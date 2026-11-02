@@ -35,6 +35,12 @@ It then writes to `OUT` the axioms the package's own constants (the `Mᵢ` and `
 (the ones the kernel accepted, not the axiom sets each `.olean` recorded when it was built), so `check.py` can compare the
 two. Exit 0 when every constant is accepted, 1 when the kernel rejects one, after writing to `OUT` the modules of the
 rejected declarations.
+
+`Replay.lean OUT --records DIR M₁ … [--closure-reused E₁ …]` (the graph's lean-module runner) also writes the axioms of
+each own constant (`declarations`, those with any), and walks no `Eᵢ` that has a record: an `Eᵢ`'s constants take the sets
+its record `DIR/<its path>.json` holds (`{"module": E, "axioms": {name: [axiom, …]}}`, what this writes for `E`, a constant
+with none left out). An `Eᵢ` is read from the parts its files have, so under the module system its public part alone
+serves, where its theorems are axioms; one without a record is walked as those parts have it.
 -/
 
 open Lean Elab Term
@@ -75,6 +81,91 @@ def axiomsIn (env : Kernel.Environment) (roots : Array Name) : Array Name := Id.
       | some (.recInfo v) => stack := stack ++ v.type.getUsedConstants
       | some (.quotInfo _) | none => pure ()
   return axs.toArray.qsort Name.lt
+
+/-- What `axiomsIn` walks through from `c`, and `c` itself when it is an axiom. -/
+def mentions (c : Name) : Option ConstantInfo → Array Name × Std.HashSet String
+  | some (.axiomInfo v) => (v.type.getUsedConstants, ({} : Std.HashSet String).insert (toString c))
+  | some (.defnInfo v) => (v.type.getUsedConstants ++ v.value.getUsedConstants, {})
+  | some (.thmInfo v) => (v.type.getUsedConstants ++ v.value.getUsedConstants, {})
+  | some (.opaqueInfo v) => (v.type.getUsedConstants ++ v.value.getUsedConstants, {})
+  | some (.inductInfo v) => (v.type.getUsedConstants ++ v.ctors.toArray, {})
+  | some (.ctorInfo v) => (v.type.getUsedConstants, {})
+  | some (.recInfo v) => (v.type.getUsedConstants, {})
+  | some (.quotInfo _) | none => (#[], {})
+
+/-- The axioms each constant reached from `roots` uses (`axiomsIn`'s walk, one set per constant), where `recorded` gives
+the set of a constant whose module recorded one, and the walk stops there. The constants of a strongly connected
+component (an inductive type and its constructors mention each other) share one set: Tarjan's algorithm, iterative, so a
+long chain of declarations takes no stack. -/
+def axiomSets (find? : Name → Option ConstantInfo) (recorded : Name → IO (Option (Std.HashSet String)))
+    (roots : Array Name) : IO (Std.HashMap Name (Std.HashSet String)) := do
+  let mut done : Std.HashMap Name (Std.HashSet String) := {}   -- each constant of a finished component, with its set
+  let mut index : Std.HashMap Name Nat := {}
+  let mut low : Std.HashMap Name Nat := {}
+  let mut reach : Std.HashMap Name (Std.HashSet String) := {}  -- what each open constant reaches so far
+  let mut opened : Array Name := #[]
+  let mut isOpen : Std.HashSet Name := {}
+  for root in roots do
+    if done.contains root || index.contains root then continue
+    let mut frames : Array (Name × Array Name × Nat) := #[]
+    let mut visit : Option Name := some root
+    repeat
+      if let some v := visit then
+        visit := none
+        let (ms, own) := mentions v (find? v)
+        low := low.insert v index.size
+        index := index.insert v index.size
+        reach := reach.insert v own
+        opened := opened.push v
+        isOpen := isOpen.insert v
+        frames := frames.push (v, ms, 0)
+      let some (v, ms, i) := frames.back? | break
+      if h : i < ms.size then
+        frames := frames.modify (frames.size - 1) fun (v, ms, i) => (v, ms, i + 1)
+        let w := ms[i]
+        if let some s := done[w]? then
+          reach := reach.modify v (·.insertMany s)
+        else match ← recorded w with
+          | some s =>
+            done := done.insert w s
+            reach := reach.modify v (·.insertMany s)
+          | none =>
+            match index[w]? with
+            | some iw => if isOpen.contains w then low := low.modify v (min · iw)
+            | none => visit := some w
+      else
+        frames := frames.pop
+        if low[v]! == index[v]! then
+          let mut members : Array Name := #[]
+          let mut s : Std.HashSet String := {}
+          repeat
+            let some m := opened.back? | break
+            opened := opened.pop
+            isOpen := isOpen.erase m
+            members := members.push m
+            s := s.insertMany (reach.getD m {})
+            if m == v then break
+          for m in members do
+            done := done.insert m s
+            reach := reach.erase m
+        if let some (u, _, _) := frames.back? then
+          match done[v]? with
+          | some s => reach := reach.modify u (·.insertMany s)
+          | none => low := low.modify u (min · low[v]!)
+  return done
+
+/-- The sets `DIR/<m's path>.json` records for `m`'s constants, or none when `DIR` holds no record of `m`. -/
+def readRecord (dir : System.FilePath) (m : Name) : IO (Option (Std.HashMap String (Std.HashSet String))) := do
+  let f := modToFilePath dir m "json"
+  unless ← f.pathExists do return none
+  let axs ← IO.ofExcept <| (Json.parse (← IO.FS.readFile f)).bind (·.getObjVal? "axioms") |>.bind Json.getObj?
+  let mut out : Std.HashMap String (Std.HashSet String) := {}
+  for (n, v) in axs do
+    let mut s : Std.HashSet String := {}
+    for a in ← IO.ofExcept v.getArr? do
+      s := s.insert (← IO.ofExcept a.getStr?)
+    out := out.insert n s
+  return some out
 
 /-- The declaration `c` goes to the kernel in, named by its first constant: an inductive type's block, for the block's
 types, constructors and recursors (`Kernel.Environment.replay` checks them together), `Quot` for the quotient's
@@ -164,8 +255,12 @@ unsafe def main (args : List String) : IO UInt32 := do
   initSearchPath (← findSysroot)
   let t0 ← IO.monoMsNow
   let some out := args.head? |
-    throw <| IO.userError "usage: Replay.lean OUT MODULE... [--reused MODULE...] [--closure MODULE...] [--closure-reused MODULE...]"
-  let parts := sections args.tail
+    throw <| IO.userError "usage: Replay.lean OUT [--records DIR] MODULE... [--reused MODULE...] [--closure MODULE...] \
+      [--closure-reused MODULE...]"
+  let (records, rest) := match args.tail with
+    | "--records" :: dir :: rest => (some (System.FilePath.mk dir), rest)
+    | rest => (none, rest)
+  let parts := sections rest
   for k in parts.keys do
     unless ["", "--reused", "--closure", "--closure-reused"].contains k do
       throw <| IO.userError s!"Replay.lean: unknown flag {k}"
@@ -369,7 +464,34 @@ unsafe def main (args : List String) : IO UInt32 := do
     return 1
   let tChecked ← IO.monoMsNow
   let ownConstants := (constants.toArray.filter fun (n, _) => ownSet.contains moduleOf[n]!).map (·.1)
-  let names := axiomsIn kenv ownConstants |>.map toString
+  let mut names : Array String := #[]
+  let mut declarations : Array (String × Json) := #[]
+  if let some dir := records then
+    let recordedModules := (get "--closure-reused").foldl NameSet.insert {}
+    let read ← IO.mkRef ({} : Std.HashMap Name (Option (Std.HashMap String (Std.HashSet String))))
+    let recorded (w : Name) : IO (Option (Std.HashSet String)) := do
+      let some m := moduleOf[w]? | return none
+      unless recordedModules.contains m do return none
+      let r ← match (← read.get)[m]? with
+        | some r => pure r
+        | none => do
+          let r ← readRecord dir m
+          read.modify (·.insert m r)
+          pure r
+      return r.map (·.getD (toString w) {})
+    -- an own module's copy of a theorem a module before it declares too is recorded under the theorem's name
+    let copies := renamedFrom.toArray.filter fun (_, (_, m)) => ownSet.contains m
+    let sets ← axiomSets (fun n => renamed[n]? <|> kenv.find? n) recorded (ownConstants ++ copies.map (·.1))
+    let mut all : Std.HashSet String := {}
+    let named := ownConstants.map (fun n => (n, n)) ++ copies.map fun (fresh, (n, _)) => (fresh, n)
+    for (k, n) in named do
+      let s := sets.getD k {}
+      unless s.isEmpty do
+        all := all.insertMany s
+        declarations := declarations.push (toString n, toJson (s.toArray.qsort (· < ·)))
+    names := all.toArray.qsort (· < ·)
+  else
+    names := axiomsIn kenv ownConstants |>.map toString
   let sent := members.fold (fun a _ cs => a + cs.size) 0
   -- three passes, not `qsort`, which is quadratic on the many declarations that take 0 ms
   let top := (List.range 3).foldl (init := (#[] : Array (Nat × Name))) fun top _ =>
@@ -389,8 +511,9 @@ unsafe def main (args : List String) : IO UInt32 := do
   let seconds := [("load", tLoaded - t0), ("plan", tPlanned - tLoaded), ("check", tChecked - tPlanned),
     ("axioms", tEnd - tChecked)].map fun (k, ms) => (k, toJson (ms / 1000))
   IO.println s!"replay: seconds {Json.mkObj seconds |>.compress}"
-  IO.FS.writeFile out <| (Json.mkObj [("replayed", toJson sent), ("skipped", toJson skipped), ("reused", toJson kept),
+  IO.FS.writeFile out <| (Json.mkObj <| [("replayed", toJson sent), ("skipped", toJson skipped), ("reused", toJson kept),
     ("second_copies", toJson renamed.size), ("closure_checked", toJson (get "--closure").size),
     ("closure_reused", toJson (get "--closure-reused").size), ("imported", toJson env.header.moduleNames.size),
-    ("axioms", toJson names), ("seconds", Json.mkObj seconds)]).compress
+    ("axioms", toJson names), ("seconds", Json.mkObj seconds)] ++
+    (if records.isSome then [("declarations", Json.mkObj declarations.toList)] else [])).compress
   return 0
