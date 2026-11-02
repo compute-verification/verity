@@ -84,7 +84,10 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 
 covert_witness's islands run unmodified (`cw.py`): the harness wraps the fixed `prepare.load_start`,
 `TrainData.next`, `encode_*` and `submit`, and scores each E with `prepare.evaluate_bpb` on the `search` set (`final`
-at tier 2), uncounted. From `benchmarks/covert_witness/`:
+at tier 2), uncounted. The encoders and `submit` are the program's work and are counted. The harness's own work runs
+with its own instance of prepare.py, on plain copies of what the program handed it, and with the program's torch
+function modes, global module hooks and profilers off. A program that rebinds what that work calls (`cw.watched`) makes
+its run invalid. From `benchmarks/covert_witness/`:
 
 ~~~text
 python -m te_core.run --script islands/CLASS/train.py --out OUT [--families DIR] [--budget-fraction F] [--tier T] \

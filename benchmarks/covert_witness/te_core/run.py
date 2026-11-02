@@ -23,6 +23,7 @@ both run work the counter can't see.
 from __future__ import annotations
 
 import argparse
+import gc
 import hashlib
 import importlib.util
 import json
@@ -39,11 +40,12 @@ from pathlib import Path
 os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
 
 import torch
+import torch.nn.modules.module as nn_module
 
 from . import VERSION
 from .codecs import Plan
 from .counterexample import SAMPLE_FINAL, SAMPLE_SEARCH, Family, check
-from .flops import Counter, digest, flags, forward_macs_per_token
+from .flops import Counter, digest, flags, forward_macs_per_token, plain
 from .score import block_c
 
 CHECKPOINTS = 20
@@ -136,10 +138,28 @@ class Session:
 
     @contextmanager
     def uncounted(self):
-        """The harness's own work (the fixed loaders, encoders, decoder and evaluator): neither counted nor timed, and
-        outside the dispatch mode. It must not write the program's tensors."""
-        with self.counter.pause(), torch.utils._python_dispatch._disable_current_modes():
-            yield
+        """The harness's own work (the fixed loader, decoder and evaluator): neither counted nor timed, and outside the
+        dispatch mode. None of the program's code runs in it: its torch function modes, global module hooks, trace and
+        profile functions are off, and so is the cyclic collector (its finalizers). It must not write the program's
+        tensors, and it reads only plain values (`plain`)."""
+        hooks = {k: v for k, v in vars(nn_module).items() if k.startswith("_global_") and isinstance(v, dict)}
+        trace, profile, collecting = sys.gettrace(), sys.getprofile(), gc.isenabled()
+        for k, v in hooks.items():
+            setattr(nn_module, k, type(v)())
+        sys.settrace(None)
+        sys.setprofile(None)
+        gc.disable()
+        try:
+            with (self.counter.pause(), torch.utils._python_dispatch._disable_current_modes(),
+                  torch._C.DisableTorchFunction()):
+                yield
+        finally:
+            for k, v in hooks.items():
+                setattr(nn_module, k, v)
+            sys.settrace(trace)
+            sys.setprofile(profile)
+            if collecting:
+                gc.enable()
 
     def in_steps(self) -> bool:
         return self.counter.cur is not self.counter.setup
@@ -253,8 +273,8 @@ class Session:
         return {k: v.detach() for k, v in state.items()}
 
     def _checkpoint(self, step: int) -> None:
-        with self.counter.pause(), torch.no_grad():
-            state = self._state()
+        with torch.no_grad():
+            state = plain(self._state())
         self.checkpoint_state(step, state, {"source": "output"})
 
     def checkpoint_state(self, step: int, state: dict[str, torch.Tensor], extra: dict | None = None) -> dict:
@@ -313,7 +333,7 @@ FORBIDDEN = (r"\.counter\b", r"\.pause\b", r"\buncounted\b", r"\bte_core\.(?!(ho
              "_set_dispatch_mode", "CUDAGraph", r"cuda\.graph", "_dynamo", "TORCHDYNAMO", "triton", "ctypes", "cupy",
              "numba", "jax", r"torch\.utils\.cpp_extension", "load_inline", "subprocess", "multiprocessing",
              r"os\.system", r"os\.exec", r"os\.spawn", r"os\.posix_spawn", "addaudithook", r"sys\.modules",
-             r"\bgc\b\.", "__import__", r"importlib")
+             r"\bgc\b\.", "__import__", r"importlib", r"\bsys\.monitoring\b", r"(?m)^\s*from\s+sys\s+import\b.*\bmonitoring\b")
 
 
 def screen(source: str) -> list[str]:
@@ -410,6 +430,7 @@ def run_script(a, args: list[str]) -> dict:
     hooks.ACTIVE = None
     meta |= adapter.meta() | {"script_rc": rc}
     problems = [f"the script exited {rc}" + (f" ({meta['error']})" if "error" in meta else "")] if rc else []
+    problems += adapter.problems()
     if not adapter.submitted and "stopped" not in meta:
         problems.append("the script submitted nothing")
     return te.finish(meta, problems)

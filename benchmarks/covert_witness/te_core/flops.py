@@ -45,8 +45,11 @@ import json
 import os
 import resource
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 
+import numpy as np
 import torch
 from torch.utils import flop_counter
 from torch.utils._python_dispatch import TorchDispatchMode
@@ -120,6 +123,39 @@ def _written(func, args, kwargs) -> list[torch.Tensor]:
             v = args[i] if i < len(args) else kwargs.get(a.name)
             out.extend(_tensors(v))
     return out
+
+
+PLAIN = (type(None), bool, int, float, complex, str, bytes, torch.dtype, torch.device)
+
+
+def plain(x):
+    """`x` rebuilt from plain values (dicts, lists, tuples, detached `torch.Tensor`s, numbers, strings, bytes, paths). The
+    harness converts what the program hands it while the count still runs, so no method of the program's objects runs
+    in the harness's uncounted work."""
+    t = type(x)
+    if t in PLAIN:
+        return x
+    if isinstance(x, torch.Tensor):
+        y = x.detach()
+        if type(y) is not torch.Tensor:
+            raise TypeError(f"te_core: a {t.__name__} is not a plain tensor; hand the harness torch.Tensor values")
+        return y
+    if isinstance(x, Mapping):
+        return {plain(k): plain(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return (list if isinstance(x, list) else tuple)(plain(v) for v in x)
+    if isinstance(x, np.generic):
+        return plain(x.item())
+    if isinstance(x, np.ndarray) and x.dtype != object:
+        return np.array(x)
+    if isinstance(x, (bytearray, memoryview)):
+        return bytes(x)
+    if isinstance(x, os.PathLike):
+        return Path(plain(os.fspath(x)))
+    for base in (int, float, complex, str, bytes):
+        if isinstance(x, base) and type(y := base(x)) is base:
+            return y
+    raise TypeError(f"te_core: the harness takes plain values, not a {t.__name__}")
 
 
 def digest(t: torch.Tensor) -> str:
