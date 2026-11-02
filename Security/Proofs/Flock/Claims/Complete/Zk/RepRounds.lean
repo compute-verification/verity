@@ -4,6 +4,8 @@ public import Proofs.Flock.Claims.Complete.Zk.ProverOk
 public import Proofs.Flock.Claims.Complete.Replay.RepRounds
 public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # Each masked rep records a round, each of at most `65536` coins (`RepRoundsZk`)

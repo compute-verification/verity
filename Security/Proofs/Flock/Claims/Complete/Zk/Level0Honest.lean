@@ -4,6 +4,8 @@ public import Proofs.Flock.Claims.Complete.Zk.Level0Model
 public import Proofs.Flock.Claims.Complete.Zk.Level0Premises
 public import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The honest masked Ligerito meets the masked model's final identity
