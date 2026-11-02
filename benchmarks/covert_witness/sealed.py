@@ -3,11 +3,11 @@
     python3 sealed.py decide --in CANDIDATES.json --out BITS.json    # on the node that holds the candidates' values
 
 `SEALED` (`$CW_SEALED`, default /workspace/research/te/sealed, which the run user owns on every node) holds the promotion
-and final sets (`heldout/`, `data.py`), the sealed start (`starts/`, `prepare.register_pythia`, loadable only with
-`CW_FINAL=1`) and the sealed values (`values/<output_sha256>.json`): for each model the harness scored in a search run, its
-search score and its start's, and its bpb on the promotion set and its start's (`prepare.Scorer.seal`), written once with
-a salt. A candidate's train.py can't read any of it (the harness's audit hook, `prepare.UNREADABLE`); any other process on
-the node can, so the rule that no search agent reads it is the brief's.
+and final sets (`heldout/<DATA>/`, `data.py`), the sealed start (`starts/`, `prepare.register_pythia`, loadable only with
+`CW_FINAL=1`) and the sealed values (`values/<DATA>/<output_sha256>.json`): for each model a search run's evaluation
+scored, its search score and its start's, and its bpb on the promotion set and its start's (`prepare.Scorer.seal`),
+written once with a salt. A candidate's training job can't open any of it (candidate.sh's sandbox mounts only the sealed
+start, in final mode); any other process on the node can, so the rule that no search agent reads it is the brief's.
 
 `decide` reads CANDIDATES, a list of `{"id": ..., "output_sha256": ...}` (a te_core ledger record's id and its
 `output.output_sha256`), and writes BITS: for each id, `promote` (true, false, or null when this node holds no value for
@@ -30,7 +30,10 @@ import time
 from pathlib import Path
 
 SEALED = Path(os.environ.get("CW_SEALED", "/workspace/research/te/sealed"))
-VALUES = SEALED / "values"
+#: the held-out data's version (`data.py`): its sets are under `heldout/<DATA>/`, and the values scored on them under
+#: `values/<DATA>/`
+DATA = "v2.2"
+VALUES = SEALED / "values" / DATA
 #: the share of its search gain a candidate's promotion-set gain must reach
 PROMOTION_SHARE = 0.5
 KEY = re.compile(r"^[0-9a-f]{64}$")
