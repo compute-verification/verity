@@ -55,10 +55,14 @@ class Args(ctypes.Structure):
     _fields_ = [("key", ctypes.c_uint32 * 8), ("nonce", ctypes.c_uint32 * 3), ("T", ctypes.c_uint32), ("did", ctypes.c_uint64 * 8)]
 
 
-def _build(tool: str, sources: Sequence[str], flags: Sequence[str], name: str) -> ctypes.CDLL:
+def built(tool: str, sources: Sequence[str], flags: Sequence[str], name: str, headers: Sequence[Path] = ()) -> Path:
+    """``sources``' last (of `CUDA_DIR`) compiled by ``tool`` with ``flags`` into ``name``, keyed by the sources, the
+    ``headers`` it includes from elsewhere, the flags and the compiler's version."""
     h = hashlib.sha256()
     for s in sources:
         h.update(s.encode() + b"\0" + (CUDA_DIR / s).read_bytes() + b"\0")
+    for p in headers:
+        h.update(p.name.encode() + b"\0" + p.read_bytes() + b"\0")
     version = subprocess.run([tool, "--version"], capture_output=True, text=True, check=True).stdout
     h.update(" ".join(flags).encode() + b"\0" + version.encode())
     lib = BUILD_DIR / h.hexdigest()[:12] / name
@@ -67,7 +71,11 @@ def _build(tool: str, sources: Sequence[str], flags: Sequence[str], name: str) -
         tmp = lib.with_suffix(f".{os.getpid()}.tmp")
         subprocess.run([tool, *flags, "-o", str(tmp), str(CUDA_DIR / sources[-1])], check=True)
         tmp.replace(lib)
-    return ctypes.CDLL(str(lib))
+    return lib
+
+
+def _build(tool: str, sources: Sequence[str], flags: Sequence[str], name: str) -> ctypes.CDLL:
+    return ctypes.CDLL(str(built(tool, sources, flags, name)))
 
 
 _u32, _u64 = (np.ctypeslib.ndpointer(t, flags="C_CONTIGUOUS") for t in (np.uint32, np.uint64))

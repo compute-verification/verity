@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pouw.Assumptions.Deadline
-public import Definitions.Pouw.Assumptions.Dimension.A2Words
 public import Definitions.Pouw.Assumptions.Dimension.Assumptions
 public import Definitions.Pouw.Assumptions.Dimension.Embed
 public import Definitions.Pouw.Assumptions.Dimension.EmbedAssumptions

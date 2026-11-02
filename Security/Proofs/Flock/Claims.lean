@@ -66,6 +66,7 @@ public import Proofs.Flock.Claims.Recursion.BoundRouteMerged
 public import Proofs.Flock.Claims.Recursion.BoundMergedLin
 public import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
 public import Proofs.Flock.Claims.Recursion.KSLin2
+public import Proofs.Flock.Claims.Recursion.KSLinks
 public import Proofs.Flock.Claims.Recursion.BitsLin2
 public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
 public import Proofs.Flock.Claims.Recursion.SetupCalls

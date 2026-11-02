@@ -1,8 +1,8 @@
 """The Lean verifier's checks of V*'s statement family (`Flock.RecVStar`): V*'s statements at an inner session's shape, as
 the verifier restates them, are the ones `rec_vstage.stage` writes (each level's `rec-open/l<LANES>-h<H>` over `2 q`
 openings, each of the algebra's parts `rec-residuals/m<m>-k<k_log>-c<claims>-p<j>` over two reps, `rec_shape.outer`'s, and
-then RecCap at each later level `l`, `rec-cap/n<N>-l<l>` over both reps' tops, and last RecCap, `rec-cap/n<N>` over
-level 0's cap of `N` nodes), and a
+then RecCap at each later level `l`, `rec-cap/n<N>-l<l>` over both reps' tops, RecLink over the link table's rows when the
+inner shape names one, `rec-link/u<UB>-p<PB>`, and last RecCap, `rec-cap/n<N>` over level 0's cap of `N` nodes), and a
 unit whose name or population is not one of them is refused by the value it differs in: an instance count, a part's shape
 against the inner session's, a name V* has no statement under. `verify` refuses one of V*'s statements without the
 verifier's own inner shape (`--rec-inner`) or its own partition object and program, and a circuit file that is not byte for
@@ -39,14 +39,17 @@ pytestmark = [pytest.mark.slow,
 SHAPES = [(25, 22, 8), (27, 22, 8)]
 
 
-def _inner(path: Path, m: int, k: int, c: int, regions: int | None = None, holo=None, sparse=None, stacked=None) -> Path:
+def _inner(path: Path, m: int, k: int, c: int, regions: int | None = None, holo=None, sparse=None, stacked=None,
+           links=None) -> Path:
     """`rec-inner`'s line at a shape, of `(c - 2) / 2` regions unless given: an extra claim per region at two link points;
     ``holo``, when given, its `holo` key (`rec-inner --hide`); ``sparse``, the bucket's RecSparse shape (`rec-inner
-    --sparse`), and ``stacked``, R's `(m, claims)` (the inner circuit's META's), candidate 3's."""
+    --sparse`), and ``stacked``, R's `(m, claims)` (the inner circuit's META's), candidate 3's; ``links``, the link table's
+    shape `{"UB", "PB", "rows"}` (`rec-inner --rec-links`)."""
     path.write_text(json.dumps({"format": "verity/rec-inner/v2", "m": m, "k_log": k, "claims": c,
                                 "regions": (c - 2) // 2 if regions is None else regions, **({"holo": holo} if holo is not None else {}),
                                 **({"sparse": list(sparse)} if sparse is not None else {}),
-                                **({"stacked": {"m": stacked[0], "claims": stacked[1]}} if stacked is not None else {})}))
+                                **({"stacked": {"m": stacked[0], "claims": stacked[1]}} if stacked is not None else {}),
+                                **({"links": links} if links is not None else {})}))
     return path
 
 
@@ -100,6 +103,31 @@ def test_the_verifiers_statements_are_the_ones_v_star_stages(tmp_path, shape):
     for name, n in (line["statements"][0], line["statements"][-2], line["statements"][-1]):
         rc, line = _statements(inner, "--unit", name, "--instances", str(n))
         assert rc == 0 and line["checked"] == [name, n], line
+
+
+def test_the_link_tables_part_comes_just_before_the_level_0_cap(tmp_path):
+    """An inner shape naming the link table (`links`) adds RecLink over its rows, `rec-link/u<UB>-p<PB>` over `rows`
+    instances, after the later levels' caps and before the level-0 cap, which stays last, and the part passes under its
+    own name and count. Another count, the part's name at an inner shape naming no table, and a row count that is no
+    table's grid(L) are each refused."""
+    shape = SHAPES[0]
+    links = {"UB": 6, "PB": 6, "rows": 18}
+    inner = _inner(tmp_path / "inner.json", *shape, links=links)
+    caps = _caps(*shape)
+    rc, line = _statements(inner)
+    assert rc == 0 and line["statements"] == _v_star(*shape) + caps[:-1] + [["rec-link/u6-p6", 18]] + caps[-1:], line
+    rc, line = _statements(inner, "--unit", "rec-link/u6-p6", "--instances", "18")
+    assert rc == 0 and line["checked"] == ["rec-link/u6-p6", 18], line
+    cases = [
+        (inner, "17", "rec-link/u6-p6: instances 17, statement says 18"),
+        (_inner(tmp_path / "bare.json", *shape), "18",
+         "rec-link/u6-p6: the link table's part, and the verifier's inner shape names no link table (links)"),
+    ]
+    for f, n, why in cases:
+        rc, line = _statements(f, "--unit", "rec-link/u6-p6", "--instances", n)
+        assert rc == 1 and line["error"] == why, (n, line)
+    rc, line = _statements(_inner(tmp_path / "odd.json", *shape, links={**links, "rows": 17}))
+    assert rc == 1 and line["error"] == "V*'s list: the link table's 17 rows are no table's grid(L)", line
 
 
 def test_a_unit_off_v_stars_statements_is_refused_by_the_value(tmp_path):

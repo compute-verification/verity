@@ -6,6 +6,7 @@ public import Proofs.Flock.VBridge.Residuals
 public import Proofs.Flock.VBridge.Climb
 public import Proofs.Flock.VBridge.Open
 public import Proofs.Flock.VBridge.RecOpen
+public import Proofs.Flock.VBridge.RecLink
 public import Proofs.Flock.VBridge.Net
 public import Proofs.Flock.VBridge.Unit
 public import Proofs.Flock.VBridge.Keyed

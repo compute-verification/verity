@@ -4,7 +4,7 @@ public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 public import Definitions.Core.Guarantees.PrivatePartition
 public import Proofs.Core.Advice
 
-/-! # Proofs about private partitions: the per-Call check, the leakage weight, and the registration -/
+/-! # Proofs about private partitions: the per-Call check, the leakage weight, and the advice's commitment -/
 
 @[expose] public section
 
@@ -60,7 +60,7 @@ theorem PrivateFitsOfLocal : Guarantees.PrivateFitsOfLocal :=
 theorem PrivateOutBitsLe : Guarantees.PrivateOutBitsLe :=
   fun _ _ P _ h T => P.sum_outBits_le h T
 
-theorem RegisteredMeets : Guarantees.RegisteredMeets := by
+theorem CommittedMeets : Guarantees.CommittedMeets := by
   intro C H F hF A hA Q root r₀ ⟨⟨_, hf, hn, _⟩, hr₀⟩ r hr
   have fits : ∀ x : (n : ℕ) × Partition C n, x = ⟨r₀.n, r₀.P⟩ →
       x.1 ≤ Q.units ∧ x.2.Fits Q.X ∧ ∀ T : Finset (Fin x.1), ∑ u ∈ T, x.2.outBits u ≤ T.card * Q.X := by

@@ -2,7 +2,6 @@ module
 
 public import Definitions.Pouw.Guarantees.Barrier
 public import Definitions.Pouw.Guarantees.Deadline
-public import Definitions.Pouw.Guarantees.Dimension
 public import Definitions.Pouw.Guarantees.Dither
 public import Definitions.Pouw.Guarantees.DitherInstance
 public import Definitions.Pouw.Guarantees.Eps1

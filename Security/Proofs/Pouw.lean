@@ -9,12 +9,10 @@ public import Proofs.Pouw.Credit
 public import Proofs.Pouw.Deadline
 public import Proofs.Pouw.EndToEndWindow.Statement
 public import Proofs.Pouw.Eps1
-public import Proofs.Pouw.Dimension
 public import Proofs.Pouw.Dither
 public import Proofs.Pouw.DitherWitness
 public import Proofs.Pouw.DitherInstance
 public import Proofs.Pouw.DitherSelected
-public import Proofs.Pouw.Dimension.A2WordsProofs
 public import Proofs.Pouw.Dimension.CausalProofs
 public import Proofs.Pouw.Dimension.EmbedProofs
 public import Proofs.Pouw.Dimension.ForestProofs

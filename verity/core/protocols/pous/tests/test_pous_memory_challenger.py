@@ -306,6 +306,35 @@ def test_a_session_log_that_is_missing_unreadable_or_made_twice_is_refused(tmp_p
     assert not path.exists()
 
 
+def test_a_salt_log_holds_one_salt_an_audit_and_fails_closed(tmp_path):
+    """A salt is logged once for its audit, fsynced, and read back by every opening; a second for the audit is refused
+    and the first kept. A log made twice, missing, or whose lines are not whole entries of distinct audits refuses."""
+    path = tmp_path / "salts"
+    mc.SaltLog.create(path)
+    with pytest.raises(mc.SessionLogError, match="never made again"):
+        mc.SaltLog.create(path)
+    audit, commitment, salt = bytes(range(64)), bytes(range(64, 128)), bytes(range(24))
+    log = mc.SaltLog(path)
+    assert log.get(audit) is None
+    log.record(audit, commitment, salt)
+    for again in (log, mc.SaltLog(path)):
+        assert again.get(audit) == (commitment, salt)
+        with pytest.raises(mc.SessionLogError, match="draws one salt an audit, and a retry never redraws it"):
+            again.record(audit, commitment, bytes(24))
+    entry = f"{audit.hex()} {commitment.hex()} {salt.hex()}"
+    assert path.read_text() == f"{mc.SALT_LOG}\n{entry}\n"
+    with pytest.raises(ValueError, match="a salt 24"):
+        log.record(bytes(64), commitment, salt[:23])
+    for text in ("", f"{mc.SALT_LOG}", f"{mc.SESSION_LOG}\n", f"{mc.SALT_LOG}\n{entry}", f"{mc.SALT_LOG}\n{entry[:-2]}\n",
+                 f"{mc.SALT_LOG}\n{entry}\n{entry}\n", f"{mc.SALT_LOG}\n{entry.upper()}\n"):
+        bad = tmp_path / "bad"
+        bad.write_text(text)
+        with pytest.raises(mc.SessionLogError, match="unreadable"):
+            mc.SaltLog(bad)
+    with pytest.raises(mc.SessionLogError, match="missing"):
+        mc.SaltLog(tmp_path / "none")
+
+
 def test_the_test_signer_leaves_nothing_outside_basetemp(tmp_path_factory, monkeypatch):
     """`pous_test_signer`'s leaf states and session logs are made under the suite's basetemp (`DIR`, the conftest's), which
     the check removes when the suite ends, or in a directory the caller passes, and never in `$TMPDIR`, where nothing
