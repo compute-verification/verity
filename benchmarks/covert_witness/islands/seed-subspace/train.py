@@ -105,6 +105,8 @@ def main() -> int:
     ap.add_argument("--perturb", default="blocks", help="S: all, blocks, norms, mats, or leaf names (wo,w_down)")
     ap.add_argument("--layers", default="", help="a-b: only blocks a..b")
     ap.add_argument("--dim", type=int, default=0, help="directions d (0: the most that fit E's cap and, for subspace, memory)")
+    ap.add_argument("--dims", default="", help="subspace arms' d (one per --lrs arm): Z is built at the largest, arm k uses "
+                                               "its first d_k rows")
     ap.add_argument("--fit-ratio", type=float, default=2.0, help="fit: d = ratio x |S|, within E's cap")
     ap.add_argument("--coeff", choices=("f32", "f16"), default="f32")
     ap.add_argument("--lr", type=float, default=3e-5)
@@ -161,7 +163,8 @@ def main() -> int:
     train_pass = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
 
     if a.mode == "subspace":
-        d = a.dim or d_cap
+        dims = [int(x) for x in a.dims.split(",")] if a.dims else []
+        d = max(dims) if dims else (a.dim or d_cap)
         if prepare.DEVICE.startswith("cuda"):
             free = torch.cuda.mem_get_info()[0]
             d_mem = int((free - a.z_reserve_gb * 2**30) // (2 * P))
@@ -207,7 +210,9 @@ def main() -> int:
         with torch.no_grad():
             W.copy_(theta0)
         if a.mode == "subspace":
-            alpha = torch.zeros(d, device=prepare.DEVICE)
+            dk = min(dims[k], d) if dims else d
+            Zk, extra_k = Z[:dk], 4 * dk * P
+            alpha = torch.zeros(dk, device=prepare.DEVICE)
             m1, m2 = torch.zeros_like(alpha), torch.zeros_like(alpha)
         else:
             opt = torch.optim.AdamW(views, lr=lr, betas=(a.beta1, a.beta2), weight_decay=0.0)
@@ -244,7 +249,7 @@ def main() -> int:
             frac = schedule(step, arm_steps, a.warmup)
             if a.mode == "subspace":
                 with torch.no_grad():
-                    torch.add(theta0, (alpha.to(Z.dtype) @ Z).float(), out=W)
+                    torch.add(theta0, (alpha.to(Zk.dtype) @ Zk).float(), out=W)
             else:
                 for g in opt.param_groups:
                     g["lr"] = lr * frac
@@ -261,13 +266,13 @@ def main() -> int:
                     g = torch.cat([v.grad.reshape(-1) for v in views])
                     for v in views:
                         v.grad = None
-                    ga = (Z @ g.to(Z.dtype)).float()
+                    ga = (Zk @ g.to(Zk.dtype)).float()
                     m1.mul_(a.beta1).add_(ga, alpha=1 - a.beta1)
                     m2.mul_(a.beta2).addcmul_(ga, ga, value=1 - a.beta2)
                     mh = m1 / (1 - a.beta1 ** (step + 1))
                     vh = m2 / (1 - a.beta2 ** (step + 1))
                     alpha.add_(mh / (vh.sqrt() + 1e-12), alpha=-lr * frac)
-                steps.append({"op": "extra", "flops": extra})
+                steps.append({"op": "extra", "flops": extra_k})
             else:
                 opt.step()
                 opt.zero_grad(set_to_none=True)
@@ -283,15 +288,17 @@ def main() -> int:
                 print(json.dumps(row), flush=True)
             if step in marks or (step == arm_steps and not last):
                 snaps.append((prepare.encode_seedlog(names, a.seed, coefficients(), a.coeff), len(steps)))
-                arms.append({"arm": k, "lr": lr, "step": step, "snapshot": len(snaps) - 1,
+                arms.append({"arm": k, "lr": lr, "d": len(alpha) if a.mode == "subspace" else d, "step": step,
+                             "snapshot": len(snaps) - 1,
                              "own_flops": prepare.train_flops(rec, trainable, steps[first:])["flops"]})
 
     coeffs = coefficients()
-    arms.append({"arm": len(lrs) - 1, "lr": lrs[-1], "step": arm_steps, "snapshot": None,
+    arms.append({"arm": len(lrs) - 1, "lr": lrs[-1], "d": len(alpha) if a.mode == "subspace" else d, "step": arm_steps,
+                 "snapshot": None,
                  "own_flops": prepare.train_flops(rec, trainable, steps[first:])["flops"]})
     if a.mode == "subspace":
         with torch.no_grad():
-            torch.add(theta0, (alpha.to(Z.dtype) @ Z).float(), out=W)
+            torch.add(theta0, (alpha.to(Zk.dtype) @ Zk).float(), out=W)
     blob = prepare.encode_seedlog(names, a.seed, coeffs, a.coeff)
     model = prepare.decode(theta, blob)
     with torch.no_grad():
