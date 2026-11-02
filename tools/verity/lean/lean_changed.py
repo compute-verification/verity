@@ -877,7 +877,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     f"check and research merge refuse; reports in {mine_out}")
                 # Keep the regenerated record now: the next requirer iteration's `sync` restores the committed one over
                 # it, and a recorded run never writes ROOT (the commit's shared source tree), so without this copy the
-                # record a lane must commit survives nowhere the run keeps (LEAN-10).
+                # record a lane must commit survives nowhere the run keeps.
                 if (b := checked(p, pkg, got, tree / p / LOCK, committed[f"{p}/{LOCK}"], up, update, out, log)) is not None:
                     new[f"{p}/{LOCK}"] = b
                 if got == 0:

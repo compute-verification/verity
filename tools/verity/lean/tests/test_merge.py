@@ -80,7 +80,7 @@ def test_a_hand_written_section_one_side_extends_is_kept():
     merged, why = M.merge(base, ours, theirs)
     assert why == [] and merged["meaning"] == ["P", "P.More"] and "P.v" in merged["guarantees"]
     both, why = M.merge(base, ours, base | {"meaning": ["P", "P.Other"]})
-    assert why == [] and set(both["meaning"]) == {"P", "P.More", "P.Other"}, "two sides that each extend it merge (#2600)"
+    assert why == [] and set(both["meaning"]) == {"P", "P.More", "P.Other"}, "two sides that each extend it merge"
 
 
 def test_a_derived_record_both_sides_changed_merges_as_ours_and_the_merged_build_regenerates_it():
@@ -151,8 +151,8 @@ def test_an_owner_merges_apart_from_the_statement():
 
 
 def test_a_definition_one_side_stops_reading_merges_as_the_union_when_the_other_side_changed_its_module():
-    """A reads-only clash (lean's One-vocabulary PRs move definitions out of a module that queued PRs' new guarantees read):
-    the record doesn't say which guarantees read the definition, so it stays, and the Lean check of `next` regenerates."""
+    """A reads-only clash (one side moves definitions out of a module that the other side's new guarantees read): the
+    record doesn't say which guarantees read the definition, so it stays, and the Lean check of `next` regenerates."""
     base = record(t=thm([F, G]))
     ours = record(t=thm([F], "P.f n + 0 = n", "00000000000000dd"))
     theirs = record(t=thm([F, G]), v=thm([H], "P.h n = n", "00000000000000cc"))
@@ -244,13 +244,11 @@ def test_a_guarantee_one_side_removed_stays_removed_unless_the_other_side_change
 FIXTURES = HERE / "fixtures" / "merge"
 
 
-def test_4406_onto_next_merges_its_reads_as_a_candidate(tmp_path, capsys):
-    """#4406 (cursor/lean-vocab-hash-fc8d at 172198e129) onto `next` at aa5d70a9f1, base main's b6b9338dcb (26 Oct): #4406
-    takes `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there, and the driver refused the train.
-    The fixture is that group on each side with the records of its readers (a sample of the new ones).  On the side that takes
-    it out, the module's readers are the base's, unrestated, and the record reads `Hash.Digest` nowhere, so the removal
-    applies: `main`'s record since reads it nowhere either."""
-    sides = json.loads((FIXTURES / "hash-basic-4406-onto-next.json").read_text())
+def test_a_definition_taken_out_of_a_module_next_adds_readers_to_merges_its_reads_as_a_candidate(tmp_path, capsys):
+    """A branch merged onto `next` takes `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there.  The
+    fixture is that group on each side with the records of its readers (a sample of the new ones).  On the side that takes it out, the module's readers are the base's, unrestated, and the record reads
+    `Hash.Digest` nowhere, so the removal applies: `main`'s record since reads it nowhere either."""
+    sides = json.loads((FIXTURES / "hash-basic-definition-taken-out-onto-next.json").read_text())
     for n in ("base", "ours", "theirs"):
         (tmp_path / n).write_text(A.text(sides[n]))
     assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
@@ -265,12 +263,12 @@ def test_4406_onto_next_merges_its_reads_as_a_candidate(tmp_path, capsys):
         sides["theirs"]["reads"]["Definitions.Hash.Basic"]["guarantees"])
 
 
-def test_5977_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, capsys):
-    """A branch that renames `J10R.Layout` to `NoiseLayout` (fcfc2901b9) merged onto `next` (e50948ba0c, base 5f41e99513) as
-    drive merged it (9a58b81858): `next` added readers of `Definitions.Accounting.TS.J10R`, and the union kept `Layout` and its
-    four fields beside the new names, which `next`'s after-landing Lean check, with no regenerate, fails on.  The fixture is
-    that group on each side with the records of its readers."""
-    sides = json.loads((FIXTURES / "j10r-5977-onto-next.json").read_text())
+def test_a_branch_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, capsys):
+    """A branch that renames `J10R.Layout` to `NoiseLayout`, merged onto `next` as drive merged it: `next` added readers of
+    `Definitions.Accounting.TS.J10R`, and the union kept `Layout` and its four fields beside the new names, which the
+    after-landing Lean check, with no regenerate, fails on.  The fixture is that group on each side with the records of its
+    readers."""
+    sides = json.loads((FIXTURES / "j10r-layout-renamed-onto-next.json").read_text())
     m = "Definitions.Accounting.TS.J10R"
     old = [d for d in sides["base"]["reads"][m]["definitions"] if ".Layout" in d]
     assert len(old) == 5 and all(d in sides["ours"]["reads"][m]["definitions"] for d in old)
@@ -527,7 +525,7 @@ def test_an_inline_premise_one_side_dropped_stays_while_the_merged_record_lists_
 
 
 def test_two_branches_that_each_widen_a_layer_merge_its_imports_and_reasons():
-    """#1860 against #1842 (12 Oct): each side added imports to `Definitions.Accounting` and a clause to its `why`."""
+    """Each side added imports to `Definitions.Accounting`'s layer and a clause to its `why`."""
     base = {"layers": {"D": {"imports": ["Mathlib", "D"], "except": [], "why": "trusted text; they import no proof"},
                        "E": {"imports": ["E"], "except": [], "why": "e"}}}
     ours = {"layers": {"D": {"imports": ["Mathlib", "P.Audit", "D"], "except": [], "why": "trusted text; M reads P; they import no proof"},
@@ -610,7 +608,7 @@ def test_imports_both_sides_add_merge_and_one_both_sides_remove_stays_removed(tm
 def test_4690_onto_next_drops_the_import_4690_retired(tmp_path):
     """`Security/Definitions/Accounting.lean` as git gave it to the driver in a merge where one side retired a module and the
     other moved its import: the merge drops the retired import, which would otherwise stop Security building."""
-    sides = json.loads((FIXTURES / "accounting-4690-onto-next.json").read_text())
+    sides = json.loads((FIXTURES / "accounting-retired-import-onto-next.json").read_text())
     text, left = _lean(tmp_path, sides["base"], sides["ours"], sides["theirs"])
     gone = "import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod\n"
     assert left == 0 and gone in sides["base"] and gone in sides["ours"] and gone not in sides["theirs"]
