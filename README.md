@@ -28,7 +28,7 @@ verifier still decides, a difftest holds it to the Lean until the Lean replaces 
 | PoUB | The same, over a node's registered store. | [`verity/core/protocols/remote_bandwidth`](verity/core/protocols/remote_bandwidth/README.md) |
 | Network certification | An auditor-trusted device on each node's uplink, the network certifier, certifies that the traffic carried only values in the committed trace, and bounds the bits that left the site. | [`verity/core/protocols/certifier`](verity/core/protocols/certifier/README.md) |
 | Memory wipes | A registered server's life is cut into server blocks, each opened by a certified memory wipe, so state crosses a boundary only as a committed value. | `verity/core/devices/memory_challenger/lean` |
-| The inference-only policy | Inference rather than training: the registered circuit divides into inference blocks of c gates, each reading at most k bits of fresh input. A protocol with no rounds, which the verifier checks from the registered circuit and the registered information alone. | [`verity/core/protocols/network/nci`](verity/core/protocols/network/nci/README.md) |
+| The inference-only policy | Inference rather than training: the registered circuit has a (c, k)-partition, inference blocks of at most c gates, each reading at most k bits beyond the registered inputs θ, at most n blocks a period. A protocol with no rounds, which the verifier checks from the registered circuit and θ alone. | [`verity/core/protocols/network/nci`](verity/core/protocols/network/nci/README.md) |
 
 ## The two composite protocols
 
@@ -102,9 +102,9 @@ Not yet:
   soundness is not yet proved.
 - **PoUW under the ACCEL model**: Dither's [protocol](verity/core/protocols/pouw/dither/PROTOCOL.md) and the Lean's
   `Pouw.Dither`.
-- **Inference versus training**: the [inference-only policy](verity/core/protocols/network/nci/README.md), the
-  feasible set, the admissible set and the slowdown lower bound in [GLOSSARY.md](GLOSSARY.md), and its numbers in
-  [`benchmarks/rho`](benchmarks/rho/README.md).
+- **Inference versus training**: the [inference-only policy](verity/core/protocols/network/nci/README.md), and in
+  [GLOSSARY.md](GLOSSARY.md)'s Notation the feasible set, the admissible set and the training formalism: a circuit's
+  slowdown ρ, the assumptions A1 and A2, and the theorems Fit, Slowdown and Security.
 
 ## Demos
 

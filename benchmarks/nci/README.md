@@ -1,5 +1,9 @@
 # The inference-only policy's literature index and slowdown board
 
+The board and its calculators compute the earlier statement of the training slowdown (yields, counted multiplications,
+the covering bound's forms), which the training formalism (`GLOSSARY.md`, Notation, "Training") replaces, until the
+training harness restates or retires them.
+
 Data and a calculator for the question negotiators will ask about the
 [inference-only policy](../../verity/core/protocols/network/nci/README.md) ("bounding accumulation"): if both sides
 adopt it, how fast can a determined actor still advance frontier capability? Four parts:
@@ -13,7 +17,7 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 (`Security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
 (`Security/Definitions/Nci/Guarantees/Contained.lean`).
 
-The slowdown lower bound's numbers come from [`benchmarks/rho`](../rho/README.md), the one slowdown calculator.
+The earlier statement's numbers come from [`benchmarks/rho`](../rho/README.md), its one calculator.
 `tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is rho's
 `rho.theorem.multiple_bound` in Lean's form (`Nci.Dampener.remoteDampener` at the reference's MFU), which `statement.py`,
 `fit.py` and `figures.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
