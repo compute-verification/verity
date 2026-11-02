@@ -4,6 +4,7 @@ public import Properties.Attest
 public import Proofs.Properties.Pous.MemoryChallenger.Tree
 public import Proofs.Flock.Claims.Finder
 public import Proofs.Properties.CertifierDevice.Lms
+import all Init.Data.String.Defs
 
 /-!
 # Proofs of a party's signed periods (`Properties.Attest`)
