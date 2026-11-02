@@ -329,6 +329,8 @@ def load_registry(path: Path, people: bool = True) -> dict:
 
 
 EXAMPLES_MAX, EXAMPLE_CHARS = 5, 160                   # a handle's `examples`: the questions a collaborator might ask it
+HOLDER_RE = re.compile(r"(?:bc-)?[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")   # one agent's full id (a desktop agent's: no bc-)
+STORE_PATH = "/cursor/stores/"                         # an agent's scratch store, which nothing cites
 
 
 def check_registry(reg: dict, path: str) -> dict:
@@ -343,6 +345,14 @@ def check_registry(reg: dict, path: str) -> dict:
         for k in ("remit", "charter"):
             if not isinstance(h.get(k), str) or not h[k]:
                 raise SlackError(f"registry {path}: @{name} has no {k}")
+            if STORE_PATH in h[k]:
+                raise SlackError(f"registry {path}: @{name}'s {k} cites an agent store ({STORE_PATH}...), which is its agent's "
+                                 "scratch: cite a note (note:<id>), a ruling or a PR instead, or say it in plain words")
+        if "holder" in h and not (isinstance(h["holder"], str) and HOLDER_RE.fullmatch(h["holder"])):
+            raise SlackError(f"registry {path}: @{name}'s holder {h['holder']!r}: its coordinator's agent id alone (bc-<8 hex>-"
+                             "<4>-<4>-<4>-<12>, or a desktop agent's bare UUID), with no prose; the agents that post as it are "
+                             "its route's `posters` (`research msg names open --as HANDLE --poster BC_ID`), and what it does "
+                             "goes in its remit")
         if len(h["remit"]) > DESCRIPTION_MAX:
             raise SlackError(f"registry {path}: @{name}'s remit is {len(h['remit'])} characters; its user group's description takes {DESCRIPTION_MAX}")
         for p in h.get("owns", []):
