@@ -288,6 +288,7 @@ theorem registered_inner {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st
   have h0 : 0 < sts.size := by subst hp; exact h0p
   have e0 : p.sts[0] = sts[0] := by subst hp; rfl
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0p
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0p).2.2)
   have hpar := FlockVBridge.Family.resParams_of_check P.recResiduals
     ((htab 0 h0p).1.trans (DecompBR.inner_named hss hsv'))
   rw [e0] at hpar

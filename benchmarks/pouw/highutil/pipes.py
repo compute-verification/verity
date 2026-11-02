@@ -2,8 +2,9 @@
 short period of the arm, kernels serialized, clocks as the node sets them): per kernel name, its launches, time, INT8
 tensor ops and the tensor pipe's active share of its elapsed cycles (time-weighted), and its SM clock. With `--card`,
 each kernel's MACs (the counter counts a MAC as two ops) against θ at its own clock: for the GEMM, the share the pipe
-fills when nothing runs beside it (the counted side of terms.py's GEMM slack). On the RTX the two agree: cuBLASLt's s8
-GEMM at 87.4% of θ and the pipe active 87.4% (r20261027-072824-8af6).
+fills when nothing runs beside it. On the RTX the two agree: cuBLASLt's s8 GEMM at 87.4% of θ and the pipe active
+87.4% (r20261027-072824-8af6). On the H200 the counter doesn't count wgmma, so an sm90_xmma kernel's MACs read 0 and
+only its active share holds. breakdown.py takes each kernel's active share times its busy time.
 
     pipes.py NCU_CSV [--card SPEC]      prints one JSON object
 """

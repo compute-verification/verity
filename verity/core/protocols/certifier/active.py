@@ -195,6 +195,7 @@ from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from dataclasses import dataclass, field, replace
 
 from verity.ml.commitments.identity import tagged_sha512
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.crypto import aead
 from verity.core.protocols.certifier.audit import Audit, Verdict
 from verity.core.protocols.certifier.certificate import PublicKey, Signer, SignerRefused
@@ -232,7 +233,7 @@ SALT_BITS = 512
 SALT_BYTES = SALT_BITS // 8
 PLACEHOLDER = bytes(64)
 SALT_FRAME_BYTES = HEADER.size + 8 + len(PLACEHOLDER)
-WEIGHTS_ROOT_BYTES = 64  # a frame-v3-sha512 root
+WEIGHTS_ROOT_BYTES = DIGEST_BYTES["sha512"]  # a frame-v3-sha512 root
 WEIGHTS_TAG = "verity-network-certifier/weights/v1"
 
 

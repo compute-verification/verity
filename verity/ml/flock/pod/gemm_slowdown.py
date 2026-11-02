@@ -5,8 +5,8 @@ per coordinate at its largest statement, the witness build plus both reps (`witn
 instances). A GEMM of M x N x K costs M * N of them. Its native time is torch's bf16 `linear` (cuBLAS, as vLLM serves it), the
 weights rotated through copies that overflow L2 so every call reads them from memory.
 
-The model is Llama-3.2-1B, #101's: 16 layers of qkv (3072 x 2048), o (2048 x 2048), gate_up (16384 x 2048) and down (2048 x 8192),
-fused as vLLM runs them, and the LM head (128256 x 2048). Prefill is #101's 256 prompt tokens through every layer and the LM head
+The model is Llama-3.2-1B, the census row's: 16 layers of qkv (3072 x 2048), o (2048 x 2048), gate_up (16384 x 2048) and down (2048 x 8192),
+fused as vLLM runs them, and the LM head (128256 x 2048). Prefill is the row's 256 prompt tokens through every layer and the LM head
 at M = 1 (vLLM computes only the last token's logits); decode is every GEMM at M = 1, 2, 4 and 8, summed over the four.
 
     python gemm_slowdown.py native --out native.json [--iters 100] [--trials 5]

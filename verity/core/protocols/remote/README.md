@@ -20,7 +20,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 **Which "remote".** Six things in the tree are called "remote", and this page means the first:
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v0`);
-- PoUB, proof of useful bandwidth, an onsite subprotocol whose code still says "remote bandwidth": its package
+- PoUB, an onsite subprotocol whose code names still say "remote" until they are renamed: its package
   `verity/core/protocols/remote_bandwidth/`, its Lean verifier `RemoteAudit`, its Lean vocabulary `Accounting.Remote`
   (`Security/Definitions/Accounting/Remote.lean`) and `Accounting.Guarantees.Remote*`, its id `verity/remote-bandwidth/v0`,
   its whole-node benchmark `benchmarks/remote_session/`, and serve-openai's `--remote-verifier`, the address of PoUB's
@@ -130,7 +130,7 @@ PoUW `--zk`), and a chain can be "none" while each piece is proved.
 | PoUW's credit over a monitoring period | `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` | **proved** | — |
 | PoUW's proof layer | `Accounting.Guarantees.TS.SessionSoundAt`: proved, but it needs `AcceptedLive`, which no served path meets yet | **open** as a chain | PoUW `--zk`: broken at the proof layer |
 | The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`RemotePeriod.lean`): only `DampenerRemotePeriodStated` is in the lock | **open** | — |
+| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`Security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `Security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the draw missing `m` faulty blocks with probability at most `(1 − q)^m` and a drawn faulty block undetected with probability at most `ks t`, and each declared run within `Throttled`'s bound | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
 | The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee (the open gap, above) | **open** | — |
 
 ## Assumptions

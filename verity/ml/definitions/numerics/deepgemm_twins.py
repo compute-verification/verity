@@ -91,13 +91,6 @@ def flashinfer_quant_1x128_row(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return q.reshape(K), R.mufu_rcp_ftz(scale)
 
 
-def flashinfer_quant_1x128_rows(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """`flashinfer_quant_1x128_row` over the rows of x (M, K)."""
-    x = np.asarray(x, dtype=np.uint16)
-    q, s = zip(*(flashinfer_quant_1x128_row(r) for r in x)) if len(x) else ((), ())
-    return np.asarray(q, dtype=np.uint8).reshape(x.shape), np.asarray(s, dtype=np.uint32).reshape(x.shape[0], -1)
-
-
 def deepgemm_linear_row(x: np.ndarray, w: np.ndarray, ws: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """`DeepGemmFp8Linear_v1{K,N}` on one bf16 row: (q, s, y bf16 words, y's nonfinite mask)."""
     q, s = ue8m0_group_quant_row(x)

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # A new target's SASS-gate pin, on a card of that target, in a `--cwd clone` run (it rewrites sass_pins.json):
 #
-#   research run --on vy-dc-h200 --project verity --campaign pouw --source . --cwd clone --env GPU_LEASE_WHO=<you> \
+#   research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEASE_WHO=<you> \
 #       -- bash benchmarks/pouw/harness/jobs/pin_target.sh 13.0.1-sm_90a /usr/local/cuda-13.0
 #
 # Builds ieee_pin.cu's pinned builds for TOOLKIT's target (ieee_pin.arch_of) with CUDA_HOME's nvcc, pins them as TOOLKIT

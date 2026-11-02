@@ -42,7 +42,7 @@ import pytest
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
 from verity.ml.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
+from verity.ml.circuits.evaluation import evaluate_batch, evaluate_words
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.windows import interface as IF, rows as CS
 
@@ -120,6 +120,24 @@ def test_the_verifiers_window_is_the_circuit_record_under_verity_s_catalog(writt
     (written.dir / "circuit.json").write_text(json.dumps({**doc, "name": "other"}))
     with pytest.raises(ValueError, match="not the circuit record the registration binds"):
         RA.verifier_window(written.dir, D.parse_law(LAW), None)
+
+
+def test_a_registry_template_resolves_in_a_fresh_audit_process():
+    """A window's io shell (`ScanSlots_v2`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
+    fresh process, which has loaded nothing else, `catalog_resolve` resolves its id to itself."""
+    from verity.ml.definitions.registry import boolean_io_shell as BX
+
+    occ, lp, mx, ids = (tuple(f + 36333 * j for j in range(2)) for f in (376, 168, 200, 474))
+    tid = descriptor_id(bind(BX.ScanSlotsV2, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=occ, LP=lp, MAX=mx, IDS=ids))
+    code = f"""
+import sys
+sys.path.insert(0, {str(HERE.parent)!r})
+import records_audit as RA
+from verity.ml.circuits.codec import descriptor_id
+assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
+"""
+    p = subprocess.run([sys.executable, "-c", code, tid], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
 
 
 def test_the_compile_check_runs_the_registered_compiler_on_the_opened_advice(written, tmp_path):
@@ -568,6 +586,55 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
             RA.period(window, audited_by, {})
     assert RA.main(["period", "--window", str(unbound), "--audit", str(audit), "--out", str(tmp_path / "q.json")]) == 1
     assert "records_audit.py period: " in capsys.readouterr().err and not (tmp_path / "q.json").exists()
+
+
+#: a `ScanSlots_v2` of two lanes on a 40-word state row (`test_io_shell`'s)
+SLOTS = {"NS": 40, "NP": 4, "IDB": 17, "K0": 2, "K": 3,
+         "OCC": (3, 300), "LP": (40, 340), "MAX": (80, 380), "IDS": (120, 420)}
+
+
+def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> SimpleNamespace:
+    """`_registered`'s window of ``n`` coordinates reading the window's own scan state (`RA.TIED`), with ``shell`` units
+    of an io shell's `ScanSlots_v2` at `SLOTS` beside them, on random state rows, each with the outputs its Definition
+    gives it."""
+    from verity.ml.definitions.registry import boolean_io_shell as BX
+
+    fn = bind(BX.ScanSlotsV2, **SLOTS)
+    state = np.random.default_rng(2).integers(0, 1 << 16, (shell, SLOTS["NS"]), dtype=np.uint16)
+    got = np.asarray(evaluate_words(fn, state.astype(np.uint32)), dtype=np.uint32).reshape(shell, -1)
+    outs = np.split(got, np.cumsum([count // 2 for _o, count in IF.layout(fn).outs])[:-1], axis=1)
+    rng = np.random.default_rng(1)
+    rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
+    value = REG.Registered.commit("test/model", RA.TIED, rows.tolist(), schema=REG.SCHEMA_V2, window=RUN)
+    read = IF.Read(TID, "wrow", RA.TIED, 0, (n // 4, 4), 0, (0, K // 2))
+    registered = IF.Registered({RA.TIED: 4 * K // 2}, reads=(read,))
+    win = IF.Window(IF.Circuit("test", ((COORD, n), (fn, shell)), registered=registered), RUN, D.parse_law(LAW), cap,
+                    registered={RA.TIED: value})
+    x = rng.integers(-128, 128, (n, K)).astype(np.int8)
+    sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
+    ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
+    win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
+    win.record(fn, [state], [np.ascontiguousarray(o) for o in outs])
+    assert win.mismatches() == {}
+    entry = {"program": "test/model", "values": {RA.TIED: value.entry()}}
+    win.write(win.close(), d, {"label": "test", "activations": entry}, registrar=R)
+    return SimpleNamespace(dir=d, shell=fn)
+
+
+def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry_definition(tmp_path):
+    """``records_audit.py period`` as V3c runs it, in a process of its own, on a window whose circuit holds an io
+    shell's `ScanSlots_v2` beside the coordinates that read its scan state. `ScanSlots_v2` is a registry Definition,
+    which `interface.resolve`'s own walk doesn't import, so the period resolves the circuit's templates in Verity's
+    whole catalog (`catalog_resolve`): it counts the shell's state rows free beside the coordinates' own, where
+    `interface.resolve` alone refuses the window ("names no Definition in Verity's catalog")."""
+    got = _io_shell_window(tmp_path / "w")
+    audit = _audited(got.dir, tmp_path / "a")
+    p = subprocess.run([sys.executable, str(HERE.parent / "records_audit.py"), "period", "--window", str(got.dir),
+                        "--audit", str(audit), "--out", str(tmp_path / "p.json")], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
+    coord, state = (sum(16 * w for _p, w in IF.layout(fn).rows) for fn in (COORD, got.shell))
+    period = json.loads((tmp_path / "p.json").read_text())
+    assert period["free"] == 8 * coord - 8 * 8 * K + 3 * state and period["answer"]["verdict"] == "accept"
 
 
 def test_a_windows_committed_activations_are_held_to_domains_binding_its_run():

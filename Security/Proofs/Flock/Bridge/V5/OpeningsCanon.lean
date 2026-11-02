@@ -2,12 +2,12 @@ import Proofs.Flock.Bridge.V5.Statement
 import Proofs.Flock.Bridge.OpeningsCanon
 
 /-!
-# A drawn unit's openings are canonical at public inputs (`Bridge.OpeningsCanonTargetV5`, proved)
+# A drawn proof block's openings are canonical at public inputs (`Bridge.OpeningsCanonTargetV5`, proved)
 
 `OpeningsCanon.lean` at `keyProgP`, `rsZHJP` and `constsOfP`, whose constants are the constant, the zero and each
-unit's public gates:
+proof block's public gates:
 
-* `HiddenExec.rowOfHP_ne_none_of_io`: a committed wire of a drawn unit other than the constant, the zero and a public
+* `HiddenExec.rowOfHP_ne_none_of_io`: a committed wire of a drawn proof block other than the constant, the zero and a public
   gate has a row (`Layout.single_gateP`; a computed one is a returned output's, `OutsOutP`, so an output row's bit);
 * `Bridge.openingsCanonV5_row`: at a wire with a row `(u', q, k)`, the opening is canonical (`canonOpen`) at the row
   the public file's leaf map registers (`LeafMap.ref`), as in `openingsCanonH`;
@@ -27,9 +27,9 @@ variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {pi : HmIn.Ports} {Re
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length} {si : SitesHP plan tab}
 
-/-- **A committed wire of a drawn unit other than the constant, the zero and a public gate has a row** at public
+/-- **A committed wire of a drawn proof block other than the constant, the zero and a public gate has a row** at public
 inputs (`rowOfH_ne_none_of_io` at `keyProgP`): a committed gate with no row is the zero, the constant, a public gate or
-a computed gate of the unit (`Layout.single_gateP`), and a computed one is a returned output's (`OutsOutP`), so an
+a computed gate of the proof block (`Layout.single_gateP`), and a computed one is a returned output's (`OutsOutP`), so an
 output row's bit (`outBitRow_ne_none`). -/
 theorem rowOfHP_ne_none_of_io
     (hparse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
@@ -76,7 +76,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
     FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkSession
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 
-/-- **At a wire with a row, a drawn unit's opening is canonical** at public inputs (`canonOpen` at the row the public
+/-- **At a wire with a row, a drawn proof block's opening is canonical** at public inputs (`canonOpen` at the row the public
 file's leaf map registers): its commit string is `.inl (u', q)` (`Layout.ofRows_pos_some`), whose value is
 `(widthOf W (portRowW q), padBits b)`, canonical by `rowShaped_rowOf`, and whose salt is `saltLen` bytes. -/
 theorem _root_.Flock.Bridge.openingsCanonV5_row
@@ -120,8 +120,8 @@ theorem _root_.Flock.Bridge.openingsCanonV5_row
   exact Bridge.rowShaped_rowOf rfl
     ((Finset.le_sup (f := Discharge.Layout.portRowW D.unroll) (Finset.mem_univ q)).trans (Nat.le_succ _)) b
 
-/-- **At a constant wire, a drawn unit's opening carries the constant** at public inputs: the opening's bit is the
-decoder's (`opening_spec`), which at the public place reads the unit's constant column, `1` (`UnitPlace.decode_one`,
+/-- **At a constant wire, a drawn proof block's opening carries the constant** at public inputs: the opening's bit is the
+decoder's (`opening_spec`), which at the public place reads the proof block's constant column, `1` (`UnitPlace.decode_one`,
 `constCols_keyProgHP`), a zero column, `0` (`zeroCols_keyProgHP`), or, at a public gate, the bit its place holds
 (`Layout.block_gateAt`), which is its public input word's bit in the population's public file
 (`HiddenExec.keyProgHP_gate` at a gate with no row, `HiddenExec.rowOfHP_pub`, and `keyGateP_pub`). -/

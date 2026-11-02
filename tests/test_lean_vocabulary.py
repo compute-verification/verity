@@ -41,10 +41,12 @@ except:
 from __future__ import annotations
 
 import functools
+import io
 import json
 import re
 import subprocess
 import sys
+import tokenize
 import tomllib
 from collections import defaultdict
 from dataclasses import dataclass
@@ -85,7 +87,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Circuit": (f"{CORE}Circuit.lean::Verity.Circuit", f"{FLOCK}Circuit.lean::Flock.Circuit"),
     "CoinTree": (),
     "Coins": (f"{CORE}Draw.lean::Verity.Coins", f"{FLOCK}Statement.lean::Flock.Coins"),
-    "Collision": ("Security/Definitions/Hash/Basic.lean::Hash.Collision",),
+    "Collision": ("Security/Definitions/Core/Hash.lean::Hash.Collision",),
     "Commitment": ("verity/ml/commitments/merkle.py::Commitment",),
     "Dag": (),
     "Device": (),
@@ -127,6 +129,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Window": (),
     "Witness": (f"{CORE}TC/Relation.lean::Verity.TC.Relation.Witness",),
 }
+CANONICAL["Record"] = ("verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record",)
 
 RA, RA_PY = "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/", "verity/core/protocols/remote_bandwidth/audit.py"
 MC, MC_PY = "verity/core/devices/memory_challenger/lean/MemoryChallenger/", "verity/core/protocols/pous/"
@@ -280,11 +283,30 @@ def lean_definitions(text: str) -> tuple[list[tuple[str, Hit]], list[tuple[str, 
     return out, fields
 
 
+def _python_code(text: str) -> str:
+    """`text` with its string literals and comments blanked to spaces, newlines and offsets kept, so prose that wraps to
+    begin a line with `class X` isn't read as a header.  Every tracked file compiles, so one that doesn't tokenize raises."""
+    lines = text.splitlines(keepends=True)
+    tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    prose = {tokenize.STRING, tokenize.COMMENT, getattr(tokenize, "FSTRING_MIDDLE", tokenize.STRING)}
+    chars = [list(line) for line in lines]
+    for t in tokens:
+        if t.type in prose:
+            (r0, c0), (r1, c1) = t.start, t.end
+            for r in range(r0, r1 + 1):
+                row = chars[r - 1]
+                for c in range(c0 if r == r0 else 0, c1 if r == r1 else len(row)):
+                    if row[c] != "\n":
+                        row[c] = " "
+    return "".join("".join(row) for row in chars)
+
+
 def python_definitions(text: str) -> list[tuple[str, Hit]]:
     """The Python source `text`'s ``(concept, Hit)`` pairs: classes at module or class level (not local to a function),
-    keyed by their qualified name (`Outer.Inner`)."""
+    keyed by their qualified name (`Outer.Inner`). Strings and comments are not code (`_python_code`)."""
     if not _PY_CANDIDATE.search(text):
         return []
+    text = _python_code(text)
     out, stack = [], []  # stack: (indent, keyword, name) of the enclosing `class` and `def` headers
     for m in _PY_HEADER.finditer(text):
         indent, keyword, name = len(m.group(1).expandtabs()), m.group(2), m.group(3)
@@ -396,8 +418,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/CoinFlow.lean::Accounting.CoinFlow.Program":
         "homonym, a Program's dataflow over coins and values: rename (compute-accounting)",
-    "Security/Definitions/Accounting/Compose.lean::Accounting.Compose.Certificate":
-        "homonym, a credit certificate: rename (lean)",
     "Security/Definitions/Accounting/ComposePeriod.lean::Accounting.Compose.Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (lean)",
     "Security/Definitions/Accounting/Device.lean::Accounting.Device":
@@ -460,15 +480,11 @@ KNOWN: dict[str, str] = {
         "homonym, a tile shape: rename (compute-accounting)",
     "Security/Definitions/Accounting/TS/Machine.lean::Accounting.TS.Machine":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes a reading of it (compute-accounting)",
-    "Security/Definitions/Accounting/Tag/PolyHash.lean::Accounting.Tag.Block":
-        "homonym, a chunk of the store: rename (lean)",
     "Security/Definitions/Claims.lean::Claims.Circuit":
         "duplicate of `Verity.Circuit`: becomes it (the claims layer's AND/XOR wire circuit) (lean)",
     "Security/Definitions/Claims.lean::Claims.Flock.Stmt": "duplicate of `Flock.Stmt`: becomes its spec, in Core (lean)",
     "Security/Definitions/Claims.lean::Claims.Gate":
         "duplicate of `Verity.Circuit`'s gate: becomes it (the AND/XOR gate) (lean)",
-    "Security/Definitions/Claims/Recursion.lean::Claims.Recursion.Draw":
-        "duplicate of `Verity.Draw`: becomes it, as a V* session's record holds it (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Partition":
@@ -597,16 +613,12 @@ KNOWN: dict[str, str] = {
         "homonym, the old word for a run, here the challenger property's: rename (soundness)",
     "Security/Properties/Challenger.lean::Properties.Challenger.Witness":
         "duplicate of `Verity.TC.Relation.Witness`: becomes it (soundness)",
-    "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device":
-        "homonym, the memory challengers a property ranges over: rename (lean)",
     "Security/Properties/Pous/WipeSigned.lean::MemoryChallenger.Properties.Challenger":
         "homonym, the keys' signing sessions in the wipe-signing property: rename (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`): becomes what `Accounting.Remote.Node` becomes (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes what RemoteAudit becomes (lean)",
-    "Security/Properties/RemoteAudit/Live.lean::Properties.RemoteAudit.Live.Answer":
-        "homonym, a live answer: rename (lean)",
     # benchmarks/
     "benchmarks/bandwidth/gpu.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (one pass's root) (memory-accounting)",
@@ -630,7 +642,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`): becomes its device entry (network-accounting)",
     "benchmarks/datacenter/datacenter/physical.py::Link":
         "duplicate of the Site (`Verity.Site`): becomes its link (network-accounting)",
-    "benchmarks/harness/verity_bench/settings.py::Registry": "homonym, one distribution's settings: rename (benchmarks)",
     "benchmarks/hash/dither/dither_fused.py::Window": "homonym, a Dither kernel's device state: rename (kernels)",
     "benchmarks/hash/dither/dither_one.py::Window": "homonym, a Dither kernel's device state: rename (kernels)",
     "benchmarks/hash/lib/vclib.py::Opening": "homonym, one vc_open_launch record: rename (kernels)",
@@ -837,8 +848,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a client of it (vllm)",
     "integrations/vllm/verity_vllm/protocols/remote_bandwidth/interface.py::Registration":
         "duplicate of the registration log (`Verity.Registration`, not yet in Core: LEAN-93): becomes a view of its head (vllm)",
-    "integrations/vllm/verity_vllm/protocols/remote_bandwidth/registry.py::Store":
-        "duplicate of `CircuitRequirement.Store`: becomes a reading of it (vllm)",
     "integrations/vllm/verity_vllm/query/units.py::Program": "homonym, what a query reads: rename (circuits)",
     # tools/
     "integrations/vllm/verity_vllm/records/inference_blocks.py::Statement":
@@ -850,7 +859,6 @@ KNOWN: dict[str, str] = {
     "tools/research/src/research/compare.py::Verdict": "homonym, a run comparison's result: rename (infra)",
     "tools/research/src/research/drive.py::Verdict": "homonym, a queue train's land verdict: rename (ci)",
     "tools/verity/cli/verity_cli/run.py::Registry": "homonym, what `verity run` reads off step 0's table: rename (ci)",
-    "tools/verity/lean/run_daily.py::Node": "homonym, node 1's paths for the daily Lean run: rename (lean)",
     # verity/core/
     "verity/core/attest/__init__.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
@@ -901,6 +909,8 @@ KNOWN: dict[str, str] = {
     "verity/core/protocols/certifier/lean/NetworkCertifier/WindowCharge.lean::NetworkCertifier.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
     "verity/core/protocols/certifier/replay_chain.py::Window": "homonym, a replay row: rename (network-accounting)",
+    "verity/core/protocols/certifier/window_charge.py::Window":
+        "homonym, one sampling block's charge: rename (network-accounting)",
     "verity/core/protocols/certifier/service.py::Opening":
         "homonym, a link-window's witness: rename (network-accounting)",
     "verity/core/protocols/certifier/window_charge.py::Window":
@@ -1303,6 +1313,21 @@ class CoinsFor: ...
 """
     assert [(c, h.key, h.line) for c, h in python_definitions(src)] == [
         ("Coins", "Coins", 1), ("Draw", "Coins.Draw", 2), ("Window", "Window", 13)]
+
+
+def test_the_scan_reads_no_class_in_a_string_or_comment():
+    """Prose that wraps to begin a line with `class X` (a docstring, a comment, a string) declares nothing."""
+    src = '''"""The census. ``key_blocks`` is the
+class Coins's attention cut, which the cost reads."""
+# class Window: a comment, not a header
+NOTE = """
+class Draw
+"""
+
+class Witness:
+    pass
+'''
+    assert [(c, h.key, h.line) for c, h in python_definitions(src)] == [("Witness", "Witness", 8)]
 
 
 def test_readings_and_slots_are_exempt():

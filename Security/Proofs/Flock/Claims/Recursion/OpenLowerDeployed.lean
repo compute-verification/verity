@@ -727,6 +727,7 @@ theorem hh_le_staged {st : Stage} {x : Msg} {r : XR} {ss : Array VStar.Stmt} {s 
   rw [hsv] at hsv'
   cases hsv'
   obtain ⟨_, P⟩ := _root_.Flock.Readable.parseFacts_of_parse hxO htyp hpi ht
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 ht).2.2)
   have hn : p.sts[0].c.unit.name = _root_.Flock.RecOpen.unitName LANES HH := (htab 0 ht).1
   obtain ⟨hv, -⟩ := _root_.Flock.RecOpen.check_ok P.recNet (FlockVBridge.params_of_check P.recNet hn)
   simp only [_root_.Flock.RecOpen.valid, Bool.and_eq_true, decide_eq_true_eq] at hv
