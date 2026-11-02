@@ -136,6 +136,7 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.refs import Coll, Explicit, array_of, concat
 from verity.ml.circuits.types import Array, RecordType, Value
 
+from verity.core.protocols.pouw.leaf_lanes import LEAST_K
 from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks
 
 from . import h1tile as H
@@ -553,10 +554,6 @@ PouwH1Combine2 = CompositeDefinition(
         "chunks in chain order), a 16-bit word. ok is 1 exactly when the partials' XOR is the receipt and every ok row is "
         "the word 1, so it is the leaf's one ok, an AND tree over its statements', and theirs are committed values, never "
         "outputs.")
-
-
-#: the least K at which a leaf's combine is proved (`combine`); a lane is proved at any K the Definitions bind (64 <= K)
-LEAST_K = 384
 
 
 def _leaf(tile: Any) -> int:
