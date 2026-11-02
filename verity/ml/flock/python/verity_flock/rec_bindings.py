@@ -50,8 +50,8 @@ def vstar_definition(unit: str, holo: bool = False):
     """V*'s Definition of the statement whose unit is ``unit`` (`Flock.RecVStar.templateId`'s): a level's of the table or of
     R ``RecOpen{LANES, H}``; a part of the algebra (at the inner session's holo flag ``holo``) or of R's opening
     ``InnerRepCheck{S}`` at its part's S (`rec_residuals.parts`, as `rec_vstage.stage` and `stage_opening` cut it);
-    RecSparse at its shape; a cap's RecCap; the link table's ``RecLink{UB, PB}``. `ValueError` for a unit that is none of
-    V*'s."""
+    RecSparse at its shape; a cap's RecCap; the link table's RecLink at its ``(UB, PB)``. `ValueError` for a unit that is
+    none of V*'s."""
     from . import rec_cap, rec_link
 
     n = r"([0-9]+)"

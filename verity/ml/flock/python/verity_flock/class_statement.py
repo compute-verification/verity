@@ -627,10 +627,9 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     every input word zero, one source identity of their own per port (so the fillers open one committed row, zero, per port),
     and the output the class lowering's own on them, checked as every lane's is (`stage_tiled`'s ``real``).
 
-    ``share_rows=False`` (an unwired class): every instance opens its own row per port, equal rows included, and the public file
-    has no shared-row tables, the form a verifier without its own registered reads covers (``ProvedScope.sharedRowsOk``)."""
-    if wiring is not None and not share_rows:
-        raise ValueError("a wired class's link rows are its writers' shared rows (share_rows)")
+    ``share_rows=False``: every instance opens its own row per port, equal rows included, and the public file has no shared-row
+    tables, the form a verifier without its own registered reads covers (``ProvedScope.sharedRowsOk``); a wired class's link
+    rows are then each reading instance's own, still under its writer's ``out`` salt."""
     core_rows = CORE_ROWS if core_rows is None else core_rows
     packed = True if core_rows else PACK_WORDS if packed is None else packed
     act = units.activation(cl.definition)
@@ -728,16 +727,17 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     salts = None
     if links:
         ports = FC._meta_ports(meta)
-        salts = FC.stage_salts(iset, 0, n, ports, salt_key, {p.name: len(tables[p.name]) if p.name in tables else n for p in ports})
+        salts = FC.stage_salts(iset, 0, n, ports, salt_key,
+                               {p.name: len(tables[p.name]) if p.name in tables else n for p in ports} if share_rows else None)
         out_name = ports[-1].name
         for i, ws in enumerate(writers):
             if ws is None:
                 continue
-            for r, k in enumerate(firsts[f"p{i}"]):
+            for r, k in enumerate(firsts[f"p{i}"] if share_rows else range(n)):
                 w = ws[k]
                 if w is None:
                     continue
-                row = tables[f"p{i}"][r]
+                row = tables[f"p{i}"][r] if share_rows else per_port[f"p{i}"][k]
                 if wiring.strict and (not np.array_equal(row[:outs.shape[1]], outs[w]) or row[outs.shape[1]:].any()):
                     raise AssertionError(f"class {name}: instance {k}'s link row p{i} is not instance {w}'s output row")
                 if wiring.writer_salts:

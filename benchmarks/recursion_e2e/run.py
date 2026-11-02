@@ -101,12 +101,22 @@ def levels(a) -> str:
     return next((e.split("=", 1)[1] for e in reversed(a.env) if e.startswith("LEVELS=")), "")
 
 
+def rec_links(a) -> bool:
+    """REC_LINKS=1 as --env passes it to 85 (the last one wins): the inner population wired, and V*'s link part and its
+    forgery (forged-link) staged and proved beside the other statements."""
+    return next((e.split("=", 1)[1] for e in reversed(a.env) if e.startswith("REC_LINKS=")), "0") == "1"
+
+
 def max_min(a) -> int:
-    """The job's limit: its statements' firewalled releases (with MARGIN) plus each other step's minutes per repeat."""
+    """The job's limit: its statements' firewalled releases (with MARGIN) plus each other step's minutes per repeat. With
+    REC_LINKS=1 the link part's releases and its forgery's are each budgeted as the largest measured statement's, until
+    its own is measured."""
     sessions = a.oprove_warm + a.oprove_runs
     fw = "firewall" in a.modes.split(",")
     forged = [s for k in forge(a) for s in statements(FORGED[k])]
-    oprove = MARGIN * (sessions * sum(FW_S[s] for s in statements(levels(a))) + sum(FW_S[s] for s in forged)) / 60 if fw else 15
+    links = (sessions + 1) * max(FW_S.values()) if rec_links(a) else 0
+    oprove = MARGIN * (sessions * sum(FW_S[s] for s in statements(levels(a))) + sum(FW_S[s] for s in forged) + links) / 60 \
+        if fw else 15
     rest = sum(m * (a.repeat if s in ("icheck", "vstage", "vcap", "oreplay", "lean") else 1)
                for s, m in OTHER_MIN.items() if s in steps(a.steps))
     # 85's CPU prover built once (oprove under the ZK server, OPROVE_GPU=0), and its proofs: a minute a statement
