@@ -1988,18 +1988,17 @@ class Queue:
         if old is None or old[1].get("why") is not None or not old[1].get("tree"):
             return False
         old_base, old_tree = old[0].rpartition(":")[2], old[1]["tree"]
-        diffs = [_git(self.workdir, "diff-tree", "-r", "-z", "--no-renames", a, b, check=False)
-                 for a, b in ((old_base, old_tree), (base_tree, tree), (old_base, base_tree))]
-        if any(r.returncode for r in diffs) or diffs[0].stdout != diffs[1].stdout:
+
+        def rows(a: str, b: str) -> list[tuple[str, str]] | None:
+            r = _git(self.workdir, "diff-tree", "-r", "-z", "--no-renames", a, b, check=False)
+            parts = r.stdout.split("\0")
+            return None if r.returncode else [(meta, path) for meta, path in zip(parts[::2], parts[1::2])]
+
+        change = rows(old_base, old_tree)
+        if change is None or change != rows(base_tree, tree) or (between := rows(old_base, base_tree)) is None:
             return False
-
-        def rows(raw: str) -> list[tuple[str, str]]:
-            parts = raw.split("\0")
-            return [(meta.rpartition(" ")[2], path) for meta, path in zip(parts[::2], parts[1::2])]
-
-        between = rows(diffs[2].stdout)
         ruled = lambda path: any(path == r or (r.endswith("/") and path.startswith(r)) for r in PREFLIGHT_RULES)  # noqa: E731
-        return not (any(status == "D" for status, _ in [*between, *rows(diffs[0].stdout)]) or any(ruled(p) for _, p in between))
+        return not any(meta.endswith(" D") for meta, _ in [*change, *between]) and not any(ruled(p) for _, p in between)
 
     def _unmerged(self, r: subprocess.CompletedProcess, files: list[str], members: list[Member]) -> str:
         if not files:
