@@ -472,6 +472,40 @@ def test_records_only_stores_every_record_and_a_forked_run_from_a_copy_of_them_b
     assert out["values"] == _fresh(edited)["values"]
 
 
+#: `cli._owners` with the CPU seconds it has of each binding written beside the tree (``<root>-seconds.json``)
+OWNERS = """
+owners = cli._owners
+def weighed(plan, tasks, n):
+    (root.parent / f"{root.name}-seconds.json").write_text(json.dumps({e.name: e.seconds for e in plan.entries}))
+    return owners(plan, tasks, n)
+cli._owners = weighed
+"""
+
+
+@pytest.mark.slow
+def test_records_built_again_are_the_same_bytes_with_each_build_s_seconds_beside_its_record(tmp_path):
+    """A record holds what its binding's build gave and read, never how long the build took: ``--records-only`` into a fresh
+    cache stores the very records it stored before, names and bytes, so a tarball of them (the circuit-catalog task's) has one
+    digest.  The CPU seconds of each binding built apart are kept beside its record (``<entry>.seconds``), and a forked run
+    from a copy of the cache weighs each binding by them (`cli._owners`)."""
+    root = _tree(tmp_path / "t")
+    _bindings(root, *BINDINGS)
+    _records_only(root)
+    first = {p.relative_to(root / "cache"): p.read_bytes() for p in _records(root)}
+    shutil.rmtree(root / "cache")
+    _records_only(root)
+    assert {p.relative_to(root / "cache"): p.read_bytes() for p in _records(root)} == first and len(first) == 5
+    assert not any("seconds" in json.loads(b)["report"] for b in first.values())
+    took = {",".join(json.loads(p.read_text())["key"]["request"]["target"][1]): float(s.read_text())
+            for p in _records(root) if (s := p.with_suffix(".seconds")).is_file()}
+    assert len(took) >= 4, took
+    warm = _copied(root, tmp_path / "warm")
+    out = _run(warm, FORKED.replace("rep = cli.run(", OWNERS + "rep = cli.run("))
+    assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0}
+    weighed = json.loads((tmp_path / "warm-seconds.json").read_text())
+    assert {n: weighed[n] for n in took} == took and all(s is None for n, s in weighed.items() if n not in took)
+
+
 #: a reference two bindings bind at two statics (as `verity.ml.kernels.tc`'s sidecar and the gemm-coordinate template bind
 #: the NVFP4 dot), a word primitive whose Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.
 #: trace` makes one) only another binding's body build registers (as `boolean_marlin_moe`'s gathers), and one whose Boolean
