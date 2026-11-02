@@ -1275,6 +1275,76 @@ def final_launch(ids: list[str], seeds=FINAL_SEEDS, dry_run: bool = False, node:
     return out
 
 
+GPUS_PER_NODE = 8  # each node's gpu pool, g0-g7
+FINAL_LINE = re.compile(r"^(\d\d:\d\dZ) (\S+) \[FINAL\] (.*)$")
+
+
+def final_entries() -> dict[str, dict]:
+    """Each direction's last FINAL line ({at, ids, text}): from its own board (islands/*/BOARD.md on every cursor/te-*
+    branch) and the merged board (BOARD.md on cursor/te-digest-4207), the later line winning."""
+    heads = git("ls-remote", "--heads", "origin", "cursor/te-*").split()[1::2]
+    subprocess.run(["git", "-C", str(REPO), "fetch", "-q", "origin", *(f"+{h}:refs/remotes/origin/{h[11:]}" for h in heads)],
+                   capture_output=True, text=True)
+    out: dict[str, dict] = {}
+    for h in heads:
+        ref = f"origin/{h[11:]}"
+        paths = [p for p in git("ls-tree", "-r", "--name-only", ref, "--", "benchmarks/covert_witness").splitlines()
+                 if p.endswith("BOARD.md") and (p.startswith(f"{ISLANDS}/") or ref == "origin/cursor/te-digest-4207")]
+        for p in paths:
+            for ln in git("show", f"{ref}:{p}").splitlines():
+                m = FINAL_LINE.match(ln.strip())
+                if m and (m[2] not in out or m[1] >= out[m[2]]["at"]):
+                    out[m[2]] = {"at": m[1], "text": m[3], "board": f"{h[11:]}:{p}", "ids": list(dict.fromkeys(
+                        re.findall(r"\b(r\d{8}-\d{6}-[0-9a-f]{4}|(?<=art:)[0-9a-f]{12,64}|[0-9a-f]{12,64})\b", m[3])))}
+    return out
+
+
+def final_plan(deadline: str = "15:20", seeds=FINAL_SEEDS) -> dict:
+    """The FINAL entries in launch order, and which of their reruns can end by `deadline` (UTC today) on the listed
+    nodes' GPUs: entries that set honest or W* in the current table first (most cells first), then the rest in their
+    direction's order, then table-setters no direction named. A rerun's time is its record's GPU seconds plus 10 minutes."""
+    rows = [json.loads(l) for l in (STATE / "index.jsonl").read_text().splitlines() if l.strip()]
+    rep = json.loads((STATE / "score.json").read_text())
+    sets: dict[str, int] = {}
+    for st in rep["starts"].values():
+        for t in st["targets"]:
+            for i in [t["honest_id"], *(c["id"] for c in t["cells"].values())]:
+                if i:
+                    sets[i] = sets.get(i, 0) + 1
+    fin, named, refused = final_entries(), [], []
+    for d, f in fin.items():
+        for k, i in enumerate(f["ids"]):
+            x = next((r for r in rows if r["source"] == "launch.py" and (r["id"].removeprefix("art:").startswith(i)
+                                                                         or r.get("run") == i)), None)
+            if x is None or not x["valid"] or x.get("final") or x.get("regime") != "current":
+                refused.append({"direction": d, "id": i, "why": "no record" if x is None else "invalid" if not x["valid"]
+                                else "earlier regime" if x.get("regime") != "current" else "a final rerun"})
+            elif x["id"] not in {y["id"] for y, _, _ in named}:
+                named.append((x, d, k))
+    order = sorted(named, key=lambda e: (-sets.get(e[0]["id"], 0), e[2], e[1]))
+    extra = [(x, "(table)", 9) for x in rows if sets.get(x["id"]) and x["id"] not in {y["id"] for y, _, _ in named}
+             and x["source"] == "launch.py"]
+    nodes = [ln.split()[0] for ln in (official_src() / "benchmarks" / "covert_witness" / "nodes.txt").read_text().splitlines()
+             if ln.strip() and not ln.startswith("#") and "pool=" in ln]
+    t0 = datetime.now(timezone.utc)
+    end = t0.replace(hour=int(deadline[:2]), minute=int(deadline[3:]), second=0, microsecond=0)
+    free = [0.0] * (GPUS_PER_NODE * len(nodes))
+    plan = []
+    for x, d, _ in order + sorted(extra, key=lambda e: -sets[e[0]["id"]]):
+        dur = (x.get("gpu_seconds") or 3000) + 600
+        ss = list(seeds if seed_args(x, 0) else seeds[:1])
+        fit = []
+        for s in ss:
+            j = min(range(len(free)), key=free.__getitem__)
+            if t0.timestamp() + free[j] + dur <= end.timestamp():
+                free[j] += dur
+                fit.append(s)
+        plan.append({"id": x["id"], "direction": d, "start": x["start"], "sets_cells": sets.get(x["id"], 0),
+                     "gpu_seconds": x.get("gpu_seconds"), "seeds": fit, "dropped_seeds": [s for s in ss if s not in fit]})
+    return {"at": now(), "deadline": deadline, "nodes": nodes, "gpus": len(free), "finals": fin, "refused": refused,
+            "plan": plan}
+
+
 def final_collect() -> list[dict]:
     """Every launched rerun's state; once it ended, its record put by launch.py --collect (meta final: true, not ingested
     into the search's ledger), its witness (every score the final set's) and te_core's submissions from its run.json."""
@@ -1512,14 +1582,22 @@ def main(argv=None) -> int:
     p = sub.add_parser("post", help="append one line to the board and push")
     p.add_argument("tag")
     p.add_argument("text")
-    f = sub.add_parser("final", help="final-set reruns (launch.py --final): launch IDS, collect, table")
-    f.add_argument("what", choices=("launch", "collect", "table"))
+    f = sub.add_parser("final", help="final-set reruns (launch.py --final): entries, plan, launch IDS, collect, table")
+    f.add_argument("what", choices=("entries", "plan", "launch", "collect", "table"))
     f.add_argument("ids", nargs="*", help="launch: record ids (12-hex prefixes)")
     f.add_argument("--seeds", default=",".join(map(str, FINAL_SEEDS)))
     f.add_argument("--node", default=None, help="launch: one of nodes.txt's nodes (default: launch.py's turn)")
+    f.add_argument("--deadline", default="15:20", help="plan: HH:MM UTC by which a planned rerun ends")
     f.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
     if a.cmd == "final":
+        if a.what in ("entries", "plan"):
+            rep = final_entries() if a.what == "entries" else final_plan(a.deadline, tuple(int(s) for s in a.seeds.split(",")))
+            if a.what == "plan":
+                FINAL.mkdir(parents=True, exist_ok=True)
+                (FINAL / "plan.json").write_text(json.dumps(rep, indent=1) + "\n")
+            print(json.dumps(rep, indent=1))
+            return 0
         if a.what == "launch":
             res = final_launch(a.ids, tuple(int(s) for s in a.seeds.split(",")), a.dry_run, a.node)
         elif a.what == "table":
