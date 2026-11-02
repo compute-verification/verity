@@ -95,7 +95,8 @@ variable {acc setup}
 theorem sessOf_eq {record : String} {spec : SessionSpec} {sts : Array Stmt} {sess : Session}
     (hs : setup record = .ok (spec, sts)) (hd : Record.decode spec record = .ok sess) :
     sessOf setup record = some (spec, sess) := by
-  simp [sessOf, hs, hd, Except.toOption]
+  simp only [sessOf, hs, hd]
+  rfl
 
 /-- **A transcript records its own view**: where its record carries the draw `d` and, wherever it decodes, its decoded
 session has both rep streams of each of the `J` tables, the transcript records `viewA` (`RecordsLiveAtA`). -/
@@ -107,7 +108,7 @@ theorem recordsLiveAt_viewA {d : Json} {J : ℕ} {t : Exec.Transcript}
     RecordsLiveAtA acc setup d (viewA setup J mPts t) t := by
   intro ha
   refine ⟨hd ha, rfl, fun spec sts sess hset hdec => ?_⟩
-  have e := sessOf_eq (setup := setup) hset hdec
+  have e := sessOf_eq hset hdec
   refine ⟨by simp only [viewA, e, Option.map_some, Option.getD_some], fun j =>
     ⟨by simp only [viewA, e, Option.map_some, Option.getD_some], fun r => ?_⟩⟩
   obtain ⟨s, hsf⟩ := hs ha spec sts sess hset hdec j.val j.isLt r.val r.isLt
@@ -134,8 +135,7 @@ theorem recordsLiveZKJA_wrA (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) 
   split
   · rename_i h
     exact (Classical.choose_spec h).2
-  · intro h
-    exact absurd h hnil
+  · exact fun h => absurd h hnil
 
 /-- **`wrA` is accepted at an outcome an accepted transcript records.** -/
 theorem acc_wrA (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg → ℕ) {S : Finset (Fin n)} {R : Reg}
@@ -143,7 +143,7 @@ theorem acc_wrA (dj : Finset (Fin n) → Json) (Jf : Finset (Fin n) → Reg → 
     acc (wrA acc setup dj Jf S R o) := by
   have hex : ∃ t, acc t ∧ RecordsLiveAtA acc setup (dj S) o t := ⟨t, ha, hr⟩
   unfold wrA
-  rw [dif_pos hex]
+  rw [dite_eq_left hex]
   exact (Classical.choose_spec hex).1
 
 end Any
@@ -160,12 +160,7 @@ theorem repStreams_size_two (spec : SessionSpec) : spec.repStreams.size = 2 * sp
       [(i, 0, s!"{spec.tables[i]!}/rep{0}"), (i, 1, s!"{spec.tables[i]!}/rep{1}")] := by
     simp [SessionSpec.repStreams, Array.toList_flatMap]
   rw [← Array.length_toList, e]
-  generalize spec.tables.size = m
-  induction m with
-  | zero => simp
-  | succ k ih =>
-    rw [List.range_succ, List.flatMap_append, List.length_append, ih]
-    simp <;> omega
+  simp [List.length_flatMap, List.sum_replicate, Nat.mul_comm]
 
 /-- **`verify --zk --public-inputs` refuses a session without proof files**: `Zk.verify` expects one per rep stream,
 two per table, and at least one table. -/
@@ -192,8 +187,7 @@ theorem recordsLiveZKJA_wrZP (I : Exec.Inputs) (own : Option ByteArray) (dj : Fi
     (Jf : Finset (Fin n) → Reg → ℕ) :
     Composed.RecordsLiveZKJA (mPts := mPts) (AcceptsZKP I own) (Exec.setupOfP (zkInputs I) own) dj Jf
       (wrZP I own dj Jf) :=
-  recordsLiveZKJA_wrA (acc := AcceptsZKP I own) (setup := Exec.setupOfP (zkInputs I) own) dj Jf
-    (not_acceptsZKP_nil I own "")
+  recordsLiveZKJA_wrA dj Jf (not_acceptsZKP_nil I own "")
 
 /-- **`RecordCustodyZKJP` at `wrZP`** is its draw file half (`DrawFileZK`) alone. -/
 theorem recordCustodyZKJP_wrZP (I : Exec.Inputs) (own : Option ByteArray) (dj : Finset (Fin n) → Json)
@@ -240,8 +234,7 @@ theorem recordsLiveAt_viewZP {I : Exec.Inputs} {own : Option ByteArray} {d : Jso
     (hd : Exec.recordDraw t.record = some d)
     (hJ : ∀ spec sts, Exec.setupOfP (zkInputs I) own t.record = .ok (spec, sts) → J ≤ sts.size) :
     RecordsLiveAtA (AcceptsZKP I own) (Exec.setupOfP (zkInputs I) own) d (viewZP I own J mPts t) t :=
-  recordsLiveAt_viewA (acc := AcceptsZKP I own) (setup := Exec.setupOfP (zkInputs I) own) (fun _ => hd)
-    fun ha spec sts sess hs hdec j hj r hr =>
+  recordsLiveAt_viewA (fun _ => hd) fun ha spec sts _ hs hdec j hj r hr =>
     acceptsZKP_streams ha hs hdec j (lt_of_lt_of_le hj (hJ spec sts hs)) r hr
 
 /-- **The verifier accepts what `wrZP` writes for an accepted transcript's view**: where `AcceptsZKP I own` accepts `t`,
@@ -251,7 +244,7 @@ theorem acceptsZKP_wrZP {I : Exec.Inputs} {own : Option ByteArray} (dj : Finset 
     (hd : Exec.recordDraw t.record = some (dj S))
     (hJ : ∀ spec sts, Exec.setupOfP (zkInputs I) own t.record = .ok (spec, sts) → Jf S R ≤ sts.size) :
     AcceptsZKP I own (wrZP I own dj Jf S R (viewZP I own (Jf S R) mPts t)) :=
-  acc_wrA (acc := AcceptsZKP I own) (setup := Exec.setupOfP (zkInputs I) own) dj Jf ha (recordsLiveAt_viewZP hd hJ)
+  acc_wrA dj Jf ha (recordsLiveAt_viewZP hd hJ)
 
 /-- **What `wrZP` writes for an accepted transcript's view records that view** (`RecordsLiveAtA`, from
 `recordsLiveZKJA_wrZP`): the draw `dj S`, `t`'s proof files, and `t`'s decoded link points, roots and rounds. -/
@@ -269,8 +262,8 @@ theorem acceptsZKP_wrZP_planZHJP {I : Exec.Inputs} {own : Option ByteArray} (hh 
     {t : Exec.Transcript} (ha : AcceptsZKP I own t) (hd : Exec.recordDraw t.record = some (dj S)) :
     AcceptsZKP I own (wrZP I own dj (fun S R => (ZkHidden.planZHJP (Reg := Reg) dj y₀ S R).length) S R
       (viewZP I own (ZkHidden.planZHJP (Reg := Reg) dj y₀ S R).length mPts t)) :=
-  acceptsZKP_wrZP dj (fun S R => (ZkHidden.planZHJP (Reg := Reg) dj y₀ S R).length) ha hd fun _ _ hs =>
-    le_of_eq ((ZkHidden.planZHJP_length dj y₀ S R).trans (ZkHidden.setupOf_tableJHP hh hd hs).1.symm)
+  acceptsZKP_wrZP dj _ ha hd fun _ _ hs => by
+    rw [ZkHidden.planZHJP_length, (ZkHidden.setupOf_tableJHP hh hd hs).1]
 
 end Zk
 

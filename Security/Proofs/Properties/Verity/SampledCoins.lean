@@ -54,7 +54,7 @@ theorem bitsAt_injective : Function.Injective (bitsAt k B) := by
   funext i p
   obtain rfl : i = 0 := Subsingleton.elim _ _
   have hB : 0 < B := Nat.pos_of_ne_zero fun h0 => by subst h0; exact absurd p.isLt (by simp)
-  have hc : p.val / B < k := Nat.div_lt_of_lt_mul (by rw [Nat.mul_comm]; exact p.isLt)
+  have hc : p.val / B < k := Nat.div_lt_of_lt_mul (lt_of_lt_of_eq p.isLt (Nat.mul_comm k B))
   have hp : p.val = (⟨p.val / B, hc⟩ : Fin k).val * B + p.val % B := (Nat.div_add_mod' p.val B).symm
   have hq : p.val % B < B := Nat.mod_lt _ hB
   refine Fin.ext (Nat.eq_of_testBit_eq fun j => ?_)
@@ -112,8 +112,8 @@ def ofBits (l : List Bool) : ℕ := l.foldr (fun b n => (if b then 1 else 0) + 2
 theorem ofBits_bits : ∀ n < 256, ofBits ((List.range 8).map fun i => n.testBit i) = n := by decide +kernel
 
 theorem byteBits_inj {x y : UInt8} (h : byteBits x = byteBits y) : x = y := by
-  have hx := ofBits_bits x.toNat (lt_of_lt_of_le x.toNat_lt (by norm_num))
-  have hy := ofBits_bits y.toNat (lt_of_lt_of_le y.toNat_lt (by norm_num))
+  have hx := ofBits_bits x.toNat x.toNat_lt
+  have hy := ofBits_bits y.toNat y.toNat_lt
   change ofBits (byteBits x) = x.toNat at hx
   change ofBits (byteBits y) = y.toNat at hy
   rw [h] at hx
@@ -150,7 +150,7 @@ theorem bitsOf_eq (b : ByteArray) : bitsOf b = b.data.toList.flatMap byteBits :=
 theorem byteBits_ofFin (a : Fin 256) :
     byteBits (UInt8.ofFin a) = List.ofFn fun j : Fin 8 => a.val.testBit j.val := by
   refine List.ext_getElem (by simp [byteBits]) fun i h1 h2 => ?_
-  simp [byteBits] <;> rfl
+  simp only [byteBits, List.getElem_map, List.getElem_range, List.getElem_ofFn] <;> rfl
 
 /-- `bitsOf` is one to one: a byte string is the only one with its bits. -/
 theorem bitsOf_injective : Function.Injective bitsOf := by
