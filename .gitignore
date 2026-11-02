@@ -57,6 +57,7 @@ verity/ml/flock/tests/fixtures/f1-gate
 verity/ml/flock/tests/fixtures/forged-proofs
 verity/ml/flock/tests/fixtures/hidden-outputs
 verity/ml/flock/tests/fixtures/honest-plain
+verity/ml/flock/tests/fixtures/honest-session
 benchmarks/pouw/machine_model/data/cover/corpus.json
 benchmarks/pouw/sass_census/data/bu_12_9.json
 benchmarks/pouw/sass_census/data/sass_isa_tables.json
