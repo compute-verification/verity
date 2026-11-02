@@ -14,12 +14,22 @@ decoder can carry) or with a list index, and single entries with an entropy-code
 - `lines`: whole rows and columns of the block matrices, the lines with the most selection energy per byte across the
   candidate matrices (a learned per-layer budget); a row i is the factor pair B = e_i (the mask), A = its values, a column
   j is A = e_j, B = its values, so the mask costs d_out (row) or d_in (column) bf16 entries;
-- `lora`: LoRA with each candidate matrix's rank allocated greedily by the probe gradient's σ² per byte.
+- `lora`: LoRA with each candidate matrix's rank allocated greedily by the probe gradient's σ² per byte;
+- `qlora`: `lora` with `--bits`-bit factors (CWQUAN1: A one f16 scale per row, B one per 64 rows), so a rank costs
+  (d_in + d_out) · bits / 8 bytes; the forward reads the codes, the factors train through them (straight-through);
+- `signrows`: whole rows of the block matrices as `--bits`-bit codes of a delta (1 bit: a sign times the row's f16 scale),
+  rows chosen by the selection energy per byte; E is a CWQUAN1 delta over each touched matrix whose other rows have
+  scale 0, which the entropy coder all but drops, so the mask costs next to nothing.
 
-The gains (`--norms`) can ride along with `lines` and `lora`. `--layers top:N` keeps every touched tensor in the top N
-blocks (the final norm included), so the backward stops there and a step costs less. `--embed-rank R` gives the tied
-embedding a rank-R LoRA (E carries it as one factor pair on `embed`; training applies it in factored form to both the
-lookup and the head), its (vocab + d) · R bf16 entries taken before the block matrices' allocation.
+The gains (`--norms`) can ride along with every mechanism: in bf16 with the CWLORA1 ones, as `--norm-bits` deltas with
+the CWQUAN1 ones (θ is fp32, so a gain carried in full would cost 4 bytes). `--layers top:N` keeps every touched tensor
+in the top N blocks (the final norm included), so the backward stops there and a step costs less. `--embed-rank R` gives
+the tied embedding a rank-R LoRA (E carries it as one factor pair on `embed`; training applies it in factored form to
+both the lookup and the head), its (vocab + d) · R entries taken before the block matrices' allocation. `--cap` sets a
+byte bin below the class's cap (the 10 kB bin, or Fit's ~1.8 kB at the reference policy).
+
+The record's notes give `delta_grad`: the trainable values N and the gradient plus AdamW's m and v passed between token
+blocks, 3N fp32 values (a straight-through code trains fp32 latents, so codes shrink E and not this).
 
 E is encoded at the end of every 5% of the harness's steps (the probe's batches included, `hooks.plan`), so each of the
 harness's checkpoints scores the most training its 5% holds.
@@ -31,7 +41,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import lzma
 import math
+import struct
 import time
 from pathlib import Path
 
@@ -227,14 +239,16 @@ def plan_lines(cands: list[str], energy: dict, theta: dict, budget: int, orient:
     return {n: (sorted(r), sorted(c)) for n, (r, c) in plan.items()}
 
 
-def plan_lora(cands: list[str], G: dict, budget: int, max_rank: int, have: dict | None = None) -> dict[str, int]:
-    """{matrix: rank}: rank units by the gradient's σ² per byte while they fit `budget` bytes; with `have` (the ranks the
-    matrices already hold), each matrix's units start past its held rank and the ranks returned are the added ones."""
+def plan_lora(cands: list[str], G: dict, budget: int, max_rank: int, have: dict | None = None,
+              bits: int = 16) -> dict[str, int]:
+    """{matrix: rank}: rank units by the gradient's σ² per byte while they fit `budget` bytes, a rank costing
+    (d_in + d_out) · bits / 8 bytes; with `have` (the ranks the matrices already hold), each matrix's units start past its
+    held rank and the ranks returned are the added ones."""
     have = have or {}
     units = []
     for n in cands:
         d_out, d_in = G[n].shape
-        cost = 2 * (d_in + d_out)
+        cost = (d_in + d_out) * bits / 8
         s2 = torch.linalg.svdvals(G[n].float()).pow(2)[:max_rank].tolist()
         for k in range(have.get(n, 0), len(s2)):
             units.append((s2[k] / cost, cost, n, k))
@@ -308,12 +322,131 @@ def e_bytes(mech: str, theta: dict, norms: list[str], plan, folded=()) -> int:
     return len(prepare._pack(b"CWLORA1\n", header, b"")) + 2 * elems
 
 
-def tie_lora(lm, A: torch.Tensor, B: torch.Tensor, s: float) -> None:
+# ---- CWQUAN1 codes -----------------------------------------------------------------------------------------------------
+
+B_ROWS = 64
+
+
+def levels(bits: int) -> torch.Tensor:
+    return torch.arange(2 ** bits, dtype=torch.float32) - (2 ** bits - 1) / 2
+
+
+def quantize(x: torch.Tensor, bits: int, group: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """x's `bits`-bit midrise code in groups of `group` consecutive entries (row-major): (the values, the codes, the f16
+    scales). A group's scale s is 2·mean|x| at 1 bit (the value ±mean|x|), the RMS at 2 bits and max|x| over the top level
+    above; a code c stands for (c − (2^bits − 1)/2) · s, exactly what CWQUAN1 decodes, and a group of scale 0 is 0."""
+    flat = x.detach().float().reshape(-1, group)
+    if bits == 1:
+        s = 2 * flat.abs().mean(1)
+    elif bits == 2:
+        s = flat.pow(2).mean(1).sqrt()
+    else:
+        s = flat.abs().amax(1) / ((2 ** bits - 1) / 2)
+    s = s.to(torch.float16).float()
+    live = (s > 0)[:, None]
+    codes = torch.where(live, torch.floor(flat / torch.where(live, s[:, None], 1.0)) + 2 ** (bits - 1), 0.0)
+    codes = codes.clamp(0, 2 ** bits - 1)
+    values = (levels(bits).to(x.device)[codes.long()] * s[:, None]).view(x.shape)
+    return values, codes.to(torch.uint8).reshape(-1), s.to(torch.float16)
+
+
+def ste(x: torch.Tensor, bits: int, group: int) -> torch.Tensor:
+    """x's code in the forward, the identity in the backward."""
+    return x + (quantize(x, bits, group)[0] - x).detach()
+
+
+def qarray(codes: torch.Tensor, scales: torch.Tensor, bits: int, group: int, shape: tuple) -> prepare.QArray:
+    return prepare.QArray(levels(bits).to(torch.float16), scales.cpu(), codes.cpu(), bits, group, tuple(shape))
+
+
+def b_group(d_out: int, r: int) -> int:
+    return r * (B_ROWS if d_out % B_ROWS == 0 else d_out)
+
+
+def lora_entry(A: torch.Tensor, B: torch.Tensor, s: float, bits: int) -> dict:
+    (_, ca, sa), (_, cb, sb) = quantize(A, bits, A.shape[1]), quantize(B, bits, b_group(*B.shape))
+    return {"kind": "lora", "a": qarray(ca, sa, bits, A.shape[1], A.shape),
+            "b": qarray(cb, sb, bits, b_group(*B.shape), B.shape), "scale": s}
+
+
+def delta_entry(d: torch.Tensor, bits: int, group: int) -> dict:
+    _, c, s = quantize(d, bits, group)
+    return {"kind": "delta", "q": qarray(c, s, bits, group, d.shape)}
+
+
+def rows_entry(shape: tuple, rows: torch.Tensor, V: torch.Tensor, bits: int) -> dict:
+    """A delta over a whole matrix that is V's code on `rows` and 0 (scale 0) on every other row."""
+    d_out, d_in = shape
+    _, c, s = quantize(V, bits, d_in)
+    codes = torch.zeros(d_out, d_in, dtype=torch.uint8)
+    scales = torch.zeros(d_out, dtype=torch.float16)
+    codes[rows.cpu()] = c.view(-1, d_in).cpu()
+    scales[rows.cpu()] = s.cpu()
+    return {"kind": "delta", "q": qarray(codes.reshape(-1), scales, bits, d_in, shape)}
+
+
+def quant_size(entries: dict, theta: dict) -> int:
+    """len(prepare.encode_quant(entries, θ)) without calling it (under the harness every encode during the steps is a
+    checkpoint candidate): the same header, arrays and xz settings."""
+    header, parts = [], []
+    for name in sorted(entries):
+        e = entries[name]
+        if e["kind"] == "delta":
+            spec, arrays = prepare._quant_array(e["q"], name)
+            header.append({"n": name, "k": "delta", **spec})
+            parts += arrays
+        else:
+            (sa, pa), (sb, pb) = prepare._quant_array(e["a"], name), prepare._quant_array(e["b"], name)
+            header.append({"n": name, "k": "lora", "r": int(e["a"].shape[0]), "s": float(e["scale"]), "A": sa, "B": sb})
+            parts += pa + pb
+    h = json.dumps({"t": header}, separators=(",", ":")).encode()
+    return 8 + len(lzma.compress(struct.pack("<I", len(h)) + h + b"".join(parts), **prepare.QUANT_XZ))
+
+
+def random_entries(theta: dict, mech: str, plan: dict, norms: list[str], bits: int, norm_bits: int, norm_group: int,
+                   gen: torch.Generator) -> dict:
+    """The entries of a plan with uniform random codes and scales: the trained codes are no less compressible."""
+    out = {}
+    for n in norms:
+        out[n] = delta_entry(torch.randn(theta[n].shape, generator=gen), norm_bits, norm_group)
+    for n, x in (plan or {}).items():
+        d_out, d_in = theta[n].shape
+        if mech == "qlora":
+            out[n] = lora_entry(torch.randn(x, d_in, generator=gen), torch.randn(d_out, x, generator=gen),
+                                math.sqrt(d_in / x), bits)
+        else:
+            rows = torch.tensor(x, dtype=torch.long)
+            out[n] = rows_entry((d_out, d_in), rows, torch.randn(len(x), d_in, generator=gen), bits)
+    return out
+
+
+def plan_rows(cands: list[str], energy: dict, theta: dict, budget: float, bits: int) -> dict[str, list[int]]:
+    """{matrix: rows}: whole rows by selection energy per byte (d_in · bits / 8 codes and a 2-byte scale) while they fit."""
+    units = []
+    for n in cands:
+        d_in = theta[n].shape[1]
+        cost = d_in * bits / 8 + 2
+        units += [(e / cost, cost, n, i) for i, e in enumerate(energy[n].sum(1).tolist())]
+    units.sort(key=lambda u: -u[0])
+    plan, used = {}, 0.0
+    for _, cost, n, i in units:
+        if used + cost > budget:
+            continue
+        plan.setdefault(n, []).append(i)
+        used += cost
+    return {n: sorted(r) for n, r in plan.items()}
+
+
+def tie_lora(lm, A, B, s: float) -> None:
     """`embed` + s · B @ A in the `lf` model's lookup and its tied head, never formed: the lookup adds s · B[idx] @ A and
-    the head s · (x Aᵀ) Bᵀ, so the frozen head's matmul stays as it was. Mirrors `model.LM.hidden` and `LM.top`."""
+    the head s · (x Aᵀ) Bᵀ, so the frozen head's matmul stays as it was. Mirrors `model.LM.hidden` and `LM.top`. A and B
+    may be callables giving the factors the forward reads (their codes)."""
+    fa = A if callable(A) else (lambda: A)
+    fb = B if callable(B) else (lambda: B)
 
     def hidden(idx, upto=None):
         t = idx.shape[1]
+        A, B = fa(), fb()
         x = F.embedding(idx, lm.embed) + s * F.linear(F.embedding(idx, B), A.t())
         cos, sin = lm.cos[:t], lm.sin[:t]
         for b in lm.blocks[:upto]:
@@ -326,7 +459,7 @@ def tie_lora(lm, A: torch.Tensor, B: torch.Tensor, s: float) -> None:
         for b in lm.blocks[start:]:
             x = b(x, cos, sin)
         x = F.rms_norm(x, (x.shape[-1],), lm.norm)
-        return F.linear(x, lm.embed) + s * F.linear(F.linear(x, A), B)
+        return F.linear(x, lm.embed) + s * F.linear(F.linear(x, fa()), fb())
 
     lm.hidden, lm.top = hidden, top
 
@@ -338,7 +471,11 @@ def main() -> int:
     ap.add_argument("--klass", required=True, choices=("e1mb", "e100kb"))
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--mech", required=True, choices=("norms", "lines", "lora"))
+    ap.add_argument("--mech", required=True, choices=("norms", "lines", "lora", "qlora", "signrows"))
+    ap.add_argument("--cap", type=int, default=0, help="E's byte bin, at most the class's cap (0: the class's)")
+    ap.add_argument("--bits", type=int, default=1, help="qlora: the factors' bits; signrows: the rows' code bits")
+    ap.add_argument("--norm-bits", type=int, default=4, help="qlora, signrows: the gains' delta code bits")
+    ap.add_argument("--norm-group", type=int, default=64, help="qlora, signrows: gain entries per f16 scale")
     ap.add_argument("--targets", default="all", help="`all`, `out`, `mlp`, `attn` or leaf names: the candidate matrices")
     ap.add_argument("--layers", default="all", help="`all` or `top:N`: touch only the top N blocks (and the final norm)")
     ap.add_argument("--norms", default="all", help="`all`, `none`, `final` or `top:N`: the gains trained in full")
@@ -375,6 +512,12 @@ def main() -> int:
     params = net.params()
     L = rec["config"]["n_layer"]
     cap = prepare.CLASSES[a.klass]["max_e_bytes"]
+    if a.cap > cap:
+        raise SystemExit(f"sparse: --cap {a.cap} is over {a.klass}'s cap of {cap}")
+    cap = a.cap or cap
+    quant = a.mech in ("qlora", "signrows")
+    if quant and not (1 <= a.bits <= 8 and 1 <= a.norm_bits <= 8):
+        raise SystemExit("sparse: --bits and --norm-bits are 1 to 8")
     for p in params.values():
         p.requires_grad_(False)
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
@@ -383,9 +526,9 @@ def main() -> int:
                    "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
 
     G = G2 = None
-    need_g = a.mech == "lora" or a.mech == "lines" and a.select in ("grad", "fisher", "adam")
+    need_g = a.mech in ("lora", "qlora") or a.mech in ("lines", "signrows") and a.select in ("grad", "fisher", "adam")
     if need_g and not a.probe:
-        raise SystemExit("sparse: --mech lora and a gradient selection need --probe > 0")
+        raise SystemExit("sparse: --mech lora|qlora and a gradient selection need --probe > 0")
     if a.probe and (need_g or a.analyse):
         G, G2, steps = probe(net, rec, theta, data, a.probe, a.batch, a.micro)
         if a.analyse:
@@ -396,10 +539,20 @@ def main() -> int:
 
     norms = norm_names(theta, a.norms, a.layers, L)
     cands = matrices(theta, a.targets, a.layers, L) if a.mech != "norms" else []
-    norm_bytes = e_bytes("norms", theta, norms, None)
+    if quant and any(theta[n].numel() % a.norm_group for n in norms):
+        raise SystemExit(f"sparse: --norm-group {a.norm_group} doesn't divide every gain")
+    sizer = torch.Generator().manual_seed(1)
+
+    def size_of(plan) -> int:
+        if quant:
+            return quant_size(random_entries(theta, a.mech, plan, norms, a.bits, a.norm_bits, a.norm_group, sizer), theta)
+        return e_bytes(a.mech, theta, norms, plan)
+
+    norm_bytes = size_of({}) if quant else e_bytes("norms", theta, norms, None)
     avail = cap - norm_bytes - HEADER_SLACK
+    trim = max(64, cap // 50)
     plan = None
-    if a.mech == "lines":
+    if a.mech in ("lines", "signrows"):
         if a.select == "grad":
             energy = {n: G[n].pow(2) for n in cands}
         elif a.select == "fisher":
@@ -412,10 +565,25 @@ def main() -> int:
             gen = torch.Generator().manual_seed(a.seed)
             energy = {n: torch.rand(theta[n].shape, generator=gen) for n in cands}
         energy = {n: e.float().cpu() for n, e in energy.items()}
-        plan = plan_lines(cands, energy, theta, avail, a.orient)
-        while plan and e_bytes("lines", theta, norms, plan) > cap:
-            avail -= 2048
-            plan = plan_lines(cands, energy, theta, avail, a.orient)
+        replan = (lambda: plan_lines(cands, energy, theta, avail, a.orient)) if a.mech == "lines" else \
+            (lambda: plan_rows(cands, energy, theta, avail, a.bits))
+        plan = replan()
+        while plan and size_of(plan) > cap:
+            avail -= trim
+            plan = replan()
+        energy = None
+    elif a.mech == "qlora":
+        if a.regrow < 1 or a.alloc != "grad":
+            raise SystemExit("sparse: --mech qlora allocates by the gradient once (--regrow 1, --alloc grad)")
+        pool = cands + (["embed"] if a.embed_rank < 0 else [])
+        fixed = {"embed": a.embed_rank} if a.embed_rank > 0 else {}
+        Gc = {n: G[n].cpu() for n in pool}
+        avail = int(avail - size_of(fixed) + norm_bytes) if fixed else avail
+        plan = fixed | plan_lora(pool, Gc, avail, a.max_rank, bits=a.bits)
+        while plan != fixed and size_of(plan) > cap:
+            avail -= trim
+            plan = fixed | plan_lora(pool, Gc, avail, a.max_rank, bits=a.bits)
+        Gc = None
     elif a.mech == "lora" and a.alloc == "uniform":
         r = 1
         while e_bytes("lora", theta, norms, {n: r + 1 for n in cands}) <= cap:
@@ -436,14 +604,16 @@ def main() -> int:
     G = G2 = None
     if prepare.DEVICE.startswith("cuda"):
         torch.cuda.empty_cache()
-    size = e_bytes(a.mech, theta, norms, plan)
+    size = size_of(plan)
     if size > cap:
-        raise SystemExit(f"sparse: E is {size} bytes, over {a.klass}'s cap of {cap}")
+        raise SystemExit(f"sparse: E is {size} bytes, over the cap of {cap}")
 
     dev = prepare.DEVICE
     for n in norms:
         params[n].data = params[n].data.float()
         params[n].requires_grad_(True)
+    gain0 = {n: params[n].detach().clone() for n in norms} if quant else {}
+    gain_latent = {n: torch.nn.Parameter(params[n].detach().clone()) for n in norms} if quant else {}
     train_vals: dict = {}
     hooks_params: list[torch.nn.Parameter] = []
     adapters: dict[str, int] = {}
@@ -468,6 +638,17 @@ def main() -> int:
                 return out
 
             mod.register_forward_hook(hook)
+    if a.mech == "signrows":
+        for n, rows in plan.items():
+            d_in = theta[n].shape[1]
+            V = torch.nn.Parameter(torch.zeros(len(rows), d_in, device=dev))
+            ri = torch.tensor(rows, dtype=torch.long, device=dev)
+            train_vals[n] = (ri, V)
+            hooks_params.append(V)
+            adapters[n] = len(rows)
+            mod = net.inner.get_submodule(n.removesuffix(".weight"))
+            mod.register_forward_hook(lambda m, inp, out, V=V, ri=ri, d_in=d_in: out.index_add(
+                -1, ri, F.linear(inp[0], ste(V, a.bits, d_in)).to(out.dtype)))
     g = torch.Generator(device=dev).manual_seed(a.seed)
 
     def add_lora(n: str, r: int) -> list[torch.nn.Parameter]:
@@ -477,22 +658,42 @@ def main() -> int:
         s = math.sqrt(d_in / r)
         train_vals.setdefault(n, []).append((A, B, s))
         adapters[n] = adapters.get(n, 0) + r
+        if a.mech == "qlora":
+            fa, fb = (lambda A=A, d_in=d_in: ste(A, a.bits, d_in)), (lambda B=B: ste(B, a.bits, b_group(*B.shape)))
+        else:
+            fa, fb = (lambda A=A: A), (lambda B=B: B)
         if n == "embed":
-            tie_lora(net.inner, A, B, s)
+            tie_lora(net.inner, fa, fb, s)
             return [A, B]
         mod = net.inner.get_submodule(n.removesuffix(".weight"))
-        mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
+        mod.register_forward_hook(lambda m, inp, out, fa=fa, fb=fb, s=s: out + s * F.linear(F.linear(inp[0], fa()), fb()))
         return [A, B]
 
-    if a.mech == "lora":
+    if a.mech in ("lora", "qlora"):
         for n, r in plan.items():
             hooks_params += add_lora(n, r)
     groups = []
     if hooks_params:
         groups.append({"params": hooks_params, "lr": a.lr, "weight_decay": 0.0})
     if norms:
-        groups.append({"params": [params[n] for n in norms], "lr": a.norm_lr if a.mech != "norms" else a.lr,
-                       "weight_decay": 0.0})
+        groups.append({"params": list(gain_latent.values()) if quant else [params[n] for n in norms],
+                       "lr": a.norm_lr if a.mech != "norms" else a.lr, "weight_decay": 0.0})
+
+    def gains_to_code() -> None:
+        with torch.no_grad():
+            for n in norms:
+                params[n].copy_(gain0[n] + quantize(gain_latent[n] - gain0[n], a.norm_bits, a.norm_group)[0])
+
+    def encode_q() -> bytes:
+        entries = {n: delta_entry(gain_latent[n].detach() - gain0[n], a.norm_bits, a.norm_group) for n in norms}
+        for n, v in train_vals.items():
+            if a.mech == "qlora":
+                (A, B, s), = v
+                entries[n] = lora_entry(A.detach(), B.detach(), s, a.bits)
+            else:
+                ri, V = v
+                entries[n] = rows_entry(tuple(theta[n].shape), ri, V.detach(), a.bits)
+        return prepare.encode_quant(entries, theta)
     opt = torch.optim.AdamW(groups, betas=(0.9, 0.95), fused=dev.startswith("cuda"))
     trainable = {"full": norms, "adapters": adapters}
     tokens = a.batch * prepare.EVAL_CTX
@@ -514,8 +715,12 @@ def main() -> int:
         summary["cols"] = sum(len(c) for _, c in plan.values())
         notes["plan"] = {n: {"rows": len(r), "cols": len(c)} for n, (r, c) in plan.items()}
         notes["mask"] = {n: {"rows": r, "cols": c} for n, (r, c) in plan.items()}
-    elif a.mech == "lora":
+    elif a.mech in ("lora", "qlora"):
         notes["plan"] = plan
+    elif a.mech == "signrows":
+        summary["rows"] = sum(len(r) for r in plan.values())
+        notes["plan"] = {n: len(r) for n, r in plan.items()}
+        notes["mask"] = plan
     notes["summary"] = summary
     print(json.dumps(summary), flush=True)
     fwd = torch.compile(net) if dev.startswith("cuda") else net
@@ -557,12 +762,16 @@ def main() -> int:
             grp["lr"] = lr * frac
         rows = data.next(a.batch)
         calls += 1
+        if quant:
+            gains_to_code()
         for i in range(0, a.batch, a.micro):
             x = rows[i: i + a.micro]
             with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
                 logits = fwd(x[:, :-1])
             loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
             loss.backward()
+        for n in gain_latent:
+            gain_latent[n].grad, params[n].grad = params[n].grad, None
         torch.nn.utils.clip_grad_norm_([p for grp in opt.param_groups for p in grp["params"]], 1.0)
         opt.step()
         opt.zero_grad(set_to_none=True)
@@ -571,10 +780,16 @@ def main() -> int:
             print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
         if calls in marks:
-            encode(a.mech, theta, params, norms, plan, train_vals)
-    blob = encode(a.mech, theta, params, norms, plan, train_vals)
+            encode_q() if quant else encode(a.mech, theta, params, norms, plan, train_vals)
+    blob = encode_q() if quant else encode(a.mech, theta, params, norms, plan, train_vals)
     model = prepare.decode(theta, blob)
     changed = sorted(set(norms) | set(adapters))
+    n_train = sum(p.numel() for grp in opt.param_groups for p in grp["params"])
+    notes["delta_grad"] = {"values": n_train, "fp32_bytes": 12 * n_train,
+                           "what": "the gradient and AdamW's m and v of every trained value (fp32 latents for codes)"}
+    notes["E_bytes"] = {"planned": size, "encoded": len(blob), "format": prepare.format_of(blob)}
+    notes["E_bytes"]["over_cap"] = len(blob) > cap
+    print(json.dumps({"delta_grad": notes["delta_grad"], "E_bytes": notes["E_bytes"]}), flush=True)
     notes["seconds"] = round(time.perf_counter() - t_start, 1)
     prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=changed, notes=notes)
     return 0
