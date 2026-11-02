@@ -15,9 +15,14 @@ bf16-autocast forward already multiplies at bf16); `svd:R` each full matrix's de
 order: default_rng(data_seed), step x batch). `--ema D` submits an exponential average of the full tensors. The submitted
 model is always decode(θ, E).
 
-This file is the island's one editable file; prepare.py, evaluate.py, guard.py and candidate.sh are fixed (README.md, the program).
+Checkpoints: the harness scores the first E encoded in each 5% of the planned steps (`hooks.plan`), so E is encoded at
+the first step of each 5%. `--arms "lr=1e-4;lr=3e-4"` splits the budget into runs from θ in turn (a sweep in one
+candidate): no other encode shares an arm's last 5%, so every arm's end is a checkpoint; later arms' checkpoints carry
+the earlier arms' MACs; E is the arm whose last tenth of batches (each unseen when its loss is taken) had the lowest loss.
 
-    python guard.py islands/shallow/train.py --start m100 --out SUB [--full SPEC] [--adapt SPEC --lora R] [--opt adamw]
+This file is the island's one editable file; the fixed side is README.md's list. candidate.sh runs it inside the harness:
+
+    train.py --start m100 --out SUB [--full SPEC] [--adapt SPEC --lora R] [--opt adamw] [--arms "lr=1e-4;lr=3e-4"]
 """
 from __future__ import annotations
 
@@ -33,6 +38,11 @@ import torch
 import torch.nn.functional as F
 
 import prepare
+
+try:
+    from te_core import hooks
+except ImportError:
+    hooks = None
 
 KLASS = "shallow"
 LF_LEAVES = ("attn_norm", "wq", "wk", "wv", "wo", "mlp_norm", "w_gate", "w_up", "w_down")
@@ -99,18 +109,54 @@ def default_full(blocks: int, parts: str, final: bool) -> str:
     return ",".join([f"t{t}.{leaf}" for t in range(blocks) for leaf in leaves] + (["final"] if final else []))
 
 
-def fresh_order(data, rec: dict) -> dict:
-    """Drop the windows the start read from the stream's order (its provenance: default_rng(data_seed), step x batch)."""
+def seen_windows(rec: dict, n_seq: int) -> np.ndarray | None:
+    """The windows the start read (its provenance: default_rng(data_seed), step x batch), or None if it names no order."""
     prov = rec.get("provenance", {})
     if not {"step", "batch", "data_seed"} <= set(prov):
-        return {"fresh": False, "why": "the start's provenance names no data order"}
+        return None
+    return np.random.default_rng(prov["data_seed"]).permutation(n_seq)[: prov["step"] * prov["batch"]]
+
+
+def fresh_order(data, rec: dict) -> dict:
+    """Drop the windows the start read from the stream's order."""
     n_seq = (len(data.tokens) - 1) // data.ctx
-    seen = np.random.default_rng(prov["data_seed"]).permutation(n_seq)[: prov["step"] * prov["batch"]]
+    seen = seen_windows(rec, n_seq)
+    if seen is None:
+        return {"fresh": False, "why": "the start's provenance names no data order"}
     keep = np.ones(n_seq, dtype=bool)
     keep[seen] = False
     before = len(data.order)
     data.order = data.order[keep[data.order]]
     return {"fresh": True, "windows": n_seq, "seen": int(len(seen)), "kept": int(len(data.order)), "of": before}
+
+
+#: the harness scores the first E encoded in each 1/CHECKPOINTS of the planned steps
+CHECKPOINTS = 20
+ARM_KEYS = {"lr": float, "muon_lr": float, "lora_lr": float, "opt": str, "wd": float, "ema": float, "schedule": str,
+            "warmup": int, "batch": int, "micro": int, "fresh": lambda v: v.lower() in ("1", "true", "on", "yes"),
+            "data_seed": int, "seed": int}
+ARM_CHOICES = {"opt": ("adamw", "muon"), "schedule": ("linear", "cosine", "wsd")}
+
+
+def parse_arms(a: argparse.Namespace) -> list[argparse.Namespace]:
+    """`--arms "lr=1e-4;lr=3e-4 wd=0.1"`: runs from θ in turn, each overriding only how it trains (ARM_KEYS), never what
+    is tuned, so one trainable prices every step."""
+    if not a.arms:
+        return [a]
+    arms = []
+    for text in filter(None, (t.strip() for t in a.arms.split(";"))):
+        arm = argparse.Namespace(**vars(a))
+        arm.overrides = text
+        for kv in text.split():
+            k, _, v = kv.partition("=")
+            k = k.replace("-", "_")
+            if k not in ARM_KEYS or not v:
+                raise SystemExit(f"shallow: arm item {kv!r} is not KEY=VALUE with KEY in {sorted(ARM_KEYS)}")
+            setattr(arm, k, ARM_KEYS[k](v))
+            if k in ARM_CHOICES and getattr(arm, k) not in ARM_CHOICES[k]:
+                raise SystemExit(f"shallow: arm {k}={v} is not one of {ARM_CHOICES[k]}")
+        arms.append(arm)
+    return arms
 
 
 def main() -> int:
@@ -137,10 +183,12 @@ def main() -> int:
     ap.add_argument("--micro", type=int, default=32)
     ap.add_argument("--data-seed", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--snaps", type=int, default=10, help="snapshots at every 1/N of the run, for the FLOPs-to-target curve")
-    ap.add_argument("--budget-fraction", type=float, default=0.98)
+    ap.add_argument("--budget-fraction", type=float, default=0.95, help="of TRAIN_FLOP_BUDGET by the analytic meter")
+    ap.add_argument("--arms", default="", help="`;`-separated runs from θ sharing the budget, each `KEY=VALUE ...` over "
+                                               + ",".join(ARM_KEYS) + "; each arm's end is a checkpoint")
     ap.add_argument("--compile", action=argparse.BooleanOptionalAction, default=True)
     a = ap.parse_args()
+    arms = parse_arms(a)
     torch.backends.cuda.matmul.allow_tf32 = True
     if prepare.start_record(a.start)["config"]["family"] != "lf":
         raise SystemExit("shallow: this train.py tunes the lf starts (s50, s100, m50, m100)")
@@ -160,92 +208,131 @@ def main() -> int:
     for p in params.values():
         p.requires_grad_(False)
     for n in full:
-        params[n].data = params[n].data.float()
+        if params[n].dtype != torch.float32:
+            params[n].data = params[n].data.float()
         params[n].requires_grad_(True)
 
     factors = {}
-    g = torch.Generator(device=prepare.DEVICE).manual_seed(a.seed)
     for n in adapt:
         w = params[n]
-        A = torch.nn.Parameter(torch.randn(a.lora, w.shape[1], device=prepare.DEVICE, generator=g) / math.sqrt(w.shape[1]))
+        A = torch.nn.Parameter(torch.empty(a.lora, w.shape[1], device=prepare.DEVICE))
         B = torch.nn.Parameter(torch.zeros(w.shape[0], a.lora, device=prepare.DEVICE))
         s = math.sqrt(w.shape[1] / a.lora)
         factors[n] = (A, B, s)
         mod = net.inner.get_submodule(n.removesuffix(".weight"))
         mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
 
-    fused = prepare.DEVICE.startswith("cuda")
-    opts, extra = [], 0
-    if factors:
-        opts.append((torch.optim.AdamW([p for A, B, _ in factors.values() for p in (A, B)], lr=a.lora_lr, betas=(0.9, 0.95),
-                                       weight_decay=0.0, fused=fused), a.lora_lr))
-    if mats and a.opt == "muon":
-        opts.append((Muon([params[n] for n in mats], lr=a.muon_lr, wd=a.wd), a.muon_lr))
-        extra = sum(ns_flops(tuple(params[n].shape)) for n in mats)
-    elif mats:
-        opts.append((torch.optim.AdamW([params[n] for n in mats], lr=a.lr, betas=(0.9, 0.95), weight_decay=a.wd,
-                                       fused=fused), a.lr))
-    if gains:
-        opts.append((torch.optim.AdamW([params[n] for n in gains], lr=a.lr, betas=(0.9, 0.95), weight_decay=0.0,
-                                       fused=fused), a.lr))
-    trained = [p for o, _ in opts for grp in o.param_groups for p in grp["params"]]
-
     trainable = {"full": full, "adapters": {n: a.lora for n in adapt}}
-    tokens = a.batch * prepare.EVAL_CTX
-    per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
     store_extra = svd_flops(params, mats) if store.startswith("svd:") else 0
-    n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - (a.snaps + 1) * store_extra) // per_step)
-    data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
-    fresh = fresh_order(data, rec) if a.fresh else {"fresh": False}
+    c = prepare.EVAL_CTX
+    budget = a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - (CHECKPOINTS + len(arms)) * store_extra
+    plans = []
+    for arm in arms:
+        extra = sum(ns_flops(tuple(params[n].shape)) for n in mats) if mats and arm.opt == "muon" else 0
+        per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": arm.batch * c}])["flops"] + extra
+        plans.append((per_step, extra, int(budget / len(arms) // per_step)))
+    total = sum(n for _, _, n in plans)
+    if hooks is not None:
+        hooks.plan(total)
+
+    def bucket(g: int) -> int:
+        return math.ceil((g + 1) * CHECKPOINTS / total)
+
+    ends = np.cumsum([n for _, _, n in plans]) - 1
+    end_buckets = {bucket(int(e)) for e in ends}
     fwd = torch.compile(net) if a.compile else net
-    ema = {n: params[n].detach().float().clone() for n in full} if a.ema else None
-    steps, snaps = [], []
-    marks = {round(n_steps * k / a.snaps) for k in range(1, a.snaps)} if a.snaps > 1 else set()
-    info = {"steps": n_steps, "full": full, "adapt": adapt, "rank": a.lora, "store": store, "flops_per_step": per_step,
-            "extra_per_step": extra, "fresh": fresh}
-    print(json.dumps(info), flush=True)
-
-    def encode() -> bytes:
-        cur = {n: (ema[n] if ema is not None else params[n].detach()).float() for n in full}
-        return encode_update(store, theta, cur, factors, mats, gains, params, steps)
-
+    fused = prepare.DEVICE.startswith("cuda")
+    steps, report, blobs, encoded = [], [], [], set()
+    g = -1
     t0 = time.perf_counter()
-    for step in range(n_steps):
-        frac = min(1.0, (step + 1) / a.warmup) * decay(a.schedule, step, n_steps)
-        for o, lr in opts:
-            for grp in o.param_groups:
-                grp["lr"] = lr * frac
-        rows = data.next(a.batch)
-        for i in range(0, a.batch, a.micro):
-            x = rows[i: i + a.micro]
-            with torch.autocast(prepare.DEVICE.split(":")[0], dtype=torch.bfloat16):
-                logits = fwd(x[:, :-1])
-            loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
-            loss.backward()
-        torch.nn.utils.clip_grad_norm_(trained, 1.0)
-        for o, _ in opts:
-            o.step()
-            o.zero_grad(set_to_none=True)
-        if ema is not None:
-            with torch.no_grad():
-                for n in full:
-                    ema[n].lerp_(params[n].detach().float(), 1 - a.ema)
-        steps.append({"op": "train", "tokens": tokens})
-        if extra:
-            steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
-        if (step + 1) % 100 == 0:
-            print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
-                              "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        if step + 1 in marks:
-            snaps.append((encode(), len(steps)))
-    blob = encode()
+
+    for k, arm in enumerate(arms):
+        with torch.no_grad():
+            for n in full:
+                params[n].copy_(theta[n].to(params[n].device, torch.float32))
+            gen = torch.Generator(device=prepare.DEVICE).manual_seed(arm.seed)
+            for A, B, _ in factors.values():
+                A.copy_(torch.randn(A.shape, device=prepare.DEVICE, generator=gen) / math.sqrt(A.shape[1]))
+                B.zero_()
+        per_step, extra, n_steps = plans[k]
+        opts = []
+        if factors:
+            opts.append((torch.optim.AdamW([p for A, B, _ in factors.values() for p in (A, B)], lr=arm.lora_lr,
+                                           betas=(0.9, 0.95), weight_decay=0.0, fused=fused), arm.lora_lr))
+        if mats and arm.opt == "muon":
+            opts.append((Muon([params[n] for n in mats], lr=arm.muon_lr, wd=arm.wd), arm.muon_lr))
+        elif mats:
+            opts.append((torch.optim.AdamW([params[n] for n in mats], lr=arm.lr, betas=(0.9, 0.95), weight_decay=arm.wd,
+                                           fused=fused), arm.lr))
+        if gains:
+            opts.append((torch.optim.AdamW([params[n] for n in gains], lr=arm.lr, betas=(0.9, 0.95), weight_decay=0.0,
+                                           fused=fused), arm.lr))
+        trained = [p for o, _ in opts for grp in o.param_groups for p in grp["params"]]
+        tokens = arm.batch * c
+        data = prepare.TrainData(rec["tokenizer"], seed=arm.data_seed)
+        fresh = fresh_order(data, rec) if arm.fresh else {"fresh": False}
+        ema = {n: params[n].detach().float().clone() for n in full} if arm.ema else None
+        tail_from = n_steps - max(1, n_steps // 10)
+        tail = torch.zeros((), device=prepare.DEVICE)
+        print(json.dumps({"arm": k, "overrides": getattr(arm, "overrides", ""), "steps": n_steps, "planned": total,
+                          "full": full, "adapt": adapt, "rank": a.lora, "store": store, "flops_per_step": per_step,
+                          "extra_per_step": extra, "fresh": fresh}), flush=True)
+
+        def encode() -> bytes:
+            cur = {n: (ema[n] if ema is not None else params[n].detach()).float() for n in full}
+            return encode_update(store, theta, cur, factors, mats, gains, params, steps)
+
+        for step in range(n_steps):
+            g += 1
+            frac = min(1.0, (step + 1) / arm.warmup) * decay(arm.schedule, step, n_steps)
+            for o, lr in opts:
+                for grp in o.param_groups:
+                    grp["lr"] = lr * frac
+            rows = data.next(arm.batch)
+            for i in range(0, arm.batch, arm.micro):
+                x = rows[i: i + arm.micro]
+                with torch.autocast(prepare.DEVICE.split(":")[0], dtype=torch.bfloat16):
+                    logits = fwd(x[:, :-1])
+                loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / arm.batch)
+                loss.backward()
+                if step >= tail_from:
+                    tail += loss.detach()
+            torch.nn.utils.clip_grad_norm_(trained, 1.0)
+            for o, _ in opts:
+                o.step()
+                o.zero_grad(set_to_none=True)
+            if ema is not None:
+                with torch.no_grad():
+                    for n in full:
+                        ema[n].lerp_(params[n].detach().float(), 1 - arm.ema)
+            steps.append({"op": "train", "tokens": tokens})
+            if extra:
+                steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
+            if (step + 1) % 100 == 0:
+                print(json.dumps({"arm": k, "step": step + 1, "loss": float(loss.detach()) * arm.batch / len(x),
+                                  "s": round(time.perf_counter() - t0, 1)}), flush=True)
+            b = bucket(g)
+            if step == n_steps - 1:
+                blob = encode()
+                encoded.add(g)
+            elif b not in end_buckets and not any(bucket(e) == b for e in encoded):
+                encode()
+                encoded.add(g)
+        entry = {"overrides": getattr(arm, "overrides", ""), "steps": n_steps, "last_step": g, "fresh": fresh,
+                 "tail_loss": float(tail) / (n_steps - tail_from)}
+        print(json.dumps({"arm": k, "last_step": g, "tail_loss": entry["tail_loss"]}), flush=True)
+        report.append(entry)
+        blobs.append(blob)
+    best = min(range(len(arms)), key=lambda k: report[k]["tail_loss"])
+    blob = blobs[best]
     model = prepare.decode(theta, blob)
     tuned = sorted(full + adapt)
     changed = sorted(n for n in tuned if not prepare.same_bits(model[n], theta[n]))
     prepare.submit(Path(a.out), a.start, KLASS, blob, model, trainable, steps, changed=changed or tuned,
-                   notes={"method": "shallow", "args": vars(a), "steps": n_steps, "full": full, "adapt": adapt,
-                          "store": store, "fresh": fresh, "seconds": round(time.perf_counter() - t0, 1)},
-                   snapshots=snaps)
+                   notes={"method": "shallow", "args": vars(a), "steps": report[best]["steps"], "full": full,
+                          "adapt": adapt, "store": store, "fresh": report[best]["fresh"], "arms": report,
+                          "submitted_arm": best, "planned_steps": total, "encoded_steps": sorted(encoded),
+                          "seconds": round(time.perf_counter() - t0, 1)})
     return 0
 
 
