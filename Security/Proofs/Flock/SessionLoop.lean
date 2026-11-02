@@ -36,6 +36,7 @@ import Proofs.Flock.SessionLoop.InnerSlot
 import Proofs.Flock.SessionLoop.InnerUnrefused
 import Proofs.Flock.SessionLoop.LiveInnerAt
 import Proofs.Flock.SessionLoop.Phase
+import Proofs.Flock.SessionLoop.VsOf
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
