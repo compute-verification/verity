@@ -1,6 +1,7 @@
-"""Island `shallow` (only the top 2 blocks and the final norm may differ, any size): updates near the output, so few updated
-multiplications lie upstream (low depth and deep share). The rest stays frozen and the backward stops at the lowest tuned
-node. The head is the tied embedding, which the input lookup also reads (layer 0), so it stays frozen.
+"""Island `shallow`: updates confined to the top blocks and the final norm, so the frozen layers below are computed from the
+token's data. `--class shallow` is the harness's cap (the top 2 blocks); `--class reference` takes any set (the top 3 or
+4). The rest stays frozen and the backward stops at the lowest tuned node. The head is the tied embedding, which the
+input lookup also reads (layer 0), so it stays frozen.
 
 What is tuned: tensors trained in full (`--full`) and matrices trained through rank-`--lora` factors (`--adapt`), each a
 comma list of `tN.LEAF` (block N from the top, t0 the last; LEAF one of LF_LEAVES or `*`) and `final` (the final norm).
@@ -11,9 +12,13 @@ upstream, so it is never deep: `--full t0.w_gate,t0.w_up,final` has φ = 0 and d
 How: AdamW or Muon (`--opt`) on full matrices, AdamW on gains and factors. E (`--store`): `fp32` every changed tensor
 in θ's dtype, adapters merged (`prepare.encode_full`); `bf16` factors and full tensors in bf16 (the lora format; the
 bf16-autocast forward already multiplies at bf16); `svd:R` each full matrix's delta truncated to rank R as bf16 factors;
-`auto` is bf16 with adapters, else fp32. `--fresh` trains only on windows the start never read (its provenance names its
-order: default_rng(data_seed), step x batch). `--ema D` submits an exponential average of the full tensors. The submitted
-model is always decode(θ, E).
+`qB` or `qB:G` each tensor's delta from θ as a CWQUAN1 delta (`prepare.encode_quant`): B-bit round-to-nearest codes into
+a symmetric codebook, an f16 scale per G entries (default 128), xz-coded; `auto` is bf16 with adapters, else fp32. An
+arm's `store=` codes its own E (`svd:R` only as the global store). Each arm's report records |E|, its trainable
+parameters and the state training carries (`v1`: fp32 gradients, the optimizer's fp32 state, the fp32 weights) and, for
+`qB`, the code's relative error on the delta. `--fresh` trains only on windows the start never read (its provenance
+names its order: default_rng(data_seed), step x batch). `--ema D` submits an exponential average of the full tensors.
+The submitted model is always decode(θ, E).
 
 Checkpoints: the harness scores the first E encoded in each 5% of the planned steps (`hooks.plan`), so E is encoded at
 the first step of each 5%. `--arms "lr=1e-4;lr=3e-4"` splits the budget into runs from θ in turn (a sweep in one
@@ -26,7 +31,8 @@ every update through it.
 
 This file is the island's one editable file; the fixed side is README.md's list. candidate.sh runs it inside the harness:
 
-    train.py --start m100 --out SUB [--full SPEC] [--adapt SPEC --lora R] [--opt adamw] [--arms "lr=1e-4;lr=3e-4"]
+    train.py --start m100 --out SUB [--class shallow] [--full SPEC] [--adapt SPEC --lora R] [--opt adamw]
+        [--store q8] [--arms "lr=1e-4;lr=3e-4"]
 """
 from __future__ import annotations
 
@@ -48,7 +54,6 @@ try:
 except ImportError:
     hooks = None
 
-KLASS = "shallow"
 LF_LEAVES = ("attn_norm", "wq", "wk", "wv", "wo", "mlp_norm", "w_gate", "w_up", "w_down")
 LF_PARAM = {leaf: leaf if leaf.endswith("norm") else f"{leaf}.weight" for leaf in LF_LEAVES}
 
@@ -138,7 +143,7 @@ def fresh_order(data, rec: dict) -> dict:
 CHECKPOINTS = 20
 ARM_KEYS = {"lr": float, "muon_lr": float, "lora_lr": float, "opt": str, "wd": float, "ema": float, "schedule": str,
             "warmup": int, "batch": int, "micro": int, "fresh": lambda v: v.lower() in ("1", "true", "on", "yes"),
-            "data_seed": int, "seed": int, "share": float, "full": str}
+            "data_seed": int, "seed": int, "share": float, "full": str, "store": str}
 ARM_CHOICES = {"opt": ("adamw", "muon"), "schedule": ("linear", "cosine", "wsd")}
 
 
@@ -168,6 +173,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--class", dest="klass", choices=("shallow", "reference"), default="shallow",
+                    help="shallow: the top 2 blocks at most; reference: any set")
     ap.add_argument("--full", default=None, help="tensors trained in full: tN.LEAF, tN.*, final (default: --blocks/--parts)")
     ap.add_argument("--adapt", default="", help="matrices trained through rank --lora factors: tN.LEAF, tN.*")
     ap.add_argument("--blocks", type=int, default=2)
@@ -179,7 +186,7 @@ def main() -> int:
     ap.add_argument("--wd", type=float, default=0.0)
     ap.add_argument("--lora", type=int, default=0, help="rank of the --adapt factors (alone: every tuned matrix)")
     ap.add_argument("--lora-lr", type=float, default=1e-3)
-    ap.add_argument("--store", default="auto", help="auto | fp32 | bf16 | svd:R")
+    ap.add_argument("--store", default="auto", help="auto | fp32 | bf16 | svd:R | qB | qB:G")
     ap.add_argument("--fresh", action=argparse.BooleanOptionalAction, default=False)
     ap.add_argument("--ema", type=float, default=0.0)
     ap.add_argument("--schedule", choices=("linear", "cosine", "wsd"), default="linear")
@@ -216,6 +223,12 @@ def main() -> int:
         raise SystemExit("shallow: --adapt needs --lora R")
     full = sorted({n for arm in arms for n in arm.tuned})
     store = a.store if a.store != "auto" else ("bf16" if adapt else "fp32")
+    for arm in arms:
+        arm.store = arm.store if arm.store != "auto" else store
+        if not re.fullmatch(r"fp32|bf16|svd:\d+|q[1-8](:\d+)?", arm.store):
+            raise SystemExit(f"shallow: --store {arm.store} is not fp32, bf16, svd:R, qB or qB:G (B in 1..8)")
+        if arm.store.startswith("svd:") != store.startswith("svd:") or (arm.store.startswith("q") and adapt):
+            raise SystemExit("shallow: svd:R is the global --store only, and qB codes full tensors' deltas (no --adapt)")
     for p in params.values():
         p.requires_grad_(False)
     for n in full:
@@ -290,12 +303,13 @@ def main() -> int:
         tail_from = n_steps - max(1, n_steps // 10)
         tail = torch.zeros((), device=prepare.DEVICE)
         print(json.dumps({"arm": k, "overrides": getattr(arm, "overrides", ""), "steps": n_steps, "planned": total,
-                          "full": arm.tuned, "adapt": adapt, "rank": a.lora, "store": store, "flops_per_step": per_step,
-                          "extra_per_step": extra, "fresh": fresh}), flush=True)
+                          "full": arm.tuned, "adapt": adapt, "rank": a.lora, "store": arm.store,
+                          "flops_per_step": per_step, "extra_per_step": extra, "fresh": fresh}), flush=True)
+        code = {}
 
         def encode() -> bytes:
             cur = {n: (ema[n] if ema is not None else params[n].detach()).float() for n in arm.tuned}
-            return encode_update(store, theta, cur, factors, mats, gains, params, steps)
+            return encode_update(arm.store, theta, cur, factors, mats, gains, params, steps, code)
 
         for step in range(n_steps):
             g += 1
@@ -334,8 +348,10 @@ def main() -> int:
                 encode()
                 encoded.add(g)
         entry = {"overrides": getattr(arm, "overrides", ""), "full": arm.tuned, "steps": n_steps, "last_step": g,
-                 "fresh": fresh, "tail_loss": float(tail) / (n_steps - tail_from)}
-        print(json.dumps({"arm": k, "last_step": g, "tail_loss": entry["tail_loss"]}), flush=True)
+                 "fresh": fresh, "tail_loss": float(tail) / (n_steps - tail_from), "store": arm.store,
+                 "e_bytes": len(blob), "code": code, "v1": v1_state(arm, params, factors)}
+        print(json.dumps({"arm": k, "last_step": g, "tail_loss": entry["tail_loss"], "e_bytes": len(blob), "code": code,
+                          "v1": entry["v1"]}), flush=True)
         report.append(entry)
         blobs.append(blob)
     best = min(range(len(arms)), key=lambda k: report[k]["tail_loss"])
@@ -343,9 +359,9 @@ def main() -> int:
     model = prepare.decode(theta, blob)
     tuned = sorted(full + adapt)
     changed = sorted(n for n in tuned if not prepare.same_bits(model[n], theta[n]))
-    prepare.submit(Path(a.out), a.start, KLASS, blob, model, trainable, steps, changed=changed or tuned,
+    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=changed or tuned,
                    notes={"method": "shallow", "args": vars(a), "steps": report[best]["steps"], "full": full,
-                          "adapt": adapt, "store": store, "fresh": report[best]["fresh"], "arms": report,
+                          "adapt": adapt, "store": arms[best].store, "fresh": report[best]["fresh"], "arms": report,
                           "submitted_arm": best, "planned_steps": total, "encoded_steps": sorted(encoded),
                           "seconds": round(time.perf_counter() - t0, 1)})
     return 0
@@ -364,6 +380,19 @@ def svd_flops(params: dict, mats: list[str]) -> int:
     return sum(4 * min(params[n].shape) ** 2 * max(params[n].shape) for n in mats)
 
 
+def v1_state(arm: argparse.Namespace, params: dict, factors: dict) -> dict:
+    """What training carries between steps, in bits (v1's Δ_grad is the gradient plus the optimizer's state): fp32
+    gradients; AdamW's fp32 exp_avg and exp_avg_sq, or Muon's one fp32 momentum buffer per matrix (gains and factors
+    on AdamW); the EMA's fp32 copy if any. The fp32 weights are listed apart."""
+    mat = sum(params[n].numel() for n in arm.mats)
+    gain = sum(params[n].numel() for n in arm.gains)
+    lora = sum(A.numel() + B.numel() for A, B, _ in factors.values())
+    n = mat + gain + lora
+    state = 64 * (gain + lora) + (32 if arm.opt == "muon" else 64) * mat + (32 * (mat + gain) if arm.ema else 0)
+    return {"params": n, "opt": arm.opt, "grad_bits": 32 * n, "state_bits": state, "weights_bits": 32 * n,
+            "delta_grad_bits": 32 * n + state}
+
+
 @torch.no_grad()
 def merged(w: torch.Tensor, A: torch.Tensor, B: torch.Tensor, s: float) -> torch.Tensor:
     tf32 = torch.backends.cuda.matmul.allow_tf32
@@ -375,7 +404,29 @@ def merged(w: torch.Tensor, A: torch.Tensor, B: torch.Tensor, s: float) -> torch
 
 
 @torch.no_grad()
-def encode_update(store, theta, cur, factors, mats, gains, params, steps) -> bytes:
+def encode_update(store, theta, cur, factors, mats, gains, params, steps, info) -> bytes:
+    if store.startswith("q"):
+        bits, _, grp = store[1:].partition(":")
+        bits, grp = int(bits), int(grp or 128)
+        mid, half = 2 ** (bits - 1), max(1, 2 ** (bits - 1) - 1)
+        entries, err, norm = {}, 0.0, 0.0
+        for n, t in cur.items():
+            d = (t - theta[n].to(t.device).float()).reshape(-1)
+            g = math.gcd(d.numel(), grp)
+            top = float(d.abs().max())
+            # the range is split between codebook and scales so neither underflows f16
+            c = math.sqrt(top) if top > 0 else 1.0
+            sc = (d.view(-1, g).abs().amax(1) / c).half()
+            cb = ((torch.arange(2 ** bits, device=d.device) - mid) / half * c).half()
+            step = sc.float() * (c / half)
+            codes = (d.view(-1, g) / torch.where(step > 0, step, 1.0)[:, None]).round().add(mid).clamp(0, 2 ** bits - 1)
+            q = cb.float()[codes.long()] * sc.float()[:, None]
+            err += float((q.reshape(-1) - d).square().sum())
+            norm += float(d.square().sum())
+            entries[n] = {"kind": "delta", "q": prepare.QArray(cb, sc, codes.to(torch.uint8), bits, g, tuple(t.shape))}
+        info.update(bits=bits, group=grp, rel_err=math.sqrt(err / norm) if norm else 0.0)
+        steps.append({"op": "extra", "flops": 8 * sum(t.numel() for t in cur.values()), "what": "qB codes of the deltas"})
+        return prepare.encode_quant(entries, theta)
     if store == "fp32":
         out = {n: t.to(theta[n].dtype).cpu() for n, t in cur.items()}
         out |= {n: merged(params[n], A, B, s).cpu() for n, (A, B, s) in factors.items()}
