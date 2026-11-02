@@ -320,31 +320,32 @@ theorem holds_sampled_of_opens (k : Verity.Registration.Composite) (θ : ByteArr
 
 /-- A registered constant opens to exactly the values holding its constant. -/
 theorem opens_const {θ c : ByteArray} {F : Array ByteArray} {g : Fin (V.circuitOf θ F).N} {b : Bool}
-    (hg : (V.read (V.circuitFile θ F)).consts g = some b) (v : BitVec ((V.circuitOf θ F).w g)) :
+    (hg : (V.read θ F).consts g = some b) (v : BitVec ((V.circuitOf θ F).w g)) :
     V.Opens θ F c g v ↔ ∀ i : Fin ((V.circuitOf θ F).w g), v.getLsbD i.val = b := by
   unfold Opens
   rw [hg]
 
-/-- **The file finder outputs a collision** when the circuit file is not the registered one and has its SHA-512. -/
-theorem fileFinder_collides {θ : ByteArray} {F : Array ByteArray} (hne : V.circuitFile θ F ≠ V.registered θ)
-    (hd : sha512Msg (V.circuitFile θ F).data.toList = sha512Msg (V.registered θ).data.toList) :
-    (V.fileFinder θ F).Pr sha512Msg = 1 := by
-  have hl : (V.circuitFile θ F).data.toList ≠ (V.registered θ).data.toList := fun e =>
+end Vocab
+
+/-- **A file finder outputs a collision** when the committed file the digest `h` names is not the registered one and
+has its SHA-512: the circuit file's (`Vocab.fileFinder`) and the public file's (`Vocab.publicFinder`). -/
+theorem namedFinder_collides {h : Option Hash.Digest} {F R : Array ByteArray} (hne : namedFile h F ≠ namedFile h R)
+    (hd : sha512Msg (namedFile h F).data.toList = sha512Msg (namedFile h R).data.toList) :
+    (namedFinder h F R).Pr sha512Msg = 1 := by
+  have hl : (namedFile h F).data.toList ≠ (namedFile h R).data.toList := fun e =>
     hne (ByteArray.ext (Array.ext' e))
-  have hs : ∀ s : (V.fileFinder θ F).S,
-      ∃ u v, (V.fileFinder θ F).out s = some (u, v) ∧ Claims.Collision sha512Msg u v :=
-    fun _ => ⟨_, _, by simp only [fileFinder, if_neg hne], hl, hd⟩
+  have hs : ∀ s : (namedFinder h F R).S,
+      ∃ u v, (namedFinder h F R).out s = some (u, v) ∧ Claims.Collision sha512Msg u v :=
+    fun _ => ⟨_, _, by simp only [namedFinder, if_neg hne], hl, hd⟩
   classical
   unfold Claims.Finder.Pr Claims.Pr
   rw [Finset.filter_true_of_mem fun s _ => hs s, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
 
-/-- **The file finder's SHA-512 calls**: two on its one coin, at most `0 · calls(τ) + 2`. -/
-theorem fileFinder_calls (θ : ByteArray) (F : Array ByteArray) (x : (V.fileFinder θ F).S) (n : ℕ) :
-    (V.fileFinder θ F).cost x ≤ 0 * n + 2 := by
-  simp [fileFinder]
-
-end Vocab
+/-- **A file finder's SHA-512 calls**: two on its one coin, at most `0 · calls(τ) + 2`. -/
+theorem namedFinder_calls (h : Option Hash.Digest) (F R : Array ByteArray) (x : (namedFinder h F R).S) (n : ℕ) :
+    (namedFinder h F R).cost x ≤ 0 * n + 2 := by
+  simp [namedFinder]
 
 namespace Idle
 
@@ -394,7 +395,7 @@ theorem nontrivial_at (k : Verity.Registration.Composite) (hk : Subprotocol.pouw
   have h0 : ∑ a ∈ subprotocols k, exact.error a .empty #[.empty] .empty (exact.honest .empty #[.empty] .empty) = 0 :=
     Finset.sum_eq_zero fun a _ => error_exact a _ _ _ _
   exact soundness_nontrivial_of exact k .empty #[.empty] .empty (exact.honest .empty #[.empty] .empty)
-    ⟨.empty, by simp, rfl⟩ .pouw hk (pouw_fails k _ _ _ _) (lt_of_eq_of_lt h0 zero_lt_one)
+    ⟨⟨.empty, by simp, rfl⟩, ⟨.empty, by simp, rfl⟩⟩ .pouw hk (pouw_fails k _ _ _ _) (lt_of_eq_of_lt h0 zero_lt_one)
 
 end Idle
 
