@@ -49,8 +49,8 @@ NOTE_MAX = 500
 COMMON = ("reading: literal-x0, tail-charged (Slowdown's frozen-tail case; Daniel decides; no headline S). basis: fit = "
           "rho 1 by Fit for the training; target = Slowdown's bound, unproved. Delta, u(1), t, a: witness upper bounds; "
           "tau a stub. One seed. Full panels: evidence store.")
-PER_RUN = ("Per valid v2.3 run, target and reading, its least-compute checkpoint reaching the target (every checkpoint, "
-           "19:50Z); variant: its launch note's label.")
+PER_RUN = ("Per valid v2.3 run, target and reading, its least-compute checkpoint reaching the target (19:50Z); "
+           "variant: its launch note's label.")
 SHORT = {
     "p1-loss-vs-compute": "Loss (val bpb) against compute after theta, every checkpoint of every valid v2.3 record: "
                           "honest |C| (gates), covert |C| rho at c=4096w k=10kB, covert-policy at other (c, k).",
