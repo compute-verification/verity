@@ -389,13 +389,13 @@ def test_every_shard_from_a_copy_of_one_records_only_run_s_cache_builds_no_bindi
 BINDINGS_ONLY = UNITS[:UNITS.index("rep = cli.run(")] + 'print(json.dumps(cli.bindings(root / "cache", log=None, jobs=2)))\n'
 #: `test_units`' bindings, each root function writing its units to ``<root>-roots.jsonl`` (beside the tree) as it runs
 ROOTS_LOGGED = ("def bindings():\n    for units, make in catalog.BINDINGS:\n        yield units, make,",
-                "def logged(units, make):\n"
+                "def rooted(units, make):\n"
                 "    def run():\n"
                 "        with CC.internal(), open(root.parent / f'{root.name}-roots.jsonl', 'a') as f:\n"
                 "            f.write(json.dumps(units) + '\\n')\n"
                 "        return make()\n"
                 "    return run\n\n\n"
-                "def bindings():\n    for units, make in catalog.BINDINGS:\n        yield units, logged(units, make),")
+                "def bindings():\n    for units, make in catalog.BINDINGS:\n        yield units, rooted(units, make),")
 
 
 def _roots_made(log: Path) -> set[str]:
