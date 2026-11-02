@@ -178,19 +178,20 @@ level 0's salts at the opened positions and at the others. -/
 abbrev Seen (T : Table F K W Salt Seed D Hi VL) : Type :=
   T.Mask × T.Vis × (Fin T.nS → Salt) × (Fin T.nU → Salt)
 
+/-- What a worker sees of the randomness `ω` and level 0's hidden leaves' salts `ys`. -/
+def seenOf (T : Table F K W Salt Seed D Hi VL) (ω : T.Rand) (ys : Fin T.nU → Salt) : T.Seen :=
+  (ω.1, ω.2.1, ω.2.2.2.2.2.2.1, ys)
+
+omit [AddCommGroup Salt] [AddCommGroup Seed] [AddCommGroup Hi] in
+/-- The fix map keeps what the workers see. -/
+theorem seenOf_fixE (T : Table F K W Salt Seed D Hi VL) (w : W) (c : Fin 2 → Fin T.nE → F) (ω : T.Rand)
+    (ys : Fin T.nU → Salt) : T.seenOf (T.fixE w c ω) ys = T.seenOf ω ys :=
+  rfl
+
 section Hm96
 
 variable {B C : Type} [AddCommGroup B]
 
-/-- What a worker sees of the randomness `ω` and the hidden leaves' salts `ys`. -/
-def seenOf (T : Table F K W Salt (B × Salt) D Hi VL) (ω : T.Rand) (ys : T.Hid → Salt) : T.Seen :=
-  (ω.1, ω.2.1, ω.2.2.2.2.2.2.1, fun q => ys (.inl q))
-
-omit [AddCommGroup Salt] [AddCommGroup Hi] [AddCommGroup B] in
-/-- The fix map keeps what the workers see. -/
-theorem seenOf_fixE (T : Table F K W Salt (B × Salt) D Hi VL) (w : W) (c : Fin 2 → Fin T.nE → F) (ω : T.Rand)
-    (ys : T.Hid → Salt) : T.seenOf (T.fixE w c ω) ys = T.seenOf ω ys :=
-  rfl
 
 /-- **The switched view with its hidden leaves given, at constant values**, is the honest one at the moved
 randomness. -/
@@ -218,6 +219,91 @@ theorem swDig_inl_fix (T : Table F K W Salt (B × Salt) D Hi VL) (M : T.Hm96 C) 
   unfold Hm96.swDig
   split_ifs <;> rfl
 
+/-- **The honest view with level 0's hidden leaves real and the pads trees' ideal**: real hm96 leaves of level 0's
+columns under the salts `ys`, ideal leaves of the seeds `ωu.2` in the pads trees. -/
+noncomputable def Hm96.viewMix {T : Table F K W Salt (B × Salt) D Hi VL} (M : T.Hm96 C) (w : W) (ωu : T.Rand × (Fin 2 × Fin T.nPU → B × Salt))
+    (ys : Fin T.nU → Salt) : T.View :=
+  T.viewWith w ωu.1 (Sum.elim (fun q => M.H (M.dig w ωu.1 (.inl q) + M.My (ys q), M.cs (ys q))) fun i => T.ideal (ωu.2 i))
+
+/-- The hidden leaves' seeds split into level 0's and the pads trees'. -/
+def hidSplit (T : Table F K W Salt (B × Salt) D Hi VL) (X : Type) :
+    (T.Rand × (Fin 2 × Fin T.nPU → X)) × (Fin T.nU → X) ≃ T.Rand × (T.Hid → X) where
+  toFun p := (p.1.1, Sum.elim p.2 p.1.2)
+  invFun q := ((q.1, fun i => q.2 (.inr i)), fun q' => q.2 (.inl q'))
+  left_inv _ := rfl
+  right_inv q := Prod.ext rfl (funext fun i => by rcases i with q' | i <;> rfl)
+
 end Hm96
+
+section Mix
+
+open Game
+
+variable {B C : Type} [AddCommGroup B] [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] [Fintype Salt]
+  [DecidableEq Salt] [Fintype B] [DecidableEq B] [Fintype Hi] [DecidableEq Hi]
+
+/-- **Lemma B with level 0's hidden leaves real and the pads trees' ideal**, for one table: every event has
+probabilities within `(n_U + |Hid|)·δ₁` of each other under the honest prover with those leaves and under `S_shvzk`
+with real leaves (`ideal_leaves_swap_fintype` on level 0's leaves, then `table_shvzk_hm96`'s steps). -/
+theorem mix_shvzk_hm96 (T : Table F K W Salt (B × Salt) D Hi VL) (M : T.Hm96 C) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding M.My M.cs δ₁) (hrank : T.Rank) (hpad : T.PadOnto)
+    (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0)
+    (w : W) (hreg : T.sReg w = T.pubReg) (hinner : T.InnerHolds w) (w0 : W) (E : T.View → Prop) :
+    prCoin (fun p : (T.Rand × (Fin 2 × Fin T.nPU → B × Salt)) × (Fin T.nU → Salt) => E (M.viewMix w p.1 p.2))
+        ≤ prCoin (fun p : T.SimRand × (T.Hid → Salt) => E (M.simR w0 p.1 p.2))
+          + ((T.nU : ENNReal) + Fintype.card T.Hid) * δ₁
+      ∧ prCoin (fun p : T.SimRand × (T.Hid → Salt) => E (M.simR w0 p.1 p.2))
+        ≤ prCoin (fun p : (T.Rand × (Fin 2 × Fin T.nPU → B × Salt)) × (Fin T.nU → Salt) => E (M.viewMix w p.1 p.2))
+          + ((T.nU : ENNReal) + Fintype.card T.Hid) * δ₁ := by
+  have : Nonempty Salt := ⟨0⟩
+  have : Nonempty T.Rand := ⟨0⟩
+  have : Nonempty T.SimRand := ⟨0⟩
+  have hS := (T.table_shvzk hrank hpad hW hpads hβ w hreg hinner w0).prCoin_eq E
+  have hv : prCoin (fun p : (T.Rand × (Fin 2 × Fin T.nPU → B × Salt)) × (Fin T.nU → B × Salt) =>
+        E (T.viewWith w p.1.1 (Sum.elim (fun q => M.H ((p.2 q).1, M.cs (p.2 q).2)) fun i => T.ideal (p.1.2 i))))
+      = prCoin (fun ω => E (T.view w ω)) := by
+    rw [← T.prCoin_viewWith_ideal w E, ← prCoin_congr_equiv (T.hidSplit (B × Salt))]
+    congr 1
+    funext p
+    refine congrArg (fun L => E (T.viewWith w p.1.1 L)) (funext fun i => ?_)
+    rcases i with q | i
+    · exact (M.ideal_eq (p.2 q).1 (p.2 q).2).symm
+    · rfl
+  have hs : prCoin (fun p : T.SimRand × (T.Hid → B × Salt) =>
+        E (T.simWith w0 p.1 fun i => M.H ((p.2 i).1, M.cs (p.2 i).2)))
+      = prCoin (fun σ => E (T.sim w0 σ)) := by
+    rw [← T.prCoin_simWith_ideal w0 E]
+    congr 1
+    funext p
+    congr 2
+    funext i
+    exact (M.ideal_eq (p.2 i).1 (p.2 i).2).symm
+  have v1 := ideal_leaves_swap_fintype M.My M.cs hT1 M.H
+    (fun (ωu : T.Rand × (Fin 2 × Fin T.nPU → B × Salt)) q => M.dig w ωu.1 (.inl q))
+    (fun ωu L => E (T.viewWith w ωu.1 (Sum.elim L fun i => T.ideal (ωu.2 i))))
+  have v2 := real_leaves_swap_fintype M.My M.cs hT1 M.H
+    (fun (ωu : T.Rand × (Fin 2 × Fin T.nPU → B × Salt)) q => M.dig w ωu.1 (.inl q))
+    (fun ωu L => E (T.viewWith w ωu.1 (Sum.elim L fun i => T.ideal (ωu.2 i))))
+  have s1 := ideal_leaves_swap_fintype M.My M.cs hT1 M.H (M.digS w0) (fun σ L => E (T.simWith w0 σ L))
+  have s2 := real_leaves_swap_fintype M.My M.cs hT1 M.H (M.digS w0) (fun σ L => E (T.simWith w0 σ L))
+  beta_reduce at v1 v2 s1 s2
+  rw [hv] at v1 v2
+  rw [hs] at s1 s2
+  simp only [Fintype.card_fin] at v1 v2
+  constructor
+  · calc prCoin (fun p : (T.Rand × (Fin 2 × Fin T.nPU → B × Salt)) × (Fin T.nU → Salt) => E (M.viewMix w p.1 p.2))
+        ≤ prCoin (fun ω => E (T.view w ω)) + T.nU * δ₁ := v1
+      _ = prCoin (fun σ => E (T.sim w0 σ)) + T.nU * δ₁ := by rw [hS]
+      _ ≤ (prCoin (fun p : T.SimRand × (T.Hid → Salt) => E (M.simR w0 p.1 p.2)) + Fintype.card T.Hid * δ₁)
+          + T.nU * δ₁ := add_le_add s2 le_rfl
+      _ = _ := by ring
+  · calc prCoin (fun p : T.SimRand × (T.Hid → Salt) => E (M.simR w0 p.1 p.2))
+        ≤ prCoin (fun σ => E (T.sim w0 σ)) + Fintype.card T.Hid * δ₁ := s1
+      _ = prCoin (fun ω => E (T.view w ω)) + Fintype.card T.Hid * δ₁ := by rw [hS]
+      _ ≤ (prCoin (fun p : (T.Rand × (Fin 2 × Fin T.nPU → B × Salt)) × (Fin T.nU → Salt) =>
+            E (M.viewMix w p.1 p.2)) + T.nU * δ₁) + Fintype.card T.Hid * δ₁ := add_le_add v2 le_rfl
+      _ = _ := by ring
+
+end Mix
 
 end FlockSoundness.ZK.Table
