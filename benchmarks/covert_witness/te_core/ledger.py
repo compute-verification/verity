@@ -193,6 +193,8 @@ def ingest(run_dir: Path, ledger: Ledger, *, direction: str, mechanism: str, par
             "program_sha256": record.get("program_sha256", ""), "direction": direction, "mechanism": mechanism,
             "parent": parent, "reference": reference, "tier": record["tier"], "start": record["start"].get("name", ""),
             "start_bpb": record["start"].get("val_bpb"), "seed": record["seed"], "hardware": record.get("hardware", ""),
+            "node": record.get("node", ""), "run_te_core": record.get("te_core", ""),
+            "val_slice": {k: cp["score"]["slice"][k] for k in ("coin", "weights_digest")} if "score" in cp else None,
             "theta_sha256": record["theta_sha256"], "checkpoint_step": cp["step"],
             "fraction": (cp["step"] + 1) / max(record.get("planned_steps") or len(record["steps"]), 1),
             "macs": sub["macs"], "macs_log": _macs_log(record, through), "annotation": sub["annotation"],

@@ -25,7 +25,7 @@ if [ "${1:-}" = --leased ]; then
     [ "$prev" = --budget-fraction ] && fraction=$x
     prev=$x
   done
-  meta="{\"class\": \"$klass\", \"start\": \"$start\", \"launcher\": \"covert_witness/candidate.sh\"}"
+  meta="{\"class\": \"$klass\", \"start\": \"$start\", \"launcher\": \"covert_witness/candidate.sh\", \"node\": \"${CW_NODE:-}\"}"
   t0=$(date +%s.%N)
   (cd "$here" && timeout --signal=TERM --kill-after=30 "$kill" "$P" -m te_core.run --script "islands/$klass/train.py" \
     --out "$OUT/run" --families "$S/families" --budget-fraction "$fraction" \
