@@ -555,9 +555,9 @@ def liveStep (s : Schedule) (st : State) (b : ByteArray) (fresh : List ByteArray
 /-- `flock-firewall live` at the byte source `get`: one session. Its first line is `{"schedule": …}`, answered
 `{"ok": true}`; each later line is one request in hex, answered with what the firewall sends the coin server for it and
 the salts it drew for them, `{"sent": [sentJson…], "salts": [hex…]}`, or with the refusal that stops the session,
-`{"stop": why}`, which every later line is answered with too. A request's salts are read from `get` before it runs, as
-many as it could draw (a salted row reads at least one node of 64 request bytes, a round's message row aside), and those
-it didn't draw are dropped. -/
+`{"stop": why}`, which every later line is answered with too. Every line is a request, an empty one an empty frame. A
+request's salts are read from `get` before it runs, as many as it could draw (a salted row reads at least one node of 64
+request bytes, a round's message row aside), and those it didn't draw are dropped. -/
 def liveWith (get : USize → IO ByteArray) (_ : List String) : IO UInt32 := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
@@ -574,7 +574,6 @@ def liveWith (get : USize → IO ByteArray) (_ : List String) : IO UInt32 := do
   repeat
     let line ← stdin.getLine
     if line.isEmpty then break
-    if line.all Char.isWhitespace then continue
     if let some why := stop then
       out (Json.mkObj [("stop", .str why)])
       continue
