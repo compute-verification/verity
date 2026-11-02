@@ -109,14 +109,14 @@ def checked(man: dict, names, tmp: Path, fetch) -> Path:
 
 
 def pack(man: dict, out: Path, fetch=store_fetch) -> Path:
-    """The artifact's starts as one tar (`starts/<name>/<file>`), checked against the manifest."""
+    """The artifact's starts as one tar (`<path>/<name>/<file>`, the manifest's path), checked against the manifest."""
     tmp = Path(tempfile.mkdtemp(prefix="starts-pack-"))
     try:
         root = checked(man, man["starts"], tmp, fetch)
         with tarfile.open(out, "w") as tf:
             for name, want in man["starts"].items():
                 for f in want["files"]:
-                    tf.add(root / name / f, arcname=f"starts/{name}/{f}")
+                    tf.add(root / name / f, arcname=f"{man.get('path', 'starts')}/{name}/{f}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return out
