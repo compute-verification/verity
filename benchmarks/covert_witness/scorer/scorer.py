@@ -1163,15 +1163,18 @@ SHIM = OFFICIAL_SRC.with_name("bin")
 
 
 def official_src() -> Path:
-    """A clean sparse checkout of TE_BRANCH's head (covert_witness and the research package) for the harness's own tools
-    (promote.py, nodes.txt), and a `research` in SHIM that runs that package (the VM's install predates pools)."""
+    """A clean sparse checkout of TE_BRANCH's head, or of `$TE_HARNESS_COMMIT` (a launcher at the pin's harness version
+    once the head's launcher has moved past it), with covert_witness and the research package, for the harness's own
+    tools (promote.py, nodes.txt, launch.py), and a `research` in SHIM that runs that package (the VM's install predates
+    pools)."""
     if not (OFFICIAL_SRC / ".git").exists():
         subprocess.run(["git", "-C", str(REPO), "worktree", "add", "-q", "--no-checkout", "--detach", str(OFFICIAL_SRC),
                         f"origin/{TE_BRANCH}"], check=True)
         subprocess.run(["git", "-C", str(OFFICIAL_SRC), "sparse-checkout", "set", "--no-cone", "/benchmarks/covert_witness/",
                         "/tools/research/"], check=True)
     subprocess.run(["git", "-C", str(OFFICIAL_SRC), "fetch", "-q", "origin", TE_BRANCH], capture_output=True, text=True)
-    subprocess.run(["git", "-C", str(OFFICIAL_SRC), "checkout", "-q", "--detach", "FETCH_HEAD"], check=True)
+    subprocess.run(["git", "-C", str(OFFICIAL_SRC), "checkout", "-q", "--detach",
+                    os.environ.get("TE_HARNESS_COMMIT") or "FETCH_HEAD"], check=True)
     SHIM.mkdir(parents=True, exist_ok=True)
     (SHIM / "research").write_text(f'#!/usr/bin/env bash\nPYTHONPATH="{OFFICIAL_SRC}/tools/research/src" '
                                    f'exec "{sys.executable}" -m research "$@"\n')
@@ -1689,10 +1692,11 @@ def final_entries() -> dict[str, dict]:
 FINAL_PER_DIRECTION = 3
 
 
-def final_plan(begin: str = "15:00", deadline: str = "17:00", seeds=FINAL_SEEDS) -> dict:
+def final_plan(begin: str = "15:00", deadline: str = "17:00", seeds=FINAL_SEEDS, nodes: list[str] | None = None) -> dict:
     """The reruns in launch order, and which of them end by `deadline` if they start at `begin` (UTC today, or now if
-    later) on the listed nodes' GPUs (coordinator 12:55Z: finals 15:00-17:00Z, ~2 h of 24 GPUs): the entries that set
-    honest or W* at some target in the pin's table, shortest first, then the directions' other FINAL entries in their
+    later) on `nodes`' GPUs (default: every listed node; coordinator 12:55Z: finals 15:00-17:00Z, ~2 h of 24 GPUs): the
+    entries that set honest or W* at some target in the pin's table, shortest first (none with TE_FINAL_SETTERS=0, as
+    when the pin's table is no longer the night's measure), then the directions' other FINAL entries in their
     direction's order, shortest first. A direction's FINAL entries are the first FINAL_PER_DIRECTION distinct records
     its line names (an art id and its run id are one), the rest being its notes. A rerun's time is its record's GPU
     seconds plus 10 minutes."""
@@ -1720,12 +1724,14 @@ def final_plan(begin: str = "15:00", deadline: str = "17:00", seeds=FINAL_SEEDS)
             elif x["id"] not in {y["id"] for y, _, _ in named}:
                 named.append((x, d, k))
     by_id = {x["id"]: (x, d, k) for x, d, k in named}
+    if os.environ.get("TE_FINAL_SETTERS", "1") == "0":
+        sets = {}
     setters = [by_id.get(x["id"], (x, x["direction"], -1)) for x in rows
                if x["source"] == "launch.py" and sets.get(x["id"]) and x.get("regime") == "current"]
     budget = lambda e: e[0].get("gpu_seconds") or 3000
     order = sorted(setters, key=budget) + sorted((e for e in named if not sets.get(e[0]["id"])),
                                                  key=lambda e: (e[2], budget(e), e[1]))
-    nodes = listed_nodes()
+    nodes = nodes or listed_nodes()
     now_ = datetime.now(timezone.utc)
     hm = lambda s: now_.replace(hour=int(s[:2]), minute=int(s[3:]), second=0, microsecond=0)
     t0, end = max(now_, hm(begin)), hm(deadline)
@@ -1761,7 +1767,7 @@ def rerun_state(run: str) -> str:
     return "waiting" if st in ("submitted", "running") and slot.get("state") != "held" else st
 
 
-def final_dispatch(nodes: list[str], deadline: str = "17:00", dry_run: bool = False) -> list[dict]:
+def final_dispatch(nodes: list[str], deadline: str = "17:00", dry_run: bool = False, begin: str = "15:00") -> list[dict]:
     """One pass: launch the plan's next reruns (final_plan's order, recomputed each pass so a record collected since
     enters it) onto `nodes` in their order, each node taking one while fewer than WAITING_PER_NODE of the scorer's reruns
     wait there for a GPU slot, so a node takes reruns as its search runs free it. A rerun that would end after `deadline`
@@ -1778,7 +1784,7 @@ def final_dispatch(nodes: list[str], deadline: str = "17:00", dry_run: bool = Fa
             waiting[la["node"]] += 1
     now_ = datetime.now(UTC)
     end = now_.replace(hour=int(deadline[:2]), minute=int(deadline[3:]), second=0, microsecond=0)
-    todo = [(e["id"], s) for e in final_plan(deadline=deadline)["plan"]
+    todo = [(e["id"], s) for e in final_plan(begin, deadline, nodes=nodes)["plan"]
             for s in (e["seeds"] + e["dropped_seeds"] if seed_args(rows[e["id"]], 0) else [None])
             if (e["id"], s) not in launched]
     out = []
@@ -2078,8 +2084,8 @@ def main(argv=None) -> int:
     f.add_argument("--seeds", default=",".join(map(str, FINAL_SEEDS)))
     f.add_argument("--node", default=None, help="launch: one of nodes.txt's nodes (default: launch.py's turn)")
     f.add_argument("--nodes", default="vy-nebius-1,vy-nebius-3,vy-nebius-2",
-                   help="dispatch: the nodes, in the order they take reruns (coordinator 12:55Z: n1, then n3 and n2)")
-    f.add_argument("--begin", default="15:00", help="plan: HH:MM UTC the reruns start (or now, if later)")
+                   help="plan, dispatch: the nodes, in the order they take reruns (coordinator 12:55Z: n1, then n3 and n2)")
+    f.add_argument("--begin", default="15:00", help="plan, dispatch: HH:MM UTC the reruns start (or now, if later)")
     f.add_argument("--deadline", default="17:00", help="plan: HH:MM UTC by which a planned rerun ends")
     f.add_argument("--dry-run", action="store_true")
     f.add_argument("--smoke", action="store_true", help="launch: a check of the pipeline, never in the table")
@@ -2087,7 +2093,7 @@ def main(argv=None) -> int:
     if a.cmd == "final":
         if a.what in ("entries", "plan"):
             rep = final_entries() if a.what == "entries" else final_plan(
-                a.begin, a.deadline, tuple(int(s) for s in a.seeds.split(",")))
+                a.begin, a.deadline, tuple(int(s) for s in a.seeds.split(",")), a.nodes.split(","))
             if a.what == "plan":
                 FINAL.mkdir(parents=True, exist_ok=True)
                 (FINAL / "plan.json").write_text(json.dumps(rep, indent=1) + "\n")
@@ -2097,7 +2103,7 @@ def main(argv=None) -> int:
             res = final_launch(a.ids, tuple(int(s) for s in a.seeds.split(",")), a.dry_run, a.node,
                                "smoke" if a.smoke else "rerun")
         elif a.what == "dispatch":
-            res = final_dispatch(a.nodes.split(","), a.deadline, a.dry_run)
+            res = final_dispatch(a.nodes.split(","), a.deadline, a.dry_run, a.begin)
         elif a.what == "table":
             final_table()
             print((FINAL / "table.md").read_text())
