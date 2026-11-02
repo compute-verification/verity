@@ -1,11 +1,12 @@
 """The committed store of a GPU-tree committer on disk, and back as a CPU store that opens and verifies like the committer.
 
 `dump(com, rc, d)` writes what the committer's range openings read (`native_ranges.NativeRangeOpenings`): per packed step its metas, its
-retained bytes (the byte ranges the host copy holds) and its tree levels, plus the run commitment (step roots, leaf counts, run root).
-`load(d)` returns `(store, run)`: `store` is a `NativeRangeOpenings` over the dumped state with the committer's own leaf, layout and
-context rules, so an `OpenedReader(store, run)` recomputes every leaf it returns and folds it to the step root and the run root of record,
-exactly as the committer does.  A dumped byte that differs from the committed one does not verify.  Only packed steps under
-rows-sha512 (`step_rows`) are dumped; any other store is refused by name.
+retained bytes (the byte ranges the host copy holds) and its tree levels, plus the run commitment's roots (`RunCommitment.roots()`: step
+roots, leaf counts, run root).  `load(d)` returns `(store, run)`: `run` is those roots read back (a `RunRoots`), and `store` a
+`NativeRangeOpenings` over the dumped state with the committer's own leaf, layout and context rules, so an `OpenedReader(store, run)`
+recomputes every leaf it returns and folds it to the step root and the run root of record, exactly as the committer does.  A dumped byte
+that differs from the committed one does not verify.  Only packed steps under rows-sha512 (`step_rows`) are dumped; any other store is
+refused by name.
 
     store.json                  {schema, chunk, program_digest, geo_digest, run_id, layout_v2, commit_scheme, run_root, steps: [...]}
     raw/s<step>.bin             the retained bytes of the step, the ranges `steps[i].ranges` ([lo, hi) of the step stream) back to back
@@ -34,6 +35,7 @@ from typing import Any
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta
 from verity_vllm.commit.native_ranges import NativeRangeOpenings
+from verity_vllm.commit.run_roots import RunRoots, StepRoot
 
 SCHEMA = "verity-vllm/committed-store/v1"
 NODE = step_rows.ROOT_BYTES                                     # a tree node
@@ -405,21 +407,6 @@ class _Level:
         return bytes(self.buf[self.off + i * self.node:self.off + (i + 1) * self.node])
 
 
-@dataclass
-class DumpedStep:
-    step: int
-    root: bytes
-    n_leaves: int
-    n_bytes: int
-    n_tensors: int
-
-
-@dataclass
-class DumpedRun:
-    run_root: bytes
-    steps: list[DumpedStep]
-
-
 class DumpedStore(NativeRangeOpenings):
     """The committer's openings over a dumped store (`load`)."""
 
@@ -492,13 +479,13 @@ class DumpedStore(NativeRangeOpenings):
         return memoryview(m)
 
 
-def load(d: str | os.PathLike) -> tuple[DumpedStore, DumpedRun]:
+def load(d: str | os.PathLike) -> tuple[DumpedStore, RunRoots]:
     d = Path(d)
     doc = json.loads((d / "store.json").read_text())
     if doc.get("schema") != SCHEMA:
         raise ValueError(f"{d / 'store.json'}: schema {doc.get('schema')!r} is not {SCHEMA}")
-    run = DumpedRun(bytes.fromhex(doc["run_root"]), [DumpedStep(int(s["step"]), bytes.fromhex(s["root"]), int(s["n_leaves"]), int(s["n_bytes"]),
-                                                                int(s["n_tensors"])) for s in doc["steps"]])
+    run = RunRoots(bytes.fromhex(doc["run_root"]), [StepRoot(int(s["step"]), bytes.fromhex(s["root"]), int(s["n_leaves"]), int(s["n_bytes"]),
+                                                             int(s["n_tensors"])) for s in doc["steps"]])
     if [s.step for s in run.steps] != list(range(len(run.steps))):
         raise ValueError(f"{d / 'store.json'}: steps are not numbered densely from 0")
     return DumpedStore(doc, d), run

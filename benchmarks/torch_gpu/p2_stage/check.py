@@ -84,7 +84,7 @@ def check_decode(args, lay: L.StoreLayout, src: L.Weights) -> dict:
 
 
 def sample_blocks(tensors: list[L.Tensor], per_tensor: int, seed: int) -> list[int]:
-    """Each tensor's first and last block and `per_tensor - 2` others of its blocks drawn by `seed` (all of them when it
+    """Each tensor's first and last block and `per_tensor - 2` others of its blocks sampled by `seed` (all of them when it
     has no more than `per_tensor`), in block order."""
     rng, out = random.Random(seed), set()
     for t in tensors:
@@ -144,7 +144,7 @@ def main(argv=None) -> int:
     ap.add_argument("--blocks", type=int, help="check only the layer's first N encoded blocks")
     ap.add_argument("--sample", type=int, help="instead of one layer's every block, N blocks of every tensor of the "
                     "encoded store (its first and last among them)")
-    ap.add_argument("--seed", type=int, default=12, help="the draw of the sampled blocks")
+    ap.add_argument("--seed", type=int, default=12, help="the sample of the sampled blocks")
     args = ap.parse_args(argv)
     if args.sample is not None and args.encoded is None:
         ap.error("--sample reads an encoded store")

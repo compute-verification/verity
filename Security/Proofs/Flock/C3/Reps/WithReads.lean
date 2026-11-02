@@ -30,7 +30,7 @@ open FlockVBridge.OfVStar (ResZeroAtLH)
 /-- **Level `ℓ`'s α at a rep's rounds and extras**: the Ligerito run's, in the coin-derived points `residualLins`
 returns there (`verifierRows`' info, `infoAlpha_of_rows`); none where it refuses. -/
 def infoAlpha (sh : Flock.Shape) (rounds : Array (Array F128)) (extras : Array Flock.Claim) (ℓ : ℕ) : Array F128 :=
-  match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.Coins.ofRounds rounds) extras with
+  match Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.CoinSource.ofRounds rounds) extras with
   | .ok (_, info) => (info.lg.conss[ℓ]!).alpha
   | .error _ => #[]
 
@@ -41,7 +41,7 @@ theorem infoAlpha_of_rows {sh : Flock.Shape} {rounds : Array (Array F128)} {extr
     infoAlpha sh rounds extras ℓ = (info.lg.conss[ℓ]!).alpha := by
   unfold Flock.RecAlgebra.verifierRows at h
   unfold infoAlpha
-  cases hl : Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.Coins.ofRounds rounds) extras with
+  cases hl : Flock.RecAlgebra.residualLins sh (Flock.RecAlgebra.CoinSource.ofRounds rounds) extras with
   | error _ => rw [hl] at h; cases h
   | ok q =>
     obtain ⟨lins, _⟩ := q

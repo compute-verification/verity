@@ -317,7 +317,7 @@ def test_every_template_carries_a_work_model() -> None:
 
 
 def test_memory_bound_templates_carry_a_bandwidth_work_model_and_the_h100_its_bandwidth() -> None:
-    """The four non-GEMM templates C-Flock has cells on: bytes per input over their ports (bench-spine's templates), evaluated at
+    """The four non-GEMM templates Flock has cells on: bytes per input over their ports (bench-spine's templates), evaluated at
     their #101 bindings; the H100's HBM3 bandwidth is the denominator."""
     want = {"rope-head/d64/neox-bf16": 6 * 64, "silu-mul/i8192/bf16": 6 * 8192, "rmsnorm-fused-cuda/n2048-eps1e-05/bf16": 10 * 2048,
             "rmsnorm-triton/n2048-eps1e-05/bf16": 6 * 2048}

@@ -511,7 +511,7 @@ def test_every_program_of_test_ports_has_the_walks_verdict(both):
 
 class _Gen:
     """A random small Program: a root of bytes, coins and positions whose body and callees dither, add and seed, and call,
-    batch and scan callees of their own, each argument drawn from what is in scope (shared, split, repeated), returning
+    batch and scan callees of their own, each argument sampled from what is in scope (shared, split, repeated), returning
     some bytes and some receipt folds keyed by a coin."""
 
     def __init__(self, seed: int) -> None:

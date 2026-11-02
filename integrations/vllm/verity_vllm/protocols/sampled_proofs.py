@@ -1,7 +1,7 @@
 """Sampled proofs as a protocol option: the Commit's own commitment and replay, declared here, with no hooks of its own.
 
 Its scheme, ``rows-sha512``, names what the Commit commits under: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte run
-roots (`verity_vllm.commit.step_rows`), over the required values of the row's Program, and the replay's draw: up to
+roots (`verity_vllm.commit.step_rows`), over the required values of the row's Program, and the replay's sample: up to
 `--replay-per-stratum` units of every stratum, uniformly (`commit.challenge.stratum_picks`).  Its hooks are the Commit's
 committer and taps, which the Commit installs exactly as before; this option adds none, and the Commit refuses an entry
 whose scheme is not its committer's (`protocol_options.commit_guard`).  ``vllm-v1`` (`verity_vllm.commit.scheme`, SHA-256,
@@ -14,7 +14,7 @@ the required-value manifest's digest.
 """
 from __future__ import annotations
 
-from verity_vllm.commit import challenge, step_rows
+from verity_vllm.commit import step_rows
 from verity_vllm.commit import scheme as recorded_scheme
 from verity_vllm.protocols.interface import Context, Option, Target
 
@@ -49,4 +49,4 @@ def install(scheme: str, target: Target) -> Option:
     entry = f"{NAME}:{scheme}"
     return Option(name=entry, hooks=target.hooks(entry),
                   details={"commitment_scheme": scheme, "law": LAW,
-                           "challenge": "legacy (the run root)" if challenge.LEGACY else "verity.ml.randomness.derive from an auditor key"})
+                           "challenge": "verity.ml.randomness.derive from an auditor key"})

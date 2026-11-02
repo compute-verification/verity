@@ -34,7 +34,7 @@ def _stratified(k: int = 4) -> dict:
 
 
 def _work(k: int = 4) -> dict:
-    """A work sampling design over the same strata: A's proof blocks do work 3, B's none (drawn at their floor)."""
+    """A work sampling design over the same strata: A's proof blocks do work 3, B's none (sampled at their floor)."""
     strata = [("A", [[0, 4], [7, 10]], 3), ("B", [[4, 7]], 0)]
     total = sum(w * sum(h - l for l, h in rs) for _, rs, w in strata)
     return {"law": "work", "k": k, "strata": [{"template": t, "units": rs, "work": w, "floor": 1,
@@ -117,7 +117,7 @@ def test_own_randomness_is_the_lean_verifiers_samplers_on_raw_bytes():
 def test_draw_first_is_the_lean_verifiers_draw_on_the_same_bytes():
     """`draw_first` reads the verifier's bytes as `Flock.Draw.drawWith` does: on a stream that doesn't run out, its proof blocks
     are `drawOn`'s on the same bytes, for every sampling design (a bernoulli sampling design at its NUM/DEN as written, unreduced), and
-    `one_stage.draw.check_draw` accepts the draw against the sampling design and the population."""
+    `one_stage.draw.check_draw` accepts the sample against the sampling design and the population."""
     rng = random.Random(8)
     laws = [{"law": "subset", "k": 0}, {"law": "subset", "k": 4}, {"law": "subset", "k": 10}, {"law": "bernoulli", "p": "2/6"},
             {"law": "bernoulli", "p": "0/3"}, {"law": "bernoulli", "p": "3/3"}, _stratified(1), _stratified(4), _stratified(10),
@@ -134,7 +134,7 @@ def test_draw_first_is_the_lean_verifiers_draw_on_the_same_bytes():
 
 
 def test_a_stream_that_runs_out_is_extended_as_lean_does():
-    """Lean's `onWith`: when the first `need` bytes can't finish the draw (here every word is rejected), `need` more are
+    """Lean's `onWith`: when the first `need` bytes can't finish the sample (here every word is rejected), `need` more are
     read and the sampler reruns from the start of the longer stream; a source that ends is refused."""
     need = 2 * 3 * 9 + 64
     src = b"\xff" * need + random.Random(9).randbytes(need)
@@ -144,9 +144,9 @@ def test_a_stream_that_runs_out_is_extended_as_lean_does():
 
 
 def test_a_work_draw_carries_its_closure():
-    """PoUW's shape: a work sampling design over tiles with the verifier's closure map (a tile and what its credit reads).  The draw
-    carries `closure_of` (Lean `closureOf`: what drawn proof blocks' closures hold beyond the drawn proof blocks, ascending, omitted
-    when empty), and `one_stage.draw.proved` is drawn and closure."""
+    """PoUW's shape: a work sampling design over tiles with the verifier's closure map (a tile and what its credit reads).  The sample
+    carries `closure_of` (Lean `closureOf`: what sampled proof blocks' closures hold beyond the sampled proof blocks, ascending, omitted
+    when empty), and `one_stage.draw.proved` is sampled and closure."""
     closure = {0: [1, 4], 2: [3], 4: [5, 0], 7: [8, 9], 9: [7]}
     assert closure_of(closure, [0, 4]) == [1, 5] and closure_of(closure, [7, 9]) == [8] and closure_of(closure, [6]) == []
     law = _work()

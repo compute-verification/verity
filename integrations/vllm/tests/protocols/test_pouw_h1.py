@@ -1093,7 +1093,7 @@ def test_a_slot_table_naming_leaves_of_an_a_table_no_round_root_commits_is_refus
 def _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after, reserved=True):
     """`honest` (a served window's commitment) with its coins swapped for those of challenge phase `CH.session_id(seed)`, which
     the auditor's ledger reserved (unless not `reserved`) and opened on `opened_on` and whose salt coin opened after
-    `salt_after`, then its round and draw coins after the window's own roots; and that challenge phase's host (`name`)."""
+    `salt_after`, then its round and flip coins after the window's own roots; and that challenge phase's host (`name`)."""
     sid = CH.session_id(seed)
     host = _host(tmp_path, monkeypatch, name=name, seed=seed, session=sid, reserved=reserved)
     answer = host.open(sid, opened_on.hex())
@@ -1396,3 +1396,20 @@ def test_hiding_rows_is_core_commit_rows_with_its_salts_drawn_as_one_stream(n, w
     want = commit_rows(SALT, 5, values, hash=HM96, salt_key=key, nonce=nonce)
     got = RQ.hiding_rows(SALT, 5, values, key, nonce)
     assert got.commitment == want.commitment and all(got.open(i) == want.open(i) for i in range(n))
+
+
+def test_a_rounds_request_and_slot_tables_are_core_commit_rows():
+    """A round's request table (entries of their own lengths, then `EMPTY_REQUEST` again and again) and slot table (each
+    owner over its rows, then `EMPTY_SLOT`), whose repeated preimages `hiding_rows` digests once, are `audit.commit_rows`'
+    trees of the same leaves: the root and every opening."""
+    from verity.core.protocols.pouw.audit import HM96, commit_rows
+    rng, t, r = random.Random(7), 40, 3
+    entries = [RQ.RequestEntry(i, r, 5 * i, 16, tuple(rng.randrange(1 << 17) for _ in range(1 + 3 * i))) for i in range(4)]
+    owners = [0] * 5 + [1] * 5 + [2] * 5 + [3] * 7 + [None] * 3
+    for got, values, binding, nonce in (
+            (RQ.request_table(SALT, r, t, entries, KEY), [e.row() for e in entries] + [RQ.EMPTY_REQUEST] * (t - 4),
+             RQ.requests_binding(SALT, r), RQ.REQUESTS_NONCE + r),
+            (RQ.slot_table(SALT, r, t, owners, KEY), [RQ.slot_leaf(o) for o in owners] + [RQ.EMPTY_SLOT] * (t - 25),
+             RQ.slots_binding(SALT, r), RQ.SLOTS_NONCE + r)):
+        want = commit_rows(binding, r, values, hash=HM96, salt_key=KEY, nonce=nonce)
+        assert got.commitment == want.commitment and all(got.open(i) == want.open(i) for i in range(t))

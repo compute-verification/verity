@@ -35,7 +35,7 @@ def test_uncovered_lm_head():
 
 def test_ncp_gamma_only_where_ttncp_is_claimed():
     """TT_NCP's premise γ_0 >= d/(3k) holds at every workload shape (k >= 1067 at γ_0 = 1/200, d = 16) and is refused
-    below it, where the one-segment adversary wins (CMP-77)."""
+    below it, where the one-segment adversary wins."""
     import json
     import pytest
     for m, k, n in json.loads(G.WORKLOAD.read_text())["gamma_shapes"]:

@@ -63,7 +63,7 @@ def adapter(form, rank, groups):
 
 def test_lora_state_matches_the_hand_counts():
     qwen, kimi = MODELS["qwen25-1b5"], MODELS["kimi-k2"]
-    # TVI A2's LoRA-16 on Qwen2.5-1.5B's seven maps: 16 (2 (1536 + 1536) + 2 (1536 + 256) + 3 (1536 + 8960)) x 28
+    # LoRA-16 (family.lora-r16) on Qwen2.5-1.5B's seven maps: 16 (2 (1536 + 1536) + 2 (1536 + 256) + 3 (1536 + 8960)) x 28
     assert adapter("lora", 16, ("attention", "dense")).sizes(qwen)[0] == 659_456 * 28 == 18_464_768
     assert adapter("xs", 5, ("attention", "dense")).sizes(qwen)[0] == 196 * 25 == 4_900
     assert adapter("xs", 16, ("attention", "dense")).sizes(qwen)[0] == 196 * 256 == 50_176

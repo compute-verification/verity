@@ -4,7 +4,7 @@
 # and checked on the CPU by ref.py after it; only if every check passes, the interleaved timing at the served shapes and
 # ncu's tensor-pipe counts under a second lease. Clocks are read, never set (ncu --clock-control none). Results in $OUT.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-12 --source . --cwd clone --env GPU_LEASE_WHO=W13 \
+#   research run --on MACHINE --project verity --source . --cwd clone --env GPU_LEASE_WHO=LANE \
 #     --send benchmarks/pouw/floored_gemm/run.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/run.sh"'
 # STAGE=build|gate|all (default all); REPS (default 15); SHAPES (name:m:n:k:C ..., C the tile config P, Q, W or D); NCU_SHAPES (same).
 set -uo pipefail
