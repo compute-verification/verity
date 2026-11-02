@@ -14,6 +14,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--steps", type=int, default=8)
     ap.add_argument("--peek", action="store_true")
+    ap.add_argument("--peek-sealed", action="store_true")
     a = ap.parse_args()
     net, rec, theta = prepare.load_start(a.start)
     params = net.params()
@@ -21,6 +22,8 @@ def main() -> int:
         p.data = p.data.float()
     if a.peek:
         (prepare.HELD_OUT / "search" / "rows.pt").read_bytes()
+    if a.peek_sealed:
+        sorted(prepare.SEALED.iterdir())
     opt = torch.optim.Adam(list(params.values()), lr=1e-2)
     data = prepare.TrainData("fake")
     fwd = torch.compile(net)

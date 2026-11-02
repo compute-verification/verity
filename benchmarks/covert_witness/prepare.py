@@ -536,17 +536,17 @@ def held_out(split: str, tokenizer: str) -> tuple[np.ndarray, dict]:
     return toks, man
 
 
-def draw_slice(weights_digest: str, coin: bytes | None = None) -> dict:
+def draw_slice(weights_digest: str, coin: str | None = None) -> dict:
     """A fresh slice of the search pool for weights already hashed to `weights_digest`: a live coin (16 bytes from the
     OS, drawn now), the pool's documents permuted by a generator seeded with sha256(coin ‖ digest), and the first of them
-    that hold SLICE_TOKENS GPT-2 tokens, in row order. The coin and the digest reproduce it."""
+    that hold SLICE_TOKENS GPT-2 tokens, in row order. The recorded coin (hex) and the digest reproduce it."""
     man = manifest(SEARCH_POOL)
-    coin = os.urandom(16) if coin is None else coin
-    seed = int.from_bytes(hashlib.sha256(coin + weights_digest.encode()).digest(), "little")
+    raw = os.urandom(16) if coin is None else bytes.fromhex(coin)
+    seed = int.from_bytes(hashlib.sha256(raw + weights_digest.encode()).digest(), "little")
     order = np.random.default_rng(seed).permutation(man["documents"])
     have = np.cumsum(np.asarray(man["tokenizers"]["gpt2"]["doc_tokens"])[order])
     n = min(int(np.searchsorted(have, SLICE_TOKENS)) + 1, len(order))
-    return {"coin": coin.hex(), "weights_digest": weights_digest, "documents": sorted(int(i) for i in order[:n])}
+    return {"coin": raw.hex(), "weights_digest": weights_digest, "documents": sorted(int(i) for i in order[:n])}
 
 
 @torch.no_grad()
