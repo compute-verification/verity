@@ -4,9 +4,13 @@ the honest session's answer is a core accept that `piece_row` reads, with its cr
 scope beside the served window; a prover that serves later passes from its cache of the first's, reading nothing of
 the store, is rejected (`receipt`); and a session that left no record, asked about a window that wasn't served, is a
 reject that says both. ``collect``, the composed run's piece, reads the answer the PoUS piece's session wrote, which
-`pieces` has run first; it names the audit missing where there is none, and refuses another window's or protocol's."""
+`pieces` has run first; it names the audit missing where there is none, and refuses another window's or protocol's. It
+credits an accept only when the bandwidth party's own answer names the window's binding as its audit: a session run
+under window 1's audit, collected at window 2, is undecided and credits nothing, as is one with no record or no
+audit."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -24,6 +28,7 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
 sys.path.insert(0, str(ROOT / "examples" / "h200" / "interfaces"))
 import served_bandwidth as SB  # noqa: E402
 import served_verdicts as S  # noqa: E402
+import served_window as SW  # noqa: E402
 from p2_v1 import bandwidth as B  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
@@ -100,20 +105,103 @@ def _held(tmp: Path, window: int, answer: dict = HELD) -> Path:
     return d
 
 
+def _served(serve: Path) -> Path:
+    """`serve` with the serve.json the window's binding is of (`served_window.of_serve_dir`)."""
+    serve.mkdir(parents=True, exist_ok=True)
+    (serve / "serve.json").write_text(json.dumps({"model": "meta-llama/Llama-3.2-1B", "revision": "4e20de36" * 5}))
+    return serve
+
+
+def _record(private: Path, audit: bytes | None, verdict: str = "accept") -> Path:
+    """The session's record the PoUS piece's bandwidth session keeps (``session.json``): the bandwidth party's own
+    answer, naming `audit` as the PoUS session's whose store it held (none for a party held by a registration file)."""
+    private.mkdir(parents=True, exist_ok=True)
+    own = {"protocol": p2_party.PROTOCOL, "verdict": verdict, "host": "auditor"}
+    own |= {} if audit is None else {"audit": audit.hex()}
+    (private / "session.json").write_text(json.dumps({"answer": own, "verifier_record": own, "verifier_rc": 0}))
+    return private
+
+
+def _composed(tmp: Path, serve: Path, window: int, audit_window: int) -> tuple[dict, dict]:
+    """`pieces` at `window`, its PoUS piece leaving an accepted bandwidth answer of `window` whose session ran under
+    window `audit_window`'s audit: what `pieces` printed of the bandwidth piece, and its row."""
+    held, kept = _held(tmp, window), _record(tmp / "kept", SW.of_serve_dir(serve, audit_window))
+    pous = (f'mkdir -p "$3/../bandwidth" "$1/private/bandwidth" && cp {held}/*.json "$3/../bandwidth/" && '
+            f'cp {kept}/session.json "$1/private/bandwidth/"')
+    env = dict(os.environ) | {"POUS_CMD": pous, "BANDWIDTH_CMD": COLLECT.replace("python", sys.executable, 1)}
+    out = tmp / f"pieces-{window}-{audit_window}"
+    return S.pieces(serve, window, out, env=env)["bandwidth"], S.piece_row("bandwidth", out)
+
+
 def test_the_pous_piece_runs_first_and_the_bandwidth_piece_collects_what_its_session_wrote(tmp_path, monkeypatch):
     """`pieces` starts PoUS's piece before the bandwidth audit's, so the answer PoUS's piece wrote to the bandwidth
-    piece's directory is there when ``collect`` reads it, and the record reads it as the bandwidth audit's."""
+    piece's directory, and the session's record in ``SERVE_DIR/private/bandwidth``, are there when ``collect`` reads
+    them; the party's own answer names the window's binding, so the record reads it as the bandwidth audit's."""
     monkeypatch.chdir(ROOT)
-    serve, held = _serve_dir(tmp_path / "serve"), _held(tmp_path, 0)
-    env = dict(os.environ) | {"POUS_CMD": f'mkdir -p "$3/../bandwidth" && cp {held}/*.json "$3/../bandwidth/"',
-                              "BANDWIDTH_CMD": COLLECT.replace("python", sys.executable, 1)}
-    got = S.pieces(serve, 0, tmp_path / "pieces", env=env)
-    assert got["bandwidth"] == {"verdict": "accept", "rc": 0}
-    log = (tmp_path / "pieces" / "bandwidth" / "piece.log").read_text()
+    serve = _served(_serve_dir(tmp_path / "serve"))
+    got, row = _composed(tmp_path, serve, 0, 0)
+    assert got == {"verdict": "accept", "rc": 0}
+    log = (tmp_path / "pieces-0-0" / "bandwidth" / "piece.log").read_text()
     assert log.startswith("BANDWIDTH ") and json.loads(log.split(" ", 1)[1])["public"] == HELD["public"]
-    row = S.piece_row("bandwidth", tmp_path / "pieces")
     assert row["verdict"] == "accept" and row["quantity"]["q_bytes"] == 8224
     assert BR._quantity("bandwidth", row)[0] == {"symbol": "Q_cert", "value": 8224, "unit": "bytes"}
+
+
+def test_a_session_under_an_earlier_windows_audit_is_undecided_and_credits_nothing(tmp_path, monkeypatch):
+    """The prover names window 1's audit at window 2, so the bandwidth party held window 1's PoUS store and accepted:
+    the answer is window 2's, but its session isn't window 2's PoUS session, so the bandwidth piece is undecided and
+    credits nothing, naming why and neither binding. The same session collected at window 1, whose audit it ran under,
+    is credited."""
+    monkeypatch.chdir(ROOT)
+    serve = _served(_serve_dir(tmp_path / "serve"))
+    got, row = _composed(tmp_path, serve, 2, 1)
+    assert got["verdict"] == row["verdict"] == "undecided" and got["rc"] == 1
+    assert row["quantity"] is None and row["answer"]["public"] is None and row["answer"]["commitment"] is None
+    assert "is not of window 2's PoUS session: the bandwidth party's own answer names another audit than window 2's " \
+           "binding" in row["reason"]
+    text = (tmp_path / "pieces-2-1" / "bandwidth" / "answer.json").read_text()
+    assert all(SW.of_serve_dir(serve, k).hex() not in text for k in (1, 2))
+    assert _composed(tmp_path, serve, 1, 1)[0] == {"verdict": "accept", "rc": 0}
+
+
+@pytest.mark.parametrize("case, why", [
+    ("no record", "there is no record of the session in "),
+    ("a party held by a registration file", "the bandwidth party's own answer names no PoUS audit"),
+    ("no answer of the party's own", "the session's record holds no answer of the bandwidth party's own"),
+    ("no serve.json", "window 3's binding can't be derived: "),
+])
+def test_an_accept_with_no_audit_of_the_windows_own_is_undecided(tmp_path, case, why):
+    serve, out = tmp_path / "serve", _held(tmp_path, 3)
+    private = serve / "private" / "bandwidth"
+    if case != "no serve.json":
+        _served(serve)
+    if case == "a party held by a registration file":
+        _record(private, None)
+    elif case == "no answer of the party's own":
+        private.mkdir(parents=True)
+        (private / "session.json").write_text(json.dumps({"answer": {"verdict": "accept"}, "verifier_record": None}))
+    elif case == "no serve.json":
+        _record(private, hashlib.sha512(b"some window's binding").digest())
+    assert SB.main(["collect", "--serve-dir", str(serve), "--window", "3", "--out", str(out)]) == 1
+    a = json.loads((out / "answer.json").read_text())
+    assert a["verdict"] == "undecided" and S.check_answer(a) and a["public"] is None
+    assert a["reason"].startswith(f"the bandwidth answer in {out} is not of window 3's PoUS session: {why}")
+
+
+def test_collect_reads_the_record_where_the_pous_piece_kept_it_and_passes_any_other_verdict(tmp_path):
+    """The record is read from ``--private`` when the PoUS piece kept it elsewhere (its ``--bw-private``); an answer
+    that credits nothing keeps its own reason, record or not."""
+    serve = _served(tmp_path / "serve")
+    elsewhere = _record(tmp_path / "elsewhere", SW.of_serve_dir(serve, 3))
+    out = _held(tmp_path, 3)
+    assert SB.main(["collect", "--serve-dir", str(serve), "--window", "3", "--out", str(out),
+                    "--private", str(elsewhere)]) == 0
+    assert json.loads((out / "answer.json").read_text()) == HELD
+    rejected = {"commitment": None, "profile": None, "protocol": p2_party.PROTOCOL, "public": None,
+                "reason": "the session was rejected: receipt at window 0, draw [1, 2]", "verdict": "reject"}
+    out = _held(tmp_path, 3, rejected)
+    assert SB.main(["collect", "--serve-dir", str(serve), "--window", "3", "--out", str(out)]) == 1
+    assert json.loads((out / "answer.json").read_text()) == rejected
 
 
 def test_collect_names_the_audit_missing_where_the_pous_piece_wrote_nothing(tmp_path, capsys):

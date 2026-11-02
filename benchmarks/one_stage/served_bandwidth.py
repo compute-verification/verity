@@ -1,6 +1,6 @@
 """The bandwidth audit's answer on one served window (`served_verdicts.sh`'s BANDWIDTH_CMD):
 
-    served_bandwidth.py collect --serve-dir SERVE_DIR --window K --out DIR
+    served_bandwidth.py collect --serve-dir SERVE_DIR --window K --out DIR [--private P]
     served_bandwidth.py answer --session FILE --serve-dir SERVE_DIR --window K --out DIR [--r-bytes-per-s R]
                        [--started UTC --ended UTC] [--gpu FILE]
 
@@ -14,8 +14,13 @@ composed run starts PoUS's piece before this one (`served_verdicts.PIECES`), so 
 (`served_verdicts.sh`'s default once POUS_CMD is set).
 
 An answer that isn't window K's is replaced by an undecided one saying whose it is, and where the PoUS piece wrote none
-nothing is written, so the record names the bandwidth audit missing (`served_verdicts.piece_row`). Exit 0 on accept, 1 on
-any other answer, 2 on none.
+nothing is written, so the record names the bandwidth audit missing (`served_verdicts.piece_row`). An accept is credited
+only when its session ran under window K's own PoUS session (`held_to`): the audit the bandwidth party's own answer
+names (``P/session.json``'s ``verifier_record``, `p2_party.session`'s ``audit``; ``P`` the PoUS piece's
+``--bw-private``, by default ``SERVE_DIR/private/bandwidth``) must be window K's binding, which ``collect`` derives from
+the serve dir as PoUS's piece binds it (`benchmarks/pous/served_window.py`), never from what that piece wrote. Any other
+(an earlier window's audit, none, no record) is replaced by an undecided answer saying which and naming no value. Exit 0
+on accept, 1 on any other answer, 2 on none.
 
 ``answer``: the session of `served_bandwidth.sh`, over a store of the node's own on its disk.
 
@@ -42,6 +47,8 @@ if str(HERE) not in sys.path:
 
 from verity.core.protocols.remote_bandwidth import p2_party  # noqa: E402
 
+#: the served window's binding, the audit PoUS's piece runs its session and its bandwidth party under
+SERVED_WINDOW = HERE.parent / "pous" / "served_window.py"
 #: an H200's specified HBM read rate, bytes a second
 H200_BYTES_PER_S = 4_800_000_000_000
 #: what the session certifies of the served window
@@ -88,9 +95,52 @@ def answer(session: Mapping[str, Any], scope: str, r_bytes_per_s: int | None) ->
     return out
 
 
-def collect(out: Path, window: int) -> dict[str, Any] | None:
-    """The answer the PoUS piece's bandwidth session wrote to `out` for `window` (module docstring), None when it wrote
-    none; ValueError when what it wrote isn't a core answer of the remote bandwidth audit."""
+def _served_window():
+    """`benchmarks/pous/served_window.py`, loaded by its path."""
+    import importlib.util
+
+    if "served_window" not in sys.modules:
+        spec = importlib.util.spec_from_file_location("served_window", SERVED_WINDOW)
+        module = sys.modules["served_window"] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    return sys.modules["served_window"]
+
+
+def held_to(serve_dir: Path, window: int, private: Path) -> str | None:
+    """None when the bandwidth session ran under window `window`'s own PoUS session: the audit the bandwidth party's own
+    answer names (``private/session.json``'s ``verifier_record``) is the window's binding, derived here from
+    `serve_dir` (`served_window.of_serve_dir`); else why not, naming no value."""
+    try:
+        bind = _served_window().of_serve_dir(serve_dir, window)
+    except ValueError as e:
+        return f"window {window}'s binding can't be derived: {e}"
+    try:
+        doc = json.loads((private / "session.json").read_text())
+    except (OSError, ValueError) as e:
+        return f"there is no record of the session in {private} ({type(e).__name__})"
+    record = doc.get("verifier_record") if isinstance(doc, dict) else None
+    if not isinstance(record, dict):
+        return "the session's record holds no answer of the bandwidth party's own"
+    if record.get("audit") is None:
+        return "the bandwidth party's own answer names no PoUS audit"
+    if record["audit"] != bind.hex():
+        return f"the bandwidth party's own answer names another audit than window {window}'s binding"
+    return None
+
+
+def _undecided(out: Path, reason: str) -> dict[str, Any]:
+    """The undecided answer saying `reason`, written over ``out/answer.json``."""
+    a = {"commitment": None, "profile": None, "protocol": p2_party.PROTOCOL, "public": None, "reason": reason,
+         "verdict": "undecided"}
+    (out / "answer.json").write_text(json.dumps(a, indent=1, sort_keys=True) + "\n")
+    return a
+
+
+def collect(out: Path, window: int, serve_dir: Path, private: Path | None = None) -> dict[str, Any] | None:
+    """The answer the PoUS piece's bandwidth session wrote to `out` for `window` (module docstring), an accept held to
+    the window's PoUS session by the session's record in `private` (`held_to`; by default
+    ``serve_dir/private/bandwidth``), None when it wrote none; ValueError when what it wrote isn't a core answer of the
+    remote bandwidth audit."""
     import served_verdicts as S
 
     files = [out / f for f in ("answer.json", "bandwidth.json")]
@@ -101,10 +151,11 @@ def collect(out: Path, window: int) -> dict[str, Any] | None:
     if a.get("protocol") != p2_party.PROTOCOL:
         raise ValueError(f"the answer in {out} is {a.get('protocol')!r}'s, not the remote bandwidth audit's")
     if summary.get("window") != window:
-        a = {"commitment": None, "profile": None, "protocol": p2_party.PROTOCOL, "public": None,
-             "reason": f"the bandwidth answer in {out} is window {summary.get('window')}'s, not window {window}'s: the "
-                       f"PoUS piece ran no bandwidth session for window {window}", "verdict": "undecided"}
-        (out / "answer.json").write_text(json.dumps(a, indent=1, sort_keys=True) + "\n")
+        return _undecided(out, f"the bandwidth answer in {out} is window {summary.get('window')}'s, not window "
+                               f"{window}'s: the PoUS piece ran no bandwidth session for window {window}")
+    private = serve_dir / "private" / "bandwidth" if private is None else private
+    if a["verdict"] == "accept" and (why := held_to(serve_dir, window, private)) is not None:
+        return _undecided(out, f"the bandwidth answer in {out} is not of window {window}'s PoUS session: {why}")
     return a
 
 
@@ -115,6 +166,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     c.add_argument("--serve-dir", type=Path, required=True)
     c.add_argument("--window", type=int, required=True)
     c.add_argument("--out", type=Path, required=True)
+    c.add_argument("--private", type=Path, help="the PoUS piece's --bw-private, where its bandwidth session's record "
+                                                "is (default SERVE_DIR/private/bandwidth)")
     p = sub.add_parser("answer")
     p.add_argument("--session", type=Path, required=True, help="bandwidth.py session's session.json")
     p.add_argument("--serve-dir", type=Path, required=True)
@@ -128,7 +181,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     if a.cmd == "collect":
         try:
-            got = collect(a.out, a.window)
+            got = collect(a.out, a.window, a.serve_dir, a.private)
         except ValueError as e:
             print(f"BANDWIDTH error: {e}", flush=True)
             return 1

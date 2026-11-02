@@ -65,6 +65,7 @@ def _load(name: str, path: Path):
 
 SP = _load("pous_served_piece", ROOT / "benchmarks" / "pous" / "served_piece.py")
 SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdicts.py")
+SB = _load("served_bandwidth", ROOT / "benchmarks" / "one_stage" / "served_bandwidth.py")
 fakes = _load("pous_fakes", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_fakes.py")
 ts = _load("pous_test_signer", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_test_signer.py")
 BR = _load("pous_served_block_record", ROOT / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "block_record.py")
@@ -254,7 +255,7 @@ def test_the_challenger_draws_the_salt_and_the_verdict_derives_the_session_id(se
     assert answer["verdict"] == "accept", answer["reason"]
     run = json.loads((served.private / "run.json").read_text())
     published = run["published"]
-    bind = SP.binding(REPO, REV, 3, None)
+    bind = SP.SW.binding(REPO, REV, 3, None)
     commitment, salt = bytes.fromhex(published["commitment"]), bytes.fromhex(published["salt"])
     assert len(auditor.sources) == 1 and auditor.salts.get(bind) == (commitment, salt)
     assert salt == period.setup.draw_salt(auditor.sources[0], commitment)
@@ -294,7 +295,7 @@ def test_a_session_whose_setup_salt_is_not_the_challengers_is_refused(served, tm
     answer, calls = _run(served, tmp_path, monkeypatch, auditor)
     assert answer["verdict"] == "undecided" and calls == []
     assert answer["reason"].endswith(f"refused: setup's published outputs do not carry the commitment and salt the memory "
-                                     f"challenger logged for audit {SP.binding(REPO, REV, 3, None).hex()}")
+                                     f"challenger logged for audit {SP.SW.binding(REPO, REV, 3, None).hex()}")
     assert auditor.log.path.read_text() == f"{mc.SESSION_LOG}\n"
 
 
@@ -331,12 +332,12 @@ def test_the_answer_reveals_nothing_of_the_weights_and_its_commitment_opens_priv
     for secret in (published["commitment"], published["salt"], published["root"], inner,
                    served.tensors["model.layers.0.self_attn.q_proj.weight"].numpy().tobytes()[:24].hex()):
         assert secret not in text
-    bind = SP.binding(REPO, REV, 3, None)
+    bind = SP.SW.binding(REPO, REV, 3, None)
     assert opening["binding"] == bind.hex() == answer["profile"]["commitment"]["binding"]
     op = advice.Opening(opening["index"], bytes.fromhex(opening["row"]), bytes.fromhex(opening["salt"]),
                         tuple(bytes.fromhex(p) for p in opening["path"]))
     assert advice.verify(bytes.fromhex(answer["commitment"]), 1, 512, bind, op)
-    assert not advice.verify(bytes.fromhex(answer["commitment"]), 1, 512, SP.binding(REPO, REV, 4, None), op)
+    assert not advice.verify(bytes.fromhex(answer["commitment"]), 1, 512, SP.SW.binding(REPO, REV, 4, None), op)
     assert stat.S_IMODE(served.private.stat().st_mode) == 0o700
     assert (served.private / "digests.bin").stat().st_size == 48 * 64
     case = json.loads((served.private / "case.json").read_text())
@@ -478,8 +479,9 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     """PoUS's session and then PoUB-P2's on the one ``C*`` the piece encoded and holds, the bandwidth party's
     registration the challenger's own record of the PoUS session: both accepted. The P2 case, written privately, is of
     PoUS's store (`p2_case.same_store` against the run's case), and `remote-audit-p2-protocol` answers it as the session
-    did; the public answer, which the composed run reads as the bandwidth piece's, names none of the store. It encodes
-    ``C*`` at the registered point (about 25 s on the CPU), the only point a P2 registration names."""
+    did; the party's own answer names the window's binding as its audit, so the composed run's collector credits the
+    public answer, which names none of the store. It encodes ``C*`` at the registered point (about 25 s on the CPU), the
+    only point a P2 registration names."""
     s = registered
     answer, calls = _run(s, tmp_path, monkeypatch, **_bandwidth(tmp_path, bw_case_exe=str(case_exe)))
     assert answer["verdict"] == "accept", answer["reason"]
@@ -513,6 +515,10 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     op = advice.Opening(opening["index"], bytes.fromhex(opening["row"]), bytes.fromhex(opening["salt"]),
                         tuple(bytes.fromhex(p) for p in opening["path"]))
     assert advice.verify(bytes.fromhex(bw["commitment"]), 1, 512, SP.HB.binding(REPO, REV, 3), op)
+    kept = json.loads((private / "session.json").read_text())
+    bind = json.loads((s.out / "pous.json").read_text())["binding"]
+    assert kept["verifier_record"]["audit"] == kept["answer"]["audit"] == bind == SP.SW.of_serve_dir(s.serve, 3).hex()
+    assert SB.collect(public, 3, s.serve) == bw
     row = SV.piece_row("bandwidth", s.out.parent)
     assert row["verdict"] == "accept" and row["protocol"] == p2_case.PROTOCOL
     assert BR._quantity("bandwidth", row)[0] == {"symbol": "Q_cert", "value": bw["public"]["q_bytes"], "unit": "bytes"}

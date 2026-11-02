@@ -38,7 +38,8 @@
 #     tree has it and this node holds the memory challenger's key (~/.ssh/vy-auditor2-pous). That piece runs the bandwidth
 #     session over the store it holds and writes its answer where the bandwidth piece's goes, which BANDWIDTH_CMD collects:
 #     by default, once POUS_CMD is set, '"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window
-#     "$2" --out "$3"'; with no PoUS piece, 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"' where the tree has
+#     "$2" --out "$3"', which credits an accept only when the bandwidth party's own answer names the window's binding as
+#     its audit; with no PoUS piece, 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"' where the tree has
 #     it and this node holds the bandwidth verifier's key (~/.ssh/vy-auditor2-bw) and its registered store (BW_STORE's
 #     setup.json). Set empty, a command is MISSING.
 #     A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`) goes in SERVE_ARGS, serve-openai's

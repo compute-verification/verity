@@ -13,8 +13,9 @@
 # the gate's cap), the case answered by BW_CASE_EXE when it names remote-audit-p2-protocol; its answer goes to DIR's
 # sibling bandwidth, which BANDWIDTH_CMD collects (served_bandwidth.py collect), and its case to SERVE_DIR/private/bandwidth.
 # POUS_ARGS adds served_piece.py's options (--node, --private, --rounds, --challenger-*, --trusted-sha512, --device, --bw-*,
-# --no-bandwidth). Logs: DIR/build.log and DIR/pous.log (its stderr). Exit: served_piece.py's
-# (0 accept, 1 another answer, 2 no answer made), 3 when the library doesn't build.
+# --no-bandwidth); a --bw-private there is where collect reads the session's record, so BANDWIDTH_CMD names it too
+# (collect's --private). Logs: DIR/build.log and DIR/pous.log (its stderr). Exit: served_piece.py's (0 accept, 1 another
+# answer, 2 no answer made), 3 when the library doesn't build.
 set -uo pipefail
 SERVE_DIR=${1:?usage: served_piece.sh SERVE_DIR WINDOW DIR}; WINDOW=${2:?WINDOW}; DIR=${3:?DIR}
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)

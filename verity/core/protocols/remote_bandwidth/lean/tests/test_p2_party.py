@@ -3,9 +3,10 @@
 `tests/test_p2.py`'s fixture: an honest prover accepted with its credited reads, under every unit or the registration's
 plan, one whose receipts skip a unit's reads, one whose openings are out of form and one that reads every unit when the
 plan is fewer rejected, and a request for another node, or off the auditor's session parameters, refused before any
-coin, the party `main` starts holding its sessions to `SESSION` unless its flags name others; and the books' veto: a Lean that
-accepts a window the books reject, books that accept one the Lean rejects, a Lean whose answer isn't the books', one
-that fails mid-session, and a Lean that holds another store, each rejected or refused."""
+coin, the party `main` starts holding its sessions to `SESSION` unless its flags name others, an answer over a PoUS
+record naming its audit; and the books' veto: a Lean that accepts a window the books reject, books that accept one the
+Lean rejects, a Lean whose answer isn't the books', one that fails mid-session, and a Lean that holds another store,
+each rejected or refused."""
 
 from __future__ import annotations
 
@@ -138,9 +139,9 @@ class Lying:
 
 
 def run(exe: Path, store: p2.Store, prover_of, request: dict, plan: receipts.Plan | None = None,
-        lean_of=lambda lean: lean) -> tuple[dict, dict]:
+        lean_of=lambda lean: lean, audit: bytes | None = None) -> tuple[dict, dict]:
     """One session over a socket pair: the verifier's side in a thread, its Lean (`lean_of` of it) holding the
-    registration file with `plan`, the prover's here; both answers."""
+    registration file with `plan` (a PoUS record's of `audit`, with one), the prover's here; both answers."""
     clock = Clock()
     a, b = socket.socketpair()
     data = json.dumps(p2_party.registration_json(store.registration, plan)).encode()
@@ -151,7 +152,7 @@ def run(exe: Path, store: p2.Store, prover_of, request: dict, plan: receipts.Pla
             reg, held = p2_party.hold(lean, data)
             got["answer"] = p2_party.session(r, w, reg, coins=b"\x07" * 64, lean=lean_of(lean), plan=held,
                                              clock=clock, sleep_until=clock.sleep_until, host="auditor-under-test",
-                                             auditor=TOY)
+                                             auditor=TOY, audit=audit)
 
     th = threading.Thread(target=verifier)
     th.start()
@@ -181,7 +182,7 @@ def test_an_honest_prover_is_accepted_with_its_credited_reads(exe, store) -> Non
     proved, answer = run(exe, store, lambda c: Prover(store, c), request(store))
     assert proved == answer
     assert answer["verdict"] == "accept" and "disagreement" not in answer, answer
-    assert answer["host"] == "auditor-under-test"
+    assert answer["host"] == "auditor-under-test" and "audit" not in answer
     units = store.registration.blocks
     assert answer["receipts"] == 2 * 2 * units and answer["plan_units"] == units
     assert [w["passes"] for w in answer["windows"]] == [2, 2]
@@ -386,3 +387,28 @@ def test_an_earlier_windows_session_on_the_host_is_never_this_windows_store(stor
     assert p2_party.registration_of(json.loads(p2_party.pous_record(tmp_path, window.hex()))) == reg
     held = p2_party.registration_of(json.loads(p2_party.pous_record(tmp_path, earlier.hex())))
     assert (held.commitment, held.salt, held.root) == (commitment, salt, root) != (reg.commitment, reg.salt, reg.root)
+
+
+def test_the_answer_names_the_pous_audit_whose_store_it_held(exe, store, tmp_path) -> None:
+    """Held by a PoUS record, the party's answer, accepted or refused, names the audit whose session's store it held,
+    so whoever credits the session holds it to the window's own binding (`served_bandwidth.py collect`); `main` names
+    the `--pous-audit` it was started with, in the answer it sends and the one it keeps in its device."""
+    audit = hashlib.sha512(b"window 2's binding").digest()
+    proved, answer = run(exe, store, lambda c: Prover(store, c), request(store), audit=audit)
+    assert proved == answer and answer["verdict"] == "accept" and answer["audit"] == audit.hex(), answer
+    _, refused = run(exe, store, lambda c: Prover(store, c), request(store) | {"node": b"another-node".hex()},
+                     audit=audit)
+    assert refused["verdict"] == "refused" and refused["audit"] == audit.hex()
+
+    reg = store.registration
+    salts, sessions = _challenger(tmp_path / "pous")
+    salts.record(audit, reg.commitment, reg.salt)
+    _ran(tmp_path / "pous", salts, sessions, reg.params, R.Setup(reg.params.blocks, reg.commitment, reg.root, reg.salt),
+         audit)
+    p = subprocess.run([sys.executable, "-m", p2_party.MODULE, "--pous-record", str(tmp_path / "pous"),
+                        "--pous-audit", audit.hex(), "--stdio", "--device", str(tmp_path / "bw"), "--lean-exe",
+                        str(exe)], input=json.dumps({"request": request(store)}).encode() + b"\n", capture_output=True,
+                       check=True)
+    sent = json.loads(p.stdout.splitlines()[0])["answer"]
+    assert sent["verdict"] == "refused" and sent["audit"] == audit.hex(), sent
+    assert [json.loads(x) for x in (tmp_path / "bw" / "answers.jsonl").read_text().splitlines()] == [sent]

@@ -33,7 +33,9 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   the prover keeps private. A session the books vetoed has none.
 - `{"answer": {...}}` ends the session (`answer`): the verdict, the failure and where, and on acceptance the credited
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
-  8,224 bytes each, over the session's span. `core_answer` puts it in the core interface's form.
+  8,224 bytes each, over the session's span. It names the verifier's host and, held by a PoUS record, the `audit` whose
+  session's store it held, so whoever credits the session holds it to the window's own binding
+  (`benchmarks/one_stage/served_bandwidth.py collect`). `core_answer` puts it in the core interface's form.
 
 The verifier is the Lean, since the trusted base is the compiled Lean verifier, which parses bytes of
 untrusted provenance, and Python is never trusted: the process `remote-audit-verifier` (`p2_lean.py`,
@@ -608,22 +610,24 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
             sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until,
             log: Callable[[str], None] = lambda _m: None, host: str | None = None,
             keep: Callable[[dict[str, Any]], None] | None = None,
-            auditor: Mapping[str, int] = SESSION) -> dict[str, Any]:
+            auditor: Mapping[str, int] = SESSION, audit: bytes | None = None) -> dict[str, Any]:
     """The verifier's side of one session over the channel (`f_in`, `f_out`), decided by `lean`, which holds
     `registration` and `plan` (`hold`; every unit by default), with the books beside it (`Twin`): the prover's
     request, refused unless it carries the auditor's parameters `auditor` (`params_of`), the registration, each pass
     asked for in order under `plan`, each window's openings drawn once its roots
     are final and verified, the session's coins disclosed, its case (`p2_case.case_of`, which `keep` is given too)
     unless the books vetoed it, and the answer, sent last and returned, naming the verifier's `host` (this one's name
-    by default). A line out of form or a closed channel rejects the session (its answer says why)."""
+    by default) and, when `registration` is a PoUS record's (`pous_record`), the `audit` it is of. A line out of form or
+    a closed channel rejects the session (its answer says why)."""
     host = host or socket.gethostname()
+    held_by = {"host": host} | ({} if audit is None else {"audit": audit.hex()})
     plan = Plan.whole(registration.blocks) if plan is None else plan
     line = f_in.readline()
     try:
         twin = Twin.open(lean, registration, plan, line, coins, clock(), auditor)
     except _Refused as e:
         out = {"protocol": PROTOCOL, "registration": registration.digest.hex(), "verdict": "refused",
-               "reason": str(e), "host": host}
+               "reason": str(e)} | held_by
         return _last(f_out, out)
     W, passes = twin.books.s.params.windows, twin.books.s.params.min_passes
 
@@ -668,7 +672,7 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
     if twin.books.s.outcome is None:
         twin.fail()
     commitment, openings = twin.books.s.disclose()
-    out = twin.answer(reason) | {"host": host}
+    out = twin.answer(reason) | held_by
     case = None
     if twin.disagreement is None:
         from . import p2_case
@@ -786,6 +790,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if (a.pous_record is None) != (a.pous_audit is None):
         ap.error("--pous-record and --pous-audit go together")
     data = a.registration.read_bytes() if a.registration is not None else pous_record(a.pous_record, a.pous_audit)
+    audit = None if a.pous_audit is None else bytes.fromhex(a.pous_audit)
     cases = None
     if a.device is not None:
         a.device.mkdir(parents=True, exist_ok=True)
@@ -820,7 +825,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         with Lean(exe) as lean:
             hold(lean, data)
             return session(r, w, reg, coins=secrets.token_bytes(64), lean=lean, plan=plan, log=log, keep=kept,
-                           auditor=auditor)
+                           auditor=auditor, audit=audit)
 
     if a.stdio:
         done(served(sys.stdin.buffer, sys.stdout.buffer))

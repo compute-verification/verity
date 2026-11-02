@@ -19,9 +19,10 @@ DIR``).
    doesn't need.
 2. **Setup** by the vLLM adapter (`verity_vllm.protocols.pous`, ``pous:p2-16448/v4``, its registered point): the
    commitment to ``W``, then the salt, which the memory challenger draws after it from its own host's OS and logs under
-   the window's binding (`binding`; `challenger_party.salt`, the gate's ``challenger_party`` verb on a salt request),
-   ``C*`` encoded on the card (``libp2v1.so``, ``--p2-lib``), the memory challenger's table and the root. Setup's own
-   inputs are kept as it sent them, for the tie. A challenger that draws no salt leaves the period undecided.
+   the window's binding (`served_window`; `challenger_party.salt`, the gate's ``challenger_party`` verb on a salt
+   request), ``C*`` encoded on the card (``libp2v1.so``, ``--p2-lib``), the memory challenger's table and the root.
+   Setup's own inputs are kept as it sent them, for the tie. A challenger that draws no salt leaves the period
+   undecided.
 3. **The session**: the memory challenger's side started on its host by ``--challenger-command`` (the auditor gate's
    ``challenger_party`` verb), the prover connecting to ``--challenger-address`` and answering each of ``--rounds``
    indices (`ROUNDS` by default) from ``C*`` on the card (`challenger_party.session`). The request names the window's
@@ -37,13 +38,13 @@ DIR``).
    105 (`p2.wide320_certificate`'s ``2^-20`` is no run's certificate). The check takes about 2.3 minutes at the
    registered point at 105 challenges or 320: the tie is its cost, not the rounds.
 5. **Zero knowledge**: the answer's commitment is a hiding one, one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512``
-   tree (`verity.ml.commitments.advice`) holding the run's commitment (the SHA-512 of what setup published) under
-   `binding`, so the record fixes the run and reveals nothing of ``W``'s digest, the salt or ``C*``'s root. Its opening,
-   setup's published outputs, the session and its id, the rounds' latencies, the trusted key, the table, and the case with
-   the run protocol's own answer on it (``case.json``, ``answer.json``: the composite's piece, `served_case.write`) go to
-   ``--private`` (by default
-   ``SERVE_DIR/private/pous/w<WINDOW>``, 0700), never to ``DIR``. The profile carries the point, the certificate, the
-   placement and the weights' public properties: their model, count and size.
+   tree (`verity.ml.commitments.advice`) holding the run's commitment (the SHA-512 of what setup published) under the
+   window's binding, so the record fixes the run and reveals nothing of ``W``'s digest, the salt or ``C*``'s root. Its
+   opening, setup's published outputs, the session and its id, the rounds' latencies, the trusted key, the table, and
+   the case with the run protocol's own answer on it (``case.json``, ``answer.json``: the composite's piece,
+   `served_case.write`) go to ``--private`` (by default ``SERVE_DIR/private/pous/w<WINDOW>``, 0700), never to ``DIR``.
+   The profile carries the point, the certificate, the placement and the weights' public properties: their model, count
+   and size.
 
 6. **The bandwidth session** (`held_bandwidth.py`): once PoUS's session completed, and before ``C*`` is released, the same
    process runs PoUB-P2's session over the store it holds on the card, so both audits are of one store and no second one
@@ -55,7 +56,8 @@ DIR``).
    and its answer go to ``--bw-private`` (by default ``SERVE_DIR/private/bandwidth``, 0700), held to PoUS's run case as
    one store (`p2_case.same_store`); its public answer, under a hiding commitment to the case's digest, to ``--bw-out``
    (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth piece's,
-   `served_bandwidth.py collect`). ``--bw-windows``, ``--bw-passes``, ``--bw-samples`` and ``--bw-window-s`` set its
+   `served_bandwidth.py collect`, which credits it only when the party's own answer names the window's binding as the
+   audit it held the store by). ``--bw-windows``, ``--bw-passes``, ``--bw-samples`` and ``--bw-window-s`` set its
    length (`held_bandwidth`'s defaults: two minutes); ``--no-bandwidth`` runs none.
 
 Writes ``DIR/answer.json`` and ``DIR/pous.json`` (sizes and the phases' timings) and prints one ``POUS`` line.
@@ -89,7 +91,6 @@ from verity.core.protocols.pous import period
 from verity.core.protocols.pous import run as R
 from verity.core.protocols.pous.schemes import p2 as P2
 from verity.ml.commitments import advice
-from verity.ml.commitments.identity import canonical_json_bytes
 from verity_vllm import protocols as PO
 
 if str(Path(__file__).resolve().parent) not in sys.path:
@@ -97,6 +98,7 @@ if str(Path(__file__).resolve().parent) not in sys.path:
 
 import held_bandwidth as HB
 import served_case as SC
+import served_window as SW
 
 pous = PO.adapter("pous")
 ROOT = Path(__file__).resolve().parents[2]
@@ -124,7 +126,6 @@ BW_PARTY = ("ssh -i ~/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes
             "research@10.96.0.36 bw_party")
 BW_PARTY_HOST = "10.96.0.36"
 BW_MINUTES = 10
-BINDING_TAG = b"verity/pous/served-window/v1"
 #: the period's challenges: the 320-read window's (`ObligationWide320`); an accepted run certifies at `1% + 2^-128`
 ROUNDS = P2.CERT_K_WIDE320
 DTYPES = {"I8": torch.int8, "F32": torch.float32, "BF16": torch.bfloat16, "F16": torch.float16}
@@ -273,12 +274,6 @@ def linears(ck: Checkpoint, device: torch.device) -> tuple[Model, dict[str, Any]
     return Model(layers), {"decoder_layers": n, "bytes": outside, "serving": SERVING}
 
 
-def binding(model: str, revision: str, window: int, registration: str | None) -> bytes:
-    """What the answer's hiding commitment is bound to: the served model, the window and its weights registration."""
-    doc = {"model": model, "registration_sha512": registration, "revision": revision, "window": window}
-    return hashlib.sha512(BINDING_TAG + canonical_json_bytes(doc)).digest()
-
-
 def _no(verdict: str, reason: str, commitment: str | None = None, protocol: str = period.PROTOCOL) -> dict[str, Any]:
     return {"commitment": commitment, "profile": None, "protocol": protocol, "public": None, "reason": reason,
             "verdict": verdict}
@@ -329,8 +324,8 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
     bw_private = bw_private or serve_dir / "private" / "bandwidth"
     out.mkdir(parents=True, exist_ok=True)
     reg_file = serve_dir / "weights_registration.json"
-    reg_sha = hashlib.sha512(reg_file.read_bytes()).hexdigest() if reg_file.is_file() else None
-    bind = binding(repo, rev, window, reg_sha)
+    reg_sha = SW.registration_sha512(serve_dir)
+    bind = SW.of_serve_dir(serve_dir, window)
     summary: dict[str, Any] = {"window": window, "model": repo, "revision": rev, "node": node, "challenger": party.host,
                                "binding": bind.hex(), "registration_sha512": reg_sha}
 
