@@ -36,7 +36,7 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    --collect-only` in a suite
                                                    whose inputs its change touches, or breaks the build of a Lean module that
                                                    is or imports what it changes (on a warm Lean tree: here on a node, else
-                                                   on vy-nebius-cpu-3, else vy-nebius-cpu-8, whatever the tier; refused
+                                                   on vy-nebius-cpu-9, else vy-nebius-cpu-5, whatever the tier; refused
                                                    when neither can build them),
                                                    naming the PR on `next` that owns it, or
                                                    drops from a Lean lock it changes a shape.inline premise or shape.frozen
@@ -2876,10 +2876,10 @@ PREFLIGHT_MIN_FREE = 0.25
 PREFLIGHT_LEAN_MODULES = 40
 PREFLIGHT_LEAN_S = 180.0
 #: where the Lean step builds, whatever the mark's tier, when this machine keeps no warm Lean tree: the first of these nodes that
-#: starts the build (each keeps `build` Lean slots; cpu-3's research pool is the least loaded, cpu-1's congested).  The one place
-#: to move it
-PREFLIGHT_LEAN_ON = ("vy-nebius-cpu-3", "vy-nebius-cpu-8")
-#: the `research run` pool it takes there: none, as `verity lean try --on vy-nebius-cpu-3` runs, since the node's `build` Lean slots
+#: starts the build (each keeps `build` Lean slots, cpu-9 the most; cpu-1's are congested, and cpu-3 and cpu-8 are stopped).  The
+#: one place to move it
+PREFLIGHT_LEAN_ON = ("vy-nebius-cpu-9", "vy-nebius-cpu-5")
+#: the `research run` pool it takes there: none, as `verity lean try --on vy-nebius-cpu-9` runs, since the node's `build` Lean slots
 #: are the gate; a node without them would take its `research` pool
 PREFLIGHT_LEAN_POOL: str | None = None
 #: the merged tree's builder (`lean_changed.py --build FILE...`, on a `build` Lean slot's warm tree), and its last line's prefix
@@ -4874,6 +4874,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (the after-landing run tests it)")
     ap.add_argument("--again", action="store_true", help="ready: mark a head that was ejected (only when the ejection was wrong); "
                                                           "lean-check: rerun a commit whose recorded Lean check passed")
+    ap.add_argument("--preflight-root", type=Path, default=None, metavar="DIR",
+                    help="ready, drive: where the preflight's merged trees go (default: the temporary directory); a tree must "
+                         "share a filesystem with uv's cache for its sync to hardlink (drive on the control pod, whose TMPDIR is a "
+                         "network volume, passes the container disk)")
     ap.add_argument("--no-preflight", action="store_true",
                     help="ready: skip the preflight (the lander's): the head merged onto a fresh `next` must merge cleanly, contain "
                          "no open PR that isn't admitted, and pass `pins.py --stale`, the invariant tests (module strings, pins, "
@@ -5025,7 +5029,8 @@ def main(argv: list[str]) -> int:
         if a.command == "ready":
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
-            pre = None if a.no_preflight else Preflight(top, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by))
+            pre = None if a.no_preflight else Preflight(top, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by),
+                                                             root=a.preflight_root)
             return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha, as_json=a.json,
                          records=RecordsGate(top, remote, store))
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
@@ -5117,7 +5122,8 @@ def main(argv: list[str]) -> int:
         if a.command == "drive":
             q._drive_only("main", "once", a.dry_run)          # its landings push `main`, its syncs `next`
         if a.command in ("sync", "drive"):
-            q.preflight = Preflight(q.workdir, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by), log=q.log).onto
+            q.preflight = Preflight(q.workdir, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by), log=q.log,
+                                    root=a.preflight_root).onto
         if a.command == "sync":
             q.hand_sync(dry_run=a.dry_run)
             return 0
