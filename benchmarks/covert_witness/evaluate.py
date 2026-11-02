@@ -30,7 +30,7 @@ import prepare
 
 
 def score(rec: dict, model: dict[str, torch.Tensor], split: str) -> dict:
-    with torch.device("cuda"):
+    with torch.device(prepare.DEVICE):
         net = prepare.Net(rec["config"])
     net.load(model)
     return prepare.evaluate_bpb(net, split, rec["tokenizer"])

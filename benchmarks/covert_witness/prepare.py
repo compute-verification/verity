@@ -39,6 +39,7 @@ ROOT = Path(os.environ.get("CW_ROOT", "/workspace/research/scratch/covert-witnes
 LF_CORPUS = Path(os.environ.get("CW_LF_CORPUS", "/workspace/research/scratch/learning-frontier/fineweb-edu-gpt2-v1"))
 STARTS = ROOT / "starts"
 HELD_OUT = ROOT / "eval"
+DEVICE = os.environ.get("CW_DEVICE", "cuda")
 EVAL_CTX = 1024
 #: about 10 GPU-minutes of m's dense AdamW at its measured 1.49e14 FLOP/s (learning_frontier, RTX PRO 6000)
 TRAIN_FLOP_BUDGET = 9e16
@@ -137,7 +138,7 @@ class Net(torch.nn.Module):
         return self
 
 
-def load_start(name: str, device: str = "cuda") -> tuple[Net, dict, dict[str, torch.Tensor]]:
+def load_start(name: str, device: str = DEVICE) -> tuple[Net, dict, dict[str, torch.Tensor]]:
     """(the start's model on `device`, its record, θ on the CPU)."""
     rec = start_record(name)
     theta = load_theta(name)
@@ -185,7 +186,7 @@ class TrainData:
         self.order = np.random.default_rng(seed).permutation((len(self.tokens) - 1) // ctx)
         self.at = 0
 
-    def next(self, n: int, device: str = "cuda") -> torch.Tensor:
+    def next(self, n: int, device: str = DEVICE) -> torch.Tensor:
         if self.at + n > len(self.order):
             self.at = 0
         idx = np.sort(self.order[self.at: self.at + n])
@@ -388,7 +389,7 @@ def lora_merge(w: torch.Tensor, a: torch.Tensor, b: torch.Tensor, scale: float) 
 
 
 @torch.no_grad()
-def decode(theta: dict[str, torch.Tensor], blob: bytes, device: str = "cuda") -> dict[str, torch.Tensor]:
+def decode(theta: dict[str, torch.Tensor], blob: bytes, device: str = DEVICE) -> dict[str, torch.Tensor]:
     """The model E encodes from θ, every tensor in θ's dtype on the CPU."""
     out = dict(theta)
     if blob[:8] == b"CWFULL1\n":
@@ -475,7 +476,7 @@ def held_out(split: str, tokenizer: str) -> tuple[np.ndarray, dict]:
 
 
 @torch.no_grad()
-def evaluate_bpb(net: Net, split: str, tokenizer: str, micro: int = 32, device: str = "cuda") -> dict:
+def evaluate_bpb(net: Net, split: str, tokenizer: str, micro: int = 32, device: str = DEVICE) -> dict:
     """Bits per byte of the held-out set: windows of EVAL_CTX + 1 tokens at stride EVAL_CTX over the set's stream (the last
     one shorter), every token after the first a target, the summed negative log-likelihood over the set's UTF-8 bytes."""
     toks, man = held_out(split, tokenizer)
@@ -487,12 +488,12 @@ def evaluate_bpb(net: Net, split: str, tokenizer: str, micro: int = 32, device: 
     net.eval()
     for i in range(0, len(full), micro):
         rows = torch.stack([t[s: s + EVAL_CTX + 1] for s in full[i: i + micro]]).to(device)
-        with torch.autocast("cuda", dtype=torch.bfloat16):
+        with torch.autocast(device.split(":")[0], dtype=torch.bfloat16):
             logits = net.logits(rows[:, :-1])
         total += F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), rows[:, 1:].reshape(-1), reduction="sum").double()
     for s in starts[len(full):]:
         rows = t[s:].unsqueeze(0).to(device)
-        with torch.autocast("cuda", dtype=torch.bfloat16):
+        with torch.autocast(device.split(":")[0], dtype=torch.bfloat16):
             logits = net.logits(rows[:, :-1])
         total += F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), rows[:, 1:].reshape(-1), reduction="sum").double()
     nats = float(total)

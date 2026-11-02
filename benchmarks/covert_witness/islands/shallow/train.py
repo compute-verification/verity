@@ -46,7 +46,7 @@ def main() -> int:
         p.requires_grad_(n in tuned)
         if n in tuned:
             p.data = p.data.float()
-    opt = torch.optim.AdamW([params[n] for n in tuned], lr=a.lr, betas=(0.9, 0.95), weight_decay=a.wd, fused=True)
+    opt = torch.optim.AdamW([params[n] for n in tuned], lr=a.lr, betas=(0.9, 0.95), weight_decay=a.wd, fused=prepare.DEVICE.startswith("cuda"))
     trainable = {"full": tuned}
     tokens = a.batch * prepare.EVAL_CTX
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
@@ -64,7 +64,7 @@ def main() -> int:
         rows = data.next(a.batch)
         for i in range(0, a.batch, a.micro):
             x = rows[i: i + a.micro]
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+            with torch.autocast(prepare.DEVICE.split(":")[0], dtype=torch.bfloat16):
                 logits = fwd(x[:, :-1])
             loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
             loss.backward()

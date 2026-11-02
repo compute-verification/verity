@@ -73,7 +73,7 @@ def main() -> int:
     rank = a.rank
     if not rank:
         rank = 1
-        while e_bytes(theta, targets, rank + 1, norms) <= cap:
+        while e_bytes(theta, targets, rank + 1, norms) <= cap - 512:
             rank += 1
     size = e_bytes(theta, targets, rank, norms)
     if cap is not None and size > cap:
@@ -84,19 +84,19 @@ def main() -> int:
     for n in norms:
         params[n].data = params[n].data.float()
         params[n].requires_grad_(True)
-    g = torch.Generator(device="cuda").manual_seed(a.seed)
+    g = torch.Generator(device=prepare.DEVICE).manual_seed(a.seed)
     factors = {}
     for n in targets:
         w = params[n]
-        A = torch.nn.Parameter(torch.randn(rank, w.shape[1], device="cuda", generator=g) / math.sqrt(w.shape[1]))
-        B = torch.nn.Parameter(torch.zeros(w.shape[0], rank, device="cuda"))
+        A = torch.nn.Parameter(torch.randn(rank, w.shape[1], device=prepare.DEVICE, generator=g) / math.sqrt(w.shape[1]))
+        B = torch.nn.Parameter(torch.zeros(w.shape[0], rank, device=prepare.DEVICE))
         s = math.sqrt(w.shape[1] / rank)
         factors[n] = (A, B, s)
         mod = net.inner.get_submodule(n.removesuffix(".weight"))
         mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
     opt = torch.optim.AdamW([{"params": [p for A, B, _ in factors.values() for p in (A, B)], "lr": a.lr, "weight_decay": 0.0},
                              {"params": [params[n] for n in norms], "lr": a.norm_lr, "weight_decay": 0.0}],
-                            betas=(0.9, 0.95), fused=True)
+                            betas=(0.9, 0.95), fused=prepare.DEVICE.startswith("cuda"))
     trainable = {"full": norms, "adapters": {n: rank for n in targets}}
     tokens = a.batch * prepare.EVAL_CTX
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
@@ -116,7 +116,7 @@ def main() -> int:
         rows = data.next(a.batch)
         for i in range(0, a.batch, a.micro):
             x = rows[i: i + a.micro]
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+            with torch.autocast(prepare.DEVICE.split(":")[0], dtype=torch.bfloat16):
                 logits = fwd(x[:, :-1])
             loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
             loss.backward()

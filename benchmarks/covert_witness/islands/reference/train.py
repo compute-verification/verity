@@ -77,7 +77,7 @@ def main() -> int:
     mats = [n for n, p in params.items() if p.ndim == 2 and n != embed]
     rest = [n for n in params if n not in mats]
     muon = Muon([params[n] for n in mats], lr=a.muon_lr)
-    adam = torch.optim.AdamW([params[n] for n in rest], lr=a.adam_lr, betas=(0.9, 0.95), weight_decay=0.0, fused=True)
+    adam = torch.optim.AdamW([params[n] for n in rest], lr=a.adam_lr, betas=(0.9, 0.95), weight_decay=0.0, fused=prepare.DEVICE.startswith("cuda"))
     trainable = {"full": sorted(params)}
     tokens = a.batch * prepare.EVAL_CTX
     extra = sum(ns_flops(tuple(params[n].shape)) for n in mats)
@@ -97,7 +97,7 @@ def main() -> int:
         rows = data.next(a.batch)
         for i in range(0, a.batch, a.micro):
             x = rows[i: i + a.micro]
-            with torch.autocast("cuda", dtype=torch.bfloat16):
+            with torch.autocast(prepare.DEVICE.split(":")[0], dtype=torch.bfloat16):
                 logits = fwd(x[:, :-1])
             loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
             loss.backward()

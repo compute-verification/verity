@@ -52,7 +52,7 @@ def main() -> int:
     n_steps = min(int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step), (cap - header) // 4)
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     fwd = torch.compile(net)
-    gen = torch.Generator(device="cuda")
+    gen = torch.Generator(device=prepare.DEVICE)
     steps, coeffs, snaps = [], [], []
     marks = {round(n_steps * k / 4) for k in (1, 2, 3)}
     print(json.dumps({"steps": n_steps, "perturbed": len(names), "flops_per_step": per_step}), flush=True)
@@ -61,9 +61,9 @@ def main() -> int:
     def loss_at(sign: float, seed: int, x: torch.Tensor) -> float:
         gen.manual_seed(seed)
         for w, m in zip(live, masters):
-            z = torch.randn(m.shape, generator=gen, device="cuda", dtype=torch.float32)
+            z = torch.randn(m.shape, generator=gen, device=prepare.DEVICE, dtype=torch.float32)
             w.copy_((m + sign * a.eps * z).to(w.dtype))
-        with torch.autocast("cuda", dtype=torch.bfloat16):
+        with torch.autocast(prepare.DEVICE.split(":")[0], dtype=torch.bfloat16):
             logits = fwd(x[:, :-1])
         return float(F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)))
 
