@@ -15,9 +15,12 @@ branch across it):
    name is its path's, so the first step has already renamed every import of it;
 3. in a `lean-audit.json`, renames module names and prose but not the records `audit.py --update` writes (`guarantees`,
    `reads`, `dependencies`), so that `--update --moved` compares the build with them under their old names;
-4. rewrites a `TRUSTED.sha256` line whose file the move changed, when it held that file's digest before;
-5. appends its renamed paths to research's `moves.json` once, as `layout.py` does, each moved path up to its first renamed
-   part (`.../warden/`, not each file under it), so that a branch carried across the move appends the same entry.
+4. rewrites a `TRUSTED.sha256` line whose file the move changed, when it held that file's digest before, and likewise a
+   Lake manifest's digest in a JSON pin of `tools/verity/check/pins.py`: a move changes a manifest only in where its path
+   packages sit, which no pinned output reads (a pin of any other file the move changes is left for its command);
+5. appends its renamed paths to research's `moves.json` once, as `layout.py` does, each moved path up to the end of each
+   run of renamed parts (`.../warden/`, not each file under it, and `.../warden/tests/test_warden.py` besides), so that a
+   branch carried across the move appends the same entry unless it adds a path that renames a part below a renamed one.
 It refuses a dirty worktree, and a second run changes nothing.
 """
 from __future__ import annotations
@@ -26,6 +29,7 @@ import argparse
 import bisect
 import fnmatch
 import hashlib
+import importlib.util
 import json
 import os
 import posixpath
@@ -44,6 +48,8 @@ POLICY = "lean-audit.json"
 RECORDS = ("guarantees", "reads", "dependencies")   # what `audit.py --update` writes from the build
 PINS = "TRUSTED.sha256"
 PIN = re.compile(r"^([0-9a-f]{64})  (.+)$", re.M)
+PINS_PY = "tools/verity/check/pins.py"              # the pins of Lean sources, some of them JSON (`json_pins`)
+MANIFEST = "lake-manifest.json"
 MOVES = L.MOVES                                     # research's record of each move's renamed paths
 
 
@@ -238,24 +244,54 @@ def repin(root: Path, words: Words, pins: str, texts: dict[str, str], dest: dict
     return None if new == text else new
 
 
+def json_pins(root: Path) -> list[tuple[str, str, str]]:
+    """The pins `tools/verity/check/pins.py` lists that record {path: digest} under a JSON key, as (pin, key, the directory
+    its paths are below); none in a tree without it."""
+    if not (root / PINS_PY).is_file():
+        return []
+    spec = importlib.util.spec_from_file_location("rename_move_pins", root / PINS_PY)
+    mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)       # its dataclass looks its module up
+    spec.loader.exec_module(mod)
+    return [(p.path, p.key, p.under) for p in mod.PINS if p.key is not None]
+
+
+def repin_manifests(root: Path, words: Words, pin: str, key: str, under: str, texts: dict[str, str]) -> str | None:
+    """The JSON pin at `pin` after the move: each Lake manifest it records under `key` whose digest it held, and which the
+    move changes, gets the manifest's new digest. None when no digest changes."""
+    before = (root / pin).read_text()
+    text = new = texts.get(pin, before)
+    for rel, digest in json.loads(before).get(key, {}).items():
+        target = posixpath.normpath(posixpath.join(under, rel))
+        if posixpath.basename(target) != MANIFEST or target not in texts:
+            continue
+        if hashlib.sha256((root / target).read_bytes()).hexdigest() != digest:
+            continue
+        written = rel if words.excluded(pin) else words.sub(rel, pin)
+        after = hashlib.sha256(texts[target].encode()).hexdigest()
+        new = re.sub(rf'("{re.escape(written)}"\s*:\s*"){digest}"', lambda m, h=after: f'{m[1]}{h}"', new)
+    return None if new == text else new
+
+
 def renamed_paths(moves: list[tuple[str, str]]) -> dict[str, str]:
-    """Each moved path up to the end of its first run of renamed parts ({old: new}; a directory ends in "/"), so that every
-    file under one renamed directory gives the same entry, and a swap (`Properties/Proofs/` to `Proofs/Properties/`) is
-    recorded whole."""
+    """Each moved path up to the end of each of its runs of renamed parts ({old: new}; a directory ends in "/"), so that
+    every file under one renamed directory gives the same entries, a path below it that renames another part
+    (`warden/tests/test_warden.py`) is recorded besides, since `move_check.py` and research's `tools_registry` read the
+    longest entry that holds a path, and a swap (`Properties/Proofs/` to `Proofs/Properties/`) is recorded whole."""
     out: dict[str, str] = {}
     for o, n in moves:
         a, b = o.split("/"), n.split("/")
-        if len(a) != len(b):
-            old, new = o, n
-        else:
-            i = next(i for i, (x, y) in enumerate(zip(a, b)) if x != y)
-            while i + 1 < len(a) and a[i + 1] != b[i + 1]:
-                i += 1
-            old, new = "/".join(a[:i + 1]), "/".join(b[:i + 1])
-            if i < len(a) - 1:
-                old, new = old + "/", new + "/"
-        if out.setdefault(old, new) != new:
-            raise SystemExit(f"{old} would move to both {out[old]} and {new}")
+        spans = [(o, n)] if len(a) != len(b) else []
+        i = 0 if len(a) == len(b) else len(a)
+        while i < len(a):
+            if a[i] != b[i]:
+                while i + 1 < len(a) and a[i + 1] != b[i + 1]:
+                    i += 1
+                end = "/" if i < len(a) - 1 else ""
+                spans.append(("/".join(a[:i + 1]) + end, "/".join(b[:i + 1]) + end))
+            i += 1
+        for old, new in spans:
+            if out.setdefault(old, new) != new:
+                raise SystemExit(f"{old} would move to both {out[old]} and {new}")
     return dict(sorted(out.items()))
 
 
@@ -316,10 +352,13 @@ def main(argv: list[str] | None = None) -> int:
         if new != text:
             texts[p] = new
     pins = {p: t for p in present if posixpath.basename(p) == PINS and (t := repin(root, words, p, texts, dest)) is not None}
+    tracked = set(present)
+    pins |= {p: t for p, key, under in json_pins(root)
+             if p in tracked and (t := repin_manifests(root, words, p, key, under, texts)) is not None}
     recorded = {MOVES: t} if (t := record(root, moves)) is not None else {}
 
     print(f"rename move at {L.git(root, 'rev-parse', 'HEAD').strip()}{' (dry run)' if a.dry_run else ''}")
-    print(f"  files rewritten: {len(texts)}, files moved: {len(moves)}, {PINS} files repinned: {len(pins)}")
+    print(f"  files rewritten: {len(texts)}, files moved: {len(moves)}, pins repinned: {len(pins)}")
     if recorded:
         print(f"  {MOVES}: the renamed paths recorded, {len(renamed_paths(moves))} of them")
     for (w, new), n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):

@@ -54,8 +54,8 @@ theorem Flock.masked_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Re
 /-- **A statement of a record's readable scope**: `2^m` trace bits in blocks of `2^6`, the empty circuit, one table,
 hm96 rows (`rows-v1`) under SHA-512 leaves. -/
 def Flock.scopeStmt (m : ℕ) : Claims.Flock.Stmt :=
-  ⟨m, 6, ⟨0, [], []⟩, fun _ => [], fun _ => [], [],
-    ⟨true, false, true, "hm96-sha512/v1", 1, false, false, false, false, 1, false, 0, true, true, false, false⟩⟩
+  ⟨m, 6, ⟨0, fun g => g.elim0, fun g => g.elim0, ∅⟩, fun _ _ => .pub 0, fun _ _ => .pub 0, [],
+    ⟨true, false, true, "hm96-sha512/v1", 1, false, false, false, false, 1, false, 0, true, true, false, false, false⟩⟩
 
 /-- **The plain record's readable scope holds a statement with a witness in its relation.** -/
 theorem Flock.scope_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
@@ -64,7 +64,7 @@ theorem Flock.scope_meets_plain (rel : Flock.Readable.Parsed → Flock.Readable.
   ⟨Flock.scopeStmt 22, ⟨[]⟩, by
     show Claims.Flock.InScope false _
     unfold Claims.Flock.InScope
-    decide, fun _ _ => rfl⟩
+    decide, fun _ _ o => o.elim0⟩
 
 /-- **The masked record's readable scope holds a statement with a witness in its relation**, at `2^25` trace bits. -/
 theorem Flock.scope_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Relation) :
@@ -73,20 +73,20 @@ theorem Flock.scope_meets_zk (rel : Flock.Readable.Parsed → Flock.Readable.Rel
   ⟨Flock.scopeStmt 25, ⟨[]⟩, by
     show Claims.Flock.InScope true _
     unfold Claims.Flock.InScope
-    decide, fun _ _ => rfl⟩
+    decide, fun _ _ o => o.elim0⟩
 
 /-- **A statement of the sampling scope**: the one-gate program that returns its input, under `Q_word` v1, with the
 design that checks every unit of its one class. -/
-def Sampling.scopeStmt : Claims.Sampling.AuditStatement := ⟨[], ⟨[.input], [0]⟩, ⟨"Q_word", 1, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
+def Sampling.scopeStmt : Claims.Sampling.AuditStatement := ⟨[], ⟨[.input], [0]⟩, ⟨"Q_word", 1, []⟩, ⟨[.all]⟩, []⟩
 
-/-- Its partition: one class of one stratum of one replay unit, the one proof unit `{0}`. -/
-def Sampling.scopePartition : Claims.Sampling.Partition := ⟨[[[[[0]]]]]⟩
+/-- Its partition: one class of one stratum of one proof block, `{0}`. -/
+def Sampling.scopePartition : Claims.Sampling.Partition := ⟨[[[[0]]]]⟩
 
 /-- **The sampling scope holds a statement**: its readable form reads no field of the record. -/
 theorem Sampling.scope_meets :
     ∃ (P : Claims.Sampling.Partition) (s : Claims.Sampling.AuditStatement), Claims.Sampling.InScope P s := by
   refine ⟨Sampling.scopePartition, Sampling.scopeStmt, ⟨?_, ?_⟩,
-    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩, rfl, ?_⟩
+    ⟨by decide, by decide, by decide, by decide, by decide⟩, rfl, ?_⟩
   · intro g x hg i hi
     cases g with
     | zero =>
@@ -97,8 +97,7 @@ theorem Sampling.scope_meets :
   · intro o ho
     simp [Sampling.scopeStmt] at ho ⊢
     exact ho
-  · simp [Sampling.scopeStmt, Sampling.scopePartition, Claims.Sampling.Rule.WellFormed,
-      Claims.Sampling.OneStage.WellFormed]
+  · simp [Sampling.scopeStmt, Sampling.scopePartition, Claims.Sampling.OneStage.WellFormed]
 
 /-- **A private circuit of a size class**: the class of one gate over two inputs and one output, and a private circuit
 of it, the AND of the two inputs, on inputs of its width. -/

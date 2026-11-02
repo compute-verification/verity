@@ -59,14 +59,17 @@ def statements() -> list[str]:
     """The names of `Flock.Tags.all` and `Tags.templated`, each list's definitions read from `Flock/Tags.lean`."""
     src = (LEAN / "Flock" / "Tags.lean").read_text()
     bodies = dict(re.findall(r"^def (\w+) : Tags :=(.*?)(?=^(?:def |/--|end ))", src, re.S | re.M))
+    strings = dict(re.findall(r'^def (\w+) : String := "([^"]+)"', src, re.M))
     names = []
     for listed in ("all", "templated"):
         m = re.search(rf"^def {listed} : List Tags := \[(.*?)\]", src, re.S | re.M)
         assert m, f"Flock/Tags.lean has no `def {listed} : List Tags := [...]`: update statements() to read the versions"
         for d in re.findall(r"\w+", m.group(1)):
-            name = re.search(r'name := "([^"]+)"', bodies.get(d, ""))
-            assert name, f"Tags.{d}: no `name := \"…\"` in its definition: update statements() to read its name"
-            names.append(name.group(1))
+            name = re.search(r'name := (?:"([^"]+)"|(\w+)\b)', bodies.get(d, ""))
+            value = name and (name.group(1) or strings.get(name.group(2)))
+            assert value, (f"Tags.{d}: no `name := \"…\"`, or `name := X` with `def X : String := \"…\"`, in its "
+                           "definition: update statements() to read its name")
+            names.append(value)
     return names
 
 

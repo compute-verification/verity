@@ -650,7 +650,7 @@ def test_live_salt(pass_server):
     """Generated live Pearl-C passes, salted by a salt-only session the auditor's signed ledger reserves, opens on the
     pass's salt epoch's root and ends complete, read through the session's own files, then each mutation over a few
     seeds (`replay`): a `pass_index` that isn't an integer in [0, 2^64), a call index of 2^32 or more, a session opened
-    on another root (W itself, another epoch's, or one the manifest doesn't name), #3868's H1 layout, a session reserved for another layout or ended
+    on another root (W itself, another epoch's, or one the manifest doesn't name), H1's layout, a session reserved for another layout or ended
     incomplete, a log showing another root, coins other than the session's, a session the manifest misnames, and every
     other refusal of `core_check.live_salt`."""
     LIVE_SALTED.clear()

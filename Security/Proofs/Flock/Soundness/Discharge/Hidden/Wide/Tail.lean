@@ -20,10 +20,10 @@ namespace FlockSoundness.Discharge.Hidden
 open Hm
 
 theorem outputs_committed_tail' : OutputsCommittedTail := by
-  intro tags cf pf coins tables d partition program st ht h pop hpop hpt D hD hlt hupv hv1 L regs hregs z hz o g j hg
+  intro tags cf pf coins tables d partition program st ht hi h pop hpop hpt D hD hlt hupv hv1 L regs hregs z hz o g j hg
     hg2 hj hr
   have s := setupHidden_spec' h
-  obtain ⟨hp, hcr⟩ := parse_untyped ht s.parse
+  obtain ⟨hp, hcr⟩ := parse_untyped ht (s.parseF hi)
   have P := parse_facts hp
   have L0 : FlockSoundness.Layout (flatTwin st) := layout_of (st := flatTwin st) P s.pin rfl rfl s.m s.kLog
   have F0 : Aliased.UnitFacts tags (flatTwin st) := unitFacts_of_parse (st := flatTwin st) hp rfl
@@ -49,7 +49,7 @@ theorem outputs_committed_tail' : OutputsCommittedTail := by
 
 /-- **`OutputsBindingTail` from `OutputsCommittedTail`**. -/
 theorem outputs_binding_tail_of (hC : OutputsCommittedTail) : OutputsBindingTail := by
-  intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hs hs' pop hpop hpt D D' hD
+  intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hi hs hs' pop hpop hpt D D' hD
     hDp hD' hDp' hupv hv1 L regs hregs L' regs' hregs' z hz z' hz' o o' g g' j hg hg2 hg' hg2' hj hr hr' hidx hne
   have hcc : st.c = st'.c := setupHidden_c hs hs'
   have hpop' : HmOut.loadPublic tags st'.c pf = .ok pop := by rw [← hcc]; exact hpop
@@ -57,8 +57,8 @@ theorem outputs_binding_tail_of (hC : OutputsCommittedTail) : OutputsBindingTail
   have hv1' : ∀ p ∈ st'.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks := by
     rw [← hcc]; exact hv1
   have hj' : j < st'.c.outPorts.size := by rw [← hcc]; exact hj
-  have e1 := hC ht hs hpop hpt hD hDp hupv hv1 L regs hregs hz o hg hg2 hj hr
-  have e2 := hC ht hs' hpop' hpt hD' hDp' hupv' hv1' L' regs' hregs' hz' o' hg' hg2' hj' hr'
+  have e1 := hC ht hi hs hpop hpt hD hDp hupv hv1 L regs hregs hz o hg hg2 hj hr
+  have e2 := hC ht hi hs' hpop' hpt hD' hDp' hupv' hv1' L' regs' hregs' hz' o' hg' hg2' hj' hr'
   have hp : HmRow.rowPrefix (st.c.ports.getD (HmOut.nIn st.c + j) default).words =
       HmRow.rowPrefix (st'.c.ports.getD (HmOut.nIn st'.c + j) default).words := by rw [hcc]
   refine commitPair_spec' _ _ _ _ (fun e => ?_) (e1.symm.trans (Eq.trans ?_ e2))
@@ -69,11 +69,11 @@ theorem outputs_binding_tail_of (hC : OutputsCommittedTail) : OutputsBindingTail
 /-- `OutputsCommittedTail` gives `OutputsCommitted`: a unit that returns the outputs has a unit per template instance at
 least. -/
 theorem outputs_committed_of_tail (hC : OutputsCommittedTail) : OutputsCommitted := by
-  intro tags cf pf coins tables d partition program st ht h pop hpop hpt D hD hlt ho hv1 L regs hregs z hz o g j hg
+  intro tags cf pf coins tables d partition program st ht hi h pop hpop hpt D hD hlt ho hv1 L regs hregs z hz o g j hg
     hg2 hj hr
   have s := setupHidden_spec' h
-  obtain ⟨hp, -⟩ := parse_untyped ht s.parse
+  obtain ⟨hp, -⟩ := parse_untyped ht (s.parseF hi)
   have F0 : Aliased.UnitFacts tags (flatTwin st) := unitFacts_of_parse (st := flatTwin st) hp rfl
-  exact hC ht h hpop hpt hD hlt (upv_pos F0.check ho) hv1 L regs hregs hz o hg hg2 hj hr
+  exact hC ht hi h hpop hpt hD hlt (upv_pos F0.check ho) hv1 L regs hregs hz o hg hg2 hj hr
 
 end FlockSoundness.Discharge.Hidden

@@ -4,7 +4,7 @@
 frame     u32be len(head) ‖ u32be len(body) ‖ head ‖ body: head a JSON object with its "type", body raw bytes
 ~~~
 
-An `openings` frame's body is the remote audit's openings frame (`verity/core/protocols/remote_bandwidth/wire.py`),
+An `openings` frame's body is PoUB's openings frame (`verity/core/protocols/remote_bandwidth/wire.py`),
 which decoding never raises past: a body it cannot read leaves its window no openings, which rejects as `malformed`.
 Every byte each side sends and receives is counted (`Conn.sent`, `Conn.received`, by message type).
 

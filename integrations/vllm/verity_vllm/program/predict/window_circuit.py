@@ -193,8 +193,8 @@ class WindowClass:
 
     @property
     def scan(self) -> Any:
-        """The network certifier's scan class at its lanes, outputs and timestep (`scan_state.scan_class`)."""
-        return SS.scan_class(self.lanes, self.outputs, self.every)
+        """The network certifier's scan class at its lanes, outputs, timestep and prompt ids (`scan_state.scan_class`)."""
+        return SS.scan_class(self.lanes, self.outputs, self.every, self.prompt)
 
 
 #: the class of record, the network certifier's envelope at these fixed slots:

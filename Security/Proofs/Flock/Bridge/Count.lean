@@ -5,12 +5,12 @@ import Proofs.Flock.Claims.Sampling.EndToEndDraw
 /-!
 # The bridge's slot count, `P_a`, count lemma and scope
 
-`partOf P κ` is one class, the population's `n` replay units (`rus_length_partOf`), each unit's slot holding the input
-rows it owns. `designOf kd` draws it `subset kd`, so its `P_a` is the subset miss at the population slots
-(`pa_partOf_window`). From them: `PartRusTarget`, `PaTarget` (`P_a(B) = C(n − |B|, kd)/C(n, kd)` for `B` of population
-slots), and `CountTarget`: a witness outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` has at least `min K₀ (n − kd + 1)`
-faulty population slots, because `C(·, kd)` is strictly increasing from `kd` on (`choose_lt_of_lt`). A unit whose owned
-input row doesn't open is one of them.
+`partOf P κ` is one class, the population's `n` proof blocks (`blocks_length_partOf`), each unit's block holding the
+input rows it owns. `designOf kd` draws it `subset kd`, so its `P_a` is the subset miss at the population slots
+(`pa_partOf_window`). From them: `PartBlocksTarget`, `PaTarget` (`P_a(B) = C(n − |B|, kd)/C(n, kd)` for `B` of
+population slots), and `CountTarget`: a witness outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` has at least
+`min K₀ (n − kd + 1)` faulty population slots, because `C(·, kd)` is strictly increasing from `kd` on
+(`choose_lt_of_lt`). A unit whose owned input row doesn't open is one of them.
 
 Scope: `designOf kd` is well formed on `partOf P κ` at `1 ≤ kd ≤ n` (`designOf_wellFormed`).
 -/
@@ -21,10 +21,10 @@ open FlockSoundness.Audit
 
 variable {C : FlockSoundness.Audit.Circuit} {n : ℕ} {κ : Fin C.N → Option Bool}
 
-theorem rus_length_partOf (P : FlockSoundness.Audit.Partition C n) : (partOf P κ).rus.length = n := by
-  simp [rus_partOf]
+theorem blocks_length_partOf (P : FlockSoundness.Audit.Partition C n) : (partOf P κ).blocks.length = n := by
+  simp [blocks_partOf]
 
-theorem partRus : PartRusTarget := fun P _ => rus_length_partOf P
+theorem partBlocks : PartBlocksTarget := fun P _ => blocks_length_partOf P
 
 theorem window_zero_filter (n : ℕ) (B : Finset ℕ) : Claims.Sampling.window 0 n B = B.filter (· < n) := by
   ext v
@@ -34,8 +34,8 @@ theorem window_zero_filter (n : ℕ) (B : Finset ℕ) : Claims.Sampling.window 0
 theorem pa_partOf_window (P : FlockSoundness.Audit.Partition C n) (kd : ℕ) (B : Finset ℕ) :
     (designOf kd).Pa (partOf P κ) B =
       ((n - (Claims.Sampling.window 0 n B).card).choose kd : ℝ) / (n.choose kd : ℝ) := by
-  simp [Claims.Sampling.Design.Pa, designOf, partOf, Claims.Sampling.classesPa, Claims.Sampling.Rule.Pa,
-    Claims.Sampling.OneStage.Pa, Claims.Sampling.strataSizes]
+  simp [Claims.Sampling.Design.Pa, designOf, partOf, Claims.Sampling.classesPa, Claims.Sampling.OneStage.Pa,
+    Claims.Sampling.strataSizes]
 
 theorem pa_partOf (P : FlockSoundness.Audit.Partition C n) (kd : ℕ) (B : Finset ℕ) (hB : B ⊆ Finset.range n) :
     (designOf kd).Pa (partOf P κ) B = ((n - B.card).choose kd : ℝ) / (n.choose kd : ℝ) := by
@@ -81,6 +81,6 @@ theorem designOf_wellFormed (P : FlockSoundness.Audit.Partition C n) {kd : ℕ} 
   simp only [designOf, partOf, List.zip_cons_cons, List.zip_nil_right, List.mem_cons,
     List.not_mem_nil, or_false] at hp
   subst hp
-  exact ⟨⟨hkd, by simpa [Claims.Sampling.strataSizes] using hkdn⟩, fun k hk => by simp at hk⟩
+  exact ⟨hkd, by simpa [Claims.Sampling.strataSizes] using hkdn⟩
 
 end Flock.Bridge

@@ -76,15 +76,15 @@ def traced_names(program, desc: dict, trace: str) -> tuple[dict[int, str | None]
     """The names no digest covers, as the trace gave them: each Call's naming hint (the descriptor's `node_hints`: the Calls are the
     trace's, the descriptors being byte-equal) and each weights record field's leaf name (`derive-report.json`'s `provenance.weights`,
     in field order), refused where the fields differ in number or size."""
-    from verity.ml.circuits.types import Record
+    from verity.ml.circuits.types import RecordType
     hints = {int(k): v for k, v in ((desc.get("annotations") or {}).get("node_hints") or {}).items()}
     params = []
     for n, t in program.fn.body.params:
-        if isinstance(t, Record):
+        if isinstance(t, RecordType):
             leaves = sorted(json.loads(Path(trace, "derive-report.json").read_text())["provenance"]["weights"], key=lambda w: w["field"])
             if (got := [f.leaves for _, f in t.fields]) != (want := [math.prod(w["shape"]) for w in leaves]):
                 raise UsageError(f"{trace}: the predicted {n} record's {len(got)} fields are not the trace's {len(want)} weight leaves in size")
-            t = Record(*((w["name"], f) for w, (_, f) in zip(leaves, t.fields)))
+            t = RecordType(*((w["name"], f) for w, (_, f) in zip(leaves, t.fields)))
         params.append([n, str(t)])
     return hints, params
 
@@ -252,7 +252,7 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
     Path(out, "build_workload", "workload_program.json").write_text(json.dumps(
         {"ok": True, "workload_digest": wp["digest"], "function": wp["function"], "lag": lag, "built_by": ROW_BUILT_BY,
          "applicability": {"engine": {"async_scheduling": bool(lag["async_scheduling"])}}}, indent=1) + "\n")
-    policy = dict(word="16/32", norm_scales=True, guarded_max=True, taps=MN.taps_of(True, True), query=QUERY_OF_RECORD,
+    policy = dict(word="16/32", norm_scales=True, taps=MN.taps_of(True, True), query=QUERY_OF_RECORD,
                   jobs=jobs or MN.cpus(), log=log)
     if len(phi.requests) > 1:
         man = MN.build_global(w, out, workload_digest=wp["digest"], **policy)
