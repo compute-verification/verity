@@ -173,7 +173,7 @@ def test_an_audits_read_of_the_scan_state_under_a_link_windows_root_and_domain_p
             case = build("honest" if form == "clock" else "rows-honest", n, small=n % 2 == 0)
             c = PC.commitment(bytes.fromhex(case["commitment"]))
             states = [PC.state_of(reg) for reg in c.windows]
-            got = [(e["root"], e["domain"]) for reg in c.audits for e in reg.record.get("registered", [])
+            got = [(e["root"], e["domain"]) for reg in c.audits for e in reg.get("registered", [])
                    if e.get("value") == PC.SCAN_STATE]
             assert all(x in states for x in got) and (form == "rows" or not got), (form, n)
             reads += len(got)
@@ -318,7 +318,7 @@ def test_only_a_tied_audit_must_draw_every_unit(server, monkeypatch):
         c = json.loads(bytes.fromhex(case["commitment"]))
         out = reference(case)
         assert out["verdict"] == ACCEPT, (n, out)
-        audits, windows = ([PC.Registration(x, b"") for x in c[k]] for k in ("audits", "windows"))
+        audits, windows = c["audits"], c["windows"]
         for i, f in enumerate(out["public"]["audits"]):
             assert f["drawn"] == f["units"] or not PC._tied_in(audits, windows, i), (n, i, f)
         if any(f["drawn"] < f["units"] for f in out["public"]["audits"]):
