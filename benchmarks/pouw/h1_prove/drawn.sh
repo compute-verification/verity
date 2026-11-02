@@ -33,6 +33,7 @@ export HZ_MEM_GB=${H1_DRAWN_MEM_GB:-$(awk '/MemTotal/ {print int($2 * 0.9 / 1048
 keep() {
   cp "$OUT/job.log" "$P/drawn/" 2>/dev/null
   for o in "$OUT"/*/; do
+    [ -d "$o" ] || continue
     mkdir -p "$P/drawn/$(basename "$o")" && cp "$o"serve.log "$o"prove.out "$o"*.time "$P/drawn/$(basename "$o")/" 2>/dev/null
   done
 }
