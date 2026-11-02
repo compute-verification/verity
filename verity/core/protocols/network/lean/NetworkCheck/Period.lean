@@ -2,8 +2,8 @@ import NetworkCheck.Check
 import CoreProtocol.Profile
 import Flock.Program
 import Flock.Public
-import NciCheck.Desc
 import Flock.WindowRecord
+import NciCheck.Desc
 
 /-!
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
