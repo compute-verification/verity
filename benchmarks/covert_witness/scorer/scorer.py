@@ -857,7 +857,7 @@ def append_board(lines: list[str]) -> None:
 FINAL = STATE / "final"
 FINAL_SRC = Path(os.environ.get("TE_FINAL_SRC", "/tmp/scorer/final-src"))
 FINAL_SH = Path(__file__).resolve().parent / "final.sh"
-FINAL_NODE = os.environ.get("TE_FINAL_NODE", "vy-nebius-2")
+FINAL_NODES = tuple(os.environ.get("TE_FINAL_NODES", "vy-nebius-2").split(","))
 FINAL_SEEDS = (101, 102, 103)
 RUNS = Path.home() / ".research" / "runs"
 
@@ -876,16 +876,20 @@ def source_at(commit: str) -> Path:
     return FINAL_SRC
 
 
-def final_run(commit: str, args: list[str], what: dict, dry_run: bool = False) -> dict:
+def research(*args: str) -> subprocess.CompletedProcess:
+    """This tree's research package: the VM's install predates pools a node keeps of its own (gpu)."""
+    env = os.environ | {"PYTHONPATH": str(REPO / "tools" / "research" / "src")}
+    return subprocess.run([sys.executable, "-m", "research", *args], capture_output=True, text=True, cwd=REPO, env=env)
+
+
+def final_run(commit: str, args: list[str], what: dict, dry_run: bool = False, node: str = FINAL_NODES[0]) -> dict:
     src = source_at(commit)
-    argv = ["research", "run", "--on", FINAL_NODE, "--project", "verity", "--source", str(src), "--cwd", "source",
+    argv = ["research", "run", "--on", node, "--project", "verity", "--source", str(src), "--cwd", "source",
             "--pool", "gpu", "--as", "training", "--pool-wait", "7200", "--timeout", "120m", "--declared-output", "out/*",
             "--send", str(FINAL_SH), "--", "bash", "-c", 'bash "$RESEARCH_RUN_DIR/inputs/final.sh" ' + shlex.join(args)]
-    row = what | {"commit": commit, "args": args, "at": now(), "argv": argv, "run": ""}
+    row = what | {"commit": commit, "args": args, "at": now(), "argv": argv, "run": "", "node": node}
     if not dry_run:
-        # the launcher is this tree's research package: the VM's install predates pools a node keeps of its own (gpu)
-        env = os.environ | {"PYTHONPATH": str(REPO / "tools" / "research" / "src")}
-        r = subprocess.run([sys.executable, "-m", "research", *argv[1:]], capture_output=True, text=True, cwd=REPO, env=env)
+        r = research(*argv[1:])
         m = re.search(r"run (r\d{8}-\d{6}-[0-9a-f]{4}) launched", r.stdout + r.stderr)
         row |= {"run": m[1] if m else "", "rc": r.returncode, "err": "" if m else (r.stdout + r.stderr)[-800:]}
         FINAL.mkdir(parents=True, exist_ok=True)
@@ -911,7 +915,8 @@ def final_launch(ids: list[str], seeds=FINAL_SEEDS, dry_run: bool = False) -> li
             args = ["--seed", str(seed), "--direction", re.sub(r"[^a-z0-9_-]", "-", x["direction"].lower()) or "scorer-final",
                     "--mechanism", x["mechanism"], *(["--reference"] if is_reference(x) else []), x["class"], x["start"],
                     *shlex.split(x.get("args") or ""), *seed_args(x, seed)]
-            out.append(final_run(x["commit"], args, {"kind": "rerun", "id": x["id"], "seed": seed}, dry_run))
+            out.append(final_run(x["commit"], args, {"kind": "rerun", "id": x["id"], "seed": seed}, dry_run,
+                                 FINAL_NODES[len(out) % len(FINAL_NODES)]))
     return out
 
 
@@ -924,14 +929,15 @@ def final_collect() -> list[dict]:
         run = la.get("run")
         if not run:
             continue
-        subprocess.run(["research", "fetch", run], capture_output=True, text=True, cwd=REPO)
+        on = ["--on", la["node"]] if la.get("node") else []
+        research("fetch", run, *on)
         st = (json.loads((RUNS / run / "status.json").read_text()).get("state")
               if (RUNS / run / "status.json").exists() else "unknown")
         row = {k: la.get(k) for k in ("kind", "id", "seed", "run", "commit", "args")} | {"state": st}
         if st in ("done", "failed", "cancelled", "refused", "timeout", "lost"):
             o = RUNS / run / "out"
             if not o.is_dir():
-                subprocess.run(["research", "fetch", run, "--all"], capture_output=True, text=True, cwd=REPO)
+                research("fetch", run, "--all", *on)
             for f in sorted(o.glob("*.json")) if o.is_dir() else []:
                 d = json.loads(f.read_text())
                 if f.name.startswith("witness."):
