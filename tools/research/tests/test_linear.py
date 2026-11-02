@@ -452,8 +452,8 @@ TYPES = {"Triage": "triage", "Backlog": "backlog", "Todo": "unstarted", "In Prog
 
 
 def issue(ident: str, state: str = "In Progress", **kw) -> dict:
-    """An open issue as the audit reads it, with nothing to find: on PJ1's M3 (dated 25 Oct), due 30 Oct, filed 68 h ago,
-    started and updated an hour ago."""
+    """An open issue as the audit reads it, with nothing to find: on PJ1's M3, both due after AUDIT_NOW, filed 68 h before
+    it, started and updated an hour before it."""
     return {"id": f"I-{ident}", "identifier": ident, "title": "The auditor-only host", "url": f"https://linear.app/x/issue/{ident}",
             "dueDate": "2026-10-30", "startedAt": "2026-10-19T19:00:00Z", "updatedAt": "2026-10-19T19:00:00Z",
             "createdAt": "2026-10-17T00:00:00Z", "state": {"name": state, "type": TYPES[state]}, "team": {"key": ident.split("-")[0]},
@@ -682,10 +682,10 @@ def test_link_attaches_each_pr_by_number_or_url_and_says_so_when_linear_has_it_a
     rc, out, _ = run(capsys, "linear", "link", "INF-1", url(6820), "6822")                 # Linear: "Duplicate attachment"
     assert rc == 0 and out.splitlines() == [f"INF-1 already links {url(6820)}", f"INF-1 linked {url(6822)}"]
     n = len(lin.calls)
-    rc, out, _ = run(capsys, "linear", "link", "INF-1", "6823", "--dry-run")
-    assert rc == 0 and out.strip() == f"dry-run: would link {url(6823)} to INF-1" and len(lin.calls) == n
-    rc, _, err = run(capsys, "linear", "link", "INF-1", "PRF-12")
-    assert rc == 2 and "PR 'PRF-12': give its number" in err and len(lin.calls) == n
+    rc, _, err = run(capsys, "linear", "link", "INF-1", "6823", "--dry-run")
+    assert rc == 2 and "linear link has no --dry-run" in err and len(lin.calls) == n
+    rc, _, err = run(capsys, "linear", "link", "INF-1", "6823", "PRF-12")
+    assert rc == 2 and "PR 'PRF-12': give its number" in err and len(lin.calls) == n                   # none is attached
     rc, _, err = run(capsys, "linear", "link", "INF-1")
     assert rc == 2 and "give the PRs to attach" in err
 

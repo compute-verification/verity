@@ -1886,9 +1886,9 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                          "--worker NAME for a lane's worker, which holds no handle")
     if ns.worker and not WORKER_RE.fullmatch(ns.worker):
         raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS)")
-    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment", "link"):
+    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment"):
         raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
-                         "`place`, `comment` or `link`, which have one")
+                         "`place` or `comment`, which have one")
     if ns.close_strays and (ns.verb != "audit" or ns.asks):
         raise SlackError("--close-strays goes with `audit` alone (not --asks): it cancels the strays that audit finds")
     try:
@@ -1954,8 +1954,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
         issue = need(ns.target, "the ISSUE (e.g. INF-12)")
         if ns.verb == "link":
             need(value, "the PRs to attach (numbers, #N or URLs)")
-            urls = [linear.pr_url(p) for p in ns.value]
-            print("\n".join([f"dry-run: would link {u} to {issue}" for u in urls] if ns.dry_run else lin.link(issue, ns.value)))
+            print("\n".join(lin.link(issue, ns.value)))
             return 0
         if ns.verb == "relate":
             if len(ns.value) != 2:
@@ -4079,12 +4078,12 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "PROJECT --health onTrack|atRisk|offTrack --body-file F` (a project update), `project create NAME --team "
                       "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `milestone create|edit PROJECT NAME "
                       "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`; none sends a state")
-    p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "link", "relate", "unrelate",
-                                    "update", "project", "milestone"))
-    p.add_argument("target", nargs="?", help="state, comment, place, edit, link, relate, unrelate: the issue (INF-12); list, audit: "
-                                             "the team (a handle or its key); update: the project; project, milestone: create or edit")
+    p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "relate", "unrelate", "update",
+                                    "project", "milestone"))
+    p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); list, audit: the "
+                                             "team (a handle or its key); update: the project; project, milestone: create or edit")
     p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "
-                                            "link: the PRs (6820, #6820 or a pull URL); "
+                                            "link: the issue's PRs (N, #N or a pull URL); "
                                             "relate: the kind and the other issue; unrelate: the other issue; project create: "
                                             "its name; milestone: the project (one word or quoted) and the milestone's name")
     p.add_argument("--state", default=None, metavar="NAME", help="list: only issues in this state (default: every open one)")
@@ -4115,6 +4114,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--close-strays", action="store_true",
                    help="audit: also cancel each stray it finds (an ask in another lane's team nobody took up or touched for "
                         "48 h), with a comment from --as naming the rule; without it the audit only reports")
+    next(a for a in p._actions if a.dest == "verb").choices += ("link",)
     p.add_argument("--label", default=None, metavar="L", help="edit: add this label (`asker:NAME`, `asker-ok`)")
     p.add_argument("--remove", action="store_true", help="edit --label: remove it instead")
     p.add_argument("--milestone", default=None, metavar="M", help="place: the project's milestone, a prefix of its name (M3)")

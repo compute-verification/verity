@@ -209,9 +209,9 @@ def asker_label(name: str) -> str:
 
 
 def pr_url(pr: str) -> str:
-    """A PR as `link` attaches it: a number (`6820`, `#6820`) is this repository's (PR_URL), and a GitHub pull URL is kept."""
+    """A PR as `link` attaches it: a number (`N` or `#N`) is this repository's (PR_URL), and a GitHub pull URL is kept."""
     if not (m := PR_ARG_RE.fullmatch(pr.strip())):
-        raise LinearError(f"PR {pr!r}: give its number (6820 or #6820) or its URL (https://github.com/OWNER/REPO/pull/N)")
+        raise LinearError(f"PR {pr!r}: give its number (N or #N) or its URL (https://github.com/OWNER/REPO/pull/N)")
     return PR_URL.format(m[1]) if m[1] else m[0]
 
 
