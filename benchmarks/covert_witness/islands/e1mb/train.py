@@ -142,8 +142,9 @@ def grad_init(net, params, ranks, data, a, steps, tokens) -> dict[str, torch.Ten
         _, _, vh = torch.linalg.svd(g, full_matrices=False)
         out[n] = vh[:r].contiguous()
         svd += 4 * g.shape[0] * g.shape[1] * min(g.shape)
-        params[n].grad = None
         params[n].requires_grad_(False)
+    for p in params.values():
+        p.grad = None
     steps.append({"op": "extra", "flops": svd})
     return out
 
