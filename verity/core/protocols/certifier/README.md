@@ -212,7 +212,7 @@ A spec-level reference for network accounting's timing channel:
   each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
   so a Program reads the states the scan's steps computed;
   `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
-  fixed slots a network timestep (ASK-122): a timestep is `EVERY` buckets, the warden's `every`, which divides its
+  fixed slots a network timestep: a timestep is `EVERY` buckets, the warden's `every`, which divides its
   window, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
   slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy
   word `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt
@@ -325,15 +325,15 @@ certifier-serve run's execution phases this way through the link's own stream, a
 in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. What's open:
 - **The certificates aren't a Spec item.** The verifier receives them in the clear from the certifier, the auditor's
   device, beside the proof system, whose public kinds have none for a trusted device's signature over a hiding
-  commitment. That is a provisional exception to the four public kinds (decided 24 Oct, option A), not a fifth kind.
+  commitment. That is a provisional exception to the four public kinds, not a fifth kind.
 - **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 
 `LinkWindows.verify`'s verdict of record on a plain, served or warden link is the Lean's, `NetworkCheck.LinkWindow`
 (`verity/core/protocols/network/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
 `service.OF_RECORD`. `verify` runs both on every proof, and a link-window where
-they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch went
-to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
+they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch is
+`lean` by the friction skill's switching ruling, on these grounds:
 - the gap list is empty for plain and served links. Everything the Python checks, the Lean checks: the findings prove
   the registered Program and the sampled proof blocks with every gate pinned, the public row the verifier derives (root, served
   domain, link, window, each end's grid and profile row, both signed digests, a served link's sync words), both rows'
@@ -345,13 +345,10 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   plain proof block's public row with both ends' grids at the warden's parameters digest, which both take as an input
   (the warden's deployment publishes it), and no sync read, as in the Python; it refuses a warden case whose digest
   isn't 64 bytes, whose ends have a profile, or whose two grids differ.
-- every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
-  controls included: 193 execution phases of seven runs, plain and served, 180 accepted and 13 refused, each with nine
-  injected controls that both reject (r20261026-050730-1027, again r20261026-104647-916d). The
-  warden runs give 30 execution phases from r20261026-080827-2bd2 and r20261026-100351-ca6a, the latter a sample of 8 on
-  the H200 warden run c20261026T092338Z-22b5. Of those, 21 are accepted and 9 refused (r20261026-104647-c07b,
-  r20261026-105654-6220). Each has ten controls: nine that both reject, among them another warden's digest, and
-  `unread`, a sync off Σ_sync that changes neither verdict.
+- every proving run of N2 recorded before the switch, plain, served and warden, replayed through both to the verdict it
+  recorded, negative controls included: each execution phase with injected controls that both reject, and a warden
+  run's also with another warden's digest, which both reject, and `unread`, a sync off Σ_sync that changes neither
+  verdict.
 - the Python keeps running beside the Lean as the reference.
 - the Lean's verdict has its property in `Security/Properties/NetworkCertifier/LinkWindow.lean`
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the
@@ -366,7 +363,7 @@ A proof of the proof block is held to its circuit. Each gate names its Definitio
 which the spec and each registration bind, binds both circuits, and `LinkWindows.verify` refuses a proof that names any
 other Program, or a proof block of a size class no sidecar pins (`LinkWindows.proved`).
 
-The certificate no longer signs a hash of witness (NET-42). The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
+The certificate never signs a hash of witness. The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
 salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier samples fresh for each record
 (`certificate.Issuer`'s `coins`) and hands to the prover with the head, as witness only (`CertifiedRecord.salt`). D is
 a hiding commitment to R, and the LMS check (`Certificate.verify`) reads only the certificate's public fields and D.
