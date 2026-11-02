@@ -83,7 +83,7 @@
    "name": "verity_difftest",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../remote/../../service/sampled_proofs/../../difftest/lean",
+   "dir": "../remote/../pouw/lean/check/../window/../../../../difftest/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -97,7 +97,8 @@
    "name": "lms",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../remote/../../service/sampled_proofs/../../primitives/lms/lean",
+   "dir":
+   "../remote/../pouw/lean/check/../window/../../../../service/sampled_proofs/../../primitives/lms/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
