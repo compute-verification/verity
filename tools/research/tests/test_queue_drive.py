@@ -219,7 +219,7 @@ def test_train_sh_runs_with_the_queues_credentials_and_git_never_prompts(tmp_pat
 
 
 def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypatch):
-    """An ejection post names the PR's owner too, not only @ci, so the owner doesn't hear of a conflict through a relay.  The
+    """An ejection post names the PR's owner too, not only drive's own handle, so the owner doesn't hear of a conflict through a relay.  The
     owner's handle comes from main's registry: the lane the body names, the agent id it carries, the ready mark's author, or
     the agent whose id ends in the branch's suffix."""
     import dataclasses
@@ -314,8 +314,8 @@ def test_two_independent_root_causes_are_two_posts(world, monkeypatch):
 
 
 def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refused_post_is_retried(world, monkeypatch):
-    """`research msg send` refuses a `--to` naming the sender, so drive posting as ci to @ci would post no notice at all. The
-    sender is also selectable (`queue eject --by lean`), so its handle, not always @ci, must be dropped."""
+    """`research msg send` refuses a `--to` naming the sender, so drive posting to its own handle would post no notice at all.
+    The sender is also selectable (`queue eject --by lean`), so its handle, not always drive's own, must be dropped."""
     from research import drive
 
     argv = []
@@ -343,9 +343,9 @@ def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refus
     assert state["told"] == ["k"] and logged[-1].startswith("research queue drive: told @ci @circuits")
 
 
-@pytest.mark.parametrize("to, sender", [(("@ci",), "ci"), (("@ci", "@circuits"), "ci"), (("@ci", "@lean"), "lean")])
+@pytest.mark.parametrize("to, sender", [(("@lean",), "lean"), (("@lean", "@circuits"), "lean"), (("@lean", "@infra"), "infra")])
 def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to, sender):
-    """A train's failure for @ci alone, starting `@ci queue:`, is refused by `msg send` as a post that wakes only its author.  A
+    """A notice for its sender alone, starting `@SENDER queue:`, is refused by `msg send` as a post that wakes only its author.  A
     stand-in for `msg send` would hide that refusal, so here each post goes through `msg send` itself."""
     from research import drive, slack
 

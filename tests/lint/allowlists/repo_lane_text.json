@@ -1281,7 +1281,6 @@
     {"file": "tools/research/tests/test_pod_guard_daemon.py", "count": 1},
     {"file": "tools/research/tests/test_pods_part.py", "count": 1},
     {"file": "tools/research/tests/test_queue.py", "count": 110},
-    {"file": "tools/research/tests/test_queue_drive.py", "count": 21},
     {"file": "tools/research/tests/test_queue_open.py", "count": 8},
     {"file": "tools/research/tests/test_queue_stats.py", "count": 1},
     {"file": "tools/research/tests/test_record_result.py", "count": 1},
