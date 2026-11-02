@@ -192,8 +192,18 @@ def kcell(c: dict) -> str:
 
 
 def order_key(lab: str) -> tuple:
-    cls = lab.split()[0]
-    return (CLASS_ORDER.index(cls) if cls in CLASS_ORDER else 9, lab)
+    """Class, then method, then the update size a label names (`S1 lora 100kB` before `S1 lora 1MB`)."""
+    parts = lab.split()
+    cls = parts[0]
+    size = 0.0
+    if len(parts) > 2:
+        units = {"GB": 1e9, "MB": 1e6, "kB": 1e3, "B": 1.0}
+        unit = next((u for u in units if parts[2].endswith(u)), None)
+        try:
+            size = float(parts[2][: -len(unit)]) * units[unit] if unit else 0.0
+        except ValueError:
+            size = 0.0
+    return (CLASS_ORDER.index(cls) if cls in CLASS_ORDER else 9, parts[1] if len(parts) > 1 else "", size, lab)
 
 
 def tables(report: dict) -> str:
