@@ -78,3 +78,27 @@ evaluation: step, tokens, FLOPs, fresh-input bits as `novel_bits`, bits communic
 `result.json` into `--out`;
 `analyze.py` writes `analysis.json`, `tables.md` and one plot per size and family into `--out`. **Backs:** no Lean guarantee
 or claim; its numbers are measurements of training under restrictions.
+
+## The covert-training speedrun
+
+From a registered θ (a dense run's weights at 25%, 50% or 100% of its steps), how much compute does each structural class of
+training method need to lower held-out loss by Δ, against the best unrestricted method: κ_class(Δ) = C_class(ℓ₀ − Δ) /
+C_ref(ℓ₀ − Δ), in analytic FLOPs, tokens and GPU-seconds, and each class's ceiling, the lowest loss it reaches in the budget.
+
+- `train.py --save-theta 0.25,0.5,1` keeps the starts: `theta-pNNN.pt` (fp32 weights and their digest, `model.theta_digest`)
+  and `theta.json` (each start's step, schedule, data order, commit and held-out loss) in `--out`.
+- `speedrun.py --data DATA --start THETA.pt --method adamw|muon|lora|mezo|icl --lr LR --out OUT --ckpt-root CKPT` continues
+  one start under one class at a fixed FLOP budget (default 2 tokens per non-embedding parameter at dense AdamW's FLOPs per
+  token), reading the training stream from past every window a base run read, and writes the run's witness record
+  (`witness.json`: commit, configuration, seed, θ's digest, ℓ₀, analytic FLOPs, tokens, GPU-seconds, the held-out trajectory
+  at every 5%, update bits, fresh input per window, the result's digest). The classes and their structural knobs are its
+  docstring. It resumes like `train.py`, so `LEASED_SCRIPT=speedrun.py leased.sh PYTHON ARGS...` runs it under leases.
+- `plan.py` lists the runs (per size: 3 starts × S0 AdamW and Muon, S1 LoRA at 100 kB, 1 MB, 10 MB and 100 MB, each at 3
+  learning rates, and S3) with each one's steps, tokens, FLOPs and estimated GPU time; `plan.py --chain SIZE FRACTION METHOD
+  UPDATE_BYTES` prints the shell loop one `research run` takes for a configuration at its 3 rates.
+- `kappa.py --out DIR RUN_DIR...` reads fetched runs: per start, each configuration at its best rate, the reference (the best
+  S0 configuration), κ at Δ up to the reference's gain at half the budget (so the budget is twice the reference's cost to the
+  deepest target), the ceilings, S3's gain against its inference cost, and the plots (`analysis.json`, `tables.md`,
+  `loss-budget-SIZE.png`, `kappa-SIZE.png`, `ceilings-SIZE.png`).
+- `smoke.py` runs all of it on a tiny model and a synthetic corpus on one CPU thread (about a minute): digests, evaluation
+  parity with `train.py`, FLOP counts, every class, LoRA's merge, resuming, and `kappa.py` on the outputs.
