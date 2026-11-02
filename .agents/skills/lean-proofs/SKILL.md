@@ -131,9 +131,11 @@ repository.
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is
-  bounded by what the run carries. No assumed advantage bounds, except PoUW's named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, `SeedExtractedAt`), listed in the lock. An input condition is a verifier refusal, not a
-  hypothesis.
+  bounded by what the run carries. No assumed advantage bounds, with two exceptions: PoUW's named random-oracle
+  premises for SHA-512 (`StraightLineExtraction`, `SeedExtractedAt`), listed in the lock; and the sampled audits'
+  soundness (`SampledProofsSound`, from C-Flock's live chain), which may take the generic SHA-512 collision bound at
+  each prover-built finder (`TableCRZ`, `LinkCRZC`), each finder's budget tied to the prover's cost (`finder_calls`),
+  rather than at one combined finder. An input condition is a verifier refusal, not a hypothesis.
 - One adversary class: every prover strategy τ, no budget class.
   `Pr[accept ∧ the claim fails on E^τ's values] ≤ δ + f(Pr[B^τ exhibits a SHA-512 collision])` (+ LMS forgery), with
   `E` a fixed named extractor and `B` a finder built from τ in about τ's time (`XplurZC`, `outCZC`). Collision
@@ -141,6 +143,10 @@ repository.
 - A claim reads `E`'s transcript, never a witness the prover picks, and a break counts only collisions the run or `E`
   exhibits. For a commit-then-coin step the break is the fork form (two runs of the prover's strategy sharing a
   commitment); the knowledge form (`EndToEndHidden`, `Claims.KS`) is preferred.
+- A soundness claim states the system as deployed, not an idealized one. For recursion, the challenges are fixed at the
+  start, hidden in a commitment and revealed round by round, and the claim rests on that commitment's hiding.
+- Zero knowledge is stated in the multiplicative form, `real ≤ 2·sim + ε` (a leak of at most one bit plus the counted
+  stop-position bits), and reported as totals per week, month and year.
 - Every security guarantee has an honest lemma (its hypotheses hold at the honest deployed instance) and a nontrivial
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails` are;
   failing either, it says nothing. `check.py` holds them to it (`witnesses`): both lemmas build their instance, taking
