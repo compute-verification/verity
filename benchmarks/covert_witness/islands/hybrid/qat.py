@@ -28,7 +28,8 @@ trained block, and the final norm, train in fp32 by AdamW and are full entries; 
 
 The notes state, per stage, the trained tensors, codes, weights, Δ_grad as the scorer counts it (gradient + momentum per
 block weight, the gains' and factors' fp32 gradient and AdamW m and v) and the update store beside it (the fp32 latent of
-each coded weight and factor entry), and the submission's Δ (|E|).
+each coded weight and factor entry), and the submission's Δ (|E|: `--xz min` submits the smallest of XZ_TRIES, every
+size in the notes) beside each code's order-0 entropy.
 
     python launch.py reference s100 --island hybrid --program qat.py --note "qat: ..." -- --klass reference \
         --code all:all=rtn3 --muon-lr 0.015
@@ -56,8 +57,12 @@ GROUPS = {"qkv": ("wq", "wk", "wv"), "attn": ("wq", "wk", "wv", "wo"), "gu": ("w
 CODE = re.compile(r"(?:sign|tern|rtn[2-8])(?:@\d*\.?\d+)?|fp|-")
 #: the harness's checkpoint count: with `hooks.plan`, the first E encoded in each 5% of the planned steps
 CHECKPOINTS = 20
-XZ9 = {"format": lzma.FORMAT_XZ, "check": lzma.CHECK_NONE,
-       "filters": [{"id": lzma.FILTER_LZMA2, "preset": 9 | lzma.PRESET_EXTREME}]}
+#: LZMA2 settings over preset 9e for the submission (`--xz min` takes the smallest; decoders read any). On dense 4-bit
+#: codes order-0 literals (lc = lp = pb = 0) are smallest, by a few tenths of a percent; on 8-bit codes a depth-1 match
+#: search is 2-3% under 9e, whose short matches cost more than they save on near-random bytes.
+XZ_TRIES = {"9e": {}, "lit0": {"lc": 0, "lp": 0, "pb": 0},
+            "hc3d1-lit0": {"mf": lzma.MF_HC3, "nice_len": 273, "depth": 1, "lc": 0, "lp": 0, "pb": 0},
+            "bt4d1": {"mf": lzma.MF_BT4, "nice_len": 273, "depth": 1}}
 
 
 def fail(msg: str):
@@ -163,6 +168,24 @@ def qarray(k: torch.Tensor, s: torch.Tensor, code: str, g: int, shape: tuple[int
         codes = k + qm
     return prepare.QArray(cb.half(), s.reshape(-1).half().cpu(), codes.reshape(-1).to(torch.uint8).cpu(),
                           code_bits(code), g, shape)
+
+
+@torch.no_grad()
+def code_entropy(stacks: list) -> dict[str, float]:
+    """The order-0 entropy of each coded matrix's levels in bits per weight, averaged by weights per code and over all
+    codes ("all"): what an order-0 coder adapted per matrix would spend, to tell a code's rate from xz's packing."""
+    tot: dict[str, list[float]] = {}
+    for st in stacks:
+        if st.code == "fp" or not st.coded or st.k is None:
+            continue
+        for k in st.k.reshape(st.k.shape[0], -1).long():
+            p = torch.bincount(k - k.min()).double()
+            p = p[p > 0] / k.numel()
+            h = float(-(p * p.log2()).sum())
+            for key in (f"{st.code}@{st.mult:g}", "all"):
+                t = tot.setdefault(key, [0.0, 0])
+                t[0], t[1] = t[0] + h * k.numel(), t[1] + k.numel()
+    return {key: round(s / n, 4) for key, (s, n) in tot.items()}
 
 
 B_ROWS = 64
@@ -441,7 +464,8 @@ def main() -> int:
     ap.add_argument("--data-seed", type=int, default=1)
     ap.add_argument("--fresh", action="store_true", help="skip the windows the start trained on")
     ap.add_argument("--budget-fraction", type=float, default=0.98)
-    ap.add_argument("--xz", choices=("1", "9e"), default="9e", help="the submission's xz preset (checkpoints: 1)")
+    ap.add_argument("--xz", choices=("1", "9e", "min"), default="9e",
+                    help="the submission's xz: preset 1, 9e, or the smallest of XZ_TRIES (checkpoints: 1)")
     a = ap.parse_args()
 
     t_start = time.perf_counter()
@@ -605,8 +629,14 @@ def main() -> int:
 
     t_train = time.perf_counter() - t0
     blob1 = encode()
-    blob = blob1[:8] + lzma.compress(lzma.decompress(bytes(blob1[8:]), format=lzma.FORMAT_XZ), **XZ9) \
-        if a.xz == "9e" else blob1
+    blob, xz_sizes = blob1, {"1": len(blob1)}
+    if a.xz != "1":
+        raw = lzma.decompress(bytes(blob1[8:]), format=lzma.FORMAT_XZ)
+        for name in (XZ_TRIES if a.xz == "min" else ("9e",)):
+            b = blob1[:8] + lzma.compress(raw, format=lzma.FORMAT_XZ, check=lzma.CHECK_NONE, filters=[
+                {"id": lzma.FILTER_LZMA2, "preset": 9 | lzma.PRESET_EXTREME} | XZ_TRIES[name]])
+            xz_sizes[name] = len(b)
+            blob = b if len(b) < len(blob) else blob
     model = prepare.decode(theta, blob)
     changed = sorted(set(codes) | all_gains)
     bad = [n for n in changed if not prepare.same_bits(model[n].cpu(), params[n].detach().to(theta[n].dtype).cpu())]
@@ -619,7 +649,8 @@ def main() -> int:
              "stages": stage_notes,
              "codes": {c: sum(1 for n in codes if codes[n] == c) for c in sorted(set(codes.values()))},
              "coded_weights": coded, "E_bytes": len(blob), "E_bytes_xz1": len(blob1),
-             "bits_per_coded_weight": 8 * len(blob) / max(1, coded),
+             "bits_per_coded_weight": 8 * len(blob) / max(1, coded), "xz_sizes": xz_sizes,
+             "code_entropy_bits": code_entropy(stacks),
              "delta_grad_bytes_max": max(s["delta_grad_bytes"] for s in stage_notes),
              "latent_bytes_max": max(s["latent_bytes"] for s in stage_notes),
              "embedding": (f"rank-{a.embed_rank} adapter, {a.embed_bits}-bit factors (CWQUAN1 lora entry)" if ad else
