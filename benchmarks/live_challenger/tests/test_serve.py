@@ -4,8 +4,9 @@ session, signs its release log when it ends and publishes nothing secret; the ve
 process's `out/` and the auditor's signed ledger alone.  A Lean that can't answer starts no session, a second session
 signs at the key's next leaves, a session id the key has signed for is refused, a key inside `out/` is refused, a refused
 hello is logged and the next connection taken, a broken sequence after the hello ends the session with exit 1, signed as
-such, an open whose label is past ASCII is refused in ASCII and its close written, a salt opens only after `--root`, and with `--peer` (development sessions alone: a window's, with `--root`, is
-refused it) the tunnel opens once the challenger listens and a tunnel that ends first ends it."""
+such, an open whose label is past ASCII is refused in ASCII and its close written, a salt opens only after `--root`, and
+with `--peer` (development sessions alone: a window's, with `--root`, is refused it) the tunnel opens once the challenger
+listens and a tunnel that ends first ends it."""
 
 from __future__ import annotations
 
