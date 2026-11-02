@@ -55,9 +55,9 @@ import torch
 from .flops import plain
 from .run import theta_sha256
 
-ENCODERS = ("encode_full", "encode_lora", "encode_lora2", "encode_seedlog", "encode_sparse")
+ENCODERS = ("encode_full", "encode_lora", "encode_lora2", "encode_seedlog", "encode_sparse", "encode_quant")
 #: the standard library modules prepare's loader, decoder and scorer call into
-STDLIB = ("hashlib", "io", "json", "math", "os", "struct", "zlib")
+STDLIB = ("hashlib", "io", "json", "lzma", "math", "os", "struct", "zlib")
 PATH_EVENTS = {"open", "os.listdir", "os.scandir", "os.stat", "glob.glob", "os.chdir", "os.symlink", "os.link", "os.rename"}
 #: `_posixsubprocess.fork_exec` (multiprocessing's spawn and forkserver starts) raises no audit event of its own
 FORK_EXEC = "te_core.fork_exec"

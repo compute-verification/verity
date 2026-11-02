@@ -1,6 +1,10 @@
-"""covert_witness's E formats (`prepare.py`): the sparse format's round trip, its two index forms and its refusals, and every
-format's rebuild cost, which is at least what te_core's counter sees the decode compute."""
+"""covert_witness's E formats (`prepare.py`): the sparse, lora2 and quant formats' round trips, layouts and refusals, and
+every format's rebuild cost, which is at least what te_core's counter sees the decode compute."""
 import importlib.util
+import json
+import lzma
+import math
+import struct
 from pathlib import Path
 
 import numpy as np
@@ -199,12 +203,127 @@ def test_the_lora2_decoder_refuses_malformed_encodings(blob, why):
         prepare.decode(th, blob, device="cpu")
 
 
+def qarray(shape, bits: int, group: int, seed: int = 2) -> "prepare.QArray":
+    g = torch.Generator().manual_seed(seed)
+    n = math.prod(shape)
+    cb = (torch.arange(2 ** bits) - 2 ** (bits - 1)).to(torch.float16)
+    sc = (torch.rand(n // group, generator=g) * 1e-2).to(torch.float16)
+    return prepare.QArray(cb, sc, torch.randint(0, 2 ** bits, (n,), generator=g).to(torch.uint8), bits, group, tuple(shape))
+
+
+def qvalues(q) -> torch.Tensor:
+    return (q.codebook.float()[q.codes.long()].view(-1, q.group) * q.scales.float()[:, None]).view(q.shape)
+
+
+def test_quant_delta_adds_its_codes_values_to_theta_in_fp32():
+    th = theta()
+    q, qg = qarray((64, 48), 3, 16), qarray((48,), 1, 48, seed=3)
+    blob = prepare.encode_quant({"w": {"kind": "delta", "q": q}, "g": {"kind": "delta", "q": qg}}, th)
+    assert prepare.format_of(blob) == "quant"
+    out = prepare.decode(th, blob, device="cpu")
+    assert prepare.same_bits(out["w"], (th["w"].float() + qvalues(q)).to(torch.bfloat16))
+    assert prepare.same_bits(out["g"], th["g"] + qvalues(qg))
+    assert all(prepare.same_bits(out[k], th[k]) for k in ("odd", "big", "v"))
+
+
+def test_quant_lora_is_lora_on_its_dequantized_factors_and_full_is_the_tensor():
+    th = theta()
+    qa, qb = qarray((5, 48), 4, 8), qarray((64, 5), 2, 5, seed=4)
+    v = torch.randn(7, 5)
+    out = prepare.decode(th, prepare.encode_quant({"w": {"kind": "lora", "a": qa, "b": qb, "scale": 0.5},
+                                                   "v": {"kind": "full", "t": v}}, th), device="cpu")
+    lora1 = prepare.decode(th, prepare.encode_lora({"w": (qvalues(qa), qvalues(qb), 0.5)}, "f32", full={"v": v}),
+                           device="cpu")
+    assert all(prepare.same_bits(out[k], lora1[k]) for k in th)
+
+
+@pytest.mark.parametrize("bits", [1, 2, 3, 5, 7, 8])
+def test_quant_codes_are_packed_bits_wide_least_significant_first(bits):
+    th = theta()
+    q = qarray((13,), bits, 13)
+    inner = lzma.decompress(prepare.encode_quant({"odd": {"kind": "delta", "q": q}}, th)[8:])
+    (n,) = struct.unpack("<I", inner[:4])
+    assert json.loads(inner[4:4 + n]) == {"t": [{"n": "odd", "k": "delta", "b": bits, "g": 13}]}
+    codes = inner[4 + n + 2 * 2 ** bits + 2:]
+    assert len(codes) == math.ceil(13 * bits / 8)
+    stream = int.from_bytes(codes, "little")
+    assert [(stream >> (i * bits)) & (2 ** bits - 1) for i in range(13)] == q.codes.tolist()
+    assert stream >> (13 * bits) == 0
+
+
+def test_the_quant_encoder_refuses_codes_that_dont_fit():
+    th = theta()
+    q = qarray((48,), 2, 16)
+    for bad, why in ((q._replace(codes=q.codes + 4), "don't fit"), (q._replace(group=5), "don't fit"),
+                     (q._replace(codebook=q.codebook[:3]), "don't fit"), (q._replace(shape=(47,)), "a delta of shape"),
+                     (q._replace(scales=q.scales * float("inf")), "finite")):
+        with pytest.raises(ValueError, match=why):
+            prepare.encode_quant({"g": {"kind": "delta", "q": bad}}, th)
+    with pytest.raises(ValueError, match="factors of shapes"):
+        prepare.encode_quant({"g": {"kind": "lora", "a": q, "b": q, "scale": 1.0}}, th)
+
+
+def _quant(entries, payload: bytes, header=None, tail: bytes = b"") -> bytes:
+    h = json.dumps(header if header is not None else {"t": entries}, separators=(",", ":")).encode()
+    return b"CWQUAN1\n" + lzma.compress(struct.pack("<I", len(h)) + h + payload, **prepare.QUANT_XZ) + tail
+
+
+D1 = b"\x00\x00\x00\x3c" + b"\x00\x3c" * 6  # a 1-bit codebook {0, 1} and 6 scales of 1.0
+OK = ([{"n": "g", "k": "delta", "b": 1, "g": 8}], D1 + bytes(6))
+REFUSED_QUANT = [
+    (_quant(*OK, header=[]), "malformed entries"),
+    (_quant(*OK, header={"t": OK[0], "x": 1}), "malformed entries"),
+    (_quant([{"n": "g", "k": "sparse", "b": 1, "g": 8}], OK[1]), "malformed entries"),
+    (_quant([{"n": "g", "k": "delta", "b": 1, "g": 8, "x": 0}], OK[1]), "malformed entries"),
+    (_quant([{"n": "w", "k": "full"}, {"n": "g", "k": "full"}], b""), "strictly increasing"),
+    (_quant([{"n": "g", "k": "full"}, {"n": "g", "k": "full"}], b""), "strictly increasing"),
+    (_quant([{"n": "nope", "k": "full"}], b""), "not one of θ's"),
+    (_quant([{"n": "i", "k": "delta", "b": 1, "g": 1}], b""), "float tensors"),
+    (_quant([{"n": "g", "k": "delta", "b": 0, "g": 8}], OK[1]), "bits or group"),
+    (_quant([{"n": "g", "k": "delta", "b": 9, "g": 8}], OK[1]), "bits or group"),
+    (_quant([{"n": "g", "k": "delta", "b": True, "g": 8}], OK[1]), "bits or group"),
+    (_quant([{"n": "g", "k": "delta", "b": 1, "g": 7}], OK[1]), "bits or group"),
+    (_quant([{"n": "g", "k": "lora", "r": 1, "s": 1.0, "A": {"b": 1, "g": 1}, "B": {"b": 1, "g": 1}}], b""), "rank or scale"),
+    (_quant([{"n": "v", "k": "lora", "r": 6, "s": 1.0, "A": {"b": 1, "g": 1}, "B": {"b": 1, "g": 1}}], b""), "rank or scale"),
+    (_quant([{"n": "v", "k": "lora", "r": 1, "s": float("nan"), "A": {"b": 1, "g": 1}, "B": {"b": 1, "g": 1}}], b""),
+     "rank or scale"),
+    (_quant([{"n": "v", "k": "lora", "r": 1, "s": 1.0, "A": {"b": 1, "g": 1, "x": 0}, "B": {"b": 1, "g": 1}}], b""),
+     "bits or group"),
+    (_quant(OK[0], b"\x00\x7c" + D1[2:] + bytes(6)), "finite"),
+    (_quant(OK[0], D1 + bytes(5)), "too short"),
+    (_quant(OK[0], D1 + bytes(7)), "trailing bytes"),
+    (_quant(OK[0], OK[1], tail=b"\x00"), "one xz stream"),
+    (_quant(*OK)[:-1], "one xz stream"),
+    (b"CWQUAN1\n" + bytes(16), "not an xz stream"),
+    (b"CWQUAN1\n" + lzma.compress(bytes(4 << 20), **prepare.QUANT_XZ), "one xz stream"),
+    (b"CWQUAN1\n" + lzma.compress(b"\xff\xff\xff\x00", **prepare.QUANT_XZ), "too short"),
+]
+
+
+@pytest.mark.parametrize("blob,why", REFUSED_QUANT, ids=[w for _, w in REFUSED_QUANT])
+def test_the_quant_decoder_refuses_malformed_encodings(blob, why):
+    th = theta() | {"i": torch.zeros(3, dtype=torch.int32)}
+    assert prepare.same_bits(prepare.decode(th, _quant(*OK), device="cpu")["g"], th["g"])
+    with pytest.raises(ValueError, match=why):
+        prepare.decode(th, blob, device="cpu")
+
+
+def test_a_quant_padding_bit_is_refused():
+    th = theta()
+    blob = _quant([{"n": "odd", "k": "delta", "b": 3, "g": 13}], b"\x00\x3c" * 8 + b"\x00\x3c" + bytes(4) + b"\x80")
+    with pytest.raises(ValueError, match="padding bit"):
+        prepare.decode(th, blob, device="cpu")
+
+
 def test_rebuild_macs_per_format_bound_what_the_counter_sees():
     th = theta()
     meta = {k: torch.empty(v.shape, dtype=v.dtype, device="meta") for k, v in th.items()}
     a, b = torch.randn(4, 48), torch.randn(64, 4)
     m = th["w"].float().norm(dim=1)
+    quant = {"w": {"kind": "lora", "a": qarray((4, 48), 4, 16), "b": qarray((64, 4), 2, 4), "scale": 0.5},
+             "big": {"kind": "delta", "q": qarray((N_BIG,), 2, 128)}, "g": {"kind": "full", "t": th["g"]}}
     blobs = {
+        "quant": (prepare.encode_quant(quant, th), 4 * (64 + 48) + (4 + 2) * 64 * 48 + 2 * N_BIG),
         "lora": (prepare.encode_lora({"w": (a, b, 0.5)}, full={"g": th["g"]}), (4 + 2) * 64 * 48),
         "lora2": (prepare.encode_lora2({"w": (a, b, 0.5)}, 4, magnitudes={"w": m}, full={"g": th["g"]}),
                   4 * (64 + 48) + (4 + 2) * 64 * 48 + 2 * (64 * 48 + 64)),

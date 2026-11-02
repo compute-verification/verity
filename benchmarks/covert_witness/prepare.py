@@ -11,8 +11,8 @@ A candidate starts from a registered start θ (`load_start`), trains within its 
 (`submit`):
 
 - E, an encoding of its update in one of the fixed formats (`encode_full`, `encode_lora`, `encode_lora2`,
-  `encode_seedlog`, `encode_sparse`); `decode(θ, E)` rebuilds the model, 8·|E| bits is the update-size witness, and
-  `rebuild_macs` is what the rebuild costs;
+  `encode_seedlog`, `encode_sparse`, `encode_quant`); `decode(θ, E)` rebuilds the model, 8·|E| bits is the update-size
+  witness, and `rebuild_macs` is what the rebuild costs;
 - the model it claims, which the checker requires to equal decode(θ, E) bit for bit, with θ's tensors, shapes and dtypes (so
   its size, evaluation FLOPs and weight bytes per byte are θ's);
 - its step log: one record per pass over data (`{"op": "train"|"forward", "tokens": T, "ctx": C}`) and any matmul FLOPs it
@@ -31,12 +31,14 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import lzma
 import math
 import os
 import re
 import struct
 import zlib
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import torch
@@ -81,7 +83,7 @@ CLASSES = {
     "seed": {"max_e_bytes": 100_000, "formats": ["seedlog"], "top_blocks": None},
 }
 MAGIC = {b"CWFULL1\n": "full", b"CWLORA1\n": "lora", b"CWLORA2\n": "lora2", b"CWSEED1\n": "seedlog",
-         b"CWSPAR1\n": "sparse"}
+         b"CWSPAR1\n": "sparse", b"CWQUAN1\n": "quant"}
 DTYPES = {"bf16": torch.bfloat16, "f16": torch.float16, "f32": torch.float32}
 EOT = {"gpt2": 50256, "pythia": 0}
 PYTHIA_REPO = "EleutherAI/pythia-160m"
@@ -732,6 +734,173 @@ def _decode_sparse(theta: dict[str, torch.Tensor], header: dict, payload: memory
     return out
 
 
+class QArray(NamedTuple):
+    """`bits`-bit codes (1 to 8) into an f16 codebook of 2**bits entries, times an f16 scale per group of `group`
+    consecutive entries in row-major order: entry i is codebook[codes[i]] · scales[i // group], exact in fp32."""
+
+    codebook: torch.Tensor
+    scales: torch.Tensor
+    codes: torch.Tensor
+    bits: int
+    group: int
+    shape: tuple[int, ...]
+
+
+QUANT_XZ = {"format": lzma.FORMAT_XZ, "check": lzma.CHECK_NONE, "preset": 1}
+QUANT_KEYS = {"delta": {"n", "k", "b", "g"}, "lora": {"n", "k", "r", "s", "A", "B"}, "full": {"n", "k"}}
+
+
+def _pack_codes(codes: np.ndarray, bits: int) -> bytes:
+    if bits == 8:
+        return codes.astype(np.uint8).tobytes()
+    flat = ((codes.astype(np.uint8)[:, None] >> np.arange(bits, dtype=np.uint8)) & 1).reshape(-1)
+    return np.packbits(flat, bitorder="little").tobytes()
+
+
+def _unpack_codes(b: bytes, count: int, bits: int, name: str) -> np.ndarray:
+    if bits == 8:
+        return np.frombuffer(b, dtype=np.uint8).copy()
+    flat = np.unpackbits(np.frombuffer(b, dtype=np.uint8), bitorder="little")
+    if flat[count * bits:].any():
+        raise ValueError(f"E (quant): {name}: a padding bit is not zero")
+    return (flat[:count * bits].reshape(count, bits) << np.arange(bits, dtype=np.uint8)).sum(1, dtype=np.uint8)
+
+
+def _quant_array(q, name: str) -> tuple[dict, list[bytes]]:
+    bits, group, shape = int(q.bits), int(q.group), tuple(int(s) for s in q.shape)
+    n = math.prod(shape)
+    cb = torch.as_tensor(q.codebook).detach().reshape(-1).cpu()
+    sc = torch.as_tensor(q.scales).detach().reshape(-1).cpu()
+    codes = torch.as_tensor(q.codes).detach().reshape(-1).cpu().long()
+    if not 1 <= bits <= 8 or group < 1 or n % group or cb.numel() != 2 ** bits or sc.numel() != n // group \
+            or codes.numel() != n or (n and not 0 <= int(codes.min()) <= int(codes.max()) < 2 ** bits):
+        raise ValueError(f"E (quant): {name}'s codes, codebook and scales don't fit {bits} bits in groups of {group} "
+                         f"for {shape}")
+    cb, sc = cb.to(torch.float16), sc.to(torch.float16)
+    if not (torch.isfinite(cb).all() and torch.isfinite(sc).all()):
+        raise ValueError(f"E (quant): {name}'s codebook and scales must be finite in f16")
+    return {"b": bits, "g": group}, [cb.view(torch.uint8).numpy().tobytes(), sc.view(torch.uint8).numpy().tobytes(),
+                                     _pack_codes(codes.to(torch.uint8).numpy(), bits)]
+
+
+def encode_quant(entries: dict[str, dict], theta: dict[str, torch.Tensor]) -> bytes:
+    """E as low-bit codes (CWQUAN1, the quant island's qformat.py): b"CWQUAN1\\n" + xz(4-byte header length, a JSON header,
+    each array's bytes in order). `entries` maps each changed tensor of θ to one of
+
+    - {"kind": "delta", "q": QArray}: W' = (W.float() + Q).to(W.dtype), Q the QArray's values in W's shape, so the rebuild
+      is the same on every device;
+    - {"kind": "lora", "a": QArray, "b": QArray, "scale": s}: W' = lora_merge(W, Q_A, Q_B, s), Q_A r x d_in, Q_B d_out x r;
+    - {"kind": "full", "t": tensor}: the tensor itself, in θ's dtype.
+
+    A QArray is `QArray` or anything with its fields (qformat's). Codes are packed `bits` wide, least significant bit
+    first, and 8·|E| counts every byte after the entropy coder (xz preset 1, no check)."""
+    header, parts = [], []
+    for name in sorted(entries):
+        e, w = entries[name], theta[name]
+        if e["kind"] == "delta":
+            if tuple(e["q"].shape) != tuple(w.shape) or not w.is_floating_point():
+                raise ValueError(f"E (quant): {name}: a delta of shape {tuple(e['q'].shape)} for a {tuple(w.shape)} tensor")
+            spec, arrays = _quant_array(e["q"], name)
+            header.append({"n": name, "k": "delta", **spec})
+            parts += arrays
+        elif e["kind"] == "lora":
+            a, b, r = e["a"], e["b"], int(e["a"].shape[0])
+            if w.ndim != 2 or tuple(a.shape) != (r, w.shape[1]) or tuple(b.shape) != (w.shape[0], r) or not 1 <= r <= min(w.shape):
+                raise ValueError(f"E (quant): {name}: factors of shapes {tuple(a.shape)}, {tuple(b.shape)} for {tuple(w.shape)}")
+            (sa, pa), (sb, pb) = _quant_array(a, name), _quant_array(b, name)
+            header.append({"n": name, "k": "lora", "r": r, "s": float(e["scale"]), "A": sa, "B": sb})
+            parts += pa + pb
+        elif e["kind"] == "full":
+            header.append({"n": name, "k": "full"})
+            parts.append(e["t"].detach().to(w.dtype).cpu().contiguous().reshape(-1).view(torch.uint8).numpy().tobytes())
+        else:
+            raise ValueError(f"E (quant): {name}: unknown kind {e['kind']!r}")
+    h = json.dumps({"t": header}, separators=(",", ":")).encode()
+    return b"CWQUAN1\n" + lzma.compress(struct.pack("<I", len(h)) + h + b"".join(parts), **QUANT_XZ)
+
+
+def _quant_header(theta: dict[str, torch.Tensor], blob: bytes) -> tuple[list[dict], memoryview]:
+    """CWQUAN1's checked entries and payload. The decompressed size is bounded by θ's (a header and, per tensor, its
+    codebooks, scales and codes at 8 bits in groups of 1, or its bytes in full)."""
+    cap = (1 << 20) + sum(8 * w.numel() + 2048 for w in theta.values())
+    dec = lzma.LZMADecompressor(format=lzma.FORMAT_XZ)
+    try:
+        inner = dec.decompress(bytes(blob[8:]), max_length=cap)
+    except lzma.LZMAError as e:
+        raise ValueError(f"E (quant): not an xz stream ({e})") from e
+    if not dec.eof or dec.unused_data:
+        raise ValueError("E (quant): not one xz stream holding at most θ's size")
+    if len(inner) < 4 or 4 + struct.unpack("<I", inner[:4])[0] > len(inner):
+        raise ValueError("E (quant): payload too short")
+    n = struct.unpack("<I", inner[:4])[0]
+    try:
+        header = json.loads(inner[4:4 + n])
+    except ValueError as e:
+        raise ValueError("E (quant): malformed header") from e
+    entries = header.get("t") if isinstance(header, dict) and set(header) == {"t"} else None
+    if not isinstance(entries, list) or not all(isinstance(e, dict) and e.get("k") in QUANT_KEYS and set(e) == QUANT_KEYS[e["k"]]
+                                                and isinstance(e["n"], str) for e in entries):
+        raise ValueError("E (quant): malformed entries")
+    names = [e["n"] for e in entries]
+    if any(x >= y for x, y in zip(names, names[1:])):
+        raise ValueError("E (quant): entries not in strictly increasing name order")
+    for e in entries:
+        w = theta.get(e["n"])
+        if w is None:
+            raise ValueError(f"E (quant): {e['n']} is not one of θ's tensors")
+        specs = [({"b": e["b"], "g": e["g"]}, tuple(w.shape))] if e["k"] == "delta" else []
+        if e["k"] == "lora":
+            r, s = e["r"], e["s"]
+            if w.ndim != 2 or type(r) is not int or not 1 <= r <= min(w.shape) or type(s) not in (int, float) \
+                    or not math.isfinite(s):
+                raise ValueError(f"E (quant): {e['n']}'s rank or scale is malformed for a {tuple(w.shape)} tensor")
+            specs = [(e["A"], (r, w.shape[1])), (e["B"], (w.shape[0], r))]
+        if e["k"] != "full" and not w.is_floating_point():
+            raise ValueError(f"E (quant): {e['n']} is not one of θ's float tensors")
+        for spec, shape in specs:
+            if not isinstance(spec, dict) or set(spec) != {"b", "g"} or type(spec["b"]) is not int \
+                    or type(spec["g"]) is not int or not 1 <= spec["b"] <= 8 or spec["g"] < 1 or math.prod(shape) % spec["g"]:
+                raise ValueError(f"E (quant): {e['n']}'s bits or group is malformed for {shape}")
+    return entries, memoryview(inner)[4 + n:]
+
+
+def _decode_quant(theta: dict[str, torch.Tensor], blob: bytes, out: dict, device: str) -> dict:
+    entries, payload = _quant_header(theta, blob)
+    at = 0
+
+    def take(nbytes: int) -> bytes:
+        nonlocal at
+        if at + nbytes > len(payload):
+            raise ValueError("E (quant): payload too short")
+        at += nbytes
+        return bytes(payload[at - nbytes:at])
+
+    def values(spec: dict, shape: tuple[int, ...], name: str) -> torch.Tensor:
+        bits, group, n = spec["b"], spec["g"], math.prod(shape)
+        cb = torch.frombuffer(bytearray(take(2 * 2 ** bits)), dtype=torch.float16)
+        sc = torch.frombuffer(bytearray(take(2 * (n // group))), dtype=torch.float16)
+        if not (torch.isfinite(cb).all() and torch.isfinite(sc).all()):
+            raise ValueError(f"E (quant): {name}'s codebook and scales must be finite")
+        codes = torch.from_numpy(_unpack_codes(take((n * bits + 7) // 8), n, bits, name)).to(device).long()
+        v = cb.float().to(device)[codes].view(-1, group) * sc.float().to(device)[:, None]
+        return v.view(shape)
+
+    for e in entries:
+        name = e["n"]
+        w = theta[name]
+        if e["k"] == "delta":
+            out[name] = (w.to(device).float() + values(e, tuple(w.shape), name)).to(w.dtype).cpu()
+        elif e["k"] == "lora":
+            r = e["r"]
+            a, b = values(e["A"], (r, w.shape[1]), name), values(e["B"], (w.shape[0], r), name)
+            out[name] = lora_merge(w.to(device), a, b, float(e["s"])).cpu()
+        else:
+            out[name] = torch.frombuffer(bytearray(take(w.numel() * w.element_size())), dtype=w.dtype).view(w.shape).clone()
+    if at != len(payload):
+        raise ValueError("E (quant): trailing bytes")
+    return out
+
+
 @torch.no_grad()
 def decode(theta: dict[str, torch.Tensor], blob: bytes, device: str = DEVICE) -> dict[str, torch.Tensor]:
     """The model E encodes from θ, every tensor in θ's dtype on the CPU."""
@@ -744,6 +913,8 @@ def decode(theta: dict[str, torch.Tensor], blob: bytes, device: str = DEVICE) ->
                 raise ValueError(f"E (full): {k} is not one of θ's tensors with its shape and dtype")
             out[k] = v
         return out
+    if blob[:8] == b"CWQUAN1\n":
+        return _decode_quant(theta, blob, out, device)
     fmt, header, payload = _unpack(blob)
     if fmt == "sparse":
         return _decode_sparse(theta, header, payload, out)
@@ -801,11 +972,17 @@ def rebuild_macs(theta: dict[str, torch.Tensor], blob: bytes) -> int:
       norms, their ratios to m, the rescale);
     - seedlog: steps · Σ numel, one fused multiply-add per element per step. Its first t coefficients rebuild the weights
       after step t, at t · Σ numel;
-    - sparse: nnz, one add per listed entry.
+    - sparse: nnz, one add per listed entry;
+    - quant: 2·numel per delta (the scale, the add); a lora entry's r·(d_in + d_out) (the factors' scales) plus lora's
+      (r + 2)·numel; 0 for a tensor in full.
 
     Every format but the seed log rebuilds only the weights at the step it encodes."""
     if blob[:8] == b"CWFULL1\n":
         return 0
+    if blob[:8] == b"CWQUAN1\n":
+        return sum(2 * theta[e["n"]].numel() if e["k"] == "delta" else
+                   e["r"] * sum(theta[e["n"]].shape) + (e["r"] + 2) * theta[e["n"]].numel() if e["k"] == "lora" else 0
+                   for e in _quant_header(theta, blob)[0])
     fmt, header, _ = _unpack(blob)
     if fmt == "lora":
         return sum((int(r) + 2) * theta[name].numel() for name, r, _ in header["factors"])

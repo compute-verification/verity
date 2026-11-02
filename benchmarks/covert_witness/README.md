@@ -11,11 +11,11 @@ It is autoresearch-shaped: a fixed side (`prepare.py`, `evaluate.py`, `candidate
 one editable `train.py` and its program, `README.md`, for a researcher agent.
 
 **Version**: v2.2 (`prepare.VERSION`, in every witness record, schema `covert-witness/witness/v3`; the harness is te_core
-3.1). Since v2, every candidate runs inside te_core's harness, which counts its MACs and times its steps, and every run is
+3.2). Since v2, every candidate runs inside te_core's harness, which counts its MACs and times its steps, and every run is
 ingested into te_core's ledger, which prices ρ. Since v2.1, every search score is on a fresh slice of the search pool drawn
 after the weights are hashed, promotions are decided on a sealed set one bit each, and the final set and a final start
-are sealed until the scorer's final scoring. v2.2 adds the `sparse` and `lora2` formats and every E's rebuild cost, and
-the meter prices an adapter on the tied embedding from the lookup.
+are sealed until the scorer's final scoring. v2.2 adds the `sparse`, `lora2` and `quant` formats and every E's rebuild
+cost, and the meter prices an adapter on the tied embedding from the lookup.
 
 ## Classes
 
@@ -84,7 +84,7 @@ about 2.4x a compiled run). A class's score at a start is its lowest valid searc
   seconds are within the budget; the class's caps. A step the island declares (`prepare.declare_step`) is a
   counterexample family the harness checks by rebuilding sampled steps with `prepare.decode`, bit for bit, within c MACs
   (te_core's README). The analytic meter (`prepare.train_flops`, from the step log) is recorded beside the harness's
-  count. Decoders are fixed (`prepare.decode`: `full`, `lora`, `lora2`, `seedlog`, `sparse`) and read only θ and E; the
+  count. Decoders are fixed (`prepare.decode`: `full`, `lora`, `lora2`, `seedlog`, `sparse`, `quant`) and read only θ and E; the
   witness records E's rebuild cost in MACs (`prepare.rebuild_macs`), and each curve point's (the harness's checkpoints).
 - **Nodes** (`nodes.txt`, `prep.sh`): a node is listed (`NODE pool=GPU_POOL cpu=CPU_POOL`) once `prep.sh`, run there
   in its CPU pool, has installed the starts, built the held-out sets and registered the sealed start; on a prepared node
