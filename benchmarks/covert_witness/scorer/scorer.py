@@ -365,6 +365,9 @@ def te_current() -> str:
     g = ["git", "-C", str(TE_CURRENT)]
     subprocess.run(g + ["fetch", "-q", "origin", *(f"+refs/heads/{b}:refs/remotes/origin/{b}" for b in OFFICIAL)],
                    capture_output=True, text=True)
+    if pin := os.environ.get("TE_CURRENT_COMMIT"):
+        subprocess.run(g + ["checkout", "-q", "--detach", pin], capture_output=True, text=True, check=True)
+        return subprocess.run(g + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
     best = None
     for b in OFFICIAL:
         if subprocess.run(g + ["merge-base", "--is-ancestor", PAIRED, f"origin/{b}"], capture_output=True).returncode:
@@ -602,7 +605,7 @@ def collect(since: str = SINCE) -> dict:
     custody = {a["run"]: by_art.get(a["run_record"]) for a in runs if a.get("run_record")}
     official, pinned = official_blobs(), pins()
     (STATE / "pin.json").write_text(json.dumps(pinned, indent=1) + "\n")
-    with ThreadPoolExecutor(16) as ex:
+    with ThreadPoolExecutor(int(os.environ.get("TE_SCORER_WORKERS", "16"))) as ex:
         rows = list(ex.map(lambda x: cw_row(r, x[0], x[1], x[2], commits, custody.get(
             x[2]["meta"]["covert_witness"].get("run")), te, official, pinned), cw))
         rows += [d for x in rows for d in x.pop("derived")]
