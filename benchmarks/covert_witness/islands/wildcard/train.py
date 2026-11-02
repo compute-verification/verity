@@ -328,10 +328,43 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
                 return out
             seed = 1000 + c["boundary"]
             if c["delta"]:
+                if CUT.get("spectrum") is not None:
+                    with torch.no_grad():
+                        spectrum_add(CUT["spectrum"].setdefault(c["boundary"], {}), (out - f).float(), out.float())
                 return f + Coded.apply(out - f, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True)
             return Coded.apply(out, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True)
         handles.append(net.inner.blocks[j].register_forward_hook(hook))
     return handles
+
+
+SESSION = 4096
+RANKS = (4, 8, 16, 32, 64, 128)
+
+
+def spectrum_add(acc: dict, delta: torch.Tensor, h: torch.Tensor):
+    """Accumulate, per SESSION-token session of `delta` (windows, ctx, d), the share of its energy that its top r
+    directions hold (eigenvalues of δᵀδ), and |δ|² against |h|²."""
+    d = delta.shape[-1]
+    acc["delta_sq"] = acc.get("delta_sq", 0.0) + float(delta.pow(2).sum())
+    acc["h_sq"] = acc.get("h_sq", 0.0) + float(h.pow(2).sum())
+    per = min(max(1, SESSION // delta.shape[1]), delta.shape[0])
+    n = delta.shape[0] // per * per
+    x = delta[:n].reshape(n // per, -1, d)
+    ev = torch.linalg.eigvalsh(x.transpose(1, 2) @ x).flip(-1).clamp_min(0)
+    share = ev.cumsum(-1) / ev.sum(-1, keepdim=True).clamp_min(1e-30)
+    acc["sessions"] = acc.get("sessions", 0) + share.shape[0]
+    for r in RANKS:
+        if r <= d:
+            acc[f"top{r}"] = acc.get(f"top{r}", 0.0) + float(share[:, r - 1].sum())
+
+
+def spectrum_report(spec: dict) -> dict:
+    out = {}
+    for b, acc in sorted(spec.items()):
+        s = acc.get("sessions", 0)
+        out[str(b)] = {"sessions": s, "delta_rms_over_h_rms": (acc["delta_sq"] / max(acc["h_sq"], 1e-30)) ** 0.5,
+                       **{k: v / s for k, v in acc.items() if k.startswith("top") and s}}
+    return out
 
 
 def lowest_block(tuned: list[str]) -> int | None:
@@ -465,7 +498,11 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
         with step_of():
             for on in (True, False):
                 CUT["on"] = on
+                if on and when == "end" and top_delta is not None:
+                    CUT["spectrum"] = {}
                 probes[f"{when}_{'coded' if on else 'uncoded'}"] = probe_loss(fwd, cut_probe, a.micro, steps)
+                if CUT.get("spectrum") is not None:
+                    probes["delta_spectrum"] = spectrum_report(CUT.pop("spectrum"))
                 if on:
                     steps.append({"op": "extra", "flops": code_fwd * len(cut_probe) * prepare.EVAL_CTX,
                                   "what": "cut code (probe)"})
