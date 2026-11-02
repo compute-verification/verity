@@ -17,7 +17,9 @@ decoder can carry) or with a list index, and single entries with an entropy-code
 - `lora`: LoRA with each candidate matrix's rank allocated greedily by the probe gradient's σ² per byte.
 
 The gains (`--norms`) can ride along with `lines` and `lora`. `--layers top:N` keeps every touched tensor in the top N
-blocks (the final norm included), so the backward stops there and a step costs less.
+blocks (the final norm included), so the backward stops there and a step costs less. `--embed-rank R` gives the tied
+embedding a rank-R LoRA (E carries it as one factor pair on `embed`; training applies it in factored form to both the
+lookup and the head), its (vocab + d) · R bf16 entries taken before the block matrices' allocation.
 
 E is encoded at the end of every 5% of the harness's steps (the probe's batches included, `hooks.plan`), so each of the
 harness's checkpoints scores the most training its 5% holds.
@@ -306,6 +308,29 @@ def e_bytes(mech: str, theta: dict, norms: list[str], plan, folded=()) -> int:
     return len(prepare._pack(b"CWLORA1\n", header, b"")) + 2 * elems
 
 
+def tie_lora(lm, A: torch.Tensor, B: torch.Tensor, s: float) -> None:
+    """`embed` + s · B @ A in the `lf` model's lookup and its tied head, never formed: the lookup adds s · B[idx] @ A and
+    the head s · (x Aᵀ) Bᵀ, so the frozen head's matmul stays as it was. Mirrors `model.LM.hidden` and `LM.top`."""
+
+    def hidden(idx, upto=None):
+        t = idx.shape[1]
+        x = F.embedding(idx, lm.embed) + s * F.linear(F.embedding(idx, B), A.t())
+        cos, sin = lm.cos[:t], lm.sin[:t]
+        for b in lm.blocks[:upto]:
+            x = b(x, cos, sin)
+        return x
+
+    def top(x, start):
+        t = x.shape[1]
+        cos, sin = lm.cos[:t], lm.sin[:t]
+        for b in lm.blocks[start:]:
+            x = b(x, cos, sin)
+        x = F.rms_norm(x, (x.shape[-1],), lm.norm)
+        return F.linear(x, lm.embed) + s * F.linear(F.linear(x, A), B)
+
+    lm.hidden, lm.top = hidden, top
+
+
 # ---- main --------------------------------------------------------------------------------------------------------------
 
 def main() -> int:
@@ -329,6 +354,9 @@ def main() -> int:
                     help="lora: the share of the byte budget placed at θ; the rest goes, after --regrow-at of the "
                          "steps, to the rank units with the most σ² per byte of a fresh probe's gradient (a learned mask)")
     ap.add_argument("--regrow-at", type=float, default=1 / 3)
+    ap.add_argument("--embed-rank", type=int, default=0,
+                    help="lora: the tied embedding's LoRA rank, placed before the block matrices' allocation; -1: the "
+                         "embedding joins the gradient's allocation as one more candidate")
     ap.add_argument("--probe", type=int, default=4, help="probe batches at θ (0: no probe, no analysis)")
     ap.add_argument("--analyse", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--lr", type=float, default=3e-4)
@@ -394,12 +422,16 @@ def main() -> int:
             r += 1
         plan = {n: r for n in cands}
     elif a.mech == "lora":
-        Gc = {n: G[n].cpu() for n in cands}
-        avail = int(avail * a.regrow)
-        plan = plan_lora(cands, Gc, avail, a.max_rank)
-        while plan and e_bytes("lora", theta, norms, plan) > cap:
+        if a.embed_rank and (a.regrow < 1 or theta["embed"].ndim != 2):
+            raise SystemExit("sparse: --embed-rank needs --regrow 1 and a 2-D `embed`")
+        pool = cands + (["embed"] if a.embed_rank < 0 else [])
+        fixed = {"embed": a.embed_rank} if a.embed_rank > 0 else {}
+        Gc = {n: G[n].cpu() for n in pool}
+        avail = int(avail * a.regrow) - sum(2 * r * sum(theta[n].shape) for n, r in fixed.items())
+        plan = fixed | plan_lora(pool, Gc, avail, a.max_rank)
+        while plan != fixed and e_bytes("lora", theta, norms, plan) > cap:
             avail -= 2048
-            plan = plan_lora(cands, Gc, avail, a.max_rank)
+            plan = fixed | plan_lora(pool, Gc, avail, a.max_rank)
         Gc = None
     G = G2 = None
     if prepare.DEVICE.startswith("cuda"):
@@ -445,6 +477,9 @@ def main() -> int:
         s = math.sqrt(d_in / r)
         train_vals.setdefault(n, []).append((A, B, s))
         adapters[n] = adapters.get(n, 0) + r
+        if n == "embed":
+            tie_lora(net.inner, A, B, s)
+            return [A, B]
         mod = net.inner.get_submodule(n.removesuffix(".weight"))
         mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
         return [A, B]
