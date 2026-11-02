@@ -1024,6 +1024,23 @@ def update_reads(rep: dict, every: bool) -> list[str]:
     return incomplete
 
 
+def undeclared_lines(binding: str, beyond: dict) -> list[str]:
+    """What ``--binding`` writes to stderr of ``beyond``, its binding's ``undeclared`` (`_read_sets`).  What it read beyond what
+    `READS` declares, ``--update-reads`` adds.  A target with no entry (``unrecorded``) gives no reads to add, and
+    `update_reads` leaves the binding's set as it was until each has one: the report's ``cache`` says why it has none (a check
+    that started a program the tracer cannot see, one that raised, a tree that changed under it)."""
+    reads = os.path.relpath(READS, REPO)
+    out = []
+    if missing := beyond.get("unrecorded"):
+        out.append(f"circuit-check --binding {binding}: {len(missing)} target(s) left no entry to take reads from "
+                   f"({', '.join(missing[:3])}): the report's cache says why (untraced, errors, changed); until each leaves one, "
+                   f"--update-reads leaves this binding's set in {reads} as it was")
+    if rest := sorted(set(beyond) - {"unrecorded"}):
+        out.append(f"circuit-check --binding {binding}: read beyond what {reads} declares of it ({', '.join(rest)}; the "
+                   f"report's undeclared): run it again with --update-reads and commit {reads}")
+    return out
+
+
 def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None) -> dict:
     """``--records-only``: every catalog binding's record in ``cache`` (`circuit_check.units`), and no target keyed or checked.
     Each binding whose record doesn't count is built in a process of its own, up to ``jobs`` at once within `budget_gb`
@@ -1625,9 +1642,8 @@ def main(argv: list[str] | None = None) -> int:
                                               if incomplete else ""))
         unread = 1 if incomplete else 0
     elif a.binding is not None and (beyond := rep.get("undeclared", {}).get(a.binding)):
-        print(f"circuit-check --binding {a.binding}: read beyond what {os.path.relpath(READS, REPO)} declares of it "
-              f"({', '.join(sorted(beyond))}; the report's undeclared): run it again with --update-reads and commit "
-              f"{os.path.relpath(READS, REPO)}", file=sys.stderr)
+        for line in undeclared_lines(a.binding, beyond):
+            print(line, file=sys.stderr)
     if a.binding is not None:
         return max(unread, verdict(rep, everything=False, out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings,
                                    what=f"binding {a.binding}: {len(rep['targets'])} target(s)"))

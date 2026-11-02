@@ -343,6 +343,17 @@ def test_update_reads_adds_what_each_run_read_to_what_reads_declares(tmp_path, m
     assert set(cli._reads_file()["bindings"]) == {"a"}
 
 
+def test_binding_s_line_for_a_target_with_no_entry_points_at_why_not_at_update_reads():
+    """A target with no entry gives `cli._read_sets` no reads, and `cli.update_reads` leaves its binding's set as it was:
+    ``--binding``'s line for it names the target and the report's cache, which says why, and suggests ``--update-reads`` only
+    for what the binding read beyond its declaration."""
+    target = "Attention_v3{T=5,NH=2,KVH=1,D=16,BN=128}"
+    [line] = cli.undeclared_lines("_vocabulary_roots", {"unrecorded": [target]})
+    assert target in line and "the report's cache says why" in line and "run it again with --update-reads" not in line
+    first, second = cli.undeclared_lines("_vocabulary_roots", {"unrecorded": [target], "probes": ["verity/x.py"]})
+    assert target in first and "(probes; the report's undeclared): run it again with --update-reads" in second
+
+
 def test_a_binding_s_name_is_its_root_function_its_files_models_or_its_template_entry():
     m = "verity.ml.circuits.ops.boolean.gf2k.circuit-check#"
     assert [SH.binding(u) for u in ((f"{m}_gf2k_roots",), (f"{m}_x_roots", f"{m}_x_bindings"), ("_kernel_roots",),
