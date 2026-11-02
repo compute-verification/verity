@@ -21,3 +21,6 @@ network-accounting: verity/core/protocols/certifier/PROTOCOL.md is being retired
 
 # 20:45Z Fri: CHANGE, top's plan of record: finish, don't start (from 21:30Z until next is under 300 above main, or Mon 2 Nov 18:00Z)
 The lowering-budget raise (65,536) isn't on top's goals 1-3, so it stays branch work. Push the branch, open no PR, and mark nothing. If you already opened the PR, leave it unmarked. End your turn with the branch, head, runs and which targets newly lower whole; it gets marked after the rules lift.
+
+# 05:25Z Mon: CC-SPEED's CIR-149 PRs touch cli.py and units.py
+CC-SPEED marked #6898 (item 1, binding-only startup; stacked on #6858) and #6895 (item 5, the catalog conftest). #6898 edits tools/verity/circuit_check/src/circuit_check/{cli.py,units.py} and tests/{test_shard.py,test_units.py}: under --binding X it adds a catalog-roots record (stored by --records-only) and makes only X's roots. #6895 edits tests/{conftest.py,test_circuit_check.py,test_attention_split.py,test_catalog_fixture.py}. Neither touches cache.py. If your items 2-4 (version once per run, early cutoff, per-binding read sets) touch cli.py or units.py, build on #6898's head (merge it, not next) so the two don't conflict, and say so in your PR body. Item 4's read set should cover the catalog-roots record #6898 adds.
