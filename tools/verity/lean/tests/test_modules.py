@@ -59,6 +59,17 @@ def test_a_file_that_runs_code_while_it_compiles_also_meta_imports_what_it_impor
         assert "meta" not in M.port(f"import A\n\n{quiet}\n"), quiet
 
 
+def test_a_file_that_declares_a_private_definition_reads_it_from_public_bodies():
+    """Every definition of a port is exposed, so a public one that reads a private one needs `backward.privateInPublic`."""
+    for decl in ("private def h := 1", "@[inline] private abbrev h := 1", "private partial def h : Nat → Nat := id",
+                 "  private structure H where"):
+        want = (f"module\n\npublic import A\n\n{M.SECTION}\nset_option backward.privateInPublic true\n"
+                f"set_option backward.privateInPublic.warn false\n\n{decl}\ndef x := h\n")
+        assert M.port(f"import A\n\n{decl}\ndef x := h\n") == want and M.port(want) == want, decl
+    for quiet in ("private theorem t : True := trivial", "def private_h := 1", "-- private def h := 1"):
+        assert "backward" not in M.port(f"import A\n\n{quiet}\n"), quiet
+
+
 def test_with_option_adds_a_transition_option_after_the_section_once():
     ported = M.port("import A\n\ndef x := 1\n")
     once = M.with_option(ported, "backward.privateInPublic")

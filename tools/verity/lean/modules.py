@@ -14,6 +14,8 @@ changes nothing and a branch made before the port takes it by running this on it
 - opens `@[expose] public section` after the header (after the module docstring when one follows it), never closed, so every
   declaration is public and every definition's value is exposed, as without the module system; `private` still means
   private, and a theorem's proof is never exposed;
+- in a file that declares a private definition, sets `backward.privateInPublic` (as `--option` does), since an exposed
+  body may not otherwise read it;
 - in a file that runs code while it compiles (`#eval`, `#guard`, `run_cmd`, ...), adds `meta import M` for each `M` it
   imports: a module runs that code at the `meta` phase, which reads only what it meta-imports.
 
@@ -25,8 +27,8 @@ own (`CallsFast100`); a theorem whose statement names another module's private d
 is private, beside a public theorem over the public definition for other files; an exported `:= rfl` theorem whose `rfl`
 unfolds an unexposed definition is `:= (rfl)`, which isn't inferred `@[defeq]`; a tactic block in a statement gets its
 type ascribed. `--option` adds one of the transition options to a file that needs it: `backward.privateInPublic` (a
-public definition reads a private one, or another module opens one with `open private … from`; the private one keeps its
-name, and the warning is turned off) or `backward.proofsInPublic`.
+public definition reads a private declaration that isn't a definition, or another module opens one with `open private …
+from`; the private one keeps its name, and the warning is turned off) or `backward.proofsInPublic`.
 
 `header` reads a header as Lean does (`module`, then `prelude`, then each `[public] [meta] import [all] M`, with comments
 anywhere between; the header ends at the first other token). Stdlib only."""
@@ -47,6 +49,9 @@ OPTIONS = {"backward.privateInPublic": ("backward.privateInPublic true", "backwa
            "backward.proofsInPublic": ("backward.proofsInPublic true",)}
 #: a command that runs code while its file compiles
 EVALUATES = re.compile(r"(?m)(?:^[ \t]*|\bin[ \t]+)(?:#eval!?|#guard|run_cmd|run_meta|run_elab)(?![\w!?'])")
+#: a private definition, which an exposed body reads only under `backward.privateInPublic`
+PRIVATE = re.compile(r"(?m)^[ \t]*(?:@\[[^\]\n]*\][ \t]*)*private[ \t]+(?:(?:noncomputable|partial|unsafe|nonrec)[ \t]+)*"
+                     r"(?:def|abbrev|instance|structure|inductive|opaque|class)\b")
 FIX = "python3 tools/verity/lean/modules.py"
 FIXTURES = "tools/verity/lean/tests/fixtures/"
 
@@ -169,7 +174,8 @@ def port(src: str) -> str:
     if not (g.module and [m.module for m in g.imports] == [m.module for m in h.imports]
             and all("public" in m.words or "all" in m.words for m in g.imports) and new.startswith(SECTION, body)):
         raise ValueError("its header doesn't read back as ported: port it by hand")
-    return with_meta_imports(new)
+    new = with_meta_imports(new)
+    return with_option(new, "backward.privateInPublic") if PRIVATE.search(src) else new
 
 
 def with_meta_imports(src: str) -> str:
