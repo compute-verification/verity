@@ -415,8 +415,8 @@ def test_the_reads_check_leaves_the_proofs_tree_to_the_trees_check():
 def test_the_record_follows_a_statement_through_the_modules_the_trees_except(tmp_path, monkeypatch):
     """`trees`' `except` exempts a module from the trees rule, not from the record: `Facts.lean` walks a guarantee's
     statement through `record_scope` (`meaning`, then the excepted prefixes), for a package's own guarantees and for those
-    a `proved_in` package proves, as `Security`'s are. The witnesses rule still reads what a statement reads under
-    `meaning`, so what the record now holds brings no guarantee into its scope."""
+    a `proved_in` package proves, as `Security`'s are. The witnesses rule still reads only what the walk under `meaning`
+    alone reaches (`meaning_reads`), so what the record now holds brings no guarantee into its scope."""
     why = "C-Flock is excepted until its spec is extracted"
     pol = {"roots": ["S"], "meaning": ["S.Defs"], "trees": {"proofs": ["SP"], "except": {"SP.Loop": why, "S.Defs": why}}}
     assert A.record_scope(pol) == ["S.Defs", "SP.Loop"]
@@ -456,10 +456,13 @@ def test_the_record_follows_a_statement_through_the_modules_the_trees_except(tmp
         A.proved(s, pol | {"proved_in": ["../p"]}, facts(modules=[], pins={}), tmp_path / "work")
     assert scopes == [["S.Defs", "SP.Loop"]], "the prover's facts are walked through the spec's excepted modules"
 
-    claim = {"name": "S.Claims.Holds", "module": "SP.Loop.Claims", "kind": "def", "hash": "4" * 32}
-    assert A.witness_scope("S.t", pol, fact(reads=[claim])) is None
-    assert A.witness_scope("S.t", pol, fact(reads=[claim | {"module": "S.Defs.Claims"}])) == (
-        "acceptance", "it reads the claim S.Claims.Holds")
+    claim = {"name": "S.Claims.Holds", "module": "S.Defs.Claims", "kind": "def", "hash": "4" * 32}
+    loop = {"name": "S.Guarantees.Loop", "module": "SP.Loop", "kind": "def", "hash": "5" * 32}
+    held = ("acceptance", "it reads the claim S.Claims.Holds")
+    assert A.witness_scope("S.t", pol, fact(reads=[loop, claim]) | {"meaning_reads": []}) is None, (
+        "a claim read only through the excepted statement")
+    assert A.witness_scope("S.t", pol, fact(reads=[loop, claim]) | {"meaning_reads": ["S.Claims.Holds"]}) == held
+    assert A.witness_scope("S.t", pol, fact(reads=[claim])) == held, "facts of a package with nothing excepted"
 
 
 def test_a_changed_statement_or_meaning_fails_until_updated():
@@ -1629,9 +1632,10 @@ def test_a_premise_outside_meaning_changes_its_record_when_it_or_what_it_reads_c
 
 
 LOOP = ("import Control.Assumptions\nimport Control.Defs\nnamespace Control.Guarantees\n"
-        "def Loop : Prop := ∀ n : Nat, Control.Hyp → Control.double n = n + n\nend Control.Guarantees\n")
+        "def Loop : Prop := ∀ n : Nat, Control.Hyp → Control.verifyDouble n\nend Control.Guarantees\n")
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_path):
     """On a real build: a guarantee whose statement is a `def G : Prop` of a proofs-tree module under `trees`' `except`
@@ -1639,14 +1643,18 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     `Proofs.Flock.SessionLoop`) is recorded through `G`'s body. A premise added to it that no named assumption stands for
     (`n ≠ 5`), or dropped from it while another guarantee still takes it (`Hyp`, whose assumption entry stays), changes
     the record, which the audit refuses until `--update` records it, and the review prints `G` as it is now. A walk that
-    stopped at `G` would record its name alone, and neither change would move the lock."""
+    stopped at `G` would record its name alone, and neither change would move the lock. What `G` reads under `meaning`
+    (`verifyDouble`, a verifier's acceptance by its name) is recorded too, but holds the guarantee to no witnesses."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    defs = pkg / "Control" / "Defs.lean"
+    defs.write_text(defs.read_text().replace(
+        "end Control", "def verifyDouble (n : Nat) : Prop := double n = n + n\n\nend Control"))
     loop = pkg / "Control" / "Loop.lean"
     loop.write_text(LOOP)
     (pkg / "Control" / "LoopThm.lean").write_text(
-        "import Control.Loop\nnamespace Control\n"
-        "theorem doubles : Guarantees.Loop := by\n  unfold Guarantees.Loop\n  intros\n  unfold double\n  omega\nend Control\n")
+        "import Control.Loop\nnamespace Control\ntheorem doubles : Guarantees.Loop := by\n  unfold Guarantees.Loop\n"
+        "  intros\n  unfold verifyDouble double\n  omega\nend Control\n")
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.LoopThm\n")
     pol = A.load(pkg)
     A.dump(pkg, pol | {"meaning": ["Control.Assumptions", "Control.Defs", "Control.Thms"],
@@ -1669,9 +1677,10 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     assert list(first["reads"]["Control.Loop"]["definitions"]) == ["Control.Guarantees.Loop"]
     assert first["reads"]["Control.Loop"]["guarantees"] == ["Control.doubles"]
     assert "Control.doubles" in first["reads"]["Control.Defs"]["guarantees"], "and through it, what it reads under `meaning`"
+    assert "Control.verifyDouble" in first["reads"]["Control.Defs"]["definitions"]
     seen = {first["reads"]["Control.Loop"]["digest"]}
     for text, shows in ((LOOP.replace("Control.Hyp →", "Control.Hyp → n ≠ 5 →"), "n ≠ 5"),
-                        (LOOP.replace("Control.Hyp → ", ""), "∀ n : Nat, Control.double n")):
+                        (LOOP.replace("Control.Hyp → ", ""), "∀ n : Nat, Control.verifyDouble n")):
         before = lock()
         loop.write_text(text)
         build()

@@ -1643,12 +1643,11 @@ def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
     (a bound on a hash, a count, a device), where neither form means anything."""
     if fns := accepted(policy, name):
         return "acceptance", f"a property of {' or '.join(fns)} accepting"
-    # what a statement reads through `trees`' `except` alone (`record_scope`) is recorded, but brings no guarantee into
-    # scope: `unwitnessed` only shrinks, and the statements still in the proofs tree carry no witnesses
-    meaning = policy.get("meaning", policy.get("roots", []))
-    excepted = [p for p in record_scope(policy) if p not in meaning]
-    reads = sorted((r for r in pin.get("reads") or []
-                    if under(meaning, m := r.get("module") or "") or not under(excepted, m)),
+    # what a statement reads only through `trees`' `except` (`record_scope`: the reads outside `meaning_reads`) is
+    # recorded, but brings no guarantee into scope: `unwitnessed` only shrinks, and the statements still in the proofs
+    # tree carry no witnesses
+    inner = None if pin.get("meaning_reads") is None else set(pin["meaning_reads"])
+    reads = sorted((r for r in pin.get("reads") or [] if inner is None or r.get("name") in inner),
                    key=lambda r: r.get("name", ""))
     for r in reads:
         m = r.get("module") or ""

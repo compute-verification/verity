@@ -224,7 +224,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside. A guarantee's record also follows it through the prefixes of
   `trees`' `except` (`record_scope`), as if they were listed here: the rules that read a statement's shape, premises and
-  witness scope go by `meaning` alone.
+  witness scope go by `meaning` alone (witness scope by what that walk reaches, `Facts.lean`'s `meaning_reads`).
 - `compile_time`: the modules that must run code while they compile, one by one. Write the entry with its `why`; `--update`
   adds the `digest` of the module's file. Any later edit of the file fails the audit until someone has reviewed its
   compile-time code and `--update` records the new digest, and `--update` prints the module in its review.
