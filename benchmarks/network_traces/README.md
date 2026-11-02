@@ -85,14 +85,15 @@ id 128001. It runs at a given UTC time when asked. The endpoint is started by ha
 `examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
 staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
 (prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node, so the chain's
-endpoint step runs there: `io` writes the kept warden run's certified I/O to a 0600 file in the kept fetch's directory,
-and `endpoint`, a run on the served node given that file over a private route, checks the endpoint's trace against it
-in a 0700 copy whose `requests.jsonl` is rebuilt from `request_users.jsonl` (each engine request's `engine_id` and its
-warden user) and the certified I/O. Its art is the step's report, `windows.jsonl` and `serve.json`; it writes nothing
-unless `serve.json` shows the endpoint's flags and no published file holds a prompt's ids, a trace's arrive, step or
-finish record, or a request-valued field. `chain` reads that report as the served node's. The session's fetch, with
-`witness/`, stays in a 0700 directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the
-session's outcome. `chain` runs the chain's warden path on the kept fetch, and only from a tree with the record's leak
+endpoint step runs there: `io` writes the kept network certifier run's certified I/O to a 0600 file in the kept fetch's
+directory, and `endpoint`, a run on the served node given that file over a private route, checks the endpoint's trace
+against it in a 0700 copy whose `requests.jsonl` is rebuilt from `request_users.jsonl` (each engine request's
+`engine_id` and its network certifier user) and the certified I/O. Its art is the step's report, `windows.jsonl` and
+`serve.json`; it writes nothing unless `serve.json` shows the endpoint's flags and no published file holds a prompt's
+ids, a trace's arrive, step or finish record, or a request-valued field. `chain` reads that report as the served node's.
+The session's fetch, with `witness/`, stays in a 0700 directory outside the run dir, and `$OUT` gets only the bundle
+less `witness/` and the session's outcome. `chain` runs the chain's network certifier path on the kept fetch, and only
+from a tree with the record's leak
 guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as
 the endpoint. `chain --coins gate` draws the scan's units on the gate's coins on the auditor's side, the node the chain
 runs on, which the challenger's coin link reaches through that node's own line of
@@ -102,13 +103,14 @@ warden run's witness never go on the prover's machine. Without the gate's coins 
 
 `certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
-class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in execution phase 0, so the engine
-closes it into the run's earliest window, the one the run audits, and the gate's fetch is kept in the serve dir's
-`private/certifier`. A request's answer must be whole D·τ after its admission, 2.7 s at the scan's 100 ms tick; for a
-slower endpoint `--bucket-ms` runs the scan at a longer tick, up to 4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`)
-runs the chain's warden path on that fetch with the serve dir's endpoint records, run dir and quarantine private
-beside the fetch, and answers with `network-period check` on the rows form of the scan's
-link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
+class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in execution phase 0, the
+network certifier at the schedule of that class's scan (`--scan-class w63k4`, 5 egress cells, the one the chain's
+`scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest window, the one the run audits,
+and the gate's fetch is kept in the serve dir's `private/certifier`. A request's answer must be whole D·τ after its
+admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` runs the scan at a longer tick, up to
+4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's warden path on that fetch with the serve dir's endpoint
+records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows form of
+the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
 of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer goes
 its case, `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window). Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
@@ -118,7 +120,12 @@ on the prover's node, so `trusted-host` is assumed with the auditor's devices no
 whose rows count each Commit window's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ, and the scan's answers):
 report.md, the report's other keys and the steps' summaries count the window's requests and outputs and the advice's
-bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory.
+bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory. Split in two around V3c
+(`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's committed window
+(`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its `period` runs the
+consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's. The period
+passes every check there, and the network verdict refuses the rows form as unproved (`period_case.UNPROVED`: no
+verifier proves its link-windows yet), so that refusal is the step's answer. Each step releases through its own hold.
 
 ## The chain's run of record
 
@@ -232,14 +239,15 @@ The terms, in the generator reading of the scan's statement (each proof block's 
   (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
 Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
-reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of the entries (`NetworkCheck.Period`'s `readsEntries`) and ignores it
-outside due and occupied slots, so a sampling block's entries are its NR·nb boundaries'. Unless the scan's `prog` is a
-compute audit's `SlotEntry_v1` template's entries (`<descriptor id>/c0/o0`, one member a slot), the read bit is the
-prover's word (an entry of read 1 and no outputs passes the scan), so `NetworkCheck.Period` refuses the sampling block
-by name (`wired`). `wired` pins the template's whole body by its closure digest (`slotEntryPins`,
-`io_shell.SlotEntry_v1` at its circuit-check rows), so the block round's `prog`, the o0 of scan_zk's `SlotEntry_v1`
-stand-in, whose entries, read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads
-the requests from its own registered `SCAN_STATE`, and the check refuses, last, by name, a sampling block whose scan's
+reads slot j's entry at row ⌊t / EVERY⌋ of lane j's entries, `scan/prog<j>` (`NetworkCheck.Period`'s `readsEntries`),
+and ignores it outside due and occupied slots, so a sampling block's entries are its NR·nb boundaries'. Unless each
+lane's `scan/prog<j>` is chunk j of a compute audit's `SlotEntry_v1` or `SelectEntry_v1` template's entries
+(`<descriptor id>/c<j>/o0`, one member a lane), the read bit is the prover's word (an entry of read 1 and no outputs
+passes the scan), so `NetworkCheck.Period` refuses the sampling block by name (`wired`). `wired` pins the template's
+whole body by its closure digest (`entryPins`, `io_shell.SlotEntry_v1` at its circuit-check rows, and
+`SelectEntry_v1`'s), so the block round's `prog<j>`, the o0 of scan_zk's `SlotEntry_v1` stand-in's lane-j member,
+whose entries, read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the
+requests from its own registered `SCAN_STATE`, and the check refuses, last, by name, a sampling block whose scan's
 state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). scan_zk's state tree is the window state
 (`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}), each leaf but the first the o1 of the proof block
 that computes it and the sin of the next, both registered reads, so a state tree that skips or alters a transition is

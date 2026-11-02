@@ -447,6 +447,11 @@ def test_a_scan_rehearsal_takes_its_prompts_off_stdin_into_its_witness_alone_and
     (["--scan", "--prompts"], b" " * A.WARDEN_PROMPTS_BYTES + b"[[1]]", "--prompts: over 1048576 bytes on stdin"),
     (["--scan", "--prompts", "--window-per-group"], json.dumps([[1]] * 5).encode(),
      "--window-per-group: 5 prompts, past a group's 4 (the scan's lanes)"),
+    (["--scan", "--scan-class", "w63k4"], b"[[1]]", "--scan-class: the scan's class of the --prompts"),
+    (["--scan", "--prompts", "--scan-class", "w99"], b"[[1]]", "--scan-class 'w99': one of ['w63', 'w63k4']"),
+    (["--scan", "--prompts", "--scan-class", "w63k4", "--tokens", "5"], b"[[1]]", "--tokens '5': 1 to 4"),
+    (["--scan", "--prompts", "--scan-class", "w63k4"], json.dumps([[0] * 33]).encode(),
+     "--prompts: stdin is a JSON array of 1 to 400 prompts, each an array of 1 to 32 token ids below 2^17"),
     (["--scan", "--prompts", "--minutes", "3"], b"[[1]]", "--minutes 3: 1 requests take 4 minutes"),
     (["--scan", "--prompts", "--window-per-group", "--requests", "400", "--minutes", "45"], b"[[1]]",
      "--minutes 45: 400 groups take 46 minutes"),
@@ -466,6 +471,34 @@ def test_a_scan_rehearsals_prompt_may_be_the_scans_ki_ids_and_no_more():
     with pytest.raises(A.Refused, match="each an array of 1 to 1024 token ids"):
         A.prompts_of(json.dumps([[0] * 1025]).encode())
     assert A.prompts_of(json.dumps([[0] * 2048]).encode(), A.CERTIFIER_PROMPTS) == [[0] * 2048]
+
+
+def test_a_scan_rehearsal_at_another_class_runs_at_its_egress_cells_with_its_ki_and_tokens(host, tmp_path):
+    """`--scan-class w63k4` is recorded (``scan_class``) only when given, takes a prompt of its KI = 32 ids and 4 tokens
+    out (its 5 egress cells less the trailer), and runs the network certifier at the scan's schedule with its 5 egress cells, every
+    other flag the class of record's (`test_warden_serve` holds each class's schedule to `scan_zk.py schedule --class`).
+    A request without it is the class of record's: its bounds are `WARDEN_PROMPT_IDS` and `WARDEN_PROMPT_TOKENS`."""
+    rc, out = gate(host, SCAN + ["--scan-class", "w63k4", "--window-per-group", "--tokens", "4", "--minutes", "4"],
+                   stdin=json.dumps([[0] * 32] * 4).encode(), started=[])
+    assert rc == 0, out
+    req = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
+    assert (req["scan_class"], req["tokens"], req["prompts"]) == ("w63k4", 4, {"count": 4, "ids": 128})
+    argv = A.warden_command(req, tmp_path, "u")
+    schedule = argv[argv.index("--ids") + 1:][:len(A.SCAN_SCHEDULE)]
+    assert schedule == list(A.scan_schedule(scan_class="w63k4")) and schedule[schedule.index("--egress-cells") + 1] == "5"
+    assert [x for i, x in enumerate(schedule) if schedule[i - 1] != "--egress-cells"] == \
+        [x for i, x in enumerate(A.SCAN_SCHEDULE) if A.SCAN_SCHEDULE[i - 1] != "--egress-cells"]
+    both = A.scan_schedule(4000, "w63k4")
+    assert both[::2] == A.SCAN_SCHEDULE[::2] and dict(zip(both[::2], both[1::2])) == \
+        dict(zip(A.SCAN_SCHEDULE[::2], A.SCAN_SCHEDULE[1::2])) | {"--bucket-ms": "4000", "--egress-cells": "5"}
+    assert A.scan_bounds("w63k4") == ((1, 32), (1, 4))
+    assert A.scan_bounds() == A.scan_bounds(A.SCAN_CLASS) == (A.WARDEN_PROMPT_IDS, A.WARDEN_PROMPT_TOKENS)
+
+    rc, out = gate(host, SCAN + ["--minutes", "4"], stdin=b"[[1]]", started=[], token="cd34")
+    assert rc == 0, out
+    req = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
+    assert "scan_class" not in req
+    assert A.warden_command(req, tmp_path, "u") == A.warden_command(req | {"scan_class": A.SCAN_CLASS}, tmp_path, "u")
 
 
 def test_a_groups_windows_are_the_scans_delay_and_its_tokens_buckets_and_their_minutes_the_groups_windows():

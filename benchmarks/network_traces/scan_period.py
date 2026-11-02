@@ -1,9 +1,9 @@
-"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a warden run's execution phase and the
-scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror and its
-Lean.
+"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a network certifier run's execution phase
+and the scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror
+and its Lean.
 
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
-        NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
+        [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
   and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
@@ -23,10 +23,19 @@ Lean.
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
   ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: reject, and where the scan's
   answer accepts, at the wiring (the mirror's ``UNWIRED`` in its reason and in Lean's). The block round's o0 is a
-  `SlotEntry_v1` stand-in's entries, whose closure digest is none the period check pins (`slotEntryPins`: the scan's
-  `prog` must be `io_shell.SlotEntry_v1`'s own entries), so the honest case passes every check before the wiring and
-  is refused there; its registration names the scan's state tree as ``scan/state``, the state the stand-in's
-  `SCAN_STATE` is tied to (`stateTied`). ``DIR`` gets each case's files and ``period.json``, each case's answers.
+  `SlotEntry_v1` stand-in's entries, whose closure digest is none the period check pins (`entryPins`: the scan's
+  `prog` is a ``scan/prog<j>`` a lane, and lane j's must be chunk j, ``<descriptor id>/c<j>/o0``, of a pinned
+  `SlotEntry_v1`'s or `SelectEntry_v1`'s own entries, as the block round's lane-j o0 is of the stand-in's), so the
+  honest case passes every check before the wiring and is refused there; its registration names the scan's state tree
+  as ``scan/state``, the state the stand-in's `SCAN_STATE` is tied to (`stateTied`). ``DIR`` gets each case's files
+  and ``period.json``, each case's answers.
+* **V3c's audit** (``--v3c``, ``records_audit.py period``'s ``period.json``, for scans proved on V3c's trees,
+  ``scan_zk.py --v3c``): the one compute audit, its Program's `SelectEntry_v1` chunks' o0 the scan's ``scan/prog<j>``
+  and its `SCAN_STATE` the scan's ``scan/state``. The honest case then passes every check at any sample of V3c's
+  (``subset:1`` included; the mirror's `analysis`): the period check is the consistency check, the committed I/O
+  against the certificates, and what a sample of one or two proof blocks leaves unproved is covert capacity, which K
+  charges. The verdict refuses it as unproved (the mirror's ``UNPROVED`` in its reason and in Lean's): no verifier
+  proves the rows form's link-windows yet.
 """
 from __future__ import annotations
 
@@ -64,12 +73,16 @@ def certificates(run: Path, w: int) -> list[dict]:
     return out
 
 
-def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
+def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None) -> dict:
     """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
-    (tampered, chain), that round's registration and its refusal."""
+    (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
+    ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
+    in place of ``answers.json``'s."""
     dep = json.loads(SZ._found(run, "deployment.json").read_text())
     doc = json.loads((scan / "answers.json").read_text())
+    if v3c is not None:
+        doc["audits"] = [json.loads(v3c.read_text())]
     if len(doc["windows"]) != 1:
         raise SystemExit(f"{scan}: a group of {len(doc['windows'])} link-windows is one registration over all their "
                          "units, and the rows form reads one link-window's 2T: prove each with scan_zk.py --group 1")
@@ -120,11 +133,30 @@ def mirror(path: Path):
     return mod
 
 
+def judged(m, honest: bool, py: dict, lean: dict, checked: dict | None = None) -> tuple[str, bool]:
+    """(what a case must answer, whether the mirror's verdict ``py`` and Lean's ``lean`` are both it), with ``m`` the
+    mirror. Both must reject, with one public. ``checked`` is the mirror's `analysis` of an honest case on V3c's audit:
+    it must accept (every check passed) while both verdicts refuse the rows form as unproved (``m.UNPROVED``). Another
+    honest case is refused at the wiring (``m.UNWIRED``), and a refused round or a forged one for its own reason."""
+    if checked is not None:
+        why, want = m.UNPROVED, "every check passed, the verdict reject as unproved"
+    else:
+        why = m.UNWIRED if honest else None
+        want = "reject" + (" at the wiring" if why else "")
+    good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
+            and (why is None or why in (py.get("reason") or "") and why in (lean.get("reason") or ""))
+            and (checked is None or checked.get("verdict") == "accept"))
+    return want, good
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="scan_period.py", description=__doc__.splitlines()[0])
     ap.add_argument("--mirror", type=Path, required=True, help="the period's mirror (period_case.py, its tests')")
     ap.add_argument("--lean", required=True, help="network-period, built")
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--v3c", type=Path, metavar="PERIOD",
+                    help="V3c's period.json (records_audit.py period): the one compute audit, for scans proved on its "
+                         "trees (scan_zk.py --v3c)")
     ap.add_argument("cases", nargs="+", help="NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged]")
     a = ap.parse_args(argv)
     m = mirror(a.mirror)
@@ -133,18 +165,18 @@ def main(argv=None) -> int:
     for spec in a.cases:
         name, _, rest = spec.partition("=")
         run, scan, *round_ = rest.split(",")
-        case = rows_case(Path(run), Path(scan), *round_)
+        case = rows_case(Path(run), Path(scan), *round_, v3c=a.v3c)
         (a.out / name).mkdir(exist_ok=True)
         (a.out / name / "case.json").write_text(json.dumps(case, indent=1, sort_keys=True))
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
         scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
-        why = m.UNWIRED if not round_ and scan_said == {"accept"} else None
-        want = "reject" + (" at the wiring" if why else "")
-        good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
-                and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
+        honest = not round_ and scan_said == {"accept"}
+        checked = m.analysis(case) if honest and a.v3c else None
+        want, good = judged(m, honest, py, lean, checked)
         ok &= good
         reg = json.loads(bytes.fromhex(case["commitment"]))["windows"][0]
-        got[name] = {"want": want, "mirror": py, "lean": lean, "as_expected": good, "registration": RG.digest(reg)}
+        got[name] = {"want": want, "mirror": py, "lean": lean, "as_expected": good, "registration": RG.digest(reg),
+                     **({"analysis": checked} if checked is not None else {})}
         print(f"SCPD {name}: want {want}; mirror {py.get('verdict')} {py.get('reason') or py.get('public')}; Lean "
               f"{lean.get('verdict')} {lean.get('reason') or lean.get('public')}; "
               f"{'as expected' if good else 'UNEXPECTED'}", flush=True)

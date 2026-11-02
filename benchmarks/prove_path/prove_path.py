@@ -76,7 +76,7 @@ Two kinds of committed run:
   and ``exfiltration_bound`` (β_δ + λ_δ).
 * **compiler**: the binding's compiler for a served run (its name, digest and ℓ, the compiler it wraps, and the φ I2 compiles
   under), the one `verity-vllm advice` registers. The inner digest is a single-GPU window's I2's (`I2Compiler.digest`) over
-  the tree's code (`source_identity.code_identity`: ``integrations/vllm`` and ``verity`` by content), so the audit runs on a
+  the tree's code (`code_identity`: ``integrations/vllm`` and ``verity`` by content), so the audit runs on a
   tree whose two are the server's; over what the compile reads of ``serve.json`` (its model, revision and that pin's config,
   target, execution and default seed), so the audit runs on the serve.json it was registered under; over ℓ and the transfer
   gates its model's compiler of record lists (`GATES_OF_RECORD`). It is the name and digest ``verity-vllm advice
@@ -118,11 +118,12 @@ Two kinds of committed run:
   **weights-registration** committed them under it before the first window's coins (``--registration``, which the
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
   any other's reads are free; the scan's state rows (`window_rows.state_value`), or without a kept run a stand-in's
-  (`window_rows.standin_state`), a per-window value under the run root. Where the certifier front kept the network
-  certifier's run under the serve dir, slot k is instead the request whose Program the network certifier's scan of that
-  run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's records for
-  ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the verifier's own
-  ``window-circuit`` record is the circuit it holds it to.
+  (`window_rows.standin_state`), a per-window value under the run root, whose rows and salts it also writes whole, prover
+  only, for the network certifier's scan to read as its state tree (`scan_state_opening`, ``scan_zk.py --v3c``). Where
+  the certifier front kept the network certifier's run under the serve dir, slot k is instead the request whose Program
+  the network certifier's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
+  records for ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the
+  verifier's own ``window-circuit`` record is the circuit it holds it to.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -152,6 +153,7 @@ import argparse
 import contextlib
 import functools
 import hashlib
+import importlib
 import json
 import multiprocessing
 import os
@@ -172,16 +174,13 @@ from records_audit import PORTS, REFUSED, free_ports, pin_arg, pins_of, registra
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
-from verity.ml.windows import interface as IF  # noqa: E402
+from verity.ml.windows import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
+from verity_vllm.pipeline.advice_windows import CAP_BITS, CAPPED, Capped  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 
-CAPPED = "verity/prove-path/capped-compiler/v0"
 I2 = "verity/prove-path/i2-compile-steps/v0"
-#: ℓ, the public cap on the advice's encoding in bits: 1 MiB, far above a TP Commit's few hundred requests (I1 spends tens of
-#: bits a row)
-CAP_BITS = 1 << 23
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
 LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
@@ -198,33 +197,6 @@ PLAIN_INTERIM: str = json.loads((HERE / "sources.json").read_text())["plain_inte
 
 
 @dataclass(frozen=True)
-class Capped:
-    """A registered compiler with ℓ, the public cap on the advice's length in bits. Its digest names the inner compiler's and ℓ,
-    so the registration's ``compiler`` fixes ℓ before the draw as it fixes the code; `load` and ``transfer_gates`` are the inner
-    compiler's."""
-
-    inner: Any
-    cap_bits: int = CAP_BITS
-    name: str = CAPPED
-
-    def __post_init__(self) -> None:
-        if isinstance(self.cap_bits, bool) or not isinstance(self.cap_bits, int) or self.cap_bits < 8:
-            raise ValueError(f"the cap ℓ is a whole number of bits, at least 8, not {self.cap_bits!r}")
-
-    @property
-    def digest(self) -> str:
-        return hashlib.sha512(canonical_json({"name": self.name, "cap_bits": self.cap_bits,
-                                              "compiler": {"name": str(self.inner.name), "digest": self.inner.digest}})).hexdigest()
-
-    @property
-    def transfer_gates(self) -> tuple[str, ...]:
-        return tuple(getattr(self.inner, "transfer_gates", ()))
-
-    def load(self, rank: int, world: int, requests: Any) -> Any:
-        return self.inner.load(rank, world, requests)
-
-
-@dataclass(frozen=True)
 class I2Compiler:
     """I2 (`predict.steps.compile_steps`) as a single-GPU window's compiler: the requests and their Programs are the ones I2
     compiles from the advice and each request's body by its I1 id (``ingress``; I2's prompts and sampling are values the request
@@ -237,10 +209,10 @@ class I2Compiler:
     (``own``, `own_builds`) and the prover's reads its row dir's. ``transfer_gates`` are the templates it lists as holding
     transfer gates (module docstring), the run's stand-in until I2 lists the I/O shell's own. Its digest, a single-GPU
     window's and a served one's alike, names its name, its code (``code``: a single-GPU window's I2 runs this tree's,
-    `code_identity`, ``verity`` and ``verity_vllm`` as git lists them, so a node's ignored build outputs don't move it; a
-    served window's, the server's registered compiler, `served_identity`), everything ``registered`` holds that I2 reads (φ:
-    the model, its revision and config, the target and the execution; the default seed; ℓ; the served model name, where it
-    names one) and that list. So a served window's ``serve.json`` is bound before the draw with the code: one that differs
+    `code_identity`; a served window's, the server's registered compiler, `served_identity`; both the verifier's
+    `interface.compiler_digest` over the integration's import closure as git lists it), everything ``registered`` holds
+    that I2 reads (φ: the model, its revision and config, the target and the execution; the default seed; ℓ; the served
+    model name, where it names one) and that list. So a served window's ``serve.json`` is bound before the draw with the code: one that differs
     from the one its advice was registered under names another compiler."""
 
     registered: Any
@@ -327,29 +299,10 @@ def own_builds(i2: I2Compiler, requests: Sequence[Mapping[str, Any]]) -> None:
         write_build(have[dg], program, named)
 
 
-#: the two packages a predicted Program is built from (`score.code_version`'s), by repository path
-CODE_DIRS = ("verity", "integrations/vllm/verity_vllm")
-
-
-@functools.lru_cache(maxsize=1)
 def code_identity() -> str:
-    """The code the compiler runs, once per process: every file git lists under `CODE_DIRS` (tracked, or untracked and not
-    ignored, so a node's build outputs, ``.lake`` under ``verity/``, don't count; docs, ``*.md``, compute nothing), by path and
-    content. Refused where the tree isn't a git work tree: a listing without git's ignore rules is another identity."""
-    import subprocess
-
-    import verity_vllm
-
-    root = Path(verity_vllm.__file__).resolve().parents[3]
-    p = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", *CODE_DIRS], cwd=root,
-                       capture_output=True)
-    if p.returncode != 0:
-        raise ValueError(f"the compiler's code identity reads the tree's git listing, and {root} has none: "
-                         f"{p.stderr.decode(errors='replace').strip()[:200]}")
-    h = hashlib.sha256()
-    for rel in sorted({f for f in p.stdout.decode().split("\0") if f and not f.endswith(".md") and (root / f).is_file()}):
-        h.update(rel.encode() + b"\0" + hashlib.sha256((root / rel).read_bytes()).digest())
-    return h.hexdigest()
+    """The code a single-GPU window's I2 runs: the served compiler's digest (`served_identity`), so a single-GPU window's
+    I2 and a served one's name their code by one formula, the verifier's `interface.compiler_digest`."""
+    return served_identity()[1]
 
 
 def bodies_by_digest(programs_root: str) -> dict[str, str]:
@@ -608,11 +561,11 @@ def i2_of_serve(run: str, window: int, programs_root: str, hf_config: str | None
 @functools.lru_cache(maxsize=1)
 def served_identity() -> tuple[str, str]:
     """The code a served window's compiler runs, as `verity-vllm advice` names it (``pipeline.advice``'s
-    ``registered_compiler``): compile_steps by its module path, its digest over the tree's code identity
-    (`source_identity.code_identity`: ``integrations/vllm`` and ``verity``), so the audit's tree holds the server's. The
+    ``registered_compiler``): compile_steps by its module path, its digest the verifier's `interface.compiler_digest` over
+    the integration's import closure (``integrations/vllm`` and ``verity``), so the audit's tree holds the server's. The
     window's I2 is that name, with this digest as its code (`i2_of_serve`)."""
     try:
-        from verity_vllm.pipeline import advice as ADV
+        ADV = importlib.import_module("verity_vllm.pipeline.advice")
     except ImportError:
         raise ValueError("a served window's registered compiler is `verity-vllm advice`'s (verity_vllm.pipeline.advice), "
                          "which this tree lacks") from None
@@ -1404,6 +1357,22 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
     return rows, [None if q is None else user[q] for q in starts]
 
 
+def scan_state_opening(value: Any, out: Path) -> Path:
+    """The window's `SCAN_STATE` value ``value`` (`window_rows.state_value`'s) opened whole for the network certifier's
+    scan, which reads it as its state tree (``scan_zk.py --v3c``): ``out``/`scan_zk.SCAN_STATE_FILE`, prover only,
+    every row (u16 little-endian) and then every salt. The window's ``v<j>-private.bin`` holds only the rows its members
+    read."""
+    import numpy as np
+
+    with network_traces():
+        from scan_zk import SCAN_STATE_FILE
+    at, path = np.arange(value.leaves), out / SCAN_STATE_FILE
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+        os.fchmod(f.fileno(), 0o600)
+        f.write(np.ascontiguousarray(RW.value_rows(value, at), dtype="<u2").tobytes() + RW.value_salts(value, at))
+    return path
+
+
 def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[str, Any]],
                 scan: tuple[Sequence[str | None], Sequence[tuple[Sequence[int], Sequence[int]]]] | None = None,
                 ) -> list[tuple[str | None, list[int], int]]:
@@ -1546,6 +1515,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
     win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)))
+    scan_state_opening(values[SS.SCAN_STATE], Path(a.out))
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
     return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
