@@ -385,7 +385,7 @@ def test_a_session_already_started_is_refused_and_its_windows_fail_closed(tmp_pa
 
 def test_a_certificate_from_another_session_is_a_signature_violation(tmp_path):
     """The cross-session replay: certificates the key signed in another session of the certifier, honest ones of the
-    same link-windows, are a `signature` violation in this session, every window; in their own they are accepted."""
+    same execution phases, are a `signature` violation in this session, every window; in their own they are accepted."""
     honest = run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))
     signer = signers.signer(tmp_path)
     key = signer.public_key()

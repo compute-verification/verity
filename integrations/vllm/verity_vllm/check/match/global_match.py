@@ -110,7 +110,7 @@ def match_ops(fast: bool) -> BD.Ops:
     return dataclasses.replace(ops, load_derived=lambda d, label: _load_component(ops, d, label))
 
 
-def _load_component(ops: BD.Ops, d: str, label: str) -> SEQ.Prog:
+def _load_component(ops: BD.Ops, d: str, label: str) -> SEQ.RootView:
     if os.path.exists(os.path.join(d, "program.json")):
         return ops.load_oracle(d, label)  # a fold record standing in for a derived component (tests)
     return ops.load_derived(d, label)
@@ -125,8 +125,8 @@ DEFAULT_WITHIN_STEP = BD.DEFAULT_WITHIN_STEP   # "dag": the criterion of record 
 def check(gp: dict, oracle_dir: str, log_path: str | None = None, tokens_path: str | None = None, run_x09: bool = True,
           within_step: str = DEFAULT_WITHIN_STEP, record_alternate: bool = True,
           _loaded: dict | None = None, tokens_optional: bool = False) -> dict:
-    """`_loaded` = {"oracle": SEQ.Prog, "components": {dir: SEQ.Prog}} decoded once by this process and shared with the X-09 run and
-    the alternate-criterion run (the fold Prog is read-only after load; decoding it three times per
+    """`_loaded` = {"oracle": SEQ.RootView, "components": {dir: SEQ.RootView}} decoded once by this process and shared with the X-09 run and
+    the alternate-criterion run (the fold RootView is read-only after load; decoding it three times per
     invocation -- check, X-09, alternate -- put GM-01's peak RSS at 87 GB on the B16 1024/128 record). The criteria are unchanged.
 
     MATCH_IMPL=fast: the same body over global_match_fast's compute-once operations (`match_ops`); the outermost

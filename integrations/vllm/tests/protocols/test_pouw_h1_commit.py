@@ -56,7 +56,8 @@ PROMPTS = {"a": [5, 6, 7], "b": [8, 9]}
 
 class Arm:
     """`engine.int8_vllm.Int8PlainLinearMethod`'s apply under H1 (``zy_rows`` set): ``int8_ops.linear_zy``, whose
-    ``row_quant`` the Commit acquires, then ``observe``, handed the codes ``edit`` makes of them (call order, codes)."""
+    ``row_quant`` the Commit acquires, then ``observe``, handed the codes ``edit`` makes of them (call order, codes). A
+    linear H1 leaves out (``zy_rows`` None) serves through ``int8_ops.linear``, as the plain arm does."""
 
     int8_arm = E.ARM
     zy_rows: int | None = None
@@ -65,7 +66,10 @@ class Arm:
         self.edit, self.calls = edit, calls if calls is not None else [0]
 
     def apply(self, layer, x, bias=None):
-        xq, s_a, y, zy = int8_ops.linear_zy(x, layer.weight, layer.weight_scale, self.zy_rows)
+        if self.zy_rows is None:
+            (xq, s_a, y), zy = int8_ops.linear(x, layer.weight, layer.weight_scale), None
+        else:
+            xq, s_a, y, zy = int8_ops.linear_zy(x, layer.weight, layer.weight_scale, self.zy_rows)
         served = xq if self.edit is None else self.edit(self.calls[0], xq.clone())
         self.calls[0] += 1
         self.observe(layer, served, s_a, y, zy)

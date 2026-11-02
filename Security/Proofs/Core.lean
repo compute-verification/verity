@@ -16,6 +16,7 @@ import Proofs.Core.Game.Batch
 import Proofs.Core.Game.BatchInduced
 import Proofs.Core.Game.Rewinding
 import Proofs.Core.Game.Unambiguous
+import Proofs.Core.Challenger
 import Proofs.Core.Round
 import Proofs.Core.Prims.Round
 import Proofs.Core.TC
