@@ -1,19 +1,22 @@
 """`research goals`: Daniel's Goals page (the console's /admin/goals), read and written with this agent's Cursor identity.
 
-  research goals show [--json]               every goal by due date: when, status, title, tags, id
-  research goals set ID [--title T] [--status on-track|off-track|done] [--due D] [--tag T ...]
-                        [--description TEXT|@FILE] [--blockers TEXT|@FILE | --no-blockers]
+  research goals show [--json] [--steps]     headline goals by due date (--steps: every goal): when, status, title, id
+  research goals set ID [--title T] [--status on-track|off-track|done] [--due D] [--owner HANDLE] [--tag T ...]
+                        [--step | --headline] [--wait goal:ID|ask:CARD ... | --no-wait] [--description TEXT|@FILE]
                                              # adds the goal, or changes only the fields given
   research goals confirm ID                  writes it again unchanged: its owner still stands by it
   research goals done ID                     marks it done
   research goals remove ID
   research goals replace FILE.json           the whole page: exactly the goals in FILE (a JSON list)
 
-A goal is an outcome Daniel would recognize and could check himself: a one-line title of at most eight words, a status
-(will it be true by its due date?), a due date (2026-11-05, the end of that day, or 2026-11-05T10:00-08:00), lowercase
-tags (demos, proofs, ci, infra, cleanup, accounting, pm), and Markdown for him: a description of what will be true and how
-to check it, and blockers only while something blocks it (a link to "#<id>" opens that goal). The site checks every write
-and answers which field is wrong. --url points the command at another server; the token's audience stays the route's.
+The plan is one graph of goals. A goal is an outcome with one owner: a one-line title of at most eight words, a due
+date (2026-11-05, the end of that day, or 2026-11-05T10:00-08:00), a status (will it be true by then?), lowercase tags,
+and a Markdown description of what exactly will be true, why it matters and how to check it, which never restates the
+fields. A headline goal is one Daniel would recognize; anything else is a step (--step), shown where something links to
+it. What a goal waits on is links only: the narrowest goal or step that blocks it, due before it, or an ask of Daniel's
+(--wait goal:ID, --wait ask:CARD). The page shows a goal off track when it waits on something due after it, off track,
+or an ask still open past its date. The site checks every write and answers which field is wrong. --url points the
+command at another server; the token's audience stays the route's.
 """
 from __future__ import annotations
 
@@ -81,14 +84,26 @@ def _find(goals: list[dict], gid: str) -> dict | None:
     return next((g for g in goals if g.get("id") == gid), None)
 
 
-def show(goals: list[dict]) -> str:
+def show(goals: list[dict], steps: bool = False) -> str:
     lines = []
     for g in goals:
+        if g.get("headline") is False and not steps:
+            continue
         flag = "  [blocked]" if g.get("blockers") else ""
         was = f"  (was {_when(g['wasDue'])})" if g.get("wasDue") else ""
-        lines.append(f"{_when(g['due']):<24} {g['status']:<9}  {g['title']}  {' '.join(g.get('tags', []))}{flag}{was}\n"
-                     f"{'':<24} {'':<9}  {g['id']}")
+        step = "  (step)" if g.get("headline") is False else ""
+        waits = "".join(f"\n{'':<24} {'':<9}    waits on {next(iter(r.values()))}" for r in g.get("waitingOn", []))
+        lines.append(f"{_when(g['due']):<24} {g['status']:<9}  {g['title']}  {' '.join(g.get('tags', []))}{step}{flag}{was}\n"
+                     f"{'':<24} {'':<9}  {g['id']}{waits}")
     return "\n".join(lines) if lines else "No goals yet."
+
+
+def _link(value: str) -> dict:
+    """goal:ID or ask:CARD, as a waitingOn link."""
+    kind, _, target = value.partition(":")
+    if kind not in ("goal", "ask") or not target:
+        raise SlackError(f"--wait {value!r}: expected goal:ID or ask:CARD")
+    return {kind: target}
 
 
 def edited(current: dict | None, ns: argparse.Namespace) -> dict:
@@ -99,12 +114,18 @@ def edited(current: dict | None, ns: argparse.Namespace) -> dict:
             goal[field] = getattr(ns, field)
     if ns.tag:
         goal["tags"] = ns.tag
+    if ns.owner is not None:
+        goal["owner"] = ns.owner
+    if ns.step:
+        goal["headline"] = False
+    elif ns.headline:
+        goal["headline"] = True
+    if ns.no_wait:
+        goal.pop("waitingOn", None)
+    elif ns.wait:
+        goal["waitingOn"] = [_link(w) for w in ns.wait]
     if ns.description is not None:
         goal["description"] = _text(ns.description)
-    if ns.no_blockers:
-        goal.pop("blockers", None)
-    elif ns.blockers is not None:
-        goal["blockers"] = _text(ns.blockers)
     missing = [f for f in ("title", "status", "due") if not goal.get(f)]
     if missing:
         raise SlackError(f"goal {ns.id} is new, so it needs --{', --'.join(missing)}")
@@ -118,16 +139,21 @@ def main(argv: list[str], route: Route | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("show")
     s.add_argument("--json", action="store_true")
+    s.add_argument("--steps", action="store_true", help="steps too, not only headline goals")
     s = sub.add_parser("set")
     s.add_argument("id")
     s.add_argument("--title")
     s.add_argument("--status", choices=STATUSES)
     s.add_argument("--due")
     s.add_argument("--tag", action="append")
+    s.add_argument("--owner", help="the lead that keeps it true, by handle")
+    level = s.add_mutually_exclusive_group()
+    level.add_argument("--step", action="store_true", help="a step: off the Goals page, shown where something links to it")
+    level.add_argument("--headline", action="store_true", help="a headline goal (the default for a new goal)")
     s.add_argument("--description", help="TEXT, or @FILE")
-    blockers = s.add_mutually_exclusive_group()
-    blockers.add_argument("--blockers", help="TEXT, or @FILE")
-    blockers.add_argument("--no-blockers", action="store_true")
+    waits = s.add_mutually_exclusive_group()
+    waits.add_argument("--wait", action="append", metavar="goal:ID|ask:CARD", help="what it waits on; repeat for each, replacing the list")
+    waits.add_argument("--no-wait", action="store_true", help="it waits on nothing")
     for name in ("confirm", "done", "remove"):
         sub.add_parser(name).add_argument("id")
     sub.add_parser("replace").add_argument("file")
@@ -136,7 +162,7 @@ def main(argv: list[str], route: Route | None = None) -> int:
     try:
         if ns.cmd == "show":
             goals = route.call()
-            print(json.dumps(goals, indent=1, ensure_ascii=False) if ns.json else show(goals))
+            print(json.dumps(goals, indent=1, ensure_ascii=False) if ns.json else show(goals, ns.steps))
             return 0
         if ns.cmd == "replace":
             goals = json.loads(Path(ns.file).read_text())
