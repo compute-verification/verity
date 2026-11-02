@@ -1,13 +1,13 @@
-"""te_core.rescore scores ledger rows with an analysis's formalism blocks, joined by run and MACs, under both readings
-of Slowdown's frozen-tail case, and leaves out the valid rows the analysis has no block for; with --stubs every valid
-row is scored on te_core.formalism's stubs."""
+"""te_core.rescore scores ledger rows with an analysis's formalism blocks, joined by run and MACs, by the formalism v2
+(a frozen tail always charged), cuts the console's panels, and leaves out the valid rows the analysis has no block
+for; with --stubs every valid row is scored on te_core.formalism's stubs."""
 import json
 
 import pytest
 
 pytest.importorskip("matplotlib")
 
-from te_core import formalism, plots, policy, rescore  # noqa: E402
+from te_core import console, formalism, plots, policy, rescore  # noqa: E402
 from test_plots import SHAPE, rows  # noqa: E402
 
 GATES_PER_MAC = 7000.0
@@ -15,6 +15,7 @@ ANALYSIS = f'''
 TAU = 16
 MACS = {[4e14, 1e15, 6e14]!r}
 E = {[9e7, 9e7, 8e4]!r}
+T = [0.5, 0.0, 0.0]
 
 def gate_factors(cache):
     cache.write_text("{{}}")
@@ -23,11 +24,20 @@ def gate_factors(cache):
 def load(scorer, ledger):
     return {{}}, {{f"s{{i}}": {{"run": f"run{{i}}"}} for i in range(3)}}, {{}}, {{}}
 
+def profiles(u1, t):
+    if 0 < t < 1:
+        return [[0.0, 0.0], [t, 0.0], [1.0, u1]], [[0.0, 0.0], [0.0, u1], [1.0, u1]]
+    return [[0.0, 0.0], [1.0, u1]], [[0.0, 0.0], [1.0, u1]]
+
 def build(subs, launch, starts, counted, g):
-    records = {{f"s{{i}}": {{"delta_grad": 1e9, "a": 512 * 16, "t": 0.5 if i == 0 else 0.0,
+    records = {{f"s{{i}}": {{"delta_grad": 1e9, "a": 512 * 16, "t": T[i],
                             "family": "full" if i < 2 else "adapter"}} for i in range(3)}}
-    cps = [{{"id": f"s{{i}}", "macs": MACS[i], "gates": {GATES_PER_MAC} * MACS[i], "tokens": 1e6, "phi": 0.9,
-             "delta": 8 * E[i]}} for i in range(3)]
+    cps = []
+    for i in range(3):
+        G = {GATES_PER_MAC} * MACS[i]
+        u, u_in = profiles(8 * E[i], T[i])
+        cps.append({{"id": f"s{{i}}", "macs": MACS[i], "gates": G, "token_gates": 0.9 * G, "affected_gates": 0.8 * G,
+                     "sigma": 0.9, "tokens": 1e6, "delta": 8 * E[i], "u": u, "u_in": u_in}})
     return records, cps
 '''
 
@@ -52,42 +62,34 @@ def run(tmp_path, monkeypatch, *extra):
 def test_the_analysis_blocks_score_the_rows_they_cover_and_the_rest_are_left_out(tmp_path, monkeypatch):
     out, fake = run(tmp_path, monkeypatch)
     fr = json.loads((out / "frontier.json").read_text())
-    assert fr["quantities"] == str(fake) and fr["not_analysed"] == ["r3"]
-    assert fr["readings"] == list(formalism.READINGS)
-    assert {t["reading"] for v in fr["starts"].values() for t in v["targets"]} == set(formalism.READINGS)
+    assert fr["quantities"] == str(fake) and fr["not_analysed"] == ["r3"] and "readings" not in fr
     kept = [json.loads(line) for line in (out / "formalism.jsonl").read_text().splitlines()]
     assert [k["id"] for k in kept] == ["r0", "r1", "r2"] and {k["source"] for k in kept} == {"analysis"}
     assert [k["family"] for k in kept] == ["full", "full", "adapter"]
     f0, f1 = kept[0]["formalism"], kept[1]["formalism"]
-    assert f0["u"] == [list(p) for p in formalism.even(8 * 9e7)] and f0["tail_share"] == 0.5
-    assert f0["labels"]["tail_share"] == rescore.TAIL and f1["tail_share"] == 0.0 and "tail_share" not in f1["labels"]
+    u, u_in = formalism.tail(8 * 9e7, 0.5)
+    assert (f0["u"], f0["u_in"], f0["tail_share"]) == ([list(p) for p in u], [list(p) for p in u_in], 0.5)
+    assert f0["labels"]["u"] == rescore.TAIL["u"] and f0["labels"]["u_in"] == rescore.TAIL["u_in"]
+    assert f1["tail_share"] == 0.0 and f1["labels"]["u"] == rescore.EVEN["u"]
     for n in plots.NAMES:
         assert (out / f"{n}.png").exists() and (out / f"{n}.json").exists()
-    assert "| literal-x0 |" in (out / "frontier.md").read_text() and "| tail-charged |" in (out / "frontier.md").read_text()
-    assert (out / "analysis-gates.json").exists()
+        c = json.loads((out / "console" / f"{n}.json").read_text())
+        assert len(console.body(c)) <= console.BODY_MAX and len(c["note"]) <= console.NOTE_MAX
+    md = (out / "frontier.md").read_text()
+    assert "x0 bound" in md and "s* known" in md and "literal-x0" not in md and "tail-charged" not in md
+    assert (out / "analysis-gates.json").exists() and not (out / "console" / "put.json").exists()
 
 
-def test_the_readings_differ_only_on_a_record_with_a_frozen_tail(tmp_path, monkeypatch):
-    """r0's block has a frozen tail (t = 0.5): tail-charged's ρ is above literal-x0's at the reference policy; r1 and r2
-    have none, so the readings agree there."""
+def test_a_frozen_tail_is_charged_through_a(tmp_path, monkeypatch):
+    """r0's block has a frozen tail (t = 0.5): u_in jumps, so x0 = 0 and ρ = σ s a / room(u) at the reference policy."""
     out, _ = run(tmp_path, monkeypatch)
-    cells = {"reference": policy.cells(SHAPE)["reference"]}
-    rho = {}
-    for line in (out / "formalism.jsonl").read_text().splitlines():
-        k = json.loads(line)
-        by, _ = formalism.rhos(formalism.measure({"formalism": k["formalism"]}, SHAPE), cells)
-        rho[k["id"]] = {name: v["reference"] for name, v in by.items()}
-    assert rho["r0"][formalism.TAIL_CHARGED] > rho["r0"][formalism.LITERAL] > 1
-    assert rho["r1"][formalism.TAIL_CHARGED] == rho["r1"][formalism.LITERAL]
-
-
-def test_one_reading_scores_only_under_it(tmp_path, monkeypatch):
-    out, _ = run(tmp_path, monkeypatch, "--reading", formalism.LITERAL)
-    fr = json.loads((out / "frontier.json").read_text())
-    assert fr["readings"] == [formalism.LITERAL]
-    assert {t["reading"] for v in fr["starts"].values() for t in v["targets"]} == {formalism.LITERAL}
-    p2 = plots.frame(json.loads((out / "p2-slowdown-vs-gain.json").read_text()))
-    assert {r["reading"] for r in p2} == {formalism.LITERAL}
+    c, k = policy.cells(SHAPE)["reference"]
+    k0 = json.loads((out / "formalism.jsonl").read_text().splitlines()[0])
+    m = formalism.measure({"formalism": k0["formalism"]}, SHAPE)
+    r = formalism.at(m, c, k)
+    assert r["x0"] == 0 and r["s_star"] == pytest.approx(formalism.room(m.u, k) / (512 * 16))
+    assert r["rho"] == pytest.approx(0.9 * (c * 1e6 / (0.9 * GATES_PER_MAC * 4e14)) * 512 * 16 / formalism.room(m.u, k))
+    assert 0 < r["s_star_known"] <= r["s_star"]
 
 
 def test_an_attached_block_is_what_the_formalism_measures(tmp_path, monkeypatch):
@@ -101,9 +103,18 @@ def test_an_attached_block_is_what_the_formalism_measures(tmp_path, monkeypatch)
     assert source == {"r0": "analysis", "r1": "analysis", "r2": "analysis", "r3": "stubs"}
     assert got[0]["family"] == "full" and "family" not in got[3]
     m = formalism.measure(got[0], SHAPE)
-    assert m.gates == pytest.approx(GATES_PER_MAC * 4e14) and m.tail_share == 0.5
+    assert m.gates == pytest.approx(GATES_PER_MAC * 4e14) and m.tail_share == 0.5 and m.sigma == pytest.approx(0.9)
     assert m.delta_bits == m.u1_bits == 8 * 9e7 and m.tau_bits == 16
     assert m.labels["u1_bits"].startswith("upper bound") and m.labels["a_bits"].startswith("upper bound")
+    assert m.labels["u"].startswith("assumption (A1)") and m.labels["u_in"].startswith("assumption (A1')")
+
+
+def test_publish_puts_each_cut_panel(tmp_path, monkeypatch):
+    sent = []
+    monkeypatch.setattr(console, "put", lambda p: sent.append(p["id"]) or "200")
+    out, _ = run(tmp_path, monkeypatch, "--publish")
+    assert sent == [f"training/{n}" for n in plots.NAMES]
+    assert json.loads((out / "console" / "put.json").read_text()) == {i: "200" for i in sent}
 
 
 def test_stubs_score_every_valid_row(tmp_path, monkeypatch):
