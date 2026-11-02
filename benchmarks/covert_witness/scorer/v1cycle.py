@@ -145,12 +145,20 @@ def label(start: str, shape: dict) -> str:
     return f"{n / 1e6:.0f}M · {shape['tokens_per_param']:g} tok/p"
 
 
+SEARCH_SET = "One seed (search slices)."
+FINAL_SET = ("Final: sealed shard; a FINAL entry's checkpoints are its reruns' (3 seeds averaged, loss_lo and loss_hi "
+             "their range), every other record's search value carried to the final start at the same drop.")
+
+
 class Cycle:
-    def __init__(self, rv, payload: dict, shapes: dict, launched: dict[str, str]):
+    def __init__(self, rv, payload: dict, shapes: dict, launched: dict[str, str], l0: dict | None = None,
+                 final: bool = False):
         self.rv, self.shapes, self.launched = rv, shapes, launched
         self.records, self.cps = payload["records"], payload["checkpoints"]
+        self.final, self.set_note = final, FINAL_SET if final else SEARCH_SET
+        self.title = "FINAL (sealed shard, 3 seeds): " if final else ""
         night = json.loads((S.STATE / "score.json").read_text())["starts"]
-        self.l0 = {s: v["start_bpb"] for s, v in night.items()}
+        self.l0 = l0 or {s: v["start_bpb"] for s, v in night.items()}
         self.starts = [s for s in self.l0 if s in shapes]
         self.ref_s, self.ref_k = rv.REFERENCE[0], rv.GRID_K[rv.REFERENCE[1]]
         self.w = {s: next(r["w"] for r in self.records.values() if r["start"] == s) for s in self.starts}
@@ -232,6 +240,85 @@ class Cycle:
                 "records": recs, "checkpoints": cps}
 
 
+MACS_MATCH = 0.02
+
+
+def final_payload(payload: dict, fdir: Path) -> tuple[dict, dict, dict]:
+    """The re-score's checkpoints on the final set, merged as scorer.py's final table merges them: a FINAL entry's
+    checkpoints are its reruns' (scorer.py final table: te_core's MACs and the seeds' mean bpb on the sealed shard), each
+    priced from the entry's search checkpoint at the same MACs (its gates scaled by the MACs, its Delta, phi and Fit
+    unchanged); every other record's search bpb is carried to the final start at the same drop. Returns the payload, the
+    final starts' bpb and, per entry, how many of its final rows found their search checkpoint."""
+    fin = json.loads((fdir / "final_submissions.json").read_text())
+    tab = json.loads((fdir / "table.json").read_text())
+    l0, l0s = tab["final_starts"], tab["search_starts"]
+    rows, mine = defaultdict(list), defaultdict(list)
+    for x in fin:
+        rows[x["id"]].append(x)
+    for c in payload["checkpoints"]:
+        mine[c["id"]].append(c)
+    cps = [c | {"bpb": c["bpb"] * l0[c["start"]] / l0s[c["start"]], "search_bpb": c["bpb"], "split": "search"}
+           for c in payload["checkpoints"] if c["id"] not in rows and c["start"] in l0 and c["start"] in l0s]
+    entries = {}
+    for i, xs in rows.items():
+        e = entries[i] = {"start": xs[0]["start"], "direction": xs[0]["direction"], "rows": len(xs), "matched": 0,
+                          "analysed": i in payload["records"], "seeds": sorted({s for x in xs for s in x["seeds"]})}
+        for x in xs:
+            c = min(mine[i], key=lambda c, x=x: abs(c["macs"] - x["macs"]), default=None)
+            if c is None or abs(c["macs"] - x["macs"]) > MACS_MATCH * max(c["macs"], x["macs"]):
+                continue
+            e["matched"] += 1
+            cps.append(c | {"bpb": x["val_bpb"], "bpb_min": x["bpb_min"], "bpb_max": x["bpb_max"], "seeds": x["seeds"],
+                            "gates": c["gates"] * x["macs"] / c["macs"] if c["macs"] else c["gates"], "macs": x["macs"],
+                            "search_bpb": c["bpb"], "split": "final",
+                            "schedule_end": x.get("schedule_end", c["schedule_end"])})
+    return {"records": payload["records"], "checkpoints": cps}, l0, entries
+
+
+def final_md(cy: Cycle, search: Cycle, sc: dict, entries: dict, tab: dict) -> str:
+    """Per FINAL entry and target: its least compute to the target on the sealed shard (seeds averaged) beside the
+    search's, and its own S at the reference policy (its least |C| rho over its final checkpoints, over the final H)."""
+    rv, short = cy.rv, cy.rv.short
+    L = ["## FINAL entries on the sealed shard", "",
+         (f"{len(entries)} entries with valid reruns; targets from the final starts' bpb ("
+          + ", ".join(f"{s} {v:.4f}" for s, v in sorted(cy.l0.items())) + "). A checkpoint reaches a target when its "
+          "seeds' mean bpb does; seeds: all when the worst seed reaches it too. Gates: the search checkpoint's at the "
+          "rerun's MACs. S: the entry's least |C| rho to the target at c = 4096w, k = 10 kB, over the final H."), "",
+         ("| entry | start | target | final: least gates (cp; bpb mean [lo, hi]; seeds) | search: least gates (cp) | "
+          "final/search | S evenly spread | S frozen tail |"), "|---|---|---|---|---|---|---|---|"]
+    for i, e in sorted(entries.items(), key=lambda t: (t[1]["start"], t[1]["direction"], t[0])):
+        r, s = cy.records.get(i), e["start"]
+        name = f"{e['direction']}/{r['mechanism'] if r else '?'} {short(i)}"
+        if r is None or not e["matched"]:
+            L.append(f"| {name} | {s} | – | " + ("not analysed by rescore_v1" if r is None else
+                                                 "no final row at a search checkpoint's MACs") + " | | | | |")
+            continue
+        for t in rv.TARGETS:
+            lf = cy.l0[s] * (1 - t)
+            hf = [c for c in cy.cps if c["id"] == i and c.get("split") == "final" and c["bpb"] <= lf]
+            hs = [c for c in search.cps if c["id"] == i and c["bpb"] <= search.l0[s] * (1 - t)]
+            f, g = (min(h, key=lambda c: c["gates"]) if h else None for h in (hf, hs))
+            if not f and not g:
+                continue
+            h = sc[f"{s}|{t}"]["H"]
+            vs = []
+            for mode in READINGS:
+                b = cy.best(hf, cy.ref_s, cy.ref_k, mode)
+                vs.append(f"{fmt(b['W'] / h['gates'])} (ρ {fmt(b['rho'])}, {b['status']})" if b and h else "–")
+            fs = (f"{fmt(f['gates'])} ({f['cp']:g}; {f['bpb']:.4f} [{f['bpb_min']:.4f}, {f['bpb_max']:.4f}]; "
+                  f"{'all' if f['bpb_max'] <= lf else 'not all'} of {len(f['seeds'])})") if f else "not reached"
+            gs = f"{fmt(g['gates'])} ({g['cp']:g})" if g else "not reached"
+            ratio = fmt(f["gates"] / g["gates"]) if f and g else "–"
+            L.append(f"| {name} | {s} | −{100 * t:g}% | {fs} | {gs} | {ratio} | " + " | ".join(vs) + " |")
+    L.append("")
+    bad = [x for x in tab.get("reruns", []) if x.get("problems")]
+    if bad:
+        L += ["### Reruns left out", "", "| entry | seed | run | problems |", "|---|---|---|---|"]
+        L += [f"| {short(x['id'])} | {x.get('seed')} | {x.get('run')} | {'; '.join(x['problems'])} |" for x in bad]
+        L.append("")
+    return "\n".join(L)
+
+
 def pareto(points):
     """(x, y, payload) sorted by x with y strictly decreasing: the best y reachable at each budget x."""
     out, best = [], math.inf
@@ -270,7 +357,8 @@ def panels(cy: Cycle, sc: dict, stamp: str, source: str) -> dict:
                 r = cy.records[c["id"]]
                 rows.append([lab[s], s, size[s], sat[s], curve, policy, reading,
                              st(c) if st else None, deepest(cy.l0[s], y, rv.TARGETS), x,
-                             x / c0[s] if c0[s] else None, y, None, None, c["id"], c["cp"], meth(r), family(r)])
+                             x / c0[s] if c0[s] else None, y, c.get("bpb_min"), c.get("bpb_max"), c["id"], c["cp"],
+                             meth(r), family(r)])
 
         emit("honest", "", "", pareto([(c["gates"], c["bpb"], c) for c in mine]))
         for mode, reading in READINGS.items():
@@ -291,7 +379,7 @@ def panels(cy: Cycle, sc: dict, stamp: str, source: str) -> dict:
                 "(the tied head is a frozen tail for every run that leaves the embedding frozen). loss = held-out bits "
                 "per byte. target_pct = the deepest target the point reaches. compute_frac is null: C0 is a stub for "
                 "these starts (" + ", ".join(f"{s} {cy.shapes[s]['c0_gates']:.3g}" for s in cy.starts) + " gates, "
-                "te_core.policy). No scratch curve until the ladder's F. One seed (search slices). Starts: "
+                f"te_core.policy). No scratch curve until the ladder's F. {cy.set_note} Starts: "
                 + ", ".join(f"{lab[s]} = {s}" for s in cy.starts) + "."}
 
     cols = ["start", "start_id", "size", "saturation", "l0", "target_pct", "g", "S", "S_lo", "S_hi", "basis",
@@ -311,7 +399,7 @@ def panels(cy: Cycle, sc: dict, stamp: str, source: str) -> dict:
         "columns": cols, "rows": rows,
         "note": f"S = W*/H at the reference policy {refpol}, the best known attack over every checkpoint of every valid "
                 "v2.3 record; H and W* read every checkpoint, so S >= 1. g = F(l*)/C0 is null until the ladder's "
-                "from-scratch curve F: plot S against target_pct. basis as in P1. One seed: S_lo and S_hi null."}
+                f"from-scratch curve F: plot S against target_pct. basis as in P1. S_lo and S_hi null. {cy.set_note}"}
 
     cols = ["start", "start_id", "target_pct", "g", "reading", "c_tokens_per_block", "c_gates", "k_bits", "k_bytes",
             "S", "basis", "fit_train", "route", "method", "record", "checkpoint", "rho", "p", "mark"]
@@ -340,7 +428,7 @@ def panels(cy: Cycle, sc: dict, stamp: str, source: str) -> dict:
                 "token's forward at full context with its K, V; the start's training in one block, C0 a stub, with its "
                 "state beyond theta). c_tokens_per_block = c/w, w the start's forward gates per token; k in bits. "
                 "fit_train: Fit holds for the training (2 Delta_grad + s tau <= k as well as Delta + s tau <= k). The "
-                "reference target is -1%; every target is listed. basis as in P1. One seed."}
+                f"reference target is -1%; every target is listed. basis as in P1. {cy.set_note}"}
 
     cols = ["start", "start_id", "target_pct", "algorithm", "family", "route", "record", "checkpoint", "p", "s", "S",
             "basis", "fit_train", "reading", "g", "seeds", "delta_bits", "delta_grad_bits", "compute_gates"]
@@ -358,14 +446,14 @@ def panels(cy: Cycle, sc: dict, stamp: str, source: str) -> dict:
                     r = cy.records[rid]
                     rows.append([lab[s], s, -100 * t, meth(r), family(r), r["direction"], rid, b["c"]["cp"],
                                  b["c"]["gates"] / h["gates"], b["rho"], b["W"] / h["gates"], b["status"],
-                                 b["status"] == "fit-train", reading, None, 1, b["c"]["delta"], r["delta_grad"],
-                                 b["c"]["gates"]])
+                                 b["status"] == "fit-train", reading, None, len(b["c"].get("seeds") or [0]),
+                                 b["c"]["delta"], r["delta_grad"], b["c"]["gates"]])
     P["p4-decomposition"] = common | {
         "id": "training/p4-decomposition", "title": "p against s per record at the reference policy",
         "columns": cols, "rows": rows,
         "note": f"One point per valid v2.3 record reaching the target: its checkpoint with the least |C| rho at {refpol}; "
                 "p = |C|/H, s = rho (the Slowdown theorem's bound, floored at 1), S = p s. H over every checkpoint. "
-                "basis as in P1. g null until the ladder's F. One seed per point."}
+                f"basis as in P1. g null until the ladder's F. {cy.set_note}"}
 
     cols = ["start", "start_id", "size", "saturation", "target_pct", "axis", "delta_bin", "delta_bits",
             "delta_grad_bits", "compute_gates", "method", "family", "route", "record", "checkpoint", "night2",
@@ -393,7 +481,9 @@ def panels(cy: Cycle, sc: dict, stamp: str, source: str) -> dict:
                 "the best-known value, an upper bound), axis delta_grad = the gradient and optimizer state passed between "
                 "blocks (from the optimizer's widths). compute in Boolean gates. fit_run_k_bits = Delta + s tau and "
                 "fit_train_k_bits = max(Delta, 2 Delta_grad) + s tau at the reference c (s = 4096 tokens, tau = 16 "
-                "bits): the least k at which Fit passes. One seed (search slices)."}
+                f"bits): the least k at which Fit passes. {cy.set_note}"}
+    for p in P.values():
+        p["title"] = cy.title + p["title"]
     return P
 
 
@@ -405,18 +495,18 @@ BASIS = ("basis: fit-train = rho 1 by Fit; fit-run = only running fits; unpriced
 SHORT = {
     "p1-loss-vs-compute": "Least compute per loss over every checkpoint of every valid v2.3 record (19:50Z rule). "
                           "honest |C| (gates); covert |C| rho at c=4096w k=10kB; covert-policy another (c, k). " + BASIS
-                          + " loss: held-out bpb. compute_frac null: C0 is a stub. One seed.",
+                          + " loss: held-out bpb. compute_frac null: C0 is a stub.",
     "p2-slowdown-vs-gain": "S = W*/H at c=4096w k=10kB, H and W* over every checkpoint of every valid v2.3 record, so "
-                           "S >= 1. g null until the ladder's F: plot S against target_pct. " + BASIS + " One seed.",
+                           "S >= 1. g null until the ladder's F: plot S against target_pct. " + BASIS,
     "p3-policy-plane": "S = W*/H over the (c, k) grid and at the start's inference and server blocks (te_core.policy), "
                        "c_tokens_per_block = c/w, k in bits; H and W* over every checkpoint. fit_train: Fit holds for "
-                       "the training. " + BASIS + " One seed.",
+                       "the training. " + BASIS,
     "p4-decomposition": "Per valid v2.3 record reaching the target, its checkpoint with the least |C| rho at c=4096w "
-                        "k=10kB: p = |C|/H, s = rho, S = p s; H over every checkpoint. " + BASIS + " One seed.",
+                        "k=10kB: p = |C|/H, s = rho, S = p s; H over every checkpoint. " + BASIS,
     "a2-efficiency-floor": "Pareto points of (update size, least compute to the target) over every checkpoint of every "
                            "valid v2.3 record: axis delta = Delta (= u(1), an upper bound), axis delta_grad = gradient "
                            "and optimizer state. fit_*_k_bits: the least k at which Fit passes at c=4096w (Delta + s "
-                           "tau; max(Delta, 2 Delta_grad) + s tau). One seed.",
+                           "tau; max(Delta, 2 Delta_grad) + s tau).",
 }
 
 
@@ -460,7 +550,11 @@ def thin(p: dict) -> dict:
     return p | {"rows": rows}
 
 
-def console(P: dict) -> dict:
+CONSOLE_SET = {False: "One seed.", True: "Final: sealed shard, FINAL entries 3 seeds averaged (loss_lo/hi their "
+                                          "range), other records' search values at the same drop."}
+
+
+def console(P: dict, final: bool = False) -> dict:
     """Each panel cut to the route's body limit (65,536 bytes): P1 thinned, with the band's policies cut to BAND_FEW and
     then to none if need be; P3 and P4 cut to the reference target if need be. The note says what was cut."""
     out = {}
@@ -481,7 +575,7 @@ def console(P: dict) -> dict:
                        lambda r: r["target_pct"] == -100 * REF_TARGET)]
         for why, keep in tries:
             q = compact(p, keep, drop)
-            note = SHORT.get(pid, p["note"]) + why
+            note = f"{SHORT[pid]} {CONSOLE_SET[final]}{why}" if pid in SHORT else p["note"] + why
             q["note"] = note if len(note) <= NOTE_MAX else note[:NOTE_MAX - 1] + "…"
             if len(body(q)) <= BODY_MAX:
                 break
@@ -522,6 +616,11 @@ def plots(cy: Cycle, P: dict, sc: dict, out: Path) -> dict[str, Path]:
             pts = [(r["compute_gates"], r["loss"]) for r in mine if r["curve"] == curve and r["reading"] == reading]
             if pts:
                 ax.step(*zip(*pts + [(pts[-1][0] * 30, pts[-1][1])]), where="post", **kw)
+        spread = [r for r in mine if r["curve"] == "honest" and r["loss_lo"] is not None]
+        if spread:
+            ax.errorbar([r["compute_gates"] for r in spread], [r["loss"] for r in spread],
+                        yerr=[[r["loss"] - r["loss_lo"] for r in spread], [r["loss_hi"] - r["loss"] for r in spread]],
+                        fmt="none", ecolor="k", elinewidth=0.8, capsize=2, label="3 seeds' range")
         for t in rv.TARGETS:
             ax.axhline(cy.l0[s] * (1 - t), color="0.8", lw=0.6, ls=":")
             ax.text(0.99, cy.l0[s] * (1 - t), f"−{100 * t:g}%", fontsize=7, color="0.5", va="bottom", ha="right",
@@ -542,7 +641,7 @@ def plots(cy: Cycle, P: dict, sc: dict, out: Path) -> dict[str, Path]:
         ax.set_xlabel("compute after θ (Boolean gates)")
         ax.set_ylabel("held-out bpb")
         ax.legend(fontsize=7, loc="lower left")
-    fig.suptitle("P1: loss against compute after θ, every checkpoint of every valid v2.3 record "
+    fig.suptitle(cy.title + "P1: loss against compute after θ, every checkpoint of every valid v2.3 record "
                  "(light red: W* at the grid's other policies)")
     paths["p1"] = out / "p1_loss_vs_compute.png"
     fig.savefig(paths["p1"], dpi=105)
@@ -559,7 +658,7 @@ def plots(cy: Cycle, P: dict, sc: dict, out: Path) -> dict[str, Path]:
     ax.set_xlabel("target (% of the start's bpb)")
     ax.set_ylabel(f"S = W*/H at {refpol}")
     ax.legend(fontsize=7, ncol=2)
-    ax.set_title("P2 (until the ladder's F): S against the target, every checkpoint of every valid v2.3 record")
+    ax.set_title(cy.title + "P2 (until the ladder's F): S against the target, every checkpoint of every valid v2.3 record")
     paths["p2"] = out / "p2_slowdown_vs_target.png"
     fig.savefig(paths["p2"], dpi=105)
     plt.close(fig)
@@ -590,7 +689,7 @@ def plots(cy: Cycle, P: dict, sc: dict, out: Path) -> dict[str, Path]:
             mk = "; ".join(f"{n.split()[0]} S {fmt(v['S'])}" for n, v in marks.items() if v["S"])
             ax.set_title(f"{s}, −1%, {reading}\n{mk}", fontsize=8)
         fig.colorbar(m, ax=axes[ri].tolist(), label="log10 S")
-    fig.suptitle("P3: S = W*/H over (c, k) at −1% (red star: the reference policy; inference and server blocks in "
+    fig.suptitle(cy.title + "P3: S = W*/H over (c, k) at −1% (red star: the reference policy; inference and server blocks in "
                  "the titles)")
     paths["p3"] = out / "p3_policy_plane.png"
     fig.savefig(paths["p3"], dpi=105)
@@ -624,7 +723,7 @@ def plots(cy: Cycle, P: dict, sc: dict, out: Path) -> dict[str, Path]:
     handles += [Line2D([], [], marker="o", ls="", mfc="white", mec="red", mew=1.6, label="Fit holds for training"),
                 Line2D([], [], marker="o", ls="", mfc="none", mec="red", ms=13, label="sets W*")]
     fig.legend(handles=handles, loc="outside right center", fontsize=8)
-    fig.suptitle(f"P4: p against s per record at −1% and {refpol} (gray: iso-S, S = p s)")
+    fig.suptitle(cy.title + f"P4: p against s per record at −1% and {refpol} (gray: iso-S, S = p s)")
     paths["p4"] = out / "p4_decomposition.png"
     fig.savefig(paths["p4"], dpi=100)
     plt.close(fig)
@@ -653,7 +752,7 @@ def plots(cy: Cycle, P: dict, sc: dict, out: Path) -> dict[str, Path]:
             ax.set_ylabel("least compute to the target (gates)", fontsize=8)
             ax.set_title(f"{s}, against {'Δ' if axis == 'delta' else 'Δ_grad'}", fontsize=9)
             ax.legend(fontsize=7)
-    fig.suptitle("A2: least compute to each target against the update size, every checkpoint of every valid v2.3 "
+    fig.suptitle(cy.title + "A2: least compute to each target against the update size, every checkpoint of every valid v2.3 "
                  "record (dashed: Fit's limit at s = 4096, running for Δ and training for Δ_grad)")
     paths["a2"] = out / "a2_efficiency_floor.png"
     fig.savefig(paths["a2"], dpi=105)
@@ -661,15 +760,17 @@ def plots(cy: Cycle, P: dict, sc: dict, out: Path) -> dict[str, Path]:
     return paths
 
 
-def tables(cy: Cycle, sc: dict, rescore_md: str, meta: dict) -> str:
+def tables(cy: Cycle, sc: dict, rescore_md: str, meta: dict, extra: str = "") -> str:
     rv, short = cy.rv, cy.rv.short
-    L = [f"# Formalism v1 refresh {meta['stamp']}", "",
+    L = [f"# Formalism v1 {'final table' if cy.final else 'refresh'} {meta['stamp']}", "",
          (f"rescore_v1.py at {meta['rescore'][:10]}; {len(cy.records)} valid v2.3 records ({meta['night2']} from "
           f"night 2, launched at or after {NIGHT2}), {len(cy.cps)} checkpoints. H and W* read every checkpoint of every "
           "valid record (the coordinator's 19:50Z rule), so S = W*/H >= 1. rho is the Slowdown theorem's bound (a "
           "target, with the best-known u(1) = Delta and a = d_model x 16 bits, upper bounds) unless Fit holds for the "
-          "training (rho = 1). Readings: evenly spread (`spec`) and frozen tail (`witness`). Gates are Boolean gates."),
-         ""]
+          "training (rho = 1). Readings: evenly spread (`spec`) and frozen tail (`witness`). Gates are Boolean gates. "
+          + cy.set_note), ""]
+    if extra:
+        L += [extra, ""]
     L += ["## At the reference policy (c = 4096w, k = 10 kB)", "",
           ("| start | target | H (gates; record, cp) | evenly spread: S (route, ρ, p, basis) | frozen tail: S (route, "
            "ρ, p, basis) |"), "|---|---|---|---|---|"]
@@ -756,11 +857,14 @@ def main() -> int:
     ap.add_argument("--no-put", action="store_true")
     ap.add_argument("--no-post", action="store_true")
     ap.add_argument("--reput", type=Path, metavar="OUT", help="re-cut a refresh's full panels (OUT/publish) and PUT them")
+    ap.add_argument("--final", type=Path, metavar="FINAL_DIR",
+                    help="the final table: the FINAL entries' reruns in FINAL_DIR (scorer.py final table) on the sealed "
+                         "shard, the other records' search values at the same drop; posts FINAL-TABLE, not DIGEST")
     args = ap.parse_args()
     if args.reput:
         return reput(args.reput)
     stamp = now()
-    out = args.out or Path("/tmp/scorer/v1") / stamp.replace(":", "")
+    out = args.out or Path("/tmp/scorer/v1") / f"{'final-' if args.final else ''}{stamp.replace(':', '')}"
     out.mkdir(parents=True, exist_ok=True)
     led = ledger(Path("/tmp/scorer/v1/ledger"))
     commit = rescore_head()
@@ -778,30 +882,43 @@ def main() -> int:
         x = json.loads(line)
         if x.get("source") == "launch.py":
             launched[x["id"]] = x.get("launched") or ""
-    cy = Cycle(rv, payload, policy_marks(), launched)
+    cy = search = Cycle(rv, payload, policy_marks(), launched)
+    extra, meta = "", {}
+    if args.final:
+        fp, l0, entries = final_payload(payload, args.final)
+        cy = Cycle(rv, fp, search.shapes, launched, l0=l0, final=True)
+        meta = {"final": str(args.final), "entries": len(entries),
+                "entries_matched": sum(e["matched"] > 0 for e in entries.values())}
     sc = cy.scores()
+    if args.final:
+        extra = final_md(cy, search, sc, entries, json.loads((args.final / "table.json").read_text()))
     n2 = sum(cy.night2(i) for i in cy.records)
     meta = {"stamp": stamp, "rescore": commit, "night2": n2, "records": len(cy.records), "checkpoints": len(cy.cps),
-            "ledger_rows": led, "unjoined": unjoined}
+            "ledger_rows": led, "unjoined": unjoined} | meta
+    what = "final table" if args.final else "refresh"
     plots_dir = out / "plots"
     plots_dir.mkdir(exist_ok=True)
     trees = {}
     for name in ("tables", "p1", "p2", "p3", "p4", "a2"):
         trees[name] = out / "publish" / name
         trees[name].mkdir(parents=True, exist_ok=True)
-    (trees["tables"] / "tables.md").write_text(tables(cy, sc, (out / "rescore" / "tables.md").read_text(), meta))
+    (trees["tables"] / "tables.md").write_text(tables(cy, sc, (out / "rescore" / "tables.md").read_text(), meta, extra))
+    if args.final:
+        (trees["tables"] / "final.md").write_text(extra + "\n")
+        (trees["tables"] / "final_entries.json").write_text(json.dumps(entries, indent=1) + "\n")
+        (trees["tables"] / "final_checkpoints.json").write_text(json.dumps(cy.cps, default=float) + "\n")
     (trees["tables"] / "scores.json").write_text(json.dumps(meta | {"rule": "H and W* over every checkpoint (19:50Z)",
                                                                     "scores": sc}, indent=1, default=float) + "\n")
     (trees["tables"] / "records_v1.json").write_text(json.dumps(cy.per_record(), default=float) + "\n")
     (trees["tables"] / "rescore_v1.json").write_text((out / "rescore" / "rescore_v1.json").read_text())
     ids = {}
     if not args.no_publish:
-        ids["tables"] = put_data(trees["tables"], "evidence/v1", {"what": "te formalism v1 refresh: tables, scores, "
+        ids["tables"] = put_data(trees["tables"], "evidence/v1", {"what": f"te formalism v1 {what}: tables, scores, "
                                                                           "per-record grid", **meta})
-    source = (f"{ids.get('tables', 'unpublished')} (scorer v1cycle {stamp}; rescore_v1.py {commit[:10]}; "
+    source = (f"{ids.get('tables', 'unpublished')} (scorer v1cycle {what} {stamp}; rescore_v1.py {commit[:10]}; "
               f"{len(cy.records)} valid v2.3 records, {len(cy.cps)} checkpoints)")
     P = panels(cy, sc, stamp, source)
-    C = console(P)
+    C = console(P, cy.final)
     paths = plots(cy, P, sc, plots_dir)
     PANELS_DIR.mkdir(parents=True, exist_ok=True)
     for key, pid in PLOT_OF.items():
@@ -811,7 +928,7 @@ def main() -> int:
         (PANELS_DIR / f"{pid}.json").write_bytes(body(C[pid]) + b"\n")
         (PANELS_DIR / paths[key].name).write_bytes(paths[key].read_bytes())
         if not args.no_publish:
-            ids[key] = put_data(trees[key], "evidence/v1", {"what": f"te formalism v1 {pid}", **meta})
+            ids[key] = put_data(trees[key], "evidence/v1", {"what": f"te formalism v1 {what} {pid}", **meta})
     puts = {}
     if not args.no_put:
         for pid in PLOT_OF.values():
@@ -826,7 +943,8 @@ def main() -> int:
     print(json.dumps(summary))
     print(line)
     if not args.no_post and not args.no_publish:
-        subprocess.run([sys.executable, str(HERE / "scorer.py"), "post", "DIGEST", line], check=True)
+        subprocess.run([sys.executable, str(HERE / "scorer.py"), "post", "FINAL-TABLE" if args.final else "DIGEST",
+                        line], check=True)
     return 0
 
 
@@ -836,7 +954,8 @@ PLOT_OF = {"p1": "p1-loss-vs-compute", "p2": "p2-slowdown-vs-gain", "p3": "p3-po
 
 def reput(out: Path) -> int:
     """The console's cut of a finished refresh's full panels, written to PANELS_DIR and PUT, with nothing re-scored."""
-    C = console({pid: json.loads((out / "publish" / key / f"{pid}.json").read_text()) for key, pid in PLOT_OF.items()})
+    P = {pid: json.loads((out / "publish" / key / f"{pid}.json").read_text()) for key, pid in PLOT_OF.items()}
+    C = console(P, any(p["title"].startswith("FINAL") for p in P.values()))
     puts = {}
     for pid, q in C.items():
         (PANELS_DIR / f"{pid}.json").write_bytes(body(q) + b"\n")
@@ -870,7 +989,9 @@ def digest(cy: Cycle, sc: dict, meta: dict, ids: dict, puts: dict) -> str:
                      + ", ".join(floor))
     arts = ", ".join(f"{k} {v[:16]}" for k, v in ids.items())
     ok = sum(str(v).startswith("2") for v in puts.values())
-    return (f"v1 refresh (rescore_v1.py {meta['rescore'][:10]}; {meta['records']} valid v2.3 records, {meta['night2']} "
+    head = (f"v1 final table (sealed shard: {meta['entries']} FINAL entries' reruns, seeds averaged, the other records' "
+            "search values at the same drop; " if cy.final else "v1 refresh (")
+    return (f"{head}rescore_v1.py {meta['rescore'][:10]}; {meta['records']} valid v2.3 records, {meta['night2']} "
             f"from night 2, {meta['checkpoints']} checkpoints; H and W* over every checkpoint, so S >= 1; rho is the "
             "Slowdown theorem's target unless Fit holds for training) at −1% and the reference (4096w, 10 kB): "
             + "; ".join(parts) + f". art: {arts}. Console panels PUT {ok}/{len(puts)} (p1-p4, a2).")
