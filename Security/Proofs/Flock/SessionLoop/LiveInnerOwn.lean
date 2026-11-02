@@ -1,6 +1,7 @@
 import Proofs.Flock.SessionLoop.LiveInnerAt
 import Proofs.Flock.SessionLoop.LiveSchedOwn
 import Proofs.Flock.SessionLoop.FinalC
+import Proofs.Flock.Claims.ZK.FinishLive
 
 /-!
 # `LiveInner` at every worker taking some `vs`'s values, on its own histories
@@ -57,6 +58,77 @@ def asksPad (C : Array (Array F128)) : Asks (StateT ℕ V) where
     if cs.size != n then throw s!"finish: round {k} squeezes {n} coins where the rep's coins have {cs.size}"
     set (k + 1)
     return fun i => cs[i]!
+
+/-- **A run answered by `C`'s coins as one answered past them by ones**: a run from round `k` that returns `a` at round
+`k'` takes no fewer rounds, and where `k'` is within `C`, the run answered past `C` by ones (`asksPad`) returns the
+same. -/
+def padSim (C : Array (Array F128)) : _root_.Flock.With.Sim (StateT ℕ V) (StateT ℕ V) where
+  R x y := ∀ k a k', x.run k = .ok (a, k') → k ≤ k' ∧ (k' ≤ C.size → y.run k = .ok (a, k'))
+  pure _ _ _ _ h := by
+    cases h
+    exact ⟨Nat.le_refl _, fun _ => rfl⟩
+  bind {α β x y f g} hxy hfg k b k'' h := by
+    rw [StateT.run_bind] at h
+    rcases hx : x.run k with _ | ⟨a, k1⟩
+    · rw [hx] at h; cases h
+    · rw [hx] at h
+      obtain ⟨hk1, hy⟩ := hxy k a k1 hx
+      obtain ⟨hk2, hg⟩ := hfg a k1 b k'' h
+      refine ⟨hk1.trans hk2, fun hle => ?_⟩
+      rw [StateT.run_bind, hy (hk2.trans hle)]
+      exact hg hle
+  throw _ _ _ _ h := by cases h
+  lift v _ _ _ h := by
+    cases v with
+    | error e => cases h
+    | ok a0 =>
+      cases h
+      exact ⟨Nat.le_refl _, fun _ => rfl⟩
+
+/-- `asksOf C` and `asksPad C` answer each round below `C.size` alike. -/
+theorem asksPad_rel (C : Array (Array F128)) :
+    _root_.Flock.Firewall.Finish.AsksRel (padSim C) (_root_.Flock.Firewall.Finish.asksOf C).toC
+      (asksPad C).toC where
+  link _ _ _ _ _ h := by cases h
+  round c k a k' h := by
+    change ((_root_.Flock.Firewall.Finish.asksOf C).round c).run k = _ at h
+    dsimp only [_root_.Flock.Firewall.Finish.asksOf] at h
+    rw [StateT.run_bind, StateT.run_get, pure_bind] at h
+    rcases hk : C[k]? with _ | cs
+    · rw [hk] at h; cases h
+    · rw [hk] at h
+      dsimp only at h
+      split at h
+      · rw [StateT.run_bind] at h
+        cases h
+      · rename_i hn
+        rw [StateT.run_bind, StateT.run_set, pure_bind, StateT.run_pure] at h
+        cases h
+        refine ⟨Nat.le_succ k, fun _ => ?_⟩
+        have hg : C.getD k (Array.replicate (_root_.Flock.u64OfLE c (c.size - 8)).toNat 1) = cs := by
+          rw [Array.getD_eq_getD_getElem?, hk]
+          rfl
+        have hn' := Bool.eq_false_iff.mpr hn
+        show ((asksPad C).round c).run k = _
+        simp only [asksPad, StateT.run_bind, StateT.run_get, StateT.run_set, StateT.run_pure, pure_bind, hg, hn',
+          Bool.false_eq_true, ↓reduceIte]
+
+/-- **`repCons` answered past its coins by ones** returns as `repCons` answered by them, where that returns within
+them. -/
+theorem repCons_asksPad (C : Array (Array F128)) (st : _root_.Flock.Setup)
+    (hm : st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (sch : _root_.Flock.Schedule) (tPad rep : ℕ)
+    (dom : ByteArray) (g : Array F128) (cm0 : _) (extras : Array _root_.Flock.Claim) (pads : _) (ic : _)
+    (vals : Array F128) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (tr : _root_.Flock.Transcript)
+    {r : _} {tr' : _root_.Flock.Transcript} {k' : ℕ}
+    (h : ((_root_.Flock.Firewall.Finish.repCons (_root_.Flock.Firewall.Finish.asksOf C)
+      (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic vals
+      extra lanePad salt).run tr).run 0 = .ok ((r, tr'), k'))
+    (hk : k' ≤ C.size) :
+    ((_root_.Flock.Firewall.Finish.repCons (asksPad C)
+      (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic vals
+      extra lanePad salt).run tr).run 0 = .ok ((r, tr'), k') :=
+  ((_root_.Flock.Firewall.Finish.repCons_rel (padSim C) (asksPad_rel C) st hm sch tPad rep dom g cm0 extras pads ic
+    vals extra lanePad salt tr 0 (r, tr') k' h).2 hk)
 
 /-- **The finish's live inner proof of a rep** on the table `t`, as rep `rep` of a stream whose transcript starts at
 `dom`, at the request `q` whose first `n` rounds of coins are the rep's scheduled rounds' (`Finish.innerLive`, its rounds
