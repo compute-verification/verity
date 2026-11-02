@@ -437,6 +437,7 @@ def step (s : Schedule) : Req → Fw Unit
     if st.finished then throw "session finished"
     if !st.committed || !st.linked then throw "Finish before the link exchange"
     pinned "Finish's rounds" (jnat st.rounds) (jnat s.rounds.size)
+    if st.rounds ≠ s.rounds.size then throw "FIREWALL-REFUSED: Finish's rounds: not the pinned schedule's"
     let got := Json.mkObj (st.streams.map fun (n, _, k) => (n, jnat k))
     let want := Json.mkObj (s.streams.map fun (n, _, _, k) => (n, jnat k))
     pinned "Finish's streams" got want
