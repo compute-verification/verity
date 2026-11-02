@@ -21,9 +21,9 @@ open Flock
 
 /-- **The verifier's list**, as `FlockC3.VStarList.statements_ok`, at V\*'s shape with the inner `m`. -/
 theorem statements_vsh {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
-    ∃ vsh A C K n, VStar.statementsOf vsh i.holo = .ok A ∧ RecVStar.candidate3Statements i = .ok C ∧
-      VStar.levelCapStatements vsh = .ok K ∧ VStar.capStatement vsh = .ok (.cap 0 n) ∧
-      ss = A ++ C ++ (K ++ #[.cap 0 n]) ∧ vsh.m = i.m := by
+    ∃ vsh A C K L n, VStar.statementsOf vsh i.holo = .ok A ∧ RecVStar.candidate3Statements i = .ok C ∧
+      VStar.levelCapStatements vsh = .ok K ∧ RecVStar.linkStatements i = .ok L ∧
+      VStar.capStatement vsh = .ok (.cap 0 n) ∧ ss = A ++ C ++ (K ++ L ++ #[.cap 0 n]) ∧ vsh.m = i.m := by
   unfold RecVStar.statements at h
   dsimp only at h
   split at h
@@ -41,13 +41,14 @@ theorem statements_vsh {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSta
   obtain ⟨t, ht, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨A, hA, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨C, hC, h⟩ := FlockC3.VStarList.eok_bind h
+  obtain ⟨L, hL, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨K0, hK0, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨n, rfl⟩ := FlockC3.VStarList.capStatement_ok hK0
   obtain ⟨u, hu, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u', -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u'', -, h⟩ := FlockC3.VStarList.eok_bind h
   cases h
-  exact ⟨_, A, C, K, n, hA, hC, hK, hK0, Array.append_assoc, rfl⟩
+  exact ⟨_, A, C, K, L, n, hA, hC, hK, hL, hK0, by simp only [Array.append_assoc], rfl⟩
 
 /-- V\*'s schedule at a shape is `fast100`'s at its `m`. -/
 theorem sched_fast100 {vsh : VStar.Algebra.Shape} {s : Schedule} (h : vsh.sched = .ok s) :
@@ -174,12 +175,13 @@ an R level (`recOpenStacked l … q`, candidate 3's, `q` units), at the schedule
 theorem accFits : AccFits := by
   intro r ss s sv hss hsv u h
   have hmem : sv ∈ ss := Array.mem_of_getElem? hsv
-  obtain ⟨vsh, A, C, K, N, hA, hC, hK, -, hse, hvm⟩ := statements_vsh hss
+  obtain ⟨vsh, A, C, K, L, N, hA, hC, hK, hL, -, hse, hvm⟩ := statements_vsh hss
   subst hse
   obtain ⟨sc, sp, ps, hsc, -, -, hAe⟩ := FlockVBridge.Family.statementsOf_eq hA
   have hf : fast100 r.shape.m = some sc := by rw [← hvm]; exact sched_fast100 hsc
-  have hcap : ∀ {st : VStar.Stmt}, st ∈ K ++ #[.cap 0 N] → ∃ l N', st = .cap l N' :=
-    fun hs => FlockC3.VStarList.caps_cap hK N _ hs
+  have hcap : ∀ {st : VStar.Stmt}, st ∈ K ++ L ++ #[.cap 0 N] →
+      (∃ l N', st = .cap l N') ∨ ∃ UB PB N', st = .link UB PB N' :=
+    fun hs => FlockC3.VStarList.tail_cases hK hL N _ hs
   cases sv with
   | inner j nm pt =>
     unfold accRead at h
@@ -192,8 +194,7 @@ theorem accFits : AccFits := by
       · rcases Array.mem_append.1 h' with h' | h'
         · exact h'
         · exact absurd h' (recOpen_not_c3 hC)
-      · obtain ⟨_, _, he⟩ := hcap h'
-        cases he
+      · rcases hcap h' with ⟨_, _, he⟩ | ⟨_, _, _, he⟩ <;> cases he
     rw [hAe] at hA'
     rcases Array.mem_append.1 hA' with h' | h'
     · obtain ⟨l', -, he⟩ := List.mem_map.1 (List.mem_toArray.1 h')
@@ -212,8 +213,7 @@ theorem accFits : AccFits := by
           · obtain ⟨_, -, he⟩ := List.mem_map.1 (List.mem_toArray.1 h')
             cases he
         · exact h'
-      · obtain ⟨_, _, he⟩ := hcap h'
-        cases he
+      · rcases hcap h' with ⟨_, _, he⟩ | ⟨_, _, _, he⟩ <;> cases he
     obtain ⟨R, sr, hR, hsr, rfl⟩ := stacked_mem hC hC'
     exact lt_stacked hf hR hsr h
   | _ =>

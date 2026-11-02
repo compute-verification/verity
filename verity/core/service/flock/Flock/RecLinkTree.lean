@@ -13,8 +13,8 @@ output row `o` of unit `u` leaf `u · 2^PB + o` of the output rows' tree. A leaf
 `rowsRoot` is one tree's root, `rowsPath` an opening of it. Each is linear in the rows it is given (one hash a row a level,
 at most `D ≤ 32` levels): the public commitments the verifier already reads, not the circuit they commit.
 
-`linksArg` reads `--rec-links ROOT:N`, the table's registered root and row count, as `rec-compose` takes them. Every
-statement carrying them is still refused (`RecLinks.refuseLinks`): no guarantee yet covers a table.
+`linksArg` reads `--rec-links ROOT:N`, the table's registered root and row count, as `verify`, `statement` and
+`rec-compose` take them; a statement carrying them is held to the table by V*'s link part (`RecLinkPart`).
 -/
 
 namespace Flock.RecLinkTree
@@ -112,8 +112,14 @@ def rowsPath (UB PB : Nat) (rows : List ((Nat × Nat) × ByteArray)) (u r : Nat)
   unless u < 2 ^ UB && r < 2 ^ PB do throw s!"row {r} of unit {u} does not fit UB {UB}, PB {PB}"
   path (UB + PB) leaves (index u r PB)
 
-/-- `--rec-links ROOT:N`: the link table's registered root (64 bytes, lowercase hex) and its row count, `grid(L)` for some
-`L ≥ 1` (a count `grid` leaves fixed: at most `GRID_BITS` significant bits); none without the flag. -/
+/-- The link table's root is 64 bytes and its row count `grid(L)` for some `L ≥ 1` (a count `grid` leaves fixed: at most
+`GRID_BITS` significant bits). -/
+def checkLinks (t : ByteArray) (n : Nat) : Except String Unit := do
+  unless t.size == 64 do throw s!"--rec-links: the table's root is 64 bytes, not {t.size}"
+  unless 1 ≤ n && RecLinks.grid n == n do throw s!"--rec-links: {n} rows is no table's grid(L)"
+
+/-- `--rec-links ROOT:N`: the link table's registered root (lowercase hex) and its row count, as `checkLinks` takes them;
+none without the flag. -/
 def linksArg (args : List String) : Except String (Option (ByteArray × Nat)) := do
   match args.dropWhile (· != "--rec-links") with
   | [] => pure none
@@ -122,9 +128,8 @@ def linksArg (args : List String) : Except String (Option (ByteArray × Nat)) :=
     if rest.contains "--rec-links" then throw "--rec-links given twice"
     let [r, n] := v.splitOn ":" | throw s!"--rec-links takes ROOT:N, not {v}"
     let t ← unhex r
-    unless t.size == 64 do throw s!"--rec-links: the table's root is 64 bytes, not {t.size}"
     let some n := n.toNat? | throw s!"--rec-links: the row count is a natural number, not {n}"
-    unless 1 ≤ n && RecLinks.grid n == n do throw s!"--rec-links: {n} rows is no table's grid(L)"
+    checkLinks t n
     pure (some (t, n))
 
 end Flock.RecLinkTree
