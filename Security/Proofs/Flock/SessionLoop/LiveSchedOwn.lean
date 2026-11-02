@@ -15,10 +15,13 @@ equation is asked there only, as `FinalRoundEq` asks its own:
   worker `Loop.valsWk honestVals` among them (`Loop.takesValsOwn_honestVals`).
 * **`LeanRelease.LiveSchedOwn`**: `LiveSched` with `OwnHist` among its hypotheses, in `FinalRoundEq`'s place; `LiveSched`
   gives it (`LeanRelease.liveSchedOwn_of_liveSched`).
+* **`LeanRelease.liveSchedAt_ofLoopLink`**: `LiveSched`'s equation after one history (`LeanRelease.LiveSchedAt`;
+  `LiveSched` is it after every history, `LeanRelease.liveSched_iff`), from `TakesValsAt` at that history alone, at
+  `SessionLoopZKDeployed`'s premises on the session, the statement and the loop's inputs, where the rows hold at `vs`
+  (`Loop.RowsOK`).
 * **`LeanRelease.liveSchedOwn_ofLoopLink`**: for every worker `wk` and every `vs` it takes at its own histories
-  (`TakesValsOwn`), where the rows hold at `vs` (`Loop.RowsOK`), at `SessionLoopZKDeployed`'s premises on the session,
-  the statement and the loop's inputs, `LiveSchedOwn` holds. `LeanRelease.liveSchedOwn_honestVals`: its premises on the
-  worker hold at the honest worker and values.
+  (`TakesValsOwn`), `LiveSchedOwn` holds: `liveSchedAt_ofLoopLink` at each. `LeanRelease.liveSchedOwn_honestVals`: its
+  premises on the worker hold at the honest worker and values.
 -/
 
 namespace Claims.ZKServer
@@ -145,11 +148,76 @@ theorem liveSchedOwn_of_liveSched {vs : (CoinLayer.session Loop.loopNr Masked.da
     LiveSchedOwn vs L₀ src real wk x w :=
   fun ν t κ m₀ ρ₀ ops v r hpos hlt hl hok href _ hv hsc => h ν t κ m₀ ρ₀ ops v r hpos hlt hl hok href hv hsc
 
+/-- **`LiveSched`'s equation after one history** `(m₀, ρ₀) :: ops` at the tape `(ν, t)` and the check coins `κ`. -/
+def LiveSchedAt (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
+    (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    (wk : (ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
+    (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce) (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape)
+    (κ : (ofLoopLink L₀ src real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) : Prop :=
+  ∀ (v : Msg) (r : ByteArray),
+    0 < ops.length → ops.length < refK x →
+    (ofLoopLink L₀ src real).toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true →
+    ((allOk ((CoinLayer.session Loop.loopNr Masked.dataE).refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval
+      CoinOpen.shaH).1 = true →
+    (ofLoopLink L₀ src real).refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false →
+    wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false) →
+    Loop.schedOf (real x w (ν, t)) x (ops.map fun p => CoinLayer.rd p.2) = some r →
+    (ofLoopLink L₀ src real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
+      dropDom ((CoinLayer.session Loop.loopNr Masked.dataE).swMsgAt x
+        ((CoinLayer.session Loop.loopNr Masked.dataE).wt x w) (vs x w ν) t
+        (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2))
+
+/-- `LiveSched` is `LiveSchedAt` after every history. -/
+theorem liveSched_iff (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
+    (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    (wk : (ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit) :
+    LiveSched vs L₀ src real wk x w ↔ ∀ ν t κ m₀ ρ₀ ops, LiveSchedAt vs L₀ src real wk x w ν t κ m₀ ρ₀ ops :=
+  Iff.rfl
+
+/-- **`LiveSched` after one history, from the worker's free words there**: at `SessionLoopZKDeployed`'s release and
+premises (as in `liveSchedOwn_ofLoopLink`), where the rows hold at `vs`, after any history at which the worker's free
+words are `vs`'s (`Loop.TakesValsAt`), `LiveSched`'s equation holds there. The release at round `n` reads the worker's
+round `n`; the frame's state before it reads the history only through `live` and the coins. -/
+theorem liveSchedAt_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
+    (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    (hreal : real = Loop.realOf src) (wk : (ofLoopLink L₀ src real).toSrv.Worker) {x : Msg} {w : Flock.Wit}
+    (hTab : (CoinLayer.session Loop.loopNr Masked.dataE).Tables)
+    (hTape : (CoinLayer.session Loop.loopNr Masked.dataE).TapeOK)
+    (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
+    (hSc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) (hS : Loop.Src L₀ src x w)
+    (hRows : Loop.RowsOK vs x w)
+    (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce) (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape)
+    (κ : (ofLoopLink L₀ src real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg))
+    (hTV : Loop.TakesValsAt vs (ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops) :
+    LiveSchedAt vs L₀ src real wk x w ν t κ m₀ ρ₀ ops := by
+  sorry
+
 /-- **`LiveSched` for any worker, at its own histories**: at `SessionLoopZKDeployed`'s release (`ofLoopLink` at the
 loop's own tables, `real = Loop.realOf src`), at its premises on the session (`Tables`, `TapeOK`), the statement (in the
 masked verifier's scope, under the relation, served by the loop) and the loop's inputs (`Loop.Src`), every worker `wk`
 whose free words are `vs`'s values at its own histories (`Loop.TakesValsOwn`), where the rows hold at `vs`
-(`Loop.RowsOK`), meets `LiveSchedOwn` at `vs`. -/
+(`Loop.RowsOK`), meets `LiveSchedOwn` at `vs`: `liveSchedAt_ofLoopLink` at each own history. -/
 theorem liveSchedOwn_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
@@ -165,8 +233,10 @@ theorem liveSchedOwn_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.data
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
     (hSc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) (hS : Loop.Src L₀ src x w)
     (hRows : Loop.RowsOK vs x w) (hTV : Loop.TakesValsOwn vs (ofLoopLink L₀ src real) wk x w) :
-    LiveSchedOwn vs L₀ src real wk x w := by
-  sorry
+    LiveSchedOwn vs L₀ src real wk x w :=
+  fun ν t κ m₀ ρ₀ ops v r hpos hlt hl hok href hown hv hsc =>
+    liveSchedAt_ofLoopLink vs L₀ src real hreal wk hTab hTape hR hSv hSc hS hRows ν t κ m₀ ρ₀ ops
+      (hTV ν t κ m₀ ρ₀ ops hown) v r hpos hlt hl hok href hv hsc
 
 /-- **At the honest worker and values**: `liveSchedOwn_ofLoopLink` at `valsWk honestVals`, whose premises on the worker
 hold there (`Loop.takesValsOwn_honestVals`, `Loop.rowsOK_honestVals`). -/
