@@ -20,9 +20,9 @@ only (`LeanRelease.LiveRoundEqOwn`), as `FinalRoundEq` asks its own:
   causal (`SwCausal`), whose `final_c` its round-1c values fix (`Loop.FinalCFixed`) and whose rows hold
   (`Loop.RowsOK`). It takes neither `Loop.TakesFinalC` nor `Loop.TakesTau`. `liveRoundEqOwn_honestVals`: its premises on
   the worker and the values hold at the honest worker `Loop.valsWk honestVals`.
-* **`Loop.finishIs_own`**: `FinishIs` at `SessionLoopZKDeployed`'s premises from `LiveRoundEqOwn` in place of
-  `LiveRoundEq`: the `Finish` reads each frame round on the history it ends, a prefix of the own history it is asked on,
-  which is own (`ZkServer.OwnHist.take`).
+
+`Loop.finishIs` takes `LiveRoundEqOwn`: the `Finish` reads each frame round on the history it ends, a prefix of the own
+history `FinishIs` is asked on, which is own (`ZkServer.OwnHist.take`, `msg_of_liveRoundEq`).
 -/
 
 namespace Claims.ZKServer
@@ -92,23 +92,5 @@ theorem liveRoundEqOwn_honestVals (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (Loop.finalCFixed_honestVals x w) (Loop.rowsOK_honestVals hR) _ (Loop.takes_honestVals_ofLoopLink _ src real).1
 
 end LeanRelease
-
-namespace Loop
-
-/-- **`FinishIs` at `SessionLoopZKDeployed`'s premises from the live rounds at the worker's own histories**: `finishIs`
-with `LiveRoundEqOwn` in place of `LiveRoundEq`. The `Finish` reads each frame round on the history it ends, a prefix
-of the own history it is asked on, which is own (`ZkServer.OwnHist.take`). -/
-theorem finishIs_own (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
-    (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
-    (wk : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Worker) (x : Msg) (w : Flock.Wit)
-    (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
-    (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
-    (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w) (hSrc : Loop.Src L₀ src x w)
-    (hE : LeanRelease.LiveRoundEqOwn finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs) :
-    LeanRelease.FinishIs finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w := by
-  sorry
-
-end Loop
 
 end Claims.ZKServer
