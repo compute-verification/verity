@@ -68,11 +68,14 @@ from fractions import Fraction
 from math import prod
 from typing import Any
 
+import numpy as np
 import torch
 
+from te_core.capture.circuit import ATTR, CARRIED, COMPUTED, OTHER_INPUT, RANDOM, TOKEN_INPUT, Net, StepCircuit, measure
 from te_core.capture.trace import BACKWARD, PHASE, CaptureRefused, Trace
 from te_core.flops import (ELEMENTWISE_NAMES, FUSED_OPTIMIZER_MACS, GATHERS, GEMM_LIKE, LINALG_NAMES, NOT_GEMM, SCALED_NAMES,
                            TOKEN_INDEX, _is_view, gather_macs)
+from te_core.gates import kind_of, per_mac
 
 __all__ = ["CLASSES", "Matmul", "StepGraph"]
 
@@ -99,6 +102,11 @@ _GEMM_LIKE, _NOT_GEMM = GEMM_LIKE, NOT_GEMM
 _ELEMENTWISE, _SCALED, _FUSED, _LINALG = ELEMENTWISE_NAMES, SCALED_NAMES, FUSED_OPTIMIZER_MACS, LINALG_NAMES
 _TOKEN_INDEX = {p.__name__ for p in TOKEN_INDEX}
 _GATHERS = {p.__name__ for p in GATHERS}
+#: ops whose values are random: a circuit's are a PRNG's of a seed it reads
+_RANDOM = {"randn", "rand", "randint", "randperm", "normal", "normal_", "uniform_", "bernoulli", "bernoulli_",
+           "native_dropout", "_fused_dropout", "multinomial", "random_", "exponential_", "geometric_", "log_normal_",
+           "cauchy_", "rand_like", "randn_like", "randint_like", "poisson", "_standard_gamma", "rrelu_with_noise"}
+_PHASE_CODE = {"forward": 0, "backward": 1}
 
 
 def _pk(t) -> str:
@@ -575,6 +583,9 @@ class StepGraph:
     #: (value, bits) on one narrowest cut, widest first; the dependent slots whose new values are the cut's sinks
     cut: list = field(default_factory=list)
     sinks: list = field(default_factory=list)
+    #: a recorded program's measured step as a circuit (`te_core.capture.circuit`), and the formalism's quantities on it
+    circuit: StepCircuit | None = field(default=None, repr=False)
+    formalism: dict | None = None
     _inputs: Any = field(default=None, repr=False)
 
     # -- building ---------------------------------------------------------------------------------------------------
@@ -711,7 +722,14 @@ class StepGraph:
                   and isinstance(a.meta.get("val"), torch.Tensor) and any(dep[x] for x in flow.reads.get((n, a), ()))]
             return min(ws, default=0)
 
-        # GEMMs and their dims in every capture
+        # GEMMs and their dims in every capture; each counted op's gates at its Definition's price (te_core.gates)
+        node_gates: dict = {}
+
+        def priced(n, macs, dtype, kind=None, width=16) -> None:
+            if macs:
+                k = kind or kind_of(phases.get(n, "forward"), "", _pk(n.target), dtype)[0]
+                node_gates[n] = node_gates.get(n, 0.0) + macs * per_mac(k, width)
+
         raw = []
         for n in nodes:
             gs = _gemms(n) if in_region(n) else []
@@ -719,6 +737,7 @@ class StepGraph:
                 continue
             vgs = [_gemms(vs[pos[n]]) for vs in vnodes]
             for j, g in enumerate(gs):
+                priced(n, _macs(g.dims), _dtype_name(g.operands[0]))
                 tdims = {}
                 for d, size in g.dims.items():
                     axes = tuple(axis_names[a] for a, vg in enumerate(vgs) if vg[j].dims[d] != size)
@@ -780,11 +799,14 @@ class StepGraph:
             k, kind = _other_macs(n)
             work = 0
             if "updated" in source and "activation" in mixed:
-                extra += gather_macs(_pk(n.target), n.args[0].meta["val"].shape, n.args[1] if len(n.args) > 1 else None,
-                                     n.meta["val"].numel())
+                gm_ = gather_macs(_pk(n.target), n.args[0].meta["val"].shape, n.args[1] if len(n.args) > 1 else None,
+                                  n.meta["val"].numel())
+                extra += gm_
+                priced(n, gm_, None, "gather", _dtype_bits(n.args[0].meta["val"].dtype))
             elif "activation" in mixed and "updated" in mixed and not kind:
                 work = _work(n)
                 extra += work
+                priced(n, work, _dtype_name(n))
             macs = k if kind else work
             out = n.meta.get("val")
             g = _G("elementwise", {"batch": 1, "m": macs, "k": 1, "n": 1}, tuple(ops),
@@ -844,6 +866,7 @@ class StepGraph:
             k, kind = _other_macs(n)
             if kind:
                 other[kind] += k
+                priced(n, k, _dtype_name(n))
 
         # the cut (module docstring)
         fr = [False] * len(flow.preds)
@@ -912,10 +935,13 @@ class StepGraph:
             sink_names = sorted(names_of[k] for k in dependent if k in writes and k in entry and fr[entry[k]])
         else:
             dep_names, sink_names = sorted({label(v) for v in carried}), sorted({label(v) for v in sinks})
+        circuit = (_step_circuit(flow, nodes, region, dep, carried, node_gates, step_tokens.get(region, tokens))
+                   if region is not None else None)
         return cls(name, region_tokens, dict(zip(axis_names, base.axis_sizes)), matmuls, plist, crossing, upd, trained, gm,
                    digest=_digest(gm), elementwise_macs=other["elementwise"], approx_macs=other["approx"],
                    updated_elementwise=updated_elementwise, dependent=dep_names, cut_bits=cut_bits,
-                   beta=beta, cut=cut, sinks=sink_names, _inputs=(base, varied, axis_names))
+                   beta=beta, cut=cut, sinks=sink_names, circuit=circuit,
+                   formalism=measure(circuit) if circuit is not None else None, _inputs=(base, varied, axis_names))
 
     def with_updated(self, updated) -> "StepGraph":
         """The same graph classified with another `updated` set (no recapture)."""
@@ -949,8 +975,9 @@ class StepGraph:
             e = log.setdefault((m.phase, m.role, m.op, json.dumps(m.dims, sort_keys=True)), [0, 0])
             e[0] += 1
             e[1] += m.macs
-        return {"updated": sorted(rows, key=lambda r: (r[1], r[0])), "log": sorted([list(k) + v for k, v in log.items()]),
-                "cut_bits": self.cut_bits, "beta": self.beta}
+        out = {"updated": sorted(rows, key=lambda r: (r[1], r[0])), "log": sorted([list(k) + v for k, v in log.items()]),
+               "cut_bits": self.cut_bits, "beta": self.beta}
+        return out | ({"formalism": self.formalism} if self.formalism is not None else {})
 
     def role_macs(self, role: str) -> int:
         return sum(m.macs for m in self.matmuls if m.role == role)
@@ -1076,7 +1103,7 @@ def _min_cut(flow: _Flow, cuttable: list[bool], sources: list[int], sinks: dict[
     finite = [sinks[v] if v in sinks else flow.bits[v] for v in keep]
     inf = sum(finite) + 1
     token = {v for v, k in flow.source.items() if k[0] == "input"}
-    net = _Net(2 * len(keep) + 2)
+    net = Net(2 * len(keep) + 2)
     S, T = 2 * len(keep), 2 * len(keep) + 1
     for i, v in enumerate(keep):
         net.add(2 * i, 2 * i + 1, finite[i] if v in sinks or (cuttable[v] and v not in token) else inf)
@@ -1093,71 +1120,103 @@ def _min_cut(flow: _Flow, cuttable: list[bool], sources: list[int], sinks: dict[
     return min(total, inf), [v for i, v in enumerate(keep) if seen[2 * i] and not seen[2 * i + 1]]
 
 
-class _Net:
-    """A flow network for Dinic's algorithm: edge e and its reverse e ^ 1."""
+def _dtype_name(x) -> str | None:
+    v = x.meta.get("val") if isinstance(x, torch.fx.Node) else None
+    if isinstance(v, (list, tuple)):
+        v = next((y for y in v if isinstance(y, torch.Tensor)), None)
+    return str(v.dtype).removeprefix("torch.") if isinstance(v, torch.Tensor) else None
 
-    def __init__(self, n: int) -> None:
-        self.n, self.head = n, [-1] * n
-        self.to: list[int] = []
-        self.cap: list[int] = []
-        self.nxt: list[int] = []
 
-    def add(self, u: int, v: int, c: int) -> None:
-        self.to += [v, u]
-        self.cap += [c, 0]
-        self.nxt += [self.head[u], self.head[v]]
-        self.head[u], self.head[v] = len(self.to) - 2, len(self.to) - 1
+def _storage_positions(v: torch.Tensor) -> np.ndarray:
+    """The storage positions a (fake) tensor's elements sit at, as te_core.flops's `read_positions`."""
+    pos = np.array(int(v.storage_offset()), dtype=np.int64)
+    for n, s in zip(v.shape, v.stride()):
+        pos = pos[..., None] + np.arange(int(n), dtype=np.int64) * int(s)
+    return np.unique(pos)
 
-    def _levels(self, s: int) -> list[int]:
-        level = [-1] * self.n
-        level[s] = 0
-        q = [s]
-        for u in q:
-            e = self.head[u]
-            while e != -1:
-                w = self.to[e]
-                if self.cap[e] > 0 and level[w] < 0:
-                    level[w] = level[u] + 1
-                    q.append(w)
-                e = self.nxt[e]
-        return level
 
-    def max_flow(self, s: int, t: int) -> tuple[int, list[bool]]:
-        """The flow's value and the nodes the residual network reaches from `s` (the min cut's source side)."""
-        total = 0
-        while True:
-            level = self._levels(s)
-            if level[t] < 0:
-                return total, [x >= 0 for x in level]
-            it = list(self.head)
-            while True:
-                stack, path = [s], []
-                pushed = 0
-                while stack:
-                    u = stack[-1]
-                    if u == t:
-                        pushed = min(self.cap[e] for e in path)
-                        for e in path:
-                            self.cap[e] -= pushed
-                            self.cap[e ^ 1] += pushed
-                        break
-                    e = it[u]
-                    while e != -1 and not (self.cap[e] > 0 and level[self.to[e]] == level[u] + 1):
-                        e = self.nxt[e]
-                    it[u] = e
-                    if e == -1:
-                        level[u] = -1
-                        stack.pop()
-                        if path:
-                            path.pop()
-                            it[stack[-1]] = self.nxt[it[stack[-1]]]
-                        continue
-                    stack.append(self.to[e])
-                    path.append(e)
-                if not pushed:
-                    break
-                total += pushed
-
+def _step_circuit(flow: _Flow, nodes: list, region: int, dep: list[bool], carried: list[int], node_gates: dict,
+                  step_tokens: int) -> StepCircuit:
+    """The measured step `region` as a `StepCircuit` (te_core.capture.circuit): its values and the carried ones it reads,
+    each op's gates split over its values by elements, and every read of token data through a storage a step-R token
+    input owns or by a token-index op."""
+    ph = [n for n in nodes if n.op == "placeholder" and int(n.meta.get("te_step", -1)) == region]
+    token_names = {n.name for n in ph if n.name.startswith("tokens_")}
+    token_in = {v for v, k in flow.source.items() if k[0] == "input" and k[1] in token_names}
+    tokdep = _closure(flow, token_in.__contains__)
+    carried_set = set(carried)
+    keep = sorted(carried_set | {v for v in range(len(flow.preds)) if flow.step[v] == region})
+    ids = {v: i for i, v in enumerate(keep)}
+    op_id = {n: i for i, n in enumerate(nodes)}
+    read_next = np.zeros(len(keep), bool)
+    for v, ps in enumerate(flow.preds):
+        if flow.step[v] == region + 1:
+            for p in ps:
+                if p in ids:
+                    read_next[ids[p]] = True
+    made: dict = {}
+    for v in keep:
+        if v not in carried_set:
+            made.setdefault(flow.node[v], []).append(v)
+    gates = np.zeros(len(keep))
+    kind = np.full(len(keep), COMPUTED, dtype=np.int8)
+    for n, vs in made.items():
+        elems = [max(flow.bits[v] // max(flow.width[v], 1), 1) for v in vs]
+        for v, e in zip(vs, elems):
+            gates[ids[v]] = node_gates.get(n, 0.0) * e / sum(elems)
+        if n is not None and n.op == "call_function" and _pk(n.target) in _RANDOM:
+            kind[[ids[v] for v in vs]] = RANDOM
+    for v in keep:
+        src = flow.source.get(v)
+        if v in carried_set:
+            kind[ids[v]] = CARRIED
+        elif src is not None:
+            kind[ids[v]] = ATTR if src[0] == "attr" else TOKEN_INPUT if v in token_in else OTHER_INPUT
+    indptr, indices = [0], []
+    outside = np.zeros(len(keep), bool)
+    for v in keep:
+        indices.extend(ids[p] for p in flow.preds[v] if p in ids)
+        indptr.append(len(indices))
+        outside[ids[v]] = any(p not in ids for p in flow.preds[v])
+    keys: dict[str, int] = {}
+    token_key: list[bool] = []
+    tr_op, tr_key, tr_index, tr_pos, tr_indptr = [], [], [], [], [0]
+    for n in nodes:
+        if (n.op != "call_function" or int(n.meta.get("te_step", 0)) != region
+                or not isinstance(n.target, torch._ops.OpOverload) or _is_view(n.target)):
+            continue
+        name = _pk(n.target)
+        for a in _arg_nodes(n):
+            val, key = a.meta.get("val"), flow.base.get(a)
+            if not isinstance(val, torch.Tensor) or not isinstance(key, tuple):
+                continue
+            owned = key[0] == "input" and key[1] in token_names
+            index = name in _TOKEN_INDEX and not val.dtype.is_floating_point and val.dtype != torch.bool \
+                and any(tokdep[x] for x in flow.reads.get((n, a), ()))
+            if not owned and not index:
+                continue
+            k = keys.setdefault(repr(key), len(keys))
+            if k == len(token_key):
+                token_key.append(owned)
+            pos = _storage_positions(val)
+            tr_op.append(op_id[n])
+            tr_key.append(k)
+            tr_index.append(index)
+            tr_pos.append(pos)
+            tr_indptr.append(tr_indptr[-1] + len(pos))
+    phase = np.array([_PHASE_CODE.get(flow.phase[v], 2) for v in keep], dtype=np.int8)
+    return StepCircuit(
+        indptr=np.array(indptr, dtype=np.int64), indices=np.array(indices, dtype=np.int64), phase=phase,
+        tok=np.array([flow.tok[v] for v in keep], bool), dep=np.array([dep[v] for v in keep], bool),
+        tokdep=np.array([tokdep[v] for v in keep], bool), kind=kind, outside=outside, read_next=read_next,
+        bits=np.array([flow.bits[v] for v in keep], dtype=np.int64),
+        width=np.array([flow.width[v] for v in keep], dtype=np.int32), gates=gates,
+        node=np.array([op_id.get(flow.node[v], -1) if v not in carried_set else -1 for v in keep], dtype=np.int64),
+        tr_op=np.array(tr_op, dtype=np.int64), tr_key=np.array(tr_key, dtype=np.int64), tr_index=np.array(tr_index, bool),
+        tr_indptr=np.array(tr_indptr, dtype=np.int64),
+        tr_pos=np.concatenate(tr_pos) if tr_pos else np.zeros(0, dtype=np.int64),
+        keys=np.array(list(keys), dtype=str), token_key=np.array(token_key, bool), region=region,
+        step_tokens=int(step_tokens))
 
 
 

@@ -3,7 +3,8 @@ its update written one of several ways (``--update``), optionally with a buffer 
 tokens (``--cache``: from θ's ``frozen`` table or the trained embedding) that a θ-only side GEMM reads. Its batches are
 `TrainData.next`'s, or (``--windows``) its own reads of the stream through numpy in `hooks.step()`'s steps, cut at the
 stream's ctx or (``--own-ctx``) at prepare.EVAL_CTX. ``--warm-tokens N``: the first N / (batch x EVAL_CTX) steps are a
-warmup that ends by halving ``fc``, a plan read off EVAL_CTX."""
+warmup that ends by halving ``fc``, a plan read off EVAL_CTX. ``--freeze NAME`` (repeated) leaves a matrix at θ;
+``--micro N`` accumulates AdamW's gradient over N slices of the batch."""
 from __future__ import annotations
 
 import argparse
@@ -28,17 +29,21 @@ def main() -> int:
     ap.add_argument("--windows", action="store_true")
     ap.add_argument("--own-ctx", action="store_true")
     ap.add_argument("--warm-tokens", type=int, default=0)
+    ap.add_argument("--freeze", action="append", default=[])
+    ap.add_argument("--micro", type=int, default=1)
     a = ap.parse_args()
     warm = a.warm_tokens // (a.batch * prepare.EVAL_CTX)
     net, _, _ = prepare.load_start("toy")
     P = net.params()
     frozen = P.pop("frozen").requires_grad_(False)
+    fixed = {n: P.pop(n).requires_grad_(False) for n in a.freeze}
     cache = torch.zeros(frozen.shape[1])
     err = {n: torch.zeros_like(p) for n, p in P.items()}
     opt = torch.optim.AdamW(P.values(), lr=LR) if a.update == "adamw" else None
     data = prepare.TrainData(None)
 
     def loss_of(P, x, y):
+        P = {**fixed, **P}
         logits = F.linear(torch.tanh(F.linear(F.embedding(x, P["emb"]), P["fc"])), P["head"])
         if a.cache != "none":
             with torch.no_grad():
@@ -64,12 +69,14 @@ def main() -> int:
                 for n, p in P.items():
                     p.sub_(z[n] * (LR * c))
             return P
-        loss = loss_of(P, x, y)
         if a.update == "adamw":
-            loss.backward()
+            for j in range(a.micro):
+                part = slice(j * a.batch // a.micro, (j + 1) * a.batch // a.micro)
+                loss_of(P, x[part], y[part]).backward()
             opt.step()
             opt.zero_grad(set_to_none=True)
             return P
+        loss = loss_of(P, x, y)
         grads = dict(zip(P, torch.autograd.grad(loss, list(P.values()))))
         if a.update == "inplace":
             with torch.no_grad():

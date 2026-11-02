@@ -713,6 +713,8 @@ def main(argv=None) -> int:
     ap.add_argument("--starts", type=Path, required=True, help="a directory of NAME.start.json")
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--log", type=Path, default=None, help="the program's standard output")
+    ap.add_argument("--circuit", type=Path, default=None,
+                    help="save the measured step's circuit (te_core.capture.circuit) to this .npz")
     argv = sys.argv[1:] if argv is None else argv
     split = argv.index("--") if "--" in argv else len(argv)
     a = ap.parse_args(argv[:split])
@@ -729,12 +731,17 @@ def main(argv=None) -> int:
            "forward_gemm_macs": g.phase_macs().get("forward", 0),
            "recorded_forward_macs": sum(v for k, v in by.items() if k.startswith("fwd/")), "tokens": g.tokens, "axes": g.axes,
            "updated_macs": g.updated_macs(), "dependent": g.dependent[:40], "sinks": g.sinks[:40],
-           "cut_bits": g.cut_bits, "beta": g.beta, "cut": g.cut[:12], "seconds": round(time.perf_counter() - t0, 1)}
+           "cut_bits": g.cut_bits, "beta": g.beta, "cut": g.cut[:12], "formalism": g.formalism,
+           "seconds": round(time.perf_counter() - t0, 1)}
+    if a.circuit and g.circuit is not None:
+        g.circuit.save(a.circuit)
     text = json.dumps(out, indent=1, default=str)
     if a.out:
         a.out.write_text(text + "\n")
+    f = g.formalism or {}
     print(json.dumps({k: out[k] for k in ("step", "forward_gemm_macs", "recorded_forward_macs", "updated_macs", "cut_bits",
-                                          "beta", "seconds")}))
+                                          "seconds")}
+                     | {k: f.get(k) for k in ("phi", "token_factor", "a_bits", "u1_bits", "tail_share", "delta_grad_bits")}))
     return 0
 
 
