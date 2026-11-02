@@ -134,8 +134,8 @@ def test_a_record_repeating_an_earlier_e_is_left_out_of_the_frontier(tmp_path):
 
 def test_a_run_with_covered_steps_counts_once_rho_is_priced_by_thresholds():
     covered = [{"covers": [0, 1], "beta": {"0": 1e-6, "1": 32.0}}]
-    rows = [{"id": name, "val_bpb": 1.0, "invalid": [], "te_core": ingest, "families": fams, "measurement_commit": PIN}
-            for name, ingest, fams in [("plain", "2.2", []), ("old-priced", "2.2", covered), ("repriced", "3.1", covered),
-                                       ("v3.10", "3.10", covered)]]
-    assert frontier.status(rows, PIN) == {"old-priced": "unpriced"}
-    assert [r["id"] for r in frontier.valid(rows, PIN)] == ["plain", "repriced", "v3.10"]
+    rows = [{"id": name, "val_bpb": 1.0, "invalid": [], "measurement_commit": PIN, "te_core": ingest, "families": fams}
+            for name, ingest, fams in [("plain", "2.3", []), ("old-priced", "2.3", covered),
+                                       ("repriced", "3.0", covered), ("repriced-later", "3.10", covered)]]
+    assert frontier.status(rows, PIN) == {"old-priced": "re-ingest"}
+    assert [r["id"] for r in frontier.valid(rows, PIN)] == ["plain", "repriced", "repriced-later"]

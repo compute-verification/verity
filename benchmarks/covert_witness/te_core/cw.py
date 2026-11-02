@@ -1,8 +1,8 @@
 """covert_witness's islands under the harness, unmodified: `python -m te_core.run --script islands/CLASS/train.py ...`.
 
 A covert_witness train.py loads its start through `prepare.load_start`, reads batches from `prepare.TrainData.next`,
-encodes its update with `prepare.encode_full|encode_lora|encode_lora2|encode_seedlog|encode_sparse|encode_quant` and
-submits with `prepare.submit`.
+encodes its update with `prepare.encode_full|encode_lora|encode_lora2|encode_seedlog|encode_sparse` and submits with
+`prepare.submit`.
 The adapter wraps those four kinds of call, and nothing else of the program. The encoders and `submit` run counted, on
 the program's objects; only the harness's own work runs uncounted, on plain copies of what the program handed it
 (`flops.plain`, made while the count runs) and with the harness's own instance of prepare.py (`private_copy`), so the
@@ -33,10 +33,10 @@ library's, or one of the harness's prepare's classes, `watched`) makes its run i
 
 The held-out sets and the sealed side are not in the training job's sandbox at all (candidate.sh); inside it, an audit
 hook also refuses every open, listing or stat under each of `prepare.UNREADABLE`, else `prepare.HELD_OUT`, except while
-the harness's own start loader runs (a sealed start, in final mode). So are other runs' outputs, where an earlier E
-sits: every run directory beside this one (`$RESEARCH_RUN_DIR`, the research runner's) and every candidate's scratch
-under `prepare.ROOT/candidates` but this run's. The loaders that open files in C++ or Rust (`c_readers`) raise the same
-audit event first. Subprocesses go to `guard.log`. A thread or a process the program starts makes its run invalid: the
+the harness's own start loader runs (a sealed start, in final mode). So are other runs' outputs, where an earlier E sits:
+every run directory beside this one (`$RESEARCH_RUN_DIR`, the research runner's) and every candidate's scratch under
+`prepare.ROOT/candidates` but this run's. The loaders that open files in C++ or Rust (`c_readers`) raise the same audit
+event first. Subprocesses go to `guard.log`. A thread or a process the program starts makes its run invalid: the
 counter's mode is per thread, and a child's work is its own. So do child processes' CPU time while the program ran, and
 a child still alive when it returns (a spawn that raises no audit event). Loading or calling native code through ctypes
 is a flag.
@@ -277,7 +277,8 @@ def score_run(prepare, rec: dict, run_dir: Path, theta: dict[str, torch.Tensor],
         score = scorer.search(state, digest)
         scorer.seal(digest, state, score)
         cp |= {"output_sha256": digest, "val_bpb": float(score["bpb"]),
-               "score": {k: v for k, v in score.items() if k != "rule"}}
+               "score": {k: v for k, v in score.items() if k != "rule"},
+               "rebuild_macs": prepare.rebuild_macs(theta, blob) if hasattr(prepare, "rebuild_macs") else None}
     rec["scored"] = {"split": scorer.split, "final_mode": bool(getattr(prepare, "FINAL_MODE", False)),
                      "problems": problems}
     return rec
@@ -360,6 +361,7 @@ class Adapter:
             self.declared_outside += 1
             return
         with self.s.uncounted():
+            self._check()
             if self.family is None:
                 self.family = self.s.family("E", CWPlan(self.own, self.s.theta, self.s.device))
             self.family.put(self.s.current_step(), frame(base, suffixes))
@@ -412,6 +414,7 @@ class Adapter:
         start = {"name": rec["name"], "digest": rec["digest"], "ctx": int(rec["config"].get("ctx", self.own.EVAL_CTX)),
                  "vocab": int(rec["config"].get("vocab", 50304)), "parameters": rec.get("parameters")}
         self.s.bind(theta, start, net, net.params() | buffers, extra)
+
     @contextmanager
     def _reading(self):
         self.evaluating = True
@@ -432,10 +435,9 @@ class Adapter:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(blob)
             fmt = own.format_of(blob) if hasattr(own, "format_of") else "unknown"
-            macs = own.rebuild_macs(self.s.theta, blob) if hasattr(own, "rebuild_macs") else None
         cp = {"step": self.s.current_step(), "macs": self.s.macs_so_far(), "val_bpb": None,
               "elapsed_s": self.s.elapsed(), "source": source, "e_bytes": len(blob), "e_sha256": sha, "format": fmt,
-              "rebuild_macs": macs, "path": str(path.relative_to(self.s.out))}
+              "path": str(path.relative_to(self.s.out))}
         self.s.checkpoints.append(cp)
         self.encoded[sha] = cp
         return cp

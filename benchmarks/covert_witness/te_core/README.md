@@ -79,8 +79,8 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 - **Elite**: a niche's submission with the least val bpb, ties going to the least |C|·ρ.
 - **Frontier**: the submissions that no other submission beats on both |C|·ρ and val bpb, at one (k, r), among those
   measured by the pinned measurement commit (covert_witness's `pin.py`, a submission's `measurement_commit`); invalid,
-  unscored, `other-version`, `duplicate-e` (an E digest an earlier submission had) and `unpriced` submissions (covered
-  steps, ingested before te_core 3.0 priced ρ by thresholds) are left out (`frontier.status`).
+  unscored, `other-version` and `duplicate-e` submissions (an E digest an earlier submission had) are left out, and so
+  is one with covered steps whose ρ wasn't priced by thresholds (`re-ingest`: ingested before 3.0) (`frontier.status`).
 - **Tiers**: tier 0 is a screen of about 3 GPU-minutes on the small start, which anyone may launch. Tier 1 is about 10
   GPU-minutes on the medium start, at most `TIER1_PER_HOUR` per agent per hour. Tier 2 is about 30 GPU-minutes, 3
   seeds, the small and medium starts. Tiers 1 and 2 run only an entry the scorer promoted to that tier.
@@ -93,13 +93,13 @@ covert_witness's evaluation job (`cw.score_run`, run by its evaluate.py after th
 sandbox) decodes each E with `prepare.decode` and scores it with `prepare.Scorer`: the output's digest, then a fresh
 slice of the search pool, and the promotion set's score sealed under the digest (covert_witness's README; the final
 set only in its final mode). A batch from `TrainData.next` is token data through any op that reads it, not only an
-embedding lookup (`flops.Counter.batch`). The encoders and `submit` are the program's work and are counted. The harness's own work runs
-with its own instance of prepare.py, on plain copies of what the program handed it, and with the program's torch
-function modes, global module hooks and profilers off, and with the `sys.path` and the modules prepare.py names as they
-were before the program ran. A program that rebinds what that work calls (`cw.watched`) makes its run invalid. So does
-one that routes work past the counter: an op outside torch's own namespaces (a custom op), a product op with no MAC
-formula, token data read out of torch (`numpy`, `tolist`, DLPack) at a value per token or more, a thread or a child
-process it starts, or a module it imports that names a route the screen refuses (`run.Imports`). From
+embedding lookup (`flops.Counter.batch`). The encoders and `submit` are the program's work and are counted. The
+harness's own work runs with its own instance of prepare.py, on plain copies of what the program handed it, and with the
+program's torch function modes, global module hooks and profilers off, and with the `sys.path` and the modules
+prepare.py names as they were before the program ran. A program that rebinds what that work calls (`cw.watched`) makes
+its run invalid. So does one that routes work past the counter: an op outside torch's own namespaces (a custom op), a
+product op with no MAC formula, token data read out of torch (`numpy`, `tolist`, DLPack) at a value per token or more, a
+thread or a child process it starts, or a module it imports that names a route the screen refuses (`run.Imports`). From
 `benchmarks/covert_witness/`:
 
 ~~~text
@@ -180,16 +180,15 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
   can lower it again. A start's buffers (RoPE tables) are taken as θ's.
 - **Harness work is neither counted nor timed**: loading, encoding, decoding and evaluation run outside the dispatch
   mode and outside the steps' clocks; `totals` sums the steps' seconds and `process_*` the whole process.
-- **The held-out guard is the integrator's sandbox first**: covert_witness's training job runs in a sandbox (its
-  `sandbox.py`) where the held-out sets, the sealed side and `val.bin` aren't mounted at all. Inside it, an audit hook
-  also refuses `prepare.UNREADABLE` (the search pool, the sealed side and learning_frontier's `val.bin` and hub cache)
-  except while the harness loads a start, and other runs' outputs (the run directories beside `$RESEARCH_RUN_DIR`, other
-  candidates' scratch under `prepare.ROOT/candidates`). The loaders that open files in C++ or Rust (`cw.c_readers`:
-  `torch.from_file`, storages' `from_file`, safetensors' `safe_open`) raise the hook's event first; the screen refuses
-  their unwrapped forms (`torch._C`, a class's bases, a function's closure) and the Arrow readers (pyarrow, polars,
-  duckdb, `datasets`). A name built at run time (getattr) still reaches them, which is why the sandbox comes first.
-  Subprocesses are logged to `guard.log`; a thread or a process the program starts makes its run invalid, and its CPU
-  seconds are in the sandbox's process-tree record.
+- **The held-out guard is the integrator's sandbox, with an in-process hook inside it**: covert_witness's training job
+  runs in a sandbox (its `sandbox.py`) where the held-out sets, the sealed side and other runs aren't mounted at all.
+  Inside it an audit hook also refuses `prepare.UNREADABLE` (the search pool, the sealed side and learning_frontier's
+  `val.bin` and hub cache) except while the harness loads a start, and other runs' outputs (the run directories beside
+  `$RESEARCH_RUN_DIR`, other candidates' scratch under `prepare.ROOT/candidates`). The loaders that open files in C++ or
+  Rust (`cw.c_readers`: `torch.from_file`, storages' `from_file`, safetensors' `safe_open`) raise the hook's event first;
+  the screen refuses their unwrapped forms (`torch._C`, a class's bases, a function's closure) and the Arrow readers
+  (pyarrow, polars, duckdb, `datasets`). Subprocesses are logged to `guard.log`; a thread or a process the program starts
+  makes its run invalid, and the sandbox's process-tree record bounds any work outside the count.
 - **Script steps follow the data stream**: a script that fetches all its data at once is one step, which keeps every
   count but coarsens D and φ.
 - **Weight shape**: a forward activation with a weight's exact 2-D shape, in a matmul of two token-indexed operands,

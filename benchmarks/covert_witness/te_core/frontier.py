@@ -5,9 +5,9 @@
 It reads only the submissions measured by the pinned measurement commit (covert_witness's `pin.py`; `--pin` names
 another), and leaves out, each marked with its reason (`status`): an invalid record, an unscored one, one measured by
 another commit (`other-version`), one whose E digest (`output.e_sha256`) equals an earlier record's (`duplicate-e`: the
-first to submit an E is the one its compute is counted for), and one with covered steps ingested before te_core 3.0
-(`unpriced`, until `python -m te_core.ledger ingest RUN_DIR` ingests it again, since 3.0 prices ρ by thresholds). Per
-(k, r) cell of the grid (score.K_BITS x score.R):
+first to submit an E is the one its compute is counted for), and one with covered steps ingested by a te_core before
+3.0 (`re-ingest`: 3.0 prices ρ by thresholds; `python -m te_core.ledger ingest RUN_DIR` prices it again). Per (k, r)
+cell of the grid (score.K_BITS x score.R):
 
 - the frontier: the valid submissions no other beats on both |C| ρ and val bits per byte;
 - the elites: per niche (mechanism tag x β range x φ range x start), the submission with the least val bits per byte,
@@ -60,7 +60,7 @@ def pinned() -> str:
 
 
 def status(rows: list[dict], pin: str) -> dict[str, str]:
-    """Each left-out record's reason: invalid, unscored, other-version, duplicate-e, unpriced."""
+    """Each left-out record's reason: invalid, unscored, other-version, duplicate-e, re-ingest."""
     out, first = {}, set()
     for r in sorted(rows, key=lambda r: (r.get("written_ts", 0), r["id"])):
         e = (r.get("output") or {}).get("e_sha256")
@@ -73,7 +73,7 @@ def status(rows: list[dict], pin: str) -> dict[str, str]:
         elif r.get("measurement_commit") != pin:
             out[r["id"]] = "other-version"
         elif version(r.get("te_core")) < PRICED_FROM and coverage_of(r.get("families", [])):
-            out[r["id"]] = "unpriced"
+            out[r["id"]] = "re-ingest"
         if e:
             first.add(e)
     return out

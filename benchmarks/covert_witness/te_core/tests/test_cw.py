@@ -75,7 +75,7 @@ def test_an_island_runs_unmodified_and_its_encodings_are_scored_by_the_evaluatio
     assert [cp["step"] for cp in cps] == [1, 3, 5, 7]
     # the training job scores nothing: each checkpoint is its E, written for the evaluation job
     assert all(cp["source"] == "encode" and cp["val_bpb"] is None and "val_bpb" not in rec["start"] for cp in cps)
-    assert all(cp["format"] == "full" and cp["rebuild_macs"] == 0 for cp in cps)
+    assert all(cp["format"] == "full" for cp in cps)
     assert all((cw_root / "out" / cp["path"]).is_file() for cp in cps)
     assert cps[-1]["submitted"] and rec["submitted"]["e_sha256"] == cps[-1]["e_sha256"]
     assert cps[0]["macs"] < cps[-1]["macs"] == rec["totals"]["macs"]
@@ -83,6 +83,7 @@ def test_an_island_runs_unmodified_and_its_encodings_are_scored_by_the_evaluatio
     rec, sealed = score(cw_root / "out")
     cps = rec["checkpoints"]
     assert rec["scored"]["problems"] == [] and all(math.isfinite(cp["val_bpb"]) for cp in cps)
+    assert all(cp["rebuild_macs"] == 0 for cp in cps)
     assert rec["start"]["val_bpb"] > cps[-1]["val_bpb"]
     # each scored model's value is sealed under its output digest, and its score names that digest
     assert {cp["output_sha256"] for cp in cps} <= set(sealed)
@@ -194,13 +195,12 @@ def test_the_programs_code_in_what_it_hands_the_encoder_is_counted(tmp_path, mon
     assert h["by"]["fwd/updated"] - b["by"]["fwd/updated"] == 50 * 4 * 8 * 16 * 16
 
 
-def test_the_evaluation_job_decodes_with_its_own_prepare(tmp_path, monkeypatch):
-    """A program that rebinds prepare.decode changes its own decoding, not the evaluation job's: E is θ, so its score
-    is θ's."""
+def test_a_program_that_rebinds_decode_changes_only_its_own_decoding(tmp_path, monkeypatch):
+    """The checkpoint is the E the program encoded, and the evaluation job decodes it with its own prepare."""
     run_probe(tmp_path, monkeypatch, "rebind_decode")
     rec, _ = score(tmp_path / "rebind_decode" / "out")
     (cp,) = rec["checkpoints"]
-    assert cp["val_bpb"] == rec["start"]["val_bpb"]
+    assert rec["scored"]["problems"] == [] and cp["val_bpb"] == rec["start"]["val_bpb"]
 
 
 @pytest.mark.parametrize("variant,name", [("rebind_torch", "torch.nn.functional.cross_entropy"),

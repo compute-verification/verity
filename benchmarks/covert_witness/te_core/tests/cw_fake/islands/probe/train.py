@@ -5,8 +5,8 @@
 - dict_encoder: the baseline, plus 50 updated matmuls on the step's tokens inside a dict subclass's items(), which the
   encoder reads;
 - rebind_decode: E is θ, and prepare.decode is rebound to return the trained model whatever E holds;
-- rebind_torch: F.cross_entropy (the evaluator's loss) rebound around the submit, and restored after it;
-- rebind_coin: os.urandom (the scorer's slice coin) rebound to zeros around the submit, and restored after it;
+- rebind_torch: F.cross_entropy rebound around the submit, while the harness writes its E, and restored after it;
+- rebind_coin: os.urandom (the families' coin) rebound to zeros around the submit, and restored after it;
 - theta_write: θ's tensors, as load_start returned them, moved in place with `w`;
 - index_lookup: the forward reads the batch by indexing the embedding (`embed[x]`), with no embedding lookup.
 
