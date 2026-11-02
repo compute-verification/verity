@@ -651,7 +651,7 @@
    "guarantees": ["Flock.Firewall.Contract.holds_computed"]
   },
   "Flock.Firewall.Contract": {
-   "digest": "9183ee1506e3bfba3a84a1a10c1eb9a2e18c02dd98330cce88c21630ba961615",
+   "digest": "80028f10c006bf7727713988ab7002f678cb97787d28c4be6aacd091f56d2262",
    "definitions": {
     "Flock.Firewall.Contract.By": "d91fb21fc66675874eb81a58c294ef88d3b1b06b3de8d8421c92c9264583a53e",
     "Flock.Firewall.Contract.By.casesOn": "2b6107e1f89c6e2113a2dec80173ed689020034ea2d503bde43c893b99319c03",
@@ -703,12 +703,6 @@
     "Flock.Firewall.Contract.State.passed": "be164eff485dc958994e3cd140378e855af3b121c1cc8e67552e082e21ef0f55",
     "Flock.Firewall.Contract.State.usedPad": "fdd70a0f65d11d9dea0108fbcde7b5090bc7429221ca8b04d0544270cf5c06ac",
     "Flock.Firewall.Contract.State.usedSalt": "1dbf2f76089fe5774341e9627e88a627dde67c3a09d789c0bb4374519fcf7dd4",
-    "Flock.Firewall.Contract.Transcript": "2c8b285a0cfa1c9acd4aa782ce3dce13dd2d90bde8b439b1454355826063e3b9",
-    "Flock.Firewall.Contract.Transcript.exposedPads": "3713b3a86a9ff6060981a80c050e01998dd01fc0fe1b1671a842d7d0efe946ad",
-    "Flock.Firewall.Contract.Transcript.exposedSalts": "192871b10ba9d07735a3be932e167f7afa93c2b560dc0adcc3dfb01cacb1f0a8",
-    "Flock.Firewall.Contract.Transcript.items": "6d68e84eddabbf6b90cbe34315342ba48b257c14c89be01a1ec19b151976a9f7",
-    "Flock.Firewall.Contract.Transcript.pads": "db95e76872727ae488800496191f8095117d910bedfccfbcdd102d07d04dde8a",
-    "Flock.Firewall.Contract.Transcript.salts": "82ef67c5422380617e93592184f79d7de7e6eeee3a24a48a7fb6de2be12f87fb",
     "Flock.Firewall.Contract.Verdict": "0f9c18de251c518b140cec914ee800e0cc7f8451f8a5d0f0bb21e657c04bdb81",
     "Flock.Firewall.Contract.Verdict.accepted": "49b3f5069d9448f44fbb62bea541f5c15d83aa19936218fd78b3b1b167e04567",
     "Flock.Firewall.Contract.Verdict.cut": "85ea441c0e09bd7619af0e21b9c1e0150a6094bf8c432e9b01b39fcfa84883e4",
