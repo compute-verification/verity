@@ -59,7 +59,7 @@ def test_the_frontier_and_its_branches(tmp_path, monkeypatch, beaten):
     assert all(a["compute_total_gates"] < b["compute_total_gates"] and a["loss"] > b["loss"] for a, b in zip(fr, fr[1:]))
     assert fr[-1]["loss"] == pytest.approx(1.0) and fr[0]["method"].endswith("loss converted")
     on = [d for d in fr if d["method"].endswith("the start s1")]
-    assert bool(on) != beaten and {d["on_frontier"] for d in ds if d["start"]} == {not beaten}
+    assert bool(on) != beaten and {d["on_frontier"] for d in ds if d["start"]} == {"no" if beaten else "yes"}
     branch = [d for d in ds if d["start"]]
     assert {d["start_loss"] for d in branch} == {1.2} and {d["start"] for d in branch} == {plots.start_label(SHAPE)}
     if on:
@@ -80,7 +80,7 @@ def test_the_frontier_and_its_branches(tmp_path, monkeypatch, beaten):
             assert d["S"] == pytest.approx(d["compute_after_gates"] / least) and d["S"] >= 1
             assert d["basis"] in {"fit", "target"}
     q = json.loads((out / "console" / f"{panels.NAME}.json").read_text())
-    assert len(console.body(q)) <= console.BODY_MAX and len(q["note"]) <= console.NOTE_MAX
+    assert len(console.body(q)) <= console.BODY_MAX and len(q["note"]) <= console.NOTE_MAX and not console.refused(q)
     assert f"x{RATIO:.4f}" in q["note"] and "best unconstrained / constrained learner" in q["note"]
 
 
@@ -130,6 +130,9 @@ def test_the_cut_fits_the_route_and_says_how_many_points(monkeypatch):
     assert len([r for r in q["rows"] if r[0] == "throttled" and r[6] == 80_000]) == n + 1
     monkeypatch.setattr(console, "BODY_MAX", 100)
     with pytest.raises(ValueError, match="no cut fits"):
+        panels.cut(p, RATIO)
+    p["rows"][0][4] = True
+    with pytest.raises(ValueError, match="refuses 1 cells .row 0's on_frontier is True"):
         panels.cut(p, RATIO)
 
 

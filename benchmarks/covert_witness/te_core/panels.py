@@ -19,10 +19,10 @@ Its rows (`COLUMNS`) are the points of three kinds of curve:
   curve is the honest one (ρ = 1 at every point of it, so S = 1 at every loss) has no rows.
 
 The branch points are the starts (te_core.policy's `starts`), each at (C0, l0) and labelled by its size and tokens per
-parameter, `on_frontier` when no frontier point has at most its total compute and a loss as low. C0 is the start's
-counted training gates when its shape has them, else its training tokens at dense AdamW's counted rate (`dense_rate`:
-the gates per token of ref-optim's AdamW-everything checkpoints, in forward passes of the same model, the rate a
-continuation's |C| is counted at), and a from-scratch point's C0 is its tokens at that rate. A from-scratch point's loss
+parameter, `on_frontier` "yes" when the frontier passes through it (nothing reaches its loss for less), else "no". C0 is
+the start's counted training gates when its shape has them, else its training tokens at dense AdamW's counted rate
+(`dense_rate`: the gates per token of ref-optim's AdamW-everything checkpoints, in forward passes of the same model, the
+rate a continuation's |C| is counted at), and a from-scratch point's C0 is its tokens at that rate. A from-scratch point's loss
 is learning_frontier's held-out bits per byte (fineweb-edu shard 013's first 2^21 tokens as one stream) times the mean
 ratio of the starts' l0 (the search pool's whole documents) to it at the same checkpoints (`ratio`), except at a start,
 whose point is its l0.
@@ -204,7 +204,7 @@ def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source:
                      r.get("delta_bits"), None])
     for b in branches:
         b.on_frontier = any(r.get("start") == b.name for _, _, r in env)
-        head = [b.label, b.c0, b.l0, b.on_frontier]
+        head = [b.label, b.c0, b.l0, "yes" if b.on_frontier else "no"]
         for x, y, r in b.honest:
             rows.append(["honest", *head, None, None, b.c0 + x, x, y, None, f"{r['id']}@{r.get('checkpoint_step')}",
                          _method(r), _delta(r), None])
@@ -271,6 +271,9 @@ def cut(p: dict, ratio: float) -> dict:
         q = p | {"rows": [rounded(r) for r in thinned(p["rows"], n)], "note": note(ratio, n)}
         if len(q["note"]) > console.NOTE_MAX:
             raise ValueError(f"{PANEL}: its note is {len(q['note'])} characters, over {console.NOTE_MAX}")
+        if bad := console.refused(q):
+            raise ValueError(f"{PANEL}: the panels route refuses {len(bad)} cells ({'; '.join(bad[:3])}): make each a "
+                             f"number, a string of at most {console.CELL_MAX} characters or null")
         if len(console.body(q)) <= console.BODY_MAX:
             return q
     raise ValueError(f"{PANEL}: no cut fits {console.BODY_MAX} bytes (the last is {len(console.body(q))})")
@@ -296,8 +299,9 @@ def figure(p: dict, out: Path) -> Path:
         step([(b["start_compute_gates"], b["start_loss"])] +
              [(r["compute_total_gates"], r["loss"]) for r in mine if r["curve"] == "throttled"
               and (r["c_tokens_per_block"], r["k_bits"]) == (DEFAULT[0], 8 * DEFAULT[1])], color="C3", lw=2)
-        ax.plot([b["start_compute_gates"]], [b["start_loss"]], "o", color="k" if b["on_frontier"] else "0.6")
-        ax.annotate(s + ("" if b["on_frontier"] else " (off)"), (b["start_compute_gates"], b["start_loss"]),
+        on = b["on_frontier"] == "yes"
+        ax.plot([b["start_compute_gates"]], [b["start_loss"]], "o", color="k" if on else "0.6")
+        ax.annotate(s + ("" if on else " (off)"), (b["start_compute_gates"], b["start_loss"]),
                     fontsize=7, xytext=(6, 4) if i % 2 else (-6, -10), ha="left" if i % 2 else "right",
                     textcoords="offset points")
     ax.plot([], [], color="C0", lw=0.8, label="best unconstrained learner from a checkpoint")
