@@ -1,0 +1,155 @@
+"""The evaluator and witness checker (fixed): the only process that reads the held-out sets.
+
+    python evaluate.py --submission DIR --class CLASS --timing FILE --out witness.json [--split search]
+    python evaluate.py --start NAME --out start.json [--split search]     # a start's own score and evaluation cost
+
+For a submission it checks, in order, and records every result in the witness record:
+
+1. θ: the start's weights match its registered digest, and the submission names that digest;
+2. E: decode(θ, E) rebuilds a model with θ's tensors, shapes and dtypes, bit-equal to the submitted model.safetensors, so
+   its size and its evaluation FLOPs and weight bytes per byte equal the start's (`prepare.eval_cost`);
+3. changed: the declared set covers every tensor that differs from θ; φ and the lowest updated layer are computed from it;
+4. FLOPs: analytic training FLOPs from the step log and the declared trainable set (`prepare.train_flops`), within
+   TRAIN_FLOP_BUDGET, and the declared set covers `changed`; GPU-seconds (the launcher's timing of train.py) within the cap;
+5. the class's caps on 8·|E|, E's format and the updated layers;
+
+then scores decode(θ, E) on the search set (`prepare.evaluate_bpb`), and each snapshot for the FLOPs-to-target curve. A
+candidate is valid when every check passes. `--split final` is the final test set's, which no island's launcher runs.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+
+import torch
+
+import prepare
+
+
+def score(rec: dict, model: dict[str, torch.Tensor], split: str) -> dict:
+    with torch.device("cuda"):
+        net = prepare.Net(rec["config"])
+    net.load(model)
+    return prepare.evaluate_bpb(net, split, rec["tokenizer"])
+
+
+def check(sub: Path, klass: str, timing: Path | None, split: str) -> dict:
+    caps = prepare.CLASSES[klass]
+    meta = json.loads((sub / "meta.json").read_text())
+    rec = prepare.start_record(meta["start"])
+    theta = prepare.load_theta(meta["start"])
+    out = {"schema": "covert-witness/witness/v1", "class": klass, "caps": caps, "start": meta["start"],
+           "theta_digest": rec["digest"], "budget": {"train_flops": prepare.TRAIN_FLOP_BUDGET,
+                                                      "gpu_seconds": prepare.GPU_SECONDS_CAP}, "checks": {}, "notes": meta.get("notes")}
+    c = out["checks"]
+    c["theta"] = meta["theta_digest"] == rec["digest"]
+    if meta.get("class") != klass:
+        c["class_named"] = False
+    blob = (sub / "E.bin").read_bytes()
+    out["E"] = {"bytes": len(blob), "bits": 8 * len(blob), "format": prepare.format_of(blob)}
+    try:
+        decoded = prepare.decode(theta, blob)
+    except (ValueError, KeyError, RuntimeError) as e:
+        c["decode"] = f"failed: {e}"
+        return out
+    from safetensors.torch import load_file
+
+    claimed = load_file(str(sub / "model.safetensors"))
+    c["architecture"] = set(claimed) == set(theta) and all(
+        claimed[k].shape == theta[k].shape and claimed[k].dtype == theta[k].dtype for k in theta)
+    c["bit_equal"] = c["architecture"] and all(prepare.same_bits(decoded[k], claimed[k]) for k in theta)
+    changed = {k for k in theta if not prepare.same_bits(decoded[k], theta[k])}
+    declared = set(meta["changed"])
+    c["changed_covered"] = changed <= declared
+    out["changed"] = {"declared": sorted(declared), "actual": sorted(changed),
+                      "declared_parameters": int(sum(theta[k].numel() for k in declared if k in theta)),
+                      "actual_parameters": int(sum(theta[k].numel() for k in changed))}
+    out["structure"] = prepare.deep_share(rec, declared)
+    out["structure_actual"] = prepare.deep_share(rec, changed)
+    trainable = meta["trainable"]
+    steps = prepare.read_steps(sub / "steps.jsonl")
+    try:
+        meter = prepare.train_flops(rec, trainable, steps)
+    except (ValueError, KeyError) as e:
+        c["meter"] = f"failed: {e}"
+        return out
+    out["train"] = meter
+    trained = set(trainable.get("full", [])) | set(trainable.get("adapters", {}))
+    c["trainable_covers_changed"] = changed <= trained
+    c["flop_budget"] = meter["flops"] <= prepare.TRAIN_FLOP_BUDGET
+    if timing is not None and timing.exists():
+        t = json.loads(timing.read_text())
+        out["gpu_seconds"] = t["gpu_seconds"]
+        out["train_rc"] = t.get("rc")
+        c["gpu_seconds"] = t["gpu_seconds"] <= prepare.GPU_SECONDS_CAP
+        c["train_exit"] = t.get("rc") == 0
+        out["implied_flop_per_second"] = meter["flops"] / t["gpu_seconds"] if t["gpu_seconds"] else None
+    else:
+        c["gpu_seconds"] = "no timing"
+    if caps["max_e_bytes"] is not None:
+        c["e_size"] = len(blob) <= caps["max_e_bytes"]
+    if caps["formats"] is not None:
+        c["e_format"] = out["E"]["format"] in caps["formats"]
+    if caps["top_blocks"] is not None:
+        L = rec["config"]["n_layer"]
+        lowest = out["structure"]["lowest_updated_layer"]
+        c["shallow"] = lowest is None or lowest >= L + 1 - caps["top_blocks"]
+    toks, man = prepare.held_out(split, rec["tokenizer"])
+    out["eval_cost"] = prepare.eval_cost(rec, len(toks), man["bytes"]) | {
+        "rule": "the model has θ's tensors, shapes and dtypes (checks.architecture), so its parameters, evaluation FLOPs "
+                "and weight bytes per byte are the start's"}
+    out["valid"] = all(v is True for v in c.values())
+    t0 = time.perf_counter()
+    out["score"] = score(rec, decoded, split)
+    out["score"]["seconds"] = time.perf_counter() - t0
+    curve = []
+    for d in sorted((sub / "snap").glob("*")) if (sub / "snap").is_dir() else []:
+        sb = (d / "E.bin").read_bytes()
+        n = json.loads((d / "meta.json").read_text())["steps_prefix"]
+        f = prepare.train_flops(rec, trainable, steps[:n])["flops"]
+        try:
+            s = score(rec, prepare.decode(theta, sb), split)["bpb"]
+        except (ValueError, KeyError) as e:
+            s = f"decode failed: {e}"
+        curve.append({"train_flops": f, "e_bytes": len(sb), "bpb": s})
+    curve.append({"train_flops": meter["flops"], "e_bytes": len(blob), "bpb": out["score"]["bpb"]})
+    out["curve"] = curve
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--submission", type=Path)
+    ap.add_argument("--start")
+    ap.add_argument("--class", dest="klass", choices=sorted(prepare.CLASSES))
+    ap.add_argument("--timing", type=Path)
+    ap.add_argument("--split", default="search", choices=("search", "final"))
+    ap.add_argument("--out", type=Path, required=True)
+    a = ap.parse_args()
+    torch.backends.cuda.matmul.allow_tf32 = True
+    if a.start:
+        rec = prepare.start_record(a.start)
+        theta = prepare.load_theta(a.start)
+        held = prepare.held_out(a.split, rec["tokenizer"])
+        out = {"schema": "covert-witness/start-score/v1", "start": a.start, "digest": rec["digest"],
+               "parameters": rec["parameters"], "score": score(rec, theta, a.split),
+               "eval_cost": prepare.eval_cost(rec, len(held[0]), held[1]["bytes"]),
+               "structure_full_update": prepare.deep_share(rec, set(theta)), "provenance": rec["provenance"]}
+    else:
+        if not (a.submission and a.klass):
+            ap.error("--submission and --class, or --start")
+        out = check(a.submission, a.klass, a.timing, a.split)
+    a.out.parent.mkdir(parents=True, exist_ok=True)
+    a.out.write_text(json.dumps(out, indent=1) + "\n")
+    s = out.get("score", {})
+    print(json.dumps({"valid": out.get("valid"), "bpb": s.get("bpb"), "E_bytes": out.get("E", {}).get("bytes"),
+                      "phi": out.get("structure", {}).get("phi"), "train_flops": out.get("train", {}).get("flops"),
+                      "checks": out.get("checks")}), flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
