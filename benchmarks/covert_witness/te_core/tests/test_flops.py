@@ -250,6 +250,44 @@ def test_token_data_read_out_of_torch_is_counted_in_its_step():
     assert s["exited"] == 3 and not leaked(s)
 
 
+def test_a_program_made_token_source_is_one_source_by_tensor_not_by_address():
+    """ref-data's 14:06Z LOOPHOLE: tokens were keyed by an index tensor's address, so a fresh index tensor per chunk at a
+    freed one's address counted once, and one score per chunk read out was a value per token. Each new tensor over the
+    same memory counts (here a numpy buffer refilled per chunk, every chunk at one address), as does a buffer an op
+    rewrites; the same source read again, or through a view, doesn't."""
+    guard_exits()
+    chunks, per = 4, 6
+    gen = torch.Generator().manual_seed(5)
+    data = torch.randint(0, VOCAB, (chunks, per), generator=gen).numpy()
+
+    def fresh(w, e):
+        buf = data[0].copy()
+        for k in range(chunks):
+            buf[:] = data[k]
+            (F.embedding(torch.from_numpy(buf), e) @ w).sum().tolist()
+
+    (s,) = one_step(fresh)["steps"]
+    assert s["tokens"] == chunks * per and s["exited"] == chunks and not leaked(s)
+
+    def rewritten(w, e):
+        buf = torch.zeros(per, dtype=torch.long)
+        for k in range(chunks):
+            buf.copy_(torch.from_numpy(data[k]))
+            F.embedding(buf, e) @ w
+
+    (s,) = one_step(rewritten)["steps"]
+    assert s["tokens"] == chunks * per
+
+    def reread(w, e):
+        idx = torch.from_numpy(data[0])
+        F.embedding(idx, e) @ w
+        F.embedding(idx[: per // 2], e) @ w
+        F.embedding(idx, e) @ w
+
+    (s,) = one_step(reread)["steps"]
+    assert s["tokens"] == per
+
+
 def test_writes_through_data_are_seen(tiny):
     m, theta = tiny
 

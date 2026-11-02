@@ -362,7 +362,7 @@ class Tag:
     tok: bool = False
     roots: frozenset = frozenset()
     cone: frozenset = frozenset()
-    src: frozenset = frozenset()  # the data stream's batches a token value is computed from (`Counter.batch`)
+    src: frozenset = frozenset()  # the token sources a token value is computed from (`Counter._token_source`)
 
     def merge(self, other: Tag) -> Tag:
         if other is NONE:
@@ -521,6 +521,7 @@ class Counter(TorchDispatchMode):
     def _reset_tags(self) -> None:
         self.tags = WeakTensorKeyDictionary()
         self.token_seen: dict = {}
+        self.sources: set[int] = set()  # the token sources `_token_source` made (not the data stream's batches)
         self.node_rows: dict[int, int] = {}
         self.used: set[tuple[str, int]] = set()
         for t in list(self.batches.keys()):
@@ -609,8 +610,7 @@ class Counter(TorchDispatchMode):
     def tokens(self, batch: torch.Tensor) -> torch.Tensor:
         """Mark `batch` as this step's token data (an index tensor the program passes through some route other than an
         embedding lookup)."""
-        self._token_source(batch)
-        self.tags[batch] = Tag(tok=True)
+        self.tags[batch] = self._token_source(batch, Tag(tok=True))
         return batch
 
     def batch(self, t: torch.Tensor) -> torch.Tensor:
@@ -626,17 +626,28 @@ class Counter(TorchDispatchMode):
         self.n_batches += 1
         self.tags[t] = Tag(tok=True, src=frozenset((self.n_batches,)))
 
-    def _token_source(self, idx: torch.Tensor, tag: Tag = NONE) -> None:
-        if tag.src:
-            seen = self.token_seen.get(tag.src, 0)
-            if idx.numel() > seen:
-                self.cur.tokens += idx.numel() - seen
-                self.token_seen[tag.src] = idx.numel()
-            return
-        key = (_ptr(idx), idx.storage_offset(), tuple(idx.shape), idx._version)
-        if key not in self.token_seen:
-            self.token_seen[key] = idx.numel()
-            self.cur.tokens += idx.numel()
+    def _token_source(self, idx: torch.Tensor, tag: Tag) -> Tag:
+        """Count `idx`'s elements as this step's tokens, once per source at its largest read, and return its tag. A
+        batch of the data stream is its own source; any other token tensor becomes one at its first read, held in its
+        tag, so a view of it or a value computed from it is the same source, a new tensor at a freed one's address is
+        another, and so is the tensor once an op writes into it (`sources`). A θ tensor keeps θ's tag and is keyed by
+        its memory, which the counter holds."""
+        if not tag.src:
+            if _ptr(idx) in self.theta_ptr:
+                key = (_ptr(idx), idx.storage_offset(), tuple(idx.shape), idx._version)
+                if key not in self.token_seen:
+                    self.token_seen[key] = idx.numel()
+                    self.cur.tokens += idx.numel()
+                return tag
+            self.n_batches += 1
+            self.sources.add(self.n_batches)
+            tag = tag.merge(Tag(tok=True, src=frozenset((self.n_batches,))))
+            self.tags[idx] = tag
+        seen = self.token_seen.get(tag.src, 0)
+        if idx.numel() > seen:
+            self.cur.tokens += idx.numel() - seen
+            self.token_seen[tag.src] = idx.numel()
+        return tag
 
     # -- provenance
 
@@ -734,13 +745,12 @@ class Counter(TorchDispatchMode):
         written = _written(func, args, kwargs)
         persistent = {id(t) for t in written if t not in self.tags}
         tags = [self._tag(t) for t in ins]
-        if p in TOKEN_INDEX and not bwd:
-            for t, g in zip(ins, tags):
-                if g.tok and not (t.is_floating_point() or t.is_complex() or t.dtype == torch.bool):
-                    self._token_source(t, g)
         if p in EMBEDDING and not bwd:
-            self._token_source(args[1], self._tag(args[1]))
             tags = [Tag(tok=True).merge(g) if t is args[1] else g for t, g in zip(ins, tags)]
+        if p in TOKEN_INDEX and not bwd:
+            tags = [self._token_source(t, g) if g.tok and not (t.is_floating_point() or t.is_complex()
+                                                               or t.dtype == torch.bool) else g
+                    for t, g in zip(ins, tags)]
         tag = NONE
         for g in tags:
             tag = tag.merge(g)
@@ -768,9 +778,11 @@ class Counter(TorchDispatchMode):
         for t in written:
             ptr = _ptr(t)
             self.epoch[ptr] = self.epoch.get(ptr, 0) + 1
+        wrote = {id(t) for t in written}
+        rewritten = Tag(tag.tok, tag.roots, tag.cone, tag.src - self.sources)
         for t in _tensors(out) + written:
             if _ptr(t) not in self.theta_ptr and id(t) not in persistent:
-                self.tags[t] = tag
+                self.tags[t] = rewritten if id(t) in wrote else tag
         return out
 
     def _weight_shaped(self, t: torch.Tensor) -> bool:
