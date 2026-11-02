@@ -213,16 +213,20 @@ def of_record(record: dict, through: int | None = None) -> dict:
     `formalism` fields over these. A structure's dependent gates are the record's when it gives them (`dep_gates`), else
     its updated forward nodes' MACs (te_core 4.0's capture: every forward MAC with an update-dependent operand; the
     backward's are not counted yet), at the bf16 GEMM price; its Δ_grad is its `delta_grad_bits`, else 4.0's
-    `cut_bits` (the narrowest cut between the step's gradient side and the new values it carries)."""
+    `cut_bits` (the narrowest cut between the step's gradient side and the new values it carries). The setup, and the
+    tail of a whole run, are parts of their own, so |C| is the prefix's whole count, as `ledger._macs_log`'s."""
     own = dict(record.get("formalism") or {})
     labels = dict(own.get("labels", {}))
     steps = [s for s in record["steps"] if through is None or s["step"] <= through]
-    groups: dict[str, list[dict]] = {}
+    groups: dict[object, list[dict]] = {}
+    for name in ("setup", *(("tail",) if through is None else ())):
+        if record.get(name, {}).get("by"):
+            groups[name] = [record[name]]
     for s in steps:
-        groups.setdefault(s["struct"], []).append(s)
+        groups.setdefault(("step", s["struct"]), []).append(s)
     parts = []
-    for sid, ss in groups.items():
-        st = record["structures"][sid]
+    for gid, ss in groups.items():
+        st = record["structures"].get(gid[1] if isinstance(gid, tuple) else ss[0].get("struct")) or {}
         n = len(ss)
         log = {"by": {}, "ops": {}}
         for s in ss:

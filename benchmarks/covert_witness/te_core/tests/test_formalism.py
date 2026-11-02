@@ -90,6 +90,18 @@ def test_a_record_with_te_core_4_cuts_reads_them_as_delta_grad():
     assert F.of_record(record, through=0)["parts"][0]["steps"] == 1
 
 
+def test_setup_and_tail_count_in_c_as_parts_with_no_token_blocks():
+    step = {"step": 0, "tokens": 8, "struct": "a", "by": {"fwd/theta": 80}}
+    record = {"setup": {"by": {"other/theta": 30}, "struct": None}, "tail": {"by": {"other/theta": 5}, "struct": None},
+              "steps": [step, step | {"step": 1}],
+              "structures": {"a": {"updated": [], "log": [["fwd", "theta", "mm", "[[8]]", 1, 80]]}}}
+    whole, prefix = F.of_record(record), F.of_record(record, through=0)
+    assert [p["tokens"] for p in whole["parts"]] == [0, 0, 16] and [p["tokens"] for p in prefix["parts"]] == [0, 8]
+    m = F.complete(whole, {"output": {"e_bytes": 10}}, SHAPE)
+    assert m.gates == pytest.approx(160 * per_mac("gemm/bf16") + 35 * per_mac("elementwise/bf16"))
+    assert [p["rho"] for p in F.at(m, 1e13, 1e4)["parts"][:2]] == [1.0, 1.0]
+
+
 def test_the_grid_spans_the_reference_shapes_in_decades():
     s = policy.shapes(SHAPE)
     w_fwd = SHAPE["forward_macs_per_token"] * per_mac("gemm/bf16")

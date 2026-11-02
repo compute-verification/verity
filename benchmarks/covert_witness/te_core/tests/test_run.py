@@ -6,6 +6,7 @@ import torch
 
 from te_core import run as te_run
 from te_core.counterexample import check
+from te_core.gates import of_log
 from te_core.ledger import Ledger, ingest
 
 MODEL = '''
@@ -141,6 +142,8 @@ def test_mezo_run_is_rebuilt_from_its_seed_log(tmp_path, theta_file):
     assert all(set(s["rho"]) == {f"{k}/r{r}" for k in ("10kB", "100kB", "1MB") for r in (1, 10, 100)} for s in subs)
     assert subs[-1]["macs"] == rec["totals"]["macs"]
     assert subs[0]["macs"] < subs[-1]["macs"]
+    for s in subs:
+        assert sum(p["gates"] for p in s["formalism"]["parts"]) == pytest.approx(of_log(s["macs_log"])["gates"])
     final = json.loads((out / "run.json").read_text())
     for cp in final["checkpoints"]:
         cp["score"] = {"val": 1.0}  # final mode scores on the final set, which has no slice

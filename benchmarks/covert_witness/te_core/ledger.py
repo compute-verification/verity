@@ -10,7 +10,8 @@ Records live under `ROOT/records/<agent>/<id>.json`, ROOT being `$TE_LEDGER` (de
 contend; `index()` reads every agent's. Each record goes to the evidence store as `research data put --kind evidence/v1
 --file REC --preserve`, its art id kept beside it in `<id>.art`; `ROOT/index.jsonl` is derived and rebuilt from the
 records. Only the scorer (agent `scorer`) writes promotions and final (test) scores, which the index joins onto their
-submissions.
+submissions. A submission carries its prefix's formalism quantities (`formalism`, te_core.formalism.of_record), which
+`frontier --formalism` scores.
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ from pathlib import Path
 
 from . import VERSION
 from .annotate import LOOKUPS_FROM, with_lookups
+from .formalism import of_record
 from .score import checkpoints
 
 SCHEMA = "te-core/submission/v1"
@@ -247,7 +249,8 @@ def ingest(run_dir: Path, ledger: Ledger, *, direction: str, mechanism: str, par
                           if "slice" in (cp.get("score") or {}) else None),
             "theta_sha256": record["theta_sha256"], "checkpoint_step": cp["step"],
             "fraction": (cp["step"] + 1) / max(record.get("planned_steps") or len(record["steps"]), 1),
-            "macs": sub["macs"], "macs_log": _macs_log(record, through), "annotation": sub["annotation"],
+            "macs": sub["macs"], "macs_log": _macs_log(record, through), "formalism": of_record(record, through),
+            "annotation": sub["annotation"],
             "c": sub["c"], "p": sub["p"], "families": record.get("families", []),
             "phi": {k: v["phi"] for k, v in grid.items()}, "depth": {k: v["depth"] for k, v in grid.items()},
             "beta": {k: v["beta"] for k, v in grid.items()}, "rho": {k: v["rho"] for k, v in grid.items()},
