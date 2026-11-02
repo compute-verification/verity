@@ -41,18 +41,26 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from sealed import SEALED, value_path
+from sealed import DATA, SEALED, value_path
 from starts_store import STARTS
 
 #: the fixed side's version, in every witness record (README.md)
-VERSION = "2.1"
+VERSION = "2.2"
 ROOT = Path(os.environ.get("CW_ROOT", "/workspace/research/scratch/covert-witness"))
 LF_CORPUS = Path(os.environ.get("CW_LF_CORPUS", "/workspace/research/scratch/learning-frontier/fineweb-edu-gpt2-v1"))
-#: the held-out sets (`data.py`): a search evaluation scores a fresh slice of the pool; the promotion and final sets are
-#: sealed (`sealed.py`)
+#: the held-out sets (`data.py`, data version `sealed.DATA`): a search evaluation scores a fresh slice of the pool; the
+#: promotion and final sets are sealed (`sealed.py`)
 SEARCH_POOL, PROMOTION, FINAL = "search-pool", "promotion", "final"
 HELD_OUT = ROOT / "heldout"
-SET_DIRS = {SEARCH_POOL: HELD_OUT / SEARCH_POOL, PROMOTION: SEALED / "heldout" / PROMOTION, FINAL: SEALED / "heldout" / FINAL}
+SET_DIRS = {SEARCH_POOL: HELD_OUT / DATA / SEARCH_POOL, PROMOTION: SEALED / "heldout" / DATA / PROMOTION,
+            FINAL: SEALED / "heldout" / DATA / FINAL}
+DATA_JSON = HELD_OUT / DATA / "data.json"
+#: each held-out set's tokens (sha256 of `<set>/<tokenizer>.bin`) as data.py built them: a set on a node that isn't
+#: these is refused, so every score of this version is on the same text
+SET_SHA256: dict[str, dict[str, str]] = {}
+#: each start's θ digest (`digest`): the search's starts as `starts_store.json` names them, and the sealed start
+START_DIGESTS = {name: s["digest"] for name, s in json.loads(
+    (Path(__file__).resolve().parent / "starts_store.json").read_text())["starts"].items()} | {}
 #: a search slice's GPT-2 tokens, whole windows of the pool's stream (`draw_slice`), and the promotion set's that a sealed
 #: value scores (its first windows): with the start's scores kept, a checkpoint costs about one 2^21-token evaluation
 SLICE_TOKENS = 2 ** 20
@@ -123,7 +131,10 @@ def start_dir(name: str) -> Path:
 
 
 def start_record(name: str) -> dict:
-    return json.loads((start_dir(name) / "start.json").read_text())
+    rec = json.loads((start_dir(name) / "start.json").read_text())
+    if rec["digest"] != START_DIGESTS.get(name):
+        raise SystemExit(f"prepare: start {name}'s registered digest is not prepare.START_DIGESTS's")
+    return rec
 
 
 def load_theta(name: str, check: bool = True) -> dict[str, torch.Tensor]:
@@ -544,8 +555,11 @@ def manifest(split: str) -> dict:
 def held_out(split: str, tokenizer: str) -> tuple[np.ndarray, dict]:
     man = manifest(split)
     toks = np.fromfile(SET_DIRS[split] / f"{tokenizer}.bin", dtype=np.uint16)
-    if hashlib.sha256(toks.tobytes()).hexdigest() != man["tokenizers"][tokenizer]["sha256"]:
+    got = hashlib.sha256(toks.tobytes()).hexdigest()
+    if got != man["tokenizers"][tokenizer]["sha256"]:
         raise SystemExit(f"prepare: the {split} set's {tokenizer} tokens do not match their manifest")
+    if got != SET_SHA256.get(split, {}).get(tokenizer):
+        raise SystemExit(f"prepare: the {split} set's {tokenizer} tokens are not prepare.SET_SHA256's (data {DATA})")
     return toks, man
 
 
