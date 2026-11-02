@@ -9,6 +9,7 @@ Every variant trains block 1 and the final norm of the start with AdamW on `--st
   them;
 - forge: replaces `prepare.evaluate_bpb`, which the harness's checkpoint scoring calls, with a constant;
 - thread: one counted forward on the start, then the whole training in a `threading.Thread` on a second copy of the model;
+- fork: one counted forward, then the whole training in an `os.fork` child, whose weights the parent loads from a file;
 - getattr: one counted forward, then the whole training inside the harness's paused context, reached by `getattr` names;
 - replay: one counted forward, then submits an E read from `--cached` (an earlier run's) as its own;
 - reach: honest, after checking what it can open beside the held-out directory (`reach`);
@@ -22,6 +23,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import threading
 from pathlib import Path
 
@@ -168,7 +170,7 @@ def main() -> int:
     if v == "reach":
         notes |= reach()
     params = net.params()
-    if v in ("thread", "getattr", "replay"):
+    if v in ("thread", "fork", "getattr", "replay"):
         with torch.no_grad():
             loss_of(net, data.next(1))
     if v == "thread":
@@ -186,6 +188,22 @@ def main() -> int:
         th.join()
         notes["losses"] = out["losses"]
         params = out["params"]
+    elif v == "fork":
+        scratch = Path(a.out).with_name("fork-weights.pt")
+        pid = os.fork()
+        if pid == 0:
+            torch.set_num_threads(1)
+            with torch.device(prepare.DEVICE):
+                twin = prepare.Net(rec["config"])
+            twin.load(theta)
+            losses = train(twin, names, data, a.steps, a.batch, a.lr, encode_first=False)
+            torch.save({"losses": losses, "w": {k: twin.params()[k].detach() for k in names}}, scratch)
+            os._exit(0)
+        os.waitpid(pid, 0)
+        got = torch.load(scratch)
+        scratch.unlink()
+        notes["losses"] = got["losses"]
+        params = got["w"]
     elif v == "getattr":
         from te_core import hooks
 
