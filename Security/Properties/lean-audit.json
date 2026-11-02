@@ -507,6 +507,8 @@
   "Properties.NetworkPeriod.rowsStateTied_nontrivial": "d0d8204ffb2e772003635028c5622784d1ec1a8d0cc8a45ea37e71b1e8fe8d70",
   "Properties.NetworkPeriod.rowsTiedDrawn": "b622058340cbc1d6926a00889f52de0c3ff4a76232c073294fa100675b759deb",
   "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": "aeb0e3753dce706751cb8042d5bf851959cd4ef89bd7357d993df497631c23fd",
+  "Properties.NetworkPeriod.rowsUntiedRefused": "a6422e99a7badb1dc8a3922255ccfe6783a66bdba2511039bf21dc30042d5a24",
+  "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial": "aa00cfe5835bf525712d992edb7d9e6ab94b7914b335d01ade734f3611ede2f5",
   "Properties.NetworkRecords.acceptMeans": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
   "Properties.NetworkRecords.answerAcceptMeans": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c",
   "Properties.NetworkRecords.noGridAcceptsMore": "34f6be27c3079d33abff38adbc90f5aeb66dd7446e7a2efada385c63921aa1c3",
@@ -618,9 +620,7 @@
   "Properties.SampledProofs.haltCoversOperator": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
   "Properties.SampledProofs.haltEndsOpen": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
   "Properties.SampledProofs.haltIsFinal": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
-  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
-  "Properties.NetworkPeriod.rowsUntiedRefused": "a6422e99a7badb1dc8a3922255ccfe6783a66bdba2511039bf21dc30042d5a24",
-  "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial": "aa00cfe5835bf525712d992edb7d9e6ab94b7914b335d01ade734f3611ede2f5"
+  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
  },
  "layers": {
   "Properties.Pouw": {
@@ -4688,9 +4688,7 @@
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.PlanMatches W (p x).toExecution (ℓ x) (plan x w j) 32768 (bind x w j)": "Accounting.Requirement.PlanMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.OneBlockEach (ℓ x) (grp x) (Finset.instSDiff.sdiff (Accounting.Requirement.reads W (p x).toExecution (bind x w j)) (Accounting.Requirement.creditedReads W (p x).toExecution (ℓ x) (bind x w j)))": "Accounting.Requirement.OneBlockEach taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Set.InjOn (addr x) (Finset.instSetLike.coe (plan x w j))": "Set.InjOn taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.RateSketch.LifetimeCapped (Properties.RemoteAudit.sessionLayout blocks dflt appended sent) joined L": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (Properties.RemoteAudit.sessionLayout blocks dflt appended sent (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.LiveSalt.epochRootBinding": {
     "Eq w.size 64": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -4716,14 +4714,10 @@
     "∀ (t : Fin Np), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.SplitRate Kd ρ p p0 a b wmax Λ": "Accounting.Compose.SplitRate taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd Np live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd Np live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.PrefixOf (Properties.Pouw.Period.checkedLayer Cd hr hK prm ws opened rel right) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.Period.checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Pouw.RelativeSecurity.Paths (Prod (Pouw.RelativeSecurity.Paths C Cd.rounds) (Prod (Equiv.Perm (Fin Np)) Ξ)) n) (w : Fin n) (j : Fin Np) (v : Nat → V), rel x w j v → right x w j v": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.OperandHMu (Sc.mu k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.ReceiptLuckAt (Sc.rB k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k x G0 => Accounting.Assumptions.Compose.GuessLuckAt (Sc.guess k) G0) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd Np live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.OperandHMu (Sc.mu k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.ReceiptLuckAt (Sc.rB k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k x G0 => Accounting.Assumptions.Compose.GuessLuckAt (Sc.guess k) G0) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -4737,14 +4731,10 @@
     "∀ (t : Fin Np), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.SplitRate Kd ρ p p0 a b wmax Λ": "Accounting.Compose.SplitRate taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd Np live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd Np live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.PrefixOf (Properties.Pouw.Period.checkedLayer Cd hr hK prm ws opened rel right) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.Period.checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Pouw.RelativeSecurity.Paths (Prod (Pouw.RelativeSecurity.Paths C Cd.rounds) (Prod (Equiv.Perm (Fin Np)) Ξ)) n) (w : Fin n) (j : Fin Np) (v : Nat → V), rel x w j v → right x w j v": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.OperandHMu (Sc.mu k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.ReceiptLuckAt (Sc.rB k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k x G0 => Accounting.Assumptions.Compose.GuessLuckAt (Sc.guess k) G0) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd Np live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.OperandHMu (Sc.mu k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.ReceiptLuckAt (Sc.rB k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k x G0 => Accounting.Assumptions.Compose.GuessLuckAt (Sc.guess k) G0) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -4758,13 +4748,9 @@
     "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd 144) (Accounting.Compose.shareCone Sc Cd 144) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin 144), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd 144 t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd 144 t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd 144 t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd 144) (Accounting.Compose.liveCone Sc Cd 144) 1 1 24 Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd 144 live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd 144 live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.PrefixOf (Properties.Pouw.Period.checkedLayer Cd hr hK prm ws opened (Properties.Pouw.Period.stagedAt salt staged) (Properties.Pouw.Period.flatAtCoin hr enc flat)) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.Period.checkedLayer Cd hr hK prm ws opened (Properties.Pouw.Period.stagedAt salt staged) (Properties.Pouw.Period.flatAtCoin hr enc flat)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.OperandHMu (Sc.mu k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.ReceiptLuckAt (Sc.rB k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k x G0 => Accounting.Assumptions.Compose.GuessLuckAt (Sc.guess k) G0) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd 144 live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.OperandHMu (Sc.mu k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k G x => Accounting.Assumptions.TS.ReceiptLuckAt (Sc.rB k) G) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.WindowPlay.EveryWindow (fun live W => Accounting.Compose.PerLiveTile Sc Cd live W fun k x G0 => Accounting.Assumptions.Compose.GuessLuckAt (Sc.guess k) G0) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -4779,10 +4765,9 @@
     "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin (Properties.Pouw.PeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) (Accounting.Compose.liveCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.PrefixOf (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": {
     "∀ (s : Fin mB), instLENat.le (k s) (Properties.Pouw.PeriodJ10R.stratum σ s).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -4796,10 +4781,9 @@
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s)) (Accounting.Compose.shareCone Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s)) j) 1": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (t : Fin (Properties.Pouw.PeriodJ10R.tileCount σ s)), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s) t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s) t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s) t) (1 / 2))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → Eq (Pl s).game (Accounting.Compose.periodGame (Accounting.Compose.tileStage (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s)) (Accounting.Compose.liveCone Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s)) 1 1 (k s) (Wp s))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin mB), SetLike.instMembership.mem S s → Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s) live) (Wp s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : Fin mB), SetLike.instMembership.mem S s → Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s) live) (Wp s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin mB), SetLike.instMembership.mem S s → Accounting.Compose.PrefixOf (Properties.Pouw.PeriodJ10RStrata.layerAt (Cd s) ⋯ ⋯ σ k hk s unitOf ws opened enc (place s) (tile s)) (Pl s).game": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun y => (Properties.Pouw.PeriodJ10RStrata.layerAt (Cd s) ⋯ ⋯ σ k hk s unitOf ws opened enc (place s) (tile s)).MovedIn y w) (δbind s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin mB), SetLike.instMembership.mem S s → Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc (Cd s) (Properties.Pouw.PeriodJ10R.tileCount σ s) live) (Wp s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : Fin mB), SetLike.instMembership.mem S s → ∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun y => (Properties.Pouw.PeriodJ10RStrata.layerAt (Cd s) ⋯ ⋯ σ k hk s unitOf ws opened enc (place s) (tile s)).MovedIn y w) (δbind s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.Served.SecurityProofs.servedFreed": {
     "∀ (s : Fin mB), instLENat.le (k s) (Properties.Pouw.PeriodJ10R.stratum σ s).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -4811,7 +4795,7 @@
     "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin (Properties.Pouw.PeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) (Accounting.Compose.liveCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "PRF-301 debt (Tue 3 Nov): this premise as checked's tree prints it (Period.EveryWindow); next prints WindowPlay.EveryWindow",
+    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.WindowPlay.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.PrefixOf (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.G1": "G.G1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -4821,8 +4805,7 @@
     "Exists fun e => Function.Injective e": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Pouw.RelativeSecurity.Paths (Properties.Pouw.PeriodJ10R.Coin C Ξ Cd.rounds σ sT) n) (w : Fin n), Set.instMembership.mem Reg (inst x w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Pd.DualOpt μ 1": "Pd.DualOpt taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLT.lt 0 (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r)))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.WindowPlay.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLT.lt 0 (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r)))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.Served.SecurityProofs.servedWork": {
     "∀ (s : Fin mB), instLENat.le (k s) (Properties.Pouw.PeriodJ10R.stratum σ s).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -4834,7 +4817,7 @@
     "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin (Properties.Pouw.PeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) (Accounting.Compose.liveCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "PRF-301 debt (Tue 3 Nov): this premise as checked's tree prints it (Period.EveryWindow); next prints WindowPlay.EveryWindow",
+    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.WindowPlay.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.PrefixOf (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.G1": "G.G1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -4843,8 +4826,7 @@
     "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Exists fun e => Function.Injective e": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Pouw.RelativeSecurity.Paths (Properties.Pouw.PeriodJ10R.Coin C Ξ Cd.rounds σ sT) n) (w : Fin n) (i : Prod St C), Eq (G.ext (work x w) i) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Pouw.RelativeSecurity.Paths (Properties.Pouw.PeriodJ10R.Coin C Ξ Cd.rounds σ sT) n) (w : Fin n), Set.instMembership.mem Reg (inst x w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.WindowPlay.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (x : Pouw.RelativeSecurity.Paths (Properties.Pouw.PeriodJ10R.Coin C Ξ Cd.rounds σ sT) n) (w : Fin n), Set.instMembership.mem Reg (inst x w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.ServedValues.SecurityProofs.rightValues": {
     "∀ (s : Fin mB), instLENat.le (k s) (Properties.Pouw.PeriodJ10R.stratum σ s).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -4856,10 +4838,9 @@
     "∀ (j : Nat), Real.instLE.le (Accounting.Compose.stageShare (Accounting.Compose.tileStage Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) j) 1": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin (Properties.Pouw.PeriodJ10R.tileCount σ sT)), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) (7 / 8)) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) t) (1 / 2))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) (Accounting.Compose.liveCone Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT)) 1 1 (k sT) Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.Period.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.PrefixOf (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -10234,7 +10215,7 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "54d9820197f787f2dd952bd3808a8119febb6ece628d36a7c6dd71cdadce3b03",
+   "digest": "3404a65444a53e3b8a4ec04e4ddd02ff4d148c7e28bb3ac80297157a646d40a6",
    "definitions": {
     "Flock.Registered.Port": "8bf63b4f11162dce1bbc385541afd32990ae8951927d86e9839649edf19734a7",
     "Flock.Registered.Port.domain": "59766f0cc4f10430def56f75d58c4ba25d8b353a298127516dfd435ef2349909",
@@ -10243,11 +10224,8 @@
     "Flock.Registered.WIDTHS": "f4977ebbfc1f56b3a8b18966d93bca3730eb80a89722073817b69365af01fb60",
     "Flock.Registered.WIDTH_KEY": "622d07ccba61c2e7c41c90ab6fdc3227805b4c267753ea215026fa7f9a71b5a0",
     "Flock.Registered.WORD_BITS": "4542d084de1788925e0a2fcbecfc92a7faea54947782d73e5ba18998b41cf3aa",
-    "Flock.Registered.climbL": "deeb59c4c0ff09253eaf700ca259e36c92c5c09b5fc142a81d3f076bfe62ff73",
     "Flock.Registered.domain": "6b7a33fcaa3a1e513ec58845d192a740233d3126543af6653c93abb8f450ac69",
     "Flock.Registered.domainWith": "49b0e81e704d15a08c8f2d14781f9568f3e557a203c02d514c5ef667be8ec782",
-    "Flock.Registered.leafAs": "a7fc4cfe446fe2cffc2c9cb01a9a0a0b9efd6894c75e872799b4fece18667eaf",
-    "Flock.Registered.node": "41c6d6d90c4fbfc4f762607cc2052780c452b0365f95f22323ff6d93f35d6bb1",
     "Flock.Registered.rowLeaf": "09ceb544a5a4910cbbfa21ac341e5fdcf6b3fd232451f5f63fb7d9ff9ea64cde",
     "Flock.Registered.rowWords": "88b71b67bc7da442e3af20bc7d557b6a01b1f73607299f5c42ff7b1df66dee0b",
     "_private.Flock.Registered.0.Flock.Registered.tagged": "722909620809d3fc0c88f4eca4e02b75c137673488be949e64466acf03bff32a"
@@ -12694,7 +12672,7 @@
    ]
   },
   "PouwCheck.Credit": {
-   "digest": "1a1ff0e37a41fd16d1b9b43c0e48671a76b4e825a0b20d04f9d735f306aee9e3",
+   "digest": "fe36e2fffa9a71b2379cdb935f006cd7ae17b0ad5088a4ff9ad1c4f7f9a99763",
    "definitions": {
     "PouwCheck.Credit.BODY": "071fefb97f3971bcd352e1c3b07d11024a6f9c774c6fb6c3b46931a10dfb376c",
     "PouwCheck.Credit.CALLS_FORM": "d6bf6cb3768f79c8900ee97cb118d0b475d4456410e4d0a86afbe35047c0da92",
@@ -12720,10 +12698,6 @@
     "PouwCheck.Credit.Internal.aLink": "5f7f5cf2092c6b8ba6f37665f41ba8362bb25c00209197f8042181342bc23b26",
     "PouwCheck.Credit.Internal.arow": "31780b4d23206b7da97977c412dcf0dc59a2b3bd12a14d1793a5dd073dac183f",
     "PouwCheck.Credit.Internal.credited": "b8e481b21d29ee0edf8a581ac396cdc3f612eacf04ea5380a3d5a4c83282bbd6",
-    "PouwCheck.Credit.Internal.credited._sparseCasesOn_1": "4dbcb9be2a1716fb11e02b528b14e160793c5f1e85cb3467fba096179e8a0882",
-    "PouwCheck.Credit.Internal.credited._sparseCasesOn_11": "c761395d7fd9a1aacee6e78fbf660be44df3eb53ad0fda9be3ebfc71d763aa36",
-    "PouwCheck.Credit.Internal.credited._sparseCasesOn_14": "43f1bc98cade7a2dfe520c8e7368ad9230d52456dcc06d3a713bc60aad198b5f",
-    "PouwCheck.Credit.Internal.credited._sparseCasesOn_8": "e33bfd94ad69786b775775f0598b4c95ea1869f226c091789a063613c14108ab",
     "PouwCheck.Credit.Internal.creditedDraw": "4fbdb516e235e2c207116980948ac60df41f06389b52354af344e31484fe59e9",
     "PouwCheck.Credit.Internal.creditedRoot": "ed33894def48e9555b17b73ad48bda9cdc86189ede25d179c75ae2ff3b2a1fa0",
     "PouwCheck.Credit.Internal.creditedRoot._sparseCasesOn_1": "dec046f6a0babbac52900384723be4cf97938342029a4e795f799d9261da6ec6",
@@ -12809,7 +12783,7 @@
     "PouwCheck.Credit.aLinkRefuse": "1996eafe6852d86a3292ff1084665b099c6c1728651341ebe7fd1e28e7aaf338",
     "PouwCheck.Credit.aValue?": "2acc6ee842fb35a9fb6469ed3f51de853a0919cf699e28b3d218458b58b9b6e0",
     "PouwCheck.Credit.arowRefuse": "d0ee1f9846da5932bef95eaeda3df5d1e8313b62a8cbb215434679b052f88580",
-    "PouwCheck.Credit.bitsOf": "93954e3fe0283372c401e9070475946f1492f159420ff81407ab4f0fe2c486ee",
+    "PouwCheck.Credit.bitsOf": "48b7120efecf67238b2d58922284376474fde274847586c1ec4b79a3a7c7da5c",
     "PouwCheck.Credit.callAt": "f6e1765fffc3367d8a7d31dadae27300d5de697dfa18c338da7695e048798831",
     "PouwCheck.Credit.callAt.go": "a4c26c0aa83fb566099e0dff9c355ff5d0b5036451a65f7f7adba04e64edf17a",
     "PouwCheck.Credit.callWork": "d38cf7f386e5377ac2b3c5856d76b16fb7d3beb8c3f26f741eb020c329893826",
@@ -12903,9 +12877,8 @@
     "PouwCheck.Credit.strata._sparseCasesOn_19": "fe84d83e644a6fe99ce940868cadb1d44bf86b548a915b8b35260aba25f6b204",
     "PouwCheck.Credit.tableRows": "24be1880ab1b1e3e83fda4a34687a44a5e1c2e6cf7b39477fe0a51caaaaaf670",
     "PouwCheck.Credit.tileK": "e4ad183d940b4dda0d3fb50dd2bf0180ab46dc9b2405024859549925720afb59",
-    "PouwCheck.Credit.tileOf": "d65f588f18a8ebdc705c6735196d03f080a432054683d7ad0105791b36f303a9",
+    "PouwCheck.Credit.tileOf": "ef888a2a964b35057888c226dbe84eaba8f51698704b4e58977db1b50ce25ffb",
     "PouwCheck.Credit.tileOf._sparseCasesOn_1": "abca97894aa5722346397160457c251915279b9013ba1976af3a05cecc562871",
-    "PouwCheck.Credit.tileOf._sparseCasesOn_7": "78239315ebcb5d9480bca09597c7a6d7a33e58fa9009337d79979ffc7484fc6b",
     "PouwCheck.Credit.treeAt": "080008ab9e35130336e286ead3b343a7e65446086c15253d0886560d1a11bd42",
     "PouwCheck.Credit.treeRoot": "a6bb8f3a8a58b3166ed9ade9510247e8956599715e5016a640a9131140b8c17c",
     "PouwCheck.Credit.unpinnedModel": "95d773802cfe2bff29dede79e9cb709b91106fb18209d33851579cfd161b8942",
