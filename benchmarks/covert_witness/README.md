@@ -42,7 +42,8 @@ search bpb.
 - **Witness checker** (`evaluate.py`): θ's digest; decode(θ, E) bit-equal to the submitted model; 8·|E| bits; the
   declared changed set covers what differs, and gives φ and the lowest updated layer (`prepare.deep_share`); training
   FLOPs from the step log and the declared trainable set (`prepare.train_flops`), which must cover the changed set;
-  GPU-seconds; the class's caps. Decoders are fixed (`prepare.decode`: `full`, `lora`, `seedlog`) and read only θ and E.
+  GPU-seconds; the class's caps. Decoders are fixed (`prepare.decode`: `full`, `lora`, `seedlog`, `sparse`) and read
+  only θ and E; the witness records each E's rebuild cost in MACs (`prepare.rebuild_macs`).
 - **Guard** (`guard.py`): train.py runs with an audit hook refusing any open under the held-out directory.
 - **Launcher** (`launch.py` on an agent VM, `candidate.sh` on the node): one candidate a run, `research run --on vy-nebius-2
   --pool gpu` with `gpu-lease 1` inside (the node takes runs only through its slot pools, and `--gpus` is refused there);

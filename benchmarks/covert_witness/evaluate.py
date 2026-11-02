@@ -52,6 +52,7 @@ def check(sub: Path, klass: str, timing: Path | None, split: str) -> dict:
     out["E"] = {"bytes": len(blob), "bits": 8 * len(blob), "format": prepare.format_of(blob)}
     try:
         decoded = prepare.decode(theta, blob)
+        out["E"]["rebuild_macs"] = prepare.rebuild_macs(theta, blob)
     except (ValueError, KeyError, RuntimeError) as e:
         c["decode"] = f"failed: {e}"
         return out
@@ -111,11 +112,12 @@ def check(sub: Path, klass: str, timing: Path | None, split: str) -> dict:
         n = json.loads((d / "meta.json").read_text())["steps_prefix"]
         f = prepare.train_flops(rec, trainable, steps[:n])["flops"]
         try:
-            s = score(rec, prepare.decode(theta, sb), split)["bpb"]
+            s, macs = score(rec, prepare.decode(theta, sb), split)["bpb"], prepare.rebuild_macs(theta, sb)
         except (ValueError, KeyError) as e:
-            s = f"decode failed: {e}"
-        curve.append({"train_flops": f, "e_bytes": len(sb), "bpb": s})
-    curve.append({"train_flops": meter["flops"], "e_bytes": len(blob), "bpb": out["score"]["bpb"]})
+            s, macs = f"decode failed: {e}", None
+        curve.append({"train_flops": f, "e_bytes": len(sb), "rebuild_macs": macs, "bpb": s})
+    curve.append({"train_flops": meter["flops"], "e_bytes": len(blob), "rebuild_macs": out["E"]["rebuild_macs"],
+                  "bpb": out["score"]["bpb"]})
     out["curve"] = curve
     return out
 

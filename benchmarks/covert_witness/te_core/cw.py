@@ -1,8 +1,8 @@
 """covert_witness's islands under the harness, unmodified: `python -m te_core.run --script islands/CLASS/train.py ...`.
 
 A covert_witness train.py loads its start through `prepare.load_start`, reads batches from `prepare.TrainData.next`,
-encodes its update with `prepare.encode_full|encode_lora|encode_seedlog` and submits with `prepare.submit`. The adapter
-wraps those four, and nothing else of the program:
+encodes its update with `prepare.encode_full|encode_lora|encode_seedlog|encode_sparse` and submits with `prepare.submit`.
+The adapter wraps those four kinds of call, and nothing else of the program:
 
 - `load_start` binds θ (the start's tensors, and its model's buffers as it builds them, so RoPE tables aren't weights)
   and registers the model's live tensors with the counter;
@@ -86,7 +86,7 @@ class Adapter:
             self.submit(blob, model)
 
         p.load_start, p.TrainData.next, p.submit = load_start_, next_, submit_
-        for name in ("encode_full", "encode_lora", "encode_seedlog"):
+        for name in ("encode_full", "encode_lora", "encode_seedlog", "encode_sparse"):
             if hasattr(p, name):
                 setattr(p, name, self._encoder(getattr(p, name)))
         sys.addaudithook(self._hook)

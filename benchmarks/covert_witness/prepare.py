@@ -4,8 +4,9 @@ checker, the classes' caps and `evaluate_bpb`. A candidate's `train.py` imports 
 A candidate starts from a registered start θ (`load_start`), trains within its class's caps and the fixed budget, and submits
 (`submit`):
 
-- E, an encoding of its update in one of the fixed formats (`encode_full`, `encode_lora`, `encode_seedlog`); `decode(θ, E)`
-  rebuilds the model, and 8·|E| bits is the update-size witness;
+- E, an encoding of its update in one of the fixed formats (`encode_full`, `encode_lora`, `encode_seedlog`,
+  `encode_sparse`); `decode(θ, E)` rebuilds the model, 8·|E| bits is the update-size witness, and `rebuild_macs` is what
+  the rebuild costs;
 - the model it claims, which the checker requires to equal decode(θ, E) bit for bit, with θ's tensors, shapes and dtypes (so
   its size, evaluation FLOPs and weight bytes per byte are θ's);
 - its step log: one record per pass over data (`{"op": "train"|"forward", "tokens": T, "ctx": C}`) and any matmul FLOPs it
@@ -52,7 +53,7 @@ CLASSES = {
     "shallow": {"max_e_bytes": None, "formats": None, "top_blocks": 2},
     "seed": {"max_e_bytes": 100_000, "formats": ["seedlog"], "top_blocks": None},
 }
-MAGIC = {b"CWFULL1\n": "full", b"CWLORA1\n": "lora", b"CWSEED1\n": "seedlog"}
+MAGIC = {b"CWFULL1\n": "full", b"CWLORA1\n": "lora", b"CWSEED1\n": "seedlog", b"CWSPAR1\n": "sparse"}
 DTYPES = {"bf16": torch.bfloat16, "f16": torch.float16, "f32": torch.float32}
 EOT = {"gpt2": 50256, "smollm2": 0}
 
@@ -388,6 +389,132 @@ def lora_merge(w: torch.Tensor, a: torch.Tensor, b: torch.Tensor, scale: float) 
         torch.backends.cuda.matmul.allow_tf32 = tf32
 
 
+_INT = {1: torch.uint8, 2: torch.int16, 4: torch.int32, 8: torch.int64}
+
+
+def _varints(v: np.ndarray) -> bytes:
+    """Unsigned LEB128 of each value."""
+    v = v.astype(np.uint64)
+    k = np.ones(len(v), dtype=np.int64)
+    for s in range(1, 10):
+        k += v >= np.uint64(1 << (7 * s))
+    owner = np.repeat(np.arange(len(v)), k)
+    j = np.arange(int(k.sum())) - np.repeat(np.cumsum(k) - k, k)
+    low = (v[owner] >> (7 * j).astype(np.uint64)) & np.uint64(0x7F)
+    return (low | ((j < k[owner] - 1).astype(np.uint64) << np.uint64(7))).astype(np.uint8).tobytes()
+
+
+def _unvarints(b: bytes, count: int) -> np.ndarray:
+    """`count` canonical unsigned LEB128 values that fill `b` exactly."""
+    a = np.frombuffer(b, dtype=np.uint8)
+    end = (a & 0x80) == 0
+    if int(end.sum()) != count or (len(a) and not end[-1]):
+        raise ValueError("E (sparse): the gaps don't hold their count of varints")
+    if not count:
+        return np.zeros(0, dtype=np.uint64)
+    starts = np.flatnonzero(np.concatenate([[True], end[:-1]]))
+    lengths = np.diff(np.append(starts, len(a)))
+    if lengths.max() > 9 or np.any((lengths > 1) & (a[starts + lengths - 1] == 0)):
+        raise ValueError("E (sparse): an overlong varint")
+    j = (np.arange(len(a)) - np.repeat(starts, lengths)).astype(np.uint64)
+    return np.add.reduceat((a & 0x7F).astype(np.uint64) << (np.uint64(7) * j), starts)
+
+
+def _sparse_index(form: str, b: bytes, nnz: int, n: int) -> np.ndarray:
+    """The sorted flat indices an index field holds: "gaps" (i_0, i_1 − i_0 − 1, …) or a "bitmap" of n bits, LSB first."""
+    if form == "gaps":
+        gaps = _unvarints(b, nnz)
+        if nnz and int(gaps.max()) >= n:
+            raise ValueError("E (sparse): an index past the tensor")
+        idx = np.cumsum(gaps.astype(np.int64) + 1) - 1
+    elif form == "bitmap":
+        if len(b) != (n + 7) // 8:
+            raise ValueError("E (sparse): a bitmap of the wrong length")
+        bits = np.unpackbits(np.frombuffer(b, dtype=np.uint8), bitorder="little")
+        if bits[n:].any():
+            raise ValueError("E (sparse): bitmap bits past the tensor")
+        idx = np.flatnonzero(bits[:n])
+    else:
+        raise ValueError(f"E (sparse): unknown index form {form!r}")
+    if len(idx) != nnz or (nnz and idx[-1] >= n):
+        raise ValueError("E (sparse): the index doesn't hold its count of entries in the tensor")
+    return idx
+
+
+def encode_sparse(theta: dict[str, torch.Tensor], deltas: dict[str, tuple[torch.Tensor, torch.Tensor]],
+                  dtype: str = "bf16") -> bytes:
+    """E as sparse deltas: for each tensor, flat indices into θ's tensor and the values (stored in `dtype`) that decode adds
+    to θ's entries in fp32, casting the sums to θ's dtype; every other entry stays θ's. Each index is stored as varint gaps
+    or as a bitmap, whichever is smaller."""
+    dt = DTYPES[dtype]
+    header = {"dtype": dtype, "tensors": []}
+    parts = []
+    for name in sorted(deltas):
+        idx, val = deltas[name]
+        w = theta[name]
+        idx = torch.as_tensor(idx).reshape(-1).to(torch.int64).cpu()
+        val = torch.as_tensor(val).reshape(-1).detach().to(dt).cpu()
+        if not w.is_floating_point() or idx.numel() != val.numel():
+            raise ValueError(f"E (sparse): {name} needs a float tensor and one value per index")
+        if not idx.numel():
+            continue
+        order = torch.argsort(idx)
+        idx, val = idx[order].numpy(), val[order].contiguous()
+        if idx[0] < 0 or idx[-1] >= w.numel() or np.any(np.diff(idx) == 0):
+            raise ValueError(f"E (sparse): {name}'s indices must be distinct and inside the tensor")
+        form, index = "gaps", _varints(np.diff(idx, prepend=-1) - 1)
+        if (w.numel() + 7) // 8 < len(index):
+            bits = np.zeros(w.numel(), dtype=bool)
+            bits[idx] = True
+            form, index = "bitmap", np.packbits(bits, bitorder="little").tobytes()
+        header["tensors"].append([name, form, int(len(idx)), len(index)])
+        parts += [index, val.view(torch.uint8).numpy().tobytes()]
+    return _pack(b"CWSPAR1\n", header, b"".join(parts))
+
+
+def sparse_deltas(theta: dict[str, torch.Tensor], model: dict[str, torch.Tensor]) -> dict[str, tuple[torch.Tensor, torch.Tensor]]:
+    """The entries where `model` differs from θ, with their deltas in fp32: `encode_sparse(θ, …, "f32")` of these decodes
+    to `model` wherever an fp32 delta is exact (the update is small next to the weight)."""
+    out = {}
+    for k, w in theta.items():
+        m = model[k].detach().cpu().to(w.dtype).reshape(-1)
+        idx = torch.nonzero(m.view(_INT[w.element_size()]) != w.reshape(-1).view(_INT[w.element_size()])).reshape(-1)
+        if idx.numel():
+            out[k] = (idx, m[idx].float() - w.reshape(-1)[idx].float())
+    return out
+
+
+def _decode_sparse(theta: dict[str, torch.Tensor], header: dict, payload: memoryview, out: dict) -> dict:
+    dt = DTYPES[header["dtype"]]
+    size = torch.tensor([], dtype=dt).element_size()
+    entries = header["tensors"]
+    if not isinstance(entries, list) or not all(isinstance(t, list) and len(t) == 4 and isinstance(t[0], str)
+                                                and isinstance(t[1], str) for t in entries):
+        raise ValueError("E (sparse): malformed tensor entries")
+    names = [t[0] for t in entries]
+    if names != sorted(set(names)):
+        raise ValueError("E (sparse): tensors not in increasing name order")
+    at = 0
+    for name, form, nnz, nb in entries:
+        w = theta.get(name)
+        if w is None or not w.is_floating_point():
+            raise ValueError(f"E (sparse): {name} is not one of θ's float tensors")
+        if type(nnz) is not int or type(nb) is not int or not 0 < nnz <= w.numel() or nb < 0:
+            raise ValueError(f"E (sparse): {name}'s counts are malformed")
+        if at + nb + nnz * size > len(payload):
+            raise ValueError("E (sparse): payload too short")
+        idx = torch.from_numpy(_sparse_index(form, bytes(payload[at:at + nb]), nnz, w.numel()))
+        at += nb
+        val = torch.frombuffer(bytearray(payload[at:at + nnz * size]), dtype=dt).float()
+        at += nnz * size
+        flat = w.detach().cpu().reshape(-1).clone()
+        flat[idx] = (flat[idx].float() + val).to(w.dtype)
+        out[name] = flat.view(w.shape)
+    if at != len(payload):
+        raise ValueError("E (sparse): trailing bytes")
+    return out
+
+
 @torch.no_grad()
 def decode(theta: dict[str, torch.Tensor], blob: bytes, device: str = DEVICE) -> dict[str, torch.Tensor]:
     """The model E encodes from θ, every tensor in θ's dtype on the CPU."""
@@ -401,6 +528,8 @@ def decode(theta: dict[str, torch.Tensor], blob: bytes, device: str = DEVICE) ->
             out[k] = v
         return out
     fmt, header, payload = _unpack(blob)
+    if fmt == "sparse":
+        return _decode_sparse(theta, header, payload, out)
     if fmt == "lora":
         dt = DTYPES[header["dtype"]]
         size = torch.tensor([], dtype=dt).element_size()
@@ -441,6 +570,27 @@ def decode(theta: dict[str, torch.Tensor], blob: bytes, device: str = DEVICE) ->
 
 def format_of(blob: bytes) -> str:
     return MAGIC.get(blob[:8], "unknown")
+
+
+def rebuild_macs(theta: dict[str, torch.Tensor], blob: bytes) -> int:
+    """The MACs `decode(θ, E)` spends, by te_core.codecs' rule (every matmul MAC, one per element of each elementwise
+    arithmetic pass), for the scorer to compare with c when it credits E as a counterexample. θ may be meta tensors.
+
+    - full: 0 (replacement tensors);
+    - lora: (r + 2)·numel per factor pair (B @ A, the scale, the add); 0 for the tensors it carries in full;
+    - seedlog: steps · Σ numel, one fused multiply-add per element per step. Its first t coefficients rebuild the weights
+      after step t, at t · Σ numel;
+    - sparse: nnz, one add per listed entry.
+
+    Every format but the seed log rebuilds only the weights at the step it encodes."""
+    if blob[:8] == b"CWFULL1\n":
+        return 0
+    fmt, header, _ = _unpack(blob)
+    if fmt == "lora":
+        return sum((int(r) + 2) * theta[name].numel() for name, r, _ in header["factors"])
+    if fmt == "seedlog":
+        return int(header["steps"]) * sum(theta[k].numel() for k in header["names"])
+    return sum(int(t[2]) for t in header["tensors"])
 
 
 # ---- submission --------------------------------------------------------------------------------------------------------
