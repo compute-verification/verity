@@ -26,10 +26,12 @@ lock, so the two never collide.
   its island's commit (witness v4's `island.commit`; before it, `candidate.json`'s commit), else its run's commit, else
   the direction its meta names, else its class. The index names each record's witness schema and version and its
   harness's te_core.
-- **Who is scored**: honest(l*) reads the reference directions (`ref-*`, and the harness's reference smoke), whatever
-  the class, at the end of each run's own schedule only (its last checkpoint, `schedule_ends`; the coordinator, 12:05Z:
-  a checkpoint inside a longer reference schedule is not what an honest run of that length reaches). W* reads every
-  checkpoint of every other direction's records, a reference-class one included. The measurement auditor's records
+- **Who is scored**: honest(l*) reads only runs that update every weight of the start (witness v4's
+  `changed.actual_parameters` all of `eval_cost.parameters`, E `full`, no declared family: `full_theta`) launched by
+  `ref-optim` or `ref-data`, or the harness's and the scorer's own reference smokes (`is_reference`; the coordinator,
+  13:42Z), at the end of each run's own schedule only (its last checkpoint, `schedule_ends`; the coordinator, 12:05Z: a
+  checkpoint inside a longer reference schedule is not what an honest run of that length reaches). W* reads every
+  checkpoint of every other record, a class-reference run from any other direction included. The measurement auditor's records
   (direction `audit`, or a note starting `audit:`) are in the ledger and in nothing scored.
 - **What a record must show to count**: launch.py uploads a record from an agent's VM, so its `witness.json` and
   `run/run.json` must be the node's (`custody_problems`: the hashes of `out/witness.json` and `out/run/run.json` in the
@@ -38,9 +40,12 @@ lock, so the two never collide.
   the pin and only the island), an earlier record's every fixed-side file at its commit (`benchmarks/covert_witness`
   outside `islands/`, `scorer/` and docs) one the harness's branches (`cursor/covert-witness-4207`,
   `cursor/te-core-4207`) held since 30 Oct (`fixed_side`). A record whose E (sha256) is
-  an earlier record's (`replays`), or whose harness counted under half the FLOPs of the run's own steps
-  (`over_train_flops` < `COUNTED_FLOOR`), is a counted-compute escape and unscored (the coordinator, 10:35Z). Otherwise
-  the record is invalid, with the reason in the ledger.
+  an earlier record's that is current or another direction's (`replays`, as te_core.frontier reads a duplicate), or
+  whose harness counted under half the FLOPs of the run's own steps (`over_train_flops` < `COUNTED_FLOOR`), is a
+  counted-compute escape and unscored (the coordinator, 10:35Z). A record whose updated set is the tied embedding with
+  no block below the top (embed only, or embed and the top block) is priced wrong (tied lookup) and out of the frontier:
+  v2.3's counter prices the lookup at 0 (the coordinator, 13:32Z). Otherwise the record is invalid, with the reason in
+  the ledger.
 - **Regime** (`regime_of`): a record measured by a commit pinned under the pin's version (`pinned.json` at
   `TE_BRANCH`'s head and its history, `pins`: a re-pin that keeps the version fixes the harness, not the measurement, as
   v2.2's second pin did) is `current`, and only those make the frontier, honest, the promotions, the cells and the finals (the coordinator, 12:55Z: the v2.3

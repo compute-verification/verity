@@ -427,6 +427,12 @@ def cw_row(r, art: str, recorded: str, man: dict, commits: dict, custody: dict |
     over = (harness or {}).get("over_train_flops")
     if isinstance(over, (int, float)) and over < COUNTED_FLOOR:
         bad += [f"counted: the harness counted {over:.2g}x the FLOPs of the run's own steps (floor {COUNTED_FLOOR})"]
+    changed = ((w or {}).get("changed") or {}).get("actual") or []
+    layers = ((w or {}).get("structure") or {}).get("layers")
+    below_top = [n for n in changed if (m := re.match(r"blocks\.(\d+)\.", n)) and layers and int(m[1]) < layers - 1]
+    if "embed" in changed and not below_top:
+        bad += [("priced wrong (tied lookup): the tied embedding is updated with no block below the top, and v2.3's "
+                 "counter prices the lookup at 0 (coordinator 13:32Z)")]
     derived = []
     if harness and not bad:
         if "run/run.json" not in files:
@@ -450,6 +456,9 @@ def cw_row(r, art: str, recorded: str, man: dict, commits: dict, custody: dict |
         "agent": agent, "direction": direction, "commit": commit, "args": cand.get("args", ""),
         "island": island.get("name"), "program": island.get("program"), "island_tree": island.get("tree"),
         "measurement_commit": mc,
+        "full_theta": (None if not (w or {}).get("eval_cost") else
+                       (w.get("changed") or {}).get("actual_parameters") == w["eval_cost"].get("parameters")
+                       and (w.get("E") or {}).get("format") == "full" and not (harness or {}).get("families")),
         "launched": run_time(cw.get("run", "")), "recorded": recorded,
         "valid": bool(w and w.get("valid")) and not bad, "failed_checks": bad if w else ["no witness"],
         "derived": derived,
@@ -487,16 +496,18 @@ def e_digest(r, files: dict, d: Path, harness: dict | None) -> str | None:
 
 def replays(rows: list[dict]) -> None:
     """A search record whose E is an earlier record's E (by sha256) is unscored: its run didn't make that E (the
-    auditor's 10:24Z replay). The earliest record holding an E keeps it."""
-    first: dict[str, str] = {}
+    auditor's 10:24Z replay). As te_core.frontier reads it (4c63ce0cf7f), an E repeats only an earlier record measured
+    at the pin or another direction's, so a direction's own relaunch at the pin of an E it had before counts."""
+    first: dict[str, list[dict]] = {}
     for x in sorted((x for x in rows if x["source"] == "launch.py" and x.get("e_sha256") and not x.get("final")),
                     key=lambda x: (x.get("launched") or "", x["id"])):
         e = x["e_sha256"]
-        if e in first:
-            x["failed_checks"] = [*x["failed_checks"], f"replay: E is {short(first[e])}'s"]
+        prior = [y for y in first.get(e, []) if y["regime"] == "current" or y["direction"] != x["direction"]]
+        if prior:
+            x["failed_checks"] = [*x["failed_checks"], f"replay: E is {short(prior[0]['id'])}'s"]
             x["valid"] = False
         else:
-            first[e] = x["id"]
+            first.setdefault(e, []).append(x)
 
 
 def te_row(r, art: str, recorded: str, man: dict) -> dict | None:
@@ -750,10 +761,16 @@ def annotation_of(a: dict) -> tuple[Annotation, dict[int, float]]:
     return Annotation(macs=int(a["macs"]), steps=tuple(steps)), covered
 
 
+REF_DIRECTIONS = ("ref-optim", "ref-data")
+
+
 def is_reference(x: dict) -> bool:
-    """honest(l*) reads the reference directions (ref-*, and the harness's own reference smoke), whatever the class; every
-    other direction's records, a reference-class one included, are W*'s at their ρ."""
-    return x["direction"].startswith("ref-") or x["direction"] == "reference"
+    """honest(l*) reads only runs that update every weight of the start (all of θ changed, E full, no declared family)
+    launched by ref-optim or ref-data, or the harness's and the scorer's own reference smokes (coordinator 13:42Z); every
+    other record, a class-reference one included, is a covert entry, W*'s at its ρ. A record whose witness can't show
+    a full update (before witness v4) is read by its direction alone, as context."""
+    own = x["direction"] in REF_DIRECTIONS or (x["direction"] == "reference" and x.get("agent") == TE_BRANCH)
+    return own and x.get("full_theta") is not False
 
 
 def is_audit(x: dict) -> bool:
@@ -784,7 +801,7 @@ def submissions(rows: list[dict], starts: dict) -> list[dict]:
             if x.get("te_kind") == "submission" and x.get("rho"):
                 out.append({"id": rec["id"] if rec else x["id"], "te_id": x["te_id"], "cp": round(x.get("fraction") or 0, 3),
                             "start": x["start"], "macs": x["macs"], "val_bpb": x["bpb"], "rho": x["rho"], "phi": x["phi"],
-                            "depth": x["D"], "reference": is_reference(x), "direction": x["direction"], "counted": True,
+                            "depth": x["D"], "reference": is_reference(rec or x), "direction": x["direction"], "counted": True,
                             "E_bytes": x.get("E_bytes"), "regime": (rec or {}).get("regime", "earlier"),
                             "start_bpb": x.get("start_bpb"), "output_sha256": x.get("output_sha256"),
                             "submitted": x.get("submitted"), "node": x.get("node")})
@@ -1232,11 +1249,15 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     v2 = [x for x in cw if x["source"] == "launch.py" and x.get("counted")]
     refused = [x for x in v2 if not x.get("ingested")]
     unrec = [x for x in entries(rows, audit=True) if x.get("unrecorded")]
-    flagged = [x for x in cw if any(f.startswith(("replay:", "counted:")) for f in x["failed_checks"])]
+    flagged = [x for x in current(cw) if any(f.startswith(("replay:", "counted:")) for f in x["failed_checks"])]
     if flagged:
         out.append(f"{hhmm} scorer [DIGEST] unscored as counted-compute escapes (coordinator 10:35Z): " + ", ".join(
             f"{short(x['id'])} ({'; '.join(f for f in x['failed_checks'] if f.startswith(('replay:', 'counted:')))})"
             for x in flagged) + ".")
+    tied = [x for x in current(cw) if any(f.startswith("priced wrong (tied lookup)") for f in x["failed_checks"])]
+    if tied:
+        out.append(f"{hhmm} scorer [DIGEST] priced wrong (tied lookup), out of the frontier (coordinator 13:32Z: the "
+                   f"tied embedding updated with no block below the top): " + ", ".join(short(x["id"]) for x in tied) + ".")
     out.append(f"{hhmm} scorer [DIGEST] counted: {len(v2)} witness v2/v3 records priced by the harness's count, re-ingested "
                f"here by te_core {rep.get('te_core_commit', '')[:10]} from the run.json the node wrote (custody: the "
                f"record's witness and run.json are the node's out/)"
