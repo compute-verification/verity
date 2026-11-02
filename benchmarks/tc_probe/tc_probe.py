@@ -230,7 +230,7 @@ class Format:
 
     def random_finite_bits(self, rng, shape, exp_lo=None, exp_hi=None) -> np.ndarray:
         """Uniformly random sign, exponent field in [exp_lo, exp_hi] (default 1 .. finite max) and mantissa; NaN codes repaired
-        to the largest finite mantissa (E4M3) -- the BF16 probe's draws."""
+        to the largest finite mantissa (E4M3) -- the BF16 probe's samples."""
 
         n = int(np.prod(shape))
         lo, hi = (1 if exp_lo is None else exp_lo), (self.finite_exp_max if exp_hi is None else exp_hi)

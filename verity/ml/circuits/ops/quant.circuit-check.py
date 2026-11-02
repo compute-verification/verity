@@ -6,7 +6,7 @@ from typing import Any
 
 def _core_roots() -> list[Any]:
     """Phase 1: the row proof block at H = 128, with and without the ReLU, and at 512; the amax of a row of 128
-    and over four partial maxima; a chunk of 128. Phase 2, each in a form whose proof block fits a C-Flock block of 2^27:
+    and over four partial maxima; a chunk of 128. Phase 2, each in a form whose proof block fits a Flock block of 2^27:
 
     * a 16,384-wide row without the ReLU (an RMSNorm's or attention's output): its amax, and the two chunks of 8,192;
     * the MLP's 65,536-wide hidden row, relu'd: in four 32 KiB rows, its amax over them and the four chunks of 16,384; in 256-byte

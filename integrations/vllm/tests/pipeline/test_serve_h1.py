@@ -386,7 +386,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     monkeypatch.setattr(TD, "available", lambda: False)
     monkeypatch.setattr(verifier, "executable", lambda: built.append(len(calls)))
     opts = SimpleNamespace(protocols=SH.ENTRY, max_num_batched_tokens=ROWS, window_steps=STEPS, protocols_config=None,
-                           gate=SimpleNamespace(h1_prover=None))
+                           gate=SimpleNamespace(h1_prover=None, h1_model=None, h1_weights_root=None))
     arm = SH.arm_of(opts, SimpleNamespace(model=srv.model, vllm=object()), srv.com, tmp_path)
     (held,) = sessions.held
     assert arm.describe()["ready"] == {"tables": "off", "kernels": 3, "session": held["session"],
@@ -753,3 +753,20 @@ def test_the_pouw_settings_unit_and_ks_serve_a_j10r_window_over_the_linears_at_o
     assert {(c.layer, c.k) for c in run.calls} == {(0, K)} and len(run.calls) == STEPS
     assert f"outside the pouw setting 'ks' [{K}]" in run.details["uncovered"]
     srv.src.uninstall()
+
+
+def test_model_key_reads_the_auditors_key_for_the_programs_circuit():
+    """`model_key_of` asks the gate's ``model-key`` for the window Program's circuit (and the period's root when given) and
+    hands back the registration's salt key and weights root, so the windows' b/<K> are committed under the auditor's key."""
+    asked = []
+
+    class Gate:
+        def call(self, *words):
+            asked.append(words)
+            return {"key": "ab" * 32, "weights_root": "cd" * 64}
+
+    key, root = SH.model_key_of(Gate(), "ROLE", "ef" * 64)("12" * 64)
+    assert (key, root) == (bytes.fromhex("ab" * 32), "cd" * 64)
+    assert asked == [("model-key", "--model", "ROLE", "--circuit", "12" * 64, "--weights-root", "ef" * 64)]
+    SH.model_key_of(Gate(), "ROLE", None)("12" * 64)
+    assert asked[-1] == ("model-key", "--model", "ROLE", "--circuit", "12" * 64)

@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.Aliased.Copies
+import Properties.Flock.Circuit.Keys
 
 /-!
 # Δ's source as a key the same at every template instance
@@ -21,38 +22,6 @@ A typed flat class's slot is one unit copy, and its input `i` is the port bit `i
 open Flock FlockLevel3
 
 namespace FlockSoundness.Discharge.Aliased
-
-/-- **The column Δ copies into a unit input, without the template instance**: a forced-zero row, message bit `bit` of
-byte `byte` of row port `p`, output column `col` of net `net`'s slot `slot`, the fixed column `col`, or input padding
-row `off` of copy `k`. -/
-inductive Src
-  | zero
-  | msg (p byte bit : ℕ)
-  | wire (net slot col : ℕ)
-  | lit (col : ℕ)
-  | pad (k off : ℕ)
-  deriving DecidableEq
-
-/-- Copy index `k`'s input port `p`, bit `t`: `flatSrc`'s source, without the template instance. -/
-def srcAt (c : Circuit) (k p t : ℕ) : Src :=
-  if p < (c.unit.inGroups.getD 0 default).bits.size then
-    if (c.leavesIn.getD k #[])[p]! < 0 then .zero else
-      let x := ((c.leavesIn.getD k #[])[p]!).toNat
-      let q := ((List.range (Typed.starts c).size).reverse.find? (fun q => (Typed.starts c)[q]! ≤ x)).getD 0
-      if 16 * (x - (Typed.starts c)[q]!) + t < c.ports[q]!.bits then
-        .msg q (2 * (x - (Typed.starts c)[q]!) + t / 8) (t % 8)
-      else .zero
-  else
-    match c.leafCuts.toList.filter (fun e => decide (e.1 = k ∧ e.2.1 = p)) with
-    | e :: _ =>
-      let q := ((List.range (Typed.starts c).size).reverse.find? (fun q => (Typed.starts c)[q]! ≤ e.2.2)).getD 0
-      if t < 16 && 16 * (e.2.2 - (Typed.starts c)[q]!) + t < c.ports[q]!.bits then
-        .msg q (2 * (e.2.2 - (Typed.starts c)[q]!) + t / 8) (t % 8)
-      else .zero
-    | [] => match c.wires.toList.filter (fun w => decide (w.dst = (c.unitNet, k, p))) with
-      | w :: _ => .wire w.src.1 w.src.2.1
-          (((portCols (c.nets.getD w.src.1 default).2.outGroups).getD w.src.2.2 default).1 + t)
-      | [] => .lit 0
 
 /-- A key's column at template instance `g` (a forced-zero row's and a padding row's are not read). -/
 def realize (c : Circuit) (g : ℕ) : Src → ℕ
@@ -103,15 +72,6 @@ theorem flatSrc_key (c : Circuit) (s₀ p t : ℕ) :
       · exact Or.inr ⟨Src.noConfusion, rfl⟩
       · exact Or.inl ⟨rfl, Or.inr rfl⟩
 
-/-- **Stacked input `x`'s key**: copy `x / W`'s input at slot offset `x % W` (`W = inWords · WORD`), `srcAt` at the
-port bit it is, or the padding row it is. -/
-def srcKey (c : Circuit) (x : ℕ) : Src :=
-  if x % (c.unit.inWords * WORD) ∈ portBits c.unit.inGroups then
-    srcAt c (x / (c.unit.inWords * WORD)) (portOf (portCols c.unit.inGroups) (x % (c.unit.inWords * WORD)))
-      (x % (c.unit.inWords * WORD) -
-        (portCols c.unit.inGroups)[portOf (portCols c.unit.inGroups) (x % (c.unit.inWords * WORD))]!.1)
-  else .pad (x / (c.unit.inWords * WORD)) (x % (c.unit.inWords * WORD))
-
 /-- **At a leaf port, Δ copies the zero or a message bit**: only a cut port's copy comes from a wire or no source. -/
 theorem srcAt_leaf (c : Circuit) (k : ℕ) {p : ℕ} (t : ℕ) (hp : p < (c.unit.inGroups.getD 0 default).bits.size) :
     srcAt c k p t = .zero ∨ ∃ q byte bit, srcAt c k p t = .msg q byte bit ∧ bit < 8 := by
@@ -147,10 +107,6 @@ theorem srcKey_pad {c : Circuit} {x k off : ℕ} (h : srcKey c x = .pad k off) :
   · exact absurd h (srcAt_ne_pad _ _ _ _ _ _)
   · cases h
     exact ⟨rfl, rfl⟩
-
-/-- **Equal codes are equal keys**: `n` inputs' keys, `none` at the zero, else the first input with the same key. -/
-def keyIdx (c : Circuit) (n : ℕ) (x : Fin n) : Option (Fin n) :=
-  if srcKey c x.val = .zero then none else (List.finRange n).find? fun i => srcKey c i.val = srcKey c x.val
 
 theorem keyIdx_eq_none {c : Circuit} {n : ℕ} (x : Fin n) : keyIdx c n x = none ↔ srcKey c x.val = .zero := by
   unfold keyIdx

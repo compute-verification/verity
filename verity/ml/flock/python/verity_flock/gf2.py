@@ -1,4 +1,4 @@
-"""`verity.ml.circuits.boolean.forms`, under its C-Flock name: the same module object, so `boolean_export`'s in-place tracing patches reach
+"""`verity.ml.circuits.boolean.forms`, under its Flock name: the same module object, so `boolean_export`'s in-place tracing patches reach
 every caller."""
 import sys
 
