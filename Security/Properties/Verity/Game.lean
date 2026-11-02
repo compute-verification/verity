@@ -38,9 +38,11 @@ The statement's form is the causal game, the committed files, one fixed extracto
 * **A causal game.** The prover sends the parameters `θ`, the committed files `F` (any number of blobs) and the
   commitment `c` first, before any coin, so every statement is `∀ θ F c`, and then plays `play (rounds θ) θ F c`, a
   `Verity.Game`: in each of the device's rounds the prover sends the bytes (a root, a transcript digest) that the
-  round's release answers, and then the device draws and releases that round's coins (`releases`). A coin tree's
-  rounds (`Round.tree`) are sampled at its `Hello`, which releases the tree's root and key, and opened later, each
-  after the bytes it answers. The evidence comes last, with its own blobs (the record, its rep files, the proofs). A
+  round's release answers, and then the device draws and releases that round's coins (`releases`). A coin tree is
+  sampled at its `Hello` (`Round.hello`), which releases the tree's root and key, and each of its rounds is opened at a
+  round of its own that names the tree (`Round.opening`), after the bytes it answers, among any other rounds: the
+  device holds every tree it sampled open, and an opening opens its stream's next unopened round, so no round is
+  opened twice. The evidence comes last, with its own blobs (the record, its rep files, the proofs). A
   strategy (`Verity.Game.Strategy`) is a function of the coins released so far and never of later ones. The composite
   reads the committed files and then the evidence's blobs (`Exchange.sent`), so every input whose blobs begin with the
   committed files is what some strategy sends (`Verity.sent_reachable`).
@@ -288,30 +290,48 @@ abbrev TreeOpenable (ν : ByteArray) (spec : Flock.CoinTree.Spec) (t : TreeSampl
   {d : TreeDraw spec.block //
     (TreeDraw.leaf ν (treeKey t.1) s r d).data = (TreeDraw.leaf ν (treeKey t.1) s r (t.2 s r)).data}
 
-/-- **A coin tree's openings `os`** after its `Hello` sampled `t` under the nonce `ν`: at each, `(s, r, n)`, the prover
-sends the bytes the opening answers, and then the device draws stream `s`'s round `r` anew among the draws with the leaf
-`t` committed to there (`TreeOpenable`) and releases its first `n` coins. -/
-def treeOpens (ν : ByteArray) (spec : Flock.CoinTree.Spec) (t : TreeSample spec) :
-    List (Fin spec.streams.size × Fin (2 ^ spec.roundsLog) × ℕ) → Game (List Release)
-  | [] => .ret []
-  | (s, r, n) :: os => .send ByteArray fun b =>
-      haveI : Nonempty (TreeOpenable ν spec t s r) := ⟨⟨t.2 s r, rfl⟩⟩
-      .coin (TreeOpenable ν spec t s r) fun d =>
-        (treeOpens ν spec t os).map fun log => ⟨b, TreeDraw.opened d.1 n⟩ :: log
+/-- **A coin tree the device holds open**: its `Hello`'s nonce, its shape, what the device sampled at its `Hello`, and how
+many of each stream's rounds it has opened. -/
+structure OpenTree where
+  nonce : ByteArray
+  spec : Flock.CoinTree.Spec
+  sample : TreeSample spec
+  opened : Fin spec.streams.size → ℕ
+
+/-- **The round an opening of stream `s` of the tree `T` opens, for its first `n` coins**: the stream's next unopened
+round; `none` where the device refuses the opening (`open_tree`): `s` is no stream of `T`, every round of it is opened,
+or `n` is more than a block. -/
+def OpenTree.next (T : OpenTree) (s n : ℕ) : Option (Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)) :=
+  if hs : s < T.spec.streams.size then
+    if hr : T.opened ⟨s, hs⟩ < 2 ^ T.spec.roundsLog ∧ n ≤ T.spec.block then some (⟨s, hs⟩, ⟨T.opened ⟨s, hs⟩, hr.1⟩)
+    else none
+  else none
+
+/-- The tree `T` once its stream `s`'s next round is opened. -/
+def OpenTree.bump (T : OpenTree) (s : Fin T.spec.streams.size) : OpenTree :=
+  ⟨T.nonce, T.spec, T.sample, fun j => if j = s then T.opened s + 1 else T.opened j⟩
 
 /-- **A round of the device.** -/
 inductive Round where
   /-- `n` coin bits, drawn after the bytes the release answers -/
   | fresh (n : ℕ)
-  /-- a coin tree of shape `spec` (`coin-tree/hm96-sha512/v2`), its rounds opened in the order `opens` lists them, each
-  `(stream, round, n)` the round's first `n` coins and each round at most once, as the challenger opens a stream's next
-  round -/
-  | tree (spec : Flock.CoinTree.Spec) (opens : List (Fin spec.streams.size × Fin (2 ^ spec.roundsLog) × ℕ))
+  /-- a coin tree's `Hello`: the device samples a tree of shape `spec` (`coin-tree/hm96-sha512/v2`) under the nonce the
+  prover sends, and releases its root and key -/
+  | hello (spec : Flock.CoinTree.Spec)
+  /-- an opening of the `i`-th coin tree the device sampled: its stream `s`'s next unopened round, the round's first `n`
+  coins, after the bytes the opening answers. An opening names no round, so no round is opened twice: the device opens a
+  stream's rounds in order, each once, as the challenger refuses any other round -/
+  | opening (i s n : ℕ)
 
-/-- **The device's releases, in order.** At a round of `n` coin bits the prover sends the bytes the release answers,
-then the device draws `n` uniform bits and releases them. At a coin tree the prover sends its `Hello`'s nonce `ν`, the
-device samples the tree (`TreeSample`: a fresh key and every round's draw) and releases its root and key (`treeRoot`,
-`treeKey`), and then it opens the tree's rounds in order (`treeOpens`). The output is the device's log.
+/-- **The device's releases, in order, holding open the coin trees `ts`.** At a round of `n` coin bits the prover sends
+the bytes the release answers, then the device draws `n` uniform bits and releases them. At a coin tree's `Hello` the
+prover sends its nonce `ν`, the device samples the tree (`TreeSample`: a fresh key and every round's draw), releases its
+root and key (`treeRoot`, `treeKey`) and holds it open. At an opening of the `i`-th tree it holds, the prover sends the
+bytes the opening answers, and then the device draws the stream's next unopened round anew among the draws with the leaf
+the tree's `Hello` committed to there (`TreeOpenable`), releases its first `n` coins and counts the round opened
+(`OpenTree.next`, `OpenTree.bump`). Rounds of different trees, streams and fresh coins interleave in any order the rounds
+list, as the challenger serves its frames. An opening the device refuses (no `i`-th tree, or `OpenTree.next`'s refusal)
+ends its releases, as a refused frame ends the challenger's session. The output is the device's log.
 
 An opening draws its round anew among the draws with the leaf the `Hello` committed to. That gives the opened coins and
 salts, jointly with the key and every leaf, the law they have when the device keeps the draws it sampled at `Hello`, as
@@ -320,13 +340,23 @@ leaf among it, and each opening's whole round, where the deployed device answers
 opening's coins, the chain's link after them, the salt and the path: a deployed prover is a strategy that reads only
 those, and its plays have the same law here. What the leaves tell of a round's coins before it's opened is what the
 key's hm96 hiding gap bounds. -/
-def releases : List Round → Game (List Release)
-  | [] => .ret []
-  | .fresh n :: rs => .send ByteArray fun b => .coin (Fin n → Bool) fun x =>
-      (releases rs).map fun log => ⟨b, List.ofFn x⟩ :: log
-  | .tree spec os :: rs => .send ByteArray fun ν => .coin (TreeSample spec) fun t =>
-      (treeOpens ν spec t os).bind fun log => (releases rs).map fun log' =>
-        ⟨ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩ :: (log ++ log')
+def releases : List OpenTree → List Round → Game (List Release)
+  | _, [] => .ret []
+  | ts, .fresh n :: rs => .send ByteArray fun b => .coin (Fin n → Bool) fun x =>
+      (releases ts rs).map fun log => ⟨b, List.ofFn x⟩ :: log
+  | ts, .hello spec :: rs => .send ByteArray fun ν => .coin (TreeSample spec) fun t =>
+      (releases (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) rs).map fun log =>
+        ⟨ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩ :: log
+  | ts, .opening i s n :: rs =>
+      match ts[i]? with
+      | none => .ret []
+      | some T =>
+        match T.next s n with
+        | none => .ret []
+        | some (s', r) => .send ByteArray fun b =>
+            haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample s' r) := ⟨⟨T.sample.2 s' r, rfl⟩⟩
+            .coin (TreeOpenable T.nonce T.spec T.sample s' r) fun d =>
+              (releases (ts.set i (T.bump s')) rs).map fun log => ⟨b, TreeDraw.opened d.1 n⟩ :: log
 
 /-- How a play ends: the parameters, the committed files and the commitment sent first, the device's log, and the
 evidence sent last with its blobs. -/
@@ -343,9 +373,9 @@ files, then the evidence's blobs. -/
 def Exchange.sent (o : Exchange) : Sent := ⟨o.params, o.commitment, o.evidence, o.files ++ o.blobs⟩
 
 /-- **The causal game after the parameters `θ`, the committed files `F` and the commitment `c`**: the device's rounds
-`ns`, each release after the bytes it answers, then the evidence with its blobs. -/
+`ns`, from no coin tree open, each release after the bytes it answers, then the evidence with its blobs. -/
 def play (ns : List Round) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) : Game Exchange :=
-  (releases ns).bind fun log => .send (ByteArray × Array ByteArray) fun e => .ret ⟨θ, F, c, log, e.1, e.2⟩
+  (releases [] ns).bind fun log => .send (ByteArray × Array ByteArray) fun e => .ret ⟨θ, F, c, log, e.1, e.2⟩
 
 /-- SHA-512, the compiled one (`Flock.Sha512.hash`), as a 64-byte digest. -/
 def sha512 (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
@@ -420,9 +450,8 @@ abbrev World {ι : Type} (d : Device ι) (α : Type) [Fintype α] := Accounting.
 
 /-- **The names the subprotocols define.** v2's reading of the circuit file; the positions from the files and
 the commitment, the circuit file's digest in the parameters and the registered file; the device's rounds (`Round`:
-fresh coins, or a coin tree's), and the releases each component's check read, decoded from the device's signed log
-entries in what the prover sent; the
-extractor applied to a strategy, and each subprotocol's collision finder and forger of the device's signature, with
+fresh coins, a coin tree's `Hello`, or an opening of one), and the releases each component's check read, decoded from
+the device's signed log entries in what the prover sent; the extractor applied to a strategy, and each subprotocol's collision finder and forger of the device's signature, with
 their SHA-512 calls bounded by the strategy's (`finder_calls`, `forger_calls`) and the device's signatures the forger saw
 by the published `Q` (`forger_signed`); the committed circuit's gates a play computed after their window's coin; the world each
 play realizes; the declaration's registered inputs and the inference-only policy's budgets; the wipe that opens the

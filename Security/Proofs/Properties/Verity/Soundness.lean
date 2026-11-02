@@ -132,7 +132,7 @@ theorem prob_play_eq_one (ns : List Round) (θ : ByteArray) (F : Array ByteArray
     Game.prob p (play ns θ F c) σ = 1 := by
   refine (Game.prob_bind_of_const (fun log => Game.send (ByteArray × Array ByteArray) fun e =>
     Game.ret (⟨θ, F, c, log, e.1, e.2⟩ : Exchange)) p
-    (fun _ => True) (fun log t => ?_) (releases ns) σ).trans (Game.prob_true _ _)
+    (fun _ => True) (fun log t => ?_) (releases [] ns) σ).trans (Game.prob_true _ _)
   simp [Game.prob, hp]
 
 /-- **Its hypotheses hold at the honest deployment**: at registered files, where each of composite `k`'s subprotocols'
@@ -183,7 +183,7 @@ theorem prob_play_eq_zero (ns : List Round) (θ : ByteArray) (F : Array ByteArra
     Game.prob p (play ns θ F c) σ = 0 := by
   refine (Game.prob_bind_of_const (fun log => Game.send (ByteArray × Array ByteArray) fun e =>
     Game.ret (⟨θ, F, c, log, e.1, e.2⟩ : Exchange)) p
-    (fun _ => False) (fun log t => ?_) (releases ns) σ).trans (Game.prob_false _ _)
+    (fun _ => False) (fun log t => ?_) (releases [] ns) σ).trans (Game.prob_false _ _)
   simp [Game.prob, hp]
 
 /-- **One subprotocol's failing instance is the theorem's**: at files that pass the commit phase's check, a strategy at
@@ -212,20 +212,38 @@ theorem soundness_nontrivial_of_lt {ι α : Type} [Fintype α] {d : Device ι} (
       _ = _ := by rw [hz, add_zero]
   exact lt_irrefl _ ((hle.trans (h θ F c σ)).trans_lt hlt)
 
-/-- A strategy for a coin tree's openings: the empty bytes at each. -/
-def treeOpensStrategy (ν : ByteArray) (spec : Flock.CoinTree.Spec) (t : TreeSample spec) :
-    (os : List (Fin spec.streams.size × Fin (2 ^ spec.roundsLog) × ℕ)) → Game.Strategy (treeOpens ν spec t os)
-  | [] => PUnit.unit
-  | (_, _, _) :: os =>
-      ⟨.empty, fun _ => Game.Strategy.toMap _ (treeOpens ν spec t os) (treeOpensStrategy ν spec t os)⟩
+/-- **An opening opens its stream's next unopened round**: the round `OpenTree.next` gives for stream `s` is the number of
+the stream's rounds already opened. -/
+theorem OpenTree.next_round {T : OpenTree} {s n : ℕ} {p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)}
+    (h : T.next s n = some p) : p.1.val = s ∧ p.2.val = T.opened p.1 := by
+  unfold OpenTree.next at h
+  split at h
+  · split at h
+    · cases h
+      exact ⟨rfl, rfl⟩
+    · cases h
+  · cases h
 
-/-- A strategy for the device's releases: the empty bytes in every round, a coin tree's `Hello` and its openings
-included. -/
-def releasesStrategy : (ns : List Round) → Game.Strategy (releases ns)
-  | [] => PUnit.unit
-  | .fresh _ :: ns => ⟨.empty, fun _ => Game.Strategy.toMap _ (releases ns) (releasesStrategy ns)⟩
-  | .tree spec os :: ns => ⟨.empty, fun t => Game.Strategy.bind (treeOpens .empty spec t os) _
-      (treeOpensStrategy .empty spec t os) fun _ => Game.Strategy.toMap _ (releases ns) (releasesStrategy ns)⟩
+/-- **Opening a round counts it**: once stream `s`'s next round is opened, its count is one more and every other stream's
+is unchanged, so with `OpenTree.next_round` a stream's rounds are opened in order, each at most once. -/
+theorem OpenTree.bump_opened (T : OpenTree) (s j : Fin T.spec.streams.size) :
+    (T.bump s).opened j = if j = s then T.opened s + 1 else T.opened j := rfl
+
+/-- The device's releases have a strategy from any coin trees open: the empty bytes in every round. -/
+theorem releases_nonempty (ts : List OpenTree) (ns : List Round) : Nonempty (Game.Strategy (releases ts ns)) := by
+  induction ns generalizing ts with
+  | nil => exact ⟨PUnit.unit⟩
+  | cons r ns ih =>
+    cases r with
+    | fresh n => exact ⟨⟨.empty, fun _ => Game.Strategy.toMap _ _ (ih ts).some⟩⟩
+    | hello spec => exact ⟨⟨.empty, fun _ => Game.Strategy.toMap _ _ (ih _).some⟩⟩
+    | opening i s n =>
+      simp only [releases]
+      split
+      · exact ⟨PUnit.unit⟩
+      · split
+        · exact ⟨PUnit.unit⟩
+        · exact ⟨⟨.empty, fun _ => Game.Strategy.toMap _ _ (ih _).some⟩⟩
 
 /-- Playing `s` in `g` and then `t b` in `f b`, where each `t b` meets `p` surely, meets `p` surely. -/
 theorem prob_bind_strategy {β γ : Type} (f : β → Game γ) (p : γ → Prop) (t : (b : β) → Game.Strategy (f b))
@@ -249,8 +267,9 @@ theorem sent_reachable (ns : List Round) (θ : ByteArray) (F : Array ByteArray) 
   let f : List Release → Game Exchange := fun log =>
     Game.send (ByteArray × Array ByteArray) fun e' => Game.ret (⟨θ, F, c, log, e'.1, e'.2⟩ : Exchange)
   let t : (log : List Release) → Game.Strategy (f log) := fun _ => ⟨(e, B), PUnit.unit⟩
-  refine ⟨Game.Strategy.bind (releases ns) f (releasesStrategy ns) t, ?_⟩
-  refine (prob_bind_strategy f _ t (fun _ => ?_) (releases ns) (releasesStrategy ns)).trans (Game.prob_true _ _)
+  obtain ⟨s⟩ := releases_nonempty [] ns
+  refine ⟨Game.Strategy.bind (releases [] ns) f s t, ?_⟩
+  refine (prob_bind_strategy f _ t (fun _ => ?_) (releases [] ns) s).trans (Game.prob_true _ _)
   simp [f, t, Game.prob, Exchange.sent]
 
 /-- **The event of `Vocab.SoundnessAt` holds every acceptance of the compiled verifier**: if composite `k`'s compiled
