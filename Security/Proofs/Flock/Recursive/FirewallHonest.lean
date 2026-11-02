@@ -182,6 +182,188 @@ theorem facts_of {s : Schedule} (hs : Canonical s) : Facts s := by
     · exact .inl (bne_iff_ne.mp h)
     · exact .inr h
 
+theorem natOf?_eq {v : Json} {c : Nat} (h : natOf? v = some c) : v = jnat c := by
+  match v, h with
+  | .num ⟨m, 0⟩, h =>
+    simp only [natOf?] at h
+    split at h
+    · cases h
+      simp only [jnat]
+      congr
+      exact (Int.toNat_of_nonneg ‹m ≥ 0›).symm
+    · cases h
+
+theorem rootsOf_obj {s : Schedule} {t : FirewallObj.Tree} (he : s.roots = .obj ⟨⟨t⟩⟩) :
+    rootsOf s = t.toListModel.map fun e => (e.1, (natOf? e.2).getD 0) := by
+  unfold rootsOf
+  rw [he]
+
+theorem streams_nodup {s : Schedule} (hF : Facts s) : (s.streams.map (·.1)).Nodup :=
+  FirewallObj.Asc.ne (key := id) hF.streams
+
+section
+variable {s : Schedule} {tables : List String} {h : Honest}
+
+/-- Commit's tables are distinct. -/
+theorem roots_nodup (hF : Facts s) (hf : Fits s tables h) : (h.roots.map (·.1)).Nodup := by
+  obtain ⟨t, he, ht, _⟩ := hF.roots
+  have hp := hf.roots.map Prod.fst
+  rw [List.map_map, rootsOf_obj he, List.map_map] at hp
+  exact hp.nodup_iff.mpr (List.pairwise_map.mpr (FirewallObj.Asc.ne (FirewallObj.asc_ordered ht)))
+
+/-- Commit's node counts have the schedule's roots' canonical form. -/
+theorem commit_pin (hF : Facts s) (hf : Fits s tables h) :
+    canonForm (Json.mkObj (h.roots.map fun e => (e.1, jnat (e.2.size / NODE_BYTES)))) = canonForm s.roots := by
+  obtain ⟨t, he, ht, hn⟩ := hF.roots
+  rw [he, FirewallObj.mkObj_eq]
+  refine FirewallObj.canonForm_obj_perm (FirewallObj.ordered_ofList _) ht ?_
+  have hnd : List.Pairwise (· ≠ ·) (h.roots.map (·.1)) := roots_nodup hF hf
+  refine (FirewallObj.forms_ofList (List.pairwise_map.mpr (List.pairwise_map.mp hnd))).trans ?_
+  rw [List.map_map]
+  have hp := hf.roots.map fun e : String × Nat => (e.1, canonForm (jnat e.2))
+  rw [List.map_map, rootsOf_obj he, List.map_map] at hp
+  refine hp.trans (List.Perm.of_eq ?_)
+  unfold FirewallObj.forms
+  refine List.map_congr_left fun e he' => ?_
+  obtain ⟨c, hc⟩ := Option.isSome_iff_exists.mp (hn e he')
+  simp only [Function.comp, hc, Option.getD_some]
+  rw [← natOf?_eq hc]
+
+/-- Each table's node count is the schedule's. -/
+theorem commit_nat (hF : Facts s) (hf : Fits s tables h) :
+    ∀ e ∈ h.roots, natOf? (s.roots.getObjValD e.1) = some (e.2.size / NODE_BYTES) := by
+  intro e he
+  obtain ⟨t, hes, ht, hn⟩ := hF.roots
+  have hm : (e.1, e.2.size / NODE_BYTES) ∈ rootsOf s := hf.roots.mem_iff.mp (List.mem_map.mpr ⟨e, he, rfl⟩)
+  rw [rootsOf_obj hes] at hm
+  obtain ⟨x, hx, hxe⟩ := List.mem_map.mp hm
+  obtain ⟨c, hc⟩ := Option.isSome_iff_exists.mp (hn x hx)
+  simp only [hc, Option.getD_some, Prod.mk.injEq] at hxe
+  rw [hes, Json.getObjValD, ← hxe.1, FirewallObj.getObjVal?_of_mem ht hx]
+  show natOf? x.2 = _
+  rw [hc, hxe.2]
+
+/-- A stream whose table has a root in the schedule has one in the worker's Commit. -/
+theorem rootOf_isSome (hF : Facts s) (hf : Fits s tables h) {stream : String} (hr : Rooted s stream) :
+    (rootOf h stream).isSome = true := by
+  obtain ⟨t, hes, ht, _⟩ := hF.roots
+  unfold Rooted at hr
+  rw [hes] at hr
+  obtain ⟨v, hv⟩ := Option.isSome_iff_exists.mp hr
+  have hv' : (Json.obj ⟨⟨t⟩⟩).getObjVal? (tableOf stream) = .ok v := by
+    revert hv
+    cases (Json.obj ⟨⟨t⟩⟩).getObjVal? (tableOf stream) <;> simp [Except.toOption]
+  have hm := FirewallObj.mem_of_getObjVal? ht hv'
+  have hm' : (tableOf stream, (natOf? v).getD 0) ∈ h.roots.map fun e => (e.1, e.2.size / NODE_BYTES) :=
+    hf.roots.mem_iff.mpr (by rw [rootsOf_obj hes]; exact List.mem_map.mpr ⟨_, hm, rfl⟩)
+  obtain ⟨e, he, hee⟩ := List.mem_map.mp hm'
+  unfold rootOf
+  rw [Option.isSome_map]
+  exact List.find?_isSome.mpr ⟨e, he, by simp [(Prod.mk.inj hee).1]⟩
+
+/-- The streams the worker opens at its places before `p`. -/
+def openedTo (h : Honest) (p : Nat) : List String := (List.range p).flatMap h.opens
+
+theorem openedTo_succ (h : Honest) (p : Nat) : openedTo h (p + 1) = openedTo h p ++ h.opens p := by
+  simp only [openedTo, List.range_succ, List.flatMap_append, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+
+theorem openedTo_sublist (h : Honest) {p q : Nat} (hpq : p ≤ q) : (openedTo h p).Sublist (openedTo h q) := by
+  induction q with
+  | zero => rw [Nat.le_zero.mp hpq]; exact List.Sublist.refl _
+  | succ q ih =>
+    rcases Nat.lt_or_ge p (q + 1) with hp | hp
+    · rw [openedTo_succ]
+      exact (ih (by omega)).trans (List.sublist_append_left _ _)
+    · rw [show p = q + 1 by omega]; exact List.Sublist.refl _
+
+theorem opened_nodup (hF : Facts s) (hf : Fits s tables h) : (openedTo h (s.rounds.size + 1)).Nodup :=
+  hf.opened.nodup_iff.mpr (streams_nodup hF)
+
+theorem cnt_zero (s : Schedule) (n : String) : cnt s 0 n = 0 := by
+  simp [cnt]
+
+theorem getD_eq {s : Schedule} {i : Nat} (hi : i < s.rounds.size) : s.rounds.getD i .null = s.rounds[i] := by
+  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi]
+  rfl
+
+theorem cnt_succ (s : Schedule) {i : Nat} (hi : i < s.rounds.size) {sp : String × Nat × Nat × List Nat × Nat × Nat}
+    (hsp : roundSpec (s.rounds.getD i .null) = some sp) (n : String) :
+    cnt s (i + 1) n = cnt s i n + if sp.1 == n then 1 else 0 := by
+  unfold cnt
+  rw [List.take_add_one, List.filterMap_append, List.length_append, Array.getElem?_toList,
+    Array.getElem?_eq_getElem hi]
+  rw [getD_eq hi] at hsp
+  congr 1
+  simp only [Option.toList_some, List.filterMap_cons, List.filterMap_nil, ksOf, hsp, Option.bind_some]
+  by_cases hn : sp.1 = n <;> simp [hn]
+
+theorem eq_length_of_range {l₁ l₂ : List Nat} {k c : Nat} (h : l₁ ++ k :: l₂ = List.range c) : k = l₁.length := by
+  have h1 : (l₁ ++ k :: l₂)[l₁.length]? = some k := by simp
+  have hlt : l₁.length < c := by
+    have := congrArg List.length h
+    simp only [List.length_append, List.length_cons, List.length_range] at this
+    omega
+  rw [h, List.getElem?_range hlt] at h1
+  exact (Option.some.inj h1).symm
+
+/-- A round's `k` is its stream's rounds before it. -/
+theorem k_eq (hF : Facts s) {i : Nat} (hi : i < s.rounds.size) {stream : String} {k n : Nat} {tops : List Nat}
+    {level0 commits : Nat} (hsp : roundSpec (s.rounds.getD i .null) = some (stream, k, n, tops, level0, commits)) :
+    k = cnt s i stream := by
+  obtain ⟨sp, hsp', -, -, hmem⟩ := hF.rounds i hi
+  rw [hsp] at hsp'
+  cases hsp'
+  obtain ⟨e, he, hee⟩ := List.mem_map.mp hmem
+  have hl := (hF.each e he).2
+  rw [hee] at hl
+  have hs : s.rounds.toList = s.rounds.toList.take i ++ s.rounds[i] :: s.rounds.toList.drop (i + 1) := by
+    rw [← Array.getElem_toList (by simpa using hi), ← List.drop_eq_getElem_cons (by simpa using hi),
+      List.take_append_drop]
+  rw [hs, List.filterMap_append, List.filterMap_cons] at hl
+  rw [getD_eq hi] at hsp
+  have hk : ksOf stream s.rounds[i] = some k := by simp [ksOf, hsp]
+  rw [hk] at hl
+  exact eq_length_of_range hl
+
+theorem cnt_size (hF : Facts s) {e : String × String × Nat × Nat} (he : e ∈ s.streams) :
+    cnt s s.rounds.size e.1 = e.2.2.2 := by
+  unfold cnt
+  rw [← Array.length_toList, List.take_length, (hF.each e he).2, List.length_range]
+
+theorem round_of_cnt {j : Nat} {n : String} (h : 0 < cnt s j n) :
+    ∃ i < j, i < s.rounds.size ∧ ∃ sp : String × Nat × Nat × List Nat × Nat × Nat,
+      roundSpec (s.rounds.getD i .null) = some sp ∧ sp.1 = n := by
+  unfold cnt at h
+  obtain ⟨k, hk⟩ := List.exists_mem_of_length_pos h
+  obtain ⟨r, hr, hrk⟩ := List.mem_filterMap.mp hk
+  obtain ⟨i, hi, hri⟩ := List.mem_iff_getElem.mp hr
+  simp only [List.length_take, Array.length_toList] at hi
+  refine ⟨i, by omega, by omega, ?_⟩
+  rw [List.getElem_take, Array.getElem_toList] at hri
+  rw [getD_eq (by omega), hri]
+  unfold ksOf at hrk
+  rcases hsp : roundSpec r with _ | sp <;> rw [hsp] at hrk
+  · cases hrk
+  simp only [Option.bind_some] at hrk
+  by_cases hn : sp.1 = n
+  · exact ⟨sp, rfl, hn⟩
+  · simp [hn] at hrk
+
+/-- A stream the worker opens just before round `j` has no round before it. -/
+theorem cnt_new (hF : Facts s) (hf : Fits s tables h) {j : Nat} (hj : j < s.rounds.size) {n : String}
+    (hn : n ∈ h.opens (j + 1)) : cnt s j n = 0 := by
+  refine Nat.eq_zero_of_not_pos fun hpos => ?_
+  obtain ⟨i, hij, hi, ⟨stream, k, m, tops, level0, commits⟩, hsp, hsn⟩ := round_of_cnt hpos
+  have hR := hf.rounds i hi
+  unfold RoundOK at hR
+  rw [hsp] at hR
+  have hmem : stream ∈ openedTo h (i + 2) := hR.2.2.2.2.2.2
+  have hnd := (opened_nodup hF hf).sublist (openedTo_sublist h (show j + 2 ≤ s.rounds.size + 1 by omega))
+  rw [openedTo_succ] at hnd
+  exact List.nodup_append.mp hnd |>.2.2 stream ((openedTo_sublist h (by omega)).subset hmem) n hn hsn
+
+end
+
 /-! ## What the firewall does on the worker's requests -/
 
 /-- The worker's rows are the schedule's count. -/
