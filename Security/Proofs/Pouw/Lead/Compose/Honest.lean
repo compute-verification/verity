@@ -16,7 +16,7 @@ bytes in the lead's chunks and over A's bytes (`commitL1w_of_leaves`): a frame l
 rank (`leafMsg_id_inj`, `leafMsg_rank_inj`), so leaves at distinct ranks are distinct messages however their values
 repeat, and its header puts one more compression on its value's (`blocks_leafMsg`). `certifierCoins` is a certifier
 that runs `certCode` with the coins as its entropy. `Compose/Deployed.lean` has the honest lemma at the deployed
-instance (`honestL1w`) and the guarantee (`honest`).
+instance (`honestL1w`) and `G`'s premises at every admitted call (`honest`), a completeness statement.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Compose
