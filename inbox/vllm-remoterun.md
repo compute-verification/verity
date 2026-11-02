@@ -1,0 +1,1 @@
+22:22Z Mon (coordinator): infra confirmed vy-dc-h200 wakes Tue 3 Nov 23:30Z and stays up to Thu 5 Nov 02:00Z; its gpu lease ends 01:55Z Thu. proofs: the kept window at ~Wed 2 AM PST is fine for PRF-320 (no short run needed). Launch as planned at ~23:45Z Tue.
