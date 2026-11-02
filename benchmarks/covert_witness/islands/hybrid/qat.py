@@ -231,13 +231,20 @@ class EmbedAdapter:
         self.opt = torch.optim.AdamW([self.a, self.b], lr=lr, betas=(0.9, 0.95), weight_decay=0.0,
                                      fused=dev.startswith("cuda"))
         self.lr = lr
+        self.w = None
         self.refresh()
 
     @torch.no_grad()
     def refresh(self) -> None:
-        self.aq, self.qa = factor_quant(self.a, self.bits, 1)
-        self.bq, self.qb = factor_quant(self.b, self.bits, B_ROWS)
-        self.w = prepare.lora_merge(self.theta, self.aq, self.bq, self.s)
+        aq, self.qa = factor_quant(self.a, self.bits, 1)
+        bq, self.qb = factor_quant(self.b, self.bits, B_ROWS)
+        w = prepare.lora_merge(self.theta, aq, bq, self.s)
+        # te_core's counter resets its tags each step and keeps every untagged tensor a step reads (new_tensors), so
+        # what the next step reads keeps its storage: a fresh tensor each step would be held forever.
+        if self.w is None:
+            self.aq, self.bq, self.w = aq, bq, w
+        else:
+            torch._foreach_copy_([self.aq, self.bq, self.w], [aq, bq, w])
 
     def factors(self) -> tuple[torch.Tensor, torch.Tensor]:
         """The coded factors with a straight-through gradient to the latents."""
