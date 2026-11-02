@@ -78,6 +78,29 @@ def test_a_task_s_graph_is_the_part_of_the_listing_that_running_it_needs(tree):
         graph.task_graph(tree, "toy:zz", listers=LISTERS)
 
 
+def test_a_run_takes_its_graph_from_its_commit_s_listing_alone(tree, tmp_path):
+    doc = graph.listing(tree, listers=LISTERS)
+    f = tmp_path / "graph.json"
+    for given, ok in ((doc, True), ({**doc, "tasks": graph.closure(doc, {"toy-b:b"})}, True), ({**doc, "commit": None}, False),
+                      ({**doc, "commit": "0" * 40}, False), ({**doc, "schema": "verity-graph/v1"}, False)):
+        f.write_bytes(contract.canonical(given))
+        if ok:
+            assert graph.given(tree, f, "toy-b:b") == given, "the listing, or the part of it the task needs"
+        else:
+            with pytest.raises(graph.GraphError, match="isn't graph/v2 of this checkout's commit"):
+                graph.given(tree, f, "toy-b:b")
+    f.write_bytes(contract.canonical({**doc, "tasks": [t for t in doc["tasks"] if t["id"] != "toy:a"]}))
+    with pytest.raises(graph.GraphError, match="no task toy:a in the graph"):
+        graph.given(tree, f, "toy-b:b")
+    f.write_bytes(b"{")
+    with pytest.raises(graph.GraphError, match="--graph"):
+        graph.given(tree, f, "toy:a")
+    f.write_bytes(contract.canonical(doc))
+    (tree / "src/a.txt").write_text("changed\n")
+    with pytest.raises(graph.GraphError, match="none: the tree is dirty"):
+        graph.given(tree, f, "toy:a")
+
+
 def test_covered_files_follow_the_table(tree):
     assert graph.covered(tree, "toy", graph.tracked(tree)) == ["src/a.txt", "src/b.txt"]
     assert graph.covered(tree, "other", graph.tracked(tree)) == ["lib/lean-toolchain", "lib/x.lean"]

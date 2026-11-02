@@ -106,6 +106,30 @@ def test_check_local_writes_its_events_beside_its_work_unless_told_where(tree, t
     assert sorted(results) == ["other:x", "toy-b:b", "toy:a"] and {r["status"] for r in results.values()} == {"pass"}
 
 
+def test_a_run_given_its_commit_s_graph_runs_no_lister(tree, tmp_path, monkeypatch, capsys):
+    doc = graph.listing(tree, listers=LISTERS)
+    f = tmp_path / "graph.json"
+    f.write_bytes(contract.canonical(doc))
+
+    def lister():
+        raise AssertionError("a run given its commit's graph lists nothing")
+
+    def write(task: dict, work: Path) -> dict:
+        (work / "out").mkdir()
+        (work / "out/a").write_text("a\n")
+        return {"status": "pass"}
+    monkeypatch.setattr(cli, "ROOT", tree)
+    monkeypatch.setattr(families, "listers", lister)
+    monkeypatch.setattr(runners, "run", write)
+    assert cli.main(["run", "toy:a", "--work", str(tmp_path / "w"), "--graph", str(f)]) == 0
+    res = json.loads(capsys.readouterr().out)
+    assert res["status"] == "pass" and res["key"] == next(t["key"] for t in doc["tasks"] if t["id"] == "toy:a")
+    (tree / "new.txt").write_text("untracked\n")
+    assert cli.main(["run", "toy:a", "--work", str(tmp_path / "w2"), "--graph", str(f)]) == 2, \
+        "a refusal is neither a fail nor a run"
+    assert "the tree is dirty" in capsys.readouterr().err
+
+
 def test_what_the_executor_takes_from_a_launch(tree, tmp_path):
     doc = graph.listing(tree, listers=LISTERS)
     a = next(t for t in doc["tasks"] if t["id"] == "toy:a")

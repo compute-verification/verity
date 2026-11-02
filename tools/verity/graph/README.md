@@ -7,7 +7,8 @@ tasks.py`, tasks/v1) is the coarse graph `check` runs today.
 
 ~~~sh
 verity graph [--json] [--family F ...] [--root DIR]   # the graph; --json prints its canonical bytes
-verity graph run ID --work DIR                         # run task ID in DIR, print its result/v1 (exit 0 pass, 1 fail, 3 error)
+verity graph run ID --work DIR [--graph FILE]          # run task ID in DIR, print its result/v1 (exit 0 pass, 1 fail, 3 error);
+                                                       # FILE: this commit's listing, so that no lister runs
 verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events FILE]
                                                        # every task, serially, in order, uncached (exit 0: all passed);
                                                        # events/v1 to FILE (default DIR/events.jsonl), DIR/results.json
@@ -97,8 +98,11 @@ it from the cases in that file, which is a change to the contract.
 The executor makes a fresh work directory, puts each artifact the task reads there at the path its producer's output
 declares (two reads or a read and an output that would land on one path are refused when listing), and runs the task's
 argv with `--work DIR` appended, from the checkout's root. `verity graph run` finds the task with `graph.task_graph`, which
-runs the family's lister but completes, digests and keys only the task and what it reads, runs its kind's runner through
-`runners.execute`, and prints result/v1 as one canonical line:
+runs the family's lister but completes, digests and keys only the task and what it reads. An executor that listed the
+commit once appends `--graph FILE` too, FILE holding that listing or the part of it with the task and what it reads, and no
+lister runs (`graph.given`): FILE is taken when it names this checkout's commit, so a dirty checkout, or one at another
+commit, refuses it (exit 2) rather than key a result from another tree's digests. Then it runs the task's kind's runner
+through `runners.execute` and prints result/v1 as one canonical line:
 
 ~~~json
 {"schema": "verity-result/v1", "task": "<id>", "key": "sha512:<hex>", "status": "pass|fail|error",

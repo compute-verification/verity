@@ -5,6 +5,7 @@ machine, the environment or the time."""
 from __future__ import annotations
 
 import fnmatch
+import json
 import subprocess
 import tomllib
 from pathlib import Path
@@ -288,6 +289,22 @@ def task_graph(root: Path, task_id: str, listers: dict | None = None) -> dict:
         tasks[tid] = complete(listed[name][tid], name, fams[name], s["env"], have)
         todo += [r["task"] for r in tasks[tid]["reads"]]
     return _document(root, s, files, sorted(tasks.values(), key=lambda t: t["id"]), None)
+
+
+def given(root: Path, path: Path, task_id: str) -> dict:
+    """The graph/v2 at ``path`` (`verity graph run --graph`): what an executor that listed this commit once hands each task run,
+    so that none runs a lister, taken when it names this checkout's commit, which a dirty tree has none of, and holds ``task_id``
+    and every task it reads (the listing, or that part of it)."""
+    try:
+        doc = json.loads(Path(path).read_bytes())
+    except (OSError, ValueError) as e:
+        raise GraphError(f"--graph {path}: {e}") from e
+    at = commit(root)
+    if not isinstance(doc, dict) or doc.get("schema") != contract.SCHEMA_GRAPH or at is None or doc.get("commit") != at:
+        raise GraphError(f"--graph {path} isn't graph/v2 of this checkout's commit ({at or 'none: the tree is dirty'}): "
+                         "`verity graph --json` lists it, or run without --graph")
+    closure(doc, {task_id})
+    return doc
 
 
 def _document(root: Path, s: dict, files: list[str], ts: list[dict], at: str | None) -> dict:
