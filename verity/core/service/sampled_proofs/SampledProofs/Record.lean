@@ -4,13 +4,14 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
 * `matchesPublic`: `registration.matches_public`, the verifier's own public file (its scheme, roots, their domains and its
   instance count) against the record, with Python's codes in its order (`scheme`, `roots`, `domains`, `population`) and
   details;
-* `sessionRegistered`: `audit.session_registered`, the `{value: root}` the verifiers of record that accepted report opening
-  the sessions' registered reads against (a verdict's `registered`, `{port: {"value", "root"}}`), a value reported under
-  two roots mapped to null; none when no such verdict reports any; `ownRegistered` keeps a registration's own values (its
-  roots' ports and registered values);
+* `sessionRegistered`: `audit.session_registered`, the `{value: read}` the verifiers of record that accepted report opening
+  the sessions' registered reads against (a verdict's `registered`, `{port: {"value", "root", "domain", "leaves", "words",
+  "word_bits"}}`), each on `READ_KEYS` (`readOf`: the root, its domain and its shape), a value reported under two reads
+  mapped to null; none when no such verdict reports any; `ownRegistered` keeps a registration's own values (its roots'
+  ports and registered values);
 * `checks`: `audit_record`'s checks, each with Python's detail: the draw's and the proved units' always, and the receipt's,
-  the served draw's, the sessions' roots' and the registered roots' when they fail;
-* `record`: the record, every field as `audit_record` writes it, the registered roots its checks read derived here from
+  the served draw's, the sessions' roots' and the registered reads' (each value's entry, `registeredReads`) when they fail;
+* `record`: the record, every field as `audit_record` writes it, the registered reads its checks read derived here from
   the verdicts (`sessionRegistered`, `ownRegistered`), never taken as input. `checks` and `ownRegistered` run linear in the
   registration's roots: each is compiled as its form on `lastRoots`, a hash map of `byPort` (`checks_eq_checksFast`,
   `ownRegistered_eq_ownRegisteredFast`), while every theorem reads the definitions above. Python writes `delta` as a float: here it is the double nearest
@@ -20,6 +21,7 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
 import SampledProofs.Bound
 import SampledProofs.Draw
 import SampledProofs.PyJson
+import SampledProofs.Registered
 import Flock.WindowRecord
 import CoreProtocol.Profile
 import Std.Data.HashMap
@@ -45,10 +47,20 @@ def byPort (rec : Json) : Array (String × Json) :=
     | .str p => (acc.filter fun (q : String × Json) => q.1 != p).push (p, r)
     | _ => acc) #[]
 
-/-- `{e["value"]: e["root"] for e in rec.get("registered", [])}`: the last root of each value. -/
-def registeredRoots (rec : Json) : Array (String × Json) :=
+/-- What a session's read of a registered value is held to of the record's entry for it (`audit.READ_KEYS`): the root it
+was opened against, that root's domain, and its shape (its leaves, a row's words and their bits). -/
+def READ_KEYS : Array String := #["root", "domain", "leaves", "words", Registered.WIDTH_KEY]
+
+/-- `audit.read_of`: a read or an entry on `READ_KEYS`, a missing key null and a missing width the default, which an entry
+names only by leaving it out. -/
+def readOf (e : Json) : Json :=
+  Json.mkObj (READ_KEYS.toList.map fun k =>
+    (k, if k == Registered.WIDTH_KEY then (field? e k).getD (Lean.toJson Registered.WORD_BITS) else getD e k))
+
+/-- `{e["value"]: read_of(e) for e in rec.get("registered", [])}`: the last entry of each value, on `READ_KEYS`. -/
+def registeredReads (rec : Json) : Array (String × Json) :=
   (match getD rec "registered" with | .arr es => es | _ => #[]).foldl (fun (acc : Array (String × Json)) e => match getD e "value" with
-    | .str v => (acc.filter fun (q : String × Json) => q.1 != v).push (v, getD e "root")
+    | .str v => (acc.filter fun (q : String × Json) => q.1 != v).push (v, readOf e)
     | _ => acc) #[]
 
 def matchesPublic (rec scheme roots domains population : Json) : Check := Id.run do
@@ -73,15 +85,15 @@ def sessionRegistered (verdicts : Array (String × Json)) : Option (Array (Strin
       let mut acc := out.getD #[]
       for (_, e) in entries (getD v "registered") do
         let .str value := getD e "value" | continue
-        let root := getD e "root"
+        let read := readOf e
         acc := match acc.find? (·.1 == value) with
-          | some (_, r) => acc.map fun (k, x) => if k == value then (k, if jeq r root then r else .null) else (k, x)
-          | none => acc.push (value, root)
+          | some (_, r) => acc.map fun (k, x) => if k == value then (k, if jeq r read then r else .null) else (k, x)
+          | none => acc.push (value, read)
       out := some acc
   return out
 
 def ownRegistered (rec : Json) (opened : Option (Array (String × Json))) : Option (Array (String × Json)) :=
-  let named := (byPort rec).map (·.1) ++ (registeredRoots rec).map (·.1)
+  let named := (byPort rec).map (·.1) ++ (registeredReads rec).map (·.1)
   opened.map (·.filter fun (v, _) => named.contains v)
 
 private def sortedInts (xs : Array Int) : Array Int := xs.qsort (· < ·)
@@ -111,7 +123,7 @@ def checks (reg receipt draw law : Json) (units : Array Int) (provedUnits : Arra
     if roots.isEmpty || !wrong.isEmpty then
       out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (wrong.map Json.str))]))
   if (field? reg "registered").isSome || sessionRegistered.isSome then
-    let want := registeredRoots reg
+    let want := registeredReads reg
     let opened := sessionRegistered.getD #[]
     if !sameDict opened want then
       let wrong := want.filterMap fun (v, r) => match opened.find? (·.1 == v) with
@@ -173,7 +185,7 @@ theorem contains_byPort (rec : Json) (v : String) :
 /-- `ownRegistered`, each value's test a hash lookup. -/
 def ownRegisteredFast (rec : Json) (opened : Option (Array (String × Json))) : Option (Array (String × Json)) :=
   let ports := lastRoots rec
-  let values := (registeredRoots rec).map (·.1)
+  let values := (registeredReads rec).map (·.1)
   opened.map (·.filter fun (v, _) => ports.contains v || values.contains v)
 
 @[csimp] theorem ownRegistered_eq_ownRegisteredFast : @ownRegistered = @ownRegisteredFast := by
@@ -201,7 +213,7 @@ def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : 
     if roots.isEmpty || !wrong.isEmpty then
       out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (wrong.map Json.str))]))
   if (field? reg "registered").isSome || sessionRegistered.isSome then
-    let want := registeredRoots reg
+    let want := registeredReads reg
     let opened := sessionRegistered.getD #[]
     if !sameDict opened want then
       let wrong := want.filterMap fun (v, r) => match opened.find? (·.1 == v) with

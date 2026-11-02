@@ -152,6 +152,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import json
 import multiprocessing
 import os
@@ -231,10 +232,10 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
     """The rank's `service.Stream` on ``coins`` (the challenger's, a `ChallengerCoins`, or the verifier's own, its
     `challenger` naming which): its unit the window's templates in their order (the one
     template's Definition where the window's query is `Q_template_instance`), the Spec's values the window's ports (a
-    row-table window's `row-table` port a tree over its steps' roots, `service.ROOTS` over row-seg leaves), its public
-    items what the registration shows (N, each template's stratum, the window, the leaf layer and each port's layout), its
-    selection the partition file's rule, and its proof deadline every member's session; -> (the stream, `register`'s counts,
-    None for one template's)."""
+    row-table window's `row-table` port a tree over its steps' roots, `service.ROOTS` over row-seg leaves) and the values
+    it registers afresh (`window_copies`), its public items what the registration shows (N, each template's stratum, the
+    window, the leaf layer, each port's layout and each registered value's shape), its selection the partition file's
+    rule, and its proof deadline every member's session; -> (the stream, `register`'s counts, None for one template's)."""
     defs: dict[str, list] = {}
     for mm in members:
         defs.setdefault(P.template_id(mm["defn"]), [mm["defn"], 0])[1] += mm["m"].n
@@ -254,6 +255,9 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
               *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain"))]
     values = tuple(S.Value(p, S.ROOTS, "serve", over=RT.SCHEMA) if p == CS.TABLE_PORT else S.Value(p, schemas[p], "serve")
                    for p in sorted(want))
+    own = sorted(getattr(a, "window_values", None) or {})
+    values += tuple(S.Value(v, None, "serve", registered=True) for v in own)
+    public += [(f"{x}:{v}", "a registered value's shape") for v in own for x in ("leaves", "words", "domain")]
     spec = S.Spec(values, S.Law(a.rule),
                   S.Check(digests[0] if one else digests, mine.query, proof_deadline=(a.session_timeout + 3600) * len(members)),
                   tuple(S.Public(item, "structure", why) for item, why in public), bytes.fromhex(a.window_root))
@@ -274,6 +278,19 @@ def output_closure(a: argparse.Namespace, population: int) -> dict[int, list[int
     without an output class."""
     outs = output_units(a)
     return {u: outs for u in range(population)} if outs else None
+
+
+def window_copies(a: argparse.Namespace, root: bool = False) -> dict:
+    """R7's copies (`registration.check`'s) of the values the window registers afresh under its open root,
+    ``a.window_values`` (the caller's ``{value: {"words", "leaves", "schema"}}``: a window circuit's registered parameters
+    that no pin holds, its scan state): each expected registered at its row's words, in its row format, at its 16-bit
+    leaves (``circuit_params``), and with ``root`` the window's open root (``a.window_root``) beside them. Empty for a
+    window that registers none, whose record stays v1."""
+    values = getattr(a, "window_values", None) or {}
+    if not values:
+        return {}
+    return {"registered": {v: e["words"] for v, e in values.items()}, "schemas": {v: e["schema"] for v, e in values.items()},
+            "circuit_params": {v: e["leaves"] for v, e in values.items()}, **({"window_root": a.window_root} if root else {})}
 
 
 def output_refusal(a: argparse.Namespace, mine: CS.Binding, drawn_law: dict) -> dict | None:
@@ -321,7 +338,8 @@ def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, me
         stream, counts = stream_of(a, mine, members, want, leaf_layer, coins)
         if a.coins is not None:
             coins.plan(AC.need(a.rule, mine.program, mine.query, mine.population, mine.work_table))
-        reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table)
+        reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
+                              **window_copies(a))
         if a.coins is not None:
             coins.commit(bytes.fromhex(reg.digest))
         draw = stream.select(reg, closure=output_closure(a, mine.population))
@@ -354,7 +372,8 @@ def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, coun
         result, told = None, {"stream": stream.digest, "accepted": False, "refused": AC._refusal(e)}
     neg = AC.verifier_negatives(
         lambda c: stream_of(a, mine, members, want, leaf_layer, c)[0],
-        lambda s: s.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table),
+        lambda s: s.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
+                             **window_copies(a)),
         stream, coins, draw, outcome, a.window_root, output_closure(a, mine.population))
     checks = (result or {}).get("checks") or {}
     record = {"source": stream.coin_source, "challenger": stream.challenger, "read": bytes(coins.read).hex(), "outcome": told,
@@ -406,8 +425,8 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
         window = "00" * 64 if name == "coins-for-another-window" else root
         s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read))
         try:
-            d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts, work_table=mine.work_table),
-                         closure=output_closure(a, mine.population))
+            d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts, work_table=mine.work_table,
+                                    **window_copies(a)), closure=output_closure(a, mine.population))
             if d.draw != draw.draw:
                 raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
             got, audit = outcome(s, d, coins)
@@ -416,8 +435,10 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
             accepted, side = None, {"refused": refusal(e)}
         py = reason(coins, window)
         at = ((side or {}).get("step"), (side or {}).get("codes"))
-        neg[name] = {"refused": py is not None and accepted is False and at == SELECT_COINS, "accepted": accepted, "python": py,
-                     "lean": side}
+        # under another window R7 refuses the registration first: the window's own values are registered under its root
+        r7 = window != root and "R7-domain" in (((side or {}).get("refused") or {}).get("codes") or ())
+        neg[name] = {"refused": py is not None and (accepted is False and at == SELECT_COINS or accepted is None and r7),
+                     "accepted": accepted, "python": py, "lean": side}
     checks = (result or {}).get("checks") or {}
     record = {"session": published.get("trusted"), "segment": segment, "read": read.hex(), "coins_reason": why, "outcome": told,
               "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
@@ -495,9 +516,113 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[st
     return out
 
 
+def window_negatives(a: argparse.Namespace, rec: dict, mine: CS.Binding, want: dict, leaf_layer: str | None) -> dict[str, dict]:
+    """The registration of a window that registers values of its own (`window_copies`), each altered, refused by R7: a value
+    left out (``R7-values``), registered at another row count (``R7-leaves``), or under another window's open root
+    (``R7-domain``, a root registered for another window); and the record in v1, registering none (``keys``)."""
+    copies = window_copies(a, root=True)
+    if not copies:
+        return {}
+    v, entries = min(copies["registered"]), rec.get("registered") or []
+    cases = {"window-value-left-out (R7)": ({**rec, "registered": [e for e in entries if e.get("value") != v]}, copies),
+             "window-value-at-another-row-count (R7)": (
+                 {**rec, "registered": [{**e, "leaves": e["leaves"] + 1} if e.get("value") == v else e for e in entries]}, copies),
+             "window-value-under-another-window (R7)": (rec, {**copies, "window_root": "00" * 64}),
+             "window-values-unregistered (v1)": ({k: x for k, x in rec.items() if k != "registered"}, copies)}
+    out = {}
+    for name, (r, c) in cases.items():
+        got = V.check(r, mine.program, mine.query, mine.law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=mine.work_table,
+                      **c)
+        out[name] = {"refused": not got.ok, "codes": list(got.codes)}
+    return out
+
+
+def compose_key(compose: Callable, defn: object, template: str) -> str | None:
+    """The cache entry (`compose_circuit.cache_key`) of a caller's composer ``compose``'s circuit for ``template``, None for one
+    that doesn't say what it composes from besides its binding (``compose.inputs``, JSON: its stager's label, the template's
+    statement): keyed by those inputs, the template, its Definition's program digest, the composer's own file and
+    compose_circuit's, and the composing packages' code and data (`compose_circuit.tree_digest`)."""
+    inputs = getattr(compose, "inputs", None)
+    if inputs is None:
+        return None
+    import compose_circuit as CM
+
+    return CM.cache_key(["a5/own", template, P.program_digest(Program(defn)), inputs],
+                        files=(Path(CM.__file__), Path(inspect.getsourcefile(compose))))
+
+
+def own_composed(a: argparse.Namespace, compose: Callable, defn: object, template: str, out: Path | None, pd: str,
+                 program: str) -> tuple[dict, bool | None]:
+    """A caller's composer ``compose`` (``(out, partition digest, program digest) -> line``) for ``template``'s circuit at
+    ``out``, bound to ``pd`` and ``program``: through ``a.compose_cache`` (`compose_circuit.cached`, keyed by `compose_key`)
+    when given and the composer says what it composes from, else composed at ``out``. -> (compose's line with the circuit's
+    META, whether the cache held it already: None off the cache)."""
+    import compose_circuit as CM
+
+    cache = getattr(a, "compose_cache", None)
+    key = compose_key(compose, defn, template) if cache else None
+    if key is None:
+        out.unlink(missing_ok=True)
+        made = compose(out, pd, program)
+        return {**made, "meta": made.get("meta") or CM.head(out)}, None
+    kept = (Path(cache) / key / "made.json").exists()
+    return CM.cached(Path(cache), key, out, {"partition": pd, "program": program}, lambda p: compose(p, pd, program)), kept
+
+
+def circuit_of(path: Path, made: dict, read: set[Path]) -> FI.FlockCircuit:
+    """The circuit at ``path`` as staging reads it: its META, pin and class from compose's line ``made`` where the line carries
+    its META, never reading a circuit that can be past 100 GB (`held` holds a sampled proof block's to them before its prover
+    reads it); else read off the file, ``path`` then put in ``read``."""
+    if "meta" in made and made.get("class_sha512"):
+        return FI.FlockCircuit(made["meta"], made["pin"], made["class_sha512"])
+    read.add(path)
+    return FI.flock_circuit(path.read_bytes())
+
+
+def held(path: Path, circ: FI.FlockCircuit, read: set[Path]) -> None:
+    """The circuit at ``path`` is the one staging took off compose's line (``circ``: its META, pin and class), read whole once:
+    ``read`` holds the circuits already read."""
+    if path in read:
+        return
+    got = FI.flock_circuit(path.read_bytes())
+    if (got.meta, got.pin, got.cls) != (circ.meta, circ.pin, circ.cls):
+        raise RuntimeError(f"{path}: not the circuit its compose's line names (its META, SHA-512 or class differ)")
+    read.add(path)
+
+
+_WARM: dict = {}
+
+
+def _warm_one(t: str) -> dict:
+    w, t0 = _WARM, time.time()
+    compose, defn = w["sets"][t]
+    made, kept = own_composed(w["a"], compose, defn, t, None, w["pd"], w["program"])
+    return {"template": t, "seconds": round(time.time() - t0, 1), "kept": kept, "pin": made["pin"], "k_log": made.get("k_log")}
+
+
+def warm(a: argparse.Namespace, sets: dict, mine: CS.Window, jobs: int = 1) -> list[dict]:
+    """Every template of window ``mine`` that a caller's composer in ``sets`` makes, and says what it makes it from
+    (`compose_key`), composed into ``a.compose_cache`` bound to the window's partition and program, ``jobs`` at a time, each in
+    a process forked for it: a window's templates and binding are public, so this runs before its timed audit, whose staging
+    then links each kept circuit and reads none (`own_composed`). A 4,32,4 window's Int8RowQuant_v3 holds its text, past 100 GB,
+    while it composes, so ``jobs`` is what the machine's memory takes. -> each template's seconds, pin and whether the cache
+    held it already."""
+    if not getattr(a, "compose_cache", None):
+        raise ValueError("warm makes a5's compose cache: give --compose-cache")
+    todo = [t for t in dict.fromkeys(m.template for m in mine.members)
+            if callable(sets.get(t, (None,))[0]) and getattr(sets[t][0], "inputs", None) is not None]
+    _WARM.update(a=a, sets=sets, pd=mine.partition_digest, program=mine.partition["program"])
+    if jobs <= 1:
+        return [_warm_one(t) for t in todo]
+    with ProcessPoolExecutor(jobs, mp_context=multiprocessing.get_context("fork")) as ex:
+        return [f.result() for f in [ex.submit(_warm_one, t) for t in todo]]
+
+
 def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
-    """A drawn member's prover's file and its circuit, under the header its public file was held to before the sample."""
+    """A drawn member's prover's file and its circuit, under the header its public file was held to before the sample, the
+    circuit held to its compose's line first (`held`)."""
     m, st_dir = mm["m"], mm["st"]["dir"]
+    held(mm["circuit"], mm["circ"], mm["read"])
     if mm["circuit"] != st_dir / "circuit.txt":
         link(mm["circuit"], st_dir / "circuit.txt")
         for f in sorted((mm["circuit"].parent / "tables").glob("*.u32")):    # a circuit with lookups reads the MUFU tables
@@ -556,7 +681,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # file and the circuit's link only for a drawn member, after the sample (`stage`)
     files = (json.loads((served / "window.json").read_text()), rec)
     roots = {r["port"]: r for r in rec["roots"]}
-    members, publics, checks, composed, programs_ok = [], {}, {}, {}, {}
+    members, publics, checks, composed, programs_ok, kept, read = [], {}, {}, {}, {}, {}, set()
     t_stage = time.time()
     for k, m in enumerate(mine.members):
         own = callable(sets.get(m.template, (None,))[0])  # the caller's composer, chunked or not
@@ -574,8 +699,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             circuit, made, circ = composed[m.template]
         elif own:
             circuit = st_dir / "circuit.txt"
-            made = sets[m.template][0](circuit, pd, part["program"])
-            circ = FI.flock_circuit(circuit.read_bytes())
+            made, kept[m.template] = own_composed(a, sets[m.template][0], defn, m.template, circuit, pd, part["program"])
+            circ = circuit_of(circuit, made, read)
             composed[m.template] = (circuit, made, circ)
         else:
             src = ["--template", m.template, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
@@ -586,7 +711,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             if p.returncode != 0:
                 raise RuntimeError(f"composing member {k}'s circuit failed: {p.stderr[-2000:]}")
             circuit, made = st_dir / "circuit.txt", json.loads(p.stdout.strip().splitlines()[-1])
-            circ = FI.flock_circuit(circuit.read_bytes())
+            circ = circuit_of(circuit, made, read)
             composed[m.template] = (circuit, made, circ)
         compose_s = round(time.time() - t, 1)
         got = FI.flock_input_files(served, k, circ, st_dir / "prover", write=("pub",), files=files)
@@ -611,13 +736,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                     and reg["domain"] == fv["domain_ids"][p_name] == want[name]["domain"])
         checks[f"m{k}"] = {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {}}
         publics[m.key] = body(st_dir / f"pub-{m.n}.bin")
-        members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ,
+        members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ, "read": read,
                         "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
                                "program_file": out / "program.json"},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
     leaf_layer = CS.leaf_layer(publics)
-    checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table).to_json()
+    checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
+                                     **window_copies(a, root=True)).to_json()
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -631,7 +757,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     summary.update(registration=R.digest(rec), leaf_layer=leaf_layer, checks_before_draw={c: v["ok"] for c, v in checks.items()},
                    circuits={mm["m"].template: {"pin": mm["pin"], "class": mm["class"], "compose_s": mm["compose_s"],
-                                                "k_log": mm["st"]["meta"].get("k_log"), "unit_log": mm["st"]["meta"].get("unit_log")}
+                                                "k_log": mm["st"]["meta"].get("k_log"), "unit_log": mm["st"]["meta"].get("unit_log"),
+                                                **({"cached": kept[mm["m"].template]} if mm["m"].template in kept else {})}
                              for mm in members if mm["circuit"].parent == mm["st"]["dir"]})
     if not all(v["ok"] for v in checks.values()):
         summary["checks"] = checks
@@ -814,15 +941,17 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         defs = [tuple(x) for x in by_template.values()]
         fewer = resized_program(defs) if len(defs) > 1 or defs[0][1] == 1 \
             else P.population_program(defs[0][0], defs[0][1] - 1)
-        v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table)
+        own = window_copies(a, root=True)
+        v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, **own)
         neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
         other = CS.expected_ports(replace(mine, run="00" * 32))
-        v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table)
+        v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table, **own)
         neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
         first = members[0]["m"].key
         flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
-        v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table)
+        v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table, **own)
         neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        neg.update(window_negatives(a, rec, mine, want, leaf_layer))
         v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
         neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
         neg.update(wiring_negatives(mine.members, publics))

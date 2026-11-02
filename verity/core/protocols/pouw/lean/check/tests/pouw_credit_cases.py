@@ -1103,6 +1103,9 @@ def _window_proofs(rng: random.Random, d: dict, units: list[int]) -> list[dict]:
         reg = {**{f"a{i}": {"value": a, "root": roots[a]} for i in range(min(r, 2))},
                **{f"b{j}": {"value": b, "root": roots[b]} for j in range(min(c, 2))},
                **{port: {**x, "root": roots[x["value"]]} for port, x in zy.items()}}
+        if rng.random() < 0.5:
+            reg = {p: {**x, "domain": _hex(rng), "leaves": 4, "words": rng.choice([None, 64]), "word_bits": 16}
+                   for p, x in reg.items()}
         out.append({"unit": u, "verdict": "accept", "program": program, "registered": reg})
     rng.shuffle(out)
     return out
@@ -1143,6 +1146,7 @@ def _mutate_proofs(proofs: list[dict], rng: random.Random, name: str, units: lis
                               {**p, "program": None}, {k: v for k, v in p.items() if k != "registered"},
                               {**p, "registered": [x]}, {**p, "registered": {"a0": {**x, "root": "zz"}}},
                               {**p, "registered": {"a0": {**x, "extra": 1}}}, {**p, "registered": {"a0": {**x, "value": 5}}},
+                              {**p, "registered": {"a0": {"value": x["value"], "root": x["root"], "domain": x["root"]}}},
                               {**p, "registered": {"a\n": x}}, {**p, "registered": {"a0": {**x, "value": "é"}}}])
             proofs = rng.choice([None, "x", proofs + [5], proofs[:j] + [bad] + proofs[j + 1:]])
         case _:

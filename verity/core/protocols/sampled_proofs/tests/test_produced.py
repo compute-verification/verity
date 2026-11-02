@@ -79,11 +79,12 @@ def test_the_opened_roots_are_the_records():
     v = lambda root: {"lean": {"of_record": True, "accepted": True,
                                "registered": {"partials": {"value": "partials", "root": root},
                                               "p0": {"value": "partials", "root": root}}}}
-    assert PR.opened(rec, audit.session_registered(v(tree.root.hex()))) == ()
-    assert PR.opened(rec, audit.session_registered(v("00" * 64))) == ("P-opened",)
-    assert PR.opened(rec, audit.session_registered({})) == ("P-opened",), "a produced value no verifier opened"
+    roots = lambda vs: {k: r and r["root"] for k, r in (audit.session_registered(vs) or {}).items()}  # noqa: E731
+    assert PR.opened(rec, roots(v(tree.root.hex()))) == ()
+    assert PR.opened(rec, roots(v("00" * 64))) == ("P-opened",)
+    assert PR.opened(rec, roots({})) == ("P-opened",), "a produced value no verifier opened"
     two = {**v(tree.root.hex()), "lean2": {**v("00" * 64)["lean"]}}
-    assert PR.opened(rec, audit.session_registered(two)) == ("P-opened",), "two roots for one value"
+    assert PR.opened(rec, roots(two)) == ("P-opened",), "two roots for one value"
 
 
 def _verdict(port_rows, accepted=True, of_record=True):

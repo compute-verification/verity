@@ -16,8 +16,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 * **the draw** is a draw of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work law, its strata and closure;
 * **the units** were proved and served as drawn, under the registered roots, and the verifiers of record opened the
-  registered values' reads against the registered roots (`UnitsProved`), and the receipt names the commitment's digest
-  (`Receipt`);
+  registered values' reads against the registered roots, under their domains and in their shapes (`UnitsProved`), and
+  the receipt names the commitment's digest (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
   (`VerdictsAccept`);
 * the law has a profile's draw and the population is a natural number;
@@ -30,6 +30,11 @@ The digest the receipt is held to is the commitment's own (`Commitment.digest`),
 as the window record's digest of the record it decodes (`Flock.WindowRecord.digest`, `DigestIsRecord's`). A Bernoulli law is accepted as the code accepts
 it: its draw is checked as any other, its profile's draw is `bernoulli p`, and it publishes the largest `M` of the
 profile's units with `(1 − p)^M ≥ δ` (`BernoulliBounds`, `Bound.bernoulliBound`).
+
+What it leaves open: the values a session reads that the record doesn't register (a window circuit's weights and its
+embedding tables' supplied values) are no values R7 checks, and `UnitsProved` holds only the record's own values' reads
+(`Record.ownRegistered`), so the roots and domains such a read was opened against are the `--registered` file's, which
+`verity.ml.windows.interface` builds off the soundness path.
 -/
 
 open Lean (Json)
@@ -176,7 +181,9 @@ def EarlierIs (log : Array Json) (leaves words bits : Nat) (record : String) : R
 
 /-- R7, for a v2 record (`Registration.checkOutputs`): the verifier derives its own entries for the values it expects
 registered (`Registration.ownEntries`: `Registered.entries`, counting each value's rows in the row format it holds for
-it, `v.schemas`, with each value's domain under its window's open root but the values it holds across windows); each
+it, `v.schemas`, or for a registered value of its circuit that is no parameter of its program, from the leaves it holds
+for it as rows of 16-bit words, `v.circuitParams`, with each value's domain under its window's open root but the values
+it holds across windows); each
 output value it has an entry for has its earlier port, with the value's leaf count, or its earlier registered value,
 with the value's leaves, words and word bits (`EarlierIs`), and takes that port's or entry's domain and root
 (`Registration.applyOutputs`: `mine'` and `held'`); the
@@ -267,16 +274,17 @@ def drawnInts (draw : Json) : Array Int :=
 def Receipt (c : Commitment) (e : Evidence) : Prop :=
   jeq (getD e.receipt "registration") (.str (Flock.hexOf c.digest))
 
-/-- The roots the verifiers of record that accepted report opening the sessions' registered reads against, for the
-record's own values (its roots' ports and its registered values): `{value: root}`, a value reported under two roots mapped
-to null; none when no such verdict reports any (`audit.session_registered`, which `Record.sessionRegistered` and
-`Record.ownRegistered` compute from the verdicts). -/
-def openedRoots (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
+/-- The reads the verifiers of record that accepted report of the sessions' registered values, for the record's own
+values (its roots' ports and its registered values): `{value: read}`, each the root it was opened against with that
+root's domain and shape (`Record.readOf`), a value reported under two reads mapped to null; none when no such verdict
+reports any (`audit.session_registered`, which `Record.sessionRegistered` and `Record.ownRegistered` compute from the
+verdicts). -/
+def openedReads (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
   Record.ownRegistered rec (Record.sessionRegistered vs)
 
-/-- Two `{value: root}` dicts with distinct keys are equal (Python's `==`): the same size, and each entry of the first has
-the same key and root in the second. -/
-def SameRoots (a b : Array (String × Json)) : Prop :=
+/-- Two `{value: read}` dicts with distinct keys are equal (Python's `==`, with `true` not 1): the same size, and each
+entry of the first has the same key and read in the second. -/
+def SameReads (a b : Array (String × Json)) : Prop :=
   a.size = b.size ∧ ∀ x ∈ a, ∃ y ∈ b, x.1 = y.1 ∧ jeq x.2 y.2
 
 /-- The units, as the record holds them (`audit_record`'s checks after the draw's): the proved statement's instances are
@@ -284,8 +292,8 @@ exactly the units the draw proves (its units and a work draw's closure, ascendin
 digest; the sessions were served exactly the drawn units, when they were handed the draw; the sessions' roots, when
 given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
 each port); and, when the record registers values or the verifiers of record report reads of the record's own values,
-those reads were opened against exactly the record's `{value: root}` (`Record.registeredRoots`, each value's last
-entry). -/
+those reads were opened against exactly the record's roots, under their domains and in their shapes (`{value: read}`,
+`Record.registeredReads`: each value's last entry on `Record.READ_KEYS`). -/
 def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧
@@ -293,8 +301,8 @@ def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
     (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (drawnInts e.draw).qsort (· < ·)) ∧
   (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
     ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
-  ((field? c.record "registered").isSome ∨ (openedRoots c.record e.verdicts).isSome →
-    SameRoots ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record))
+  ((field? c.record "registered").isSome ∨ (openedReads c.record e.verdicts).isSome →
+    SameReads ((openedReads c.record e.verdicts).getD #[]) (Record.registeredReads c.record))
 
 /-- The verdicts accept (`verdict` of `audit_record`): every verdict that ran (`accepted` not null) accepted; at least
 one is of record (`of_record` truthy); and every verdict of record ran. -/

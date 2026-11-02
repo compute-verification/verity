@@ -24,6 +24,7 @@ from verity_flock import circuit as FC
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
 
 from test_lean_registered_reads import BIN, LEAN, POSITIONS, STATEMENT, TABLE_ROWS, VALUE, _program
+from registered_finding import opened
 
 N = len(POSITIONS)
 WORDS = 64
@@ -150,8 +151,8 @@ def test_bit_row_registered_statement_is_accepted(staged):
     code, out = _statement(staged, staged.dir / "own.json")
     assert code == 0, out
     line = json.loads(out.splitlines()[0])
-    assert line["registered"] == {"cs": {"value": VALUE, "root": staged.regs[VALUE].root.hex()},
-                                  "x": {"value": "x", "root": staged.regs["x"].root.hex()}}
+    assert opened(line["registered"]) == {"cs": {"value": VALUE, "root": staged.regs[VALUE].root.hex()},
+                                          "x": {"value": "x", "root": staged.regs["x"].root.hex()}}
     assert line["partition_check"]["units"] == "derived"
 
 
@@ -206,7 +207,7 @@ def test_two_rows_of_one_value_a_unit_are_accepted(one_value):
     code, out = _statement(one_value, one_value.dir / "own.json")
     assert code == 0, out
     root = one_value.regs["rows"].root.hex()
-    assert json.loads(out.splitlines()[0])["registered"] == {p: {"value": ROWS, "root": root} for p in ("x", "cs")}
+    assert opened(json.loads(out.splitlines()[0])["registered"]) == {p: {"value": ROWS, "root": root} for p in ("x", "cs")}
 
 
 def test_a_row_at_the_wrong_index_is_refused(one_value):

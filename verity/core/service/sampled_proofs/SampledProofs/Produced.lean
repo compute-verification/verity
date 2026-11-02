@@ -12,8 +12,8 @@ the one root the record names. They are never outputs. H1's drawn leaf is proved
   digest and its own entries (`Mine`), Python's P- codes in its order, a value's codes in the order of the verifier's
   value names; `openings` is each row's commit-time opening by its digest `b ‖ c`, every row of each produced value and
   the read rows of the registered values the sessions read (`P-openings`);
-* `opened`: the roots the verifiers of record report opening the produced values against (`Record.sessionRegistered`)
-  must each be the accepted record's (`P-opened`);
+* `opened`: the roots the verifiers of record report opening the produced values against (those of
+  `Record.sessionRegistered`'s reads) must each be the accepted record's (`P-opened`);
 * `wanted`, `shared`: every row the verifiers of record report opening (their verdicts' `openings`, `Flock.registeredOpenings`) of
   a value the verifier holds openings of must be that opening (`P-shared`), so the sessions that read a row read the one
   opening the record fixed, with no appeal to SHA-512's collision resistance;

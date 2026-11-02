@@ -647,7 +647,7 @@ class _Entry:
     program: Program
     work_table: Mapping[str, Any] | None = None
     #: what `register` handed R1-R7 besides the record: (ports, leaf_layer, anchors, the log's records, registered,
-    #: supplied, pinned, schemas, window_root, held)
+    #: supplied, pinned, schemas, window_root, held, circuit_params)
     copies: tuple[Any, ...] = ()
     read: bytes | None = None
     closure: Mapping[int, Sequence[int]] | None = None
@@ -1353,7 +1353,8 @@ class Stream:
                  work_table: Mapping[str, Any] | None = None, supplied: Mapping[str, Any] | None = None,
                  pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
                  window_root: str | None = None, held: Sequence[str] | None = None,
-                 counts: Mapping[str, int] | None = None) -> Registration:
+                 counts: Mapping[str, int] | None = None,
+                 circuit_params: Mapping[str, int] | None = None) -> Registration:
         """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`),
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
@@ -1361,7 +1362,7 @@ class Stream:
         every template's at least one), the check's query, the selection rule's sampling design,
         `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), and the per-registration copies given
         here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`, `schemas`,
-        `window_root` and `held`, as `registration.check` takes them). Then the receipt. Under
+        `window_root`, `held` and `circuit_params`, as `registration.check` takes them). Then the receipt. Under
         `Check.registration_deadline` the challenger first reads its clock (`received_at`): a registration received more
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
@@ -1399,7 +1400,8 @@ class Stream:
             if v.ok:
                 earlier = self._earlier(record, supplied)
                 v = V.check(record, program, self.spec.check.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
-                            work_table, registered, supplied, pinned, self.binding, schemas, window_root, held)
+                            work_table, registered, supplied, pinned, self.binding, schemas, window_root, held,
+                            circuit_params=circuit_params)
                 if v.ok and count_varies(law):
                     v = _refuse("shapes", {"law": law}).verdict
                 if v.ok and not P.in_order(program, self.spec.check.query, n):
@@ -1429,7 +1431,7 @@ class Stream:
         program, law = got["program"], got["law"]
         self._entries.append(_Entry(reg, D.derive(program, self.spec.check.query, law, work_table), program, work_table,
                                     (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas,
-                                     window_root, held)))
+                                     window_root, held, circuit_params)))
         if deadline is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": reg.salted_at, "received_at": reg.received_at})
@@ -1649,7 +1651,7 @@ class Stream:
         accepted = rec["accepted"]
         if e.read is not None and rec["verifiers"]["agree"]:
             reg = draw.registration
-            ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held = e.copies
+            ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held, circuit = e.copies
             v = V.run({"receipt": dict(reg.receipt), "draw": dict(draw.draw), "read": len(e.read),
                        "symbol": ACCEPT if accepted else REJECT, "public": public if accepted else {},
                        "audit": {k: x for k, x in rec.items() if k != "verifiers"}},
@@ -1659,6 +1661,7 @@ class Stream:
                       [(x.name, x.registered) for x in self.spec.values], [p.item for p in self.spec.public],
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
+                      circuit_params=circuit,
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held,
                       coin_source=self.coin_source, coins=coins)
             if not v.ok:

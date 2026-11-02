@@ -338,10 +338,14 @@ BODY = ("the window's circuit's units are not its record's tiles: its root's nod
         "one (h1window.program's body)")
 #: a drawn unit's proof outcome: the verifier of record's verdict for the session that proved it
 PROOF_KEYS = ("program", "registered", "unit", "verdict")
+#: a registered finding's entry: its port's value and the root its reads were opened against, with that root's domain and
+#: shape beside them (flock-verify's `Registered.finding`) or not
+FINDING_KEYS = (["root", "value"], ["domain", "leaves", "root", "value", "word_bits", "words"])
 PROOFS_FORM = ("the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier "
                "of record's verdict for a drawn unit's session: verdict accept or reject, program the SHA-512 of the "
                "circuit's descriptor it verified the session against, and registered its finding, each registered port's "
-               "{value, root}, port and value printable ASCII and root a SHA-512 digest")
+               "{value, root}, alone or with its {domain, leaves, words, word_bits}, port and value printable ASCII and "
+               "root a SHA-512 digest")
 LOG_FORM = "the round log is not a nonempty list"
 ENTRIES_FORM = "the window's registered entries are not a list of objects"
 NO_A = ("the window registers no A value (…/a/<K>, or a round's …/a/<K>@<s>), so nothing ties its units' A rows to "
@@ -1180,14 +1184,15 @@ def _window_drawn(window: dict, draw: dict, ss: list[dict], k: Any
 
 
 def _finding(x: Any) -> list[tuple[str, str, str]] | None:
-    """A session's registered finding (flock-verify's ``registered``, ``{port: {value, root}}``: each registered port's
-    value and the root its reads were opened against) as ``(port, value, root)`` in port order, or None."""
+    """A session's registered finding (flock-verify's ``registered``, ``{port: {value, root, ...}}``: each registered
+    port's value and the root its reads were opened against, `FINDING_KEYS`) as ``(port, value, root)`` in port order,
+    or None."""
     if not isinstance(x, dict):
         return None
     out = []
     for port in sorted(x):
         e = x[port]
-        if not (_printable(port) and isinstance(e, dict) and sorted(e) == ["root", "value"] and _printable(e["value"])
+        if not (_printable(port) and isinstance(e, dict) and sorted(e) in FINDING_KEYS and _printable(e["value"])
                 and _digest(e["root"]) is not None):
             return None
         out.append((port, e["value"], e["root"]))

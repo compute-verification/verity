@@ -207,8 +207,8 @@ def known_port(program: str, value: str, row: Sequence[int], salt: bytes, regist
 
 def opened(rec: Mapping[str, Any], session_registered: Mapping[str, str | None] | None) -> tuple[str, ...]:
     """``("P-opened",)`` unless each produced value of the accepted record ``rec`` was opened against its root: the
-    ``{value: root}`` the verdicts of record report (`audit.session_registered` without a registration, a value two of
-    them report under different roots None), at every produced value."""
+    ``{value: root}`` the verdicts of record report (the roots of `audit.session_registered`'s reads without a
+    registration, a value two of them report under different reads None), at every produced value."""
     want = {e["value"]: e["root"] for e in rec["produced"]}
     got = dict(session_registered or {})
     return () if all(got.get(v) == r for v, r in want.items()) else ("P-opened",)

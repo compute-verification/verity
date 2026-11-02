@@ -108,8 +108,8 @@ theorem none_fail_base (d p : Check) :
     (∀ x ∈ #[("draw", d), ("proved", p)], Fails x = false) ↔ p.codes = #[] := by
   simp [Fails, Array.isEmpty_iff]
 
-theorem sameDict_iff (a b : Array (String × Json)) : Record.sameDict a b = true ↔ SameRoots a b := by
-  simp only [Record.sameDict, SameRoots, Bool.and_eq_true, beq_iff_eq, Array.all_eq_true', Array.any_eq_true']
+theorem sameDict_iff (a b : Array (String × Json)) : Record.sameDict a b = true ↔ SameReads a b := by
+  simp only [Record.sameDict, SameReads, Bool.and_eq_true, beq_iff_eq, Array.all_eq_true', Array.any_eq_true']
 
 theorem qsort_eq_empty {α : Type} (xs : Array α) (lt : α → α → Bool) : xs.qsort lt = #[] ↔ xs = #[] := by
   rw [← Array.size_eq_zero_iff, size_qsort, Array.size_eq_zero_iff]
@@ -125,7 +125,7 @@ theorem checks_ok (reg receipt draw law : Json) (units : Array Int) (provedUnits
     (∀ roots, sessionRoots = some roots → roots ≠ #[] ∧
       ∀ pr ∈ roots, ∃ r, (Record.byPort reg).find? (·.1 == pr.1) = some r ∧ jeq (getD r.2 "root") pr.2 = true) ∧
     ((field? reg "registered").isSome = true ∨ opened.isSome = true →
-      SameRoots (opened.getD #[]) (Record.registeredRoots reg)) := by
+      SameReads (opened.getD #[]) (Record.registeredReads reg)) := by
   unfold Record.checks
   extract_lets o0 j3 want opened' wrong j2 registered j1 j0 o1
   rcases hs : served with _ | s <;> rcases hr : sessionRoots with _ | roots
@@ -176,7 +176,7 @@ theorem recordChecks_nil (c : Commitment) (e : Evidence) :
       (∀ x ∈ cs, ¬(match x with | (n, c) => n != "draw" && !c.codes.isEmpty) = true) ↔ ∀ x ∈ cs, Fails x = false := by
     intro cs; simp [Fails]
   rw [hf, checks_ok, checkProved_nil]
-  unfold UnitsProved Receipt openedRoots
+  unfold UnitsProved Receipt openedReads
   simp only [Option.map_eq_some_iff, forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, and_assoc]
   exact Iff.rfl
 

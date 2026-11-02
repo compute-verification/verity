@@ -173,9 +173,12 @@ def opensLeaf (reg : Port) (payload : ByteArray) (pos : Nat) (path : ByteArray) 
 def opens (reg : Port) (bc : ByteArray) (pos : Nat) (path : ByteArray) : Bool :=
   opensLeaf reg (Hm96.Default512.treeLeaf bc) pos path
 
-/-- What a verdict reports: each registered port's value and the root its reads were opened against. -/
+/-- What a verdict reports: each registered port's value, the root its reads were opened against, and that root's domain
+and shape: its leaves, a row's words (null where the file names none) and their bits. -/
 def finding (own : Array Port) : Json :=
-  Json.mkObj (own.toList.map fun p => (p.name, Json.mkObj [("value", Json.str p.value), ("root", Json.str (hexOf p.root))]))
+  Json.mkObj (own.toList.map fun p => (p.name, Json.mkObj [("value", Json.str p.value), ("root", Json.str (hexOf p.root)),
+    ("domain", Json.str (hexOf p.domain)), ("leaves", Lean.toJson p.leaves), ("words", (p.words.map Lean.toJson).getD .null),
+    (WIDTH_KEY, Lean.toJson p.wordBits)]))
 
 /-- The statement check derived the statement's units from the verifier's own program (its partition finding,
 `HmRow.PartitionFinding`), rather than taking them as stated. -/

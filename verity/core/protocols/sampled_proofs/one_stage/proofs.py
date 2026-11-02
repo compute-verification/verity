@@ -79,7 +79,8 @@ class Proof:
 @dataclass(frozen=True)
 class Finding:
     """One session's verdict from the verifier's own run: accepted or not and why, the program its verdict names, its
-    registered finding (port -> {value, root}) and the global proof blocks it proved (none unless accepted)."""
+    registered finding (port -> {value, root, domain, leaves, words, word_bits}) and the global proof blocks it proved
+    (none unless accepted)."""
 
     session: str
     accepted: bool

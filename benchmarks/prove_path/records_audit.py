@@ -36,23 +36,32 @@ of a pinned parameter leave the free inputs where the window's root for it is th
 them registered, its pins the ``--registered`` file's roots and the window's roots those its registration records
 (`window_roots`: its ``registered_roots``, `interface.Window.write`, and its committed values' entries).
 
-A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, a
-loop's activation rows) has them fixed before the sample with the rest of the registration;
-the audit holds each entry's domain to the one core's ``registered.domain`` makes of the program, the value, its rows and
-the window's run root (`committed_activations`), and reports their roots. Those the circuit doesn't read take nothing from
-the free inputs. Those it reads as ties (a wired loop's activations: an output port writes every row an input port
-takes, `tied_values`) are pinned from the registration beside ``--registered``'s (`window_pins`), so Lean's registered
-reads tie each reader's row to its writer's. One it reads only through input ports is opened against its committed root
-too, but the prover chose its rows: its reads count free, and the count names it (``leak.untied``). PoUW's H1 tiles
-have theirs pinned through ``--registered``, from the window's entries.
+The circuit's registered parameters that ``--registered`` doesn't pin are the window's own values, registered afresh
+each window (`window_values`: its scan state): the registration registers each (its ``registered``, a v2 record), and
+a5 hands them to R7 (`a5.window_copies`: each value at its row's words, its 16-bit leaves and ``hm96-sha512/row/v2``,
+under the window's open root, the run root), which holds each entry to the domain the verifier derives from the sampled
+Program before the sample. Each is pinned at its registered entry (`window_entries`), beside ``--registered``'s. Those it
+reads as ties (a wired loop's activations: an output port writes every row an input port takes, `tied_values`) have
+Lean's registered reads tie each reader's row to its writer's. One it reads only through input ports is opened against
+its registered root too, but the prover chose its rows: its reads count free, and the count names it (``leak.untied``).
+A registration whose window commits per-window values beside it (``activations``: ``{program, values: {value:
+entry}}``, PoUW's operands) has each entry's domain held to the one core's ``registered.domain`` makes of the program,
+the value, its rows and the window's run root (`committed_activations`), and their roots reported. PoUW's H1 tiles have
+theirs pinned through ``--registered``, from the window's entries.
 
 The negatives (`negatives` before the sample, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
 
+``warm``: a window's templates and binding are public, so every template its composers make is composed into a5's compose
+cache before the timed audit (`warm`, `a5.warm`), under the tree and ``FLOCK_*`` environment the audit then runs in, since
+the cache's key covers both; the audit with ``--compose-cache`` then composes none. An audit's time quoted with the cache
+quotes the warm's beside it.
+
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
-        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives]
+        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives] [--compose-cache DIR]
+    records_audit.py warm --window DIR --law L [--template-sets DIR] --compose-cache DIR [--jobs N]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
     records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
 
@@ -62,7 +71,7 @@ registration (``--window``'s ``registration.json``), the population Program's de
 ``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`), and its
 terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
 values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
-the scan's state tree (``stateTied``), so its reads count registered. Refused where the window commits no scan state.
+the scan's state tree (``stateTied``), so its reads count registered. Refused where the window registers no scan state.
 
 ``count``: a stated record that declares its inputs (cuts, registered reads, ingress: `interface.Circuit.declared`) counted
 from its description alone (`declared_count`), before the committer writes its members' rows. A registered read counts as
@@ -315,11 +324,11 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
                    untied: Iterable[str] = ()) -> dict[str, Any]:
     """The leak bound's count of a stated record that declares its inputs (`interface.input_count`, from its description
     alone): its input rows less those its wires, registered reads of a parameter whose window root (``roots``, those the
-    registration records: `window_roots`) is the verifier's pin (``pins``, ``{param: root}``) and ingress fill
+    registration records: `registration_roots`) is the verifier's pin (``pins``, ``{param: root}``) and ingress fill
     leave ``free``, and ``other_inputs`` is those plus the advice's ``bits``, the compile unit's one input, a statement of
     its own. So ``other_inputs`` equals the charge exactly when the circuit leaves no input free. An ``untied`` value
-    (`window_pins`: a per-window value no output port of the circuit writes, whose rows the prover chose) is no pin here,
-    though the audit opens its reads against its committed root: its input rows are free, and the count names it."""
+    (`window_entries`: a per-window value no output port of the circuit writes, whose rows the prover chose) is no pin
+    here, though the audit opens its reads against its registered root: its input rows are free, and the count names it."""
     untied = set(untied)
     held = {p: r for p, r in pins.items() if p not in untied} if isinstance(pins, Mapping) else pins
     n = IF.input_count(doc, resolve, held, roots)
@@ -388,11 +397,19 @@ def window_roots(w: Mapping[str, Any]) -> dict[str, str]:
 
 
 def registration_roots(rec: Mapping[str, Any]) -> dict[str, str]:
-    """The roots a window's registration records for its parameters (`window_roots`): core's registration's window's, or
-    an integration's own window registration's, whose ``window`` is no mapping (vLLM's advice registration names the
-    window's index there)."""
+    """The roots a window's registration records for its parameters (`window_roots`): core's registration's window's
+    beside the values it registers (its ``registered``, v2: the window's own, `window_entries`), or an integration's own
+    window registration's, whose ``window`` is no mapping (vLLM's advice registration names the window's index there).
+    Refused (ValueError) where a root isn't hex digits or two give one parameter two roots."""
     w = rec.get("window")
-    return window_roots(w if isinstance(w, Mapping) else rec)
+    if not isinstance(w, Mapping):
+        return window_roots(rec)
+    roots = window_roots(w)
+    got = {str(e.get("value")): e.get("root") for e in rec.get("registered") or () if isinstance(e, Mapping)}
+    IF.held_params({}, got)
+    if two := sorted(v for v, r in got.items() if roots.setdefault(v, r).lower() != r.lower()):
+        raise ValueError(f"the window's registration records two roots for {two}")
+    return roots
 
 
 def pinned(doc: Any) -> dict[str, dict[str, Any]]:
@@ -422,7 +439,7 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
 
 def pin_roots(entries: Mapping[str, Mapping[str, Any]]) -> dict[str, str]:
     """The pins `interface.input_count` holds to a window's roots (`window_roots`), ``{param: root}``, of pinned entries
-    (`pinned`, `window_pins`'): each entry's root alone, its domain and shape staying with the entries that
+    (`pinned`, `window_entries`'): each entry's root alone, its domain and shape staying with the entries that
     `interface.registered_reads` opens against. Refused (ValueError) where a root isn't hex digits."""
     pins = {v: e["root"] for v, e in entries.items()}
     IF.held_params(pins, {})
@@ -450,25 +467,50 @@ def tied_values(circuit: Mapping[str, Any], values: Iterable[str], resolve: Call
     return {v for v in values if v in taken and taken[v] <= written.get(v, set())}
 
 
-def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any],
-                resolve: Callable[[str], Any] = IF.resolve) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
-    """The per-window values the circuit reads (its registered parameters among the registration's ``activations``), by
-    parameter, each refused (ValueError) unless it names its value and a root and its domain binds the window's run root,
-    as ``(ties, untied)``. The ties (`tied_values`: a wired loop's activations, each written by an output port and read by
-    an input port) are pinned: the registration fixes them before the sample, and the Lean verifier's registered reads open
-    each writer's and each reader's rows against the same root, so a reader's rows are its writer's. An untied value (read
-    only by input ports) is opened against its committed root too, since the Lean verifier opens every registered read, but
-    nothing in the circuit fixes its rows: the prover chose them, so its reads count free (`declared_count`)."""
-    params = set((circuit.get("registered") or {}).get("params") or {})
-    acts = w.get("activations") or {}
-    values = {v: dict(e) for v, e in (acts.get("values") or {}).items() if v in params}
-    for v, e in values.items():
-        want = REG.domain(acts["program"], v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS),
-                          window=w.get("run")).domain_id.hex()
-        if e.get("value") != v or e.get("domain") != want or not isinstance(e.get("root"), str):
-            raise ValueError(f"the window's value {v!r} names another value or a domain not bound to its run root, or no root")
-    ties = tied_values(circuit, values, resolve)
-    return {v: e for v, e in values.items() if v in ties}, {v: e for v, e in values.items() if v not in ties}
+def window_values(circuit: Mapping[str, Any], pins: Iterable[str],
+                  resolve: Callable[[str], Any] = IF.resolve) -> dict[str, dict[str, Any]]:
+    """The values the window registers afresh under its open root, the ones R7 expects registered (a5's
+    ``window_values``, `a5.window_copies`): the stated record ``circuit``'s registered parameters the verifier pinned
+    none of (``pins``, the ``--registered`` weights), its scan state, each ``{words, leaves, schema}`` in
+    `interface.read_shape`'s shape: the row width every read of it names, its 16-bit leaves, in ``hm96-sha512/row/v2``
+    rows. Refused (ValueError) where no read names one, reads name it at two widths, or its leaves aren't whole rows."""
+    reg = IF.declarations(circuit)[2]
+    if reg is None:
+        return {}
+    lays = {t: IF.layout(resolve(t)) for t, _ in circuit["templates"]}
+    out = {}
+    for v, leaves in sorted(reg.params.items()):
+        if v in pins:
+            continue
+        widths = {dict(lays[r.reader].rows + lays[r.reader].outs)[r.port] for r in reg.reads if r.param == v}
+        if len(widths) != 1 or leaves % min(widths):
+            raise ValueError(f"the verifier didn't pin registered parameter {v!r}, which as the window's own value is read at "
+                             f"{sorted(widths)} words a row, not one width its {leaves} leaves are rows of")
+        out[v] = {"words": min(widths), "leaves": int(leaves), "schema": REG.SCHEMA_V2}
+    return out
+
+
+def window_entries(rec: Mapping[str, Any], circuit: Mapping[str, Any], values: Iterable[str],
+                   resolve: Callable[[str], Any] = IF.resolve) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """The registration's entries of the window's own values (`window_values`): each once in its ``registered`` (v2, R7's,
+    which holds each to the domain the verifier derives from the sampled Program, the value, its shape and the window's
+    open root before the sample), by value, as ``(ties, untied)``; refused (ValueError) otherwise. The ties (`tied_values`:
+    a wired loop's activations, each written by an output port and read by an input port) are pinned: the Lean verifier's
+    registered reads open each writer's and each reader's rows against the same root, so a reader's rows are its writer's.
+    An untied value (read only by input ports, the scan's state) is opened against its registered root too, since the Lean
+    verifier opens every registered read, but nothing in the circuit fixes its rows: the prover chose them, so its reads
+    count free (`declared_count`)."""
+    got = rec.get("registered") if isinstance(rec.get("registered"), list) else []
+    entries = {}
+    for v in values:
+        hits = [e for e in got if isinstance(e, Mapping) and e.get("value") == v]
+        if len(hits) != 1 or not isinstance(hits[0].get("root"), str):
+            raise ValueError(f"the verifier didn't pin registered parameter {v!r}, and the registration registers it "
+                             f"{len(hits)} times, not once with its root: a window's own value is an entry of its "
+                             "registration's registered (v2)")
+        entries[v] = dict(hits[0])
+    ties = tied_values(circuit, entries, resolve)
+    return {v: e for v, e in entries.items() if v in ties}, {v: e for v, e in entries.items() if v not in ties}
 
 
 def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -569,6 +611,7 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
         if st["reads"] == "slots":
             FC.IL.write_tables(Path(out).parent / "tables")
         return {"subcircuit": s.meta.get("subcircuit"), "pin": s.pin, "class_sha512": s.class_sha512, "k_log": s.meta["k_log"]}
+    compose.inputs = ["unit/window", st]  # a5's compose cache keys a composer by these (a5.compose_key), else never caches it
     return compose
 
 
@@ -578,9 +621,11 @@ TIED = SCAN_STATE
 
 def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]:
     """The window's audit as one compute audit of the network certifier's period (module docstring's ``period``):
-    ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ValueError where the
-    circuit isn't the one the registration binds, the window commits no `TIED` value its circuit reads, the audit wrote no
-    Program or another than the registration names, or its answer commits to another registration."""
+    ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`), the circuit's other
+    registered parameters the window's own (`window_values`). ValueError where the circuit isn't the one the registration
+    binds, the registration doesn't register each of the window's own values (`window_entries`) or registers no `TIED`
+    value its circuit reads, the audit wrote no Program or another than the registration names, or its answer commits to
+    another registration."""
     import served_integrity as SI
 
     rec = json.loads((window / "registration.json").read_text())
@@ -588,11 +633,11 @@ def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]
     if hashlib.sha512(body).hexdigest() != own.get("circuit"):
         raise ValueError(f"{window / 'circuit.json'} is not the circuit record the registration binds")
     doc = json.loads(body)
-    ties, untied = window_pins(own, doc, catalog_resolve)
+    ties, untied = window_entries(rec, doc, window_values(doc, pins, catalog_resolve), catalog_resolve)
     if TIED not in ties | untied:
-        raise ValueError(f"the window commits no {TIED} its circuit reads: the period has no state to tie to its scan's")
+        raise ValueError(f"the window registers no {TIED} its circuit reads: the period has no state to tie to its scan's")
     count = declared_count(doc, 0, catalog_resolve, pins={**pins, **pin_roots({**ties, **untied})},
-                           roots=window_roots(own), untied=set(untied) - {TIED})
+                           roots=registration_roots(rec), untied=set(untied) - {TIED})
     try:
         program = json.loads((audit / "window" / "program.json").read_text())
     except OSError:
@@ -629,7 +674,7 @@ def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = ()
     verifier's own, from the circuit's shape) and every unit an uncut registered read of an output port (``o<j>``)
     covers in the circuit record (``registered``'s ``reads``: units ``[at, at + prod(radix))`` of its reader template,
     the population's indices from the templates' order), unless it reads one of the window's ``own`` values
-    (`window_pins`: a tie inside the window, a wired loop's activations), whose units the sample samples like any other. A
+    (`window_entries`: a tie inside the window, a wired loop's activations), whose units the sample samples like any other. A
     value pinned from outside the window (a served ``out`` that the next step also reads) keeps its units in the class."""
     base, at = {}, 0
     for t, n in circuit["templates"]:
@@ -707,12 +752,11 @@ def audit(a: argparse.Namespace) -> int:
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
         def resolve(t: str) -> Any:
             return sets[t][1] if t in sets else catalog_resolve(t)
-        own = json.loads((wdir / "registration.json").read_text()).get("window") or {}
-        ties, untied = window_pins(own, doc, resolve)
-        if twice := sorted((set(ties) | set(untied)) & set(pins)):
-            raise ValueError(f"values {twice} are both pinned and the window's own")
+        registration = json.loads((wdir / "registration.json").read_text())
+        values = window_values(doc, pins, resolve)
+        ties, untied = window_entries(registration, doc, values, resolve)
         pins |= ties | untied
-        roots = window_roots(own)
+        roots = registration_roots(registration)
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
     except (ValueError, KeyError, TypeError) as e:
         row = {"ok": False, "refused": {"records": f"{type(e).__name__}: {e}"}, "seconds": round(time.time() - t0, 1)}
@@ -738,7 +782,7 @@ def audit(a: argparse.Namespace) -> int:
     a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
     a.port = a.port if a.port is not None else free_ports(a.ports)
     a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
-    a.compose_cache = None
+    a.window_values = values
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (), own=set(ties) | set(untied))
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
@@ -766,6 +810,9 @@ def audit(a: argparse.Namespace) -> int:
                    if set(IF.DECLARED) & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
     if reads:
         row["registered"] = {"pins": counted, "roots": roots, "members": len(reads)}
+    if values:
+        row["window_values"] = {v: {k: e.get(k) for k in ("root", "leaves", "words", "domain")}
+                                for v, e in sorted({**ties, **untied}.items())}
     acts = committed_activations(w)
     if acts is not None:
         row["activations"] = acts
@@ -814,6 +861,23 @@ def audit(a: argparse.Namespace) -> int:
     return 0 if row["ok"] else 1
 
 
+def warm(a: argparse.Namespace) -> int:
+    """Every template of the verifier's window that its composers make, composed into ``a.compose_cache`` bound to the window's
+    partition and program (`a5.warm`), ``a.jobs`` at a time, before the timed audit: an audit with that cache then composes
+    none. One JSON line a template (its seconds, pin and whether the cache held it), then a ``WARM`` line."""
+    import a5 as A5
+
+    t0 = time.time()
+    mine, _doc, sets = verifier_window(Path(a.window), D.parse_law(a.law), Path(a.template_sets) if a.template_sets else None)
+    window_s = round(time.time() - t0, 1)
+    got = A5.warm(a, sets, mine, a.jobs)
+    for g in got:
+        print(json.dumps(g, sort_keys=True))
+    print("WARM " + json.dumps({"templates": len(got), "kept": sum(bool(g["kept"]) for g in got), "verifier_window_s": window_s,
+                                "seconds": round(time.time() - t0, 1)}, sort_keys=True))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     import a5 as A5
 
@@ -860,6 +924,15 @@ def main(argv: list[str] | None = None) -> int:
                    "values} (`pinned`), for a circuit that reads them")
     p.add_argument("--skip-negatives", action="store_true", help="no negatives in this audit (module docstring): a run of "
                    "several audits runs them in its first")
+    p.add_argument("--compose-cache", help="a5's compose cache, which `warm` filled under this tree and FLOCK_* environment: "
+                   "staging links each kept circuit and composes none (default none: every template composed here)")
+    p = sub.add_parser("warm", help="every template of a window composed into a5's compose cache, before its timed audit")
+    p.add_argument("--window", required=True, help="the window's directory, as its audit takes it")
+    p.add_argument("--law", required=True, help="the window's law, as its audit takes it")
+    p.add_argument("--template-sets", help="the verifier's own input sets, as its audit takes them")
+    p.add_argument("--compose-cache", required=True, help="the cache the audit's --compose-cache names")
+    p.add_argument("--jobs", type=int, default=1, help="templates composed at once, each in a forked process: what the "
+                   "machine's memory takes (a5.warm)")
     p = sub.add_parser("count", help="a stated circuit record's leak count from its description alone (declared_count)")
     p.add_argument("--circuit", required=True, help="the circuit record (circuit.json), or its description")
     p.add_argument("--bits", type=int, required=True, help="the advice's registered length in bits, the charge")
@@ -903,6 +976,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(declared_count(json.loads(Path(a.circuit).read_text()), a.bits, pins=pins, roots=roots),
                          sort_keys=True))
         return 0
+    if a.cmd == "warm":
+        return warm(a)
     if bool(a.opening) == bool(a.circuit) or bool(a.opening) != bool(a.compilers):
         ap.error("a compiled circuit: --opening FILE --compilers FILE; a circuit with no compiler: --circuit SHA512")
     if a.challenger:

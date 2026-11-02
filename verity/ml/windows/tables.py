@@ -89,7 +89,9 @@ def reported_reads(reads: Mapping[str, Mapping[str, Any]], verdicts: Mapping[str
     for key, v in verdicts.items():
         want = {p: {"value": e["value"], "root": e["root"]} for p, e in (reads.get(key) or {}).get("ports", {}).items()}
         got = v.get("registered")
-        chunks[key] = {"reads": want, "reported": got, "ok": bool(want) and v.get("accepted") is True and got == want}
+        opened = ({p: {k: e.get(k) for k in ("value", "root")} for p, e in got.items()}
+                  if isinstance(got, Mapping) and all(isinstance(e, Mapping) for e in got.values()) else got)
+        chunks[key] = {"reads": want, "reported": got, "ok": bool(want) and v.get("accepted") is True and opened == want}
     return {"ok": all(c["ok"] for c in chunks.values()), "chunks": chunks}
 
 

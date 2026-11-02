@@ -21,6 +21,12 @@ opens under no other's domain. A value the verifier holds across windows (the we
 value did before it: the verifier names which (`registration.check`'s `held`, with its pinned, supplied and output
 values), and its domain is the same in every window.
 
+A registered parameter of the verifier's circuit that is no parameter of its program (a window circuit's scan state,
+which every member reads) has no Input gates to count: the verifier holds its count of 16-bit leaves from its own circuit
+(`registered_entries`' `circuit`), a row holds `words` of them in any row format (`circuit_shape`), and its domain is the
+same derivation over the program's SHA-512. One that is also a parameter of the program is refused, as are leaves that
+are not whole rows.
+
 A value read by a bit-row port is committed in that port's row format instead (`schema`, one of `SCHEMAS`): under
 `hm96-sha512/row/v2` a row is the bit row of its leaves (`bit_row((row, word_bits))`: its `row_words` with no padding,
 little-endian), `x = sha512_row_v2_digest` over it, and its leaf `row_leaf(D, r, ..., "hm96-sha512/row/v2")`; under
@@ -245,6 +251,17 @@ def shape(program: Program, value: str, words: int, schema: str = SCHEMA) -> int
     return n // k
 
 
+def circuit_shape(program: Program, value: str, leaves: int, words: int) -> int:
+    """The rows of the circuit's registered parameter `value`, `leaves` 16-bit leaves of which a row holds `words` in any
+    row format. Refused (ValueError) when `value` is a parameter of the program, whose own leaves `shape` counts, or its
+    leaves are not rows of `words`, with the Lean's reason (`Registered.circuitShape`)."""
+    if value in dict(program.fn.signature()[0]):
+        raise ValueError(f"circuit parameter {value} is a parameter of the program")
+    if leaves < 1 or words < 1 or leaves % words:
+        raise ValueError(f"circuit parameter {value}: {leaves} leaves are not rows of {words}")
+    return leaves // words
+
+
 def leaf(dom: CommitmentDomain, position: int, bc: bytes, schema: str = SCHEMA) -> bytes:
     return row_leaf(dom, position, _INST.tree_leaf(_INST.default_key, bc), _schema(schema))
 
@@ -423,15 +440,20 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
 
 
 def registered_entries(program: Program, values: Mapping[str, int], schemas: Mapping[str, str] | None = None,
-                       window: str | None = None, fixed: Sequence[str] = ()) -> dict[str, dict[str, Any]]:
+                       window: str | None = None, fixed: Sequence[str] = (),
+                       circuit: Mapping[str, int] | None = None) -> dict[str, dict[str, Any]]:
     """The verifier's own `{value: {"leaves", "words", "word_bits", "domain"}}` for the parameters it expects registered
     (`values`: `{parameter: words}`), from its own program (`word_bits`: `width`; `leaves`: `shape`, in the value's row
     format from `schemas`, default `SCHEMA`). `window`: the window's open root, which every value's domain binds but the
-    ones in `fixed`, the values it holds across windows (`domain`)."""
-    prog = P.program_digest(program)
+    ones in `fixed`, the values it holds across windows (`domain`). `circuit`: of `values`, the registered parameters of
+    the verifier's circuit that are no parameter of its program (`{value: leaves}`, its 16-bit leaves: `circuit_shape`)."""
+    prog, circuit = P.program_digest(program), circuit or {}
     out = {}
     for v, w in values.items():
-        n, b = shape(program, v, w, (schemas or {}).get(v, SCHEMA)), width(program, v)
+        if v in circuit:
+            n, b = circuit_shape(program, v, circuit[v], w), WORD_BITS
+        else:
+            n, b = shape(program, v, w, (schemas or {}).get(v, SCHEMA)), width(program, v)
         out[v] = {"leaves": n, "words": int(w), "word_bits": b,
                   "domain": domain(prog, v, w, n, b, None if v in fixed else window).domain_id.hex()}
     return out

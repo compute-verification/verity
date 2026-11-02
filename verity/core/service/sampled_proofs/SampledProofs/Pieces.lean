@@ -27,8 +27,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   offsets and total, the honest prover's witnesses, and the witness for a named call;
 * `verdict`: the verdicts' share of the outcome once the record's checks hold;
 * `matches_public`: the verifier's own public file against the record (`Record.matchesPublic`);
-* `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`), and with a
-  registration only its own values' (`Record.ownRegistered`);
+* `session_registered`: the registered reads the verifiers of record report, each its root, domain and shape
+  (`Record.sessionRegistered`), and with a registration only its own values' (`Record.ownRegistered`);
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
 * `check_public`: the proof service's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof service outcome (`Service.checkVerdicts`);
@@ -141,6 +141,19 @@ def registration (j : Json) : V Json := do
 def registered (j : Json) : V Json := do
   let v := (← params (getD j "params")).verifier
   return orNull (fun es => Json.mkObj (es.toList.map fun e => (e.value, e.toJson))) (Registration.ownEntries v)
+
+/-- `{"params", "value", "leaves", "words"}`, the parameters of a verifier that expects values registered, a string and
+two natural numbers, to `registered.circuit_shape`'s `{"rows"}`, or `{"refused": reason}` where it raises, the reason
+compared whole: the value a parameter of the program, or its leaves not rows of `words`. -/
+def circuitShape (j : Json) : V Json := do
+  let v := (← params (getD j "params")).verifier
+  if v.registered.isEmpty then throw "the verifier expects no values registered"
+  let .str value := getD j "value" | throw "value is not a string"
+  let (some leaves, some words) := (nat? (getD j "leaves"), nat? (getD j "words"))
+    | throw "leaves or words is not a natural number"
+  return match Registered.circuitShape v.params value leaves words with
+    | .ok (n, k, _) => Json.mkObj [("rows", Lean.toJson (n / k))]
+    | .error e => Json.mkObj [("refused", Json.str e)]
 
 /-- `{"program", "value", "words", "leaves", "word_bits"}`, two strings and three natural numbers, and an optional
 `"window"`, to `registered.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32, a window that is
@@ -446,7 +459,7 @@ def matchesPublic (j : Json) : V Json := do
     throw "scheme is not a string, roots or domains not an object of strings, or population not an integer"
   return (Record.matchesPublic rec_ (getD j "scheme") (getD j "roots") (getD j "domains") (getD j "population")).toJson
 
-/-- `{"verdicts", "registration"?}` to `{"registered": {value: root} or null}` (`Record.sessionRegistered`, with a
+/-- `{"verdicts", "registration"?}` to `{"registered": {value: read} or null}` (`Record.sessionRegistered`, with a
 registration `Record.ownRegistered`); refused where `inputOf` refuses the verdicts, and a registration whose roots are not
 a list of objects with a string port or whose registered values, if any, are not a list of objects with a string value. -/
 def sessionRegistered (j : Json) : V Json := do
@@ -570,6 +583,7 @@ def table : List (String × (Json → V Json)) :=
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
+   ("circuit_shape", circuitShape),
    ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
    ("challenger_commitment", Challenger.commitmentPiece),

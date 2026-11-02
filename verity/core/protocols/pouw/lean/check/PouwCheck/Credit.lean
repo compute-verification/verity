@@ -190,7 +190,7 @@ def PROOFS_FORM : String :=
   "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier of " ++
   "record's verdict for a drawn unit's session: verdict accept or reject, program the SHA-512 of the circuit's " ++
   "descriptor it verified the session against, and registered its finding, each registered port's {value, root}, " ++
-  "port and value printable ASCII and root a SHA-512 digest"
+  "alone or with its {domain, leaves, words, word_bits}, port and value printable ASCII and root a SHA-512 digest"
 def LOG_FORM : String := "the round log is not a nonempty list"
 def ENTRIES_FORM : String := "the window's registered entries are not a list of objects"
 def NO_A : String :=
@@ -696,13 +696,19 @@ def drawnOf (coin : ByteArray) (stream registration receipt : Json) (ss : Array 
   let some units ← port (workUnits coin st reg kvs (← law ss k)) | throw ("sampler", "the draw's stream ran out")
   pure units
 
-/-- `credit._finding`: a session's registered finding (flock-verify's `registered`, `{port: {value, root}}`: each
-registered port's value and the root its reads were opened against) as `(port, value, root)` in port order. -/
+/-- A registered finding's entry: its port's value and the root its reads were opened against, with that root's domain
+and shape beside them (flock-verify's `Registered.finding`) or not. -/
+def FINDING_KEYS : List (List String) := [["root", "value"], ["domain", "leaves", "root", "value", "word_bits", "words"]]
+
+/-- `credit._finding`: a session's registered finding (flock-verify's `registered`, `{port: {value, root, ...}}`: each
+registered port's value and the root its reads were opened against, `FINDING_KEYS`) as `(port, value, root)` in port
+order. -/
 def finding? (x : Json) : Option (List (String × String × String)) :=
   if isObj x then (fields x).mapM fun (port, e) =>
     match keys e, get e "value", get e "root" with
-    | some ["root", "value"], .str v, .str r =>
-      if _root_.PouwCheck.plain port && _root_.PouwCheck.plain v && (digest? (.str r)).isSome then some (port, v, r)
+    | some ks, .str v, .str r =>
+      if FINDING_KEYS.contains ks && _root_.PouwCheck.plain port && _root_.PouwCheck.plain v && (digest? (.str r)).isSome
+      then some (port, v, r)
       else none
     | _, _, _ => none
   else none
