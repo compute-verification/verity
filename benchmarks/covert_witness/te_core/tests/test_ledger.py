@@ -86,7 +86,7 @@ def test_launch_gates(tmp_path):
     s.promote(entry, 2, "elite")
     recs = launch.launch(a, prog, 2, node_file=nodes, direction="d", mechanism="m", entry=entry, dry_run=True,
                          clock=clock)
-    assert len(recs) == 9 and all("--keep-checkpoints" in r["argv"][-1] for r in recs)
+    assert len(recs) == 6 and all("--keep-checkpoints" in r["argv"][-1] for r in recs)
     only_h200 = tmp_path / "h200.txt"
     only_h200.write_text("vy-dc-h200-2\n")
     with pytest.raises(launch.Refused, match="no usable node"):
