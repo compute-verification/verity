@@ -5,8 +5,8 @@
 
 `--factory MODULE:FUNCTION` returns the start's model, untrained; θ is loaded into it and its forward MACs per token at
 `--ctx` counted by the harness (flops.forward_macs_per_token), on CPU. The entry is `{name: {path, sha256, val_bpb, ctx,
-vocab, forward_macs_per_token}}`; a registry is one JSON object of such entries, named `small`, `medium` and `large` for
-the tiers.
+vocab, forward_macs_per_token}}`; a registry is one JSON object of such entries, named `small` and `medium` for the
+tiers.
 """
 from __future__ import annotations
 
