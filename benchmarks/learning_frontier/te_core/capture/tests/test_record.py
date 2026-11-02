@@ -6,7 +6,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from models import mlp
+from models import TinyLM, lm_loss, mlp
 from te_core.capture import capture_run, capture_step
 
 FI, H, O, N = 3, 5, 2, 4
@@ -54,3 +54,20 @@ def test_bits_are_the_updated_weights_width():
     m = mlp(FI, H, O).to(torch.bfloat16)
     g = capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1), mse, batch(torch.bfloat16))
     assert [r[4] for r in g.structure()["updated"]] == [16, 16]
+
+
+def test_bf16_autocast_reads_through_the_casts():
+    B, S, V, Hd, I, L = 2, 4, 32, 16, 32, 2
+    T = B * S
+
+    def loss(m, b):
+        with torch.autocast("cpu", dtype=torch.bfloat16):
+            return lm_loss(m, b)
+
+    model = TinyLM(V, Hd, 2, I, L)
+    ids = torch.zeros(B, S, dtype=torch.long)
+    g = capture_step(model, torch.optim.AdamW(model.parameters()), loss, (ids, ids))
+    assert g.macs == 3 * T * Hd * V + L * (12 * T * Hd * Hd + 6 * T * Hd * I + 6 * T * S * Hd)
+    using = [m for m in g.matmuls if m.role == "using" and m.phase == "forward"]
+    assert len(using) == 6 * L + 1 and all(m.dtypes == ("bfloat16", "bfloat16") for m in using)
+    assert {r[4] for r in g.structure()["updated"]} == {16}
