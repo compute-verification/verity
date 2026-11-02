@@ -39,8 +39,7 @@ from .workloads import Workload
 
 SECURITY = {"target": -100, "profile": "fast100", "reps": 2}
 #: a point's coins, as its sweep record names them (`verity_flock.circuit.coins`)
-COINS = {"coin-tree": "coin-tree: every round's coins the challenger's keyed coin tree's (serve --tree-from)",
-         "live-os": "live-os: the verifier's OS draws, round by round"}
+COINS = {"coin-tree": "coin-tree: every round's coins the challenger's keyed coin tree's (serve --tree-from)"}
 PREPROCESSING = ("the population is lowered and staged once for every B (fixed.setup_seconds); every timed session builds "
                  "its drawn statement and witness and proves both reps afresh")
 CONFIGS = {"plain": "C-Flock native prover, ZK off (flock-circuit prove --gpu), live coins and the stratified draw of B units "

@@ -10,8 +10,8 @@
 #      ZK=1 (selftest: C-Flock ZK's --zk statement, and zkaudit on the device's proofs)  MODES="m0 zk" (bench: each point in each mode;
 #      zkseq: --zk with the host's zk work not overlapped, FC_ZK_SEQUENTIAL)  FC_COINS=tree (bench: m0's sessions on the
 #      challenger's keyed coin tree, as every --zk session is: each point's server on its own challenger, bounded to WARM + RUNS
-#      sessions, its records audited against the challenger's release log, out/<set>/challenger-N-MODE/audit.json; os: per-round
-#      OS coins, no seed and no PRF; seed: the binary's default; a selftest build always seeds)
+#      sessions, its records audited against the challenger's release log, out/<set>/challenger-N-MODE/audit.json; empty: the
+#      binary's default, seed coins; a selftest build always seeds)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 export FC_COINS=${FC_COINS:-tree}

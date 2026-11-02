@@ -11,8 +11,8 @@
 # full fold, h nonzero); rec_vstage stage --levels none (the holo algebra's InnerRepCheck parts, h read from the session's
 # rows, each holding); and Lean's reading of the session (flock-verify rec-transcript: every stream of the verifier's record,
 # held to the schedule and to the prover's record, R's top to its registration with STACKED), which test_lean_rec_inner_streams
-# runs on the fixture. Lean's plain verify reads seeded or per-round OS coins, not the tree, so the prover's session is not
-# verified on its own here (pod 85's INNER_LEAN likewise), nor are the controls on its sample and challenges. The coin server
+# runs on the fixture. Lean's plain verify takes a coin tree of the session's own streams (--coins tree), not one with the
+# relay's sparse and stacked streams added, so the prover's session is not verified on its own here (pod 85's INNER_LEAN likewise), nor are the controls on its sample and challenges. The coin server
 # answers Register with the verifier's full draw (stage/draw.json, rec_live.full_draw: every unit), which both records keep.
 # Run from the verity tree (research run --cwd source). Outputs under out/: host.txt, stage.json, statement.txt,
 # schedule.json, tree-source.txt, session.log, time-prove.txt, prove.txt/.err, inner/ (schedule.json, public.json,
@@ -42,7 +42,6 @@ for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 export RI_PINNED=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
 export RAYON_NUM_THREADS=$(echo $RI_PINNED | tr ',' '\n' | wc -l)
-export FC_COINS=os
 . verity/ml/flock/pod/rec-env.sh
 # the inner statement's prover, statement and replay: on the challenger's coin tree (rec_live.INNER_COIN_SPEC: the prover's
 # own streams, then the relay's sparse and stacked ones), as pod 85's

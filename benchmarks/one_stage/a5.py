@@ -552,7 +552,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": law, "delta": a.delta, "firewall": a.firewall,
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
     if plain(a):
-        summary.update(firewall=None, plain={"scope": PLAIN_SCOPE, "coins": "os", "firewall": PLAIN_FIREWALL})
+        summary.update(firewall=None, plain={"scope": PLAIN_SCOPE, "coins": "tree", "firewall": PLAIN_FIREWALL})
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
 

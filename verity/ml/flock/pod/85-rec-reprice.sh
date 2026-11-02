@@ -19,7 +19,7 @@
 #                replay of the last one and V*'s hashing
 #                reference (rec_vstar) over it, and over two forged copies of its private.json (a round's top: one node one
 #                bit off, one salt one bit off), which it must refuse (CHECKS=0: STEP=icheck's); then (INNER_LOOPBACK=1) the
-#                hm96 statement on loopback, M0 (FC_COINS=os) and --zk, WARM + RUNS sessions each (today's numbers)
+#                hm96 statement on loopback, M0 (FC_COINS=tree) and --zk, WARM + RUNS sessions each (today's numbers)
 #   STEP=icheck  (CPU) the replay and rec_vstar on the inner's last session, the schedule the sessions were held to against
 #                the statement's (derived again), each session's own schedule, how it ended and its message count, the coin
 #                server's record against the clear tops, and the tree-top controls rec_vstar must refuse by name
@@ -45,8 +45,8 @@
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs oprove fixed (the
 #                inner shape, the statement's index and bindings, the shared rows, the inner transcript) (INNER_LEAN=1, the
-#                inner's own plain verify, is refused: Lean's plain verify reads seeded or per-round OS coins, not the
-#                challenger's coin tree the inner session is on; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither
+#                inner's own plain verify, is refused: Lean's plain verify takes a coin tree of the session's own streams
+#                (--coins tree), not the inner session's, which adds the inner phase's sparse and stacked streams; ZK_LEAN=1: also today's --zk session; LEVELS=none: neither
 #                of V*'s), and
 #                flock-verify statement on the inner statement with the partition object and program vstage wrote. The job
 #                fails unless each statement (staged or proved) and ZK_LEAN's session exited 0 with every VERDICT accepted,
@@ -161,9 +161,10 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
 export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src
-export FC_COINS=os FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
+export FC_COINS=tree FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 # the inner statement's prover, statement and replay: on the challenger's coin tree (rec_live --coin-tree's INNER_COIN_SPEC, the
-# prover's own streams then the inner phase's sparse and stacked ones); FC_COINS=os is today's loopback M0's
+# prover's own streams then the inner phase's sparse and stacked ones); FC_COINS=tree is today's loopback M0's, on its
+# verifier's own tree
 INNER_COINS="FC_COINS=tree FC_COIN_STREAMS=sparse/rep0,sparse/rep1,stacked/rep0"
 export REC_CIRCUIT_CACHE=${REC_CIRCUIT_CACHE-$FW/rec-circuits}
 # the lease command: GPU_LEASE, else the queue's own for this node (infra/cluster's submit.wrappers: node 1's pool where its tool
@@ -942,8 +943,8 @@ oreplay)
   done
   ;;
 lean)
-  [ "${INNER_LEAN:-0}" = 1 ] && { echo "REFUSED: INNER_LEAN=1: the inner session is on the challenger's coin tree, and Lean's plain" \
-    "verify reads seeded or per-round OS coins only; leave INNER_LEAN unset"; exit 2; }
+  [ "${INNER_LEAN:-0}" = 1 ] && { echo "REFUSED: INNER_LEAN=1: the inner session's coin tree adds the inner phase's streams, and" \
+    "Lean's plain verify takes a tree of the session's own streams only; leave INNER_LEAN unset"; exit 2; }
   [ -x $LEAN_BIN ] || lean_build > $O/build-lean.log 2>&1 || { tail -20 $O/build-lean.log; exit 1; }
   mkdir -p $O/lean
   # LEAN_JOBS verifications at once, the largest circuit first: one core each, at most 4.3 GB at K=64 N=64,

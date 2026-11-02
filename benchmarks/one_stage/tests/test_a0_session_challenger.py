@@ -83,7 +83,7 @@ def test_a_failed_challenger_refuses_the_session(run, monkeypatch):
     assert live["accepted"] is False and live["why"].startswith("challenger: ") and live["challenger"]["ok"] is False
 
 
-@pytest.mark.parametrize("flag, zk, env", [(None, True, {}), ("0", True, {}), ("1", False, {}), ("1", False, {"FC_COINS": "os"})])
+@pytest.mark.parametrize("flag, zk, env", [(None, True, {}), ("0", True, {}), ("1", False, {})])
 def test_any_other_session_starts_no_challenger(run, monkeypatch, flag, zk, env):
     go, calls, _ = run
     if flag is None:

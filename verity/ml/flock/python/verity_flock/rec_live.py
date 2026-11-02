@@ -6,7 +6,7 @@ Flock prover against a verifier that never sees the hidden statement or the prov
     python -m verity_flock.rec_live --schedule-for STATEMENT         a statement's schedule (flock-circuit statement's output)
     python -m verity_flock.rec_live --schedule-of PUBLIC_JSON        a record's schedule, to compare with the one it was held to
 
-The prover (``flock-circuit prove --verifier ADDR`` under ``FC_COINS=os``, or ``FC_COINS=tree`` with ``--coin-tree``) speaks the live protocol (``live/src/lib.rs``) to
+The prover (``flock-circuit prove --verifier ADDR`` under ``FC_COINS=tree``, with ``--coin-tree``) speaks the live protocol (``live/src/lib.rs``) to
 :class:`Proxy`, which runs on the prover's side. The proxy is the ZK server of the inner phase (live PROTOCOL.md §10.3): it
 answers what the live server would, except that every coin comes from :class:`CoinServer`, the verifier's side, which is shown
 only the session's public schedule and salted hashes:

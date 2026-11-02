@@ -374,7 +374,7 @@ def read(root: Path) -> dict[str, Any]:
     if ln:
         names = [n for n in _names(ln, "lean", r"time-(.+)\.txt")]
         rel = {f"lean {n}": (f"lean/time-{n}.txt", ("flock-verify statement on the inner statement" if n == "inner-statement"
-                                                    else "flock-verify verify on the inner run (--coins os)" if n == "inner"
+                                                    else "flock-verify verify on the inner run" if n == "inner"
                                                     else f"flock-verify verify --zk on V*'s {n} release")) for n in names}
 
         def lv(o: Path, n: str) -> bool | None:
