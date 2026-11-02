@@ -506,8 +506,8 @@ class _Builder:
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 def ports_of_type(t) -> tuple[Port, ...]:
-    """The output ports of a `verity.ml.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a Record."""
-    from verity.ml.circuits.types import Record, Tuple as TupleT
+    """The output ports of a `verity.ml.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a RecordType."""
+    from verity.ml.circuits.types import RecordType, Tuple as TupleT
 
     def one(name: str, lo: int, ty) -> Port:
         n = ty.leaves
@@ -519,7 +519,7 @@ def ports_of_type(t) -> tuple[Port, ...]:
             out.append(one(str(i), lo, f))
             lo += f.leaves
         return tuple(out)
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         out, lo = [], 0
         for k, f in t.fields:
             out.append(one(k, lo, f))

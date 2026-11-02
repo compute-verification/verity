@@ -48,7 +48,7 @@ def test_shapes_parse_by_name_and_refuse_what_they_dont_name():
 
 
 def test_gamma_is_the_pinned_twins_larger_price_at_each_linear_and_the_cube():
-    """γ comes from the price twins at both FP32 prices, the larger published, on the path the draw's statement cites, at a
+    """γ comes from the price twins at both FP32 prices, the larger published, on the path the sample's statement cites, at a
     cube or a Llama linear's (n, k); the layout's is the max over its linears; a shape no twin states is missing, never
     filled in."""
     P = C.price_twins()
@@ -484,10 +484,10 @@ class _Tagger:
 
 
 def _device(setup, fail_after: int | None = None):
-    """The store's one prover (`joint.Device` over `gpu.Prover`) on `_Tagger`, its raw read made up."""
+    """The store's one prover (`joint.BandwidthProver` over `gpu.Prover`) on `_Tagger`, its raw read made up."""
     store = setup.store
     tree = J.store_key(store.params, store.salt, b"".join(store.blocks))[1]
-    d = J.Device(J.load_gpu(), _Tagger(store, fail_after), 0, store.params.blocks, tree)
+    d = J.BandwidthProver(J.load_gpu(), _Tagger(store, fail_after), 0, store.params.blocks, tree)
     d.raw_read = lambda reps: {"kernel": "none", "bytes": len(store.blocks) * store.params.block_bytes,
                                "device_ms": [0.25] * reps}
     return d

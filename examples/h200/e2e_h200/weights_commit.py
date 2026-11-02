@@ -9,7 +9,7 @@ salts, and every row opened later against its root.
   ~86 GB a tensor at H200.
 * **The commit** (`commit`): each tensor's rows in aligned chunks of 2^b rows (at most ``chunk_bytes``) over ``workers``
   processes. A chunk's bytes are generated from the seed, or read from a weights stream file (``source``: interface 1's
-  ``plain`` stream, the file the H200's server loads); its rows' salts are drawn from the operating system by the worker
+  ``plain`` stream, the file the H200's server loads); its rows' salts are sampled from the operating system by the worker
   that commits them (every hm96 salt is the operating system's) and written to the
   witness, or read from an existing witness (``salts="witness"``: the same registration again, or network's load's,
   `load_relay`'s witness). The witness holds every tensor's row salts in tensor order, each row's 192 bytes at
@@ -20,7 +20,7 @@ salts, and every row opened later against its root.
   entry, chunk bits and offset in ``tops.bin``), ``tops.bin`` and, unless named elsewhere, the witness ``salts.bin``.
   ``commit.json``'s ``registered`` is the record's ``registered`` list (``registration.record``'s, `REG.Registered.entry`
   each); ``values_digest`` is interface 1's registration digest of it (`weights.registration_digest`).
-* **Opening** (`open_state`, `Value`): a value as a drawn proof block reads it, standing in for a `REG.Registered` where a
+* **Opening** (`open_state`, `Value`): a value as a sampled proof block reads it, standing in for a `REG.Registered` where a
   bundle takes one (``replay_bundle.build``'s ``weights``: its ``program``, ``bcs[pos]`` and ``path(pos)``): a row's
   bytes regenerated or read, its salt read from the witness, and its path the chunk's subtree recomputed, then the chunk
   roots above it.
@@ -218,7 +218,7 @@ class _Bcs:
 
 
 class Value:
-    """One registered tensor of a commit's state, as a drawn proof block reads it: what `REG.Registered` gives a bundle
+    """One registered tensor of a commit's state, as a sampled proof block reads it: what `REG.Registered` gives a bundle
     (``program``, ``value``, ``words``, ``word_bits``, ``leaves``, ``schema``, ``root``, ``domain``, ``entry()``, ``bcs[pos]``,
     ``path(pos)``, ``statement(positions)``), each row computed when asked."""
 

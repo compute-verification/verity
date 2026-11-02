@@ -54,7 +54,9 @@ def test_leaf_openings_carry_their_salts_and_verify():
     assert not com.verify(rc, replace(o, value=bytes([o.value[0] ^ 1]) + o.value[1:]))
     assert not com.verify(rc, replace(o, salt=bytes([o.salt[0] ^ 1]) + o.salt[1:]))
     assert not com.verify(rc, replace(o, path=o.path[:-1]))
+    assert not com.verify(rc, replace(o, path=o.path + o.path[:1]))
     assert not com.verify(rc, replace(o, path=(bytes(R.ROOT_BYTES),) + o.path[1:]))
+    assert not com.verify(replace(rc, steps=[replace(sc, merkle_root=bytes(R.ROOT_BYTES)) for sc in rc.steps]), o)
     assert not com.verify(replace(rc, run_root=rc.run_root[:32]), o)
 
 

@@ -1,4 +1,4 @@
-"""C-Flock lowering of ``ingress-prompt`` (IngressPrompt_v1{MODEL,LP,V}): the I/O shell's ingress parse as ONE unit
+"""Flock lowering of ``ingress-prompt`` (IngressPrompt_v1{MODEL,LP,V}): the I/O shell's ingress parse as ONE unit
 (``ir_lower.whole``: the parse's fields read different bytes of one body, so its gate graph is no row of identical units), lowered
 piece by piece from the word Definition. Its input row is the body, whole SHA-512 blocks of bytes (ingress v0 pads to them).
 

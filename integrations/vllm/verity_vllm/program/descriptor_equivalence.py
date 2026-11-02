@@ -32,7 +32,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Iterator
 
-from verity.ml.circuits.codec import decode_program, program_digest
+from verity.ml.circuits.codec import decode_program, descriptor_id, program_digest
 from verity.ml.circuits.defs import PrimitiveDefinition, REGISTRY, SpecializedDefinition
 from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.layout import FunctionCall
@@ -171,8 +171,8 @@ def _compare_definition(fid: str, a, b, rep: dict) -> None:
     for k, (na, nb) in enumerate(zip(ba.nodes, bb.nodes)):
         if (na.form, na.axes, na.n, na.n_xs) != (nb.form, nb.axes, nb.n, nb.n_xs):
             raise Mismatch(f"{fid} node {k}: form/axes/n differ")
-        if _fid(na.fn) != _fid(nb.fn):
-            raise Mismatch(f"{fid} node {k}: callee {_fid(na.fn)} vs {_fid(nb.fn)}")
+        if descriptor_id(na.fn) != descriptor_id(nb.fn):
+            raise Mismatch(f"{fid} node {k}: callee {descriptor_id(na.fn)} vs {descriptor_id(nb.fn)}")
         if na.out != nb.out:
             raise Mismatch(f"{fid} node {k}: output types differ")
         if len(na.args) != len(nb.args):
@@ -192,15 +192,10 @@ def _compare_definition(fid: str, a, b, rep: dict) -> None:
     rep["composites"] += 1
 
 
-def _fid(fn) -> str:
-    from verity.ml.circuits.codec import _spec_id
-    return _spec_id(fn)
-
-
 def _static_view(v: Any) -> Any:
     from verity.ml.circuits.defs import FunctionDefinition
     if isinstance(v, FunctionDefinition):
-        return ("fn", _fid(v))
+        return ("fn", descriptor_id(v))
     if isinstance(v, (list, tuple)):
         return tuple(_static_view(x) for x in v)
     if isinstance(v, dict):
@@ -212,7 +207,7 @@ def _all_definitions(root: SpecializedDefinition) -> dict[str, Any]:
     out: dict[str, Any] = {}
 
     def visit(fn) -> None:
-        fid = _fid(fn)
+        fid = descriptor_id(fn)
         if fid in out:
             return
         out[fid] = fn

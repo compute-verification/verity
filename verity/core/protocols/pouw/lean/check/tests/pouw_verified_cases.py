@@ -2,7 +2,7 @@
 statements, its period's committed circuit files and the verifier of record's answers.
 
 A `verified` case is a served window (`pouw_credit_cases.layout`, its descriptor under a prefix or none, its calls over
-one to three rounds), one to six drawn units, the entries a statement of each drawn call reads (its round's A table of
+one to three rounds), one to six sampled proof blocks, the entries a statement of each drawn call reads (its round's A table of
 its K, its z table and the weights' ``b/<K>``, `credit.registered_file`'s, each registered once), one statement a drawn
 call in a shuffled order (its circuit and public files' paths and one to three sessions' directories), each K's
 committed circuit file, the window's open root, rounds and Program salt, and `runs`: null, the first of the Lean's two
@@ -11,7 +11,7 @@ order, until one the Lean refuses at, each session accepted with the units of it
 registered finding the ``--registered`` file's ports at their values and roots.
 
 Its mutations before any run (`PRE_NAMES`, with `runs` null or answered) break the circuit files' form, the statements'
-form or name a call past the window's, give a call two statements or one to a call with no drawn unit, drop a K's
+form or name a call past the window's, give a call two statements or one to a call with no sampled proof block, drop a K's
 circuit file, register the window's ok rows (``ok-registered``) or none of a value a statement reads (``unregistered``),
 and give a descriptor that is no H1 window's. Its mutations of the answers (`RUN_NAMES`) make one statement's verifier
 fail to run (``error``) or refuse it (``refused``), reject one session (``rejected``), open a public table or the ok

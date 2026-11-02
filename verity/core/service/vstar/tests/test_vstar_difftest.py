@@ -2,7 +2,7 @@
 parameters: the SHA-512 gadget, the climb and the GF(2^128) residuals as laid-out netlists, the algebra's structure and its
 parts (`rec_algebra.structure`, `rec_residuals.spec`, `rec_residuals.parts`), V*'s statements over an inner session's shape
 (`rec_vstage.stage`'s), each statement's unit (`rec_outer.lowering`, `rec_residuals.lowering`) as its lowering text, and its
-whole `flock-circuit` file (`circuit.compose`) under drawn bindings, and the prover's reading of an inner session's draw
+whole `flock-circuit` file (`circuit.compose`) under drawn bindings, and the prover's reading of an inner session's sample
 (`rec_live.inner_draw`) against the verifier's (`RecSetup.innerDrawn`). Big outputs are compared as digest and size;
 `test_*_file_is_byte_equal` compares whole files.
 
@@ -28,6 +28,7 @@ from verity.ml.circuits.ops.boolean import gf2k as G
 from verity_flock import circuit as FC
 from verity_flock import ir_lower as IL
 from verity_flock import rec_algebra as A
+from verity_flock import rec_link as LK
 from verity_flock import rec_live as RL
 from verity_flock import rec_open as R
 from verity_flock import rec_outer as O
@@ -256,6 +257,44 @@ def rec_open_unit(v) -> dict:
     return _lowering(O.lowering(_nat(o["LANES"]), _nat(o["H"])))
 
 
+def link_unit(v) -> dict:
+    o = _obj(v, ("UB", "PB"))
+    return _lowering(LK.lowering(_nat(o["UB"]), _nat(o["PB"])))
+
+
+def link_tree(v) -> dict:
+    """`rec_link.Tree` at depth ``UB + PB`` over ``rows`` (``[unit, row, b ‖ c hex]``, in increasing order, each in range):
+    its root and the opening of ``pos``."""
+    o = _obj(v, ("UB", "PB", "rows", "pos"))
+    UB, PB = _nat(o["UB"]), _nat(o["PB"])
+    LK._check(UB, PB)
+    def at(x) -> int:
+        if not isinstance(x, list) or len(x) < 2:
+            raise D.Reject("[unit, row, ..]")
+        u, r = _nat(x[0]), _nat(x[1])
+        if u >> UB:
+            raise D.Reject(f"unit {u} does not fit {UB} bits")
+        return LK.index(u, r, PB)
+    if not isinstance(o["rows"], list):
+        raise D.Reject("rows: a list")
+    leaves: dict[int, bytes] = {}
+    for x in o["rows"]:
+        if not isinstance(x, list) or len(x) != 3 or not isinstance(x[2], str):
+            raise D.Reject("row: [unit, row, bc]")
+        i = at(x)
+        if leaves and i <= max(leaves):
+            raise D.Reject("rows in increasing order, each once")
+        if any(c not in HEX for c in x[2]):
+            raise D.Reject("bc: lowercase hex")
+        leaves[i] = LK.leaf(bytes.fromhex(x[2]))
+    if not isinstance(o["pos"], list) or len(o["pos"]) != 2:
+        raise D.Reject("pos: [unit, row]")
+    t = LK.Tree(leaves, LK.depth(UB, PB))
+    if t.root == bytes(64):
+        raise D.Reject("a root of 64 zero bytes")
+    return {"root": t.root.hex(), "path": [s.hex() for s in t.path(at(o["pos"]))]}
+
+
 def _rec_open_text(o: dict) -> str:
     L, H = _nat(o["LANES"]), _nat(o["H"])
     partition, program = _str(o["partition"]), _str(o["program"])
@@ -446,7 +485,7 @@ INNER = st.fixed_dictionaries({"S": rep_s(), "name": NAME, "partition": DIGEST, 
                                "program_digests": DIGESTS})
 
 
-#: an inner session's record: a draw (any JSON value), one null or absent, and text that is no JSON object
+#: an inner session's record: a sample (any JSON value), one null or absent, and text that is no JSON object
 _REST = st.dictionaries(st.sampled_from(["verdict", "streams"]), JSON, max_size=2)
 RECORDS = st.one_of(
     st.builds(lambda d, rest: json.dumps({**rest, "unit_draw": d}, ensure_ascii=False), JSON, _REST),
@@ -603,7 +642,7 @@ def test_the_verifiers_holo_part_nets_are_vstars_units(server, shape):
 
 # --- the units ------------------------------------------------------------------------------------------------------------------
 
-#: H = 0 and 17 take a minute to lower, so `test_rec_open_unit_agrees` replays them once rather than drawing them.
+#: H = 0 and 17 take a minute to lower, so `test_rec_open_unit_agrees` replays them once rather than sampling them.
 REC_OPEN = st.one_of(st.just({"LANES": 8, "H": 1}),
                      st.fixed_dictionaries({"LANES": st.sampled_from([0, 4, 7, 9, 12, -8, True]), "H": st.just(1)}),
                      st.fixed_dictionaries({"LANES": st.just(8), "H": st.sampled_from([33, -1, True])}),
@@ -615,7 +654,7 @@ def test_inner_unit_agrees(server):
     """Drawn, and replayed on an S whose GfResiduals S is in range but whose row ports repeat a name (`checkRepS`'s refusal)
     and on one whose ports are right but whose add term is past w (`checkS`'s): Lean's `residualForms` reads such a term as
     zero, so without its own check `innerUnit` would emit a unit where `unit_circuit` refuses. A drawn invalid S is
-    usually refused by `checkRepS` first, so the draws alone rarely reach `checkS`."""
+    usually refused by `checkRepS` first, so the samples alone rarely reach `checkS`."""
     p = port("inner_unit", inner_unit, st.fixed_dictionaries({"S": REPS, "name": NAME}) | JSON)
     def gf(t):
         return {"nw": 2, "nv": 0, "ops": [], "res": [{"mul": [], "add": [t]}]}
@@ -629,7 +668,7 @@ def test_inner_unit_agrees(server):
 
 @pytest.mark.slow
 def test_rec_open_unit_agrees(server):
-    """`RecOpen{LANES, H}`'s lowering, drawn at H = 1 and at parameters both refuse, and replayed at the climb's edges: H = 0
+    """`RecOpen{LANES, H}`'s lowering, sampled at H = 1 and at parameters both refuse, and replayed at the climb's edges: H = 0
     (`aux` one row the unit does not read) and 17 (the first height whose side bits are `dirs`' word 1). Lowering H = 17
     takes about a minute; no cheaper test compares V*'s builder with `rec_open` at those heights."""
     p = port("rec_open_unit", rec_open_unit, REC_OPEN)
@@ -656,7 +695,7 @@ def test_inner_draw_agrees(server):
 @pytest.mark.slow
 def test_inner_circuit_agrees(server):
     """`compose` on small InnerRepCheck units under drawn bindings: META, the zero instance's outputs and `b ‖ c`, the slot
-    ranges and the block size. A binding that is not a digest is replayed in each place, not drawn: drawn, it refused
+    ranges and the block size. A binding that is not a digest is replayed in each place, not sampled: drawn, it refused
     most of the five units, and which ones moved with the source of modules the reference loads (Hypothesis draws their
     constants too)."""
     p = port("inner_circuit", inner_circuit, INNER)
@@ -810,3 +849,43 @@ def test_stage_is_byte_equal(tmp_path, shape):
         Path(out).mkdir(parents=True, exist_ok=True)
         (Path(out) / f"stage-{'-'.join(map(str, shape))}.json").write_text(json.dumps(record, indent=1))
     assert all(r["equal"] for r in record), [r["dir"] for r in record if not r["equal"]]
+
+
+# --- the link table's unit and trees -----------------------------------------------------------------------------------------
+
+@st.composite
+def _link_trees(draw):
+    UB, PB = draw(st.integers(0, 3)), draw(st.integers(0, 2))
+    keys = sorted(draw(st.sets(st.tuples(st.integers(0, 2 ** UB - 1), st.integers(0, 2 ** PB - 1)), max_size=6)))
+    rows = [[u, r, draw(st.binary(min_size=128, max_size=128)).hex()] for u, r in keys]
+    return {"UB": UB, "PB": PB, "rows": rows, "pos": [draw(st.integers(0, 2 ** UB)), draw(st.integers(0, 2 ** PB))]}
+
+
+LINK_TREE = _link_trees() | st.fixed_dictionaries({"UB": _near(0, 30), "PB": _near(0, 16), "rows": st.just([]),
+                                                   "pos": st.just([0, 0])}) | JSON
+
+
+def test_link_tree_agrees(server):
+    """The verifier's rows trees (`Flock.RecLinkTree`) against `rec_link.Tree`: drawn rows, positions in and just past
+    range, and shapes either refuses; replayed on rows out of order and twice, and at the deepest tree, D = 32."""
+    p = port("link_tree", link_tree, LINK_TREE)
+    row = [0, 1, "00" * 128]
+    assert D.replay(p, {"UB": 1, "PB": 1, "rows": [[1, 0, "11" * 128], row], "pos": [0, 0]}, server)[0] == "reject"
+    assert D.replay(p, {"UB": 1, "PB": 1, "rows": [row, row], "pos": [0, 0]}, server)[0] == "reject"
+    assert D.replay(p, {"UB": 16, "PB": 16, "rows": [[65535, 3, "ab" * 128]], "pos": [65535, 3]}, server)[0] == "output"
+    stats = D.run(p, examples=60, seed=SEED, server=server)
+    assert stats.outputs >= 20 and stats.rejects >= 10, stats
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("ub_pb", [(0, 0), (2, 1), (1, 2)])
+def test_link_unit_agrees(server, ub_pb):
+    """V*'s link unit (`VStar.linkUnit`) against `rec_link.lowering`, at a tree of no levels and at two of three levels the
+    unit and the port bits split differently; and both refuse the shapes `rec_link._check` does. Python lowers each in
+    under a minute (two hm96 leaves, the climbs); no cheaper test compares the two builders gate for gate."""
+    p = port("link_unit", link_unit, st.nothing())
+    UB, PB = ub_pb
+    assert D.replay(p, {"UB": UB, "PB": PB}, server)[0] == "output"
+    if ub_pb == (0, 0):
+        for bad in ({"UB": 31, "PB": 0}, {"UB": 0, "PB": 17}, {"UB": 16, "PB": 17}, {"UB": True, "PB": 0}, {"UB": 1}):
+            assert D.replay(p, bad, server)[0] == "reject", bad

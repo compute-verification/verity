@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# FILLER (note:20261017T0652Z-draft-filler): the whole decode step co-resident with a 1-block pump on every SM, its
+# The whole decode step co-resident with a 1-block pump on every SM, its
 # linears through flin's FLIN_FIT tiles (a CTA fits beside the pump block: ≤ 32 K registers, ≤ 41 KB of shared memory)
 # and lm_head too (FLIN_LM=1), attention dcap's (it already fits, capfill_fit_probe.sh). Gates: dgate on the fit build,
 # fgate (every fitted tile bit for bit, every row) on the CP_FGATE builds. Then flin alone at each fitted M (CP_FLIN
@@ -9,10 +9,10 @@
 # Builds: fit (FLIN_FIT), fit2 (FLIN_FIT=2), fitx (FLIN_FIT, the pump's NC 4 the provisional XIN13 fold), fitxy...
 # and fitxtNS... (fitx, its pump waiting out, or sleeping NS ns a read on, the SMs flin's CTAs occupy: PF_YIELD; below),
 # c1 (default tiles), all with the 1-block pump; dgate runs on every build, and every build's dfill_k registers and SASS are kept.
-# (A software-pipelined pump, B fragment j + 1's MMAs under j's folds, was slower alone and beside the step,
-# r20261017-090156-4ab8: ptxas already spaces the MMAs, and duo's fold is bound by the ALU-heavy pipe. Attention's warps
-# marking their SMs for PF_YIELD cost attention 1.13× against 1.05× beside a running pump and never held the pump off,
-# r20261017-102521-b8af.) CP_ALONE
+# (A software-pipelined pump, B fragment j + 1's MMAs under j's folds, was slower alone and beside the step:
+# ptxas already spaces the MMAs, and duo's fold is bound by the ALU-heavy pipe. Attention's warps
+# marking their SMs for PF_YIELD cost attention 1.13× against 1.05× beside a running pump and never held the pump off.)
+# CP_ALONE
 # ("BUILD:NC:S ...") runs the pump alone (dalone) and CP_NCU ("BUILD:NC:S ...") ncu over one of its launches, with
 # CP_NCU_METRICS (ncu's --metrics) added to its sections and the raw page kept. Clocks are read, never set.
 set -uo pipefail

@@ -1,4 +1,4 @@
-"""``flock-ir-tmpl/v2`` (``Flock.Tmpl`` in the Lean verifier, PRF-133): a flat ``flock-ir-unit/v2`` unit written as
+"""``flock-ir-tmpl/v2`` (``Flock.Tmpl`` in the Lean verifier): a flat ``flock-ir-unit/v2`` unit written as
 Definitions and placed copies, so its text is O(description) where the flat form is O(unrolled).
 
 :func:`emit` reads the structure off the flat unit itself, whatever lowering wrote it. It works level by level: at each
@@ -135,7 +135,7 @@ def read_flat(path, name: str | None = None) -> tuple[Flat, int]:
 
 
 def of_layout(lay, name: str) -> Flat:
-    """A laid-out unit (`ir_lower.Layout`) as the unit `ir_lower.netlist` writes of it (no ``LEAVES`` line), read off its
+    """A laid-out unit (`ir_lower.LoweredUnit`) as the unit `ir_lower.netlist` writes of it (no ``LEAVES`` line), read off its
     rows rather than its text."""
     head = [FLAT, name, str(lay.useful), str(lay.const)]
     for groups in (lay.in_groups, lay.out_groups):

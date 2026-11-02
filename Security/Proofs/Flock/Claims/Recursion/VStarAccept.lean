@@ -50,20 +50,20 @@ theorem qsort_mem {α : Type} (as : Array α) (lt : α → α → Bool) (hasym :
       (Nat.lt_succ_self _)
     exact mem_of_sameOn hS (Nat.zero_min _) (by omega) x
 
-theorem before_asym (a b : _root_.VStar.In.Opening) (h : _root_.VStar.In.before a b = true) :
+theorem before_asym (a b : _root_.VStar.In.Query) (h : _root_.VStar.In.before a b = true) :
     _root_.VStar.In.before b a = false := by
   simp [_root_.VStar.In.before] at h ⊢ <;> omega
 
-theorem before_trans (a b c : _root_.VStar.In.Opening) (h1 : _root_.VStar.In.before a b = false)
+theorem before_trans (a b c : _root_.VStar.In.Query) (h1 : _root_.VStar.In.before a b = false)
     (h2 : _root_.VStar.In.before b c = false) : _root_.VStar.In.before a c = false := by
   simp [_root_.VStar.In.before] at h1 h2 ⊢ <;> omega
 
 /-- An opening is in the chain's order exactly where it is one of the stager's. -/
-theorem mem_order {src : _root_.VStar.In.Src} {o : _root_.VStar.In.Opening} :
+theorem mem_order {src : _root_.VStar.In.Src} {o : _root_.VStar.In.Query} :
     o ∈ _root_.VStar.In.order src ↔ o ∈ src.openings :=
   qsort_mem _ _ before_asym before_trans o
 
-theorem at?_some {src : _root_.VStar.In.Src} {o : _root_.VStar.In.Opening} (h : o ∈ src.openings) :
+theorem at?_some {src : _root_.VStar.In.Src} {o : _root_.VStar.In.Query} (h : o ∈ src.openings) :
     ∃ p, _root_.VStar.In.at? src o = some p := by
   unfold _root_.VStar.In.at?
   cases hf : (_root_.VStar.In.order src).findIdx? (_root_.VStar.In.same o) with

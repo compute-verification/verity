@@ -1,4 +1,4 @@
-"""``nci_glm.py measure``: the NCI check (`nci-check --policy`, `NciCheck.Desc`) on GLM-5.3's registered Programs, the B1
+"""``nci_glm.py measure``: the inference-only check (`nci-check --policy`, `NciCheck.Desc`) on GLM-5.3's registered Programs, the B1
 Build's workload Program of each TP rank, and on Programs derived from them for the divisions the registered ones can't
 express (README.md).
 
