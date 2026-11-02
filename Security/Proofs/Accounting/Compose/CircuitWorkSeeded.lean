@@ -20,6 +20,8 @@ import Proofs.Accounting.Compose.CircuitWork
   (`WorkProof.work_of_bounds`).
 -/
 
+open Claims renaming Pr → prob, Ex → expect
+
 namespace Accounting.SecurityProofs.Compose.Seeded
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity

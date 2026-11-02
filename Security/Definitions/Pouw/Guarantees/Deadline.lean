@@ -27,6 +27,8 @@ timed run and verifier's rule, and time meets the cost model through one named a
   cost model. `sha`, `fetch`, the salt's bytes `salt` and `sem` are parameters.
 -/
 
+open Claims renaming Pr → pr
+
 namespace Pouw.Guarantees
 
 open Pouw.Pinned Finset

@@ -31,6 +31,8 @@ scheme, periods and rates, the provers that fix no word (`idlePlay`, accepted on
 probability is `1`, above any `∑_{s ∈ S} (δ_s(s) + n·(δ_bind(s) + δ_ks(s))) < 1`.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Properties.Pouw.PeriodJ10RStrata.SecurityProofs.HonestStrata
 
 open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.PeriodJ10RStrata

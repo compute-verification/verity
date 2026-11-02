@@ -27,6 +27,8 @@ STEER-PROOF's route B, each `def G : Prop` proved as
   most `T·C(G, n)·μ^n`.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.Guarantees.TS
 
 open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity

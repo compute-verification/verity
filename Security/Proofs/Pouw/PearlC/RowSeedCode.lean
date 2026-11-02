@@ -18,6 +18,8 @@ A fixed permutation of the oracle's inputs, one per layout, carries one to the o
   γ theorems `pearlCGammaDevRev1RowSeedAt` and `pearlCSampledDevRev1RowSeedAt` apply at `semC` unchanged.
 -/
 
+open Claims renaming Pr → pr
+
 namespace Pouw.PearlC
 
 open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom

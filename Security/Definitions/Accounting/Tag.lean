@@ -1,4 +1,4 @@
-import Definitions.Accounting.Tag.Prob
+import Definitions.Core.Prob
 import Definitions.Accounting.Tag.PolyHash
 import Definitions.Accounting.Tag.Sketch
 

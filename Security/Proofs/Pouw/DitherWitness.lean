@@ -44,6 +44,8 @@ at `δ = 1/2`.
   `(q² + …)/|D|`, is at least 1; that guarantee has no witness here.
 -/
 
+open Claims renaming Pr → prob, Ex → avg
+
 namespace Pouw.SecurityProofs.DitherWitness
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.Witness Finset

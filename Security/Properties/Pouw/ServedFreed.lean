@@ -35,6 +35,8 @@ provider is `trusted-host`.
 The proof is `Proofs.Pouw.ServedFreed`; `Proofs.Pouw.ServedFreed.Honest` has its honest and nontrivial lemmas.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Properties.Pouw.Served
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity

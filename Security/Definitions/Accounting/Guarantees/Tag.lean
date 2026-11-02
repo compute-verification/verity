@@ -27,6 +27,8 @@ Each takes no hypothesis: a condition on its inputs (the blocks differ, the list
 bounds. The proofs are in `Security/Proofs/Accounting/Tag/`.
 -/
 
+open Verity.Game renaming prPMF → prob
+
 namespace Accounting.Guarantees.Tag
 
 open Accounting.Tag

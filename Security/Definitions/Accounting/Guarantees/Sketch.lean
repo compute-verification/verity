@@ -1,5 +1,5 @@
 import Mathlib.Probability.Distributions.Uniform
-import Definitions.Accounting.Tag.Prob
+import Definitions.Core.Prob
 import Definitions.Accounting.Tag.Sketch
 
 /-!
@@ -23,6 +23,8 @@ product with a block's elements, computed exactly on the tensor cores.
 Each takes no hypothesis: a condition on its inputs (the vectors differ) is part of the event it bounds, and the bounds
 on the data and the chain's length are in their types. The proofs are in `Security/Proofs/Accounting/Tag/`.
 -/
+
+open Verity.Game renaming prPMF → prob
 
 namespace Accounting.Guarantees.Sketch
 

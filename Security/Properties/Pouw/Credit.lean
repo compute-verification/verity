@@ -31,7 +31,6 @@ assumption: the probability is over the streams' bytes.
 -/
 
 open Lean (Json toJson)
-open Pouw.RelativeSecurity (prob)
 
 namespace Properties.Pouw.Credit
 
@@ -43,6 +42,12 @@ where a stream runs out. -/
 def drawnOn (strata : Array Flock.Draw.Stratum) (g : (i : Fin strata.size) → Fin strata[i].need → Fin 256) :
     Option (Array ℕ) :=
   Flock.Draw.stratified strata (Array.ofFn fun i => Properties.SampledProofs.bytesOf (g i))
+
+/-- The probability, over uniform streams, that the draw over `strata` (`drawnOn`) is made and its units `d` meet `M`:
+the draw's miss probability of `B` when `M d` says `d` has no unit of `B`. Its event is the draw's alone; the code that
+accepts a layout and gives `strata` runs before it, outside the event. -/
+noncomputable def missProb (strata : Array Flock.Draw.Stratum) (M : Array ℕ → Prop) : ℝ :=
+  Claims.Pr fun g : (i : Fin strata.size) → Fin strata[i].need → Fin 256 => ∃ d, drawnOn strata g = some d ∧ M d
 
 /-- The credited calls' served work: each call of `layout` in `got` at its served rows `served` is m_s·(n/C) live
 positions of C·K MACs each (`PouwCheck.Credit.servedWork`), never its M slot rows' units (`callWork`). -/
@@ -64,7 +69,7 @@ def WorkDrawMisses : Prop :=
     PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.law ss (toJson K) = .ok strata →
       PouwWindow.kPrime eps δ C (Flock.Draw.totalWork ss) 1 = .ok k' →
       ∀ B : Finset ℕ, k' ≤ K → eps * C ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℚ) →
-        prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (δ : ℝ)
+        missProb strata (fun d => ∀ u ∈ B, u ∉ d) ≤ (δ : ℝ)
 
 /-- **The ε `epsAt` answers is established**: wherever `strata` accepts a layout with strata `ss`, `law` puts them under
 `work:K`, and `epsAt K δ C W 1` (`W` the strata's work) answers `ε`, the draw over uniform streams draws no unit of a set
@@ -74,7 +79,7 @@ def EpsAtSound : Prop :=
     PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.law ss (toJson K) = .ok strata →
       PouwWindow.epsAt K δ C (Flock.Draw.totalWork ss) 1 = .ok e →
       ∀ B : Finset ℕ, e * C ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℚ) →
-        prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (δ : ℝ)
+        missProb strata (fun d => ∀ u ∈ B, u ∉ d) ≤ (δ : ℝ)
 
 /-- **The ε a credit reports is established**, the claim behind every ε `periodCredit` reports: wherever `strata` accepts
 a layout with strata `ss`, `law` puts them under `work:K`, and `established layout got served K` answers `ε` for the
@@ -86,7 +91,7 @@ def EstablishedSound : Prop :=
     PouwCheck.Credit.strata layout = .ok ss → PouwCheck.Credit.law ss (toJson K) = .ok strata →
       PouwCheck.Credit.established layout got served K = some e →
       ∀ B : Finset ℕ, e * creditedWork layout got served ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℚ) →
-        prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (PouwCheck.Credit.DELTA : ℝ)
+        missProb strata (fun d => ∀ u ∈ B, u ∉ d) ≤ (PouwCheck.Credit.DELTA : ℝ)
 
 /-- **The grouped draw at `K ≥ K′` misses a set of blocks of work `ε·C` with probability at most `δ`**: the work law
 draws leaves (`drawnOn`, as in `WorkDrawMisses`), and each drawn leaf `u` is proved as its group, every block `b` with
@@ -103,7 +108,7 @@ def GroupedDrawMisses : Prop :=
       ∀ {β : Type} (leafOf w : β → ℕ) (Bb : Finset β), k' ≤ K →
         (∀ u, ∑ b ∈ Bb.filter (fun b => leafOf b = u), w b ≤ unitWork ss u) →
         eps * C ≤ ((∑ b ∈ Bb, w b : ℕ) : ℚ) →
-          prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ b ∈ Bb, leafOf b ∉ d) ≤ (δ : ℝ)
+          missProb strata (fun d => ∀ b ∈ Bb, leafOf b ∉ d) ≤ (δ : ℝ)
 
 /-! ## A window of leaves proved as their lanes and combines
 

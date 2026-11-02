@@ -41,7 +41,7 @@ and could be proved first (`Select.select`'s subset draw from bytes, `Draw.drawU
 -/
 
 open Lean (Json)
-open Pouw.RelativeSecurity (prob)
+open Claims renaming Pr → prob
 
 namespace Properties.Compose
 

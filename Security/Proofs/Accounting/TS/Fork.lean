@@ -13,6 +13,8 @@ at most the forked mass. Sums over continuations are sums over paths because `(x
 is an involution (`splice_swap`, `sum_splice`).
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.SecurityProofs.TS
 
 open Accounting.TS Pouw.RelativeSecurity

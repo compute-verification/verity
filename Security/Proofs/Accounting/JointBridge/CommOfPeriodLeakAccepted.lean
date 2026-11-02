@@ -25,9 +25,9 @@ namespace Accounting.SecurityProofs.Bridge
 open Claims Claims.Sampling NetTiming Accounting.JointBridge Finset
 
 theorem pr_exists_le {β : Type} [Fintype β] {n : ℕ} (P : Fin n → β → Prop) :
-    Pouw.pr (fun x => ∃ i, P i x) ≤ ∑ i, Pouw.pr (P i) := by
+    Claims.Pr (fun x => ∃ i, P i x) ≤ ∑ i, Claims.Pr (P i) := by
   classical
-  unfold Pouw.pr
+  unfold Claims.Pr
   rw [← Finset.sum_div]
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hsub : (univ.filter fun x => ∃ i, P i x) ⊆ univ.biUnion (fun i => univ.filter (P i)) := fun x hx => by
@@ -76,10 +76,10 @@ theorem comm_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d
     r.Sound c p .network (n * (δ + εks + εbind + εtap)) := by
   intro ξ
   have hlin := ksLin_of_periodLeak hsrc H D hks L Kₒ S lay k δ decode hδ hdec reg Dj R.tops hb
-  calc Pouw.pr (fun x : Ω (r.own .network) =>
+  calc Claims.Pr (fun x : Ω (r.own .network) =>
         r.accepts .network (Function.update ξ (r.own .network) x) ∧
           ¬ r.Holds c p .network (Function.update ξ (r.own .network) x))
-      ≤ Pouw.pr (fun x : Ω (r.own .network) => ∃ i,
+      ≤ Claims.Pr (fun x : Ω (r.own .network) => ∃ i,
           r.accepts .network (Function.update ξ (r.own .network) x) ∧
             ¬ WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops
               (R.stmt (Function.update ξ (r.own .network) x) i) (R.wit (Function.update ξ (r.own .network) x) i)
@@ -89,7 +89,7 @@ theorem comm_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d
         rw [R.comm_iff] at hn'
         obtain ⟨i, hi⟩ := not_forall.mp hn'
         exact ⟨i, ha, hi⟩
-    _ ≤ ∑ i, Pouw.pr (fun x : Ω (r.own .network) =>
+    _ ≤ ∑ i, Claims.Pr (fun x : Ω (r.own .network) =>
           r.accepts .network (Function.update ξ (r.own .network) x) ∧
             ¬ WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops
               (R.stmt (Function.update ξ (r.own .network) x) i) (R.wit (Function.update ξ (r.own .network) x) i)

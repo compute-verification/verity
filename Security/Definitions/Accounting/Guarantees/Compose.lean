@@ -78,6 +78,8 @@ circuit's layer.
 model, concluding `(1 − ε_s)^t + ε(q, N)`, where `CircuitCredit` is the TS model under live coins.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.Guarantees.Compose
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity

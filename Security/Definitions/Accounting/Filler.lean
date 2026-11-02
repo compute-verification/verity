@@ -29,6 +29,8 @@ What the filler's per-check luck is about, as `benchmarks/pouw/filler/pfill_ref.
   committed receipt isn't the recomputed one.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.Filler
 
 open Finset Pouw.RelativeSecurity

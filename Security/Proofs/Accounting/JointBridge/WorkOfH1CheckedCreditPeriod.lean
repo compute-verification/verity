@@ -8,7 +8,7 @@ import Proofs.Pouw.Period
 `Accounting.SecurityProofs.Bridge.WorkOfCreditedWords` at H1's instance: at each value `ξ` of the other audits' coins,
 `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` at the source's instance there bounds the play's
 acceptance with `n` times its fixed words below the check's credit, which is the bound the bridge takes, read through
-`Pouw.pr` (`pr_le_prob_of_equiv` at the identity). The H200's instance is it at `Accounting.h200S8Price`,
+`Claims.Pr` (`pr_le_prob_of_equiv` at the identity). The H200's instance is it at `Accounting.h200S8Price`,
 `receiptWordMacs R C` multiply-adds a word and `receiptUnitMacs K R C` a unit.
 -/
 
@@ -18,9 +18,9 @@ open Properties.Pouw.Period
 
 /-- The uniform probability of `E` on `A` is at most that of `F` on `X` when `e : A ≃ X` maps `E` into `F`. -/
 theorem pr_le_prob_of_equiv {A X : Type} [Fintype A] [Fintype X] (e : A ≃ X) {E : A → Prop} {F : X → Prop}
-    (h : ∀ a, E a → F (e a)) : Pouw.pr E ≤ Pouw.RelativeSecurity.prob F := by
+    (h : ∀ a, E a → F (e a)) : Claims.Pr E ≤ Claims.Pr F := by
   classical
-  unfold Pouw.pr Pouw.RelativeSecurity.prob
+  unfold Claims.Pr
   rw [Fintype.card_congr e]
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hmap : ((Finset.univ.filter E).map e.toEmbedding) ⊆ Finset.univ.filter F := by

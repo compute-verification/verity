@@ -48,6 +48,8 @@ Its `δ_s` is δ_coin and its `n·(δ_bind + δ_ks)` is δ_crypto. `BlockMap` is
 registered circuit, the unit the PoUW component's `Holds` is restated in.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Properties.Pouw.ServedValues
 
 open Properties.Pouw.PeriodJ10R

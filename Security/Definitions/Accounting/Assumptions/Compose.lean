@@ -54,6 +54,8 @@ The physical layer's (`CreditOfWork`):
   falsifies.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.Assumptions.Compose
 
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity

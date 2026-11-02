@@ -33,6 +33,8 @@ Dither's headline (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated ove
 * the error (`epsWorkSound`, `ε_skip`).
 -/
 
+open Claims renaming Pr → prob, Ex → avg
+
 namespace Pouw.Dither
 
 open Pouw.RelativeSecurity Finset
@@ -244,9 +246,6 @@ def ditherSelected (k : NoFold) (Sel : Type) [Fintype Sel] (picked : Sel → Pro
 end Round
 
 section Moments
-
-/-- The uniform average of `f`. -/
-noncomputable def avg {Ω : Type} [Fintype Ω] (f : Ω → ℝ) : ℝ := (∑ ω, f ω) / Fintype.card Ω
 
 /-- **A shortfall** against a public best: `(pub − cost)₊`, how far a program's priced cost falls short of the public
 best's `pub`, in the same units (the prices `μ`). -/

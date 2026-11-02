@@ -13,7 +13,7 @@ import Proofs.Accounting.Remote
 
 `Accounting.SecurityProofs.Remote.Conservation` composes them; the run's payments other than its tier reads are the
 `n·P` passes' `S + (L − ρ) + X` bits, so its `(1 − d̄ − λ)·C` of payments are `(1 − (d̄ + γ))·C` of tier reads, with
-`γ` the deployed game's `Deployed.gammaPass`. The remote model's probability is real (`Pouw.pr`), the game's in `ℝ≥0∞`
+`γ` the deployed game's `Deployed.gammaPass`. The remote model's probability is real (`Claims.Pr`), the game's in `ℝ≥0∞`
 (`Pous.pr`); `pouw_pr_le` carries a bound across.
 -/
 
@@ -25,14 +25,14 @@ open scoped ENNReal
 variable {n P N b h ρ S L q r s d G τ : ℕ}
 
 /-- The remote model's probability is the game's, as a real. -/
-theorem pouw_pr_eq {α : Type} [Fintype α] (Q : α → Prop) : Pouw.pr Q = (Pous.pr Q).toReal := by
-  unfold Pouw.pr Pous.pr
+theorem pouw_pr_eq {α : Type} [Fintype α] (Q : α → Prop) : Claims.Pr Q = (Pous.pr Q).toReal := by
+  unfold Claims.Pr Pous.pr
   rw [ENNReal.toReal_div]
   simp
 
 /-- A bound on the game's probability bounds the remote model's. -/
 theorem pouw_pr_le {α : Type} [Fintype α] {Q : α → Prop} {B : ℝ≥0∞} (h : Pous.pr Q ≤ B) (hB : B ≠ ⊤) :
-    Pouw.pr Q ≤ B.toReal := by
+    Claims.Pr Q ≤ B.toReal := by
   rw [pouw_pr_eq]
   exact ENNReal.toReal_mono hB h
 

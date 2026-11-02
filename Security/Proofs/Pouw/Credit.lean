@@ -69,11 +69,11 @@ theorem miss_le_prod (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[
 
 /-- `miss_le_prod` as `prob` reads it, the product in `ℝ≥0`. -/
 theorem prob_le (S : Array Flock.Draw.Stratum) (hk : ∀ s : Fin S.size, S[s].k ≤ S[s].size) (B : Finset ℕ) :
-    Pouw.RelativeSecurity.prob
+    Claims.Pr
         (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d) ≤
       ((∏ s : Fin S.size, ((S[s].size - (localOf S B s).card).choose S[s].k : ℝ≥0) /
         (S[s].size.choose S[s].k : ℝ≥0) : ℝ≥0) : ℝ) := by
-  rw [Properties.Served.SecurityProofs.prob_eq_pr, Claims.Sampling.Pr_eq_toReal_prCoin]
+  rw [Claims.Sampling.Pr_eq_toReal_prCoin]
   have hC : ∀ s : Fin S.size, ((S[s].size.choose S[s].k : ℕ) : ℝ≥0) ≠ 0 := fun s => by
     exact_mod_cast (Nat.choose_pos (hk s)).ne'
   have h := miss_le_prod S hk B
@@ -168,7 +168,7 @@ theorem prob_le_pow (S : Array Flock.Draw.Stratum) (w : Fin S.size → ℕ) (K W
     (hge : ∀ s : Fin S.size, S[s].k = S[s].size ∨ K * w s * S[s].size ≤ W * S[s].k)
     (hk1 : ∀ s : Fin S.size, 0 < w s → 0 < S[s].size → 1 ≤ S[s].k) (B : Finset ℕ)
     (hT : T ≤ ∑ s, w s * (localOf S B s).card) :
-    Pouw.RelativeSecurity.prob
+    Claims.Pr
         (fun g : (i : Fin S.size) → Fin S[i].need → Fin 256 => ∃ d, drawnOn S g = some d ∧ ∀ u ∈ B, u ∉ d) ≤
       (((W - T : ℕ) : ℝ) / W) ^ K := by
   refine (prob_le S hkN B).trans ?_
@@ -365,10 +365,8 @@ theorem groupedDrawMisses : GroupedDrawMisses := by
   have hle : ∑ b ∈ Bb, w b ≤ ∑ u ∈ Bb.image leafOf, unitWork ss u := by
     rw [← Finset.sum_fiberwise_of_maps_to (fun b hb => Finset.mem_image_of_mem leafOf hb)]
     exact Finset.sum_le_sum fun u _ => hw u
-  have hev : (fun g : (i : Fin strata.size) → Fin strata[i].need → Fin 256 =>
-      ∃ d, drawnOn strata g = some d ∧ ∀ b ∈ Bb, leafOf b ∉ d) =
-      fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ Bb.image leafOf, u ∉ d := by
-    funext g
+  have hev : (fun d : Array ℕ => ∀ b ∈ Bb, leafOf b ∉ d) = fun d => ∀ u ∈ Bb.image leafOf, u ∉ d := by
+    funext d
     simp only [Finset.forall_mem_image]
   rw [hev]
   exact workDrawMisses layout ss K strata eps δ C k' hss hlaw hk' (Bb.image leafOf) hk'K
@@ -446,7 +444,7 @@ theorem groupedDrawMisses_honest :
 give, none (`idleLaw`): the draw is empty whatever the streams, so the lanes window's blocks all escape, with
 probability 1 > 1/256. -/
 theorem groupedDrawMisses_nontrivial :
-    ¬ Pouw.RelativeSecurity.prob (fun g => ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) ≤
+    ¬ Claims.Pr (fun g => ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) ≤
       ((1 / 256 : ℚ) : ℝ) := by
   classical
   have hall : ∀ g : (i : Fin idleLaw.size) → Fin idleLaw[i].need → Fin 256,
@@ -457,9 +455,9 @@ theorem groupedDrawMisses_nontrivial :
     dsimp only
     rw [Std.Legacy.Range.forIn_eq_forIn_range']
     rfl
-  have h1 : Pouw.RelativeSecurity.prob
+  have h1 : Claims.Pr
       (fun g => ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d) = 1 := by
-    unfold Pouw.RelativeSecurity.prob
+    unfold Claims.Pr
     have hf : ∀ inst : DecidablePred (fun g : (i : Fin idleLaw.size) → Fin idleLaw[i].need → Fin 256 =>
         ∃ d, drawnOn idleLaw g = some d ∧ ∀ b ∈ lanesBlocks, lanesLeaf b ∉ d),
         @Finset.filter _ _ inst Finset.univ = Finset.univ := fun _ => Finset.filter_true_of_mem fun g _ => hall g

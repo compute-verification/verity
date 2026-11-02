@@ -35,6 +35,8 @@ as zero noise), advice that holds the un-noised product answers the check for fr
 public best; it enters `κ` once a round.
 -/
 
+open Claims renaming Pr → prob, Ex → avg
+
 namespace Pouw.Assumptions
 
 open Pouw.RelativeSecurity Pouw.Dither

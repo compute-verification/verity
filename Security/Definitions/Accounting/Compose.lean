@@ -127,6 +127,8 @@ The physical layer:
   admits may claim.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.Compose
 
 open Accounting.TS Pouw.RelativeSecurity

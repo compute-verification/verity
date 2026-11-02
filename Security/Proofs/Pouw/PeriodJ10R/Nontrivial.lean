@@ -16,6 +16,8 @@ path, and its probability, `1`, exceeds any `δ_s + n·(δ_bind + δ_ks) < 1`. A
 every period of 39 windows or more.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
 
 open Properties.Pouw.PeriodJ10R

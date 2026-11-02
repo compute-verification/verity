@@ -16,6 +16,8 @@ independent of each other and of `ω₀` (`Steer.prob_pi_mem`), so all `n` hit t
 and since its target doesn't read its own seed, `SteerUnion` with one configuration bounds it by `C(G, n)·μ^n`.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.SecurityProofs.TS
 
 open Accounting.TS Accounting.Assumptions.TS Accounting.Guarantees.TS Pouw.RelativeSecurity

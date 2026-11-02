@@ -5,7 +5,7 @@ import Definitions.Accounting.TS.ProofLayer
 # The bridge's probability steps, over any family of sessions
 
 The proof layer's soundness (`Accounting.TS.ProofLayer.SoundAt`) is a probability over a window's paths (uniform on
-`Paths Ω S`, `Pouw.RelativeSecurity.prob`), per round `w` and proof `i`; C-Flock's bounds are probabilities over one
+`Paths Ω S`, `Claims.Pr`), per round `w` and proof `i`; C-Flock's bounds are probabilities over one
 session's audit game played by its prover (`FlockSoundness.Game.prob`). This file joins the two for any family of
 sessions, with no C-Flock definition:
 
@@ -43,19 +43,19 @@ theorem game_prob_exists_le {α : Type} {ι : Type*} (s : Finset ι) (E : ι →
     · exact Or.inr ⟨i, hi, hE⟩
 
 theorem wprob_mono {β : Type*} [Fintype β] {p q : β → Prop} (h : ∀ b, p b → q b) :
-    Pouw.RelativeSecurity.prob p ≤ Pouw.RelativeSecurity.prob q := by
+    Claims.Pr p ≤ Claims.Pr q := by
   classical
-  unfold Pouw.RelativeSecurity.prob
+  unfold Claims.Pr
   apply div_le_div_of_nonneg_right _ (by positivity)
   exact_mod_cast Finset.card_le_card fun b hb => by
     simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hb ⊢
     exact h b hb
 
 theorem wprob_or_le {β : Type*} [Fintype β] (p q : β → Prop) :
-    Pouw.RelativeSecurity.prob (fun b => p b ∨ q b) ≤
-      Pouw.RelativeSecurity.prob p + Pouw.RelativeSecurity.prob q := by
+    Claims.Pr (fun b => p b ∨ q b) ≤
+      Claims.Pr p + Claims.Pr q := by
   classical
-  unfold Pouw.RelativeSecurity.prob
+  unfold Claims.Pr
   rw [← add_div]
   apply div_le_div_of_nonneg_right _ (by positivity)
   have key : ∀ s t u : Finset β, (∀ b ∈ s, b ∈ t ∨ b ∈ u) → (s.card : ℝ) ≤ t.card + u.card := fun s t u h => by
@@ -81,7 +81,7 @@ def SessionLaw {Ω : Type} [Fintype Ω] {S : ℕ} {Sess : Type u} {Out : Sess �
     (G : ∀ s, Game (Out s)) (τ : ∀ s, Game.Strategy (G s)) (sess : Paths Ω S → Sess) (out : ∀ x, Out (sess x)) :
     Prop :=
   ∀ E : ∀ s, Out s → Prop,
-    Pouw.RelativeSecurity.prob (fun x => E (sess x) (out x)) ≤
+    Claims.Pr (fun x => E (sess x) (out x)) ≤
       (∑ x, (Game.prob (E (sess x)) (G (sess x)) (τ (sess x))).toReal) / (Fintype.card (Paths Ω S) : ℝ)
 
 /-- **`SoundAt` from a family of sessions**: when proof `i` of round `w` runs the session `sess x w i` with outcome
@@ -93,7 +93,7 @@ theorem soundAt_of_sessions {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (p
     (Bad : ∀ s, Out s → Prop) (sess : Paths Ω S → Fin S → Fin nπ → Sess) (out : ∀ x w i, Out (sess x w i))
     (Off : Paths Ω S → Fin S → Fin nπ → Prop) (δo δ : ℝ)
     (hLaw : ∀ w i, SessionLaw G τ (fun x => sess x w i) (fun x => out x w i))
-    (hOff : ∀ w i, Pouw.RelativeSecurity.prob (fun x => Off x w i) ≤ δo)
+    (hOff : ∀ w i, Claims.Pr (fun x => Off x w i) ≤ δo)
     (hB : ∀ x w i, Game.prob (Bad (sess x w i)) (G (sess x w i)) (τ (sess x w i)) ≤ ENNReal.ofReal δ)
     (hδ : 0 ≤ δ) (hIn : ∀ x w i, pf.Unsound x w i → Off x w i ∨ Bad (sess x w i) (out x w i)) :
     pf.SoundAt (δo + δ) := by

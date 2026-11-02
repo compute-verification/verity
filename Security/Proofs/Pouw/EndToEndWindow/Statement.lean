@@ -75,6 +75,8 @@ statement does C-Flock's; `Models.lean`, which the `security` package builds wit
 it. `TileWork` and `StraightLineExtraction` are named premises awaiting their card.
 -/
 
+open Claims renaming Pr → pr
+
 namespace Pouw.WindowWork
 
 open Finset FlockSoundness.Audit

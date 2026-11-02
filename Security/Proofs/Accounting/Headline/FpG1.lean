@@ -37,6 +37,8 @@ Lean here models (`ProofsPin`'s docstring). Its receipt game is the honest one, 
 receipt check, and its time is exactly the credit, so it shows only that every premise can hold at once.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.SecurityProofs.FpG1
 
 open Finset Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity Pouw.FpG1

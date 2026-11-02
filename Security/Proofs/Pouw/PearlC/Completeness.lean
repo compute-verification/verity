@@ -17,6 +17,8 @@ import Proofs.Pouw.Copy
   Qwen3-8B's served layouts (`pearlCDomainDevShapes`), whose units are at most `2^16` deep.
 -/
 
+open Claims renaming Pr → pr
+
 namespace Pouw.PearlC
 
 open Finset Pouw.Fp8Atom Pouw.PearlC.Assumptions Pouw.PearlC.HonestWords

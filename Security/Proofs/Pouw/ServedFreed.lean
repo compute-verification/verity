@@ -17,6 +17,8 @@ import Proofs.Pouw.OnsiteFreed
   floor into freed compute, and the union bound adds the certifier's `δ`.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Properties.Pouw.Served.SecurityProofs
 
 open Properties.Pouw.Served Properties.Pouw.PeriodJ10R

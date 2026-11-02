@@ -54,7 +54,7 @@ def AcceptedLive (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → F
 at most `δo`; `δo = 0` when `opened` is defined as that value (`openedPlur_zero`). -/
 def OpenedPlurAt (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (δo : ℝ) : Prop :=
-  ∀ w i, Pouw.RelativeSecurity.prob
+  ∀ w i, Claims.Pr
     (fun x => pf.accepted x w i ∧ pf.opened x w i ≠ rows (sess x w i) (sess x w i).Xv) ≤ δo
 
 /-- **Gap 1, the relation is what the drawn units certify** (open): on every path, when no drawn unit of proof `i`'s

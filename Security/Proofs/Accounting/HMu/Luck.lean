@@ -9,6 +9,8 @@ vectors at each committed `ω₀`: Erdős's Littlewood–Offord bound (`Accounti
 from `Fin u` to any finite index), or the pairing of each bit vector with the one that flips a bit of nonzero weight.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.HMuProofs
 
 open Accounting.HMu Pouw.RelativeSecurity Finset

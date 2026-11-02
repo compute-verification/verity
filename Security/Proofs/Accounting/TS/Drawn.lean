@@ -24,6 +24,8 @@ with every continuation that opens the position, except those opening `v₁` alo
 `L`, gives `|L|²`.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.SecurityProofs.TS
 
 open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity

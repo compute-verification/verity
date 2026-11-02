@@ -22,6 +22,8 @@ windows' inputs (`hacc`, `hsalt`, `hdraw`).
   (`creditPrefix_pos`) and so `ε(x) < 1`. The event has probability 1, past the bound `e^{−1}`.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Properties.Pouw.Served.SecurityProofs.Honest
 
 open Properties.Pouw.Served Properties.Pouw.Served.SecurityProofs

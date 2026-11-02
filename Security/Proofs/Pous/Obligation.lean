@@ -10,7 +10,7 @@ import Proofs.Pous.Thm1.Theorem1ii
 For an injective snapshot `tag`, reading a function on tags at the snapshot and off it is a bijection (`splitEquiv`),
 so the store's oracle with any other coins is, as a uniform sample, the other tags' key pairs beside the snapshot's
 primitive and those coins (`oracleEquiv`). An event bounded at every value of the other tags' keys is then bounded over
-the whole oracle (`pr_snap_le`, and `pr_snap_le_real` for `Pouw.pr`). The window's bounds are that at each value: any
+the whole oracle (`pr_snap_le`, and `pr_snap_le_real` for `Claims.Pr`). The window's bounds are that at each value: any
 bound on P2's audit at the block count, P2's graded bound (`PousP2Rounds.graded`) for a payload and responder fixed by
 those keys, and `PeriodHeld` at the snapshot for the deployed check. The demo's state bound is a floor computed by
 `norm_num`. A block's offset absorbs its content by translating the offset's element by the difference of the contents'
@@ -81,13 +81,13 @@ theorem pr_snap_le {w p : ℕ} [NeZero p] [Fintype T] [DecidableEq T] {Z : Type}
     _ ≤ pr (fun _ : RestKeys tag w p => False) + c := PousThm1ii.pr_prod_le F (fun _ => False) c fun e _ => h e
     _ = c := by rw [pr_false_eq_zero, zero_add]
 
-/-- `pr_snap_le` for `Pouw.pr`. -/
+/-- `pr_snap_le` for `Claims.Pr`. -/
 theorem pr_snap_le_real {w p : ℕ} [NeZero p] [Fintype T] [DecidableEq T] {Z : Type} [Fintype Z]
     (tag : Fin N → T) (htag : Function.Injective tag) (F : RestKeys tag w p → (ringRO N w p).Ω × Z → Prop)
-    (c : ℝ) (hc : 0 ≤ c) (h : ∀ e, Pouw.pr (F e) ≤ c) :
-    Pouw.pr (fun y : Oracle w p T × Z => F (rest tag y.1) (snap tag y.1, y.2)) ≤ c :=
-  calc Pouw.pr (fun y : Oracle w p T × Z => F (rest tag y.1) (snap tag y.1, y.2))
-      = Pouw.pr (fun x : RestKeys tag w p × ((ringRO N w p).Ω × Z) => F x.1 x.2) :=
+    (c : ℝ) (hc : 0 ≤ c) (h : ∀ e, Claims.Pr (F e) ≤ c) :
+    Claims.Pr (fun y : Oracle w p T × Z => F (rest tag y.1) (snap tag y.1, y.2)) ≤ c :=
+  calc Claims.Pr (fun y : Oracle w p T × Z => F (rest tag y.1) (snap tag y.1, y.2))
+      = Claims.Pr (fun x : RestKeys tag w p × ((ringRO N w p).Ω × Z) => F x.1 x.2) :=
         Pouw.pr_equiv (oracleEquiv tag htag Z) (fun x => F x.1 x.2)
     _ ≤ c := Pouw.pr_prod_le (fun x => F x.1 x.2) c hc fun e => h e
 

@@ -27,6 +27,8 @@ time, `⊤` where they fail it, and each value of its coins capped at 1
 (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover; CMP-33).
 -/
 
+open Claims renaming Pr → prob
+
 namespace Pouw.Guarantees.RelativeSecurity
 
 open Pouw.RelativeSecurity Pouw.Assumptions

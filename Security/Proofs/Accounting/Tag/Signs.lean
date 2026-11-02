@@ -11,6 +11,8 @@ at most `2^-k` (`card_rows_le`). `nonCollision` is `Accounting.Guarantees.Sketch
 (`Accounting.Guarantees.Sketch.CommitThenProject`) applies the same bound to a column where `C` and `A·B` differ.
 -/
 
+open Verity.Game renaming prPMF → prob
+
 namespace Accounting.TagProofs
 
 open Accounting.Tag Finset

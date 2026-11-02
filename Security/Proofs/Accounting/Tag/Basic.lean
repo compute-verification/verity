@@ -11,6 +11,8 @@ import Definitions.Accounting.Tag.PolyHash
 uniform draw are counts; and a nonzero sparse polynomial of degree at most `d` vanishes at at most `d` points.
 -/
 
+open Verity.Game renaming prPMF → prob
+
 namespace Accounting.TagProofs
 
 open Accounting.Tag Polynomial

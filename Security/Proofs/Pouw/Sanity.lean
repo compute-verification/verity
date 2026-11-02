@@ -29,6 +29,8 @@ the pinned statements excludes it or makes it harmless.
 | (d′)'s hypotheses together | `milestone_hypotheses_consistent` (at `W_ref = m1Wref`, `Ω_max = Ω_M1`) |
 -/
 
+open Claims renaming Pr → pr
+
 namespace Pouw.Sanity
 
 open Finset Pouw.Proofs

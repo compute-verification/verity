@@ -34,6 +34,8 @@ skipped, priced writer's cone is charged at its draw probability: every unit is 
 isn't (`DrawnLayer.Covers`), and `Priced` holds of `glue` without a run in which `glue` is skipped.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.SecurityProofs.TS.FixedMeets
 
 open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity

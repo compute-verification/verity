@@ -9,6 +9,8 @@ for fixed blocks and for fixed lists of hashes (root counting), unpredictability
 `p` holds at most three 32-bit words), the digest (the two together) and the Horner loop.
 -/
 
+open Verity.Game renaming prPMF → prob
+
 namespace Accounting.TagProofs
 
 open Accounting.Tag Accounting.Guarantees.Tag

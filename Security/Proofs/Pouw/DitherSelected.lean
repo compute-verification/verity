@@ -30,6 +30,8 @@ is, at this `P`, `SAKResidual`'s at the selection's rate. Nothing here is a prem
 proof-only definition, a hypothesis of these lemmas.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Pouw.SakLb
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Finset

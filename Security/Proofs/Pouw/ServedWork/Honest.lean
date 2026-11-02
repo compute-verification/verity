@@ -22,6 +22,8 @@ period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the windo
   event has probability 1, past the bound `e^{−1}`.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Properties.Pouw.Served.SecurityProofs.Honest
 
 open Properties.Pouw.Served Properties.Pouw.Served.SecurityProofs

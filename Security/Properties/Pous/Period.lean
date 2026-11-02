@@ -235,7 +235,7 @@ def PeriodHeld : Prop :=
         DeviceModel r P τ D Q L round → Instantiates P τ →
           S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S →
             ∀ o : ΩW × ΩQ,
-              Pouw.pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+              Claims.Pr (fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
                   P.Accepts (o.1, o.2, x) ∧ ¬ P.Break (o.1, o.2, x) ∧
                     (r.held (o.1, o.2, x) : ℝ) < S * (r.win .capacity).len) ≤
                 (Params.δ : ℝ) + Params.εMax.toReal

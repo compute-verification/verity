@@ -16,6 +16,8 @@ and the pinned anchors (L8). `tileProofSoundAll_of_tileGame` (`HiddenTileGame`) 
 C-Flock's per-finder `cr/sha-512` and `ecr/sha-512`, and the live coins.
 -/
 
+open Claims renaming Ex → ex
+
 namespace Pouw.PearlC.Assumptions
 
 variable {Q R S : Type}

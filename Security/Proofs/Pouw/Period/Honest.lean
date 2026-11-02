@@ -34,6 +34,8 @@ credited live words are `128·n` (`checkedLive_all`), so `h1_credit` is `H1Check
 words, not at none.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Properties.Pouw.Period.SecurityProofs.HonestH1
 
 open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs Properties.Pouw.Period.SecurityProofs.Accept

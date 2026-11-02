@@ -34,6 +34,8 @@ prefix's live tiles:
   prefix (`deficiencyUpTo_periodGame`), the shares in the cheaper of the two (`liveWork_of`).
 -/
 
+open Claims renaming Pr → prob, Ex → expect
+
 namespace Accounting.SecurityProofs.ComposePeriod
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity

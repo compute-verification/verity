@@ -17,15 +17,13 @@ import Proofs.Flock.Claims.Sampling.Select.Bounds
   (`Nat.add_one_mul_choose_eq`) turns the product into the ratio.
 -/
 
+open Claims renaming Pr → prob, Ex → expect
+
 namespace Properties.Served.SecurityProofs
 
 open Pouw.RelativeSecurity
 open Accounting.SecurityProofs.Compose.Budget (forall_mem_subsetDraw rest prob_mem)
 open Accounting.SecurityProofs.TS.Stages (prob_prod)
-
-theorem prob_eq_pr {α : Type} [Fintype α] (p : α → Prop) : prob p = Claims.Pr p := by
-  classical
-  rw [prob_eq_card, Claims.Pr]
 
 theorem card_rest_le {n : ℕ} (B : Finset (Fin (n + 1))) (p : Fin (n + 1)) : (rest B p).card ≤ B.card :=
   Finset.card_le_card_of_injOn (fun z => Equiv.swap 0 p z.succ) (fun z hz => by simpa [rest] using hz)
@@ -137,8 +135,7 @@ theorem drawMissesSubset : DrawMissesSubset := by
   have hcode := (Properties.SampledProofs.SecurityProofs.one_bound N _ hr L).1 K hK
   rw [Finset.card_map] at hcode
   refine le_trans ?_ (hcode.trans ?_)
-  · rw [prob_eq_pr]
-    refine Claims.Pr_mono fun src h => ?_
+  · refine Claims.Pr_mono fun src h => ?_
     obtain ⟨⟨units, read⟩, hd, hm⟩ := h
     exact ⟨units, read, hd, fun u hu => hm u (hU u hu)⟩
   · exact (miss_ge K N (tilesOf N U) hK).trans (le_of_eq (congrArg prob (funext fun β =>

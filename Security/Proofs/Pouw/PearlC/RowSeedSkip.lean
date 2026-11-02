@@ -26,6 +26,8 @@ supporting line: no statement those proofs read is proved here. It takes no TT_O
   vacuous. (C6) asks for an injective key only on the unit's rows and their 32-bit words, the rows the corollary reads.
 -/
 
+open Claims renaming Pr → pr
+
 namespace Pouw.QTree
 
 variable {Q R α β : Type}

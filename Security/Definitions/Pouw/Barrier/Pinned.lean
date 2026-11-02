@@ -4,6 +4,8 @@ import Definitions.Pouw.Barrier.Defs
 # The degenerate-input barrier: pinned statements (trusted)
 -/
 
+open Claims renaming Pr → pr
+
 namespace Pouw.Barrier.Pinned
 
 open Finset

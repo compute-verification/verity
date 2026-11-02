@@ -27,6 +27,8 @@ earlier windows' openings coins kept, window `t`'s and the later ones fresh), wh
   verifiers, `split_t = 0`, and `√(|L_t|·s_t·q_t²/2^513) = √(|L_t|·s_t)·q_t/2^256.5`.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.SecurityProofs.Remote
 
 open Finset Accounting.TS Accounting.Remote.Draw Pouw.RelativeSecurity
@@ -92,10 +94,6 @@ theorem toReal_pr {α : Type} [Fintype α] (P : α → Prop) : (Pous.pr P).toRea
   unfold Pous.pr prob
   rw [ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
 
-theorem claims_pr {α : Type} [Fintype α] (P : α → Prop) : Claims.Pr P = prob P := by
-  unfold Claims.Pr prob
-  congr
-
 /-- A window opens at most `s_t` receipts: its draws, `min(s_t, U_t)`. -/
 theorem card_opened_le (D : Session n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : Coins n κ X) : (D.opened prf rest t ω).card ≤ s t := by
@@ -155,7 +153,7 @@ theorem window_le [Fintype X] (D : Session n m s κ X) (R : Receipts n κ X) (pr
 theorem fork_le_finder [Fintype X] [Nonempty X] (D : Session n m s κ X) (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (q : ℕ) :
     (R.fork D prf rest t).toReal ≤ (R.finder D prf rest t q).Pr (fun u => (R.hash u).bytes) := by
-  rw [Receipts.fork, toReal_pr, Claims.Finder.Pr, claims_pr]
+  rw [Receipts.fork, toReal_pr, Claims.Finder.Pr]
   refine prob_mono (Ω := Coins n κ X × Coins n κ X) fun y hy => ?_
   have hex : ∃ uv, R.Finds D prf rest t y.1 y.2 uv := by
     obtain ⟨p, hp, hp', h | h⟩ := hy

@@ -55,6 +55,8 @@ are its witnesses: its premises hold at a constructed honest developer, and at `
 every certificate, every other premise holds while PoUW's per-window bound and the conclusion fail.
 -/
 
+open Verity.Game renaming prPMFReal → prob
+
 namespace Nci.Guarantees
 
 open Verity Nci.Dampener

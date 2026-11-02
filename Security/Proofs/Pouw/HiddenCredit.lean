@@ -35,13 +35,14 @@ What a correct unit is, and that the opening's `ok` means the staged rows are th
 are the opening's meaning and the commitments' binding, outside this file.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Pouw.SecurityProofs.HiddenCredit
 
 open Lean (Json toJson)
 open Finset FlockSoundness.Audit
 open Properties.Pouw.Strata (unitWork)
 open Properties.Pouw.Credit (drawnOn)
-open Pouw.RelativeSecurity (prob)
 open SampledProofs.HiddenDraw (Call witness witness_inj witness_bounds)
 
 variable {T : Type}
@@ -258,12 +259,10 @@ theorem credit_of_miss {Ω : Type} [Fintype Ω] (D : Ω → Option (Array ℕ)) 
         exact_mod_cast hsplit
       linarith
     refine le_trans ?_ (hmiss B hB)
-    rw [Properties.Served.SecurityProofs.prob_eq_pr, Properties.Served.SecurityProofs.prob_eq_pr]
     refine Claims.Pr_mono fun g hg => ?_
     obtain ⟨⟨d, hD, hgood⟩, -⟩ := hg
     exact ⟨d, hD, fun u hu hud => (mem_filter.1 hu).2 (hgood u (mem_filter.1 hu).1 hud)⟩
-  · rw [Properties.Served.SecurityProofs.prob_eq_pr, Claims.Pr_congr fun g => iff_false_intro fun h => hd h.2,
-      Claims.Pr_false]
+  · rw [Claims.Pr_congr fun g => iff_false_intro fun h => hd h.2, Claims.Pr_false]
     exact_mod_cast hδ
 
 /-- **Credit over hidden positions at the served draw, at the ε `epsAt` reports** (`EpsAtSound`'s form): wherever

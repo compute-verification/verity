@@ -16,9 +16,9 @@ open Accounting.PouwWork Finset
 
 namespace PouwWork
 
-theorem pr_mono {α : Type} [Fintype α] {E F : α → Prop} (h : ∀ x, E x → F x) : Pouw.pr E ≤ Pouw.pr F := by
+theorem pr_mono {α : Type} [Fintype α] {E F : α → Prop} (h : ∀ x, E x → F x) : Claims.Pr E ≤ Claims.Pr F := by
   classical
-  unfold Pouw.pr
+  unfold Claims.Pr
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hsub : (univ.filter E) ⊆ univ.filter F := fun x hx => by
     simp only [mem_filter, mem_univ, true_and] at hx ⊢
@@ -26,9 +26,9 @@ theorem pr_mono {α : Type} [Fintype α] {E F : α → Prop} (h : ∀ x, E x →
   exact_mod_cast card_le_card hsub
 
 theorem pr_or_le {α : Type} [Fintype α] (E F : α → Prop) :
-    Pouw.pr (fun x => E x ∨ F x) ≤ Pouw.pr E + Pouw.pr F := by
+    Claims.Pr (fun x => E x ∨ F x) ≤ Claims.Pr E + Claims.Pr F := by
   classical
-  unfold Pouw.pr
+  unfold Claims.Pr
   rw [← add_div]
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hsub : (univ.filter fun x => E x ∨ F x) ⊆ univ.filter E ∪ univ.filter F := fun x hx => by
@@ -92,13 +92,13 @@ theorem PouwLocalOff : Accounting.Guarantees.PouwLocalOff := by
     have h3 : help S P X r = 0 := Nat.le_zero.mp h2
     rw [h3, Nat.mul_zero, Nat.add_zero] at h1
     omega
-  calc Pouw.pr (fun r => Accepts S P r ∧ credits S P X π m r < Wb * Nmin)
-      ≤ Pouw.pr (fun r => ((Accepts S P r ∧ good S P r < Nmin) ∨
+  calc Claims.Pr (fun r => Accepts S P r ∧ credits S P X π m r < Wb * Nmin)
+      ≤ Claims.Pr (fun r => ((Accepts S P r ∧ good S P r < Nmin) ∨
           (Accepts S P r ∧ Nmin ≤ good S P r ∧ goodAll S P < Nmin)) ∨ Z r) := PouwWork.pr_mono hsub
-    _ ≤ Pouw.pr (fun r => (Accepts S P r ∧ good S P r < Nmin) ∨
-          (Accepts S P r ∧ Nmin ≤ good S P r ∧ goodAll S P < Nmin)) + Pouw.pr Z := PouwWork.pr_or_le _ _
-    _ ≤ (Pouw.pr (fun r => Accepts S P r ∧ good S P r < Nmin) +
-          Pouw.pr (fun r => Accepts S P r ∧ Nmin ≤ good S P r ∧ goodAll S P < Nmin)) + Pouw.pr Z :=
+    _ ≤ Claims.Pr (fun r => (Accepts S P r ∧ good S P r < Nmin) ∨
+          (Accepts S P r ∧ Nmin ≤ good S P r ∧ goodAll S P < Nmin)) + Claims.Pr Z := PouwWork.pr_or_le _ _
+    _ ≤ (Claims.Pr (fun r => Accepts S P r ∧ good S P r < Nmin) +
+          Claims.Pr (fun r => Accepts S P r ∧ Nmin ≤ good S P r ∧ goodAll S P < Nmin)) + Claims.Pr Z :=
         add_le_add_left (PouwWork.pr_or_le _ _) _
     _ ≤ δdet + δluck + δskip := add_le_add (add_le_add hdet hluck) hZ
 

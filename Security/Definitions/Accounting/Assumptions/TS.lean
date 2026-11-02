@@ -70,6 +70,8 @@ noise-active segments carry equal counts), and no guarantee rests on it; `Accoun
 bound that holds.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.Assumptions.TS
 
 open Accounting.TS Pouw.RelativeSecurity

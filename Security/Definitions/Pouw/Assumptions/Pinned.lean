@@ -11,6 +11,8 @@ The headline statements, each a `Prop`; the proofs are theorems `Pouw.Proofs.* :
 `lean-audit.json`. (b), (c) and (d) are guarantees, in `Pouw.Guarantees.Game`. Plain-language map: `STATEMENTS.md`.
 -/
 
+open Claims renaming Pr → pr
+
 namespace Pouw.Pinned
 
 open Finset

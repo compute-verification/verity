@@ -9,6 +9,8 @@ and the escape slack on sampled proofs catching each faulty block whatever came 
 [SAMPLED-DETECTION]), from which `Nci.SecurityProofs.sampled_escape` bounds what each identity's escaped blocks skip.
 -/
 
+open Verity.Game renaming prPMFReal → prob
+
 namespace Nci.Assumptions
 
 open Nci.Dampener

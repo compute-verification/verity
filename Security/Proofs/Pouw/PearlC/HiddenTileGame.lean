@@ -11,6 +11,8 @@ its verdict accept only on a run in `Bad` (`TileGame.prob_le`); and the batch pr
 better than some strategy it induces on that tile's game, which is in `Cls` (core's `ProbBatchInduced`).
 -/
 
+open Claims renaming Ex → ex
+
 namespace Pouw.PearlC
 
 open scoped ENNReal

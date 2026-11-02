@@ -95,7 +95,7 @@ this at `δs = 0` only under full checking (`kd = n`) and `ServedRegistered` at 
 leaves, and `rows` can't see the draw. -/
 def ServedRootsLinked [Fintype Ω] (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (δs : ℝ) : Prop :=
-  ∀ w i, Pouw.RelativeSecurity.prob (fun x =>
+  ∀ w i, Claims.Pr (fun x =>
     LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i) ∧
       (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u) ∧
       rows (sess x w i) (sess x w i).Xv ≠ pf.opened x w i) ≤ δs

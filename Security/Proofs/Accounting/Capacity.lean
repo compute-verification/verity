@@ -15,6 +15,8 @@ is one of the other accounts, so what it holds and what the rest hold together a
 capacity account below the certificate on every one of them (`Run.capacityShort_of_covertBut`).
 -/
 
+open Claims renaming Pr → pr
+
 namespace Accounting
 
 open Pouw

@@ -1,4 +1,4 @@
-import Definitions.Pouw.Basic.Prob
+import Definitions.Core.Interaction
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.Order.Archimedean.Real.Basic
 import Mathlib.Order.Interval.Finset.Nat
@@ -7,7 +7,7 @@ import Mathlib.Order.Interval.Finset.Nat
 # What a remote audit shows held: the node's memory as a trace (trusted)
 
 A remote audit session over a registered store of `N` blocks, at each outcome `ω` of the audit's coins `Ω` (uniform,
-`Pouw.pr`), seen as a trace of where each registered block is, tick by tick on the verifier's clock:
+`Claims.Pr`), seen as a trace of where each registered block is, tick by tick on the verifier's clock:
 
 * `mem ω t`: the registered blocks in node memory (every GPU's HBM and the host's DRAM) at tick `t`;
 * `chip ω t`: those on the node's chips (every GPU's on-chip storage and the host's caches), not in node memory;
@@ -98,7 +98,7 @@ def heldOver (ω : Ω) (u v : ℕ) : ℕ := ∑ t ∈ Ico u v, (T.mem ω t).card
 variable [Fintype Ω]
 
 /-- The trace meets `P` except with probability at most `δ` over the coins on which the audit accepts. -/
-def Holds (δ : ℝ) (P : Ω → Prop) : Prop := Pouw.pr (fun ω => T.accepts ω ∧ ¬ P ω) ≤ δ
+def Holds (δ : ℝ) (P : Ω → Prop) : Prop := Claims.Pr (fun ω => T.accepts ω ∧ ¬ P ω) ≤ δ
 
 end Trace
 

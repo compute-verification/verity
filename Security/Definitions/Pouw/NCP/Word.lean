@@ -1,4 +1,4 @@
-import Definitions.Pouw.Basic.Prob
+import Definitions.Core.Interaction
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
@@ -26,6 +26,8 @@ which is not proved here: it is a named hypothesis, and `WordFinalWitness` only 
 The model is non-adaptive (the rules are fixed before the salt) and excludes shared tables. It is a witness that a
 TT_NCP-shaped bound can hold because of the noise, not evidence for TT_NCP.
 -/
+
+open Claims renaming Pr → pr
 
 namespace Pouw.NCP.Word
 

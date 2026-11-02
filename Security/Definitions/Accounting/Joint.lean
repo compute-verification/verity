@@ -1,11 +1,11 @@
 import Definitions.Accounting.Device
-import Definitions.Pouw.Basic.Prob
+import Definitions.Core.Interaction
 
 /-!
 # A joint audit's run, and what each audit's guarantee says about it (trusted)
 
 A joint audit runs three audits on one device at once: the compute audit (PoUW), the bandwidth audit and the capacity
-audit (PoUS). Each draws coins of its own (`ΩW`, `ΩQ`, `ΩS`), uniformly and independently (`Pouw.pr` over the product),
+audit (PoUS). Each draws coins of its own (`ΩW`, `ΩQ`, `ΩS`), uniformly and independently (`Claims.Pr` over the product),
 and has an account and a window of its own. The device sees every coin, so its schedule is a function of all three.
 
 Each audit's guarantee is stated in the shape of PoUW's `Pouw.Guarantees.EndToEnd`, on its own account and its own
@@ -125,14 +125,14 @@ coins, if the compute account's work is at most `T` on every compute coin, the c
 probability at most `ε` over the compute coins. -/
 def ComputeSound (p : Price) (W ε : ℝ) : Prop :=
   ∀ (o : ΩQ × ΩS) (T : ℝ), 0 ≤ T → (∀ x : ΩW, (r.work p (x, o) : ℝ) ≤ T) →
-    Pouw.pr (fun x : ΩW => r.accepts .compute (x, o) ∧ T < W) ≤ ε
+    Claims.Pr (fun x : ΩW => r.accepts .compute (x, o) ∧ T < W) ≤ ε
 
 /-- **The bandwidth audit's guarantee, at certificate `Q` and error `ε`**: at any value of the other audits' coins, if
 the bandwidth account reads at most `B` bits from device memory on every bandwidth coin, the bandwidth audit accepts
 with `B < Q` with probability at most `ε` over the bandwidth coins. -/
 def BandwidthSound (Q ε : ℝ) : Prop :=
   ∀ (x : ΩW) (s : ΩS) (B : ℝ), 0 ≤ B → (∀ q : ΩQ, (r.read (x, q, s) : ℝ) ≤ B) →
-    Pouw.pr (fun q : ΩQ => r.accepts .bandwidth (x, q, s) ∧ B < Q) ≤ ε
+    Claims.Pr (fun q : ΩQ => r.accepts .bandwidth (x, q, s) ∧ B < Q) ≤ ε
 
 /-- **The capacity audit's guarantee, at certificate `S` and error `ε`**: capacity is counted in bit-ticks over the
 capacity window, so the certificate is `S * len` bit-ticks, `S` bits on average. At any value of the other audits'
@@ -140,7 +140,7 @@ coins, if the capacity account holds at most `B` bit-ticks of device memory over
 capacity audit accepts with `B < S * len` with probability at most `ε` over the capacity coins. -/
 def CapacitySound (S ε : ℝ) : Prop :=
   ∀ (x : ΩW) (q : ΩQ) (B : ℝ), 0 ≤ B → (∀ s : ΩS, (r.held (x, q, s) : ℝ) ≤ B) →
-    Pouw.pr (fun s : ΩS => r.accepts .capacity (x, q, s) ∧ B < S * (r.win .capacity).len) ≤ ε
+    Claims.Pr (fun s : ΩS => r.accepts .capacity (x, q, s) ∧ B < S * (r.win .capacity).len) ≤ ε
 
 end Sound
 

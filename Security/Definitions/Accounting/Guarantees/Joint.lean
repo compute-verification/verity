@@ -33,7 +33,7 @@ def Joint : Prop :=
   ∀ (ι α ΩW ΩQ ΩS : Type) [Fintype α] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] [Nonempty ΩW] [Nonempty ΩQ]
     [Nonempty ΩS] (d : Device ι) (r : Run d α ΩW ΩQ ΩS) (p : Price) (W Q S εW εQ εS : ℝ),
     r.ComputeSound p W εW → r.BandwidthSound Q εQ → r.CapacitySound S εS →
-    Pouw.pr (fun ω => r.Accepted ω ∧ (r.ComputeShort p W ω ∨ r.BandwidthShort Q ω ∨ r.CapacityShort S ω))
+    Claims.Pr (fun ω => r.Accepted ω ∧ (r.ComputeShort p W ω ∨ r.BandwidthShort Q ω ∨ r.CapacityShort S ω))
       ≤ εW + εQ + εS
 
 /-- **The covert residual.** Under the joint guarantee's hypotheses, the probability that every audit accepts and, for
@@ -46,7 +46,7 @@ def CovertResidual : Prop :=
   ∀ (ι α ΩW ΩQ ΩS : Type) [Fintype α] [DecidableEq α] [Fintype ΩW] [Fintype ΩQ] [Fintype ΩS] [Nonempty ΩW]
     [Nonempty ΩQ] [Nonempty ΩS] (d : Device ι) (r : Run d α ΩW ΩQ ΩS) (p : Price) (W Q S εW εQ εS : ℝ),
     r.ComputeSound p W εW → r.BandwidthSound Q εQ → r.CapacitySound S εS →
-    Pouw.pr (fun ω => r.Accepted ω ∧ (r.ComputeCovert p W ω ∨ r.BandwidthCovert Q ω ∨ r.CapacityCovert S ω))
+    Claims.Pr (fun ω => r.Accepted ω ∧ (r.ComputeCovert p W ω ∨ r.BandwidthCovert Q ω ∨ r.CapacityCovert S ω))
       ≤ εW + εQ + εS
 
 end Accounting.Guarantees

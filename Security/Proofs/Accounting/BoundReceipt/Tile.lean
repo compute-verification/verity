@@ -19,7 +19,7 @@ theorem tileUnpredictable_of_total {Q R S : Type} [Fintype Q] [DecidableEq Q] [F
     (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ)
     (h : ∀ U : Pouw.Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Pouw.Adversary CM,
       A.Bounded U T q →
-        Pouw.pr (fun x : (Q → R) × S =>
+        Claims.Pr (fun x : (Q → R) × S =>
           T / (1 - γ₀) < ∑ u ∈ Pouw.checkedSet P U x.1 x.2 (A.transcript U x.1 x.2), credit (U.layout.shape u))
           ≤ ε q U.layout.N) :
     TileUnpredictable CM P credit D γ₀ ε := by

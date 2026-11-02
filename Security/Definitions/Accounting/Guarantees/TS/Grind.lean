@@ -50,6 +50,8 @@ share a coin (`HMu`), and the binding term `δb` itself, which is per prover (SH
 for a prover that holds no SHA-512 collision, and `1` for one that does).
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.Guarantees.TS
 
 open Pouw.RelativeSecurity

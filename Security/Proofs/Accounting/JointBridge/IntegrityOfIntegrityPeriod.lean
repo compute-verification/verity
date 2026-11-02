@@ -31,7 +31,7 @@ theorem IntegrityOfIntegrityPeriod : Accounting.Guarantees.Bridge.IntegrityOfInt
     have hlt := not_le.mp hfail'
     rw [R.wrong_eq] at hlt
     exact hcert.trans hlt.le
-  have hlaw : ENNReal.ofReal (Pouw.pr fun x : Ω (r.own .sampled) =>
+  have hlaw : ENNReal.ofReal (Claims.Pr fun x : Ω (r.own .sampled) =>
         (∀ w ∈ R.record (Function.update ξ (r.own .sampled) x), w.accepted) ∧
           Real.log (1 / δ) / q ≤
             (((R.record (Function.update ξ (r.own .sampled) x)).map Flock.Guarantees.WindowRec.wrong).sum : ℝ)) =

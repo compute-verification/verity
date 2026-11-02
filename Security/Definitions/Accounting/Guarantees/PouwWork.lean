@@ -28,6 +28,6 @@ def PouwLocalOff : Prop :=
     (π : ∀ r, Fin (S r).A.N → ℕ) (m : ∀ r, Finset (Fin (S r).A.N)) (Wb Nmin ρ : ℕ) (δdet δluck δskip : ℝ),
     Assumptions.PouwDetection S P Nmin δdet → Assumptions.PouwLuck S P Nmin δluck →
     Assumptions.PouwFloorOff S P X π m Wb Nmin ρ δskip → Assumptions.PouwHelpBound S P X 0 →
-    Pouw.pr (fun r => Accepts S P r ∧ credits S P X π m r < Wb * Nmin) ≤ δdet + δluck + δskip
+    Claims.Pr (fun r => Accepts S P r ∧ credits S P X π m r < Wb * Nmin) ≤ δdet + δluck + δskip
 
 end Accounting.Guarantees

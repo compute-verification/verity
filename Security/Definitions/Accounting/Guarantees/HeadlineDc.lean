@@ -188,6 +188,8 @@ Each is proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.Headlin
 of `headline_of_branches` at the data's π*, each branch's floor bounded from below by lower bounds on `w*` and `φ*`.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.Guarantees.TS
 
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity

@@ -14,6 +14,8 @@ bound holds on the period's coins (`stratum_bound`). An accepted period whose fi
 the summed credit has a stratum whose own fall short, so the union bound gives the statement.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Properties.Pouw.PeriodJ10RStrata.SecurityProofs
 
 open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.PeriodJ10RStrata

@@ -1,4 +1,4 @@
-import Definitions.Pouw.Basic.Prob
+import Definitions.Core.Interaction
 import Definitions.Pouw.Basic.Mat
 import Definitions.Pouw.Basic.QTree
 
@@ -27,8 +27,10 @@ every cost model.
 Simplifications (each listed in `STATEMENTS.md` with its bridge or as a gap):
 * ideal commitments: the online phase outputs the committed values themselves (`Transcript`);
 * a finite oracle `Q → R` and a uniform salt type `S` (the chain's instance is `Fin (2^128)`);
-* deterministic adversaries (`Definitions/Pouw/Basic/Prob.lean`).
+* deterministic adversaries: a randomized one is an average of them (`Pouw.Sanity.randomized_of_deterministic`).
 -/
+
+open Claims renaming Pr → pr
 
 namespace Pouw
 

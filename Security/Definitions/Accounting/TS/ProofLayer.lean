@@ -37,6 +37,8 @@ relation reads σ_w (the salt its unit takes) and the keyed words its proofs giv
 round's leaves and σ_w, so they need no binding of their own.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.TS
 
 open Pouw.RelativeSecurity

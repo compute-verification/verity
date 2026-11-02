@@ -29,6 +29,8 @@ import Proofs.Pouw.DitherWitness
 refuses nothing (`twNet`); the onsite statement's `β K` term and the certifier's refusals aren't exercised.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Pouw.SecurityProofs
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Finset

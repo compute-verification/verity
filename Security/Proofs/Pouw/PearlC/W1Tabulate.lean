@@ -46,6 +46,8 @@ the bound it is not a program (`tree_not_code`).
 as compute the reference more cheaply than the honest program, is TT_OUT's own conjecture.
 -/
 
+open Claims renaming Pr → pr
+
 namespace Pouw.PearlC.W1Tabulate
 
 open Pouw Pouw.PearlC Pouw.PearlC.W1 Pouw.PearlC.Assumptions

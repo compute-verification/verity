@@ -12,6 +12,8 @@ event in `ℝ≥0∞`, and with `N > 0` its bound is finite and is the certifica
 (`pr_short_le_error`). The sure bound gives `BandwidthOfAudit`, the reads at the coins drawn `BandwidthOfAuditPerRun`.
 -/
 
+open Claims renaming Pr → pr
+
 namespace Accounting.SecurityProofs
 
 open Accounting Pouw

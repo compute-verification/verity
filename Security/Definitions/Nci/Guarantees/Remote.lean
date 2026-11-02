@@ -24,6 +24,8 @@ hypothesis derived, and the two that sampled proofs and PoUW's deficit add:
   as `0 ≤ s ≤ 1`. With every proof block proved (T1–T4), `q = 1` and the escape term's probability is 0 at any `θ > 0`.
 -/
 
+open Verity.Game renaming prPMFReal → prob
+
 namespace Nci.Guarantees
 
 open Verity Nci.Dampener

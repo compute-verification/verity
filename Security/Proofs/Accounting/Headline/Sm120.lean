@@ -25,6 +25,8 @@ data's hypotheses discharged and the terms bounded:
 * (I7) at `7/8` is the receipt split's (`luck_of_receipt_half`).
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.SecurityProofs.TS.Headline
 
 open Accounting.TS Accounting.TS.Headline Accounting.Assumptions.TS Pouw.RelativeSecurity Accounting.SecurityProofs.TS

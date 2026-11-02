@@ -18,6 +18,8 @@ import Proofs.Accounting.TS.Stages
   positive weight gives `E[L_F] ≤ p·E[W_F]` and `E[L_0] ≤ p0·E[W_0]`, so its mean is at most `1`.
 -/
 
+open Claims renaming Pr → prob, Ex → expect
+
 namespace Accounting.SecurityProofs.Compose.Budget
 
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity

@@ -10,6 +10,8 @@ named assumption is its instance at ncp-v1's `β = 128`. Neither variant
 reduces to the other in W1 cost: converting one checked word into the other costs one priced add.
 -/
 
+open Claims renaming Pr → pr
+
 namespace Pouw.NCP.Assumptions
 
 open Finset

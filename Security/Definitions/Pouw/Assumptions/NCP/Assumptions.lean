@@ -6,6 +6,8 @@ import Definitions.Pouw.Game.Defs
 A `Prop` taken as a hypothesis by the statements that use it, never an `axiom`.
 -/
 
+open Claims renaming Pr → pr
+
 namespace Pouw.NCP.Assumptions
 
 open Finset

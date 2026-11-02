@@ -34,7 +34,7 @@ all three. The draw conjunct is a property of `drawUnits`, with no premise.
 -/
 
 open Lean (Json)
-open Pouw.RelativeSecurity (prob)
+open Claims renaming Pr → prob
 
 namespace Properties.Served
 

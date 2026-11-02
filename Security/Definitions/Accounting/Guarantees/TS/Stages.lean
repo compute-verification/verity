@@ -23,6 +23,8 @@ probability `p` gives `E[e^{d/Λ}·1{pass}] = p^{−m}·(1 − (1 − p)·m) > 1
 draw.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.Guarantees.TS
 
 open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity

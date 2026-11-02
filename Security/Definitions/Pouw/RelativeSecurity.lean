@@ -8,8 +8,8 @@ The definitions `Definitions.Pouw.Guarantees.RelativeSecurity` and `Definitions.
 verbatim from `Proofs.Pouw.RelativeSecurity` (same names, namespace and section variables), so the lock's `reads`
 follow them into the spec:
 
-* uniform probability (`prob`), `R` rounds of fresh coins (`Paths`), a prover's play (`RoundGame`, its acceptance
-  and deficiency) and a round's stages (`StageGame`);
+* `R` rounds of fresh coins (`Paths`), a prover's play (`RoundGame`, its acceptance and deficiency) and a round's
+  stages (`StageGame`), with uniform probability core's `Claims.Pr` (`prob` here);
 * the machine model (`Machine`, a run's `charge`), the service (`Service`) and its adversary floor (`ServiceFloor`;
   adversary by adversary, `ServiceFloorPerProver`, at an adversary's error `breakBound`, read through the analysis's
   collision finders, `Finders` and `finderTerm`, and `ecr/sha-512`'s `Claims.ecrBound` at budgets computed from the
@@ -26,17 +26,11 @@ follow them into the spec:
   (`XBlind`, `YBlind`, `TwoSidedAt`) and charging purity (`SlpG.ChargePure`; across draws, `SlpG.ChargePureAt`).
 -/
 
+open Claims renaming Pr → prob
+
 namespace Pouw.RelativeSecurity
 
 open Finset
-
-section Probability
-
-/-- The probability of an event under the uniform distribution on a finite type. -/
-noncomputable def prob {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : ℝ := by
-  classical exact ((univ.filter p).card : ℝ) / (Fintype.card Ω : ℝ)
-
-end Probability
 
 section Rounds
 

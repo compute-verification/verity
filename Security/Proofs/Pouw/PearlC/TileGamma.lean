@@ -22,6 +22,8 @@ Staged; nothing pinned. The pins proposed are `pearlCSampled8192`, `pearlCSample
   layout's `W_ref` tile by tile, and an in-domain workload whose one tile is within the cap and has positive credit.
 -/
 
+open Claims renaming Pr → pr
+
 namespace Pouw.PearlC
 
 open Finset Assumptions Pouw.Fp8Atom

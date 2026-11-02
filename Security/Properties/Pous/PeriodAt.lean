@@ -122,7 +122,7 @@ def PeriodHeldAt : Prop :=
           RingDeviceAt N pt r P D Q L round →
             S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ SAt N →
               ∀ o : ΩW × ΩQ,
-                Pouw.pr (fun x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+                Claims.Pr (fun x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
                     P.Accepts pt (o.1, o.2, x) ∧ ¬ P.Break pt (o.1, o.2, x) ∧
                       (r.held (o.1, o.2, x) : ℝ) < S * (r.win .capacity).len) ≤
                   (Params.δ : ℝ) + Params.εMax.toReal
@@ -142,7 +142,7 @@ def PeriodHeldDemo : Prop :=
           RingDeviceAt N pt r P D Q L round →
             S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ 1060008348186 →
               ∀ o : ΩW × ΩQ,
-                Pouw.pr (fun x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+                Claims.Pr (fun x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
                     P.Accepts pt (o.1, o.2, x) ∧ ¬ P.Break pt (o.1, o.2, x) ∧
                       (r.held (o.1, o.2, x) : ℝ) < S * (r.win .capacity).len) ≤
                   (Params.δ : ℝ) + Params.εMax.toReal

@@ -26,7 +26,7 @@ marking is taken as given, and the premise is claimed only at markings that are 
 (`#unmixed + 2·#mixed ≥ floor`) is being proved as a bound that implies this one. -/
 def PouwFloorOff (X : Finset L) (π : ∀ r, Fin (S r).A.N → ℕ) (m : ∀ r, Finset (Fin (S r).A.N))
     (Wb Nmin ρ : ℕ) (δ : ℝ) : Prop :=
-  ∃ Z : Ω → Prop, Pouw.pr Z ≤ δ ∧
+  ∃ Z : Ω → Prop, Claims.Pr Z ≤ δ ∧
     ∀ r, ¬ Z r → Nmin ≤ goodAll S P → Wb * Nmin ≤ credits S P X π m r + ρ * help S P X r
 
 end Accounting.Assumptions

@@ -12,6 +12,8 @@ import Proofs.Accounting.HMu
   `¾ + ¼·½`.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.SecurityProofs.TS.Headline
 
 open Accounting.TS Accounting.Assumptions.TS Accounting.SecurityProofs.TS Pouw.RelativeSecurity

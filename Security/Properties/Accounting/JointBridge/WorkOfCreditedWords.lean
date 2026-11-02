@@ -41,7 +41,7 @@ def WorkOfCreditedWords : Prop :=
     (real : Accounting.RealizesCreditedWords r c p m u bUnit X acc credit),
     Accounting.Assumptions.WordCostsMacs r p m u real.coin acc fixed help →
     Accounting.Assumptions.HelpWithinCertifier r c bUnit real.coin acc help →
-    (∀ ξ, Pouw.pr (fun x : X => acc ξ x ∧ fixed ξ x < credit ξ x) ≤ δ) →
+    (∀ ξ, Claims.Pr (fun x : X => acc ξ x ∧ fixed ξ x < credit ξ x) ≤ δ) →
     r.Sound c p .pouw δ
 
 end Properties.Accounting.JointBridge

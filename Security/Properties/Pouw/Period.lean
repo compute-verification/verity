@@ -124,6 +124,8 @@ accepted window), and `Proofs.Pouw.Period.Honest` is a live-salt period of those
 `H1CheckedCreditPeriod`.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Properties.Pouw.Period
 
 open PouwCheck

@@ -42,6 +42,8 @@ columns' noise and its fold keys from its own position. A call is then one `Call
 from its own seed.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Accounting.TS
 
 open Pouw.RelativeSecurity

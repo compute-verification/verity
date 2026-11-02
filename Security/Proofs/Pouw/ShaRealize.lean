@@ -19,6 +19,8 @@ import Proofs.Pouw.RelativeSecurity
   `ExtractAdvAt`'s sense.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Pouw.SecurityProofs.ShaRealize
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.MerkleExtract

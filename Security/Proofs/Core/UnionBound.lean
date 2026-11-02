@@ -19,10 +19,11 @@ The probability over the product that some protocol fails is then at most the su
   the coins before it.
 * `union_bound_monitoringPeriod`: over a monitoring period's periods, each period's protocols in
   `union_bound_update`'s form: `∑_j ∑_a δ j a`. `union_bound_monitoringPeriod_with` adds one more event bounded over the
-  whole product, such as acceptance over a monitoring period (`FlockSoundness.Audit.Law.pooled_escape_log`, in
-  `Claims.Pr`, which is `pr`: `Pr_eq_pr`); `pr_restrict_le` carries a bound proved over a block of the coordinates to the
-  whole product.
+  whole product, such as acceptance over a monitoring period (`FlockSoundness.Audit.Law.pooled_escape_log`);
+  `pr_restrict_le` carries a bound proved over a block of the coordinates to the whole product.
 -/
+
+open Claims renaming Pr → pr
 
 namespace Pouw
 
@@ -44,9 +45,6 @@ theorem pr_split_fst_le (e : X ≃ P × R) (E : P → Prop) : pr (fun x => E (e 
   (pr_equiv e fun y => E y.1).trans_le (pr_fst_le E)
 
 end Split
-
-/-- `Claims.Pr`, the claims' uniform probability, is `pr`. -/
-theorem Pr_eq_pr {α : Type} [Fintype α] (E : α → Prop) : Claims.Pr E = pr E := rfl
 
 section Product
 

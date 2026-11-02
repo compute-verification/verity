@@ -23,6 +23,8 @@ accounts at most `(F + pRead·BW)·T − (W + pRead·Q)` of priced work and read
 and a cost model whose costs and calls don't depend on the coins satisfies it (`budgetAbortPearlC_of_oblivious`).
 -/
 
+open Claims renaming Pr → pr
+
 namespace Accounting
 
 open Pouw

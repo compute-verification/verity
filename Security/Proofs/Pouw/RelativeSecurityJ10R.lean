@@ -22,6 +22,8 @@ The floors per prover take the same chain one adversary and one value of its coi
 (`roundsSlice_of_stagedPJ`, `roundsSlice_of_overlapPJ`) into `serviceFloorPerProver_of_slices`.
 -/
 
+open Claims renaming Pr → prob, Ex → expect
+
 namespace Pouw.RelativeSecurity
 
 open Finset

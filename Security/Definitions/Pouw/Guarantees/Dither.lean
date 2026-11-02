@@ -25,6 +25,8 @@ The ACCEL program's headline, on the accelerator model of `Definitions.Pouw.Dith
   from the floor to `WorkSound`'s conclusion.
 -/
 
+open Claims renaming Pr → prob
+
 namespace Pouw.Guarantees.Dither
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.MerkleExtract
