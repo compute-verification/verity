@@ -37,7 +37,7 @@ c. Until Lean proves Slowdown, a ρ taken from it is reported as a target.
 | θ′, 𝒯 | The annotation: the new slow weights θ′, values computed by gates of C, the trained weights; the token blocks 𝒯, pairwise disjoint sets of gates, each one token's computation in one step. | not yet in Lean |
 | Dep, φ | The gates that depend on some value in θ′: everything downstream of the update, θ's computation on changed activations included. The dependent share φ = \|Dep ∩ ⋃𝒯\|/\|C\|. | not yet in Lean |
 | x_T(I), m(I) | Block I's share of token T, x_T(I) = \|I ∩ T ∩ Dep\|/\|T ∩ Dep\|. I enters T mid-path if x_T(I) > 0 and I reads a value computed by a gate of T outside I; m(I) is the number of tokens I enters this way. | not yet in Lean |
-| w, s, τ | Work per token, the gates per token block; tokens per block, s = c/w; data per token, the unregistered inputs a token block reads. | not yet in Lean |
+| w, s, τ | Work per token, the gates per token block; tokens per block, s = c/w; data per token, the fresh input bits a token block reads. | not yet in Lean |
 | a | The cut cost: the computed bits needed to hand a block one token's state mid-path, roughly d_model × activation bits. | not yet in Lean |
 | u(x), x₀ | The update profile: the computed bits a block must read to do a share x of one token's dependent work, u(1) the per-token update; the bottom share x₀, the largest x with u(x) ≤ k. | not yet in Lean |
 | Δ, Δ_grad | The total update, the bits needed to describe θ′ given θ with a decoder of at most c gates, Fit's quantity (Slowdown's is u(1), equal to Δ only when every token's path reads the update in full, as in dense models); the accumulated state, the gradient and optimizer state passed between blocks during training. | not yet in Lean |
@@ -210,7 +210,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "dark" (compute, fleet, leaves), "unmonitored", "undeclared hardware", ε_dark, L_dark, and the Lean's `Nci.Dampener.unmonitoredShare` and `benchmarks/rho`'s `eps_dark` until renamed; "monitored" (compute, hardware, a server) | unregistered hardware, ε_unreg, L_unreg; registered hardware (the monitoring period keeps its name) |
 | "certified work", "credited work", "accounted compute", "declared compute", W_acc, W_cert for compute; W_cert in the Lean (`Nci.Dampener.residualShare`, `Accounting.Run.ComputeSound`) and the block record (`verity/block-record/v1`), `w_cert`, until renamed; "certified share", "declared utilization" | verified compute, V ("certified" stays for what a certifier certifies); utilization |
 | "slack", "uncertified capacity", "uncertified gates", "unaccounted" (share, compute, gates), "undeclared compute", "skippable work", "residual compute", "monitored residual" (r, r̂) | free compute, U (its registered part is ε_undecl + ε_skip). "Slack" keeps its other senses |
-| "unregistered input", "unregistered input bits", "unregistered information", "novel information" | fresh input, fresh input bits (in(I) ∖ θ stays as notation) |
+| "unregistered input", "unregistered input bits", "unregistered information", "novel information" | fresh input, fresh input bits (k bounds in(I) ∖ θ, computed values included) |
 | a for the protocol index: 𝒜_a, δ_a | p: 𝒜_p, δ_p (a is the initial state) |
 | θ for a card's numbers | the card table (θ is the registered inputs) |
 | "envelope ISA", "envelope op"; `machine_model`'s `cover` command and its `envelope` key, until renamed | the ACCEL ops (𝒜_p is the admissible set) |
