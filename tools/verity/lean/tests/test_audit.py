@@ -1641,9 +1641,10 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     """On a real build: a guarantee whose statement is a `def G : Prop` of a proofs-tree module under `trees`' `except`
     and outside `meaning` (`Control.Guarantees.Loop`, as C-Flock's `SessionLoopZKDeployed` is in
     `Proofs.Flock.SessionLoop`) is recorded through `G`'s body. A premise added to it that no named assumption stands for
-    (`n ≠ 5`), or dropped from it while another guarantee still takes it (`Hyp`, whose assumption entry stays), changes
-    the record, which the audit refuses until `--update` records it, and the review prints `G` as it is now. A walk that
-    stopped at `G` would record its name alone, and neither change would move the lock. What `G` reads under `meaning`
+    (`n ≠ 5`), or dropped from it while another guarantee still takes it (`Hyp`, whose assumption entry stays, and whose
+    module's readers lose the guarantee), changes the record, which the audit refuses until `--update` records it, and
+    the review prints `G` as it is now. A walk that stopped at `G` would record its name alone, and neither change would
+    move the lock. What `G` reads under `meaning`
     (`verifyDouble`, a verifier's acceptance by its name) is recorded too, but holds the guarantee to no witnesses."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
@@ -1660,6 +1661,7 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     A.dump(pkg, pol | {"meaning": ["Control.Assumptions", "Control.Defs", "Control.Thms"],
                        "trees": pol["trees"] | {"proofs": [*pol["trees"]["proofs"], "Control.Loop"],
                                                 "except": {"Control.Loop": "the statement this test records, in a proof module"}},
+                       "claims": pol["claims"] | {"not": {"Control.verifyDouble": "the toy verifier the statement reads"}},
                        "guarantees": pol["guarantees"] | {"Control.doubles": {"owner": "@lean"}}})
 
     def build():
@@ -1679,22 +1681,27 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     assert "Control.doubles" in first["reads"]["Control.Defs"]["guarantees"], "and through it, what it reads under `meaning`"
     assert "Control.verifyDouble" in first["reads"]["Control.Defs"]["definitions"]
     seen = {first["reads"]["Control.Loop"]["digest"]}
-    for text, shows in ((LOOP.replace("Control.Hyp →", "Control.Hyp → n ≠ 5 →"), "n ≠ 5"),
-                        (LOOP.replace("Control.Hyp → ", ""), "∀ n : Nat, Control.verifyDouble n")):
+    for text, shows, codes, hyp_readers in (
+            (LOOP.replace("Control.Hyp →", "Control.Hyp → n ≠ 5 →"), "n ≠ 5", ["guarantees.reads-changed"],
+             ["Control.doubles", "Control.main_thm"]),
+            (LOOP.replace("Control.Hyp → ", ""), "∀ n : Nat, Control.verifyDouble n",
+             ["guarantees.readers", "guarantees.reads-changed"], ["Control.main_thm"])):
         before = lock()
         loop.write_text(text)
         build()
-        assert [f.code for f in audit(False)["failures"] if not f.code.startswith("shape")] == ["guarantees.reads-changed"]
+        assert sorted(f.code for f in audit(False)["failures"] if not f.code.startswith("shape")) == codes
         rep = audit(True)
         after = lock()
         assert unshaped(rep) == [] and after["guarantees"] == before["guarantees"]
         assert after["assumptions"] == before["assumptions"] and set(after["assumptions"]) == {"Control.Hyp"}
+        assert after["reads"]["Control.Assumptions"]["guarantees"] == hyp_readers
         assert after["reads"]["Control.Loop"]["digest"] not in seen
         seen.add(after["reads"]["Control.Loop"]["digest"])
         changes = A.statement_changes(rep["review"])
         assert changes[0] == "definition Control.Guarantees.Loop (Control.Loop), read by Control.doubles: changed", changes
         assert any(shows in line for line in changes[1:]), changes
-        after["reads"]["Control.Loop"] = before["reads"]["Control.Loop"]
+        for module in ("Control.Loop", "Control.Assumptions"):
+            after["reads"][module] = before["reads"][module]
         assert after == before, "the statement's record changed, and nothing else"
 
 
