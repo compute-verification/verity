@@ -133,7 +133,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/core/protocols/onsite/../remote/../../service/sampled_proofs/../../difftest/lean",
+   "../../verity/core/protocols/onsite/../remote/../pouw/lean/check/../window/../../../../difftest/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -149,7 +149,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/core/protocols/onsite/../remote/../../service/sampled_proofs/../../primitives/lms/lean",
+   "../../verity/core/protocols/onsite/../remote/../pouw/lean/check/../window/../../../../service/sampled_proofs/../../primitives/lms/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
