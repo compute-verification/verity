@@ -327,10 +327,11 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
             if c is None:
                 return out
             seed = 1000 + c["boundary"]
+            if CUT.get("spectrum") is not None:
+                with torch.no_grad():
+                    acc = CUT["spectrum"].setdefault(c["boundary"], {"of": "h - h_frozen" if c["delta"] else "h"})
+                    spectrum_add(acc, out - f if c["delta"] else out, out)
             if c["delta"]:
-                if CUT.get("spectrum") is not None:
-                    with torch.no_grad():
-                        spectrum_add(CUT["spectrum"].setdefault(c["boundary"], {}), (out - f).float(), out.float())
                 return f + Coded.apply(out - f, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True)
             return Coded.apply(out, c["bits_fwd"], c["bits_bwd"], c["group"], seed, True)
         handles.append(net.inner.blocks[j].register_forward_hook(hook))
@@ -339,21 +340,38 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
 
 SESSION = 4096
 RANKS = (4, 8, 16, 32, 64, 128)
+COORDS = (1, 2, 4, 8, 16, 32)
 
 
 def spectrum_add(acc: dict, delta: torch.Tensor, h: torch.Tensor):
-    """Accumulate, per SESSION-token session of `delta` (windows, ctx, d), the share of its energy that its top r
-    directions hold (eigenvalues of δᵀδ), and |δ|² against |h|²."""
+    """Accumulate, per SESSION-token session of `delta` (windows, ctx, d; δ = h for a whole-state code): the share of
+    its energy that its top r directions hold (eigenvalues λ of δᵀδ), the transform-coding gain ½·log2(mean λ / geomean
+    λ) (bits per coordinate a fixed basis with bits allocated by variance saves over a flat code at high rate), the share
+    of a session's energy in its largest token, the share of a token's energy in its largest k coordinates, and |δ|²
+    against |h|²."""
     d = delta.shape[-1]
-    acc["delta_sq"] = acc.get("delta_sq", 0.0) + float(delta.pow(2).sum())
-    acc["h_sq"] = acc.get("h_sq", 0.0) + float(h.pow(2).sum())
+    e = delta.float().pow(2)
+    tok = e.sum(-1)
+    acc["delta_sq"] = acc.get("delta_sq", 0.0) + float(tok.sum())
+    acc["h_sq"] = acc.get("h_sq", 0.0) + float(h.float().pow(2).sum())
+    if not float(tok.sum()):
+        return
+    top = e.topk(min(max(COORDS), d), dim=-1).values.cumsum(-1) / tok.unsqueeze(-1).clamp_min(1e-30)
+    acc["tokens"] = acc.get("tokens", 0) + tok.numel()
+    for k in COORDS:
+        if k <= d:
+            acc[f"coord_top{k}"] = acc.get(f"coord_top{k}", 0.0) + float(top[..., k - 1].sum())
     per = min(max(1, SESSION // delta.shape[1]), delta.shape[0])
     n = delta.shape[0] // per * per
-    x = delta[:n].reshape(n // per, -1, d)
+    x = delta[:n].float().reshape(n // per, -1, d)
     with torch.autocast(x.device.type, enabled=False):
         ev = torch.linalg.eigvalsh(x.transpose(1, 2) @ x).flip(-1).clamp_min(0)
     share = ev.cumsum(-1) / ev.sum(-1, keepdim=True).clamp_min(1e-30)
+    lam = (ev / ev.mean(-1, keepdim=True).clamp_min(1e-30)).clamp_min(1e-9)
+    peak = x.pow(2).sum(-1)
     acc["sessions"] = acc.get("sessions", 0) + share.shape[0]
+    acc["gain_bits"] = acc.get("gain_bits", 0.0) + float((-0.5 * torch.log2(lam).mean(-1)).sum())
+    acc["token_peak"] = acc.get("token_peak", 0.0) + float((peak.amax(-1) / peak.sum(-1).clamp_min(1e-30)).sum())
     for r in RANKS:
         if r <= d:
             acc[f"top{r}"] = acc.get(f"top{r}", 0.0) + float(share[:, r - 1].sum())
@@ -362,9 +380,12 @@ def spectrum_add(acc: dict, delta: torch.Tensor, h: torch.Tensor):
 def spectrum_report(spec: dict) -> dict:
     out = {}
     for b, acc in sorted(spec.items()):
-        s = acc.get("sessions", 0)
-        out[str(b)] = {"sessions": s, "delta_rms_over_h_rms": (acc["delta_sq"] / max(acc["h_sq"], 1e-30)) ** 0.5,
-                       **{k: v / s for k, v in acc.items() if k.startswith("top") and s}}
+        s, t = acc.get("sessions", 0), acc.get("tokens", 0)
+        out[str(b)] = {"of": acc.get("of"), "sessions": s,
+                       "delta_rms_over_h_rms": (acc["delta_sq"] / max(acc["h_sq"], 1e-30)) ** 0.5,
+                       **{k: v / s for k, v in acc.items() if s and (k.startswith("top") or k in ("gain_bits",
+                                                                                                   "token_peak"))},
+                       **{k: v / t for k, v in acc.items() if t and k.startswith("coord_top")}}
     return out
 
 
@@ -480,8 +501,10 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
     alphas = [1.0] + a.extrapolate if a.extrapolate else []
     reserve = probe_flops(a, rec, trainable, len(alphas)) if alphas else 0
     if cut_probe is not None:
-        reserve += 4 * prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": len(cut_probe) * prepare.EVAL_CTX}])[
-            "flops"] + 2 * code_fwd * len(cut_probe) * prepare.EVAL_CTX
+        probe_tokens = len(cut_probe) * prepare.EVAL_CTX
+        reserve += 4 * prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": probe_tokens}])[
+            "flops"] + 2 * code_fwd * probe_tokens
+        reserve += 4 * len(cuts) * (probe_tokens * d * d + (probe_tokens // SESSION + 1) * d ** 3)
     n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - reserve) // per_step)
     if n_steps < 1:
         raise Skip(f"wildcard {a.method}: the budget leaves no step after the line search's reserve")
@@ -499,11 +522,11 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
         with step_of():
             for on in (True, False):
                 CUT["on"] = on
-                if on and when == "end" and top_delta is not None:
+                if on and (when == "end" or any(not c["delta"] for c in cuts)):
                     CUT["spectrum"] = {}
                 probes[f"{when}_{'coded' if on else 'uncoded'}"] = probe_loss(fwd, cut_probe, a.micro, steps)
                 if CUT.get("spectrum") is not None:
-                    probes["delta_spectrum"] = spectrum_report(CUT.pop("spectrum"))
+                    probes[f"{when}_spectrum"] = spectrum_report(CUT.pop("spectrum"))
                 if on:
                     steps.append({"op": "extra", "flops": code_fwd * len(cut_probe) * prepare.EVAL_CTX,
                                   "what": "cut code (probe)"})
