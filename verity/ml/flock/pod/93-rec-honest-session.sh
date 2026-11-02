@@ -6,14 +6,20 @@
 # the salts the firewall drew for it. Run from the verity tree (research run --cwd source). Outputs under out/: fixture/
 # (the tree to put as fixture/v1: firewall-in.txt, firewall-out.txt, and rec_live's public.json, the coin server's record),
 # inner/ (rec_live's session), stage.json, statement.txt, schedule.json, proxy.log, prove.txt/.err, summary.json.
-# env: N=1 (RoPE heads: 1 to 8 are m=25, the smallest fast100 takes)  CPUS=32  FLOCK_WORK (as 80-rec-inner.sh)
+# Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
+# env: N=1 (RoPE heads: 1 to 8 are m=25, the smallest fast100 takes)  CPUS=32  FLOCK_WORK (as 80-rec-inner.sh; where neither
+#      /workspace nor /workspace/jobs is writable, /workspace/cache/flock, as 71-gemm-slowdown.sh's)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${RI_PINNED:-}" ]; then
-  . verity/ml/flock/pod/cpu-slices.sh
-  hold_slices "" "${CPUS:-32}" || exit 1
-  export RI_PINNED=$SLICE_CPUS RAYON_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l)
-  exec taskset -c $SLICE_CPUS bash "$0" "$@"
+  if mkdir -p "${SLICE_LOCKS:-/workspace/jobs/slices}" 2>/dev/null; then
+    . verity/ml/flock/pod/cpu-slices.sh
+    hold_slices "" "${CPUS:-32}" || exit 1
+    export RI_PINNED=$SLICE_CPUS RAYON_NUM_THREADS=$(echo $SLICE_CPUS | tr ',' '\n' | wc -l)
+    exec taskset -c $SLICE_CPUS bash "$0" "$@"
+  fi
+  export RI_PINNED=slot RAYON_NUM_THREADS=$(nproc)
+  [ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ] && export FLOCK_WORK=/workspace/cache/flock
 fi
 export FC_COINS=os
 . verity/ml/flock/pod/rec-env.sh
