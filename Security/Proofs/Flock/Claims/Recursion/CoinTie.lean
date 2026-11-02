@@ -261,7 +261,7 @@ def StreamOk (x : Json) (st : StreamRec) : Prop :=
     Pairs (fun r rd => ∃ cj, Record.arr r "coins" = .ok cj ∧ Record.f128s cj = .ok rd.coins) rj.toList st.rounds.toList
 
 set_option maxHeartbeats 1000000 in
-theorem decode_streams {spec : SessionSpec} {text : String} {sess : Session}
+theorem decode_streams {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decode spec text = .ok sess) :
     ∃ j sj, Json.parse text = .ok j ∧ Record.arr j "streams" = .ok sj ∧ Pairs StreamOk sj.toList sess.streams.toList := by
   unfold Record.decode at h
@@ -550,7 +550,7 @@ session's z_partial. `hq` is `qsort`'s membership (`FlockSoundness.Audit.DrawExe
 theorem coinTie_core (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x, x ∈ a.qsort lt → x ∈ a)
     {tr : Json} {record : String} {reg : Option Json} {bound : Option String}
     {shape : Option RecVStar.StackedShape} {cs : RecVStar.InnerCommits} {ish : RecVStar.Inner} {tt : String}
-    {spec : SessionSpec} {sess : Session} {name : String} {st : StreamRec}
+    {spec : SessionSpec} {sess : RunRecord} {name : String} {st : StreamRec}
     (hic : RecVStar.innerCommits tr record reg bound shape = .ok cs)
     (hR : RecSetup.checkReads ish tt tr record cs = .ok ())
     (hdec : Record.decode spec record = .ok sess) (hst : sess.streams.find? (·.name == name) = some st) :

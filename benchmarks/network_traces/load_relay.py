@@ -500,7 +500,7 @@ class Task:
 
 
 def run_task(task: Task, data: bytes) -> tuple[int, int, bytes, int, bytes | None]:
-    """One chunk's subtree root: its bytes decoded first when they are P2 blocks, its salts drawn and written at their
+    """One chunk's subtree root: its bytes decoded first when they are P2 blocks, its salts sampled and written at their
     witness offset, or returned with it when the task's `witness` is none and its `keep` is set."""
     j = task.job
     if j.block is not None:
@@ -681,7 +681,8 @@ def verifier_domain(program: str) -> Callable[[Value], CommitmentDomain]:
 
 def heads(link: str, program: str, values: Sequence[Value], roots: Mapping[str, bytes],
           domain: Callable[[Value], CommitmentDomain]) -> list[TR.TransferHead]:
-    """Each value's head for the load's link-window (`transfer_rows.TransferHead`: kind ``load``, ingress, window 0)."""
+    """Each value's head for the load's execution phase (`transfer_rows.TransferHead`: kind ``load``, ingress, window
+    0)."""
     return [TR.TransferHead(link, Direction.INGRESS, WINDOW, KIND, v.name, bytes.fromhex(program), v.reg_words, v.leaves,
                             domain(v).domain_id, roots[v.name], v.word_bits, v.schema) for v in values]
 
@@ -699,7 +700,7 @@ def sign_heads(issuer: Issuer, heads_: Sequence[TR.TransferHead]) -> list[dict[s
 
 def sign(issuer: Issuer, link: str, program: str, values: Sequence[Value], roots: dict[str, bytes],
          domain: Callable[[Value], CommitmentDomain]) -> list[dict[str, Any]]:
-    """Each value's head signed for the load's link-window: its registration (`transfer_rows.registration`)."""
+    """Each value's head signed for the load's execution phase: its registration (`transfer_rows.registration`)."""
     return sign_heads(issuer, heads(link, program, values, roots, domain))
 
 

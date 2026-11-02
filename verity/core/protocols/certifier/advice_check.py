@@ -1,5 +1,5 @@
-"""Advice v0's validity as a Boolean Definition: the first part of the compile unit, "this committed bit string decodes to
-a well-formed v0 advice" (`advice`, PROTOCOL.md "Advice v0").
+"""Advice v0's validity as a Boolean Definition: the first part of the compile slice's proof block, "this committed bit
+string decodes to a well-formed v0 advice" (`advice`, PROTOCOL.md "Advice v0").
 
     AdviceCheck_v1{L} (bits: Array<L, Value<1>>, length: Array<LW, Value<1>>) -> Value<1>
 
@@ -672,7 +672,8 @@ def unit(L: int):
 
 
 def arguments(data: bytes, L: int) -> list[list[int]]:
-    """The unit's arguments for `data`: its bits in stream order, zero beyond its length, and its length in bytes."""
+    """The proof block's arguments for `data`: its bits in stream order, zero beyond its length, and its length in
+    bytes."""
     Z = _widths(L)
     if 8 * len(data) > L or len(data) >= 1 << Z.LW:
         raise ValueError(f"{len(data)} bytes don't fit L = {L} bits")
@@ -681,7 +682,7 @@ def arguments(data: bytes, L: int) -> list[list[int]]:
 
 
 def evaluate(L: int, datas: Sequence[bytes]) -> list[int]:
-    """The unit's output on each byte string, in one evaluation."""
+    """The proof block's output on each byte string, in one evaluation."""
     args = [list(rows) for rows in zip(*(arguments(d, L) for d in datas))]
     return [int(b) for b in evaluate_bits(unit(L), *args).reshape(-1).tolist()]
 
@@ -693,7 +694,7 @@ def part_ands(L: int) -> dict[str, int]:
 
 
 def size(L: int) -> dict[str, int]:
-    """The unit's ANDs at L, by stage, from its parts' counts: no body is built, so any L is cheap."""
+    """The proof block's ANDs at L, by stage, from its parts' counts: no body is built, so any L is cheap."""
     Z, p = _widths(L), part_ands(L)
     out = {"parse": Z.NB * p["AdviceParse"] + p["AdviceParseEnd"], "sort": comparators(Z.NB) * p["AdviceSwap"],
            "replay": Z.NB * p["AdviceReplay"] + p["AdviceReplayEnd"], "final": 1}

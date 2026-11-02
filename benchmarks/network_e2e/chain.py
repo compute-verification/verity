@@ -218,7 +218,7 @@ def opens(reg: dict, opening: dict, adv) -> bool:
     w = reg["row_bits"] // 8
     rows = [data[i:i + w].ljust(w, b"\0") for i in range(0, max(len(data), 1), w)]
     binding = hashlib.sha512(canonical_json({"scheme": reg["scheme"], "compiler": reg["binding"]["compiler"]})).digest()
-    got = AC.register(rows, reg["row_bits"], binding, [bytes.fromhex(s) for s in opening["salts"]])
+    got = AC.commit(rows, reg["row_bits"], binding, [bytes.fromhex(s) for s in opening["salts"]])
     return got.root.hex() == reg["binding"]["advice"]["root"]
 
 

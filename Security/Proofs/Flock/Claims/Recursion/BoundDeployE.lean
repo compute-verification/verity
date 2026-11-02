@@ -4,7 +4,7 @@ import Proofs.Flock.Claims.DeployE
 /-!
 # The bound record at the element-level verifier's steps (DecompB, option (b))
 
-`RecDeploy.KSBoundDeployed` and its ∀-form `KSBoundRoute` take the element-level verifier's steps `nextE` as a
+`RecDeploy.KSBoundDeployed` and its ∀-form `KSBoundRouteCols` take the element-level verifier's steps `nextE` as a
 parameter. Option (b) instantiates them with the element-level inner verifier's (`FlockDeploy.VE`, the deployed plain
 verifier with its digests of encodings dropped). What that reads, and what it doesn't:
 

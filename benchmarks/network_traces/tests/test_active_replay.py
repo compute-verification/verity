@@ -1,6 +1,6 @@
 """The active replay on a tiny synthetic trace calibrated by the library, on an injected clock: the proxy, the server and
 the peer over localhost sockets, then the audit of the published records. An honest run is accepted on every
-link-window, raw and committed, and is `run_shaper`'s, rule for rule; servers that signal by their write times give
+execution phase, raw and committed, and is `run_shaper`'s, rule for rule; servers that signal by their write times give
 its wire byte for byte, and one that holds a session past every sync is rejected."""
 
 from __future__ import annotations
@@ -257,7 +257,7 @@ def test_a_session_held_past_every_sync_is_rejected(runs):
 def test_a_proxy_that_declares_its_own_syncs_is_accepted_and_is_run_shapers(setup, tmp_path):
     """Under an online rule the proxy's prover declares each window's sync from the frames it has read: the envelope
     (δ = 3) with no history, then a bucket past what the earlier windows needed. They are what the plan declares on the
-    model's run, the audit accepts every link-window, and the records are `run_shaper`'s under them."""
+    model's run, the audit accepts every execution phase, and the records are `run_shaper`'s under them."""
     doc, report, s = setup
     plan = ar.plan_configuration(doc["configurations"][0], s, syncs="cover-2-1")
     assert plan["sync_rule"] == "cover-2-1" and [d for d, _ in plan["syncs"]] == [3, 4, 4]
@@ -450,8 +450,9 @@ def _live_run(setup, run, syncs: str, strategy: str = "honest", lag: int = 1) ->
 @pytest.mark.parametrize("syncs", ["envelope", "cover-2-1"])
 def test_a_live_shim_that_holds_its_writes_is_accepted(setup, tmp_path, syncs):
     """A live endpoint that answers at once, behind a shim that holds each event to the bucket before its hand time
-    (`spread`): accepted on every link-window. Under the envelope its wire is honest's; under an online rule the proxy
-    declares from what it read, so the later windows' syncs, and with them the wire, may move, never window 0's."""
+    (`spread`): accepted on every execution phase. Under the envelope its wire is honest's; under an online rule the
+    proxy declares from what it read, so the later windows' syncs, and with them the wire, may move, never window
+    0's."""
     _, honest = _live_run(setup, tmp_path / "honest", syncs)
     plan, audit = _live_run(setup, tmp_path / "spread", syncs, "spread")
     assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"]) and len(audit["rows"]) == 6
@@ -472,7 +473,8 @@ def test_a_live_shim_that_holds_its_writes_is_accepted(setup, tmp_path, syncs):
 
 def test_a_lagged_prover_in_front_of_a_live_shim_is_accepted(setup, tmp_path):
     """The lagged prover's choices wake the driver on the injected clock, so a run behind the live shim, where nothing
-    else may move the proxy, still ends: every link-window accepted, no window declared the envelope for want of a choice."""
+    else may move the proxy, still ends: every execution phase accepted, no window declared the envelope for want of a
+    choice."""
     _, audit = _live_run(setup, tmp_path, "cover-2-1", lag=5)
     assert all(r["raw"] is None and r["committed"] is None for r in audit["rows"]) and len(audit["rows"]) == 6
     import gzip

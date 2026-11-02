@@ -94,6 +94,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
+_spec = importlib.util.spec_from_file_location("plan_settings", HERE / "settings.py")
+#: every environment variable check reads, declared once (`settings.py`), from beside this file: sent with it to a node (`--on`)
+SETTINGS = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(SETTINGS)
 KIND = "check-plan/v1"
 #: how a check runs a tree (`tools/verity/check/tool.py`'s command, less `python check.py`)
 DECLARED = ["run", "--locked", "--all-packages", "--extra", "torch-cpu", "python"]
@@ -247,7 +251,7 @@ def local_source(C, own: bool = False) -> Source:
     """This machine's caches: $CHECK_CACHE, $VERITY_TEST_CACHE and (unless ``own``, a check's own caches alone) every check
     slot's test cache."""
     S = C.SUITES
-    tests = [Path(os.environ.get("VERITY_TEST_CACHE") or S.CACHE), *([] if own else slot_caches(C))]
+    tests = [Path(SETTINGS.VERITY_TEST_CACHE or S.CACHE), *([] if own else slot_caches(C))]
     return Source("own" if own else "local", C.cache_dir(), list(dict.fromkeys(tests)))
 
 
@@ -563,10 +567,10 @@ def _clean_env(tree: Path) -> dict[str, str]:
     """This process's environment for a planning process in ``tree``, as a check run there would have it: without this
     checkout's virtualenv and `uv run`'s depth (the tree's own `uv run` sets both), and with this checkout's path written as
     ``tree``'s wherever it appears (`check._env_key` writes either as `<tree>`)."""
-    e = {k: v for k, v in os.environ.items() if k not in ("VIRTUAL_ENV", "UV_RUN_RECURSION_DEPTH")}
+    e = {k: v for k, v in SETTINGS.environ().items() if k not in ("VIRTUAL_ENV", "UV_RUN_RECURSION_DEPTH")}
     path = e.get("PATH", "").split(os.pathsep)
-    if os.environ.get("VIRTUAL_ENV") and str(Path(os.environ["VIRTUAL_ENV"]) / "bin") in path:
-        path.remove(str(Path(os.environ["VIRTUAL_ENV"]) / "bin"))       # the one `uv run` put first
+    if (venv := SETTINGS.VIRTUAL_ENV) and str(Path(venv) / "bin") in path:
+        path.remove(str(Path(venv) / "bin"))       # the one `uv run` put first
     e["PATH"] = os.pathsep.join(path)
     return {k: v.replace(str(ROOT), str(tree)) for k, v in e.items()}
 
@@ -601,11 +605,11 @@ def on_machine(machine: str, commit: str, d: Path, packs: list[tuple[str | None,
     cmd = " ".join(['I="$RESEARCH_RUN_DIR/inputs";', 'mkdir -p "$RESEARCH_RUN_DIR/out";', "exec uv --quiet", *DECLARED,
                     '"$I/plan.py"', "--tree", ".", "--out", f'"$RESEARCH_RUN_DIR/{REMOTE_OUT}"', *map(shlex.quote, flags),
                     *(shlex.quote(f"--pack={rid or ''}=") + f'"$I/{n}"' for rid, n in names)])
-    sends = [HERE / "plan.py", HERE / "verdicts.py", *(send / n for _, n in names)]
+    sends = [HERE / "plan.py", HERE / "verdicts.py", HERE / "settings.py", *(send / n for _, n in names)]
     _git("worktree", "add", "-q", "--detach", str(tree), commit, repo=ROOT)
     try:
         r = run([sys.executable, "-m", "research", "run", "--on", machine, "--project", REMOTE_PROJECT, "--source", str(tree),
-                 "--cwd", "source", "--pool", REMOTE_POOL, "--as", os.environ.get("RESEARCH_LANE") or "ci",
+                 "--cwd", "source", "--pool", REMOTE_POOL, "--as", SETTINGS.RESEARCH_LANE or "ci",
                  "--timeout", str(REMOTE_TIMEOUT_S), "--wait", "--declared-output", REMOTE_OUT,
                  *(x for f in sends for x in ("--send", str(f))), "--", "bash", "-c", cmd],
                 cwd=ROOT, capture_output=True, text=True, stdin=subprocess.DEVNULL)
@@ -700,7 +704,7 @@ def main(argv: list[str], host=None) -> int:
             tree = Path(d) / "tree"
             _git("worktree", "add", "-q", "--detach", str(tree), commit)
             try:
-                uv = os.environ.get("UV") or shutil.which("uv") or "uv"
+                uv = SETTINGS.UV or shutil.which("uv") or "uv"
                 r = subprocess.run([uv, "--quiet", *DECLARED, str(HERE / "plan.py"), "--tree", str(tree), "--out", str(out), *args],
                                    cwd=tree, env=_clean_env(tree)).returncode
             finally:

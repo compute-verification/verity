@@ -29,6 +29,7 @@ try:
 except ModuleNotFoundError:
     pytest.skip("could not import 'torch'", allow_module_level=True)
 
+from tests.pipeline import predicted
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Committer, Engine, Runner, Serving, events, records
 
 A = {0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]}
@@ -87,8 +88,8 @@ def _window_a() -> tuple[Any, Any, dict[str, Any]]:
     com.pool = PP.PinnedPool(1 << 14, exact=False, populate_threads=0)
     rc = _commit(com, A)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
-    leds = {"alice": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
-            "cmpl-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
+    leds = {"alice": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
+            "cmpl-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
     reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
     kw = dict(rec={"window": 5, "run_id": "t/w5", "steps": len(rc.steps), "passed": True}, reqs=reqs, request_rows=rows,
               tokens={k: v.streamed for k, v in leds.items()}, sampling={}, label="serve-openai:t", code="c0de",
@@ -664,7 +665,7 @@ def test_a_draining_loop_refuses_new_requests_and_ends_once_idle():
 
 
 def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
-    (man := tmp_path / "manifest.json").write_text("{}")
+    man = predicted.row(tmp_path)
     base = ["--model", "m", "--revision", "r", "--out", str(tmp_path / "new" / "dir"), "--seal", "--window-gb", "10", "--disk-floor-gb", "300",
             "--required-manifest", str(man)]
     opts = cli.parse("serve-openai", base, environ={})
