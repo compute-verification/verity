@@ -27,8 +27,8 @@ lanes.
   do at most `256 / 3` MACs a coin bit, so every set of such cells does (every step interval, row set and column set
   of a call): `n_max ≤ 256 / 3` wherever every step carries the three lanes.
 * `netShare`, `netShare_lead_cap32` and `netShare_lead_cap320`: the network term `n_max W_mac E` over the stock MACs a
-  token, at `n_max ≤ 256 / 3` and Llama-3.2-1B's MACs a token, is at most 0.036% at 32 bits a token and 0.36% at 320
-  while `W_mac ≤ 128.28`; `netShare_le_of_stock_le` bounds the same term over any `W_reg` of at least the stock.
+  token, at `n_max ≤ 256 / 3` and Llama-3.2-1B's MACs a token, is at most 0.0361% at 32 bits a token and 0.361%
+  at 320 while `W_mac ≤ 128.59`; `netShare_le_of_stock_le` bounds the same term over any `W_reg` of at least the stock.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Network
@@ -227,16 +227,16 @@ theorem netShare_mono {nmax nmax' Wmac Wmac' E macs : ℝ} (hn : 0 ≤ nmax) (hn
   exact div_le_div_of_nonneg_right
     (mul_le_mul_of_nonneg_right (mul_le_mul hn' hW' hW (hn.trans hn')) hE) hm.le
 
-/-- **The lead at 32 bits a token**: at most 0.036% of stock while `W_mac ≤ 128.28`. -/
+/-- **The lead at 32 bits a token**: at most 0.0361% of stock while `W_mac ≤ 128.59`. -/
 theorem netShare_lead_cap32 {nmax Wmac : ℝ} (hn : 0 ≤ nmax) (hn' : nmax ≤ 256 / 3) (hW : 0 ≤ Wmac)
-    (hW' : Wmac ≤ 128.28) : netShare nmax Wmac 32 leadMacs ≤ 0.00036 := by
+    (hW' : Wmac ≤ 128.59) : netShare nmax Wmac 32 leadMacs ≤ 0.000361 := by
   refine (netShare_mono hn hn' hW hW' (by norm_num) (by rw [leadMacs_eq]; norm_num)).trans ?_
   rw [netShare, leadMacs_eq]
   norm_num
 
-/-- **The lead at 320 bits a token**: at most 0.36% of stock while `W_mac ≤ 128.28`. -/
+/-- **The lead at 320 bits a token**: at most 0.361% of stock while `W_mac ≤ 128.59`. -/
 theorem netShare_lead_cap320 {nmax Wmac : ℝ} (hn : 0 ≤ nmax) (hn' : nmax ≤ 256 / 3) (hW : 0 ≤ Wmac)
-    (hW' : Wmac ≤ 128.28) : netShare nmax Wmac 320 leadMacs ≤ 0.0036 := by
+    (hW' : Wmac ≤ 128.59) : netShare nmax Wmac 320 leadMacs ≤ 0.00361 := by
   refine (netShare_mono hn hn' hW hW' (by norm_num) (by rw [leadMacs_eq]; norm_num)).trans ?_
   rw [netShare, leadMacs_eq]
   norm_num

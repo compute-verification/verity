@@ -8,6 +8,7 @@ import Proofs.Pouw.Lead.PStar
 import Proofs.Pouw.Lead.Statement
 import Proofs.Pouw.Lead.Tags
 import Proofs.Pouw.Lead.Tail
+import Proofs.Pouw.Lead.Witness
 
 /-!
 # The PoUW lead's proofs

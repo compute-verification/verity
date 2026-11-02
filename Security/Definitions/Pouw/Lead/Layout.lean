@@ -11,12 +11,13 @@ hiding L1 + (a).
 
 * **The layout** (`Layout`) is the call's shape (`m` rows and `n` columns of committed words, `rows` of A and `cols`
   outputs served, `S` k32 steps a word) and the design's constants: the coin tile's rows, the coin lanes' bits, the
-  words chunk's size, the egress cap, the served forward's MACs a token and the node's memory.
+  words chunk's size, the egress cap, the served forward's MACs a token and the node's storage.
   `lead` commits every call over whole MMA tiles (`padRows`, `padCols`), decode (`m = 1`) included, and fixes the
-  design's constants; `pt512x64`, `pt512x512` and `pt8192` are the three evaluated points.
-* **A call's bits** (`Layout.callBits`): the network certifier apportions a forward's egress cap, `cap` bits a token,
-  among its calls by their MACs, so a call's share is `cap · rows · n · K / fwdMacs` and a forward's calls' shares sum
-  to its cap. The certifier refuses a call that exchanges more (`Accepted`).
+  design's constants; `pt512x64`, `pt512x512` and `pt8192` are the three evaluated points, and `llamaCalls` the served
+  forward's linears.
+* **A call's bits** (`Layout.callBits`): a forward's egress cap, `cap` bits a token, apportioned among its calls by
+  their MACs, so a call's share is `cap · rows · n · K / fwdMacs` and a forward's calls' shares sum to its cap. The
+  network certifier counts and refuses per forward, not per call (`Pouw.Lead.Forward.Accepted`).
 * **The coins** (`Coins`) are what the certifier draws after it holds the call's `A`: the tag bits `b`, the step-1
   bits `a₁`, the tag weights `G ∈ [−3, 3]^{4×n}` and the coin lanes `s ∈ {±1, ±3, …, ±(2^e − 1)}`, one a step, tile,
   lane and column. They are a finite type, and every bound averages over them uniformly.
@@ -60,7 +61,7 @@ structure Layout where
   cap : ℕ
   /-- The served forward's MACs a token over its linears, by which the cap is apportioned among its calls. -/
   fwdMacs : ℕ
-  /-- The node's memory in MMA tiles of 512 bytes, its cards' and hosts': what pre-coin tables can hold. -/
+  /-- The node's storage in MMA tiles of 512 bytes, its cards', hosts' and disks': what pre-coin tables can hold. -/
   mem : ℕ
 
 /-- Coin tiles a call: `⌈m / tile⌉`. -/
@@ -127,15 +128,17 @@ def padRows (m : ℕ) : ℕ := 16 * ((m + 15) / 16)
 /-- A call's columns padded to whole MMA tiles: `8 ⌈n / 8⌉`. -/
 def padCols (n : ℕ) : ℕ := 8 * ((n + 7) / 8)
 
-/-- **A call's bits**: its MACs' share of its forward's egress cap, `cap · rows · n · K / fwdMacs`, the bits the
-network certifier lets the call's node exchange. -/
+/-- **A call's bits**: its MACs' share of its forward's egress cap, `cap · rows · n · K / fwdMacs`. The network
+certifier counts a forward's bits, not a call's: it refuses a forward whose counted bits pass its calls' bits summed
+(`Pouw.Lead.Forward.Accepted`). -/
 def Layout.callBits (L : Layout) : ℚ := (L.cap * (L.rows * L.n * L.K) : ℚ) / L.fwdMacs
 
 /-- **The lead** at `T` tokens and a call of `m × K × n`: its words committed over whole MMA tiles (`padRows m` rows
 and `padCols n` columns: a padding row has zero data and its coin lanes, tag and coins like any row, a padding
 column its coins; it serves `rows = m` rows and `cols = n` columns), 64-row coin tiles, 7-bit coins, 256 KiB words
-chunks, an egress cap of 32 bits a token over Llama-3.2-1B's 973,078,528 MACs a token (16 layers of `2048 × 3072`,
-`2048 × 2048`, `2048 × 16384` and `8192 × 2048`), and 8 TiB of node memory (`2^34` tiles). -/
+chunks, an egress cap of 32 bits a token over Llama-3.2-1B's 973,078,528 MACs a token (16 layers of `llamaCalls`),
+and 512 TiB of node storage (`2^40` tiles). The storage bounds only the tables' `2^-100` term (`tableGap`), so any
+physical size within it serves. -/
 def lead (T m n K : ℕ) : Layout where
   T := T
   m := padRows m
@@ -149,10 +152,14 @@ def lead (T m n K : ℕ) : Layout where
   chunkWords := 65536
   cap := 32
   fwdMacs := 973078528
-  mem := 2 ^ 34
+  mem := 2 ^ 40
 
 /-- The lead at cap 320. -/
 def lead320 (T m n K : ℕ) : Layout := { lead T m n K with cap := 320 }
+
+/-- Llama-3.2-1B's linears a layer, as `(n, K)`: `2048 × 3072`, `2048 × 2048`, `2048 × 16384` and `8192 × 2048`; 16
+layers make its 973,078,528 MACs a token (`lead`'s `fwdMacs`). -/
+def llamaCalls : List (ℕ × ℕ) := [(3072, 2048), (2048, 2048), (16384, 2048), (2048, 8192)]
 
 /-- The point T 512 × 64: 512 tokens a step, 64 rows a call. -/
 def pt512x64 (n K : ℕ) : Layout := lead 512 64 n K

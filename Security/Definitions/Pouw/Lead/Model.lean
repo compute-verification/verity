@@ -6,14 +6,16 @@ import Definitions.Hash.Basic
 /-!
 # A prover's strategy on one call of the lead, in model W at tile grain (trusted definitions)
 
-A strategy fixes its tables before the coins (`Strategy.pre`) and then, at each value `ω` of the call's coins, runs
-an execution (`Exec`), so it may branch on the coins anywhere.
+A strategy fixes its tables and registers `A`'s root before the coins (`Strategy.pre`, `Strategy.aRoot`) and then, at
+each value `ω` of the call's coins, runs an execution (`Exec`), so it may branch on the coins anywhere. The coins are
+what the network certifier releases after it reads `A`'s root (`Pouw.Assumptions.Lead.CertifierCoins`, which `G`
+takes).
 
 * **An execution** carries
   - `trace`: the instructions it executes, in `MH100w`'s classes (`Op100 Unit`: at one coin value a register is a
     value), each at its W1 price. Its **priced W1 work** is `cost100 pr trace` (`Strategy.work`);
   - `steps`: its account at the grain of an MMA tile (`tileWords` words, 16 rows × 8 columns), a run of the chunk
-    model (`Pouw.Dimension.Pointwise`) whose slots hold one tile, from the pre-coin tables (within the node's memory)
+    model (`Pouw.Dimension.Pointwise`) whose slots hold one tile, from the pre-coin tables (within the node's storage)
     and the certifier's coin stream (`init`). A write step is the execution's writing of one tile's words, at any points
     of the execution and in any order, so the words need never be in memory together; a copy moves a tile whole, free;
   - `shaRegs`: the registers its SHA-512 compressions write, and `hashed`, the messages it hashes;
@@ -21,12 +23,13 @@ an execution (`Exec`), so it may branch on the coins anywhere.
   - `root`: the words' commitment it registers.
 * **The certifier's coin stream** (`CoinStream`): raw coins in a fixed arrangement, each coin once at most.
 * **The commitment format** (`Commit`): the messages the honest commitment of a call's words hashes (leaves and
-  nodes), its root, and their SHA-512 compressions.
-* **Accepted** (`Accepted`): what the verifier sees. The call is one it admits (`Layout.Admits`: an inner dimension of
-  at least 1 and at most `2^40` MMA tiles, by the call's public shape), and the execution registers the honest
-  commitment's root and exchanges at most the call's bits (`Layout.callBits`), which the network certifier counts and
-  refuses past. How it computed the words is not part of acceptance: that it writes each committed tile it doesn't
-  start with is the copy model's premise (`Pouw.Assumptions.Lead.TileGrain`).
+  nodes), its root, the messages and root of `A`'s commitment, and their SHA-512 compressions.
+* **Accepted** (`Accepted`): what the verifier sees of a call. The call is one it admits (`Layout.Admits`: an inner
+  dimension of at least 1 and at most `2^40` MMA tiles, by the call's public shape), the strategy registered `A`'s
+  honest root before the coins, and the execution registers the words' honest root. The bits it exchanges are not
+  part of a call's acceptance: the network certifier counts them per forward (`Pouw.Lead.Forward`). How it computed
+  the words is not part of acceptance either: that it writes each committed tile it doesn't start with is the copy
+  model's premise (`Pouw.Assumptions.Lead.TileGrain`).
 * **The break** (`Break`): a SHA-512 collision among what the execution hashed and what the honest commitment hashes.
 -/
 
@@ -68,13 +71,14 @@ def coinAt {L : Layout} (ω : Coins L) : CoinIdx L → ℤ
   | .inr (.inr (.inr (t, k, ℓ, j))) => ω.s t k ℓ j
 
 /-- **The certifier's coin stream**: raw coins in an arrangement fixed before the coins (`ι`), each streamed word zero
-or one coin, each coin at one position at most, within the node's memory of tiles. The certifier draws the coins after
-it holds `A_j` and the strategy's tables are fixed (`trusted-host`): `Strategy` fixes its tables before the coins,
-`G` fixes the data before them, and every bound averages over `Coins` uniformly. -/
+or one coin, each coin at one position at most, within the node's storage of tiles. The certifier draws the coins after
+it reads `A_j`'s root and the strategy's tables are fixed (`Pouw.Assumptions.Lead.CertifierCoins`): `Strategy` fixes
+its tables and `A`'s root before the coins, `G` fixes the data before them, and every bound averages over the
+certifier's entropy uniformly, which `CertifierCoins` decodes one to one into `Coins`. -/
 structure CoinStream (L : Layout) where
   /-- The coin at each streamed tile's word, or none (zero). -/
   ι : ℕ → Fin tileWords → Option (CoinIdx L)
-  /-- The stream fits the node's memory: `L.mem` tiles. -/
+  /-- The stream fits the node's storage: `L.mem` tiles. -/
   supp : ∀ c p, L.mem ≤ c → ι c p = none
   /-- Each coin is streamed once at most. -/
   once : ∀ c p c' p' x, ι c p = some x → ι c' p' = some x → c = c' ∧ p = p'
@@ -83,13 +87,15 @@ structure CoinStream (L : Layout) where
 def CoinStream.val {L : Layout} (st : CoinStream L) (ω : Coins L) (c : ℕ) : Fin tileWords → ℤ :=
   fun p => (st.ι c p).elim 0 (coinAt ω)
 
-/-- **A prover's strategy on a call**: tables fixed before the coins, within the node's memory, and an execution at
-each coin value. -/
+/-- **A prover's strategy on a call**: tables fixed before the coins, within the node's storage, `A`'s root registered
+before the coins, and an execution at each coin value. -/
 structure Strategy (L : Layout) where
   /-- The pre-coin tables (any, chosen after the data), one tile a slot. -/
   pre : ℕ → Fin tileWords → ℤ
-  /-- The tables fit the node's memory: `L.mem` tiles. -/
+  /-- The tables fit the node's storage: `L.mem` tiles. -/
   pre_supp : ∀ a, L.mem ≤ a → pre a = 0
+  /-- The `A` root it registers before the coins, which the certifier reads before it releases them. -/
+  aRoot : Hash.Digest
   /-- The execution at each value of the coins. -/
   exec : Coins L → Exec
 
@@ -126,10 +132,12 @@ order) and its root, at the hash `H`. -/
 structure Commit (L : Layout) where
   /-- Every message the honest commitment of the words hashes. -/
   msgs : (Hash.Msg → Hash.Digest) → (Fin L.m → Fin L.S → Fin L.n → ℤ) → List Hash.Msg
-  /-- The honest root. -/
+  /-- The words' honest root. -/
   root : (Hash.Msg → Hash.Digest) → (Fin L.m → Fin L.S → Fin L.n → ℤ) → Hash.Digest
   /-- The messages A's commitment hashes, fixed before the coins. -/
   aMsgs : List Hash.Msg
+  /-- A's honest root, fixed before the coins: the digest the certifier reads before it draws them. -/
+  aRoot : (Hash.Msg → Hash.Digest) → Hash.Digest
   /-- The words chunks: leaves holding at most `chunkWords` words each. -/
   chunks : ℕ
 
@@ -169,12 +177,12 @@ is zero while tiles still repeat, and past `2^40` tiles the call's pairs of tile
 agreeing (`2^−56` a pair) to stay within `coinBranchGap`. -/
 def Layout.Admits (L : Layout) : Prop := 1 ≤ L.K ∧ L.rowBlocks * L.colBlocks * L.S ≤ 2 ^ 40
 
-/-- **The execution at `ω` is accepted**: the verifier admits the call (`Layout.Admits`), and the execution registers
-the honest root and exchanges at most the call's bits (the network certifier refuses a call past them). All three are
-what the verifier sees. -/
+/-- **The execution at `ω` is accepted**: the verifier admits the call (`Layout.Admits`), the strategy registered `A`'s
+honest root before the coins, and the execution registers the words' honest root. All three are what the verifier
+sees. Its exchanged bits are counted with its forward's (`Pouw.Lead.Forward.Accepted`). -/
 def Accepted (L : Layout) (H : Hash.Msg → Hash.Digest) (C : Commit L) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
     (σ : Strategy L) (ω : Coins L) : Prop :=
-  L.Admits ∧ (σ.exec ω).root = C.root H (word L κ ω) ∧ ((σ.exec ω).egress : ℚ) ≤ L.callBits
+  L.Admits ∧ σ.aRoot = C.aRoot H ∧ (σ.exec ω).root = C.root H (word L κ ω)
 
 /-- The break a statement ends in: two different messages with one SHA-512 digest, both among what the execution at
 `ω` hashed and what the honest commitment of its words hashes (the verifier's check hashes those). -/
