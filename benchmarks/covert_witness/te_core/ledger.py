@@ -200,6 +200,8 @@ def ingest(run_dir: Path, ledger: Ledger, *, direction: str, mechanism: str, par
             "phi": {k: v["phi"] for k, v in grid.items()}, "depth": {k: v["depth"] for k, v in grid.items()},
             "beta": {k: v["beta"] for k, v in grid.items()}, "rho": {k: v["rho"] for k, v in grid.items()},
             "option": {k: v["option"] for k, v in grid.items()}, "val_bpb": cp.get("val_bpb"),
+            "final_bpb": cp.get("test_bpb"), "output": {k: cp[k] for k in ("source", "e_bytes", "e_sha256", "format",
+                                                                          "submitted", "output_sha256") if k in cp},
             "flags": record.get("flags", []), "invalid": record.get("invalid", []),
             "seconds": {k: record["totals"][k] for k in ("cpu_s", "wall_s", "gpu_s")},
         }

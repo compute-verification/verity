@@ -59,7 +59,14 @@ def test_launch_gates(tmp_path):
     (rec,) = launch.launch(a, prog, 0, node_file=nodes, direction="d", mechanism="m", dry_run=True, clock=clock)
     assert rec["node"] == "vy-nebius-2"
     assert rec["argv"][:6] == ["research", "run", "--on", "vy-nebius-2", "--gpus", "1"]
-    assert "--budget-minutes 3" in rec["argv"][-1]
+    assert "--budget-minutes 9" in rec["argv"][-1] and "gpu-lease" not in rec["argv"][-1]
+    pooled = tmp_path / "pooled.txt"
+    pooled.write_text("vy-nebius-2 pool=gpu\n")
+    (rec,) = launch.launch(a, prog, 0, node_file=pooled, direction="d", mechanism="m", dry_run=True, clock=clock,
+                           script=True, train_args=["--lr", "1e-3"])
+    assert rec["argv"][3:8] == ["vy-nebius-2", "--pool", "gpu", "--as", "training"] and "--gpus" not in rec["argv"]
+    assert "gpu-lease 1 --wait" in rec["argv"][-1] and "--script" in rec["argv"][-1]
+    assert "--start s100 --out $S/sub --budget-fraction 0.294 --lr 1e-3" in rec["argv"][-1]
     entry = sub(a, program_sha256=file_sha256(prog))["id"]
     with pytest.raises(launch.Refused, match="not promoted"):
         launch.launch(a, prog, 1, node_file=nodes, direction="d", mechanism="m", entry=entry, dry_run=True, clock=clock)

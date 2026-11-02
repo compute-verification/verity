@@ -1,17 +1,23 @@
-"""Launch a submission at a tier, through `research run --on NODE --gpus 1` (gpu-lease hands out the GPU).
+"""Launch a submission at a tier, one `research run` a start and seed, from the committed checkout (`--source`).
 
-    python -m te_core.launch --program train.py --tier 0 --agent A --direction D --mechanism M [--parent ID] \\
-        [--entry ID] [--nodes FILE] [--starts PATH_ON_NODE] [--evaluator MODULE:FUNCTION] [--dry-run]
+    python -m te_core.launch (--script islands/CLASS/train.py | --program train.py) --tier 0 --agent A \\
+        --direction D --mechanism M [--parent ID] [--entry ID] [--nodes FILE] [--dry-run] [-- TRAIN_ARGS...]
 
 - Tier 0 (screen): about 3 GPU-minutes on the small start, one seed; anyone may launch.
 - Tier 1: about 10 GPU-minutes on the medium start, one seed; only an entry the scorer promoted to tier 1 or above
   (`--entry`, its program the one launched), at most `TIER1_PER_HOUR` launches per agent in any hour.
 - Tier 2: about 30 GPU-minutes, 3 seeds, every start, checkpoints kept; only an entry promoted to tier 2.
 
+A `--script` is a covert_witness train.py (cw.py): it gets `--start NAME --out DIR --budget-fraction F` with F the
+tier's minutes over the 10 GPU-minutes `prepare.TRAIN_FLOP_BUDGET` stands for, and the harness's 5% checkpoints divide
+the same F of that budget. Small, medium and large are `STARTS`'s covert_witness starts.
+
 The node comes from the node list the coordinator maintains (`--nodes`, default `$TE_NODES`, one node per line, `#`
-comments), the agent's launches spread over it in turn; `vy-dc-h200*` is refused whatever the list says. The program is
-sent with the run (`--send`) and screened first (run.py's `screen`). Each launch is a `launch` record in the agent's
-ledger.
+comments, `NODE pool=NAME` for a node that takes runs only through a slot pool), the agent's launches spread over it in
+turn; `vy-dc-h200*` is refused whatever the list says. On a pool node the run is `research run --on NODE --pool NAME`
+with `gpu-lease 1` inside (vy-nebius-2: `--gpus` is refused there); elsewhere `research run --on NODE --gpus 1`. The
+program is sent with the run (`--send`) and screened first (run.py's `screen`). Each launch is a `launch` record in the
+agent's ledger.
 """
 from __future__ import annotations
 
@@ -48,19 +54,35 @@ TIERS = {
 TIER1_PER_HOUR = 4
 REFUSED_NODES = ("vy-dc-h200*",)
 PROJECT = "te-search"
-RUN_LINE = re.compile(r"research: run (\S+) launched on")
+RUN_LINE = re.compile(r"run (\S+) launched")
+#: the covert_witness starts a script runs at each size
+STARTS = {"small": "s100", "medium": "m100", "large": "smollm2"}
+#: the GPU-minutes `prepare.TRAIN_FLOP_BUDGET` stands for
+BUDGET_MINUTES = 10.0
+#: the island scripts' own margin under the budget (their default --budget-fraction)
+BUDGET_MARGIN = 0.98
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[2]
 
 
 class Refused(RuntimeError):
     pass
 
 
-def nodes(path: Path) -> list[str]:
+@dataclass(frozen=True)
+class Node:
+    name: str
+    pool: str = ""
+
+
+def nodes(path: Path) -> list[Node]:
     out = []
     for line in Path(path).read_text().splitlines():
-        name = line.split("#", 1)[0].strip()
-        if name and not any(fnmatch.fnmatchcase(name, pat) for pat in REFUSED_NODES):
-            out.append(name)
+        words = line.split("#", 1)[0].split()
+        if not words or any(fnmatch.fnmatchcase(words[0], pat) for pat in REFUSED_NODES):
+            continue
+        opts = dict(w.split("=", 1) for w in words[1:] if "=" in w)
+        out.append(Node(words[0], opts.get("pool", "")))
     if not out:
         raise Refused(f"{path}: no usable node")
     return out
@@ -85,40 +107,64 @@ def gate(ledger: Ledger, tier: int, program: Path, entry: str, clock=time.time) 
         raise Refused(f"{ledger.agent} has launched {TIER1_PER_HOUR} tier-1 runs in the last hour")
 
 
-def commands(program: Path, tier: int, node: str, *, starts: str, evaluator: str, python: str, meta: dict) -> list[dict]:
+def _shell(argv: list[str]) -> str:
+    return " ".join(a if a.startswith("$") else shlex.quote(a) for a in argv)
+
+
+def commands(program: Path, tier: int, node: Node | str, *, starts: str, evaluator: str, python: str, meta: dict,
+             script: bool = False, train_args: list[str] = (), lane: str = "training", source: Path = REPO) -> list[dict]:
     t = TIERS[tier]
+    node = node if isinstance(node, Node) else Node(node)
+    sent = f"$RESEARCH_RUN_DIR/inputs/{Path(program).name}"
+    fraction = BUDGET_MARGIN * t.minutes / BUDGET_MINUTES
+    timeout = int(3 * t.minutes + 15)
     out = []
-    for start in t.starts:
+    for size in t.starts:
+        start = STARTS[size] if script else size
         for seed in t.seeds:
             m = meta | {"tier": tier, "start": start, "seed": seed}
-            inner = [python, "-m", "te_core.run", "--program", f"$RESEARCH_RUN_DIR/inputs/{Path(program).name}",
-                     "--starts", starts, "--start", start, "--tier", str(tier), "--seed", str(seed),
-                     "--budget-minutes", str(t.minutes), "--evaluator", evaluator, "--out", "$OUT", "--meta",
-                     json.dumps(m)] + (["--keep-checkpoints"] if t.keep else [])
-            shell = " ".join(a if a.startswith("$") else shlex.quote(a) for a in inner)
-            argv = ["research", "run", "--on", node, "--gpus", "1", "--project", PROJECT, "--cwd",
-                    "source/benchmarks/learning_frontier", "--send", str(program), "--timeout",
-                    f"{int(2 * t.minutes + 10)}m", "--", "bash", "-c", shell]
+            common = ["--tier", str(tier), "--seed", str(seed), "--budget-minutes", str(3 * t.minutes),
+                      "--evaluator", evaluator, "--out", "$OUT/run", "--meta", json.dumps(m)]
+            # a script's checkpoints are E's, scored on the final set in the run at tier 2, never kept in full
+            common += ["--keep-checkpoints"] if t.keep and not script else []
+            if script:
+                inner = [python, "-m", "te_core.run", "--script", sent, "--budget-fraction", f"{fraction:g}", *common,
+                         "--", "--start", start, "--out", "$S/sub", "--budget-fraction", f"{fraction:g}",
+                         *train_args]
+            else:
+                inner = [python, "-m", "te_core.run", "--program", sent, "--starts", starts, "--start", start, *common,
+                         "--", *train_args]
+            # the submission (its model in full) lives in scratch, removed at exit; the record keeps E's digest
+            shell = ('cd benchmarks/covert_witness && R="${CW_ROOT:-/workspace/research/scratch/covert-witness}" && '
+                     'mkdir -p "$R/candidates" && S=$(mktemp -d -p "$R/candidates" te.XXXXXX) && '
+                     "trap 'rm -rf \"$S\"' EXIT && " +
+                     (f"gpu-lease 1 --wait --max-min {timeout} -- {_shell(inner)}" if node.pool else _shell(inner)))
+            where = (["--pool", node.pool, "--as", lane, "--pool-wait", "7200"] if node.pool else ["--gpus", "1"])
+            argv = ["research", "run", "--on", node.name, *where, "--project", PROJECT, "--source", str(source),
+                    "--declared-output", "out/*", "--send", str(program), "--timeout", f"{timeout}m", "--",
+                    "bash", "-c", shell]
             out.append({"start": start, "seed": seed, "argv": argv})
     return out
 
 
 def launch(ledger: Ledger, program: Path, tier: int, *, node_file: Path, direction: str, mechanism: str,
            parent: str = "", entry: str = "", starts: str = "starts.json", evaluator: str = "none",
-           python: str = "python3", dry_run: bool = False, clock=time.time, runner=subprocess.run) -> list[dict]:
+           python: str = "python3", dry_run: bool = False, clock=time.time, runner=subprocess.run,
+           script: bool = False, train_args: list[str] = (), lane: str = "training") -> list[dict]:
     gate(ledger, tier, program, entry, clock)
     pool = nodes(node_file)
     node = pool[sum(1 for r in ledger.records() if r["kind"] == "launch" and r["agent"] == ledger.agent) % len(pool)]
     meta = {"agent": ledger.agent, "direction": direction, "mechanism": mechanism, "parent": parent, "entry": entry}
     out = []
-    for cmd in commands(program, tier, node, starts=starts, evaluator=evaluator, python=python, meta=meta):
+    for cmd in commands(program, tier, node, starts=starts, evaluator=evaluator, python=python, meta=meta,
+                        script=script, train_args=train_args, lane=lane):
         run_id, rc = "", None
         if not dry_run:
             res = runner(cmd["argv"], capture_output=True, text=True)
             rc = res.returncode
             m = RUN_LINE.search(res.stdout + res.stderr)
             run_id = m.group(1) if m else ""
-        rec = ledger.append("launch", meta | {"tier": tier, "node": node, "start": cmd["start"], "seed": cmd["seed"],
+        rec = ledger.append("launch", meta | {"tier": tier, "node": node.name, "pool": node.pool, "start": cmd["start"], "seed": cmd["seed"],
                                               "program_sha256": file_sha256(program), "argv": cmd["argv"],
                                               "run_id": run_id, "rc": rc, "dry_run": dry_run})
         out.append(rec)
@@ -126,8 +172,13 @@ def launch(ledger: Ledger, program: Path, tier: int, *, node_file: Path, directi
 
 
 def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else list(argv)
+    train_args = argv[argv.index("--") + 1:] if "--" in argv else []
+    argv = argv[: argv.index("--")] if "--" in argv else argv
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--program", type=Path, required=True)
+    which = ap.add_mutually_exclusive_group(required=True)
+    which.add_argument("--program", type=Path, help="a file defining train(te)")
+    which.add_argument("--script", type=Path, help="a covert_witness train.py (cw.py)")
     ap.add_argument("--tier", type=int, choices=sorted(TIERS), required=True)
     ap.add_argument("--agent", default=os.environ.get("TE_AGENT", ""), required=not os.environ.get("TE_AGENT"))
     ap.add_argument("--direction", required=True)
@@ -135,16 +186,19 @@ def main(argv=None) -> int:
     ap.add_argument("--parent", default="")
     ap.add_argument("--entry", default="", help="tiers 1 and 2: the promoted submission this program is")
     ap.add_argument("--nodes", type=Path, default=Path(os.environ.get("TE_NODES", "nodes.txt")))
-    ap.add_argument("--starts", default=os.environ.get("TE_STARTS", "starts.json"), help="the registry's path on the node")
+    ap.add_argument("--starts", default=os.environ.get("TE_STARTS", "starts.json"), help="--program: the registry on the node")
     ap.add_argument("--evaluator", default=os.environ.get("TE_EVALUATOR", "none"))
-    ap.add_argument("--python", default=os.environ.get("TE_PYTHON", "python3"))
+    ap.add_argument("--python", default=os.environ.get("TE_PYTHON", "/workspace/jobs/venv312/bin/python"))
+    ap.add_argument("--lane", default=os.environ.get("RESEARCH_LANE", "training"))
     ap.add_argument("--root", type=Path, default=None)
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args(argv)
+    program = a.script or a.program
     try:
-        recs = launch(Ledger(a.root, a.agent), a.program, a.tier, node_file=a.nodes, direction=a.direction,
+        recs = launch(Ledger(a.root, a.agent), program, a.tier, node_file=a.nodes, direction=a.direction,
                       mechanism=a.mechanism, parent=a.parent, entry=a.entry, starts=a.starts, evaluator=a.evaluator,
-                      python=a.python, dry_run=a.dry_run)
+                      python=a.python, dry_run=a.dry_run, script=a.script is not None, train_args=train_args,
+                      lane=a.lane)
     except Refused as e:
         print(f"refused: {e}", file=sys.stderr)
         return 2

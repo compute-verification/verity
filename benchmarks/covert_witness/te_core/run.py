@@ -261,6 +261,8 @@ class Session:
             bpb = float(self.evaluator(state, "val", self.device)) if self.evaluator else None
             cp = {"step": step, "macs": self.macs_so_far(), "val_bpb": bpb, "elapsed_s": self.elapsed(),
                   "output_sha256": theta_sha256(state)} | (extra or {})
+            if self.tier >= 2 and self.evaluator:
+                cp["test_bpb"] = float(self.evaluator(state, "test", self.device))
             if self.keep or (self.n_steps and step == max(self.cp_steps, default=-1)):
                 path = self.out / "checkpoints" / f"step{step:07d}-{len(self.checkpoints):02d}.pt"
                 path.parent.mkdir(exist_ok=True)
@@ -343,7 +345,9 @@ def parse(argv=None) -> argparse.Namespace:
     which.add_argument("--program", type=Path, help="a file defining train(te)")
     which.add_argument("--script", type=Path, help="a standalone covert_witness train.py, run as __main__ (cw.py)")
     ap.add_argument("--budget-macs", type=float, default=0.0,
-                    help="--script: the MACs the 5%% checkpoints divide (default prepare.TRAIN_FLOP_BUDGET / 2)")
+                    help="--script: the MACs the 5%% checkpoints divide (default --budget-fraction of "
+                         "prepare.TRAIN_FLOP_BUDGET / 2)")
+    ap.add_argument("--budget-fraction", type=float, default=1.0, help="--script: see --budget-macs")
     ap.add_argument("--start-bpb", type=float, default=None, help="--script: the start's held-out bpb, else measured")
     ap.add_argument("--digests", choices=("on", "off"), default=None,
                     help="digest every updated weight value (counterexample checks need them; default: on for "
@@ -377,7 +381,7 @@ def run_script(a, args: list[str]) -> dict:
     te = Session({}, a.out, seed=a.seed, tier=a.tier, device=getattr(prepare, "DEVICE", a.device), start=start,
                  budget_s=60 * a.budget_minutes, keep_checkpoints=a.keep_checkpoints, digests=a.digests == "on",
                  args=args)
-    te.budget_macs = a.budget_macs or float(getattr(prepare, "TRAIN_FLOP_BUDGET", 0)) / 2
+    te.budget_macs = a.budget_macs or a.budget_fraction * float(getattr(prepare, "TRAIN_FLOP_BUDGET", 0)) / 2
     adapter = cw.Adapter(te, prepare, guard_log=a.out / "guard.log")
     te.evaluator = load_evaluator(a.evaluator) or adapter.evaluate
     adapter.install()

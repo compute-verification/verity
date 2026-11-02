@@ -35,8 +35,9 @@ SPAWN_EVENTS = {"subprocess.Popen", "os.system", "os.exec", "os.posix_spawn"}
 
 
 def import_prepare(script: Path):
-    """covert_witness's `prepare`, from the nearest directory at or above the script's that has one."""
-    for d in [Path(script).resolve().parent, *Path(script).resolve().parents]:
+    """covert_witness's `prepare`, from the nearest directory at or above the script's that has one, else the working
+    directory's (a script sent with the run sits in its inputs)."""
+    for d in [Path(script).resolve().parent, *Path(script).resolve().parents, Path.cwd()]:
         if (d / "prepare.py").is_file():
             sys.path.insert(0, str(d))
             spec = importlib.util.spec_from_file_location("prepare", d / "prepare.py")
