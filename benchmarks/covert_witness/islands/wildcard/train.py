@@ -476,14 +476,17 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
                                        fused=prepare.DEVICE.startswith("cuda")), None))
     else:
         trainable = {"full": tuned}
+        emb = ["embed"] if a.embed_lr and "embed" in mats else []
         if a.method == "muon" and mats:
-            opts.append((Muon([params[n] for n in mats], lr=a.lr, wd=a.wd), a.lr))
-            extra = sum(ns_flops(tuple(params[n].shape)) for n in mats)
-            adam_names = gains
+            muon = [n for n in mats if n not in emb]
+            opts.append((Muon([params[n] for n in muon], lr=a.lr, wd=a.wd), a.lr))
+            extra = sum(ns_flops(tuple(params[n].shape)) for n in muon)
+            adam_names = emb + gains
         else:
             adam_names = mats + gains
         if adam_names:
-            groups = [{"params": [params[n] for n in adam_names if params[n].ndim == 2], "lr": a.lr},
+            groups = [{"params": [params[n] for n in adam_names if params[n].ndim == 2 and n not in emb], "lr": a.lr},
+                      {"params": [params[n] for n in emb], "lr": a.embed_lr},
                       {"params": [params[n] for n in adam_names if params[n].ndim == 1], "lr": a.norm_lr}]
             groups = [g for g in groups if g["params"]]
             opts.append((torch.optim.AdamW(groups, betas=(0.9, a.beta2), weight_decay=a.wd,
@@ -972,6 +975,8 @@ def main() -> int:
                     help="with --cut: probe windows scored coded and uncoded at theta and at the end (0: none)")
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--norm-lr", type=float, default=1e-3)
+    ap.add_argument("--embed-lr", type=float, default=0.0,
+                    help="the tied embedding's own AdamW rate when it trains (0: it goes with the other matrices)")
     ap.add_argument("--beta2", type=float, default=0.95)
     ap.add_argument("--wd", type=float, default=0.0)
     ap.add_argument("--clip", type=float, default=1.0)
