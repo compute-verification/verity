@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sys
 import time
@@ -136,19 +137,172 @@ def qat_quant(v: torch.Tensor, scheme: str, group: int, mult: float) -> qf.QArra
     return qf.QArray(cb.to(torch.float16), s, (k + qmax).to(torch.uint8).view(-1), bits, g, tuple(v.shape))
 
 
+LF_MATS = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
+HF_MATS = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj")
+
+
+def lora_targets(rec: dict, params: dict, spec: str) -> list[str]:
+    lf = rec["config"]["family"] == "lf"
+    want = (set(LF_MATS if lf else HF_MATS) if spec == "all" else {"wo", "w_down", "o_proj", "down_proj"} if spec == "out"
+            else set(spec.split(",")))
+    out = []
+    for n, p in params.items():
+        if p.ndim != 2 or n in ("embed", "model.embed_tokens.weight"):
+            continue
+        leaf = n.split(".")[-2] if n.endswith(".weight") else n.split(".")[-1]
+        if leaf in want:
+            out.append(n)
+    return sorted(out)
+
+
+B_ROWS = 64
+
+
+@torch.no_grad()
+def factor_quant(x: torch.Tensor, bits: int, pow2: bool, rows: int = 1) -> qf.QArray:
+    """Absmax round to nearest at `bits`, one scale per `rows` rows (A: per row; B, d_out x r: per 64 rows, since a scale
+    per row of r entries costs 16/r bits an entry); with `pow2` each scale is a power of two, so every value is an
+    integer times a power of two and exact in bf16 (the fixed `lora` format carries it unchanged)."""
+    qmax = 2 ** (bits - 1) - 1
+    shape = tuple(x.shape)
+    rows = rows if x.shape[0] % rows == 0 else 1
+    x = x.reshape(-1, rows * x.shape[1])
+    amax = x.float().abs().amax(1)
+    s = amax / qmax
+    if pow2:
+        s = torch.where(s > 0, torch.exp2(torch.ceil(torch.log2(s.clamp(min=2.0 ** -24)))), 0.0)
+    s = qf._f16(s)
+    sf = s.float()
+    k = torch.clamp(torch.round(x.float() / torch.where(sf > 0, sf, 1.0)[:, None]), -qmax, qmax) * (sf > 0)[:, None]
+    cb = torch.zeros(2 ** bits)
+    cb[: 2 * qmax + 1] = torch.arange(-qmax, qmax + 1, dtype=torch.float32)
+    return qf.QArray(cb.to(torch.float16), s, (k + qmax).to(torch.uint8).view(-1), bits, x.shape[1], shape)
+
+
+def main_qlora(a) -> int:
+    """LoRA whose factors are k-bit in every forward (straight-through fake quantization); E is the factors' codes."""
+    t_start = time.perf_counter()
+    torch.backends.cuda.matmul.allow_tf32 = True
+    net, rec, theta = prepare.load_start(a.start)
+    dev = prepare.DEVICE
+    params = net.params()
+    targets = lora_targets(rec, params, a.targets)
+    norms = sorted(n for n, p in params.items() if p.ndim == 1) if a.norms else []
+    for p in params.values():
+        p.requires_grad_(False)
+    for n in norms:
+        params[n].data = params[n].data.float()
+        params[n].requires_grad_(True)
+    g = torch.Generator(device=dev).manual_seed(a.seed)
+    factors = {}
+
+    def fq(x, rows=1):
+        return x + (factor_quant(x.detach(), a.qbits, a.pow2, rows).value() - x).detach()
+
+    for n in targets:
+        w = params[n]
+        A = torch.nn.Parameter(torch.randn(a.rank, w.shape[1], device=dev, generator=g) / math.sqrt(w.shape[1]))
+        B = torch.nn.Parameter(torch.zeros(w.shape[0], a.rank, device=dev))
+        s = math.sqrt(w.shape[1] / a.rank)
+        factors[n] = (A, B, s)
+        mod = net.inner.get_submodule(n.removesuffix(".weight"))
+        mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], fq(A)), fq(B, B_ROWS)))
+    opt = torch.optim.AdamW([{"params": [p for A, B, _ in factors.values() for p in (A, B)], "lr": a.lr, "weight_decay": 0.0},
+                             {"params": [params[n] for n in norms], "lr": a.norm_lr, "weight_decay": 0.0}],
+                            betas=(0.9, 0.95), fused=dev.startswith("cuda"))
+    trainable = {"full": norms, "adapters": {n: a.rank for n in targets}}
+    tokens = a.batch * prepare.EVAL_CTX
+    per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
+    n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
+    data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
+    fwd = torch.compile(net)
+    steps, snaps = [], []
+    marks = {round(n_steps * k / 4) for k in (1, 2, 3)}
+
+    def entries():
+        out = {n: {"kind": "lora", "a": factor_quant(A.detach(), a.qbits, a.pow2),
+                   "b": factor_quant(B.detach(), a.qbits, a.pow2, B_ROWS), "scale": s} for n, (A, B, s) in factors.items()}
+        out |= {n: {"kind": "full", "t": params[n].detach().to(torch.bfloat16).float()} for n in norms}
+        return out
+
+    def emit(ent):
+        if a.emit == "lora":
+            fac = {n: (e["a"].value(), e["b"].value(), e["scale"]) for n, e in ent.items() if e["kind"] == "lora"}
+            return prepare.encode_lora(fac, "bf16", {n: e["t"] for n, e in ent.items() if e["kind"] == "full"})
+        qblob = qf.encode(ent, theta)
+        return qblob if a.emit == "quan" else prepare.encode_full(
+            {k: v for k, v in qf.decode(theta, qblob, dev).items() if k in ent})
+
+    print(json.dumps({"steps": n_steps, "rank": a.rank, "bits": a.qbits, "targets": len(targets), "norms": len(norms),
+                      "flops_per_step": per_step}), flush=True)
+    t0 = time.perf_counter()
+    lrs = [grp["lr"] for grp in opt.param_groups]
+    for step in range(n_steps):
+        frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
+        for grp, lr in zip(opt.param_groups, lrs):
+            grp["lr"] = lr * frac
+        rows = data.next(a.batch)
+        for i in range(0, a.batch, a.micro):
+            x = rows[i: i + a.micro]
+            with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
+                logits = fwd(x[:, :-1])
+            loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
+            loss.backward()
+        torch.nn.utils.clip_grad_norm_([p for grp in opt.param_groups for p in grp["params"]], 1.0)
+        opt.step()
+        opt.zero_grad(set_to_none=True)
+        steps.append({"op": "train", "tokens": tokens})
+        if (step + 1) % 100 == 0:
+            print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
+                              "s": round(time.perf_counter() - t0, 1)}), flush=True)
+        if step + 1 in marks:
+            snaps.append((emit(entries()), len(steps)))
+    t_train = time.perf_counter() - t0
+    t1 = time.perf_counter()
+    ent = entries()
+    qblob = qf.encode(ent, theta)
+    blob = emit(ent)
+    model = prepare.decode(theta, blob)
+    rebuilt = qf.decode(theta, qblob, dev)
+    ok = all(prepare.same_bits(rebuilt[k], model[k]) for k in theta)
+    n_entries = sum(A.numel() + B.numel() for A, B, _ in factors.values()) + sum(params[n].numel() for n in norms)
+    h_bits = sum(e["a"].entropy_bits() + e["b"].entropy_bits() for e in ent.values() if e["kind"] == "lora") + sum(
+        32 * params[n].numel() for n in norms)
+    note = variant_note(f"qlora-r{a.rank}-q{a.qbits}{'-pow2' if a.pow2 else ''}", qblob, len(qblob), h_bits, ok, 0.0,
+                        n_entries, t1, where="submission", lora_bf16_bytes=len(prepare.encode_lora(
+                            {n: (A, B, s) for n, (A, B, s) in factors.items()}, "bf16", {n: params[n] for n in norms})))
+    notes = {"direction": "quant", "mode": "qlora", "args": vars(a), "steps": n_steps, "trained_entries": n_entries,
+             "variants": [note], "train_seconds": round(t_train, 1),
+             "process_seconds": round(time.perf_counter() - t_start, 1),
+             "E_format_note": "q_bytes is the update's CWQUAN1 size (islands/quant/qformat.py), checked to rebuild the "
+                              "submitted model bit for bit; bits_per_param is per factor entry"}
+    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=targets + norms, notes=notes,
+                   snapshots=snaps)
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--klass", required=True, choices=sorted(prepare.CLASSES))
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--mode", choices=("ptq", "qat"), default="ptq")
+    ap.add_argument("--mode", choices=("ptq", "qat", "qlora"), default="ptq")
+    ap.add_argument("--targets", default="all", help="qlora: all | out | leaf names")
+    ap.add_argument("--rank", type=int, default=16, help="qlora")
+    ap.add_argument("--qbits", type=int, default=4, help="qlora: the factors' bits")
+    ap.add_argument("--pow2", action="store_true", help="qlora: power-of-two scales (exact in the bf16 lora format)")
+    ap.add_argument("--norms", action=argparse.BooleanOptionalAction, default=True, help="qlora: train the norm gains")
+    ap.add_argument("--lr", type=float, default=1e-3, help="qlora: the factors' AdamW rate")
+    ap.add_argument("--norm-lr", type=float, default=3e-4, help="qlora")
+    ap.add_argument("--seed", type=int, default=0, help="qlora: the factors' initialization")
     ap.add_argument("--train", default="all", help="all | blocks | blockmats | comma-separated name regexes")
     ap.add_argument("--variants", default="fp,rtn4g128,rtn3g128,rtn2g128,sign,tern0.7", help="ptq")
     ap.add_argument("--norm-bits", type=int, default=8, help="ptq: the norm gains' rtn bits")
     ap.add_argument("--qat", default="tern", help="qat: sign | tern | rtn{b}")
     ap.add_argument("--qat-group", type=int, default=-1, help="qat: -1 one scale per tensor, 0 per row, else G entries")
     ap.add_argument("--qat-mult", type=float, default=1.0, help="qat: the scale over the group's mean |V|")
-    ap.add_argument("--emit", choices=("full", "quan"), default="full")
+    ap.add_argument("--emit", choices=("full", "quan", "lora"), default="full",
+                    help="E's format: encode_full, CWQUAN1, or (qlora --pow2) the bf16 lora format")
     ap.add_argument("--muon-lr", type=float, default=0.01)
     ap.add_argument("--adam-lr", type=float, default=3e-4)
     ap.add_argument("--warmup", type=int, default=50)
@@ -157,6 +311,12 @@ def main() -> int:
     ap.add_argument("--data-seed", type=int, default=1)
     ap.add_argument("--budget-fraction", type=float, default=0.98)
     a = ap.parse_args()
+    if a.mode == "qlora":
+        if a.emit == "lora" and not a.pow2:
+            raise SystemExit("quant: --emit lora carries the codes exactly only with --pow2")
+        return main_qlora(a)
+    if a.emit == "lora":
+        raise SystemExit("quant: --emit lora is qlora's")
     if a.mode == "qat" and not QAT_SCHEME.fullmatch(a.qat):
         raise SystemExit(f"quant: unknown --qat {a.qat!r}")
     t_start = time.perf_counter()
