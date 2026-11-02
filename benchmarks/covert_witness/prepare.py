@@ -383,6 +383,14 @@ def seedlog_step(masters: list[torch.Tensor], seed: int, c: float, gen: torch.Ge
         w.add_(torch.randn(w.shape, generator=gen, device=w.device, dtype=torch.float32), alpha=-c)
 
 
+def declare_step(base: bytes = b"", suffixes: tuple[bytes, ...] = ()) -> None:
+    """Declare the weights the training step in progress reads, as encodings from θ the harness credits as a
+    counterexample (te_core/cw.py): a weight read at one value is decode(θ, base)'s (θ's for an empty base), one read at
+    several is decode(decode(θ, base), suffixes[i])'s at its i-th, in the order the step reads them. The rebuild must cost
+    at most c MACs (4096 x the start's forward MACs per token). Encode the base before the suffixes: the first E encoded in
+    each 5% of the run is scored. A no-op outside the harness."""
+
+
 @torch.no_grad()
 def lora_merge(w: torch.Tensor, a: torch.Tensor, b: torch.Tensor, scale: float) -> torch.Tensor:
     """θ's weight plus scale · B @ A, in fp32 on the weight's device without TF32, cast to the weight's dtype."""
@@ -433,7 +441,7 @@ def decode(theta: dict[str, torch.Tensor], blob: bytes, device: str = DEVICE) ->
             raise ValueError("E (lora): trailing bytes")
         return out
     names, seed, n = header["names"], header["seed"], header["steps"]
-    coeffs = torch.frombuffer(bytearray(payload), dtype=DTYPES[header["coeff"]]).float().tolist()
+    coeffs = torch.frombuffer(bytearray(payload), dtype=DTYPES[header["coeff"]]).float().tolist() if len(payload) else []
     if len(coeffs) != n:
         raise ValueError("E (seedlog): coefficient count differs from its header")
     masters = [theta[k].to(device).float().clone() for k in names]

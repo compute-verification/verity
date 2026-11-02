@@ -89,8 +89,10 @@ class Session:
 
     def __init__(self, theta: dict[str, torch.Tensor], out: Path, *, seed: int = 0, tier: int = 0, device: str = "cpu",
                  start: dict | None = None, evaluator=None, budget_s: float = 0.0, keep_checkpoints: bool = False,
-                 digests: bool = True, args: list[str] | None = None, clock=time.perf_counter):
+                 digests: bool = True, args: list[str] | None = None, clock=time.perf_counter,
+                 families: Path | None = None):
         self.theta, self.out = theta, Path(out)
+        self.families_root = Path(families) if families else self.out / "families"
         self.seed, self.tier, self.device = seed, tier, device
         self.start = start or {}
         self.evaluator, self.budget_s, self.keep = evaluator, budget_s, keep_checkpoints
@@ -217,7 +219,7 @@ class Session:
         self.output_fn = fn
 
     def family(self, name: str, plan: Plan, uniform: bool = True) -> Family:
-        fam = Family(self.out / "families", name, plan, uniform)
+        fam = Family(self.families_root, name, plan, uniform)
         self.families.append(fam)
         return fam
 
@@ -294,7 +296,7 @@ class Session:
         verified = []
         with self.counter.pause():
             for fam in self.families:
-                v = check(fam.dir, rec, self.theta, c, n_sample=n, device=self.device)
+                v = check(fam.dir, rec, self.theta, c, n_sample=n, device=self.device, plan=fam.plan)
                 (fam.dir / "verified.json").write_text(json.dumps(v.to_json(), indent=1) + "\n")
                 verified.append(v.to_json())
         rec["families"] = verified
@@ -349,9 +351,9 @@ def parse(argv=None) -> argparse.Namespace:
                          "prepare.TRAIN_FLOP_BUDGET / 2)")
     ap.add_argument("--budget-fraction", type=float, default=1.0, help="--script: see --budget-macs")
     ap.add_argument("--start-bpb", type=float, default=None, help="--script: the start's held-out bpb, else measured")
-    ap.add_argument("--digests", choices=("on", "off"), default=None,
-                    help="digest every updated weight value (counterexample checks need them; default: on for "
-                         "--program, off for --script)")
+    ap.add_argument("--digests", choices=("on", "off"), default="on",
+                    help="digest every updated weight value (flops.KeyedDigest, on the run's device; counterexample "
+                         "checks need them)")
     ap.add_argument("--starts", type=Path, help="the starts registry (JSON)")
     ap.add_argument("--start", default="", help="a start's name in --starts")
     ap.add_argument("--theta", type=Path, help="θ's file, instead of --starts/--start")
@@ -362,6 +364,8 @@ def parse(argv=None) -> argparse.Namespace:
     ap.add_argument("--evaluator", default="none", help="MODULE:FUNCTION, (state, split, device) -> bits per byte")
     ap.add_argument("--budget-minutes", type=float, default=0.0)
     ap.add_argument("--keep-checkpoints", action="store_true")
+    ap.add_argument("--families", type=Path, default=None,
+                    help="where counterexample families are written (default OUT/families; their verdicts are in run.json)")
     ap.add_argument("--peak-macs-per-s", type=float, default=0.0, help="the device's peak, for the unexplained-GPU flag")
     ap.add_argument("--meta", default="{}", help="JSON merged into the record (agent, tags, parent: launch.py's)")
     ap.add_argument("program_args", nargs=argparse.REMAINDER)
@@ -379,8 +383,8 @@ def run_script(a, args: list[str]) -> dict:
     prepare = cw.import_prepare(script)
     start = {} if a.start_bpb is None else {"val_bpb": a.start_bpb}
     te = Session({}, a.out, seed=a.seed, tier=a.tier, device=getattr(prepare, "DEVICE", a.device), start=start,
-                 budget_s=60 * a.budget_minutes, keep_checkpoints=a.keep_checkpoints, digests=a.digests == "on",
-                 args=args)
+                 budget_s=60 * a.budget_minutes, keep_checkpoints=a.keep_checkpoints, digests=a.digests != "off",
+                 args=args, families=a.families)
     te.budget_macs = a.budget_macs or a.budget_fraction * float(getattr(prepare, "TRAIN_FLOP_BUDGET", 0)) / 2
     adapter = cw.Adapter(te, prepare, guard_log=a.out / "guard.log")
     te.evaluator = load_evaluator(a.evaluator) or adapter.evaluate
@@ -433,7 +437,8 @@ def main(argv=None) -> int:
     torch.manual_seed(a.seed)
     te = Session(theta, a.out, seed=a.seed, tier=a.tier, device=a.device, start=start,
                  evaluator=load_evaluator(a.evaluator), budget_s=60 * a.budget_minutes,
-                 keep_checkpoints=a.keep_checkpoints, digests=a.digests != "off", args=args)
+                 keep_checkpoints=a.keep_checkpoints, digests=a.digests != "off", args=args,
+                 families=a.families)
     program = load_program(a.program)
     meta = json.loads(a.meta) | {"program": a.program.name, "program_sha256": file_sha256(a.program),
                                  "commit": git_commit(), "hardware": torch.cuda.get_device_name() if
