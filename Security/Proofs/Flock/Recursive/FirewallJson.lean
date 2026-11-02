@@ -12,6 +12,10 @@ by inserting its members, in its tree's order, into the empty tree, as the parse
 than `k`, followed by whatever may follow a value (`Follow`), through `str` (`str_plain`), `num` (`num_chars`) and the
 loops of `array` (`array_loop`) and `object` (`object_loop`). `canonForm_norm` is the other half: keys inserted in
 ascending order into a tree whose keys are all below them go after its members, in order (`toListModel_foldl`).
+
+`fractional_printJson`: that text has no fraction or exponent, so `step` doesn't refuse it as `fractional`.
+`fractional_eq` reads `fractional`'s loop as `scan`, and every part of a plain value's text takes `scan` from outside a
+string to outside a string, whatever follows (`Clean`).
 -/
 
 namespace FlockSoundness.Discharge.Recursion.FirewallJson
@@ -546,5 +550,176 @@ compare. -/
 theorem printJson_roundTrip {j : Json} (h : plain j = true) :
     ∃ j', JsonParse.parse (printJson j) = .ok j' ∧ canonForm j' = canonForm j :=
   ⟨norm j, parse_printJson h, canonForm_norm j h⟩
+
+/-! ## No fraction or exponent -/
+
+/-- `fractional`'s loop on the text left, from its state (in a string, after a backslash in one, in a number): `none`
+once it meets a fraction or an exponent, else its state at the end. -/
+def scan : Bool × Bool × Bool → List Char → Option (Bool × Bool × Bool)
+  | st, [] => some st
+  | (inStr, esc, inNum), c :: cs =>
+    if inStr then
+      if esc then scan (inStr, false, inNum) cs
+      else if c == '\\' then scan (inStr, true, inNum) cs
+      else if c == '"' then scan (false, esc, inNum) cs
+      else scan (inStr, esc, inNum) cs
+    else if c == '"' then scan (true, esc, false) cs
+    else if c.isDigit || c == '-' then scan (inStr, esc, true) cs
+    else if inNum && (c == '.' || c == 'e' || c == 'E') then none
+    else scan (inStr, esc, false) cs
+
+theorem fractional_eq (t : String) : fractional t = (scan (false, false, false) t.toList).isNone := by
+  unfold fractional
+  simp only [Id.run]
+  generalize t.toList = cs
+  generalize hs : ((none, false, false, false) : Option Bool × Bool × Bool × Bool) = s
+  have h1 : s.1 = none := by rw [← hs]
+  have h2 : (false, false, false) = s.2 := by rw [← hs]
+  rw [h2]
+  clear hs h2
+  induction cs generalizing s with
+  | nil =>
+    obtain ⟨r, a, b, d⟩ := s
+    cases h1
+    rfl
+  | cons c cs ih =>
+    obtain ⟨r, a, b, d⟩ := s
+    cases h1
+    simp only [List.forIn_cons, scan]
+    generalize (c == '\\') = q1
+    generalize (c == '"') = q2
+    generalize (c.isDigit || c == '-') = q3
+    generalize (c == '.' || c == 'e' || c == 'E') = q4
+    cases a <;> cases b <;> cases d <;> cases q1 <;> cases q2 <;> cases q3 <;> cases q4 <;>
+      simp only [↓reduceIte, Bool.false_eq_true, Bool.and_true, Bool.and_false] <;>
+      first | rfl | exact ih _ rfl
+
+/-- Text the scan crosses from outside a string to outside a string, whatever follows it. -/
+def Clean (l : List Char) : Prop := ∀ b rest, ∃ b', scan (false, false, b) (l ++ rest) = scan (false, false, b') rest
+
+theorem clean_nil : Clean [] := fun b _ => ⟨b, rfl⟩
+
+theorem clean_append {l l' : List Char} (h : Clean l) (h' : Clean l') : Clean (l ++ l') := by
+  intro b rest
+  obtain ⟨b1, h1⟩ := h b (l' ++ rest)
+  obtain ⟨b2, h2⟩ := h' b1 rest
+  exact ⟨b2, by rw [List.append_assoc, h1, h2]⟩
+
+/-- A character outside a string that is no quote, digit, sign, point or exponent. -/
+theorem clean_char {c : Char}
+    (h : (c == '"') = false ∧ (c.isDigit || c == '-') = false ∧ (c == '.' || c == 'e' || c == 'E') = false) :
+    Clean [c] := fun b rest => ⟨false, by simp only [List.singleton_append, scan, h.1, h.2.1, h.2.2]; cases b <;> rfl⟩
+
+theorem clean_word : Clean ['n', 'u', 'l', 'l'] ∧ Clean ['t', 'r', 'u', 'e'] ∧ Clean ['f', 'a', 'l', 's', 'e'] :=
+  ⟨fun b _ => ⟨false, by cases b <;> rfl⟩, fun b _ => ⟨false, by cases b <;> rfl⟩,
+    fun b _ => ⟨false, by cases b <;> rfl⟩⟩
+
+theorem clean_digits : ∀ ds : List Char, (∀ c ∈ ds, c.isDigit = true) → Clean ds
+  | [], _ => clean_nil
+  | c :: ds, h => by
+    intro b rest
+    have hc := h c (List.mem_cons_self ..)
+    have hq : (c == '"') = false := by
+      cases hq : c == '"'
+      · rfl
+      · rw [beq_iff_eq] at hq
+        subst hq
+        exact absurd hc (by decide)
+    obtain ⟨b', hb⟩ := clean_digits ds (fun c' hc' => h c' (List.mem_cons_of_mem _ hc')) true rest
+    exact ⟨b', by simp only [List.cons_append, scan, hq, hc, Bool.true_or, ↓reduceIte, Bool.false_eq_true]; exact hb⟩
+
+theorem toDigits_isDigit (m : Nat) : ∀ c ∈ Nat.toDigits 10 m, c.isDigit = true := by
+  have hd : ∀ d, d < 10 → d.digitChar.isDigit = true := by decide
+  induction m using Nat.strongRecOn with
+  | ind m ih =>
+    rw [Nat.toDigits_eq_ite (by decide)]
+    split
+    · intro c hc
+      simp only [List.mem_singleton] at hc
+      exact hc ▸ hd m (by omega)
+    · intro c hc
+      simp only [List.mem_append, List.mem_singleton] at hc
+      rcases hc with hc | hc
+      · exact ih (m / 10) (by omega) c hc
+      · exact hc ▸ hd (m % 10) (Nat.mod_lt _ (by decide))
+
+theorem scan_plain : ∀ cs : List Char, (∀ c ∈ cs, (c != '"' && c != '\\' && 0x20 ≤ c.val) = true) →
+    ∀ d rest, scan (true, false, d) (cs ++ rest) = scan (true, false, d) rest
+  | [], _, _, _ => rfl
+  | c :: cs, h, d, rest => by
+    have hc := h c (List.mem_cons_self ..)
+    simp only [Bool.and_eq_true, bne_iff_ne, ne_eq] at hc
+    simp only [List.cons_append, scan, ↓reduceIte, Bool.false_eq_true, beq_eq_false_iff_ne.mpr hc.1.1,
+      beq_eq_false_iff_ne.mpr hc.1.2]
+    exact scan_plain cs (fun c' hc' => h c' (List.mem_cons_of_mem _ hc')) d rest
+
+theorem clean_str {s : String} (h : plainStr s = true) : Clean ('"' :: s.toList ++ ['"']) := fun b rest => by
+  refine ⟨false, ?_⟩
+  simp only [List.cons_append, List.append_assoc, List.nil_append]
+  rw [show scan (false, false, b) ('"' :: (s.toList ++ '"' :: rest)) =
+    scan (true, false, false) (s.toList ++ '"' :: rest) from rfl, scan_plain _ (plainStr_chars h)]
+  rfl
+
+theorem clean_join : ∀ L : List (List Char), (∀ l ∈ L, Clean l) → Clean ([','].intercalate L)
+  | [], _ => clean_nil
+  | [l], h => by rw [List.intercalate_singleton]; exact h l (List.mem_singleton_self _)
+  | l :: l' :: L, h => by
+    rw [List.intercalate_cons_cons]
+    exact clean_append (clean_append (h l (List.mem_cons_self ..)) (clean_char (by decide)))
+      (clean_join (l' :: L) fun x hx => h x (List.mem_cons_of_mem _ hx))
+
+theorem clean_wrap {o c : Char} {X : List Char}
+    (ho : (o == '"') = false ∧ (o.isDigit || o == '-') = false ∧ (o == '.' || o == 'e' || o == 'E') = false)
+    (hc : (c == '"') = false ∧ (c.isDigit || c == '-') = false ∧ (c == '.' || c == 'e' || c == 'E') = false)
+    (hX : Clean X) : Clean (o :: X ++ [c]) :=
+  clean_append (clean_append (clean_char ho) hX) (clean_char hc)
+
+theorem clean_key {k : String} (h : plainStr k = true) : Clean ('"' :: k.toList ++ ['"', ':']) := by
+  have e : '"' :: k.toList ++ ['"', ':'] = ('"' :: k.toList ++ ['"']) ++ [':'] := by simp
+  rw [e]
+  exact clean_append (clean_str h) (clean_char (by decide))
+
+mutual
+theorem clean_value : ∀ j : Json, plain j = true → Clean (jsonChars j)
+  | .null, _ => clean_word.1
+  | .bool true, _ => clean_word.2.1
+  | .bool false, _ => clean_word.2.2
+  | .num ⟨m, _⟩, _ => clean_digits _ (toDigits_isDigit m.toNat)
+  | .str _, h => clean_str h
+  | .arr ⟨a⟩, h => by
+    simp only [plain] at h
+    exact clean_wrap (by decide) (by decide) (clean_join _ (clean_list a h))
+  | .obj ⟨⟨t⟩⟩, h => by
+    simp only [plain, Bool.and_eq_true] at h
+    exact clean_wrap (by decide) (by decide) (clean_join _ (clean_members t h.1))
+theorem clean_list : ∀ a : List Json, plainList a = true → ∀ l ∈ jsonCharsList a, Clean l
+  | [], _ => by simp [jsonCharsList]
+  | j :: js, h => by
+    simp only [plainList, Bool.and_eq_true] at h
+    intro l hl
+    simp only [jsonCharsList, List.mem_cons] at hl
+    rcases hl with rfl | hl
+    · exact clean_value j h.1
+    · exact clean_list js h.2 l hl
+theorem clean_members : ∀ t : Impl String (fun _ => Json), plainObj t = true → ∀ l ∈ jsonCharsObj t, Clean l
+  | .leaf, _ => by simp [jsonCharsObj]
+  | .inner _ k v l r, h => by
+    simp only [plainObj, Bool.and_eq_true] at h
+    intro x hx
+    simp only [jsonCharsObj, List.mem_append, List.mem_singleton] at hx
+    rcases hx with (hx | rfl) | hx
+    · exact clean_members l h.1.1.1 x hx
+    · exact clean_append (clean_key h.1.1.2) (clean_value v h.1.2)
+    · exact clean_members r h.2 x hx
+end
+
+/-- **A plain value's text has no fraction or exponent**, so the firewall's `Hello` doesn't refuse it as
+`fractional`. -/
+theorem fractional_printJson {j : Json} (h : plain j = true) : fractional (printJson j) = false := by
+  rw [fractional_eq, printJson, String.toList_ofList]
+  obtain ⟨b, hb⟩ := clean_value j h false []
+  rw [List.append_nil] at hb
+  rw [hb]
+  rfl
 
 end FlockSoundness.Discharge.Recursion.FirewallJson

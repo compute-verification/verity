@@ -77,6 +77,7 @@ import Flock.Extract
 import Flock.Qcall
 import Flock.Fuel
 import Flock.Firewall
+import Flock.Firewall.Honest
 import Flock.Firewall.Contract
 import Flock.Firewall.Assumptions
 import Flock.Firewall.Released
