@@ -12,7 +12,9 @@ issues every request to it, on the schedule `Drive.reqs` fixes. Nothing the prov
   (`Drive.openStep`, the rep's opening a round at a time, on the extra claims at the session's `Commit` coins,
   `Drive.extras`, and the rep's salts for levels ≥ 1, the loop's finish's), then the inner proof's: the frame's own round
   (`Frame.innerSched`) on the rounds the loop's finish computed for the rep before they went to the host
-  (`Sessions.inner`, `Finish.serve`'s `inner`), so the host only relays them. Rep 1's frame first takes
+  (`Sessions.inner`, `Finish.serve`'s `inner`), so the host only relays them. At a round the finish has not computed,
+  the frame takes no device round: whatever the host relays fails, the frame's own round on the finish's rounds so far
+  stands in, and the rep stops, so the session's `Finish` leaves without proofs. Rep 1's frame first takes
   rep 0's algebraic-phase coins (`prior`). What leaves is the frame's release, at the stream's first round after its
   domain frame (`domainFrame`, `Transcript.init`'s).
 * `coins`: once the coins answered that round open the committed tree (`State.answer`), the frame takes them
@@ -223,11 +225,13 @@ def replyWhy : Frame.Reply → String
 /-- **The frame and place of session `sid`'s round `content` of table `i`'s rep `r`**, squeezing `n` coins, in the loop's
 frames `R` and level 0s `L0`, on a stream whose domain frame is `dom`: the rep's frame ready to take it (at the stream's
 first round, its algebraic phase's scheduled rounds on the session's level 0, `withAlg`, and rep 1's after rep 0's
-algebraic-phase coins), the round's place and whether it is the stream's first round; or why the round has none. The
-place is `placeOf`'s, but past the opening: there the inner proof's round `j` is the frame's own (`Frame.innerSched`) on
-the rounds the loop's finish computed for the rep (`Sessions.innerOf`), and one the finish has not computed has none. -/
+algebraic-phase coins), the round's place, whether it is the stream's first round, and why the frame takes no device
+round in that place, if it takes none; or why the round has none. The place is `placeOf`'s, but past the opening: there
+the inner proof's round `j` is the frame's own (`Frame.innerSched`) on the rounds the loop's finish computed for the rep
+(`Sessions.innerOf`). At a round `j` the finish has not computed, the frame takes no device round: whatever the host
+relays, the frame fails it, and its own round on the finish's rounds so far stands in (`roundStep`). -/
 def roundPlace (R : Sessions) (L0 : Level0.Slots) (sid i r : Nat) (dom content : ByteArray) (n : Nat) :
-    Except String (Rep × Frame.Place × Bool) := do
+    Except String (Rep × Frame.Place × Bool × Option String) := do
   let some (_, p) := R.find sid i r | throw s!"a round of table {i} rep {r}, whose frame the loop has not started"
   let some s := R.sessions.find? (·.sid == sid) | throw s!"a round of session {sid}, which the loop is not serving"
   let some _ := s.sts[i]? | throw s!"table {i} of the session's {s.sts.size}"
@@ -251,9 +255,10 @@ def roundPlace (R : Sessions) (L0 : Level0.Slots) (sid i r : Nat) (dom content :
     let j := p'.st.m.inner.getD 0
     let fin := R.innerOf l0.root r
     if Frame.INNER_ROUNDS ≤ j then throw s!"a round after the inner proof's {Frame.INNER_ROUNDS}"
-    if fin.size ≤ j then throw s!"table {i} rep {r}'s inner round {j} before the loop's finish computed it"
-    return (p', .sched (Frame.innerSched p'.cfg p'.st.m fin n j), first)
-  | _ => return (p', place, first)
+    let noDevice := if j < fin.size then none
+      else some s!"table {i} rep {r}'s inner round {j}, which the loop's finish has not computed"
+    return (p', .sched (Frame.innerSched p'.cfg p'.st.m fin n j), first, noDevice)
+  | _ => return (p', place, first, none)
 
 /-- A round's effect on the loop: what leaves (or why nothing does), the rep's frame after it, which the loop puts back,
 the rank check's result where the round made it, and the round and why the rep stopped where the round stopped it. -/
@@ -266,11 +271,13 @@ structure RoundStep where
 /-- **Session `sid`'s device round `content` of table `i`'s rep `r`**, squeezing `n` coins, in the loop's frames `R` and
 level 0s `L0`, on a stream whose domain frame is `dom`, the stream's first round opening with it: the frame's release
 (`Frame.step`, which takes the first round whole and releases it without the domain frame), after the stream's domain
-frame at its first round, at the round's place (`roundPlace`). -/
+frame at its first round, at the round's place (`roundPlace`). Where `roundPlace` takes no device round, the frame steps
+on none (`ByteArray.empty`, which no scheduled round passes): the scheduled round stands in, and the rep stops. -/
 def roundStep (R : Sessions) (L0 : Level0.Slots) (sid i r : Nat) (dom content : ByteArray) (n : Nat) : RoundStep :=
   match roundPlace R L0 sid i r dom content n with
   | .error e => { out := .error e }
-  | .ok (p, place, first) =>
+  | .ok (p, place, first, noDevice) =>
+    let content := if noDevice.isSome then ByteArray.empty else content
     let free := match place with
       | .sched sr => match Frame.roundFree p.cfg p.st.m sr n with
         | .ok (_, _, f) => f
@@ -283,7 +290,7 @@ def roundStep (R : Sessions) (L0 : Level0.Slots) (sid i r : Nat) (dom content : 
         rank := (match p.st.m.rank, st'.m.rank with
           | none, some k => some k
           | _, _ => none)
-        stops := if v.startsWith " fail" then some (p.coins.size, s!"{v.drop 5}") else none }
+        stops := if v.startsWith " fail" then some (p.coins.size, (noDevice.map (" " ++ ·)).getD s!"{v.drop 5}") else none }
     | (a, st') => { out := .error (replyWhy a), put := some { p with st := st' } }
 
 /-- **Session `sid`'s device round `content` of table `i`'s rep `r`** in the loop: `roundStep` on the loop's frames and

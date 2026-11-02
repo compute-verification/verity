@@ -6,9 +6,12 @@ import Proofs.Flock.SessionLoop.Statement
 Past an opened rep's scheduled rounds the loop's frame releases the inner proof's rounds itself (`Frames.roundPlace`,
 at `Frame.innerSched`): its round `j` is `Frame.ownRound`, every word the frame's own (its `ε`, `β`, pads and coin
 count) but `final_c'` (round 0) and `τ`'s commitment (round 2), which it reads off the finish's round `j`, as the
-finish hands it to the frame (`Sessions.innerRound`, from `Finish.liveAsks`'s `sent`) before Rust relays it. A finish
-round that differs from the frame's is refused: the frame's check at `.sched` asks for the round byte for byte. This
-file defines that release and proves `LoopInnerRound0` at it, at every finish:
+finish hands it to the frame (`Sessions.innerRound`, from `Finish.liveAsks`'s `sent`) before Rust relays it. A relayed
+round that differs from the frame's fails the frame's check at `.sched`, which asks for the round byte for byte: the
+frame's own round stands in and the rep stops (`standIn`). So does a round the finish has not computed, where the loop
+hands the frame no device round whatever Rust relays (`Frames.roundStep`), the frame's own round reading zero words for
+the finish's: a failure that `LeanRelease.cross` covers, since it may fail any round. This file defines that release and
+proves `LoopInnerRound0` at it, at every finish:
 
 * `Loop.innerOf`: the round in the device's place past the located rep's schedule, at the inner proof's round `j`
   (`j < INNER_ROUNDS`), `Frame.innerSched` at the rep's configuration, `ε` and `β` the first words of the coins of the
