@@ -5,7 +5,7 @@ The store is the harness's `C` on the device, set up under the bandwidth audit's
 in, so the granted verifier accepts `C` as this device's store (`audit.Verifier` refuses any other) and P2's audit runs over
 the same `C`.  The challenger reads the device's id itself (`gpu.challenger_device`) and keeps the store's one state in the
 run's state directory (`audit.ChallengerState`), which every tag's verifier shares across rounds.  Every window goes
-through the store's one prover, the bandwidth harness's (`gpu.Prover`, kept by `Device`): it opens the window, prepares (an
+through the store's one prover, the bandwidth harness's (`gpu.Prover`, kept by `BandwidthProver`): it opens the window, prepares (an
 untimed pass under a throwaway seed, then a read of 512 MiB of another buffer, so L2 holds clean lines and no part of the
 store), takes σ, runs the tag pass on stream 0 in the tagger's own workspaces and commits the root.  The context prefers L1
 in the L1/shared-memory split from the start (`prefer_l1`): the tag pass otherwise runs in the split torch's last kernel
@@ -151,7 +151,7 @@ class Pass(Protocol):
 
 
 class Prover(Protocol):
-    """The store's one honest bandwidth prover (`Device`): `commit(window, slot, tagged)` opens the window, prepares, takes
+    """The store's one honest bandwidth prover (`BandwidthProver`): `commit(window, slot, tagged)` opens the window, prepares, takes
     σ, tags every label (or the first `tagged`, a skip control, over a poisoned workspace) into workspace `slot` and commits
     its root, returning the pass and the samples; `tag_pass` is a pass outside any window (one of (d)'s, or the kernels'
     first load), `scrub` the preparation's read, and `reserve` makes a tag's workspaces ahead."""
@@ -563,7 +563,7 @@ class GpuPass:
         return self._c.open(j, self._tree)
 
 
-class Device:
+class BandwidthProver:
     """The store's one bandwidth prover, the bandwidth harness's `gpu.Prover` over the store at `store` (`blocks` rows of
     2,056 bytes in device memory) with `tagger`'s own scrub buffer and workspaces, on stream 0, as `gpu.py windows` runs it;
     `tree` is the store's tree under `vk`.  A window's workspace is its slot's (each tag's slots made by `reserve` or on
@@ -624,7 +624,7 @@ class Device:
         return {"kernel": "torch.sum of E as int64", "bytes": self.c.numel(), "device_ms": times}
 
 
-def store_setup(lib: str | Path, c: Any, fr: Any, gpu_id: str, state_dir: Path) -> tuple[dict, Device, Challenger]:
+def store_setup(lib: str | Path, c: Any, fr: Any, gpu_id: str, state_dir: Path) -> tuple[dict, BandwidthProver, Challenger]:
     """At the harness's hook (`C` on the device, nothing running): the device as the challenger reads it, which must be the
     one the store's salt binds (the harness's `--bandwidth-salt`), `vk` over `C` under the framing's registered P2
     (`fr.params`, `fr.salt`), the store's one prover and its challenger."""
@@ -644,7 +644,7 @@ def store_setup(lib: str | Path, c: Any, fr: Any, gpu_id: str, state_dir: Path) 
     t0 = time.monotonic()
     vk, tree = store_key(fr.params, fr.salt, c.cpu().numpy().tobytes())
     key_s = time.monotonic() - t0
-    prover = Device(G, tagger, c.data_ptr(), int(c.shape[0]), tree, c)
+    prover = BandwidthProver(G, tagger, c.data_ptr(), int(c.shape[0]), tree, c)
     ch = Challenger.open(state_dir, vk, device, fr.model, fr.setup_source)
     return {"store": {"blocks": fr.params.blocks, "block_bytes": fr.params.block_bytes,
                       "bytes": fr.params.blocks * fr.params.block_bytes, "root": vk.root.hex(), "salt": vk.salt.hex()},

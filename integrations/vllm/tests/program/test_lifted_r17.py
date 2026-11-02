@@ -365,7 +365,7 @@ def test_a2_lag_from_header_is_gp01s_rule_on_the_attested_engine_block():
             lifted_records.lag_from_header(hdr)
     with pytest.raises(ValueError, match="not attested"):
         lifted_records.lag_from_header({"$e": "RunHeader", "profile": {"engine_kwargs": {}}})
-    assert L.DP_PAD_02.endswith("RULED R17-1")
+    assert L.DP_PAD_02 == "DP-pad-02(b), RULED"
 
 
 def test_a2_declared_lag_of_row_reads_the_builds_declaration_through_the_same_rule():

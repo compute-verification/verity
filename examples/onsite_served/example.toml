@@ -1,0 +1,13 @@
+# The served window's onsite run (README.md): one configuration of onsite's seven subprotocols that
+# `verity run` executes, each party on its machine, every host and address in the deploy bindings. No run of record yet.
+protocol = "onsite"
+workload = "vllm"
+run = "moved"
+proof = "none"
+
+[placement]
+prover = "gpu-node"            # workers, firewall and the prover: serving, committing, proving, answering the sessions
+store = "gpu-node"             # PoUS's and PoUB's store: the served weights on the card
+verifier = "auditor-host"      # the onsite check
+challenger = "auditor-host"    # the gate's challenger, and the memory challenger and bandwidth verifier
+certifier = "auditor-host"     # the network certifier, beside the gate's challenger

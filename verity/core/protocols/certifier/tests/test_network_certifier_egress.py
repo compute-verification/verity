@@ -94,7 +94,7 @@ def test_the_map_is_the_wardens_slots():
     E, P = IT.END_ENTRY, IT.EMPTY
     slots = [EG.Request(1, 0, 3), EG.Request(2, 0, 0), EG.Request(3, 2, 1), None]
     maps = [EG.bucket_map(b, slots, 4, 2, 1) for b in range(5)]
-    R = EG.Record
+    R = EG.Occupancy
     assert maps[0] == ((R(1, 0, P), R(1, 0, P), R(2, 1, P), R(2, 1, P)), False)
     assert maps[1] == ((R(1, 0, 0), R(1, 0, 1), R(2, 1, E), R(2, 1, P)), False)
     assert maps[2] == ((R(1, 0, 2), R(1, 0, E), R(3, 2, P), R(3, 2, P)), False)

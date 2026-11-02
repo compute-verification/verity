@@ -1,9 +1,9 @@
-# co32c's linear with fx1 (decision 83; SAT-120's fx1 arm, egemm.cu's fx_chain<FX1>) a MMA as measured: c_fx1, c_l7qs
+# co32c's linear with fx1 (egemm.cu's fx_chain<FX1>) a MMA as measured: c_fx1, c_l7qs
 # with one keyed IMAD a word (w * key_mul(1, 32(4T + E)), the tile position's word E) chained in front of duo on every
 # absorbed word, the mainloop's and co32c's tail's (O', D_d), so f = 4; 8192^3 (m = 3 digits). Counts are the kernel's
 # executed mix (ncu; the tail's MMAs included); WAIT, the barrier wait, is left out (0.2051 a MMA). fx1 adds exactly 4.00
 # IMAD a MMA (one a word) and no ALU over c_l7qs, so the IMAD does not merge into duo's; the binding row moves from EALUB1
-# to JI3s_0 and issue-slot use from 60.5% to 68.1%. The GEMM runs 1.675x plain int8 (c_l7qs 1.494x; SAT-120's estimate
+# to JI3s_0 and issue-slot use from 60.5% to 68.1%. The GEMM runs 1.675x plain int8 (c_l7qs 1.494x; estimated
 # 1.693x), and Llama-3.1-8B's served linears (cquant, cwedit beside it, c_fx1) 1.83-1.99x at 2K-32K against 1.65-1.82x.
 name = "c-fx1"
 status = "measured"

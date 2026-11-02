@@ -1,4 +1,4 @@
-"""`fold_compare.WeightSource` on an mla-moe weights Record: every `dense_layers` / `layers` field reads its own checkpoint layer
+"""`fold_compare.WeightSource` on an mla-moe weights RecordType: every `dense_layers` / `layers` field reads its own checkpoint layer
 (`layers[i]` = `model.layers.{i + FIRST_DENSE}`), fused fields concatenate in vLLM's row order, the f32 router gate widens its
 bf16 tensor and the F32 correction bias is read as is."""
 import json
@@ -6,7 +6,7 @@ import struct
 
 import numpy as np
 
-from verity.ml.circuits.types import Array, Record
+from verity.ml.circuits.types import Array, RecordType
 from verity_vllm.check.fold_compare import WeightSource
 from verity_vllm.program.frontend.rules.family import _field_intervals
 from verity.ml.definitions.registry.prims import BF16, F32
@@ -18,14 +18,14 @@ def _mat(n: int, k: int, t=BF16) -> Array:
     return Array(n, Array(k, t))
 
 
-def _mla_weights_type() -> Record:
-    """The layout of GLM-4.7-Flash's weights Record (arch `mla-moe`) at toy sizes: `FD` dense layers, then `NL - FD` MoE layers."""
+def _mla_weights_type() -> RecordType:
+    """The layout of GLM-4.7-Flash's weights RecordType (arch `mla-moe`) at toy sizes: `FD` dense layers, then `NL - FD` MoE layers."""
     attn = [("ln1", Array(H, BF16)), ("qkv_a_w", _mat(QL + L + DR, H)), ("q_a_ln", Array(QL, BF16)), ("q_b_w", _mat(NH * (DN + DR), QL)),
             ("kv_a_ln", Array(L, BF16)), ("kv_b_w", _mat(NH * (DN + DV), L)), ("o_w", _mat(H, NH * DV)), ("ln2", Array(H, BF16))]
-    dense = Record(*attn, ("gate_up_w", _mat(2 * ID, H)), ("down_w", _mat(H, ID)))
-    moe = Record(*attn, ("gate_w", _mat(E, H, F32)), ("gate_bias", Array(E, F32)), ("sh_gate_up_w", _mat(2 * I, H)),
+    dense = RecordType(*attn, ("gate_up_w", _mat(2 * ID, H)), ("down_w", _mat(H, ID)))
+    moe = RecordType(*attn, ("gate_w", _mat(E, H, F32)), ("gate_bias", Array(E, F32)), ("sh_gate_up_w", _mat(2 * I, H)),
                  ("sh_down_w", _mat(H, I)), ("w13", Array(E, _mat(2 * I, H))), ("w2", Array(E, _mat(H, I))))
-    return Record(("embed", _mat(V, H)), ("dense_layers", Array(FD, dense)), ("layers", Array(NL - FD, moe)), ("norm", Array(H, BF16)),
+    return RecordType(("embed", _mat(V, H)), ("dense_layers", Array(FD, dense)), ("layers", Array(NL - FD, moe)), ("norm", Array(H, BF16)),
                   ("cos_sin", _mat(MAX_POS, DR)), ("lm_head", _mat(V, H)))
 
 

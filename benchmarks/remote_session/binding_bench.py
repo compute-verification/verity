@@ -19,7 +19,7 @@ disagree, or that decides otherwise than its row says, fails the bench. Writes O
 (the cores, the load average before and after each); exits 1 unless every phase decided as it should.
 
     python binding_bench.py --out OUT [--engines 8 --arena-blocks 16250000 --weights 4000000 --host 0 --workers N]
-                            [--phases sequential,concurrent,bound,split] [--python-share 0.6]
+                            [--phases sequential,concurrent,bound,split] [--python-share 0.59]
 
 The defaults are a whole node's 130M chunks: eight arenas of an 8B BF16 model's 4M weights chunks.
 
@@ -49,8 +49,8 @@ import verifier as V  # noqa: E402
 ROLE = "SYNTHETIC_BF16"
 NODE = b"binding-bench-node"
 PHASES = ("sequential", "concurrent", "bound", "split")
-PYTHON_SHARE = 0.6
-"""store.py's share of the cores in `split`: its root's time over both roots' on 11 cores each, 665 s and 436 s at
+PYTHON_SHARE = 0.59
+"""store.py's share of the cores in `split`: its root's time over both roots' on 11 cores each, 432 s and 306 s at
 130M chunks."""
 
 

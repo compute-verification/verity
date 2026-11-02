@@ -70,7 +70,19 @@ def test_no_word_primitive_is_lowered_by_whichever_builder_registered_first():
         "Definition, or its own piece in `ir_lower.PIECES`")
 
 
-def test_a_word_two_builders_build_is_ambiguous_unless_it_has_a_piece_of_its_own(monkeypatch):
+def _traced(name, fn):
+    """A piece wrapped as `verity_flock.boolean_export`'s tracer wraps it."""
+    def w(*a, **k):
+        return fn(*a, **k)
+    w.__wrapped__ = fn
+    return w
+
+
+@pytest.mark.parametrize("wrap", [None, _traced], ids=["unwrapped", "wrapped"])
+def test_a_word_two_builders_build_is_ambiguous_unless_it_has_a_piece_of_its_own(monkeypatch, wrap):
+    """Whether or not the pieces resolved are wrapped (`ir_lower.PIECES.wrap`), as the Boolean export's tracer wraps each one
+    once a test in the process exports: else the check finds nothing wherever an export ran first."""
+    monkeypatch.setattr(IL.PIECES, "wrap", wrap)
     word = SimpleNamespace(id="AmbientTestWord_v1")
     for i, build in (("AmbientTestOne_v1", lambda C, a: a), ("AmbientTestTwo_v1", lambda C, a: [a[0].inv().inv()])):
         monkeypatch.setitem(REGISTRY.defs, i, SimpleNamespace(id=i, word=word, build=build))
