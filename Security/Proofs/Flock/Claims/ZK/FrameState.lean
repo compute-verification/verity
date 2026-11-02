@@ -178,7 +178,7 @@ theorem cfg_snoc {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List
 round, the next round is the same rep's,
 the frame's check of some device round releases `out`, every check that does returns `t`'s state but for `stopped`, and
 the transport's coin check passes the history with the release and the answer `a`, the frame's state after that history
-is its taking of the stream's coins at `t`, at some `stopped`. -/
+is its taking of the stream's coins at `t`, at some `stopped`, past the rank stop (`rankStop`). -/
 theorem answered_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
     (a : Msg) {m : Masker} (t : Masker) {out : ByteArray} (hP : L.ProgChecks x w) (hA : L.answered x ρ h = .ok m)
     (hkd : L.kindAt x h.length = .masked) (hrep : L.rep x (h.length + 1) = L.rep x h.length)
@@ -186,7 +186,8 @@ theorem answered_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (
     (hex : ∃ v s' why, L.checkAt x w ρ h m false v = .ok (out, s', why))
     (hst : ∀ v st s' why, L.checkAt x w ρ h m st v = .ok (out, s', why) → ∃ b, s' = { t with stopped := b }) :
     ∃ b, L.answered x ρ (h ++ [(0 :: out.data.toList, a)]) =
-      { t with stopped := b }.answer (L.cfg x ρ h) (L.coinsOf x (h ++ [(0 :: out.data.toList, a)])) := by
+      ({ t with stopped := b }.answer (L.cfg x ρ h) (L.coinsOf x (h ++ [(0 :: out.data.toList, a)])) >>=
+        rankStop (L.cfg x ρ h)) := by
   obtain ⟨v, st, s', why, hc, hp⟩ := hP ρ h a m out hA hkd hex
   obtain ⟨b, rfl⟩ := hst v st s' why hc
   refine ⟨(L.prog x (h ++ [(0 :: out.data.toList, a)])).stopped, ?_⟩
@@ -206,11 +207,13 @@ theorem answered_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (
   dsimp only
   unfold takeAt
   rw [if_neg hn, hs, if_pos rfl, L.cfg_snoc x ρ h _ hrep]
-  exact congrArg (fun s => s.answer (L.cfg x ρ h) (L.coinsOf x (h ++ [(0 :: out.data.toList, a)]))) hp'
+  exact congrArg (fun s => s.answer (L.cfg x ρ h) (L.coinsOf x (h ++ [(0 :: out.data.toList, a)])) >>=
+    rankStop (L.cfg x ρ h)) hp'
 
 /-- **A round's state at level 0**: where the firewall's scheduled round after `h` carries no free value at any
 `stopped`, with `t`'s state but for `stopped`, and releases `out` at the state `m`, the frame's state after the history
-with that release and the stream's answer is its taking of the stream's coins at `t`, at some `stopped`. -/
+with that release and the stream's answer is its taking of the stream's coins at `t`, at some `stopped`, past the rank
+stop. -/
 theorem answered_of_scheduled {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg))
     (a : Msg) {m : Masker} (t : Masker) {out : ByteArray} (hP : L.ProgChecks x w) (hA : L.answered x ρ h = .ok m)
     (hkd : L.kindAt x h.length = .masked) (hrep : L.rep x (h.length + 1) = L.rep x h.length)
@@ -222,7 +225,8 @@ theorem answered_of_scheduled {W R : Type} (L : LeanRelease W R) (x : Msg) (w : 
       ⟨(L.scheduled x w ρ h (computedOf (L.computed x w ρ h))).toArray⟩ (L.coins x h.length) =
         .ok (out, { t with stopped := false }, #[])) :
     ∃ b, L.answered x ρ (h ++ [(0 :: out.data.toList, a)]) =
-      { t with stopped := b }.answer (L.cfg x ρ h) (L.coinsOf x (h ++ [(0 :: out.data.toList, a)])) :=
+      ({ t with stopped := b }.answer (L.cfg x ρ h) (L.coinsOf x (h ++ [(0 :: out.data.toList, a)])) >>=
+        rankStop (L.cfg x ρ h)) :=
   L.answered_of_check x w ρ h a t hP hA hkd hrep ho
     ⟨L.scheduled x w ρ h (computedOf (L.computed x w ρ h)), _, none, check_self rfl (round_of_roundFree h0)⟩
     fun _ _ _ _ hc => check_l0 hr hc
@@ -261,7 +265,8 @@ theorem answered_openBind {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (
     { m with on := true, l0 := true, owed := some (L.coins x h.length) } hP hA hkd hrep (by rw [hout]; exact ho)
     (fun b => (hr b).imp fun _ hb => hb.1) hr0
   rw [hout] at hb
-  exact ⟨b, hb.trans (answer_l0_mid _ _ _ (by rw [hcs]; try rfl) (by exact hi) (by rfl) (by exact hp))⟩
+  exact ⟨b, hb.trans (bind_rankStop_l0
+    (answer_l0_mid _ _ _ (by rw [hcs]; try rfl) (by exact hi) (by rfl) (by exact hp)) rfl)⟩
 
 /-- **A masked round of level 0 moves the position by its values**: where the frame takes the coins before a level-0
 round (`L0Round`) at level 0's phase and the round's position, its values short of the layout's last, the firewall's
@@ -301,8 +306,8 @@ theorem answered_l0 {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R
     { m with pos := m.pos + nAbs G, owed := some (L.coins x h.length) } hP hA hkd hrep (by rw [hout]; exact ho)
     (fun b => (hr b).imp fun _ hb => hb.1) hr0
   rw [hout] at hb'
-  exact ⟨b, hb'.trans (answer_l0_mid _ _ _ (by rw [hcs]; try rfl) (by exact hi) (by exact hl0)
-    (by show m.pos + nAbs G ≠ _; omega))⟩
+  exact ⟨b, hb'.trans (bind_rankStop_l0 (answer_l0_mid _ _ _ (by rw [hcs]; try rfl) (by exact hi) (by exact hl0)
+    (by show m.pos + nAbs G ≠ _; omega)) (by exact hl0))⟩
 
 /-- **The pair's sums reach the layout's last value and take `ρ_0`**: where the frame takes the coins before a level-0
 round at level 0's phase and the round's position, with no `ρ` coin yet, whose values end the layout's and which squeezes
@@ -342,8 +347,8 @@ theorem answered_l0_last {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (�
     { m with pos := m.pos + nAbs G, owed := some (L.coins x h.length) } hP hA hkd hrep (by rw [hout]; exact ho)
     (fun b => (hr b).imp fun _ hb => hb.1) hr0
   rw [hout, hcs] at hb'
-  exact ⟨b, hb'.trans (answer_rho_first _ _ r0 r1 (by show some (L.coins x h.length) = _; rw [hn2])
-    (by exact hi) (by exact hl0) (by show m.pos + nAbs G = _; omega) (by exact hrho))⟩
+  exact ⟨b, hb'.trans (bind_rankStop_l0 (answer_rho_first _ _ r0 r1 (by show some (L.coins x h.length) = _; rw [hn2])
+    (by exact hi) (by exact hl0) (by show m.pos + nAbs G = _; omega) (by exact hrho)) (by exact hl0))⟩
 
 /-- **`ρ_1`'s round takes `ρ_1`**: where the frame takes the coins before level 0's last round, its squeeze of `ρ_1`'s
 two coins alone, at level 0's phase with every value of the layout absorbed past the algebraic phase's and `ρ_0`'s
@@ -380,9 +385,9 @@ theorem answered_rho1 {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ :
     { m with pos := m.pos + nAbs [], owed := some (L.coins x h.length) } hP hA hkd hrep (by rw [hout]; exact ho)
     (fun b => (hr b).imp fun _ hb => hb.1) hr0
   rw [hout, hcs] at hb'
-  exact ⟨b, hb'.trans (_root_.Claims.ZKServer.answer_rho_independent _ _ r0 r1 a0 a1
+  exact ⟨b, hb'.trans (bind_rankStop_l0 (_root_.Claims.ZKServer.answer_rho_independent _ _ r0 r1 a0 a1
     (by show some (L.coins x h.length) = _; rw [hn2]) (by exact hi) (by exact hl0)
-    (by show m.pos + nAbs [] = _; simp [nAbs, hpos]) (by exact hrho) (by exact hd))⟩
+    (by show m.pos + nAbs [] = _; simp [nAbs, hpos]) (by exact hrho) (by exact hd)) (by exact hl0))⟩
 
 end LeanRelease
 

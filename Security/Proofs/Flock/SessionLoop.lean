@@ -1,5 +1,9 @@
 import Proofs.Flock.SessionLoop.Statement
+import Proofs.Flock.SessionLoop.TakenVals
+import Proofs.Flock.SessionLoop.FinalC
+import Proofs.Flock.SessionLoop.TakesTau
 import Proofs.Flock.SessionLoop.Inner
+import Proofs.Flock.SessionLoop.LiveInner
 import Proofs.Flock.Claims.ZK.FrameUnrefused
 import Proofs.Flock.SessionLoop.Link
 import Proofs.Flock.Claims.ZK.FinishSwFrame
@@ -25,6 +29,12 @@ import Proofs.Flock.Claims.ZK.RepCutFw
 import Proofs.Flock.Claims.ZK.FinishSwMkAny
 import Proofs.Flock.Claims.ZK.FinishFwL0
 import Proofs.Flock.SessionLoop.FinishIsLoop
+import Proofs.Flock.SessionLoop.PiopState
+import Proofs.Flock.SessionLoop.CutPiopLive
+import Proofs.Flock.SessionLoop.CutInnerLive
+import Proofs.Flock.SessionLoop.InnerSlot
+import Proofs.Flock.SessionLoop.InnerUnrefused
+import Proofs.Flock.SessionLoop.LiveInnerAt
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
