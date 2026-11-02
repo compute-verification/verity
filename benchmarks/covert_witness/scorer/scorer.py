@@ -1875,7 +1875,7 @@ def final_table(write: bool = True) -> dict:
         subs += [{"id": x["id"], "run": r["run"], "seed": r.get("seed"), "cp": round(t.get("fraction") or 0, 3),
                   "start": x["start"], "macs": t["macs"], "val_bpb": t["bpb"], "rho": t["rho"], "phi": t["phi"],
                   "depth": t["D"], "reference": is_reference(x), "direction": x["direction"], "counted": True,
-                  "E_bytes": t.get("E_bytes"), "start_bpb": r["witness"]["start_bpb"]}
+                  "E_bytes": t.get("E_bytes"), "start_bpb": r["witness"]["start_bpb"], "fork_ladder": fork_ladder(x)}
                  for t in r["ledger"] if t.get("te_kind") == "submission" and t.get("rho") and t.get("valid")]
     schedule_ends(subs, key=lambda s: s["run"])
     l0 = {s: v for s in STARTS if (v := regime_start_bpb(subs, s)) is not None}
