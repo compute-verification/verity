@@ -20,7 +20,7 @@ Mechanisms (`--mech`):
   approximation every T steps (rank-constrained training by projection).
 - `subspace`: exact-gradient descent in a random subspace whose basis comes from seeds: each direction z_i is the seed
   log's (`prepare.seedlog_step`), its coefficient is the backward gradient's projection on z_i, and E is only the
-  coefficients (`prepare.encode_seedlog`).
+  coefficients (`prepare.encode_seedlog`). Each step declares the log so far.
 
 E for the piece mechanisms is the pieces concatenated (rank K·r, `prepare.encode_lora`) when they fit the class's cap,
 else the truncated SVD of the whole update W − θ with ranks allocated across tensors greedily by singular value energy
@@ -721,13 +721,16 @@ def run_full(run: Run) -> None:
 
 def run_subspace(run: Run) -> None:
     """Random-subspace descent with exact directional derivatives: each step one backward, then `--dirs` seed-log
-    directions, each moved by c_i = lr · <G, z_i> / (|G| sqrt(P)) (quantized to f16), applied as the decoder applies it."""
+    directions, each moved by c_i = lr · <G, z_i> / (|G| sqrt(P)) (quantized to f16) with the decoder's own op, so each
+    step reads decode(θ, the log so far) bit for bit and declares it. The log is cut where its rebuild (P MACs a
+    coefficient) would pass half of c, beyond which the harness can't credit a step."""
     a, params = run.a, run.params
     names = sorted(run.targets + run.norms)
     for n in names:
         params[n].requires_grad_(True)
     P = sum(params[n].numel() for n in names)
-    max_dirs = ((run.cap or 10 ** 9) - seedlog_bytes(names, a.seed, 0)) // 2
+    c_macs = 4096 * prepare.train_flops(run.rec, {}, [{"op": "forward", "tokens": 1}])["flops"] / 2
+    max_dirs = min(((run.cap or 10 ** 9) - seedlog_bytes(names, a.seed, 0)) // 2, int(c_macs / 2 // P))
     trainable = {"full": names}
     per_step = prepare.train_flops(run.rec, trainable, [{"op": "train", "tokens": run.tokens}])["flops"]
     dir_flops = 4 * P
@@ -736,13 +739,17 @@ def run_subspace(run: Run) -> None:
     fwd = torch.compile(run.net) if a.compile else run.net
     gen = torch.Generator(device=DEV)
     masters = [params[n].data for n in names]
-    coeffs: list[torch.Tensor] = []
+    coeffs: list[float] = []
     print(json.dumps({"mech": "subspace", "arm": len(run.results), "lr": a.lr, "steps": n_steps, "dirs_per_step": a.dirs,
-                      "P": P, "names": len(names), "flops_per_step": per_step + a.dirs * dir_flops}), flush=True)
-    marks = {round(n_steps * k / 4) for k in (1, 2, 3)}
+                      "P": P, "names": len(names), "max_dirs": max_dirs, "flops_per_step": per_step + a.dirs * dir_flops}),
+          flush=True)
+    base = b""
     for step in range(n_steps):
         frac = schedule(step, n_steps, a.warmup)
-        loss = loss_backward(fwd, run.next_batch(), a)
+        rows = run.next_batch()
+        if base:
+            prepare.declare_step(base)
+        loss = loss_backward(fwd, rows, a)
         grads = [params[n].grad for n in names]
         gnorm = torch.sqrt(sum((g.float() ** 2).sum() for g in grads))
         with torch.no_grad():
@@ -750,21 +757,18 @@ def run_subspace(run: Run) -> None:
                 gen.manual_seed(a.seed + len(coeffs))
                 zs = [torch.randn(w.shape, generator=gen, device=w.device, dtype=torch.float32) for w in masters]
                 gi = sum(torch.dot(g.reshape(-1), z.reshape(-1)) for g, z in zip(grads, zs))
-                c = (a.lr * frac * gi / (gnorm * math.sqrt(P) + 1e-12)).to(torch.float16).float()
+                c = float((a.lr * frac * gi / (gnorm * math.sqrt(P) + 1e-12)).to(torch.float16))
                 coeffs.append(c)
                 for w, z in zip(masters, zs):
-                    w.add_(z * (-c))
+                    w.add_(z, alpha=-c)
         for n in names:
             params[n].grad = None
         run.steps += [{"op": "train", "tokens": run.tokens},
                       {"op": "extra", "flops": a.dirs * dir_flops, "what": "directional derivatives and steps"}]
         run.report(step, loss)
-        if step + 1 in marks and run.free():
-            prepare.encode_seedlog(names, a.seed, torch.stack(coeffs).tolist(), "f16")
-            run.encoded()
-    blob = prepare.encode_seedlog(names, a.seed, torch.stack(coeffs).tolist(), "f16")
-    run.encoded()
-    run.close_arm(blob, trainable, {"directions": len(coeffs), "steps": n_steps})
+        base = prepare.encode_seedlog(names, a.seed, coeffs, "f16")
+        run.used.add(run.bucket())
+    run.close_arm(base, trainable, {"directions": len(coeffs), "steps": n_steps})
 
 
 def parse_arms(base: argparse.Namespace) -> list[argparse.Namespace]:
