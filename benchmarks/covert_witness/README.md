@@ -12,7 +12,7 @@ island per class (or per direction, `islands/<direction>/`), each with one edita
 `README.md`, for a researcher agent.
 
 **Version**: v2.3 (`prepare.VERSION`, in every witness record, schema `covert-witness/witness/v4`; the harness is te_core
-3.5; data version `sealed.DATA` v2.2). Since v2, every candidate runs inside te_core's harness, which counts its MACs and
+3.5.1; data version `sealed.DATA` v2.2). Since v2, every candidate runs inside te_core's harness, which counts its MACs and
 times its steps, and every run is ingested into te_core's ledger, which prices ρ. Since v2.1, every search score is on a
 fresh slice of the search pool drawn after the weights are hashed, promotions are decided on a sealed set one bit each,
 and the final set and a final start are sealed until the scorer's final scoring. Since v2.2, one pinned commit
@@ -22,7 +22,9 @@ separate evaluation job that rebuilds and scores the model; the held-out sets le
 documents. v2.3, the night's last pin, adds te_core 2.7-3.5 to it: the counter's routes and product forms, the guard over
 other runs' outputs and the C++ and Rust loaders, the screen over code it never reads (runpy, exec/compile, marshal,
 pickle, modules written during the run), ρ by thresholds, a declared step's rebuild-cost floor, the `sparse`, `lora2`
-and `quant` formats with every E's rebuild cost, and the meter's tied-embedding adapters.
+and `quant` formats with every E's rebuild cost, and the meter's tied-embedding adapters. Its second commit changes
+only the final-score path (a final-set score has no search slice: evaluate.py and the ledger's ingest), and measures
+every search run as the first does, so the frontier counts both (`same_version`).
 
 ## Classes
 
@@ -113,8 +115,8 @@ about 2.4x a compiled run). A class's score at a start is its lowest valid searc
 - **Pinned version** (`pin.py`, `pinned.json` on `cursor/covert-witness-4207`): the one commit whose fixed side measures
   every candidate. launch.py ships it (a clean worktree of it under `~/.research/cw-pinned/`) whatever the candidate's
   checkout holds, and the witness and ledger records name it (`measurement_commit`); te_core's frontier leaves out a
-  record of any other commit (`other-version`) and one whose E an earlier record at the pin, or another agent's at any
-  commit, submitted (`duplicate-e`).
+  record of any other commit than it and the earlier commits of its version (`same_version`) (`other-version`), and
+  one whose E an earlier record at the pin, or another agent's at any commit, submitted (`duplicate-e`).
 - **Nodes** (`nodes.txt`, `prep.sh`): a node is listed (`NODE pool=GPU_POOL cpu=CPU_POOL`) once `prep.sh`, run there
   in its CPU pool, has installed the starts, built the held-out sets (checked against `prepare.SET_SHA256`, left
   read-only) and registered the sealed start; on a prepared node it only checks. vy-nebius-1, -2 and -3 are listed.
