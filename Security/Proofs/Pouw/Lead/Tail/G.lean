@@ -98,22 +98,23 @@ certifier releases, which `CertifierCoins` makes `coinsOf` of the entropy, an eq
 values is the share of coin values. -/
 theorem G_tail : Pouw.Guarantees.Lead.G_tail := by
   intro pr H T m n K κ stream C isA can Real Device Ent _ cert coinsOf runC hcert hC h32 hw1 htile hone hcard hsha
-    hhon hout σ hcan
-  have hrel : ∀ e, released cert runC σ e = coinsOf e := fun e => by
+    hhon hout σ
+  have hrel : ∀ e, released cert runC σ.1 e = coinsOf e := fun e => by
     unfold released
-    rw [hcert (σ.aRoot, e)]
+    rw [hcert (σ.1.aRoot, e)]
     rfl
-  have h := G_tail_coins pr H T m n K κ stream C isA can Real hC h32 hw1 htile hone hcard hsha hhon hout σ hcan
+  have h := G_tail_coins pr H T m n K κ stream C isA can Real hC h32 hw1 htile hone hcard hsha hhon hout σ.1 σ.2
   have heq := Pouw.pr_equiv coinsOf (fun ω : Coins (lead T m n K) =>
-    Accepted (lead T m n K) H C κ σ ω ∧ ¬ Break (lead T m n K) H C κ σ ω ∧
-      (σ.work pr ω : ℚ) + betaLead (lead T m n K) C * (σ.exec ω).egress <
+    Accepted (lead T m n K) H C κ σ.1 ω ∧ ¬ Break (lead T m n K) H C κ σ.1 ω ∧
+      (σ.1.work pr ω : ℚ) + betaLead (lead T m n K) C * (σ.1.exec ω).egress <
         32 * (honestRegs (lead T m n K) C - gapFixed (lead T m n K) C))
   simp only [hrel]
   exact heq.le.trans h
 
-/-- **The tail at the three points and decode** (`Pouw.Guarantees.Lead.TailAt`). -/
-theorem tailAt : Pouw.Guarantees.Lead.TailAt := by
-  intro T n K hn hK L hL htiles
+/-- The tail at one of the three points or decode, for a call of `n, K ≥ 4,096` and at most `2^30` tiles. -/
+theorem tailAt_mem (T n K : ℕ) (hn : 4096 ≤ n) (hK : 4096 ≤ K) (L : Pouw.Lead.Layout)
+    (hL : L ∈ [pt512x64 n K, pt512x512 n K, pt8192 n K, lead T 1 n K])
+    (htiles : L.rowBlocks * L.colBlocks * L.S ≤ 2 ^ 30) : etaLead L ≤ 1 / 2 ^ 34 := by
   have hmem : L.mem = 2 ^ 40 := by
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hL
     rcases hL with rfl | rfl | rfl | rfl <;> rfl
@@ -130,5 +131,9 @@ theorem tailAt : Pouw.Guarantees.Lead.TailAt := by
   push_cast at htab'
   unfold etaLead
   linarith
+
+/-- **The tail at the three points and decode** (`Pouw.Guarantees.Lead.TailAt`): `tailAt_mem` at each. -/
+theorem tailAt : Pouw.Guarantees.Lead.TailAt := fun T n K hn hK =>
+  List.forall_iff_forall_mem.2 fun L hL htiles => tailAt_mem T n K hn hK L hL htiles
 
 end Pouw.SecurityProofs.Lead.Tail

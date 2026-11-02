@@ -14,6 +14,7 @@ the words root it releases the links, and the release carries `⌈log₂(r + 1)�
 * **Accepted** (`Forward.Accepted`): the certifier refuses a forward whose counted and release bits pass its bits.
 * **Its network term** (`Forward.networkRegs`): each call's `betaLead` a bit its execution exchanged, in registers.
   That the calls' bits are the forward's counted ones is a premise (`Pouw.Assumptions.Lead.SerialForwards`).
+* **Its largest `β`** (`Forward.betaMax`): the largest `betaLead` among its calls.
 -/
 
 namespace Pouw.Lead
@@ -52,5 +53,8 @@ def Forward.Accepted (F : Forward) : Prop := ((F.count + F.release : ℕ) : ℚ)
 
 /-- **A forward's network term** in registers: `betaLead` a bit each call's execution exchanged, over 32. -/
 def Forward.networkRegs (F : Forward) : ℚ := (F.calls.map fun c => betaLead c.L c.C * c.egress).sum / 32
+
+/-- **A forward's largest `β`**: the largest `betaLead` among its calls, 0 for a forward of none. -/
+def Forward.betaMax (F : Forward) : ℚ := (F.calls.map fun c => betaLead c.L c.C).foldr max 0
 
 end Pouw.Lead

@@ -16,7 +16,8 @@ empty root and hm96 messages differ from a leaf in a header byte. The stream's t
 
 `honestL1w` is the honest lemma at the deployed instance: `honestOfCommit` at `l1wCommit`, `l1wIsA` and the certifier's
 stream `certStream`, at every admitted call whose A is at most `2^64` bytes, in every forward whose words leaves number
-at most `2^64`. `honest` is the guarantee, `honestL1w` beside `certifierCoins`.
+at most `2^64`. `honest` (`Honest`) is `honestL1w` beside `certifierCoins`: a completeness statement, not a guarantee;
+`Witness.G_honest` is `G`'s honest witness at one deployed instance.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Compose
@@ -440,9 +441,31 @@ theorem honestL1w (T m n K : ℕ) (hadm : (lead T m n K).Admits) (hA : m * K ≤
     (commitL1w_l1w _ (Dvd.intro _ rfl) (Dvd.intro _ rfl) (show 0 < 65536 by norm_num) P hnb F hF
       (aLeaves_le T m n K hA) H A H κ) hadm
 
-/-- **The honest lemma** (`Pouw.Guarantees.Lead.Honest`): `certifierCoins` beside `honestL1w`, at every admitted
-call. -/
-theorem honest : Pouw.Guarantees.Lead.Honest := fun T m n K H κ hadm =>
+/-- **`G`'s premises at every admitted call**, a completeness statement (`G_honest` is `G`'s honest witness, at one
+deployed instance): at every call of the lead the verifier admits (`Layout.Admits`), the hypotheses are jointly
+satisfiable at the deployed instance: some certifier meets `CertifierCoins`, and at the deployed commitment
+(`l1wCommit`), its form classifier (`l1wIsA`) and the certifier's coin stream (`certStream`) the nominal W1 table and
+some set of strategies meet every other premise of `G`, with an honest strategy accepted at every coin value. That is
+for every A of at most `2^64` bytes, all commitment parameters whose column tile is a positive number of blocks, and
+every forward of the call whose words leaves number at most `2^64` (`range-u64` domains refuse more). -/
+def Honest : Prop :=
+  ∀ (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
+    (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ), (lead T m n K).Admits →
+    (∃ (Device Ent : Type) (cert : Device) (coinsOf : Ent ≃ Coins (lead T m n K))
+      (runC : Device → Hash.Digest × Ent → Hash.Digest × Coins (lead T m n K)), CertifierCoins cert coinsOf runC) ∧
+    ∀ (P : L1w) (F : CallForward) (A : Fin (lead T m n K).rows → Fin (lead T m n K).K → UInt8),
+      0 < P.nb → m * K ≤ 2 ^ 64 → F.leaves P.nb (lead T m n K) ≤ 2 ^ 64 →
+      ∃ (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
+        CommitL1w H (l1wCommit _ P F H A) (l1wIsA _ P F H A) κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧
+        TileGrain H (l1wCommit _ P F H A) κ (certStream _) Real ∧ OneInstructionMinimal Real ∧
+        CardWithinAccelW1 Real Real ∧ ShaWrites (l1wIsA _ P F H A) Real ∧
+        HonestHashRuled H (l1wCommit _ P F H A) κ Real ∧
+        OutsourceWithinEgressLead h100Nominal (betaLead (lead T m n K) (l1wCommit _ P F H A)) H
+          (l1wCommit _ P F H A) κ Real ∧
+        Real σ ∧ ∀ ω, Accepted (lead T m n K) H (l1wCommit _ P F H A) κ σ ω
+
+/-- **`G`'s premises at every admitted call** (`Honest`): `certifierCoins` beside `honestL1w`. -/
+theorem honest : Honest := fun T m n K H κ hadm =>
   ⟨⟨Unit, _, (), _, _, certifierCoins _⟩, fun P F A hnb hA hF => honestL1w T m n K hadm hA H κ P hnb F hF A⟩
 
 end Pouw.SecurityProofs.Lead.Compose

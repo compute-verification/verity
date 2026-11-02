@@ -152,13 +152,13 @@ theorem G_coins (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
 values. -/
 theorem G : Pouw.Guarantees.Lead.G := by
   intro pr H T m n K κ stream C isA can Real Device Ent cert coinsOf runC hcert hC h32 hw1 htile hone hcard hsha hhon
-    hout σ hcan O hacc
-  have hrel : ∀ e, released cert runC σ e = coinsOf e := fun e => by
+    hout σ O hacc
+  have hrel : ∀ e, released cert runC σ.1 e = coinsOf e := fun e => by
     unfold released
-    rw [hcert (σ.aRoot, e)]
+    rw [hcert (σ.1.aRoot, e)]
     rfl
   simp only [hrel] at hacc ⊢
-  have h := G_coins pr H T m n K κ stream C isA can Real hC h32 hw1 htile hone hcard hsha hhon hout σ hcan
+  have h := G_coins pr H T m n K κ stream C isA can Real hC h32 hw1 htile hone hcard hsha hhon hout σ.1 σ.2
     (O.map coinsOf.toEmbedding) fun ω hω => by
       obtain ⟨e, he, rfl⟩ := Finset.mem_map.1 hω
       exact hacc e he

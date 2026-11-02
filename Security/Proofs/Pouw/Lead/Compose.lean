@@ -11,5 +11,6 @@ the honest strategy meeting every premise but `CommitL1w` at every coin stream a
 honest lemma at every stream and commitment meeting `CommitL1w` (`honestOfCommit`), `CommitL1w` at a commitment whose
 messages include frame-v3 leaves over the words and A's bytes (`commitL1w_of_leaves`), and a certifier running
 `certCode` (`certifierCoins`); `Deployed`, `CommitL1w` at the deployed commitment (`commitL1w_l1w`), the honest lemma at
-the deployed commitment and the certifier's stream (`honestL1w`), and the guarantee (`honest`).
+the deployed commitment and the certifier's stream (`honestL1w`), and `G`'s premises at every admitted call, a
+completeness statement (`honest`).
 -/

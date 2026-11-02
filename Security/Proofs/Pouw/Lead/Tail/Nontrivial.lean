@@ -38,7 +38,8 @@ theorem gapFixed_lt_honest {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (hsha
 
 /-- **The tail form's nontrivial lemma** (`Pouw.Guarantees.Lead.NontrivialTail`). -/
 theorem nontrivialTail : NontrivialTail := by
-  intro n K hn hK L hL
+  intro n K hn hK
+  refine List.forall_iff_forall_mem.2 fun L hL => ?_
   have hS : K ≤ 28 * stepsFor K := by simp only [stepsFor]; omega
   have pos : ∀ T m : ℕ, 0 < m → 0 < servedRegs (lead T m n K) := fun T m hm => by
     show (0 : ℚ) < (m * n * K : ℚ) / 32
@@ -56,7 +57,7 @@ theorem nontrivialTail : NontrivialTail := by
     have hL' : L ∈ [pt512x64 n K, pt512x512 n K, pt8192 n K, lead 1 1 n K] := by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hL ⊢
       tauto
-    exact (tailAt 1 n K hn hK L hL' ht).trans_lt (by norm_num)
+    exact (tailAt_mem 1 n K hn hK L hL' ht).trans_lt (by norm_num)
   obtain ⟨h64, h512, h8192, -⟩ := gapFixedAt 1 n K hn hK
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hL
   rcases hL with rfl | rfl | rfl
@@ -66,5 +67,12 @@ theorem nontrivialTail : NontrivialTail := by
       (rows 512 512) (cols 512 512) hS, heta⟩
   · exact ⟨fun C hC => gapFixed_lt_honest C ((h8192 C hC).trans (by norm_num)) (pos 8192 8192 (by norm_num))
       (rows 8192 8192) (cols 8192 8192) hS, heta⟩
+
+/-- `nontrivialTail` at one of the three points. -/
+theorem nontrivialTail_mem (n K : ℕ) (hn : 4096 ≤ n) (hK : 4096 ≤ K) (L : Pouw.Lead.Layout)
+    (hL : L ∈ [pt512x64 n K, pt512x512 n K, pt8192 n K]) :
+    (∀ C : Pouw.Lead.Commit L, ChunksOf L C → gapFixed L C < honestRegs L C) ∧
+      (L.rowBlocks * L.colBlocks * L.S ≤ 2 ^ 30 → etaLead L < 1) :=
+  List.forall_iff_forall_mem.1 (nontrivialTail n K hn hK) L hL
 
 end Pouw.SecurityProofs.Lead.Tail
