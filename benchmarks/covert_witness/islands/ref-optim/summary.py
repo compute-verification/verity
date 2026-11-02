@@ -1,6 +1,7 @@
 """ref-optim's scoreboard: for each start, the lowest valid bpb and the fewest training FLOPs to each target
 (start x (1 - 0.5%, 1%, 2%, 5%)) over every reference record's curve, from the launcher's ledger and the fetched run dirs.
-Only records at the pinned measurement commit (`pinned.json`) count, each against the start bpb its witness carries.
+Only records at the pinned measurement commit (`pinned.json`, with its `same_version` commits) count, each against the
+start bpb its witness carries.
 
     python benchmarks/covert_witness/islands/ref-optim/summary.py [--ledger ~/.research/covert-witness.jsonl] [--rows]
 """
