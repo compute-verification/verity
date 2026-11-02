@@ -4,13 +4,18 @@ reference. `islands/<class>/train.py` on this branch runs `main(class)`; E alway
 Mechanisms (`--mech`):
 
 - `relora`: K pieces of rank r. Each piece is a LoRA (A ~ N(0, 1/d_in), B = 0, scale sqrt(d_in / r)) trained by AdamW
-  for its share of the steps, then merged into the fp32 running weights (its factors rounded to E's dtype, the scale folded
-  into B), and the factors and their optimizer state restart. K = 1 is plain LoRA.
+  for its share of the steps, then merged (its factors rounded to E's dtype, the scale folded into B), and the factors and
+  their optimizer state restart. K = 1 is plain LoRA. A merge rebuilds each weight from θ with every piece so far
+  (`prepare.lora_merge`), so the running weights are decode(θ, E_j) bit for bit. Its steps can't be declared: each also
+  reads the active piece's factors, new tensors that no fixed format decodes.
 - `stack`: the same K pieces kept as adapters on θ, never merged, so every base W x stays θ's (`--basis lora`: ReLoRA's
   function; `--basis galore`: GaLore in adapter form, each piece's frozen factor the top-r singular basis of the
   gradient at its first step).
 - `galore`: every target matrix is trained in full through a rank-r projected Adam (GaLore). The projector is the top-r
   singular basis of the gradient, refreshed K times, so each period's update is exactly P_j @ N_j, one rank-r piece.
+  After every step each W is rebuilt from θ with the pieces so far as E stores them (N's and the norm gains' fp32
+  masters kept apart), so the next step reads decode(θ, E_t) bit for bit and declares E_t (`prepare.declare_step`):
+  merged steps the harness credits as a counterexample family.
 - `full`: AdamW (or Muon) on the target matrices; `--project-every T` projects W − θ onto its best fitting low-rank
   approximation every T steps (rank-constrained training by projection).
 - `subspace`: exact-gradient descent in a random subspace whose basis comes from seeds: each direction z_i is the seed
@@ -385,7 +390,7 @@ def run_relora(run: Run) -> None:
     per_step = prepare.train_flops(run.rec, trainable, [{"op": "train", "tokens": run.tokens}])["flops"]
     merge = sum(2 * r * params[n].shape[0] * params[n].shape[1] for n in targets)
     trunc = sum(svd_flops(tuple(params[n].shape)) for n in targets)
-    n_steps = run.n_steps(per_step, K * merge + trunc)
+    n_steps = run.n_steps(per_step, K * (K + 1) // 2 * merge + trunc)
     run.plan(n_steps)
     bounds = [round(n_steps * j / K) for j in range(K + 1)]
     pieces = {n: [] for n in targets}
@@ -413,10 +418,11 @@ def run_relora(run: Run) -> None:
         if step + 1 == bounds[piece + 1]:
             with torch.no_grad():
                 for n, (A, B, s) in fac.items():
-                    aq, bq = A.detach().to(CODE["dtype"]), (s * B.detach()).to(CODE["dtype"])
-                    params[n].data += no_tf32_matmul(bq, aq)
-                    pieces[n].append((aq, bq))
-            run.steps.append({"op": "extra", "flops": merge, "what": f"merge piece {piece}"})
+                    pieces[n].append((A.detach().to(CODE["dtype"]), (s * B.detach()).to(CODE["dtype"])))
+                so_far = concat_factors(pieces)
+                for n, (aq, bq, _) in so_far.items():
+                    params[n].data.copy_(prepare.lora_merge(run.theta_dev[n], aq, bq, 1.0))
+            run.steps.append({"op": "extra", "flops": (piece + 1) * merge, "what": f"merge pieces 0-{piece} from θ"})
             piece += 1
             if piece < K:
                 run.snapshot_pieces(pieces)
@@ -562,15 +568,13 @@ class GaloreState:
         return dense(self.P.T.to(CODE["dtype"])), dense(self.N.to(CODE["dtype"]))
 
     @torch.no_grad()
-    def step(self, w: torch.Tensor, grad: torch.Tensor, lr: float, b1=0.9, b2=0.95, eps=1e-8) -> None:
+    def step(self, grad: torch.Tensor, lr: float, b1=0.9, b2=0.95, eps=1e-8) -> None:
         R = self.P.T @ grad if self.left else grad @ self.P
         self.t += 1
         self.m.mul_(b1).add_(R, alpha=1 - b1)
         self.v.mul_(b2).addcmul_(R, R, value=1 - b2)
         d = (self.m / (1 - b1 ** self.t)) / ((self.v / (1 - b2 ** self.t)).sqrt() + eps)
-        d.mul_(-lr)
-        self.N.add_(d)
-        w.add_(self.P @ d if self.left else d @ self.P.T)
+        self.N.add_(d, alpha=-lr)
 
 
 def run_galore(run: Run) -> None:
@@ -580,43 +584,64 @@ def run_galore(run: Run) -> None:
     for n in targets:
         params[n].requires_grad_(True)
     st = {n: GaloreState(params[n], r) for n in targets}
+    masters = {n: params[n].detach().clone() for n in run.norms}
     trainable = {"full": sorted(targets + run.norms)}
     per_step = prepare.train_flops(run.rec, trainable, [{"op": "train", "tokens": run.tokens}])["flops"]
     proj = sum(4 * r * params[n].shape[0] * params[n].shape[1] for n in targets)
     svd = sum(svd_flops(tuple(params[n].shape)) for n in targets)
-    n_steps = run.n_steps(per_step + proj, (K + 1) * svd)
+    rebuild = sum(2 * K * r * params[n].shape[0] * params[n].shape[1] for n in targets)
+    n_steps = run.n_steps(per_step + proj + rebuild, (K + 1) * svd)
     run.plan(n_steps)
     bounds = [round(n_steps * j / K) for j in range(K + 1)]
     pieces = {n: [] for n in targets}
     fwd = torch.compile(run.net) if a.compile else run.net
     print(json.dumps({"mech": "galore", "arm": len(run.results), "lr": a.lr, "steps": n_steps, "rank": r, "pieces": K,
-                      "targets": len(targets), "norms": len(run.norms), "flops_per_step": per_step + proj}), flush=True)
-    piece = 0
+                      "targets": len(targets), "norms": len(run.norms), "flops_per_step": per_step + proj + rebuild}),
+          flush=True)
+    piece, base = 0, b""
     for step in range(n_steps):
         frac = schedule(step, n_steps, a.warmup, bounds[piece], a.rewarm)
-        loss = loss_backward(fwd, run.next_batch(), a)
+        rows = run.next_batch()
+        if base:
+            prepare.declare_step(base)
+        loss = loss_backward(fwd, rows, a)
         torch.nn.utils.clip_grad_norm_([params[n] for n in targets + run.norms], 1.0)
         if step == bounds[piece]:
             for n in targets:
                 st[n].refresh(params[n].grad, a.keep_moments)
             run.steps.append({"op": "extra", "flops": svd, "what": f"projector SVDs, piece {piece}"})
         for n in targets:
-            st[n].step(params[n].data, params[n].grad, a.lr * frac)
+            st[n].step(params[n].grad, a.lr * frac)
             params[n].grad = None
-        if nopt:
-            for grp in nopt.param_groups:
-                grp["lr"] = a.norm_lr * schedule(step, n_steps, a.warmup)
-            nopt.step()
-            nopt.zero_grad(set_to_none=True)
-        run.steps += [{"op": "train", "tokens": run.tokens}, {"op": "extra", "flops": proj, "what": "projections"}]
+        with torch.no_grad():
+            if nopt:
+                for grp in nopt.param_groups:
+                    grp["lr"] = a.norm_lr * schedule(step, n_steps, a.warmup)
+                for n in run.norms:
+                    params[n].data.copy_(masters[n])
+                nopt.step()
+                nopt.zero_grad(set_to_none=True)
+                for n in run.norms:
+                    masters[n].copy_(params[n].data)
+                    params[n].data.copy_(masters[n].to(CODE["dtype"]))
+            if step + 1 == bounds[piece + 1]:
+                for n in targets:
+                    pieces[n].append(st[n].piece())
+                piece += 1
+                current = pieces
+            else:
+                current = {n: pieces[n] + [st[n].piece()] for n in targets}
+            # each step reads W = decode(θ, E_t) bit for bit: rebuilt from θ with the factors as E stores them
+            so_far = concat_factors(current)
+            for n, (aq, bq, _) in so_far.items():
+                params[n].data.copy_(prepare.lora_merge(run.theta_dev[n], aq, bq, 1.0))
+        run.steps += [{"op": "train", "tokens": run.tokens}, {"op": "extra", "flops": proj, "what": "projections"},
+                      {"op": "extra", "flops": rebuild, "what": "rebuild from θ"}]
         run.report(step, loss, piece=piece)
-        if step + 1 == bounds[piece + 1]:
-            for n in targets:
-                pieces[n].append(st[n].piece())
-            piece += 1
-            if piece < K:
-                run.snapshot_pieces(pieces)
-    run.finish(pieces, run_deltas(run), trainable, {"pieces": K, "rank": r, "steps": n_steps})
+        if step + 1 < n_steps:
+            base = prepare.encode_lora(so_far, CODE["name"], run.norm_vals())
+            run.used.add(run.bucket())
+    run.finish(pieces, run_deltas(run), trainable, {"pieces": K, "rank": r, "steps": n_steps, "declared": True})
 
 
 def newton_schulz(g: torch.Tensor, steps: int = 5) -> torch.Tensor:
