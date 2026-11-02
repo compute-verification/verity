@@ -1,8 +1,10 @@
 """The search's frontier, read from the ledger's index.
 
-    python -m te_core.frontier [--root DIR] [--json OUT] [--promote TIER --as scorer]
+    python -m te_core.frontier [--root DIR] [--json OUT]
 
-Per (k, r) cell of the grid (score.K_BITS x score.R):
+It reads the submissions of te_core's current VERSION only: from 2.2 a covert_witness val bpb is a paired score on a
+fresh slice of the search pool and its start's bpb is the whole pool's, which an earlier record's fixed-set scores don't
+compare with. Per (k, r) cell of the grid (score.K_BITS x score.R):
 
 - the frontier: the valid submissions no other beats on both |C| ρ and val bits per byte;
 - the elites: per niche (mechanism tag x β range x φ range x start), the submission with the least val bits per byte,
@@ -11,8 +13,8 @@ Per (k, r) cell of the grid (score.K_BITS x score.R):
 - W*(l*), honest(l*) and the effective slowdown W*/honest at l* = the start's bits per byte less 0.5%, 1%, 2% and 5%,
   honest(l*) being the least |C| over the reference runs (`reference` records) on that start.
 
-`--promote T`, run as the scorer, writes a promotion to tier T for every frontier member and elite at tier T - 1 not yet
-promoted.
+`candidates(rows, T)` are the frontier members and elites at tier T - 1 not yet promoted to T; which of them are promoted
+is decided on the sealed promotion set, one bit each (covert_witness's `promote.py --tier T`, run as the scorer).
 """
 from __future__ import annotations
 
@@ -22,7 +24,8 @@ import math
 import sys
 from pathlib import Path
 
-from .ledger import SCORER, Ledger
+from . import VERSION
+from .ledger import Ledger
 from .score import K_BITS, R, cell, effective_slowdown, honest, w_star
 
 BETA_EDGES = (1e-3, 1e-2, 1e-1, 1.0, 10.0)
@@ -36,7 +39,7 @@ def bin_of(x: float, edges: tuple[float, ...]) -> int:
 
 
 def valid(rows: list[dict]) -> list[dict]:
-    return [r for r in rows if not r.get("invalid") and r.get("val_bpb") is not None]
+    return [r for r in rows if not r.get("invalid") and r.get("val_bpb") is not None and r.get("run_te_core") == VERSION]
 
 
 def cost(r: dict, key: str) -> float:
@@ -128,22 +131,18 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--root", type=Path, default=None)
     ap.add_argument("--json", type=Path, default=None)
-    ap.add_argument("--promote", type=int, choices=(1, 2), default=None)
-    ap.add_argument("--as", dest="agent", default="")
+    ap.add_argument("--promote", type=int, choices=(1, 2), default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--as", dest="agent", default="", help=argparse.SUPPRESS)
     a = ap.parse_args(argv)
-    led = Ledger(a.root, a.agent)
-    rows = led.index()
+    if a.promote:
+        print(f"promotions are decided on the sealed promotion set, one bit each: from benchmarks/covert_witness/, "
+              f"`python promote.py --tier {a.promote}` (the scorer's)", file=sys.stderr)
+        return 2
+    rows = Ledger(a.root).index()
     rep = report(rows)
     if a.json:
         a.json.write_text(json.dumps(rep, indent=1) + "\n")
     print(markdown(rep))
-    if a.promote:
-        if a.agent != SCORER:
-            print("--promote runs as the scorer (--as scorer)", file=sys.stderr)
-            return 2
-        for rid in candidates(rows, a.promote):
-            led.promote(rid, a.promote, "frontier or elite at the tier below")
-            print(f"promoted {rid} to tier {a.promote}")
     return 0
 
 
