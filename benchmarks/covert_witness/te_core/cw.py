@@ -27,13 +27,18 @@ library's, or one of the harness's prepare's classes, `watched`) makes its run i
   is credited, not only adapter factors.
 
 The held-out sets are unreadable from the program (an audit hook refuses every open, listing or stat under
-`prepare.HELD_OUT`), except while the harness's own evaluator runs. Subprocesses go to `guard.log`.
+`prepare.HELD_OUT`), except while the harness's own evaluator runs. Subprocesses go to `guard.log`. A thread or a
+process the program starts makes its run invalid: the counter's mode is per thread, and a child's work is its own.
+So do child processes' CPU time while the program ran, and a child still alive when it returns (a spawn that raises no
+audit event). Loading or calling native code through ctypes is a flag.
 """
 from __future__ import annotations
 
 import hashlib
 import importlib.util
 import os
+import re
+import resource
 import struct
 import sys
 from contextlib import contextmanager
@@ -49,21 +54,72 @@ ENCODERS = ("encode_full", "encode_lora", "encode_lora2", "encode_seedlog", "enc
 #: the standard library modules prepare's loader, decoder and evaluator call into
 STDLIB = ("hashlib", "io", "json", "math", "struct", "zlib")
 PATH_EVENTS = {"open", "os.listdir", "os.scandir", "os.stat", "glob.glob", "os.chdir", "os.symlink", "os.link"}
-SPAWN_EVENTS = {"subprocess.Popen", "os.system", "os.exec", "os.posix_spawn"}
+#: `_posixsubprocess.fork_exec` (multiprocessing's spawn and forkserver starts) raises no audit event of its own
+FORK_EXEC = "te_core.fork_exec"
+SPAWN_EVENTS = {"subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork", "os.forkpty",
+                FORK_EXEC}
+THREAD_EVENTS = {"_thread.start_new_thread", "_thread.start_joinable_thread"}
+NATIVE_EVENTS = {"ctypes.dlopen", "ctypes.dlsym", "ctypes.dlsym/handle", "ctypes.call_function"}
+#: child processes' CPU seconds while the program runs above which its run is invalid
+CHILD_CPU_S = 0.5
+
+
+def _children_cpu_s() -> float:
+    ru = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return ru.ru_utime + ru.ru_stime
+
+
+def live_children() -> list[int]:
+    """This process's child processes, alive or unreaped, from /proc."""
+    me, out = os.getpid(), []
+    for d in os.listdir("/proc"):
+        if d.isdigit():
+            try:
+                ppid = int(Path(f"/proc/{d}/stat").read_text().rsplit(")", 1)[1].split()[1])
+            except (OSError, ValueError, IndexError):
+                continue
+            if ppid == me:
+                out.append(int(d))
+    return out
+
+
+def _audit_fork_exec() -> None:
+    import _posixsubprocess
+
+    fork_exec = _posixsubprocess.fork_exec
+    if getattr(fork_exec, "_te_audited", False):
+        return
+
+    def fork_exec_(*args, _f=fork_exec):
+        sys.audit(FORK_EXEC)
+        return _f(*args)
+
+    fork_exec_._te_audited = True
+    _posixsubprocess.fork_exec = fork_exec_
 
 
 def import_prepare(script: Path):
-    """covert_witness's `prepare`, from the nearest directory at or above the script's that has one, else the working
-    directory's (a script sent with the run sits in its inputs)."""
-    for d in [Path(script).resolve().parent, *Path(script).resolve().parents, Path.cwd()]:
+    """covert_witness's `prepare`, from the nearest directory above the script's that has one, else the script's own,
+    else the working directory's (a script sent with the run sits in its inputs), so a prepare.py beside an island's
+    train.py doesn't replace the fixed one. Every module prepare.py names is imported here too, before the program
+    runs: one it imports lazily (`model`, `tiktoken`) is then the fixed side's, not a same-named file the program puts
+    first on sys.path."""
+    s = Path(script).resolve()
+    for d in [*s.parent.parents, s.parent, Path.cwd()]:
         if (d / "prepare.py").is_file():
             sys.path.insert(0, str(d))
             spec = importlib.util.spec_from_file_location("prepare", d / "prepare.py")
             mod = importlib.util.module_from_spec(spec)
             sys.modules["prepare"] = mod
             spec.loader.exec_module(mod)
+            names = re.findall(r"(?m)^\s*(?:from|import)\s+([A-Za-z_][\w.]*)", (d / "prepare.py").read_text())
+            for name in sorted(set(names)):
+                try:
+                    importlib.import_module(name)
+                except ImportError:
+                    pass
             return mod
-    raise SystemExit(f"{script}: no prepare.py at or above it")
+    raise SystemExit(f"{script}: no prepare.py above it, beside it or in the working directory")
 
 
 def private_copy(prepare):
@@ -159,6 +215,11 @@ class Adapter:
         self.declared_outside = 0
         self.watch: list = []
         self.rebound: set[str] = set()
+        self.running = False
+        self.started: dict[str, int] = {}
+        self.native: dict[str, int] = {}
+        self.children_cpu_s = 0.0
+        self.alive: list[int] = []
 
     # -- installation
 
@@ -190,8 +251,19 @@ class Adapter:
                 setattr(p, name, self._encoder(getattr(p, name)))
         if hasattr(p, "declare_step"):
             p.declare_step = self.declare_step
+        _audit_fork_exec()
         sys.addaudithook(self._hook)
         self.watch = watched(own)
+
+    def start(self) -> None:
+        """The program starts running."""
+        self.children_cpu_s -= _children_cpu_s()
+        self.running = True
+
+    def stop(self) -> None:
+        self.running = False
+        self.alive = live_children()
+        self.children_cpu_s += _children_cpu_s()
 
     def declare_step(self, base: bytes = b"", suffixes=()) -> None:
         """The step in progress's weights as encodings from θ (the module docstring), into the family `E`."""
@@ -231,7 +303,12 @@ class Adapter:
                     return
                 if s == self.forbidden or s.startswith(self.forbidden + os.sep):
                     raise PermissionError(f"te_core: {s} is held out; only the harness's evaluator reads it")
-        elif event in SPAWN_EVENTS and self.guard_log is not None:
+            return
+        if self.running and (event in SPAWN_EVENTS or event in THREAD_EVENTS):
+            self.started[event] = self.started.get(event, 0) + 1
+        elif self.running and event in NATIVE_EVENTS:
+            self.native[event] = self.native.get(event, 0) + 1
+        if event in SPAWN_EVENTS and self.guard_log is not None:
             with open(self.guard_log, "a") as f:
                 f.write(f"{event} {args[:2]!r}\n")
 
@@ -302,10 +379,21 @@ class Adapter:
 
     def problems(self) -> list[str]:
         self._check()
-        if not self.rebound:
-            return []
-        return [f"the program rebound what the harness's uncounted work calls: {sorted(self.rebound)[:6]}"]
+        out = []
+        if self.rebound:
+            out.append(f"the program rebound what the harness's uncounted work calls: {sorted(self.rebound)[:6]}")
+        if self.started:
+            out.append(f"the program started threads or processes ({self.started}): their work runs outside the counter")
+        if self.children_cpu_s > CHILD_CPU_S:
+            out.append(f"child processes used {self.children_cpu_s:.1f} CPU-s while the program ran")
+        if self.alive:
+            out.append(f"child processes outlived the program: {self.alive[:5]}")
+        return out
+
+    def flags(self) -> list[str]:
+        return [f"native: the program loaded or called native code through ctypes {self.native}"] if self.native else []
 
     def meta(self) -> dict:
         return {"adapter": "covert_witness", "submitted": self.submitted, "declared_outside_steps": self.declared_outside,
+                "children_cpu_s": self.children_cpu_s, "native_calls": self.native,
                 "start_record": {k: self.rec[k] for k in ("name", "digest", "tokenizer", "parameters")} if self.rec else {}}

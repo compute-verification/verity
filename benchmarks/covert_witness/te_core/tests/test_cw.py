@@ -94,8 +94,13 @@ def test_a_recast_copy_of_theta_is_theta_and_a_lossy_one_is_not():
 
 def test_the_screen_reads_names_not_substrings():
     assert te_run.screen("t0 = time.perf_counter()\nfwd = torch.compile(net)\nfrom te_core import hooks\n") == []
+    assert te_run.screen("model.eval()\npat = re.compile(r'x')\nempty = torch.empty(3)\n") == []
+    prose = '"""Runs under te_core.run --script."""\n\n\ndef f():\n    """No threading here."""\n    return 1  # nor subprocess\n'
+    assert te_run.screen(prose) == [] and te_run.screen(prose + "x = 'subprocess'\n") == ["subprocess"]
     for bad in ("te.counter.paused = 1", "from te_core import flops", "import te_core.run", "torch._dynamo.reset()",
-                "with uncounted():", "sys.modules['x']"):
+                "with uncounted():", "sys.modules['x']", "import threading", "from concurrent import futures",
+                "os.fork()", "os.popen('ls')", "torch.library.custom_op", "exec('x = 1')", "eval ('1')",
+                "compile(src, 'f', 'exec')", "import builtins", "torch._C.TensorBase.numpy(t)"):
         assert te_run.screen(bad), bad
 
 
@@ -137,6 +142,60 @@ def test_the_stream_batch_is_token_data_without_an_embedding(tmp_path, monkeypat
     assert rec["invalid"] == [], rec["invalid"]
     (s,) = rec["steps"]
     assert s["tokens"] == 4 * 8 and s["by"]["fwd/updated"] == 4 * 8 * 16 * 16
+
+
+@pytest.mark.parametrize(("variant", "why"), [
+    ("custom_op", "outside torch's own"), ("bilinear", "no formula for"), ("numpy_mm", "read out of torch"),
+    ("thread", "started threads or processes"),
+    pytest.param("fork", "started threads or processes",
+                 marks=pytest.mark.filterwarnings("ignore:This process .* is multi-threaded:DeprecationWarning")),
+    ("sibling", "modules the program imported"),
+])
+def test_a_route_past_the_counter_makes_the_run_invalid(tmp_path, monkeypatch, variant, why):
+    rec = run_probe(tmp_path, monkeypatch, variant)
+    assert any(why in p for p in rec["invalid"]), rec["invalid"]
+
+
+@pytest.mark.parametrize("variant", ["div_mm", "add_exp"])
+def test_a_matmul_written_without_a_multiplication_is_counted_as_one(tmp_path, monkeypatch, variant):
+    rec = run_probe(tmp_path, monkeypatch, variant)
+    assert rec["invalid"] == [], rec["invalid"]
+    (s,) = rec["steps"]
+    assert s["tokens"] == 4 * 8 and s["by"]["fwd/updated"] == 4 * 8 * 16 * 16
+
+
+def test_a_statistic_per_sequence_may_leave_torch(tmp_path, monkeypatch):
+    rec = run_probe(tmp_path, monkeypatch, "numpy_stat")
+    assert rec["invalid"] == [], rec["invalid"]
+    (s,) = rec["steps"]
+    assert s["exited"] == 4 + 4 < s["tokens"]
+
+
+def test_the_fixed_prepare_above_an_island_wins_and_its_modules_are_imported_first(tmp_path, monkeypatch):
+    from te_core import cw
+
+    (tmp_path / "prepare.py").write_text("def load():\n    import te_fixed_lazy\n    return te_fixed_lazy.WHO\n")
+    (tmp_path / "te_fixed_lazy.py").write_text("WHO = 'fixed'\n")
+    island = tmp_path / "islands" / "x"
+    island.mkdir(parents=True)
+    (island / "prepare.py").write_text("def load():\n    return 'island'\n")
+    (island / "te_fixed_lazy.py").write_text("WHO = 'island'\n")
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.delitem(sys.modules, "te_fixed_lazy", raising=False)
+    monkeypatch.setitem(sys.modules, "prepare", None)
+    prepare = cw.import_prepare(island / "train.py")
+    sys.path.insert(0, str(island))
+    assert Path(prepare.__file__) == tmp_path / "prepare.py" and prepare.load() == "fixed"
+    assert Path(sys.modules["te_fixed_lazy"].__file__) == tmp_path / "te_fixed_lazy.py"
+
+
+def test_the_harness_work_imports_from_the_path_it_began_with(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    te = te_run.Session({}, tmp_path)
+    sys.path.insert(0, str(tmp_path / "program"))
+    with te.uncounted():
+        inside = list(sys.path)
+    assert str(tmp_path / "program") not in inside and sys.path[0] == str(tmp_path / "program")
 
 
 def test_plain_copies_containers_and_refuses_what_could_run_code():

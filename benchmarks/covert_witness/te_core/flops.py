@@ -2,14 +2,26 @@
 with the structure the annotation reads. Nothing a program reports about its compute is read.
 
 `Counter` is a TorchDispatchMode installed around the whole program (run.py), so it sees every aten op on every device,
-forward, backward (autograd's threads inherit the mode) and optimizer alike. It counts, in multiply-accumulates (MACs):
+forward, backward (autograd's threads inherit the mode; a program's own threads don't, and run.py refuses them) and
+optimizer alike. It counts, in multiply-accumulates (MACs):
 
-- matmuls (`mm`, `addmm`, `bmm`, `baddbmm`, `dot`, `mv`, `addmv`, `addbmm`, `_int_mm`, `_scaled_mm`), attention and
-  convolutions, by torch's FLOP formulas (`torch.utils.flop_counter`) halved, or by shape;
-- elementwise multiplications (`mul`, `addcmul`, `addcdiv`, `lerp`, `add` with a scale, their in-place and `_foreach_`
-  forms), one MAC per output element, so a matmul written as a broadcast product is counted too, and fused optimizer
-  steps at their unfused forms' multiplications per parameter;
-- dense linear algebra (`eigh`, `svd`, `qr`, `cholesky`, `inv`, solves), at n**3 per matrix, marked approximate.
+- matmuls (`mm`, `addmm`, `bmm`, `baddbmm`, `dot`, `mv`, `addmv`, `addbmm`, `addr`, `_int_mm`, `_scaled_mm`, their
+  in-place forms), attention and convolutions, by torch's FLOP formulas (`torch.utils.flop_counter`) halved, or by
+  shape; distances (`cdist`, `pdist`) at one MAC per coordinate pair, and `embedding_bag` at one per index and column;
+- elementwise multiplications (`mul`, `div`, `addcmul`, `addcdiv`, `lerp`, `add` with a scale, their in-place and
+  `_foreach_` forms), one MAC per output element, so a matmul written as a broadcast product or quotient is counted
+  too, and fused optimizer steps at their unfused forms' multiplications per parameter;
+- dense linear algebra (`eigh`, `svd`, `qr`, `cholesky`, `inv`, solves), at n**3 per matrix, marked approximate;
+- any other forward op that combines token-indexed data with an updated weight (an add, a norm with a trained gain,
+  `exp` of a sum), at one MAC per element of its largest operand or result, since a product can be written through
+  any of them (`x + w` then `exp`, `log`): it is an updated node. A gather (`embedding`, `index`, ...) moves its
+  source's rows without computing on them, so only its indices combine.
+
+An op outside torch's own namespaces (a `torch.library` custom op, whose body runs where the mode can't see it,
+`foreign_ops`) or an aten op whose name says it computes products but that has no formula here (an RNN kernel,
+`_trilinear`, a packed matmul, `unknown_ops`) would count as zero; run.py makes such a run invalid. So does token data
+read out of torch (`numpy`, `tolist`, DLPack: `guard_exits`) at one value or more per token of its step (`exited`), since
+what is computed on it outside torch isn't counted.
 
 |C| is their sum (`macs`). Each multiplication is a node classified by its operands' provenance, which the counter tracks
 per tensor through every op within a step:
@@ -31,7 +43,8 @@ operand: optimizer work), and every product in autograd's backward is `bwd/grad`
 row upstream of it in its token's pass (the cone of updated forward nodes its operands were computed from). Every value
 autograd's backward produces is a weight from then on (`derived`): a gradient used as a weight, directly or through an
 out-of-place update, is updated. So is a token-derived operand shaped like a weight in a two-token-operand matmul (a
-gradient computed by hand); a forward activation that happens to have a weight's 2-D shape is counted as one too.
+gradient computed by hand); a forward activation that happens to have a weight's 2-D shape is counted as one too. A
+node's token rows are its token operand's rows (its elements, for integer token data), at most the step's tokens.
 
 Tags are cleared at every step boundary, so a value carried from one step to the next is a weight from then on. Writes
 the dispatcher doesn't see (a custom kernel into a weight's memory) are caught at each step's end, when every registered
@@ -42,6 +55,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import resource
 import time
@@ -64,29 +78,72 @@ def _shape_macs(func, args) -> int:
     if p in (aten.mm, aten._int_mm):
         (m, k), (_, n) = args[0].shape, args[1].shape
         return m * k * n
-    if p is aten.addmm:
+    if p in (aten.addmm, aten.addmm_, aten._addmm_activation):
         (m, k), (_, n) = args[1].shape, args[2].shape
         return m * k * n
     if p is aten.bmm:
         (b, m, k), (_, _, n) = args[0].shape, args[1].shape
         return b * m * k * n
-    if p in (aten.baddbmm, aten.addbmm):
+    if p in (aten.baddbmm, aten.baddbmm_, aten.addbmm, aten.addbmm_):
         (b, m, k), (_, _, n) = args[1].shape, args[2].shape
         return b * m * k * n
     if p in (aten.dot, aten.vdot):
         return args[0].numel()
     if p is aten.mv:
         return args[0].numel()
-    if p is aten.addmv:
+    if p in (aten.addmv, aten.addmv_):
         return args[1].numel()
+    if p in ADDR:
+        return args[1].numel() * args[2].numel()
+    if p in (aten._cdist_forward, aten._euclidean_dist):
+        (*batch, n, d), m = args[0].shape, args[1].shape[-2]
+        return math.prod(batch) * n * m * d
+    if p is aten._cdist_backward:
+        (*batch, n, d), m = args[1].shape, args[2].shape[-2]
+        return math.prod(batch) * n * m * d
+    if p in (aten._pdist_forward, aten._pdist_backward):
+        n, d = args[0 if p is aten._pdist_forward else 1].shape
+        return n * (n - 1) // 2 * d
+    if p in EMBEDDING_BAG:
+        idx = next(t for t in _tensors(args) if not (t.is_floating_point() or t.is_complex()))
+        return idx.numel() * args[0].shape[-1]
     raise KeyError(p)
 
 
-SHAPE_OPS = {aten.mm, aten._int_mm, aten.addmm, aten.bmm, aten.baddbmm, aten.addbmm, aten.dot, aten.vdot, aten.mv, aten.addmv}
-#: The non-GEMM op sets by aten name, which te_core.capture's static count (`capture.structure`) reads too.
-ELEMENTWISE_NAMES = frozenset({"mul", "mul_", "addcmul", "addcmul_", "addcdiv", "addcdiv_", "lerp", "lerp_", "_foreach_mul",
-                               "_foreach_mul_", "_foreach_addcmul", "_foreach_addcmul_", "_foreach_addcdiv",
-                               "_foreach_addcdiv_", "_foreach_lerp", "_foreach_lerp_"})
+def _ops(*names) -> set:
+    return {getattr(aten, n) for n in names if hasattr(aten, n)}
+
+
+EMBEDDING_BAG = _ops("_embedding_bag", "_embedding_bag_forward_only", "_embedding_bag_backward",
+                     "_embedding_bag_dense_backward", "_embedding_bag_per_sample_weights_backward")
+ADDR = _ops("addr", "addr_")
+#: matmuls whose first operand is an accumulator
+ACCUMULATING = _ops("addmm", "addmm_", "_addmm_activation", "baddbmm", "baddbmm_", "addbmm", "addbmm_", "addmv", "addmv_") | ADDR
+SHAPE_OPS = _ops("mm", "_int_mm", "addmm", "addmm_", "_addmm_activation", "bmm", "baddbmm", "baddbmm_", "addbmm", "addbmm_",
+                 "dot", "vdot", "mv", "addmv", "addmv_", "_cdist_forward", "_cdist_backward", "_euclidean_dist",
+                 "_pdist_forward", "_pdist_backward") | ADDR | EMBEDDING_BAG
+#: Parts of the names of ops that compute products. An op whose name has one, and that neither the counter nor
+#: te_core.capture has a formula for (an RNN kernel, `_trilinear`, a packed or sparse matmul), makes a run invalid or a
+#: capture refused, since its work would count as zero.
+GEMM_LIKE = ("mm", "matmul", "conv", "linear", "attention", "einsum", "tensordot", "bilinear", "lstm", "gru", "rnn",
+             "addmv", "addr", "dot", "dist", "embedding_bag", "kron")
+#: names with one of those parts that compute no products
+NOT_GEMM = frozenset({"cummax", "cummin", "digamma", "digamma_", "igamma", "igamma_", "igammac", "igammac_", "lgamma",
+                      "lgamma_", "mvlgamma", "mvlgamma_", "polygamma", "polygamma_", "_standard_gamma",
+                      "_convert_weight_to_int4pack", "_convert_weight_to_int4pack_for_cpu", "upsample_linear1d",
+                      "upsample_bilinear2d", "_upsample_bilinear2d_aa", "_upsample_bilinear2d_aa_backward",
+                      "upsample_trilinear3d", "upsample_linear1d_backward", "upsample_bilinear2d_backward",
+                      "upsample_trilinear3d_backward", "_record_function_enter_new", "_record_function_exit",
+                      "conj_physical", "native_dropout_backward"})
+#: the op namespaces whose kernels the counter knows; any other (a `torch.library` custom op, whose body it can't see)
+#: makes a run invalid
+NAMESPACES = frozenset({"aten", "prims", "profiler"})
+#: The non-GEMM op sets by aten name, which te_core.capture's static count (`capture.structure`) reads too. Division is
+#: a multiplication by a reciprocal.
+ELEMENTWISE_NAMES = frozenset({"mul", "mul_", "div", "div_", "addcmul", "addcmul_", "addcdiv", "addcdiv_", "lerp", "lerp_",
+                               "_foreach_mul", "_foreach_mul_", "_foreach_div", "_foreach_div_", "_foreach_addcmul",
+                               "_foreach_addcmul_", "_foreach_addcdiv", "_foreach_addcdiv_", "_foreach_lerp",
+                               "_foreach_lerp_"})
 #: counted as elementwise multiplications only with a scale (`alpha` other than 1)
 SCALED_NAMES = frozenset({"add", "add_", "sub", "sub_", "_foreach_add", "_foreach_add_", "_foreach_sub", "_foreach_sub_"})
 #: fused optimizer steps, at the multiplications per parameter their unfused forms make
@@ -108,6 +165,30 @@ TOKEN_INDEX = {getattr(aten, n) for n in ("embedding", "_embedding_bag", "index"
                                           "scatter", "scatter_", "scatter_add", "scatter_add_", "scatter_reduce",
                                           "scatter_reduce_", "index_put", "index_put_", "index_add", "index_add_",
                                           "index_copy", "index_copy_", "bincount") if hasattr(aten, n)}
+#: ops whose result is gathered from their first argument: their work is the result, not the whole source
+GATHERS = _ops("embedding", "index", "index_select", "take", "gather")
+
+
+def _is_view(func) -> bool:
+    ret = func._schema.returns
+    return bool(ret) and ret[0].alias_info is not None and not ret[0].alias_info.is_write
+
+
+def _work(func, args, kwargs, out) -> int:
+    """An op's work with no multiplication formula: one per element of its largest operand or result (of its index
+    operands and result, for a gather)."""
+    p = func.overloadpacket
+    if p in TOKEN_INDEX:
+        sizes = [t.numel() for t in _tensors((args[1:], kwargs))]
+        sizes += [t.numel() for t in _tensors(out)] if p in GATHERS else []
+    else:
+        sizes = [t.numel() for t in _tensors((args, kwargs, out))]
+    return max(sizes, default=0)
+
+
+def gemm_like(name: str) -> bool:
+    """Whether an aten op's name says it computes products (`GEMM_LIKE`)."""
+    return name not in NOT_GEMM and any(s in name for s in GEMM_LIKE)
 
 
 def _tensors(x) -> list[torch.Tensor]:
@@ -267,6 +348,36 @@ class Step:
     wall_s: float = 0.0
     gpu_s: float = 0.0
     device_macs: dict = field(default_factory=dict)
+    exited: int = 0  # elements of token data read out of torch (`guard_exits`)
+
+
+#: torch.Tensor's methods that hand its values to Python or another library past the dispatcher (`__array__` calls
+#: `numpy`)
+EXITS = ("numpy", "tolist", "__dlpack__")
+_RUNNING: list = []
+
+
+def guard_exits() -> None:
+    """Wrap `EXITS`, once per process, so the innermost running counter sees token data leave torch (`Step.exited`).
+    Install it before anything snapshots torch.Tensor's attributes (cw.watched)."""
+    for name in EXITS:
+        fn = getattr(torch.Tensor, name)
+        if getattr(fn, "_te_exit", False):
+            continue
+
+        def exit_(self, *args, _fn=fn, **kwargs):
+            if _RUNNING:
+                _RUNNING[-1]._exit(self)
+            return _fn(self, *args, **kwargs)
+
+        exit_._te_exit = True
+        exit_.__name__ = exit_.__qualname__ = name
+        setattr(torch.Tensor, name, exit_)
+
+
+def leaked(step: dict) -> bool:
+    """Whether a step's record shows token data read out of torch at one value or more per token."""
+    return step.get("exited", 0) >= max(step["tokens"], 2)
 
 
 class Counter(TorchDispatchMode):
@@ -295,6 +406,7 @@ class Counter(TorchDispatchMode):
         self.paused = 0
         self.unseen_writes: list[tuple[int, str]] = []
         self.unknown_ops: dict[str, int] = {}
+        self.foreign_ops: dict[str, int] = {}
         self.batches = WeakTensorKeyDictionary()
         self.n_batches = 0
         self._reset_tags()
@@ -430,9 +542,21 @@ class Counter(TorchDispatchMode):
 
     def __enter__(self):
         out = super().__enter__()
+        _RUNNING.append(self)
         if self.cur is self.setup:
             self._open(self.setup)
         return out
+
+    def __exit__(self, *exc):
+        if _RUNNING and _RUNNING[-1] is self:
+            _RUNNING.pop()
+        return super().__exit__(*exc)
+
+    def _exit(self, t) -> None:
+        if not self.paused and isinstance(t, torch.Tensor):
+            tag = self.tags.get(t)
+            if tag is not None and tag.tok:
+                self.cur.exited += t.numel()
 
     def tokens(self, batch: torch.Tensor) -> torch.Tensor:
         """Mark `batch` as this step's token data (an index tensor the program passes through some route other than an
@@ -561,20 +685,31 @@ class Counter(TorchDispatchMode):
         bwd = torch._C._current_graph_task_id() != -1
         written = _written(func, args, kwargs)
         persistent = {id(t) for t in written if t not in self.tags}
-        tag = NONE
-        for t in ins:
-            tag = tag.merge(self._tag(t))
+        tags = [self._tag(t) for t in ins]
         if p in TOKEN_INDEX and not bwd:
-            for t in ins:
-                g = self._tag(t)
+            for t, g in zip(ins, tags):
                 if g.tok and not (t.is_floating_point() or t.is_complex() or t.dtype == torch.bool):
                     self._token_source(t, g)
         if p in EMBEDDING and not bwd:
             self._token_source(args[1], self._tag(args[1]))
-            tag = Tag(tok=True).merge(tag)
+            tags = [Tag(tok=True).merge(g) if t is args[1] else g for t, g in zip(ins, tags)]
+        tag = NONE
+        for g in tags:
+            tag = tag.merge(g)
         macs, cls = self._macs(func, args, kwargs, out)
+        if func.namespace not in NAMESPACES:
+            self.foreign_ops[str(func)] = self.foreign_ops.get(str(func), 0) + 1
+        elif not macs and func.namespace == "aten" and gemm_like(p.__name__):
+            self.unknown_ops[str(func)] = self.unknown_ops.get(str(func), 0) + 1
+        if not macs and not bwd and not _is_view(func):
+            # token data and an updated weight combined by any op are an updated node; a gather moves its source's
+            # rows without computing on them, so only its indices combine
+            src = {id(t) for t in _tensors(args[:1])} if p in GATHERS else set()
+            mixed = [g for t, g in zip(ins, tags) if id(t) not in src]
+            if any(g.tok for g in mixed) and any(g.roots and not g.tok for g in mixed):
+                macs, cls = _work(func, args, kwargs, out), "elementwise"
         if macs:
-            tag = self._count(func, ins, macs, cls, tag, bwd)
+            tag = self._count(func, ins, tags, macs, cls, tag, bwd)
         if bwd:
             tag = Tag(False, tag.roots | {DERIVED})
         for t in written:
@@ -593,13 +728,12 @@ class Counter(TorchDispatchMode):
         shapes = {tuple(t.shape) for t in [*self.held.values(), *self.new_tensors.values()] if t.dim() == 2}
         return shapes | {s[::-1] for s in shapes}
 
-    def _count(self, func, ins, macs, cls, tag: Tag, bwd: bool) -> Tag:
+    def _count(self, func, ins, tags, macs, cls, tag: Tag, bwd: bool) -> Tag:
         s = self.cur
         s.macs += macs
         setattr(s, f"{cls}_macs", getattr(s, f"{cls}_macs") + macs)
         dev = ins[0].device.type if ins else "cpu"
         s.device_macs[dev] = s.device_macs.get(dev, 0) + macs
-        tags = [self._tag(t) for t in ins]
         if not bwd and sum(g.tok for g in tags) >= 2 and func.overloadpacket in SHAPE_OPS:
             # a token-derived operand shaped like a weight (a gradient computed by hand) is a weight
             tags = [Tag(False, g.roots | {DERIVED}) if g.tok and self._weight_shaped(t) else g for t, g in zip(ins, tags)]
@@ -625,12 +759,15 @@ class Counter(TorchDispatchMode):
         if phase != "fwd" or not tok:
             return tag
         a = tok[0]
-        first = ins.index(a) == (1 if func.overloadpacket in (aten.addmm, aten.baddbmm, aten.addbmm, aten.addmv) else 0)
-        if a.dim() >= 2 and not first and cls == "matmul":
+        first = next(i for i, t in enumerate(ins) if t is a) == (1 if func.overloadpacket in ACCUMULATING else 0)
+        if not (a.is_floating_point() or a.is_complex()):
+            rows = a.numel()
+        elif a.dim() >= 2 and not first and cls == "matmul":
             rows = (a.numel() // (a.shape[-2] * a.shape[-1])) * a.shape[-1]
         else:
             rows = a.numel() // a.shape[-1] if a.dim() else 1
-        rows = max(rows, 1)
+        # a token row's work is per token: an operand reshaped so its rows outnumber the step's tokens has no more
+        rows = max(min(rows, s.tokens) if s.tokens else rows, 1)
         cone = frozenset().union(*(g.cone for g in tags))
         upstream = sum(self.node_rows[n] for n in cone)
         if kind != "updated":
@@ -662,7 +799,7 @@ class Counter(TorchDispatchMode):
             steps.append({"step": s.index, "tokens": s.tokens, "macs": s.macs, "matmul_macs": s.matmul_macs,
                           "elementwise_macs": s.elementwise_macs, "approx_macs": s.approx_macs, "by": s.by,
                           "struct": sid, "weights": s.weights, "shapes": s.shapes, "cpu_s": s.cpu_s, "wall_s": s.wall_s,
-                          "gpu_s": s.gpu_s, "device_macs": s.device_macs})
+                          "gpu_s": s.gpu_s, "device_macs": s.device_macs, "exited": s.exited})
         ru = resource.getrusage(resource.RUSAGE_CHILDREN)
         totals = {
             "macs": sum(s["macs"] for s in steps),
@@ -681,6 +818,7 @@ class Counter(TorchDispatchMode):
         totals["device_macs"] = devs
         return {"totals": totals, "setup": steps[0], "steps": steps[1:-1], "tail": steps[-1], "structures": structures,
                 "unseen_writes": self.unseen_writes, "new_weights": sorted(self.new_tensors),
+                "unknown_ops": dict(sorted(self.unknown_ops.items())), "foreign_ops": dict(sorted(self.foreign_ops.items())),
                 "digest_key": self.wdigest.key.hex() if self.wdigest else None}
 
 

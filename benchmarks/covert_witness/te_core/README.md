@@ -87,8 +87,12 @@ covert_witness's islands run unmodified (`cw.py`): the harness wraps the fixed `
 at tier 2), uncounted. A batch from `TrainData.next` is token data through any op that reads it, not only an embedding
 lookup (`flops.Counter.batch`). The encoders and `submit` are the program's work and are counted. The harness's own work runs
 with its own instance of prepare.py, on plain copies of what the program handed it, and with the program's torch
-function modes, global module hooks and profilers off. A program that rebinds what that work calls (`cw.watched`) makes
-its run invalid. From `benchmarks/covert_witness/`:
+function modes, global module hooks and profilers off, and with the `sys.path` and the modules prepare.py names as they
+were before the program ran. A program that rebinds what that work calls (`cw.watched`) makes its run invalid. So does
+one that routes work past the counter: an op outside torch's own namespaces (a custom op), a product op with no MAC
+formula, token data read out of torch (`numpy`, `tolist`, DLPack) at a value per token or more, a thread or a child
+process it starts, or a module it imports that names a route the screen refuses (`run.Imports`). From
+`benchmarks/covert_witness/`:
 
 ~~~text
 python -m te_core.run --script islands/CLASS/train.py --out OUT [--families DIR] [--budget-fraction F] [--tier T] \
@@ -135,7 +139,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 
 | file | what it does |
 |---|---|
-| `flops.py` | `Counter`: the dispatch-mode harness counting MACs and provenance; `flags`: uncounted-work flags; `forward_macs_per_token` |
+| `flops.py` | `Counter`: the dispatch-mode harness counting MACs and provenance; `guard_exits`: token data read out of torch; `flags`: uncounted-work flags; `forward_macs_per_token` |
 | `annotate.py` | `annotate(record, through)`: the maximal annotation, per step U, D_t, the depth profile; `Annotation.phi(d_min)` |
 | `counterexample.py` | `Family` (the program's writer), `check` (the sampled bit-for-bit rebuild), `coverage` |
 | `score.py` | `score` (options (a) and (b)), `score_grid`, `checkpoints`, `w_star`, `honest`, `effective_slowdown` |
@@ -147,14 +151,20 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |
-| `capture/` | the static count: one training step traced on fakes (`make_fx`), its \|C\|, GEMM roles and φ without running, in `flops`'s record form; its own suite. Its elementwise, fused-optimizer and linear-algebra op sets are `flops`'s (`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`) |
+| `capture/` | the static count: one training step traced on fakes (`make_fx`), its \|C\|, GEMM roles and φ without running, in `flops`'s record form; its own suite. Its op sets are `flops`'s (`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`, `GEMM_LIKE`, `NOT_GEMM`, `TOKEN_INDEX`, `GATHERS`), and so is its rule for an updated node with no multiplication |
 | `tests/` | a suite (`uv run tools/verity/check/suites.py benchmarks/covert_witness/te_core`); `cw_fake/` is a fake `prepare` and island |
 
 ## Limits of the count
 
 - **Work outside torch's dispatcher** (custom CUDA or Triton kernels, host libraries) isn't counted. The screen refuses
-  the usual routes. The flags `cpu_heavy`, `cpu_parallel`, `children`, `gpu_unexplained` (with `--peak-macs-per-s`) and
-  `cpu_macs` show work the count can't vouch for. Torch compilation is disabled and CUDA graph replay refused.
+  the usual routes by name, and the routes it can see run make the run invalid (above). What stays open is in-process:
+  a program that reaches the harness's own objects by attribute lookups (`getattr` on `hooks.ACTIVE`, frames) can pause
+  the counter or rewrite its record; torch's C methods (`torch._C.TensorBase.numpy`, storages, `torch.save` into a
+  buffer) read values out unseen; a grandchild process that outlives its parent isn't seen; and native code through
+  ctypes is only the `native` flag. The flags `cpu_heavy`, `cpu_parallel`, `children`, `gpu_unexplained` (with
+  `--peak-macs-per-s`) and `cpu_macs` show work the count can't vouch for; a check outside the training process (the
+  GPU's own busy time against the counted MACs) is what bounds the in-process routes. Torch compilation is disabled and
+  CUDA graph replay refused.
 - **Provenance is by value for θ's tensors and by origin for everything else**: a tensor that isn't exactly one of θ's
   counts as a differing weight even when it computes nothing new (a zero-initialized adapter factor at step 0, say).
   Any annotation holding a subset of these is still valid, so this error can only raise ρ, and a counterexample family
@@ -162,7 +172,8 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 - **Harness work is neither counted nor timed**: loading, encoding, decoding and evaluation run outside the dispatch
   mode and outside the steps' clocks; `totals` sums the steps' seconds and `process_*` the whole process.
 - **The held-out guard is the integrator's**: an audit hook refuses the held-out directory except while the harness
-  evaluates; a second thread could read during an evaluation, and a subprocess runs unguarded (logged to `guard.log`).
+  evaluates. Reads in C++ (`torch.from_file`, safetensors' loaders) raise no audit event, so it doesn't see them.
+  Subprocesses are logged to `guard.log`, and any the program starts make its run invalid.
 - **Script steps follow the data stream**: a script that fetches all its data at once is one step, which keeps every
   count but coarsens D and φ.
 - **Weight shape**: a forward activation with a weight's exact 2-D shape, in a matmul of two token-indexed operands,
