@@ -219,7 +219,7 @@ def test_train_sh_runs_with_the_queues_credentials_and_git_never_prompts(tmp_pat
 
 
 def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypatch):
-    """An ejection post names the PR's owner too, not only @ci, so the owner doesn't hear of a conflict through a relay.  The
+    """An ejection post names the PR's owner too, not only drive's own handle, so the owner doesn't hear of a conflict through a relay.  The
     owner's handle comes from main's registry: the lane the body names, the agent id it carries, the ready mark's author, or
     the agent whose id ends in the branch's suffix."""
     import dataclasses
@@ -314,8 +314,8 @@ def test_two_independent_root_causes_are_two_posts(world, monkeypatch):
 
 
 def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refused_post_is_retried(world, monkeypatch):
-    """`research msg send` refuses a `--to` naming the sender, so drive posting as ci to @ci would post no notice at all. The
-    sender is also selectable (`queue eject --by lean`), so its handle, not always @ci, must be dropped."""
+    """`research msg send` refuses a `--to` naming the sender, so drive posting to its own handle would post no notice at all.
+    The sender is also selectable (`queue eject --by lean`), so its handle, not always drive's own, must be dropped."""
     from research import drive
 
     argv = []
@@ -343,9 +343,9 @@ def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refus
     assert state["told"] == ["k"] and logged[-1].startswith("research queue drive: told @ci @circuits")
 
 
-@pytest.mark.parametrize("to, sender", [(("@ci",), "ci"), (("@ci", "@circuits"), "ci"), (("@ci", "@lean"), "lean")])
+@pytest.mark.parametrize("to, sender", [(("@lean",), "lean"), (("@lean", "@circuits"), "lean"), (("@lean", "@infra"), "infra")])
 def test_every_notice_drive_sends_passes_msg_sends_own_refusals(monkeypatch, to, sender):
-    """A train's failure for @ci alone, starting `@ci queue:`, is refused by `msg send` as a post that wakes only its author.  A
+    """A notice for its sender alone, starting `@SENDER queue:`, is refused by `msg send` as a post that wakes only its author.  A
     stand-in for `msg send` would hide that refusal, so here each post goes through `msg send` itself."""
     from research import drive, slack
 
@@ -513,3 +513,43 @@ def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_ca
     ids, tail = train_launch(tmp_path, "c" * 40, "m1", extra.pop("agreement"), deferred="pytest,circuit-check", **extra)
     assert ids == ["r20261027-120000-aaaa"]
     assert f"argv: {'c' * 40} m1 --deferred pytest,circuit-check --no-cache --circuit-cache --no-regenerate" in tail, tail
+
+
+def test_a_tick_sets_the_record_drivers_its_clone_lacks_and_plain_git_then_merges_two_records_with_merge_py(world, monkeypatch):
+    """A queue clone seeded from a copy without the drivers (or with another value) gets every `RECORD_DRIVER` key on a tick,
+    logged once, and a later tick only reads them; then a git without `git_env`'s settings merges two PRs' lean-audit.json
+    records in that clone through merge.py rather than line by line."""
+    import json
+    import os
+    from pathlib import Path
+
+    from research.clone import RECORD_DRIVER
+
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    tools = {f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")}
+    base = world.change({**tools, ".gitattributes": "lean-audit.json merge=lean-audit\n"})
+    _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
+    wd = world.tmp / "q" / "verity"
+    _git(world.tmp, "clone", "-q", str(world.origin), str(wd))
+    _git(wd, "config", "--local", "merge.lean-caps.driver", "true")
+    h = Harness(world, monkeypatch)
+    assert h.q.workdir == wd
+
+    def said() -> list[str]:
+        return [x for x in world.logs if "set the record merge drivers" in x]
+
+    h.tick()
+    (line,) = said()
+    assert line.endswith(", ".join(RECORD_DRIVER)), line
+    assert {k: _git(wd, "config", "--local", "--get", k) for k in RECORD_DRIVER} == RECORD_DRIVER
+    h.tick()
+    assert said() == [line]
+
+    rec = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    a, b = (world.change({"pkg/lean-audit.json": json.dumps({**rec, "guarantees": {**rec["guarantees"], g: "1"}})}, base=base)
+            for g in "AB")
+    for k in [k for k in os.environ if k.startswith("GIT_CONFIG")]:
+        monkeypatch.delenv(k)
+    _git(wd, "fetch", "-q", "origin", f"refs/dev/{a}", f"refs/dev/{b}")
+    tree = _git(wd, f"--attr-source={base}", "merge-tree", "--write-tree", "--no-messages", a, b)
+    assert set(json.loads(_git(wd, "show", f"{tree}:pkg/lean-audit.json"))["guarantees"]) == {"T", "A", "B"}

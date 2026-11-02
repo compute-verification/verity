@@ -3,10 +3,10 @@ import Definitions.Core.Advice
 /-!
 # Private partitions with public predicates
 
-A private partition is the prover's advice, registered under a hidden root before any coin that depends on it: its rows,
+A private partition is the prover's advice, committed under a hidden root before any coin that depends on it: its rows,
 under salts of the prover's choosing, in the advice tree (`Advice`). The verifier never sees it: it holds the public
-predicates `Q` and the root, and the registration proves that the circuit has a partition meeting `Q` whose advice has
-that root (`Registered`). This is `verity/partition/v2`; `verity/partition/v1`'s public partition is unchanged.
+predicates `Q` and the root, and the commitment's proof shows that the circuit has a partition meeting `Q` whose advice
+has that root (`Commits`). This is `verity/partition/v2`; `verity/partition/v1`'s public partition is unchanged.
 
 `Partition`'s type already gives covering and disjointness: every computed gate is in exactly one unit, and inputs are in
 none. The predicates add the rest of the draft's global ones:
@@ -18,7 +18,7 @@ none. The predicates add the rest of the draft's global ones:
 
 The width rule holds for every unit, wrong or not, which is what bounds the bits that wrong units can leak.
 
-The registration checks the width rule once per Definition, not per unit. Its advice is a Call table, the circuit's
+The commitment's proof checks the width rule once per Definition, not per unit. Its advice is a Call table, the circuit's
 computed gates grouped into root Calls with each Call's returned gates (`Calls`), and per Definition a cut, an owner per
 gate of the Call. Unit `u`'s outputs inside its Call (`localOuts`) are its gates that the Call returns, or that a gate of
 another unit of the same Call reads. They depend only on the Call's own graph, so all Calls of one Definition share them,
@@ -67,11 +67,11 @@ def Meets (Q : Predicates) : Prop :=
 
 end Partition
 
-/-- `r` registers `root` under `Q`: its partition meets `Q`, and the advice tree over the partition's rows (`A`) under
-`r`'s salts, framed by `F` and hashed by `H`, has root `root`. The registration's statement is that some `r` does; the
+/-- `r` commits to `root` under `Q`: its partition meets `Q`, and the advice tree over the partition's rows (`A`) under
+`r`'s salts, framed by `F` and hashed by `H`, has root `root`. The commitment's statement is that some `r` does; the
 verifier holds `Q` and `root`, never `r`. -/
-def Registered {C : Circuit} (H : List UInt8 → Digest) (F : Advice.Framing) (A : Advice.Rows C) (Q : Predicates)
-    (r : Advice.Registration C) (root : Digest) : Prop :=
+def Commits {C : Circuit} (H : List UInt8 → Digest) (F : Advice.Framing) (A : Advice.Rows C) (Q : Predicates)
+    (r : Advice.Committed C) (root : Digest) : Prop :=
   r.P.Meets Q ∧ r.root H F A = root
 
 /-- The circuit's computed gates grouped into its root Calls `0, …, m − 1`, with the gates the Calls return. A value read
