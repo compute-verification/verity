@@ -1,4 +1,4 @@
-"""sbench's side of the remote bandwidth audit beside its arms (`sbench.py --bw-passes GIB`): `Side` runs `dbw_side.py`
+"""sbench's side of PoUB beside its arms (`sbench.py --bw-passes GIB`): `Side` runs `dbw_side.py`
 (the audit's verifier, and its prover on sbench's GPU) and starts each session as sbench needs it; `report` reads both
 timelines, sbench's decode rows and the audit's passes, on the host's monotonic clock.
 

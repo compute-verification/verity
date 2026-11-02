@@ -112,15 +112,8 @@ ALLOWED: dict[str, str] = {
     "before any coin draws (the firewall's staged statements)": "a line of GLOSSARY.md that queued PRs on next rewrite; the protocol vocabulary's rename follows them",
     "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/rho/rho/envelopes.py`, "
                                                        "which a queued PR on next rewrites; renamed after it lands",
-    "charges a tied audit no faulty term": "`NetworkCheck.Period`'s refusal of a tied audit with a unit undrawn, which the "
-                                           "network tests' mirror and difftest pin; renamed with the Lean's faulty names",
-    "(its wrong units' outputs are the egress's)": "the same refusal's reason, the Lean's text; renamed with the Lean's "
-                                                   "faulty names",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
-    "a proof unit's public outputs are at most 16 bits": "`verity/core/protocols/network/tests/period_case.py`'s comment on "
-                                                         "OUT_BITS: a queued PR on next rewrites the lines above it; renamed "
-                                                         "after it lands",
 }
 
 PENDING: dict[str, str] = {
@@ -149,6 +142,9 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/certifier/boundary.py": "#4721 rewrites its lines",
     "verity/core/protocols/certifier/egress.py": "#4721 rewrites its lines",
     "verity/core/protocols/certifier/tests/test_network_certifier_egress.py": "#4721 rewrites its lines",
+    "verity/core/protocols/network/tests/period_case.py": "#6383 rewrites its docstrings and the rows form's refusals",
+    "verity/core/protocols/network/tests/test_network_period_protocol.py": "#6383 rewrites its docstrings and the rows "
+                                                                           "form's refusals",
     "verity/core/protocols/pous/README.md": "#4719 rewrites its lines",
     "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
     "verity/ml/circuits/ops/boolean/rowwise.py": "#4539 rewrites its lines",

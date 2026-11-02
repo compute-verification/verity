@@ -85,7 +85,7 @@ SALT_BYTES = 192
 M32 = (1 << 32) - 1
 #: the public row's parameters, in its bit order
 PUBLIC = HW.PUBLIC
-PUB_BITS = 512 + 64 + 1024
+PUB_BITS = CC.PUBLIC_ROW_BITS
 #: STAND-INS for what the network certifier and the window's registration give a certified window, which this harness
 #: runs without: the certifier's reveal(p) (`stand_in_reveal`), the registered stream, and the registered prover's id
 STAND_IN_REVEAL_TAG = b"verity/pouw/h1-prove/stand-in-reveal/v0\0"

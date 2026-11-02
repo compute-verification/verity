@@ -40,7 +40,7 @@ transformers = pytest.importorskip("transformers")
 from verity.ml.circuits.codec import program_digest
 from verity_vllm.program.frontend.derive import DERIVE_VERSION, DeriveReport, Unsupported, derive_report
 from verity.ml.definitions.numerics.serve3_reference import materialize
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 
 # ---------------------------------------------------------------------------------------------------------
 # dims, environment, output
@@ -469,7 +469,7 @@ def evaluate(rep: DeriveReport, module: nn.Module, inputs: tuple, tol_dtype: str
     named = {**dict(module.named_parameters(remove_duplicate=False)), **dict(module.named_buffers(remove_duplicate=False))}
     named.update(_derived_tables(rep, module))
     wrec = params[-1][1]
-    assert isinstance(wrec, Record), wrec
+    assert isinstance(wrec, RecordType), wrec
     ftypes = dict(wrec.fields)
     words: list[list[int]] = []
     for (pn, pt), x in zip(params[:-1], inputs):

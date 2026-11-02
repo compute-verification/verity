@@ -8,7 +8,7 @@ import os
 import stat
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 
 import pytest
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("check_slot", ROOT / "tools" / "verity" / "check" / "slot.py")
 SLOT = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(SLOT)
-NOW = datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
 
 
 class Exec(Exception):
@@ -33,8 +33,9 @@ def any_core(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def roomy_disk(monkeypatch, tmp_path):
-    """The machine's own /workspace never blocks a slot in these tests."""
+    """The machine's own /workspace and check cache never block a slot in these tests."""
     monkeypatch.setattr(SLOT, "DISK", tmp_path / "no-disk")
+    monkeypatch.setattr(SLOT, "cache_disk", lambda: tmp_path / "no-disk")
 
 
 def test_a_disk_short_of_inodes_or_bytes_blocks_every_slot(monkeypatch, tmp_path):
@@ -440,6 +441,29 @@ def test_run_max_counts_from_the_slot_taken_through_the_runs_timeout_control(tmp
             SLOT.main([*bad, "--", "true"])
 
 
+def test_a_wait_with_no_limit_moves_the_run_s_timeout_from_where_it_stands(tmp_path):
+    """`defer_run` adds the wait to the run's timeout as it stands: the control file's (a slot's --run-max, a bare number too) over
+    status.json's launch value; nothing to move outside a run, without a wait or without a timeout; a control file the job can't
+    write (a --job-user run) leaves the timeout as it was and says so."""
+    run = tmp_path / "run"
+    run.mkdir()
+    assert SLOT.defer_run(60, "line", None) is None and SLOT.defer_run(0, "line", str(run)) is None
+    assert SLOT.defer_run(60, "line", str(run)) is None
+    (run / "status.json").write_text(json.dumps({"timeout_s": None}))
+    assert SLOT.defer_run(60, "line", str(run)) is None and not (run / SLOT.RUN_TIMEOUT).exists()
+    (run / "status.json").write_text(json.dumps({"timeout_s": 3600}))
+    assert SLOT.defer_run(60, "line", str(run)).startswith("line: the run's timeout is now 3660 s from its start")
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 3660
+    (run / SLOT.RUN_TIMEOUT).write_text("9000")
+    SLOT.defer_run(1000, "line", str(run))
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 10000
+    (run / SLOT.RUN_TIMEOUT).unlink()
+    (run / SLOT.RUN_TIMEOUT).parent.rmdir()
+    (run / SLOT.RUN_TIMEOUT.parent).write_text("not a directory")
+    said = SLOT.defer_run(60, "line", str(run))
+    assert said.startswith("line: the run's timeout stays 3600 s from its start, counting this 60 s wait")
+
+
 def test_a_run_s_slot_record_says_it_waits_until_it_takes_a_slot_or_leaves_the_line(tmp_path, monkeypatch):
     """A check waiting in the line is not reported running since its launch: its run's slot.json says waiting,
     and why, until the slot is taken, then which slot and when; a waiter that gives up says it left, and why."""
@@ -718,7 +742,7 @@ def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_o
     assert SLOT.ahead(low) == 0 and SLOT.ahead(high) == 1 and SLOT.ahead(unranked) == 2 and SLOT.ahead(lane) == 3
     post, p = SLOT.join(tmp_path, priority=True, rank=0)                    # the post-landing run of `main`
     assert SLOT.ahead(post) == 0 and SLOT.ahead(low) == 1
-    waits = SLOT.waiting(tmp_path / SLOT.LINE, datetime(2026, 10, 19, tzinfo=timezone.utc))
+    waits = SLOT.waiting(tmp_path / SLOT.LINE, datetime(2026, 10, 19, tzinfo=UTC))
     assert [w["priority"] for w in waits] == [True, True, True, True, False]
     assert all(w["since"][:4].isdigit() for w in waits)                  # a ranked ticket's arrival still parses
     for fd in (u, h, lo, la, p):

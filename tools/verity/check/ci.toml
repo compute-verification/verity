@@ -107,7 +107,8 @@ gate = false
 
 # The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
 # choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the
-# shards). Balanced on a cold check's costs on one pod (lean-audit 46 min, soundness alone 45-70 of it; pytest 27, lean-suites
+# shards). These are written by hand and stay as fallbacks: `--shard auto[:MAX]` plans the shards from measured costs instead
+# (`shards.py`, `check.py --shard-plan` prints the plan), N the fewest that reach the critical path. Balanced on a cold check's costs on one pod (lean-audit 46 min, soundness alone 45-70 of it; pytest 27, lean-suites
 # 22, circuit-check about 48 on half the cores), so the wall time is about the soundness audit's.
 # lean-audit runs on a scratch tree, so a shard audits without lean-build; the jobs that read lean-build's binaries `needs`
 # it, or run `after` it, and a shard holds both.
