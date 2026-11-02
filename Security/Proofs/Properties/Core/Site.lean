@@ -421,4 +421,112 @@ theorem refusedAt : RefusedAt := by
   rw [hc] at hs
   exact hs
 
+/-! ## Witnesses
+
+Each guarantee holds at `honestLog`, a host and its uplink registered for the remote composite, and its conclusion
+fails at a check that accepts everything (for `refusedAt`, one that refuses everything): the code's check decides each
+instance, and the guarantee carries it to the spec. -/
+
+theorem honestEntry_refusal :
+    honestEntry.refusal witnessDigests witnessAuditor .remote emptySite "genesis" = none := by decide
+
+theorem staleEntry_refusal :
+    staleEntry.refusal witnessDigests witnessAuditor .remote emptySite "genesis" = some .previous := by decide
+
+theorem check_honestLog :
+    Core.Site.Registration.check witnessDigests witnessAuditor .remote honestLog = .ok (Core.Site.ofLog honestLog) := by
+  rfl
+
+theorem check_staleLog :
+    Core.Site.Registration.check witnessDigests witnessAuditor .remote staleLog = .error (1, .previous) := by rfl
+
+theorem valid_honestLog :
+    Verity.Registration.Valid (digests witnessDigests) (auditor witnessAuditor) (composite .remote) (log honestLog) := by
+  have h := checks witnessDigests witnessAuditor .remote honestLog
+  rw [check_honestLog] at h
+  by_contra hv
+  simp [Except.toOption, hv] at h
+
+theorem not_valid_staleLog :
+    ¬Verity.Registration.Valid (digests witnessDigests) (auditor witnessAuditor) (composite .remote) (log staleLog) := by
+  intro hv
+  have h := checks witnessDigests witnessAuditor .remote staleLog
+  rw [check_staleLog] at h
+  simp [Except.toOption, hv] at h
+
+/-- `Refuses`' honest witness: the code accepts `honestEntry` against the empty Site at the genesis, and so does the
+spec. -/
+theorem refuses_honest :
+    honestEntry.refusal witnessDigests witnessAuditor .remote emptySite "genesis" = none ∧
+      Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+        (site emptySite) "genesis" (regEntry honestEntry) = none := by
+  refine ⟨honestEntry_refusal, ?_⟩
+  rw [← refuses, honestEntry_refusal]
+  rfl
+
+/-- `Refuses`' nontrivial witness: an entry check that accepts everything doesn't refuse `staleEntry` as the spec
+does. -/
+theorem refuses_nontrivial :
+    ¬(acceptAllRefusal staleEntry).map refusal =
+      Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+        (site emptySite) "genesis" (regEntry staleEntry) := by
+  rw [← refuses, staleEntry_refusal]
+  simp [acceptAllRefusal]
+
+/-- `EntryValid`'s honest witness: the code accepts `honestEntry` against the empty Site at the genesis, and it is
+valid there. -/
+theorem entryValid_honest :
+    honestEntry.refusal witnessDigests witnessAuditor .remote emptySite "genesis" = none ∧
+      Verity.Registration.Entry.Valid (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+        (site emptySite) "genesis" (regEntry honestEntry) :=
+  ⟨honestEntry_refusal, (entryValid _ _ _ _ _ _).mp honestEntry_refusal⟩
+
+/-- `EntryValid`'s nontrivial witness: an entry check that accepts everything accepts `staleEntry`, which is not
+valid. -/
+theorem entryValid_nontrivial :
+    ¬(acceptAllRefusal staleEntry = none ↔
+      Verity.Registration.Entry.Valid (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+        (site emptySite) "genesis" (regEntry staleEntry)) := by
+  intro h
+  have hr := (entryValid _ _ _ _ _ _).mpr (h.mp rfl)
+  rw [staleEntry_refusal] at hr
+  cases hr
+
+/-- `Checks`' honest witness: the code's check accepts `honestLog`, with its Site, and the log is valid. -/
+theorem checks_honest :
+    Core.Site.Registration.check witnessDigests witnessAuditor .remote honestLog = .ok (Core.Site.ofLog honestLog) ∧
+      Verity.Registration.Valid (digests witnessDigests) (auditor witnessAuditor) (composite .remote) (log honestLog) :=
+  ⟨check_honestLog, valid_honestLog⟩
+
+/-- `Checks`' nontrivial witness: a log check that accepts everything accepts `staleLog`, which is not valid. -/
+theorem checks_nontrivial :
+    ¬(acceptAllCheck staleLog).toOption.map site =
+      if Verity.Registration.Valid (digests witnessDigests) (auditor witnessAuditor) (composite .remote) (log staleLog)
+      then some (Verity.Site.ofLog (log staleLog)) else none := by
+  simp [not_valid_staleLog, acceptAllCheck, Except.toOption]
+
+/-- `RefusedAt`'s honest witness: the code's check accepts `honestLog` and refuses `staleLog` at its second entry, as
+not following the head. -/
+theorem refusedAt_honest :
+    Core.Site.Registration.check witnessDigests witnessAuditor .remote honestLog = .ok (Core.Site.ofLog honestLog) ∧
+      Core.Site.Registration.check witnessDigests witnessAuditor .remote staleLog = .error (1, .previous) :=
+  ⟨check_honestLog, check_staleLog⟩
+
+/-- `RefusedAt`'s nontrivial witness: a log check that refuses everything at its first entry, as not following the
+head, refuses `honestLog` with a refusal the spec doesn't give that entry, at every index of `honestLog` it may name. -/
+theorem refusedAt_nontrivial :
+    ∀ i : Fin honestLog.length,
+      ¬Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+          (Verity.Site.ofLog (log (honestLog.take i)))
+          (Verity.Registration.head (digests witnessDigests) (composite .remote) (log (honestLog.take i)))
+          (regEntry honestLog[i]) = some (refusal .previous) := by
+  rintro ⟨i, hi⟩
+  obtain rfl : i = 0 := by simp only [honestLog, List.length_singleton] at hi; omega
+  have h := refuses witnessDigests witnessAuditor .remote emptySite "genesis" honestEntry
+  rw [honestEntry_refusal] at h
+  show ¬Verity.Registration.Entry.refusal (digests witnessDigests) (auditor witnessAuditor) (composite .remote)
+    (site emptySite) "genesis" (regEntry honestEntry) = _
+  rw [← h]
+  simp
+
 end Properties.Site

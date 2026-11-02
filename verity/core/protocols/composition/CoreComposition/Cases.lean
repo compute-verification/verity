@@ -1,6 +1,6 @@
 /-
 Inputs for a composition, which the `#guard`s of the composition and of each product build: a stub's case (its
-parameter k, the units drawn and passed its evidence records, its root), any component's case as its own `serve` reads
+parameter k, the units drawn and passed its evidence records, its root), any subprotocol's case as its own `serve` reads
 it (`Case`), and the composition's params, evidence and commitment over a list of them.
 -/
 import CoreComposition.Product
@@ -23,7 +23,7 @@ def stubParams (x : Stubbed) : String := "{\"k\":" ++ toString x.k ++ "}"
 def stubEvidence (x : Stubbed) : String :=
   "{\"drawn\":" ++ toString x.drawn ++ ",\"passed\":" ++ toString x.passed ++ "}"
 
-/-- A stub's case as a component's case: its root is its commitment, and its own digest. -/
+/-- A stub's case as a subprotocol's case: its root is its commitment, and its own digest. -/
 def Stubbed.case (x : Stubbed) : Case :=
   { id := x.id, params := stubParams x, commitment := x.root, evidence := (stubEvidence x).toUTF8 }
 
@@ -47,7 +47,7 @@ def commitmentOf (P : Protocol) (xs : List Stubbed) : ByteArray := bind P.id (xs
 def answer (P : Protocol) (xs : List Stubbed) (ps : List Stubbed := xs) (c : ByteArray := commitmentOf P xs) : Answer :=
   P.answer (paramsOf ps).toUTF8 c (evidenceOf xs).toUTF8
 
-/-- `P`'s answer on any components' cases `xs`, under their own params and the commitment `c`. -/
+/-- `P`'s answer on any subprotocols' cases `xs`, under their own params and the commitment `c`. -/
 def answerCases (P : Protocol) (xs : List Case) (c : ByteArray) : Answer :=
   P.answer (paramsOfCases xs).toUTF8 c (evidenceOfCases xs).toUTF8
 
