@@ -1,7 +1,7 @@
 """Poseidon2 over BabyBear, width 24 (``verity.ml.commitments`` reference; the Ligero gadget imports it as ``archive.direct.ligero.poseidon2``) (Plonky3 parameters), as (a) a scalar reference (the numpy row-vectorised committer and the torch witness path live in ``archive/direct/ligero/poseidon2.py`` / ``hashchain.py``: this package imports nothing outside the standard library),
 permutation for the committer, and (c) a generic ring evaluation the Ligero gadget runs on affine ``Expr`` values.
 
-Parameters (``Plonky3/baby-bear/src/poseidon2.rs``, pinned by ``CONSTANTS_SHA256`` below):
+Parameters (``Plonky3/baby-bear/src/poseidon2.rs``, fetched 2026-09-23; pinned by ``CONSTANTS_SHA256`` below):
 width 24, S-box x^7, R_F = 8 external rounds (4 initial + 4 terminal), R_P = 21 internal rounds; external linear layer
 ``circ(2 M4, M4, ..., M4)`` with ``M4 = [[2,3,1,1],[1,2,3,1],[1,1,2,3],[3,1,1,2]]`` (Plonky3's ``mds_light_permutation``);
 internal linear layer ``1 + Diag(V)`` with ``V = [-2, 1, 2, 1/2, 3, 4, -1/2, -3, -4, 1/2^8, 1/4, 1/8, 1/16, 1/2^7, 1/2^9,
