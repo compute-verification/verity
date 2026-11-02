@@ -11,7 +11,7 @@ It is autoresearch-shaped: a fixed side (`prepare.py`, `evaluate.py`, `candidate
 one editable `train.py` and its program, `README.md`, for a researcher agent.
 
 **Version**: v2.2 (`prepare.VERSION`, in every witness record, schema `covert-witness/witness/v3`; the harness is te_core
-2.10). Since v2, every candidate runs inside te_core's harness, which counts its MACs and times its steps, and every run is
+3.0). Since v2, every candidate runs inside te_core's harness, which counts its MACs and times its steps, and every run is
 ingested into te_core's ledger, which prices ρ. Since v2.1, every search score is on a fresh slice of the search pool drawn
 after the weights are hashed, promotions are decided on a sealed set one bit each, and the final set and a final start
 are sealed until the scorer's final scoring. v2.2 adds the `sparse` and `lora2` formats and every E's rebuild cost, and

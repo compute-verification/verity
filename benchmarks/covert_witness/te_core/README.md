@@ -62,11 +62,10 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 - **β_t**: a step's counterexample β, bits(E_t) over the step's updated MACs per token block.
 - **Coverage**: a family covers the sampled steps that rebuild bit for bit (5 sampled steps at search time, 20 at
   final, drawn from a live coin). A uniform family also covers every step it declares, if every sampled step verified.
-- **Option (a)**: the annotation holding all of U, with β = min(p/r, min over covered steps of β_t).
-- **Option (b)**: the annotation holding only the uncovered steps' U, with β = p/r and φ recomputed on that subset over
-  the same |C|.
-- **ρ (slowdown)**: max(1, φcβ / (k(k + β))) if D ≥ k/β, else 1, for each option, then the larger of (a) and (b), at
-  each (k, r).
+- **U_τ (threshold annotation)**: for τ in {p/r} and the covered steps' β_t below p/r, the uncovered steps' U and the
+  covered steps' with β_t ≥ τ, with β = min(p/r, τ) and φ recomputed on it over the same |C|. A cheap covered step
+  leaves U_τ for every τ above its β_t, so it costs only its own share of φ.
+- **ρ (slowdown)**: max(1, φcβ / (k(k + β))) if D ≥ k/β, else 1, for each U_τ, then the largest, at each (k, r).
 - **bpb**: the held-out bits per byte of the output model from the integrator's fixed evaluator: `val` during the search
   (for covert_witness, a paired score on a fresh slice of its search pool, drawn after the output's digest), `test`
   when finally scored. An evaluator returns None for a sealed split, and the record then holds no test bpb.
@@ -146,7 +145,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `flops.py` | `Counter`: the dispatch-mode harness counting MACs and provenance; `guard_exits`: token data read out of torch; `flags`: uncounted-work flags; `forward_macs_per_token` |
 | `annotate.py` | `annotate(record, through)`: the maximal annotation, per step U, D_t, the depth profile; `Annotation.phi(d_min)` |
 | `counterexample.py` | `Family` (the program's writer), `check` (the sampled bit-for-bit rebuild), `coverage` |
-| `score.py` | `score` (options (a) and (b)), `score_grid`, `checkpoints`, `w_star`, `honest`, `effective_slowdown` |
+| `score.py` | `score` (the largest ρ over the thresholds τ), `score_grid`, `checkpoints`, `w_star`, `honest`, `effective_slowdown` |
 | `ledger.py` | `Ledger` (append-only, per agent, evidence store), `ingest`, the index |
 | `launch.py` | tiers, the promotion gate and hourly cap, the `research run` command (`--pool` with gpu-lease inside, or `--gpus 1`) |
 | `cw.py` | `Adapter`: a covert_witness train.py under the harness, its held-out guard and its evaluator; `CWPlan`, the family `prepare.declare_step` writes |
