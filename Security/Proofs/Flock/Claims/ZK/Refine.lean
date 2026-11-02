@@ -137,18 +137,20 @@ theorem withStops_causal (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → 
 
 theorem withStops_swCausal (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (vs : S.SwVals) (hRf : S.StopsCausal Rf) (hc : S.SwCausal vs) : (S.withStops Rf stop).SwCausal vs := by
-  intro x w ν ω p c c' i h
+  intro x w ν ω s p c c' i h
   show (if Rf x c i = true then stop else if i = 0 then S.enc x c i _ else dropDom (S.enc x c i _)) =
     (if Rf x c' i = true then stop else if i = 0 then S.enc x c' i _ else dropDom (S.enc x c' i _))
   rw [hRf x c c' i h]
-  exact congrArg (fun m => if Rf x c' i = true then stop else if i = 0 then m else dropDom m) (hc x w ν ω p c c' i h)
+  exact congrArg (fun m => if Rf x c' i = true then stop else if i = 0 then m else dropDom m) (hc x w ν ω s p c c' i h)
 
 open Classical in
 /-- **Where the rule stops the coins, the session's switched message is the stop**, before the last coin and after
 it. -/
 theorem swMsgAt_withStops_stop (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
+    (v : (c : Fin (refK x) → S.Coin) → (∀ j, FlockSoundness.Discharge.ZkView.Seen (S.C x j).z) →
+      ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (t : S.Tape) (cs : List S.Coin)
     (hR : Rf x (S.pad cs) (min cs.length (refK x)) = true) : (S.withStops Rf stop).swMsgAt x wt v t cs = stop := by
   by_cases h : cs.length < refK x
   · rw [Nat.min_eq_left h.le] at hR
@@ -168,7 +170,9 @@ open Classical in
 `S`'s.** -/
 theorem swMsgAt_withStops_go (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
+    (v : (c : Fin (refK x) → S.Coin) → (∀ j, FlockSoundness.Discharge.ZkView.Seen (S.C x j).z) →
+      ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (t : S.Tape) (cs : List S.Coin)
     (hR : Rf x (S.pad cs) (min cs.length (refK x)) = false) (h0 : cs.length = 0 ∨ refK x ≤ cs.length) :
     (S.withStops Rf stop).swMsgAt x wt v t cs = S.swMsgAt x wt v t cs := by
   by_cases h : cs.length < refK x
@@ -196,7 +200,9 @@ open Classical in
 leading domain frame.** -/
 theorem swMsgAt_withStops_frame (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
     (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
-    (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
+    (v : (c : Fin (refK x) → S.Coin) → (∀ j, FlockSoundness.Discharge.ZkView.Seen (S.C x j).z) →
+      ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (t : S.Tape) (cs : List S.Coin)
     (hR : Rf x (S.pad cs) cs.length = false) (h0 : 0 < cs.length) (h : cs.length < refK x) :
     (S.withStops Rf stop).swMsgAt x wt v t cs = dropDom (S.swMsgAt x wt v t cs) := by
   show (if cs.length < refK x then
