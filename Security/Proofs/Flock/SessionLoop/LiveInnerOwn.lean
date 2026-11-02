@@ -20,6 +20,9 @@ loop reads back are the worker's, and there both follow from the worker taking `
   `consWhy` refuses, then `innerP` on `repCons`'s proof and constraints. Its `final_c` slot is the one at which the finish
   accepts the request: the passed values fix it (`consWhy`'s `zerocheck c_eval`), and at another the finish computes no
   round and the frame stands in and stops the rep. `Loop.finInner` is the run, `Loop.asksPad` its coins.
+* **`LeanRelease.finOf_finalC_own`** and **`LeanRelease.finOf_tau_own`**: at the worker's own histories, the finish's
+  round 0 is the inner proof's label and `vs`'s `final_c` under the configuration's pad, and its round 2 `vs`'s `τ`
+  commitment (`Loop.vsTau`): the premises `liveInner_withInner_at` takes at a rep's inner rounds.
 * **`LeanRelease.liveInnerOwn_withInner`**: `LiveInnerOwn` at `withInner` on the finish's rounds (`Loop.finOf`), at every
   worker taking some `vs`'s values at its own histories (`Loop.TakesValsOwn`), where `vs` meets `SwCausal`,
   `Loop.FinalCFixed` and `Loop.RowsOK`; a worker taking no `vs`'s values is outside it. Its premises on the statement,
@@ -33,8 +36,10 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec Hashes TMW)
-open _root_.Flock.Firewall.Frame (INNER_ROUNDS)
+open _root_.Flock.Firewall.Frame (INNER_ROUNDS labelFrame wordBytes words)
 open _root_.Flock.Firewall.Finish (Tab RepIn Asks)
+open _root_.Flock.Transcript (header)
+open FlockSoundness.Refine (colBytes)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, as in `Statement`
@@ -75,7 +80,7 @@ def finInner (t : Tab) (rep : ℕ) (dom : ByteArray) (n : ℕ) (q : RepIn) : V (
     let ip ← _root_.Flock.Firewall.Finish.innerP (asksPad q.coins) hs
       (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) pads ic p.zerocheck.finalC cons
     return (p.zerocheck.finalC, ip.tauCommit)
-  let (r, _) ← (prog.run (_root_.Flock.Transcript.init #[] dom)).run 0
+  let ((r, _), _) ← (prog.run (_root_.Flock.Transcript.init #[] dom)).run 0
   return r
 
 open Classical in
@@ -108,6 +113,66 @@ noncomputable def finOf {R : Type} (real : Msg → Flock.Wit → R → ℕ → V
       | .error _ => #[]
     | .error _ => #[]
   | _, _ => #[]
+
+/-- Round 0's `final_c'`, read as the frame reads it and sent back as bytes, is the word's bytes. -/
+theorem wordBytes_words_inner0 (a : F128) :
+    wordBytes (words (inner0 a.toBytes) ((labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16) 1) =
+      a.toBytes := by
+  have h1 : words (inner0 a.toBytes) ((labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16) 1 = #[a] := by
+    have e := finalCOf_inner0 a
+    simp only [finalCOf, Array.toArray_toList] at e
+    apply Array.ext
+    · simp [words_size]
+    · intro i h1 h2
+      obtain rfl : i = 0 := by simpa using h2
+      rw [← getElem!_pos _ 0 h1]
+      exact e
+  rw [h1]
+  apply ByteArray.ext
+  apply Array.ext'
+  rw [wordBytes_data]
+  simp [colBytes]
+
+/-- Round 2's `τ` commitment, read as the frame reads it (four words past its header) and sent back as bytes, is the
+commitment. -/
+theorem wordBytes_words_inner2 {t : ByteArray} (ht : t.size = 64) : wordBytes (words (inner2 t) 16 4) = t := by
+  obtain ⟨P, hP, hc⟩ := colBytes_read 4 t.data.toList (by rw [Array.length_toList]; exact ht)
+  have hd : ∀ i (hi : i < 4), (inner2 t).data.toList.drop (16 + 16 * i) =
+      (P[i]'(by omega)).toBytes.data.toList ++ (colBytes (P.drop (i + 1)) ++ (header 4 1 1).data.toList) := by
+    intro i hi
+    have hs : P = P.take i ++ P[i]'(by omega) :: P.drop (i + 1) := by
+      conv_lhs => rw [← List.take_append_drop i P]
+      rw [List.drop_eq_getElem_cons (by omega)]
+    have hl : ((header 5 0 64).data.toList ++ colBytes (P.take i)).length = 16 + 16 * i := by
+      rw [List.length_append, FlockSoundness.Refine.Frame.header_length, FlockSoundness.Refine.Frame.colBytes_length,
+        List.length_take]
+      omega
+    have e : (inner2 t).data.toList = ((header 5 0 64).data.toList ++ colBytes (P.take i)) ++
+        ((P[i]'(by omega)).toBytes.data.toList ++ (colBytes (P.drop (i + 1)) ++ (header 4 1 1).data.toList)) := by
+      rw [inner2, ByteArray.toList_data_append, ByteArray.toList_data_append, ← hc]
+      conv_lhs => rw [hs]
+      simp only [colBytes, List.flatMap_append, List.flatMap_cons, List.append_assoc]
+    rw [e, List.drop_left' hl]
+  have hw : words (inner2 t) 16 4 = P.toArray := by
+    apply Array.ext
+    · rw [words_size, List.size_toArray, hP]
+    · intro i h1 h2
+      have hi : i < 4 := by rw [words_size] at h1; exact h1
+      have e1 : (words (inner2 t) 16 4)[i]'h1 = wd (inner2 t).data.toList (16 + 16 * i) := by
+        unfold wd
+        have hz : 0 < (words (ByteArray.mk (inner2 t).data.toList.toArray) (16 + 16 * i) 1).size := by
+          rw [words_size]
+          omega
+        rw [getElem!_pos _ 0 hz]
+        simp only [words, Array.getElem_map, Array.getElem_range, Nat.mul_zero, Nat.add_zero]
+        rfl
+      rw [e1, wd_drop (hd i hi)]
+      simp
+  rw [hw]
+  apply ByteArray.ext
+  apply Array.ext'
+  rw [wordBytes_data]
+  simpa using hc
 
 end Loop
 
@@ -154,6 +219,102 @@ theorem liveInnerOwn_of_liveInner {vs : (CoinLayer.session Loop.loopNr Masked.da
     (hI : LiveInner vs L₀ src real wk x w) : LiveInnerOwn vs L₀ src real wk x w :=
   fun ν t κ m₀ ρ₀ ops v hpos hlt hl hok hr _ hv hin => hI ν t κ m₀ ρ₀ ops v hpos hlt hl hok hr hv hin
 
+/-- **The finish's round 0 at the worker's own history**: at a history `LiveInnerOwn` reads whose next round is rep
+`2j + r`'s inner round 0, the round the finish hands the frame (`Loop.finOf`) is the inner proof's label and `vs`'s
+`final_c` masked by the configuration's pad there. The loop's request carries the worker's values, `vs`'s at its own
+histories (`Loop.TakesValsOwn`); the finish accepts it at `vs`'s `final_c` alone (`consWhy`'s `zerocheck c_eval`,
+`Loop.FinalCFixed`) and masks it with the rep's pads, the configuration's. -/
+theorem finOf_finalC_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
+    (L₁ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    (hreal : real = Loop.realOf src) (x : Msg) (w : Flock.Wit)
+    (hR : Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
+    (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
+    (hSrc : Loop.Src (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src x w)
+    (hcaus : (CoinLayer.session Loop.loopNr Masked.dataE).SwCausal vs)
+    (wk : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.Worker)
+    (hV : Loop.TakesValsOwn vs (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real) wk x w)
+    (hC : Loop.FinalCFixed vs x w)
+    (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce) (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape)
+    (κ : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.Chk) (m₀ ρ₀ : Msg)
+    (ops : List (Msg × Msg)) (v : Msg) (h0 : 0 < ops.length) (hlt : ops.length < refK x)
+    (hl : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.live wk x w (ν, t) κ
+      ((m₀, ρ₀) :: ops) = true)
+    (hok : ((allOk ((CoinLayer.session Loop.loopNr Masked.dataE).refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval
+      CoinOpen.shaH).1 = true)
+    (hr : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).refusesCoins x (ν, t)
+      ((m₀, ρ₀) :: ops) = false)
+    (hown : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.OwnHist
+      (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).fillOf wk x w (ν, t) κ
+      ((m₀, ρ₀) :: ops))
+    (hv : wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false))
+    (hI : Loop.InnerAt (real x w (ν, t)) x (ops.map fun p => CoinLayer.rd p.2))
+    (j : Fin (Masked.jOf x)) (r : Fin 2)
+    (hrep : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).rep x (ops.length + 1) =
+      2 * j.val + r.val)
+    (hslot : ops.length = Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff 0)) :
+    (Loop.finOf real L₁.draws x w (ν, t) ((m₀, ρ₀) :: ops)).getD 0 .empty =
+      Loop.inner0 (Loop.vsWord vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad
+          (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r
+          ((ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).cfg x (ν, t)
+            ((m₀, ρ₀) :: ops)).lay.fc +
+        ((ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).cfg x (ν, t)
+            ((m₀, ρ₀) :: ops)).h.getD
+          ((ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).cfg x (ν, t)
+            ((m₀, ρ₀) :: ops)).lay.fc 0).toBytes := by
+  sorry
+
+/-- **The finish's round 2 at the worker's own history**: at a history `LiveInnerOwn` reads whose next round is rep
+`2j + r`'s inner round 2, the round the finish hands the frame (`Loop.finOf`) carries `vs`'s `τ` commitment
+(`Loop.vsTau`). The finish's request carries `vs`'s values (`Loop.TakesValsOwn`), on which it accepts at `vs`'s
+`final_c` (`finOf_finalC_own`), and its inner proof commits to `τ` from the request's values, coins and salts as the
+switched source does where the rows hold (`Loop.RowsOK`). -/
+theorem finOf_tau_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
+    (L₁ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    (hreal : real = Loop.realOf src) (x : Msg) (w : Flock.Wit)
+    (hR : Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
+    (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
+    (hSrc : Loop.Src (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src x w)
+    (hcaus : (CoinLayer.session Loop.loopNr Masked.dataE).SwCausal vs)
+    (wk : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.Worker)
+    (hV : Loop.TakesValsOwn vs (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real) wk x w)
+    (hC : Loop.FinalCFixed vs x w) (hrows : Loop.RowsOK vs x w)
+    (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce) (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape)
+    (κ : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.Chk) (m₀ ρ₀ : Msg)
+    (ops : List (Msg × Msg)) (v : Msg) (h0 : 0 < ops.length) (hlt : ops.length < refK x)
+    (hl : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.live wk x w (ν, t) κ
+      ((m₀, ρ₀) :: ops) = true)
+    (hok : ((allOk ((CoinLayer.session Loop.loopNr Masked.dataE).refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval
+      CoinOpen.shaH).1 = true)
+    (hr : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).refusesCoins x (ν, t)
+      ((m₀, ρ₀) :: ops) = false)
+    (hown : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).toSrv.OwnHist
+      (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).fillOf wk x w (ν, t) κ
+      ((m₀, ρ₀) :: ops))
+    (hv : wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false))
+    (hI : Loop.InnerAt (real x w (ν, t)) x (ops.map fun p => CoinLayer.rd p.2))
+    (j : Fin (Masked.jOf x)) (r : Fin 2)
+    (hrep : (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).rep x (ops.length + 1) =
+      2 * j.val + r.val)
+    (hslot : ops.length = Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff 2)) :
+    (Loop.finOf real L₁.draws x w (ν, t) ((m₀, ρ₀) :: ops)).getD 2 .empty =
+      Loop.inner2 (Loop.vsTau vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad
+        (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r) := by
+  sorry
+
 /-- **`LiveInner` at every worker taking some `vs`'s values, on its own histories**: at `withInner` on the loop's
 finish's rounds (`Loop.finOf`, at `L₁`'s frame draws), at a statement in the masked scope with a witness that the loop
 serves, on the loop's own tables (`Loop.realOf`) and inputs (`Loop.Src`), `LiveInnerOwn` holds at every worker whose free
@@ -177,7 +338,23 @@ theorem liveInnerOwn_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     (hV : Loop.TakesValsOwn vs (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real) wk x w)
     (hC : Loop.FinalCFixed vs x w) (hrows : Loop.RowsOK vs x w) :
     LiveInnerOwn vs (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real wk x w := by
-  sorry
+  intro ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hown hv hI
+  have hR' : ∀ (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand) (s0 : _) (spec : SessionSpec) (sts : Array Stmt),
+      FlockDeploy.setupOf true x = some (s0, spec, sts) → Count.RealTabs sts (real x w ρ) := by
+    intro ρ s0 spec sts hs
+    subst hreal
+    exact Loop.realTabs_of src x w ρ hs
+  refine liveInner_withInner_at vs L₁ src real (Loop.finOf real L₁.draws) x w (Masked.live_of hsc hR) hSv hR'
+    hSrc.2 wk hrows ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv hI ?_ ?_
+  · intro w' j r _ _ hrep hslot hv0
+    rw [hv0, finOf_finalC_own vs L₁ src real hreal x w hR hSv hsc hSrc hcaus wk hV hC ν t κ m₀ ρ₀ ops v h0 hlt hl hok
+      hr hown hv hI j r hrep hslot, Loop.wordBytes_words_inner0, Loop.finalCOf_inner0]
+    exact FlockSoundness.Discharge.Composed.ZerocheckMasked.add_add_self _ _
+  · intro m w' j r _ _ _ hvs hrep hslot hv2
+    rw [finOf_tau_own vs L₁ src real hreal x w hR hSv hsc hSrc hcaus wk hV hC hrows ν t κ m₀ ρ₀ ops v h0 hlt hl hok
+      hr hown hv hI j r hrep hslot, Loop.wordBytes_words_inner2 (Loop.vsTau_size _ _ _ _ _ _ _ _)] at hv2
+    exact Loop.inner2_inj (hvs.symm.trans hv2)
 
 /-- **At the honest values**: the worker that sends the scheduled rounds with them (`Loop.valsWk`) meets `TakesValsOwn`
 (`Loop.takesValsOwn_honestVals`), and they are causal at the session's causality (`RefSession.swCausal_vals`), fix

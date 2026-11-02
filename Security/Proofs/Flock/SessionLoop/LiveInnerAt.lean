@@ -350,6 +350,9 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
       v = (_root_.Flock.Firewall.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++
         _root_.Flock.Transcript.header 3 1 1 ++ w' ++ _root_.Flock.Transcript.header 4 1 1).data.toList →
       (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).rep x (ops.length + 1) = 2 * j.val + r.val →
+      ops.length = Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff 0) →
+      v = (Loop.inner0 (wordBytes (words ((fin x w (ν, t) ((m₀, ρ₀) :: ops)).getD 0 .empty)
+        ((labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16) 1))).data.toList →
       finalCOf ⟨v.toArray⟩ +
           ((ofLoopLink (withInner Masked.dataE L₁ real fin) src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).h.getD
             ((ofLoopLink (withInner Masked.dataE L₁ real fin) src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).lay.fc 0 =
@@ -361,6 +364,8 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
       m.inner = some 2 → w'.size = 64 →
       v = (_root_.Flock.Transcript.header 5 0 64 ++ w' ++ _root_.Flock.Transcript.header 4 1 1).data.toList →
       (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).rep x (ops.length + 1) = 2 * j.val + r.val →
+      ops.length = Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff 2) →
+      v = (Loop.inner2 (wordBytes (words ((fin x w (ν, t) ((m₀, ρ₀) :: ops)).getD 2 .empty) 16 4))).data.toList →
       w' = Loop.vsTau vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad
         (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r) :
     (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
@@ -398,6 +403,7 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
       wordBytes (words ((fin x w (ν, t) ((m₀, ρ₀) :: ops)).getD 2 .empty) 16 4),
       by simp only [wordBytes_size, Loop.words_size], by simp only [wordBytes_size, Loop.words_size],
       fun _ _ _ _ => rfl⟩
+  have hvr0 := hvr
   rw [hsch] at hrel hvr
   have hcfg : (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).cfg x (ν, t) ((m₀, ρ₀) :: ops) =
       (withFrames Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops) := by
@@ -438,10 +444,10 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     (by rw [List.length_map]; omega) (by rw [List.length_map]; exact hN), dropDom_innerCutBody]
   refine congrArg (List.cons 0) ?_
   rw [ownRound_encs hW hT' he4]
-  generalize hE : j' + 1 - rsched.size = e at hslot he4 hvr ⊢
+  generalize hE : j' + 1 - rsched.size = e at hslot he4 hvr hvr0 ⊢
   obtain rfl | rfl | rfl | rfl : e = 0 ∨ e = 1 ∨ e = 2 ∨ e = 3 := by omega
   · -- round 0: `final_c'`
-    have hTF := hF W jf rf hW hvr hrep
+    have hTF := hF W jf rf hW hvr hrep (hq1.trans hslot) (hvr0.trans rfl)
     rw [hcfg, hLay, hH] at hTF
     have hWb : (readWord W.data.toList).toBytes = W :=
       ByteArray.ext (Array.ext' (toBytes_readWord _ (by rw [Array.length_toList]; exact hW)))
@@ -484,7 +490,7 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
       (withFiles (withLink (withInner Masked.dataE L₁ real fin) src) src) real x w hSv hR (ν, t) (m₀, ρ₀) ops ha
       hne rfl hxs hq1 hloc hreal hrs (by omega)
     rw [show j' - rsched.size + 1 = 2 by omega] at hin2
-    have hTT := hT m T jf rf ha hin2 hT' hvr hrep
+    have hTT := hT m T jf rf ha hin2 hT' hvr hrep (hq1.trans hslot) (hvr0.trans rfl)
     rw [hTT]
     rfl
   · -- round 3: `Y`
@@ -540,8 +546,8 @@ theorem liveInner_withInner (vs : (CoinLayer.session Loop.loopNr Masked.dataE).S
     LiveInner vs (withInner Masked.dataE L₁ real fin) src real wk x w := by
   intro ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv hI
   exact liveInner_withInner_at vs L₁ src real fin x w hx hSv hR hS wk hrows ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr hv hI
-    (fun w' j r hw hs hrep => hF ν t κ m₀ ρ₀ ops v w' j r h0 hlt hl hok hv hw hs hrep)
-    (fun m w' j r ha hi hw hs hrep => hT ν t κ m₀ ρ₀ ops v m w' j r h0 hlt hl hok hv ha hi hw hs hrep)
+    (fun w' j r hw hs hrep _ _ => hF ν t κ m₀ ρ₀ ops v w' j r h0 hlt hl hok hv hw hs hrep)
+    (fun m w' j r ha hi hw hs hrep _ _ => hT ν t κ m₀ ρ₀ ops v m w' j r h0 hlt hl hok hv ha hi hw hs hrep)
 
 end LeanRelease
 
