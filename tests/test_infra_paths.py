@@ -42,10 +42,6 @@ INFRA_PATHS = {
     ".cursor/hooks.json": "shim",
     "tools/agent-guard": "shim",
     "tests/test_agent_guard_boot.py": "infra",
-    "tests/test_agent_guard_hook.py": "infra",
-    "tests/test_agent_guard_oom.py": "infra",
-    "tests/test_shell_hook.py": "infra",
-    "tests/test_task_hook.py": "infra",
     # the environment's install command runs it by its path here
     "tools/lean": "shim",
     # the layout move, which drive regenerates and certifies
@@ -101,15 +97,8 @@ INFRA_PATHS = {
     "tools/verity/circuit_check/tests/test_cache_redteam.py": "coarse-check",
     "tools/verity/circuit_check/tests/test_cache_redteam_1176.py": "coarse-check",
     "tools/verity/circuit_check/tests/test_units.py": "coarse-check",
-    # the team's skills
-    ".agents/skills/asking-daniel": "infra",
-    ".agents/skills/authoring-skills": "infra",
-    ".agents/skills/coordinating": "infra",
-    ".agents/skills/friction": "infra",
-    ".agents/skills/process-design": "infra",
-    ".agents/skills/team": "infra",
+    # the Slack registry and the app's manifest, which research reads by this path and which move with it
     ".agents/skills/using-slack": "infra",
-    ".agents/skills/writing-runs": "infra",
 }
 
 FIX = ("Infra starts in the infra repository (compute-verification/infra), never here, and INFRA_PATHS in "
