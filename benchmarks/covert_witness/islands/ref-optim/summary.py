@@ -20,9 +20,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--ledger", type=Path, default=Path.home() / ".research" / "covert-witness.jsonl")
     ap.add_argument("--rows", action="store_true", help="every reference row, not only the best")
+    ap.add_argument("--pin", default=PIN, help="another measurement commit (default: the pin)")
     a = ap.parse_args()
     rows = [json.loads(x) for x in a.ledger.read_text().splitlines() if x.strip()]
-    rows = [r for r in rows if r["class"] == "reference" and r.get("valid") and r.get("measurement_commit") == PIN]
+    rows = [r for r in rows if r["class"] == "reference" and r.get("valid") and r.get("measurement_commit") == a.pin]
     for start in sorted({r["start"] for r in rows}):
         mine, points, bases = [r for r in rows if r["start"] == start], [], []
         for r in mine:
