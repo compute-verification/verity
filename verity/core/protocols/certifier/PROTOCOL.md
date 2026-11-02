@@ -606,7 +606,7 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   row t. The unit is `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
   (`io_request.circuit-check.json`), its witness row the bucket row itself, read off the network certifier's root by
   the verifier's own registered read (`warden_rows.bucket_port`). The statement is a shared-row file every port of
-  which is one of the verifier's registered reads (C-Flock's `Registered.checkComplete`): `wit` at the network
+  which is one of the verifier's registered reads (Flock's `Registered.checkComplete`): `wit` at the network
   certifier's root, and `pub` and `o0` at known content the verifier registers itself (`IngressTie.known`), each
   unit's lanes (`io_request.lanes`, from the advice it holds and the network certifier's release, taken in the clear)
   and the output word 1, under public salts, which hide nothing since both rows are public. The verifier of record

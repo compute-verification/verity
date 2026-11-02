@@ -86,7 +86,7 @@ SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS C
       same statement can prove that every inference block has c gates and reads at most k bits outside θ, which is the
       inference-only policy's check.
    2. Only then does the challenger flip the coins that select the sample, so the partition is fixed before any coin.
-   3. The developer proves each sampled proof block with C-Flock `--zk` behind the ZK server, and the Lean verifier
+   3. The developer proves each sampled proof block with Flock `--zk` behind the ZK server, and the Lean verifier
       `flock-verify` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment and its sampled
       proofs and receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
    4. The composition accepts only if every subprotocol accepts and the commitments match (the verdict, below), and
@@ -123,7 +123,7 @@ PoUW `--zk`), and a chain can be "none" while each piece is proved.
 |---|---|---|---|
 | The verdict rule | `Properties.Composition.AcceptMeans`, `AnswerAccepts` (`Security/Properties/Composition.lean`; proofs `acceptMeans`, `answerAccepts`) | **proved** | — |
 | Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
-| A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
+| A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The verifier's verdicts tied to those theorems | none: remote reads one-stage v1, which takes the verdicts as evidence; v2 (`verity/sampled-proofs/one-stage/v2`) runs `flock-verify verify --zk` itself, and remote doesn't read v2 yet | **open** | — |
 | PoUW's accept rule, and its accepted prefix tied to the period credit | `Properties.Pouw.Check.AcceptMeans`, and `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (`Security/Properties/Pouw/Period.lean`; proofs `Properties.Pouw.Check.acceptMeans`, `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` and `checkedCreditPeriod`, all in `Security/Properties/lean-audit.json`) | **proved**, under the PoUW assumptions below | — |
@@ -225,7 +225,7 @@ development run:
   check`. It runs; nothing about it is proved.
 
 - `verity example h200` (`examples/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
-  are sampled by one live coin, each is proved by C-Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
+  are sampled by one live coin, each is proved by Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
   refused. At an 8-block sample, that allows at most 43.77% incorrect proof blocks at δ = 1%. It runs, at proof level
   none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
   `uv run python examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).

@@ -10,11 +10,12 @@ them are incorrect, never faulty or wrong, while a faulty node, link or device k
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
 (`GLOSSARY.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``), a spelling baked into a
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
-already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it.
+already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it, or that moves to another
+repository.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
 "block" is reserved for parts of circuits, a proof block is incorrect or correct, never faulty, the subprotocols go by
-their names, and "leg", the dampener and NCI are retired). Their code
+their names, and "leg", the dampener, NCI, C-Flock and the netlist are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
 """
@@ -42,7 +43,8 @@ _INCORRECT_TERM = re.compile(rf"\b(?:faulty{_SEP}(?:outputs?|steps?|ingress{_SEP
 #: The retired-terms table, the Glossary's older names (`ARCHITECTURE.md` links it).
 GLOSSARY = "GLOSSARY.md"
 #: The table's rows that name the terms, in GLOSSARY.
-RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "declared advice"', '| "audit coin"')
+RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "declared advice"', '| "audit coin"',
+                '| "C-Flock"', '| "netlist"')
 
 #: Retired in the maintained docs' prose, and what to write instead.
 DOC_TERMS = {
@@ -53,6 +55,8 @@ DOC_TERMS = {
     "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
     "components, the composite's product": "subprotocols, composition",
     "firewall": "ZK server",
+    "C-Flock": "Flock (Succinct's is upstream Flock)",
+    "netlist": "a private circuit, or the circuit's description",
     "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
                                                       "stays in backticks)",
     "builder, advice compiler, circuit builder": "registered compiler",
@@ -86,6 +90,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
                        rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
+                       rf"|(?i:\bC-Flock\b|\bnetlists?\b)"
                        rf"|\bcommit{_SPACE}periods?\b")
 #: The commitments' own docs, where hm96 rows keep their name.
 HM96_HOME = "verity/ml/commitments/"
@@ -111,6 +116,10 @@ ALLOWED: dict[str, str] = {
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
+    "(C-Flock's circuit prover, Flock b684b12": "`benchmarks/served_units/README.md`: a queued PR on next rewrites the line "
+                                                "beside it; renamed after it lands",
+    "reads Programs with C-Flock's decoder": "`verity/core/protocols/network/nci/README.md`: a queued PR on next rewrites the "
+                                             "line beside it; renamed after it lands",
 }
 
 PENDING: dict[str, str] = {
@@ -197,6 +206,7 @@ PENDING: dict[str, str] = {
     "verity/ml/flock/verifier/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/flock/verifier/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/flock/README.md": "a PR on next rewrites the lines beside its unit classes; the rename follows it",
+    "tools/verity/check/README.md": "moves to the infra repository with the check's tooling; renamed there",
 }
 
 
@@ -406,3 +416,14 @@ def test_the_doc_scan_reads_the_incorrect_terms():
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "faulty proof blocks"), ("a.md", 1, "faulty proof block"), ("a.md", 2, "faulty-block"),
         ("a.md", 2, "faulty set")]
+
+
+def test_the_doc_scan_reads_the_flock_terms():
+    """C-Flock and the netlist, on toy files: the stored label `C-Flock`, a `flock-netlist` tag, Flock and upstream Flock
+    stay."""
+    docs = {
+        "a.md": "C-Flock's prover proves a netlist; two\nNetlists, and C-FLOCK.\n"
+                "The stored label `C-Flock`, the `verity/flock-netlist/v1` tag, Flock and upstream Flock stay.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "C-Flock"), ("a.md", 1, "netlist"), ("a.md", 2, "Netlists"), ("a.md", 2, "C-FLOCK")]

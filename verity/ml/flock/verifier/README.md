@@ -7,7 +7,7 @@ This directory holds the outline, the agreement scripts and the vectors.
 
 ## What it verifies
 
-The default statement, `verity/flock-circuit`, is the format of C-Flock's circuit prover (M0, `verity_flock.circuit`):
+The default statement, `verity/flock-circuit`, is the format of Flock's circuit prover (M0, `verity_flock.circuit`):
 serving rows are `hm96-sha512/row/v1` leaves proved in the circuit, every output is a hidden row, every identity and
 binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. Its variants:
 
@@ -41,7 +41,7 @@ It also holds the parts to one run, C10 `OneRun`, through `--rec-run`: the chall
 `rec_shared` before any session, logs every session the challenger opened for the run's parts (a retry's too) and is
 closed after the last; it holds no coin, since each part's coins are drawn fresh at its own Hello and never committed
 before the run. The live challenger writes it: its operator stages it before any session and closes it after the last,
-and C-Flock's `flock-circuit serve --zk --rec-run FILE --rec-part J` appends one `open` for every Hello it answers with
+and Flock's `flock-circuit serve --zk --rec-run FILE --rec-part J` appends one `open` for every Hello it answers with
 coins, in one write, before the answer carrying the session's fresh coin key leaves; a Hello it can't log is refused
 (`flock_live::run_record`). `rec-compose` refuses a part with two sessions or none, a session opened and not composed, a composed
 session the record didn't open, a staging after the first Hello, a second staging or one of other inputs, and a record

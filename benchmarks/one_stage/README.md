@@ -1,7 +1,7 @@
 # One-stage audit runs
 
 The one-stage audit (`verity.core.protocols.sampled_proofs.one_stage`) end to end: serving's committed values through registration, the verifier's
-sample, C-Flock's circuit prover (M0) and the Lean verifier, to the audit record with its integrity profile, then the
+sample, Flock's circuit prover (M0) and the Lean verifier, to the audit record with its integrity profile, then the
 negatives.
 
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it.
@@ -87,7 +87,7 @@ negatives.
   step's verdict line is in `out/verdicts.txt`.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
-  staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
+  staged by Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
   share proved under `--zk` across its template's statements and held by the Lean verifier with the units it derives itself.
 - `a8.sh`: run A8's entry point, on the same builds. A8 is one window of the remote bandwidth audit over a registered store of
   a few thousand blocks with every opening proved by the opening unit (`remote_bandwidth.opening`) under `--zk` and held by
@@ -105,7 +105,7 @@ negatives.
   remote verifier's `verifier.json`): each pass's plan cut into the store's shards, every instance held to the unit's
   reference, each distinct one to the circuit, and one staged by `UnitStager` for its fit in M0's block. A CPU job; it
   builds nothing.
-- `zk_cost.sh`: C-Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`zk_cost.py`, a GPU
+- `zk_cost.sh`: Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`zk_cost.py`, a GPU
   host job, or a preemptible guest job on a shared node). A6's W8A8 coordinates at K = 4096 and 14336 are
   staged in statements of 1 to 512 units, and sessions of 1 to 512 drawn units are proved by `flock-circuit prove --zk
   --gpu`, with the firewall's send check on and off. The Lean verifier checks them, and the job fits the per-session,
@@ -127,7 +127,7 @@ negatives.
   `prove_path/run.sh` builds, with the ZK server's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and ZK server), which is what a CPU node
   spends on one sampled statement of a block's sample.
-- `forged_proofs.sh`: the fixture of C-Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`),
+- `forged_proofs.sh`: the fixture of Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`),
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 unit (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
   with one honest sampled `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
   skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.
@@ -169,7 +169,7 @@ negatives.
   to its own on the step trace's clock, and splits the rest into losses by what the GPU was running at each sample.
   With `PYSPY=1`, `pyspy_steps.py` splits the same steps' host time by Python function and thread, from py-spy's trace.
 
-C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
+Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
 inputs sent with the run; it builds `flock-circuit` and `flock-verify` once per pod, then runs the driver, whose
 `--m0-pythonpath` names that M0 tree. The drivers' checks go through the verifier of record

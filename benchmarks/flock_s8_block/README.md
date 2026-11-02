@@ -1,4 +1,4 @@
-# C-Flock --zk on an int8 row block
+# Flock --zk on an int8 row block
 
 The prover's price for proof blocks of `ROWS` adjacent cells of one int8 GEMM output row: `S8Matmul_v1{N=ROWS, K}` in its
 plain arm (`verity.ml.circuits.ops.s8`), each instance's operand rows and output row hashed in the circuit, staged as a

@@ -1,4 +1,4 @@
-# Served proof blocks under C-Flock
+# Served proof blocks under Flock
 
 A served model's proof blocks proved one type at a time, from synthetic values at the model's served statics, through the path the
 one-stage audit takes: the proof block's Boolean lowering, its `verity/flock-circuit` statement with hidden outputs, a loopback
