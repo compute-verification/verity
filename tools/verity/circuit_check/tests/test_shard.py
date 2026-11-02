@@ -297,6 +297,30 @@ def test_reads_holds_each_path_once_and_gives_each_binding_its_whole_read_set_ba
     assert cli._ranges([0, 1, 2, 3, 7, 9, 10]) == "0-3,7,9-10" and cli._places("0-3,7,9-10") == [0, 1, 2, 3, 7, 9, 10]
 
 
+def test_the_modules_whose_source_inspect_looked_for_are_every_binding_s_loaded_probes(tmp_path, monkeypatch):
+    """`cli._read_sets` takes the modules whose source `inspect` looked for (``present``) out of each binding's own set: their
+    paths, but the files the set holds by their bytes, are ``loaded``, every binding's, since torch's import asks for the
+    source of every module the process loaded and which those are depends on how the run went.  A run reports what it holds
+    beyond `cli.READS`' ``loaded`` as undeclared ``loaded``, and another binding's run that loaded the same module, nothing."""
+    monkeypatch.setattr(cli, "READS", tmp_path / "reads")
+    entries = {"kx": {"files": ["a.py"], "present": ["m", "own"]}, "ky": {"files": ["b.py"], "present": ["n"]}}
+    where = {"m": "m.py", "n": "n.py", "own": "a.py"}
+    monkeypatch.setattr(CC, "recorded", lambda cache, key, repo: entries[key])
+    monkeypatch.setattr(CC, "declared", lambda root, reads: {
+        "files": sorted(reads.get("files", ())), "listed": [], "probes": sorted(where[m] for m in reads.get("present", ())),
+        "registry": False})
+    group = {"files": [], "listed": [], "probes": []}
+    ids, keys = [("definition", "X_v1"), ("definition", "Y_v1")], ["kx", "ky"]
+    got = cli._read_sets(tmp_path, {"x": [0], "y": [1]}, ids, keys, group)
+    assert got["reads"]["bindings"] == {"x": {"files": ["a.py"], "listed": [], "probes": [], "registry": False},
+                                        "y": {"files": ["b.py"], "listed": [], "probes": [], "registry": False}}
+    assert got["reads"]["loaded"] == ["m.py", "n.py"] and got["undeclared"]["x"] == {"files": ["a.py"], "loaded": ["m.py"]}
+    cli.update_reads(got, every=True)
+    assert cli._read_sets(tmp_path, {"x": [0], "y": [1]}, ids, keys, group)["undeclared"] == {}
+    entries["ky"] = {"files": ["b.py"], "present": ["n", "m"]}
+    assert cli._read_sets(tmp_path, {"y": [1]}, ids, keys, group)["undeclared"] == {}
+
+
 def test_update_reads_adds_what_each_run_read_to_what_reads_declares(tmp_path, monkeypatch):
     """`cli.update_reads` adds what a run read to each binding's declared set, and to ``registries`` and ``loaded``: a
     binding's runs read otherwise by how they ran (``--binding`` makes only its own binding's roots), so its declaration holds
