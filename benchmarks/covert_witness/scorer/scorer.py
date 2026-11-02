@@ -128,6 +128,7 @@ def attempts(r, since: str) -> list[dict]:
             continue
         ex_ = a.get("execution") or {}
         out.append({"run": a["id"], "state": a["status"]["state"], "rc": a["status"].get("rc"),
+                    "cancelled": str(a["status"].get("class", "")).startswith("CANCELLED"),
                     "machine": ex_.get("machine"), "start_utc": ex_.get("start_utc"), "end_utc": ex_.get("end_utc"),
                     "commit": a["source"]["commit"], "class": m.group(1) if m else "te_core",
                     "start": m.group(2) if m else "", "te_core": not m})
@@ -146,23 +147,25 @@ def branches(commits: set[str]) -> dict[str, list[str]]:
                         "+refs/heads/cursor/covert-witness-4207:refs/remotes/origin/cursor/covert-witness-4207"],
                        capture_output=True, text=True)
     for c in todo:
-        out = subprocess.run(["git", "-C", str(REPO), "branch", "-r", "--contains", c, "--format=%(refname:short)"],
+        # local branches too: agents on this VM share its object store, and some never push their branch
+        out = subprocess.run(["git", "-C", str(REPO), "branch", "-a", "--contains", c, "--format=%(refname:short)"],
                              capture_output=True, text=True)
-        names = [b.removeprefix("origin/") for b in out.stdout.split() if "/te-" in b or "covert-witness" in b]
+        names = {b.removeprefix("origin/") for b in out.stdout.split() if "/te-" in b or "covert-witness" in b}
         known[c] = sorted(names)
     path.write_text(json.dumps(known, indent=1, sort_keys=True) + "\n")
     return known
 
 
 def direction_of(names: list[str], klass: str) -> tuple[str, str]:
-    """(agent branch, direction): the te-<direction>-4207 branch holding the commit, else the class."""
+    """(agent branch, direction): the harness's for a commit on cursor/covert-witness-4207 (every te-* branch holds those),
+    else the te-<direction>-4207 branch holding it, else the class."""
+    if "cursor/covert-witness-4207" in names:
+        return "cursor/covert-witness-4207", klass
     own = [b for b in names if re.fullmatch(r"cursor/te-.+-4207", b) and b not in (
-        "cursor/te-board-4207", "cursor/te-core-4207", "cursor/te-capture-4207")]
+        "cursor/te-board-4207", "cursor/te-core-4207", "cursor/te-capture-4207", "cursor/te-digest-4207")]
     if own:
         b = sorted(own, key=len)[0]
         return b, b.removeprefix("cursor/te-").removesuffix("-4207")
-    if "cursor/covert-witness-4207" in names:
-        return "cursor/covert-witness-4207", klass
     return "", klass
 
 
@@ -280,6 +283,11 @@ def collect(since: str = SINCE) -> dict:
     for a in runs:
         a["agent"], a["direction"] = direction_of(commits.get(a["commit"], []), a["class"])
         a["record"] = a["run"] in recorded_runs
+    by_run = {a["run"]: a for a in runs}
+    for x in rows:
+        a = by_run.get(x.get("run"))
+        if x["source"] == "launch.py" and not x.get("commit") and a:
+            x["commit"], x["agent"], x["direction"] = a["commit"], a["agent"], a["direction"]
     rows.sort(key=lambda x: (x.get("launched") or "", x["id"]))
     STATE.mkdir(parents=True, exist_ok=True)
     (STATE / "index.jsonl").write_text("".join(json.dumps(x, sort_keys=True) + "\n" for x in rows))
@@ -287,7 +295,9 @@ def collect(since: str = SINCE) -> dict:
     (STATE / "index.md").write_text(index_md(rows, runs, starts))
     out = {"at": now(), "records": len([x for x in rows if x["source"] == "launch.py"]),
            "te_core_records": len([x for x in rows if x["source"] == "te_core"]), "runs": len(runs),
-           "runs_without_record": [a["run"] for a in runs if not a["record"] and run_time(a["run"]) >= SEARCH_START],
+           "runs_without_record": [a["run"] for a in runs if not a["record"] and not a.get("cancelled")
+                                    and run_time(a["run"]) >= SEARCH_START],
+           "cancelled": len([a for a in runs if a.get("cancelled")]),
            "seconds": round(time.time() - t0, 1)}
     (STATE / "collect.json").write_text(json.dumps(out, indent=1) + "\n")
     return out
@@ -314,7 +324,7 @@ def index_md(rows: list[dict], runs: list[dict], starts: dict) -> str:
                      f"{x['note']} | {x['start']} | {x['launched'][11:16]} | {fmt(x['train_flops'])} | {fmt(x['bpb'], '.4f')} | "
                      f"{fmt(drop, '.2f')} | {fmt(x['E_bytes'], ',')} | {fmt(x['phi'], '.3f')} | {fmt(D, '.3g')} | "
                      f"{'yes' if x['valid'] else 'no: ' + ','.join(x['failed_checks'])} |")
-    pend = [a for a in runs if not a["record"] and run_time(a["run"]) >= SEARCH_START]
+    pend = [a for a in runs if not a["record"] and not a.get("cancelled") and run_time(a["run"]) >= SEARCH_START]
     if pend:
         lines += ["", "Ended candidate runs with no record yet (launch.py collects a record when its run ends): " + ", ".join(
             f"{a['run']} ({a['direction']} {a['class']} {a['start']}, {a['state']})" for a in pend)]
@@ -706,7 +716,6 @@ FINAL_SRC = Path(os.environ.get("TE_FINAL_SRC", "/tmp/scorer/final-src"))
 FINAL_SH = Path(__file__).resolve().parent / "final.sh"
 FINAL_NODE = os.environ.get("TE_FINAL_NODE", "vy-nebius-2")
 FINAL_SEEDS = (101, 102, 103)
-REPO = Path(__file__).resolve().parents[3]
 RUNS = Path.home() / ".research" / "runs"
 
 
