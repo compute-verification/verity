@@ -8,7 +8,8 @@ learning rates and optimizer, and their precision.
 lists every knob. `--e-bytes N` fits the rank to N bytes instead of the cap, for the curve's points.
 
 - `drive.py`: the queue (`~/.research/lowrank/queue.txt`, one `CLASS START ; NOTE ; TRAIN_ARGS` per line), at most two
-  candidates per island in flight through `launch.py`, launched from a clean worktree at the branch's tip.
+  candidates per island in flight, launched with `launch.py --no-wait` from this checkout when it is clean and collected
+  with `launch.py --collect` when they end; its state file lets a restarted driver resume.
 - `report.py`: every ended candidate by start, class and bpb.
 
 Results and negatives go on the board (cursor/te-board-4207, `benchmarks/covert_witness/BOARD.md`) with their run and art

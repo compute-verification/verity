@@ -1,10 +1,11 @@
 """The lowrank direction's candidate queue: keeps at most two candidates per island in flight through `launch.py`.
 
-    python drive.py [--queue ~/.research/lowrank/queue.txt] [--launch-wt DIR] [--branch cursor/te-lowrank-4207]
+    python drive.py [--queue ~/.research/lowrank/queue.txt]
 
-Each queue line is `CLASS START ; NOTE ; TRAIN_ARGS` (`#` comments). A line launches once (keyed by its text); before each
-launch the launch worktree is moved to the branch's tip, so a run ships the newest commit. Rows go to `state.jsonl` beside
-the queue (and to launch.py's ledger). No launch after 14:30Z.
+Each queue line is `CLASS START ; NOTE ; TRAIN_ARGS` (`#` comments). A line launches once (keyed by its text), with
+`launch.py --no-wait` from this checkout, which must be clean (the run ships HEAD); an ended run is collected with
+`launch.py --collect`. Every launch and collection goes to `state.jsonl` beside the queue, from which a restarted driver
+resumes. No launch after 14:30Z.
 """
 from __future__ import annotations
 
@@ -19,6 +20,10 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[3]
+LAUNCH = REPO / "benchmarks" / "covert_witness" / "launch.py"
+RUNS = Path.home() / ".research" / "runs"
+DONE = {"done", "failed", "cancelled", "refused", "timeout", "lost"}
 STOP = dt.time(14, 30)
 PER_CLASS = 2
 
@@ -32,52 +37,73 @@ def parse(line: str) -> tuple[str, str, str, list[str]] | None:
     return klass, start, note, shlex.split(args)
 
 
+def utc() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--queue", type=Path, default=Path.home() / ".research" / "lowrank" / "queue.txt")
-    ap.add_argument("--launch-wt", type=Path, default=Path.home() / "wt-te-lowrank-launch")
-    ap.add_argument("--branch", default="cursor/te-lowrank-4207")
     a = ap.parse_args()
     state_path = a.queue.parent / "state.jsonl"
-    logs = a.queue.parent / "logs"
-    logs.mkdir(parents=True, exist_ok=True)
-    done = {json.loads(x)["key"] for x in state_path.read_text().splitlines() if x.strip()} if state_path.exists() else set()
-    flying: dict[str, tuple[subprocess.Popen, str, Path]] = {}
-    # the research CLI from the launch worktree's tools: /workspace's may predate the node's own pools (`--pool gpu`)
+    # the research CLI from this checkout's tools (`bin/research`): /workspace's may predate the node's own pools
     env = dict(os.environ, PATH=f"{a.queue.parent / 'bin'}:/workspace/.venv/bin:{os.environ['PATH']}")
+
+    def record(rec: dict) -> None:
+        with state_path.open("a") as f:
+            f.write(json.dumps(rec) + "\n")
+
+    def research(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["research", *args], capture_output=True, text=True, env=env, cwd=REPO)
+
     while True:
-        for key, (proc, klass, log) in list(flying.items()):
-            if proc.poll() is None:
+        seen, flying = set(), {}
+        for x in state_path.read_text().splitlines() if state_path.exists() else []:
+            s = json.loads(x)
+            seen.add(s["key"])
+            if s.get("run") and "row" not in s:
+                flying[s["key"]] = s
+            elif "row" in s:
+                flying.pop(s["key"], None)
+        for key, s in flying.items():
+            research("fetch", s["run"])
+            st = RUNS / s["run"] / "status.json"
+            state = json.loads(st.read_text()).get("state") if st.exists() else None
+            if state not in DONE:
                 continue
-            rows = [json.loads(x) for x in log.read_text().splitlines() if x.startswith("{")]
-            with state_path.open("a") as f:
-                f.write(json.dumps({"key": key, "rc": proc.returncode, "row": rows[-1] if rows else None,
-                                    "run": rows[0].get("run") if rows else None}) + "\n")
-            print(f"{dt.datetime.utcnow():%H:%M}Z ended rc {proc.returncode}: {key}  {rows[-1] if rows else ''}", flush=True)
-            del flying[key]
-        lines = [x for x in a.queue.read_text().splitlines()] if a.queue.exists() else []
-        now = dt.datetime.utcnow()
+            klass, start, note, _ = parse(key)
+            r = subprocess.run([sys.executable, str(LAUNCH), klass, start, "--note", note, "--collect", s["run"]],
+                               capture_output=True, text=True, env=env, cwd=REPO)
+            rows = [json.loads(y) for y in r.stdout.splitlines() if y.startswith("{")]
+            record({"key": key, "run": s["run"], "state": state, "row": rows[-1] if rows else None,
+                    "collect_rc": r.returncode, "err": r.stderr[-500:] if not rows else ""})
+            print(f"{utc():%H:%M}Z ended {state}: {key}  {rows[-1] if rows else r.stderr[-300:]}", flush=True)
+        clean = not subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], capture_output=True,
+                                   text=True, cwd=REPO).stdout.strip()
+        lines = a.queue.read_text().splitlines() if a.queue.exists() else []
         for line in lines:
             p = parse(line)
             key = line.strip()
-            if p is None or key in done or key in flying or now.time() >= STOP:
+            if p is None or key in seen or utc().time() >= STOP or not clean:
                 continue
             klass, start, note, args = p
-            if sum(1 for _, k, _ in flying.values() if k == klass) >= PER_CLASS:
+            if sum(1 for k in flying if parse(k)[0] == klass) >= PER_CLASS:
                 continue
-            subprocess.run(["git", "-C", str(a.launch_wt), "checkout", "-q", "--detach", a.branch], check=True)
-            log = logs / f"{now:%H%M%S}-{klass}-{start}-{len(done) + len(flying)}.log"
-            cmd = [sys.executable, str(a.launch_wt / "benchmarks/covert_witness/launch.py"), klass, start, "--note", note,
-                   "--", *args]
-            flying[key] = (subprocess.Popen(cmd, stdout=log.open("w"), stderr=subprocess.STDOUT, env=env), klass, log)
-            done.add(key)
-            with state_path.open("a") as f:
-                f.write(json.dumps({"key": key, "launched": f"{now:%H:%M:%S}Z", "log": str(log)}) + "\n")
-            print(f"{now:%H:%M}Z launched {klass} {start}: {note} :: {' '.join(args)}", flush=True)
-            time.sleep(5)
-        if not flying and now.time() >= STOP:
+            r = subprocess.run([sys.executable, str(LAUNCH), klass, start, "--note", note, "--no-wait", "--", *args],
+                               capture_output=True, text=True, env=env, cwd=REPO)
+            rows = [json.loads(y) for y in r.stdout.splitlines() if y.startswith("{")]
+            run = rows[0].get("run") if rows else None
+            rec = {"key": key, "launched": f"{utc():%H:%M:%S}Z", "run": run}
+            if not run:
+                rec["row"], rec["err"] = None, (r.stdout + r.stderr)[-500:]
+            record(rec)
+            seen.add(key)
+            if run:
+                flying[key] = rec
+            print(f"{utc():%H:%M}Z launched {klass} {start} {run or 'FAILED: ' + rec['err'][-200:]}: {note}", flush=True)
+        if not flying and utc().time() >= STOP:
             return 0
-        time.sleep(20)
+        time.sleep(60)
 
 
 if __name__ == "__main__":
