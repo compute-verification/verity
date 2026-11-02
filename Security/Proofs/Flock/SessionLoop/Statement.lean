@@ -331,8 +331,9 @@ def Loop.RepSrc
 does not check). **Every input the session loop takes from its host and its operating system is the tape's** at `x`, in
 two halves: the level-0 inputs (`Loop.Level0Src`: the packed witness the host hands it and the bytes `Level0.draw`
 reads) and the rep draws (`Loop.RepSrc`: the bytes `Frames.startRep` and `Finish.serve` read for each rep). Why it is
-reasonable: the loop runs on the auditor-trusted host (`trusted-host`), whose operating system's random bytes are
-the uniform draws the tape models, and which hands the loop the witness `w` the statement is served at. -/
+reasonable: the loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the
+tape models, and which hands the loop the witness `w` the statement is served at. The host is the developer's, not an
+auditor-trusted one (`trusted-host`), and that is the host to trust here: zero knowledge protects the developer. -/
 def Loop.Src
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
