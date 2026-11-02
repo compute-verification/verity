@@ -450,7 +450,8 @@ def test_records_only_stores_every_record_and_a_forked_run_from_a_copy_of_them_b
     _bindings(root, *BINDINGS)
     first = _records_only(root)
     assert first["reused"] == 0 and first["stored"] == len(first["rebuilt"]) == 5 and first["scratch_bytes"] > 0, first
-    assert len(_records(root)) == len(list((root / "cache").glob("*/*/*.json"))) == 5     # no target's entry, no task list
+    # the records and the catalog's roots record (`units.store_roots`): no target's entry, no task list
+    assert len(_records(root)) == len(list((root / "cache").glob("*/*/*.json"))) == 6
     assert first["bytes"] == sum(p.stat().st_size for p in _records(root))
     assert _records_only(root) == {"reused": 5, "rebuilt": [], "scratch_bytes": 0, "stored": 0, "bytes": first["bytes"]}
 
@@ -485,8 +486,8 @@ cli._owners = weighed
 @pytest.mark.slow
 def test_records_built_again_are_the_same_bytes_with_each_build_s_seconds_beside_its_record(tmp_path):
     """A record holds what its binding's build gave and read, never how long the build took: ``--records-only`` into a fresh
-    cache stores the very records it stored before, names and bytes, so a tarball of them (the circuit-catalog task's) has one
-    digest.  The CPU seconds of each binding built apart are kept beside its record (``<entry>.seconds``), and a forked run
+    cache stores the very records it stored before, the catalog's roots record (`units.store_roots`) with them, names and
+    bytes, so a tarball of them (the circuit-catalog task's) has one digest.  The CPU seconds of each binding built apart are kept beside its record (``<entry>.seconds``), and a forked run
     from a copy of the cache weighs each binding by them (`cli._owners`)."""
     root = _tree(tmp_path / "t")
     _bindings(root, *BINDINGS)
@@ -494,7 +495,7 @@ def test_records_built_again_are_the_same_bytes_with_each_build_s_seconds_beside
     first = {p.relative_to(root / "cache"): p.read_bytes() for p in _records(root)}
     shutil.rmtree(root / "cache")
     _records_only(root)
-    assert {p.relative_to(root / "cache"): p.read_bytes() for p in _records(root)} == first and len(first) == 5
+    assert {p.relative_to(root / "cache"): p.read_bytes() for p in _records(root)} == first and len(first) == 6
     assert not any("seconds" in json.loads(b)["report"] for b in first.values())
     took = {",".join(json.loads(p.read_text())["key"]["request"]["target"][1]): float(s.read_text())
             for p in _records(root) if (s := p.with_suffix(".seconds")).is_file()}

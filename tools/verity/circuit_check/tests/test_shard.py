@@ -1,11 +1,15 @@
 """``circuit-check --shard K/N`` and ``--combine`` (`circuit_check.shard`): which shard a target is, what a shard writes, what
-``--combine`` refuses, and that a combined run's report, verdict and output are the unsharded run's."""
+``--combine`` refuses, and that a combined run's report, verdict and output are the unsharded run's.  And ``--binding NAME``
+and ``--bindings``: each catalog binding's targets, together the whole list."""
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import random
 import shutil
+import subprocess
+import sys
 import types
 from pathlib import Path
 
@@ -16,7 +20,7 @@ from circuit_check import cli
 from circuit_check import known as KN
 from circuit_check import shard as SH
 from circuit_check import targets as TG
-from test_cache import _bindings, _tree
+from test_cache import REPO, _bindings, _edit, _tree
 from test_units import BINDINGS as UNIT_BINDINGS
 from test_units import FORKED as UNITS_FORKED
 from test_units import HARNESS as UNITS
@@ -249,8 +253,17 @@ def test_the_shard_options_are_refused_where_they_mean_nothing(stub, tmp_path, c
                       (["--all", "--shard-dir", "d"], "give --shard K/N"),
                       (["--all", "--shard", "1/3", "--shard-dir", "d", "--update-pins"], "--update-pins"),
                       (["--combine", "d", "--all"], "--combine joins"),
-                      (["--combine", "d", "--batch"], "five modes"),
-                      (["--combine", "d", "--records-only"], "five modes"),
+                      (["--combine", "d", "--batch"], "six modes"),
+                      (["--combine", "d", "--records-only"], "six modes"),
+                      (["--all", "--cache", "c", "--records-only", "--bindings"], "six modes"),
+                      (["--bindings", "--cache", "c"], "--bindings names"),
+                      (["--all", "--bindings"], "--bindings names"),
+                      (["--all", "--bindings", "--cache", "c", "--binding", "_core_roots"], "--bindings names"),
+                      (["--all", "--catalog-units", "--binding", "_core_roots"], "--binding checks"),
+                      (["--all", "--cache", "c", "--binding", "_core_roots"], "--binding checks"),
+                      (["--all", "--catalog-units", "--cache", "c", "--binding", "_core_roots", "SynPass_v1"], "--binding checks"),
+                      (["--all", "--catalog-units", "--cache", "c", "--binding", "_core_roots", "--shard", "1/3",
+                        "--shard-dir", "d"], "--binding checks"),
                       (["--records-only", "--cache", "c"], "--records-only stores"),
                       (["--all", "--records-only"], "--records-only stores"),
                       (["--all", "--records-only", "--cache", "c", "SynPass_v1"], "--records-only stores"),
@@ -261,6 +274,16 @@ def test_the_shard_options_are_refused_where_they_mean_nothing(stub, tmp_path, c
             cli.main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err, argv
     _refused(capsys, [tmp_path / "nothing"], "did not finish")
+
+
+def test_a_binding_s_name_is_its_root_function_its_files_models_or_its_template_entry():
+    m = "verity.ml.circuits.ops.boolean.gf2k.circuit-check#"
+    assert [SH.binding(u) for u in ((f"{m}_gf2k_roots",), (f"{m}_x_roots", f"{m}_x_bindings"), ("_kernel_roots",),
+                                    ("_vocabulary_roots", "_vocabulary_bindings"), (f"{m}_model_roots:Gf2kMul_v1",),
+                                    ("_model_roots:SynOther_v1",), (f"{m}TEMPLATE_PARAMS:token-select-combine",),
+                                    ("TEMPLATE_PARAMS:rmsnorm-cuda-vec8",), ("<registered>",))] == [
+        f"{m}_gf2k_roots", f"{m}_x_roots", "_kernel_roots", "_vocabulary_roots", f"{m}_model_roots", "_model_roots",
+        f"{m}TEMPLATE_PARAMS:token-select-combine", "TEMPLATE_PARAMS", "<registered>"]
 
 
 def test_the_shard_module_is_outside_the_checker_s_version(tmp_path, monkeypatch):
@@ -360,3 +383,171 @@ def test_every_shard_from_a_copy_of_one_records_only_run_s_cache_builds_no_bindi
         assert sorted(out["values"]) == sorted(t for t in UNIT_IDS if SH.shard_of("definition", t, 3) == k)
         got.update(out["values"])
     assert got == _fresh(root)["values"]
+
+
+#: `test_units`' setup, then ``circuit-check --all --bindings -j 2`` (`cli.bindings`) from the records in the tree's cache
+BINDINGS_ONLY = UNITS[:UNITS.index("rep = cli.run(")] + 'print(json.dumps(cli.bindings(root / "cache", log=None, jobs=2)))\n'
+#: `test_units`' bindings, each root function writing its units to ``<root>-roots.jsonl`` (beside the tree) as it runs
+ROOTS_LOGGED = ("def bindings():\n    for units, make in catalog.BINDINGS:\n        yield units, make,",
+                "def rooted(units, make):\n"
+                "    def run():\n"
+                "        with CC.internal(), open(root.parent / f'{root.name}-roots.jsonl', 'a') as f:\n"
+                "            f.write(json.dumps(units) + '\\n')\n"
+                "        return make()\n"
+                "    return run\n\n\n"
+                "def bindings():\n    for units, make in catalog.BINDINGS:\n        yield units, rooted(units, make),")
+
+
+def _roots_made(log: Path) -> set[str]:
+    return {SH.binding(json.loads(ln)) for ln in log.read_text().splitlines()} if log.exists() else set()
+
+
+def _py(root: Path, harness: str) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO,
+                          env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+
+
+def _forked(name: str) -> str:
+    """`test_units`' forked ``--all`` as ``--binding name`` runs it, its bindings' roots logged (`ROOTS_LOGGED`)."""
+    # the real registry, which `targets.load_registries` loads before any check and the harness's stand-in doesn't: else the
+    # first check to load it records the kernels it registers as reads this process can't digest
+    return UNITS_FORKED.replace(*ROOTS_LOGGED).replace("fork=True)", f"fork=True, binding={name!r})").replace(
+        "rep = cli.run(", "from verity.ml.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(", 1)
+
+
+@pytest.mark.slow
+def test_each_binding_from_a_copy_of_one_records_only_run_s_cache_checks_its_own_targets_and_together_the_list(tmp_path):
+    """``--bindings`` names each catalog binding with the targets ``--binding`` checks under it: together the whole list, each
+    target once.  Each forked ``--binding`` run, in a tree of its own from a copy of one ``--records-only`` run's cache (a task
+    on another machine), builds no binding and no body in its own process, makes only its own binding's roots (the catalog's
+    roots record lists the others'), keys and checks exactly its targets, with the verdicts a full build gives; run again, it
+    reuses every target.  With the roots record stale (a module no binding reads edited) it makes every binding's roots, with
+    the same verdicts.  With no record it refuses rather than build, and given a name no catalog binding has, rather than
+    check nothing."""
+    assert UNITS_FORKED.count(ROOTS_LOGGED[0]) == 1
+    root = _tree(tmp_path / "t")
+    _bindings(root, *UNIT_BINDINGS)
+    cold = _py(root, UNITS.replace("units=True)", "units=True, binding='_core_roots')"))
+    assert cold.returncode and "the bindings' records give no task list" in cold.stderr, cold.stderr
+    assert _records_only(root)["stored"] == 5
+    got = _py(root, BINDINGS_ONLY)
+    assert got.returncode == 0, got.stderr
+    named = json.loads(got.stdout.strip().splitlines()[-1])
+    assert sorted(named["bindings"]) == ["<registered>", "_core_roots", "_model_roots", "_sized_roots", "_xor_roots"]
+    assert sorted(label for ts in named["bindings"].values() for _, label in ts) == UNIT_IDS and named["root_errors"] == []
+    values: dict = {}
+    for i, (name, targets) in enumerate(named["bindings"].items()):
+        tree = _copied(root, tmp_path / f"b{i}")
+        out = _run_units(tree, _forked(name))
+        assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and out["here"] == [], (name, out["stats"])
+        assert sorted(out["values"]) == sorted(label for _, label in targets) and out["hits"] == [], name
+        assert _roots_made(tmp_path / f"b{i}-roots.jsonl") == {name} - {"<registered>"}, name
+        assert len(out["keys"]) == len(out["values"]), (name, out["keys"])
+        values.update(out["values"])
+        if name == "_core_roots":
+            again = _run_units(tree, _forked(name))
+            assert again["stats"]["units"] == out["stats"]["units"] and again["here"] == [], again["stats"]
+            assert again["hits"] == sorted(again["values"]) == sorted(out["values"]), again
+    assert values == _fresh(root)["values"]
+    stale = _copied(root, tmp_path / "stale")
+    _edit(stale, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")
+    out = _run_units(stale, _forked("_core_roots"))
+    assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and out["here"] == [], out["stats"]
+    assert _roots_made(tmp_path / "stale-roots.jsonl") == set(named["bindings"]) - {"<registered>"}
+    assert out["values"] == {t: values[t] for _, t in named["bindings"]["_core_roots"]}
+    unknown = _py(root, UNITS.replace("units=True)", "units=True, binding='_no_roots')"))
+    assert unknown.returncode and cli.NO_BINDING in unknown.stderr, unknown.stderr
+
+
+#: two bindings past `test_units`' whose roots register beyond themselves: ``_late_roots`` a primitive of a module only it
+#: imports (`syn.late.lz`: the registries import `syn`'s top-level modules) and a member of a family its id makes
+#: (`SynWide{n}`, `codec.register_lazy_family`); ``_minted_roots`` a composite its factory makes, which no id makes
+LATE = {
+    "syn/wide.py": """
+from verity.ml.circuits.codec import register_lazy_family
+from verity.ml.circuits.defs import PrimitiveDefinition
+
+from syn.prims import V
+
+_MADE = {}
+
+
+def wide(n):
+    if n not in _MADE:
+        _MADE[n] = PrimitiveDefinition(f"SynWide{n}", 1, (("a", V), ("b", V)), V, lambda a, b: a | b)
+    return _MADE[n]
+
+
+register_lazy_family(r"^SynWide(\\d+)_v1$", lambda m: wide(int(m[1])))
+""",
+    "syn/late/__init__.py": "",
+    "syn/late/lz.py": """
+from verity.ml.circuits import primitive
+
+from syn.prims import V
+
+
+@primitive("SynLz", 1, [("a", V), ("b", V)], V)
+def SynLz(a, b):
+    return a & b
+""",
+    "syn/fresh.py": """
+from verity.ml.circuits import composite
+
+from syn.prims import SynAdd, V
+
+_MADE = []
+
+
+def made():
+    if not _MADE:
+        @composite("SynFresh", 1, [], lambda S: ((("a", V), ("b", V)), V))
+        def SynFresh(B, S, a, b):
+            return B.call(SynAdd, a, b)
+        _MADE.append(SynFresh)
+    return _MADE[0]
+""",
+}
+LATE_ROOTS = ("\ndef late():\n    from syn import wide\n    from syn.late import lz\n    return [lz.SynLz, wide.wide(7)]\n\n\n"
+              "def minted():\n    from syn import fresh\n    return [bind(fresh.made())]\n\n")
+#: what the forked run's own process has registered of the tree's Definitions, in order, and imported of its modules
+HELD_HERE = ('"here": here,', '"here": here, "registry": [f for f in dict.keys(__import__("verity.ml.circuits.defs", '
+             'fromlist=["REGISTRY"]).REGISTRY.defs) if f.startswith("Syn")], "modules": sorted(m for m in sys.modules '
+             'if m.startswith("syn")),')
+
+
+def _late_tree(at: Path) -> Path:
+    root = _tree(at)
+    for rel, text in LATE.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text.lstrip("\n"))
+    _edit(root, "syn/catalog.py", "\nBINDINGS = [", LATE_ROOTS + "\nBINDINGS = [")
+    _bindings(root, *UNIT_BINDINGS, '(("_late_roots",), late)', '(("_minted_roots",), minted)')
+    return root
+
+
+@pytest.mark.slow
+def test_a_binding_run_does_in_each_other_binding_s_place_what_making_its_roots_did_beyond_them(tmp_path):
+    """A ``--binding`` run from a copy of one ``--records-only`` run's cache makes another binding's roots only where what
+    making them did beyond them (the catalog's roots record notes it) can't be done in their place: ``_late_roots``' import of
+    `syn.late.lz` and its ``SynWide7_v1``, made by its id, are done (`units._replay`), and ``_minted_roots``' composite, which
+    no id makes, is made.  So this process's registry and its in-tree modules are, in order, the ones a run that makes every
+    binding's roots has (the roots record stale), with that run's verdicts: C-Flock lowers a word primitive by the first
+    Boolean Definition registered of that word, which another binding's roots can be the first to register."""
+    root = _late_tree(tmp_path / "t")
+    assert _records_only(root)["stored"] == 7
+    lazy, stale = _late_tree(tmp_path / "lazy"), _late_tree(tmp_path / "stale")
+    for tree in (lazy, stale):
+        shutil.copytree(root / "cache", tree / "cache")
+    _edit(stale, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")
+    harness = _forked("_core_roots").replace(*HELD_HERE)
+    assert harness.count('"registry": [') == 1
+    got, full = _run_units(lazy, harness), _run_units(stale, harness)
+    assert _roots_made(tmp_path / "lazy-roots.jsonl") == {"_core_roots", "_minted_roots"}
+    assert _roots_made(tmp_path / "stale-roots.jsonl") == {"_core_roots", "_model_roots", "_sized_roots", "_xor_roots",
+                                                           "_late_roots", "_minted_roots"}
+    assert got["registry"] == full["registry"] and got["modules"] == full["modules"], (got, full)
+    assert [f for f in got["registry"] if f in ("SynLz_v1", "SynWide7_v1", "SynFresh_v1")] == \
+        ["SynLz_v1", "SynWide7_v1", "SynFresh_v1"] and "syn.late.lz" in got["modules"], got
+    assert got["stats"]["units"] == full["stats"]["units"] == {"reused": 7, "rebuilt": [], "stored": 0}, (got, full)
+    assert got["here"] == full["here"] == [] and got["values"] == full["values"] and got["values"], (got, full)
