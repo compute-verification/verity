@@ -1,5 +1,5 @@
 """Direction `lowrank-restart`: updates built from many low-rank pieces or projections, for the classes e1mb, e100kb and
-reference. `islands/<class>/train.py` on this branch runs `main(class)`; E always encodes the whole update from θ.
+reference, run by this island's `train.py` as the class `--class` names; E always encodes the whole update from θ.
 
 Mechanisms (`--mech`):
 
@@ -34,8 +34,8 @@ scores the first E encoded in each 5% of the planned steps (`hooks.plan`), so ea
 whose 5% is still free and at its end; the arm with the least final training loss is submitted. A later arm's
 checkpoints are charged every arm before it.
 
-    python benchmarks/covert_witness/launch.py e1mb s100 --note "stack r2x4 lr sweep" -- --mech stack --rank 2 \
-        --pieces 4 --arms lr=1e-3/lr=3e-3/lr=1e-2 --budget-fraction 0.6
+    python benchmarks/covert_witness/launch.py e1mb s100 --note "stack r2x4 lr sweep" -- --class e1mb --mech stack \
+        --rank 2 --pieces 4 --arms lr=1e-3/lr=3e-3/lr=1e-2 --budget-fraction 0.6
 """
 from __future__ import annotations
 
@@ -824,8 +824,9 @@ def parse_arms(base: argparse.Namespace) -> list[argparse.Namespace]:
     return arms
 
 
-def main(klass: str) -> int:
+def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--class", dest="klass", choices=tuple(prepare.CLASSES), required=True)
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--mech", choices=("relora", "stack", "galore", "full", "subspace"), required=True)
@@ -861,7 +862,7 @@ def main(klass: str) -> int:
     torch.backends.cuda.matmul.allow_tf32 = True
     CODE.update(name=base.dtype, dtype=prepare.DTYPES[base.dtype])
     arms = parse_arms(base)
-    run = Run(base, klass, arms)
+    run = Run(base, base.klass, arms)
     mech = {"relora": run_relora, "stack": run_stack, "galore": run_galore, "full": run_full, "subspace": run_subspace}
     try:
         for a in arms:
