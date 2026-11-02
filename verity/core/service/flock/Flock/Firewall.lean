@@ -543,21 +543,24 @@ def sentJson : Sent → Json
       ("tops", .arr (tops.map hexs).toArray), ("level0", jnat level0), ("commits", hexs rows), ("n", jnat n)])]
   | .finish ok => Json.mkObj [("finish", .bool ok)]
 
-/-- One request of a live session at the state `st`, the salts drawn from `fresh`: what it sends, the salts it drew in
-order and the state after it, or the refusal that stops the session. On a session's requests in turn, with each
-request's salts those it drew, this is `run`'s loop until its first refusal. -/
+/-- One request of a live session at the state `st`, its salts those `st` holds undrawn then `fresh`: what it sends, the
+salts it drew in order and the state after it, holding the salts it didn't draw, or the refusal that stops the session.
+On a session's requests in turn from `{ salts := [] }`, each with the fresh salts read for it, this is `run`'s loop at
+those salts in order (`FirewallLive.run_live`). -/
 def liveStep (s : Schedule) (st : State) (b : ByteArray) (fresh : List ByteArray) :
     Except String (List Sent × List ByteArray × State) :=
-  match (show Fw Unit from do step s (← decode b)).run { st with salts := fresh, sent := #[] } with
-  | .ok ((), st') => .ok (st'.sent.toList, fresh.take (fresh.length - st'.salts.length), { st' with salts := [], sent := #[] })
+  let pool := st.salts ++ fresh
+  match (show Fw Unit from do step s (← decode b)).run { st with salts := pool, sent := #[] } with
+  | .ok ((), st') => .ok (st'.sent.toList, pool.take (pool.length - st'.salts.length), { st' with sent := #[] })
   | .error e => .error e
 
 /-- `flock-firewall live` at the byte source `get`: one session. Its first line is `{"schedule": …}`, answered
 `{"ok": true}`; each later line is one request in hex, answered with what the firewall sends the coin server for it and
 the salts it drew for them, `{"sent": [sentJson…], "salts": [hex…]}`, or with the refusal that stops the session,
 `{"stop": why}`, which every later line is answered with too. Every line is a request, an empty one an empty frame. A
-request's salts are read from `get` before it runs, as many as it could draw (a salted row reads at least one node of 64
-request bytes, a round's message row aside), and those it didn't draw are dropped. -/
+request's fresh salts are read from `get` before it runs, as many as it could draw (a salted row reads at least one node
+of 64 request bytes, a round's message row aside), and those it doesn't draw are the next request's first: the salts
+drawn are the first of the salts read, in order. -/
 def liveWith (get : USize → IO ByteArray) (_ : List String) : IO UInt32 := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
