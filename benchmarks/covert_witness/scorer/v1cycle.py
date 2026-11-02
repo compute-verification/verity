@@ -1,26 +1,23 @@
 """Night 2's formalism-v1 refresh (note:training-20261102T1817Z-report-training-formalism-v1), every 90 minutes.
 
     python v1cycle.py [--out DIR] [--no-publish] [--no-put] [--no-post]
+    python v1cycle.py --reput OUT
 
-One refresh:
+The score is te_core's alone (coordinator 20:15Z: one codebase, `te_core.rescore` with its readings). One refresh:
 
-1. Rebuilds the merged ledger (every ingested checkpoint's MACs log) from STATE/ingest/<TE_CURRENT_COMMIT[:12]>.
-2. Runs the re-score, benchmarks/covert_witness/analysis/rescore_v1.py at the newest commit that touches it on
-   cursor/te-rescore-v1-4207 or cursor/training-efficiency-4207: per checkpoint of every valid v2.3 record Delta (= u(1),
-   the best-known value, an upper bound), Delta_grad, phi, Fit (running and training) and the Slowdown theorem's rho
-   (target) on the (c, k) grid, under both readings of the u profile (`spec`: evenly spread, the frozen-tail form for
-   one-layer runs; `witness`: the frozen-tail form for every run with a frozen tail, the tied head included).
-3. Scores it under the coordinator's 19:50Z rule: H(l*) and W*(l*; c, k) = min |C| rho both read every checkpoint of
-   every valid record, so S = W*/H >= 1.
-4. Builds the console's five panels (note:dashboard-20261102T1934Z-draft-training-plots-contract, columns per
-   note:training-20261102T1938Z-draft-training-plots-contract-reply), draws each as a PNG from the same rows, writes them to
-   /opt/cursor/artifacts/te-panels/, publishes each plot (PNG + panel JSON) and the tables to the evidence store, PUTs the
-   panels, and posts one DIGEST line with the art ids.
+1. Checks out, detached in RESCORE_WT, the newest commit touching te_core or analysis/rescore_v1.py on
+   cursor/covert-witness-4207 or cursor/training-efficiency-4207.
+2. Runs its `python -m te_core.rescore` on the scorer's ledger at tonight's pin (PINS): per checkpoint of every valid
+   v2.3 record, rescore_v1.py's quantities (Delta, u(1), Delta_grad, phi, the frozen tail's share t), Fit (running and
+   training) and the Slowdown theorem's rho (a target) on te_core.policy's (c, k) grid under both readings of its
+   frozen-tail case (literal-x0 and tail-charged, no headline S), H and W* over every checkpoint of every valid record
+   (19:50Z), S = W*/H; frontier.md/json, formalism.jsonl and the console's five panels with their PNGs.
+3. Publishes the tables and each panel (its JSON and PNG) to the evidence store, writes each panel's console cut (the
+   route's body and note limits, `console`) to /opt/cursor/artifacts/te-panels/, PUTs them, and posts one DIGEST line
+   with the art ids. `--reput OUT` re-cuts a finished refresh's panels and PUTs them, with nothing re-scored.
 """
 import argparse
-import importlib.util
 import json
-import math
 import os
 import subprocess
 import sys
@@ -32,18 +29,37 @@ import scorer as S
 
 HERE = Path(__file__).resolve().parent
 RESCORE_WT = Path(os.environ.get("TE_RESCORE_WT", "/tmp/scorer/rescore"))
-RESCORE_PATH = "benchmarks/covert_witness/analysis/rescore_v1.py"
-RESCORE_REFS = ("cursor/te-rescore-v1-4207", "cursor/training-efficiency-4207")
-HARNESS_WT = Path(os.environ.get("TE_HARNESS_WT", "/tmp/scorer/harness-head"))
+RESCORE_PATHS = ("benchmarks/covert_witness/te_core", "benchmarks/covert_witness/analysis/rescore_v1.py")
+RESCORE_REFS = ("cursor/covert-witness-4207", "cursor/training-efficiency-4207")
+PINS = os.environ.get("TE_V1_PINS", "11d96c1b8745d8093746ea11e3e33fe6f07f7d3b,"
+                                    "36aac280a62be7a04cbf510b50636b5ad875ba54").split(",")
 PANELS_DIR = Path(os.environ.get("TE_PANELS_DIR", "/opt/cursor/artifacts/te-panels"))
 PANELS_URL = "https://website-docs-sage.vercel.app/api/panels"
-READINGS = {"spec": "evenly spread", "witness": "frozen tail"}
-REF_TARGET = 0.01
-NIGHT2 = "2026-11-02T19:15Z"
-BINS = (("<=10kB", 8e4), ("<=100kB", 8e5), ("<=1MB", 8e6), ("<=10MB", 8e7), ("<=100MB", 8e8), ("full", math.inf))
-FAMILY_COLORS = {"full": "black", "data": "dimgray", "partial": "tab:blue", "adapter": "tab:green",
-                 "update-code": "tab:purple", "state-compressed": "tab:brown", "activation-code": "tab:cyan",
-                 "seed": "magenta"}
+PLOT_OF = {"p1": "p1-loss-vs-compute", "p2": "p2-slowdown-vs-gain", "p3": "p3-policy-plane", "p4": "p4-decomposition",
+           "a2": "a2-efficiency-floor"}
+READINGS = ("literal-x0", "tail-charged")
+REFERENCE = "c=4096w k=10kB"
+REF_TARGET = -1.0
+NIGHT2 = "2026-11-02T19:15:00Z"
+BINS = (("<=10kB", 8e4), ("<=100kB", 8e5), ("<=1MB", 8e6))
+BODY_MAX = 65536
+NOTE_MAX = 500
+COMMON = ("reading: literal-x0 and tail-charged, Slowdown's two frozen-tail readings (Daniel decides; no headline S). "
+          "basis: fit = rho 1 by Fit for the training; target = Slowdown's bound, unproved. Delta, u(1), t, a: upper "
+          "bounds from witnesses; tau a stub. One seed. Full panel: evidence store.")
+SHORT = {
+    "p1-loss-vs-compute": "Loss (val bpb) against compute after theta, every checkpoint of every valid v2.3 record: "
+                          "honest |C| (gates), covert |C| rho at c=4096w k=10kB, covert-policy at other (c, k).",
+    "p2-slowdown-vs-gain": "S = W*/H at c=4096w k=10kB per start and target; H and W* over every checkpoint of every "
+                           "valid v2.3 record, so S >= 1. g null until the ladder's F.",
+    "p3-policy-plane": "S = W*/H over te_core.policy's (c, k) grid and each start's marked shapes, k in bits; H and W* "
+                       "over every checkpoint of every valid v2.3 record.",
+    "p4-decomposition": "Per valid v2.3 record reaching the target, at c=4096w k=10kB: p = |C|/H, s = rho, S = p s.",
+    "a2-efficiency-floor": "Least compute (gates) to each target against Delta, per start, every checkpoint of every "
+                           "valid v2.3 record; fit_*_k_bits: least k where Fit holds at c=4096w. No rho: readings agree.",
+}
+BAND_FEW = ("c1e15/k1e5", "c1e15/k1e6", "c1e14/k1e4")
+LEAN = ("start_id", "checkpoint", "method", "family")
 
 
 def fmt(x) -> str:
@@ -65,467 +81,49 @@ def git(*args: str, cwd: Path = RESCORE_WT) -> str:
 
 
 def rescore_head() -> str:
-    """Check out, detached, the newest commit touching the re-score on either branch; returns it."""
+    """Check out, detached, the newest commit touching te_core or the analysis on either branch; returns it."""
     for ref in RESCORE_REFS:
         subprocess.run(["git", "-C", str(RESCORE_WT), "fetch", "-q", "origin", ref], check=False, capture_output=True)
-    commit = git("log", "-1", "--format=%H", *(f"origin/{r}" for r in RESCORE_REFS), "--", RESCORE_PATH)
+    commit = git("log", "-1", "--format=%H", *(f"origin/{r}" for r in RESCORE_REFS), "--", *RESCORE_PATHS)
     git("checkout", "-q", "--detach", commit)
     return commit
 
 
-def ledger(out: Path) -> int:
-    """STATE's ingested checkpoints as rescore_v1's ledger rows (run_id, macs, macs_log)."""
-    commit = os.environ.get("TE_CURRENT_COMMIT", "df4acd427d3151ec8d1c955f9b3e93ff38de40f4")
-    rows = 0
+def rescore(out: Path, gates: Path) -> str:
+    """te_core.rescore into `out` (module docstring, 2); returns its last line."""
     out.mkdir(parents=True, exist_ok=True)
-    tmp = out / "index.jsonl.tmp"
-    with tmp.open("w") as f:
-        for p in sorted((S.STATE / "ingest" / commit[:12]).glob("*/records/scorer-ingest/*.json")):
-            r = json.loads(p.read_text())
-            if r.get("run_id") and r.get("macs") is not None and r.get("macs_log"):
-                f.write(json.dumps({k: r.get(k) for k in ("run_id", "macs", "macs_log", "fraction", "checkpoint_step")})
-                        + "\n")
-                rows += 1
-    tmp.rename(out / "index.jsonl")
-    return rows
-
-
-def load_rescore():
-    spec = importlib.util.spec_from_file_location("rescore_v1", RESCORE_WT / RESCORE_PATH)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-POLICY = """
-import json
-from te_core import policy as P
-out = {}
-for name, shape in P.starts().items():
-    c0, how = P.c0(shape)
-    out[name] = {"parameters": shape["parameters"], "tokens_per_param": shape.get("tokens_per_param"),
-                 "c0_gates": c0, "c0_counted": not how.startswith("stub"), "c0_how": how,
-                 "marks": {m: {"c": v["c"], "k": v["k"]} for m, v in P.shapes(shape).items()}}
-print(json.dumps(out))
-"""
-
-
-def policy_marks() -> dict:
-    """Each start's shape (parameters, tokens per parameter, C0) and te_core.policy's marked blocks, in gates and bits,
-    from the harness head's te_core (a process of its own: scorer.py has imported the pinned one)."""
-    subprocess.run(["git", "-C", str(HARNESS_WT), "fetch", "-q", "origin", "cursor/covert-witness-4207"], check=False,
-                   capture_output=True)
-    git("checkout", "-q", "--detach", "origin/cursor/covert-witness-4207", cwd=HARNESS_WT)
-    r = subprocess.run([sys.executable, "-c", POLICY], cwd=HARNESS_WT / "benchmarks" / "covert_witness",
-                       capture_output=True, text=True, check=True)
-    return json.loads(r.stdout)
-
-
-def family(r: dict) -> str:
-    mech, fmt, opt, d = r["mechanism"] or "", r["E_format"] or "", r["optimizer"], r["direction"]
-    if opt == "seed" or fmt == "seedlog":
-        return "seed"
-    if "act" in mech.split("-")[0]:
-        return "activation-code"
-    if fmt == "quant" or "qat" in mech or "4bit" in mech or "signrows" in mech:
-        return "update-code"
-    if opt == "galore" or d == "lowrank-restart":
-        return "state-compressed"
-    if fmt.startswith("lora"):
-        return "adapter"
-    if d == "ref-data" and "window" in mech:
-        return "data"
-    if d in ("ref-optim", "ref-data") and not mech.startswith("top"):
-        return "full"
-    return "partial"
-
-
-def label(start: str, shape: dict) -> str:
-    n = shape["parameters"]
-    return f"{n / 1e6:.0f}M · {shape['tokens_per_param']:g} tok/p"
-
-
-SEARCH_SET = "One seed (search slices)."
-FINAL_SET = ("Final: sealed shard; a FINAL entry's checkpoints are its reruns' (3 seeds averaged, loss_lo and loss_hi "
-             "their range), every other record's search value carried to the final start at the same drop.")
-
-
-class Cycle:
-    def __init__(self, rv, payload: dict, shapes: dict, launched: dict[str, str], l0: dict | None = None,
-                 final: bool = False):
-        self.rv, self.shapes, self.launched = rv, shapes, launched
-        self.records, self.cps = payload["records"], payload["checkpoints"]
-        self.final, self.set_note = final, FINAL_SET if final else SEARCH_SET
-        self.title = "FINAL (sealed shard, 3 seeds): " if final else ""
-        night = json.loads((S.STATE / "score.json").read_text())["starts"]
-        self.l0 = l0 or {s: v["start_bpb"] for s, v in night.items()}
-        self.starts = [s for s in self.l0 if s in shapes]
-        self.ref_s, self.ref_k = rv.REFERENCE[0], rv.GRID_K[rv.REFERENCE[1]]
-        self.w = {s: next(r["w"] for r in self.records.values() if r["start"] == s) for s in self.starts}
-        self.grid = [(c, kn, k) for c in rv.GRID_C for kn, k in rv.GRID_K.items()]
-
-    def rho(self, c: dict, s: float, k: float, mode: str) -> float:
-        return float(self.rv.rho_cp(c, self.records[c["id"]], s, k, mode))
-
-    def status(self, c: dict, s: float, k: float, mode: str) -> str:
-        return self.rv.status(c, self.records[c["id"]], s, k, mode)
-
-    def hit(self, start: str, target: float) -> list[dict]:
-        ls = self.l0[start] * (1 - target)
-        return [c for c in self.cps if c["start"] == start and c["bpb"] <= ls]
-
-    def best(self, hit: list[dict], s: float, k: float, mode: str) -> dict | None:
-        """W* over `hit` at (s, k): the checkpoint with the least |C| rho."""
-        if not hit:
-            return None
-        w, c = min(((c["gates"] * self.rho(c, s, k, mode), c) for c in hit), key=lambda t: t[0])
-        return {"W": w, "c": c, "rho": w / c["gates"], "status": self.status(c, s, k, mode)}
-
-    def scores(self) -> dict:
-        out = {}
-        for start in self.starts:
-            for t in self.rv.TARGETS:
-                hit = self.hit(start, t)
-                h = min(hit, key=lambda c: c["gates"]) if hit else None
-                cell = {"l_star": self.l0[start] * (1 - t), "reached": len(hit), "H": h and self.cp_ref(h), "grid": {},
-                        "marks": {}}
-                for mode in READINGS:
-                    for cw, kn, k in self.grid:
-                        b = self.best(hit, cw, k, mode)
-                        if b:
-                            cell["grid"][f"{mode}|{cw}|{kn}"] = self.cell(b, h)
-                    for m, v in self.shapes[start]["marks"].items():
-                        b = self.best(hit, v["c"] / self.w[start], v["k"], mode)
-                        if b:
-                            cell["marks"][f"{mode}|{m}"] = self.cell(b, h) | {"c_gates": v["c"], "k_bits": v["k"],
-                                                                              "s": v["c"] / self.w[start]}
-                out[f"{start}|{t}"] = cell
-        return out
-
-    def cp_ref(self, c: dict) -> dict:
-        r = self.records[c["id"]]
-        return {"gates": c["gates"], "id": c["id"], "cp": c["cp"], "bpb": c["bpb"], "direction": r["direction"],
-                "mechanism": r["mechanism"], "night2": self.night2(c["id"])}
-
-    def cell(self, b: dict, h: dict) -> dict:
-        r = self.records[b["c"]["id"]]
-        return {"W*": b["W"], "S": b["W"] / h["gates"], "rho": b["rho"], "p": b["c"]["gates"] / h["gates"],
-                "id": b["c"]["id"], "cp": b["c"]["cp"], "direction": r["direction"], "mechanism": r["mechanism"],
-                "family": family(r), "status": b["status"], "delta": b["c"]["delta"], "delta_grad": r["delta_grad"]}
-
-    def night2(self, rid: str) -> bool:
-        return self.launched.get(rid, "") >= NIGHT2
-
-    def per_record(self) -> dict:
-        """Per checkpoint: Delta = u(1), Delta_grad, phi, and on the grid Fit (running, training) and rho by reading."""
-        keys = [f"{cw}|{kn}" for cw, kn, _ in self.grid]
-        cps = []
-        for c in self.cps:
-            r = self.records[c["id"]]
-            g = {"fit_run": [], "fit_train": [], "rho_spec": [], "rho_witness": []}
-            for cw, _, k in self.grid:
-                run = c["delta"] + cw * self.rv.TAU <= k
-                g["fit_run"].append(run)
-                g["fit_train"].append(run and 2 * r["delta_grad"] + cw * self.rv.TAU <= k)
-                for mode in READINGS:
-                    g[f"rho_{mode}"].append(round(self.rho(c, cw, k, mode), 6))
-            cps.append({"id": c["id"], "start": c["start"], "cp": c["cp"], "schedule_end": c["schedule_end"],
-                        "gates": c["gates"], "bpb": c["bpb"], "delta_bits": c["delta"], "u1_bits": c["delta"],
-                        "delta_grad_bits": r["delta_grad"], "phi": c["phi"], **g})
-        recs = {rid: {k: v for k, v in r.items() if k != "note"} | {"family": family(r), "night2": self.night2(rid),
-                                                                   "note": r["note"]}
-                for rid, r in self.records.items()}
-        return {"grid_keys": keys, "grid_c_over_w": list(self.rv.GRID_C), "grid_k_bits": self.rv.GRID_K,
-                "tau_bits": self.rv.TAU, "u1": "u(1) = Delta, the best-known value from the record (an upper bound)",
-                "records": recs, "checkpoints": cps}
-
-
-MACS_MATCH = 0.02
-
-
-def final_payload(payload: dict, fdir: Path) -> tuple[dict, dict, dict]:
-    """The re-score's checkpoints on the final set, merged as scorer.py's final table merges them: a FINAL entry's
-    checkpoints are its reruns' (scorer.py final table: te_core's MACs and the seeds' mean bpb on the sealed shard), each
-    priced from the entry's search checkpoint at the same MACs (its gates scaled by the MACs, its Delta, phi and Fit
-    unchanged); every other record's search bpb is carried to the final start at the same drop. Returns the payload, the
-    final starts' bpb and, per entry, how many of its final rows found their search checkpoint."""
-    fin = json.loads((fdir / "final_submissions.json").read_text())
-    tab = json.loads((fdir / "table.json").read_text())
-    l0, l0s = tab["final_starts"], tab["search_starts"]
-    rows, mine = defaultdict(list), defaultdict(list)
-    for x in fin:
-        rows[x["id"]].append(x)
-    for c in payload["checkpoints"]:
-        mine[c["id"]].append(c)
-    cps = [c | {"bpb": c["bpb"] * l0[c["start"]] / l0s[c["start"]], "search_bpb": c["bpb"], "split": "search"}
-           for c in payload["checkpoints"] if c["id"] not in rows and c["start"] in l0 and c["start"] in l0s]
-    entries = {}
-    for i, xs in rows.items():
-        e = entries[i] = {"start": xs[0]["start"], "direction": xs[0]["direction"], "rows": len(xs), "matched": 0,
-                          "analysed": i in payload["records"], "seeds": sorted({s for x in xs for s in x["seeds"]})}
-        for x in xs:
-            c = min(mine[i], key=lambda c, x=x: abs(c["macs"] - x["macs"]), default=None)
-            if c is None or abs(c["macs"] - x["macs"]) > MACS_MATCH * max(c["macs"], x["macs"]):
-                continue
-            e["matched"] += 1
-            cps.append(c | {"bpb": x["val_bpb"], "bpb_min": x["bpb_min"], "bpb_max": x["bpb_max"], "seeds": x["seeds"],
-                            "gates": c["gates"] * x["macs"] / c["macs"] if c["macs"] else c["gates"], "macs": x["macs"],
-                            "search_bpb": c["bpb"], "split": "final",
-                            "schedule_end": x.get("schedule_end", c["schedule_end"])})
-    return {"records": payload["records"], "checkpoints": cps}, l0, entries
-
-
-def final_md(cy: Cycle, search: Cycle, sc: dict, entries: dict, tab: dict) -> str:
-    """Per FINAL entry and target: its least compute to the target on the sealed shard (seeds averaged) beside the
-    search's, and its own S at the reference policy (its least |C| rho over its final checkpoints, over the final H)."""
-    rv, short = cy.rv, cy.rv.short
-    L = ["## FINAL entries on the sealed shard", "",
-         (f"{len(entries)} entries with valid reruns; targets from the final starts' bpb ("
-          + ", ".join(f"{s} {v:.4f}" for s, v in sorted(cy.l0.items())) + "). A checkpoint reaches a target when its "
-          "seeds' mean bpb does; seeds: all when the worst seed reaches it too. Gates: the search checkpoint's at the "
-          "rerun's MACs. S: the entry's least |C| rho to the target at c = 4096w, k = 10 kB, over the final H."), "",
-         ("| entry | start | target | final: least gates (cp; bpb mean [lo, hi]; seeds) | search: least gates (cp) | "
-          "final/search | S evenly spread | S frozen tail |"), "|---|---|---|---|---|---|---|---|"]
-    for i, e in sorted(entries.items(), key=lambda t: (t[1]["start"], t[1]["direction"], t[0])):
-        r, s = cy.records.get(i), e["start"]
-        name = f"{e['direction']}/{r['mechanism'] if r else '?'} {short(i)}"
-        if r is None or not e["matched"]:
-            L.append(f"| {name} | {s} | – | " + ("not analysed by rescore_v1" if r is None else
-                                                 "no final row at a search checkpoint's MACs") + " | | | | |")
-            continue
-        for t in rv.TARGETS:
-            lf = cy.l0[s] * (1 - t)
-            hf = [c for c in cy.cps if c["id"] == i and c.get("split") == "final" and c["bpb"] <= lf]
-            hs = [c for c in search.cps if c["id"] == i and c["bpb"] <= search.l0[s] * (1 - t)]
-            f, g = (min(h, key=lambda c: c["gates"]) if h else None for h in (hf, hs))
-            if not f and not g:
-                continue
-            h = sc[f"{s}|{t}"]["H"]
-            vs = []
-            for mode in READINGS:
-                b = cy.best(hf, cy.ref_s, cy.ref_k, mode)
-                vs.append(f"{fmt(b['W'] / h['gates'])} (ρ {fmt(b['rho'])}, {b['status']})" if b and h else "–")
-            fs = (f"{fmt(f['gates'])} ({f['cp']:g}; {f['bpb']:.4f} [{f['bpb_min']:.4f}, {f['bpb_max']:.4f}]; "
-                  f"{'all' if f['bpb_max'] <= lf else 'not all'} of {len(f['seeds'])})") if f else "not reached"
-            gs = f"{fmt(g['gates'])} ({g['cp']:g})" if g else "not reached"
-            ratio = fmt(f["gates"] / g["gates"]) if f and g else "–"
-            L.append(f"| {name} | {s} | −{100 * t:g}% | {fs} | {gs} | {ratio} | " + " | ".join(vs) + " |")
-    L.append("")
-    bad = [x for x in tab.get("reruns", []) if x.get("problems")]
-    if bad:
-        L += ["### Reruns left out", "", "| entry | seed | run | problems |", "|---|---|---|---|"]
-        L += [f"| {short(x['id'])} | {x.get('seed')} | {x.get('run')} | {'; '.join(x['problems'])} |" for x in bad]
-        L.append("")
-    return "\n".join(L)
-
-
-def pareto(points):
-    """(x, y, payload) sorted by x with y strictly decreasing: the best y reachable at each budget x."""
-    out, best = [], math.inf
-    for x, y, p in sorted(points, key=lambda t: (t[0], t[1])):
-        if y < best:
-            out.append((x, y, p))
-            best = y
-    return out
-
-
-def deepest(l0: float, bpb: float, targets) -> float | None:
-    hit = [t for t in targets if bpb <= l0 * (1 - t)]
-    return -100 * max(hit) if hit else None
-
-
-def panels(cy: Cycle, sc: dict, stamp: str, source: str) -> dict:
-    rv, P = cy.rv, {}
-    refpol = f"c={rv.REFERENCE[0]}w k={rv.REFERENCE[1]}"
-    common = {"updated_at": stamp, "source": source, "kind": "table"}
-    lab = {s: label(s, cy.shapes[s]) for s in cy.starts}
-    size = {s: cy.shapes[s]["parameters"] for s in cy.starts}
-    sat = {s: cy.shapes[s]["tokens_per_param"] for s in cy.starts}
-    c0 = {s: cy.shapes[s]["c0_gates"] if cy.shapes[s]["c0_counted"] else None for s in cy.starts}
-
-    def meth(r):
-        return f"{r['direction']}/{r['mechanism']}"
-
-    cols = ["start", "start_id", "size", "saturation", "curve", "policy", "reading", "basis", "target_pct",
-            "compute_gates", "compute_frac", "loss", "loss_lo", "loss_hi", "record", "checkpoint", "method", "family"]
-    rows = []
-    for s in cy.starts:
-        mine = [c for c in cy.cps if c["start"] == s]
-
-        def emit(curve, policy, reading, pts, st=None, s=s):
-            for x, y, c in pts:
-                r = cy.records[c["id"]]
-                rows.append([lab[s], s, size[s], sat[s], curve, policy, reading,
-                             st(c) if st else None, deepest(cy.l0[s], y, rv.TARGETS), x,
-                             x / c0[s] if c0[s] else None, y, c.get("bpb_min"), c.get("bpb_max"), c["id"], c["cp"],
-                             meth(r), family(r)])
-
-        emit("honest", "", "", pareto([(c["gates"], c["bpb"], c) for c in mine]))
-        for mode, reading in READINGS.items():
-            for cw, kn, k in cy.grid:
-                pol = f"c={cw}w k={kn}"
-                pts = pareto([(c["gates"] * cy.rho(c, cw, k, mode), c["bpb"], c) for c in mine])
-                emit("covert" if pol == refpol else "covert-policy", pol, reading, pts,
-                     lambda c, cw=cw, k=k, mode=mode: cy.status(c, cw, k, mode))
-    P["p1-loss-vs-compute"] = common | {
-        "id": "training/p1-loss-vs-compute", "title": "Loss against compute spent after the start (every valid v2.3 "
-        "checkpoint)", "columns": cols, "rows": rows,
-        "note": "Each curve is the least compute at which a loss is reached (its Pareto points), over every checkpoint "
-                "of every valid v2.3 record (the 19:50Z rule). honest = |C| (Boolean gates); covert = |C| rho at the "
-                f"reference policy {refpol}; covert-policy = the other (c, k) of the grid (c in tokens per block, c/w). "
-                "basis: fit-train = rho 1 by Fit for the training; fit-run = only running the updated model fits; "
-                "unpriced = the Slowdown theorem's bound is 1 without Fit; priced = its bound is above 1 (a target: stated, "
-                "not proved in Lean, with the best-known u and a, upper bounds). reading: evenly spread or frozen tail "
-                "(the tied head is a frozen tail for every run that leaves the embedding frozen). loss = held-out bits "
-                "per byte. target_pct = the deepest target the point reaches. compute_frac is null: C0 is a stub for "
-                "these starts (" + ", ".join(f"{s} {cy.shapes[s]['c0_gates']:.3g}" for s in cy.starts) + " gates, "
-                f"te_core.policy). No scratch curve until the ladder's F. {cy.set_note} Starts: "
-                + ", ".join(f"{lab[s]} = {s}" for s in cy.starts) + "."}
-
-    cols = ["start", "start_id", "size", "saturation", "l0", "target_pct", "g", "S", "S_lo", "S_hi", "basis",
-            "reading", "policy", "method", "family", "record", "checkpoint", "H_gates", "W_gates", "rho", "p"]
-    rows = []
-    for s in cy.starts:
-        for t in rv.TARGETS:
-            cell = sc[f"{s}|{t}"]
-            for mode, reading in READINGS.items():
-                q = cell["grid"].get(f"{mode}|{rv.REFERENCE[0]}|{rv.REFERENCE[1]}")
-                rows.append([lab[s], s, size[s], sat[s], cy.l0[s], -100 * t, None, q and q["S"], None, None,
-                             q and q["status"], reading, refpol, q and f"{q['direction']}/{q['mechanism']}",
-                             q and q["family"], q and q["id"], q and q["cp"], cell["H"] and cell["H"]["gates"],
-                             q and q["W*"], q and q["rho"], q and q["p"]])
-    P["p2-slowdown-vs-gain"] = common | {
-        "id": "training/p2-slowdown-vs-gain", "title": "Slowdown S against the target (g waits for the ladder's F)",
-        "columns": cols, "rows": rows,
-        "note": f"S = W*/H at the reference policy {refpol}, the best known attack over every checkpoint of every valid "
-                "v2.3 record; H and W* read every checkpoint, so S >= 1. g = F(l*)/C0 is null until the ladder's "
-                f"from-scratch curve F: plot S against target_pct. basis as in P1. S_lo and S_hi null. {cy.set_note}"}
-
-    cols = ["start", "start_id", "target_pct", "g", "reading", "c_tokens_per_block", "c_gates", "k_bits", "k_bytes",
-            "S", "basis", "fit_train", "route", "method", "record", "checkpoint", "rho", "p", "mark"]
-    rows = []
-    for s in cy.starts:
-        for t in rv.TARGETS:
-            cell = sc[f"{s}|{t}"]
-            for mode, reading in READINGS.items():
-                for cw, kn, k in cy.grid:
-                    q = cell["grid"].get(f"{mode}|{cw}|{kn}")
-                    mark = "reference" if (cw, kn) == tuple(rv.REFERENCE) else ""
-                    rows.append([lab[s], s, -100 * t, None, reading, cw, cw * cy.w[s], k, k / 8, q and q["S"],
-                                 q and q["status"], q and q["status"] == "fit-train", q and q["direction"],
-                                 q and f"{q['direction']}/{q['mechanism']}", q and q["id"], q and q["cp"],
-                                 q and q["rho"], q and q["p"], mark])
-                for m in ("inference", "server"):
-                    q = cell["marks"].get(f"{mode}|{m}")
-                    v = cy.shapes[s]["marks"][m]
-                    rows.append([lab[s], s, -100 * t, None, reading, v["c"] / cy.w[s], v["c"], v["k"], v["k"] / 8,
-                                 q and q["S"], q and q["status"], q and q["status"] == "fit-train",
-                                 q and q["direction"], q and f"{q['direction']}/{q['mechanism']}", q and q["id"],
-                                 q and q["cp"], q and q["rho"], q and q["p"], f"{m} block"])
-    P["p3-policy-plane"] = common | {
-        "id": "training/p3-policy-plane", "title": "Slowdown S over the policy (c, k)", "columns": cols, "rows": rows,
-        "note": "S = W*/H at each (c, k) of the grid and at the start's inference and server blocks (te_core.policy: one "
-                "token's forward at full context with its K, V; the start's training in one block, C0 a stub, with its "
-                "state beyond theta). c_tokens_per_block = c/w, w the start's forward gates per token; k in bits. "
-                "fit_train: Fit holds for the training (2 Delta_grad + s tau <= k as well as Delta + s tau <= k). The "
-                f"reference target is -1%; every target is listed. basis as in P1. {cy.set_note}"}
-
-    cols = ["start", "start_id", "target_pct", "algorithm", "family", "route", "record", "checkpoint", "p", "s", "S",
-            "basis", "fit_train", "reading", "g", "seeds", "delta_bits", "delta_grad_bits", "compute_gates"]
-    rows = []
-    for s in cy.starts:
-        for t in rv.TARGETS:
-            h = sc[f"{s}|{t}"]["H"]
-            hit = cy.hit(s, t)
-            by = defaultdict(list)
-            for c in hit:
-                by[c["id"]].append(c)
-            for mode, reading in READINGS.items():
-                for rid, cs in by.items():
-                    b = cy.best(cs, cy.ref_s, cy.ref_k, mode)
-                    r = cy.records[rid]
-                    rows.append([lab[s], s, -100 * t, meth(r), family(r), r["direction"], rid, b["c"]["cp"],
-                                 b["c"]["gates"] / h["gates"], b["rho"], b["W"] / h["gates"], b["status"],
-                                 b["status"] == "fit-train", reading, None, len(b["c"].get("seeds") or [0]),
-                                 b["c"]["delta"], r["delta_grad"], b["c"]["gates"]])
-    P["p4-decomposition"] = common | {
-        "id": "training/p4-decomposition", "title": "p against s per record at the reference policy",
-        "columns": cols, "rows": rows,
-        "note": f"One point per valid v2.3 record reaching the target: its checkpoint with the least |C| rho at {refpol}; "
-                "p = |C|/H, s = rho (the Slowdown theorem's bound, floored at 1), S = p s. H over every checkpoint. "
-                f"basis as in P1. g null until the ladder's F. {cy.set_note}"}
-
-    cols = ["start", "start_id", "size", "saturation", "target_pct", "axis", "delta_bin", "delta_bits",
-            "delta_grad_bits", "compute_gates", "method", "family", "route", "record", "checkpoint", "night2",
-            "fit_run_k_bits", "fit_train_k_bits"]
-    rows = []
-    sref_tau = cy.ref_s * rv.TAU
-    for s in cy.starts:
-        for t in rv.TARGETS:
-            hit = cy.hit(s, t)
-            for axis in ("delta", "delta_grad"):
-                def x_of(c, axis=axis):
-                    return c["delta"] if axis == "delta" else cy.records[c["id"]]["delta_grad"]
-                pts = pareto([(x_of(c), c["gates"], c) for c in hit])
-                for _, g, c in pts:
-                    r = cy.records[c["id"]]
-                    rows.append([lab[s], s, size[s], sat[s], -100 * t, axis,
-                                 next(n for n, b in BINS if c["delta"] <= b), c["delta"], r["delta_grad"], g, meth(r),
-                                 family(r), r["direction"], c["id"], c["cp"], cy.night2(c["id"]),
-                                 c["delta"] + sref_tau, max(c["delta"], 2 * r["delta_grad"]) + sref_tau])
-    P["a2-efficiency-floor"] = common | {
-        "id": "training/a2-efficiency-floor", "title": "Efficiency floor: least compute to each target against the "
-        "update's size", "columns": cols, "rows": rows,
-        "note": "Per start and target, the Pareto points of (update size, least compute to the target) over every "
-                "checkpoint of every valid v2.3 record: axis delta = the total update Delta (Fit's quantity; also u(1), "
-                "the best-known value, an upper bound), axis delta_grad = the gradient and optimizer state passed between "
-                "blocks (from the optimizer's widths). compute in Boolean gates. fit_run_k_bits = Delta + s tau and "
-                "fit_train_k_bits = max(Delta, 2 Delta_grad) + s tau at the reference c (s = 4096 tokens, tau = 16 "
-                f"bits): the least k at which Fit passes. {cy.set_note}"}
-    for p in P.values():
-        p["title"] = cy.title + p["title"]
-    return P
-
-
-BODY_MAX = 65536
-NOTE_MAX = 500
-BAND_FEW = ("c=4096w k=100kB", "c=4096w k=1MB", "c=100w k=10kB", "c=1w k=10kB")
-BASIS = ("basis: fit-train = rho 1 by Fit; fit-run = only running fits; unpriced = Slowdown's bound is 1; priced = its "
-         "bound is above 1 (a target, not yet proved).")
-SHORT = {
-    "p1-loss-vs-compute": "Least compute per loss over every checkpoint of every valid v2.3 record (19:50Z rule). "
-                          "honest |C| (gates); covert |C| rho at c=4096w k=10kB; covert-policy another (c, k). " + BASIS
-                          + " loss: held-out bpb. compute_frac null: C0 is a stub.",
-    "p2-slowdown-vs-gain": "S = W*/H at c=4096w k=10kB, H and W* over every checkpoint of every valid v2.3 record, so "
-                           "S >= 1. g null until the ladder's F: plot S against target_pct. " + BASIS,
-    "p3-policy-plane": "S = W*/H over the (c, k) grid and at the start's inference and server blocks (te_core.policy), "
-                       "c_tokens_per_block = c/w, k in bits; H and W* over every checkpoint. fit_train: Fit holds for "
-                       "the training. " + BASIS,
-    "p4-decomposition": "Per valid v2.3 record reaching the target, its checkpoint with the least |C| rho at c=4096w "
-                        "k=10kB: p = |C|/H, s = rho, S = p s; H over every checkpoint. " + BASIS,
-    "a2-efficiency-floor": "Pareto points of (update size, least compute to the target) over every checkpoint of every "
-                           "valid v2.3 record: axis delta = Delta (= u(1), an upper bound), axis delta_grad = gradient "
-                           "and optimizer state. fit_*_k_bits: the least k at which Fit passes at c=4096w (Delta + s "
-                           "tau; max(Delta, 2 Delta_grad) + s tau).",
-}
+    if gates.exists() and not (out / "analysis-gates.json").exists():
+        (out / "analysis-gates.json").write_bytes(gates.read_bytes())
+    ledger = os.environ.get("TE_LEDGER", str(Path.home() / ".research" / "te-ledger"))
+    cmd = [sys.executable, "-m", "te_core.rescore", "--out", str(out), "--root", ledger, "--scorer", str(S.STATE)]
+    cmd += [x for p in PINS for x in ("--pin", p)]
+    r = subprocess.run(cmd, cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True,
+                       check=False)
+    (out / "rescore.log").write_text(r.stdout + r.stderr)
+    if r.returncode:
+        raise SystemExit(f"v1cycle: te_core.rescore failed (rc {r.returncode}):\n{r.stderr[-2000:]}")
+    return r.stdout.strip().splitlines()[-1]
 
 
 def body(p: dict) -> bytes:
     return json.dumps(p, separators=(",", ":"), allow_nan=False, ensure_ascii=False).encode()
 
 
+def frame(p: dict) -> list[dict]:
+    ix = {c: i for i, c in enumerate(p["columns"])}
+    return [{c: r[i] for c, i in ix.items()} for r in p["rows"]]
+
+
 def compact(p: dict, keep=lambda r: True, drop: tuple = ()) -> dict:
-    """`p` with the rows `keep` takes, without the columns `drop`, art ids shortened to 12 hex digits and numbers to 4
-    significant digits (losses 6)."""
+    """`p` with the rows `keep` takes, without the columns `drop`, booleans as yes/no and numbers to 4 significant
+    digits (losses 6)."""
     ix = {c: i for i, c in enumerate(p["columns"])}
 
     def val(c, v):
         if isinstance(v, bool):
             return "yes" if v else "no"
-        if isinstance(v, str) and v.startswith("art:"):
-            return v[4:16]
-        if isinstance(v, float) and not isinstance(v, bool):
-            return round(v, 6) if c in ("loss", "l0") else float(f"{v:.4g}")
+        if isinstance(v, float):
+            return round(v, 6) if c in ("loss", "loss_lo", "loss_hi", "l0") else float(f"{v:.4g}")
         return v
     rows = [[val(c, r[i]) for c, i in ix.items() if c not in drop] for r in p["rows"]
             if keep({c: r[i] for c, i in ix.items()})]
@@ -537,7 +135,7 @@ def thin(p: dict) -> dict:
     ix = {c: i for i, c in enumerate(p["columns"])}
     groups: dict[tuple, list] = defaultdict(list)
     for r in p["rows"]:
-        groups[(r[ix["start"]], r[ix["curve"]], r[ix["policy"]], r[ix["reading"]])].append(r)
+        groups[(r[ix["start_id"]], r[ix["curve"]], r[ix["policy"]], r[ix["reading"]])].append(r)
     rows = []
     for g in groups.values():
         kept = [g[0]]
@@ -550,280 +148,34 @@ def thin(p: dict) -> dict:
     return p | {"rows": rows}
 
 
-CONSOLE_SET = {False: "One seed.", True: "Final: sealed shard, FINAL entries 3 seeds averaged (loss_lo/hi their "
-                                          "range), other records' search values at the same drop."}
-
-
-def console(P: dict, final: bool = False) -> dict:
-    """Each panel cut to the route's body limit (65,536 bytes): P1 thinned, with the band's policies cut to BAND_FEW and
-    then to none if need be; P3 and P4 cut to the reference target if need be. The note says what was cut."""
+def console(P: dict) -> dict:
+    """Each of te_core's panels cut to the route's limits (a body of BODY_MAX bytes, a note of NOTE_MAX characters):
+    the short note, and the first of its cuts that fits, which the note names. Every cut keeps both readings."""
+    def ref(r):
+        return r["target_pct"] == REF_TARGET
     out = {}
     for pid, p in P.items():
-        tries, drop = [("", lambda r: True)], ()
+        tries = [("", lambda r: True, LEAN)]
         if pid == "p1-loss-vs-compute":
-            drop = ("start_id", "checkpoint", "method", "family")
             p = thin(p)
-            tries = [("", lambda r: True),
-                     (f" The band here: {', '.join(BAND_FEW)} (the full grid is in the evidence store).",
-                      lambda r: r["curve"] != "covert-policy" or r["policy"] in BAND_FEW),
-                     (" The band here: c=4096w k=100kB and k=1MB, evenly spread (the full grid is in the evidence store).",
-                      lambda r: r["curve"] != "covert-policy" or (r["policy"] in BAND_FEW[:2]
-                                                                  and r["reading"] == "evenly spread")),
-                     (" No band here (the full grid is in the evidence store).", lambda r: r["curve"] != "covert-policy")]
+            tries += [(f" The band here: {', '.join(BAND_FEW)}.",
+                       lambda r: r["curve"] != "covert-policy" or r["policy"] in BAND_FEW, LEAN),
+                      (f" The band here: {BAND_FEW[1]}.",
+                       lambda r: r["curve"] != "covert-policy" or r["policy"] == BAND_FEW[1], LEAN),
+                      (" No band here.", lambda r: r["curve"] != "covert-policy", LEAN)]
         elif pid in ("p3-policy-plane", "p4-decomposition"):
-            tries += [(" Only the reference target (-1%) here; every target is in the evidence store.",
-                       lambda r: r["target_pct"] == -100 * REF_TARGET)]
-        for why, keep in tries:
+            tries += [(" Here -1% only.", ref, LEAN),
+                      (" Here -1% only, no record column.", ref, (*LEAN, "record")),
+                      (" Here -1% only, no record, g, k_bytes or p (= S/rho).", ref,
+                       (*LEAN, "record", "g", "k_bytes", "p"))]
+        for why, keep, drop in tries:
             q = compact(p, keep, drop)
-            note = f"{SHORT[pid]} {CONSOLE_SET[final]}{why}" if pid in SHORT else p["note"] + why
+            note = f"{SHORT[pid]}{why} {COMMON}"
             q["note"] = note if len(note) <= NOTE_MAX else note[:NOTE_MAX - 1] + "…"
             if len(body(q)) <= BODY_MAX:
                 break
         out[pid] = q
     return out
-
-
-def frame(p: dict):
-    ix = {c: i for i, c in enumerate(p["columns"])}
-    return [{c: r[i] for c, i in ix.items()} for r in p["rows"]]
-
-
-def plots(cy: Cycle, P: dict, sc: dict, out: Path) -> dict[str, Path]:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from matplotlib.lines import Line2D
-
-    rv, paths = cy.rv, {}
-    refpol = f"c={rv.REFERENCE[0]}w k={rv.REFERENCE[1]}"
-    starts = cy.starts
-    tgt_colors = {-0.5: "tab:blue", -1.0: "tab:red", -2.0: "tab:green", -5.0: "tab:purple"}
-
-    rows = frame(P["p1-loss-vs-compute"])
-    fig, axes = plt.subplots(2, 2, figsize=(13, 10), constrained_layout=True)
-    for ax, s in zip(axes.flat, starts):
-        mine = [r for r in rows if r["start_id"] == s]
-        for pol in sorted({r["policy"] for r in mine if r["curve"] == "covert-policy"}):
-            for reading in READINGS.values():
-                pts = [(r["compute_gates"], r["loss"]) for r in mine if r["policy"] == pol and r["reading"] == reading]
-                if pts:
-                    ax.step(*zip(*pts), where="post", color="tab:red", alpha=0.12, lw=0.7)
-        for curve, reading, kw in (("honest", "", {"color": "k", "lw": 1.6, "label": "H, honest"}),
-                                   ("covert", "evenly spread", {"color": "tab:red", "lw": 1.4,
-                                                                "label": f"W* at {refpol}, evenly spread"}),
-                                   ("covert", "frozen tail", {"color": "darkorange", "lw": 1.2, "ls": "--",
-                                                              "label": f"W* at {refpol}, frozen tail"})):
-            pts = [(r["compute_gates"], r["loss"]) for r in mine if r["curve"] == curve and r["reading"] == reading]
-            if pts:
-                ax.step(*zip(*pts + [(pts[-1][0] * 30, pts[-1][1])]), where="post", **kw)
-        spread = [r for r in mine if r["curve"] == "honest" and r["loss_lo"] is not None]
-        if spread:
-            ax.errorbar([r["compute_gates"] for r in spread], [r["loss"] for r in spread],
-                        yerr=[[r["loss"] - r["loss_lo"] for r in spread], [r["loss_hi"] - r["loss"] for r in spread]],
-                        fmt="none", ecolor="k", elinewidth=0.8, capsize=2, label="3 seeds' range")
-        for t in rv.TARGETS:
-            ax.axhline(cy.l0[s] * (1 - t), color="0.8", lw=0.6, ls=":")
-            ax.text(0.99, cy.l0[s] * (1 - t), f"−{100 * t:g}%", fontsize=7, color="0.5", va="bottom", ha="right",
-                    transform=ax.get_yaxis_transform())
-        ax.axhline(cy.l0[s], color="0.6", lw=0.8)
-        ax.set_xscale("log")
-        if mine:
-            ax.set_xlim(min(r["compute_gates"] for r in mine) / 2, max(r["compute_gates"] for r in mine
-                                                                      if r["curve"] != "covert-policy") * 30)
-        ax.set_ylim(cy.l0[s] * 0.93, cy.l0[s] * 1.005)
-        c0 = cy.shapes[s]["c0_gates"]
-        sec = ax.secondary_xaxis("top", functions=(lambda x, c0=c0: x / c0, lambda f, c0=c0: f * c0))
-        sec.set_xlabel("compute / C0 stub (te_core.policy)", fontsize=8)
-        cell = sc[f"{s}|{REF_TARGET}"]
-        q = cell["grid"].get(f"spec|{rv.REFERENCE[0]}|{rv.REFERENCE[1]}")
-        ax.set_title(f"{s} ({label(s, cy.shapes[s])}), start {cy.l0[s]:.4f} bpb\n−1%: H {fmt(cell['H']['gates'])} gates, "
-                     f"S {fmt(q['S'])} ({q['mechanism']}, {q['status']})" if q else label(s, cy.shapes[s]), fontsize=9)
-        ax.set_xlabel("compute after θ (Boolean gates)")
-        ax.set_ylabel("held-out bpb")
-        ax.legend(fontsize=7, loc="lower left")
-    fig.suptitle(cy.title + "P1: loss against compute after θ, every checkpoint of every valid v2.3 record "
-                 "(light red: W* at the grid's other policies)")
-    paths["p1"] = out / "p1_loss_vs_compute.png"
-    fig.savefig(paths["p1"], dpi=105)
-    plt.close(fig)
-
-    rows = frame(P["p2-slowdown-vs-gain"])
-    fig, ax = plt.subplots(figsize=(8, 5.5), constrained_layout=True)
-    for i, s in enumerate(starts):
-        for reading, mk, ls in (("evenly spread", "o", "-"), ("frozen tail", "s", "--")):
-            pts = [(r["target_pct"], r["S"]) for r in rows if r["start_id"] == s and r["reading"] == reading and r["S"]]
-            if pts:
-                ax.plot(*zip(*pts), marker=mk, ls=ls, color=f"C{i}", label=f"{s}, {reading}")
-    ax.set_yscale("log")
-    ax.set_xlabel("target (% of the start's bpb)")
-    ax.set_ylabel(f"S = W*/H at {refpol}")
-    ax.legend(fontsize=7, ncol=2)
-    ax.set_title(cy.title + "P2 (until the ladder's F): S against the target, every checkpoint of every valid v2.3 record")
-    paths["p2"] = out / "p2_slowdown_vs_target.png"
-    fig.savefig(paths["p2"], dpi=105)
-    plt.close(fig)
-
-    rows = frame(P["p3-policy-plane"])
-    cs, ks = list(rv.GRID_C), list(rv.GRID_K.values())
-    fig, axes = plt.subplots(2, len(starts), figsize=(4.4 * len(starts), 8.6), constrained_layout=True, squeeze=False)
-    for ri, reading in enumerate(READINGS.values()):
-        for ax, s in zip(axes[ri], starts):
-            mine = [r for r in rows if r["start_id"] == s and r["reading"] == reading and r["target_pct"] == -100 * REF_TARGET]
-            z = [[math.nan] * len(cs) for _ in ks]
-            for r in mine:
-                if not r["mark"].endswith("block") and r["S"]:
-                    z[ks.index(r["k_bits"])][cs.index(r["c_tokens_per_block"])] = math.log10(r["S"])
-            m = ax.pcolormesh(range(len(cs) + 1), range(len(ks) + 1), z, vmin=0, vmax=6, cmap="viridis")
-            for yi, row in enumerate(z):
-                for xi, v in enumerate(row):
-                    if not math.isnan(v):
-                        ax.text(xi + 0.5, yi + 0.5, fmt(10 ** v), ha="center", va="center", fontsize=7,
-                                color="w" if v < 4 else "k")
-            ax.scatter([cs.index(rv.REFERENCE[0]) + 0.5], [0.5 + list(rv.GRID_K).index(rv.REFERENCE[1])], marker="*",
-                       s=160, facecolors="none", edgecolors="red", linewidths=1.4)
-            marks = {r["mark"]: r for r in mine if r["mark"].endswith("block")}
-            ax.set_xticks([x + 0.5 for x in range(len(cs))], [f"{c}w" for c in cs], fontsize=7)
-            ax.set_yticks([y + 0.5 for y in range(len(ks))], list(rv.GRID_K), fontsize=7)
-            ax.set_xlabel("c (tokens per block, c/w)", fontsize=8)
-            ax.set_ylabel("k", fontsize=8)
-            mk = "; ".join(f"{n.split()[0]} S {fmt(v['S'])}" for n, v in marks.items() if v["S"])
-            ax.set_title(f"{s}, −1%, {reading}\n{mk}", fontsize=8)
-        fig.colorbar(m, ax=axes[ri].tolist(), label="log10 S")
-    fig.suptitle(cy.title + "P3: S = W*/H over (c, k) at −1% (red star: the reference policy; inference and server blocks in "
-                 "the titles)")
-    paths["p3"] = out / "p3_policy_plane.png"
-    fig.savefig(paths["p3"], dpi=105)
-    plt.close(fig)
-
-    rows = frame(P["p4-decomposition"])
-    fig, axes = plt.subplots(2, len(starts), figsize=(4.6 * len(starts), 9), constrained_layout=True, squeeze=False)
-    for ri, reading in enumerate(READINGS.values()):
-        for ax, s in zip(axes[ri], starts):
-            mine = [r for r in rows if r["start_id"] == s and r["reading"] == reading
-                    and r["target_pct"] == -100 * REF_TARGET]
-            for r in mine:
-                ax.scatter(r["s"], r["p"], s=90 if r["family"] == "full" else 30,
-                           marker="*" if r["family"] == "full" else "o", color=FAMILY_COLORS.get(r["family"], "gray"),
-                           edgecolors="red" if r["fit_train"] else "k", linewidths=1.6 if r["fit_train"] else 0.3,
-                           zorder=3)
-            xs = [10 ** (e / 10) for e in range(-5, 91)]
-            for e in range(10):
-                ax.plot(xs, [10 ** e / x for x in xs], color="0.85", lw=0.7, zorder=1)
-            if mine:
-                b = min(mine, key=lambda r: r["S"])
-                ax.scatter(b["s"], b["p"], s=260, facecolors="none", edgecolors="red", zorder=4)
-                ax.set_title(f"{s}, −1%, {reading}: S {fmt(b['S'])} ({b['algorithm']})", fontsize=8)
-                ax.set_xlim(0.7, max(r["s"] for r in mine) * 3)
-                ax.set_ylim(0.7, max(r["p"] for r in mine) * 3)
-            ax.set_xscale("log")
-            ax.set_yscale("log")
-            ax.set_xlabel("s = ρ at the reference policy", fontsize=8)
-            ax.set_ylabel("p = |C| / H", fontsize=8)
-    handles = [Line2D([], [], marker="o", ls="", color=v, label=k) for k, v in FAMILY_COLORS.items()]
-    handles += [Line2D([], [], marker="o", ls="", mfc="white", mec="red", mew=1.6, label="Fit holds for training"),
-                Line2D([], [], marker="o", ls="", mfc="none", mec="red", ms=13, label="sets W*")]
-    fig.legend(handles=handles, loc="outside right center", fontsize=8)
-    fig.suptitle(cy.title + f"P4: p against s per record at −1% and {refpol} (gray: iso-S, S = p s)")
-    paths["p4"] = out / "p4_decomposition.png"
-    fig.savefig(paths["p4"], dpi=100)
-    plt.close(fig)
-
-    rows = frame(P["a2-efficiency-floor"])
-    fig, axes = plt.subplots(2, len(starts), figsize=(4.6 * len(starts), 8.6), constrained_layout=True, squeeze=False)
-    for ri, axis in enumerate(("delta", "delta_grad")):
-        for ax, s in zip(axes[ri], starts):
-            for t in rv.TARGETS:
-                tp = -100 * t
-                pts = [(r["delta_bits"] if axis == "delta" else r["delta_grad_bits"], r["compute_gates"])
-                       for r in rows if r["start_id"] == s and r["axis"] == axis and r["target_pct"] == tp]
-                if pts:
-                    ax.step(*zip(*pts + [(3e10, pts[-1][1])]), where="post", color=tgt_colors[tp], label=f"{tp:g}%")
-                    ax.scatter(*zip(*pts), s=10, color=tgt_colors[tp])
-            for kn, k in rv.GRID_K.items():
-                lim = k - cy.ref_s * rv.TAU if axis == "delta" else (k - cy.ref_s * rv.TAU) / 2
-                if lim > 0:
-                    ax.axvline(lim, color="0.75", ls="--", lw=0.7)
-                    ax.text(lim * 1.05, 0.02, f"Fit k={kn}", rotation=90, fontsize=6, color="0.5", va="bottom",
-                            transform=ax.get_xaxis_transform())
-            ax.set_xscale("log")
-            ax.set_yscale("log")
-            ax.set_xlim(1e3, 3e10)
-            ax.set_xlabel("Δ (bits)" if axis == "delta" else "Δ_grad (bits)", fontsize=8)
-            ax.set_ylabel("least compute to the target (gates)", fontsize=8)
-            ax.set_title(f"{s}, against {'Δ' if axis == 'delta' else 'Δ_grad'}", fontsize=9)
-            ax.legend(fontsize=7)
-    fig.suptitle(cy.title + "A2: least compute to each target against the update size, every checkpoint of every valid v2.3 "
-                 "record (dashed: Fit's limit at s = 4096, running for Δ and training for Δ_grad)")
-    paths["a2"] = out / "a2_efficiency_floor.png"
-    fig.savefig(paths["a2"], dpi=105)
-    plt.close(fig)
-    return paths
-
-
-def tables(cy: Cycle, sc: dict, rescore_md: str, meta: dict, extra: str = "") -> str:
-    rv, short = cy.rv, cy.rv.short
-    L = [f"# Formalism v1 {'final table' if cy.final else 'refresh'} {meta['stamp']}", "",
-         (f"rescore_v1.py at {meta['rescore'][:10]}; {len(cy.records)} valid v2.3 records ({meta['night2']} from "
-          f"night 2, launched at or after {NIGHT2}), {len(cy.cps)} checkpoints. H and W* read every checkpoint of every "
-          "valid record (the coordinator's 19:50Z rule), so S = W*/H >= 1. rho is the Slowdown theorem's bound (a "
-          "target, with the best-known u(1) = Delta and a = d_model x 16 bits, upper bounds) unless Fit holds for the "
-          "training (rho = 1). Readings: evenly spread (`spec`) and frozen tail (`witness`). Gates are Boolean gates. "
-          + cy.set_note), ""]
-    if extra:
-        L += [extra, ""]
-    L += ["## At the reference policy (c = 4096w, k = 10 kB)", "",
-          ("| start | target | H (gates; record, cp) | evenly spread: S (route, ρ, p, basis) | frozen tail: S (route, "
-           "ρ, p, basis) |"), "|---|---|---|---|---|"]
-    for key, cell in sc.items():
-        s, t = key.split("|")
-        h = cell["H"]
-        hs = f"{fmt(h['gates'])} ({h['mechanism']} {short(h['id'])}, {h['cp']:g}{', night 2' if h['night2'] else ''})" \
-            if h else "not reached"
-        vs = []
-        for mode in READINGS:
-            q = cell["grid"].get(f"{mode}|{rv.REFERENCE[0]}|{rv.REFERENCE[1]}")
-            vs.append(f"{fmt(q['S'])} ({q['mechanism']} {short(q['id'])}, ρ {fmt(q['rho'])}, p {fmt(q['p'])}, "
-                      f"{q['status']})" if q else "–")
-        L.append(f"| {s} | −{100 * float(t):g}% | {hs} | " + " | ".join(vs) + " |")
-    L.append("")
-    for mode, reading in READINGS.items():
-        for title, axis in ((f"S at c = 4096w, by k ({reading})", "k"), (f"S at k = 10 kB, by c ({reading})", "c")):
-            cols = list(rv.GRID_K) if axis == "k" else [f"{c}w" for c in rv.GRID_C]
-            L += [f"## {title}", "", "| start | target | " + " | ".join(cols) + " |", "|---|---|" + "---|" * len(cols)]
-            for key, cell in sc.items():
-                s, t = key.split("|")
-                vals = []
-                for col in (rv.GRID_K if axis == "k" else rv.GRID_C):
-                    q = cell["grid"].get(f"{mode}|{4096 if axis == 'k' else col}|{col if axis == 'k' else '10kB'}")
-                    vals.append(f"{fmt(q['S'])} {q['mechanism']} [{q['status']}]" if q else "–")
-                L.append(f"| {s} | −{100 * float(t):g}% | " + " | ".join(vals) + " |")
-            L.append("")
-    L += ["## Marked blocks (te_core.policy), S by reading", "", "| start | target | inference block | server block |",
-          "|---|---|---|---|"]
-    for key, cell in sc.items():
-        s, t = key.split("|")
-        vals = []
-        for m in ("inference", "server"):
-            vals.append(" / ".join(f"{fmt(q['S'])} {q['mechanism']} [{q['status']}]" if (q := cell["marks"].get(
-                f"{mode}|{m}")) else "–" for mode in READINGS))
-        L.append(f"| {s} | −{100 * float(t):g}% | " + " | ".join(vals) + " |")
-    L.append("")
-    L += ["## A2: least compute (gates) to each target per Δ bin, every checkpoint", "",
-          "| start | target | " + " | ".join(n for n, _ in BINS) + " |", "|---|---|" + "---|" * len(BINS)]
-    for key in sc:
-        s, t = key.split("|")
-        hit = cy.hit(s, float(t))
-        vals = []
-        for _, b in BINS:
-            ok = [c for c in hit if c["delta"] <= b]
-            c = min(ok, key=lambda c: c["gates"]) if ok else None
-            vals.append(f"{fmt(c['gates'])} {cy.records[c['id']]['mechanism']} (Δ {fmt(c['delta'])}, Δ_grad "
-                        f"{fmt(cy.records[c['id']]['delta_grad'])})" if c else "none")
-        L.append(f"| {s} | −{100 * float(t):g}% | " + " | ".join(vals) + " |")
-    L.append("")
-    per_record = rescore_md.split("\n### S = W*/H")[0]
-    L += ["## Per record, from rescore_v1.py (independent of H)", "", per_record.replace("### ", "#### "), ""]
-    return "\n".join(L)
 
 
 def put_data(tree: Path, kind: str, meta: dict) -> str:
@@ -849,116 +201,83 @@ def put_panel(panel: dict) -> str:
         return f"{e.code} {e.read()[:400].decode(errors='replace')}"
 
 
+def night2_runs() -> set[str]:
+    out = set()
+    for line in (S.STATE / "index.jsonl").open():
+        x = json.loads(line)
+        if x.get("source") == "launch.py" and (x.get("launched") or "") >= NIGHT2:
+            out.add(x.get("run"))
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, help="default /tmp/scorer/v1/<stamp>")
-    ap.add_argument("--gates", type=Path, default=Path("/tmp/scorer/v1/trial/gates.json"))
+    ap.add_argument("--gates", type=Path, default=Path("/tmp/scorer/v1/trial/gates.json"),
+                    help="the analysis's gate factors, seeded into the re-score's cache")
     ap.add_argument("--no-publish", action="store_true")
     ap.add_argument("--no-put", action="store_true")
     ap.add_argument("--no-post", action="store_true")
     ap.add_argument("--reput", type=Path, metavar="OUT", help="re-cut a refresh's full panels (OUT/publish) and PUT them")
-    ap.add_argument("--final", type=Path, metavar="FINAL_DIR",
-                    help="the final table: the FINAL entries' reruns in FINAL_DIR (scorer.py final table) on the sealed "
-                         "shard, the other records' search values at the same drop; posts FINAL-TABLE, not DIGEST")
+    ap.add_argument("--final", type=Path, metavar="FINAL_DIR", help="the final table (not yet on te_core.rescore)")
     args = ap.parse_args()
     if args.reput:
         return reput(args.reput)
+    if args.final:
+        raise SystemExit("v1cycle --final: the final table isn't on te_core.rescore yet")
     stamp = now()
-    out = args.out or Path("/tmp/scorer/v1") / f"{'final-' if args.final else ''}{stamp.replace(':', '')}"
-    out.mkdir(parents=True, exist_ok=True)
-    led = ledger(Path("/tmp/scorer/v1/ledger"))
+    out = args.out or Path("/tmp/scorer/v1") / stamp.replace(":", "")
     commit = rescore_head()
-    r = subprocess.run([sys.executable, str(RESCORE_WT / RESCORE_PATH), "--scorer", str(S.STATE), "--ledger",
-                        "/tmp/scorer/v1/ledger", "--out", str(out / "rescore"), "--gates", str(args.gates)],
-                       capture_output=True, text=True, check=False)
-    if r.returncode:
-        print(r.stderr[-2000:], file=sys.stderr)
-        return 1
-    rv = load_rescore()
-    payload = json.loads((out / "rescore" / "rescore_v1.json").read_text())
-    unjoined = sum(c["source"] != "ledger" for c in payload["checkpoints"])
-    launched = {}
-    for line in (S.STATE / "index.jsonl").open():
-        x = json.loads(line)
-        if x.get("source") == "launch.py":
-            launched[x["id"]] = x.get("launched") or ""
-    cy = search = Cycle(rv, payload, policy_marks(), launched)
-    extra, meta = "", {}
-    if args.final:
-        fp, l0, entries = final_payload(payload, args.final)
-        cy = Cycle(rv, fp, search.shapes, launched, l0=l0, final=True)
-        meta = {"final": str(args.final), "entries": len(entries),
-                "entries_matched": sum(e["matched"] > 0 for e in entries.values())}
-    sc = cy.scores()
-    if args.final:
-        extra = final_md(cy, search, sc, entries, json.loads((args.final / "table.json").read_text()))
-    n2 = sum(cy.night2(i) for i in cy.records)
-    meta = {"stamp": stamp, "rescore": commit, "night2": n2, "records": len(cy.records), "checkpoints": len(cy.cps),
-            "ledger_rows": led, "unjoined": unjoined} | meta
-    what = "final table" if args.final else "refresh"
-    plots_dir = out / "plots"
-    plots_dir.mkdir(exist_ok=True)
-    trees = {}
-    for name in ("tables", "p1", "p2", "p3", "p4", "a2"):
-        trees[name] = out / "publish" / name
-        trees[name].mkdir(parents=True, exist_ok=True)
-    (trees["tables"] / "tables.md").write_text(tables(cy, sc, (out / "rescore" / "tables.md").read_text(), meta, extra))
-    if args.final:
-        (trees["tables"] / "final.md").write_text(extra + "\n")
-        (trees["tables"] / "final_entries.json").write_text(json.dumps(entries, indent=1) + "\n")
-        (trees["tables"] / "final_checkpoints.json").write_text(json.dumps(cy.cps, default=float) + "\n")
-        for name in ("table.md", "table.json", "final_submissions.json", "results.jsonl", "plan.json"):
-            if (args.final / name).exists():
-                (trees["tables"] / f"scorer-final-{name}").write_bytes((args.final / name).read_bytes())
-    (trees["tables"] / "scores.json").write_text(json.dumps(meta | {"rule": "H and W* over every checkpoint (19:50Z)",
-                                                                    "scores": sc}, indent=1, default=float) + "\n")
-    (trees["tables"] / "records_v1.json").write_text(json.dumps(cy.per_record(), default=float) + "\n")
-    (trees["tables"] / "rescore_v1.json").write_text((out / "rescore" / "rescore_v1.json").read_text())
+    last = rescore(out / "rescore", args.gates)
+    rs = out / "rescore"
+    fr = json.loads((rs / "frontier.json").read_text())
+    scored = [json.loads(line) for line in (rs / "formalism.jsonl").open()]
+    runs, n2 = {r["run_id"] for r in scored}, night2_runs()
+    meta = {"stamp": stamp, "te_core": commit, "pin": fr["pin"], "readings": fr["readings"],
+            "checkpoints": len(scored), "records": len(runs), "night2_records": len(runs & n2),
+            "not_analysed": len(fr["not_analysed"]), "rule": "H and W* over every checkpoint (19:50Z)"}
+    trees = {k: out / "publish" / k for k in ("tables", *PLOT_OF)}
+    for t in trees.values():
+        t.mkdir(parents=True, exist_ok=True)
+    for name in ("frontier.md", "frontier.json", "formalism.jsonl", "rescore.log"):
+        (trees["tables"] / name).write_bytes((rs / name).read_bytes())
+    (trees["tables"] / "meta.json").write_text(json.dumps(meta, indent=1) + "\n")
     ids = {}
     if not args.no_publish:
-        ids["tables"] = put_data(trees["tables"], "evidence/v1", {"what": f"te formalism v1 {what}: tables, scores, "
-                                                                          "per-record grid", **meta})
-    source = (f"{ids.get('tables', 'unpublished')} (scorer v1cycle {what} {stamp}; rescore_v1.py {commit[:10]}; "
-              f"{len(cy.records)} valid v2.3 records, {len(cy.cps)} checkpoints)")
-    P = panels(cy, sc, stamp, source)
-    C = console(P, cy.final)
-    paths = plots(cy, P, sc, plots_dir)
+        ids["tables"] = put_data(trees["tables"], "evidence/v1", {"what": "te formalism v1 refresh: te_core.rescore's "
+                                                                          "frontier and per-checkpoint blocks", **meta})
+    source = (f"{ids.get('tables', 'unpublished')[:16]} (scorer v1cycle {stamp}: te_core.rescore {commit[:10]}, "
+              f"{len(scored)} valid v2.3 checkpoints)")
+    P = {}
+    for pid in PLOT_OF.values():
+        P[pid] = json.loads((rs / f"{pid}.json").read_text()) | {"source": source}
+    C = console(P)
     PANELS_DIR.mkdir(parents=True, exist_ok=True)
     for key, pid in PLOT_OF.items():
-        (trees[key] / f"{pid}.json").write_text(json.dumps(P[pid], default=float) + "\n")
+        (trees[key] / f"{pid}.json").write_text(json.dumps(P[pid]) + "\n")
         (trees[key] / f"{pid}.console.json").write_bytes(body(C[pid]) + b"\n")
-        (trees[key] / paths[key].name).write_bytes(paths[key].read_bytes())
+        (trees[key] / f"{pid}.png").write_bytes((rs / f"{pid}.png").read_bytes())
         (PANELS_DIR / f"{pid}.json").write_bytes(body(C[pid]) + b"\n")
-        (PANELS_DIR / paths[key].name).write_bytes(paths[key].read_bytes())
+        (PANELS_DIR / f"{pid}.png").write_bytes((rs / f"{pid}.png").read_bytes())
         if not args.no_publish:
-            ids[key] = put_data(trees[key], "evidence/v1", {"what": f"te formalism v1 {what} {pid}", **meta})
-    puts = {}
-    if not args.no_put:
-        for pid in PLOT_OF.values():
-            puts[pid] = put_panel(C[pid])
+            ids[key] = put_data(trees[key], "evidence/v1", {"what": f"te formalism v1 refresh {pid}", **meta})
+    puts = {} if args.no_put else {pid: put_panel(C[pid]) for pid in PLOT_OF.values()}
     summary = meta | {"art": ids, "panels_put": puts, "rows": {k: len(v["rows"]) for k, v in P.items()},
                       "console_rows": {k: len(v["rows"]) for k, v in C.items()},
-                      "console_bytes": {k: len(body(v)) for k, v in C.items()},
-                      "out": str(out)}
+                      "console_bytes": {k: len(body(v)) for k, v in C.items()}, "rescore": last, "out": str(out)}
     (out / "cycle.json").write_text(json.dumps(summary, indent=1) + "\n")
-    line = digest(cy, sc, meta, ids, puts)
+    line = digest(P, meta, ids, puts)
     (out / "digest.txt").write_text(line + "\n")
     print(json.dumps(summary))
     print(line)
     if not args.no_post and not args.no_publish:
-        subprocess.run([sys.executable, str(HERE / "scorer.py"), "post", "FINAL-TABLE" if args.final else "DIGEST",
-                        line], check=True)
+        subprocess.run([sys.executable, str(HERE / "scorer.py"), "post", "DIGEST", line], check=True)
     return 0
-
-
-PLOT_OF = {"p1": "p1-loss-vs-compute", "p2": "p2-slowdown-vs-gain", "p3": "p3-policy-plane", "p4": "p4-decomposition",
-           "a2": "a2-efficiency-floor"}
 
 
 def reput(out: Path) -> int:
     """The console's cut of a finished refresh's full panels, written to PANELS_DIR and PUT, with nothing re-scored."""
-    P = {pid: json.loads((out / "publish" / key / f"{pid}.json").read_text()) for key, pid in PLOT_OF.items()}
-    C = console(P, any(p["title"].startswith("FINAL") for p in P.values()))
+    C = console({pid: json.loads((out / "publish" / key / f"{pid}.json").read_text()) for key, pid in PLOT_OF.items()})
     puts = {}
     for pid, q in C.items():
         (PANELS_DIR / f"{pid}.json").write_bytes(body(q) + b"\n")
@@ -967,37 +286,36 @@ def reput(out: Path) -> int:
     return 0 if all(str(v).startswith("2") for v in puts.values()) else 1
 
 
-def digest(cy: Cycle, sc: dict, meta: dict, ids: dict, puts: dict) -> str:
-    rv, short = cy.rv, cy.rv.short
-    ref = f"{rv.REFERENCE[0]}|{rv.REFERENCE[1]}"
+def digest(P: dict, meta: dict, ids: dict, puts: dict) -> str:
+    """At the reference target and policy, per start: H, each reading's S (rho, route) from P2's rows, and A2's least
+    gates at the first Delta bins."""
+    p2, a2 = frame(P["p2-slowdown-vs-gain"]), frame(P["a2-efficiency-floor"])
     parts = []
     for s in ("s100", "m100", "s50", "m50"):
-        if s not in cy.starts:
+        at = {r["reading"]: r for r in p2 if r["start_id"] == s and r["target_pct"] == REF_TARGET
+              and r["policy"] == REFERENCE}
+        if not at:
             continue
-        cell = sc[f"{s}|{REF_TARGET}"]
-        h = cell["H"]
-        if not h:
+        h = next(iter(at.values()))["H_gates"]
+        if h is None:
             parts.append(f"{s} not reached")
             continue
-        q = {m: cell["grid"].get(f"{m}|{ref}") for m in READINGS}
-        hit = cy.hit(s, REF_TARGET)
+        q = " / ".join(f"{fmt(at[m]['S'])} {m} (ρ {fmt(at[m]['rho'])}, {at[m]['basis']}; {at[m]['method']} "
+                       f"{at[m]['record']}@{at[m]['checkpoint']})" if m in at and at[m]["S"] is not None else f"– {m}"
+                       for m in READINGS)
+        fl = [r for r in a2 if r["start_id"] == s and r["target_pct"] == REF_TARGET and r["reading"] == READINGS[0]]
         floor = []
-        for n, b in BINS[:3]:
-            ok = [c for c in hit if c["delta"] <= b]
-            floor.append(f"{n} {fmt(min(c['gates'] for c in ok))}" if ok else f"{n} none")
-        parts.append(f"{s}: H {fmt(h['gates'])} ({h['mechanism']} {short(h['id'])}{', night 2' if h['night2'] else ''}); "
-                     f"S {fmt(q['spec']['S'])} evenly spread ({q['spec']['mechanism']} {short(q['spec']['id'])}, ρ "
-                     f"{fmt(q['spec']['rho'])}, {q['spec']['status']}) / {fmt(q['witness']['S'])} frozen tail "
-                     f"({q['witness']['mechanism']}, ρ {fmt(q['witness']['rho'])}); A2 least gates at "
-                     + ", ".join(floor))
+        for n, b in BINS:
+            ok = [r["compute_gates"] for r in fl if r["delta_bits"] <= b]
+            floor.append(f"{n} {fmt(min(ok))}" if ok else f"{n} none")
+        parts.append(f"{s}: H {fmt(h)}; S {q}; A2 least gates at " + ", ".join(floor))
     arts = ", ".join(f"{k} {v[:16]}" for k, v in ids.items())
     ok = sum(str(v).startswith("2") for v in puts.values())
-    head = (f"v1 final table (sealed shard: {meta['entries']} FINAL entries' reruns, seeds averaged, the other records' "
-            "search values at the same drop; " if cy.final else "v1 refresh (")
-    return (f"{head}rescore_v1.py {meta['rescore'][:10]}; {meta['records']} valid v2.3 records, {meta['night2']} "
-            f"from night 2, {meta['checkpoints']} checkpoints; H and W* over every checkpoint, so S >= 1; rho is the "
-            "Slowdown theorem's target unless Fit holds for training) at −1% and the reference (4096w, 10 kB): "
-            + "; ".join(parts) + f". art: {arts}. Console panels PUT {ok}/{len(puts)} (p1-p4, a2).")
+    return (f"v1 refresh (te_core.rescore {meta['te_core'][:10]}: {meta['records']} valid v2.3 records, "
+            f"{meta['night2_records']} from night 2, {meta['checkpoints']} checkpoints, {meta['not_analysed']} not "
+            "analysed yet; H and W* over every checkpoint, so S >= 1; both readings of Slowdown's frozen-tail case, "
+            "literal-x0 / tail-charged, no headline S; rho a target unless Fit holds for the training) at −1% and "
+            f"{REFERENCE}: " + "; ".join(parts) + f". art: {arts}. Console panels PUT {ok}/{len(puts)} (p1-p4, a2).")
 
 
 if __name__ == "__main__":
