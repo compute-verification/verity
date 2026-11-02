@@ -1,0 +1,88 @@
+"""The maximal structure annotation A of a run, read from the harness's count (flops.Counter.record), never from the
+program.
+
+- multiplication blocks: MACs, as counted;
+- token blocks: one token's computation in one step;
+- updated blocks U: the forward pass's MACs whose weight operand differs from θ (flops: `updated` nodes). Backward
+  input-gradient products read the same weights but are left out: counting them would halve β per MAC and double φ,
+  leaving φβ unchanged and D ≥ k/β harder to meet.
+
+Per step t it gives the updated MACs, the updated MACs per token block (the smaller of the per-row sum over updated nodes
+and the step's updated MACs over its tokens, so neither hiding tokens from the count nor routing tokens to some weights
+only lowers it), the depth D_t (the updated MACs per token upstream of the step's deepest updated node, within its
+token's forward pass) and the depth profile from which φ is read: φ(D_min) is the share of |C| in updated MACs with at
+least D_min updated MACs upstream.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class StepAnnotation:
+    step: int
+    tokens: int
+    macs: int
+    updated_macs: int
+    updated_per_token: float
+    depth: int
+    profile: tuple[tuple[int, int], ...]  # (updated MACs per token upstream, MACs) per updated node
+    bits: int  # the narrowest width an updated weight is multiplied at (0: no updated node)
+    weights: dict  # weight key -> digests of the values used, in order
+    shapes: dict  # weight key -> [dtype, shape]
+
+
+@dataclass(frozen=True)
+class Annotation:
+    macs: int  # |C|: the prefix's every counted MAC, setup included
+    steps: tuple[StepAnnotation, ...]
+
+    def select(self, steps=None) -> list[StepAnnotation]:
+        if steps is None:
+            return list(self.steps)
+        want = set(steps)
+        return [s for s in self.steps if s.step in want]
+
+    def updated(self, steps=None) -> int:
+        return sum(s.updated_macs for s in self.select(steps))
+
+    def depth(self, steps=None) -> int:
+        return max((s.depth for s in self.select(steps) if s.updated_macs), default=0)
+
+    def phi(self, d_min: float, steps=None) -> float:
+        """The share of |C| in updated MACs (of `steps`, default all) with at least `d_min` updated MACs upstream."""
+        if self.macs <= 0:
+            return 0.0
+        deep = sum(m for s in self.select(steps) for up, m in s.profile if up >= d_min)
+        return deep / self.macs
+
+    def bits(self, steps=None) -> int:
+        return min((s.bits for s in self.select(steps) if s.bits), default=0)
+
+    def summary(self) -> dict:
+        upd = [s for s in self.steps if s.updated_macs]
+        return {"macs": self.macs, "steps": len(self.steps), "updated_steps": len(upd), "updated_macs": self.updated(),
+                "depth": self.depth(), "bits": self.bits(),
+                "updated_per_token": [min((s.updated_per_token for s in upd), default=0),
+                                      max((s.updated_per_token for s in upd), default=0)]}
+
+
+def _step(rec: dict, struct: dict) -> StepAnnotation:
+    nodes = struct["updated"]
+    updated = sum(n[2] for n in nodes)
+    per_row = sum(n[0] for n in nodes)
+    per_token = min(per_row, updated / rec["tokens"]) if rec["tokens"] else per_row
+    return StepAnnotation(
+        step=rec["step"], tokens=rec["tokens"], macs=rec["macs"], updated_macs=updated, updated_per_token=per_token,
+        depth=max((n[1] for n in nodes), default=0), profile=tuple(sorted((n[1], n[2]) for n in nodes)),
+        bits=min((n[4] for n in nodes), default=0), weights=rec.get("weights", {}), shapes=rec.get("shapes", {}))
+
+
+def annotate(record: dict, through: int | None = None) -> Annotation:
+    """The annotation of the run's prefix through step `through` (every step if None, the tail's work included)."""
+    structures = record["structures"]
+    steps = [s for s in record["steps"] if through is None or s["step"] <= through]
+    macs = record["setup"]["macs"] + sum(s["macs"] for s in steps)
+    if through is None:
+        macs += record.get("tail", {}).get("macs", 0)
+    return Annotation(macs=macs, steps=tuple(_step(s, structures[s["struct"]]) for s in steps))
