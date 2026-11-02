@@ -9,7 +9,15 @@ The scorer reads only the evidence store and writes the ledger and scores under 
 python scorer.py collect                               # new manifests -> index.jsonl, index.md, runs.json, starts.json
 python scorer.py score                                 # score.json, score.md, submissions.json
 python scorer.py board --promote --digest [--append]   # this hour's PROMOTED and DIGEST lines (--append pushes them)
+python scorer.py post TAG TEXT                         # one line onto islands/scorer/BOARD.md, pushed
+python scorer.py final starts|launch ID...|collect     # final-set reruns (below)
 ~~~
+
+- **Final scoring** (`final.sh`, `scorer.py final`): an entry is rerun at fresh seeds (101, 102, 103 on the `--seed` and
+  `--data-seed` flags its script takes) by `research run --source` of its own commit, `final.sh` sent with the run, so
+  the island, the fixed side and the train args are the ones its record names. `final.sh` trains as `candidate.sh` does
+  and scores the submission (and its curve) on the search and the final set; `final starts` scores the starts on both.
+  `final collect` reads each ended run's `out/` into `$TE_SCORER_STATE/final/results.jsonl`.
 
 - **Records**: evidence/v1 artifacts with `meta.covert_witness.class` (launch.py's, one per candidate) and te_core
   ledger records (`meta.schema` te-core/submission/v1), written since `TE_SCORER_SINCE`. The start registry's bpbs and
