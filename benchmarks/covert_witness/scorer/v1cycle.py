@@ -907,6 +907,9 @@ def main() -> int:
         (trees["tables"] / "final.md").write_text(extra + "\n")
         (trees["tables"] / "final_entries.json").write_text(json.dumps(entries, indent=1) + "\n")
         (trees["tables"] / "final_checkpoints.json").write_text(json.dumps(cy.cps, default=float) + "\n")
+        for name in ("table.md", "table.json", "final_submissions.json", "results.jsonl", "plan.json"):
+            if (args.final / name).exists():
+                (trees["tables"] / f"scorer-final-{name}").write_bytes((args.final / name).read_bytes())
     (trees["tables"] / "scores.json").write_text(json.dumps(meta | {"rule": "H and W* over every checkpoint (19:50Z)",
                                                                     "scores": sc}, indent=1, default=float) + "\n")
     (trees["tables"] / "records_v1.json").write_text(json.dumps(cy.per_record(), default=float) + "\n")
