@@ -1,0 +1,92 @@
+"""`research goals` against a fake route: set adds a goal or changes only the fields given, confirm and done write it
+back, replace sends exactly the file's goals, show prints them by due date, and a refusal comes back as one line."""
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from research import goals
+from research.slack import RouteError
+
+GOAL = {"id": "demos/both", "title": "Both demos pass on one served H200 run", "status": "off-track",
+        "due": "2026-11-05T10:00-08:00", "tags": ["demos"], "description": "The verdicts come back.",
+        "blockers": "Waits on [PoUW](#demos/pouw)."}
+
+
+class Fake:
+    """The route: the page's goals, and every body posted to it."""
+
+    def __init__(self, page: list[dict] | None = None, refuse: str | None = None):
+        self.page = [dict(g, updatedAt="2026-11-02T04:00:00Z", updatedBy="bc-top") for g in page or []]
+        self.posted: list[dict] = []
+        self.refuse = refuse
+
+    def call(self, body: dict | None = None) -> list[dict]:
+        if body is None:
+            return self.page
+        if self.refuse:
+            raise RouteError(f"POST {goals.GOALS}: refused: {self.refuse}", 400)
+        self.posted.append(body)
+        if "set" in body:
+            self.page = [g for g in self.page if g["id"] != body["set"]["id"]] + [body["set"]]
+        return self.page
+
+
+def test_set_changes_only_the_fields_given_and_drops_what_the_store_added(capsys):
+    fake = Fake([GOAL])
+    assert goals.main(["set", "demos/both", "--status", "on-track", "--no-blockers"], fake) == 0
+    sent = fake.posted[-1]["set"]
+    assert sent == {k: v for k, v in GOAL.items() if k != "blockers"} | {"status": "on-track"}
+    assert "Thu 5 Nov, 10:00 AM" in capsys.readouterr().out
+
+
+def test_a_new_goal_needs_title_status_and_due(capsys, tmp_path):
+    fake = Fake()
+    assert goals.main(["set", "infra/x", "--title", "Verity holds no infra"], fake) == 1
+    assert "needs --status, --due" in capsys.readouterr().err
+    (tmp_path / "d.md").write_text("Every infra path is gone.")
+    assert goals.main(["set", "infra/x", "--title", "Verity holds no infra", "--status", "on-track", "--due",
+                       "2026-11-06", "--tag", "infra", "--description", f"@{tmp_path / 'd.md'}"], fake) == 0
+    assert fake.posted[-1]["set"] == {"id": "infra/x", "title": "Verity holds no infra", "status": "on-track",
+                                      "due": "2026-11-06", "tags": ["infra"], "description": "Every infra path is gone."}
+
+
+def test_confirm_writes_it_back_unchanged_and_done_marks_it_done():
+    fake = Fake([GOAL])
+    assert goals.main(["confirm", "demos/both"], fake) == 0
+    assert fake.posted[-1] == {"set": GOAL}
+    assert goals.main(["done", "demos/both"], fake) == 0
+    assert fake.posted[-1]["set"]["status"] == "done"
+    assert goals.main(["done", "nope"], fake) == 1
+
+
+def test_replace_sends_exactly_the_files_goals(tmp_path):
+    fake = Fake()
+    path = tmp_path / "goals.json"
+    path.write_text(json.dumps([GOAL | {"updatedBy": "x"}]))
+    assert goals.main(["replace", str(path)], fake) == 0
+    assert fake.posted == [{"replace": [GOAL]}]
+    path.write_text(json.dumps({"goals": []}))
+    assert goals.main(["replace", str(path)], fake) == 1
+
+
+def test_show_lists_by_due_date_with_blocked_and_moved_marks(capsys):
+    fake = Fake([GOAL | {"wasDue": "2026-11-03"}])
+    assert goals.main(["show"], fake) == 0
+    out = capsys.readouterr().out
+    assert "Thu 5 Nov, 10:00 AM" in out and "off-track" in out and "[blocked]" in out
+    assert "(was Tue 3 Nov, end of day)" in out and "demos/both" in out
+
+
+def test_a_refusal_is_one_line_naming_the_field(capsys):
+    fake = Fake([GOAL], refuse="due must be a date (2026-11-05) or a time with its offset (2026-11-05T10:00-08:00)")
+    assert goals.main(["set", "demos/both", "--due", "Thursday"], fake) == 1
+    err = capsys.readouterr().err.strip().splitlines()
+    assert len(err) == 1 and "due must be a date" in err[0]
+
+
+@pytest.mark.parametrize("argv", [["set", "x", "--status", "maybe"], ["set", "x", "--blockers", "a", "--no-blockers"]])
+def test_the_command_line_refuses_what_the_site_would(argv):
+    with pytest.raises(SystemExit):
+        goals.main(argv, Fake())
