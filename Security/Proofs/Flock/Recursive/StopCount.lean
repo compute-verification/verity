@@ -185,7 +185,7 @@ def unreleasedOf (σ : St) (s : String) : Bool :=
 `M s q` messages did, after the `k` that did; none if every message of every statement did. -/
 def recStop (M : String → ℕ → ℕ) (σ : St) (s : String) :
     Flock.SecurityProofs.RecStops (fun p : Fin (nOf σ s) => M s p) :=
-  match (List.finRange (nOf σ s)).find? (fun q => decide (σ.sent s q < M s q)) with
+  match (List.finRange (nOf σ s)).find? (fun q : Fin (nOf σ s) => decide (σ.sent s q < M s q)) with
   | none => none
   | some q => some ⟨q, ⟨min (σ.sent s q) (M s q), Nat.lt_succ_of_le (Nat.min_le_right _ _)⟩⟩
 
