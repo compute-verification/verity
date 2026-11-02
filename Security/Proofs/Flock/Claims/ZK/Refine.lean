@@ -24,9 +24,10 @@ opening that fails (`strat_eval_cons`).
   where that check is the session's (`CheckIs`): then the release refuses after any opening the session's check
   refuses, up to the protocol's last coin (`OpeningsRefused`, `openingsRefused_of_checkIs`), with `abort` the stop.
 * **The frame's coin stops read no tape** (`LeanRelease.refusesCoins_tape`): on the histories the transport's check
-  passes, the frame's refusal of the coins (`Masker.answer`) reads its configuration's layout and absorbed order alone
-  (`answer_congr`), never the pads or the root, and a rep's configuration takes both from its layout
-  (`answer_ofDraws`), so it is the same on every tape. A session, whose round encoding sees the coins and the cut view
+  passes, the frame's refusal of the coins (`Masker.answer`, `rankStop`) reads its configuration's layout, absorbed
+  order and mask slot alone (`answer_congr`, `rankStop_congr`), never the pads or the root, and a rep's configuration
+  takes them from its layout and the statement's slot (`answer_ofDraws`, `rankStop_ofDraws`), so it is the same on
+  every tape. A session, whose round encoding sees the coins and the cut view
   but not the tape, can stop where the frame does. The check itself reads the tape's nonce, as the session's does, so a
   live frame round asks its openings to pass under that nonce only (`checkIs_live`).
 * **The session with the frame's stops** (`RefSession.withStops`): `S` with every message `stop` at the coins and round
@@ -50,7 +51,8 @@ opening that fails (`strat_eval_cons`).
   session's (`LeanRelease.liveRoundEq_of_frames`, `liveRoundEq_of_honest`, `fillRoundEq_of_frames`).
 * **The stops of a transport that reads only the coins** (`LeanRelease.stopsAt_of_readsCoins`): where, on the histories
   its check passes, the round's rep's state and the coins handed to the frame are functions of the coins the openings
-  open (`ReadsCoins`), the frame's refusal at those coins or at a prefix of them (`refuseOf` at any draws, `stopOf`: a
+  open (`ReadsCoins`), the frame's refusal at those coins or at a prefix of them (`refuseOf` at any draws and the rep's
+  mask slot, `stopOf`: a
   refusal stops the session for good) is a stop rule (`rfOf`) that reads the coins before its round only
   (`stopsCausal_rfOf`) and, where the check is the session's, is the release's refusals (`StopsAt`).
 * **At the deployed coin layer** (`Flock.zk_server_lean_coinLayer`, at SHA-512): `S` is `CoinLayer.session nr T`,
@@ -243,6 +245,11 @@ theorem answer_ofDraws (s : Masker) (cs : Array _root_.Flock.F128) (l : _root_.F
     (m m' : Option MaskSlot) : s.answer (Cfg.ofDraws l d m) cs = s.answer (Cfg.ofDraws l d' m') cs :=
   answer_congr s cs rfl rfl
 
+/-- At a rep's configuration the rank stop reads its layout and mask slot alone, whatever its draws. -/
+theorem rankStop_ofDraws (l : _root_.Flock.Zk.PadLayout) (d d' : Draws) (m : Option MaskSlot) :
+    LeanRelease.rankStop (Cfg.ofDraws l d m) = LeanRelease.rankStop (Cfg.ofDraws l d' m) :=
+  funext fun s => LeanRelease.rankStop_congr s rfl rfl rfl
+
 namespace LeanRelease
 
 /-- At the empty history the frame has no coins to take, so it refuses none. -/
@@ -324,13 +331,13 @@ theorem release_eq_abort_of_liveRefine (S : RefSession) (vs : S.SwVals)
     rfl
   exact he.symm.trans hm
 
-/-- Who takes the coins reads the configurations' layouts alone. -/
+/-- Who takes the coins reads the configurations' layouts alone, and the next round's rep's mask slot (`rankStop`). -/
 theorem takeAt_ofDraws (n : ℕ) (b : Bool) (lN lP : _root_.Flock.Zk.PadLayout) (dN dN' dP dP' : Draws)
-    (mN mN' mP mP' : Option MaskSlot) (s : Masker) (f : Except String Masker) (cs : Array _root_.Flock.F128) :
+    (mN mP mP' : Option MaskSlot) (s : Masker) (f : Except String Masker) (cs : Array _root_.Flock.F128) :
     takeAt n b (Cfg.ofDraws lN dN mN) (Cfg.ofDraws lP dP mP) s f cs =
-      takeAt n b (Cfg.ofDraws lN dN' mN') (Cfg.ofDraws lP dP' mP') s f cs := by
+      takeAt n b (Cfg.ofDraws lN dN' mN) (Cfg.ofDraws lP dP' mP') s f cs := by
   unfold takeAt
-  rw [answer_ofDraws s cs lN dN dN' mN mN', answer_ofDraws s cs lP dP dP' mP mP']
+  rw [answer_ofDraws s cs lN dN dN' mN mN, answer_ofDraws s cs lP dP dP' mP mP', rankStop_ofDraws lN dN dN' mN]
 
 /-- The frame's own taking of the coins is the same on every tape. -/
 theorem frameAnswer_tape {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ ρ' : R) (h : List (Msg × Msg)) :
@@ -338,7 +345,7 @@ theorem frameAnswer_tape {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ ρ' : 
   unfold frameAnswer cfg cfgAt
   cases h.getLast? with
   | none => rfl
-  | some _ => exact takeAt_ofDraws _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+  | some _ => exact takeAt_ofDraws _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 theorem tookEarlier_tape {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ ρ' : R) (h : List (Msg × Msg)) :
     L.tookEarlier x ρ h = L.tookEarlier x ρ' h :=
@@ -711,13 +718,14 @@ def ReadsCoins (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.re
   ProgReads S L pc fc x ∧ CoinsRead S L cc x
 
 /-- **The frame's refusal at the coins `cs`** under the transport's reading `pc`, `fc`, `cc`: whether the frame refuses
-`cc x cs` where round `cs.length + 1` takes them (`takeAt`), at the states `pc x cs` and `fc x cs` and the layouts of
-the reps of rounds `cs.length` and `cs.length + 1`, at any draws (`takeAt_ofDraws`). -/
+`cc x cs` where round `cs.length + 1` takes them (`takeAt`), at the states `pc x cs` and `fc x cs`, the layouts of
+the reps of rounds `cs.length` and `cs.length + 1` and the mask slot of the latter, at any draws
+(`takeAt_ofDraws`). -/
 def refuseOf {W R Coin : Type} (L : LeanRelease W R) (pc : Msg → List Coin → Masker)
     (fc : Msg → List Coin → Except String Masker) (cc : Msg → List Coin → Array _root_.Flock.F128) (x : Msg)
     (cs : List Coin) : Bool :=
   !(takeAt (cs.length + 1) (decide (L.rep x (cs.length + 1) = L.rep x cs.length))
-      (Cfg.ofDraws (L.lay x (L.rep x (cs.length + 1))) default none)
+      (Cfg.ofDraws (L.lay x (L.rep x (cs.length + 1))) default (L.slot x (L.rep x (cs.length + 1))))
       (Cfg.ofDraws (L.lay x (L.rep x cs.length)) default none) (pc x cs) (fc x cs) (cc x cs)).isOk
 
 /-- **The transport's stop at the coins `cs`** under its reading: whether the frame refused the coins at `cs` or at one
@@ -759,7 +767,7 @@ theorem frameAnswer_of_readsCoins (S : RefSession) (L : LeanRelease Flock.Wit (S
     dsimp only
     rw [hp, hf, hc]
     simp only [List.length_cons, List.length_map, Nat.add_sub_cancel, Bool.not_not]
-    exact congrArg Except.isOk (takeAt_ofDraws _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+    exact congrArg Except.isOk (takeAt_ofDraws _ _ _ _ _ _ _ _ _ _ _ _ _ _)
 
 /-- **Under the transport's reading, the release refuses the coins where the transport's stop does** (`stopOf`), at
 every tape whose check passes the history: the check passes each prefix (`opens_take`), and at each the frame's
