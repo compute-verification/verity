@@ -767,7 +767,7 @@ def _unit_fn(k: int, r: int, c: int, j10r: bool = False, tile: int | None = None
 
 
 def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False,
-                tile: int | None = None) -> dict:
+                tile: int | None = None, unit_fns: dict[int, str] | None = None) -> dict:
     """A served window's circuit as `h1window.program(linears, calls, m, tile)` encodes it (`codec.encode_program`), as
     far as `credit.layout_of` reads it: its program function's record, each K's template, and the root's input batches,
     then each call's (m/R)·(n/C) tiles, each a call of K's template or, at random, a run of them one batch; each
@@ -775,9 +775,10 @@ def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object
     (each unit's tile ``PouwH1Tile_v<tile>`` when `tile` is given, `_unit_fn`).
     At a chunked K (`weights.chunks` n > 1) the unit is `h1zy.PouwH1TileZyChunks_v1` {UNIT, CHUNKS = n} over the tile
     (v2 over a J10-R one), as `h1window.program` wraps it. The root's input batches are each K's A and B rows' bits,
-    then three of words."""
+    then three of words. `unit_fns`: a K's unit id in place of `_unit_fn`'s (a lanes-form K's zy unit,
+    ``PouwH1TileZy_v1{TILE=…}``, whose TILE `credit.leaf_unit_id` reads)."""
     (r, c), ks = lay["tile"], sorted({k for _name, k, _n in lay["linears"]})
-    units = {k: {"fn": _unit_fn(k, r, c, j10r, tile)} for k in ks}
+    units = {k: {"fn": (unit_fns or {}).get(k) or _unit_fn(k, r, c, j10r, tile)} for k in ks}
     tids = {k: _template_id(k, units[k]) for k in ks}
     callees = ["Input16_v1", *(u["fn"] for u in units.values()), *tids.values(), "Input1_v1"]
     defs = {u["fn"]: {"form": "primitive", "id": u["fn"], "params": [], "ret": ["Value", 16]} for u in units.values()}
@@ -807,9 +808,9 @@ def desc_bytes(desc: dict) -> bytes:
 
 
 def descriptor(rng: random.Random, lay: dict, prefix: str = "", receipt: object = None, j10r: bool = False,
-               tile: int | None = None) -> str:
+               tile: int | None = None, unit_fns: dict[int, str] | None = None) -> str:
     """`window_desc`'s bytes in hex, as a window's evidence carries them."""
-    return desc_bytes(window_desc(rng, lay, prefix, receipt, j10r, tile)).hex()
+    return desc_bytes(window_desc(rng, lay, prefix, receipt, j10r, tile, unit_fns)).hex()
 
 
 def j10r_misformed(rng: random.Random, lay: dict, prefix: str = "") -> str:
