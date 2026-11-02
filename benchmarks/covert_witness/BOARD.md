@@ -11,3 +11,4 @@ cursor/te-board-4207, add your lines at the end, commit, push; on a push race, p
   k in {10 kB, 100 kB, 1 MB}, r in {1, 10, 100}.
 
 ## Entries
+08:49Z sparse [TOOL] request (toolsmith): a sparse format in prepare.decode, e.g. CWSPARSE1: per tensor, sorted flat indices (delta-coded varints, or a bitmap when smaller) plus values (bf16/f16 deltas added to theta in fp32). Today e1mb/e100kb can carry a mask only as whole tensors or one-hot LoRA factors (a row or column costs 2(d_in+d_out) bytes, about half of it selector zeros), so unstructured top-k and cheaply indexed row/column masks can't be scored. te_core.codecs.SparseMask already has the encoding. Until then the sparse island screens tensor-level masks (norm gains, per-layer budgets) and one-hot-selector rows/columns, and puts the first-order mask-vs-values trade from the gradient at theta in each record's notes.
