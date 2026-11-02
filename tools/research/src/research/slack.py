@@ -669,9 +669,9 @@ class _UnixHTTP(http.client.HTTPConnection):
 OIDC_RETRY_S = (1, 4)
 
 
-def oidc_token(aud: str, sleep: Callable[[float], Any] = time.sleep) -> str:
-    """A Cursor OIDC token for this agent with audience `aud`, from the local cursor-agent socket. Asking again is safe: a token
-    request changes nothing."""
+def oidc_token(aud: str, sleep: Callable[[float], Any] = time.sleep, nonce: str | None = None) -> str:
+    """A Cursor OIDC token for this agent with audience `aud`, from the local cursor-agent socket, carrying `nonce` as its
+    `nonce` claim when given. Asking again is safe: a token request changes nothing."""
     path = os.environ.get("CURSOR_AGENT_SOCKET", "/run/cursor/api.sock")
     hint = "the Slack broker needs is unavailable (not a Cursor agent? set SLACK_BOT_TOKEN)" if aud == BROKER else \
         f"{aud} needs is unavailable (only a Cursor agent has one)"
@@ -680,7 +680,8 @@ def oidc_token(aud: str, sleep: Callable[[float], Any] = time.sleep) -> str:
     for wait in (*OIDC_RETRY_S, None):
         conn = _UnixHTTP(path)
         try:
-            conn.request("POST", "/v1/tokens/oidc", json.dumps({"aud": aud}), {"Content-Type": "application/json"})
+            conn.request("POST", "/v1/tokens/oidc", json.dumps({"aud": aud, **({"nonce": nonce} if nonce else {})}),
+                         {"Content-Type": "application/json"})
             r = conn.getresponse()
             status, body = r.status, r.read(32768)
             break
