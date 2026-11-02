@@ -93,6 +93,19 @@ def test_a_move_is_regenerated_on_a_moved_checked_certified_at_nexts_bottom_and_
     assert any(p.startswith("@lane-2 queue: #2 landed in `main`") and "drive closed it" in p for p in h.posts), h.posts
 
 
+def test_a_move_whose_map_rewrites_a_locks_frozen_reason_enters_next(world, monkeypatch):
+    """The move rewrites the moved path where a lock's frozen entry names it; that rewrite is the certified move, not a dropped
+    entry, so the sync's lock-drop check doesn't keep the move out."""
+    lock = {"guarantees": {"G": {"statement": "s"}}, "shape": {"frozen": {"G": "frozen: old_proto.a's bound"}}}
+    _move_main(world, {"lean/P/lean-audit.json": json.dumps(lock, indent=1) + "\n"})
+    h = Review(world, monkeypatch, land_into="checked")
+    _move_pr(world, 1)
+    h.tick()
+    move = _member(world, 1)
+    assert "new_proto.a's bound" in _show(world, move, "lean/P/lean-audit.json")
+    assert not any("drops" in x and "#1" in x for x in world.logs), world.logs
+
+
 def test_a_member_conflicting_only_with_the_move_is_restacked_onto_it(world, monkeypatch):
     h = Review(world, monkeypatch, land_into="checked")
     _move_pr(world, 1)

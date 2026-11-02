@@ -13,6 +13,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -2454,7 +2455,7 @@ def test_the_lean_step_skips_past_its_bounds_and_refuses_what_it_cannot_build(wo
          False, False),
         (LakeBuild(slots=world.tmp / "absent"), {}, "this machine keeps no warm Lean tree (no `build` pool in "
          f"{world.tmp / 'absent'}; an agent VM builds nothing) and was given no node to build on: `ready --on MACHINE` builds "
-         "them on vy-nebius-cpu-3", False, True),
+         "them on vy-nebius-cpu-9", False, True),
         (LakeBuild(slots=slots), {}, "lean/a not built: no Mathlib here: mark again once this node builds them", True, True),
     ]
     for n, (lean, kw, says, built, refused) in enumerate(cases, start=2):
@@ -2549,7 +2550,7 @@ def test_the_lean_step_falls_back_to_the_next_node_when_one_cannot_start_the_bui
     one deadline; only when none builds is the mark refused, naming each node's reason and the fix."""
     from research.queue import LEAN_BUILDER, PREFLIGHT_LEAN_ON, LakeBuild
 
-    assert (PREFLIGHT_LEAN_ON, LakeBuild().pool) == (("vy-nebius-cpu-3", "vy-nebius-cpu-8"), None)
+    assert (PREFLIGHT_LEAN_ON, LakeBuild().pool) == (("vy-nebius-cpu-9", "vy-nebius-cpu-5"), None)
     first, second = PREFLIGHT_LEAN_ON
     (tmp_path / "wt" / LEAN_BUILDER).parent.mkdir(parents=True)
     (tmp_path / "wt" / LEAN_BUILDER).write_text("")
@@ -3984,3 +3985,13 @@ def test_the_sync_leaves_off_next_a_head_whose_lock_merge_drops_what_next_needs_
     assert entries[2].state == "refused" and entries[2].why == why
     assert q.load_state()["conflicts"]["2"]["why"] == why
     assert set(json.loads(_git(world.origin, "show", "refs/heads/next:pkg/lean-audit.json"))["guarantees"]) == {"F", "G2", "H", "K"}
+
+
+
+def test_drive_and_ready_take_the_preflight_root_they_are_given(tmp_path):
+    """Drive's pod keeps TMPDIR on a network volume, where a merged tree's `uv sync` can't hardlink from uv's cache and outruns
+    the budget; `--preflight-root` puts the trees on a local disk instead, and without it they go to the temporary directory."""
+    from research.queue import Preflight
+
+    assert Preflight(tmp_path, "origin", None, root=tmp_path / "fast").root == tmp_path / "fast"
+    assert Preflight(tmp_path, "origin", None).root == Path(tempfile.gettempdir())
