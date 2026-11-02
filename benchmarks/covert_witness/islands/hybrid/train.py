@@ -5,6 +5,8 @@
   matrix (0-FLOP nodes, so φ is unchanged) or none; `--final-norm`.
 - `--store bf16` writes every full tensor through the `lora` format's bf16 `full` list: the evaluator multiplies weights at
   bf16 under autocast, so the f32 low halves `encode_full` would carry never reach a matmul. `--store f32` is `encode_full`.
+  `--store qN` is CWQUAN1: each full matrix as a delta from θ in round-to-nearest N-bit codes, the adapters' factors at
+  LORA_BITS, the gains in full (low-rank plus low-bit, so a deep stage fits e1mb).
 - `--select-pool P`: draw P·batch windows, score them with a forward (logged), train on the `--select-by` share.
 - `--cache-windows W --cache-epochs E` (the top block's MLP only): each data step reads W windows, runs θ once to the top
   MLP's input, and trains E shuffled passes over that cache, so a pass costs the top MLP and the head, not the prefix.
@@ -12,7 +14,8 @@
   (log-Q corrected), so a shallow step skips most of the tied head's forward and input gradient (2·50304·d MACs a token).
 - `--arms`: several settings in one candidate, each from θ with an equal share of the budget, either LR multipliers
   (`0.3,1,3`) or `;`-separated arms of `KEY=VALUE` overrides (`head=full;head=sampled;head=sampled,cache_windows=640`, keys
-  in `ARM_KEYS`). The trained set is the same in every arm. A later arm's checkpoints carry the arms before it.
+  in `ARM_KEYS`; `share=0.1` gives an arm that fraction of the budget, the rest split evenly). The trained set is the same
+  in every arm. A later arm's checkpoints carry the arms before it, so a short complete schedule goes first.
 
 SPEC is comma-separated `BLOCKS:LEAVES`: BLOCKS `all`, `i`, `i-j` or a negative index from the top; LEAVES `+`-joined leaf
 names (`wq wk wv wo w_gate w_up w_down`) or groups (`qkv`, `attn`, `gu`, `mlp`, `all`). `--klass` must equal the class the
@@ -43,9 +46,11 @@ ARM_KEYS = {"lr_mult": float, "lr": float, "lora_lr": float, "norm_lr": float, "
             "opt": ("adamw", "muon"), "schedule": ("linear", "cosine", "wsd"), "warmup": int, "cooldown": float,
             "batch": int, "micro": int, "select_pool": int, "select_by": ("high", "low", "mid"), "fresh": bool,
             "head": ("full", "sampled"), "head_neg": int, "head_plan": int, "cache_windows": int, "cache_epochs": int,
-            "data_seed": int, "seed": int}
+            "data_seed": int, "seed": int, "share": float, "snaps": int}
 #: te_core takes the first E encoded in each 5% of the run's MAC budget as a checkpoint
 CHECKPOINTS = 20
+#: `--store qN`: entries per f16 scale, and the adapters' factor bits
+QGROUP, LORA_BITS = 128, 8
 
 
 def select(spec: str, L: int) -> list[str]:
@@ -130,18 +135,48 @@ class Muon(torch.optim.Optimizer):
                 p.add_(u, alpha=-g["lr"] * max(1.0, p.shape[0] / p.shape[1]) ** 0.5)
 
 
+def rtn(t: torch.Tensor, bits: int):
+    """t as round-to-nearest `bits`-bit codes into the integer codebook -2^(b-1)..2^(b-1)-1, an f16 scale per QGROUP
+    entries putting each group's max |t| at the top code."""
+    group = math.gcd(t.numel(), QGROUP)
+    flat = t.detach().float().reshape(-1, group)
+    top = 2 ** (bits - 1) - 1
+    scale = (flat.abs().amax(1) / top).clamp_min(2 ** -24).half()
+    codes = (flat / scale.float()[:, None]).round().clamp(-top - 1, top) + top + 1
+    return prepare.QArray(torch.arange(2 ** bits, dtype=torch.float16) - (top + 1), scale.cpu(),
+                          codes.to(torch.uint8).reshape(-1).cpu(), bits, group, tuple(t.shape))
+
+
 def encode(store: str, factors: dict, params: dict, full: list[str], theta: dict) -> bytes:
     if store == "f32":
         if factors:
             raise SystemExit("hybrid: --store f32 is encode_full, which holds no adapters")
         return prepare.encode_full({n: params[n].detach().to(theta[n].dtype) for n in full})
+    if store.startswith("q"):
+        ent = {n: {"kind": "delta", "q": rtn(params[n].detach().float() - theta[n].to(params[n].device).float(),
+                                             int(store[1:]))} if params[n].ndim == 2 else
+               {"kind": "full", "t": params[n].detach().to(theta[n].dtype)} for n in full}
+        ent |= {n: {"kind": "lora", "a": rtn(A, LORA_BITS), "b": rtn(B, LORA_BITS), "scale": s}
+                for n, (A, B, s) in factors.items()}
+        return prepare.encode_quant(ent, theta)
     return prepare.encode_lora({n: (A, B, s) for n, (A, B, s) in factors.items()}, "bf16", {n: params[n] for n in full})
 
 
 def e_bytes(store: str, theta: dict, lora: list[str], rank: int, full: list[str]) -> int:
-    fac = {n: (torch.zeros(rank, theta[n].shape[1]), torch.zeros(theta[n].shape[0], rank), math.sqrt(theta[n].shape[1] / rank))
+    """E's size at this rank; for `--store qN` an upper bound, with every code and every group's scale drawn uniformly
+    (xz can't shrink them)."""
+    g = torch.Generator().manual_seed(0)
+
+    def uniform(*shape: int) -> torch.Tensor:
+        n = math.prod(shape)
+        k = math.gcd(n, QGROUP)
+        return ((torch.rand(n // k, k, generator=g) - 0.5) * (0.5 + torch.rand(n // k, 1, generator=g))).reshape(shape)
+
+    fill = uniform if store.startswith("q") else torch.zeros
+    fac = {n: (fill(rank, theta[n].shape[1]), fill(theta[n].shape[0], rank), math.sqrt(theta[n].shape[1] / rank))
            for n in lora}
-    return len(encode(store, fac, theta, full, theta))
+    vals = {n: theta[n].float() + fill(*theta[n].shape) if store.startswith("q") else theta[n] for n in full}
+    return len(encode(store, fac, vals, full, theta))
 
 
 def fresh_order(data, rec: dict) -> dict:
@@ -178,7 +213,7 @@ def main() -> int:
     ap.add_argument("--rank", type=int, default=0, help="0: the largest that fits the class's cap")
     ap.add_argument("--norms", choices=("none", "above"), default="above")
     ap.add_argument("--final-norm", action=argparse.BooleanOptionalAction, default=True)
-    ap.add_argument("--store", choices=("bf16", "f32"), default="bf16")
+    ap.add_argument("--store", choices=("bf16", "f32", *(f"q{b}" for b in range(2, 9))), default="bf16")
     ap.add_argument("--opt", choices=("adamw", "muon"), default="adamw", help="for the full matrices")
     ap.add_argument("--lr", type=float, default=3e-4, help="full matrices (AdamW) or Muon's rate")
     ap.add_argument("--wd", type=float, default=0.0)
@@ -209,7 +244,10 @@ def main() -> int:
     ap.add_argument("--data-seed", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--budget-fraction", type=float, default=0.98)
+    ap.add_argument("--share", type=float, default=0.0, help=argparse.SUPPRESS)
     a = ap.parse_args()
+    if a.store.startswith("q") and not hasattr(prepare, "encode_quant"):
+        raise SystemExit("hybrid: --store qN needs prepare.encode_quant (CWQUAN1)")
     torch.backends.cuda.matmul.allow_tf32 = True
     net, rec, theta = prepare.load_start(a.start)
     if rec["config"]["family"] != "lf":
@@ -282,7 +320,11 @@ def main() -> int:
     trainable = {"full": full, "adapters": {n: rank for n in lora}}
     V, d = net.inner.embed.shape
     arms = parse_arms(a.arms, a)
-    share = a.budget_fraction * prepare.TRAIN_FLOP_BUDGET / len(arms)
+    fixed, free = sum(aa.share for aa in arms), [aa for aa in arms if not aa.share]
+    if fixed > 1 + 1e-9 or (free and fixed >= 1) or any(aa.share < 0 for aa in arms):
+        raise SystemExit(f"hybrid: arm shares {[aa.share for aa in arms]} don't fit one budget")
+    for aa in free:
+        aa.share = (1 - fixed) / len(free)
     cached = [aa for aa in arms if aa.cache_windows]
     if cached:
         top = {f"blocks.{L - 1}.{x}.weight" for x in ("w_gate", "w_up", "w_down")}
@@ -295,6 +337,7 @@ def main() -> int:
 
     def plan(aa: argparse.Namespace) -> dict:
         """An arm's steps within its share: n_data data steps (TrainData.next calls), n_train optimizer steps."""
+        share = aa.share * a.budget_fraction * prepare.TRAIN_FLOP_BUDGET
         tokens = aa.batch * prepare.EVAL_CTX
         extra = sum(ns_flops(tuple(params[n].shape)) for n in full_m) if aa.opt == "muon" else 0
         pool = aa.select_pool * aa.batch
@@ -302,7 +345,7 @@ def main() -> int:
             [{"op": "forward", "tokens": pool * prepare.EVAL_CTX}] if aa.select_pool > 1 else []))["flops"]
         if aa.head == "sampled":
             per_step -= 2 * 2 * (V - aa.head_plan) * d * tokens
-        p = {"tokens": tokens, "extra": extra, "pool": pool, "flops_per_step": per_step + extra}
+        p = {"tokens": tokens, "extra": extra, "pool": pool, "flops_per_step": per_step + extra, "planned_flops": share}
         W, E = aa.cache_windows, aa.cache_epochs
         if W:
             epoch_tok = per_step / tokens - prefix_tok
@@ -333,13 +376,13 @@ def main() -> int:
             raise SystemExit(f"hybrid: --fresh leaves {fresh.get('kept')} windows, the arm reads {p['reads']}")
         n_data, n_train, last = p["n_data"], p["n_train"], arm == len(arms) - 1
         # a non-last arm's end must be the first E encoded in its 5%, so no snapshot within a 5% (10% slack) of it
-        keep = 1.0 if last else 1 - 1.1 * len(arms) / CHECKPOINTS
-        marks = {round(n_data * j / a.snaps) for j in range(1, a.snaps) if j / a.snaps < keep} - {0}
+        keep = 1.0 if last else 1 - 1.1 / (CHECKPOINTS * aa.share)
+        marks = {round(n_data * j / aa.snaps) for j in range(1, aa.snaps) if j / aa.snaps < keep} - {0}
         if not last:
             marks.add(n_data)
         overrides = {k: v for k, v in vars(aa).items() if k not in vars(a) or v != vars(a)[k]}
         arms_out.append({**overrides, "first_train_step": sum(q["n_train"] for q in plans[:arm]), "train_steps": n_train,
-                         "data_steps": n_data, "planned_flops": share})
+                         "data_steps": n_data, "planned_flops": p["planned_flops"]})
         print(json.dumps({"arm": arm, **overrides, "train_steps": n_train, "data_steps": n_data, "full": len(full_m),
                           "lora": len(lora), "rank": rank if lora else None, "norms": len(norms), "E_bytes": size,
                           "flops_per_step": p["flops_per_step"], "phi": structure["phi"],
