@@ -9,12 +9,15 @@ as many steps as the budget allows.
 
 - `subspace`: intrinsic-dimension training. θ_S = θ0_S + Σ α_i z_i over d fixed directions, Z cached on the GPU in bf16
   (d is what fits beside the model); the gradient is backpropagated to θ_S and projected onto Z; Adam on α. Two GEMVs a
-  step are logged as `extra`.
+  step are logged as `extra`. `--redraw N` (mechanism `resub`) splits an arm into N blocks of d fresh directions each,
+  so it explores N·d ≤ the cap in the memory of d.
 - `fit`: train S itself (AdamW), then solve the minimum-norm c with −Zᵀc = Δ over d ≥ |S| exact directions. S must be
   small: the norm gains (6,656 on s, 13,056 on m) are the one set the seed log can carry exactly.
 - `mezo`: zeroth-order, `--pop K` seeds a step (antithetic ES with shared seeds); the `seed-mezo` direction owns MeZO.
 
-The submitted model is always `prepare.decode(θ, E)`.
+`--lrs a,b,c` runs one arm per learning rate from θ on the same data, each a share of the budget, every arm a snapshot
+(charged cumulatively); `notes.arms` has each arm's own FLOPs. `--probe` (default on a GPU) records each tensor's mean
+squared gradient at θ in `notes.probe`. The submitted model is always `prepare.decode(θ, E)`.
 
     python benchmarks/covert_witness/launch.py seed s50 --note "fit-norms ..." -- --mode fit --perturb norms --lr 1e-3
     python benchmarks/covert_witness/launch.py seed s50 --note "subspace ..." -- --mode subspace --perturb blocks --lr 3e-6
