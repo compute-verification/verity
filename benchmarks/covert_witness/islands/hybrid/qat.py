@@ -26,8 +26,9 @@ trained block, and the final norm, train in fp32 by AdamW and are full entries; 
   prepare.lora_merge builds it (the head under bf16 autocast, as the evaluator multiplies), and the backward reaches A
   and B through rank-r products, so no dense embedding gradient is formed or paid.
 
-The notes state, per stage, the trained tensors, codes, weights and Δ_grad (latent + gradient + momentum per coded
-weight, gradient + momentum per fp weight, the gains' fp32 gradient and AdamW m and v), and the submission's Δ (|E|).
+The notes state, per stage, the trained tensors, codes, weights, Δ_grad as the scorer counts it (gradient + momentum per
+block weight, the gains' and factors' fp32 gradient and AdamW m and v) and the update store beside it (the fp32 latent of
+each coded weight and factor entry), and the submission's Δ (|E|).
 
     python launch.py reference s100 --island hybrid --program qat.py --note "qat: ..." -- --klass reference \
         --code all:all=rtn3 --muon-lr 0.015
@@ -263,7 +264,10 @@ class EmbedAdapter:
         return {"kind": "lora", "a": self.qa, "b": self.qb, "scale": self.s}
 
     def state_bytes(self) -> int:
-        return 16 * (self.a.numel() + self.b.numel())
+        return 12 * (self.a.numel() + self.b.numel())
+
+    def latent_bytes(self) -> int:
+        return 4 * (self.a.numel() + self.b.numel())
 
 
 def adapter_forward(lm, blocks_fn, ad: EmbedAdapter):
@@ -540,11 +544,12 @@ def main() -> int:
         note = {"stage": j, "spec": (stage_specs * a.passes)[j], "steps": n_j, "flops_per_step": per_step[j] + ns_extra[j],
                 "matrices": len(names), "coded_weights": coded_w, "fp_weights": fp_w, "gains": len(gains),
                 "codes": sorted({codes[n] for n in names}),
-                "delta_grad_bytes": coded_w * (4 + 4 + mom_b) + fp_w * (4 + mom_b) + gain_w * 12
+                "delta_grad_bytes": (coded_w + fp_w) * (4 + mom_b) + gain_w * 12
                 + (ad.state_bytes() if ad is not None else 0),
-                "delta_grad_what": f"coded weight: fp32 latent + fp32 gradient + {a.momentum_dtype} Muon momentum; "
-                                   f"fp weight: fp32 gradient + {a.momentum_dtype} momentum; gain: fp32 gradient + AdamW "
-                                   "fp32 m and v; embedding adapter factor: fp32 latent + gradient + AdamW m and v"}
+                "delta_grad_what": f"block weight: fp32 gradient + {a.momentum_dtype} Muon momentum; gain: fp32 gradient + "
+                                   "AdamW fp32 m and v; embedding adapter factor: fp32 gradient + AdamW m and v",
+                "latent_bytes": coded_w * 4 + (ad.latent_bytes() if ad is not None else 0),
+                "latent_what": "the update store: fp32 latent V per coded weight and per adapter factor entry"}
         print(json.dumps(note), flush=True)
         for step in range(n_j):
             if switch and g == switch:
@@ -613,6 +618,7 @@ def main() -> int:
              "coded_weights": coded, "E_bytes": len(blob), "E_bytes_xz1": len(blob1),
              "bits_per_coded_weight": 8 * len(blob) / max(1, coded),
              "delta_grad_bytes_max": max(s["delta_grad_bytes"] for s in stage_notes),
+             "latent_bytes_max": max(s["latent_bytes"] for s in stage_notes),
              "embedding": (f"rank-{a.embed_rank} adapter, {a.embed_bits}-bit factors (CWQUAN1 lora entry)" if ad else
                            "frozen at theta (the tied head is a frozen tail)"), "fresh": fresh,
              "rebuilds_bit_for_bit": True, "grad_copies": sum(st.copies for st in stacks),
