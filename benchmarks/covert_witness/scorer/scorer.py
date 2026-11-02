@@ -850,6 +850,7 @@ def submissions(rows: list[dict], starts: dict) -> list[dict]:
     v1 records. The te_core records agents publish themselves are listed, never scored."""
     out = []
     launched = run_rows(rows)
+    soft = {s["rec"]["id"] for s in soft_spots(rows)}
     for x in rows:
         if x["source"] == "te_core" and not x.get("derived"):
             continue
@@ -866,7 +867,7 @@ def submissions(rows: list[dict], starts: dict) -> list[dict]:
                             "E_bytes": x.get("E_bytes"), "regime": (rec or {}).get("regime", "earlier"),
                             "start_bpb": x.get("start_bpb"), "output_sha256": x.get("output_sha256"),
                             "submitted": x.get("submitted"), "node": x.get("node"), "fork_ladder": fork_ladder(rec),
-                            "phi_position": (rec or {}).get("phi")})
+                            "phi_position": (rec or {}).get("phi"), "soft_spot": (rec or x)["id"] in soft})
             continue
         if x.get("counted"):
             continue
@@ -954,6 +955,7 @@ def target_row(on: list[dict], f: float, l_star: float) -> dict:
             "w_star": c["w_star"], "effective_slowdown": c["effective_slowdown"], "id": w and w["id"], "cp": w and w["cp"],
             "rho": c["rho"], "direction": w and w["direction"], "counted": w and w.get("counted"),
             "seeds": w and w.get("seeds"), "split": w and w.get("split"), "phi": w and (w.get("phi") or {}).get(key),
+            "soft_spot": bool(w and w.get("soft_spot")),
             "phi_position": w and w.get("phi_position"),
             "vs_reference": c["w_star"] / t["honest_reference"] if c["w_star"] and t["honest_reference"] else None}
     return row
@@ -1863,9 +1865,9 @@ def table(subs: list[dict], l0: dict[str, float]) -> dict:
 
 
 def soft_phi(c: dict) -> bool:
-    """A W* entry whose counted φ is under a tenth of its position φ (prepare.deep_share): an unmerged adapter
-    (`soft_spots`), shown with both (coordinator 14:22Z; the counted one sets the frontier, 13:42Z)."""
-    return c.get("phi") is not None and (c.get("phi_position") or 0) >= SOFT_PHI and c["phi"] < c["phi_position"] / 10
+    """A W* entry that is a soft spot (`soft_spots`: an unmerged adapter, its counted φ under a tenth of its position φ,
+    prepare.deep_share), shown with both (coordinator 14:22Z; the counted one sets the frontier, 13:42Z)."""
+    return bool(c.get("soft_spot")) and c.get("phi") is not None and c.get("phi_position") is not None
 
 
 def table_md(tab: dict, split: str, seeds: str) -> str:
@@ -1987,6 +1989,7 @@ def final_table(write: bool = True) -> dict:
     res = [json.loads(l) for l in (FINAL / "results.jsonl").read_text().splitlines() if l.strip()] \
         if (FINAL / "results.jsonl").exists() else []
     subs, reruns = [], []
+    soft = {s["rec"]["id"] for s in soft_spots(list(rows.values()))}
     judged = readout_leaks({r["run"]: (RUNS / r["run"] / "out" / "run" / "run.json",
                                        (starts.get(rows[r["id"]]["start"]) or {}).get("tensors"))
                             for r in res if r.get("kind") == "rerun" and r.get("id") in rows and r.get("run")
@@ -2007,7 +2010,7 @@ def final_table(write: bool = True) -> dict:
                   "start": x["start"], "macs": t["macs"], "val_bpb": t["bpb"], "rho": t["rho"], "phi": t["phi"],
                   "depth": t["D"], "reference": is_reference(x), "direction": x["direction"], "counted": True,
                   "E_bytes": t.get("E_bytes"), "start_bpb": r["witness"]["start_bpb"], "fork_ladder": fork_ladder(x),
-                  "phi_position": x.get("phi"), "split": "final"}
+                  "phi_position": x.get("phi"), "soft_spot": x["id"] in soft, "split": "final"}
                  for t in r["ledger"] if t.get("te_kind") == "submission" and t.get("rho") and t.get("valid")]
     schedule_ends(subs, key=lambda s: s["run"])
     l0 = {s: v for s in STARTS if (v := regime_start_bpb(subs, s)) is not None}
