@@ -10,9 +10,15 @@ python scorer.py collect                               # new manifests -> index.
 python scorer.py score                                 # score.json, score.md, submissions.json
 python scorer.py board --promote --digest [--append]   # this hour's PROMOTED and DIGEST lines (--append pushes them)
 python scorer.py post TAG TEXT                         # one line onto islands/scorer/BOARD.md, pushed
-python scorer.py final launch ID... [--seeds 101,102,103] [--node N] [--dry-run]
+python scorer.py final entries|plan [--deadline HH:MM]  # the FINAL lines; the reruns that fit by the deadline
+python scorer.py final launch ID... [--seeds 101,102,103] [--node N] [--smoke] [--dry-run]
 python scorer.py final collect|table                   # final-set reruns (below)
 ~~~
+
+The nodes launch.py and promote.py take are the coordinator's shared list `/tmp/te-nodes.txt` (11:55Z) when it exists
+(`TE_NODES`), else the harness's `nodes.txt`. The hourly lines are two runs: `board --digest --append`, then
+`board --promote --append`, which waits on the sealed set (a `cpu=gpu` node decides in its gpu line). Appends take a
+lock, so the two never collide.
 
 - **Records**: evidence/v1 artifacts with `meta.covert_witness.class` (launch.py's, one per candidate) and te_core
   ledger records (`meta.schema` te-core/submission/v1), written since `TE_SCORER_SINCE`. The start registry's bpbs and
@@ -20,7 +26,9 @@ python scorer.py final collect|table                   # final-set reruns (below
   its commit (`candidate.json`), else its run's commit, else the direction its meta names, else its class. The index
   names each record's witness schema and version and its harness's te_core.
 - **Who is scored**: honest(l*) reads the reference directions (`ref-*`, and the harness's reference smoke), whatever
-  the class; W* reads every other direction's records, a reference-class one included. The measurement auditor's records
+  the class, at the end of each run's own schedule only (its last checkpoint, `schedule_ends`; the coordinator, 12:05Z:
+  a checkpoint inside a longer reference schedule is not what an honest run of that length reaches). W* reads every
+  checkpoint of every other direction's records, a reference-class one included. The measurement auditor's records
   (direction `audit`, or a note starting `audit:`) are in the ledger and in nothing scored.
 - **What a record must show to count**: launch.py uploads a record from an agent's VM, so its `witness.json` and
   `run/run.json` must be the node's (`custody_problems`: the hashes of `out/witness.json` and `out/run/run.json` in the

@@ -735,7 +735,22 @@ def submissions(rows: list[dict], starts: dict) -> list[dict]:
                         "option": {k: v["option"] for k, v in grid.items()}, "depth": a["depth"],
                         "reference": is_reference(x), "direction": x["direction"], "counted": False,
                         "E_bytes": cp.get("e_bytes"), "credit": a["credit"], "regime": "earlier"})
-    return out
+    return schedule_ends(out)
+
+
+def schedule_ends(subs: list[dict], key=lambda s: s["id"]) -> list[dict]:
+    """Marks each run's last checkpoint, the end of its own schedule: honest(l*) reads only those (coordinator 12:05Z, a
+    checkpoint inside a longer reference schedule is not what an honest run of that length reaches)."""
+    top: dict = {}
+    for s in subs:
+        top[key(s)] = max(top.get(key(s), 0), s["cp"])
+    for s in subs:
+        s["schedule_end"] = s["cp"] == top[key(s)]
+    return subs
+
+
+def honest_refs(on: list[dict]) -> list[dict]:
+    return [x for x in on if x["reference"] and x.get("schedule_end")]
 
 
 def regime_start_bpb(subs: list[dict], s: str) -> float | None:
@@ -756,7 +771,7 @@ def pareto(points: list[tuple[float, float, dict]]) -> list[dict]:
 
 def start_table(on: list[dict], l0: float | None, c: float) -> dict:
     """W*, honest and W*/honest per target and (k, r) on one start, and the proxy frontiers, from its submissions."""
-    refs, cov = [x for x in on if x["reference"]], [x for x in on if not x["reference"]]
+    refs, cov = honest_refs(on), [x for x in on if not x["reference"]]
     st = {"start_bpb": l0, "c": c, "targets": [], "submissions": len(on),
           "proxy_frontier_flops": [{"id": x["id"], "cp": x["cp"], "flops": 2 * x["macs"], "bpb": x["val_bpb"]}
                                    for x in pareto([(x["macs"], x["val_bpb"], x) for x in on])],
@@ -971,15 +986,22 @@ def official_src() -> Path:
     return OFFICIAL_SRC
 
 
+#: the coordinator's shared node list (11:55Z: every launch reads it as $CW_NODES), else the harness's nodes.txt
+TE_NODES = Path(os.environ.get("TE_NODES", "/tmp/te-nodes.txt"))
+
+
+def nodes_file() -> Path:
+    return TE_NODES if TE_NODES.exists() else official_src() / "benchmarks" / "covert_witness" / "nodes.txt"
+
+
 def listed_nodes() -> list[str]:
-    """The nodes the harness's nodes.txt lists (TE_BRANCH's head), in order."""
-    path = official_src() / "benchmarks" / "covert_witness" / "nodes.txt"
-    return [ln.split()[0] for ln in path.read_text().splitlines() if ln.split("#", 1)[0].strip()]
+    """The nodes launch.py and promote.py take (`nodes_file`), in order."""
+    return [ln.split()[0] for ln in nodes_file().read_text().splitlines() if ln.split("#", 1)[0].strip()]
 
 
 def tool_env() -> dict:
-    return os.environ | {"PATH": f"{SHIM}:{os.environ.get('PATH', '')}",
-                         "CW_NODES": str(OFFICIAL_SRC / "benchmarks" / "covert_witness" / "nodes.txt")}
+    official_src()
+    return os.environ | {"PATH": f"{SHIM}:{os.environ.get('PATH', '')}", "CW_NODES": str(nodes_file())}
 
 
 def sealed_bits(cands: list[dict]) -> dict:
@@ -1033,7 +1055,7 @@ def board(promote: bool, digest: bool, append: bool, hhmm: str | None = None) ->
                     for i in no) + ".")
             if pending:
                 lines.append(f"{hhmm} scorer [DIGEST] promotion candidates not yet decided: " + ", ".join(
-                    f"{short(i)} ({'; '.join(why[i])}; its value is on {n}, which the harness's nodes.txt doesn't list, "
+                    f"{short(i)} ({'; '.join(why[i])}; its value is on {n}, which {nodes_file()} doesn't list, "
                     f"so promote.py can't run there)" for i, n in pending.items()) + "; candidates again next hour.")
             pr["new"] = [p for p in pr["new"] if p["id"] in yes]
             pr["decided"] = {i: bits.get(i) for i in why if i not in pending}
@@ -1097,7 +1119,7 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
            f"no {reg} record yet. ")
         + "The earlier records' (the fixed search set; not comparable, and out of the final table): "
         + (" ".join(frontier_lines(rep.get("earlier", {}))) or "none")]
-    if pr["new"]:
+    if pr["new"] and "decided" in pr:
         out.append(f"{hhmm} scorer [DIGEST] newly promoted: " + ", ".join(short(p["id"]) for p in pr["new"]) + ".")
     empty = empty_cells(rows, starts)
     by_start: dict[str, list[str]] = {}
@@ -1166,7 +1188,17 @@ def direction_sentence(d: str, rows: list[dict], starts: dict) -> str:
 
 
 def append_board(lines: list[str]) -> None:
-    """Append to the scorer's own board file and push its branch; the coordinator merges it into the shared board."""
+    """Append to the scorer's own board file and push its branch; the coordinator merges it into the shared board. One
+    writer at a time (a promotion run waits on the sealed set while digests are posted)."""
+    import fcntl
+
+    STATE.mkdir(parents=True, exist_ok=True)
+    with (STATE / "board.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        _append_board(lines)
+
+
+def _append_board(lines: list[str]) -> None:
     BOARD.parent.mkdir(parents=True, exist_ok=True)
     wt = subprocess.run(["git", "-C", str(BOARD.parent), "rev-parse", "--show-toplevel"], capture_output=True, text=True,
                         check=True).stdout.strip()
@@ -1435,7 +1467,7 @@ def table(subs: list[dict], l0: dict[str, float]) -> dict:
         on = [x for x in subs if x["start"] == s]
         if s not in l0 or not on:
             continue
-        refs, cov = [x for x in on if x["reference"]], [x for x in on if not x["reference"]]
+        refs, cov = honest_refs(on), [x for x in on if not x["reference"]]
         rows = []
         for f in TARGETS:
             l_star = l0[s] * (1 - f)
@@ -1487,7 +1519,7 @@ def plot(subs: list[dict], l0: dict[str, float], title: str, path: Path) -> None
     color = {d: plt.cm.tab20(i % 20) for i, d in enumerate(dirs)}
     for row, s in zip(axes, starts):
         on = [x for x in subs if x["start"] == s]
-        refs, cov = [x for x in on if x["reference"]], [x for x in on if not x["reference"]]
+        refs, cov = honest_refs(on), [x for x in on if not x["reference"]]
         for ax, k in zip(row, K_BITS):
             for f in TARGETS:
                 ax.axhline(l0[s] * (1 - f), color="0.8", lw=0.8, zorder=0)
@@ -1566,6 +1598,7 @@ def final_table(write: bool = True) -> dict:
                   "depth": t["D"], "reference": is_reference(x), "direction": x["direction"], "counted": True,
                   "E_bytes": t.get("E_bytes"), "start_bpb": r["witness"]["start_bpb"]}
                  for t in r["ledger"] if t.get("te_kind") == "submission" and t.get("rho") and t.get("valid")]
+    schedule_ends(subs, key=lambda s: s["run"])
     l0 = {s: v for s in STARTS if (v := regime_start_bpb(subs, s)) is not None}
     fin = seed_mean(subs)
     search_subs = [x for x in json.loads((STATE / "submissions.json").read_text()) if x.get("regime") == "current"]
