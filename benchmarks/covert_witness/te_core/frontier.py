@@ -5,8 +5,10 @@
 It reads only the submissions measured by the pinned measurement commit (covert_witness's `pin.py`; `--pin` names
 another), and leaves out, each marked with its reason (`status`): an invalid record, an unscored one, one measured by
 another commit (`other-version`), one whose E digest (`output.e_sha256`) equals an earlier record's (`duplicate-e`: the
-first to submit an E is the one its compute is counted for), and one with covered steps ingested by a te_core before
-3.0 (`re-ingest`: 3.0 prices ρ by thresholds; `python -m te_core.ledger ingest RUN_DIR` prices it again). Per (k, r)
+first to submit an E is the one its compute is counted for), one with covered steps ingested by a te_core before 3.0
+and one of a run counted before 3.6 ingested before 3.7 (`re-ingest`: 3.0 prices ρ by thresholds, and 3.7's ingest adds
+an updated table's lookup, which 3.6's counter prices; `python -m te_core.ledger --agent AGENT ingest RUN_DIR ...
+--run-id RUN` prices it again), and one a later ingest of its run supersedes (`re-ingested`). Per (k, r)
 cell of the grid (score.K_BITS x score.R):
 
 - the frontier: the valid submissions no other beats on both |C| ρ and val bits per byte;
@@ -27,7 +29,8 @@ import math
 import sys
 from pathlib import Path
 
-from .ledger import Ledger, coverage_of
+from .annotate import LOOKUPS_FROM
+from .ledger import Ledger, coverage_of, version
 from .score import K_BITS, R, cell, effective_slowdown, honest, w_star
 
 BETA_EDGES = (1e-3, 1e-2, 1e-1, 1.0, 10.0)
@@ -43,13 +46,13 @@ def bin_of(x: float, edges: tuple[float, ...]) -> int:
 #: the first te_core whose ingest prices ρ by thresholds (a row's `te_core`): an earlier ingest could price a run with
 #: covered steps at its cheapest step's β, so such a row counts once its run is ingested again
 PRICED_FROM = (3, 0)
+#: the first te_core whose ingest adds the lookups of updated tables to a run counted before `annotate.LOOKUPS_FROM`
+#: (`annotate.with_lookups`), so a row of such a run ingested earlier counts once its run is ingested again
+LOOKUPS_INGESTED = (3, 7)
 
 
-def version(v) -> tuple[int, ...]:
-    try:
-        return tuple(int(x) for x in str(v).split("."))
-    except ValueError:
-        return ()
+def _run_key(r: dict):
+    return (r["run_id"], r.get("measurement_commit"), r.get("checkpoint_step")) if r.get("run_id") else None
 
 
 def pinned() -> str:
@@ -60,12 +63,20 @@ def pinned() -> str:
 
 
 def status(rows: list[dict], pin: str) -> dict[str, str]:
-    """Each left-out record's reason: invalid, unscored, other-version, duplicate-e, re-ingest. An E repeats an earlier
-    record's when that record was measured at the pin or is another agent's: an agent's own relaunch at a new pin of an
-    E it had at an old one counts."""
+    """Each left-out record's reason: re-ingested, invalid, unscored, other-version, duplicate-e, re-ingest. A later
+    ingest of the same run's checkpoint (its run id; a row without one is never superseded) supersedes an earlier one
+    (`re-ingested`),
+    which then seeds no duplicate. An E repeats an earlier record's when that record was measured at the pin or is
+    another agent's: an agent's own relaunch at a new pin of an E it had at an old one counts."""
     out, first = {}, {}
-    for r in sorted(rows, key=lambda r: (r.get("written_ts", 0), r["id"])):
+    ordered = sorted(rows, key=lambda r: (r.get("written_ts", 0), r["id"]))
+    latest = {_run_key(r): r["id"] for r in ordered}
+    for r in ordered:
         e = (r.get("output") or {}).get("e_sha256")
+        key = _run_key(r)
+        if key is not None and latest[key] != r["id"]:
+            out[r["id"]] = "re-ingested"
+            continue
         if e and any(at_pin or agent != r.get("agent") for at_pin, agent in first.get(e, ())):
             out[r["id"]] = "duplicate-e"
         elif r.get("invalid"):
@@ -75,6 +86,8 @@ def status(rows: list[dict], pin: str) -> dict[str, str]:
         elif r.get("measurement_commit") != pin:
             out[r["id"]] = "other-version"
         elif version(r.get("te_core")) < PRICED_FROM and coverage_of(r.get("families", [])):
+            out[r["id"]] = "re-ingest"
+        elif version(r.get("te_core")) < LOOKUPS_INGESTED and version(r.get("run_te_core")) < LOOKUPS_FROM:
             out[r["id"]] = "re-ingest"
         if e and out.get(r["id"]) != "duplicate-e":
             first.setdefault(e, set()).add((r.get("measurement_commit") == pin, r.get("agent")))

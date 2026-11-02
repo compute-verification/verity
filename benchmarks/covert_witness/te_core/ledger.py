@@ -25,6 +25,7 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 from . import VERSION
+from .annotate import LOOKUPS_FROM, with_lookups
 from .score import checkpoints
 
 SCHEMA = "te-core/submission/v1"
@@ -149,6 +150,21 @@ class Ledger:
         return self.append("final", {"entry": entry, "test_bpb": float(test_bpb)})
 
 
+def version(v) -> tuple[int, ...]:
+    try:
+        return tuple(int(x) for x in str(v).split("."))
+    except ValueError:
+        return ()
+
+
+def lookup_tables() -> list[str]:
+    """The starts' token lookups by name (regexes), from covert_witness's prepare (`FAMILIES`)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    import prepare
+
+    return sorted({f["embed"] for f in prepare.FAMILIES.values()})
+
+
 def coverage_of(families: list[dict]) -> dict[int, float]:
     """Each covered step's least β_t, from a run record's verified families."""
     out: dict[int, float] = {}
@@ -181,6 +197,8 @@ def ingest(run_dir: Path, ledger: Ledger, *, direction: str, mechanism: str, par
            reference: bool = False, p: float | None = None) -> list[dict]:
     """One submission record per checkpoint of the run in `run_dir` (its `run.json`)."""
     record = json.loads((Path(run_dir) / "run.json").read_text())
+    if version(record.get("te_core")) < LOOKUPS_FROM:
+        record = with_lookups(record, lookup_tables())
     ev = record.get("evaluation", {})
     cov = coverage_of(record.get("families", []))
     last = record["steps"][-1]["step"] if record["steps"] else -1
