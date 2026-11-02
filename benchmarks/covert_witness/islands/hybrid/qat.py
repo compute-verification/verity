@@ -18,6 +18,8 @@ trained block, and the final norm, train in fp32 by AdamW and are full entries; 
   restarts its latent from its code, so Δ_grad is the largest stage's. The rate follows one schedule over the run
   (`--stage-sched global`) or restarts in each stage (`each`).
 - `--momentum-dtype bf16` keeps Muon's buffer in bf16.
+- `--qat-from F` (one stage only) trains the coded matrices unquantized, θ + V, for the first share F of the steps, and
+  from then on through their code; checkpoints before the switch hold those matrices as full entries.
 - `--embed-rank r` adds a rank-r adapter on the tied embedding beside the coded blocks, trained in every stage (AdamW
   `--embed-lr`): W' = θ + s · Q(B) Q(A), s = sqrt(d / r), its factors `--embed-bits` round to nearest (straight-through;
   A a scale per row, B a scale per 64 rows), a CWQUAN1 lora entry. Every step's lookup and head read W' as
@@ -334,6 +336,7 @@ class Stack:
         self.k = self.s = None
         self.v = self.buf = self.grad = None
         self.copies = 0
+        self.coded, self.trained = code != "fp", False
 
     def collect(self) -> None:
         """Make the buffer hold every matrix's gradient: backward accumulates into an existing .grad in place, so this
@@ -362,6 +365,7 @@ class Stack:
             self.v = d.float()
         self.buf = torch.zeros_like(self.v, dtype=momentum_dtype)
         self.grad = torch.zeros_like(self.v)
+        self.trained = True
         for i, p in enumerate(self.params):
             p.requires_grad_(True)
             p.grad = self.grad[i]
@@ -383,14 +387,16 @@ class Stack:
     def rebuild(self, mult: float) -> None:
         if self.code == "fp":
             w = self.v
+        elif not self.coded:
+            w = self.theta + self.v
         else:
             q, self.k, self.s = quantize(self.v, self.code, self.g, mult)
             w = self.theta + q
         torch._foreach_copy_(self.params, list(w.unbind(0)))
 
     def entries(self) -> dict[str, dict]:
-        if self.code == "fp":
-            return {n: {"kind": "full", "t": p.detach()} for n, p in zip(self.names, self.params)}
+        if self.code == "fp" or not self.coded:
+            return {n: {"kind": "full", "t": p.detach()} for n, p in zip(self.names, self.params)} if self.trained else {}
         if self.k is None:
             return {}
         return {n: {"kind": "delta", "q": qarray(self.k[i], self.s[i], self.code, self.g, self.shape)}
@@ -409,6 +415,8 @@ def main() -> int:
     ap.add_argument("--shares", default="", help="the stages' shares of the steps, comma-separated (default: equal)")
     ap.add_argument("--passes", type=int, default=1, help="repeat the stage list")
     ap.add_argument("--stage-sched", choices=("global", "each"), default="global")
+    ap.add_argument("--qat-from", type=float, default=0.0,
+                    help="the share of the steps after which the coded matrices read their code (before: theta + V)")
     ap.add_argument("--muon-lr", type=float, default=0.015)
     ap.add_argument("--momentum", type=float, default=0.95)
     ap.add_argument("--momentum-dtype", choices=("fp32", "bf16"), default="fp32")
@@ -484,6 +492,11 @@ def main() -> int:
     if total < CHECKPOINTS:
         fail(f"the budget buys {total} steps, fewer than the {CHECKPOINTS} checkpoints")
     sched = Schedule(total)
+    switch = round(a.qat_from * total)
+    if switch and len(stage_sets) > 1:
+        fail("--qat-from needs one stage")
+    for st in stacks:
+        st.coded = st.coded and not switch
 
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     fresh = fresh_order(data, rec) if a.fresh else {"fresh": False}
@@ -534,6 +547,11 @@ def main() -> int:
                                    "fp32 m and v; embedding adapter factor: fp32 latent + gradient + AdamW m and v"}
         print(json.dumps(note), flush=True)
         for step in range(n_j):
+            if switch and g == switch:
+                for st in active:
+                    if st.code != "fp":
+                        st.coded = True
+                        st.rebuild(a.mult)
             gs = g if a.stage_sched == "global" else step
             frac = lr_frac(gs, total if a.stage_sched == "global" else n_j, a.warmup, a.sched, a.decay_frac)
             if adam is not None:
@@ -589,7 +607,8 @@ def main() -> int:
     if bad:
         fail(f"E rebuilds {len(bad)} tensors differently from the trained ones: {bad[:3]}")
     coded = sum(theta[n].numel() for n in codes if codes[n] != "fp")
-    notes = {"direction": "hybrid", "program": "qat.py", "args": vars(a), "steps": total, "stages": stage_notes,
+    notes = {"direction": "hybrid", "program": "qat.py", "args": vars(a), "steps": total, "qat_switch_step": switch,
+             "stages": stage_notes,
              "codes": {c: sum(1 for n in codes if codes[n] == c) for c in sorted(set(codes.values()))},
              "coded_weights": coded, "E_bytes": len(blob), "E_bytes_xz1": len(blob1),
              "bits_per_coded_weight": 8 * len(blob) / max(1, coded),
