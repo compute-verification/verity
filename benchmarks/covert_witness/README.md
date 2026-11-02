@@ -6,9 +6,15 @@ lowest held-out loss a candidate reaches from a registered start at a fixed trai
 curve. The attacker's effective cost in a class is the theorem's slowdown for the class times that rate. Every candidate
 carries witnesses to its parameters, which the evaluator checks; nothing here meters a chain of blocks.
 
-It is autoresearch-shaped: a fixed side (`prepare.py`, `evaluate.py`, `guard.py`, `candidate.sh`, `launch.py`, with
-`data.py`, `starts.py` and `model.py` behind them) and one island per class, each with one editable `train.py` and its
-program, `README.md`, for a researcher agent.
+It is autoresearch-shaped: a fixed side (`prepare.py`, `evaluate.py`, `candidate.sh`, `launch.py` and the harness
+`te_core/`, with `data.py`, `starts.py`, `starts_store.py` and `model.py` behind them) and one island per class, each with
+one editable `train.py` and its program, `README.md`, for a researcher agent.
+
+**Version**: v2.1 (`prepare.VERSION`, in every witness record, schema `covert-witness/witness/v3`; the harness is te_core
+2.2). Since v2, every candidate runs inside te_core's harness, which counts its MACs and times its steps, and every run is
+ingested into te_core's ledger, which prices ρ. Since v2.1, every search score is on a fresh slice of the search pool drawn
+after the weights are hashed, promotions are decided on a sealed set one bit each, and the final set and a final start
+are sealed until the scorer's final scoring.
 
 ## Classes
 
@@ -22,38 +28,78 @@ Caps on the witnessed parameters (`prepare.CLASSES`); every class also has the b
 | `shallow` | only the top 2 blocks and the final norm differ | AdamW on those; the tied head stays frozen (it is layer 0 too) |
 | `seed` | E a seed log, ≤ 100,000 bytes | MeZO: two forwards a step, the step's coefficient stored, z replayed from seeds |
 
-**Budget**: analytic training FLOPs ≤ 9e16 (`TRAIN_FLOP_BUDGET`, about 10 GPU-minutes of m's dense AdamW at its measured
-1.49e14 FLOP/s) and train.py's GPU-seconds ≤ 1200 (`GPU_SECONDS_CAP`). A class's score at a start is its lowest valid
-search bpb.
+**Budget**: 2x the MACs the harness counts ≤ 9e16 x 1.1 (`TRAIN_FLOP_BUDGET`, about 10 GPU-minutes of m's dense AdamW at
+its measured 1.49e14 FLOP/s, times `HARNESS_FLOP_SLACK` for the elementwise and optimizer work the analytic meter leaves
+out) and train.py's steps' wall seconds under the harness ≤ 3000 (`GPU_SECONDS_CAP`; the harness runs eager and counted,
+about 2.4x a compiled run). A class's score at a start is its lowest valid search bpb.
 
 ## The fixed side
 
-- **Held-out sets** (`data.py`): `search`, fineweb-edu shard 013's first whole documents up to 2^21 GPT-2 tokens (2,092
-  documents, 9,797,536 bytes), the only set candidates are scored on; `final`, shard 012's by the same rule, never shown to
-  the search. Each is tokenized by every start's tokenizer; bits per byte divides by the documents' UTF-8 bytes, so scores
-  compare across tokenizers. Training streams: learning_frontier's GPT-2 shards 000-002, and shard 000 in SmolLM2's tokens.
-- **Starts** (`starts.py`, `prepare.register_smollm2`): `s50`, `s100`, `m50`, `m100`, learning_frontier's dense s and m
-  (seed 0, data order 0, its best rates) at 50% and 100% of their 8-tokens-per-parameter runs, retrained here since that
-  branch kept no final checkpoint; and `smollm2`, SmolLM2-135M at its hub revision. Each is registered as
-  `starts/<name>/theta.safetensors` with `start.json`: the digest θ (`prepare.digest`), config, tokenizer and provenance.
+- **Held-out sets** (`data.py`, each with every document's tokens and bytes): the search pool, fineweb-edu shard 013's
+  first whole documents up to 2^23 GPT-2 tokens (8,320 documents, 38,804,016 bytes), in `CW_ROOT/heldout/search-pool`;
+  the promotion set, shard 011's by the same rule up to 2^21 tokens (2,154 documents), and the final set, shard 010's up
+  to 2^21 (2,189 documents) in GPT-2's and Pythia's tokens, both sealed. Bits per byte divides by the documents' UTF-8
+  bytes, so scores compare across tokenizers. Training streams: learning_frontier's GPT-2 shards 000-002, and shard 000
+  in Pythia's tokens.
+- **Search scores** (`prepare.Scorer`): every search evaluation, the harness's and the checker's, hashes the weights and
+  then draws a slice of the pool (`prepare.draw_slice`: a coin of 16 bytes from the OS, and 1,024 of the pool's 8,192
+  evaluation windows, 2^20 tokens, drawn by a generator seeded with sha256(coin ‖ digest)). The score is the start's bpb
+  on the whole pool plus the candidate's minus the start's on the same windows, so a slice's difficulty cancels; the
+  start's windows are scored once per process. The record names the coin and the digest, which reproduce the slice.
+- **The sealed side** (`sealed.py`; `CW_SEALED`, `/workspace/research/te/sealed` on the node): the promotion and final
+  sets, the final start, the sealed values and the decisions. At each of its evaluations the harness also scores the
+  promotion set's first 2^20 tokens (`prepare.PROMOTION_TOKENS`) and writes the value (the search and promotion bpb,
+  and the start's) once under the weights' digest
+  (the checkpoint's `output_sha256`); nothing returns it. Promotions are the scorer's `promote.py`: it sends candidates
+  (`{id, output_sha256}`) to `sealed.py decide` on the node that holds their values and gets one bit each, promote iff
+  the search gain over the start is positive and the promotion gain is at least half of it (`sealed.PROMOTION_SHARE`),
+  with the value record's salted sha256; each decision is appended to `decisions.jsonl`. `promote.py --tier T` promotes
+  te_core's frontier members and elites at tier T - 1 this way (`python -m te_core.frontier --promote` is refused).
+- **Final mode** (`CW_FINAL=1`, the scorer's, after the search; `launch.py --final` with direction `scorer`): the harness
+  and the checker score the final set (`evaluate.py --split final` refuses outside final mode), and the sealed start
+  loads: `pythia160m`, EleutherAI's Pythia-160M at its recorded revision cast to fp32 (`prepare.register_pythia`). It
+  trained on the Pile, so the same final text is a domain shift for it, and its architecture (GPT-NeoX, family
+  `hf-neox`, whose parallel residual makes its φ an upper bound) is not the search's. A final run is preserved but not
+  ingested into the search's ledger.
+- **Starts** (`starts.py`): `s50`, `s100`, `m50`, `m100`, learning_frontier's dense s and m (seed 0, data order 0, its
+  best rates) at 50% and 100% of their 8-tokens-per-parameter runs, retrained here since that branch kept no final
+  checkpoint. Each is `<name>/theta.safetensors` with `start.json` (the digest θ, `prepare.digest`; config, tokenizer and
+  provenance), and all four are one preserved artifact in the evidence store, named with every file's sha256 in
+  `starts_store.json`. Each node installs them into one fixed directory, `/workspace/research/te/starts` (`CW_STARTS`,
+  `prepare.STARTS`), with `python3 starts_store.py install --keep`, which checks every file against the manifest; no run
+  reads another run's directory.
 - **Evaluator** (`evaluate.py`, `prepare.evaluate_bpb`): bits per byte at context 1024 of decode(θ, E). The model must
   have θ's tensors, shapes and dtypes, so its parameter count, evaluation FLOPs and weight bytes read per byte (every
   parameter's bytes once per window, a lookup table in full) are the start's: no lookup table rides free.
+- **Harness** (`te_core/`, its README): train.py runs as `python -m te_core.run --script islands/CLASS/train.py`, which
+  counts every multiply-accumulate it computes through torch, times its steps (a step is one `TrainData.next` to the
+  next), scores the first E in each 5% of the run (a search score, above), refuses programs that route around the
+  dispatcher, and keeps `prepare.UNREADABLE` (the search pool, the sealed side and v2.0's `eval/`) unreadable from
+  train.py's process (an audit hook) except while it evaluates.
 - **Witness checker** (`evaluate.py`): θ's digest; decode(θ, E) bit-equal to the submitted model; 8·|E| bits; the
-  declared changed set covers what differs, and gives φ and the lowest updated layer (`prepare.deep_share`); training
-  FLOPs from the step log and the declared trainable set (`prepare.train_flops`), which must cover the changed set;
-  GPU-seconds; the class's caps. Decoders are fixed (`prepare.decode`: `full`, `lora`, `seedlog`) and read only θ and E.
-- **Guard** (`guard.py`): train.py runs with an audit hook refusing any open under the held-out directory.
+  declared changed set covers what differs, and gives φ and the lowest updated layer (`prepare.deep_share`); the declared
+  trainable set covers the changed set; the harness's record is this E's and found nothing invalid, and its FLOPs and
+  seconds are within the budget; the class's caps. A step the island declares (`prepare.declare_step`) is a
+  counterexample family the harness checks by rebuilding sampled steps with `prepare.decode`, bit for bit, within c MACs
+  (te_core's README). The analytic meter (`prepare.train_flops`, from the step log) is
+  recorded beside the harness's count. Decoders are fixed (`prepare.decode`: `full`, `lora`, `seedlog`) and read only θ
+  and E.
 - **Launcher** (`launch.py` on an agent VM, `candidate.sh` on the node): one candidate a run, `research run --on vy-nebius-2
   --pool gpu` with `gpu-lease 1` inside (the node takes runs only through its slot pools, and `--gpus` is refused there);
-  the record goes to the store as `research data put --kind evidence/v1 --tree OUT --preserve`.
+  the record goes to the store as `research data put --kind evidence/v1 --tree OUT --preserve`, and the harness's record
+  into te_core's ledger (`python -m te_core.ledger --agent D --publish ingest`, D the direction from the branch
+  `cursor/te-<D>-NNNN`, the mechanism the note's first word), after which the local frontier is printed.
 
 **Run**: `python benchmarks/covert_witness/launch.py CLASS START --note TEXT -- TRAIN_ARGS` from a committed checkout.
-`data.py` and `starts.py --size s|m` build the fixed side once (CPU with network; one GPU); `evaluate.py --start NAME --out F`
-scores a start. `CW_DEVICE=cpu` runs the whole path on a CPU for a smoke test.
+`data.py`, `prepare.register_pythia()` and `starts.py --size s|m` build the fixed side once (CPU with network; one GPU);
+`evaluate.py --start NAME --out F` scores a start on the whole search pool. `nodes.txt` lists the nodes and their pools
+(`NODE pool=gpu cpu=research`). `CW_DEVICE=cpu` runs the whole path on a CPU for a smoke test.
 
-**Reads and writes**: everything lives under `/workspace/research/scratch/covert-witness` (`CW_ROOT`, kept under @training):
-`eval/` (held out), `starts/`, `train/`, `ckpt/`, and `candidates/` (each candidate's submission, removed when it ends).
-A candidate's run `out/` holds `witness.json` (schema `covert-witness/witness/v1`), `timing.json`, `meta.json`,
-`steps.jsonl`, `E.bin` when at most 1 MB, `train.py` and its logs. **Backs**: no Lean guarantee or claim; its numbers are
+**Reads and writes**: the starts are in `/workspace/research/te/starts` and the sealed side in
+`/workspace/research/te/sealed` (above); everything else lives under `/workspace/research/scratch/covert-witness`
+(`CW_ROOT`, kept under @training): `heldout/` (the search pool), `train/`, `ckpt/`, and `candidates/` (each candidate's
+submission, removed when it ends).
+A candidate's run `out/` holds `run/run.json` (the harness's record, schema `te-core/run/v1`), `witness.json` (schema
+`covert-witness/witness/v3`), `timing.json`, `meta.json`, `steps.jsonl`, `E.bin` when at most 1 MB, `train.py` and its
+logs. **Backs**: no Lean guarantee or claim; its numbers are
 measurements of training under structural caps.
