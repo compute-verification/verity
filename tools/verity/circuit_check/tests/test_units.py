@@ -829,6 +829,28 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
         UN.call_families([], nothing, {})
 
 
+#: what `targets.on_demand_boolean_families` registers, in order, given word Call families made on demand
+ON_DEMAND = """
+from circuit_check import targets as TG
+from verity.ml.circuits.defs import REGISTRY
+import verity.ml.definitions.boolean
+
+before = set(dict.keys(REGISTRY.defs))
+TG.on_demand_boolean_families({"Const8[0x0]_v1", "Const16[0x1]_v1", "Const32[0x2]_v1", "Const4[0x3]_v1", "GatherBf16x4_v1",
+                               "GatherBf16x8_v1", "GatherI32x2_v1", "GatherI32x4_v1", "GatherI32x8_v1", "F32Add_v1"})
+print([fid for fid in dict.keys(REGISTRY.defs) if fid not in before])
+"""
+
+
+def test_the_boolean_versions_made_on_demand_register_in_one_order_under_any_hash_seed():
+    """`targets.on_demand_boolean_families` makes the Boolean versions in the same order whatever the process's hash seed: each
+    one made registers, and the catalog's roots record notes the order (`units._noting`), so a set's order would give an
+    unchanged catalog's rebuild other bytes."""
+    got = {subprocess.run([sys.executable, "-c", ON_DEMAND], capture_output=True, text=True, check=True, cwd=REPO,
+                          env={**os.environ, "PYTHONHASHSEED": str(seed)}).stdout for seed in (1, 2, 3, 4)}
+    assert len(got) == 1, got
+
+
 #: the catalog over the synthetic bindings, in a process of its own: built whole (``whole``, `targets.suite`), each binding built
 #: in a process forked for it into a manifest (``build``, `units.built_apart`), or made from that manifest (``load``,
 #: `units.from_manifest`, `units.make`); prints each suite target's descriptor and units, the catalog's errors and the ids made
