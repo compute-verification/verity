@@ -523,13 +523,13 @@ def padsJoin (T : ∀ j, Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)) :
   right_inv _ := rfl
 
 omit [CharP F 2] [AddCommGroup Salt] [∀ j, AddCommGroup (Hi j)] in
-theorem leaf_common {T : Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)} (M : T.Hm96 C) (My : Salt → B)
+theorem leaf_common {j : Fin J} {T : Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)} (M : T.Hm96 C) (My : Salt → B)
     (cs : Salt → C) (Hh : B × C → D) (hMy : M.My = My) (hcs : M.cs = cs) (hH : M.H = Hh) (d : B) (y : Salt) :
     M.H (d + M.My y, M.cs y) = Hh (d + My y, cs y) := by
   rw [hMy, hcs, hH]
 
 omit [CharP F 2] [AddCommGroup Salt] [∀ j, AddCommGroup (Hi j)] in
-theorem ideal_common {T : Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)} (M : T.Hm96 C) (cs : Salt → C)
+theorem ideal_common {j : Fin J} {T : Table F K (W j) Salt (B × Salt) D (Hi j) (VL j)} (M : T.Hm96 C) (cs : Salt → C)
     (Hh : B × C → D) (hcs : M.cs = cs) (hH : M.H = Hh) (u : B × Salt) : Hh (u.1, cs u.2) = T.ideal u := by
   rw [← hcs, ← hH]
   exact (M.ideal_eq u.1 u.2).symm
