@@ -517,9 +517,10 @@ def test_a_binding_s_report_holds_its_read_set_and_what_reads_does_not_declare_o
     imported: here all of ``syn``, which `load_registries` enumerates): its own targets' pins files, no other binding's, and
     the package listing every check holds.  With no `cli.READS` all of it is undeclared; once ``--update-reads`` wrote it,
     nothing is, and another binding's run written beside it keeps the first's: each of those runs makes only its own binding's
-    roots, the others' are the catalog's roots record's (`units.plan`'s ``binding``).  A module the process loaded before its
-    checks, which a check's `inspect` lookup asks for, is undeclared in ``loaded``, the probes every binding's set holds
-    (`cli.READS`), not in the binding's own set: which modules a process loaded depends on how it runs.  A module only one target's check imports, new, is
+    roots, the others' are the catalog's roots record's (`units.plan`'s ``binding``).  A module the process loaded after the
+    registries' inputs and before its checks, which a check's `inspect` lookup asks for, is undeclared in ``loaded``, the probes
+    every binding's set holds (`cli.READS`), not in the binding's own set: which modules a process loaded depends on how it
+    runs.  A module only one target's check imports, new, is
     undeclared for that binding alone; a module the registries import anew, for every binding, until it is written."""
     from test_cache import _pin
 
