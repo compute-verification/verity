@@ -304,8 +304,9 @@ def test_the_lanes_merge_rebuilds_conflicted_pins_as_the_sync_does(world, monkey
 
 
 def test_the_lanes_merge_ports_the_lean_a_member_adds_as_the_sync_does(world, monkeypatch, tmp_path):
-    """Above a Lean check it moves, the lane merges each member again: once the tree has Lean's module system, a `.lean` file a
-    member adds that isn't a module is ported, as the sync's merge ported it, so the moved check holds the tree it checked."""
+    """Above a Lean check it moves, the lane merges each member again: once the tree has Lean's module system, the merged
+    tree's `.lean` files that aren't modules are ported, as the sync's merge ported them, so the moved check holds the tree it
+    checked."""
     from research.queue import MODULES
     from test_queue_ported import _port, _stub
 

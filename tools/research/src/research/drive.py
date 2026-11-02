@@ -3220,8 +3220,8 @@ class Driver:
 
     def _clean_merge(self, tip: str, head: str) -> tuple[str | None, str]:
         """(the tree of ``head`` merged onto ``tip``, "") when it merges as `Queue._merge` merges, with ``tip``'s merge drivers
-        and a merge whose every conflict is in a pin kept, each pin rebuilt from the merged tree (`repinned`), and the `.lean`
-        files it adds on the Lean module system once the tree has it (`ported`), else (None, why).  A git without
+        and a merge whose every conflict is in a pin kept, each pin rebuilt from the merged tree (`repinned`), and the merged
+        tree's Lean on the Lean module system once the tree has it (`ported`), else (None, why).  A git without
         `--attr-source` merges without the drivers, which conflicts more."""
         from .queue import ported, repinned
 
@@ -3237,7 +3237,7 @@ class Driver:
             return None, f"doesn't merge: {(r.stderr or r.stdout).strip()[-200:]}"
         else:
             tree = r.stdout.split()[0]
-        tree, _, _, why = ported(self.repo, tip, tree)
+        tree, _, _, why = ported(self.repo, tree)
         return tree, why
 
     def _reviewed(self, chain: list[Member]) -> tuple[int, str | None]:
