@@ -25,7 +25,7 @@ verdict accept at the plain leaf** (`accepts_verdict_plainAnyD`). -/
 theorem accepts_verdict_plainAnyDJK (keep : Bool → Bool) {I : Exec.Inputs} {dr : Option Json} {t : TranscriptJ}
     (hh : I.tags.hiddenOutputs = true) (hl : I.tags.merkleLeaf = "flock-leaf/sha512-unsalted")
     (h : AcceptsAtDJK keep I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeJWithK keep With.std spec t.j = .ok sess ∧ sts.size = spec.tables.size ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m),
@@ -97,7 +97,7 @@ open Lean (Json)
 reps' deployed entries** (`accepts_opens₀LDU`): `accepts_opens₀LDLfJK` at `leafPlain`. -/
 theorem accepts_opens₀LDUJK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : TranscriptJ} (h : AcceptsAtDJK keep I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeJWithK keep With.std spec t.j = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
@@ -152,7 +152,7 @@ theorem accepts_repsOneDUJK (keep : Bool → Bool)
     {I : Inputs} {dr : Option Json} {t : TranscriptJ} (hrr : I.tags.retainRounds = true)
     (hh : I.tags.hiddenOutputs = true) (hl : I.tags.merkleLeaf = "flock-leaf/sha512-unsalted") (hc1 : I.count ≤ 1)
     (h : AcceptsAtDJK keep I dr t) :
-    ∃ (st : Flock.Stmt) (spec : SessionSpec) (sess : Session) (sch : Flock.Schedule),
+    ∃ (st : Flock.Stmt) (spec : SessionSpec) (sess : RunRecord) (sch : Flock.Schedule),
       setupOne I.tags I.circuitFile I.publicFile I.coins I.tables dr I.partition I.program = .ok st ∧
       setupAtD I dr = .ok (spec, #[st]) ∧ Record.decodeJWithK keep With.std spec t.j = .ok sess ∧
       Flock.fast100 st.m = some sch ∧
