@@ -626,19 +626,24 @@ def test_a_party_runs_its_module_from_the_pinned_tree_as_auditor_with_its_own_de
                                        str(svc.parties / "pous"), "--listen", "0.0.0.0:47610", "minutes=5"]
 
 
-def test_bw_party_holds_the_store_the_block_challenger_kept_for_the_windows_audit_else_the_fixture_s(svc):
+def test_bw_party_holds_the_store_the_block_challenger_kept_for_the_windows_audit_or_the_named_fixture_s(svc):
     """The bandwidth party's registration is the host's: the block challenger's own record of the PoUS session of the
-    window's binding the lane names (its device on this host, the session's id derived there), or the fixture's
-    registration in the pinned tree; never a session id or a path."""
+    window's binding the lane names (its device on this host, the session's id derived there), or with `--fixture` the
+    fixture's registration in the pinned tree; never a session id or a path. A party that names neither is refused
+    before it starts: V3's rerun 58a7 reached the gate through a key whose forced command dropped the session's flag, so
+    the party held the fixture's store and refused the session's node."""
     audit = "0f" * 64
     (rc, _), ran = party(svc, ["bw_party", "--pous-audit", audit, "--minutes", "8"])
     assert rc == 0 and ran[0][-11:] == ["-m", H.PARTIES["bw_party"][1], "--device", str(svc.parties / "bw"),
                                         "--listen", "0.0.0.0:47612", "--pous-record", str(svc.parties / "pous"),
                                         "--pous-audit", audit, "minutes=8"]
-    (rc, _), ran = party(svc, ["bw_party"])
+    (rc, _), ran = party(svc, ["bw_party", "--fixture"])
     assert rc == 0 and ran[0][-9:] == ["-m", H.PARTIES["bw_party"][1], "--device", str(svc.parties / "bw"),
                                        "--listen", "0.0.0.0:47612", *H.PARTY_FIXED["bw_party"], "minutes=60"]
     assert (H.TREE / H.PARTY_FIXED["bw_party"][1]).is_file()
+    for words in (["bw_party"], ["bw_party", "--minutes", "10"]):
+        got, ran = party(svc, words)
+        assert "bw_party names no store" in refused(got) and ran == []
 
 
 @pytest.mark.parametrize("words, why", [
@@ -652,13 +657,15 @@ def test_bw_party_holds_the_store_the_block_challenger_kept_for_the_windows_audi
     (["challenger_party", "--reads", "8"], "challenger_party takes no flags"),
     (["challenger_party", "--minutes", "181"], "--minutes takes one integer"),
     (["wipe_party", "--minutes"], "--minutes takes one integer"),
-    (["bw_party", "--registration", "/tmp/r.json"], "bw_party takes [--pous-audit AUDIT]; got '--registration'"),
+    (["bw_party", "--registration", "/tmp/r.json"], "bw_party takes --pous-audit AUDIT | --fixture; got '--registration'"),
     (["bw_party", "--pous-record", "/tmp"], "got '--pous-record'"),
-    (["bw_party", "--pous-session", "a" * 64], "bw_party takes [--pous-audit AUDIT]; got '--pous-session'"),
+    (["bw_party", "--pous-session", "a" * 64], "bw_party takes --pous-audit AUDIT | --fixture; got '--pous-session'"),
     (["bw_party", "--pous-audit", "a" * 64], "128 lowercase hex digits"),
     (["bw_party", "--pous-audit", "../" + "a" * 125], "128 lowercase hex digits"),
     (["bw_party", "--pous-audit", "A" * 128], "128 lowercase hex digits"),
-    (["bw_party", "--pous-audit", "a" * 128, "--pous-audit", "b" * 128], "got '--pous-audit'"),
+    (["bw_party", "--pous-audit", "a" * 128, "--pous-audit", "b" * 128], "bw_party holds one store"),
+    (["bw_party", "--fixture", "--pous-audit", "a" * 128], "bw_party holds one store"),
+    (["bw_party", "--pous-audit", "a" * 128, "--fixture"], "bw_party holds one store"),
 ])
 def test_a_party_is_refused_any_flag_its_whitelist_lacks_before_it_starts(svc, words, why):
     got, ran = party(svc, words)
@@ -740,8 +747,8 @@ def test_party_log_reads_the_sessions_and_each_ones_stdout_as_the_host_kept_it_f
 
 
 def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc):
-    (rc, _), ran = party(svc, ["bw_party", "--minutes", "10"])
+    (rc, _), ran = party(svc, ["bw_party", "--fixture", "--minutes", "10"])
     assert rc == 0 and ran[0][-9:] == ["-m", "verity.core.protocols.remote_bandwidth.p2_party", "--device", str(svc.parties / "bw"),
                                        "--listen", "0.0.0.0:47612", "--registration",
                                        "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json", "minutes=10"]
-    assert "bw_party takes [--pous-audit AUDIT]" in refused(party(svc, ["bw_party", "--registration", "/tmp/x"])[0])
+    assert "bw_party takes --pous-audit AUDIT | --fixture" in refused(party(svc, ["bw_party", "--registration", "/tmp/x"])[0])
