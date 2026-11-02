@@ -27,7 +27,8 @@ step reads them (default: the ones the step trains); `schedule_updated` gives it
 
 ## Against te_core.flops
 
-`RunGraph.record()` is in `te_core.flops.Counter.record()`'s form. On the toolsmith's tiny tied-head model and the tests'
+`RunGraph.record()` is in `te_core.flops.Counter.record()`'s form, and both count the op sets `te_core.flops` names
+(`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`). On the toolsmith's tiny tied-head model and the tests'
 two-layer decoder (full training, top layer only, LoRA with its adapters in θ or new), the capture's record and the
 Counter's runtime record of the same three steps agree on every step's tokens, GEMM and elementwise MACs, updated MACs,
 updated MACs per token, depth D, depth profile, bits and φ. A capture has no values, so the records' weight digests,

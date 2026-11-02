@@ -27,6 +27,7 @@ but not ingested into the search's ledger.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import re
@@ -41,7 +42,8 @@ REPO = HERE.parents[1]
 ISLANDS = "benchmarks/covert_witness/islands"
 RUNS = Path.home() / ".research" / "runs"
 LEDGER = Path(os.environ.get("CW_LEDGER", Path.home() / ".research" / "covert-witness.jsonl"))
-#: this VM's launches, one line each, which the next launch's node follows in turn
+#: this VM's launches, one line each, and each turn a launch took (a `turn` line, written under `.lock` before the
+#: launch starts, so launches started together take consecutive turns); the next launch's node follows the turns in order
 LAUNCHES = LEDGER.with_name(LEDGER.stem + "-launches.jsonl")
 sys.path.insert(0, str(HERE))
 from pin import source  # noqa: E402
@@ -93,15 +95,21 @@ def island_of(name: str | None, program: str, klass: str, direction: str) -> dic
 
 
 def pick_node(name: str | None, path: Path, launches: Path = LAUNCHES) -> Node:
-    """`name` if the node list has it, else the list's next node after this VM's launches so far."""
+    """`name` if the node list has it, else the list's next node after the turns this VM's launches took so far."""
     known = nodes(path)
     if name:
         node = next((n for n in known if n.name == name), None)
         if node is None:
             raise SystemExit(f"launch: {name} is not in {path} ({', '.join(n.name for n in known)})")
     else:
-        done = len(launches.read_text().splitlines()) if launches.exists() else 0
-        node = known[done % len(known)]
+        launches.parent.mkdir(parents=True, exist_ok=True)
+        with open(launches.with_suffix(".lock"), "a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            lines = launches.read_text().splitlines() if launches.exists() else []
+            turns = sum("turn" in json.loads(line) for line in lines if line.strip())
+            node = known[turns % len(known)]
+            with launches.open("a") as f:
+                f.write(json.dumps({"turn": turns, "node": node.name, "at": time.time()}) + "\n")
     if not node.pool:
         raise SystemExit(f"launch: {path} names no gpu pool for {node.name} (`{node.name} pool=gpu cpu=research`)")
     return node

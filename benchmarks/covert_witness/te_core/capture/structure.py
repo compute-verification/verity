@@ -5,9 +5,13 @@ Every matmul-class node (``mm``, ``addmm``, ``bmm``, ``baddbmm``, ``addbmm``, ``
 `Matmul` per GEMM it runs, with dims (batch, m, k, n), MACs = batch·m·k·n, and which token axes index each dim (from
 the varied captures, `trace`). A matmul-like op outside that list is refused. `macs` is the GEMMs' MACs. The rest of
 the step's share of |C| is counted by te_core.flops's rule, so `c_macs` matches the harness's count: one MAC per output
-element of each elementwise multiplication (`elementwise_macs`: ``mul``, ``addcmul``, ``addcdiv``, ``lerp``, ``add`` and
-``sub`` with a scale, their in-place and ``_foreach_`` forms, fused optimizer steps at their unfused forms'
-multiplications), and dense linear algebra at n³ per matrix (`approx_macs`).
+element of each elementwise multiplication (`elementwise_macs`: ``mul``, ``div``, ``addcmul``, ``addcdiv``, ``lerp``,
+``add`` and ``sub`` with a scale, their in-place and ``_foreach_`` forms, fused optimizer steps at their unfused forms'
+multiplications), and dense linear algebra at n³ per matrix (`approx_macs`). Any other forward op that combines an
+activation with an updated operand (a norm with a trained gain, an add then ``exp``) is an updated node as in
+te_core.flops, at one MAC per element of its largest operand or result (only its indices and result, for a gather):
+a using `Matmul` of part ``elementwise`` (`using_elementwise`), with k its MACs per token, which counts toward the
+upstream MACs of the GEMMs it reaches but not toward their `upstream` counts.
 
 Terms are the training ontology's (note:training-20261102T0700Z-finding-training-ontology):
 
@@ -39,7 +43,7 @@ from __future__ import annotations
 import hashlib
 import json
 import operator
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from fractions import Fraction
 from math import prod
 from typing import Any
@@ -47,7 +51,8 @@ from typing import Any
 import torch
 
 from te_core.capture.trace import BACKWARD, PHASE, CaptureRefused, Trace
-from te_core.flops import ELEMENTWISE_NAMES, FUSED_OPTIMIZER_MACS, LINALG_NAMES, SCALED_NAMES
+from te_core.flops import (ELEMENTWISE_NAMES, FUSED_OPTIMIZER_MACS, GATHERS, GEMM_LIKE, LINALG_NAMES, NOT_GEMM, SCALED_NAMES,
+                           TOKEN_INDEX, _is_view)
 
 __all__ = ["CLASSES", "Matmul", "StepGraph"]
 
@@ -66,11 +71,11 @@ _SCALE = {"mul", "div", "neg", "add", "sub"}
 #: ops that read only their argument's shape
 _SHAPE_ONLY = {"ones_like", "zeros_like", "empty_like", "full_like", "new_zeros", "new_ones", "new_empty", "new_full",
                "sym_size", "sym_numel", "sym_stride", "empty_strided"}
-#: matmul-like names that `_gemms` must account for; any other op with one of these in its name is refused
-_GEMM_LIKE = ("mm", "matmul", "conv", "linear", "attention", "einsum", "tensordot", "bilinear", "lstm", "gru", "rnn", "addmv",
-              "addr", "dot")
-_NOT_GEMM = {"_record_function_enter_new", "_record_function_exit", "conj_physical", "native_dropout_backward"}
+#: matmul-like names that `_gemms` must account for (te_core.flops's); any other op with one of these in its name is refused
+_GEMM_LIKE, _NOT_GEMM = GEMM_LIKE, NOT_GEMM
 _ELEMENTWISE, _SCALED, _FUSED, _LINALG = ELEMENTWISE_NAMES, SCALED_NAMES, FUSED_OPTIMIZER_MACS, LINALG_NAMES
+_TOKEN_INDEX = {p.__name__ for p in TOKEN_INDEX}
+_GATHERS = {p.__name__ for p in GATHERS}
 
 
 def _pk(t) -> str:
@@ -196,6 +201,28 @@ def _other_macs(node) -> tuple[int, str]:
         n = s[-1] if s else 1
         return (prod(s) // max(n, 1)) * n * n, "approx"
     return 0, ""
+
+
+def _work(node) -> int:
+    """A non-GEMM node's work by te_core.flops's rule (`flops._work`): one per element of its largest operand or result,
+    of its index operands and result for a gather."""
+    name = _pk(node.target)
+    args = list(node.args[1:]) + list(node.kwargs.values()) if name in _TOKEN_INDEX else list(node.args) + list(node.kwargs.values())
+    vals = [a.meta.get("val") for a in _arg_nodes_of(args)]
+    if name not in _TOKEN_INDEX or name in _GATHERS:
+        out = node.meta.get("val")
+        vals += list(out) if isinstance(out, (list, tuple)) else [out]
+    return max((v.numel() for v in vals if isinstance(v, torch.Tensor)), default=0)
+
+
+def _arg_nodes_of(args) -> list:
+    out = []
+    for a in args:
+        if isinstance(a, torch.fx.Node):
+            out.append(a)
+        elif isinstance(a, (list, tuple)):
+            out.extend(x for x in a if isinstance(x, torch.fx.Node))
+    return out
 
 
 def _width(dtype: str) -> int:
@@ -444,6 +471,8 @@ class StepGraph:
     digest: str = ""
     elementwise_macs: int = 0
     approx_macs: int = 0
+    #: the forward's non-GEMM using nodes (an activation combined with an updated operand), as te_core.flops counts them
+    using_elementwise: list[Matmul] = field(default_factory=list)
     _inputs: Any = field(default=None, repr=False)
 
     # -- building ---------------------------------------------------------------------------------------------------
@@ -579,6 +608,32 @@ class StepGraph:
             weight = min(classes, key=lambda c: _RANK[c]) if classes else "constant"
             recs.append([n, g, tdims, classes, names, result, role, weight, rv])
 
+        # a forward node that combines an activation with an updated operand is a using node whatever op it is
+        # (te_core.flops): at its elementwise multiplications, else its work (`_work`); a gather's source isn't combined
+        extra = 0
+        for n in nodes:
+            if (n.op != "call_function" or not isinstance(n.target, torch._ops.OpOverload) or _gemms(n)
+                    or phases.get(n, "forward") != "forward" or _is_view(n.target)
+                    or _pk(n.target) in ("_record_function_enter_new", "_record_function_exit")):
+                continue
+            ops = _arg_nodes(n)
+            src = set(_arg_nodes_of(n.args[:1])) if _pk(n.target) in _GATHERS else set()
+            cls_ = [klass(n, a) for a in ops]
+            mixed = [c for a, (c, _) in zip(ops, cls_) if a not in src]
+            if "activation" not in mixed or "updated" not in mixed:
+                continue
+            k, kind = _other_macs(n)
+            if not kind:
+                k = _work(n)
+                extra += k
+            if not k:
+                continue
+            out = n.meta.get("val")
+            g = _G("elementwise", {"batch": 1, "m": k, "k": 1, "n": 1}, tuple(ops), 0 if isinstance(out, (list, tuple)) else None)
+            classes = tuple(c for c, _ in cls_)
+            recs.append([n, g, {}, classes, tuple(p for _, p in cls_), "token", "using",
+                         min(classes, key=lambda c: _RANK[c]), result_value(n, g)])
+
         # upstream using GEMMs, as bitsets over the using records
         using_idx = [i for i, r in enumerate(recs) if r[6] == "using"]
         own: dict[int, int] = {}
@@ -593,10 +648,12 @@ class StepGraph:
                 m |= anc[p] | own.get(p, 0)
             anc[v] = m
         per_tok = [Fraction(_macs(recs[i][1].dims), tokens) for i in using_idx]
-        fwd_mask = 0
+        fwd_mask = gemm_mask = 0
         for bit, i in enumerate(using_idx):
             if phases.get(recs[i][0]) == "forward":
                 fwd_mask |= 1 << bit
+            if recs[i][1].part != "elementwise":
+                gemm_mask |= 1 << bit
 
         matmuls = []
         for n, g, tdims, classes, names, result, role, weight, rv in recs:
@@ -609,8 +666,10 @@ class StepGraph:
             dtypes = tuple(str(a.meta["val"].dtype).removeprefix("torch.") for a in g.operands if isinstance(a, torch.fx.Node))
             matmuls.append(Matmul(n.name, str(n.target), g.part, phases.get(n, "forward"), _macs(g.dims), dict(g.dims), tdims,
                                   classes, names, dtypes, weight, result, role, Fraction(_macs(g.dims), tokens),
-                                  _popcount(m), _popcount(m & fwd_mask), up_macs))
-        other = {"elementwise": 0, "approx": 0}
+                                  _popcount(m & gemm_mask), _popcount(m & fwd_mask & gemm_mask), up_macs))
+        using_elementwise = [m for m in matmuls if m.part == "elementwise"]
+        matmuls = [m for m in matmuls if m.part != "elementwise"]
+        other = {"elementwise": extra, "approx": 0}
         for n in nodes:
             k, kind = _other_macs(n)
             if kind:
@@ -634,7 +693,7 @@ class StepGraph:
                      for s in base.state]
         return cls(name, tokens, dict(zip(axis_names, base.axis_sizes)), matmuls, plist, crossing, upd, trained, gm,
                    digest=_digest(gm), elementwise_macs=other["elementwise"], approx_macs=other["approx"],
-                   _inputs=(base, varied, axis_names))
+                   using_elementwise=using_elementwise, _inputs=(base, varied, axis_names))
 
     def with_updated(self, updated) -> "StepGraph":
         """The same graph classified with another `updated` set (no recapture)."""
@@ -657,7 +716,7 @@ class StepGraph:
         `updated` holds one row [per-token MACs, updated MACs per token upstream, MACs, tokens, weight bits] per using GEMM
         outside the backward, sorted by (upstream, per-token MACs); `log` counts every GEMM by (phase, role, op, dims)."""
         rows = []
-        for m in self.matmuls:
+        for m in self.matmuls + self.using_elementwise:
             if m.role != "using" or m.phase == "backward":
                 continue
             bits = min(_width(d) for c, d in zip(m.operands, m.dtypes) if c == "updated")
