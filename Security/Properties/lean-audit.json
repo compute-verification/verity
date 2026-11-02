@@ -533,6 +533,11 @@
   "Properties.Pouw.Commit.leafRefusals": "3128c3c5eb612819cd9903270c2c719b0d83ef4286a43ce01d1a099d0b569c33",
   "Properties.Pouw.Commit.saltRefusals": "ee7608241f9a4df39f8212af4d4e3bad019968fd21691f19ffce06fa67b2f6ac",
   "Properties.Pouw.Commit.saltSize": "30fd4da534ba9d9d1ac4d9f139c2caddb9c8062ac8d56b30d9bd1695fec59b6a",
+  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
+   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
+   "missing": "honest",
+   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld"
+  },
   "Properties.Pouw.Credit.SecurityProofs.epsAtSound": "9cdd4feb03ed39b17cc2290c38f6aa3b4bde712d77a7e4f22a57da8a746332a6",
   "Properties.Pouw.Credit.SecurityProofs.establishedSound": "c03e3c77fda8ce7a3f84f025ba5617b90e2db2dfdab66fcbb3f209aadeaa67ab",
   "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c",
@@ -613,12 +618,7 @@
   "Properties.SampledProofs.haltCoversOperator": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
   "Properties.SampledProofs.haltEndsOpen": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
   "Properties.SampledProofs.haltIsFinal": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
-  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
-  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
-   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
-   "missing": "honest",
-   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld"
-  }
+  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
  },
  "layers": {
   "Properties.Pouw": {
@@ -2563,7 +2563,17 @@
    "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4"
   },
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial (r : String) :",
+    "  Not",
+    "    (And",
+    "      (Eq (PouwCheck.get (Lean.Json.mkObj (List.cons { fst := \"root\", snd := Lean.Json.str \"\" } List.nil)) \"root\")",
+    "        (Lean.Json.str r))",
+    "      (Eq (SampledProofs.Challenger.withheldOn (Lean.Json.arr List.nil.toArray) r) Bool.true))"
+   ],
+   "assumptions": [],
+   "type_hash": "fbcc042f4fc915866d881c92de580d81bb2f65711b2b8a2b4a1181f315c99ef5"
   },
   "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
    "owner": "@compute-accounting",
@@ -5856,6 +5866,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Credit.SecurityProofs.drawWithheld",
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
@@ -8997,6 +9008,7 @@
     "Properties.Pouw.Commit.frameSizes",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.Credit.SecurityProofs.drawWithheld",
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.liveCoinBinding",
     "Properties.Pouw.LiveSalt.onePair",
@@ -9147,6 +9159,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Credit.SecurityProofs.drawWithheld",
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.liveCoinBinding",
     "Properties.Pouw.LiveSalt.onePair",
@@ -13038,6 +13051,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Credit.SecurityProofs.drawWithheld",
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial",
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses",
@@ -13591,6 +13605,7 @@
     "Properties.Pouw.Check.publishesPublic",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Credit.SecurityProofs.drawWithheld",
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial",
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses",
@@ -16530,6 +16545,7 @@
    },
    "guarantees": [
     "Properties.Pouw.Credit.SecurityProofs.drawWithheld",
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -16576,6 +16592,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Credit.SecurityProofs.drawWithheld",
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
@@ -16746,6 +16763,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Credit.SecurityProofs.drawWithheld",
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
@@ -16866,6 +16884,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Credit.SecurityProofs.drawWithheld",
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
@@ -17008,6 +17027,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Credit.SecurityProofs.drawWithheld",
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
