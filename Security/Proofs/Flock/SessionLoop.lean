@@ -7,9 +7,9 @@ import Proofs.Flock.SessionLoop.FinishParts
 import Proofs.Flock.SessionLoop.FinCommits
 import Proofs.Flock.SessionLoop.FinPoints
 import Proofs.Flock.SessionLoop.FinRounds
+import Proofs.Flock.SessionLoop.TablesSide
 import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.FinishTrunc
-import Proofs.Flock.SessionLoop.FinRounds
 import Proofs.Flock.Claims.ZK.FinHmkLive
 import Proofs.Flock.Claims.ZK.FinishFwRep
 import Proofs.Flock.Claims.ZK.FinTau
