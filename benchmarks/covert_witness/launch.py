@@ -26,11 +26,11 @@ LEDGER = Path(os.environ.get("CW_LEDGER", Path.home() / ".research" / "covert-wi
 DONE = {"done", "failed", "cancelled", "refused", "timeout", "lost"}
 
 
-def research(*args: str, check: bool = True) -> str:
+def research(*args: str, check: bool = True, stdout_only: bool = False) -> str:
     r = subprocess.run(["research", *args], capture_output=True, text=True, cwd=REPO)
     if check and r.returncode:
         raise SystemExit(f"launch: research {' '.join(args[:2])} failed ({r.returncode}): {r.stderr[-2000:]}")
-    return r.stdout + r.stderr
+    return r.stdout if stdout_only else r.stdout + r.stderr
 
 
 def main() -> int:
@@ -75,8 +75,8 @@ def collect(run: str, klass: str, start: str, note: str) -> int:
     w = json.loads((out / "witness.json").read_text()) if (out / "witness.json").exists() else None
     put = json.loads(research("data", "put", "--kind", "evidence/v1", "--tree", str(out), "--preserve", "--json",
                               "--meta", json.dumps({"covert_witness": {"run": run, "class": klass, "start": start,
-                                                                       "note": note}})))
-    art = put.get("art") or put.get("id") or put
+                                                                       "note": note}}), stdout_only=True))
+    art = put["id"]
     row = {"run": run, "art": art, "class": klass, "start": start, "note": note,
            "valid": w and w.get("valid"), "bpb": w and w.get("score", {}).get("bpb"),
            "E_bytes": w and w["E"]["bytes"], "phi": w and w.get("structure", {}).get("phi"),
