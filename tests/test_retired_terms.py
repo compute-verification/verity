@@ -3,8 +3,11 @@ A semantically meaningful part of the registered or actual circuit is a block, a
 (`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty or wrong unit an incorrect
 proof block (Glossary, "Incorrect proof block"). The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
 
-Scanned: every tracked text file but the Lean (`.lean` files, their packages' `lakefile.toml` and their locks' reasons, `lean-audit.json`). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
-line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
+Scanned: every tracked text file but the Lean packages' `lakefile.toml` and their locks' reasons (`lean-audit.json`), and
+of a `.lean` file only its comments and docstrings (``lean_prose``, the lane-text lint's reader), where every site is held
+to its file's count in ``LEAN_LIST``: a file past its count, or with a site and no entry, fails, and the ratchet gate holds
+the list's total from rising, so it only shrinks (``--prune`` lowers it to what the tree holds). A term matches
+case-insensitively as two words, hyphenated, or wrapped onto the next line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
 network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
 them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
@@ -20,8 +23,12 @@ record key stays, and a term written as a quoted mention ("leg"); the table's ro
 """
 from __future__ import annotations
 
+import json
 import re
+import sys
+from collections import Counter
 
+from lint.test_repo_lane_text import lean_prose
 from test_repository import ROOT, _tracked
 
 #: Each retired term and what to write instead.
@@ -43,12 +50,14 @@ _INCORRECT_TERM = re.compile(rf"\b(?:faulty{_SEP}(?:outputs?|steps?|ingress{_SEP
 GLOSSARY = "GLOSSARY.md"
 #: The table's rows that name the terms, in GLOSSARY.
 RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "declared advice"', '| "audit coin"')
+#: The Lean's sites, a count per file, which only shrinks.
+LEAN_LIST = ROOT / "tests/lint/allowlists/lean_retired_terms.json"
 
 #: Retired in the maintained docs' prose, and what to write instead.
 DOC_TERMS = {
     "wrong unit, incorrect unit": "incorrect proof block",
     "faulty proof block, faulty block, faulty set": "incorrect proof block; the incorrect set F",
-    "isolation unit, IU": "isolation block",
+    "isolation unit, IU": "inference block",
     "replay unit": "replay block",
     "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
     "components, the composite's product": "subprotocols, composition",
@@ -68,7 +77,7 @@ DOC_TERMS = {
     "hm96 rows, outside the commitments' docs": "hiding commitments",
     "that period's coins": "before any coins are flipped",
     "rejection dominates, reject dominance": "any rejection rejects the whole",
-    "physical block": "server-time block",
+    "physical block": "server block",
     "thread block": "CTA",
     "KV block": "KV page",
     "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
@@ -200,9 +209,24 @@ PENDING: dict[str, str] = {
 
 
 def scanned(files: list[str]) -> list[str]:
-    """Every file but the Lean, PENDING and this one, which names the terms to find them."""
-    return sorted(f for f in files if not f.endswith((".lean", "lean-audit.json", "lakefile.toml"))
+    """Every file but the Lean packages' configs and locks, PENDING and this one, which names the terms to find them."""
+    return sorted(f for f in files if not f.endswith(("lean-audit.json", "lakefile.toml"))
                   and f not in PENDING and f != "tests/test_retired_terms.py")
+
+
+_CODE_CHAR = re.compile(r"\S")
+
+
+def _lean_prose(text: str) -> str:
+    """A Lean file's comments and docstrings where they stand, and its code's non-blank characters NUL, so that a term
+    wraps from one comment line onto the next but never through code."""
+    starts = [0] + [m.end() for m in re.finditer("\n", text)]
+    out, at = [], 0
+    for line, chunk in lean_prose(text):
+        start = text.index(chunk, max(at, starts[line - 1]))
+        out += [_CODE_CHAR.sub("\0", text[at:start]), chunk]
+        at = start + len(chunk)
+    return "".join(out) + _CODE_CHAR.sub("\0", text[at:])
 
 
 def _read(f: str) -> str | None:
@@ -220,6 +244,8 @@ def offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]],
         incorrect = f.startswith(INCORRECT)
         if text is None or not ("unit" in text.lower() or "service" in text.lower() or "faulty" in text.lower()):
             continue
+        if f.endswith(".lean"):
+            text = _lean_prose(text)
         allowed = [(m.start(), m.end(), s) for s in ALLOWED for m in re.finditer(re.escape(s), text)]
         lines = text.splitlines()
         terms = (_TERM, _INCORRECT_TERM) if incorrect else (_TERM,)
@@ -257,14 +283,35 @@ def doc_offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, st
     return out, used
 
 
+def lean_allowed() -> Counter:
+    """Each Lean file's allowed sites, from LEAN_LIST."""
+    doc = json.loads(LEAN_LIST.read_text(encoding="utf-8"))
+    counts = Counter({e["file"]: e["count"] for e in doc["entries"]})
+    assert len(counts) == len(doc["entries"]) and all(type(n) is int and n >= 1 for n in counts.values()), (
+        f"{LEAN_LIST.name}: each entry is one file's {{file, count}}, its count a positive int")
+    return counts
+
+
+def over_lean_list(found: list[tuple[str, int, str]], have: Counter) -> list[str]:
+    """Each Lean file holding more sites than ``have`` allows, with its sites."""
+    lean = Counter(f for f, *_ in found if f.endswith(".lean"))
+    return [f"  {f}: {n} found, {have[f]} allowed\n" + "\n".join(f"    {f}:{line}: {term}" for g, line, term in found if g == f)
+            for f, n in sorted(lean.items()) if n > have[f]]
+
+
 def test_no_retired_term_in_prose():
-    bad, used = offenders(_tracked())
+    found, used = offenders(_tracked())
+    bad = [o for o in found if not o[0].endswith(".lean")]
+    say = ("say " + " and ".join(f'"{new}" for "{old}"' for old, new in TERMS.items())
+           + f" (in {', '.join(INCORRECT)}, also " + " and ".join(f'"{new}" for "{old}"' for old, new in INCORRECT_TERMS.items())
+           + ")" + f' (ARCHITECTURE.md, Glossary, "Block"; {GLOSSARY})')
     assert not bad, (
-        "a retired term: say " + " and ".join(f'"{new}" for "{old}"' for old, new in TERMS.items())
-        + f" (in {', '.join(INCORRECT)}, also " + " and ".join(f'"{new}" for "{old}"' for old, new in INCORRECT_TERMS.items())
-        + ")"
-        + f' (ARCHITECTURE.md, Glossary, "Block"; {GLOSSARY}); a spelling baked into a record or a digest goes in ALLOWED'
-        + " with its reason:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
+        f"a retired term: {say}; a spelling baked into a record or a digest goes in ALLOWED with its reason:\n"
+        + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
+    over = over_lean_list(found, lean_allowed())
+    assert not over, (
+        f"a retired term in a Lean comment or docstring, past {LEAN_LIST.relative_to(ROOT)}, which only shrinks: {say}, "
+        f"and once a file holds fewer, `python3 tests/test_retired_terms.py --prune` lowers its count:\n" + "\n".join(over))
     unused = set(ALLOWED) - used - doc_offenders(_tracked())[1]
     assert not unused, f"ALLOWED entries that match nothing any more: {sorted(unused)}"
 
@@ -275,6 +322,47 @@ def test_no_retired_term_in_the_maintained_docs():
         "a retired term in a maintained doc: say " + "; ".join(f'{new} for "{old}"' for old, new in DOC_TERMS.items())
         + f" (ARCHITECTURE.md's Glossary, {GLOSSARY}). A path or a record key that keeps it goes in backticks, and a word"
         + " in another sense goes in ALLOWED with its reason:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
+
+
+def _normal(name: str) -> str:
+    return re.sub(r"^(?:(?:the|a|an|or|and)\s+)+", "", " ".join(name.lower().split()))
+
+
+def older_names(glossary: str) -> set[str]:
+    """Each name GLOSSARY's Older names table quotes in its first column: not one qualified by its sense (`"block" for a
+    tile`, `"unit" alone meaning one`), nor one it keeps (`"stage", outside "one-stage"`)."""
+    table = re.search(r"^## Older names\n(.*?)(?=^## |\Z)", glossary, re.M | re.S)[1]
+    names = set()
+    for cell in (re.split(r"(?<!\\)\|", line)[1] for line in table.splitlines() if line.startswith("| ")):
+        for m in re.finditer(r'"([^"]*)"', cell):
+            if not (cell[m.end():].startswith((" for ", " meaning ", " alone ")) or cell[:m.start()].endswith("outside ")):
+                names.add(_normal(m[1]))
+    return names
+
+
+def stale_replacements(tables: dict[str, str], old: set[str]) -> list[tuple[str, str]]:
+    """(row, the name it prescribes) for each replacement in ``tables`` that is one of ``old``."""
+    return [(row, piece) for row, new in tables.items() for piece in map(_normal, re.split(r"[,;:()]", new)) if piece in old]
+
+
+def test_no_replacement_is_an_older_name():
+    old = older_names((ROOT / GLOSSARY).read_text(encoding="utf-8"))
+    stale = stale_replacements({**TERMS, **INCORRECT_TERMS, **DOC_TERMS}, old)
+    assert not stale, (f"a row prescribes a name {GLOSSARY}'s Older names table retires: write that table's Term instead:\n"
+                       + "\n".join(f'  "{row}": "{name}"' for row, name in stale))
+
+
+def test_the_older_names_are_read_from_the_table():
+    """On a toy Glossary: a row that prescribes an older name (`"isolation block"`, `"server-time block"`, one piece of a
+    longer replacement) is found, and a sense-qualified or kept name isn't an older name."""
+    toy = ('## Older names\n\n| Old name | Term |\n|---|---|\n| "isolation unit" (IU), "isolation block" | inference block |\n'
+           '| "server-time block", "window" for a server\'s gates, \\|C\\| | server block |\n'
+           '| "stage", outside "one-stage" | phase |\n| "unit" alone meaning one | proof block |\n\n## Next\n\n| "leg" | x |\n')
+    assert older_names(toy) == {"isolation unit", "isolation block", "server-time block", "stage"}
+    assert stale_replacements({"isolation unit, IU": "isolation block", "physical block": "the server-time block",
+                               "replay unit": "replay block", "unit": "a phase, or the stage (a one-stage run)"},
+                              older_names(toy)) == [("isolation unit, IU", "isolation block"),
+                                                    ("physical block", "server-time block"), ("unit", "stage")]
 
 
 def test_the_glossary_records_the_retired_terms():
@@ -290,14 +378,19 @@ def test_the_scan_reads_each_form():
         "a.py": '"""A proof unit, two Proof-Units and a proof\n    units wrap."""\nx.proof_unit  # a faulty unit; unit tests\n',
         "b.rs": "/// the proof\n/// unit of it; a bulletproof unit\nlet reason = \"N, the round's proof units\";\n",
         "d.py": '# the Proof-Service and a proof\n# services; proof_service, verity/proof-service/stream/v0; a faulty service\n',
-        "c.lean": "-- a proof unit",
+        "c.lean": ('def s := "a proof unit"  -- the proof\n  -- unit, wrapped\n/-- a faulty\n  unit -/ def proof_unit := 1\n'
+                   "-- a proof\ndef unit := 2\n"),
         "verity/README.md": "a proof unit",
         GLOSSARY: '| "proof unit", and "unit" alone meaning one | proof block |\n| other | a proof unit |\n',
     }
     found, used = offenders(list(docs), read=docs.__getitem__)
     assert found == [(GLOSSARY, 2, "proof unit"), ("a.py", 1, "proof unit"), ("a.py", 1, "Proof-Units"),
                      ("a.py", 1, "proof units"), ("a.py", 3, "faulty unit"), ("b.rs", 1, "proof /// unit"),
+                     ("c.lean", 1, "proof -- unit"), ("c.lean", 3, "faulty unit"),
                      ("d.py", 1, "Proof-Service"), ("d.py", 1, "proof # services")]
+    assert over_lean_list(found, Counter({"c.lean": 2})) == []
+    assert over_lean_list(found, Counter({"c.lean": 1})) == [
+        "  c.lean: 2 found, 1 allowed\n    c.lean:1: proof -- unit\n    c.lean:3: faulty unit"]
     assert used == {"N, the round's proof units", "verity/proof-service/"}
 
 
@@ -405,3 +498,17 @@ def test_the_doc_scan_reads_the_incorrect_terms():
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "faulty proof blocks"), ("a.md", 1, "faulty proof block"), ("a.md", 2, "faulty-block"),
         ("a.md", 2, "faulty set")]
+
+
+def dump_lean_list(counts: Counter) -> None:
+    lines = [f"    {json.dumps({'file': f, 'count': n}, ensure_ascii=False)}" for f, n in sorted(counts.items()) if n > 0]
+    LEAN_LIST.write_text('{\n  "rule": "retired terms in Lean comments and docstrings (tests/test_retired_terms.py)",\n'
+                         '  "entries": [\n' + ",\n".join(lines) + "\n  ]\n}\n", encoding="utf-8")
+
+
+if __name__ == "__main__":
+    if sys.argv[1:] not in (["--prune"], ["--record"]):
+        sys.exit("python3 tests/test_retired_terms.py --prune    # lower LEAN_LIST to what this tree holds\n"
+                 "python3 tests/test_retired_terms.py --record   # LEAN_LIST is what this tree holds (the gate holds a rise)")
+    lean = Counter(f for f, *_ in offenders(_tracked())[0] if f.endswith(".lean"))
+    dump_lean_list(lean_allowed() & lean if sys.argv[1] == "--prune" else lean)
