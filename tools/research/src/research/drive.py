@@ -83,8 +83,10 @@ circuit-check and ratchet-gate among them, which `_promote` doesn't wait for (po
 verified `checked` commit, below the tip, for ratchet-gate to judge the
 landings above, or above ratchet-gate's own base (`--ratchet-base JUDGED`, `_ratchet_base`): the tip of the newest run whose
 ratchet-gate ended with a verdict (`postland["ratchet_judged"]`: passed, or failed naming each change it fails,
-`_ratchet_judged`), once a revert undid each of those, so a red step elsewhere, which holds `verified`, doesn't make each run
-re-judge every landing since; while one stands, the base that run judged above; the last verified commit when none was
+`_ratchet_judged`), once each of those was reverted or fixed forward (a merge landed above it whose title names its PR, as
+`_fix` reads a landed fix: `_ratchet_standing`), so a red step elsewhere, which holds `verified`, doesn't make each run
+re-judge every landing since; while one stands, the first parent of the oldest that stands, so the gate fails it again
+without re-judging the merges below it, and the run's log names each; the last verified commit when none was
 judged or the judged tip left the tip's history (a revert or reset); with drive.toml's `after_landing_shards` N, as N runs at
 once (`--shard K/N` each, on machines of `on` no other
 shard has while there are N: `shard_machines`), passed once every shard passed, launched once circuit-check's records step
@@ -1753,18 +1755,43 @@ class Driver:
             return
         pl["ratchet_judged"] = {"tip": tip, "base": run.get("ratchet_base"), "failed": failed}
 
-    def _ratchet_base(self, pl: dict, tip: str, below: str | None) -> str | None:
-        """ratchet-gate's base in an after-landing run of ``tip`` (`train.sh --ratchet-base`): the newest tip whose run's
-        ratchet-gate gave a verdict (`ratchet_judged`) once a revert at or below ``tip`` undid each change it failed, so a
-        reverted culprit's revert lies above the base and is judged; while one stands, the base that run's gate judged above,
-        so the gate fails it again.  Either only strictly below ``tip`` and at or above ``below`` (the run's `--base`); else,
-        none judged or a revert or reset that left it off ``tip``'s history, ``below``."""
+    def _ratchet_base(self, pl: dict, tip: str, below: str | None) -> tuple[str | None, list[str]]:
+        """ratchet-gate's base in an after-landing run of ``tip`` (`train.sh --ratchet-base`), and the name of each change
+        that holds it (`_ratchet_standing`).  The newest tip whose run's ratchet-gate gave a verdict (`ratchet_judged`), once
+        each change it failed was reverted or fixed forward at or below ``tip``: the revert, or a fix that landed after that
+        run, lies above the base and is judged.  While one stands, the first parent of the oldest that stands, when that is a
+        PR's merge above the base that run's gate judged above, else that base: the gate fails it again without judging the
+        merges below it.  Each only strictly below ``tip`` and at or above ``below`` (the run's `--base`); else, none judged
+        or a revert or reset that left it off ``tip``'s history, ``below``."""
         j = pl.get("ratchet_judged") or {}
-        undone = all(self._undone(c, tip) for c in j.get("failed") or ())
-        for c in (j.get("tip") if undone else None, j.get("base")):
+        standing = self._ratchet_standing(j, tip)
+        names, judged_above, under = [n for n, _ in standing], j.get("base"), None
+        if standing and (oldest := standing[0][1]) and judged_above:
+            under = _git(self.repo, "rev-parse", "--verify", "-q", f"{oldest}^1", check=False).stdout.strip()
+            under = under if under and self._ancestor(judged_above, under) else None
+        for c in (None if standing else j.get("tip"), under, judged_above):
             if c and c != tip and self._ancestor(c, tip) and (not below or self._ancestor(below, c)):
-                return c
-        return below
+                return c, names
+        return below, names
+
+    def _ratchet_standing(self, j: dict, tip: str) -> list[tuple[str, str | None]]:
+        """Each change ``j``'s gate failed (`ratchet_judged`, oldest first as the gate names them) that stands at ``tip``, as
+        (its name, its PR's merge or None): neither undone by a revert above it at or below ``tip`` (`_undone`) nor fixed
+        forward, by a merge the queue landed above it at or below ``tip`` whose title names its PR (`#N`, as a landed fix of a
+        red does: `_fix`).  `fixes step ratchet-gate` names no culprit, so it fixes none forward; nor is a failed range of
+        commits, no PR's merge, fixed forward: only a revert undoes it."""
+        out: list[tuple[str, str | None]] = []
+        for c in j.get("failed") or ():
+            if self._undone(c, tip):
+                continue
+            landed = self.landed_since(f"{c}^1", tip) if self._ancestor(c, tip) else []
+            if not (own := next((m for m in landed if m.commit == c), None)):
+                out.append((c[:12], None))
+                continue
+            says = re.compile(rf"#{own.pr}\b")
+            if not any(m.pr != own.pr and says.search(_out(self.repo, "log", "-1", "--format=%s", m.commit)) for m in landed):
+                out.append((f"#{own.pr} ({c[:12]})", c))
+        return out
 
     def _own(self, m: Member) -> set[str]:
         """The files ``m``'s merge onto `next` changes, read once per tick."""
@@ -2154,7 +2181,7 @@ class Driver:
         # verified `main` itself, so its base is the tip's first parent; above it, the last tip its gate judged (`_ratchet_base`)
         below = (pl["verified"] if pl["verified"] != main else
                  _git(self.repo, "rev-parse", "--verify", "-q", f"{main}^1", check=False).stdout.strip()) or None
-        ratchet = self._ratchet_base(pl, main, below)
+        ratchet, standing = self._ratchet_base(pl, main, below)
         rb = {"ratchet_base": ratchet} if ratchet != below else {}
         flags = ((f" --base {below[:12]}" if below else "") + (f" --ratchet-base {ratchet[:12]}" if rb else "")
                  + "".join(f" --{k.replace('_', '-')}" for k, on in extra.items() if on))
@@ -2198,6 +2225,8 @@ class Driver:
         q.log(f"research queue drive: post-landing run of `{self.q.into}` {main[:12]} ({steps}): {_ids(rec)}; "
               f"{len(pl['pending'])} landing(s) since {pl['verified'][:12]}"
               + (f"; ratchet-gate judges those above {ratchet[:12]}" if rb else "")
+              + (f"; {', '.join(standing)} failed ratchet-gate and stand(s): no revert or landed merge naming it as fixed"
+                 if standing else "")
               + (f"; circuit-check's records {cc['cc_records_from']}" if cc else "") + _of_plan(plan, "; shards"))
 
     def _plan(self, drive: dict, pl: dict, tip: str, steps: str) -> dict | None:

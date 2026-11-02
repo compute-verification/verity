@@ -1670,11 +1670,9 @@ def test_ratchet_gate_judges_above_the_last_tip_its_gate_passed_at_while_verifie
     assert any(f"; ratchet-gate judges those above {t1[:12]}" in line for line in world.logs), world.logs
 
 
-def test_after_a_red_ratchet_gate_whose_culprit_was_reverted_the_gate_judges_above_that_runs_tip(world, monkeypatch, tmp_path):
-    """A ratchet-gate that failed naming the merge it fails is a verdict too: once drive reverted that culprit, the next run's
-    gate judges above the red run's tip, where the revert lies, so the revert is judged; `verified` stays below."""
-    from research.drive import FIX_WINDOW_S
-
+def _red_ratchet(world, monkeypatch, tmp_path) -> tuple[Review, str, str, str]:
+    """#1, #2 and #3 landed, and the after-landing run of their tip ended with ratchet-gate failing #2's merge: (the harness,
+    that tip, `verified` below it, #2's merge)."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.gh.put(2, world.change({"c.py": "C = 1\n"}))
@@ -1695,6 +1693,15 @@ def test_after_a_red_ratchet_gate_whose_culprit_was_reverted_the_gate_judges_abo
     pl = h.postland()
     assert pl["red"]["step ratchet-gate"]["culprit"][:1] == [2] and pl["verified"] == verified, world.logs
     assert pl["ratchet_judged"] == {"tip": tip, "base": verified, "failed": [merge2]}
+    return h, tip, verified, merge2
+
+
+def test_after_a_red_ratchet_gate_whose_culprit_was_reverted_the_gate_judges_above_that_runs_tip(world, monkeypatch, tmp_path):
+    """A ratchet-gate that failed naming the merge it fails is a verdict too: once drive reverted that culprit, the next run's
+    gate judges above the red run's tip, where the revert lies, so the revert is judged; `verified` stays below."""
+    from research.drive import FIX_WINDOW_S
+
+    h, tip, verified, merge2 = _red_ratchet(world, monkeypatch, tmp_path)
     h.clock += FIX_WINDOW_S + 1
     h.tick()
     revert = _main(world)
@@ -1705,9 +1712,41 @@ def test_after_a_red_ratchet_gate_whose_culprit_was_reverted_the_gate_judges_abo
     assert _git(world.origin, "rev-list", f"{kw['ratchet_base']}..{revert}") == revert   # the revert lies above the base
 
 
+def test_after_a_red_ratchet_gate_fixed_forward_by_a_landed_merge_naming_its_culprit_the_gate_judges_above_that_runs_tip(
+        world, monkeypatch, tmp_path):
+    """A red fixed forward, by a later PR whose merge's title names the culprit, rather than by drive's revert: the base
+    moves to the red run's tip as it does once the culprit is reverted, so the next run judges the fix and not the merges
+    below it again, and the culprit's merge, below the base, is not failed again in every run."""
+    h, tip, verified, merge2 = _red_ratchet(world, monkeypatch, tmp_path)
+    world.gh.put(4, world.change({"d.txt": "4\n"}))
+    world.gh.prs[4] = Q.PR(4, world.gh.prs[4].head, "shrink p01 back (fixes #2's ratchet-gate red)", "Lane `lane-4`.")
+    h.review(4)
+    assert h.tick().startswith("landed #4"), world.logs
+    t2, _, kw = h.posted[-1]
+    assert t2 == _main(world) and kw["base"] == verified == h.postland()["verified"] and kw["ratchet_base"] == tip, world.logs
+    assert [m.pr for m in h.d.landed_since(kw["ratchet_base"], t2)] == [4]                # the fix alone is judged
+    assert not any("stand(s)" in line for line in world.logs), world.logs
+
+
+def test_a_ratchet_gate_culprit_left_unfixed_is_named_each_run_and_the_merges_below_it_are_not_judged_again(
+        world, monkeypatch, tmp_path):
+    """A culprit neither reverted nor named as fixed by a landed merge (one merely landing above it isn't a fix) keeps the
+    base below it: the next run's gate judges from its merge up, so it fails it again, and the run's log names it, while the
+    merges below it, judged already, aren't judged again."""
+    h, tip, verified, merge2 = _red_ratchet(world, monkeypatch, tmp_path)
+    world.gh.put(4, world.change({"d.txt": "4\n"}))
+    h.review(4)
+    assert h.tick().startswith("landed #4"), world.logs
+    t2, _, kw = h.posted[-1]
+    assert kw["base"] == verified and kw["ratchet_base"] == _git(world.origin, "rev-parse", f"{merge2}^1") != tip, world.logs
+    assert [m.pr for m in h.d.landed_since(kw["ratchet_base"], t2)] == [2, 3, 4]          # #1, below the culprit, isn't
+    assert any(f"; #2 ({merge2[:12]}) failed ratchet-gate and stand(s)" in line for line in world.logs), world.logs
+
+
 def test_ratchet_gates_base_falls_back_to_verified_unless_the_judged_tip_lies_on_the_tips_history(world, monkeypatch):
     """`_ratchet_base`: the judged tip only strictly below the tip and at or above the verified commit; while a change its gate
-    failed stands (no revert at or below the tip), the base that gate judged above; else the verified commit: none judged, or a
+    failed stands (neither reverted nor fixed forward at or below the tip; a change not a PR's merge is named by its commit),
+    the base that gate judged above; else the verified commit: none judged, or a
     revert or reset that left the judged tip off the tip's history."""
     h = Review(world, monkeypatch)
     m0 = _main(world)
@@ -1722,7 +1761,7 @@ def test_ratchet_gates_base_falls_back_to_verified_unless_the_judged_tip_lies_on
     _git(h.d.repo, "fetch", "-q", "origin", *(f"refs/dev/{x}" for x in (a, b, c, off, rev)))
 
     def base(judged: dict | None, tip: str, below: str = m0) -> str | None:
-        return h.d._ratchet_base({"ratchet_judged": judged} if judged else {}, tip, below)
+        return h.d._ratchet_base({"ratchet_judged": judged} if judged else {}, tip, below)[0]
 
     assert base(None, c) == m0                                                            # none judged
     assert base({"tip": b, "base": m0, "failed": []}, c) == b                              # passed at b
@@ -1731,6 +1770,7 @@ def test_ratchet_gates_base_falls_back_to_verified_unless_the_judged_tip_lies_on
     assert base({"tip": a, "base": m0, "failed": []}, c, below=b) == b                     # below the verified commit
     assert base({"tip": c, "base": a, "failed": [b]}, rev) == c                            # its failure reverted at or below
     assert base({"tip": b, "base": a, "failed": [b]}, c) == a                              # b stands: where that gate began
+    assert h.d._ratchet_base({"ratchet_judged": {"tip": b, "base": a, "failed": [b]}}, c, m0)[1] == [b[:12]]  # ... named
     assert base({"tip": b, "base": off, "failed": [b]}, c) == m0                           # ... unless that is off the history
 
 
