@@ -9,7 +9,9 @@ the adapters' MACs are updated). Knobs, each a mechanism of the direction:
 - placement: `--targets` (all, out, attn, mlp, qkv, qv, none, or leaf names), `--layers` (all, top:N, A-B, or a list);
 - size: `--rank` (0: the largest uniform rank that fits `--e-bytes`, default the cap less 512), `--rank-map leaf=R,...`;
 - norm gains: `--norms` (none, all, final, adapted: the adapted blocks' and the final norm);
-- factor precision: `--dtype` bf16 or f16 (f16 rescales A and B to unit max and moves the factor into the scale);
+- factor precision: `--dtype` bf16 or f16 (f16 rescales A and B to unit max and moves the factor into the scale), or
+  `--bits` 4 or 8: CWLORA2's integer factors, one f16 scale per rank component (`prepare.encode_lora2`), trained through
+  their rounding (straight-through), the gains still in `--dtype`;
 - initialization: `--init` gauss (A ~ N(0, 1/d_in), B = 0), orth (A orthonormal rows), grad (A the top-r right singular
   vectors of the targets' full gradient over `--init-batches` batches, B = 0; the pass and the weight gradients are logged);
 - optimizer: AdamW with `--b-lr-mult` (LoRA+), `--opt riemann` (each factor's gradient preconditioned by the other's Gram,
@@ -87,9 +89,22 @@ def norms_of(params: dict, spec: str, layers: set[int]) -> list[str]:
     raise SystemExit(f"{KLASS}: --norms {spec}: none, all, final or adapted")
 
 
-def e_bytes(theta, ranks: dict[str, int], norms, dtype) -> int:
+def e_bytes(theta, ranks: dict[str, int], norms, dtype, bits: int = 0) -> int:
     fac = {n: (torch.zeros(r, theta[n].shape[1]), torch.zeros(theta[n].shape[0], r), 1.0) for n, r in ranks.items()}
-    return len(prepare.encode_lora(fac, dtype, {n: theta[n] for n in norms}))
+    full = {n: theta[n] for n in norms}
+    return len(prepare.encode_lora2(fac, bits, dtype, full=full) if bits else prepare.encode_lora(fac, dtype, full))
+
+
+def adapter(A, B, s: float, bits: int):
+    """The forward hook adding s · B(A x) to a target's output; with `bits`, A and B as CWLORA2 stores them, with the
+    rounding's gradient passed straight through."""
+    def hook(m, inp, out):
+        fa, fb = A, B
+        if bits:
+            qa, qb = prepare.lora2_factors(A, B, bits)
+            fa, fb = A + (qa - A).detach(), B + (qb - B).detach()
+        return out + s * F.linear(F.linear(inp[0], fa), fb)
+    return hook
 
 
 def ranks_for(targets: list[str], rank: int, rank_map: dict[str, int]) -> dict[str, int]:
@@ -181,6 +196,8 @@ def main() -> int:
     ap.add_argument("--e-bytes", type=int, default=0, help="the byte target the rank fits (default: the class's cap less 512)")
     ap.add_argument("--norms", default="all")
     ap.add_argument("--dtype", default="bf16", choices=("bf16", "f16"))
+    ap.add_argument("--bits", type=int, default=0, choices=(0, *prepare.LORA2_BITS),
+                    help="0: CWLORA1 factors in --dtype; 4 or 8: CWLORA2 integer factors")
     ap.add_argument("--init", default="gauss", choices=("gauss", "orth", "grad"))
     ap.add_argument("--init-batches", type=int, default=4)
     ap.add_argument("--scale", default="rs", choices=("rs", "one"), help="rs: s = sqrt(d_in / r); one: s = 1")
@@ -214,10 +231,10 @@ def main() -> int:
     rank = a.rank
     if not rank and targets:
         rank = 1
-        while e_bytes(theta, ranks_for(targets, rank + 1, rank_map), norms, a.dtype) <= target_bytes:
+        while e_bytes(theta, ranks_for(targets, rank + 1, rank_map), norms, a.dtype, a.bits) <= target_bytes:
             rank += 1
     ranks = ranks_for(targets, rank, rank_map)
-    size = e_bytes(theta, ranks, norms, a.dtype)
+    size = e_bytes(theta, ranks, norms, a.dtype, a.bits)
     if cap is not None and size > cap:
         raise SystemExit(f"{KLASS}: ranks {sorted(set(ranks.values()))} on {len(ranks)} weights and {len(norms)} norms is "
                          f"{size} bytes, over the cap of {cap}")
@@ -248,7 +265,7 @@ def main() -> int:
         s = math.sqrt(w.shape[1] / r) if a.scale == "rs" else 1.0
         factors[n] = (A, B, s)
         mod = net.inner.get_submodule(n.removesuffix(".weight"))
-        mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
+        mod.register_forward_hook(adapter(A, B, s, a.bits))
     fwd = torch.compile(net)
     groups = [{"params": [A for A, _, _ in factors.values()], "lr": a.lr, "weight_decay": a.wd},
               {"params": [B for _, B, _ in factors.values()], "lr": a.lr * a.b_lr_mult, "weight_decay": a.wd},
@@ -293,8 +310,8 @@ def main() -> int:
             print(json.dumps({"step": step + 1, "loss": round(total, 4), "ema": round(ema, 4),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
         if step + 1 in marks:
-            snaps.append((encode(factors, params, norms, a.dtype), len(steps)))
-    blob = encode(factors, params, norms, a.dtype)
+            snaps.append((encode(factors, params, norms, a.dtype, a.bits), len(steps)))
+    blob = encode(factors, params, norms, a.dtype, a.bits)
     model = prepare.decode(theta, blob)
     prepare.submit(Path(a.out), a.start, KLASS, blob, model, trainable, steps, changed=list(ranks) + norms,
                    notes={"method": "lora", "direction": "lowrank", "rank": rank, "ranks": ranks, "args": vars(a),
@@ -302,7 +319,10 @@ def main() -> int:
     return 0
 
 
-def encode(factors: dict, params: dict, norms: list[str], dtype: str) -> bytes:
+def encode(factors: dict, params: dict, norms: list[str], dtype: str, bits: int = 0) -> bytes:
+    if bits:
+        return prepare.encode_lora2({n: (A.detach().float(), B.detach().float(), s) for n, (A, B, s) in factors.items()},
+                                    bits, dtype, full={n: params[n] for n in norms})
     out = {}
     for n, (A, B, s) in factors.items():
         A, B = A.detach().float(), B.detach().float()
