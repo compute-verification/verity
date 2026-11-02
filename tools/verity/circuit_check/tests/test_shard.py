@@ -786,12 +786,26 @@ def test_a_binding_from_its_slice_finds_the_boolean_definitions_and_statics_a_fu
 def test_one_binding_s_edit_changes_its_own_slice_alone(tmp_path):
     """The slices are a function of the tree's bytes alone: two trees of the same bytes at two paths cut the same bytes.  An
     edit to a file only ``_xor_roots`` reads (its Definition's body) changes that binding's slice and no other's, nor the
-    shared part: a graph keying each binding's task on its slice reruns that binding's alone."""
+    shared part: a graph keying each binding's task on its slice reruns that binding's alone.  ``_model_roots``' binding asks
+    `inspect` for the module of its frame, as torch's import does, which looks for the source of every module loaded, that
+    file's among them: its record holds that module by whether it is there (``present``, `units._unchanged`), so its slice is
+    unchanged too, and the edited tree's records cut from the first tree's rebuild ``_xor_roots``' alone, into the same slices
+    as from none."""
     trees = {}
-    for name in ("a", "b", "c"):
+    for name in ("a", "b", "c", "warm"):
         trees[name] = _tree(tmp_path / name)
         _bindings(trees[name], *UNIT_BINDINGS)
-    _edit(trees["b"], "syn/xdef.py", "B.call(SynXor, a, b)", "B.call(SynXor, b, a)")
-    got = {name: _digests(_slices(root)[1]) for name, root in trees.items()}
+        _edit(trees[name], "syn/catalog.py", "def model():\n",
+              "def model():\n    import inspect\n    import sys\n\n    inspect.getmodule(sys._getframe())\n")
+    for name in ("b", "warm"):
+        _edit(trees[name], "syn/xdef.py", "B.call(SynXor, a, b)", "B.call(SynXor, b, a)")
+    cuts = {name: _slices(root)[1] for name, root in trees.items() if name != "warm"}
+    got = {name: _digests(cut) for name, cut in cuts.items()}
+    index = json.loads((cuts["a"] / "index.json").read_text())["bindings"]
+    (model,) = json.loads((cuts["a"] / index["_model_roots"]).read_text())["entries"]
+    assert model["reads"]["present"].get("syn.xdef") is True, model["reads"]["present"]
     assert got["a"] == got["c"] and len(got["a"]) == 6, got
     assert {k for k in got["a"] if got["a"][k] != got["b"][k]} == {"_xor_roots"}, got
+    shutil.copytree(trees["a"] / "cache", trees["warm"] / "cache")
+    rep, cut = _slices(trees["warm"])
+    assert rep["rebuilt"] == ["_xor_roots"] and _digests(cut) == got["b"], (rep, _digests(cut))

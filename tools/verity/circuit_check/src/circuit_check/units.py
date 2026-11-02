@@ -15,8 +15,9 @@ closures, its units by digest and what the process read outside every recording;
 root (one run for what it sets, as `syn.knob`'s), whose reads every record holds.  The registered primitives and static-free
 composites are one more record, ``<registered>``.
 
-A record counts only when its every read is unchanged where it was (never through a move) and the roots its binding made now
-are the ones it lists; else its binding is built as the catalog builds it and its record stored again.  The task list is then
+A record counts only when its every read is unchanged where it was (never through a move; a module whose source `inspect`
+looked for only by whether it is there, `_unchanged`) and the roots its binding made now are the ones it lists; else its
+binding is built as the catalog builds it and its record stored again.  The task list is then
 what `cli._tasks` would build: `targets.select` over what the roots reach in `targets.reachable`'s order, PoUW's roots whole,
 each target's units (`targets.BINDINGS`), whether it is a Call (`targets.call_families`: the word Call families, and the
 Boolean version of each suite Definition of one, made from its binding where no built binding holds it, `_materialize`) and
@@ -363,7 +364,9 @@ def _sited(v: Any) -> Any:
 
 def _unchanged(was: dict, now: dict) -> bool:
     """Every read as recorded, where it was: a module or unit by its content and where its import sites resolve (`_sited`), a
-    package an enumerator listed by the modules it lists."""
+    package an enumerator listed by the modules it lists, a module whose source `inspect` looked for (``present``) by whether
+    it is there, as `cache.declared` declares it: torch's import asks for the source of every module the process loaded, and
+    each record holds what the process read outside every recording."""
     for kind, v in was.items():
         if kind == "enums":
             if any((a is None) != (b is None) or (a is not None and a.keys() != b.keys())
@@ -372,6 +375,9 @@ def _unchanged(was: dict, now: dict) -> bool:
         elif kind in ("modules", "units"):
             if v.keys() != now[kind].keys() or any(_sited(x) != _sited(now[kind][r]) for r, x in v.items()):
                 return False
+        elif kind == "present":
+            if v.keys() != now[kind].keys() or any((d is None) != (now[kind][n] is None) for n, d in v.items()):
+                return False
         elif now.get(kind) != v:
             return False
     return True
@@ -379,9 +385,10 @@ def _unchanged(was: dict, now: dict) -> bool:
 
 def _held(reads: dict) -> dict:
     """What `_unchanged` holds a record's reads to, as JSON: a package an enumerator listed by the modules it lists, a module or
-    unit by `_sited`, the rest as digested."""
+    unit by `_sited`, a module whose source `inspect` looked for by whether it is there, the rest as digested."""
     return json.loads(json.dumps({k: {p: None if a is None else sorted(a) for p, a in v.items()} if k == "enums" else
-                                  {r: _sited(x) for r, x in v.items()} if k in ("modules", "units") else v
+                                  {r: _sited(x) for r, x in v.items()} if k in ("modules", "units") else
+                                  {n: d is not None for n, d in v.items()} if k == "present" else v
                                   for k, v in reads.items()}))
 
 
