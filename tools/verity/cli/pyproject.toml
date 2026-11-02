@@ -1,7 +1,7 @@
 [project]
 name = "verity-cli"
 version = "0.0.0"
-description = "`verity`: the repository's one command (check, bench, run, config, --remote), dispatching to the tools beside it."
+description = "`verity`: the repository's one command (check, tasks, bench, run, config, --remote), dispatching to the tools beside it."
 requires-python = ">=3.12"
 dependencies = []
 

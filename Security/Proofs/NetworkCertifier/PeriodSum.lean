@@ -4,7 +4,7 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 /-!
 # The period sum: per-window leak bounds summed over a period
 
-A period `T` is a finite set of windows over one coin space `Ω` (the audit's draws over the period). Each window `w`
+A period `T` is a finite set of windows over one coin space `Ω` (the audit's samples over the period). Each window `w`
 has its own leak bound: except with probability `ε w`, an accepted audit of `w` leaves the sender at most `b w` bits
 through the wardens in `w` (`Pr[acc w ∧ b w < moved w] ≤ ε w`). This is the per-window guarantee's conclusion, whose
 error is `δ + ε_ks + ε_bind`, taken here as a hypothesis family, so the sum doesn't depend on the per-window

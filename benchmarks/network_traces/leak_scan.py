@@ -12,12 +12,12 @@ The pieces (`cut`, the one cutter every driver's `public_pieces` runs): each wit
 cover it whole, its aligned ones and, past its last 16-byte boundary, its last 16 bytes and its last aligned chunk
 zero-padded (the row's last element, packed from an element boundary). The residual: a row packed
 from an element boundary whose last element pads its tail with anything but zeros matches neither, its last 16 bytes
-straddling two elements, so a leak in that tail is missed. A row shorter than a piece (a unit's carry rows, the served
-rows of a block of a few steps) is found whole (`find_whole`), raw or as the hex of whole bytes, and its finds are
-judged by the same rule. It is at least 6 bytes (`WHOLE`): a uniform L-byte row matches a given offset raw, or an even
-offset of hex text, with chance 2^-8L, so R rows over N received bytes expect about 2·N·R·2^-8L chance finds, 2^-7 at 6
-bytes for a GiB and 1024 rows but 2 at 5. A low-entropy row matches the format's structure more often: in a field the
-reader fixes it reads public, which also excuses a real find of it, and anywhere else leaked.
+straddling two elements, so a leak in that tail is missed. A row shorter than a piece (a proof block's carry rows, the
+served rows of a block of a few steps) is found whole (`find_whole`), raw or as the hex of whole bytes, and its finds
+are judged by the same rule. It is at least 6 bytes (`WHOLE`): a uniform L-byte row matches a given offset raw, or an
+even offset of hex text, with chance 2^-8L, so R rows over N received bytes expect about 2·N·R·2^-8L chance finds, 2^-7
+at 6 bytes for a GiB and 1024 rows but 2 at 5. A low-entropy row matches the format's structure more often: in a field
+the reader fixes it reads public, which also excuses a real find of it, and anywhere else leaked.
 
 The rule:
 * A find counts only where it is one field's bytes: inside one field of a repetition's proof stream (``S.repK.bin``,
@@ -309,9 +309,9 @@ def scan(received: dict, pieces: dict[str, bytes], vdir: Path | None, reads=read
 def rescan(received: dict, pieces: dict[str, bytes], vdir: Path | None, reads=reads, a8=None, rows=()) -> dict:
     """A finished run's scan (its summary's ``received``) taken again under this rule from the verifier's files it kept,
     with the pieces the driver recomputes: `scan`'s result, and the run's own ``leaked`` as ``was``. A found piece the
-    driver can't recompute (a salt the run drew) reads leaked. With `a8`, each kept file is searched afresh for `pieces`
-    (`a8.find`), so a piece the run's cutter didn't cut is searched too, and of the run's own finds only those of a blob
-    the driver didn't recompute (not in `rows`) stay."""
+    driver can't recompute (a salt the run sampled) reads leaked. With `a8`, each kept file is searched afresh for
+    `pieces` (`a8.find`), so a piece the run's cutter didn't cut is searched too, and of the run's own finds only those
+    of a blob the driver didn't recompute (not in `rows`) stay."""
     if a8 is not None and vdir is not None:
         table, files = a8.needles(pieces), {}
         for f, rec in received["files"].items():
