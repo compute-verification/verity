@@ -1,4 +1,4 @@
-"""The remote bandwidth audit's opening of a drawn receipt (`verity.core.protocols.remote_bandwidth`, PROTOCOL.md §6's checks
+"""PoUB's opening of a drawn receipt (`verity.core.protocols.remote_bandwidth`, PROTOCOL.md §6's checks
 1-3 and 5, as §8 deploys them) as one Boolean Definition: what a proof runs on a drawn receipt in place of opening it, so the
 block, its payload, its receipt leaf and every salt and path stay the unit's witness and the verifier reads the unit's
 verdict.

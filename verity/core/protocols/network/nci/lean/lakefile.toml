@@ -1,11 +1,11 @@
 # The NCI policy's check, the verifier's side: given a declaration (a descriptor v1 Program and its baseline θ) and a
 # declared division into isolation units, decide `Nci.Complies Γ α` for that division (`Security/Definitions/Nci.lean`).
-# It reads the Program with C-Flock's decoder (`Flock.Program`), required by path, and imports nothing else but Lean
-# core and the core interface (`core_protocol`, for `NciCheck.Protocol`): no Mathlib and nothing of Security. The
-# difftest holds it to the Python reference in `scripts/nci_reference.py`.
+# It reads the Program with C-Flock's decoder (`Flock.Program`), required by path, and imports nothing else but Lean core
+# and the core interface (`core_protocol`, for `NciCheck.Protocol`): no Mathlib and nothing of Security. The difftest
+# holds it to the Python reference in `scripts/nci_reference.py`.
 # `nci-check` runs `NciCheck.Desc`, the check at the size of the description, then θ's provenance (`NciCheck.Baseline`),
 # and `nci-check --unrolled` the reference. `inference-only` is the same check as the core protocol
-# `verity/inference-only/v0` (`NciCheck.Protocol`), which neither composite runs yet.
+# `verity/inference-only/v0` (`NciCheck.Protocol`), the inference-only policy's subprotocol of onsite and remote.
 name = "nci_check"
 defaultTargets = ["NciCheck", "nci-difftest", "nci-desc-difftest", "nci-desc-liveness", "nci-desc-fuzz", "nci-baseline-difftest",
   "nci-check", "inference-only"]

@@ -10,7 +10,7 @@ salt, and a one-window configuration with a declared sync whose run ticks each g
 salt that one. The run's hypotheses are `step` evaluated by the kernel (`decide +kernel`);
 the key's are `Lms.key`'s acceptance of a 16-byte identifier (`key_ok`), not its tree, which the kernel need not compute.
 
-`Digested` is the one hypothesis left as one: `parameters` reads `Flock.canon`, well-founded recursion the kernel does
+`Digested` is the one hypothesis left as one: `parameters` reads `Flock.canonUtf8`, well-founded recursion the kernel does
 not evaluate, so no proof evaluates it on a configuration (`DeviceOutputAccepted`'s module docstring).
 -/
 
@@ -79,10 +79,10 @@ def salt : ByteArray := ⟨Array.replicate 64 0⟩
 
 theorem salt_size : salt.size = NetworkCheck.saltBytes := by decide +kernel
 
-/-- **`IssuerSigns`'s honest case holds**: the toy key is valid, leaf `0` is below `2^H`, and the one-bucket record has
-a head under a 64-byte parameters digest and the 64-byte salt. -/
+/-- **`IssuerSigns`'s honest case holds**: the toy key is valid, leaf `0` is below `2^H`, and the one-bucket record is
+complete and has a head under a 64-byte parameters digest and the 64-byte salt. -/
 theorem issuerSigns_instance : ∃ prepared, ValidKey issuer.key ∧ 0 < 2 ^ issuer.key.params.H ∧
-    issuer.prepare salt record .egress grid digest true = .ok prepared := by
+    record.status = .complete ∧ issuer.prepare salt record .egress grid digest true = .ok prepared := by
   obtain ⟨head, dg, m, -, hprep⟩ := Properties.CertifierNetwork.Proofs.prepare_of (i := issuer) (r := record)
     (d := .egress) (g := grid) (pd := digest) (by show toyKey.I.size = 16; rw [(key_spec toyKey_eq).2.1]; exact ident_size)
     (by decide +kernel) salt_size (by decide +kernel) (by
@@ -92,7 +92,7 @@ theorem issuerSigns_instance : ∃ prepared, ValidKey issuer.key ∧ 0 < 2 ^ iss
       exact ⟨#[], by decide, by simp, by decide +kernel⟩)
     (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
     (by decide +kernel) (by decide +kernel) rfl
-  exact ⟨(head, dg, m), toyKey_valid, Nat.two_pow_pos _, hprep⟩
+  exact ⟨(head, dg, m), toyKey_valid, Nat.two_pow_pos _, rfl, hprep⟩
 
 /-! ## A run of the device -/
 

@@ -21,13 +21,14 @@ import SampledProofs.Stream
 import SampledProofs.Fleet
 import SampledProofs.Pieces
 import SampledProofs.Hello
-import SampledProofs.DomainAgrees
 import SampledProofs.Challenger
 import SampledProofs.ChallengerRecord
 import SampledProofs.ChallengerSession
 import SampledProofs.ChallengerCoins
+import SampledProofs.ChallengerDraw
 import SampledProofs.Wires
 import SampledProofs.WiresSpan
 import SampledProofs.WiresSound
 import SampledProofs.WiresComplete
 import SampledProofs.WiresDrawn
+import SampledProofs.SiteDifftest

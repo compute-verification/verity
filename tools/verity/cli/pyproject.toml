@@ -1,9 +1,12 @@
 [project]
 name = "verity-cli"
 version = "0.0.0"
-description = "`verity`: the repository's one command (check, bench, run, config, --remote), dispatching to the tools beside it."
+description = "`verity`: the repository's one command (check, tasks, graph, bench, run, config, --remote), dispatching to the tools beside it."
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["verity-graph"]
+
+[tool.uv.sources]
+verity-graph = { workspace = true }
 
 [project.scripts]
 verity = "verity_cli:main"

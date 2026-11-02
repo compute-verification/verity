@@ -110,9 +110,9 @@ staging them through `benchmarks/served_units/stage.py` is the next workload's w
 `proof-throughput/v2`, one population per workload, pinned by `instances/<workload>.json`
 (`verity_proof_throughput/instances.py`): `n_max` independent instances of the workload's VU Definition (core's
 `population_program` at v0, whose digest every lane is derived from, `verity_proof_throughput/population.py`), each
-instance one unit of `Q_template_instance` v0, so the population is one stratum and the stratified law samples B of its
-units uniformly. The lanes are those Flock's class sweep
-gives that unit class at seed 0. The manifest pins every lane's digest and the population's; the prover run recomputes
+instance one proof block of `Q_template_instance` v0, so the population is one stratum and the stratified law samples B
+of its proof blocks uniformly. The lanes are those Flock's class sweep
+gives that proof-block class at seed 0. The manifest pins every lane's digest and the population's; the prover run recomputes
 them before proving, and the result names the manifest by its SHA-256. The words are uniform 16-bit encodings: at K = 6144
 every coordinate meets a NaN, so every output is the same NaN word (`output_words` in the manifest). A Boolean circuit's
 proving cost doesn't depend on the values it carries. Regenerate with `instances --workload W --write`.
