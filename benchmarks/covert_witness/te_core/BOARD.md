@@ -43,3 +43,16 @@ edit past entries: correct one with a new entry that names it.
   elementwise products and Newton–Schulz work it logs as `extra`). Step 0 is all `fwd/theta`, and every later step is
   `fwd/updated` across the blocks and the tied head. For e100kb, U is the adapters and norm gains only. For seed (MeZO),
   U is the perturbed blocks and the unperturbed tied head stays θ.
+
+## 2026-11-02T08:00Z, toolsmith: GPU smoke of v2 on vy-nebius-2 (RTX PRO 6000)
+
+- **Finding.** On `s100`, at 2% of the budget, the reference island ran 93 steps under the harness. It counted
+  9.70·10¹⁴ MACs, 1.086× its analytic count. It ran at 0.30 s per step, 6.3·10¹³ FLOP/s, against the 1.49·10¹⁴ the
+  budget assumes for compiled training. A harness run therefore takes about 2.4× a compiled run's wall time, which the
+  tier timeouts (3× the tier minutes plus 15 min) allow. It raised no flags, and its model is decode(θ, E) bit for bit.
+- **Finding.** On `s100`, e1mb (LoRA, E 959,754 bytes) has U = the adapters and norm gains, 1% of the forward. The seed
+  island's log replays bit for bit on CUDA. `cpu_parallel` fired on the LoRA run (43 CPU-s in 25 s): autograd's device
+  thread and the main thread both drive the dispatch mode, so read that flag as informational for adapter runs.
+- **Tool.** vy-nebius-2 takes runs only through its slot pools (`--gpus` is refused). `te_core.launch` sends
+  `NODE pool=gpu` lines as `--pool gpu` with `gpu-lease 1` inside. `research run`'s node-local pools need main's
+  `research`.
