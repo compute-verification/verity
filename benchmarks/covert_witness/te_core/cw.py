@@ -415,9 +415,9 @@ class Adapter:
             self.s.boundary()
             return self.s.batch(nxt(data, *args, **kwargs))
 
-        def submit_(out, start, klass, blob, model, *args, **kwargs):
+        def submit_(out, start, blob, model, *args, **kwargs):
             blob, model = plain(blob), plain(model)
-            submit(out, start, klass, blob, model, *args, **kwargs)
+            submit(out, start, blob, model, *args, **kwargs)
             self.submit(blob, model)
 
         p.load_start, p.TrainData.next, p.submit = load_start_, next_, submit_

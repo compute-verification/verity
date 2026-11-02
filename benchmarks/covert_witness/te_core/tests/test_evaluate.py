@@ -16,7 +16,7 @@ SEARCH_SCORE = {"bpb": 1.25, "start_bpb": 1.3, "slice": {"coin": "c", "weights_d
 def stub_prepare(final: bool) -> SimpleNamespace:
     theta = {"w": torch.zeros(2)}
     return SimpleNamespace(
-        CLASSES={"e100kb": {"max_e_bytes": 100_000, "formats": None, "top_blocks": None}}, VERSION="2.3", DATA="v2.2",
+        VERSION="3.0", DATA="v2.2",
         TRAIN_FLOP_BUDGET=1e12, HARNESS_FLOP_SLACK=1.1, GPU_SECONDS_CAP=600.0, FINAL_MODE=final, FINAL="final",
         SEARCH_POOL="search", DEVICE="cpu",
         start_record=lambda name: {"digest": "d", "config": {"n_layer": 2}, "tokenizer": "gpt2"},
@@ -31,7 +31,7 @@ def test_the_submitted_score_is_recorded_with_or_without_a_search_slice(tmp_path
     sub = tmp_path / "sub"
     sub.mkdir()
     (sub / "E.bin").write_bytes(BLOB)
-    (sub / "meta.json").write_text(json.dumps({"start": "s50", "theta_digest": "d", "class": "e100kb", "changed": [],
+    (sub / "meta.json").write_text(json.dumps({"start": "s50", "theta_digest": "d", "changed": [],
                                                "trainable": {"full": []}}))
     run = tmp_path / "run.json"
     run.write_text(json.dumps({"totals": {"macs": 1e6, "wall_s": 1.0, "self_cpu_s": 1.0}, "steps": [{}],
@@ -53,8 +53,9 @@ def test_the_submitted_score_is_recorded_with_or_without_a_search_slice(tmp_path
     monkeypatch.setattr(evaluate, "prepare", stub_prepare(final))
     monkeypatch.setattr(evaluate, "score_run", score_run)
     monkeypatch.setattr(evaluate, "source_clean", lambda: True)
-    out = evaluate.check(sub, "e100kb", timing, run, tree, island, tmp_path / "scored")
+    out = evaluate.check(sub, timing, run, tree, island, tmp_path / "scored")
     assert out["valid"], out["checks"]
+    assert not {"e_size", "e_format", "shallow", "class_named"} & set(out["checks"]) and "caps" not in out
     assert out["score"]["bpb"] == score["bpb"] and ("slice" in out["score"]) == (not final)
     if not final:
         assert out["score"]["slice"]["digest"] == "te_core.run.theta_sha256"

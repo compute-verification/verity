@@ -98,7 +98,7 @@ def same_bits(a, b):
     return a.dtype == b.dtype and a.shape == b.shape and torch.equal(a, b)
 
 
-def submit(out, start, klass, blob, model, trainable, steps, changed, notes=None, snapshots=()):
+def submit(out, start, blob, model, trainable, steps, changed, notes=None, snapshots=()):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "E.bin").write_bytes(blob)

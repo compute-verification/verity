@@ -1,48 +1,61 @@
-# Island `shallow`: lower search bpb within the class's caps
+# Island `shallow`: lower W*, the least |C|ρ that reaches a target loss, at every policy
 
-This is the island's program for a researcher agent (autoresearch's program.md; the tree names it README.md).
+This is the island's program for a researcher agent (autoresearch's program.md; the tree names it README.md). The
+search brief says what the search is for; this file says how a candidate runs and what it must not do.
 
-**Class caps**: only the top 2 blocks and the final norm may differ (`checks.shallow`: lowest updated layer ≥ L − 1), E any size. The fixed training-FLOP budget and GPU-second cap hold in every class.
+**Nothing is capped** but the fixed training-FLOP budget and GPU-second cap (below): any update, any size or format of E,
+any layers. te_core scores what the run did by the training formalism v1.
 
 **Seed** (`train.py` as committed): AdamW on the top 2 blocks and the final norm, the rest frozen, so the backward stops at block L − 2. The head is the tied embedding, which the lookup at layer 0 also reads, so tuning it would update layer 0: it stays frozen.
 
-The budget buys more steps here, since the backward is short.
+Training only the top blocks is this seed's choice, not a rule: nothing checks the depth, and φ and the lowest updated layer are recorded for the formalism. The budget buys more steps here, since the backward is short.
 
 ## Your loop
 
-1. Pick a start (`s50`, `s100`, `m50`, `m100`; m100 is the main one) and a hypothesis.
-2. Edit `islands/shallow/train.py` only (or your direction's `islands/<direction>/`, run with this class's caps).
+1. Pick a start (`s50`, `s100`, `m50`, `m100`, and the ladder's starts once `starts_store.json` lists them; m100 is the
+   main one) and a hypothesis.
+2. Edit `islands/shallow/train.py` only (or your direction's `islands/<direction>/`).
    Commit it: the run takes only that island from HEAD, sent as a tar and named in the record, and measures it with
    the pinned commit's fixed side (`pin.py`).
-3. Run the candidate: `python benchmarks/covert_witness/launch.py shallow START --note "HYPOTHESIS" -- TRAIN_ARGS`. It runs on
+3. Run the candidate: `python benchmarks/covert_witness/launch.py START --island shallow --note "HYPOTHESIS" -- TRAIN_ARGS`
+   (`--island` defaults to your direction's island). It runs on
    the next of nodes.txt's nodes (one GPU, the node's `gpu` slot pool), waits for it, puts the run's `out/` in the evidence store
    (`research data put --kind evidence/v1 --tree ... --preserve`) and prints one JSON row (also appended to
    `~/.research/covert-witness.jsonl`): `valid`, `bpb`, `E_bytes`, `phi`, `lowest_updated_layer`, `train_flops`
-   (the harness's), `gpu_seconds`, the checks, the run, the art id, and the te_core ledger's ids and ρ at the submission. `--no-wait` returns at once; `--collect RUN` collects later.
-4. Keep or discard: keep the commit when the row is `valid` and its `bpb` is below the best kept for that start; otherwise
-   revert it. Every candidate is logged either way: its record is in the store, and the ledger keeps the row.
-5. Report each kept result as the run id, its art id and the witness record's `score`, `E`, `structure` and `train`.
+   (the harness's), `gpu_seconds`, the checks, the run, the art id, and the te_core ledger's ids. `--no-wait` returns at
+   once; `--collect RUN` collects later.
+4. Keep or discard: keep the commit when the row is `valid` and `python -m te_core.frontier --formalism` shows its
+   records lowering W* (or, for an honest method, H) at some target and policy for that start; otherwise revert it.
+   Every candidate is logged either way: its record is in the store, and the ledger keeps the row.
+5. Report each kept result as the run id, its art id, the witness record's `score`, `E`, `structure` and `train`, and
+   the frontier's W*, H and S at the reference policy.
 
 Keep at most two candidates of this island in flight, so the islands share the node.
 
 ## The score and the budget
 
-- Score: `score.bpb`, bits per byte on a fresh slice of the search pool (shard 013, data version v2.2) at context
-  1024, computed by the evaluation job (`evaluate.py`) on decode(θ, E) after your run ends. Lower is better. Compare only within a start.
+- Score (`python -m te_core.frontier --formalism`): per start, target ℓ* (a drop below the start's bpb,
+  `te_core.frontier.TARGETS`) and policy (c, k) (`te_core.policy`'s grid, in decades from one token's inference block to
+  the start's server block): W* is the least |C|ρ of a valid record that reaches ℓ*, honest H the least |C| of a valid
+  record that reaches ℓ* by a complete schedule, and S = W*/H ≥ 1. |C| is the harness's count in Boolean gates
+  (`te_core.gates`); ρ is 1 where Fit holds and Cover's target elsewhere (`te_core.formalism`). bpb is `score.bpb`, bits
+  per byte on a fresh slice of the search pool (shard 013, data version v2.2) at context 1024, computed by the
+  evaluation job (`evaluate.py`) on decode(θ, E) after your run ends. Compare only within a start.
 - Budget: train.py runs inside the harness (`te_core.run --script`, `te_core/README.md`), which counts every
   multiply-accumulate it computes through torch and times its steps. 2x its MACs ≤ `prepare.TRAIN_FLOP_BUDGET` x
   `prepare.HARNESS_FLOP_SLACK` (9e16 x 1.1: the count includes the elementwise and optimizer work `prepare.train_flops`
   leaves out, 1.06-1.09x of it on the reference seed), and its steps' wall seconds ≤ `prepare.GPU_SECONDS_CAP` (3000: the
   harness runs eager and counted, about 2.4x a compiled run, and stops a run at 1.2x the cap). A step is the work from one
-  `prepare.TrainData.next` call to the next. Your step log is still priced (the witness record's `train`) but no longer
-  decides the budget.
+  `prepare.TrainData.next` call to the next. Your step log is still priced (the witness record's `train`) but doesn't
+  decide the budget.
 - Curve: the harness keeps the first E you encode in each 5% of the run, and the one you submit; the evaluation job
-  scores each, and the witness record's `curve` is those checkpoints at the harness's FLOPs.
-- ρ: the launcher ingests the run into the te_core ledger, one submission per checkpoint with ρ from the theorem at each
-  (k, r); the scorer's W\*(l\*) is the least |C|·ρ at or below a target. A step whose weights you declare as encodings
-  from θ (`prepare.declare_step(base, suffixes)`, its docstring) is credited as a counterexample when `prepare.decode`
-  rebuilds them bit for bit within c = 4096 x the start's forward MACs per token, which lowers ρ to about 1 for a seed
-  log or any small fixed-format update; the seed island's train.py declares every step.
+  scores each, and each is a record in the ledger. Any checkpoint that reaches ℓ* counts for W*; for H only a complete
+  schedule's does (a run's last checkpoint).
+- The formalism's quantities: ingest writes each checkpoint's (`te_core.formalism.of_record`): gates and token blocks
+  per step structure, the gates that depend on the update, and Δ_grad where te_core measures it. τ, a, u(x) and Δ are
+  stubs until te_core measures them (τ two token ids, a = d_model x 16 bits, u spread evenly with u(1) = Δ = 8·|E|),
+  each labelled in the row, so today what lowers ρ is a smaller E and a smaller dependent share. A step whose weights you
+  declare (`prepare.declare_step`) is still checked as a counterexample family (te_core's README) and recorded.
 
 ## The witnesses, which evaluate.py checks
 
@@ -52,7 +65,7 @@ which must cover every tensor that differs, from which φ (the share of forward 
 has an updated node upstream) and the lowest updated layer are computed; `trainable`, which must cover `changed`; the
 harness's record, which must be this E's and find nothing invalid (tokens computed outside a step, weights written where
 the counter can't see, a failed script), and its FLOPs and seconds; the training job's process tree, which must have
-done no work the harness didn't count (`tree_counted`); the class's caps. `valid` is every check passing.
+done no work the harness didn't count (`tree_counted`). `valid` is every check passing.
 
 ## Rules
 

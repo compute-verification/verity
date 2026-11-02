@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# candidate.sh CLASS START [TRAIN_ARGS...]: one candidate on one leased GPU (fixed), run from the pinned measurement commit
+# candidate.sh START [TRAIN_ARGS...]: one candidate on one leased GPU (fixed), run from the pinned measurement commit
 # (pin.py) as two jobs, one after the other.
 #
-# The training job is the island's program, `islands/$CW_ISLAND/$CW_PROGRAM` (default the class's island and train.py; the
-# island is launch.py's $RESEARCH_RUN_DIR/inputs/island.tar, else this commit's), inside the harness (`python -m
+# The training job is the island's program, `islands/$CW_ISLAND/$CW_PROGRAM` (CW_ISLAND required, CW_PROGRAM default
+# train.py; the island is launch.py's $RESEARCH_RUN_DIR/inputs/island.tar, else this commit's), inside the harness (`python -m
 # te_core.run --script`, which counts its MACs, times its steps and stops it at 1.2x GPU_SECONDS_CAP), inside sandbox.py:
 # it sees this commit's benchmarks/covert_witness with that one island in islands/, the starts, the training stream (the
 # sealed start and its stream only in final mode), the Python it runs on and its leased GPU, all read-only, and one
@@ -31,8 +31,8 @@ print(int(c), int(1.2 * c + 600), 1200, int((1.2 * c + 600 + 1200) / 60 + 5))")"
 
 if [ "${1:-}" = --leased ]; then
   shift
-  klass=$1 start=$2 S=$3 island=$4 program=$5
-  shift 5
+  start=$1 S=$2 island=$3 program=$4
+  shift 4
   fraction=0.98 prev=
   for x in "$@"; do
     case "$x" in --budget-fraction=*) fraction=${x#*=} ;; esac
@@ -41,7 +41,7 @@ if [ "${1:-}" = --leased ]; then
   done
   T=$S/train
   mkdir -p "$T" "$S/root"
-  meta="{\"class\": \"$klass\", \"start\": \"$start\", \"launcher\": \"covert_witness/candidate.sh\", \"node\": \"${CW_NODE:-}\", \"island\": \"$island\"}"
+  meta="{\"start\": \"$start\", \"launcher\": \"covert_witness/candidate.sh\", \"node\": \"${CW_NODE:-}\", \"island\": \"$island\"}"
   # the interpreter's prefix, base prefix and every sys.path entry, and each link on the way to its binary and to its
   # venv's home (a bind follows it), outside /usr and each other, none holding a held-out directory
   pyro=$("$P" -I -c 'import os, sys
@@ -113,7 +113,7 @@ print(" ".join(out))' "$P" "$R" "$SEALED" "$LF") || { echo "$pyro"; exit 1; }
   [ -f "$T/run/guard.log" ] && cp "$T/run/guard.log" "$OUT/run/guard.log"
   [ -f "$T/sub/meta.json" ] || { echo "candidate: the program wrote no submission (rc $rc)"; tail -3 "$OUT/train.log"; exit 1; }
   [ -f "$T/run/run.json" ] || { echo "candidate: the harness wrote no run.json (rc $rc)"; tail -3 "$OUT/train.log"; exit 1; }
-  timeout --signal=TERM --kill-after=30 "$ekill" "$P" "$here/evaluate.py" --submission "$T/sub" --class "$klass" \
+  timeout --signal=TERM --kill-after=30 "$ekill" "$P" "$here/evaluate.py" --submission "$T/sub" \
     --timing "$S/timing.json" --run "$T/run/run.json" --tree "$S/tree.json" --island "$S/island.json" \
     --scored "$OUT/run" --out "$OUT/witness.json" > "$OUT/evaluate.log" 2>&1
   erc=$?
@@ -121,9 +121,9 @@ print(" ".join(out))' "$P" "$R" "$SEALED" "$LF") || { echo "$pyro"; exit 1; }
   exit $erc
 fi
 
-klass=$1 start=$2
-shift 2
-island=${CW_ISLAND:-$klass} program=${CW_PROGRAM:-train.py}
+start=${1:?candidate: candidate.sh START [TRAIN_ARGS...]}
+shift
+island=${CW_ISLAND:?candidate: name the island (CW_ISLAND; launch.py sets it)} program=${CW_PROGRAM:-train.py}
 case "$island/$program" in
   /*|*..*|*//*) echo "candidate: island $island and program $program must be names inside islands/"; exit 2 ;;
 esac
@@ -158,12 +158,12 @@ print(json.dumps(rec, indent=1))' "$S/island" "$island" "$program" "$from" "$com
   > "$S/island.json" || { echo "candidate: could not record the island"; exit 2; }
 cp "$S/island.json" "$OUT/island.json"
 cp "$S/island/$program" "$OUT/train.py"
-echo "{\"class\": \"$klass\", \"start\": \"$start\", \"island\": \"$island\", \"program\": \"$program\", \"args\": \"$*\", \"measurement_commit\": \"${RESEARCH_SOURCE_SHA:-}\"}" > "$OUT/candidate.json"
+echo "{\"start\": \"$start\", \"island\": \"$island\", \"program\": \"$program\", \"args\": \"$*\", \"measurement_commit\": \"${RESEARCH_SOURCE_SHA:-}\"}" > "$OUT/candidate.json"
 if [ "${CW_LEASE:-}" = none ]; then
   [ "${CW_DEVICE:-}" = cpu ] || { echo "candidate: CW_LEASE=none runs only with CW_DEVICE=cpu"; exit 2; }
-  bash "$0" --leased "$klass" "$start" "$S" "$island" "$program" "$@"
+  bash "$0" --leased "$start" "$S" "$island" "$program" "$@"
 else
-  gpu-lease 1 --wait --max-min "$lease" -- bash "$0" --leased "$klass" "$start" "$S" "$island" "$program" "$@"
+  gpu-lease 1 --wait --max-min "$lease" -- bash "$0" --leased "$start" "$S" "$island" "$program" "$@"
 fi
 rc=$?
 for f in meta.json steps.jsonl; do [ -f "$S/train/sub/$f" ] && cp "$S/train/sub/$f" "$OUT/"; done
