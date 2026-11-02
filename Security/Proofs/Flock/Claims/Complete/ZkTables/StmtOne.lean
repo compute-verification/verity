@@ -4,6 +4,8 @@ public import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
 public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 public import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # What the masked record needs of the statement, at one table

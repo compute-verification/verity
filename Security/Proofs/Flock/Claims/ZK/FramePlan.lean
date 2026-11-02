@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.ZK.FrameAsks
 public import Proofs.Flock.Claims.ZK.FrameSched
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # A rep's scheduled rounds against its plan

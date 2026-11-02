@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Complete.ZkTables.View
 public import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The masked prover's rep: its round count

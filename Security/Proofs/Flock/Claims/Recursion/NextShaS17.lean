@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.NextSha
 public import Proofs.Flock.Soundness.Refine.Rep
+import all Lean.Data.Json.Basic
 
 /-!
 # S17 at the substituted value (`decodeJWith_shaSubJ`, `s17_shaSubJ`)

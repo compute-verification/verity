@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.CoinTie
+import all Init.Data.String.Defs
 
 /-!
 # The coin server's round the coin tie names is the only one of its stream and round number

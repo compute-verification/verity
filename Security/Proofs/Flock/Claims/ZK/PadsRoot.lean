@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.FrameTape
 public import Proofs.Flock.Claims.ZK.Round1Root
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # The frame's pads root is the masked prover's
