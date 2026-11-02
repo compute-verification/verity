@@ -27,16 +27,18 @@ lock, so the two never collide.
   its island's commit (witness v4's `island.commit`; before it, `candidate.json`'s commit), else its run's commit, else
   the direction its meta names, else its class. The index names each record's witness schema and version and its
   harness's te_core.
-- **Who is scored**: honest(l*) reads only runs that update every weight of the start (witness v4's
-  `changed.actual_parameters` all of `eval_cost.parameters`, E `full`, no declared family: `full_theta`) launched by
-  `ref-optim` or `ref-data`, or the harness's and the scorer's own reference smokes (`is_reference`; the coordinator,
-  13:42Z), at the end of each run's own schedule only (its last checkpoint, `schedule_ends`; the coordinator, 12:05Z: a
-  checkpoint inside a longer reference schedule is not what an honest run of that length reaches). A fork ladder
-  (`fork_ladder`: the reference island's train.py with `--forks` and an empty `--snap-at`) encodes only at its cooldown
-  branches' ends, each a complete schedule decayed to 0, so every checkpoint of it is a schedule end; its FLOPs include
-  the earlier branches' passes, which overstates honest there by up to about a quarter. W* reads every
-  checkpoint of every other record, a class-reference run from any other direction included. The measurement auditor's records
-  (direction `audit`, or a note starting `audit:`) are in the ledger and in nothing scored.
+- **Who is scored** (the coordinator's 14:57Z ruling, priced by `te_core.frontier.target` of te_core 3.5.3, a worktree
+  at `TE_PIN` on `cursor/te-core-313-on-pin-3a8f`; `target_row`): honest(l*) is the least |C| over every valid record,
+  of any class or direction, that reaches l* by a complete schedule, and W*(l*) in each (k, r) the least |C|ρ over the
+  same records, so W*/honest >= 1 is the effective slowdown. A complete schedule is a run's last checkpoint
+  (`schedule_ends`; the coordinator, 12:05Z: a checkpoint inside a longer schedule is not what a run of that length
+  reaches) or any checkpoint of a fork ladder (`fork_ladder`: the reference island's train.py with `--forks` and an
+  empty `--snap-at` encodes only at its cooldown branches' ends, each decayed to 0; its FLOPs include the earlier
+  branches' passes, which overstates honest there by up to about a quarter). Where only a mid-schedule checkpoint
+  reaches l*, both read it and te_core labels the target 'upper bound (checkpoint)'. The reference-only honest, the
+  rule before (full-θ runs by `ref-optim` or `ref-data` and the reference smokes, `is_reference`), is kept beside it as
+  context. A W* entry whose counted φ is under a tenth of its position φ (`soft_phi`, the soft spot) shows both. The
+  measurement auditor's records (direction `audit`, or a note starting `audit:`) are in the ledger and in nothing scored.
 - **What a record must show to count**: launch.py uploads a record from an agent's VM, so its `witness.json` and
   `run/run.json` must be the node's (`custody_problems`: the hashes of `out/witness.json` and `out/run/run.json` in the
   run-record the node's runner publishes, the attempt's `outputs.run_record`), and its fixed side must be the
@@ -44,13 +46,16 @@ lock, so the two never collide.
   the pin and only the island), an earlier record's every fixed-side file at its commit (`benchmarks/covert_witness`
   outside `islands/`, `scorer/` and docs) one the harness's branches (`cursor/covert-witness-4207`,
   `cursor/te-core-4207`) held since 30 Oct (`fixed_side`). A record whose E (sha256) is
-  an earlier record's that is current or another direction's (`replays`, as te_core.frontier reads a duplicate), or
+  another direction's earlier record's (`replays`; the coordinator, 14:22Z: an agent's own relaunch counts), or
   whose harness counted under half the FLOPs of the run's own steps (`over_train_flops` < `COUNTED_FLOOR`), is a
   counted-compute escape and unscored (the coordinator, 10:35Z), unless the scorer has read its op table and found the
   gap accounted for op by op (`FLOOR_ACCOUNTED`, by art id; the coordinator, 13:42Z). A record whose updated set is the tied embedding with
   no block below the top (embed only, or embed and the top block) is priced wrong (tied lookup) and out of the frontier:
-  v2.3's counter prices the lookup at 0 (the coordinator, 13:32Z). Otherwise the record is invalid, with the reason in
-  the ledger.
+  v2.3's counter prices the lookup at 0 (the coordinator, 13:32Z). A pin record whose `run.json` te_core 3.5.3's
+  `cw.readout_leaks` lists a step of (`judge_readouts`, run under `TE_TORCH_PYTHON` since cw imports torch; cached in
+  `$TE_SCORER_STATE/readouts.json`) took its read-out allowance from index reads no counted work consumed and is
+  invalid (the coordinator, 15:00Z); one without its `run.json` is unjudged. Otherwise the record is invalid, with the
+  reason in the ledger.
 - **Regime** (`regime_of`): a record measured by a commit pinned under the pin's version (`pinned.json` at
   `TE_BRANCH`'s head and its history, `pins`: a re-pin that keeps the version fixes the harness, not the measurement, as
   v2.2's second pin did) is `current`, and only those make the frontier, honest, the promotions, the cells and the finals (the coordinator, 12:55Z: the v2.3
@@ -58,7 +63,7 @@ lock, so the two never collide.
   scored apart in `score.md` and in the digest's context lines: `pin V` (an earlier pin's), `paired` (te_core 2.2's
   paired slices before the pins: `score.start_bpb` and every checkpoint's `val_slice`), and `earlier` (the fixed search
   set).
-- **ρ**: te_core's (`TE_CORE_PATH`, its `score.score_grid`, `w_star`, `honest`, `effective_slowdown`, `frontier.TARGETS`).
+- **ρ**: te_core's (`TE_CORE_PATH`, its `score.score_grid` and `frontier.TARGETS`).
   A record made inside te_core's harness (witness v2/v3, covert_witness v2.1) is priced by the harness's count: `collect`
   ingests the node's `run.json` with the te_core of the official branch with the highest VERSION that holds `PAIRED`
   (`te_current`, a worktree at `TE_CURRENT`), so a pricing fix re-prices every record, the pin's included (the
@@ -112,9 +117,11 @@ lock, so the two never collide.
   train args, and `final table` refuses one measured by any other commit. In final mode (`CW_FINAL=1`) every score is the final set's, and launch.py preserves the
   record with meta `final: true` and ingests it into no ledger. `final collect` runs `launch.py --collect` once per ended
   run and reads its witness and te_core's submissions from its `run.json`. `final table` refuses a rerun that isn't
-  done, valid, scored on the final split, priced at the witness's |C|, ρ ≥ 1 and over the counter floor. It averages the
-  seeds per checkpoint and writes the table of W* and W*/honest per start, target, k and r, against the final set's
-  start bpb, beside the search set's from the current regime's records, and both frontier plots, into
+  done, valid, scored on the final split, priced at the witness's |C|, ρ ≥ 1, over the counter floor and with no
+  read-out leak. It averages the seeds per checkpoint and writes the final table of W* and W*/honest per start, target,
+  k and r, against the final set's start bpb: every current-regime record, an entry's reruns replacing its search
+  values where they exist (the coordinator, 15:27Z) and a search value carried onto the final start at the same drop
+  from its search start. Beside it go the reruns alone and the search set alone, and the frontier plots, into
   `$TE_SCORER_STATE/final/`. `final entries` reads each direction's last `[FINAL]` line (its own board on its
   `cursor/te-*` branch or the merged board; art ids or run ids). `final plan` orders the reruns (the coordinator,
   12:55Z): the entries that set honest or W* at some target in the pin's table, shortest first, then the first
