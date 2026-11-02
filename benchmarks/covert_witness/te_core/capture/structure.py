@@ -7,36 +7,51 @@ the varied captures, `trace`). A matmul-like op outside that list is refused. `m
 the step's share of |C| is counted by te_core.flops's rule, so `c_macs` matches the harness's count: one MAC per output
 element of each elementwise multiplication (`elementwise_macs`: ``mul``, ``div``, ``addcmul``, ``addcdiv``, ``lerp``,
 ``add`` and ``sub`` with a scale, their in-place and ``_foreach_`` forms, fused optimizer steps at their unfused forms'
-multiplications), and dense linear algebra at n³ per matrix (`approx_macs`). Any other forward op that combines an
-activation with an updated operand (a norm with a trained gain, an add then ``exp``) is an updated node as in
-te_core.flops, at one MAC per element of its largest operand or result (only its indices and result, for a gather):
-a using `Matmul` of part ``elementwise`` (`using_elementwise`), with k its MACs per token, which counts toward the
-upstream MACs of the GEMMs it reaches but not toward their `upstream` counts.
+multiplications), dense linear algebra at n³ per matrix (`approx_macs`), and any other forward op that combines an
+activation with a parameter that differs from θ (a norm with a trained gain, an add then ``exp``) at one MAC per element
+of its largest operand or result (only its indices and result, for a gather), as te_core.flops counts it.
 
-Terms are the training ontology's (note:training-20261102T0700Z-finding-training-ontology):
+Terms are the training ontology's (note:training-20261102T0700Z-finding-training-ontology), with T2 read as Daniel's
+smell check set it (2 Nov, 8:23-8:29 AM PST): deep use is about activations that depend on the run's own persistent
+values, however the circuit is written.
 
-- A GEMM's result is **token-indexed** when one of its batch, m or n dims is indexed by a token axis, else
-  **parameter-indexed** (a weight-shaped sum over tokens, as dW).
-- Each operand's class is its provenance. Through views, casts and scalings by a constant, an operand that is a
-  parameter is **updated** if its name is in `updated` (it differs from θ when read: the harness passes the set) and
-  **registered** otherwise, as is every buffer. Any other operand is a **gradient** when it is computed from the backward,
-  an **activation** when it is token-indexed (an embedding's rows gathered by token ids are, as in te_core.flops), and
-  when it is weight-shaped, **updated** or
-  **registered** by the parameters it is computed from (a merged LoRA weight, MeZO's perturbed copy). The GEMM's
-  **weight** is its highest operand class in the order updated, registered, gradient, activation, constant.
-- **Using**: a token-indexed result with an updated operand (the forward's and the backward's dX GEMMs against an updated
-  weight). **Producing**: a parameter-indexed result that reaches the final value of a parameter the step writes through
+- A value is **token-indexed** when one of its dims changes with a token axis (a GEMM's result when its batch, m or n
+  dim does), else **parameter-indexed** (a weight-shaped sum over tokens, as dW).
+- A **slot** is a storage the step reads that outlives it: a parameter, a buffer, an optimizer's state, an error-feedback
+  buffer (a graph attribute, `Trace.attrs`, or one the step's earlier steps wrote, `Trace.written_before`). A slot is
+  **dependent** when its value is one the run produced: a parameter named in `updated` (when the caller passes it), a
+  slot an earlier step wrote that this one doesn't, and every slot the step writes from a dependent slot (its own old
+  value included: W ← W − u). Of the slots the step writes, the largest set closed under that rule is dependent, so a
+  cache the step rewrites from θ, constants and token data alone (``copy_``, ``fill_`` and in-place samplers write a
+  whole storage without reading it) is not, and a parameter the step updates in place is.
+- A value is **update-dependent** when it is computed, through any path, from a dependent slot's value at the step's
+  start. A gather of a dependent table is (its rows are), with no MAC; a value computed only from θ, constants and token
+  data is not.
+- **Updated**: a MAC of the forward (outside autograd's backward and an optimizer's step) with a token-indexed result and
+  an update-dependent operand: a GEMM (role ``updated``), an elementwise multiplication or a counted op of
+  te_core.flops's rule (`updated_elementwise`, one `Matmul` of part ``elementwise`` per node). Backward products against
+  the same values are left out (counting them halves β per MAC and doubles φ, leaving φβ unchanged and D ≥ k/β harder).
+  **Producing**: a parameter-indexed result that reaches the final value of a parameter the step writes through
   weight-shaped values only (dW into the optimizer's state and the parameter; a matrix optimizer's own products).
   Every other GEMM is **neither**.
-- **Upstream**: for each GEMM, the using GEMMs whose results reach its operands (`upstream`, of them those in the forward
-  `upstream_fwd`), and their MACs per token (`upstream_macs`), the depth D reads. The count is at node granularity: a
-  GEMM counts every MAC of an upstream using GEMM, which is exact where a token's row is mixed between them (a norm, a
-  softmax, a contraction over the row) and an upper bound otherwise (an up projection feeding its own layer's down
-  projection through an elementwise activation).
-- **φ(D)**: the share of the step's MACs in using GEMMs with at least D upstream (`phi`).
+- **Depth** (`upstream_macs`): for each MAC node, the updated MACs per token of its step upstream of it, through the
+  forward values of its own step (`upstream` counts the updated GEMMs). The count is at node granularity: exact where a
+  token's row is mixed between nodes (a norm, a softmax, a contraction over the row), an upper bound otherwise.
+- **φ(D)**: the share of the step's MACs in updated MACs with at least D upstream (`phi`).
+- **Cut** (`cut_bits`, T1's witness): the narrowest vertex cut, in bits, between the step's gradient-side computation
+  and the new values of the dependent slots its forward reads (the sinks). Paths start at the token data and at the old
+  values of the dependent slots the forward doesn't read (optimizer moments, error feedback, gradient accumulators).
+  The forward's own values (its token-indexed values and everything they read) can't be cut, nor can a value computed
+  only from θ, constants and token data; every other update-dependent value can (the loss, the backward, an
+  optimizer's step or an update written by hand, those old values), at its dtype's width times its elements (a bool is
+  one bit, a sparse tensor its stored elements), and a sink at its elements times the width the forward reads it at
+  (through casts). A circuit that sends its update through a sign bit with error feedback, a top-k list or low-rank
+  factors has that cut; a dense update's is its elements at that width. `beta` is the cut over the step's updated MACs
+  per token.
 
 Dataflow follows storage: an in-place op (``add_``, a foreach optimizer kernel) makes a new version of the storage it
-writes, every view of it reads that version, and each element of a foreach list is its own value.
+writes, every view of it reads that version, and each element of a foreach list is its own value. A Python scalar read
+from a tensor (`Trace` from a recorded program, ``.item()``) carries its tensor's dependence into the ops it reaches.
 """
 from __future__ import annotations
 
@@ -70,7 +85,10 @@ _WALK = {"view", "_unsafe_view", "reshape", "t", "transpose", "permute", "expand
 _SCALE = {"mul", "div", "neg", "add", "sub"}
 #: ops that read only their argument's shape
 _SHAPE_ONLY = {"ones_like", "zeros_like", "empty_like", "full_like", "new_zeros", "new_ones", "new_empty", "new_full",
-               "sym_size", "sym_numel", "sym_stride", "empty_strided"}
+               "sym_size", "sym_numel", "sym_stride", "empty_strided", "randn_like", "rand_like", "randint_like"}
+#: in-place ops that write every element of what they write without reading it
+_OVERWRITE = {"copy_", "fill_", "zero_", "set_", "normal_", "uniform_", "bernoulli_", "random_", "exponential_",
+              "geometric_", "log_normal_", "cauchy_", "_foreach_copy_", "_foreach_zero_"}
 #: matmul-like names that `_gemms` must account for (te_core.flops's); any other op with one of these in its name is refused
 _GEMM_LIKE, _NOT_GEMM = GEMM_LIKE, NOT_GEMM
 _ELEMENTWISE, _SCALED, _FUSED, _LINALG = ELEMENTWISE_NAMES, SCALED_NAMES, FUSED_OPTIMIZER_MACS, LINALG_NAMES
@@ -226,12 +244,29 @@ def _arg_nodes_of(args) -> list:
 
 
 def _width(dtype: str) -> int:
-    return getattr(torch, dtype).itemsize * 8
+    return _dtype_bits(getattr(torch, dtype))
+
+
+def _dtype_bits(dtype: torch.dtype) -> int:
+    return 1 if dtype == torch.bool else dtype.itemsize * 8
+
+
+def _value_bits(v) -> int:
+    """A value's bits: its elements (a sparse tensor's stored ones) at its dtype's width; 64 for a Python scalar."""
+    if isinstance(v, torch.Tensor):
+        n = v.numel()
+        if v.layout != torch.strided:
+            try:
+                n = v._nnz() * (1 + v.sparse_dim())
+            except (RuntimeError, NotImplementedError, AttributeError):
+                pass
+        return n * _dtype_bits(v.dtype)
+    return 64 if isinstance(v, (int, float, bool, torch.SymInt, torch.SymFloat)) else 0
 
 
 @dataclass(frozen=True)
 class Matmul:
-    """One GEMM of the step (module docstring)."""
+    """One MAC node of the step (module docstring): a GEMM, or (part ``elementwise``) an updated elementwise or counted op."""
     node: str
     op: str
     part: str
@@ -249,10 +284,14 @@ class Matmul:
     upstream: int
     upstream_fwd: int
     upstream_macs: Fraction
+    step: int = 0
+    tokens: int = 1
+    #: the narrowest width of its update-dependent operands (0: none)
+    width: int = 0
 
     def to_json(self) -> dict:
         d = {k: getattr(self, k) for k in ("node", "op", "part", "phase", "macs", "dims", "operands", "weight", "result", "role",
-                                           "upstream", "upstream_fwd")}
+                                           "upstream", "upstream_fwd", "step", "tokens", "width")}
         d["token_dims"] = {k: list(v) for k, v in self.token_dims.items()}
         d["params"] = list(self.params)
         d["dtypes"] = list(self.dtypes)
@@ -262,9 +301,13 @@ class Matmul:
 
 
 def _phases(gm) -> dict:
-    """Each node's phase from the `record_function` markers around it (module docstring of `trace`)."""
+    """Each node's phase: a recorded program's (``meta["te_phase"]``, `trace.record_program`), else from the
+    `record_function` markers around it (module docstring of `trace`)."""
     out, stack = {}, []
     for n in gm.graph.nodes:
+        if "te_phase" in n.meta:
+            out[n] = n.meta["te_phase"]
+            continue
         name = _pk(n.target) if n.op == "call_function" else ""
         if name == "_record_function_enter_new":
             stack.append((n, str(n.args[0])))
@@ -292,26 +335,56 @@ class _Flow:
     """Values of the graph with their direct dependences, storage-versioned (module docstring)."""
 
     def __init__(self, gm, phases: dict, tok) -> None:
+        self.gm = gm
         self.preds: list[tuple[int, ...]] = []
         self.phase: list[str] = []
         self.tok: list[bool] = []
+        self.step: list[int] = []
+        self.bits: list[int] = []
+        self.node: list[Any] = []                      # value -> the node that made it
         self.source: dict[int, tuple[str, str]] = {}   # value -> ("attr", target) | ("input", name): a graph source
         self.val: dict[Any, Any] = {}
         self.base: dict[Any, Any] = {}
         self.cur: dict[Any, int] = {}
+        self.size: dict[Any, int] = {}                 # storage -> its elements
         self.written: set = set()
+        self.writes: list[tuple[Any, int, Any]] = []   # (storage, its new value, the node that wrote it)
         self.reads: dict[tuple[Any, Any], frozenset[int]] = {}   # (node, argument node) -> the values it read when it ran
+        self._at, self._step = None, 0
         for n in gm.graph.nodes:
             if n.op == "call_function":
-                for a in _arg_nodes(n):
+                for a in _arg_nodes(n) + list(n.meta.get("te_scalar_deps", ())):
                     self.reads[(n, a)] = frozenset(self._rd(a))
+            self._at, self._step = n, int(n.meta.get("te_step", 0))
             self._node(n, phases.get(n, "forward"), tok)
 
-    def _new(self, preds, phase: str, tok: bool) -> int:
+    def _new(self, preds, phase: str, tok: bool, val=None) -> int:
         self.preds.append(tuple(sorted(set(preds))))
         self.phase.append(phase)
         self.tok.append(tok)
+        self.step.append(self._step)
+        self.bits.append(_value_bits(val))
+        self.node.append(self._at)
         return len(self.preds) - 1
+
+    def _write(self, a, reads, ph: str, tok: bool) -> tuple[int, Any]:
+        """A new value of the storage `a` (a node's argument) writes."""
+        b = self.base.get(a, ("node", a.name))
+        val = a.meta.get("val")
+        bits = self.size.get(b, val.numel() if isinstance(val, torch.Tensor) else 1)
+        v = self._new(reads, ph, tok)
+        if isinstance(val, torch.Tensor):
+            self.bits[v] = bits * _dtype_bits(val.dtype)
+        self.cur[b] = v
+        self.written.add(b)
+        self.writes.append((b, v, self._at))
+        return v, b
+
+    def _whole(self, a) -> bool:
+        """Whether the argument `a` covers all of its storage."""
+        val = a.meta.get("val")
+        b = self.base.get(a, ("node", a.name))
+        return isinstance(val, torch.Tensor) and val.numel() == self.size.get(b, val.numel())
 
     def _rd(self, a) -> set[int]:
         out = set()
@@ -329,16 +402,20 @@ class _Flow:
 
     def _node(self, n, ph: str, tok) -> None:
         if n.op == "placeholder":
-            v = self._new((), ph, tok(n, None))
+            val = n.meta.get("val")
+            v = self._new((), ph, tok(n, None), val)
             self.val[n], self.base[n] = v, ("input", n.name)
             self.cur[("input", n.name)] = v
+            self.size[("input", n.name)] = val.numel() if isinstance(val, torch.Tensor) else 1
             self.source[v] = ("input", n.name)
             return
         if n.op == "get_attr":
             key = ("attr", n.target)
             if key not in self.cur:
-                v = self._new((), ph, tok(n, None))
+                val = getattr(self.gm, n.target, None)
+                v = self._new((), ph, tok(n, None), val)
                 self.cur[key] = v
+                self.size[key] = val.numel() if isinstance(val, torch.Tensor) else 1
                 self.source[v] = key
             self.val[n], self.base[n] = self.cur[key], key
             return
@@ -367,14 +444,20 @@ class _Flow:
                     written_pos.add(i if not arg.kwarg_only else arg.name)
         lists = [(p, a) for p, a in flat if isinstance(a, (list, tuple)) and any(isinstance(x, torch.fx.Node) for x in a)]
         singles = [(p, a) for p, a in flat if isinstance(a, torch.fx.Node)]
+        scalars = set()
+        for d in n.meta.get("te_scalar_deps", ()):
+            scalars |= self._rd(d)
         shape_only = name in _SHAPE_ONLY
+        overwrite = name in _OVERWRITE
         if lists and any(len(a) > 1 for _, a in lists) and name.startswith("_foreach"):
             k = max(len(a) for _, a in lists)
-            common = set()
+            common = set(scalars)
             for _, a in singles:
                 common |= self._rd(a)
             reads = [set(common) for _ in range(k)]
-            for _, a in lists:
+            for p, a in lists:
+                if overwrite and p in written_pos:
+                    continue
                 if len(a) == k:
                     for i, x in enumerate(a):
                         reads[i] |= self._rd(x)
@@ -386,33 +469,33 @@ class _Flow:
             if mutated:
                 for m in mutated:
                     for i, x in enumerate(m):
-                        v = self._new(reads[i], ph, tok(x, None))
-                        b = self.base.get(x, ("node", x.name))
-                        self.cur[b] = v
-                        self.written.add(b)
+                        own = set() if not overwrite or self._whole(x) else self._rd(x)
+                        self._write(x, reads[i] | own, ph, tok(x, None))
                 self.val[n] = None
                 return
-            vals = [self._new(reads[i], ph, tok(n, i)) for i in range(k)]
+            outs = n.meta.get("val")
+            vals = [self._new(reads[i], ph, tok(n, i), outs[i] if isinstance(outs, (list, tuple)) and i < len(outs) else None)
+                    for i in range(k)]
             self.val[n] = vals
             self.base[n] = [("node", n.name, i) for i in range(k)]
             for i, v in enumerate(vals):
                 self.cur[("node", n.name, i)] = v
+                o = outs[i] if isinstance(outs, (list, tuple)) and i < len(outs) else None
+                self.size[("node", n.name, i)] = o.numel() if isinstance(o, torch.Tensor) else 1
             return
-        reads = set()
+        mutated = [a for p, a in singles if p in written_pos]
+        reads = set(scalars)
         if not shape_only:
             for _, a in singles:
-                reads |= self._rd(a)
+                if not (overwrite and a in mutated and self._whole(a)):
+                    reads |= self._rd(a)
             for _, a in lists:
                 for x in a:
                     reads |= self._rd(x)
-        mutated = [a for p, a in singles if p in written_pos]
         if mutated:
             first = None
             for a in mutated:
-                v = self._new(reads, ph, tok(a, None))
-                b = self.base.get(a, ("node", a.name))
-                self.cur[b] = v
-                self.written.add(b)
+                v, b = self._write(a, reads, ph, tok(a, None))
                 first = (v, b) if first is None else first
             self.val[n], self.base[n] = first
             return
@@ -420,7 +503,7 @@ class _Flow:
         is_view = bool(ret) and ret[0].alias_info is not None and not ret[0].alias_info.is_write and singles
         out = n.meta.get("val")
         if isinstance(out, (list, tuple)):
-            vals = [self._new(reads, ph, tok(n, i)) if isinstance(o, torch.Tensor) else None for i, o in enumerate(out)]
+            vals = [self._new(reads, ph, tok(n, i), o) if isinstance(o, torch.Tensor) else None for i, o in enumerate(out)]
             self.val[n] = vals
             if is_view:
                 self.base[n] = [self.base.get(singles[0][1], ("node", singles[0][1].name))] * len(vals)
@@ -429,14 +512,16 @@ class _Flow:
                 for i, v in enumerate(vals):
                     if v is not None:
                         self.cur[("node", n.name, i)] = v
+                        self.size[("node", n.name, i)] = out[i].numel()
             return
-        v = self._new(reads, ph, tok(n, None))
+        v = self._new(reads, ph, tok(n, None), out)
         self.val[n] = v
         if is_view:
             self.base[n] = self.base.get(singles[0][1], ("node", singles[0][1].name))
         else:
             self.base[n] = ("node", n.name)
             self.cur[("node", n.name)] = v
+            self.size[("node", n.name)] = out.numel() if isinstance(out, torch.Tensor) else 1
 
 
 def _arg_nodes(n) -> list:
@@ -471,8 +556,16 @@ class StepGraph:
     digest: str = ""
     elementwise_macs: int = 0
     approx_macs: int = 0
-    #: the forward's non-GEMM using nodes (an activation combined with an updated operand), as te_core.flops counts them
-    using_elementwise: list[Matmul] = field(default_factory=list)
+    #: the forward's updated MAC nodes that aren't GEMMs (module docstring)
+    updated_elementwise: list[Matmul] = field(default_factory=list)
+    #: the dependent slots, by parameter or attribute name
+    dependent: list = field(default_factory=list)
+    #: the cut (module docstring) in bits, and its bits per updated MAC per token (None: no updated MAC)
+    cut_bits: int = 0
+    beta: float | None = None
+    #: (value, bits) on one narrowest cut, widest first; the dependent slots whose new values are the cut's sinks
+    cut: list = field(default_factory=list)
+    sinks: list = field(default_factory=list)
     _inputs: Any = field(default=None, repr=False)
 
     # -- building ---------------------------------------------------------------------------------------------------
@@ -513,12 +606,37 @@ class StepGraph:
         attrs = base.attrs
         params = {t: v for t, v in attrs.items() if v[0] == "parameter"}
         trained = frozenset(params[k[1]][1] for k in flow.written if k[0] == "attr" and k[1] in params)
-        upd = trained if updated is None else frozenset(updated)
-        seed = _closure(flow, lambda v: flow.phase[v] == "backward")
-        dep_upd = _closure(flow, lambda v: flow.source.get(v, ("", ""))[0] == "attr" and
-                           flow.source[v][1] in params and params[flow.source[v][1]][1] in upd)
-        dep_par = _closure(flow, lambda v: flow.source.get(v, ("", ""))[0] == "attr" and flow.source[v][1] in attrs)
         tokens = prod(base.axis_sizes) if base.axis_sizes else 1
+        step_tokens = dict(base.step_tokens or {})
+        region_tokens = sum(step_tokens.values()) if step_tokens else tokens
+
+        def tokens_of(n) -> int:
+            return step_tokens.get(int(n.meta.get("te_step", 0)), tokens) if step_tokens else tokens
+
+        # dependent slots: the largest set of written slots closed under the rule (module docstring)
+        entry = {k: v for v, k in flow.source.items() if k[0] == "attr"}
+        writes: dict = {}
+        for k, v, _ in flow.writes:
+            if k[0] == "attr":
+                writes.setdefault(k, []).append(v)
+        before = {("attr", t) for t in base.written_before if ("attr", t) in entry}
+        if updated is None:
+            seeded, slots = set(), set(writes) | before
+        else:
+            seeded = {k for k in entry if k[1] in params and params[k[1]][1] in updated}
+            slots = {k for k in set(writes) | before if k[1] not in params}
+        while True:
+            seeds = {entry[k] for k in slots | seeded if k in entry}
+            dep = _closure(flow, seeds.__contains__)
+            kept = {k for k in slots if k not in writes or any(dep[v] for v in writes[k])}
+            if kept == slots:
+                break
+            slots = kept
+        dependent = slots | seeded
+        upd = (frozenset(params[k[1]][1] for k in dependent if k[1] in params) if updated is None
+               else frozenset(updated))
+        seed = _closure(flow, lambda v: flow.phase[v] == "backward")
+        dep_par = _closure(flow, lambda v: flow.source.get(v, ("",))[0] == "attr")
 
         def walk(a):
             seen = 0
@@ -546,7 +664,7 @@ class StepGraph:
                     return "constant", None
                 if hit[0] == "parameter":
                     return ("updated" if hit[1] in upd else "registered"), hit[1]
-                return "registered", hit[1]
+                return ("updated" if ("attr", src.target) in dependent else "registered"), hit[1]
             vs = flow.reads.get((n, a), frozenset())
             if not vs:
                 return "constant", None
@@ -554,11 +672,19 @@ class StepGraph:
                 return "gradient", None
             if any(flow.tok[x] for x in vs):
                 return "activation", None
-            if any(dep_upd[x] for x in vs):
+            if any(dep[x] for x in vs):
                 return "updated", None
             if any(dep_par[x] for x in vs):
                 return "registered", None
             return "constant", None
+
+        def depends(n, ops) -> bool:
+            return any(dep[x] for a in ops if isinstance(a, torch.fx.Node) for x in flow.reads.get((n, a), ()))
+
+        def width(n, ops) -> int:
+            ws = [_dtype_bits(a.meta["val"].dtype) for a in ops if isinstance(a, torch.fx.Node)
+                  and isinstance(a.meta.get("val"), torch.Tensor) and any(dep[x] for x in flow.reads.get((n, a), ()))]
+            return min(ws, default=0)
 
         # GEMMs and their dims in every capture
         raw = []
@@ -599,8 +725,8 @@ class StepGraph:
             names = tuple(p for _, p in cls_)
             result = "token" if any(d in tdims for d in ("batch", "m", "n")) else "parameter"
             rv = result_value(n, g)
-            if result == "token" and "updated" in classes:
-                role = "using"
+            if result == "token" and phases.get(n, "forward") == "forward" and depends(n, g.operands):
+                role = "updated"
             elif result == "parameter" and rv is not None and rv in reach:
                 role = "producing"
             else:
@@ -608,9 +734,10 @@ class StepGraph:
             weight = min(classes, key=lambda c: _RANK[c]) if classes else "constant"
             recs.append([n, g, tdims, classes, names, result, role, weight, rv])
 
-        # a forward node that combines an activation with an updated operand is a using node whatever op it is
-        # (te_core.flops): at its elementwise multiplications, else its work (`_work`); a gather's source isn't combined,
-        # but an updated source gathered by token data is the circuit's gather (`gather_macs`)
+        # |C|'s other forward work (te_core.flops): an activation combined with an operand that differs from θ, at its
+        # elementwise multiplications, else its work (`_work`); an updated source gathered by token data is the
+        # circuit's gather (`gather_macs`). The updated ones: an elementwise or counted op whose result is
+        # token-indexed with an update-dependent operand; a gather moves a dependent table's rows with no MAC.
         extra = 0
         for n in nodes:
             if (n.op != "call_function" or not isinstance(n.target, torch._ops.OpOverload) or _gemms(n)
@@ -618,70 +745,113 @@ class StepGraph:
                     or _pk(n.target) in ("_record_function_enter_new", "_record_function_exit")):
                 continue
             ops = _arg_nodes(n)
-            src = set(_arg_nodes_of(n.args[:1])) if _pk(n.target) in _GATHERS else set()
+            gather = _pk(n.target) in _GATHERS
+            src = set(_arg_nodes_of(n.args[:1])) if gather else set()
             cls_ = [klass(n, a) for a in ops]
             mixed = [c for a, (c, _) in zip(ops, cls_) if a not in src]
             source = [c for a, (c, _) in zip(ops, cls_) if a in src]
+            k, kind = _other_macs(n)
+            work = 0
             if "updated" in source and "activation" in mixed:
-                # an updated table read by token data: the circuit's gather of its rows (te_core.flops, gather_macs)
-                k = gather_macs(_pk(n.target), n.args[0].meta["val"].shape, n.args[1] if len(n.args) > 1 else None,
-                                n.meta["val"].numel())
-                extra += k
-            elif "activation" in mixed and "updated" in mixed:
-                k, kind = _other_macs(n)
-                if not kind:
-                    k = _work(n)
-                    extra += k
-            else:
-                continue
-            if not k:
-                continue
+                extra += gather_macs(_pk(n.target), n.args[0].meta["val"].shape, n.args[1] if len(n.args) > 1 else None,
+                                     n.meta["val"].numel())
+            elif "activation" in mixed and "updated" in mixed and not kind:
+                work = _work(n)
+                extra += work
+            macs = k if kind else work
             out = n.meta.get("val")
-            g = _G("elementwise", {"batch": 1, "m": k, "k": 1, "n": 1}, tuple(ops), 0 if isinstance(out, (list, tuple)) else None)
+            g = _G("elementwise", {"batch": 1, "m": macs, "k": 1, "n": 1}, tuple(ops),
+                   0 if isinstance(out, (list, tuple)) else None)
+            rv = result_value(n, g)
+            if gather or not macs or rv is None or not flow.tok[rv] or not depends(n, ops):
+                continue
             classes = tuple(c for c, _ in cls_)
-            recs.append([n, g, {}, classes, tuple(p for _, p in cls_), "token", "using",
-                         min(classes, key=lambda c: _RANK[c]), result_value(n, g)])
+            recs.append([n, g, {}, classes, tuple(p for _, p in cls_), "token", "updated",
+                         min(classes, key=lambda c: _RANK[c]) if classes else "constant", rv])
 
-        # upstream using GEMMs, as bitsets over the using records
-        using_idx = [i for i, r in enumerate(recs) if r[6] == "using"]
+        # depth: the forward's updated MACs upstream of each node within its step, as bitsets over the updated records
+        fwd = [i for i, r in enumerate(recs) if r[6] == "updated" and phases.get(r[0], "forward") == "forward"]
         own: dict[int, int] = {}
-        for bit, i in enumerate(using_idx):
+        for bit, i in enumerate(fwd):
             rv = recs[i][8]
             if rv is not None:
                 own[rv] = own.get(rv, 0) | (1 << bit)
         anc = [0] * len(flow.preds)
         for v, ps in enumerate(flow.preds):
+            if flow.phase[v] != "forward":
+                continue
             m = 0
             for p in ps:
-                m |= anc[p] | own.get(p, 0)
+                if flow.phase[p] == "forward" and flow.step[p] == flow.step[v]:
+                    m |= anc[p] | own.get(p, 0)
             anc[v] = m
-        per_tok = [Fraction(_macs(recs[i][1].dims), tokens) for i in using_idx]
-        fwd_mask = gemm_mask = 0
-        for bit, i in enumerate(using_idx):
-            if phases.get(recs[i][0]) == "forward":
-                fwd_mask |= 1 << bit
+        per_tok = [Fraction(_macs(recs[i][1].dims), tokens_of(recs[i][0])) for i in fwd]
+        gemm_mask = 0
+        for bit, i in enumerate(fwd):
             if recs[i][1].part != "elementwise":
                 gemm_mask |= 1 << bit
 
         matmuls = []
         for n, g, tdims, classes, names, result, role, weight, rv in recs:
             m = 0
-            for a in g.operands:
-                if isinstance(a, torch.fx.Node):
-                    for x in flow.reads.get((n, a), ()):
-                        m |= anc[x] | own.get(x, 0)
+            if phases.get(n, "forward") == "forward":
+                st = int(n.meta.get("te_step", 0))
+                for a in g.operands:
+                    if isinstance(a, torch.fx.Node):
+                        for x in flow.reads.get((n, a), ()):
+                            if flow.phase[x] == "forward" and flow.step[x] == st:
+                                m |= anc[x] | own.get(x, 0)
             up_macs = sum((per_tok[b] for b in _bits(m)), Fraction(0))
-            dtypes = tuple(str(a.meta["val"].dtype).removeprefix("torch.") for a in g.operands if isinstance(a, torch.fx.Node))
+            dtypes = tuple(str(a.meta["val"].dtype).removeprefix("torch.") for a in g.operands
+                           if isinstance(a, torch.fx.Node) and isinstance(a.meta.get("val"), torch.Tensor))
             matmuls.append(Matmul(n.name, str(n.target), g.part, phases.get(n, "forward"), _macs(g.dims), dict(g.dims), tdims,
-                                  classes, names, dtypes, weight, result, role, Fraction(_macs(g.dims), tokens),
-                                  _popcount(m & gemm_mask), _popcount(m & fwd_mask & gemm_mask), up_macs))
-        using_elementwise = [m for m in matmuls if m.part == "elementwise"]
+                                  classes, names, dtypes, weight, result, role, Fraction(_macs(g.dims), tokens_of(n)),
+                                  _popcount(m & gemm_mask), _popcount(m & gemm_mask), up_macs,
+                                  int(n.meta.get("te_step", 0)), tokens_of(n), width(n, g.operands) if role == "updated" else 0))
+        updated_elementwise = [m for m in matmuls if m.part == "elementwise"]
         matmuls = [m for m in matmuls if m.part != "elementwise"]
         other = {"elementwise": extra, "approx": 0}
         for n in nodes:
             k, kind = _other_macs(n)
             if kind:
                 other[kind] += k
+
+        # the cut (module docstring)
+        fr = [False] * len(flow.preds)
+        for v in range(len(flow.preds) - 1, -1, -1):
+            if flow.phase[v] == "forward" and flow.tok[v]:
+                fr[v] = True
+            if fr[v]:
+                for p in flow.preds[v]:
+                    if flow.phase[p] == "forward":
+                        fr[p] = True
+        read_width: dict[str, int] = {}
+        for n in nodes:
+            out = flow.val.get(n)
+            if n.op != "call_function" or phases.get(n, "forward") != "forward" or not isinstance(out, int) \
+                    or not flow.tok[out]:
+                continue
+            for a in _arg_nodes(n):
+                s = walk(a)
+                if isinstance(s, torch.fx.Node) and s.op == "get_attr" and isinstance(a.meta.get("val"), torch.Tensor):
+                    read_width[s.target] = max(read_width.get(s.target, 0), _dtype_bits(a.meta["val"].dtype))
+        sources = [v for v, k in flow.source.items() if k[0] == "input"]
+        sources += [entry[k] for k in dependent if k in entry and not fr[entry[k]]]
+        sinks: dict[int, int] = {}
+        for k in dependent:
+            if k in writes and k in entry and fr[entry[k]]:
+                t = getattr(gm, k[1], None)
+                own_w = _dtype_bits(t.dtype) if isinstance(t, torch.Tensor) else 64
+                sinks[flow.cur[k]] = flow.size.get(k, 1) * min(own_w, read_width.get(k[1], own_w))
+        cut_bits, on_cut = _min_cut(flow, [d and not f for d, f in zip(dep, fr)], sources, sinks)
+        u_macs = sum(_macs(recs[i][1].dims) for i in fwd)
+        beta = cut_bits / (u_macs / region_tokens) if u_macs and region_tokens else None
+
+        def label(v) -> str:
+            n = flow.node[v]
+            return n.target if n is not None and n.op == "get_attr" else (n.name if n is not None else "?")
+
+        cut = sorted(((label(v), flow.bits[v] if v not in sinks else sinks[v]) for v in on_cut), key=lambda x: -x[1])
         plist = []
         seen_names = set()
         for t, (kind, pname, aliases) in attrs.items():
@@ -699,9 +869,13 @@ class StepGraph:
                 crossing.append({"kind": kind, "name": pname, "shape": list(v.shape), "dtype": str(v.dtype).removeprefix("torch.")})
         crossing += [{"kind": "optimizer_state", "name": f"{s['param']}.{s['key']}", "shape": s["shape"], "dtype": s["dtype"]}
                      for s in base.state]
-        return cls(name, tokens, dict(zip(axis_names, base.axis_sizes)), matmuls, plist, crossing, upd, trained, gm,
+        names_of = {k: (attrs[k[1]][1] if k[1] in attrs else k[1]) for k in dependent}
+        return cls(name, region_tokens, dict(zip(axis_names, base.axis_sizes)), matmuls, plist, crossing, upd, trained, gm,
                    digest=_digest(gm), elementwise_macs=other["elementwise"], approx_macs=other["approx"],
-                   using_elementwise=using_elementwise, _inputs=(base, varied, axis_names))
+                   updated_elementwise=updated_elementwise, dependent=sorted(names_of.values()), cut_bits=cut_bits,
+                   beta=beta, cut=cut, sinks=sorted(names_of[k] for k in dependent if k in writes and k in entry and
+                                                    fr[entry[k]]),
+                   _inputs=(base, varied, axis_names))
 
     def with_updated(self, updated) -> "StepGraph":
         """The same graph classified with another `updated` set (no recapture)."""
@@ -719,22 +893,24 @@ class StepGraph:
         """The step's share of |C| as te_core.flops counts it: GEMMs, elementwise multiplications, linear algebra."""
         return self.macs + self.elementwise_macs + self.approx_macs
 
+    def _updated(self) -> list[Matmul]:
+        return [m for m in self.matmuls + self.updated_elementwise if m.role == "updated" and m.phase == "forward"]
+
     def structure(self) -> dict:
         """The step in te_core.flops's record form (`Counter.record()["structures"][sid]`), which te_core.annotate reads:
-        `updated` holds one row [per-token MACs, updated MACs per token upstream, MACs, tokens, weight bits] per using GEMM
-        outside the backward, sorted by (upstream, per-token MACs); `log` counts every GEMM by (phase, role, op, dims)."""
-        rows = []
-        for m in self.matmuls + self.using_elementwise:
-            if m.role != "using" or m.phase == "backward":
-                continue
-            bits = min(_width(d) for c, d in zip(m.operands, m.dtypes) if c == "updated")
-            rows.append([_num(m.per_token), _num(m.upstream_macs), m.macs, self.tokens, bits])
+        `updated` holds one row [MACs per token, updated MACs per token upstream, MACs, tokens, width] per updated MAC node,
+        sorted by (upstream, MACs per token), the width its update-dependent operands' narrowest; `beta` the cut's bits
+        per updated MAC per token (None: no updated MAC), `cut_bits` the cut; `log` counts every GEMM by (phase, role,
+        op, dims)."""
+        rows = [[_num(Fraction(m.macs, self.tokens)), _num(m.upstream_macs), m.macs, self.tokens, m.width]
+                for m in self._updated()]
         log: dict[tuple, list[int]] = {}
         for m in self.matmuls:
             e = log.setdefault((m.phase, m.role, m.op, json.dumps(m.dims, sort_keys=True)), [0, 0])
             e[0] += 1
             e[1] += m.macs
-        return {"updated": sorted(rows, key=lambda r: (r[1], r[0])), "log": sorted([list(k) + v for k, v in log.items()])}
+        return {"updated": sorted(rows, key=lambda r: (r[1], r[0])), "log": sorted([list(k) + v for k, v in log.items()]),
+                "cut_bits": self.cut_bits, "beta": self.beta}
 
     def role_macs(self, role: str) -> int:
         return sum(m.macs for m in self.matmuls if m.role == role)
@@ -745,28 +921,153 @@ class StepGraph:
             out[m.phase] = out.get(m.phase, 0) + m.macs
         return out
 
+    def updated_macs(self) -> int:
+        """The forward's updated MACs, GEMMs and elementwise."""
+        return sum(m.macs for m in self._updated())
+
     def depth_profile(self, unit: str = "macs") -> list[tuple[Fraction | int, int]]:
-        """(upstream, MACs) of every using GEMM, upstream in per-token MACs (``unit="macs"``) or GEMM nodes
-        (``"matmuls"``, ``"matmuls_fwd"``)."""
-        key = {"macs": lambda m: m.upstream_macs, "matmuls": lambda m: m.upstream,
-               "matmuls_fwd": lambda m: m.upstream_fwd}[unit]
-        return sorted((key(m), m.macs) for m in self.matmuls if m.role == "using")
+        """(upstream, MACs) of every updated MAC node of the forward, upstream in per-token MACs (``unit="macs"``) or
+        updated GEMM nodes (``"matmuls"``)."""
+        key = {"macs": lambda m: m.upstream_macs, "matmuls": lambda m: m.upstream}[unit]
+        return sorted((key(m), m.macs) for m in self._updated())
 
     def deep_macs(self, D, unit: str = "macs") -> int:
         return sum(macs for up, macs in self.depth_profile(unit) if up >= D)
 
     def phi(self, D, unit: str = "macs") -> Fraction:
-        """The share of the step's MACs in using GEMMs with at least D upstream (`depth_profile`'s unit)."""
-        return Fraction(self.deep_macs(D, unit), self.macs) if self.macs else Fraction(0)
+        """The share of the step's |C| (`c_macs`) in updated MACs with at least D upstream (`depth_profile`'s unit)."""
+        return Fraction(self.deep_macs(D, unit), self.c_macs) if self.c_macs else Fraction(0)
 
     def summary(self) -> dict:
-        roles = {r: self.role_macs(r) for r in ("using", "producing", "neither")}
+        roles = {r: self.role_macs(r) for r in ("updated", "producing", "neither")}
         return {"name": self.name, "digest": self.digest, "tokens": self.tokens, "axes": self.axes, "macs": self.macs,
                 "elementwise_macs": self.elementwise_macs, "approx_macs": self.approx_macs, "c_macs": self.c_macs,
                 "macs_per_token": str(Fraction(self.macs, self.tokens)), "roles": roles, "phases": self.phase_macs(),
-                "depth_max": str(max((m.upstream_macs for m in self.matmuls if m.role == "using"), default=0)),
-                "updated": sorted(self.updated), "trained": sorted(self.trained), "params": self.params,
-                "step_crossing": self.step_crossing, "matmuls": [m.to_json() for m in self.matmuls]}
+                "updated_macs": self.updated_macs(),
+                "depth_max": str(max((m.upstream_macs for m in self._updated()), default=0)),
+                "updated": sorted(self.updated), "trained": sorted(self.trained), "dependent": self.dependent,
+                "sinks": self.sinks, "cut_bits": self.cut_bits, "beta": self.beta, "cut": self.cut[:12],
+                "params": self.params, "step_crossing": self.step_crossing, "matmuls": [m.to_json() for m in self.matmuls]}
+
+
+def _min_cut(flow: _Flow, cuttable: list[bool], sources: list[int], sinks: dict[int, int]) -> tuple[int, list[int]]:
+    """The least bits of a vertex set separating `sources` from `sinks` (value -> its capacity) through `cuttable`
+    values and sinks only, and the values on one such cut."""
+    if not sinks or not sources:
+        return 0, []
+    n = len(flow.preds)
+    succ: list[list[int]] = [[] for _ in range(n)]
+    for v, ps in enumerate(flow.preds):
+        for p in ps:
+            succ[p].append(v)
+    fwd = [False] * n
+    stack = list(sources)
+    for s in sources:
+        fwd[s] = True
+    while stack:
+        for w in succ[stack.pop()]:
+            if not fwd[w]:
+                fwd[w] = True
+                stack.append(w)
+    back = [False] * n
+    stack = [s for s in sinks if fwd[s]]
+    for s in stack:
+        back[s] = True
+    while stack:
+        for p in flow.preds[stack.pop()]:
+            if fwd[p] and not back[p]:
+                back[p] = True
+                stack.append(p)
+    keep = [v for v in range(n) if fwd[v] and back[v]]
+    if not keep:
+        return 0, []
+    idx = {v: i for i, v in enumerate(keep)}
+    finite = [sinks[v] if v in sinks else flow.bits[v] for v in keep]
+    inf = sum(finite) + 1
+    token = {v for v, k in flow.source.items() if k[0] == "input"}
+    net = _Net(2 * len(keep) + 2)
+    S, T = 2 * len(keep), 2 * len(keep) + 1
+    for i, v in enumerate(keep):
+        net.add(2 * i, 2 * i + 1, finite[i] if v in sinks or (cuttable[v] and v not in token) else inf)
+        for p in flow.preds[v]:
+            if p in idx:
+                net.add(2 * idx[p] + 1, 2 * i, inf)
+    for s in sources:
+        if s in idx:
+            net.add(S, 2 * idx[s], inf)
+    for t in sinks:
+        if t in idx:
+            net.add(2 * idx[t] + 1, T, inf)
+    total, seen = net.max_flow(S, T)
+    return min(total, inf), [v for i, v in enumerate(keep) if seen[2 * i] and not seen[2 * i + 1]]
+
+
+class _Net:
+    """A flow network for Dinic's algorithm: edge e and its reverse e ^ 1."""
+
+    def __init__(self, n: int) -> None:
+        self.n, self.head = n, [-1] * n
+        self.to: list[int] = []
+        self.cap: list[int] = []
+        self.nxt: list[int] = []
+
+    def add(self, u: int, v: int, c: int) -> None:
+        self.to += [v, u]
+        self.cap += [c, 0]
+        self.nxt += [self.head[u], self.head[v]]
+        self.head[u], self.head[v] = len(self.to) - 2, len(self.to) - 1
+
+    def _levels(self, s: int) -> list[int]:
+        level = [-1] * self.n
+        level[s] = 0
+        q = [s]
+        for u in q:
+            e = self.head[u]
+            while e != -1:
+                w = self.to[e]
+                if self.cap[e] > 0 and level[w] < 0:
+                    level[w] = level[u] + 1
+                    q.append(w)
+                e = self.nxt[e]
+        return level
+
+    def max_flow(self, s: int, t: int) -> tuple[int, list[bool]]:
+        """The flow's value and the nodes the residual network reaches from `s` (the min cut's source side)."""
+        total = 0
+        while True:
+            level = self._levels(s)
+            if level[t] < 0:
+                return total, [x >= 0 for x in level]
+            it = list(self.head)
+            while True:
+                stack, path = [s], []
+                pushed = 0
+                while stack:
+                    u = stack[-1]
+                    if u == t:
+                        pushed = min(self.cap[e] for e in path)
+                        for e in path:
+                            self.cap[e] -= pushed
+                            self.cap[e ^ 1] += pushed
+                        break
+                    e = it[u]
+                    while e != -1 and not (self.cap[e] > 0 and level[self.to[e]] == level[u] + 1):
+                        e = self.nxt[e]
+                    it[u] = e
+                    if e == -1:
+                        level[u] = -1
+                        stack.pop()
+                        if path:
+                            path.pop()
+                            it[stack[-1]] = self.nxt[it[stack[-1]]]
+                        continue
+                    stack.append(self.to[e])
+                    path.append(e)
+                if not pushed:
+                    break
+                total += pushed
+
+
 
 
 def _bits(m: int):

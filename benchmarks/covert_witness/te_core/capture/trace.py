@@ -74,11 +74,15 @@ def phase(name: str):
 @dataclass
 class Trace:
     """One capture: the graph; each graph attribute that is a parameter or buffer, as (kind, name, aliases); the
-    optimizer state after the step; the token-axis sizes the batch was captured at."""
+    optimizer state after the step; the token-axis sizes the batch was captured at. A capture of several steps (a
+    recorded program's update period) gives each step's tokens by its nodes' ``meta["te_step"]`` (`step_tokens`), and
+    the graph attributes steps before it wrote (`written_before`: the run's own values when the graph reads them)."""
     gm: torch.fx.GraphModule
     attrs: dict[str, tuple[str, str, tuple[str, ...]]]
     state: list[dict]
     axis_sizes: tuple[int, ...] = ()
+    step_tokens: dict | None = None
+    written_before: frozenset = frozenset()
 
 
 def _default_token_dims(t: torch.Tensor) -> tuple[int, ...]:
