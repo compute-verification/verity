@@ -11,7 +11,7 @@
     circuit-check --all --records-only --cache DIR -j 64            every catalog binding's record, no target (`records`)
     circuit-check --all --catalog-units --cache DIR --binding NAME  only catalog binding NAME's targets, from the records
     circuit-check --all --cache DIR --bindings                      each catalog binding's targets, none checked (`bindings`)
-    circuit-check --all --catalog-units --cache DIR --update-reads  every catalog binding's read set into reads.json (`READS`)
+    circuit-check --all --catalog-units --cache DIR --update-reads  every catalog binding's read set into reads/ (`READS`)
     circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
     circuit-check --batch                                           batch invariance of the v0 registration's templates
@@ -56,10 +56,12 @@ from . import units as UN
 
 REPO = Path(__file__).resolve().parents[5]
 #: each catalog binding's read set as a task keyed on declared inputs declares it (`run`'s ``reads``, which ``--update-reads``
-#: writes here): ``bindings``, by name, each one's ``files``, ``listed`` and ``probes`` (`cache.declared`) beyond
-#: ``registries``' (`cache.registry_inputs`) when its ``registry`` is true, which then are its inputs too.  Outside this package,
-#: so no target's key (`cache.version`) holds it
-READS = Path(__file__).resolve().parents[2] / "reads.json"
+#: writes here), its ``files``, ``listed`` and ``probes`` (`cache.declared`) beyond ``registries``' (`cache.registry_inputs`)
+#: when its ``registry`` is true, which then are its inputs too.  ``registries.json`` holds ``registries``; ``bindings.json``
+#: holds each path once, in the one of its ``groups`` that exactly the bindings whose sets hold it share, and ``bindings``, by
+#: name, each one's other fields and the places of its groups as ranges (``"groups": "0-3,7"``; `grouped`, `expanded`).
+#: Outside this package, so no target's key (`cache.version`) holds it
+READS = Path(__file__).resolve().parents[2] / "reads"
 READS_SCHEMA = "circuit-check-reads/v1"
 
 
@@ -895,13 +897,71 @@ def _whole(d: dict | None, registries: dict) -> dict | None:
 
 
 def _reads_file() -> dict:
-    """`READS`, or none declared when there is none."""
+    """`READS`, or none declared when there is none, each binding's read set whole (`expanded`)."""
+    got: dict = {}
     with CC.internal():
-        try:
-            got = json.loads(READS.read_text())
-        except FileNotFoundError:
-            got = {}
-    return {"registries": got.get("registries", {}), "bindings": got.get("bindings", {})}
+        for part in ("registries.json", "bindings.json"):
+            try:
+                got.update(json.loads((READS / part).read_text()))
+            except FileNotFoundError:
+                pass
+    return expanded(got)
+
+
+def _ranges(places: list[int]) -> str:
+    """Ascending ``places`` as ranges, ``"0-3,7"`` for 0, 1, 2, 3 and 7 (`_places` reads them)."""
+    runs: list[list[int]] = []
+    for i in places:
+        if runs and runs[-1][1] == i - 1:
+            runs[-1][1] = i
+        else:
+            runs.append([i, i])
+    return ",".join(str(a) if a == b else f"{a}-{b}" for a, b in runs)
+
+
+def _places(ranges: str) -> list[int]:
+    """`_ranges`' ``ranges`` as the places they hold."""
+    out: list[int] = []
+    for run in filter(None, ranges.split(",")):
+        a, _, b = run.partition("-")
+        out.extend(range(int(a), int(b or a) + 1))
+    return out
+
+
+def grouped(bindings: dict[str, dict]) -> dict:
+    """``bindings.json``'s ``groups`` and ``bindings`` for the read sets ``bindings``: each path once, in the group of exactly the
+    bindings whose sets hold it, and each binding with its other fields and the places of its groups (`_ranges`); `expanded`
+    gives the sets back.  A path most bindings read is written once, not once a binding, and the groups go in the order of
+    their bindings (those of the first binding by name first, and so on), so a binding's places are few ranges."""
+    members: dict[tuple[str, str], list[str]] = {}
+    for n, d in sorted(bindings.items()):
+        for k in CC.DECLARED:
+            for p in d.get(k, ()):
+                members.setdefault((k, p), []).append(n)
+    by: dict[tuple[str, ...], list[tuple[str, str]]] = {}
+    for kp, ns in members.items():
+        by.setdefault(tuple(ns), []).append(kp)
+    names = sorted(bindings)
+    order = sorted(by, key=lambda ns: [n not in ns for n in names])
+    groups = [{k: sorted(p for kk, p in by[ns] if kk == k) for k in CC.DECLARED if any(kk == k for kk, _ in by[ns])}
+              for ns in order]
+    refs: dict[str, list[int]] = {n: [] for n in bindings}
+    for i, ns in enumerate(order):
+        for n in ns:
+            refs[n].append(i)
+    return {"groups": groups, "bindings": {n: {"groups": _ranges(refs[n]), **{k: v for k, v in d.items() if k not in CC.DECLARED}}
+                                           for n, d in sorted(bindings.items())}}
+
+
+def expanded(got: dict) -> dict:
+    """`READS`' ``registries`` and ``bindings.json``'s (`grouped`), ``got``, as ``registries`` and each binding's read set whole:
+    its groups' paths, by kind."""
+    groups = got.get("groups", [])
+    return {"registries": got.get("registries", {}),
+            "bindings": {n: {**{k: v for k, v in d.items() if k != "groups"},
+                             **{k: sorted({p for i in _places(d.get("groups", "")) for p in groups[i].get(k, ())})
+                                for k in CC.DECLARED}}
+                         for n, d in got.get("bindings", {}).items()}}
 
 
 def update_reads(rep: dict, every: bool) -> list[str]:
@@ -917,11 +977,11 @@ def update_reads(rep: dict, every: bool) -> list[str]:
         bindings = {**have["bindings"], **done}
     regs = new["registries"] if every and not incomplete else \
         {k: sorted({*have["registries"].get(k, ()), *new["registries"].get(k, ())}) for k in CC.DECLARED}
-    text = json.dumps({"schema": READS_SCHEMA, "registries": regs, "bindings": dict(sorted(bindings.items()))}, indent=1,
-                      sort_keys=True) + "\n"
-    tmp = READS.with_name(f".{READS.name}.{os.getpid()}")
-    tmp.write_text(text)
-    os.replace(tmp, READS)
+    READS.mkdir(parents=True, exist_ok=True)
+    for part, got in (("registries.json", {"registries": regs}), ("bindings.json", grouped(bindings))):
+        tmp = READS / f".{part}.{os.getpid()}"
+        tmp.write_text(json.dumps({"schema": READS_SCHEMA, **got}, indent=1, sort_keys=True) + "\n")
+        os.replace(tmp, READS / part)
     return incomplete
 
 

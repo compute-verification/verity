@@ -2465,7 +2465,9 @@ def declared(root: Path, reads: dict[str, list[str]]) -> dict[str, Any]:
             files |= got[0]
             listed |= got[1]
             probes |= got[2]
-    out: dict[str, Any] = {"files": sorted(files), "listed": sorted(listed), "probes": sorted(probes - files - {"", "."}),
+    # a code object's pseudo-file (``<frozen abc>``, ``<string>``) is no path of the tree
+    out: dict[str, Any] = {"files": sorted(files), "listed": sorted(listed),
+                           "probes": sorted(p for p in probes - files if p not in ("", ".") and not p.startswith("<")),
                            "registry": any(reads.get(k) for k in _REGISTRY)}
     if libs := reads.get("libs"):
         out["untracked"] = sorted(libs)

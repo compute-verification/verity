@@ -376,12 +376,14 @@ def test_a_target_s_reads_declare_the_paths_their_lookup_takes(tmp_path, monkeyp
     its pin's file; the listing of the package `load_registries` enumerated, not the modules that lists (`lookup` holds an
     unheld one by its name, through a move); each path the search for its modules asked about, so a module put where the
     search would find it first is a change of what it declares; whether it read the registries (every reached Definition's
-    registrar).  SynOther's leaves out what only SynTop's build imported."""
+    registrar).  SynOther's leaves out what only SynTop's build imported, and a code object's pseudo-file is no path."""
     from circuit_check import cache as CC
 
     root = _tree(tmp_path)
     _run(root)
     monkeypatch.syspath_prepend(str(root))
+    assert CC.declared(root, {"files": ["<frozen abc>", "<string>"]}) == {"files": [], "listed": [], "probes": [],
+                                                                          "registry": False}
     top, other = (CC.declared(root, _entry(root, t)["reads"]) for t in ("SynTop_v1", "SynOther_v1"))
     assert {"syn/__init__.py", "syn/top.py", "syn/sub.py", "syn/shape.py", "syn/prims.py", "syn/check.py", "syn/h.py",
             "targets.py", _pin("SynTop_v1")} <= set(top["files"]), top["files"]

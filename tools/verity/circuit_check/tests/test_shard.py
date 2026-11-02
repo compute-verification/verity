@@ -280,6 +280,22 @@ def test_the_shard_options_are_refused_where_they_mean_nothing(stub, tmp_path, c
     _refused(capsys, [tmp_path / "nothing"], "did not finish")
 
 
+def test_reads_holds_each_path_once_and_gives_each_binding_its_whole_read_set_back():
+    """`cli.grouped` writes each path once, in the group of exactly the bindings whose read sets hold it, those of the first
+    binding first, each binding's places as ranges, and `cli.expanded` gives every set back as it was, with its other fields."""
+    regs = {"files": ["r.py"], "listed": [], "probes": ["q"]}
+    sets = {"a": {"files": ["x.py", "y.py"], "listed": ["d"], "probes": ["p"], "registry": True},
+            "b": {"files": ["x.py"], "listed": [], "probes": ["p", "z"], "registry": False, "untracked": ["lib.so"]},
+            "c": {"files": [], "listed": [], "probes": [], "registry": False}}
+    got = cli.grouped(sets)
+    assert got["groups"] == [{"files": ["x.py"], "probes": ["p"]}, {"files": ["y.py"], "listed": ["d"]}, {"probes": ["z"]}]
+    assert got["bindings"] == {"a": {"groups": "0-1", "registry": True},
+                               "b": {"groups": "0,2", "registry": False, "untracked": ["lib.so"]},
+                               "c": {"groups": "", "registry": False}}
+    assert cli.expanded({"registries": regs, **json.loads(json.dumps(got))}) == {"registries": regs, "bindings": sets}
+    assert cli._ranges([0, 1, 2, 3, 7, 9, 10]) == "0-3,7,9-10" and cli._places("0-3,7,9-10") == [0, 1, 2, 3, 7, 9, 10]
+
+
 def test_a_binding_s_name_is_its_root_function_its_files_models_or_its_template_entry():
     m = "verity.ml.circuits.ops.boolean.gf2k.circuit-check#"
     assert [SH.binding(u) for u in ((f"{m}_gf2k_roots",), (f"{m}_x_roots", f"{m}_x_bindings"), ("_kernel_roots",),
@@ -440,14 +456,14 @@ def _reads_run(name: str, write: bool = False) -> str:
     tree: prints the report's ``reads`` and ``undeclared`` too, with ``write`` once ``--update-reads`` wrote them."""
     return (UNITS_FORKED.replace("fork=True)", f"fork=True, binding={name!r})")
             .replace("rep = cli.run(", "from verity.ml.definitions.registry import catalog as RC\nRC.load()\n"
-                     "cli.READS = root / 'reads.json'\nrep = cli.run(", 1)
+                     "cli.READS = root / 'reads'\nrep = cli.run(", 1)
             .replace('print(json.dumps({"stats"', ("cli.update_reads(rep, every=False)\n" if write else "")
                      + 'print(json.dumps({"stats"', 1)
             .replace('"values": {', '"reads": rep["reads"], "undeclared": rep["undeclared"], "values": {', 1))
 
 
 @pytest.mark.slow
-def test_a_binding_s_report_holds_its_read_set_and_what_reads_json_does_not_declare_of_it(tmp_path):
+def test_a_binding_s_report_holds_its_read_set_and_what_reads_does_not_declare_of_it(tmp_path):
     """A ``--binding`` run's report holds its binding's read set (`cli._read_sets`) beside the registries' (each module they
     imported: here all of ``syn``, which `load_registries` enumerates): its own targets' pins files, no other binding's, and
     the package listing every check holds.  With no `cli.READS` all of it is undeclared; once ``--update-reads`` wrote it,
@@ -470,8 +486,11 @@ def test_a_binding_s_report_holds_its_read_set_and_what_reads_json_does_not_decl
     model = _run_units(root, _reads_run("_model_roots", write=True))
     theirs = model["reads"]["bindings"]["_model_roots"]
     assert _pin("SynOther_v1") in theirs["files"] and _pin("SynTop_v1") not in theirs["files"], theirs
-    written = json.loads((root / "reads.json").read_text())
-    assert written["bindings"] == {"_core_roots": mine, "_model_roots": theirs} and written["registries"] == regs
+    written = {k: v for part in ("registries.json", "bindings.json")
+               for k, v in json.loads((root / "reads" / part).read_text()).items()}
+    assert cli.expanded(written) == {"registries": regs, "bindings": {"_core_roots": mine, "_model_roots": theirs}}
+    paths = [(k, p) for g in written["groups"] for k, ps in g.items() for p in ps]
+    assert len(paths) == len(set(paths)) and set(paths) >= {("files", _pin("SynTop_v1")), ("files", _pin("SynOther_v1"))}
     (root / "synlib").mkdir()
     (root / "synlib/__init__.py").write_text("")
     (root / "synlib/helper.py").write_text("H = 1\n")
