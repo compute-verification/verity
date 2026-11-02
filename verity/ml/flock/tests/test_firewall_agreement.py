@@ -418,6 +418,33 @@ def test_serve_relays_each_session_through_its_own_lean_firewall(built, tmp_path
     assert json.loads((tmp_path / "s1" / "public.json").read_text())["end"] == "finish"
 
 
+FLAT = Path(__file__).resolve().parent / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
+
+
+def test_a_real_provers_session_passes_the_lean_firewall_as_run_does(built):
+    """The flat GEMM selftest's honest session (the fetched fixture `test_rec_vstage` replays), at `schedule_for`'s schedule
+    of its shape, relayed through ``flock-firewall live``: it finishes, and its coin server record is `Flock.Firewall.run`'s
+    at the salts the live session drew. The cases above are synthetic; this is the unmodified prover's own rounds."""
+    assert (FLAT / "records-cpu" / "honest.json").is_file(), (
+        f"{FLAT} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/hidden-outputs`")
+    rec = json.loads((FLAT / "records-cpu" / "honest.json").read_text())["record"]
+    hello = json.loads(rec["hello"])
+    del hello["coins"]
+    lk = rec["link"]
+    reqs = [RL.encode_req(RL.REQ_HELLO, json.dumps(hello)),
+            RL.encode_req(RL.REQ_COMMIT, bytes.fromhex(lk["root_f"]), [(t, bytes.fromhex(v)) for t, v in lk["root_b"].items()], []),
+            RL.encode_req(RL.REQ_LINK, bytes(16 * len(lk["y"])))]
+    for st in rec["streams"]:
+        reqs.append(RL.encode_req(RL.REQ_OPEN, st["stream"], st["parent"] or "", st["label"].encode(), st["at"]))
+        reqs += [RL.encode_req(RL.REQ_ROUND, st["stream"], bytes.fromhex(rd["msg"]), rd["n"]) for rd in st["rounds"]]
+    reqs += [RL.encode_req(RL.REQ_PROOF, "circuit", r, (FLAT / "records-cpu" / f"honest.rep{r}.proof").read_bytes()) for r in (0, 1)]
+    reqs.append(RL.encode_req(RL.REQ_FINISH))
+    schedule = RL.schedule_for({"dense_m": 25, "k_log": 22, "nbl": 3, "regions": 3})
+    got, calls, drawn = relay_session(schedule, reqs)
+    assert got["end"] == "finish" and len(got["rounds"]) == sum(len(st["rounds"]) for st in rec["streams"])
+    assert lean_run([("real", schedule, reqs)], [drawn]) == [{"record": got, "calls": calls}]
+
+
 def test_main_serves_live_coins_only_through_the_lean_firewall(tmp_path, capsys, monkeypatch):
     monkeypatch.delenv("FC_FIREWALL_LEAN", raising=False)
     (tmp_path / "s.json").write_text(json.dumps(SCHEDULE))
