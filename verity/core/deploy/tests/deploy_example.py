@@ -13,7 +13,7 @@ import hashlib
 from pathlib import Path
 
 from verity.core.deploy.manifest import Channel, Manifest, Role
-from verity.core.deploy.party import Finish, Received, Record, Send, Timer
+from verity.core.deploy.party import Finish, Received, LogEntry, Send, Timer
 from verity.core.deploy.runtime import ProtocolDef
 from verity.core.wire import Body, Bool, Int, Message, Schema
 from verity.ml.crypto import lms
@@ -48,7 +48,7 @@ class Challenger:
             return [Send("clock", Message("ClockRead"))]
         if m.type == "ClockReading" and self.sent is None:
             self.sent = m.fields["ns"]
-            out = [Record({"nonce": self.nonce.hex()}, "coins"),
+            out = [LogEntry({"nonce": self.nonce.hex()}, "coins"),
                    Send("responder", Message("Challenge", {"deadline_ns": self.deadline}, self.nonce))]
             return out + ([Timer(self.sent + self.deadline)] if self.timer else [])
         if m.type == "Answer":
