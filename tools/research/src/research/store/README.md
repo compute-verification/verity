@@ -443,7 +443,8 @@ prints the table; the groups are:
   so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's
   spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
   carries no verdict — ignored; `verdict` (enum: pass | fail) on `task:<key>`, by the executor's worker, and `executor_shadow`
-  on `commit:<sha>`, by drive (`research.executor`).
+  on `commit:<sha>`, by drive (`research.executor`); `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, and
+  `label_delegation` on an agent's delegation target (`task:<sha512>`), each by a handle (`research.labelauth`).
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`;
   `staged` on `ckpt:<repo>@<revision>`, when a host finished staging a checkpoint's weights (`verity-vllm records staged`).
