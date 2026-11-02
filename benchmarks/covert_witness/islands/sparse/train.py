@@ -346,13 +346,35 @@ def quantize(x: torch.Tensor, bits: int, group: int) -> tuple[torch.Tensor, torc
     live = (s > 0)[:, None]
     codes = torch.where(live, torch.floor(flat / torch.where(live, s[:, None], 1.0)) + 2 ** (bits - 1), 0.0)
     codes = codes.clamp(0, 2 ** bits - 1)
-    values = (levels(bits).to(x.device)[codes.long()] * s[:, None]).view(x.shape)
+    values = ((codes - (2 ** bits - 1) / 2) * s[:, None]).view(x.shape)
     return values, codes.to(torch.uint8).reshape(-1), s.to(torch.float16)
 
 
-def ste(x: torch.Tensor, bits: int, group: int) -> torch.Tensor:
-    """x's code in the forward, the identity in the backward."""
-    return x + (quantize(x, bits, group)[0] - x).detach()
+class Codes:
+    """Straight-through codes: each latent's code sits in a leaf tensor the forward reads, refreshed once a step (not in
+    every micro-batch's forward), and the code's gradient becomes the latent's."""
+
+    def __init__(self):
+        self.pairs: list[tuple] = []
+
+    def add(self, latent: torch.Tensor, bits: int, group: int, code: torch.Tensor | None = None,
+            base: torch.Tensor | None = None) -> torch.Tensor:
+        """The leaf holding `base + code(latent − base)` (`code`, if given, is the model's own tensor)."""
+        code = torch.zeros_like(latent, requires_grad=True) if code is None else code
+        self.pairs.append((latent, code, bits, group, base))
+        return code
+
+    @torch.no_grad()
+    def refresh(self) -> None:
+        for latent, code, bits, group, base in self.pairs:
+            if base is None:
+                code.copy_(quantize(latent, bits, group)[0])
+            else:
+                code.copy_(base + quantize(latent - base, bits, group)[0])
+
+    def backprop(self) -> None:
+        for latent, code, *_ in self.pairs:
+            latent.grad, code.grad = code.grad, None
 
 
 def qarray(codes: torch.Tensor, scales: torch.Tensor, bits: int, group: int, shape: tuple) -> prepare.QArray:
@@ -614,6 +636,9 @@ def main() -> int:
         params[n].requires_grad_(True)
     gain0 = {n: params[n].detach().clone() for n in norms} if quant else {}
     gain_latent = {n: torch.nn.Parameter(params[n].detach().clone()) for n in norms} if quant else {}
+    codes = Codes()
+    for n in gain_latent:
+        codes.add(gain_latent[n], a.norm_bits, a.norm_group, code=params[n], base=gain0[n])
     train_vals: dict = {}
     hooks_params: list[torch.nn.Parameter] = []
     adapters: dict[str, int] = {}
@@ -646,9 +671,10 @@ def main() -> int:
             train_vals[n] = (ri, V)
             hooks_params.append(V)
             adapters[n] = len(rows)
+            Vq = codes.add(V, a.bits, d_in)
             mod = net.inner.get_submodule(n.removesuffix(".weight"))
-            mod.register_forward_hook(lambda m, inp, out, V=V, ri=ri, d_in=d_in: out.index_add(
-                -1, ri, F.linear(inp[0], ste(V, a.bits, d_in)).to(out.dtype)))
+            mod.register_forward_hook(lambda m, inp, out, Vq=Vq, ri=ri: out.index_add(
+                -1, ri, F.linear(inp[0], Vq).to(out.dtype)))
     g = torch.Generator(device=dev).manual_seed(a.seed)
 
     def add_lora(n: str, r: int) -> list[torch.nn.Parameter]:
@@ -658,15 +684,12 @@ def main() -> int:
         s = math.sqrt(d_in / r)
         train_vals.setdefault(n, []).append((A, B, s))
         adapters[n] = adapters.get(n, 0) + r
-        if a.mech == "qlora":
-            fa, fb = (lambda A=A, d_in=d_in: ste(A, a.bits, d_in)), (lambda B=B: ste(B, a.bits, b_group(*B.shape)))
-        else:
-            fa, fb = (lambda A=A: A), (lambda B=B: B)
+        fa, fb = (codes.add(A, a.bits, d_in), codes.add(B, a.bits, b_group(d_out, r))) if a.mech == "qlora" else (A, B)
         if n == "embed":
             tie_lora(net.inner, fa, fb, s)
             return [A, B]
         mod = net.inner.get_submodule(n.removesuffix(".weight"))
-        mod.register_forward_hook(lambda m, inp, out, fa=fa, fb=fb, s=s: out + s * F.linear(F.linear(inp[0], fa()), fb()))
+        mod.register_forward_hook(lambda m, inp, out, fa=fa, fb=fb, s=s: out + s * F.linear(F.linear(inp[0], fa), fb))
         return [A, B]
 
     if a.mech in ("lora", "qlora"):
@@ -678,11 +701,6 @@ def main() -> int:
     if norms:
         groups.append({"params": list(gain_latent.values()) if quant else [params[n] for n in norms],
                        "lr": a.norm_lr if a.mech != "norms" else a.lr, "weight_decay": 0.0})
-
-    def gains_to_code() -> None:
-        with torch.no_grad():
-            for n in norms:
-                params[n].copy_(gain0[n] + quantize(gain_latent[n] - gain0[n], a.norm_bits, a.norm_group)[0])
 
     def encode_q() -> bytes:
         entries = {n: delta_entry(gain_latent[n].detach() - gain0[n], a.norm_bits, a.norm_group) for n in norms}
@@ -762,16 +780,14 @@ def main() -> int:
             grp["lr"] = lr * frac
         rows = data.next(a.batch)
         calls += 1
-        if quant:
-            gains_to_code()
+        codes.refresh()
         for i in range(0, a.batch, a.micro):
             x = rows[i: i + a.micro]
             with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
                 logits = fwd(x[:, :-1])
             loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
             loss.backward()
-        for n in gain_latent:
-            gain_latent[n].grad, params[n].grad = params[n].grad, None
+        codes.backprop()
         torch.nn.utils.clip_grad_norm_([p for grp in opt.param_groups for p in grp["params"]], 1.0)
         opt.step()
         opt.zero_grad(set_to_none=True)
