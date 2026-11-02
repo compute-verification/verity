@@ -23,9 +23,9 @@ def cw_root(tmp_path, monkeypatch):
     return tmp_path
 
 
-def run_island(tmp_path, *island_args) -> tuple[int, dict]:
+def run_island(tmp_path, *island_args, harness=()) -> tuple[int, dict]:
     out = tmp_path / "out"
-    rc = te_run.main(["--script", str(FAKE / "islands" / "sgd" / "train.py"), "--out", str(out), "--",
+    rc = te_run.main(["--script", str(FAKE / "islands" / "sgd" / "train.py"), "--out", str(out), *harness, "--",
                       "--start", "fake", "--out", str(tmp_path / "sub"), *island_args])
     return rc, json.loads((out / "run.json").read_text())
 
@@ -47,10 +47,23 @@ def test_an_island_runs_unmodified_and_is_scored_at_its_encodings(cw_root):
     assert cps[0]["macs"] < cps[-1]["macs"] == rec["totals"]["macs"]
     assert rec["start"]["val_bpb"] > cps[-1]["val_bpb"]
     assert rec["c"] == 4096 * rec["forward_macs_per_token"]
+    # each scored model's value is sealed under its output digest, and its score names that digest
+    import sys
+
+    assert {cp["output_sha256"] for cp in cps} <= set(sys.modules["prepare"].SEALED_KEYS)
+    assert all(cp["score"]["slice"]["weights_digest"] == cp["output_sha256"] for cp in cps)
 
 
-def test_the_held_out_set_is_unreadable_to_the_island(cw_root):
-    rc, rec = run_island(cw_root, "--steps", "2", "--peek")
+def test_a_sealed_split_is_never_returned(cw_root):
+    rc, rec = run_island(cw_root, "--steps", "4", harness=("--tier", "2"))
+    assert rc == 0 and rec["invalid"] == []
+    assert rec["checkpoints"] and all("test_bpb" not in cp for cp in rec["checkpoints"])
+
+
+@pytest.mark.parametrize("flag", ["--peek", "--peek-sealed"])
+def test_the_held_out_and_sealed_sets_are_unreadable_to_the_island(cw_root, flag):
+    (cw_root / "root" / "sealed").mkdir()
+    rc, rec = run_island(cw_root, "--steps", "2", flag)
     assert rc == 1 and "PermissionError" in rec["error"]
     assert any("PermissionError" in p for p in rec["invalid"])
     assert rec["start"]["val_bpb"] is not None

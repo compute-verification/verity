@@ -13,7 +13,8 @@ tier's minutes over the 10 GPU-minutes `prepare.TRAIN_FLOP_BUDGET` stands for, a
 the same F of that budget. Small and medium are `STARTS`'s covert_witness starts.
 
 The node comes from the node list the coordinator maintains (`--nodes`, default `$TE_NODES`, one node per line, `#`
-comments, `NODE pool=NAME` for a node that takes runs only through a slot pool), the agent's launches spread over it in
+comments, `NODE pool=NAME` for a node that takes runs only through a slot pool, `cpu=NAME` its CPU pool), the agent's
+launches spread over it in
 turn; `vy-dc-h200*` is refused whatever the list says. On a pool node the run is `research run --on NODE --pool NAME`
 with `gpu-lease 1` inside (vy-nebius-2: `--gpus` is refused there); elsewhere `research run --on NODE --gpus 1`. The
 program is sent with the run (`--send`) and screened first (run.py's `screen`). Each launch is a `launch` record in the
@@ -53,7 +54,8 @@ TIERS = {
 }
 TIER1_PER_HOUR = 4
 REFUSED_NODES = ("vy-dc-h200*",)
-PROJECT = "te-search"
+#: the project the node list's machines belong to (`research run --on` refuses any other)
+PROJECT = "verity"
 RUN_LINE = re.compile(r"run (\S+) launched")
 #: the covert_witness starts a script runs at each size
 STARTS = {"small": "s100", "medium": "m100"}
@@ -73,6 +75,7 @@ class Refused(RuntimeError):
 class Node:
     name: str
     pool: str = ""
+    cpu: str = ""
 
 
 def nodes(path: Path) -> list[Node]:
@@ -82,7 +85,7 @@ def nodes(path: Path) -> list[Node]:
         if not words or any(fnmatch.fnmatchcase(words[0], pat) for pat in REFUSED_NODES):
             continue
         opts = dict(w.split("=", 1) for w in words[1:] if "=" in w)
-        out.append(Node(words[0], opts.get("pool", "")))
+        out.append(Node(words[0], opts.get("pool", ""), opts.get("cpu", "")))
     if not out:
         raise Refused(f"{path}: no usable node")
     return out
@@ -122,7 +125,7 @@ def commands(program: Path, tier: int, node: Node | str, *, starts: str, evaluat
     for size in t.starts:
         start = STARTS[size] if script else size
         for seed in t.seeds:
-            m = meta | {"tier": tier, "start": start, "seed": seed}
+            m = meta | {"tier": tier, "start": start, "seed": seed, "node": node.name}
             common = ["--tier", str(tier), "--seed", str(seed), "--budget-minutes", str(3 * t.minutes),
                       "--evaluator", evaluator, "--out", "$OUT/run", "--meta", json.dumps(m)]
             # a script's checkpoints are E's, scored on the final set in the run at tier 2, never kept in full

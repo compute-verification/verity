@@ -13,7 +13,8 @@ invalid.
 
 `--starts` is the integrator's registry of starts, `{name: {path, sha256, val_bpb, ctx, vocab, forward_macs_per_token}}`;
 c is `score.C_PER_FORWARD_TOKEN` times the start's `forward_macs_per_token` (measured on the registered model when the
-registry lacks it). The evaluator is a function `(state_dict, split, device) -> bits per byte`.
+registry lacks it). The evaluator is a function `(state_dict, split, device) -> bits per byte`, or None for a split it
+keeps sealed (covert_witness's `test`).
 
 Writes `OUT/run.json` (the count, the checkpoints, the flags, the program's and θ's digests), `OUT/families/*/` with each
 family's `verified.json` (checked here, after training, on the run's device, from a live coin) and, with
@@ -263,8 +264,9 @@ class Session:
             bpb = float(self.evaluator(state, "val", self.device)) if self.evaluator else None
             cp = {"step": step, "macs": self.macs_so_far(), "val_bpb": bpb, "elapsed_s": self.elapsed(),
                   "output_sha256": theta_sha256(state)} | (extra or {})
-            if self.tier >= 2 and self.evaluator:
-                cp["test_bpb"] = float(self.evaluator(state, "test", self.device))
+            test = self.evaluator(state, "test", self.device) if self.tier >= 2 and self.evaluator else None
+            if test is not None:
+                cp["test_bpb"] = float(test)
             if self.keep or (self.n_steps and step == max(self.cp_steps, default=-1)):
                 path = self.out / "checkpoints" / f"step{step:07d}-{len(self.checkpoints):02d}.pt"
                 path.parent.mkdir(exist_ok=True)
