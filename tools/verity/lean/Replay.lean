@@ -4,7 +4,8 @@ import Lean
 # Kernel replay of a package's declarations, and of its import closure
 
 `lake env lean --run Replay.lean OUT M₁ M₂ … [--reused R₁ …] [--closure D₁ …] [--closure-reused E₁ …]` reads every
-constant the named modules declare from their `.olean` files, imports once the modules they import from outside that set,
+constant the named modules declare from their `.olean` files (a `module`'s from its private part, `.olean.private`, the
+only part that holds its proofs and unexposed bodies), imports once the modules they import from outside that set,
 and sends each constant of the `Mᵢ` and the `Dᵢ` to the kernel (`Kernel.Environment.replay`). The `Mᵢ` and `Rᵢ` are the
 package's own modules, the `Dᵢ` and `Eᵢ` modules of its import closure (Mathlib, ArkLib, the toolchain's own). A module
 `Rᵢ` or `Eᵢ` passed this replay before with the same `.olean` files, its imports' included, on the same toolchain
@@ -184,12 +185,19 @@ unsafe def main (args : List String) : IO UInt32 := do
   let mut imports : Array Import := #[]
   for m in mods do
     let olean ← findOLean m
-    let mut files := #[olean]
-    for level in [OLeanLevel.server, OLeanLevel.private] do
-      if ← (level.adjustFileName olean).pathExists then
-        files := files.push (level.adjustFileName olean)
-    let parts ← readModuleDataParts files
-    let (some (data, _), some (header, _)) := (parts.back?, parts[0]?) | throw <| IO.userError s!"no module data for {m}"
+    -- as `importModules` reads them: a `module`'s proofs and unexposed bodies are only in its private part, read on top
+    -- of its `.olean` and server part; a file outside the module system is its `.olean` alone, whatever lies beside it
+    let (header, region) ← CompactedRegion.read (α := ModuleData) olean #[]
+    let mut data := header
+    if header.isModule then
+      let mut regions := #[region]
+      for level in [OLeanLevel.server, OLeanLevel.private] do
+        let part := level.adjustFileName olean
+        unless ← part.pathExists do
+          throw <| IO.userError s!"{m} is a `module` and {part} is missing: its proofs are only there"
+        let (d, r) ← CompactedRegion.read (α := ModuleData) part regions
+        data := d
+        regions := regions.push r
     importsOf := importsOf.insert m (header.imports.map (·.module))
     for c in data.constants do
       match constants[c.name]?, c with
