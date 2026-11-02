@@ -68,12 +68,14 @@ def test_a_check_that_runs_a_cpp_model_is_stored_after_the_prebuild(tmp_path, mo
     verdict would not be stored.  The prebuild builds every one of them before the tracer starts: from an empty build directory,
     a check of a target that runs fa2's model is stored, and the directory holds one library per source.  In a process of
     its own, since a model's library path is fixed when its module is imported, run as the ``circuit-check`` script runs, with
-    no working directory on the import path; and outside the tree, since torch gives ``torch.ops`` and ``torch.classes`` a bare
-    ``__file__`` (``_ops.py``, ``_classes.py``) that the tracer would look for at the tree's root, a read outside the suite's
-    inputs."""
+    no working directory on the import path.  Torch gives ``torch.ops`` and ``torch.classes`` a bare ``__file__`` (``_ops.py``,
+    ``_classes.py``), which the tracer resolves against the working directory: outside the tree it counts them as imported
+    from outside it and stores nothing, and at the tree's root its look for ``_ops.py`` is a read outside this suite's inputs.
+    So the check runs in this suite's directory, as its tests do."""
     monkeypatch.setenv("VERITY_NUMERICS_BUILD_DIR", str(tmp_path / "libs"))
     r = subprocess.run([sys.executable, "-P", "-m", "circuit_check", ATTENTION, "--cache", str(tmp_path / "cache"), "-j", "1", "-q",
-                        "--out", str(tmp_path / "report.json")], cwd=tmp_path, capture_output=True, text=True)
+                        "--out", str(tmp_path / "report.json")], cwd=Path(__file__).resolve().parents[1], capture_output=True,
+                       text=True)
     assert r.returncode == 0, r.stdout[-2000:] + r.stderr[-2000:]
     assert sorted(p.name for p in (tmp_path / "libs").glob("*.so")) == sorted(f"lib{p.stem}.so" for p in CPP.glob("*.cpp"))
     c = json.loads((tmp_path / "report.json").read_text())["cache"]
