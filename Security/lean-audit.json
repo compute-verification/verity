@@ -15370,6 +15370,7 @@
     "∀ (j : ι) (t : Real), Real.instLE.le ((Finset.filter (fun b => And (Eq (ident b) j) (And (Real.instLE.le t (τ b)) (Real.instLE.le (τ b) (instHAdd.hAdd t Δ)))) bad).sum fun b => w b) (instHMul.hMul Φ Δ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
+    "instLENat.le n (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, restated over the send-tick grid's epochs after the rule was keyed from `main`, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le n (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateFixedClock": {
@@ -15377,9 +15378,12 @@
     "instLENat.le n (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerWindow": {
+    "instLENat.le (instHMul.hMul (instHAdd.hAdd e₀ m) (instHMul.hMul g T)) (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, restated over the send-tick grid's epochs after the rule was keyed from `main`, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le (instHMul.hMul m T) (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows": {
+    "instLENat.le n (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, restated over the send-tick grid's epochs after the rule was keyed from `main`, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLENat.le n (instHMul.hMul m (instHMul.hMul g T))": "a bound that is no plain range, restated over the send-tick grid's epochs after the rule was keyed from `main`, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le n (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le n (instHMul.hMul m T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -15404,11 +15408,16 @@
     "instLENat.le n (instHMul.hMul m T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
+    "instLENat.le n (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, restated over the send-tick grid's epochs after the rule was keyed from `main`, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "instLENat.le n (instHMul.hMul m (instHMul.hMul g T))": "a bound that is no plain range, restated over the send-tick grid's epochs after the rule was keyed from `main`, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le n (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le n (instHMul.hMul m T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le n (instHMul.hMul m T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow": {
+    "instLENat.le (instHMul.hMul (instHAdd.hAdd e₀ m) (instHMul.hMul g T)) (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, restated over the send-tick grid's epochs after the rule was keyed from `main`, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (I.obsRun z (instHMul.hMul e₀ (instHMul.hMul g T))) p": "a membership, restated over the send-tick grid's epochs after the rule was keyed from `main`, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z (instHMul.hMul (instHAdd.hAdd e₀ m) (instHMul.hMul g T)))) z": "a membership, restated over the send-tick grid's epochs after the rule was keyed from `main`, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le (instHMul.hMul m T) (instHMul.hMul W T)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z (instHMul.hMul m T))) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -15480,6 +15489,7 @@
     "∀ (σ : Srv), Set.instMembership.mem Srvs σ → Set.instMembership.mem Ds fun c => (arr σ c).stream": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.ExpectedRowCausal": {
+    "∀ (e : Fin E), Eq e.val (instHDiv.hDiv t (instHMul.hMul g T)) → Eq (a e) (a' e)": "an equation, restated over the send-tick grid's epochs after the rule was keyed from `main`, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin W), instLENat.le w.val (instHDiv.hDiv t T) → Eq (syncs w) (syncs' w)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.HorizonLeakAccepted": {
@@ -16123,6 +16133,9 @@
    },
    "Accounting.SecurityProofs.TS.LeafGroupSound": {
     "∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ) (k : Accounting.TS.Group.Ix T.lanes n), ENNReal.instLE.le (instHMul.hMul ((sess₀ x w i k).canon (op x w i k)).n.cast ((sess₀ x w i k).canon (op x w i k)).bound) (ENNReal.ofReal δ)": "the per-session bound LeafLanesSound takes inline too, which #6460 brought before the inline rule reached it: name it or state it as a guarantee's conclusion"
+   },
+   "Verity.SecurityProofs.TransportPassiveZk": {
+    "Or (Verity.Assumptions.WitnessPathPrivate s c) (∀ (E : W → Prop), Verity.Assumptions.ChannelHides wire (fun m => fill (record m)) E η m)": "a disjunction of two named assumptions, inline in the transport statement this lock carries, held here by the inline rule: name the disjunction as an assumption or state it as a listed guarantee's conclusion"
    }
   }
  },
