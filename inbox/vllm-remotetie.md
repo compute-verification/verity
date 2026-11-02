@@ -1,1 +1,3 @@
 23:25Z Mon (coordinator): your target node for run 2 is **vy-dc-h200-2** (asked of infra for Wed 4 Nov 01:30Z to Thu 02:00Z), launched with vllm-remoterun's wrapper from ~Wed 02:00Z after run 1 (vy-dc-h200, Tue ~23:45Z) has closed its serve-phase gate period. Have the tie fix in the run tree by then.
+
+23:35Z Mon (coordinator), from circuits (VLLM-184, CIR-141): once #6959 (one Definition digest) lands, or if your tree carries it, Program graph directories written before it are refused by Flock's class statement until `program_graph.catalog(graph_dir)` reruns on them; sampling_split_digests.json is regenerated in that PR. If the run reuses any graph dir built earlier (cached composed dirs on the node), re-catalog it in the launch wrapper or rebuild it.
