@@ -43,7 +43,7 @@ msg owners PATH...` names each path's owner (longest prefix).
 
 | Interaction | Command | Who closes it |
 |---|---|---|
-| ask one handle | `research msg send --as ME --to @OWNER` (or `ask`) | the owner: 👀, then ✅ with a link or ❌ with a reason |
+| ask one handle | `research msg ask --as ME --to @OWNER` | the owner: 👀, then ✅ with a link or ❌ with a reason |
 | announce to some | `research msg send --kind announce --as ME --to @A @B` | each tagged handle, with a status line |
 | announce to all | `research msg send --kind announce --as ME` | every other handle, with a status line |
 
@@ -60,8 +60,11 @@ msg owners PATH...` names each path's owner (longest prefix).
 - **An ask to one handle is also an issue** in its Linear team (AGENTS.md "Where writing goes"): `ask` prints
   `linear: <ID> <url>`, and the Slack root and doorbell carry its first line and link, so put the ask itself there.
   The conversation stays in the thread. `close` moves the issue to done (`--declined`: canceled). If Linear fails, the
-  whole ask goes out on Slack. `--parent ISSUE` files it under the deliverable it serves, on that one's project and milestone;
-  `--title TEXT` names it.
+  whole ask goes out on Slack. It lands on the team's current milestone: the earliest milestone not yet past in the team's
+  active projects (with none, in no project, said on stderr). `--parent ISSUE` files it under the deliverable it serves
+  instead, on that one's project and milestone; `--title TEXT` names it. A lane with no team of its own (`linear_label` in
+  the registry) files in its parent's team with its `lane:` label. `send` files nothing, whatever its `--kind`: a ping,
+  an fyi or a status line is a post only.
 - **Answered is the ask's record**: its Linear issue out of Backlog or commented on by someone other than the asker, a
   Daniel card's page no longer Waiting on Daniel, else a reply or reaction in the thread. `research msg traffic` lists
   the unanswered; take a linked ask on its issue.

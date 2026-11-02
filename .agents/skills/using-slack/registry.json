@@ -297,7 +297,9 @@
       "holder": "bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac",
       "remit": "The machine model, Lean accounting statements (NCI, a circuit's stacked requirement), their red and blue teams, PoUW's protocol statements.",
       "charter": "note:compute-accounting/20261019T2230Z-report-lane-split",
-      "usergroup": "S0CBZ2L8542"
+      "usergroup": "S0CBZ2L8542",
+      "linear": "CMP",
+      "linear_label": "lane:compute-research"
     },
     {
       "handle": "memory-accounting",
@@ -669,6 +671,8 @@
       "holder": "bc-d2745108-9b89-5c53-8137-de8e75809c4d",
       "remit": "The one soundness theorem: Verity.Soundness over the compiled verifier, every subprotocol it rests on, and their composition.",
       "charter": "Daniel, 2026-10-26 10:04 AM PDT (pull the full proofs in; a new slice, via top, split from proofs at its worker cap)",
+      "linear": "PRF",
+      "linear_label": "lane:soundness",
       "owns": [
         "verity/core/protocols/onsite/",
         "verity/core/protocols/remote/"
