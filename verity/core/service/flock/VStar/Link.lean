@@ -1,6 +1,8 @@
-import VStar.Compose
-import VStar.Unit
-import Flock.RecLinkTree
+module
+
+public import VStar.Compose
+public import VStar.Unit
+public import Flock.RecLinkTree
 
 /-!
 # `RecLink{UB, PB}`: one row of a recursive session's link table (`verity_flock.rec_link`)
@@ -18,6 +20,8 @@ Ports, u16 words: `trow` 64, `xr` 32, `yr` 96, `raux` `A(D)`, `xw` 32, `yw` 96, 
 `LinkStmt` is V*'s statement of the table, over its `grid(L)` rows. No verifier reads it yet: a statement carrying a link
 table is refused (`Flock.RecLinks.refuseLinks`) until a guarantee covers it.
 -/
+
+@[expose] public section
 
 namespace VStar
 
