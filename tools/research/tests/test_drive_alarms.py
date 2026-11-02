@@ -21,8 +21,10 @@ JOBS = {"pytest": ("suites", 1), "flock-circuit-build": ("proofs", 2), "circuit-
         "lean-suites": ("ci", 5), "ratchet-gate": ("vllm", 4)}
 CI_TOML = 'schema = "ci/v0"\n' + "".join(
     f'[[job]]\nname = "{s}"\nowner = "{JOBS[s][0]}"\ngroup = {JOBS[s][1]}\n'
-    + ('gate = false\n' if s in ("circuit-check", "ratchet-gate") else "")
     + ('after = "lean-build"\n' if s == "lean-suites" else "") for s in AFTER_LANDING)
+#: `CI_TOML` with drive's policy taking circuit-check and ratchet-gate off the merge gate, as in the tree
+TREE = {"tools/verity/check/ci.toml": CI_TOML,
+        "tools/verity/check/policy.toml": 'schema = "policy/v0"\noff_gate = ["circuit-check", "ratchet-gate"]\n'}
 
 
 @pytest.fixture
@@ -72,7 +74,7 @@ def test_running_steps_follow_the_preflights_then_each_group_in_order():
 
 def _landed(world: World, monkeypatch, **kw) -> Review:
     """#1 landed on `checked` under `CI_TOML`, its after-landing run `r-post-0` running."""
-    _move_main(world, {"tools/verity/check/ci.toml": CI_TOML})
+    _move_main(world, TREE)
     h = Review(world, monkeypatch, land_into="checked", **kw)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
@@ -185,7 +187,7 @@ def test_a_held_member_below_rings_its_own_owner_for_the_ready_prs_above_it(worl
 
 
 def test_a_reviewed_pr_waiting_on_its_running_lean_check_rings_the_lean_audits_owner(world, monkeypatch):
-    _move_main(world, {"tools/verity/check/ci.toml": CI_TOML})
+    _move_main(world, TREE)
     marks: dict[int, str] = {}
     h = Review(world, monkeypatch, land_into="checked", marked_at=lambda n, head: marks.get(n))
     lock = json.dumps({"guarantees": {"T": "2"}, "reads": {}, "dependencies": {"M": "1"}})

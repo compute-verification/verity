@@ -5,7 +5,7 @@ executable `annot-difftest` of this distribution's `lean/` package), for the tes
 Its functions (`FNS`) take `{"program": descriptor text, "annotation": {"query", "tables"}, "meaning": {...}}`:
 
 * `annot.term`: a query document read and written back, the codec's canonical form;
-* `annot.check`: the description-level verdict `{"accept", "count", "code"?}` (`Annot.check`);
+* `annot.check`: the description-level result `{"accept", "count", "code"?}` (`Annot.check`);
 * `annot.reference`: the same meaning decided gate by gate (`Annot.reference`);
 * `annot.sets`: `{"sets", "labels"}`, the family's sets in order and the gates each label holds, as root-gate intervals.
 
