@@ -22,18 +22,28 @@ python scorer.py final starts|launch ID...|collect     # final-set reruns (below
 - **Records**: evidence/v1 artifacts with `meta.covert_witness.class` (launch.py's, one per candidate) and te_core
   ledger records (`meta.schema` te-core/submission/v1), written since `TE_SCORER_SINCE`. The start registry's bpbs and
   tensors come from launch.py's start-scores record. A record's agent is the `cursor/te-<direction>-4207` branch holding
-  its commit (`candidate.json`), else its class.
+  its commit (`candidate.json`), else its run's commit, else the direction its meta names, else its class.
+- **Who is scored**: honest(l*) reads the reference directions (`ref-*`, and the harness's reference smoke), whatever
+  the class; W* reads every other direction's records, a reference-class one included. The measurement auditor's records
+  (direction `audit`, or a note starting `audit:`) are in the ledger and in nothing scored.
 - **ρ**: te_core's (`TE_CORE_PATH`, its `score.score_grid`, `w_star`, `honest`, `effective_slowdown`, `frontier.TARGETS`).
-  A launch.py record has no te_core count, so its annotation is analytic (`scorer.analytic`): U is every forward
-  multiplication whose weight operand is trained (a fully trained tensor's matmul or norm gain, both factors of an
-  adapter; a frozen W·x is θ's), a node's upstream is the updated MACs per token of the nodes before it in (layer, stage)
-  order, |C| is the training FLOPs over 2, p = 16 and c = 4096 times the start's forward MACs per token (weight matmuls,
-  norm gains and 2·d·ctx attention MACs a layer). Each curve point is a submission (its prefix of the run).
-- **Counterexample credit** (`scorer.credit`): an E whose decoder rebuilds a step's updated weights from θ within c is
-  a T1 family for that step. A seed log (`E.format` seedlog) is one: its prefix E_t rebuilds step t in (t + 1)·n MACs
-  for n trained values, so it covers the steps with (t + 1)·n ≤ c, at β_t = bits(E_t) / updated MACs per token (bounded
-  by the smallest snapshot's E), and te_core's option (a) takes that β. Adapter and full E's rebuild no step's values
-  bit for bit and get none; an adapter's ρ is low because its φ is.
+  A record made inside te_core's harness (witness v2, covert_witness v2.1) is priced by its run's te_core ledger records,
+  one per checkpoint, with the harness's counted |C|, U, D, φ and ρ; its entry takes |C|, φ and D from the last of them,
+  and it is unscored until they are in the store. A witness v1 record has no te_core count, so its annotation is
+  analytic (`scorer.analytic`): U is every forward multiplication whose weight operand is trained (a fully trained
+  tensor's matmul or norm gain, both factors of an adapter; a frozen W·x is θ's, except in a run that merges its pieces,
+  `notes.mech` relora with `notes.pieces` > 1, whose targets are full for the whole run), a node's upstream is the updated
+  MACs per token of the nodes before it in (layer, stage) order, |C| is the training FLOPs over 2, p = 16 and c = 4096
+  times the start's forward MACs per token (weight matmuls, norm gains and 2·d·ctx attention MACs a layer). Each curve
+  point is a submission (its prefix of the run). Scores and digests mark each W* entry (c) counted or (a) analytic.
+- **Counterexample credit** (`scorer.credit`, witness v1 only; v2's families are the harness's, verified by
+  `prepare.declare_step`): an E whose decoder rebuilds a step's updated weights from θ within c is a T1 family for that
+  step. A seed log (`E.format` seedlog) is one. With one coefficient a step (MeZO) its prefix E_t rebuilds step t in
+  (t + 1)·n MACs for n trained values, so it covers the steps with (t + 1)·n ≤ c, at β_t = bits(E_t) / updated MACs per
+  token (bounded by the smallest snapshot's E). With K coefficients over more steps (a trained seed subspace, K read from
+  E's header) each step is the K-term log at that step's coefficients, so every step is covered iff K·n ≤ c, at β_t =
+  bits(E) / updated MACs per token. te_core's option (a) takes that β. Adapter and full E's, and a piece run's
+  snapshots, show no step rebuilt bit for bit and get none; an adapter's ρ is low because its φ is.
 - **Cells**: mechanism (the note's first word) x |E| range (decades from 10 kB) x φ range (te_core's `PHI_EDGES`, on
   the witness's φ) x start. A cell is thin at two valid records or fewer.
 - **Promotions** (hourly): each direction's top third by relative bpb drop from its start, and the best record of each

@@ -9,14 +9,19 @@ STATE is `$TE_SCORER_STATE` (default ~/.research/te-scorer); everything in it is
 rebuilt by `collect`. Records are the evidence/v1 artifacts whose meta has `covert_witness.class` (launch.py's), and the
 te-core/submission/v1 ledger records (te_core.ledger's), written since `$TE_SCORER_SINCE`.
 
-A launch.py record carries the witness (training FLOPs, φ over forward weight-matmul FLOPs, |E|, search bpb, the
-FLOPs-to-target curve), not te_core's count. Its te_core annotation here is analytic, from the record's declared trainable
-set and step-log tokens over the start's tensors: U is every forward multiplication whose weight operand is trained (a
-full tensor's matmul or norm gain, an adapter's two factors; a frozen base W·x is θ's), each node's upstream is the
-updated MACs per token of the nodes before it in (layer, stage) order, |C| = training FLOPs / 2, p = 16 (bf16 autocast)
-and c = 4096 times the start's forward MACs per token (weight matmuls plus 2·d·ctx attention MACs a layer). ρ, W*,
-honest and the effective slowdown are te_core's (`score.score_grid`, `w_star`, `honest`, `effective_slowdown`) on that
-annotation, with the coverage `credit` reads off a seed-log E. A te_core ledger record carries its counted ρ, used as is.
+A record made inside te_core's harness (witness v2, covert_witness v2.1) is priced by the harness's count: its te_core
+ledger records, one per checkpoint, carry |C|, U, D, φ and ρ, used as is. A witness v1 record carries the witness
+(training FLOPs, φ over forward weight-matmul FLOPs, |E|, search bpb, the FLOPs-to-target curve), not te_core's count. Its
+annotation here is analytic, from the record's declared trainable set and step-log tokens over the start's tensors: U is
+every forward multiplication whose weight operand is trained (a full tensor's matmul or norm gain, an adapter's two
+factors; a frozen base W·x is θ's, except in a run that merges its pieces, whose targets are full), each node's upstream
+is the updated MACs per token of the nodes before it in (layer, stage) order, |C| = training FLOPs / 2, p = 16 (bf16
+autocast) and c = 4096 times the start's forward MACs per token (weight matmuls plus 2·d·ctx attention MACs a layer).
+ρ, W*, honest and the effective slowdown are te_core's (`score.score_grid`, `w_star`, `honest`, `effective_slowdown`) on
+that annotation, with the coverage `credit` reads off a seed-log E.
+
+honest(l*) reads the reference directions (ref-*), W* every other direction's records whatever their class, and the
+measurement auditor's records (direction audit) are in the ledger only.
 """
 from __future__ import annotations
 
@@ -27,9 +32,11 @@ import math
 import os
 import re
 import shlex
+import struct
 import subprocess
 import sys
 import time
+import zlib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -201,6 +208,18 @@ def starts_info(r, recs: list[tuple[str, str, dict]]) -> dict:
     raise SystemExit("scorer: no start-scores record in the store since SINCE")
 
 
+def seedlog_header(r, files: dict, d: Path) -> dict | None:
+    """A seed-log E's header (names, seed, steps = its coefficient count, coeff): magic, u32 length, zlib JSON."""
+    f = files.get("E.bin")
+    if not f:
+        return None
+    b = blob(r, f["sha256"], d / "E.bin").read_bytes()
+    if b[:8] != b"CWSEED1\n":
+        return None
+    (n,) = struct.unpack("<I", b[8:12])
+    return json.loads(zlib.decompress(b[12:12 + n]))
+
+
 def cw_row(r, art: str, recorded: str, man: dict, commits: dict) -> dict:
     cw = man["meta"]["covert_witness"]
     files = {f["path"]: f for f in man["payload"].get("files", [])}
@@ -211,24 +230,31 @@ def cw_row(r, art: str, recorded: str, man: dict, commits: dict) -> dict:
             got[name] = json.loads(blob(r, files[name]["sha256"], d / name).read_text())
     w, cand, meta = got.get("witness.json"), got.get("candidate.json", {}), got.get("meta.json", {})
     agent, direction = direction_of(commits.get(cand.get("commit", ""), []), cw.get("class", ""))
+    if not agent and cw.get("direction"):
+        direction = cw["direction"]
     checks = (w or {}).get("checks", {})
     bad = sorted(k for k, v in checks.items() if v is not True)
     curve = (w or {}).get("curve") or []
+    harness = (w or {}).get("harness")
+    notes = (w or {}).get("notes") or {}
     return {
         "id": art, "source": "launch.py", "run": cw.get("run"), "class": cw.get("class"), "start": cw.get("start"),
         "note": cw.get("note", ""), "mechanism": mechanism_of(cw.get("note", "")), "screen": screen_key(cw.get("note", "")),
         "agent": agent, "direction": direction, "commit": cand.get("commit", ""), "args": cand.get("args", ""),
         "launched": run_time(cw.get("run", "")), "recorded": recorded,
         "valid": bool(w and w.get("valid")), "failed_checks": bad if w else ["no witness"],
-        "train_flops": (w or {}).get("train", {}).get("flops"), "tokens": (w or {}).get("train", {}).get("tokens"),
+        "witness": (w or {}).get("schema", "covert-witness/witness/v1") if w else None, "counted": bool(harness),
+        "train_flops": (harness or {}).get("flops") or (w or {}).get("train", {}).get("flops"),
+        "declared_flops": (w or {}).get("train", {}).get("flops"), "tokens": (w or {}).get("train", {}).get("tokens"),
         "bpb": (w or {}).get("score", {}).get("bpb"), "E_bytes": (w or {}).get("E", {}).get("bytes"),
         "E_format": (w or {}).get("E", {}).get("format"),
         "phi": (w or {}).get("structure", {}).get("phi"),
         "lowest_updated_layer": (w or {}).get("structure", {}).get("lowest_updated_layer"),
         "gpu_seconds": (w or {}).get("gpu_seconds"), "curve": curve,
-        "trainable": meta.get("trainable", {}), "method": ((w or {}).get("notes") or {}).get("method"),
-        "train_args": ((w or {}).get("notes") or {}).get("args"), "steps": ((w or {}).get("notes") or {}).get("steps"),
-        "has_E": "E.bin" in files,
+        "trainable": meta.get("trainable", {}), "method": notes.get("method"),
+        "train_args": notes.get("args"), "steps": notes.get("steps"), "mech": notes.get("mech"),
+        "pieces": notes.get("pieces"), "has_E": "E.bin" in files,
+        "seedlog": seedlog_header(r, files, d) if (w or {}).get("E", {}).get("format") == "seedlog" else None,
     }
 
 
@@ -332,18 +358,20 @@ def index_md(rows: list[dict], runs: list[dict], starts: dict) -> str:
              f"{len(rows)} records since {SINCE}; starts' search bpb: " +
              ", ".join(f"{s} {starts[s]['bpb']:.4f}" for s in STARTS), "",
              "| record | agent | direction | class | mechanism note | start | launched | train FLOPs | bpb | Δ% | |E| bytes |"
-             " φ | D (analytic) | valid |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
-    for x in entries(rows):
+             " φ | D (c counted, a analytic) | valid |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for x in entries(rows, audit=True):
         s0 = starts.get(x["start"], {}).get("bpb")
         drop = 100 * (s0 - x["bpb"]) / s0 if s0 and x["bpb"] is not None else None
-        if x["source"] == "te_core":
-            D = x["D"].get("10kB/r1") if isinstance(x.get("D"), dict) else x.get("D")
+        if x.get("te_id") or x.get("counted"):
+            D, how = x.get("D"), "c"
         else:
             ann = analytic(x, starts) if x["valid"] and x["start"] in starts else None
-            D = ann["depth"] if ann else None
-        lines.append(f"| `{short(x['id'])}` | {x['agent'].removeprefix('cursor/') or '—'} | {x['direction']} | {x['class']} | "
-                     f"{x['note']} | {x['start']} | {x['launched'][11:16]} | {fmt(x['train_flops'])} | {fmt(x['bpb'], '.4f')} | "
-                     f"{fmt(drop, '.2f')} | {fmt(x['E_bytes'], ',')} | {fmt(x['phi'], '.3f')} | {fmt(D, '.3g')} | "
+            D, how = ann and ann["depth"], "a"
+        d = x["direction"] + (" (not scored)" if is_audit(x) else "")
+        lines.append(f"| `{short(x['id'])}` | {(x['agent'] or '').removeprefix('cursor/') or '—'} | {d} | {x['class']} | "
+                     f"{x['note']} | {x['start']} | {(x['launched'] or '')[11:16]} | {fmt(x['train_flops'])} | "
+                     f"{fmt(x['bpb'], '.4f')} | {fmt(drop, '.2f')} | {fmt(x['E_bytes'], ',')} | {fmt(x['phi'], '.3f')} | "
+                     f"{fmt(D, '.3g')} {how if D is not None else ''} | "
                      f"{'yes' if x['valid'] else 'no: ' + ','.join(x['failed_checks'])} |")
     pend = [a for a in runs if not a["record"] and not a.get("cancelled") and run_time(a["run"]) >= SEARCH_START]
     if pend:
@@ -389,11 +417,13 @@ def analytic(row: dict, starts: dict, fraction: float = 1.0) -> dict:
     start = starts[row["start"]]
     tr = row.get("trainable") or {}
     full, adapters = set(tr.get("full", [])), {k: int(v) for k, v in (tr.get("adapters") or {}).items()}
+    if merges_pieces(row):
+        full |= set(adapters)  # every merged piece makes the target's own W·x a multiplication by an updated weight
     upd = []  # (key, param, sub, per-token MACs): an adapter is x·Aᵀ (sub 0) then its product with Bᵀ (sub 1)
     for n in nodes_of(start):
         if n["param"] in full:
             upd.append((n["key"], n["param"], 0, n["macs"]))
-        elif n["param"] in adapters:
+        if n["param"] in adapters:
             r = adapters[n["param"]]
             upd += [(n["key"], n["param"], 0, r * n["d_in"]), (n["key"], n["param"], 1, r * n["d_out"])]
     profile = [(sum(mm for k, _, _, mm in upd if k < key) + sum(mm for k, p, s, mm in upd if k == key and p == param and s < sub), m)
@@ -408,24 +438,38 @@ def analytic(row: dict, starts: dict, fraction: float = 1.0) -> dict:
             "updated_per_token": per_token, "c": c, "credit": credit(row, start, fraction, per_token, c)}
 
 
+def merges_pieces(row: dict) -> bool:
+    """A ReLoRA-style run (notes.mech relora, notes.pieces > 1) merges each piece into the running weights."""
+    return row.get("mech") == "relora" and int(row.get("pieces") or 0) > 1
+
+
 def credit(row: dict, start: dict, fraction: float, per_token: float, c: float) -> dict | None:
-    """The counterexample family a seed-log E gives: E_t, the log's first t coefficients with ε and the sign, rebuilds
-    step t's weights (masters after t `seedlog_step`s, plus ±εz_t) bit for bit in (t + 1) n MACs for n trained values,
-    so it covers the steps with (t + 1) n ≤ c, at β_t = bits(E_t) / updated MACs per token, bounded here by the smallest
-    snapshot's E. Adapter and full E's rebuild no step's fp32 values bit for bit, and their bits per updated MAC are at
-    least p, so they get none."""
+    """The counterexample family a seed-log E gives, for a record whose witness carries no harness-verified family.
+
+    A log with one coefficient a training step (MeZO): E_t, its first t coefficients with ε and the sign, rebuilds step t's
+    weights (masters after t `seedlog_step`s, plus ±εz_t) in (t + 1) n MACs for n trained values, so it covers the steps
+    with (t + 1) n ≤ c, at β_t = bits(E_t) / updated MACs per token, bounded here by the smallest snapshot's E. A log of K
+    coefficients over many steps (a fixed seed subspace, its coefficients trained): step t's weights are the same K-term
+    log at that step's coefficients, rebuilt in K n MACs, so every step is covered iff K n ≤ c, at β_t = bits(E) / updated
+    MACs per token. Both are the direction's construction as its witness states it; the harness's `declare_step` verifies
+    one. Adapter and full E's rebuild no step's fp32 values bit for bit, and their bits per updated MAC are at least p, so
+    they get none."""
     if row.get("E_format") != "seedlog" or not per_token:
         return None
     names = (row.get("trainable") or {}).get("full", [])
     n = sum(math.prod(start["tensors"][k][1]) for k in names if k in start["tensors"])
     steps = int(row.get("steps") or 0)
+    k = int((row.get("seedlog") or {}).get("steps") or steps)
     if not n or not steps:
         return None
+    if k != steps:
+        return {"family": "subspace", "coefficients": k, "covered_share": 1.0 if k * n <= c else 0.0,
+                "beta_t": 8 * (row.get("E_bytes") or 0) / per_token, "rebuild_macs_last": k * n, "values": n}
     t_max = int(c // n) - 1
     covered = min(1.0, max(0, t_max + 1) / max(1.0, fraction * steps))
     e_min = min((cp["e_bytes"] for cp in row.get("curve") or [] if cp.get("e_bytes")), default=row.get("E_bytes") or 0)
-    return {"covered_share": covered, "beta_t": (8 * e_min + 33) / per_token, "rebuild_macs_last": (fraction * steps + 1) * n,
-            "values": n}
+    return {"family": "prefix", "coefficients": k, "covered_share": covered, "beta_t": (8 * e_min + 33) / per_token,
+            "rebuild_macs_last": (fraction * steps + 1) * n, "values": n}
 
 
 def annotation_of(a: dict) -> tuple[Annotation, dict[int, float]]:
@@ -447,21 +491,41 @@ def annotation_of(a: dict) -> tuple[Annotation, dict[int, float]]:
 
 
 def is_reference(x: dict) -> bool:
-    return x["direction"].startswith("ref") or x.get("class") == "reference"
+    """honest(l*) reads the reference directions (ref-*, and the harness's own reference smoke), whatever the class; every
+    other direction's records, a reference-class one included, are W*'s at their ρ."""
+    return x["direction"].startswith("ref-") or x["direction"] == "reference"
+
+
+def is_audit(x: dict) -> bool:
+    """The measurement auditor's records exercise measurement gaps on purpose: in the ledger, out of every score."""
+    return x.get("direction") == "audit" or str(x.get("note", "")).lower().startswith("audit:")
+
+
+def run_rows(rows: list[dict]) -> dict[str, dict]:
+    return {x["run"]: x for x in rows if x["source"] == "launch.py" and x.get("run")}
 
 
 def submissions(rows: list[dict], starts: dict) -> list[dict]:
-    """Every checkpoint of every valid record as a te_core submission: {id, cp, start, macs, val_bpb, rho, phi, depth}."""
+    """Every checkpoint of every valid record as a te_core submission: {id, cp, start, macs, val_bpb, rho, phi, depth}.
+    A record made inside te_core's harness (witness v2) is scored from its te_core ledger records, one per checkpoint,
+    with the harness's counted annotation; the analytic annotation is only for witness v1 records."""
     out = []
+    launched = run_rows(rows)
     for x in rows:
-        if not x.get("valid") or x.get("start") not in starts:
+        if not x.get("valid") or x.get("start") not in starts or is_audit(x):
             continue
         if x["source"] == "te_core":
+            rec = launched.get(x.get("run"))
+            if rec and (not rec["valid"] or is_audit(rec)):
+                continue
             if x.get("te_kind") == "submission" and x.get("rho"):
-                out.append({"id": x["id"], "cp": x.get("fraction"), "start": x["start"], "macs": x["macs"],
-                            "val_bpb": x["bpb"], "rho": x["rho"], "phi": x["phi"], "depth": x["D"],
-                            "reference": bool(x.get("reference")), "direction": x["direction"], "counted": True,
+                y = x | ({"direction": rec["direction"]} if rec else {})
+                out.append({"id": rec["id"] if rec else x["id"], "te_id": x["te_id"], "cp": x.get("fraction"),
+                            "start": x["start"], "macs": x["macs"], "val_bpb": x["bpb"], "rho": x["rho"], "phi": x["phi"],
+                            "depth": x["D"], "reference": is_reference(y), "direction": y["direction"], "counted": True,
                             "E_bytes": x.get("E_bytes")})
+            continue
+        if x.get("counted"):
             continue
         total = x["train_flops"] or 0
         for i, cp in enumerate(x.get("curve") or []):
@@ -492,7 +556,8 @@ def score(write: bool = True) -> dict:
     rows = [json.loads(x) for x in (STATE / "index.jsonl").read_text().splitlines() if x.strip()]
     starts = json.loads((STATE / "starts.json").read_text())
     subs = submissions(rows, starts)
-    rep = {"at": now(), "te_core": TE_CORE_VERSION, "annotation": "analytic for launch.py records (module docstring)",
+    rep = {"at": now(), "te_core": TE_CORE_VERSION,
+           "annotation": "the harness's count for witness v2 records, analytic for witness v1 (module docstring)",
            "p_bits": P_BITS, "c_per_forward_token": C_PER_FORWARD_TOKEN, "starts": {}, "submissions": len(subs)}
     for s in STARTS:
         on = [x for x in subs if x["start"] == s]
@@ -514,7 +579,7 @@ def score(write: bool = True) -> dict:
                 arg = min((x for x in cov if x["val_bpb"] <= l_star), key=lambda x: x["macs"] * x["rho"][key], default=None)
                 t["cells"][key] = {"w_star": w, "effective_slowdown": effective_slowdown(cov, refs, l_star, key),
                                    "id": arg and arg["id"], "cp": arg and arg["cp"], "rho": arg and arg["rho"][key],
-                                   "direction": arg and arg["direction"]}
+                                   "direction": arg and arg["direction"], "counted": arg and arg["counted"]}
             st["targets"].append(t)
         rep["starts"][s] = st
     if write:
@@ -562,17 +627,30 @@ def drop_of(x: dict, starts: dict) -> float | None:
     return (s0 - x["bpb"]) / s0 if s0 and isinstance(x.get("bpb"), (int, float)) else None
 
 
-def entries(rows: list[dict]) -> list[dict]:
-    """One row per candidate: a launch.py record, or a te_core run's last checkpoint (φ read at 10kB/r1)."""
-    out = [x for x in rows if x["source"] == "launch.py"]
+def entries(rows: list[dict], audit: bool = False) -> list[dict]:
+    """One row per candidate: a launch.py record, or a te_core run's last checkpoint (φ and D read at 10kB/r1). A witness
+    v2 record takes |C|, φ and D from its run's last te_core checkpoint (the harness's count). The auditor's records only
+    with `audit` (the ledger lists them; nothing scores them)."""
+    launched = run_rows(rows)
     last: dict[str, dict] = {}
     for x in rows:
         if x["source"] == "te_core" and x.get("te_kind") == "submission":
             k = x.get("run") or x["te_id"]
             if k not in last or (x.get("fraction") or 0) > (last[k].get("fraction") or 0):
                 last[k] = x
-    out += [x | {"phi": x["phi"].get("10kB/r1") if isinstance(x.get("phi"), dict) else x.get("phi")} for x in last.values()]
-    return sorted(out, key=lambda x: (x.get("launched") or "", x["id"]))
+    out = []
+    for x in rows:
+        if x["source"] != "launch.py":
+            continue
+        t = last.pop(x["run"], None) if x.get("counted") else None
+        out.append(x | ({"phi": at10(t["phi"]), "D": at10(t["D"]), "train_flops": 2 * t["macs"], "te_id": t["te_id"],
+                         "tier": t.get("tier"), "families": t.get("families")} if t else {}))
+    out += [x | {"phi": at10(x.get("phi")), "D": at10(x.get("D"))} for x in last.values()]
+    return sorted((x for x in out if audit or not is_audit(x)), key=lambda x: (x.get("launched") or "", x["id"]))
+
+
+def at10(v):
+    return v.get("10kB/r1") if isinstance(v, dict) else v
 
 
 def promotions(rows: list[dict], starts: dict, promoted: dict) -> dict:
@@ -664,13 +742,30 @@ def board(promote: bool, digest: bool, append: bool, hhmm: str | None = None) ->
     return lines
 
 
+def ledger_promote(new: list[dict], rows: list[dict]) -> list[str]:
+    """A promoted te_core entry at tier 0 gets the scorer's promotion record to tier 1 in the te_core ledger (published),
+    which tier 1's launch gate reads; tier 2 is final scoring's."""
+    from te_core.ledger import Ledger
+
+    ents = {x["id"]: x for x in entries(rows)}
+    led = Ledger(agent="scorer", publish=True)
+    out = []
+    for p in new:
+        x = ents.get(p["id"])
+        if x and x.get("te_id") and int(x.get("tier") or 0) < 1:
+            led.promote(x["te_id"], 1, "; ".join(p["reasons"]))
+            out.append(x["te_id"])
+    return out
+
+
 def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     out = []
     cw = entries(rows)
     n, nv = len(cw), len([x for x in cw if x["valid"]])
-    out.append(f"{hhmm} scorer [DIGEST] {n} records ({nv} valid). Frontier per target below: honest = least reference "
-               f"FLOPs reaching l*; W*/honest per (k, r) in the order 10kB r1,r10,r100 | 100kB | 1MB, te_core rho on the "
-               f"analytic annotation (p 16), with the W* entry; full tables in the scorer's score.md.")
+    out.append(f"{hhmm} scorer [DIGEST] {n} records ({nv} valid; direction audit's not counted). Frontier per target "
+               f"below: honest = least FLOPs of the reference directions (ref-*) reaching l*; W*/honest per (k, r) in the "
+               f"order 10kB r1,r10,r100 | 100kB | 1MB, te_core rho, with the W* entries, (c) priced by the harness's "
+               f"count, (a) by the analytic annotation (p 16); full tables in the scorer's score.md.")
     for s, st in rep["starts"].items():
         parts = []
         for t in st["targets"]:
@@ -680,7 +775,7 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
                 continue
             eff = [cells[k]["effective_slowdown"] for k in KEYS]
             vec = " | ".join(", ".join(fmt(e, ".3g") for e in eff[i: i + 3]) for i in (0, 3, 6))
-            ids = sorted({short(c["id"]) for c in cells.values() if c["id"]})
+            ids = sorted({short(c["id"]) + (" (c)" if c.get("counted") else " (a)") for c in cells.values() if c["id"]})
             parts.append(f"-{100 * t['drop']:g}% (l* {t['l_star']:.4f}): honest {fmt(h and 2 * h)}"
                          + (f" ({short(t['honest_id'])}@{t['honest_cp']})" if t["honest_id"] else "")
                          + (f"; W*/honest [{vec}] via {', '.join(ids)}" if ids else "; no covert entry reaches it"))
@@ -696,16 +791,25 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     out.append(f"{hhmm} scorer [DIGEST] empty cells (|E| range x phi range, per start, |E| under 10 MB, any mechanism): " +
                "; ".join(f"{s} {len(by_start.get(s, []))}/20 empty, filled {', '.join(sorted(filled_of(rows, s))) or 'none'}"
                          for s in STARTS) + ".")
-    cred = [(x, analytic(x, starts)["credit"]) for x in cw if x["source"] == "launch.py" and x["valid"] and x["start"] in starts]
-    cred = [(x, c) for x, c in cred if c]
-    fam = [x for x in cw if x["source"] == "te_core" and any(f["covers"] for f in x.get("families") or [])]
+    cred = [(x, analytic(x, starts)["credit"]) for x in cw
+            if x["source"] == "launch.py" and not x.get("counted") and x["valid"] and x["start"] in starts]
+    cred = [(x, c) for x, c in cred if c and c["covered_share"] > 0]
+    fam = [x for x in cw if x.get("te_id") and any(f["covers"] for f in x.get("families") or [])]
     out.append(f"{hhmm} scorer [DIGEST] E credited as a T1 counterexample family (its decoder rebuilds each covered "
-               f"step's weights from theta within c): " + (", ".join(
-                   f"{short(x['id'])} ({x['E_format']}, {100 * c['covered_share']:.0f}% of steps, beta_t {c['beta_t']:.2g}, "
-                   f"last rebuild {c['rebuild_macs_last']:.2g} MACs)" for x, c in cred) or "none")
-               + "; te_core runs with a verified family: "
+               f"step's weights from theta within c): witness v1 seed logs as the witness states them, " + (", ".join(
+                   f"{short(x['id'])} ({c['family']} log of {c['coefficients']} coefficients, "
+                   f"{100 * c['covered_share']:.0f}% of steps, beta_t {c['beta_t']:.2g}, last rebuild "
+                   f"{c['rebuild_macs_last']:.2g} MACs)" for x, c in cred) or "none")
+               + "; harness-verified families (witness v2, te_core.run): "
                + (", ".join(f"{short(x['id'])} ({families_of(x)})" for x in fam) or "none")
                + "; no other entry's E is credited.")
+    v2 = [x for x in cw if x["source"] == "launch.py" and x.get("counted")]
+    missing = [x for x in v2 if not x.get("te_id")]
+    out.append(f"{hhmm} scorer [DIGEST] counted: {len(v2)} witness v2 records priced by the harness's count"
+               + (f" ({len(missing)} with no te_core ledger record yet, unscored: "
+                  + ", ".join(short(x["id"]) for x in missing) + ")" if missing else "")
+               + f"; {len([x for x in cw if x['source'] == 'launch.py' and not x.get('counted')])} witness v1 records "
+               "priced by the analytic annotation (self-reported trainable set and step log).")
     for d in sorted({x["direction"] for x in cw}):
         out.append(f"{hhmm} scorer [DIGEST] {d}: " + direction_sentence(d, rows, starts))
     return out
