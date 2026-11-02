@@ -59,8 +59,8 @@
   the window's day, by its index among the monitoring period's days on its own clock, and the declarations of the log
   it holds when it draws (its view's `declarations`: `{"day", "program", "blocks"}` each). R2 refuses a day with no
   declaration (`R2-undeclared`), a day declared twice (`R2-declared-twice`, which the log's own check refuses as
-  `duplicate-declaration`), and a record whose program is not the day's declared one (`R2-declared`). R2's Lean
-  (`SampledProofs.Registration.check`) doesn't read declarations yet.
+  `duplicate-declaration`), and a record whose program is not the day's declared one (`R2-declared`), as R2's Lean does
+  (`SampledProofs.Registration.declaredCode`), which `verifier.check` runs beside it.
 * **Binding** (`binding`: `{"stream", "prover"}`, the verifier's stream digest and the identity it registered the prover
   under): R6 also holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them,
   so a tile seeded for one prover's stream is refused in any other's, in the same window or not.
