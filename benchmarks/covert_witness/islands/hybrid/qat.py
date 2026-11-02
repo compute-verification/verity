@@ -18,6 +18,11 @@ trained block, and the final norm, train in fp32 by AdamW and are full entries; 
   restarts its latent from its code, so Δ_grad is the largest stage's. The rate follows one schedule over the run
   (`--stage-sched global`) or restarts in each stage (`each`).
 - `--momentum-dtype bf16` keeps Muon's buffer in bf16.
+- `--embed-rank r` adds a rank-r adapter on the tied embedding beside the coded blocks, trained in every stage (AdamW
+  `--embed-lr`): W' = θ + s · Q(B) Q(A), s = sqrt(d / r), its factors `--embed-bits` round to nearest (straight-through;
+  A a scale per row, B a scale per 64 rows), a CWQUAN1 lora entry. Every step's lookup and head read W' as
+  prepare.lora_merge builds it (the head under bf16 autocast, as the evaluator multiplies), and the backward reaches A
+  and B through rank-r products, so no dense embedding gradient is formed or paid.
 
 The notes state, per stage, the trained tensors, codes, weights and Δ_grad (latent + gradient + momentum per coded
 weight, gradient + momentum per fp weight, the gains' fp32 gradient and AdamW m and v), and the submission's Δ (|E|).
@@ -157,6 +162,123 @@ def qarray(k: torch.Tensor, s: torch.Tensor, code: str, g: int, shape: tuple[int
                           code_bits(code), g, shape)
 
 
+B_ROWS = 64
+
+
+@torch.no_grad()
+def factor_quant(x: torch.Tensor, bits: int, rows: int) -> tuple[torch.Tensor, prepare.QArray]:
+    """`x` at `bits`-bit absmax round to nearest, one f16 scale per `rows` rows: (its fp32 value, its QArray)."""
+    qm = 2 ** (bits - 1) - 1
+    shape = tuple(x.shape)
+    rows = rows if x.shape[0] % rows == 0 else 1
+    xg = x.float().reshape(-1, rows * x.shape[1])
+    s = (xg.abs().amax(1, keepdim=True) / qm).clamp(max=65504.0).half().float()
+    k = torch.clamp(torch.round(xg / torch.where(s > 0, s, 1.0)), -qm, qm) * (s > 0)
+    cb = torch.zeros(2 ** bits)
+    cb[: 2 * qm + 1] = torch.arange(-qm, qm + 1, dtype=torch.float32)
+    q = prepare.QArray(cb.half(), s.reshape(-1).half().cpu(), (k + qm).reshape(-1).to(torch.uint8).cpu(), bits,
+                       xg.shape[1], shape)
+    return (k * s).reshape(shape), q
+
+
+class LoraLookup(torch.autograd.Function):
+    """F.embedding(idx, W') for W' = θ + s · B A (given merged), whose backward reaches A and B only."""
+
+    @staticmethod
+    def forward(ctx, idx, w, a, b, s):
+        ctx.save_for_backward(idx, a, b)
+        ctx.s = s
+        return F.embedding(idx, w)
+
+    @staticmethod
+    def backward(ctx, gx):
+        idx, a, b = ctx.saved_tensors
+        i, g = idx.reshape(-1), gx.reshape(-1, gx.shape[-1]).float()
+        ga = ctx.s * (b[i].T @ g)
+        gb = torch.zeros_like(b).index_add_(0, i, ctx.s * (g @ a.T))
+        return None, None, ga, gb, None
+
+
+class LoraHead(torch.autograd.Function):
+    """Logits x W'^T in bf16 (the evaluator's autocast matmul of the merged weight), whose backward gives x's gradient
+    through W' and A's and B's through rank-r products: dB = s G A^T = s gy^T (x A^T), dA = s B^T G = s (gy B)^T x."""
+
+    @staticmethod
+    def forward(ctx, x, w, a, b, s):
+        ctx.save_for_backward(x, w, a, b)
+        ctx.s = s
+        return F.linear(x.bfloat16(), w.bfloat16())
+
+    @staticmethod
+    def backward(ctx, gy):
+        x, w, a, b = ctx.saved_tensors
+        gy2, x2 = gy.reshape(-1, gy.shape[-1]).bfloat16(), x.reshape(-1, x.shape[-1]).bfloat16()
+        gx = (gy2 @ w.bfloat16()).reshape(x.shape).to(x.dtype)
+        gb = ctx.s * (gy2.T @ (x2 @ a.bfloat16().T)).float()
+        ga = ctx.s * ((gy2 @ b.bfloat16()).T @ x2).float()
+        return gx, None, ga, gb, None
+
+
+class EmbedAdapter:
+    """The rank-r adapter on the tied embedding: fp32 latents A (r x d) and B (V x r), their codes, and the merged W'."""
+
+    def __init__(self, theta_e: torch.Tensor, rank: int, bits: int, lr: float, seed: int, dev: str):
+        V, d = theta_e.shape
+        gen = torch.Generator(device=dev).manual_seed(seed)
+        self.theta, self.rank, self.bits, self.s = theta_e, rank, bits, math.sqrt(d / rank)
+        self.a = torch.nn.Parameter(torch.randn(rank, d, device=dev, generator=gen) / math.sqrt(d))
+        self.b = torch.nn.Parameter(torch.zeros(V, rank, device=dev))
+        self.opt = torch.optim.AdamW([self.a, self.b], lr=lr, betas=(0.9, 0.95), weight_decay=0.0,
+                                     fused=dev.startswith("cuda"))
+        self.lr = lr
+        self.refresh()
+
+    @torch.no_grad()
+    def refresh(self) -> None:
+        self.aq, self.qa = factor_quant(self.a, self.bits, 1)
+        self.bq, self.qb = factor_quant(self.b, self.bits, B_ROWS)
+        self.w = prepare.lora_merge(self.theta, self.aq, self.bq, self.s)
+
+    def factors(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """The coded factors with a straight-through gradient to the latents."""
+        return self.a + (self.aq - self.a).detach(), self.b + (self.bq - self.b).detach()
+
+    def step(self, frac: float) -> None:
+        for grp in self.opt.param_groups:
+            grp["lr"] = self.lr * frac
+        self.opt.step()
+        self.opt.zero_grad(set_to_none=True)
+        self.refresh()
+
+    def entry(self) -> dict:
+        return {"kind": "lora", "a": self.qa, "b": self.qb, "scale": self.s}
+
+    def state_bytes(self) -> int:
+        return 16 * (self.a.numel() + self.b.numel())
+
+
+def adapter_forward(lm, blocks_fn, ad: EmbedAdapter):
+    """The LM's forward with W' at its lookup and head (model.LM.hidden and .top with the merged weight)."""
+
+    def fwd(idx):
+        a, b = ad.factors()
+        x = LoraLookup.apply(idx, ad.w, a, b, ad.s)
+        return LoraHead.apply(blocks_fn(x), ad.w, a, b, ad.s)
+
+    return fwd
+
+
+def blocks_and_norm(lm):
+    def run(x):
+        t = x.shape[1]
+        cos, sin = lm.cos[:t], lm.sin[:t]
+        for blk in lm.blocks:
+            x = blk(x, cos, sin)
+        return F.rms_norm(x, (x.shape[-1],), lm.norm)
+
+    return run
+
+
 class Schedule:
     """The run's steps, told to the harness (`hooks.plan`), and which encode an E: the first E in each 5% of the steps
     is a checkpoint, so each 5% gets one at its last step."""
@@ -285,6 +407,10 @@ def main() -> int:
     ap.add_argument("--momentum-dtype", choices=("fp32", "bf16"), default="fp32")
     ap.add_argument("--adam-lr", type=float, default=3e-4, help="the norm gains' AdamW rate")
     ap.add_argument("--no-gains", action="store_true", help="keep the norm gains at θ")
+    ap.add_argument("--embed-rank", type=int, default=0, help="a rank-r adapter on the tied embedding (0: none)")
+    ap.add_argument("--embed-bits", type=int, default=8)
+    ap.add_argument("--embed-lr", type=float, default=1e-3)
+    ap.add_argument("--seed", type=int, default=0, help="the embedding adapter's A")
     ap.add_argument("--sched", choices=("linear", "wsd"), default="linear")
     ap.add_argument("--decay-frac", type=float, default=0.2, help="wsd: the decaying share")
     ap.add_argument("--warmup", type=int, default=50)
@@ -336,8 +462,9 @@ def main() -> int:
 
     tokens = a.batch * prepare.EVAL_CTX
     per_step, ns_extra = [], []
+    adapters = {"embed": a.embed_rank} if a.embed_rank else {}
     for names in stage_sets:
-        tr = {"full": sorted(names + gains_of(names))}
+        tr = {"full": sorted(names + gains_of(names)), "adapters": adapters}
         per_step.append(prepare.train_flops(rec, tr, [{"op": "train", "tokens": tokens}])["flops"])
         ns_extra.append(sum(ns_flops(tuple(params[n].shape)) for n in names))
     shares = [float(x) for x in a.shares.split(",")] if a.shares else [1.0] * len(stage_specs)
@@ -353,7 +480,14 @@ def main() -> int:
 
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     fresh = fresh_order(data, rec) if a.fresh else {"fresh": False}
-    fwd = torch.compile(net)
+    ad = None
+    if a.embed_rank:
+        if rec["config"]["family"] != "lf" or not rec["config"].get("tied"):
+            fail("--embed-rank needs an lf start with a tied embedding")
+        ad = EmbedAdapter(theta["embed"].to(dev), a.embed_rank, a.embed_bits, a.embed_lr, a.seed, dev)
+        fwd = adapter_forward(net.inner, torch.compile(blocks_and_norm(net.inner)), ad)
+    else:
+        fwd = torch.compile(net)
     mdt = torch.bfloat16 if a.momentum_dtype == "bf16" else torch.float32
     steps: list[dict] = []
     stage_notes, g, ema, t0 = [], 0, None, time.perf_counter()
@@ -364,6 +498,8 @@ def main() -> int:
         for st in stacks:
             ent |= st.entries()
         ent |= {n: {"kind": "full", "t": params[n].detach()} for n in sorted(all_gains)}
+        if ad is not None:
+            ent["embed"] = ad.entry()
         return prepare.encode_quant(ent, theta)
 
     for j, names in enumerate(stage_sets):
@@ -384,10 +520,11 @@ def main() -> int:
         note = {"stage": j, "spec": (stage_specs * a.passes)[j], "steps": n_j, "flops_per_step": per_step[j] + ns_extra[j],
                 "matrices": len(names), "coded_weights": coded_w, "fp_weights": fp_w, "gains": len(gains),
                 "codes": sorted({codes[n] for n in names}),
-                "delta_grad_bytes": coded_w * (4 + 4 + mom_b) + fp_w * (4 + mom_b) + gain_w * 12,
+                "delta_grad_bytes": coded_w * (4 + 4 + mom_b) + fp_w * (4 + mom_b) + gain_w * 12
+                + (ad.state_bytes() if ad is not None else 0),
                 "delta_grad_what": f"coded weight: fp32 latent + fp32 gradient + {a.momentum_dtype} Muon momentum; "
                                    f"fp weight: fp32 gradient + {a.momentum_dtype} momentum; gain: fp32 gradient + AdamW "
-                                   "fp32 m and v"}
+                                   "fp32 m and v; embedding adapter factor: fp32 latent + gradient + AdamW m and v"}
         print(json.dumps(note), flush=True)
         for step in range(n_j):
             gs = g if a.stage_sched == "global" else step
@@ -407,13 +544,16 @@ def main() -> int:
                 loss_sum += float(loss.detach())
             for st in active:
                 st.collect()
-            torch.nn.utils.clip_grad_norm_([p for st in active for p in st.params] + [params[n] for n in gains], 1.0)
+            torch.nn.utils.clip_grad_norm_([p for st in active for p in st.params] + [params[n] for n in gains]
+                                           + ([ad.a, ad.b] if ad is not None else []), 1.0)
             for st in active:
                 st.muon(a.muon_lr * frac, a.momentum)
                 st.rebuild(a.mult)
             if adam is not None:
                 adam.step()
                 adam.zero_grad(set_to_none=True)
+            if ad is not None:
+                ad.step(frac)
             steps.append({"op": "train", "tokens": tokens})
             steps.append({"op": "extra", "flops": ns_extra[j], "what": "muon newton-schulz"})
             ema = loss_sum if ema is None else 0.98 * ema + 0.02 * loss_sum
@@ -437,6 +577,8 @@ def main() -> int:
     model = prepare.decode(theta, blob)
     changed = sorted(set(codes) | all_gains)
     bad = [n for n in changed if not prepare.same_bits(model[n].cpu(), params[n].detach().to(theta[n].dtype).cpu())]
+    if ad is not None:
+        bad += [] if prepare.same_bits(model["embed"].cpu(), ad.w.cpu()) else ["embed"]
     if bad:
         fail(f"E rebuilds {len(bad)} tensors differently from the trained ones: {bad[:3]}")
     coded = sum(theta[n].numel() for n in codes if codes[n] != "fp")
@@ -445,12 +587,14 @@ def main() -> int:
              "coded_weights": coded, "E_bytes": len(blob), "E_bytes_xz1": len(blob1),
              "bits_per_coded_weight": 8 * len(blob) / max(1, coded),
              "delta_grad_bytes_max": max(s["delta_grad_bytes"] for s in stage_notes),
-             "embedding": "frozen at theta (the tied head is a frozen tail)", "fresh": fresh,
+             "embedding": (f"rank-{a.embed_rank} adapter, {a.embed_bits}-bit factors (CWQUAN1 lora entry)" if ad else
+                           "frozen at theta (the tied head is a frozen tail)"), "fresh": fresh,
              "rebuilds_bit_for_bit": True, "grad_copies": sum(st.copies for st in stacks),
              "train_seconds": round(t_train, 1),
              "process_seconds": round(time.perf_counter() - t_start, 1)}
     print(json.dumps({k: v for k, v in notes.items() if k not in ("args", "stages")}), flush=True)
-    prepare.submit(Path(a.out), a.start, a.klass, blob, model, {"full": changed}, steps, changed=changed, notes=notes)
+    prepare.submit(Path(a.out), a.start, a.klass, blob, model, {"full": changed, "adapters": adapters}, steps,
+                   changed=changed + (["embed"] if ad is not None else []), notes=notes)
     return 0
 
 
