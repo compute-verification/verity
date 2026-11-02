@@ -10,7 +10,9 @@ as many steps as the budget allows.
 - `subspace`: intrinsic-dimension training. θ_S = θ0_S + Σ α_i z_i over d fixed directions, Z cached on the GPU in bf16
   (d is what fits beside the model); the gradient is backpropagated to θ_S and projected onto Z; Adam on α. Two GEMVs a
   step are logged as `extra`. `--redraw N` (mechanism `resub`) splits an arm into N blocks of d fresh directions each,
-  so it explores N·d ≤ the cap in the memory of d.
+  so it explores N·d ≤ the cap in the memory of d. Under the v2.1 harness only `--exact` steps are credited: Z is cached
+  in fp32 and each step's weights are built by the decoder's own sequential adds, so they are decode(θ, E_t) bit for bit
+  and the step declares E_t (`prepare.declare_step`); without it the steps read θ + bf16(αZ), ~0.3% of Δ off the decode.
 - `fit`: train S itself (AdamW), then solve the minimum-norm c with −Zᵀc = Δ over d ≥ |S| exact directions. S must be
   small: the norm gains (6,656 on s, 13,056 on m) are the one set the seed log can carry exactly.
 - `mezo`: zeroth-order, `--pop K` seeds a step (antithetic ES with shared seeds); the `seed-mezo` direction owns MeZO.
