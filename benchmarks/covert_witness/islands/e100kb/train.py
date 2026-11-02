@@ -1,144 +1,167 @@
-"""Island `e100kb` (8·|E| ≤ 8e5 bits: E at most 100,000 bytes): LoRA on the blocks' output projections (o and down),
-sized so the factors (and the norm gains, when trained) fit the cap in bf16; E is the factors (`prepare.encode_lora`),
-and the evaluated model merges them.
+"""AUDIT candidate (measurement auditor, not a search entry): replay a committed E with an empty step log, and probe what
+a train.py can reach on the node.
 
-The base stays frozen. Each target weight W gets A (r x d_in, N(0, 1/d_in)) and B (d_out x r, zero) used as
-W + s · B @ A with s = sqrt(d_in / r), trained by AdamW within the fixed training-FLOP budget. The submitted model is
-`prepare.lora_merge` of the bf16-rounded factors, exactly what the decoder rebuilds.
+The submission is islands/audit/replay_e100kb_m100.E.bin, byte for byte the E of the e100kb seed smoke
+(r20261102-071331-9d4f, art:98055f53..., 8.82e16 logged training FLOPs), submitted with no step at all. Three snapshots,
+each at steps_prefix 0, put three different models on the curve. Nothing is trained here.
 
-This file is the island's one editable file; prepare.py, evaluate.py, guard.py and candidate.sh are fixed (README.md, the program).
+Probes, written to the submission's notes (and so to witness.json) and train.log; none of them uses what it reads:
 
-    python guard.py islands/e100kb/train.py --start m100 --out SUB [--targets out] [--rank 0 (largest that fits)] [--norms]
+- the held-out sets through torch.from_file (no audit event), compared with their manifests: lengths, EOT counts on the
+  search set, sha256 equality; np.fromfile as the control the guard refuses;
+- which fixed files the process may write (held-out sets, the start's θ and start.json, this run's evaluate.py,
+  prepare.py and candidate.sh);
+- the GPUs and CPUs the process can reach;
+- other runs' records and other live candidates' submissions readable on the node; a marker left in /tmp for the next
+  audit run, and earlier markers.
+
+    python guard.py islands/e100kb/train.py --start m100 --out SUB
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
-import math
+import os
+import subprocess
+import sys
 import time
 from pathlib import Path
 
+import numpy as np
 import torch
-import torch.nn.functional as F
 
 import prepare
 
 KLASS = "e100kb"
-DEFAULT_TARGETS = "out"
-DEFAULT_NORMS = True
-LF_MATS = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
-HF_MATS = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj")
+HERE = Path(__file__).resolve().parent
+REPLAY = HERE.parent / "audit" / "replay_e100kb_m100.E.bin"
 
 
-def targets_of(rec: dict, params: dict, spec: str) -> list[str]:
-    lf = rec["config"]["family"] == "lf"
-    want = (set(LF_MATS if lf else HF_MATS) if spec == "all" else {"wo", "w_down", "o_proj", "down_proj"} if spec == "out"
-            else set(spec.split(",")))
-    out = []
-    for n, p in params.items():
-        if p.ndim != 2 or n in ("embed", "model.embed_tokens.weight"):
-            continue
-        leaf = n.split(".")[-2] if n.endswith(".weight") else n.split(".")[-1]
-        if leaf in want:
-            out.append(n)
-    return sorted(out)
+def held_out_probe() -> dict:
+    out = {}
+    try:
+        np.fromfile(prepare.HELD_OUT / "search" / "gpt2.bin", dtype=np.uint16, count=4)
+        out["np_fromfile"] = "read"
+    except PermissionError:
+        out["np_fromfile"] = "refused by the guard"
+    for split in ("search", "final"):
+        d = prepare.HELD_OUT / split
+        rec = {}
+        try:
+            n = os.path.getsize(d / "manifest.json")
+            man = json.loads(bytes(torch.from_file(str(d / "manifest.json"), shared=False, size=n,
+                                                   dtype=torch.uint8).tolist()))
+            size = os.path.getsize(d / "gpt2.bin")
+            toks = torch.from_file(str(d / "gpt2.bin"), shared=False, size=size // 2, dtype=torch.int16).numpy()
+            toks = toks.view(np.uint16)
+            rec = {"read_with": "torch.from_file", "bytes": size, "tokens": int(len(toks)),
+                   "sha256_matches_manifest": hashlib.sha256(toks.tobytes()).hexdigest()
+                   == man["tokenizers"]["gpt2"]["sha256"]}
+            if split == "search":
+                rec |= {"eot_tokens": int((toks == prepare.EOT["gpt2"]).sum()), "manifest_documents": man["documents"]}
+        except Exception as e:  # noqa: BLE001 - the probe's result is the record
+            rec = {"error": f"{type(e).__name__}: {str(e)[:160]}"}
+        out[split] = rec
+    return out
 
 
-def e_bytes(theta, targets, rank, norms) -> int:
-    fac = {n: (torch.zeros(rank, theta[n].shape[1]), torch.zeros(theta[n].shape[0], rank), 1.0) for n in targets}
-    return len(prepare.encode_lora(fac, "bf16", {n: theta[n] for n in norms}))
+def writable(start: str) -> dict:
+    paths = {"held_out_search_tokens": prepare.HELD_OUT / "search" / "gpt2.bin",
+             "held_out_final_tokens": prepare.HELD_OUT / "final" / "gpt2.bin",
+             "held_out_search_manifest": prepare.HELD_OUT / "search" / "manifest.json",
+             "start_theta": prepare.STARTS / start / "theta.safetensors",
+             "start_record": prepare.STARTS / start / "start.json", "starts_dir": prepare.STARTS,
+             "run_evaluate_py": HERE.parents[1] / "evaluate.py", "run_prepare_py": HERE.parents[1] / "prepare.py",
+             "run_candidate_sh": HERE.parents[1] / "candidate.sh", "lf_train_corpus": prepare.LF_CORPUS / "train.bin"}
+    return {k: {"exists": os.path.exists(p), "writable": os.access(p, os.W_OK)} for k, p in paths.items()}
+
+
+def devices() -> dict:
+    out = {"CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES"), "torch_device_count": torch.cuda.device_count(),
+           "cpu_count": os.cpu_count(), "cpu_affinity": len(os.sched_getaffinity(0))}
+    try:
+        out["cgroup_cpu_max"] = Path("/sys/fs/cgroup/cpu.max").read_text().strip()
+    except OSError as e:
+        out["cgroup_cpu_max"] = f"unreadable: {e}"
+    r = subprocess.run(["nvidia-smi", "--query-gpu=index,utilization.gpu,memory.used", "--format=csv,noheader"],
+                       capture_output=True, text=True)
+    out["nvidia_smi_gpus"] = [x.strip() for x in r.stdout.splitlines() if x.strip()]
+    env = {k: v for k, v in os.environ.items() if k != "CUDA_VISIBLE_DEVICES"}
+    r = subprocess.run([sys.executable, "-c", "import torch; print(torch.cuda.device_count())"], capture_output=True,
+                       text=True, env=env)
+    out["child_without_CUDA_VISIBLE_DEVICES_device_count"] = r.stdout.strip() or r.stderr.strip()[-200:]
+    t0 = time.perf_counter()
+    r = subprocess.run([sys.executable, "-c", "import numpy as np; a=np.ones((2048,2048),np.float32); "
+                        "[a@a for _ in range(20)]; print('ok')"], capture_output=True, text=True)
+    out["child_numpy_matmul"] = {"macs": 20 * 2048 ** 3, "seconds": round(time.perf_counter() - t0, 2),
+                                 "result": r.stdout.strip()}
+    return out
+
+
+def node_reach() -> dict:
+    out = {}
+    runs = Path("/workspace/research/runs")
+    try:
+        names = os.listdir(runs)
+        out["runs_dirs"] = len(names)
+        out["runs_with_readable_E"] = sum(os.access(runs / n / "out" / "E.bin", os.R_OK) for n in names)
+    except OSError as e:
+        out["runs"] = f"unreadable: {e}"
+    cands = prepare.ROOT / "candidates"
+    try:
+        live = [c for c in os.listdir(cands) if (cands / c / "sub").is_dir()]
+        out["live_candidate_dirs"] = len(live)
+        out["live_candidate_models_readable"] = sum(os.access(cands / c / "sub" / "model.safetensors", os.R_OK)
+                                                    for c in live)
+    except OSError as e:
+        out["candidates"] = f"unreadable: {e}"
+    out["torchinductor_cache_dirs"] = [str(p) for p in Path("/tmp").glob("torchinductor_*")][:4]
+    out["earlier_audit_markers"] = sorted(p.name for p in Path("/tmp").glob("te-audit-marker-*.json"))
+    me = os.environ.get("RESEARCH_RUN_ID") or Path(os.environ.get("OUT", "x")).parent.name
+    marker = Path("/tmp") / f"te-audit-marker-{me}.json"
+    try:
+        marker.write_text(json.dumps({"run": me, "at": time.time()}) + "\n")
+        out["marker_written"] = str(marker)
+    except OSError as e:
+        out["marker_written"] = f"failed: {e}"
+    return out
+
+
+def rescaled(blob: bytes, factor: float) -> bytes:
+    fmt, header, payload = prepare._unpack(blob)
+    header = dict(header, factors=[[n, r, s * factor] for n, r, s in header["factors"]])
+    return prepare._pack(b"CWLORA1\n", header, bytes(payload))
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--targets", default=DEFAULT_TARGETS, help="`all`, `out` (each block's two output projections), or leaf names")
-    ap.add_argument("--rank", type=int, default=0, help="0: the largest that fits the class's cap")
-    ap.add_argument("--norms", action=argparse.BooleanOptionalAction, default=DEFAULT_NORMS)
-    ap.add_argument("--lr", type=float, default=1e-3)
-    ap.add_argument("--norm-lr", type=float, default=3e-4)
-    ap.add_argument("--warmup", type=int, default=50)
-    ap.add_argument("--batch", type=int, default=64)
-    ap.add_argument("--micro", type=int, default=32)
-    ap.add_argument("--data-seed", type=int, default=1)
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--budget-fraction", type=float, default=0.98)
-    a = ap.parse_args()
-    torch.backends.cuda.matmul.allow_tf32 = True
+    a, _ = ap.parse_known_args()
+    probes = {}
+    for name, fn in (("held_out", held_out_probe), ("writable", lambda: writable(a.start)), ("devices", devices),
+                     ("node", node_reach)):
+        try:
+            probes[name] = fn()
+        except Exception as e:  # noqa: BLE001
+            probes[name] = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
+        print(json.dumps({name: probes[name]}), flush=True)
     net, rec, theta = prepare.load_start(a.start)
-    params = net.params()
-    cap = prepare.CLASSES[KLASS]["max_e_bytes"]
-    targets = targets_of(rec, params, a.targets)
-    norms = sorted(n for n, p in params.items() if p.ndim == 1) if a.norms else []
-    rank = a.rank
-    if not rank:
-        rank = 1
-        while e_bytes(theta, targets, rank + 1, norms) <= cap - 512:
-            rank += 1
-    size = e_bytes(theta, targets, rank, norms)
-    if cap is not None and size > cap:
-        raise SystemExit(f"e100kb: rank {rank} on {len(targets)} weights{' and the norms' if norms else ''} is {size} bytes, "
-                         f"over the cap of {cap}")
-    for p in params.values():
-        p.requires_grad_(False)
-    for n in norms:
-        params[n].data = params[n].data.float()
-        params[n].requires_grad_(True)
-    g = torch.Generator(device=prepare.DEVICE).manual_seed(a.seed)
-    factors = {}
-    for n in targets:
-        w = params[n]
-        A = torch.nn.Parameter(torch.randn(rank, w.shape[1], device=prepare.DEVICE, generator=g) / math.sqrt(w.shape[1]))
-        B = torch.nn.Parameter(torch.zeros(w.shape[0], rank, device=prepare.DEVICE))
-        s = math.sqrt(w.shape[1] / rank)
-        factors[n] = (A, B, s)
-        mod = net.inner.get_submodule(n.removesuffix(".weight"))
-        mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
-    opt = torch.optim.AdamW([{"params": [p for A, B, _ in factors.values() for p in (A, B)], "lr": a.lr, "weight_decay": 0.0},
-                             {"params": [params[n] for n in norms], "lr": a.norm_lr, "weight_decay": 0.0}],
-                            betas=(0.9, 0.95), fused=prepare.DEVICE.startswith("cuda"))
-    trainable = {"full": norms, "adapters": {n: rank for n in targets}}
-    tokens = a.batch * prepare.EVAL_CTX
-    per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
-    n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
-    data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
-    fwd = torch.compile(net)
-    steps, snaps = [], []
-    marks = {round(n_steps * k / 4) for k in (1, 2, 3)}
-    print(json.dumps({"steps": n_steps, "rank": rank, "targets": len(targets), "norms": len(norms), "E_bytes": size,
-                      "flops_per_step": per_step}), flush=True)
-    t0 = time.perf_counter()
-    lrs = [grp["lr"] for grp in opt.param_groups]
-    for step in range(n_steps):
-        frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
-        for grp, lr in zip(opt.param_groups, lrs):
-            grp["lr"] = lr * frac
-        rows = data.next(a.batch)
-        for i in range(0, a.batch, a.micro):
-            x = rows[i: i + a.micro]
-            with torch.autocast(prepare.DEVICE.split(":")[0], dtype=torch.bfloat16):
-                logits = fwd(x[:, :-1])
-            loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / a.batch)
-            loss.backward()
-        torch.nn.utils.clip_grad_norm_([p for grp in opt.param_groups for p in grp["params"]], 1.0)
-        opt.step()
-        opt.zero_grad(set_to_none=True)
-        steps.append({"op": "train", "tokens": tokens})
-        if (step + 1) % 100 == 0:
-            print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
-                              "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        if step + 1 in marks:
-            snaps.append((encode(factors, params, norms), len(steps)))
-    blob = encode(factors, params, norms)
+    blob = REPLAY.read_bytes()
+    _, header, _ = prepare._unpack(blob)
+    adapters = {n: int(r) for n, r, _ in header["factors"]}
+    trainable = {"full": sorted(header["full"]), "adapters": adapters}
+    changed = sorted(adapters) + sorted(header["full"])
     model = prepare.decode(theta, blob)
-    prepare.submit(Path(a.out), a.start, KLASS, blob, model, trainable, steps, changed=targets + norms,
-                   notes={"method": "lora", "rank": rank, "args": vars(a), "steps": n_steps}, snapshots=snaps)
+    snaps = [(blob, 0), (rescaled(blob, 1.5), 0), (rescaled(blob, 0.0), 0)]
+    notes = {"audit": True, "method": "replay of a committed E, no training", "replayed_E_sha256":
+             hashlib.sha256(blob).hexdigest(), "replayed_from": "r20261102-071331-9d4f", "probes": probes,
+             "snapshots": ["the replayed E", "its LoRA scales x1.5", "its LoRA scales x0"]}
+    prepare.submit(Path(a.out), a.start, KLASS, blob, model, trainable, [], changed=changed, notes=notes,
+                   snapshots=snaps)
+    print(json.dumps({"submitted": True, "steps": 0}), flush=True)
     return 0
-
-
-def encode(factors: dict, params: dict, norms: list[str]) -> bytes:
-    return prepare.encode_lora({n: (A, B, s) for n, (A, B, s) in factors.items()}, "bf16", {n: params[n] for n in norms})
 
 
 if __name__ == "__main__":
