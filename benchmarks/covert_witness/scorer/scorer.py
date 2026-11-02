@@ -446,29 +446,25 @@ def merges_pieces(row: dict) -> bool:
 def credit(row: dict, start: dict, fraction: float, per_token: float, c: float) -> dict | None:
     """The counterexample family a seed-log E gives, for a record whose witness carries no harness-verified family.
 
-    A log with one coefficient a training step (MeZO): E_t, its first t coefficients with ε and the sign, rebuilds step t's
-    weights (masters after t `seedlog_step`s, plus ±εz_t) in (t + 1) n MACs for n trained values, so it covers the steps
-    with (t + 1) n ≤ c, at β_t = bits(E_t) / updated MACs per token, bounded here by the smallest snapshot's E. A log of K
-    coefficients over many steps (a fixed seed subspace, its coefficients trained): step t's weights are the same K-term
-    log at that step's coefficients, rebuilt in K n MACs, so every step is covered iff K n ≤ c, at β_t = bits(E) / updated
-    MACs per token. Both are the direction's construction as its witness states it; the harness's `declare_step` verifies
-    one. Adapter and full E's rebuild no step's fp32 values bit for bit, and their bits per updated MAC are at least p, so
-    they get none."""
+    A log with one coefficient a training step (MeZO, each step's perturbation `seedlog_step` itself): E_t, its first t
+    coefficients with ε and the sign, rebuilds step t's weights (masters after t `seedlog_step`s, plus ±εz_t) in (t + 1) n
+    MACs for n trained values, so it covers the steps with (t + 1) n ≤ c, at β_t = bits(E_t) / updated MACs per token,
+    bounded here by the smallest snapshot's E. A log of fewer coefficients than steps (E's header) is a trained subspace
+    whose steps the decoder rebuilds only if they ran its own sequential fp32 adds, which a v1 record doesn't show, so it
+    gets none (the harness's `declare_step` credits such steps). Adapter and full E's rebuild no step's fp32 values bit for
+    bit, and their bits per updated MAC are at least p, so they get none."""
     if row.get("E_format") != "seedlog" or not per_token:
         return None
     names = (row.get("trainable") or {}).get("full", [])
     n = sum(math.prod(start["tensors"][k][1]) for k in names if k in start["tensors"])
     steps = int(row.get("steps") or 0)
     k = int((row.get("seedlog") or {}).get("steps") or steps)
-    if not n or not steps:
+    if not n or not steps or k != steps:
         return None
-    if k != steps:
-        return {"family": "subspace", "coefficients": k, "covered_share": 1.0 if k * n <= c else 0.0,
-                "beta_t": 8 * (row.get("E_bytes") or 0) / per_token, "rebuild_macs_last": k * n, "values": n}
     t_max = int(c // n) - 1
     covered = min(1.0, max(0, t_max + 1) / max(1.0, fraction * steps))
     e_min = min((cp["e_bytes"] for cp in row.get("curve") or [] if cp.get("e_bytes")), default=row.get("E_bytes") or 0)
-    return {"family": "prefix", "coefficients": k, "covered_share": covered, "beta_t": (8 * e_min + 33) / per_token,
+    return {"coefficients": k, "covered_share": covered, "beta_t": (8 * e_min + 33) / per_token,
             "rebuild_macs_last": (fraction * steps + 1) * n, "values": n}
 
 
@@ -797,7 +793,7 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     fam = [x for x in cw if x.get("te_id") and any(f["covers"] for f in x.get("families") or [])]
     out.append(f"{hhmm} scorer [DIGEST] E credited as a T1 counterexample family (its decoder rebuilds each covered "
                f"step's weights from theta within c): witness v1 seed logs as the witness states them, " + (", ".join(
-                   f"{short(x['id'])} ({c['family']} log of {c['coefficients']} coefficients, "
+                   f"{short(x['id'])} (prefix log of {c['coefficients']} coefficients, "
                    f"{100 * c['covered_share']:.0f}% of steps, beta_t {c['beta_t']:.2g}, last rebuild "
                    f"{c['rebuild_macs_last']:.2g} MACs)" for x, c in cred) or "none")
                + "; harness-verified families (witness v2, te_core.run): "

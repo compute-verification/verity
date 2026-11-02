@@ -38,12 +38,11 @@ python scorer.py final starts|launch ID...|collect     # final-set reruns (below
   point is a submission (its prefix of the run). Scores and digests mark each W* entry (c) counted or (a) analytic.
 - **Counterexample credit** (`scorer.credit`, witness v1 only; v2's families are the harness's, verified by
   `prepare.declare_step`): an E whose decoder rebuilds a step's updated weights from θ within c is a T1 family for that
-  step. A seed log (`E.format` seedlog) is one. With one coefficient a step (MeZO) its prefix E_t rebuilds step t in
+  step. A seed log (`E.format` seedlog) with one coefficient a step (MeZO) is one: its prefix E_t rebuilds step t in
   (t + 1)·n MACs for n trained values, so it covers the steps with (t + 1)·n ≤ c, at β_t = bits(E_t) / updated MACs per
-  token (bounded by the smallest snapshot's E). With K coefficients over more steps (a trained seed subspace, K read from
-  E's header) each step is the K-term log at that step's coefficients, so every step is covered iff K·n ≤ c, at β_t =
-  bits(E) / updated MACs per token. te_core's option (a) takes that β. Adapter and full E's, and a piece run's
-  snapshots, show no step rebuilt bit for bit and get none; an adapter's ρ is low because its φ is.
+  token (bounded by the smallest snapshot's E), and te_core's option (a) takes that β. A seed log of fewer coefficients
+  than steps (a trained subspace, read from E's header), adapter and full E's, and a piece run's snapshots show no step
+  rebuilt bit for bit and get none; an adapter's ρ is low because its φ is.
 - **Cells**: mechanism (the note's first word) x |E| range (decades from 10 kB) x φ range (te_core's `PHI_EDGES`, on
   the witness's φ) x start. A cell is thin at two valid records or fewer.
 - **Promotions** (hourly): each direction's top third by relative bpb drop from its start, and the best record of each
