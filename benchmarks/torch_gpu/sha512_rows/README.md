@@ -58,7 +58,7 @@ The default is `0000`; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds 
 - `engine.py`: the call.
 - `settings.py`: the variables `engine.py` reads.
 - `check.py`: the engine against the reference: every variant, edge sizes, the H200 layer on sampled slots.
-- `bench.py`: the variant and leaf-kernel sweeps, and whole steps at the H200 example's shape.
+- `bench.py`: the variant and leaf-kernel sweeps, and whole steps at the H200 demo's shape.
 - `sass.py`: opcode counts per variant.
 - `sass_count.py`: one kernel's SASS counts per main-loop iteration, by opcode and issue pipe (`ruler.sh`'s pipe mix).
 - `gpu.sh`: one leased GPU run.
