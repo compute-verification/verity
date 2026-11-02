@@ -115,27 +115,75 @@ def delta_of(params: dict, theta: dict, names: list[str]) -> dict:
     return {n: params[n].detach().to(theta[n].dtype).cpu() for n in names}
 
 
+def lora_bytes(theta: dict, mats: list[str], gains: list[str], rank: int) -> int:
+    fac = {n: (torch.zeros(rank, theta[n].shape[1]), torch.zeros(theta[n].shape[0], rank), 1.0) for n in mats}
+    return len(prepare.encode_lora(fac, "bf16", {n: theta[n] for n in gains}))
+
+
+def add_adapters(net, theta: dict, params: dict, mats: list[str], gains: list[str], rank: int) -> tuple[dict, int]:
+    """Rank-r adapters W + s·B·A on `mats` (A ~ N(0, 1/d_in), B = 0, s = sqrt(d_in / r)); rank -1 is the largest whose E
+    fits the class's cap."""
+    if rank < 0:
+        cap = prepare.CLASSES[KLASS]["max_e_bytes"]
+        if cap is None:
+            raise SystemExit(f"wildcard: --lora-rank -1 needs a class with an E cap, not {KLASS}")
+        rank = 1
+        while lora_bytes(theta, mats, gains, rank + 1) <= cap - 512:
+            rank += 1
+    for n in mats:
+        params[n].requires_grad_(False)
+        params[n].data = theta[n].to(params[n].device).clone()
+    g = torch.Generator(device=prepare.DEVICE).manual_seed(0)
+    factors = {}
+    for n in mats:
+        w = params[n]
+        A = torch.nn.Parameter(torch.randn(rank, w.shape[1], device=prepare.DEVICE, generator=g) / math.sqrt(w.shape[1]))
+        B = torch.nn.Parameter(torch.zeros(w.shape[0], rank, device=prepare.DEVICE))
+        s = math.sqrt(w.shape[1] / rank)
+        factors[n] = (A, B, s)
+        mod = net.inner.get_submodule(n.removesuffix(".weight"))
+        mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
+    return factors, rank
+
+
 def train_iterative(a, net, rec, theta, params, tuned, data, fwd):
     mats = [n for n in tuned if params[n].ndim == 2]
     gains = [n for n in tuned if params[n].ndim == 1]
-    opts, extra = [], 0
-    if a.method == "muon" and mats:
-        opts.append((Muon([params[n] for n in mats], lr=a.lr, wd=a.wd), a.lr))
-        extra = sum(ns_flops(tuple(params[n].shape)) for n in mats)
-        adam_names = gains
-    else:
-        adam_names = mats + gains
-    if adam_names:
-        groups = [{"params": [params[n] for n in adam_names if params[n].ndim == 2], "lr": a.lr},
-                  {"params": [params[n] for n in adam_names if params[n].ndim == 1], "lr": a.norm_lr}]
-        groups = [g for g in groups if g["params"]]
-        opts.append((torch.optim.AdamW(groups, betas=(0.9, a.beta2), weight_decay=a.wd,
+    opts, extra, factors = [], 0, {}
+    if a.lora_rank:
+        factors, a.lora_rank = add_adapters(net, theta, params, mats, gains, a.lora_rank)
+        trainable = {"full": gains, "adapters": {n: a.lora_rank for n in mats}}
+        groups = [{"params": [p for A, B, _ in factors.values() for p in (A, B)], "lr": a.lr},
+                  {"params": [params[n] for n in gains], "lr": a.norm_lr}]
+        opts.append((torch.optim.AdamW([g for g in groups if g["params"]], betas=(0.9, a.beta2), weight_decay=a.wd,
                                        fused=prepare.DEVICE.startswith("cuda")), None))
-    trainable = {"full": tuned}
+    else:
+        trainable = {"full": tuned}
+        if a.method == "muon" and mats:
+            opts.append((Muon([params[n] for n in mats], lr=a.lr, wd=a.wd), a.lr))
+            extra = sum(ns_flops(tuple(params[n].shape)) for n in mats)
+            adam_names = gains
+        else:
+            adam_names = mats + gains
+        if adam_names:
+            groups = [{"params": [params[n] for n in adam_names if params[n].ndim == 2], "lr": a.lr},
+                      {"params": [params[n] for n in adam_names if params[n].ndim == 1], "lr": a.norm_lr}]
+            groups = [g for g in groups if g["params"]]
+            opts.append((torch.optim.AdamW(groups, betas=(0.9, a.beta2), weight_decay=a.wd,
+                                           fused=prepare.DEVICE.startswith("cuda")), None))
+    trained = [p for o, _ in opts for g in o.param_groups for p in g["params"]]
+
+    def encode(src: dict) -> bytes:
+        if factors:
+            return prepare.encode_lora(factors, "bf16", {n: src[n] for n in gains})
+        return prepare.encode_full(delta_of(src, theta, tuned))
+
     tokens = a.batch * prepare.EVAL_CTX
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
     n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
     base = [[g["lr"] for g in o.param_groups] for o, _ in opts]
+    if a.ema and factors:
+        raise SystemExit("wildcard: --ema is for full-tensor sets")
     ema = {n: params[n].detach().clone() for n in tuned} if a.ema else None
     steps, snaps = [], []
     marks = {round(n_steps * k / (a.snaps + 1)) for k in range(1, a.snaps + 1)}
@@ -157,7 +205,7 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd):
             x = rows[i: i + a.micro]
             loss = loss_of(fwd, x, len(x) / a.batch)
             loss.backward()
-        torch.nn.utils.clip_grad_norm_([params[n] for n in tuned], a.clip)
+        torch.nn.utils.clip_grad_norm_(trained, a.clip)
         for o, _ in opts:
             o.step()
             o.zero_grad(set_to_none=True)
@@ -172,10 +220,9 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd):
             print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
         if step + 1 in marks:
-            src = ema if ema is not None else params
-            snaps.append((prepare.encode_full(delta_of(src, theta, tuned)), len(steps)))
-    src = ema if ema is not None else params
-    return delta_of(src, theta, tuned), trainable, steps, snaps, {"steps": n_steps}
+            snaps.append((encode(ema if ema is not None else params), len(steps)))
+    return encode(ema if ema is not None else params), trainable, steps, snaps, {"steps": n_steps,
+                                                                                 "lora_rank": a.lora_rank}
 
 
 def train_kfac(a, net, rec, theta, params, tuned, data, fwd):
@@ -263,7 +310,8 @@ def train_kfac(a, net, rec, theta, params, tuned, data, fwd):
         for n in tuned:
             params[n].copy_(base[n] - best * direction[n])
     print(json.dumps({"line_search": results, "eta": best}), flush=True)
-    return delta_of(params, theta, tuned), trainable, steps, [], {"steps": n_steps, "line_search": results, "eta": best}
+    return (prepare.encode_full(delta_of(params, theta, tuned)), trainable, steps, [],
+            {"steps": n_steps, "line_search": results, "eta": best})
 
 
 def main() -> int:
@@ -274,6 +322,8 @@ def main() -> int:
     ap.add_argument("--set", dest="tset", default="mlp-in:-1")
     ap.add_argument("--allow-deep", action="store_true")
     ap.add_argument("--method", default="adamw", choices=("adamw", "muon", "kfac"))
+    ap.add_argument("--lora-rank", type=int, default=0,
+                    help="train the set's matrices through rank-r adapters (E `encode_lora`); -1 fits the class's cap")
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--norm-lr", type=float, default=1e-3)
     ap.add_argument("--beta2", type=float, default=0.95)
@@ -307,14 +357,13 @@ def main() -> int:
             p.data = p.data.float()
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     if a.method == "kfac":
-        delta, trainable, steps, snaps, info = train_kfac(a, net, rec, theta, params, tuned, data, net)
+        blob, trainable, steps, snaps, info = train_kfac(a, net, rec, theta, params, tuned, data, net)
     else:
-        delta, trainable, steps, snaps, info = train_iterative(a, net, rec, theta, params, tuned, data, torch.compile(net))
-    model = dict(theta) | delta
-    changed = [n for n in tuned if not prepare.same_bits(delta[n], theta[n])]
-    blob = prepare.encode_full({n: delta[n] for n in changed})
+        blob, trainable, steps, snaps, info = train_iterative(a, net, rec, theta, params, tuned, data, torch.compile(net))
+    model = prepare.decode(theta, blob)
+    changed = [n for n in tuned if not prepare.same_bits(model[n], theta[n])]
     notes = {"direction": "wildcard", "mechanism": a.mechanism, "method": a.method, "set": tuned, "args": vars(a),
-             "info": info, "source": Path(__file__).read_text()}
+             "info": info, "E_bytes": len(blob), "source": Path(__file__).read_text()}
     prepare.submit(Path(a.out), a.start, KLASS, blob, model, trainable, steps, changed=changed, notes=notes,
                    snapshots=snaps)
     return 0
