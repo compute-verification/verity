@@ -1,27 +1,28 @@
 # The inference-only policy
 
-The inference-only policy asks that the registered circuit D have an inference-block partition 𝓘: blocks with gate
-budget c (exactly c gates each) and fresh-input budget k (at most k bits of fresh input each), where fresh input is
-every value outside the registered information θ, the models, code and data fixed before the monitoring period. It is
-a protocol with no rounds. Setup fixes θ and the registered compiler B. At the start of each verification phase, before
-any coin, B's output on the reported advice partitions that execution block into inference blocks, and the developer's
-ZK proof that B ran correctly and explains the committed trace can also show that each has c gates and reads at most k
-bits outside θ (`verity/core/protocols/remote/README.md`, "Lifecycle"). In Lean it is `Nci.Complies`, in an older form
-(below), and its check is `NciCheck`.
+The inference-only policy (c, k, n) asks that the registered circuit D have a (c, k)-partition 𝓘: inference blocks I,
+each of at most c gates and reading at most k bits beyond the registered inputs θ, the models, code and data fixed
+before the monitoring period (|I| ≤ c and |in(I) ∖ θ| ≤ k), at most n blocks a period (`GLOSSARY.md`, Notation). It
+is a protocol with no rounds. Setup fixes θ and the registered compiler B. At the start of each verification phase,
+before any coin, B's output on the reported advice partitions that execution block into inference blocks, and the
+developer's ZK proof that B ran correctly and explains the committed trace can also show that each meets the policy
+(`verity/core/protocols/remote/README.md`, "Lifecycle"). In Lean it is `Nci.Complies`, in an older form (below), and its
+check is `NciCheck`.
 
 The inference-only policy is not yet a subprotocol of the composites: neither onsite nor remote
 (`verity/core/protocols/composition`) runs its check today.
 
 ## Why it separates inference from training
 
-An inference episode (a chat session) reads little fresh input, say 100 KB of prompt tokens, so honest serving
-divides into inference blocks with a small fresh-input budget (`Nci.Guarantees.Inference`). A training episode (an RL
-rollout) reads an enormous amount, say 1 TB of new parameters, so training that runs through inference blocks gets
-only their yields q(c, k): a pricing argument says how much of a block's fresh-input budget each counted object of a
-necessary subcomputation needs. The slowdown lower bound sums those yields with free compute, at the hardware's rate,
-and with the server-block yields that the memory wipe, proof of useful space (PoUS) and network certification bound (`GLOSSARY.md`, "Size, credit and
-the slowdown lower bound"). Its numbers come from [`benchmarks/rho`](../../../../../benchmarks/rho/README.md), whose
-scenarios register a policy as if it were a subprotocol.
+An inference episode (a chat session) reads little beyond θ, say 100 KB of prompt tokens, so honest serving fits blocks
+of a small k, one block a session at slowdown ρ = 1 (Fit; `Nci.Guarantees.Inference` in the older form). A training
+episode (an RL rollout) computes new weights θ′, say 1 TB of new parameters, and every gate downstream of the update
+depends on them: under A1, a block doing a share x of one token's dependent work reads at least u(x) computed bits, plus
+the cut cost a for each token it enters mid-path, so training through blocks of a small k is slow (Slowdown), and under
+A1 and A2 reaching a target loss covertly costs at least the honest cost H(ℓ*) times min ρp (Security). The symbols and
+statements are `GLOSSARY.md`'s (Notation, Training). [`benchmarks/rho`](../../../../../benchmarks/rho/README.md) still
+computes the earlier statement, which the training formalism replaces; its scenarios register a policy as if it were a
+subprotocol.
 
 ## The Lean
 
@@ -30,8 +31,9 @@ scenarios register a policy as if it were a subprotocol.
   bits a block. The (c, k) form, with an exact gate budget, is not yet in Lean.
 - **The guarantees**, `Security/Definitions/Nci/Guarantees/`, each proved in `Security/Proofs/Nci/` as
   `Nci.SecurityProofs.G`. `ReadBound` turns a lower bound on fresh input into a lower bound on size, `Inference` shows
-  honest inference complies, and the covering, training and threading statements are pricing arguments.
-  `Nci.Guarantees.DampenerRemote` and its relatives state the remote composition's overhead in the older form.
+  honest inference complies, and the covering, training and threading statements belong to the earlier statement of
+  the training slowdown, which the training formalism replaces. `Nci.Guarantees.DampenerRemote` and its relatives state
+  the remote composition's slowdown in that earlier form.
 - **The registered information's provenance**, `Nci.Assumptions.BaselineRegistered`: every θ entry is registered
   public data, never an earlier run's output.
 

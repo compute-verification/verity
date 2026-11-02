@@ -1,5 +1,5 @@
-"""Island `e1mb` (8·|E| ≤ 8e6 bits: E at most 1,000,000 bytes): LoRA on the blocks' matrices, sized so the factors (and the
-norm gains, when trained) fit the cap in bf16; E is the factors (`prepare.encode_lora`), and the evaluated model merges them.
+"""Island `e1mb` (E sized to 1,000,000 bytes, `--e-bytes`): LoRA on the blocks' matrices, sized so the factors (and the
+norm gains, when trained) fit that size in bf16; E is the factors (`prepare.encode_lora`), and the evaluated model merges them.
 
 The base stays frozen. Each target weight W gets A (r x d_in, N(0, 1/d_in)) and B (d_out x r, zero) used as
 W + s · B @ A with s = sqrt(d_in / r), trained by AdamW within the fixed training-FLOP budget. The submitted model is
@@ -22,7 +22,8 @@ import torch.nn.functional as F
 
 import prepare
 
-KLASS = "e1mb"
+#: the island's update size, its own choice (nothing caps it); `--e-bytes` sets another
+E_BYTES = 1_000_000
 DEFAULT_TARGETS = "all"
 DEFAULT_NORMS = True
 LF_MATS = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
@@ -53,7 +54,8 @@ def main() -> int:
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--targets", default=DEFAULT_TARGETS, help="`all`, `out` (each block's two output projections), or leaf names")
-    ap.add_argument("--rank", type=int, default=0, help="0: the largest that fits the class's cap")
+    ap.add_argument("--rank", type=int, default=0, help="0: the largest that fits --e-bytes")
+    ap.add_argument("--e-bytes", type=int, default=E_BYTES, help="the size E is sized to")
     ap.add_argument("--norms", action=argparse.BooleanOptionalAction, default=DEFAULT_NORMS)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--norm-lr", type=float, default=3e-4)
@@ -67,18 +69,18 @@ def main() -> int:
     torch.backends.cuda.matmul.allow_tf32 = True
     net, rec, theta = prepare.load_start(a.start)
     params = net.params()
-    cap = prepare.CLASSES[KLASS]["max_e_bytes"]
+    want = a.e_bytes
     targets = targets_of(rec, params, a.targets)
     norms = sorted(n for n, p in params.items() if p.ndim == 1) if a.norms else []
     rank = a.rank
     if not rank:
         rank = 1
-        while e_bytes(theta, targets, rank + 1, norms) <= cap - 512:
+        while e_bytes(theta, targets, rank + 1, norms) <= want - 512:
             rank += 1
     size = e_bytes(theta, targets, rank, norms)
-    if cap is not None and size > cap:
+    if size > want:
         raise SystemExit(f"e1mb: rank {rank} on {len(targets)} weights{' and the norms' if norms else ''} is {size} bytes, "
-                         f"over the cap of {cap}")
+                         f"over --e-bytes {want}")
     for p in params.values():
         p.requires_grad_(False)
     for n in norms:
@@ -131,7 +133,7 @@ def main() -> int:
             snaps.append((encode(factors, params, norms), len(steps)))
     blob = encode(factors, params, norms)
     model = prepare.decode(theta, blob)
-    prepare.submit(Path(a.out), a.start, KLASS, blob, model, trainable, steps, changed=targets + norms,
+    prepare.submit(Path(a.out), a.start, blob, model, trainable, steps, changed=targets + norms,
                    notes={"method": "lora", "rank": rank, "args": vars(a), "steps": n_steps}, snapshots=snaps)
     return 0
 

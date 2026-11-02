@@ -1,12 +1,12 @@
 """Launch one candidate on a node and preserve its record (fixed; run from an agent VM's checkout).
 
-    python benchmarks/covert_witness/launch.py CLASS START [--note TEXT] [--direction D] [--mechanism M] [--node NODE] \\
-        [--island NAME] [--program FILE] [-- TRAIN_ARGS...]
+    python benchmarks/covert_witness/launch.py START [--island NAME] [--note TEXT] [--direction D] [--mechanism M] \\
+        [--node NODE] [--program FILE] [--reference] [-- TRAIN_ARGS...]
 
 The candidate is measured by the pinned measurement commit (`pin.py`, fetched from the integrator's branch): the run ships
 that commit (a clean checkout of it beside this one), and takes from this checkout only the island,
-`islands/NAME/` as HEAD has it (committed; NAME defaults to the direction when HEAD has `islands/<direction>/FILE`, else
-the class), sent as a tar; FILE (default train.py) is the program, run with CLASS's caps. The node is the next of the
+`islands/NAME/` as HEAD has it (committed; NAME defaults to the direction, when HEAD has `islands/<direction>/FILE`),
+sent as a tar; FILE (default train.py) is the program, and nothing caps what it does. The node is the next of the
 pinned commit's `nodes.txt` in turn (`$CW_NODES`; `--node` names one of them), each line `NODE pool=GPU_POOL
 cpu=CPU_POOL` for a node `prep.sh` has prepared. The candidate runs as `research run --on NODE --pool GPU_POOL` (one slot
 per GPU; candidate.sh leases the GPU with gpu-lease) and records its node (`CW_NODE`): candidate.sh runs the program in a
@@ -18,7 +18,8 @@ checkpoint, each put in the store), and the frontier of the local ledger goes to
 the witness summary are printed as one JSON line, and appended to `$CW_LEDGER` (default ~/.research/covert-witness.jsonl).
 
 D, the direction, defaults to the branch's `cursor/te-<D>-NNNN` (else `integrator`); M, the mechanism, to the note's first
-word (else the class). A `reference` candidate is ingested as a reference (honest) run.
+word (else the island). A candidate of a reference direction (`te_core.frontier.REF_DIRECTIONS`), or `--reference`, is
+ingested as a reference run; honest is the least |C| of every valid record either way (te_core.frontier).
 
 `--final` (the scorer's, direction `scorer`, after the search) runs the candidate in final mode (`CW_FINAL=1`): the
 harness and the checker score the sealed final set, a sealed start (`pythia160m`) may be named, and the run is preserved
@@ -47,7 +48,10 @@ LEDGER = Path(os.environ.get("CW_LEDGER", Path.home() / ".research" / "covert-wi
 LAUNCHES = LEDGER.with_name(LEDGER.stem + "-launches.jsonl")
 sys.path.insert(0, str(HERE))
 from pin import source  # noqa: E402
+from te_core.frontier import REF_DIRECTIONS  # noqa: E402
 from te_core.launch import Node, nodes  # noqa: E402
+#: the harness this launcher drives (prepare.VERSION, read without importing prepare's torch)
+VERSION = re.search(r'^VERSION = "([^"]+)"', (HERE / "prepare.py").read_text(), re.M).group(1)
 DONE = {"done", "failed", "cancelled", "refused", "timeout", "lost"}
 #: candidate.sh's GPU lease (1.2x prepare.GPU_SECONDS_CAP plus 30 minutes for both jobs) and a margin
 TIMEOUT = "110m"
@@ -77,11 +81,13 @@ def git(*args: str) -> str:
     return r.stdout.strip()
 
 
-def island_of(name: str | None, program: str, klass: str, direction: str) -> dict:
-    """The island HEAD has (committed, unedited): `name`, else the direction's when it has `program`, else the class's."""
+def island_of(name: str | None, program: str, direction: str) -> dict:
+    """The island HEAD has (committed, unedited): `name`, else the direction's."""
     has = lambda n: subprocess.run(["git", "cat-file", "-e", f"HEAD:{ISLANDS}/{n}/{program}"], cwd=REPO,
                                    capture_output=True).returncode == 0
-    name = name or (direction if has(direction) else klass)
+    if not name and not has(direction):
+        raise SystemExit(f"launch: HEAD has no {ISLANDS}/{direction}/{program}: name the island (--island NAME)")
+    name = name or direction
     if not re.fullmatch(r"[a-z0-9_-]+", name) or ".." in program or program.startswith("/"):
         raise SystemExit(f"launch: island {name!r} and program {program!r} must be names inside {ISLANDS}/")
     if not has(name):
@@ -120,7 +126,6 @@ def main() -> int:
     train_args = argv[argv.index("--") + 1:] if "--" in argv else []
     argv = argv[: argv.index("--")] if "--" in argv else argv
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("klass")
     ap.add_argument("start")
     ap.add_argument("--note", default="")
     ap.add_argument("--direction", default=None, help="the ledger agent and direction (default: from the branch)")
@@ -130,17 +135,24 @@ def main() -> int:
     ap.add_argument("--collect", default=None, metavar="RUN", help="collect an ended candidate run")
     ap.add_argument("--final", action="store_true", help="final scoring, the scorer's (module docstring)")
     ap.add_argument("--node", default=None, help="one of nodes.txt's nodes (default: the next in turn)")
-    ap.add_argument("--island", default=None, help="the island, islands/NAME/ (default: the direction's, else the class's)")
+    ap.add_argument("--island", default=None, help="the island, islands/NAME/ (default: the direction's)")
     ap.add_argument("--program", default="train.py", help="the island's program (default train.py)")
+    ap.add_argument("--reference", action="store_true", help="ingest as a reference run (default: a reference direction's)")
     a = ap.parse_args(argv)
     direction = tag(a.direction) if a.direction else branch_direction()
-    mechanism = tag(a.mechanism or (a.note.split() or [a.klass])[0]) or a.klass
+    reference = a.reference or direction in REF_DIRECTIONS
     if a.final and direction != "scorer":
         raise SystemExit("launch: --final is the scorer's (direction scorer), after the search")
     if a.collect:
-        return collect(a.collect, a.klass, a.start, a.note, direction, mechanism, a.final)
-    island = island_of(a.island, a.program, a.klass, direction)
+        mechanism = tag(a.mechanism or (a.note.split() or [a.island or direction])[0])
+        return collect(a.collect, a.start, a.note, direction, mechanism, a.final, reference)
+    island = island_of(a.island, a.program, direction)
+    mechanism = tag(a.mechanism or (a.note.split() or [island["name"]])[0]) or island["name"]
     pin, src = source()
+    if str(pin.get("version", "")).split(".")[0] != VERSION.split(".")[0]:
+        raise SystemExit(f"launch: this launcher is harness v{VERSION} and the pin is v{pin.get('version')} "
+                         f"({pin['commit'][:11]}): launch from a checkout at the pin's version until the integrator "
+                         f"pins v{VERSION} (the board's [TOOL] line), then merge origin/cursor/covert-witness-4207")
     node = pick_node(a.node, Path(os.environ.get("CW_NODES", src / "benchmarks/covert_witness/nodes.txt")))
     with tempfile.TemporaryDirectory() as tmp:
         tar = Path(tmp) / "island.tar"
@@ -151,14 +163,14 @@ def main() -> int:
         cmd = ["run", "--on", node.name, "--project", "verity", "--source", str(src), "--send", str(tar),
                "--pool", node.pool, "--as", a.lane, "--pool-wait", "7200", "--timeout", TIMEOUT,
                "--declared-output", "out/*", *env, "--",
-               "bash", "benchmarks/covert_witness/candidate.sh", a.klass, a.start, *train_args]
+               "bash", "benchmarks/covert_witness/candidate.sh", a.start, *train_args]
         out = research(*cmd)
     m = re.search(r"run (r\d{8}-\d{6}-[0-9a-f]{4}) launched", out)
     if not m:
         raise SystemExit(f"launch: no run id in research run's output:\n{out[-2000:]}")
     run = m.group(1)
-    launched = {"run": run, "node": node.name, "class": a.klass, "start": a.start, "direction": direction,
-                "mechanism": mechanism, "measurement_commit": pin["commit"], "island": island}
+    launched = {"run": run, "node": node.name, "start": a.start, "direction": direction, "mechanism": mechanism,
+                "reference": reference, "measurement_commit": pin["commit"], "island": island}
     LAUNCHES.parent.mkdir(parents=True, exist_ok=True)
     with LAUNCHES.open("a") as f:
         f.write(json.dumps(launched) + "\n")
@@ -171,16 +183,16 @@ def main() -> int:
         if st.get("state") in DONE:
             break
         time.sleep(30)
-    return collect(run, a.klass, a.start, a.note, direction, mechanism, a.final)
+    return collect(run, a.start, a.note, direction, mechanism, a.final, reference)
 
 
-def ingest(run: str, out: Path, klass: str, direction: str, mechanism: str) -> dict:
+def ingest(run: str, out: Path, direction: str, mechanism: str, reference: bool) -> dict:
     """The harness's record into the te_core ledger (each record published), then the local frontier to stderr."""
     if not (out / "run" / "run.json").exists():
         return {"ledger_error": "no run/run.json"}
     r = subprocess.run([sys.executable, "-m", "te_core.ledger", "--agent", direction, "--publish", "ingest",
                         str(out / "run"), "--direction", direction, "--mechanism", mechanism, "--run-id", run,
-                        *(["--reference"] if klass == "reference" else [])], capture_output=True, text=True, cwd=HERE)
+                        *(["--reference"] if reference else [])], capture_output=True, text=True, cwd=HERE)
     if r.returncode:
         return {"ledger_error": r.stderr.strip()[-500:]}
     recs = json.loads(r.stdout.strip().splitlines()[-1])
@@ -190,7 +202,8 @@ def ingest(run: str, out: Path, klass: str, direction: str, mechanism: str) -> d
             "rho": recs[-1]["rho"] if recs else None}
 
 
-def collect(run: str, klass: str, start: str, note: str, direction: str, mechanism: str, final: bool = False) -> int:
+def collect(run: str, start: str, note: str, direction: str, mechanism: str, final: bool = False,
+            reference: bool = False) -> int:
     research("fetch", run, "--all")
     out = RUNS / run / "out"
     w = json.loads((out / "witness.json").read_text()) if (out / "witness.json").exists() else None
@@ -201,12 +214,12 @@ def collect(run: str, klass: str, start: str, note: str, direction: str, mechani
         print(f"launch: {run}'s witness names measurement commit {w.get('measurement_commit')}, the run shipped "
               f"{shipped}: preserved, not ingested", file=sys.stderr)
     put = json.loads(research("data", "put", "--kind", "evidence/v1", "--tree", str(out), "--preserve", "--json",
-                              "--meta", json.dumps({"covert_witness": {"run": run, "class": klass, "start": start,
-                                                                       "note": note, "direction": direction,
-                                                                       "mechanism": mechanism, "final": final}}),
+                              "--meta", json.dumps({"covert_witness": {
+                                  "run": run, "island": w and (w.get("island") or {}).get("name"), "start": start,
+                                  "note": note, "direction": direction, "mechanism": mechanism, "final": final}}),
                               stdout_only=True))
-    row = {"run": run, "art": put["id"], "class": klass, "start": start, "note": note, "direction": direction,
-           "mechanism": mechanism, "final": final, "measurement_commit": shipped,
+    row = {"run": run, "art": put["id"], "start": start, "note": note, "direction": direction,
+           "mechanism": mechanism, "final": final, "reference": reference, "measurement_commit": shipped,
            "island": w and {k: (w.get("island") or {}).get(k) for k in ("name", "program", "commit", "digest")},
            "valid": w and w.get("valid"),
            "bpb": w and w.get("score", {}).get("bpb"), "split": w and w.get("score", {}).get("split"),
@@ -215,7 +228,7 @@ def collect(run: str, klass: str, start: str, note: str, direction: str, mechani
            "train_flops": w and w.get("harness", {}).get("flops"), "gpu_seconds": w and w.get("gpu_seconds"),
            "checks": w and w.get("checks")}
     if not final and agrees:
-        row |= ingest(run, out, klass, direction, mechanism)
+        row |= ingest(run, out, direction, mechanism, reference)
     LEDGER.parent.mkdir(parents=True, exist_ok=True)
     with LEDGER.open("a") as f:
         f.write(json.dumps(row) + "\n")

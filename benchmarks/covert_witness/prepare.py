@@ -1,5 +1,5 @@
 """The fixed side of the covert-witness speedrun: the registered starts, the decoders, the training-FLOP meter, the witness
-checker, the classes' caps, `evaluate_bpb` and the `Scorer`. A candidate's `train.py` imports it and never edits it;
+checker, `evaluate_bpb` and the `Scorer`. A candidate's `train.py` imports it and never edits it;
 `evaluate.py` and the harness run it.
 
 A search score (`Scorer.search`) is taken after the weights are hashed: a slice of the search pool drawn from a fresh
@@ -7,8 +7,8 @@ coin and the digest (`draw_slice`), scored paired with the start (the start's wh
 the start's on the slice). `Scorer.seal` writes the promotion set's score under the digest, which only `sealed.py`
 reads. In final mode (`CW_FINAL=1`) every score is the final set's, and the sealed start (`register_pythia`) loads.
 
-A candidate starts from a registered start θ (`load_start`), trains within its class's caps and the fixed budget, and submits
-(`submit`):
+A candidate starts from a registered start θ (`load_start`), trains within the fixed budget, and submits (`submit`). Nothing caps
+its update, its size or its shape: the training formalism v1 scores what it did (te_core.formalism). It submits:
 
 - E, an encoding of its update in one of the fixed formats (`encode_full`, `encode_lora`, `encode_lora2`,
   `encode_seedlog`, `encode_sparse`, `encode_quant`); `decode(θ, E)` rebuilds the model, 8·|E| bits is the update-size
@@ -48,7 +48,7 @@ from sealed import DATA, SEALED, value_path
 from starts_store import STARTS
 
 #: the fixed side's version, in every witness record (README.md)
-VERSION = "2.3"
+VERSION = "3.0"
 ROOT = Path(os.environ.get("CW_ROOT", "/workspace/research/scratch/covert-witness"))
 LF_CORPUS = Path(os.environ.get("CW_LF_CORPUS", "/workspace/research/scratch/learning-frontier/fineweb-edu-gpt2-v1"))
 #: the held-out sets (`data.py`, data version `sealed.DATA`): a search evaluation scores a fresh slice of the pool; the
@@ -89,13 +89,6 @@ HARNESS_FLOP_SLACK = 1.1
 #: the candidate's steps' wall seconds as the harness times them (its own loading, encoding and evaluation excluded), on one
 #: GPU; the harness runs eager and counted, about 2.4x a compiled run's time
 GPU_SECONDS_CAP = 3000.0
-CLASSES = {
-    "reference": {"max_e_bytes": None, "formats": None, "top_blocks": None},
-    "e1mb": {"max_e_bytes": 1_000_000, "formats": None, "top_blocks": None},
-    "e100kb": {"max_e_bytes": 100_000, "formats": None, "top_blocks": None},
-    "shallow": {"max_e_bytes": None, "formats": None, "top_blocks": 2},
-    "seed": {"max_e_bytes": 100_000, "formats": ["seedlog"], "top_blocks": None},
-}
 MAGIC = {b"CWFULL1\n": "full", b"CWLORA1\n": "lora", b"CWLORA2\n": "lora2", b"CWSEED1\n": "seedlog",
          b"CWSPAR1\n": "sparse", b"CWQUAN1\n": "quant"}
 DTYPES = {"bf16": torch.bfloat16, "f16": torch.float16, "f32": torch.float32}
@@ -1014,10 +1007,13 @@ def rebuild_macs(theta: dict[str, torch.Tensor], blob: bytes) -> int:
 
 # ---- submission --------------------------------------------------------------------------------------------------------
 
-def submit(out: Path, start: str, klass: str, blob: bytes, model: dict[str, torch.Tensor], trainable: dict,
-           steps: list[dict], changed: list[str], notes: dict | None = None, snapshots: list[tuple[bytes, int]] = ()) -> None:
+def submit(out: Path, start: str, blob: bytes, model: dict[str, torch.Tensor], trainable: dict, steps: list[dict],
+           changed: list[str], notes: dict | None = None, snapshots: list[tuple[bytes, int]] = ()) -> None:
     """Write a submission: E.bin, steps.jsonl, meta.json, and snapshots (E at a step-log prefix) for the FLOPs-to-target
     curve. `model` isn't written: the evaluation job rebuilds the model from θ and E with the fixed decoder."""
+    if isinstance(blob, str):
+        raise SystemExit(f"prepare: harness v3 has no classes: call submit(out, start, blob, model, trainable, steps, "
+                         f"changed, ...) without the class ({blob!r})")
     out.mkdir(parents=True, exist_ok=True)
     (out / "E.bin").write_bytes(blob)
     (out / "steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in steps))
@@ -1027,7 +1023,7 @@ def submit(out: Path, start: str, klass: str, blob: bytes, model: dict[str, torc
         (d / "E.bin").write_bytes(b)
         (d / "meta.json").write_text(json.dumps({"steps_prefix": n}) + "\n")
     meta = {"schema": "covert-witness/submission/v1", "start": start, "theta_digest": start_record(start)["digest"],
-            "class": klass, "trainable": trainable, "changed": sorted(changed), "notes": notes or {}}
+            "trainable": trainable, "changed": sorted(changed), "notes": notes or {}}
     (out / "meta.json").write_text(json.dumps(meta, indent=1) + "\n")
 
 
