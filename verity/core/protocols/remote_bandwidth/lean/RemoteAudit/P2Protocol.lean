@@ -35,6 +35,8 @@ No property states yet what this check accepts; `p2_case.py`'s tests hold it to 
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.P2Protocol
 
