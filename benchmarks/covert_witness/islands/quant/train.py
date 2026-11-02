@@ -24,7 +24,8 @@ variant each checkpoint holds. The submission is `--variants`' first, and the no
 weights. In qat and qlora each 5%'s checkpoint is the model itself, except a `--qat fp` arm's, which are ptq's.
 
 Variant names: `fp` (no quantization), `rtn{b}g{G}` (b-bit round to nearest, G-entry groups, G 0 a row), `sign[g{G}]`,
-`tern{tau}[g{G}]` (ternary, kept when |Δ| > tau · the group's mean |Δ|).
+`tern{tau}[g{G}]` (ternary, kept when |Δ| > tau · the group's mean |Δ|), `svd{r}[q{b}]` (each matrix's update at its best
+rank r, a CWQUAN1 lora entry whose factors are b-bit, 8 by default, in groups of 128).
 
     python benchmarks/covert_witness/launch.py reference s100 --note "ptq: ..." -- --klass reference --mode ptq \
         --variants fp,rtn2g128,sign
@@ -143,7 +144,7 @@ class Muon(torch.optim.Optimizer):
 
 # ---- variants ----------------------------------------------------------------------------------------------------------
 
-VARIANT = re.compile(r"fp|rtn(\d)g(\d+)|sign(?:g(\d+))?|tern([\d.]+)(?:g(\d+))?")
+VARIANT = re.compile(r"fp|rtn(\d)g(\d+)|sign(?:g(\d+))?|tern([\d.]+)(?:g(\d+))?|svd(\d+)(?:q(\d))?")
 
 
 def quantizer(name: str):
@@ -156,7 +157,24 @@ def quantizer(name: str):
         return lambda x: qf.rtn(x, int(m.group(1)), int(m.group(2)))
     if name.startswith("sign"):
         return lambda x: qf.sign(x, int(m.group(3) or 0))
+    if name.startswith("svd"):
+        return lambda x: svd_entry(x, int(m.group(6)), int(m.group(7) or 8))
     return lambda x: qf.ternary(x, float(m.group(4)), int(m.group(5) or 0))
+
+
+@torch.no_grad()
+def svd_entry(d: torch.Tensor, rank: int, bits: int) -> dict:
+    """The update's best rank-r approximation as a CWQUAN1 lora entry: B = U_r S_r^1/2, A = S_r^1/2 V_r^T, each k-bit round
+    to nearest in groups of 128 (a row when it is shorter)."""
+    u, s, vh = torch.linalg.svd(d.float(), full_matrices=False)
+    r = min(rank, s.numel())
+    root = s[:r].sqrt()
+    a, b = root[:, None] * vh[:r], u[:, :r] * root[None, :]
+
+    def q(x):
+        return qf.rtn(x.contiguous(), bits, 128 if x.numel() % 128 == 0 else 0)
+
+    return {"kind": "lora", "a": q(a), "b": q(b), "scale": 1.0}
 
 
 def entries_of(name: str, delta: dict[str, torch.Tensor], norm_bits: int) -> dict[str, dict]:
@@ -165,9 +183,22 @@ def entries_of(name: str, delta: dict[str, torch.Tensor], norm_bits: int) -> dic
     for k, d in delta.items():
         if d.ndim == 1:
             out[k] = {"kind": "delta", "q": qf.rtn(d, norm_bits, 0)}
+        elif name.startswith("svd"):
+            out[k] = quant(d)
         else:
             out[k] = {"kind": "delta", "q": quant(d)}
     return out
+
+
+def entry_value(w: torch.Tensor, e: dict) -> torch.Tensor:
+    """W' of one CWQUAN1 entry, on W's device in W's dtype, as qformat.decode computes it."""
+    if e["kind"] == "lora":
+        return prepare.lora_merge(w, e["a"].value().to(w.device), e["b"].value().to(w.device), e["scale"])
+    return (w.float() + e["q"].value().to(w.device)).to(w.dtype)
+
+
+def entry_bits(e: dict) -> float:
+    return e["a"].entropy_bits() + e["b"].entropy_bits() if e["kind"] == "lora" else e["q"].entropy_bits()
 
 
 # ---- training ----------------------------------------------------------------------------------------------------------
@@ -655,11 +686,11 @@ def ptq_variant(v: str, weights: dict[str, torch.Tensor], theta: dict, norm_bits
         return model, variant_note(v, None, q_bytes, 8.0 * q_bytes, True, 0.0, n_params, t1)
     delta = {n: w.float() - theta[n].to(dev).float() for n, w in weights.items()}
     entries = entries_of(v, delta, norm_bits)
-    h_bits = sum(e["q"].entropy_bits() for e in entries.values())
+    h_bits = sum(entry_bits(e) for e in entries.values())
     qblob = qf.encode(entries, theta)
     rebuilt = qf.decode(theta, qblob, dev)
     model = {n: rebuilt[n] for n in weights}
-    want = {n: (theta[n].to(dev).float() + entries[n]["q"].value()).to(theta[n].dtype).cpu() for n in weights}
+    want = {n: entry_value(theta[n].to(dev), entries[n]).cpu() for n in weights}
     ok = all(prepare.same_bits(model[n], want[n]) for n in weights)
     num = sum(float(((model[n].to(dev).float() - theta[n].to(dev).float() - delta[n]) ** 2).sum()) for n in weights)
     rel = num / max(1e-30, sum(float((d ** 2).sum()) for d in delta.values()))
