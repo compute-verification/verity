@@ -27,6 +27,7 @@ import Flock.WindowRecord
 import VStar.Cli
 import VStar.Compose
 import VStar.Stage
+import Flock.JsonParse
 
 namespace Flock
 namespace RecVStar
@@ -511,7 +512,7 @@ def vstarRows (sub : VStar.Sub) (u : VStar.UnitC) : List (String × Nat × Nat) 
 unit's input leaves its input words in order, V*'s row ports (`vstarRows`), each a `sha512/row/v1` row as V*'s META writes
 them (`row_schema`, no `row_schemas`), and the unit's output leaves its output words in order (`UnitC.leaves`' `out`),
 with no template (V*'s circuits are flat). `checkFile` holds the bytes to V*'s;
-this holds what the verifier parsed from them, which no proof reads through `Lean.Json.parse`, to what V* wrote. -/
+this holds what the verifier parsed from them, which no proof yet reads through `JsonParse.parse`, to what V* wrote. -/
 def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
   if c.tmpl.isSome then
     throw s!"{s.name}: the parsed circuit is templated, and V*'s circuits are flat"
@@ -694,8 +695,8 @@ def partHolo (s : VStar.Stmt) (holo : Bool) : Bool := holo && s matches .inner .
 
 /-- **The parsed circuit's META `holo` is V*'s file's**: `RecResiduals.holoOf c` is `true` exactly at a part's statement
 over a holo inner session, where `circuitFile` writes META `holo` (`VStar.emitCircuitHolo`), and `false` elsewhere, where
-it writes none. `checkFile` holds the bytes to V*'s; this holds what `checkPart` reads of the parsed circuit, which no
-proof reads through `Lean.Json.parse`, to what V* wrote. -/
+it writes none. `checkFile` holds the bytes to V*'s; this holds what `checkPart` reads of the parsed circuit, which no proof
+yet reads through `JsonParse.parse`, to what V* wrote. -/
 def checkHolo (s : VStar.Stmt) (c : Circuit) (holo : Bool) : V Unit := do
   if (← RecResiduals.holoOf c) != partHolo s holo then
     throw s!"{s.name}: the circuit's META holo is not V*'s file's ({partHolo s holo}) at the inner session's holo flag {holo}"
@@ -1293,7 +1294,7 @@ def innerCommits (tr : Json) (record : String) (reg : Option Json := none) (boun
   checkFinished tr
   let held ← registration reg bound
   let .ok rounds := tr.getObjValAs? (Array Json) "rounds" | throw "rec inner transcript: rounds is not a list"
-  let rec_ ← match Json.parse record with
+  let rec_ ← match JsonParse.parse record with
     | .ok j => pure j
     | .error e => throw s!"rec inner transcript: the inner session's record is not JSON: {e}"
   let .ok streams := rec_.getObjValAs? (Array Json) "streams" | throw "rec inner transcript: the inner session's record has no streams"
@@ -1629,7 +1630,7 @@ def innerLink (tr : Json) (record : String) : V InnerLink := do
   if flat.size != np * m then throw s!"rec inner transcript: {flat.size} link coins for {np} points of {m}"
   let coins ← f128sOfHex "link.points" flat
   let points := (Array.range np).map fun i => coins.extract (i * m) (i * m + m)
-  let rec_ ← match Json.parse record with
+  let rec_ ← match JsonParse.parse record with
     | .ok j => pure j
     | .error e => throw s!"rec inner transcript: the inner session's record is not JSON: {e}"
   let .ok rp := (rec_.getObjVal? "link" >>= (·.getObjValAs? (Array (Array String)) "points"))
