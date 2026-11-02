@@ -1,4 +1,4 @@
-"""served_h1's side computation (`served_h1/receipts.py`) is `h1tile.reference`'s receipt, unit by unit: on random s8
+"""served_h1's side computation (vllm's `pouw_h1_receipts`) is `h1tile.reference`'s receipt, unit by unit: on random s8
 calls at K = 64 and 128 (a partial row block left uncovered), and saturated operands at K = 64; and each receipt reads
 the unit's position, salt and roots and every operand byte of its tile.  A call's receipt tree (`served_h1/commit.py`)
 is the same built in pool tasks or leaf by leaf, opens a unit's leaf, and refuses a flipped bit or another call's salt
@@ -39,6 +39,8 @@ import numpy as np
 import pytest
 import torch
 
+from verity_vllm.protocols.pouw.h1 import receipts as RC
+
 HERE = Path(__file__).resolve().parents[1] / "served_h1"
 
 
@@ -49,7 +51,7 @@ def _load(name: str):
     return mod
 
 
-RC, CM, CR, CO = _load("receipts"), _load("commit"), _load("credit"), _load("coins")
+CM, CR, CO = _load("commit"), _load("credit"), _load("coins")
 SALT, RA, RB = bytes(range(64)), bytes(range(64, 128)), bytes(range(128, 192))
 
 

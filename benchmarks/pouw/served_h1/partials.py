@@ -28,7 +28,6 @@ in its own instantiation, run on just the drawn leaves' gathered operands, batch
 from __future__ import annotations
 
 import ctypes as C
-import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,13 +35,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
-HERE = Path(__file__).resolve().parent
-if str(HERE) not in sys.path:
-    sys.path.insert(0, str(HERE))
-import receipts as RC  # noqa: E402
-
-from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.core.protocols.pouw.circuit import h1tile as HT
+from verity.core.protocols.pouw.circuit import seeds as SD
+from verity_vllm.protocols.pouw.h1 import receipts as RC
 
 LANES = RC.LANES
 
