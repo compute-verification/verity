@@ -681,6 +681,11 @@
   "Properties.Pouw.Commit.leafRefusals": "3128c3c5eb612819cd9903270c2c719b0d83ef4286a43ce01d1a099d0b569c33",
   "Properties.Pouw.Commit.saltRefusals": "ee7608241f9a4df39f8212af4d4e3bad019968fd21691f19ffce06fa67b2f6ac",
   "Properties.Pouw.Commit.saltSize": "30fd4da534ba9d9d1ac4d9f139c2caddb9c8062ac8d56b30d9bd1695fec59b6a",
+  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
+   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
+   "missing": "honest",
+   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld"
+  },
   "Properties.Pouw.Credit.SecurityProofs.epsAtSound": "9cdd4feb03ed39b17cc2290c38f6aa3b4bde712d77a7e4f22a57da8a746332a6",
   "Properties.Pouw.Credit.SecurityProofs.establishedSound": "c03e3c77fda8ce7a3f84f025ba5617b90e2db2dfdab66fcbb3f209aadeaa67ab",
   "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c",
@@ -761,12 +766,7 @@
   "Properties.SampledProofs.haltCoversOperator": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
   "Properties.SampledProofs.haltEndsOpen": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
   "Properties.SampledProofs.haltIsFinal": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
-  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
-  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
-   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
-   "missing": "honest",
-   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld"
-  }
+  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
  },
  "layers": {
   "Properties.Composition": {
@@ -5535,9 +5535,6 @@
     "Accounting.Compose.WindowPlay.EveryWindow (fun live x => Accounting.Compose.DeadConeDead Sc Cd (Properties.Pouw.PeriodJ10R.tileCount σ sT) live) Wp": "Accounting.Compose.Period.EveryWindow taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Accounting.Compose.PrefixOf (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)) Pl.game": "Accounting.Compose.PrefixOf taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Properties.Pouw.PeriodJ10R.tileLayer Cd hr σ k hk sT unitOf ws opened (Properties.Pouw.PeriodJ10R.pinnedAt (Properties.Pouw.PeriodJ10R.saltOf ws) place tile) (Properties.Pouw.PeriodJ10R.j10rAtCoin hr enc place tile)).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": {
-    "∀ (p : MemoryChallenger.WipeProtocol.Params) (c : MemoryChallenger.StreamedWipe.Commitment) (e : MemoryChallenger.WipeProtocol.Evidence), Exists fun out => Exists fun prof => Eq (check p c e) (Core.Outcome.accept out prof)": "PRF-301 debt (Tue 3 Nov): the acceptAll lemma's hypothesis as checked states it; #6241 unlists the lemma above this PR"
    }
   }
  },
@@ -14235,9 +14232,10 @@
    ]
   },
   "Flock.WindowRecord": {
-   "digest": "8dcec6d35a7ea073032d152c2f3513671d0e2e46924f78e1040f989f4f083d92",
+   "digest": "8b291075a6ac25178e903fc2e54ac98ebb108597850dc4ec624163ec6c999d5d",
    "definitions": {
     "Flock.WindowRecord.FORMAT": "6621ef0d3ac02e239ca9106a042701296aba9be581a87dfe034e6d18717d45ab",
+    "Flock.WindowRecord.FORMATS": "3a345af6923c1b5b05ec8dfa525d194cdf0024289b25861ae693c07def4b0212",
     "Flock.WindowRecord.FORMAT_V2": "e45e16f3ff307b1ee5f61d3cc6c024f7aed04875023277710658ce00253b4480",
     "Flock.WindowRecord.digest": "7498ecf53352f8b9664fb28338d1eef73483938c1efc389b621c42588379d9ab",
     "Flock.WindowRecord.digestHex": "150ad2be7d7e4e6b3a426393c32ba81e74c12a6448eec7c3601a41ea08dbce3a",
@@ -15987,7 +15985,7 @@
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
   "NetworkCheck.Period": {
-   "digest": "75844397526dfd212193676bba25bcc6154a743873f0aebe0b49e0121967d51c",
+   "digest": "f2da15869524498b40d236330231faa92fea5835e5a89301cd28b40e7952dcde",
    "definitions": {
     "NetworkCheck.Period.Audit": "0d641bb152e911020e01f254af27bca6b76ff4e2cb57994e3121b4fcb8e976f4",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -16122,7 +16120,7 @@
     "NetworkCheck.Period.clockDigest": "b00053981453a122c0cf6e04e51482c993365526c33520f49eb09ccb03fd4dde",
     "NetworkCheck.Period.clockTag": "dac49ad8ff6064134028a068f766570c10643c1261cf4667962a3c000a5bddcc",
     "NetworkCheck.Period.clog2": "0b4eb09d5ca828e9a24744a2362203d629b3e35103d57bfb916d321bdfbe2dcc",
-    "NetworkCheck.Period.commitmentOf": "5d979cc1c9ab7d795006db7c5198efc116d6e598f484a58cbcc50b25d8dc0924",
+    "NetworkCheck.Period.commitmentOf": "63f58bc80c29b6d3825009203fd8d07ac83c050e84921bf4cfd0fcdd0961271e",
     "NetworkCheck.Period.commitmentTag": "3beab37b10b6aa4c879a13f8df016e198564d03f09fd8693c11ed34139d7e8a4",
     "NetworkCheck.Period.definitionDigest": "8b1a995fa6aabfc9bc97a4efdb5e1fdb24efeef3d2aa46cb46be2203c18750fc",
     "NetworkCheck.Period.domainTag": "96482ade324b360c62b47eaa557a5e5541ebd16076ce6dcba0ea42cc95248016",
@@ -16137,7 +16135,6 @@
     "NetworkCheck.Period.findingOf": "44131db49e33c7c229608dc8c49142bcce277c3cdc31d2a3967a13207a33d738",
     "NetworkCheck.Period.firstFinding": "4976491d675431c8ecd02961f5bb72d0ff705497487dfc3f05d872d5e036b77e",
     "NetworkCheck.Period.firstParams": "4cba5348252e0f6afd34f7a65d63e75da7fdce6dfdfec950f5c78753ef353225",
-    "NetworkCheck.Period.formats": "b08962418ae5eb2acb1932c4b6bede5d14d257d43da5bbdbb43ca3769ea3b727",
     "NetworkCheck.Period.headDigest": "b2484035200a5bef6a2c6423bc939b5aabb6fcb5e9ccbcc75594593704f70008",
     "NetworkCheck.Period.holds": "0068a20e53b1794f1fea1dac8eba7fa9280bb65286efb1b45b775b80c96a31f1",
     "NetworkCheck.Period.ingressParams": "68483bb6bb24f46819fbb2716ccaa3e98383d35b957eaf1166c469eb457e1c99",
@@ -16170,7 +16167,7 @@
     "NetworkCheck.Period.readsEntries": "60dd991d295d9457d19c5724ecd815abe248b1445ca35498ddd504cc872c66ea",
     "NetworkCheck.Period.records": "37fdbf54f32bf6a269ee8269d50985610b2cc11fc133e2ea046e6598744d2250",
     "NetworkCheck.Period.refuse": "98b441532a0acf294152e4a1e6423cb00123cf5b271ba7738085748378b43955",
-    "NetworkCheck.Period.registrationOf": "b9cb6a34210a08dee937179fc3a1fa09e7ae1320f580f7c32d3c14f5b5387f92",
+    "NetworkCheck.Period.registrationOf": "9ec58192cfb78fd3f4b66c5c066ee40caeee112708dfdb7ccd6ae30bac22cdd4",
     "NetworkCheck.Period.resolvedEntry": "1e6d96dcfa03d6a09b2041cdc50ffdf7c63c016b2f1862bdb7b445912af4f801",
     "NetworkCheck.Period.resolvedEntry._sparseCasesOn_3": "cba3f8198bfba8537bce2670c54a5622612bf9d7ca54c6495d544c277c069342",
     "NetworkCheck.Period.resolvedEntry._sparseCasesOn_6": "d60d50bd791b8dbb886abef72b19155da671e693d5b8fd93a53fa645130c5330",
@@ -17063,7 +17060,7 @@
    ]
   },
   "PouwCheck.Credit": {
-   "digest": "201104109b6cd197e00e50e1e4901e25030b177992e07464d3ad282ad567fc4c",
+   "digest": "06bc7f6783dfa3e71c71b401e4c208f3498500c4031ed03ee136fa98f90ae4c6",
    "definitions": {
     "PouwCheck.Credit.BODY": "071fefb97f3971bcd352e1c3b07d11024a6f9c774c6fb6c3b46931a10dfb376c",
     "PouwCheck.Credit.CALLS_FORM": "d6bf6cb3768f79c8900ee97cb118d0b475d4456410e4d0a86afbe35047c0da92",
@@ -17083,6 +17080,7 @@
     "PouwCheck.Credit.DRAW_FORM": "3586d72cf56e22561898e42cfa91bfcfb77810e53ae4d9735e618f59f9cdf550",
     "PouwCheck.Credit.DRAW_ROOT": "4aa40abefce48d7862ecaece849ff6510eac1f0cb5b556750e0bafbcc467d8bb",
     "PouwCheck.Credit.DRAW_TAG": "2ad80ea599e33f411f92e3ae91e0d878191fad1047965b385fad2e9782654cb1",
+    "PouwCheck.Credit.DRAW_UNIT": "6f869f09620fbe9def4973b8cca707756090ce0c4a15225b84636a4c0092449d",
     "PouwCheck.Credit.ENTRIES_FORM": "898c4c10520da3215cd65690aeea2cf2146cd5f6ea406887e1aaa5af6bd06cef",
     "PouwCheck.Credit.HEADER_WORDS": "714835b583b058a5fe09f4e96a8b5892a87823e0a0c5ee4150dafe1a1adbb005",
     "PouwCheck.Credit.IDS_OUTSIDE": "ac6c0bb206131b81f480e3113d7e01ae8876720377a64e4a3e303b43aa412a37",
@@ -17198,10 +17196,10 @@
     "PouwCheck.Credit.commitOf?": "7fce0fcd7ff58dd4f04f801376467a05d70f89795c05462c4e50824e7c1bed94",
     "PouwCheck.Credit.commitRows": "935c00ed18db025df43f38a2cc865ba4565a9a46dd296c48cc4f9d49b2a0aab0",
     "PouwCheck.Credit.committedFloor": "5e718cbf6eca126e2cc52717d75328d2388ad29ed9115a039924fc3d1dec2206",
-    "PouwCheck.Credit.committedK": "a68b76240759f5f374a6bbc6cb75952c467f047c75233e8441b19b45f6b7737a",
+    "PouwCheck.Credit.committedK": "7a3481d42b1b9894dc1db6e6b50ab4296044fe575967754857b0cde19abf8164",
     "PouwCheck.Credit.committedLength": "9456e90d80b336667d8e4cbbe4b6076dedf3649353e7935bc91137e43aaf1f31",
     "PouwCheck.Credit.committedPin": "f797588d242b45959a52a4cbd09fa36fb1f2566309053c324b6f114378ad794b",
-    "PouwCheck.Credit.committedRows": "b61563b721094cb6bfc92642d823529bf400d4f6ee14a99c96e1e2b487281796",
+    "PouwCheck.Credit.committedRows": "bebe638c132699750e24938c8c026d45b29b84550dbc583256550f488370f350",
     "PouwCheck.Credit.committedWeights": "abc1532db777beea512b1f3313eab84218fc4337b924067b009b32403b55d812",
     "PouwCheck.Credit.creditedWork": "f656e6139a00e30a3d5fbecdd52bc84db5915d5331abeeb7db311ef354a159dc",
     "PouwCheck.Credit.defn?": "cc922bbc75f76dfa45516ca76490ac33d7771ee9b20c526bd9a21f1b8440c2e1",
@@ -17241,7 +17239,7 @@
     "PouwCheck.Credit.liveRefuse": "5b887e53e883a83eab24caaaa4245b3f4ed9eea6b0ec83206471a13530f8ece6",
     "PouwCheck.Credit.liveRoots": "8eefaf3c370d07061de91bb414b95ad9fd81b4f722a52d94f8e1751ec8d426a3",
     "PouwCheck.Credit.loads?": "932faa89f1d184a45caf3a21bfcd5dceb3877c15be2bb6fbbce8b5c7f6b7f12b",
-    "PouwCheck.Credit.mainIndex?": "e4d1f9b9b7fe82e8ea9eb07e60dcd7be835543400b96b6e8609360fd134a98c0",
+    "PouwCheck.Credit.mainIndex?": "99eaacfae1bb12952c60a981211272eaca527241dc13b0e132feafcbda7c7029",
     "PouwCheck.Credit.nDigits": "a51b2c456822dc1b03505b6ba6045106f22ad0810734a709ee4a9e7d74d3a54b",
     "PouwCheck.Credit.noBit": "37194b620292afafb155b3808df58d04735fef89b0dff38228a17297e1e12c95",
     "PouwCheck.Credit.noFixedLength": "d1f995c8d378eef6023a26756e25e423f28d0953adfa4e373c532887a922a469",
@@ -17262,10 +17260,10 @@
     "PouwCheck.Credit.otherServed": "922ef202688d16e735bb84adf65e0f6bc49351ba58efb1c5eb2cc28f4a34fc51",
     "PouwCheck.Credit.otherSlot": "08dea76f7fff9ccc8f23bee8ede75beda3b3d50fc70f1954a3edea5306a9a6f1",
     "PouwCheck.Credit.otherWeightsEntry": "b99d6a54e0db71086af2f43c4a582275d5ad9fc5e430e7db257d7de11eaa4830",
-    "PouwCheck.Credit.period": "a6426d879000237d166ae942d268f6437660d7addfc3b52ecf01710979912f1c",
-    "PouwCheck.Credit.periodCredit": "eb9764ba04d759ac8f0b9c0e0b93286fc35a8d36e3f88a8f1364d7f782a22090",
+    "PouwCheck.Credit.period": "e27471b77bd9a9d79c1ebd4260f82a0774dc05b7a6fe9c1d42ad9a749b22b6b5",
+    "PouwCheck.Credit.periodCredit": "a2c1557350a6d98b8a25757de6947a03024e4daa3de847b6b00d60c077280956",
     "PouwCheck.Credit.periodWeights": "7721ae6e040706e3477c1d898e5062b182e40562e7b864aed9c0d6f00a700d04",
-    "PouwCheck.Credit.pinHygiene": "82cb82a48d69a9b2fc722d95199c9e2d458029105e083571574fe7f485a644a9",
+    "PouwCheck.Credit.pinHygiene": "db23949b8396a3392a823004f32c2fe8f4f524613adf1eefb535ef273cc5f157",
     "PouwCheck.Credit.plain": "24d0c20f660b1f5273ae96670457bd051ae2b4b5710656fe17644aeb54bbccb2",
     "PouwCheck.Credit.prefixOf": "b2325c5e6df0ae471f52afc29af357163014b82d1101c83745d1107831c2e88a",
     "PouwCheck.Credit.programOf": "708a913ffcef0bc9e84b66a18a9dd7ece147dd82135b9c21bf8c5046db9d8e7c",
