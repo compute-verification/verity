@@ -1,10 +1,13 @@
 """`tools/agent-guard/boot.sh` puts compute-verification/infra's agent guard on a VM, as the environment's `start` runs it:
 it clones infra to INFRA and runs infra's boot.sh, which installs the guard in DEST; when infra can't be fetched it runs
-INFRA's earlier checkout, else Verity's last guard. A branch without `.cursor/hooks.json` gets one that runs DEST's hook
-fail-closed, and no path ends with a hook in DEST that lets `env` through. Infra's boot.sh is infra's to test: here it is a
-stub that installs the hook beside it."""
+INFRA's earlier checkout, else Verity's last guard, and leaves one retry behind, which takes the same steps once the fetch
+works. A branch without `.cursor/hooks.json` gets one that runs DEST's hook fail-closed, and no path ends with a hook in DEST
+that lets `env` through. Infra's boot.sh is infra's to test: here it is a stub that installs the hook beside it. Here the
+retry waits no time between tries, and a git on PATH fails infra's fetch as many times as a test asks."""
+import fcntl
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -18,6 +21,17 @@ INFRA_BOOT = ('set -e\nmkdir -p "$AGENT_GUARD_DEST"\ncp "$(dirname "$0")/shell_h
               'echo "infra boot.sh {} ran for $1"\n')
 LAST_BOOT = 'echo "Verity\'s last boot.sh ran for $1"\n'
 ENV_EVENT = json.dumps({"hook_event_name": "beforeShellExecution", "command": "env | cut -d= -f1", "cwd": "/"})
+# git, but a clone or fetch of infra fails until it has been tried more than INFRA_FAILS times; with INFRA_HOLD set, every
+# try but the first waits until the test lets go of its lock on INFRA_HOLD
+FLAKY_GIT = """#!/bin/bash
+case " $* " in *" $AGENT_GUARD_INFRA_URL "*)
+  echo >> "$INFRA_TRIES"
+  n=$(wc -l < "$INFRA_TRIES")
+  [ "$n" = 1 ] || [ -z "$INFRA_HOLD" ] || flock "$INFRA_HOLD" true
+  [ "$n" -gt "$INFRA_FAILS" ] || exit 128
+esac
+exec {git} "$@"
+"""
 
 
 def git(env, cwd, *a) -> str:
@@ -49,7 +63,8 @@ def vm(tmp_path, infra_hook: str | None = DENY):
     with a stub guard whose hook is `infra_hook` (none when None); DEST and INFRA empty."""
     env = {**os.environ, **GIT_ENV, "AGENT_GUARD_DEST": str(tmp_path / "opt"), "AGENT_GUARD_INFRA": str(tmp_path / "infra"),
            "AGENT_GUARD_INFRA_URL": str(tmp_path / "infra.git"), "AGENT_GUARD_SKIP_INSTALL": "1",
-           "AGENT_GUARD_BASHRC": str(tmp_path / "bashrc")}
+           "AGENT_GUARD_BASHRC": str(tmp_path / "bashrc"), "AGENT_GUARD_RETRY_LOG": str(tmp_path / "retry.log"),
+           "AGENT_GUARD_RETRY_ATTEMPTS": "0", "AGENT_GUARD_RETRY_WAIT": "0"}
     ws = tmp_path / "ws"
     git(env, tmp_path, "init", "-q", "--bare", "-b", "main", "origin.git")
     git(env, tmp_path, "clone", "-q", "origin.git", "ws")
@@ -83,6 +98,27 @@ def boot(env, ws) -> subprocess.CompletedProcess:
 def refuses_env(dest: Path) -> bool:
     p = subprocess.run(["python3", str(dest / "shell_hook.py")], input=ENV_EVENT, capture_output=True, text=True, check=True)
     return json.loads(p.stdout)["permission"] == "deny"
+
+
+def flaky(env, tmp_path, fails: int, attempts: int) -> dict:
+    """`env` with FLAKY_GIT on PATH, failing infra's fetch `fails` times, and a boot.sh that retries it `attempts` times."""
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin/git").write_text(FLAKY_GIT.format(git=shutil.which("git")))
+    (tmp_path / "bin/git").chmod(0o755)
+    return env | {"PATH": f"{tmp_path / 'bin'}:{env['PATH']}", "INFRA_TRIES": str(tmp_path / "tries"),
+                  "INFRA_FAILS": str(fails), "AGENT_GUARD_RETRY_ATTEMPTS": str(attempts)}
+
+
+def retried(env) -> str:
+    """The retry's log once the retry has ended: it holds a lock on the log while it runs."""
+    with open(env["AGENT_GUARD_RETRY_LOG"], "a+") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.seek(0)
+        return f.read()
+
+
+def tries(tmp_path) -> int:
+    return len((tmp_path / "tries").read_text().splitlines())
 
 
 def test_boot_clones_infra_runs_its_boot_sh_and_brings_it_to_infras_main_on_the_next_boot(tmp_path):
@@ -150,6 +186,54 @@ def test_a_last_guard_whose_boot_sh_is_this_one_stops_instead_of_running_itself_
     assert f"{ws} tracks .cursor/hooks.json" in p.stdout
     assert p.returncode == 1 and "is this boot.sh; stopping" in p.stderr and "no guard on this VM" in p.stderr, p.stderr
     assert not (tmp_path / "opt/shell_hook.py").exists()
+
+
+def test_a_boot_that_cant_fetch_infra_puts_verity_s_last_guard_and_its_retry_puts_infra_s(tmp_path):
+    env, ws = vm(tmp_path)
+    env = flaky(env, tmp_path, fails=3, attempts=5)
+    p = boot(env, ws)
+    assert p.returncode == 0 and "put Verity's last guard" in p.stderr, (p.stdout, p.stderr)
+    assert "retrying infra's main in the background every 0s, up to 5 times" in p.stderr
+    log = retried(env)
+    assert "fetched infra's main on retry 3" in log and f"infra boot.sh v1 ran for {ws}" in log, log
+    assert tries(tmp_path) == 4
+    assert refuses_env(tmp_path / "opt") and (tmp_path / "opt/shell_hook.py").read_text().endswith("# infra v1\n")
+    p = boot(env, ws)
+    assert p.returncode == 0 and "infra boot.sh v1 ran" in p.stdout and "retry" not in p.stderr, (p.stdout, p.stderr)
+
+
+def test_a_retry_that_never_fetches_infra_leaves_verity_s_last_guard(tmp_path):
+    env, ws = vm(tmp_path)
+    env = flaky(env, tmp_path, fails=100, attempts=3)
+    assert boot(env, ws).returncode == 0
+    log = retried(env)
+    assert "still can't be fetched after 3 retries" in log and "fetched infra's main" not in log, log
+    assert tries(tmp_path) == 4
+    assert refuses_env(tmp_path / "opt") and (tmp_path / "opt/shell_hook.py").read_text().endswith("# Verity's last\n")
+
+
+def test_a_boot_that_leaves_no_guard_still_leaves_a_retry(tmp_path):
+    env, ws = vm(tmp_path)
+    env = flaky(env, tmp_path, fails=1, attempts=1)
+    git(env, ws, "update-ref", "-d", "refs/remotes/origin/main")
+    p = subprocess.run(["bash", str(BOOT), str(ws)], capture_output=True, text=True, env=env)
+    assert p.returncode == 1 and "no guard on this VM" in p.stderr, (p.stdout, p.stderr)
+    assert "retrying infra's main in the background" in p.stderr
+    assert "fetched infra's main on retry 1" in retried(env) and refuses_env(tmp_path / "opt")
+
+
+def test_a_boot_while_a_retry_runs_leaves_no_second_retry(tmp_path):
+    env, ws = vm(tmp_path)
+    env = flaky(env, tmp_path, fails=100, attempts=1)
+    with open(tmp_path / "hold", "w") as hold:
+        fcntl.flock(hold, fcntl.LOCK_EX)
+        first = boot(env | {"INFRA_HOLD": hold.name}, ws)
+        second = boot(env, ws)
+    assert "retrying infra's main in the background" in first.stderr, first.stderr
+    assert second.returncode == 0 and "no retry started" in second.stderr, second.stderr
+    log = retried(env)
+    assert log.count("retrying infra's main every") == 1 and "after 1 retries" in log, log
+    assert tries(tmp_path) == 3
 
 
 def test_tracked_hooks_run_the_installed_guard_fail_closed():
