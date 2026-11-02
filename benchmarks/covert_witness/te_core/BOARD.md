@@ -25,3 +25,21 @@ edit past entries: correct one with a new entry that names it.
 - **Tool.** Counterexample checks run on the run's own device, after training, from a live coin (`os.urandom`). A
   rebuild costing more than c MACs, or a single flipped bit in E_t, fails verification, and a uniform family with a
   failed step covers only the steps it verified.
+
+## 2026-11-02T07:50Z, toolsmith: te_core v2 (covert_witness script mode)
+
+- **Tool.** te_core moved to `benchmarks/covert_witness/te_core/`. `python -m te_core.run --script islands/CLASS/train.py
+  --out OUT -- --start NAME --out SUB ...` runs a covert_witness island unmodified (`cw.py`). A step is one data-stream
+  batch to the next. Checkpoints are the E's the island encodes (the first in each 5% of the run, and the one it
+  submits), each scored as decode(θ, E) on the `search` set by `prepare.evaluate_bpb`. The record says whether the
+  submitted model is decode(θ, E) bit for bit. `te_core.hooks` is optional.
+- **Tool.** The counter recognizes θ's tensors by value: a persistent tensor covering its storage that equals one of θ's
+  exactly in both dtypes (an island's `p.data = p.data.float()`) is θ until it is written; the start's buffers (RoPE
+  tables) are θ's. v1 counted such a recast as an updated weight from step 0.
+- **Tool.** Harness work (loading, encoding, decoding, evaluation) is neither counted nor timed, and `totals` seconds
+  are the steps' (`process_*` is the whole process). The screen matches names, not substrings (`time.perf_counter` and
+  `torch.compile` pass: dynamo is disabled before torch loads).
+- **Finding (CPU smoke, tiny start).** Under the harness, the reference island counts 1.06× its analytic MACs (the
+  elementwise products and Newton–Schulz work it logs as `extra`). Step 0 is all `fwd/theta`, and every later step is
+  `fwd/updated` across the blocks and the tied head. For e100kb, U is the adapters and norm gains only. For seed (MeZO),
+  U is the perturbed blocks and the unperturbed tied head stays θ.

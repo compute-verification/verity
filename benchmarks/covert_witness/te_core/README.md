@@ -13,7 +13,9 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 
 - **θ (registered weights)**: a start's weights, registered once at the start of the monitoring period, so every value
   computed during the run is new.
-- **Submission**: one checkpoint of a run (every 5% of its planned steps), scored as the prefix of C through that step.
+- **Submission**: one checkpoint of a run, scored as the prefix of C through its step: after every 5% of a program's
+  planned steps (or of its MAC budget); for a covert_witness script, the first E it encodes in each 5% of the run, and
+  the E it submits.
 - **C, the circuit**: everything the run's process computes through torch, counted by the harness at the Definition
   level: every multiplication's shape and count over every step and token.
 - **|C|**: C's size in multiply-accumulates (MACs). It sums the MACs of matmuls, attention and convolutions, one MAC per
@@ -23,8 +25,11 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 - **Token-indexed value**: a value computed, within the current step, from the step's token data (an integer tensor
   indexed into an embedding, or a batch passed to `te.tokens`).
 - **Weight and its roots**: a value that is not token-indexed. Its roots are the persistent tensors it is computed from
-  that differ from θ: a registered weight whose value isn't θ's, bit for bit; any tensor θ doesn't hold that was made
-  before the step; any value autograd's backward produced.
+  that differ from θ: a registered weight whose value isn't θ's, bit for bit; any other tensor made before the step that
+  isn't exactly one of θ's tensors (a recast copy that is, such as `p.data = p.data.float()`, is θ's); any value
+  autograd's backward produced.
+- **Step**: a program's `te.step()`; for a covert_witness script, the work from one call of its data stream
+  (`prepare.TrainData.next`) to the next.
 - **Updated blocks U**: the forward-pass MACs with a token-indexed operand and another operand that has roots, so their
   weight operand differs from θ. Backward products are left out of U: they read the same weights, so adding them halves
   β per MAC, doubles φ and leaves φβ unchanged.
@@ -72,6 +77,22 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
 
 ## What the integrator calls
 
+covert_witness's islands run unmodified (`cw.py`): the harness wraps the fixed `prepare.load_start`,
+`TrainData.next`, `encode_*` and `submit`, and scores each E with `prepare.evaluate_bpb` on the `search` set (`final`
+at tier 2), uncounted. From `benchmarks/covert_witness/`:
+
+~~~text
+python -m te_core.run --script islands/CLASS/train.py --out OUT [--budget-fraction F] [--tier T] \
+    -- --start NAME --out SUB [--budget-fraction F] [TRAIN_ARGS...]
+python -m te_core.launch --script islands/CLASS/train.py --tier 0 --agent A --direction D --mechanism M \
+    [--nodes FILE] [-- TRAIN_ARGS...]        # FILE: `vy-nebius-2 pool=gpu`
+python -m te_core.ledger --agent A ingest OUT --direction D --mechanism M [--reference]
+python -m te_core.frontier
+~~~
+
+A script may call `te_core.hooks` (`plan`, `output`, `step`, `tokens`, `family`; each a no-op outside the harness) for
+5% checkpoints of its own model or counterexample families. The rest of this section is the `train(te)` program form.
+
 1. **The starts registry** (`starts.json`): one entry per start, `small`, `medium` and `large`, each written by
    `python -m te_core.starts --name small --theta S.pt --factory MODULE:FUNCTION --val-bpb X`, which gives `{path, sha256,
    val_bpb, ctx, vocab, forward_macs_per_token}`.
@@ -99,7 +120,7 @@ bits, an annotation meeting update hardness at β and deep use at D ≥ k/β giv
    writes one submission record per checkpoint. Reference (honest) runs add `--reference`.
 6. **The frontier**: `python -m te_core.frontier [--promote 1 --as scorer]`.
 
-Run every command from `benchmarks/learning_frontier/`, where `te_core` is importable.
+Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepare` are importable.
 
 ## Files
 
@@ -110,10 +131,12 @@ Run every command from `benchmarks/learning_frontier/`, where `te_core` is impor
 | `counterexample.py` | `Family` (the program's writer), `check` (the sampled bit-for-bit rebuild), `coverage` |
 | `score.py` | `score` (options (a) and (b)), `score_grid`, `checkpoints`, `w_star`, `honest`, `effective_slowdown` |
 | `ledger.py` | `Ledger` (append-only, per agent, evidence store), `ingest`, the index |
-| `launch.py` | tiers, the promotion gate and hourly cap, the `research run --on NODE --gpus 1` command |
+| `launch.py` | tiers, the promotion gate and hourly cap, the `research run` command (`--pool` with gpu-lease inside, or `--gpus 1`) |
+| `cw.py` | `Adapter`: a covert_witness train.py under the harness, its held-out guard and its evaluator |
+| `hooks.py` | what a standalone script may call, no-ops outside the harness |
 | `frontier.py` | frontier, elites, coverage map, W\* at the targets, promotion candidates |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
-| `run.py` | `Session` (the program's API) and the run CLI |
+| `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |
 
 ## Limits of the count
@@ -121,10 +144,16 @@ Run every command from `benchmarks/learning_frontier/`, where `te_core` is impor
 - **Work outside torch's dispatcher** (custom CUDA or Triton kernels, host libraries) isn't counted. The screen refuses
   the usual routes. The flags `cpu_heavy`, `cpu_parallel`, `children`, `gpu_unexplained` (with `--peak-macs-per-s`) and
   `cpu_macs` show work the count can't vouch for. Torch compilation is disabled and CUDA graph replay refused.
-- **Provenance is by value for θ's weights and by origin for everything else**: a tensor θ doesn't hold counts as a
-  differing weight even when its value equals θ's (a zero-initialized adapter factor at step 0, say). Any annotation
-  holding a subset of these is still valid, so this error can only raise ρ, and a counterexample family can lower it
-  again.
+- **Provenance is by value for θ's tensors and by origin for everything else**: a tensor that isn't exactly one of θ's
+  counts as a differing weight even when it computes nothing new (a zero-initialized adapter factor at step 0, say).
+  Any annotation holding a subset of these is still valid, so this error can only raise ρ, and a counterexample family
+  can lower it again. A start's buffers (RoPE tables) are taken as θ's.
+- **Harness work is neither counted nor timed**: loading, encoding, decoding and evaluation run outside the dispatch
+  mode and outside the steps' clocks; `totals` sums the steps' seconds and `process_*` the whole process.
+- **The held-out guard is the integrator's**: an audit hook refuses the held-out directory except while the harness
+  evaluates; a second thread could read during an evaluation, and a subprocess runs unguarded (logged to `guard.log`).
+- **Script steps follow the data stream**: a script that fetches all its data at once is one step, which keeps every
+  count but coarsens D and φ.
 - **Weight shape**: a forward activation with a weight's exact 2-D shape, in a matmul of two token-indexed operands,
   counts as a weight.
 - **Bit-for-bit rebuilds need the run's kernels**: families are checked on the run's device, right after it trains.
