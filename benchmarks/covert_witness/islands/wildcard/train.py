@@ -16,6 +16,15 @@ Methods:
 - `scale`: every tensor of the set times one line-searched scalar.
 - `--extrapolate`: after training, θ + αΔ with α line-searched (ExPO); `--suite`: several configs in one run.
 
+Codes (witnesses for formalism v1's cut cost a, `adamw` / `muon`):
+- `--cut B:q4,...`: the residual stream at block boundary B is handed on as a code (`Coded`): a randomized DCT, rebuilt
+  in every step, then each group's coordinates on a 2^q-level grid with a bf16 scale; the gradient crosses back in the
+  same code with stochastic rounding (`q2b4`: 2 bits forward, 4 back; `g64`: a scale per 64 coordinates). Training sees
+  only the coded state; the evaluator scores the uncoded model, and the probe windows are scored both ways.
+- `--lora-rank r --lora-fix B --z-bits q`: a rank-r update whose B is r seeded orthonormal columns, so its whole effect
+  on a token is r coefficients z = A·h, handed on (and their gradient back) at q bits each. `--lora-fix A` trains only
+  B over a frozen random A.
+
 `--class` must be the class launch.py runs it under (the submission names it); its source rides in the submission's
 notes. Every method marks explicit harness steps (`hooks.step`), so it runs in the harness's script mode:
 
@@ -161,34 +170,177 @@ def line_search(a, fwd, data, steps: list, apply, values: list[float]) -> tuple[
     return best, results
 
 
+FRESH: dict = {}
+CUT = {"on": True}
+
+
+def rotation(d: int, seed: int, device) -> torch.Tensor:
+    """An orthogonal d x d matrix, the orthonormal DCT-II times seeded random signs, made from factory ops."""
+    i = torch.arange(d, device=device, dtype=torch.float32)
+    m = torch.cos(math.pi * (i[None, :] + 0.5) * i[:, None] / d) * math.sqrt(2.0 / d)
+    m[0] = m[0] / math.sqrt(2.0)
+    g = torch.Generator(device=device).manual_seed(seed)
+    return m * (torch.randint(0, 2, (d,), generator=g, device=device).float() * 2 - 1)
+
+
+def fresh_rotation(d: int, seed: int, device) -> torch.Tensor:
+    key = ("rot", d, seed, str(device))
+    if key not in FRESH:
+        FRESH[key] = rotation(d, seed, device)
+    return FRESH[key]
+
+
+#: The optimal uniform quantizer's step for a unit Gaussian at 1-3 bits (Max 1960); rotated coordinates are near-Gaussian.
+GAUSS_STEP = {1: 1.596, 2: 0.9957, 3: 0.5860}
+
+
+def quantize(y: torch.Tensor, bits: int, group: int, stochastic: bool) -> torch.Tensor:
+    """Each group of `group` trailing coordinates on a grid of 2^bits levels with one bf16 scale per group. Nearest
+    rounding (forward) uses the mid-rise grid (k + 1/2)·step, step GAUSS_STEP times the group's RMS at 1-3 bits and
+    2·absmax / 2^bits above. Stochastic rounding (gradients) uses the grid whose end levels are ±absmax (rounded up), so
+    no value is clipped and the code is unbiased."""
+    shape = y.shape
+    y = y.reshape(-1, shape[-1] // group, group)
+    if stochastic:
+        top = (y.abs().amax(-1, keepdim=True) * (1 + 2 ** -7)).to(torch.bfloat16).float().clamp_min(1e-30)
+        step = 2 * top / (2 ** bits - 1)
+        j = torch.floor((y + top) / step + torch.rand_like(y)).clamp(0, 2 ** bits - 1)
+        return (j * step - top).reshape(shape)
+    if bits in GAUSS_STEP:
+        step = y.pow(2).mean(-1, keepdim=True).sqrt() * GAUSS_STEP[bits]
+    else:
+        step = y.abs().amax(-1, keepdim=True) * (2.0 / 2 ** bits)
+    step = step.to(torch.bfloat16).float().clamp_min(1e-30)
+    half = 2 ** (bits - 1)
+    return ((torch.floor(y / step).clamp(-half, half - 1) + 0.5) * step).reshape(shape)
+
+
+def code_bits(d: int, bits: int, group: int) -> int:
+    """Bits per token of one coded d-vector: `bits` per coordinate and a bf16 step per group."""
+    return d * bits + 16 * (d // group)
+
+
+class Coded(torch.autograd.Function):
+    """A token's d-vector handed across a cut as a code: rotated by R, quantized per group, rotated back (forward,
+    nearest rounding); the backward passes the gradient straight through the quantizer and hands it across the cut in
+    the same code with stochastic rounding. With `rotate` false the vector is coded in its own basis."""
+
+    @staticmethod
+    def forward(ctx, x, bits_f, bits_b, group, seed, rotate):
+        ctx.cfg = (bits_b, group, seed, rotate)
+        with torch.autocast(x.device.type, enabled=False):
+            y = x.float()
+            if rotate:
+                r = fresh_rotation(x.shape[-1], seed, x.device)
+                return (quantize(y @ r.T, bits_f, group, False) @ r).to(x.dtype)
+            return quantize(y, bits_f, group, False).to(x.dtype)
+
+    @staticmethod
+    def backward(ctx, g):
+        bits_b, group, seed, rotate = ctx.cfg
+        with torch.autocast(g.device.type, enabled=False):
+            y = g.float()
+            if rotate:
+                r = fresh_rotation(g.shape[-1], seed, g.device)
+                out = quantize(y @ r.T, bits_b, group, True) @ r
+            else:
+                out = quantize(y, bits_b, group, True)
+        return out.to(g.dtype), None, None, None, None, None
+
+
+CUT_RE = re.compile(r"q(\d+)(?:b(\d+))?(?:g(\d+))?")
+
+
+def parse_cut(spec: str, L: int, d: int) -> list[dict]:
+    """`B:CODE,...`: boundary B (1..L; the input of block B, L the input of the final norm; `all` every one) handed on
+    as CODE = q<forward bits>[b<backward bits>][g<group>] in a randomized-DCT basis (group d unless given)."""
+    out = []
+    for part in [p.strip() for p in spec.split(",") if p.strip()]:
+        where, code = part.split(":")
+        m = CUT_RE.fullmatch(code)
+        if not m:
+            raise SystemExit(f"wildcard: --cut code {code!r} is not q<bits>[b<bits>][g<group>]")
+        bf = int(m.group(1))
+        bb = int(m.group(2) or bf)
+        group = int(m.group(3) or d)
+        if d % group or not (1 <= bf <= 16 and 1 <= bb <= 16):
+            raise SystemExit(f"wildcard: --cut {part!r}: bits 1-16 and a group dividing d = {d}")
+        for b in (range(1, L + 1) if where == "all" else [int(where)]):
+            if not 1 <= b <= L:
+                raise SystemExit(f"wildcard: --cut boundary {b} is not in 1..{L}")
+            out.append({"boundary": b, "bits_fwd": bf, "bits_bwd": bb, "group": group,
+                        "a_fwd_bits": code_bits(d, bf, group), "a_bwd_bits": code_bits(d, bb, group)})
+    return sorted(out, key=lambda c: c["boundary"])
+
+
+def install_cuts(net, cuts: list[dict]):
+    """Each boundary's code as a forward hook on the block below it (boundary B: block B - 1's output), active while
+    CUT["on"]."""
+    handles = []
+    for c in cuts:
+        def hook(m, inp, out, c=c):
+            if not CUT["on"]:
+                return out
+            return Coded.apply(out, c["bits_fwd"], c["bits_bwd"], c["group"], 1000 + c["boundary"], True)
+        handles.append(net.inner.blocks[c["boundary"] - 1].register_forward_hook(hook))
+    return handles
+
+
+def lowest_block(tuned: list[str]) -> int | None:
+    """The lowest block index a trained tensor sits in (-1 for the embedding, L for the final norm)."""
+    found = []
+    for n in tuned:
+        m = re.match(r"blocks\.(\d+)\.", n)
+        found.append(int(m.group(1)) if m else (-1 if n == "embed" else 10 ** 6))
+    return min(found) if found else None
+
+
 def lora_bytes(theta: dict, mats: list[str], gains: list[str], rank: int) -> int:
     fac = {n: (torch.zeros(rank, theta[n].shape[1]), torch.zeros(theta[n].shape[0], rank), 1.0) for n in mats}
     return len(prepare.encode_lora(fac, "bf16", {n: theta[n] for n in gains}))
 
 
-def add_adapters(net, theta: dict, params: dict, mats: list[str], gains: list[str], rank: int) -> tuple[dict, int]:
+def add_adapters(net, theta: dict, params: dict, mats: list[str], gains: list[str], rank: int, fix: str = "",
+                 zbits: int = 0) -> tuple[dict, int]:
     """Rank-r adapters W + s·B·A on `mats` (A ~ N(0, 1/d_in), B = 0, s = sqrt(d_in / r)); rank -1 is the largest whose E
-    fits the class's cap."""
+    fits the class's cap. `fix` "A" freezes that random A (only B trains). `fix` "B" makes B r seeded orthonormal
+    columns (rows of a randomized DCT), frozen, with A = 0 trained and s = sqrt(d_out / r), so the update's whole effect
+    on a token is its r coefficients z = A·h; `zbits` hands z on coded at that many bits per coefficient (one bf16 scale
+    per token), and its gradient back the same way."""
     if rank < 0:
         cap = prepare.CLASSES[KLASS]["max_e_bytes"]
-        if cap is None:
-            raise SystemExit(f"wildcard: --lora-rank -1 needs a class with an E cap, not {KLASS}")
+        if cap is None or fix:
+            raise SystemExit(f"wildcard: --lora-rank -1 needs a class with an E cap and no --lora-fix, not {KLASS}")
         rank = 1
         while lora_bytes(theta, mats, gains, rank + 1) <= cap - 512:
             rank += 1
+    if zbits and fix != "B":
+        raise SystemExit("wildcard: --z-bits codes z = A·h, which only --lora-fix B makes the update's whole effect")
     for n in mats:
         params[n].requires_grad_(False)
         params[n].data = theta[n].to(params[n].device).clone()
     g = torch.Generator(device=prepare.DEVICE).manual_seed(0)
     factors = {}
-    for n in mats:
-        w = params[n]
-        A = torch.nn.Parameter(torch.randn(rank, w.shape[1], device=prepare.DEVICE, generator=g) / math.sqrt(w.shape[1]))
-        B = torch.nn.Parameter(torch.zeros(w.shape[0], rank, device=prepare.DEVICE))
-        s = math.sqrt(w.shape[1] / rank)
+    for i, n in enumerate(mats):
+        d_out, d_in = params[n].shape
+        if fix == "B":
+            pick = torch.randperm(d_out, generator=g, device=prepare.DEVICE)[:rank]
+            B = rotation(d_out, 2000 + i, prepare.DEVICE)[pick].T.contiguous()
+            A = torch.nn.Parameter(torch.zeros(rank, d_in, device=prepare.DEVICE))
+            s = math.sqrt(d_out / rank)
+        else:
+            A = torch.randn(rank, d_in, device=prepare.DEVICE, generator=g) / math.sqrt(d_in)
+            A = A if fix == "A" else torch.nn.Parameter(A)
+            B = torch.nn.Parameter(torch.zeros(d_out, rank, device=prepare.DEVICE))
+            s = math.sqrt(d_in / rank)
         factors[n] = (A, B, s)
-        mod = net.inner.get_submodule(n.removesuffix(".weight"))
-        mod.register_forward_hook(lambda m, inp, out, A=A, B=B, s=s: out + s * F.linear(F.linear(inp[0], A), B))
+
+        def hook(m, inp, out, A=A, B=B, s=s):
+            z = F.linear(inp[0], A)
+            if zbits:
+                z = Coded.apply(z, zbits, zbits, rank, 0, False)
+            return out + s * F.linear(z, B)
+        net.inner.get_submodule(n.removesuffix(".weight")).register_forward_hook(hook)
     return factors, rank
 
 
@@ -198,9 +350,10 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
     gains = [n for n in tuned if params[n].ndim == 1]
     opts, extra, factors = [], 0, {}
     if a.lora_rank:
-        factors, a.lora_rank = add_adapters(net, theta, params, mats, gains, a.lora_rank)
+        factors, a.lora_rank = add_adapters(net, theta, params, mats, gains, a.lora_rank, a.lora_fix, a.z_bits)
         trainable = {"full": gains, "adapters": {n: a.lora_rank for n in mats}}
-        groups = [{"params": [p for A, B, _ in factors.values() for p in (A, B)], "lr": a.lr},
+        groups = [{"params": [p for A, B, _ in factors.values() for p in (A, B) if isinstance(p, torch.nn.Parameter)],
+                   "lr": a.lr},
                   {"params": [params[n] for n in gains], "lr": a.norm_lr}]
         opts.append((torch.optim.AdamW([g for g in groups if g["params"]], betas=(0.9, a.beta2), weight_decay=a.wd,
                                        fused=prepare.DEVICE.startswith("cuda")), None))
@@ -226,9 +379,24 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
         return prepare.encode_full(delta_of(src, theta, tuned))
 
     tokens = a.batch * prepare.EVAL_CTX
+    d = rec["config"]["d_model"]
+    cuts = parse_cut(a.cut, rec["config"]["n_layer"], d) if a.cut else []
+    low = lowest_block(tuned)
+    crossed = [c for c in cuts if low is not None and low < c["boundary"]]
+    code_fwd = 4 * d * d * len(cuts)
+    code_train = code_fwd + 4 * d * d * len(crossed)
+    if cuts:
+        install_cuts(net, cuts)
+        print(json.dumps({"cuts": cuts, "gradient_crosses": [c["boundary"] for c in crossed],
+                          "code_flops_per_token": {"forward": code_fwd, "train": code_train}}), flush=True)
+    cut_probe = probe_rows(rec, a)[: a.cut_probe_rows] if cuts and a.cut_probe_rows else None
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
+    per_step += code_train * tokens
     alphas = [1.0] + a.extrapolate if a.extrapolate else []
     reserve = probe_flops(a, rec, trainable, len(alphas)) if alphas else 0
+    if cut_probe is not None:
+        reserve += 4 * prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": len(cut_probe) * prepare.EVAL_CTX}])[
+            "flops"] + 2 * code_fwd * len(cut_probe) * prepare.EVAL_CTX
     n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - reserve) // per_step)
     if n_steps < 1:
         raise Skip(f"wildcard {a.method}: the budget leaves no step after the line search's reserve")
@@ -239,6 +407,22 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
     steps, snaps = [], []
     marks = {round(n_steps * k / (a.snaps + 1)) for k in range(1, a.snaps + 1)}
     print(json.dumps({"steps": n_steps, "tuned": tuned, "flops_per_step": per_step, "extra": extra}), flush=True)
+    probes = {}
+
+    def cut_probes(when: str):
+        """The probe windows' loss with every cut coded and with none (the evaluator scores the uncoded model)."""
+        with step_of():
+            for on in (True, False):
+                CUT["on"] = on
+                probes[f"{when}_{'coded' if on else 'uncoded'}"] = probe_loss(fwd, cut_probe, a.micro, steps)
+                if on:
+                    steps.append({"op": "extra", "flops": code_fwd * len(cut_probe) * prepare.EVAL_CTX,
+                                  "what": "cut code (probe)"})
+            CUT["on"] = True
+        print(json.dumps({"cut_probe": when, **probes}), flush=True)
+
+    if cut_probe is not None:
+        cut_probes("theta")
     t0 = time.perf_counter()
     for step in range(n_steps):
         warm = min(1.0, (step + 1) / a.warmup)
@@ -264,6 +448,8 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
             steps.append({"op": "train", "tokens": tokens})
             if extra:
                 steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
+            if cuts:
+                steps.append({"op": "extra", "flops": code_train * tokens, "what": "cut code"})
             if ema is not None:
                 with torch.no_grad():
                     for n in tuned:
@@ -277,6 +463,13 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
             print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
     info = {"steps": n_steps, "lora_rank": a.lora_rank}
+    if cuts:
+        if cut_probe is not None:
+            cut_probes("end")
+        info["cuts"] = {"codes": cuts, "gradient_crosses": [c["boundary"] for c in crossed], "probe": probes,
+                        "probe_rows": 0 if cut_probe is None else len(cut_probe)}
+    if a.z_bits:
+        info["z_code"] = {"bits": a.z_bits, "rank": a.lora_rank, "a_bits_per_direction": a.lora_rank * a.z_bits + 16}
     if alphas:
         info["alpha"], info["line_search"] = extrapolate(a, fwd, data, steps, theta, params, ema, tuned, factors, alphas)
     return encode(ema if ema is not None else params), trainable, steps, snaps, info
@@ -614,9 +807,14 @@ def train_cached(a, net, rec, theta, params, tuned, data):
             {"steps": n_steps, "positions": n_pos, "epochs": n_steps * P / n_pos, "top_k": K})
 
 
+@contextlib.contextmanager
 def step_of():
-    """An explicit harness step (a cached step reads no fresh batch); outside the harness, nothing."""
-    return hooks.step() if hooks is not None else contextlib.nullcontext()
+    """An explicit harness step (a cached step reads no fresh batch); outside the harness, nothing. Values cached in
+    FRESH live for one step, so the counter sees them made in the step that uses them."""
+    FRESH.clear()
+    with hooks.step() if hooks is not None else contextlib.nullcontext():
+        yield
+    FRESH.clear()
 
 
 def tokens_of(ix: torch.Tensor) -> torch.Tensor:
@@ -639,6 +837,12 @@ def main() -> int:
     ap.add_argument("--method", default="adamw", choices=("adamw", "muon", "kfac", "cached", "scale"))
     ap.add_argument("--lora-rank", type=int, default=0,
                     help="train the set's matrices through rank-r adapters (E `encode_lora`); -1 fits the class's cap")
+    ap.add_argument("--lora-fix", default="", choices=("", "A", "B"),
+                    help="freeze the adapters' A (random) or B (seeded orthonormal, A = 0 trained)")
+    ap.add_argument("--z-bits", type=int, default=0, help="with --lora-fix B: hand z = A·h on at this many bits per coefficient")
+    ap.add_argument("--cut", default="", help="B:q<bits>[b<bits>][g<group>],...: block boundaries handed on coded (parse_cut)")
+    ap.add_argument("--cut-probe-rows", type=int, default=128,
+                    help="with --cut: probe windows scored coded and uncoded at theta and at the end (0: none)")
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--norm-lr", type=float, default=1e-3)
     ap.add_argument("--beta2", type=float, default=0.95)
