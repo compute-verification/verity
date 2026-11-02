@@ -27,7 +27,7 @@ import torch
 from .annotate import annotate
 from .codecs import Plan
 from .codecs.wire import DTYPES
-from .flops import Counter, digest
+from .flops import Counter, KeyedDigest, digest
 
 SAMPLE_SEARCH = 5
 SAMPLE_FINAL = 20
@@ -100,16 +100,18 @@ def _bases(names: dict, shapes: dict, theta: dict[str, torch.Tensor], device) ->
     return out
 
 
-def rebuild(plan: Plan, enc: bytes, step, theta: dict, c: float, device="cpu") -> tuple[bool, str, int]:
-    """Rebuild one step's updated weights from θ and E_t; (verified, reason, cost in MACs)."""
+def rebuild(plan: Plan, enc: bytes, step, theta: dict, c: float, device="cpu", wdigest=digest) -> tuple[bool, str, int]:
+    """Rebuild one step's updated weights from θ and E_t; (verified, reason, cost in MACs). The decoder must produce every
+    weight the step read (any others it produces cost their MACs and are not compared); `wdigest` is the run's value
+    digest."""
     names = weight_names(step.weights)
     if not names:
         return False, "the step has no updated weights", 0
     bases = _bases(names, step.shapes, theta, device)
     try:
-        if set(plan.keys(enc)) != set(names):
-            missing, extra = sorted(set(names) - set(plan.keys(enc))), sorted(set(plan.keys(enc)) - set(names))
-            return False, f"weights: missing {missing[:4]}, extra {extra[:4]}", 0
+        missing = sorted(set(names) - set(plan.keys(enc)))
+        if missing:
+            return False, f"weights: missing {missing[:4]}", 0
         counter = Counter(digests=False)
         with counter:
             out = plan.decode(enc, bases)
@@ -119,17 +121,19 @@ def rebuild(plan: Plan, enc: bytes, step, theta: dict, c: float, device="cpu") -
     if cost > c:
         return False, f"rebuild costs {cost} MACs > c = {c:.0f}", cost
     for name, (_, want) in names.items():
-        if digest(out[name]) != want:
+        if wdigest(out[name]) != want:
             return False, f"{name}: rebuilt value differs from the one the step read", cost
     return True, "", cost
 
 
 def check(family_dir: Path, record: dict, theta: dict[str, torch.Tensor], c: float, n_sample: int = SAMPLE_SEARCH,
-          coin: bytes | None = None, device="cpu") -> Verified:
-    """Verify a family against a run's count. `coin` is the verifier's live coin (default: fresh from the OS)."""
+          coin: bytes | None = None, device="cpu", plan=None) -> Verified:
+    """Verify a family against a run's count. `coin` is the verifier's live coin (default: fresh from the OS); `plan` is
+    the family's decoder when the run holds it (a plan outside the codec library, such as cw.py's), else its spec's."""
     family_dir = Path(family_dir)
     meta = json.loads((family_dir / "family.json").read_text())
-    plan = Plan.from_spec(meta["decoder"])
+    plan = plan or Plan.from_spec(meta["decoder"])
+    wdigest = KeyedDigest(bytes.fromhex(record["digest_key"])) if record.get("digest_key") else digest
     ann = annotate(record)
     by_step = {s.step: s for s in ann.steps}
     declared = sorted(t for t in set(meta["steps"]) if t in by_step and by_step[t].updated_macs)
@@ -144,7 +148,7 @@ def check(family_dir: Path, record: dict, theta: dict[str, torch.Tensor], c: flo
             v.beta[t] = 8 * len(enc) / st.updated_per_token
     for t in sampled:
         enc = (family_dir / f"{t}.enc").read_bytes()
-        ok, reason, cost = rebuild(plan, enc, by_step[t], theta, c, device)
+        ok, reason, cost = rebuild(plan, enc, by_step[t], theta, c, device, wdigest)
         v.cost[t] = cost
         if ok:
             v.passed.append(t)
