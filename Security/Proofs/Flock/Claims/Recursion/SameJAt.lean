@@ -4,6 +4,7 @@ public import Proofs.Flock.Claims.Recursion.DecodeSame
 public import Proofs.Flock.Claims.Recursion.NextR
 public import Proofs.Flock.Claims.Recursion.NextShaDec
 import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # The record the verdict reads is alike an honest record
