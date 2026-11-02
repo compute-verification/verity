@@ -100,8 +100,9 @@ def test_a_two_template_window_runs_to_an_accepted_outcome_by_the_lean_run():
 def test_a_window_registering_a_value_of_its_own_runs_to_an_accepted_outcome_at_its_circuit_parameters_leaves():
     """A window that registers a value afresh under its open root (a scan state: a registered parameter of its circuit,
     none of its program's) is registered with the value's 16-bit leaves (`register(circuit_params=)`), which R7 counts its
-    rows from, and runs to an accepted outcome, the Lean run re-running R7 on the same leaves. Without them R7 refuses
-    it (`R7-registered`), and at other leaves too (`R7-leaves`, `R7-domain`)."""
+    rows from, and runs to an accepted outcome, the Lean run re-running R7 on the same leaves, once the verdict of record
+    reports its sessions' read of it at its entry; one that reports none is refused at the audit record's `registered`.
+    Without the leaves R7 refuses it (`R7-registered`), and at other leaves too (`R7-leaves`, `R7-domain`)."""
     root = "ab" * 64
     state = G.Registered.commit(P.program_digest(_program()), "state", [[4 * r + j for j in range(4)] for r in range(3)],
                                 schema=G.SCHEMA_V2, window=root)
@@ -113,12 +114,17 @@ def test_a_window_registering_a_value_of_its_own_runs_to_an_accepted_outcome_at_
     assert _refused(lambda: _stream(spec).register(rec, _ports(), **kw)) == ("R7-registered",)
     assert set(_refused(lambda: _stream(spec).register(rec, _ports(), **kw, circuit_params={"state": 24}))) == {
         "R7-leaves", "R7-domain"}
-    stream = _stream(spec)
-    reg = stream.register(rec, _ports(), **kw, circuit_params={"state": 12})
-    draw = stream.select(reg)
-    assert stream.deliver(draw, [SESSION]) is None
-    out = stream.outcome(draw, _lean(), {"statement": "stub"})
-    assert out.accepted and stream._entries[reg.order].read and stream._entries[reg.order].copies[-1] == {"state": 12}
+    for opened in ({}, {"state": state.entry()}):
+        stream = _stream(spec)
+        reg = stream.register(rec, _ports(), **kw, circuit_params={"state": 12})
+        draw = stream.select(reg)
+        assert stream.deliver(draw, [SESSION]) is None
+        out = stream.outcome(draw, _lean(registered=opened), {"statement": "stub"})
+        assert stream._entries[reg.order].read and stream._entries[reg.order].copies[-1] == {"state": 12}
+        if opened:
+            assert out.accepted and out.verdict.ok, out.verdict
+        else:
+            assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["registered"], out.verdict
 
 
 def test_a_registration_of_another_window_is_refused():
