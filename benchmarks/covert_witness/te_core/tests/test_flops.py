@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 from conftest import D, PER_TOKEN, VOCAB, loss_of
 from te_core.annotate import annotate
-from te_core.flops import Counter, flags, forward_macs_per_token
+from te_core.flops import Counter, flags, forward_macs_per_token, guard_exits, leaked
 
 IDX = torch.randint(0, VOCAB, (3, 8), generator=torch.Generator().manual_seed(3))  # 24 tokens: no activation is weight-shaped
 TOKENS = IDX.numel()
@@ -110,6 +110,87 @@ def test_a_gradient_by_hand_is_a_weight(tiny):
     by = rec["steps"][0]["by"]
     assert by["fwd/updated"] == D * D * TOKENS
     assert by["fwd/act"] == D * D * TOKENS
+
+
+def test_a_stream_batch_is_token_data_through_any_op_and_counts_once():
+    """`Counter.batch`: an index lookup (`embed[x]`) beside a one-token embedding, the targets read by a gather, and a
+    batch fetched in one step and read in the next."""
+    torch.manual_seed(0)
+    theta = {"w": torch.randn(D, D), "embed": torch.randn(VOCAB, D)}
+    w, embed = (torch.nn.Parameter(theta[k].clone()) for k in ("w", "embed"))
+    c = Counter(theta, digests=False)
+    c.register({"w": w, "embed": embed})
+    gen = torch.Generator().manual_seed(1)
+    with c, torch.no_grad():
+        c.begin_step()
+        w.add_(0.01)
+        b = c.batch(torch.randint(0, VOCAB, (3, 9), generator=gen))
+        x, y = b[:, :-1], b[:, 1:]
+        F.embedding(x[:, :1], embed)
+        torch.log_softmax(embed[x] @ w.T @ embed.T, -1).gather(-1, y[..., None])
+        ahead = c.batch(torch.randint(0, VOCAB, (3, 9), generator=gen))
+        c.end_step()
+        embed[ahead[:, :-1]] @ w.T
+        c.end_step()
+    c.finish()
+    s0, s1 = c.record()["steps"]
+    assert s0["tokens"] == s1["tokens"] == 3 * 8
+    assert s0["by"]["fwd/updated"] == s1["by"]["fwd/updated"] == 3 * 8 * D * D
+
+
+def one_step(body) -> dict:
+    """The record of one step that moves `w` off θ, then runs `body(w, embed)`."""
+    torch.manual_seed(0)
+    theta = {"w": torch.randn(D, D), "embed": torch.randn(VOCAB, D)}
+    w, embed = (torch.nn.Parameter(theta[k].clone()) for k in ("w", "embed"))
+    c = Counter(theta, digests=False)
+    c.register({"w": w, "embed": embed})
+    with c, torch.no_grad():
+        c.begin_step()
+        w.add_(0.01)
+        body(w, embed)
+        c.end_step()
+    c.finish()
+    return c.record()
+
+
+def embedded(embed):
+    return F.embedding(IDX, embed)
+
+
+def test_a_product_written_through_any_op_is_an_updated_node():
+    """A quotient by the reciprocal, an in-place accumulating matmul, a sum then exp, and a distance each combine the
+    step's tokens with the updated weight, at the matmul's MACs."""
+    cases = {"div": lambda w, e: (embedded(e).unsqueeze(-1) / w.T.reciprocal()).sum(-2),
+             "addmm_": lambda w, e: torch.zeros(TOKENS, D).addmm_(embedded(e).reshape(-1, D), w.T),
+             "add_exp": lambda w, e: torch.exp(embedded(e).unsqueeze(-1) + w.T).sum(-2),
+             "cdist": lambda w, e: torch.cdist(embedded(e).reshape(-1, D), w)}
+    for name, body in cases.items():
+        (s,) = one_step(body)["steps"]
+        assert s["by"].get("fwd/updated") == TOKENS * D * D, (name, s["by"])
+    (s,) = one_step(lambda w, e: F.layer_norm(embedded(e), (D,), weight=w[0]))["steps"]
+    assert s["by"]["fwd/updated"] == TOKENS * D  # a trained gain
+
+
+def test_a_token_rows_work_is_per_token():
+    """An operand reshaped to one value per row has no more rows than the step has tokens."""
+    rec = one_step(lambda w, e: embedded(e).reshape(-1, 1) @ w[:1])
+    (s,) = rec["steps"]
+    assert rec["structures"][s["struct"]]["updated"] == [[D * D, 0, TOKENS * D * D, TOKENS, 32]]
+
+
+def test_ops_the_counter_cannot_price_are_recorded():
+    rec = one_step(lambda w, e: F.bilinear(embedded(e), embedded(e), w.unsqueeze(0)))
+    assert list(rec["unknown_ops"]) == ["aten._trilinear.default"] and rec["foreign_ops"] == {}
+
+
+def test_token_data_read_out_of_torch_is_counted_in_its_step():
+    guard_exits()
+    rec = one_step(lambda w, e: (embedded(e).numpy(), embedded(e).sum(-1).tolist(), w.detach().numpy()))
+    (s,) = rec["steps"]
+    assert s["exited"] == TOKENS * D + TOKENS and leaked(s)
+    (s,) = one_step(lambda w, e: embedded(e).sum((1, 2)).tolist())["steps"]
+    assert s["exited"] == 3 and not leaked(s)
 
 
 def test_writes_through_data_are_seen(tiny):
