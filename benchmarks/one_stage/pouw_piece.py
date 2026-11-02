@@ -31,8 +31,9 @@ it is undecided, as the check does.
 `period_missing`): the directory then holds only ``missing.json`` saying why, no case and no answer, so `composite.py`
 leaves the protocol out and Lean's verdict on the product names it missing. It prints one ``MISSING`` line and exits
 2: nothing was decided. ``period``'s are the closed period ``SERVE_DIR/period.json`` names (`served_verdicts.py period
-open|close`) holding window K alone (``--cap 1``); its ledger, pins log and window K's session as PoUW's served piece
-fetched them from the gate (``--pouw``, ``pieces/pouw``: ``ledger.jsonl``, ``pins.jsonl``, ``session/<id>/out``), the
+open|close`) holding window K's session and its sample's alone (``--cap 2``); its ledger, pins log and both sessions
+as PoUW's served piece fetched them from the gate (``--pouw``, ``pieces/pouw``: ``ledger.jsonl``, ``pins.jsonl``,
+``session/<id>/out``), the
 key in that session pinned by ``--key-sha512`` (the auditor's); ``--main``; the declared Program
 (``h1/window-program.json.gz``); and the drawn calls' statements (``--statements``, a JSON list) and the live evidence
 (``--live-evidence``, ``h1_prove/live.py evidence``'s), from the proving runs (`period_inputs`).
@@ -244,17 +245,21 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
         raise Missing(f"window {k} has no H1 record (h1/w{k}/pouw-h1-calls.json) in {serve_dir}")
     rec = json.loads(calls.read_text())
     sid = rec["commitment"]["session"]["session"]
-    tree = pouw / "session" / sid / "out"
-    for p in (pouw / "ledger.jsonl", pouw / "pins.jsonl", tree / "key.json"):
+    dsid = (rec["commitment"].get("draw_session") or {}).get("session")
+    if not dsid:
+        raise Missing(f"window {k}'s record names no sample session (draw_session), whose coin credit reads its sample from")
+    tree, draw = pouw / "session" / sid / "out", pouw / "session" / dsid / "out"
+    for p in (pouw / "ledger.jsonl", pouw / "pins.jsonl", tree / "key.json", draw):
         if not p.exists():
             raise Missing(f"no {p.relative_to(pouw)} in {pouw}: PoUW's served piece (served_verdicts.py pouw) fetches "
-                          "the gate's ledger, pins log and the window's session after the period's close")
+                          "the gate's ledger, pins log and the window's session and its sample's after the period's close")
     ledger = lines(pouw / "ledger.jsonl")
     close = next((json.loads(x)["body"] for x in ledger if json.loads(x).get("kind") == "period-close"
                   and json.loads(x)["body"].get("period") == name), None)
-    if close is None or len(close.get("windows") or ()) != 1:
-        raise Missing(f"period {name}'s close in the ledger lists {len((close or {}).get('windows') or ())} windows, "
-                      "and this piece is built for a period of one window (period-open --cap 1)")
+    listed = [w.get("session") for w in (close or {}).get("windows") or ()]
+    if listed != [sid, dsid]:
+        raise Missing(f"period {name}'s close in the ledger lists the sessions {listed}, and this piece is built for a "
+                      f"period of one served window, its session {sid} and then its sample's {dsid} (period-open --cap 2)")
     program = serve_dir / "h1/window-program.json.gz"
     if not program.is_file():
         raise Missing(f"no declared window Program (h1/window-program.json.gz) in {serve_dir}, the circuit the "
@@ -270,7 +275,7 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
     key = PHC.pinned_key(tree / "key.json", key_sha512)
     ev = PHC.window_evidence(rec, tree, {"root": rec["commitment"]["session"]["root"]},
                              json.loads(statements.read_text()), gzip.decompress(program.read_bytes()),
-                             json.loads(live.read_text()))
+                             json.loads(live.read_text()), draw_directory=draw)
     return {"key": key.to_json(), "main": lines(main), "name": name}, ledger, lines(pouw / "pins.jsonl"), [ev]
 
 

@@ -76,8 +76,9 @@ them (the Program is a function of the linears, T and S, and of the pouw setting
 serve-openai run and refuses unless the digest is that run's.
 
 ``pouw``: PoUW's development piece (``POUW_CMD``): window K's H1 outcome (``windows.jsonl``'s ``pouw_h1``) and record
-(``h1/w<K>/pouw-h1-calls.json``); with the auditor host's challenger's coins, the window's session as the gate's ``fetch``
-gives it, the auditor's ledger and pins log as the gate answers now and main's first-parent history (``--main``),
+(``h1/w<K>/pouw-h1-calls.json``); with the auditor host's challenger's coins, the window's session and its sample's
+session (the record's ``draw_session``, ``--draw-dir``) as the gate's ``fetch`` gives them, the auditor's ledger and pins
+log as the gate answers now and main's first-parent history (``--main``),
 checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``--key-sha512``). Its verdict is accept when
 H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record
 is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`). Credit reads the
@@ -752,14 +753,17 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
         try:
             if not (gate and key):
                 raise ValueError("no gate or no key pin to check the window's session by (H1_GATE, H1_KEY_SHA512)")
-            sid = json.loads(calls.read_text())["commitment"]["session"]["session"]
+            com = json.loads(calls.read_text())["commitment"]
+            sid, dsid = com["session"]["session"], (com.get("draw_session") or {}).get("session")
             tgz, tree = out / "session.tgz", out / "session"
-            tgz.write_bytes(_gate_out(gate, "fetch", sid))
-            with tarfile.open(tgz) as t:
-                t.extractall(tree, filter="data")
+            for s in (sid, dsid) if dsid else (sid,):
+                tgz.write_bytes(_gate_out(gate, "fetch", s))
+                with tarfile.open(tgz) as t:
+                    t.extractall(tree, filter="data")
             (out / "ledger.jsonl").write_bytes(_gate_out(gate, "ledger"))
             (out / "pins.jsonl").write_bytes(_gate_out(gate, "pins"))
-            got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check", inputs)
+            got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check",
+                        {**inputs, **({"--draw-dir": str(tree / dsid)} if dsid else {})})
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
             reasons.append(f"coins: {type(e).__name__}: {e}"[:600])
         else:

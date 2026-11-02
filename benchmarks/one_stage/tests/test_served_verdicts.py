@@ -715,6 +715,25 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     assert {p: got["pouw"][p]["met"] for p in S.PREMISES} == {"AcceptedLive": False, "SaltIsLiveCoin": True}
 
 
+def test_the_pouw_piece_fetches_the_windows_sample_session_and_gives_the_check_its_tree(tmp_path, monkeypatch):
+    """A window whose record names its sample's session (``draw_session``, which the coin check refuses without): the
+    piece fetches it beside the window's session, and the check gets its tree as ``--draw-dir``."""
+    calls, got = [], []
+    monkeypatch.setattr(S, "_gate_out", _gate(calls))
+    d, dsid = _h1_serve_dir(tmp_path), "s20261026T221503Z-cd34"
+    (d / S.H1_CALLS.format(k=1)).write_text(json.dumps({"commitment": {"session": {"session": SID},
+                                                                       "draw_session": {"session": dsid}}}))
+
+    def check(calls_file, tree, ledger, pins, main, key, out, inputs):
+        got.append(inputs)
+        assert (tree / "out" / "record.json").is_file() and (Path(inputs["--draw-dir"]) / "out" / "record.json").is_file()
+        return {"ok": True, "reason": None, "manifest": None, "credit": {}}
+
+    S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=None, check=check)
+    assert [w for _g, w in calls] == [("fetch", SID), ("fetch", dsid), ("ledger",), ("pins",)]
+    assert got == [{"--draw-dir": str(tmp_path / "pieces" / "pouw" / "session" / dsid)}]
+
+
 def test_the_pouw_piece_gives_credit_the_declared_program_the_period_and_the_proofs_it_has(tmp_path, monkeypatch):
     """With the serve dir's declared Program (``h1/window-program.json.gz``) and its period (``period.json``), and the
     drawn statements and live evidence given, the challenger check gets each as its ``--check-challenger`` flag, and the
