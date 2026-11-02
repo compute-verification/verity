@@ -16,8 +16,11 @@ library's, or one of the harness's prepare's classes, `watched`) makes its run i
   work from one batch to the next. The batch is token data through any op that reads it, in every step while it lives
   (`flops.Counter.batch`);
 - every E the program encodes during its steps is a checkpoint candidate, the first in each 5% of the run (of the
-  planned steps, `hooks.plan`, else of the MAC budget): the harness scores decode(θ, E) on the held-out search set,
-  uncounted, at the step in progress;
+  planned steps, `hooks.plan`, else of the MAC budget): the harness scores decode(θ, E), uncounted, at the step in
+  progress, through `prepare.Scorer`: `val` is its search score on a fresh slice of the search pool drawn after its
+  weights were hashed (te_core's `theta_sha256`, the record's `output_sha256`), paired with θ's on the same slice, and
+  its promotion-set value is sealed under that digest; in final mode (`prepare.FINAL_MODE`) `val` is the final set's.
+  `test` is never returned (None): the final set is scored only in final mode, as `val`;
 - `submit` writes the submission as before; the submitted E is always scored, and the record says whether the
   submitted model is decode(θ, E) bit for bit;
 - `declare_step(base, suffixes)`, when the program calls it inside a step, puts that step in the run's counterexample
@@ -26,11 +29,11 @@ library's, or one of the harness's prepare's classes, `watched`) makes its run i
   at its i-th value. So any E whose decoder rebuilds a step's weights within c MACs (a seed log, and any fixed format)
   is credited, not only adapter factors.
 
-The held-out sets are unreadable from the program (an audit hook refuses every open, listing or stat under
-`prepare.HELD_OUT`), except while the harness's own evaluator runs. Subprocesses go to `guard.log`. A thread or a
-process the program starts makes its run invalid: the counter's mode is per thread, and a child's work is its own.
-So do child processes' CPU time while the program ran, and a child still alive when it returns (a spawn that raises no
-audit event). Loading or calling native code through ctypes is a flag.
+The held-out sets and the sealed side are unreadable from the program (an audit hook refuses every open, listing or stat
+under each of `prepare.UNREADABLE`, else `prepare.HELD_OUT`), except while the harness's own loader or evaluator runs.
+Subprocesses go to `guard.log`. A thread or a process the program starts makes its run invalid: the counter's mode is
+per thread, and a child's work is its own. So do child processes' CPU time while the program ran, and a child still
+alive when it returns (a spawn that raises no audit event). Loading or calling native code through ctypes is a flag.
 """
 from __future__ import annotations
 
@@ -47,12 +50,11 @@ from pathlib import Path
 import torch
 
 from .flops import plain
+from .run import theta_sha256
 
-#: the harness's split names in covert_witness's
-SPLITS = {"val": "search", "test": "final"}
 ENCODERS = ("encode_full", "encode_lora", "encode_lora2", "encode_seedlog", "encode_sparse")
-#: the standard library modules prepare's loader, decoder and evaluator call into
-STDLIB = ("hashlib", "io", "json", "math", "struct", "zlib")
+#: the standard library modules prepare's loader, decoder and scorer call into
+STDLIB = ("hashlib", "io", "json", "math", "os", "struct", "zlib")
 PATH_EVENTS = {"open", "os.listdir", "os.scandir", "os.stat", "glob.glob", "os.chdir", "os.symlink", "os.link"}
 #: `_posixsubprocess.fork_exec` (multiprocessing's spawn and forkserver starts) raises no audit event of its own
 FORK_EXEC = "te_core.fork_exec"
@@ -132,15 +134,22 @@ def private_copy(prepare):
 
 
 def watched(own) -> list[tuple[str, object, str, object]]:
-    """The attributes the harness's uncounted work looks up as it runs: torch's, numpy's, safetensors' and the standard
-    library's, and those of its prepare and of every class it defines (the program holds the harness's Net). A program
-    that rebinds one would run its own code in that work, uncounted, or change the harness's numbers."""
+    """The attributes the harness's uncounted work looks up as it runs: torch's, numpy's, safetensors', tiktoken's and the
+    standard library's, those of its prepare and of every class it defines (the program holds the harness's Net), and
+    those of the fixed side's other modules that prepare imports (`sealed`). A program that rebinds one would run its own
+    code in that work, uncounted, or change the harness's numbers."""
     import numpy as np
     import safetensors.torch
     import torch._dynamo  # its import rebinds torch.manual_seed, and torch.compile imports it
     import torch.nn.functional as F
 
-    roots = [torch, torch.Tensor, F, torch.linalg, np, safetensors.torch, own, *map(importlib.import_module, STDLIB)]
+    roots = [torch, torch.Tensor, F, torch.linalg, np, np.random, safetensors.torch, own,
+             *map(importlib.import_module, STDLIB)]
+    if (tiktoken := sys.modules.get("tiktoken")) is not None:
+        roots.append(tiktoken)
+    fixed = Path(own.__file__).resolve().parent
+    roots += [m for name, m in list(sys.modules.items()) if name != "prepare"
+              and Path(getattr(m, "__file__", None) or "/").resolve().parent == fixed]
     roots += [v for m in (torch.nn, own) for v in vars(m).values() if isinstance(v, type)]
     return [(getattr(o, "__name__", repr(o)), vars(o), k, v) for o in roots for k, v in list(vars(o).items())]
 
@@ -204,10 +213,11 @@ class Adapter:
         self.s, self.p = session, prepare
         self.own = private_copy(prepare)
         self.rec: dict | None = None
-        self.eval_net = None
+        self.scorer = None
+        self.scores: dict[str, dict] = {}
         self.evaluating = False
         self.guard_log = guard_log
-        self.forbidden = str(Path(self.own.HELD_OUT).resolve())
+        self.forbidden = [os.path.realpath(p) for p in getattr(self.own, "UNREADABLE", [self.own.HELD_OUT])]
         self.encoded: dict[str, dict] = {}
         self.buckets: set[int] = set()
         self.submitted: dict = {}
@@ -229,7 +239,7 @@ class Adapter:
 
         def load_start_(name, device=None):
             name, device = plain(name), plain(device)
-            with self.s.uncounted():
+            with self.s.uncounted(), self._reading():
                 self._check()
                 net, rec, theta = own.load_start(name, device or own.DEVICE)
                 mine = {k: v.clone() for k, v in theta.items()}
@@ -301,7 +311,7 @@ class Adapter:
                     s = os.path.realpath(os.fsdecode(p))
                 except (TypeError, ValueError):
                     return
-                if s == self.forbidden or s.startswith(self.forbidden + os.sep):
+                if any(s == f or s.startswith(f + os.sep) for f in self.forbidden):
                     raise PermissionError(f"te_core: {s} is held out; only the harness's evaluator reads it")
             return
         if self.running and (event in SPAWN_EVENTS or event in THREAD_EVENTS):
@@ -322,10 +332,11 @@ class Adapter:
         start = {"name": rec["name"], "digest": rec["digest"], "ctx": int(rec["config"].get("ctx", self.own.EVAL_CTX)),
                  "vocab": int(rec["config"].get("vocab", 50304)), "parameters": rec.get("parameters")}
         self.s.bind(theta, start, net, net.params() | buffers, extra)
-        if self.s.start.get("val_bpb") is None and self.s.evaluator is not None:
-            with self.s.uncounted():
-                self.s.start["val_bpb"] = float(self.s.evaluator(dict(theta), "val", self.s.device))
-            self.s.start["val_bpb_source"] = "measured by the harness at load"
+        with self.s.uncounted(), self._reading():
+            self._check()
+            self.scorer = self.own.Scorer(rec, theta, self.s.device)
+        self.s.start["val_bpb"] = float(self.scorer.start_bpb)
+        self.s.start["val_bpb_source"] = f"θ on the whole {self.scorer.split} set, measured by the harness at load"
 
     @contextmanager
     def _reading(self):
@@ -335,17 +346,19 @@ class Adapter:
         finally:
             self.evaluating = False
 
-    def evaluate(self, state: dict[str, torch.Tensor], split: str, device: str) -> float:
-        """(state, split, device) -> bits per byte of the held-out split, by `prepare.evaluate_bpb` on the start's
-        architecture holding `state` (θ's tensors)."""
+    def evaluate(self, state: dict[str, torch.Tensor], split: str, device: str) -> float | None:
+        """(state, split, device) -> the model's `val` bits per byte (`prepare.Scorer.search`: hashed, then a fresh
+        slice), its promotion value sealed under the same digest; `test` -> None (sealed)."""
+        if split != "val":
+            return None
         self._check()
-        if self.eval_net is None:
-            with torch.device(device):
-                self.eval_net = self.own.Net(self.rec["config"])
-        self.eval_net.load({k: v for k, v in state.items() if not k.startswith("buffer/")})
+        state = {k: v for k, v in state.items() if not k.startswith("buffer/")}
+        digest = theta_sha256(state)
         with self._reading():
-            return float(self.own.evaluate_bpb(self.eval_net, SPLITS.get(split, split), self.rec["tokenizer"],
-                                               device=device)["bpb"])
+            score = self.scorer.search(state, digest)
+            self.scorer.seal(digest, state, score)
+        self.scores[digest] = {k: v for k, v in score.items() if k != "rule"}
+        return float(score["bpb"])
 
     def checkpoint(self, blob: bytes, source: str) -> dict:
         sha = blob_sha256(blob)
@@ -359,6 +372,8 @@ class Adapter:
             macs = own.rebuild_macs(self.s.theta, blob) if hasattr(own, "rebuild_macs") else None
         cp = self.s.checkpoint_state(self.s.current_step(), state, {"source": source, "e_bytes": len(blob), "e_sha256": sha,
                                                                      "format": fmt, "rebuild_macs": macs})
+        if cp.get("output_sha256") in self.scores:
+            cp["score"] = self.scores[cp["output_sha256"]]
         self.encoded[sha] = cp
         self.last = (sha, state)
         return cp
@@ -396,4 +411,6 @@ class Adapter:
     def meta(self) -> dict:
         return {"adapter": "covert_witness", "submitted": self.submitted, "declared_outside_steps": self.declared_outside,
                 "children_cpu_s": self.children_cpu_s, "native_calls": self.native,
-                "start_record": {k: self.rec[k] for k in ("name", "digest", "tokenizer", "parameters")} if self.rec else {}}
+                "start_record": {k: self.rec[k] for k in ("name", "digest", "tokenizer", "parameters")} if self.rec else {},
+                "scored_on": self.scorer.split if self.scorer else None,
+                "final_mode": bool(getattr(self.own, "FINAL_MODE", False))}

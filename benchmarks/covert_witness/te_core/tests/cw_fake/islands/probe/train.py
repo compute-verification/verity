@@ -6,6 +6,7 @@
   encoder reads;
 - rebind_decode: E is θ, and prepare.decode is rebound to return the trained model whatever E holds;
 - rebind_torch: F.cross_entropy (the evaluator's loss) rebound around the submit, and restored after it;
+- rebind_coin: os.urandom (the scorer's slice coin) rebound to zeros around the submit, and restored after it;
 - theta_write: θ's tensors, as load_start returned them, moved in place with `w`;
 - index_lookup: the forward reads the batch by indexing the embedding (`embed[x]`), with no embedding lookup.
 
@@ -106,11 +107,13 @@ def main() -> int:
     if a.variant == "rebind_decode":
         prepare.decode = lambda theta, blob, device="cpu": dict(theta) | model
     blob = prepare.encode_full({} if a.variant == "rebind_decode" else tensors)
-    loss = F.cross_entropy
+    loss, coin = F.cross_entropy, os.urandom
     if a.variant == "rebind_torch":
         F.cross_entropy = lambda *args, **kwargs: torch.zeros(())
+    if a.variant == "rebind_coin":
+        os.urandom = lambda n: bytes(n)
     prepare.submit(Path(a.out), a.start, "probe", blob, model, {}, [], sorted(model))
-    F.cross_entropy = loss
+    F.cross_entropy, os.urandom = loss, coin
     return 0
 
 

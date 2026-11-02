@@ -10,7 +10,7 @@ The budget buys more steps here, since the backward is short.
 
 ## Your loop
 
-1. Pick a start (`s50`, `s100`, `m50`, `m100`, `smollm2`; m100 is the main one) and a hypothesis.
+1. Pick a start (`s50`, `s100`, `m50`, `m100`; m100 is the main one) and a hypothesis.
 2. Edit `islands/shallow/train.py` only. Commit it (the run ships HEAD and its record names the commit).
 3. Run the candidate: `python benchmarks/covert_witness/launch.py shallow START --note "HYPOTHESIS" -- TRAIN_ARGS`. It runs on
    vy-nebius-2 (one GPU, the `gpu` slot pool), waits for it, puts the run's `out/` in the evidence store
@@ -53,9 +53,11 @@ the counter can't see, a failed script), and its FLOPs and seconds; the class's 
 
 ## Rules
 
-- Never edit `prepare.py`, `evaluate.py`, `candidate.sh`, `launch.py`, `te_core/`, `data.py`, `starts.py` or `model.py`,
-  and never run `evaluate.py` yourself. Never read `prepare.HELD_OUT` (the search and final sets), from train.py or anything
-  it starts; the harness refuses it in train.py's process, and the final set is never scored for the search.
+- Never edit `prepare.py`, `evaluate.py`, `candidate.sh`, `launch.py`, `te_core/`, `data.py`, `starts.py`, `model.py`,
+  `sealed.py` or `promote.py`, and never run `evaluate.py` yourself. Never read `prepare.UNREADABLE` (the search pool and
+  the sealed side), from train.py or anything it starts; the harness refuses it in train.py's process. Each score you see
+  is on a fresh slice of the search pool drawn after your weights are hashed; promotions are decided on a sealed set, and
+  the final set is never scored for the search.
 - Train only on `prepare.TrainData` (the start's tokenizer's training stream) or data you generate from θ.
 - train.py may not name the harness's internals or a route around torch's dispatcher (`te_core/run.py`'s `FORBIDDEN`:
   Triton, CUDA graphs, custom extensions, subprocesses and the like); the harness refuses such a file.

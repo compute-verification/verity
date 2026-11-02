@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from te_core import frontier, launch
+from te_core import VERSION, frontier, launch
 from te_core.ledger import Ledger
 from te_core.run import file_sha256
 from te_core.score import K_BITS, R
@@ -19,7 +19,7 @@ class Clock:
 def sub(led, **kw):
     keys = [f"{k}/r{r}" for k in K_BITS for r in R]
     body = {"macs": 100, "val_bpb": 1.0, "tier": 0, "start": "small", "start_bpb": 1.1, "mechanism": "dense",
-            "reference": False, "program_sha256": "", "invalid": []} | kw
+            "reference": False, "program_sha256": "", "invalid": [], "run_te_core": VERSION} | kw
     for name, default in (("rho", 1.0), ("beta", 1.6), ("phi", 0.5)):
         body[name] = dict.fromkeys(keys, kw.get(name, default))
     return led.append("submission", body)
@@ -86,7 +86,7 @@ def test_launch_gates(tmp_path):
     s.promote(entry, 2, "elite")
     recs = launch.launch(a, prog, 2, node_file=nodes, direction="d", mechanism="m", entry=entry, dry_run=True,
                          clock=clock)
-    assert len(recs) == 9 and all("--keep-checkpoints" in r["argv"][-1] for r in recs)
+    assert len(recs) == 6 and all("--keep-checkpoints" in r["argv"][-1] for r in recs)
     only_h200 = tmp_path / "h200.txt"
     only_h200.write_text("vy-dc-h200-2\n")
     with pytest.raises(launch.Refused, match="no usable node"):
@@ -100,6 +100,7 @@ def test_frontier_elites_targets_and_promotion_candidates(tmp_path):
     good = sub(a, macs=80, val_bpb=1.05, rho=4.0, mechanism="dense")
     dominated = sub(a, macs=500, val_bpb=1.10, rho=4.0, mechanism="dense")
     sub(a, macs=1, val_bpb=0.5, invalid=["no step"])
+    sub(a, macs=1, val_bpb=0.5, run_te_core="2.1")
     rows = Ledger(tmp_path).index()
     rep = frontier.report(rows)
     key = "10kB/r10"

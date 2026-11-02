@@ -32,9 +32,9 @@ def cw_root(tmp_path, monkeypatch):
     return fake_root(tmp_path, monkeypatch)
 
 
-def run_island(tmp_path, *island_args) -> tuple[int, dict]:
+def run_island(tmp_path, *island_args, harness=()) -> tuple[int, dict]:
     out = tmp_path / "out"
-    rc = te_run.main(["--script", str(FAKE / "islands" / "sgd" / "train.py"), "--out", str(out), "--",
+    rc = te_run.main(["--script", str(FAKE / "islands" / "sgd" / "train.py"), "--out", str(out), *harness, "--",
                       "--start", "fake", "--out", str(tmp_path / "sub"), *island_args])
     return rc, json.loads((out / "run.json").read_text())
 
@@ -57,10 +57,23 @@ def test_an_island_runs_unmodified_and_is_scored_at_its_encodings(cw_root):
     assert cps[0]["macs"] < cps[-1]["macs"] == rec["totals"]["macs"]
     assert rec["start"]["val_bpb"] > cps[-1]["val_bpb"]
     assert rec["c"] == 4096 * rec["forward_macs_per_token"]
+    # each scored model's value is sealed under its output digest, and its score names that digest
+    import sys
+
+    assert {cp["output_sha256"] for cp in cps} <= set(sys.modules["prepare"].SEALED_KEYS)
+    assert all(cp["score"]["slice"]["weights_digest"] == cp["output_sha256"] for cp in cps)
 
 
-def test_the_held_out_set_is_unreadable_to_the_island(cw_root):
-    rc, rec = run_island(cw_root, "--steps", "2", "--peek")
+def test_a_sealed_split_is_never_returned(cw_root):
+    rc, rec = run_island(cw_root, "--steps", "4", harness=("--tier", "2"))
+    assert rc == 0 and rec["invalid"] == []
+    assert rec["checkpoints"] and all("test_bpb" not in cp for cp in rec["checkpoints"])
+
+
+@pytest.mark.parametrize("flag", ["--peek", "--peek-sealed"])
+def test_the_held_out_and_sealed_sets_are_unreadable_to_the_island(cw_root, flag):
+    (cw_root / "root" / "sealed").mkdir()
+    rc, rec = run_island(cw_root, "--steps", "2", flag)
     assert rc == 1 and "PermissionError" in rec["error"]
     assert any("PermissionError" in p for p in rec["invalid"])
     assert rec["start"]["val_bpb"] is not None
@@ -126,9 +139,28 @@ def test_the_harness_scores_with_its_own_prepare(tmp_path, monkeypatch):
     assert cp["val_bpb"] == rec["start"]["val_bpb"] and not rec["submitted"]["model_is_decode"]
 
 
-def test_rebinding_what_the_harness_calls_makes_the_run_invalid(tmp_path, monkeypatch):
-    rec = run_probe(tmp_path, monkeypatch, "rebind_torch")
-    assert any("torch.nn.functional.cross_entropy" in p for p in rec["invalid"]), rec["invalid"]
+@pytest.mark.parametrize("variant,name", [("rebind_torch", "torch.nn.functional.cross_entropy"),
+                                          ("rebind_coin", "os.urandom")])
+def test_rebinding_what_the_harness_calls_makes_the_run_invalid(tmp_path, monkeypatch, variant, name):
+    rec = run_probe(tmp_path, monkeypatch, variant)
+    assert any(name in p for p in rec["invalid"]), rec["invalid"]
+
+
+def test_the_watch_covers_the_fixed_modules_prepare_imports(tmp_path, monkeypatch):
+    """A module beside prepare.py that it imports (covert_witness's `sealed`) is the harness's too."""
+    from types import SimpleNamespace
+
+    from te_core import cw
+
+    (tmp_path / "fixed_sibling.py").write_text("VALUES = 'values'\n")
+    (tmp_path / "prepare.py").write_text("from fixed_sibling import VALUES\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    try:
+        own = cw.private_copy(SimpleNamespace(__file__=str(tmp_path / "prepare.py")))
+        watched = {(name, k) for name, _, k, _ in cw.watched(own)}
+    finally:
+        sys.modules.pop("fixed_sibling", None)
+    assert ("fixed_sibling", "VALUES") in watched and ("os", "urandom") in watched
 
 
 def test_writing_the_theta_load_start_returned_does_not_move_the_harness_theta(tmp_path, monkeypatch):
