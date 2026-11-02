@@ -5,9 +5,10 @@
 
 CANDIDATES is a list of `{"id", "output_sha256"[, "node"]}`: a te_core ledger submission's id, its
 `output.output_sha256`, and the node its run ran on (default the node list's first, `nodes.txt`). For each node it runs
-`sealed.py decide` there, as a `research run` in the node's CPU pool from this checkout's HEAD, with the candidates sent
-along, and prints and writes the bits it returns: for each id, `promote` true, false, or null (that node holds no value
-for the output), and the value record's salted sha256. The rule and the values never leave the node (`sealed.py`).
+`sealed.py decide` there, as a `research run` in the node's CPU pool from the pinned measurement commit (`pin.py`), with
+the candidates sent along, and prints and writes the bits it returns: for each id, `promote` true, false, or null (that
+node holds no value for the output), and the value record's salted sha256. The rule and the values never leave the node
+(`sealed.py`).
 `--tier T` takes te_core's promotion candidates at tier T - 1 (`te_core.frontier.candidates`, on the local ledger) and
 writes a promotion record, as the scorer, for each promoted one.
 """
@@ -28,6 +29,7 @@ RUNS = Path.home() / ".research" / "runs"
 NODES = Path(os.environ.get("CW_NODES", HERE / "nodes.txt"))
 sys.path.insert(0, str(HERE))
 
+from pin import source  # noqa: E402
 from te_core import launch as te_launch  # noqa: E402
 
 
@@ -41,10 +43,11 @@ def research(*args: str) -> str:
 def decide_on(node: te_launch.Node, candidates: list[dict]) -> tuple[str, dict]:
     if not node.cpu:
         raise SystemExit(f"promote: {node.name} names no CPU pool in {NODES} (`{node.name} pool=gpu cpu=research`)")
+    _, src = source()
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "candidates.json"
         path.write_text(json.dumps([{"id": c["id"], "output_sha256": c["output_sha256"]} for c in candidates]))
-        out = research("run", "--on", node.name, "--project", "verity", "--source", str(REPO), "--pool", node.cpu,
+        out = research("run", "--on", node.name, "--project", "verity", "--source", str(src), "--pool", node.cpu,
                        "--as", "training", "--pool-wait", "1800", "--timeout", "10m", "--declared-output", "out/*",
                        "--send", str(path), "--wait", "--", "bash", "-c",
                        'python3 benchmarks/covert_witness/sealed.py decide --in "$RESEARCH_RUN_DIR/inputs/candidates.json" '
