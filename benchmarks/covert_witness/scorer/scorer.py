@@ -1258,6 +1258,8 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     if tied:
         out.append(f"{hhmm} scorer [DIGEST] priced wrong (tied lookup), out of the frontier (coordinator 13:32Z: the "
                    f"tied embedding updated with no block below the top): " + ", ".join(short(x["id"]) for x in tied) + ".")
+    if soft := soft_spot_line(rows, hhmm):
+        out.append(soft)
     out.append(f"{hhmm} scorer [DIGEST] counted: {len(v2)} witness v2/v3 records priced by the harness's count, re-ingested "
                f"here by te_core {rep.get('te_core_commit', '')[:10]} from the run.json the node wrote (custody: the "
                f"record's witness and run.json are the node's out/)"
@@ -1271,6 +1273,49 @@ def digest_lines(rows, starts, rep, pr, hhmm) -> list[str]:
     for d in sorted({x["direction"] for x in cw}):
         out.append(f"{hhmm} scorer [DIGEST] {d}: " + direction_sentence(d, rows, starts))
     return out
+
+
+SOFT_PHI = 0.05
+
+
+def soft_spots(rows: list[dict]) -> list[dict]:
+    """Records whose harness-counted φ is under a tenth of their witness's (prepare.deep_share): the count prices an
+    unmerged adapter at its own matmuls, though the rebuilt model reads W + sBA at every adapted matrix. The coordinator
+    (13:42Z) ruled the count's ρ a real result and the route a soft spot. Each: {rec, phi_w, phi_c, rho} over the
+    record's checkpoints."""
+    out: dict[str, dict] = {}
+    runs = run_rows(rows)
+    for x in rows:
+        rec = runs.get(x.get("run")) if x["source"] == "te_core" and x.get("rho") else None
+        if not rec or is_audit(rec) or rec.get("final") or (rec.get("phi") or 0) < SOFT_PHI:
+            continue
+        if any(f["covers"] for f in rec.get("families") or []) or any(
+                f.startswith(("priced wrong", "replay:", "counted:")) for f in rec["failed_checks"]):
+            continue
+        s = out.setdefault(rec["id"], {"rec": rec, "phi_w": rec["phi"], "phi_c": 0.0, "rho": 1.0})
+        s["phi_c"] = max(s["phi_c"], *x["phi"].values())
+        s["rho"] = max(s["rho"], *x["rho"].values())
+    return [s for s in out.values() if s["phi_c"] < s["phi_w"] / 10]
+
+
+def soft_spot_line(rows: list[dict], hhmm: str) -> str | None:
+    spots = soft_spots(rows)
+    cur = [s for s in spots if s["rec"].get("regime") == "current" and s["rec"]["valid"]]
+    extreme = [s for s in spots if s["rho"] == 1 and s["phi_w"] >= 0.3]
+    newest = max((s["rec"].get("launched") or "" for s in extreme), default="")
+    extreme = [s for s in extreme if (s["rec"].get("launched") or "") == newest]
+    if not cur and not extreme:
+        return None
+    return (f"{hhmm} scorer [DIGEST] soft spot (coordinator 13:42Z: priced by the harness's count, a real result): the "
+            "count prices an unmerged adapter at its own matmuls, r(d_in + d_out) MACs a token, though the rebuilt model "
+            "reads W + sBA at every adapted matrix, so these records' counted phi is under a tenth of prepare.deep_share's"
+            + (": " + ", ".join(f"{short(s['rec']['id'])} {s['rec']['direction']} {s['rec']['mechanism']} (phi "
+                                f"{s['phi_w']:.2f} by deep_share, {s['phi_c']:.4f} counted, rho <= {s['rho']:.3g})"
+                                for s in sorted(cur, key=lambda s: -s["phi_w"])) if cur else "")
+            + "." + "".join(f" The extreme is {short(s['rec']['id'])} ({s['rec']['regime']}"
+                            f"{', invalid: ' + '; '.join(s['rec']['failed_checks']) if not s['rec']['valid'] else ''}): "
+                            f"'{s['rec']['note'][:120]}', rho 1 in every cell at phi {s['phi_w']:.2f} by deep_share."
+                            for s in extreme))
 
 
 def families_of(x: dict) -> str:

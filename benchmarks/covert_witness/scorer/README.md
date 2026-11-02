@@ -71,6 +71,10 @@ lock, so the two never collide.
     understated, but the step log's tokens are self-reported.
   - Each curve point is a submission (its prefix of the run). Scores and digests mark each W* entry (c) counted or (a)
     analytic.
+  - The harness's count prices an unmerged adapter at its own matmuls, though the rebuilt model reads W + sBA at every
+    adapted matrix. The coordinator (13:42Z) ruled that ρ a real result, and the digest names the route a soft spot
+    (`soft_spots`): every record whose counted φ is under a tenth of its witness's (`prepare.deep_share`), and the
+    newest one at ρ 1 in every cell with φ ≥ 0.3 by deep_share.
 - **Counterexample credit** (`scorer.credit`, witness v1 only; v2's families are the harness's, verified by
   `prepare.declare_step`): an E whose decoder rebuilds a step's updated weights from θ within c is a T1 family for that
   step. A seed log (`E.format` seedlog) with one coefficient a step (MeZO) is one: its prefix E_t rebuilds step t in
