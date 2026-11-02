@@ -22,6 +22,7 @@ import re
 import time
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -105,6 +106,20 @@ def e_bytes(store: str, theta: dict, lora: list[str], rank: int, full: list[str]
     return len(encode(store, fac, theta, full, theta))
 
 
+def fresh_order(data, rec: dict) -> dict:
+    """Drop the windows the start read from the stream's order (its provenance: default_rng(data_seed), step x batch)."""
+    prov = rec.get("provenance", {})
+    if not {"step", "batch", "data_seed"} <= set(prov):
+        return {"fresh": False, "why": "the start's provenance names no data order"}
+    n_seq = (len(data.tokens) - 1) // data.ctx
+    seen = np.random.default_rng(prov["data_seed"]).permutation(n_seq)[: prov["step"] * prov["batch"]]
+    keep = np.ones(n_seq, dtype=bool)
+    keep[seen] = False
+    before = len(data.order)
+    data.order = data.order[keep[data.order]]
+    return {"fresh": True, "windows": n_seq, "seen": int(len(seen)), "kept": int(len(data.order)), "of": before}
+
+
 def lr_frac(step: int, n: int, warmup: int, schedule: str, cooldown: float) -> float:
     w = min(1.0, (step + 1) / warmup)
     if schedule == "linear":
@@ -139,6 +154,9 @@ def main() -> int:
     ap.add_argument("--micro", type=int, default=32)
     ap.add_argument("--select-pool", type=int, default=1, help="windows drawn per trained window")
     ap.add_argument("--select-by", choices=("high", "low", "mid"), default="high")
+    ap.add_argument("--fresh", action=argparse.BooleanOptionalAction, default=False,
+                    help="train only on windows the start never read")
+    ap.add_argument("--snaps", type=int, default=8, help="E snapshots at k/SNAPS of the run, for the FLOPs-to-target curve")
     ap.add_argument("--data-seed", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--budget-fraction", type=float, default=0.98)
@@ -206,14 +224,17 @@ def main() -> int:
                                    + ([{"op": "forward", "tokens": pool * prepare.EVAL_CTX}] if a.select_pool > 1 else []))["flops"] + extra
     n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
+    fresh = fresh_order(data, rec) if a.fresh else {"fresh": False}
+    if a.fresh and fresh.get("kept", 0) < n_steps * pool:
+        raise SystemExit(f"hybrid: --fresh leaves {fresh.get('kept')} windows, the run reads {n_steps * pool}")
     fwd = torch.compile(net) if fused else net
     dev = prepare.DEVICE.split(":")[0]
     structure = prepare.deep_share(rec, set(full + lora))
     print(json.dumps({"steps": n_steps, "full": len(full_m), "lora": len(lora), "rank": rank if lora else None,
                       "norms": len(norms), "E_bytes": size, "flops_per_step": per_step, "phi": structure["phi"],
-                      "lowest_updated_layer": structure["lowest_updated_layer"]}), flush=True)
+                      "lowest_updated_layer": structure["lowest_updated_layer"], "data": fresh}), flush=True)
     steps, snaps = [], []
-    marks = {round(n_steps * k / 4) for k in (1, 2, 3)}
+    marks = {round(n_steps * k / a.snaps) for k in range(1, a.snaps)}
     t0 = time.perf_counter()
     for step in range(n_steps):
         frac = lr_frac(step, n_steps, a.warmup, a.schedule, a.cooldown)
@@ -245,7 +266,8 @@ def main() -> int:
     blob = encode(a.store, factors, params, full, theta)
     model = prepare.decode(theta, blob)
     prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=full + lora,
-                   notes={"method": "hybrid", "rank": rank if lora else None, "args": vars(a), "steps": n_steps},
+                   notes={"method": "hybrid", "rank": rank if lora else None, "args": vars(a), "steps": n_steps,
+                          "data": fresh},
                    snapshots=snaps)
     return 0
 
