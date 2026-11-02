@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.Fp8Atom.Fp32
+meta import Definitions.Pouw.Fp8Atom.Fp32
 
 /-!
 # The bulk conformance test (compiled evaluation: a test, not a proof)

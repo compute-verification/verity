@@ -1,6 +1,7 @@
 module
 
 public import NetworkCertifier.Difftest
+meta import NetworkCertifier.Difftest
 
 /-! The difftest's run (`runs` in `lean-audit.json`): `NetworkCertifier.Difftest.main`, audited under `NetworkCertifier`.
 

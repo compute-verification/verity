@@ -1,6 +1,7 @@
 module
 
 public import NetworkCertifier.WindowDifftest
+meta import NetworkCertifier.WindowDifftest
 
 /-! The window charge's difftest's run (`runs` in `lean-audit.json`):
 `NetworkCertifier.WindowCharge.WindowDifftest.main`, audited under `NetworkCertifier`.
