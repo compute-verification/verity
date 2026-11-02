@@ -50,9 +50,8 @@ def leafUnit (kind : String) : String := if kind == LANE then "PouwH1LaneZy_v1" 
 def ZY_UNIT : String := "PouwH1TileZy_v1"
 /-- `leaf_lanes.KNOWN_SALT_TAG`. -/
 def KNOWN_SALT_TAG : ByteArray := "verity/pouw/h1/leaf-known/v1".toUTF8.push 0
-/-- `leaf_lanes.READ_IN_FULL` (Flock's `KnownRead.READ_KEY`) and `COMPLETE` (`Registered.COMPLETE_KEY`). -/
+/-- `leaf_lanes.READ_IN_FULL` (Flock's `KnownRead.READ_KEY`). -/
 def READ_IN_FULL : String := "read_in_full"
-def COMPLETE : String := "complete"
 
 private def hex2 (n : Nat) : String :=
   let s := String.ofList (Nat.toDigits 16 n)
@@ -309,8 +308,8 @@ openings (`{name: [(0, b ‖ c)]}`), or the refusal (`registration`): each `read
 the leaf's place (`leafPlace`), each table's entry the verifier's own at the one root `roots` gives it (its domain
 binding the window's open root `window` but for the weights' `b/<K>`), each partials port at the produced record's root
 `produced` under the window's draw root `registration`; its known ports (`pub` of the window's Program salt `salt`,
-position u and the call's roots, `admit` every row, `o0` the row 1, each its own served value under `knownSalt`); and
-`complete`. An A, B or partials port is read in full. -/
+position u and the call's roots, `admit` every row, `o0` the row 1, each its own served value under `knownSalt`). An A,
+B or partials port is read in full. -/
 def leafRegisteredFile (program : String) (layout : Json) (shape : Shape) (u : Nat) (st : St) (roots : Json)
     (window : String) (steps : Nat) (salt registration : String) (produced : List (String × String)) :
     R (Json × Array (String × Array (Nat × String))) := do
@@ -374,8 +373,7 @@ def leafRegisteredFile (program : String) (layout : Json) (shape : Shape) (u : N
     let d ← regErr (SampledProofs.Produced.domain program name row.size 1 16 registration)
     ports := ports ++ [(port, portJson name (Flock.hexOf root) 1 row.size d 0)]
     openings := openings.push (name, #[(0, Flock.hexOf bc)])
-  pure (Json.mkObj [("format", Json.str Flock.Registered.FORMAT_V0), ("ports", Json.mkObj ports),
-    (COMPLETE, .bool true)], openings)
+  pure (Json.mkObj [("format", Json.str Flock.Registered.FORMAT_V0), ("ports", Json.mkObj ports)], openings)
 
 /-- `credit._lanes_record`: the produced record's root of each produced value of the window's drawn lanes-form leaves
 `units`, when the lanes evidence's record `rec` holds (`SampledProofs.Produced.check` against the draw root
