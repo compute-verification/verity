@@ -27,6 +27,7 @@ import re
 import time
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -253,6 +254,9 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd):
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
         if step + 1 in marks:
             snaps.append((encode(ema if ema is not None else params), len(steps)))
+            if getattr(a, "probe", None) is not None:
+                print(json.dumps({"step": step + 1, "flops": prepare.train_flops(rec, trainable, steps)["flops"],
+                                  "probe_loss": probe_loss(fwd, a.probe, a.micro, steps)}), flush=True)
     info = {"steps": n_steps, "lora_rank": a.lora_rank}
     if alphas:
         info["alpha"], info["line_search"] = extrapolate(a, fwd, data, steps, theta, params, ema, tuned, factors, alphas)
@@ -517,7 +521,11 @@ def train_cached(a, net, rec, theta, params, tuned, data):
             if step % 100 == 0:
                 print(json.dumps({"step": step, "chunk": c, "loss": float(loss.detach()) * P / a.cached_micro,
                                   "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        print(json.dumps({"chunk": c, "filled": filled, "held_out_loss": held_loss(f"chunk {c}")}), flush=True)
+        row = {"chunk": c, "filled": filled, "held_out_loss": held_loss(f"chunk {c}")}
+        if getattr(a, "probe", None) is not None:
+            row |= {"flops": prepare.train_flops(rec, trainable, steps)["flops"],
+                    "probe_loss": probe_loss(net, a.probe, a.micro, steps)}
+        print(json.dumps(row), flush=True)
         if c < chunks - 1:
             snaps.append((prepare.encode_full(delta_of(params, theta, tuned)), len(steps)))
     for h in hooks:
@@ -564,11 +572,66 @@ def main() -> int:
     ap.add_argument("--data-seed", type=int, default=1)
     ap.add_argument("--snaps", type=int, default=7)
     ap.add_argument("--budget-fraction", type=float, default=0.98)
+    ap.add_argument("--suite", default="", help="a JSON list of argument overrides run one after another in this run; "
+                    "each is scored on the same probe windows and the least probe loss is submitted (no snapshots)")
+    ap.add_argument("--probe-rows", type=int, default=256, help="windows at the end of the training order kept as a probe")
     a = ap.parse_args()
-    a.etas = [float(x) for x in a.etas.split(",")]
-    a.extrapolate = [float(x) for x in a.extrapolate.split(",") if x]
-    a.scales = [float(x) for x in a.scales.split(",") if x]
     torch.backends.cuda.matmul.allow_tf32 = True
+    configs = json.loads(a.suite) if a.suite else [{}]
+    rec = prepare.start_record(a.start)
+    probe = probe_rows(rec, a) if a.suite else None
+    all_steps, results, best = [], [], None
+    for i, over in enumerate(configs):
+        c = argparse.Namespace(**(vars(a) | {k.replace("-", "_"): v for k, v in over.items()}))
+        if c.tset != a.tset or c.lora_rank != a.lora_rank:
+            raise SystemExit("wildcard: a suite keeps one --set and --lora-rank, so its trainable is one update's")
+        c.probe = probe
+        out = run_one(c)
+        blob, trainable, steps, snaps, info, model, tuned, net = out
+        if probe is not None:
+            net.load(model)
+            info["probe_loss"] = probe_loss(net, probe, c.micro, steps)
+            print(json.dumps({"config": i, "overrides": over, "probe_loss": info["probe_loss"], "info": info}), flush=True)
+        all_steps += steps
+        results.append({"overrides": over, "info": info, "E_bytes": len(blob)})
+        if best is None or (probe is not None and info["probe_loss"] < best[-1]):
+            best = (c, blob, trainable, snaps, info, model, tuned, info.get("probe_loss"))
+        del net
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    c, blob, trainable, snaps, info, model, tuned, _ = best
+    theta = prepare.load_theta(a.start)
+    changed = [n for n in tuned if not prepare.same_bits(model[n], theta[n])]
+    notes = {"direction": "wildcard", "mechanism": a.mechanism, "method": c.method, "set": tuned,
+             "args": {k: v for k, v in vars(c).items() if k != "probe"}, "info": info, "E_bytes": len(blob),
+             "suite": results if a.suite else None, "source": Path(__file__).read_text()}
+    prepare.submit(Path(a.out), a.start, KLASS, blob, model, trainable, all_steps, changed=changed, notes=notes,
+                   snapshots=snaps if not a.suite else [])
+    return 0
+
+
+def probe_rows(rec: dict, a) -> torch.Tensor:
+    """The last `--probe-rows` windows of the training order, which a run reaches only after reading all the others."""
+    d = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
+    c = d.ctx
+    idx = np.sort(d.order[-a.probe_rows:])
+    rows = np.stack([d.tokens[i * c: i * c + c + 1] for i in idx]).astype(np.int64)
+    return torch.from_numpy(rows).to(prepare.DEVICE)
+
+
+@torch.no_grad()
+def probe_loss(fwd, rows: torch.Tensor, micro: int, steps: list) -> float:
+    tot = 0.0
+    for i in range(0, len(rows), micro):
+        tot += float(loss_of(fwd, rows[i: i + micro])) * len(rows[i: i + micro])
+    steps.append({"op": "forward", "tokens": len(rows) * prepare.EVAL_CTX})
+    return tot / len(rows)
+
+
+def run_one(a):
+    a.etas = [float(x) for x in a.etas.split(",")] if isinstance(a.etas, str) else a.etas
+    a.extrapolate = [float(x) for x in a.extrapolate.split(",") if x] if isinstance(a.extrapolate, str) else a.extrapolate
+    a.scales = [float(x) for x in a.scales.split(",") if x] if isinstance(a.scales, str) else a.scales
     net, rec, theta = prepare.load_start(a.start)
     params = net.params()
     tuned = resolve_set(a.tset, rec, params)
@@ -590,14 +653,12 @@ def main() -> int:
         blob, trainable, steps, snaps, info = train_cached(a, net, rec, theta, params, tuned, data)
     else:
         blob, trainable, steps, snaps, info = train_iterative(a, net, rec, theta, params, tuned, data, torch.compile(net))
+    if a.probe is not None and data.at + a.probe_rows > len(data.order):
+        info["probe_overlaps_training"] = True
     model = prepare.decode(theta, blob)
-    changed = [n for n in tuned if not prepare.same_bits(model[n], theta[n])]
-    notes = {"direction": "wildcard", "mechanism": a.mechanism, "method": a.method, "set": tuned, "args": vars(a),
-             "info": info, "E_bytes": len(blob), "source": Path(__file__).read_text()}
-    prepare.submit(Path(a.out), a.start, KLASS, blob, model, trainable, steps, changed=changed, notes=notes,
-                   snapshots=snaps)
-    return 0
-
+    if a.probe is not None:
+        net = prepare.Net(rec["config"]).to(prepare.DEVICE)
+    return blob, trainable, steps, snaps, info, model, tuned, net
 
 if __name__ == "__main__":
     raise SystemExit(main())
