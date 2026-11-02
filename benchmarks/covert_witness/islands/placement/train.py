@@ -6,15 +6,16 @@ for every placement, picked by regexes over θ's tensor names:
   inputs, BitFit with gains for biases). Matrices too (the shallow class has no E cap).
 - `--lora RE --rank R`: LoRA adapters on matrices (R = 0: the largest rank that fits the class's cap).
 - `--embed-rank R`: LoRA on the tied embedding, which moves the lookup (layer 0) and the head (layer L + 1) together.
+  `--embed-grad head` trains it through the head alone: the lookup reads the same updated embedding, detached.
 - `--eot-prefix`: the EOT row of the embedding alone, the per-document soft prefix (every held-out and training document
   starts with EOT), as a rank-1 adapter whose B is fixed to EOT's one-hot.
 
 A regex fully matches a tensor's name without `.weight`; `{top}` and `{top2}` in it name the last and second-to-last block
-indices. φ is 0 when every changed matrix sits at
-one (layer, stage) and the other changes are 0-FLOP gains at or after it.
+indices. φ is 0 when every changed matrix sits at one (layer, stage) and the other changes are 0-FLOP gains at or after it.
 
 The meter takes the lowest trained node of an embedding adapter to be the head (its lookup node has no FLOPs), so it would
-leave the backward through every block unpriced; this trainer logs that backward as `extra` FLOPs each step.
+leave the backward through every block unpriced; with gradient through the lookup this trainer logs that backward as
+`extra` FLOPs each step.
 
     python guard.py islands/placement/train.py --class e100kb --start s100 --out SUB --full '.*norm' --norm-lr 3e-3
 """
@@ -61,10 +62,11 @@ def unpriced_per_token(rec: dict, trainable: dict) -> int:
     return missing + 6 * int(adapters["embed"]) * rec["config"]["d_model"]
 
 
-def lm_logits(inner, idx: torch.Tensor, embed: torch.Tensor) -> torch.Tensor:
-    """model.LM's forward with the embedding given (the lookup and the tied head both read it)."""
+def lm_logits(inner, idx: torch.Tensor, embed: torch.Tensor, head_only: bool = False) -> torch.Tensor:
+    """model.LM's forward with the embedding given (the lookup and the tied head both read it; with `head_only` the lookup
+    reads it detached)."""
     t = idx.shape[1]
-    x = F.embedding(idx, embed)
+    x = F.embedding(idx, embed.detach() if head_only else embed)
     cos, sin = inner.cos[:t], inner.sin[:t]
     for b in inner.blocks:
         x = b(x, cos, sin)
@@ -82,6 +84,7 @@ def main() -> int:
     ap.add_argument("--rank", type=int, default=0, help="the matrices' adapter rank; 0: the largest that fits the cap")
     ap.add_argument("--embed-rank", type=int, default=0)
     ap.add_argument("--eot-prefix", action="store_true")
+    ap.add_argument("--embed-grad", default="full", choices=("full", "head"))
     ap.add_argument("--fmt", default="auto", choices=("auto", "full", "lora"),
                     help="auto: full (θ's dtype, exact) without adapters, else lora")
     ap.add_argument("--dtype", default="f16", choices=sorted(prepare.DTYPES), help="the lora format's storage dtype")
@@ -178,7 +181,8 @@ def main() -> int:
     opt = torch.optim.AdamW(groups, betas=(0.9, 0.95), fused=dev.startswith("cuda"))
     trainable = {"full": full, "adapters": {n: rank for n in lora} | ({"embed": embed_rank} if embed_rank else {})}
     tokens = a.batch * prepare.EVAL_CTX
-    extra = unpriced_per_token(rec, trainable) * tokens
+    head_only = a.embed_grad == "head"
+    extra = 0 if head_only else unpriced_per_token(rec, trainable) * tokens
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
     n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // per_step)
     if a.max_steps:
@@ -186,7 +190,7 @@ def main() -> int:
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     if embed_factor:
         A, B, s = embed_factor
-        fwd = torch.compile(lambda idx, A, B: lm_logits(net.inner, idx, net.inner.embed + s * (B @ A)))
+        fwd = torch.compile(lambda idx, A, B: lm_logits(net.inner, idx, net.inner.embed + s * (B @ A), head_only))
         logits_of = lambda x: fwd(x, A, B)  # noqa: E731
     else:
         fwd = torch.compile(net)
