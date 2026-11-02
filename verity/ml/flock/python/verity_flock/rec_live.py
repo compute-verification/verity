@@ -693,6 +693,53 @@ def round_after(entry: dict) -> bytes:
     return hashlib.sha512(canonical({k: v for k, v in entry.items() if k != "coins"}).encode()).digest()
 
 
+def tree_held_reason(log: list[str], sessions: list[tuple[str, dict, dict]]) -> str | None:
+    """Why the inner sessions ``sessions`` (each its name, its ``coin_tree`` and its coin server's record, ``public.json``)
+    don't show their coins to be the ones the challenger's release log ``log`` shows it sampled and opened; None when they
+    do. Each session's tree must be one the log sampled, under its key, nonce, root and spec, and no earlier session's; its
+    link points that tree's ``session`` round 0, opened after `link_after` of the record's ``link.roots``; each round of
+    its record its stream's round, opened after `round_after` of the round; and the log must show no tree and no opening
+    that no session records. `challenger.sessions_tree_reason` holds a `flock-circuit serve` session to the log the same
+    way, after what that server answers."""
+    from verity.core.protocols.sampled_proofs import challenger as C
+
+    trees, used = C.coin_trees_of(log), []
+    for name, tree, public in sessions:
+        why = _tree_held(trees, tree, public)
+        if why is None and tree["root"] in used:
+            why = C.SHARED_TREE
+        if why is not None:
+            return f"session {name}'s coins are not the challenger's: {why}"
+        used.append(tree["root"])
+    if len(used) != len(trees):
+        return f"the challenger's release log shows {len(trees)} coin trees and the sessions use {len(used)}: {C.UNUSED_TREE}"
+    return None
+
+
+def _tree_held(trees: dict, tree: dict, public: dict) -> str | None:
+    from verity.core.protocols.sampled_proofs import challenger as C
+
+    t = trees.get(tree.get("root")) if isinstance(tree, dict) else None
+    if t is None:
+        return C.NO_TREE
+    if canonical(tree) != canonical(t.record()):
+        return "its coin tree is not the one the challenger's release log shows it sampled under that root"
+    try:
+        link = public["link"]
+        asked = [(CT.SESSION, 0, link["points"], link_after({k: [bytes.fromhex(b) for b in v] for k, v in link["roots"].items()}))]
+        asked += [(r["stream"], r["k"], r["coins"], round_after(r)) for r in public["rounds"]]
+        got = [(s, k, len(cs), a.hex(), hashlib.sha512(b"".join(bytes.fromhex(c) for c in cs)).hexdigest()) for s, k, cs, a in asked]
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return "its coin server's record is not one rec_live writes (link {points, roots}, rounds [{stream, k, coins, ...}])"
+    for s, k, n, after, coins in got:
+        o = t.opening(s, k)
+        if o is None or (o.n, o.after, o.coins) != (n, after, coins):
+            return f"its {s} round {k} is not coins the challenger opened under its tree after what the coin server recorded"
+    if len(t.opened) != len(got):
+        return f"the challenger's release log shows {len(t.opened)} openings of its tree and its record {len(got)}"
+    return None
+
+
 class CoinServer:
     """The verifier's coin server: public data in, coins out, every exchange recorded (``record``). ``rand(n)`` returns n
     bytes (default the operating system's generator). ``tree``: the session's coin tree (`coin_tree.Spec`), from

@@ -88,8 +88,9 @@
 #              a test's coins, never the challenger's, out/inner/tree-source.txt says which)
 #              TREE_FROM=local: the challenger started on this node beside the run (pod/challenger.sh: its key and session
 #              secret in a scratch directory none of the prover's), its records under out/inner/challenger, and
-#              out/inner/tree-held.json its audit (challenger_audit, Python and Lean): every inner session's coins are the
-#              ones its signed release log shows it sampled and opened; the step fails otherwise
+#              out/inner/tree-held.json its audit (rec_inner.py tree-held, Python: rec_live.tree_held_reason): every inner
+#              session's coins are the ones its signed release log shows it sampled and opened after what rec_live's coin
+#              server recorded; the step fails otherwise
 #      RELEASE=0 (1: the recursive session through the ZK server's release side, live PROTOCOL.md §10.5, on the state
 #              directory $DD/fw: STEP=inner, one session (WARM=0 RUNS=1), opens it with V*'s statements as its parts in
 #              rec-statements' order and RELEASE_WINDOWS_S's schedule ($DD/release.json, rec_inner.py release-parts);
@@ -345,14 +346,15 @@ print("--parts", ",".join(r["parts"]), "--release-windows-ms", ",".join(map(str,
     mkdir -p $DD/inner/s0 && for f in $DD/inner/*; do case ${f##*/} in s0|schedule.json) ;; *) mv $f $DD/inner/s0/ ;; esac; done
   fi
   # TREE_FROM=local: the challenger exits once rec_live closed its session; every session's coins are its tree's, as the
-  # challenger's signed release log shows it sampled and opened them, in Python and Lean (challenger_audit), the audit
-  # also in out/inner/tree-held.json
+  # challenger's signed release log shows it sampled and opened them after what rec_live's coin server recorded
+  # (rec_inner.py tree-held), into out/inner/tree-held.json
   if [ $own = 1 ]; then
     TREE_FROM=local
     challenger_end $O/inner/challenger; echo "challenger exit $?"
     if [ $rc = 0 ]; then
-      challenger_audit $O/inner/challenger $DD/inner/s*/session || rc=1
-      cp $O/inner/challenger/audit.json $O/inner/tree-held.json
+      python3 verity/ml/flock/pod/rec_inner.py tree-held --challenger $O/inner/challenger $DD/inner/s* \
+        > $O/inner/tree-held.json || rc=1
+      cat $O/inner/tree-held.json
     fi
   fi
   return $rc
@@ -675,6 +677,10 @@ inner)
   again proxied
   SESS=$DD/inner/s$((NS - 1))
   [ -f $SESS/session/session.json ] || { tail -20 $O/inner/proxy/proxy.log $O/inner/proxy/prove.err; exit 1; }
+  if [ "${TREE_FROM:-}" = local ]; then
+    python3 -c 'import json, sys; sys.exit(0 if json.load(open(sys.argv[1]))["ok"] else 1)' $O/inner/tree-held.json \
+      || { echo "REFUSED: the inner sessions' coins are not the challenger's (out/inner/tree-held.json)"; exit 1; }
+  fi
   # CHECKS=0: the replay and V*'s hashing reference wait for STEP=icheck (CPU), outside the GPU lease
   if [ "${CHECKS:-1}" = 1 ]; then
   taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-proxy.txt env $INNER_COINS $B replay --instances $D/pub-$N.bin \

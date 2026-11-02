@@ -64,8 +64,9 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   session at a part that is late or refused. `rec_inner.py release-report` reads the ZK server's record against the
   schedule and the Lean loop's `FIREWALL-TIMES` lines (when it decided each part) into `out/oprove/release.json`; the step
   fails unless every part was released at its time. With `--env TREE_FROM=local` the challenger runs beside the inner
-  step, every inner coin is its coin tree's, and `challenger_audit` holds the inner session to its signed release log (in
-  Python and Lean, `out/inner/tree-held.json`). The result's `release` and the table's release-side section give each
+  step, every inner coin is its coin tree's, and `rec_inner.py tree-held` holds the inner session to its signed release log
+  (`out/inner/tree-held.json`, in Python alone: Lean's `challenger_session_trees` reads `flock-circuit serve`'s records,
+  whose rounds open after other bytes than rec_live's coin server's). The result's `release` and the table's release-side section give each
   part's window, release time, decision time, slack and prove wall; the headline's `released` is its verdict, and `ok`
   needs it. `--max-min` gives oprove twice its proving model (a window is about twice its part's prove) and the lead.
 - **The figures** (`figures.py`, the result's `figures` and the table's last section): the session's cost, its

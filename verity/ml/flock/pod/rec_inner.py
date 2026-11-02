@@ -32,6 +32,9 @@ statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the u
                                                              that session on the ZK server's record against its schedule:
                                                              each part's release time, when the Lean loop decided it, the
                                                              slack and the outcome; exit 1 unless every part was released
+    python rec_inner.py tree-held --challenger DIR SESSION...
+                                                             each rec_live session's coins held to the challenger's release
+                                                             log (tree_held); exit 1 unless every one is its tree's
 """
 from __future__ import annotations
 
@@ -275,6 +278,23 @@ def release_report(state: Path, session: str, times: list[dict]) -> dict:
             "schedule_ms": r and sum(r["windows_ms"])}
 
 
+def tree_held(challenger: Path, sessions: list[Path]) -> dict:
+    """Each rec_live session directory of ``sessions`` held to the release log in ``challenger`` (`rec_live.tree_held_reason`):
+    its coin server's record (``public.json``) and its coin tree (a stopped session's ``coin_tree.json``, else its session
+    record's ``coin_tree``)."""
+    from verity.core.protocols.sampled_proofs import remote as R
+
+    held = []
+    for d in sessions:
+        ct = d / "coin_tree.json"
+        tree = json.loads(ct.read_text()) if ct.exists() else json.loads((d / "session" / "session.json").read_text())["coin_tree"]
+        held.append((d.name, tree, json.loads((d / "public.json").read_text())))
+    why = RL.tree_held_reason(R.log_lines(challenger / R.RELEASES), held)
+    return {"sessions": [n for n, _, _ in held], "reason": why, "ok": why is None,
+            "held_by": "rec_live.tree_held_reason (Python): Lean's challenger_session_trees reads flock-circuit serve's "
+                       "records, not rec_live's coin server's"}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -307,7 +327,15 @@ def main(argv=None) -> int:
     rr.add_argument("--state", required=True)
     rr.add_argument("--session", required=True)
     rr.add_argument("--times", nargs="*", default=[], help="files holding the Lean session loop's FIREWALL-TIMES lines")
+    th = sp.add_parser("tree-held")
+    th.add_argument("--challenger", required=True, help="the challenger's directory (its releases.jsonl)")
+    th.add_argument("sessions", nargs="+", help="rec_live's session directories (public.json beside session/)")
     a = ap.parse_args(argv)
+    if a.cmd == "tree-held":
+        res = tree_held(Path(a.challenger), [Path(s) for s in a.sessions])
+        json.dump(res, sys.stdout, sort_keys=True, indent=1)
+        print()
+        return 0 if res["ok"] else 1
     if a.cmd == "release-parts":
         (line,) = [json.loads(ln[9:]) for ln in Path(a.statements).read_text().splitlines() if ln.startswith("RECVSTAR ")]
         units = [s[0] for s in line["statements"]]
