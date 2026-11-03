@@ -16,7 +16,7 @@ Masked.dataE`) masks the values `vs` gives at the opened coins the same way (`Ma
 states the switched session's side by pad index, as the firewall's words:
 
 * **`Loop.vsWord`**: table `j`'s rep `r` value `k` of `vs` at the opened coins, at the table's base on the tape (its
-  mask slot and extra lanes, which a table's values may read), as the firewall's word; `0` from `n_E` on.
+  mask slot and level 0's hiding, which a table's values may read), as the firewall's word; `0` from `n_E` on.
 * **`Loop.RowsOK`**: each table's rows hold at `vs` at its base, at every nonce, opened coins and tape at which none of
   the table's zerocheck outer coins is `1`. Where they fail the switched session commits its pads tree over the moved
   pads (`Table.swPads`), while the frame commits it over the drawn ones, so a rep's first round, which carries the pads
@@ -61,10 +61,10 @@ set_option smartUnfolding false in
 /-- **The rows at the honest values are the table's own**: where each rep's batched constraint holds at `w`'s view at
 every draw, the rows hold at `w` and the table's values. -/
 theorem rowsAt_vals {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
-    (T : Table F K W Salt Seed D Hi VL) (w : W) (u : T.Mask) (R : T.XLanes)
+    (T : Table F K W Salt Seed D Hi VL) (w : W) (u : T.Mask) (V : T.Vis)
     (h : ∀ (ω : T.Rand) (r : Fin 2),
       ∑ i, T.lam r (T.view w ω).pre i * T.hFull (ω.2.2.1 r) i = T.theta r (T.view w ω).pre) :
-    T.onVals.RowsAt (w, T.vals) u R :=
+    T.onVals.RowsAt (w, T.vals) u V :=
   fun ω _ _ r => h ω r
 
 end FlockSoundness.ZK.Table
@@ -80,14 +80,14 @@ open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 namespace Loop
 
 /-- **`vs`'s value at pad `k`** of table `j`'s rep `r`, at the opened coins `c` and at table `j`'s base on the tape `τ`
-(its mask slot and extra lanes), as the firewall's word; `0` from `n_E` on. -/
+(its mask slot and level 0's hiding, `Table.Vis`), as the firewall's word; `0` from `n_E` on. -/
 noncomputable def vsWord (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit)
     (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (k : ℕ) :
     _root_.Flock.F128 :=
   if hk : k < (tabC PE x j).z.nE then
     FlockLevel3.GF128.val (vs x w ν c j r (wtOf PE x w j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 ⟨k, hk⟩)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 ⟨k, hk⟩)
   else 0
 
 /-- **The rows hold at `vs`**: at every nonce, opened coins and tape, at each table none of whose zerocheck outer coins
@@ -99,7 +99,7 @@ def RowsOK (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) 
     (∀ (r : Fin 2), ∀ y ∈ (tabC PE x j).rOuter (czExe PE x c j) r, y ≠ 1) →
     ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, vs x w ν c j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1
 
 /-- **The rows hold at the honest values** at every witness in the deployed relation: each table's share is valid
 (`complete_tabC`), so it carries the public region data (`coinedOf_reg_of`), and the honest pads satisfy each rep's

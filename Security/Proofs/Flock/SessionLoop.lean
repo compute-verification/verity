@@ -1,5 +1,9 @@
 import Proofs.Flock.SessionLoop.Statement
 import Proofs.Flock.SessionLoop.TakenVals
+import Proofs.Flock.SessionLoop.FinalC
+import Proofs.Flock.SessionLoop.TakesTau
+import Proofs.Flock.SessionLoop.Inner
+import Proofs.Flock.SessionLoop.LiveInner
 import Proofs.Flock.Claims.ZK.FrameUnrefused
 import Proofs.Flock.SessionLoop.Link
 import Proofs.Flock.Claims.ZK.FinishSwFrame
@@ -27,6 +31,10 @@ import Proofs.Flock.Claims.ZK.FinishFwL0
 import Proofs.Flock.SessionLoop.FinishIsLoop
 import Proofs.Flock.SessionLoop.PiopState
 import Proofs.Flock.SessionLoop.CutPiopLive
+import Proofs.Flock.SessionLoop.CutInnerLive
+import Proofs.Flock.SessionLoop.InnerSlot
+import Proofs.Flock.SessionLoop.InnerUnrefused
+import Proofs.Flock.SessionLoop.LiveInnerAt
 import Proofs.Flock.SessionLoop.PcsRank
 import Proofs.Flock.SessionLoop.SchedUnrefused
 import Proofs.Flock.SessionLoop.LiveSchedOwn
@@ -71,6 +79,14 @@ theorem realTabs_realOf {R : Type}
       · rename_i t ht
         cases h
         exact ⟨g, d, l, hl, ht⟩
+
+/-- **Every worker that reads only what the workers see is a pad-blind one** (`Loop.blind`): one that returns the same
+at two tapes alike there (`Masked.seenOf`) and two histories whose answers carry the same coins (`CoinLayer.rd`). -/
+theorem exists_blind (L : LeanRelease Flock.Wit
+    ((ZKMal.CoinLayer.session loopNr ZKMal.Masked.dataE).refP.Nonce ×
+      (ZKMal.CoinLayer.session loopNr ZKMal.Masked.dataE).refP.Rand))
+    {wk : L.toSrv.Worker} (hb : L.toSrv.Blind ZKMal.Masked.seenOf ZKMal.CoinLayer.rd wk) : ∃ bw, blind L bw = wk :=
+  hb.exists_lift ZKMal.Masked.seenOf_surjective
 
 end Claims.ZKServer.Loop
 

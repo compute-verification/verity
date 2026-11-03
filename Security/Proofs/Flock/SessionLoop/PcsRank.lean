@@ -49,9 +49,7 @@ theorem forIn_go_cut {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep σ)
       l'.toList = l.toList ++ (List.range a).map B →
       ((forIn (List.range' a k) s body).run (T a)).go l' =
         (.error e, l ++ ((List.range (i + 1)).map B).toArray) by
-    first
-    | exact h n 0 s₀ l (Nat.zero_le _) (by omega) (by omega) (by simp)
-    | simpa using h n 0 s₀ l (Nat.zero_le _) (by omega) (by omega) (by simp)
+    exact h n 0 s₀ l (Nat.zero_le _) (by omega) (by omega) (by simp)
   intro k
   induction k with
   | zero =>
@@ -179,8 +177,7 @@ theorem openStep_switch_at (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (d
     exact FlockComplete.bind_go_err hL
   have e2 := congrArg Array.toList (Prod.mk.inj (hro.symm.trans e)).2
   rw [hL', hpe, empty_toList, hna] at e2
-  simp only [Array.toList_append, List.toList_toArray, Array.toList_empty, List.nil_append, Array.size_empty,
-    Nat.sub_zero] at e2
+  simp only [Array.toList_append, List.nil_append, Array.size_empty, Nat.sub_zero] at e2
   exact e2.symm
 
 /-- **A rep's schedule fed `a` of the opening's coins**, up to `γ`'s: past its algebraic phase it holds the ring
@@ -399,6 +396,7 @@ theorem rank_unrefused_sched (T : ZKMal.CoinLayer.TableData)
     rw [hjj]
     exact getElem!_pos _ j hj
   have hstj : (Masked.stsOf x)[j]! = (Masked.stsOf x)[j] := getElem!_pos _ j hj
+  have hk6 : 6 ≤ (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog := by rw [hst]; exact y.wf.1.hk6
   have hm14 : 14 ≤ (Masked.stsOf x)[j].m := by have := (hall j hj).1; omega
   have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]; exact y.hz
@@ -468,7 +466,7 @@ theorem rank_unrefused_sched (T : ZKMal.CoinLayer.TableData)
   rw [hz, Except.ok.injEq, Prod.mk.injEq] at htp
   obtain ⟨htsch, -⟩ := htp
   obtain ⟨hm36, hk0, hn, hq⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule _ = .ok (t.sch, y.tPad))
-  obtain ⟨-, hdom', -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
+  obtain ⟨-, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph
   have hls : (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0).size =
       min (loopNr x 0) _root_.Flock.Firewall.Frames.COIN_MAX := by

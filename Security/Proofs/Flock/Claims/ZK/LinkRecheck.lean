@@ -79,7 +79,7 @@ theorem _root_.FlockSoundness.Discharge.ZkView.Coined.swContent_inl {K W Hi VL :
     {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (v : T.tab.Vals) (b : ZkView.Base z Hi)
     (p : Fin (z.nS + z.nU)) : T.swContent w v b (.inl p) = T.content w b (.inl p) := by
   unfold ZkView.Coined.swContent
-  by_cases h : T.tab.onVals.RowsAt (w, v) b.1 b.2.1.2.1
+  by_cases h : T.tab.onVals.RowsAt (w, v) b.1 b.2.1
   · rw [if_pos h] <;> rfl
   · rw [if_neg h] <;> rfl
 

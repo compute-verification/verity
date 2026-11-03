@@ -684,7 +684,7 @@ import Proofs.Flock.Claims.ZK.RepRet
   reps the worker's rows hold at every pad (**`Composed.rowsAt_of_rows`**, `Table.RowsAt`).
 * `FinishStopAt`: that stop at a `--zk` table's own draw. Where, at each rep, the firewall's constraints are the first
   seven rows on the view's masked values and none fails on the drawn pads, the worker's rows hold at the draw's mask slot
-  and extra lanes (**`Composed.rowsAt_of_cons`**), so the switched view is the worker's own.
+  and level 0's hiding (**`Composed.rowsAt_of_cons`**), so the switched view is the worker's own.
 * `FinishSwSrc`: the switched prover's rep source, `tabSrcCut` of the switched cut at the workers' values
   (`Masked.swSrcE`, `Masked.swCutE`, `RefSession.swCutOf`), the source `FinishSrc`'s premises are to be met at for
   `FinishIs`. Where a table's rows hold at its base, its masked values are the worker's view's
@@ -948,7 +948,8 @@ import Proofs.Flock.Claims.ZK.RepRet
   reads (`real_bounds`, with `sched_bounds` by `decide +kernel`).
 * `FrameRep`: the session loop places a rep's rounds as `Drive.reqs` does: at a rep whose kept algebraic phase and
   opening are the schedule so far on its coins (`RepInv`), `Frames.placeOf` places its next round at that schedule's
-  round there, the inner proof's own past it (`placeOf_sched`), and the rep after the round's coins keeps `RepInv`.
+  round there, the inner proof's own past it (`placeOf_sched`; `Frames.roundPlace` places that at `.sched` of the frame's
+  own round, `Frame.innerSched`), and the rep after the round's coins keeps `RepInv`.
 * `FrameInner`: at the inner proof's rounds the frame takes only the firewall's own round (`innerOwn_inv`,
   `roundFree_own_frames`), and where the deployed frame's check releases one, the placeholder's own round at zero pads
   (`ZeroCfg`) from the same state but for `stopped` leaves the same state but for `stopped`: past the inner proof's
