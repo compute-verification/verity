@@ -426,6 +426,10 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
     used = re.search(r"(\d+) ladder points(?: \((art:\w+)\))?", json.loads(fit.read_text()).get("source") or ""
                      ) if fit.exists() else None
     res["ladder_used"] = {"points": int(used[1]), "art": used[2]} if used else None
+    c = subprocess.run([sys.executable, "-c", "import json; from te_core import algorithm_policy as a; "
+                        "print(json.dumps(list(a.CONSOLE)))"], cwd=RESCORE_WT / "benchmarks" / "covert_witness",
+                       capture_output=True, text=True, check=False)
+    res["console"] = json.loads(c.stdout) if not c.returncode else None
     return res
 
 
@@ -560,7 +564,9 @@ def main() -> int:
             "pilot_start": sum(v == "pilot-start" for v in (fr.get("skipped") or {}).values()),
             "rule": "H and W* over every checkpoint (19:50Z)"}
     if policy:
-        meta["algorithm_policy"] = {k: v for k, v in policy.items() if k not in ("coverage", "ladder", "ladder_used")}
+        meta["algorithm_policy"] = {k: v for k, v in policy.items()
+                                    if k not in ("coverage", "ladder", "ladder_used", "console")}
+        meta["console"] = policy.get("console")
         if "ladder" in policy:
             meta["ladder_points"], meta["ladder_used"] = policy["ladder"], policy.get("ladder_used")
         apc = out / "algorithm-policy" / "console" / "algorithm-policy.json"
@@ -749,11 +755,11 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
           else "; Δ_t not priced (this te_core has none)")
     v3_said = ", ".join(f"{s} {x['records']} ({x['checkpoints']} checkpoints)" for s, x in meta["v3"].items()
                         if x["records"]) or "none measured yet"
-    ap, cells = meta.get("algorithm_policy") or {}, meta.get("algorithm_policy_cells") or {}
+    ap, cells, ck = meta.get("algorithm_policy") or {}, meta.get("algorithm_policy_cells") or {}, meta.get("console")
     cells_said = (f" (every row: reading {'/'.join(cells.get('reading') or ['–'])}, te_core "
                   f"{'/'.join(cells.get('te_core') or ['–'])}"
-                  + (", rho_console at c = 5,120 x 2 x 45e6 x 740 gates, k = 65,536 bits" if cells.get("rho_console")
-                     else "")
+                  + ((f", rho_console at te_core's console c = {ck[0]:.6g} gates, k = {ck[1]:,.0f} bits" if ck
+                      else ", rho_console at te_core's console c") if cells.get("rho_console") else "")
                   + (f", the one bound's binding kind {'/'.join(cells['binding_kind'])} with what it rests on and each "
                      "kind's term (reduction and update as sensitivities, 08:26Z)" if cells.get("binding_kind") else "")
                   + ", rho_default)" if cells else "")
