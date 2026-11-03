@@ -30,11 +30,12 @@ appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules ho
   session that asks meanwhile waits (``wait``) and takes the slot after (``slot``), so each ``slot`` event is followed by its
   session's outcome before the next one. A holder that ended before its outcome (killed, say) is recorded as its session's
   stop by the next session to take the slot, if its session was opened.
-* **A stream stops at its failure budget.** A stream opened with ``budget`` b (the challenger's stream's ``budget``, P1, at
-  least `BUDGET_MIN`) refuses every outer session and every open after its b-th failure: a recursive session's stop, or a
-  refusal of a recursive session that had neither stopped nor released its last statement, on a stream that had not
-  stopped. It refuses an open while its unended recursive sessions (opened on it, neither stopped nor released whole) and
-  its failures together reach b, so at most b of its recursive sessions ever have a statement not released.
+* **A stream stops at its failure budget.** A stream opened with ``budget`` b (the challenger's stream's ``budget``, P1, a
+  public parameter of the deployment, at least `BUDGET_MIN`) refuses every outer session and every open after its b-th
+  failure: a recursive session's stop, or a refusal of a recursive session that had neither stopped nor released its last
+  statement, on a stream that had not stopped. It refuses an open while its unended recursive sessions (opened on it,
+  neither stopped nor released whole) and its failures together reach b, so at most b of its recursive sessions ever have
+  a statement not released.
 * **Proofs leave at public times.** A recursive session opened with a ``release`` schedule (``start_ms``, and one window a
   statement, ``windows_ms``) releases statement j's proofs at ``start_ms + windows_ms[0] + ... + windows_ms[j]``: proofs
   ready early wait, and proofs not ready by then are a stop. Only the Lean ZK server keeps the times; this module's relay
@@ -82,8 +83,8 @@ KIND = "firewall/v0"
 INNER = "inner"
 #: an outer session's proofs, one a rep (2 at K = 4096)
 PROOFS = 2
-#: the least failure budget a stream is opened with
-BUDGET_MIN = 3
+#: the least failure budget a stream is opened with (b, a public parameter of the deployment): at 0 every open is refused
+BUDGET_MIN = 1
 
 
 class Refused(Exception):

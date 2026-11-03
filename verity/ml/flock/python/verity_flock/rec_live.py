@@ -1372,10 +1372,10 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     opens a recursive session on ``stream`` with its V* statements in their order (``parts``, public, from K: L0–L6 and the
     algebra at K = 4096), its id in the session directory's ``firewall.json``: a stop is that recursive session's stop, so
     the ZK server serves none of its outer sessions, and a finished session lets them be served, in that order, each once.
-    ``budget`` is the stream's failure budget (the challenger's stream's ``budget``, at least
-    `verity_flock.firewall.BUDGET_MIN`), which a firewall needs: without one, or with a lesser one, ``serve`` raises
-    before it listens, since a stream without a budget bounds none of its recursive sessions; once the stream has stopped
-    at it, or its
+    ``budget`` is the stream's failure budget (the challenger's stream's ``budget``, a public parameter of the deployment,
+    at least `verity_flock.firewall.BUDGET_MIN`), which a firewall needs: without one, or with a lesser one, ``serve``
+    raises before it listens, since a stream without a budget bounds none of its recursive sessions; once the stream has
+    stopped at it, or its
     unended recursive sessions and its failures reach it, a connection is closed before anything is served and ``serve``
     returns. ``release`` (``{"windows_ms": [one a
     statement]}``, public) is each recursive session's release schedule, its ``start_ms`` the time (``now_ms``) its
@@ -1526,7 +1526,8 @@ def main(argv=None) -> int:
     ap.add_argument("--parts", metavar="L0,L1,...,alg",
                     help="each recursive session's V* statements in their order, the only order served (required with --firewall)")
     ap.add_argument("--budget", type=int,
-                    help="the stream's failure budget, the challenger's stream's, at least 3 (required with --firewall)")
+                    help="the stream's failure budget, the challenger's stream's, a public parameter of the deployment, "
+                         "at least 1 (required with --firewall)")
     ap.add_argument("--release-windows-ms", metavar="W0,W1,...",
                     help="the release schedule's public window a statement, in ms: statement j leaves at the connection's time "
                          "plus W0 + ... + Wj (--firewall)")
@@ -1553,7 +1554,7 @@ def main(argv=None) -> int:
     if a.firewall and a.parts is None:
         ap.error("--firewall needs --parts: each recursive session's V* statements in their order (L0–L6,alg at K = 4096)")
     if a.firewall and a.budget is None:
-        ap.error("--firewall needs --budget: the stream's failure budget, the challenger's stream's, at least 3; a stream "
+        ap.error("--firewall needs --budget: the stream's failure budget, the challenger's stream's, at least 1; a stream "
                  "without one bounds none of its recursive sessions")
     if a.lean and a.coin_tree:
         ap.error("--lean: the Lean firewall holds no coin tree")

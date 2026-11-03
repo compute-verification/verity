@@ -19,9 +19,11 @@ from verity_flock import firewall as FW
 import test_firewall_release as F
 
 NAMES = ("L0", "L1", "alg")
-#: the streams' budgets: two at least `BUDGET_MIN`, and one with none, which shares the slot with them
-BUDGETS = {"s": FW.BUDGET_MIN, "t": FW.BUDGET_MIN + 1, "u": None}
+#: the streams' budgets: b = 1 to 4, and one with none, which shares the slot with them
+BUDGETS = {"p": 1, "q": 2, "s": 3, "t": 4, "u": None}
 SEEDS, STEPS = range(16), 200
+#: the one stream's budget in the tests of a single history
+B = 3
 
 
 def _unreleased(record: list[dict], stream: str) -> int:
@@ -103,8 +105,8 @@ def _history(fw: FW.Firewall, seed: int, steps: int, bounded: bool = True) -> tu
 
 def test_at_most_its_budget_of_a_streams_recursive_sessions_have_a_statement_not_released(tmp_path):
     """Over `SEEDS`' histories, after every op: at most b of each budgeted stream's recursive sessions have a statement not
-    released, and the bound is reached on both streams. Every outcome of an outer session occurs, and opens are refused
-    for the unended rule."""
+    released, and the bound is reached on each, at b = 1 to 4. Every outcome of an outer session occurs, and opens are
+    refused for the unended rule."""
     most, seen = {t: 0 for t, b in BUDGETS.items() if b is not None}, Counter()
     for seed in SEEDS:
         m, s = _history(FW.Firewall(tmp_path / f"fw-{seed}"), seed, STEPS)
@@ -136,7 +138,7 @@ def test_a_relay_that_ends_while_it_is_seated_leaves_the_record_as_it_was(tmp_pa
     session not yet being the stream's), so it opens unstopped, one of the stream's unended, and the stream's next open
     past its budget is refused."""
     fw, log = FW.Firewall(tmp_path / "fw"), []
-    first = fw.open("s", list(NAMES), budget=FW.BUDGET_MIN)
+    first = fw.open("s", list(NAMES), budget=B)
     fw.finish(first)
     record = tmp_path / "fw" / "record.jsonl"
     before = record.read_bytes()
@@ -160,18 +162,18 @@ def test_a_relay_that_ends_while_it_is_seated_leaves_the_record_as_it_was(tmp_pa
     out, _ = F._outer(fw, first, "L0", F.HONEST, F.Challenger(log, "first"))
     assert out["outcome"] == "release" and [(e["event"], e["session"]) for e in fw.record()[-2:]] == [
         ("slot", first), ("release", first)]
-    assert [fw.open("s", list(NAMES), budget=FW.BUDGET_MIN) for _ in range(FW.BUDGET_MIN - 1)] == ["r0001", "r0002"]
+    assert [fw.open("s", list(NAMES), budget=B) for _ in range(B - 1)] == ["r0001", "r0002"]
     assert fw.stopped("r0001") is None and fw.failures("s") == 0 and {name for name, _ in log} == {"first"}
     with pytest.raises(FW.Refused, match=r"stream s's unended recursive sessions and failures reach its failure budget "
                                          r"\(3 and 0 of 3\)"):
-        fw.open("s", list(NAMES), budget=FW.BUDGET_MIN)
+        fw.open("s", list(NAMES), budget=B)
 
 
 def test_a_seat_on_a_record_whose_last_line_has_no_newline_writes_nothing(tmp_path):
     """The slot's line would join a last line without its newline, so the Lean ZK server's ``seat`` fails at its
     admission's read and writes nothing; `Firewall.seat` does the same, and holds no slot after."""
     fw = FW.Firewall(tmp_path / "fw")
-    fw.finish(fw.open("s", list(NAMES), budget=FW.BUDGET_MIN))
+    fw.finish(fw.open("s", list(NAMES), budget=B))
     record = tmp_path / "fw" / "record.jsonl"
     record.write_bytes(record.read_bytes()[:-1])
     before = record.read_bytes()
@@ -190,16 +192,16 @@ def test_no_stop_is_recorded_of_a_session_not_yet_opened(tmp_path):
     ``stop`` of that id, record no stop of it, so it opens unstopped, one of its stream's unended, and the stream's open
     past its budget is refused; at most b of its sessions ever have a statement not released."""
     fw = FW.Firewall(tmp_path / "fw")
-    for k in range(2 * FW.BUDGET_MIN):
+    for k in range(2 * B):
         assert fw.stop(f"r{k:04d}", FW.INNER, "rec proxy: the session ended without Finish") is False
         with fw.slot(f"r{k:04d}", "L0"):
             pass
         with fw.slot("r9999", "L0"):
             pass
         try:
-            fw.open("s", list(NAMES), budget=FW.BUDGET_MIN)
+            fw.open("s", list(NAMES), budget=B)
         except FW.Refused as e:
             assert "unended recursive sessions and failures reach its failure budget (3 and 0 of 3)" in str(e)
-        assert _unreleased(fw.record(), "s") <= FW.BUDGET_MIN
+        assert _unreleased(fw.record(), "s") <= B
     assert not any(e["event"] == "stop" for e in fw.record()) and fw.failures("s") == 0
-    assert _unreleased(fw.record(), "s") == FW.BUDGET_MIN
+    assert _unreleased(fw.record(), "s") == B
