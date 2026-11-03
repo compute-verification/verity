@@ -252,14 +252,14 @@ theorem slotDesign_law (rule : Select.Rule) (d : Program) (query : Json) (table 
 
 /-- **`Slots.layout`'s partition** as the claims read it: one class, the units' proof blocks' gates in unit order, split
 into runs of the strata's sizes. -/
-theorem slotPartition_layout (f : FileUnits) (ns : Array ℕ) :
+theorem slotPartition_layout (f : FilePart.FilePart) (ns : Array ℕ) :
     Properties.SampledProofs.slotPartition (Slots.layout f ns) =
       ⟨[ns.toList.splitLengths ((List.range f.n).map fun u =>
-        Properties.SampledProofs.puGates ({ unit := some u, gates := f.block u } : Slots.ProofBlock))]⟩ := by
+        Properties.SampledProofs.puGates (Slots.blockOf f u))]⟩ := by
   obtain ⟨pop, hc, hp⟩ := layout_classes f ns
   have key : pop.toList.map (fun s => s.toList.map Properties.SampledProofs.puGates) =
       ns.toList.splitLengths ((List.range f.n).map fun u =>
-        Properties.SampledProofs.puGates ({ unit := some u, gates := f.block u } : Slots.ProofBlock)) := by
+        Properties.SampledProofs.puGates (Slots.blockOf f u)) := by
     have := congrArg (List.map (List.map Properties.SampledProofs.puGates)) hp
     rw [List.map_map, ← splitLengths_map, List.map_map] at this
     exact this

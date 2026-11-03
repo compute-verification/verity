@@ -440,8 +440,8 @@ theorem first_wf (rule : Select.Rule) (d : Program) (query : Json) (table : Opti
 (`Properties.SampledProofs.DesignWellFormed`). -/
 theorem designWellFormed : DesignWellFormed := by
   intro rule cf d query table l D hl hD
-  obtain ⟨ns, hns, rfl⟩ := fileLayout_ok cf d query l hl
-  obtain ⟨S₀, hS₀, -, hsz⟩ := strataSizes_ok d query ns hns
+  obtain ⟨S₀, ns, hS₀, hns, rfl⟩ := fileLayout_ok cf d query l hl
+  obtain ⟨-, hsz⟩ := sizes_ok S₀ ns hns
   obtain ⟨rs, he, rfl⟩ := strata_ok d query S₀ hS₀
   set S := Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)) with hS
   have hperm : (popUnits S).Perm (List.range' 0 (Flock.TemplateQuery.population rs)) :=
@@ -457,13 +457,13 @@ theorem designWellFormed : DesignWellFormed := by
     obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hm
     exact strataOf_pos _ (partition_covered d query rs he) p hp
   suffices h : ∀ first : OneStage, first.WellFormed (S.toList.map fun p => rsSize p.2) →
-      (⟨[first]⟩ : Design).WellFormed (slotPartition (Slots.layout (FileUnits.ofCircuit cf ns.toList.sum) ns)) by
+      (⟨[first]⟩ : Design).WellFormed (slotPartition (Slots.layout (FilePart.ofCircuit cf ns.toList.sum) ns)) by
     rcases hDc with ⟨-, rfl⟩ | ⟨hne, parsed, hp, rfl⟩
     · exact h .all trivial
     · exact h _ (first_wf rule d query table n named derived parsed S (strata_eq d query rs he) hne hnamed hd hp
         hsum hpos)
   intro first hf
-  obtain ⟨c, hc, hs, -⟩ := slotPartition_strata (FileUnits.ofCircuit cf ns.toList.sum) ns rfl
+  obtain ⟨c, hc, hs, -⟩ := slotPartition_strata (FilePart.ofCircuit cf ns.toList.sum) ns rfl
   rw [hc]
   refine ⟨rfl, fun p hp => ?_⟩
   simp only [List.zip_cons_cons, List.zip_nil_left, List.mem_cons, List.not_mem_nil, or_false] at hp

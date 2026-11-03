@@ -309,36 +309,32 @@ theorem toList_expandArr (ranges : Array (ℕ × ℕ)) :
     (ranges.flatMap fun (r : ℕ × ℕ) => (Array.range (r.2 - r.1)).map (r.1 + ·)).toList = expand ranges.toList := by
   simp [expand, Array.toList_flatMap, List.range'_eq_map_range]
 
-/-- A `forIn` in `Except` whose every step yields keeps an invariant of the prefix it has read. -/
-theorem forIn_yield_inv {α β ε : Type} (I : List α → β → Prop) (f : α → β → Except ε (ForInStep β))
-    (hf : ∀ pre a b, I pre b → ∀ s, f a b = .ok s → ∃ c, s = .yield c ∧ I (pre ++ [a]) c) :
-    ∀ (l pre : List α) (b : β), I pre b → ∀ b', forIn l b f = .ok b' → I (pre ++ l) b'
+/-- A `forIn` in `Option` whose every step yields keeps an invariant of the prefix it has read. -/
+theorem forIn_yield_inv_opt {α β : Type} (I : List α → β → Prop) (f : α → β → Option (ForInStep β))
+    (hf : ∀ pre a b, I pre b → ∀ s, f a b = some s → ∃ c, s = .yield c ∧ I (pre ++ [a]) c) :
+    ∀ (l pre : List α) (b : β), I pre b → ∀ b', forIn l b f = some b' → I (pre ++ l) b'
   | [], pre, b, hb, b', h => by
-    simp only [List.forIn_nil] at h; obtain rfl := Except.ok.inj h; simpa using hb
+    simp only [List.forIn_nil] at h; obtain rfl := Option.some.inj h; simpa using hb
   | a :: l, pre, b, hb, b', h => by
     rw [List.forIn_cons] at h
     cases hs : f a b with
-    | error e => rw [hs] at h; exact absurd h (by rw [bind_error]; simp)
-    | ok s =>
-      rw [hs, bind_ok] at h
+    | none => rw [hs] at h; exact absurd h (by simp)
+    | some s =>
+      rw [hs] at h
       obtain ⟨c, rfl, hc⟩ := hf pre a b hb s hs
-      have := forIn_yield_inv I f hf l (pre ++ [a]) c hc b' h
+      have := forIn_yield_inv_opt I f hf l (pre ++ [a]) c hc b' (by simpa using h)
       simpa using this
 
-/-- **The registration's strata sizes** (`Slots.strataSizes`): where they are given, the strata of the program under
-the query (`Partition.strata`), read stratum by stratum, are the units `0, 1, …, N − 1` in order, `N` the sizes' sum,
-and each size is its stratum's units. -/
-theorem strataSizes_ok (d : Program) (query : Lean.Json) (ns : Array ℕ) (h : Slots.strataSizes d query = .ok ns) :
-    ∃ S, Partition.strata d query = .ok S ∧
-      (S.toList.flatMap fun s => expand s.2.toList) = List.range' 0 ns.toList.sum ∧
+/-- **The registration's strata sizes** (`FilePart.sizes`): where they are given, the strata (`Partition.strata`), read
+stratum by stratum, are the units `0, 1, …, N − 1` in order, `N` the sizes' sum, and each size is its stratum's units. -/
+theorem sizes_ok (S : Array (String × Array (ℕ × ℕ))) (ns : Array ℕ) (h : FilePart.sizes S = some ns) :
+    (S.toList.flatMap fun s => expand s.2.toList) = List.range' 0 ns.toList.sum ∧
       ns.toList = S.toList.map fun s => (expand s.2.toList).length := by
-  unfold Slots.strataSizes at h
-  obtain ⟨S, hS, h⟩ := bind_eq_ok.1 h
-  refine ⟨S, hS, ?_⟩
-  obtain ⟨st, hst, h⟩ := bind_eq_ok.1 h
-  obtain rfl := (Except.ok.inj h).symm
+  unfold FilePart.sizes at h
+  obtain ⟨st, hst, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain rfl := (Option.some.inj h).symm
   rw [← Array.forIn_toList] at hst
-  have key := forIn_yield_inv (fun pre (st : ℕ × Array ℕ) =>
+  have key := forIn_yield_inv_opt (fun pre (st : ℕ × Array ℕ) =>
       (pre.flatMap fun p => expand p.2.toList) = List.range' 0 st.1 ∧
         st.2.toList = pre.map fun p => (expand p.2.toList).length) _ ?_ S.toList [] (0, #[]) (by simp) st hst
   · rw [List.nil_append] at key
@@ -349,10 +345,10 @@ theorem strataSizes_ok (d : Program) (query : Lean.Json) (ns : Array ℕ) (h : S
     rw [h1, h2, hlen]
   · rintro pre ⟨t, rs⟩ ⟨at_, ns₀⟩ ⟨hI1, hI2⟩ s hs
     dsimp only at hs hI1 hI2
-    obtain ⟨at', hin, hs⟩ := bind_eq_ok.1 hs
-    obtain rfl := (Except.ok.inj hs).symm
+    obtain ⟨at', hin, hs⟩ := Option.bind_eq_some_iff.1 hs
+    obtain rfl := (Option.some.inj hs).symm
     rw [← Array.forIn_toList] at hin
-    have inner := forIn_yield_inv (fun pre (a : ℕ) => expand pre = List.range' at_ (a - at_) ∧ at_ ≤ a) _ ?_
+    have inner := forIn_yield_inv_opt (fun pre (a : ℕ) => expand pre = List.range' at_ (a - at_) ∧ at_ ≤ a) _ ?_
       rs.toList [] at_ (by simp [expand]) at' hin
     · rw [List.nil_append] at inner
       obtain ⟨hi1, hi2⟩ := inner
@@ -368,11 +364,11 @@ theorem strataSizes_ok (d : Program) (query : Lean.Json) (ns : Array ℕ) (h : S
     · rintro pre ⟨a, b⟩ a₀ ⟨hJ1, hJ2⟩ s hs
       dsimp only at hs
       split at hs
-      · exact absurd hs (by simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind])
+      · exact absurd hs (by simp)
       · rename_i hc
         simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, decide_eq_true_eq, not_or, not_not, not_lt] at hc
         obtain ⟨rfl, hab⟩ := hc
-        obtain rfl := (Except.ok.inj hs).symm
+        obtain rfl := (Option.some.inj hs).symm
         refine ⟨b, rfl, ?_, by omega⟩
         rw [show expand (pre ++ [(a, b)]) = expand pre ++ List.range' a (b - a) by simp [expand], hJ1]
         have := List.range'_append_1 (s := at_) (m := a - at_) (n := b - a)
@@ -401,11 +397,10 @@ theorem fold_extract {α : Type} (bs : Array α) : ∀ (l : List ℕ) (acc : Arr
     simp [Array.toList_extract, List.extract, List.drop_drop]
 
 /-- **`Slots.layout`'s one class**: the units' proof blocks in unit order, each its unit at its positions in the circuit
-file (`FileUnits.block`), split into runs of the strata's sizes. -/
-theorem layout_classes (f : FileUnits) (ns : Array ℕ) :
+file (`Slots.blockOf`, `FilePart.block` as intervals), split into runs of the strata's sizes. -/
+theorem layout_classes (f : FilePart.FilePart) (ns : Array ℕ) :
     ∃ pop : Array (Array Slots.ProofBlock), (Slots.layout f ns).classes = #[pop] ∧
-      pop.toList.map Array.toList = ns.toList.splitLengths
-        ((List.range f.n).map fun u => ({ unit := some u, gates := f.block u } : Slots.ProofBlock)) := by
+      pop.toList.map Array.toList = ns.toList.splitLengths ((List.range f.n).map (Slots.blockOf f)) := by
   unfold Slots.layout
   dsimp only
   refine ⟨_, rfl, ?_⟩
@@ -413,24 +408,28 @@ theorem layout_classes (f : FileUnits) (ns : Array ℕ) :
   simp [Array.toList_range]
 
 /-- **`Slots.layout`'s proof blocks** are the units', in unit order, where its strata cover the units. -/
-theorem layout_blocks (f : FileUnits) (ns : Array ℕ) (h : f.n ≤ ns.toList.sum) :
-    (Slots.layout f ns).blocks.toList =
-      (List.range f.n).map fun u => ({ unit := some u, gates := f.block u } : Slots.ProofBlock) := by
+theorem layout_blocks (f : FilePart.FilePart) (ns : Array ℕ) (h : f.n ≤ ns.toList.sum) :
+    (Slots.layout f ns).blocks.toList = (List.range f.n).map (Slots.blockOf f) := by
   obtain ⟨pop, hc, hp⟩ := layout_classes f ns
   have : (Slots.layout f ns).blocks.toList = (pop.toList.map Array.toList).flatten := by
     simp [Slots.Layout.blocks, hc]
   rw [this, hp, List.flatten_splitLengths]
   simpa using h
 
-/-- **`Slots.fileLayout`'s steps**: the registration's strata sizes, and `Slots.layout` of the circuit file's summary at
-their sum. -/
+/-- **`Slots.fileLayout`'s steps**: the registration's strata (`Partition.strata`) and their sizes (`FilePart.sizes`),
+and `Slots.layout` of the circuit file's summary (`FilePart.ofCircuit`) at their sum. -/
 theorem fileLayout_ok (c : Flock.Circuit) (d : Program) (query : Lean.Json) (l : Slots.Layout)
     (h : Slots.fileLayout c d query = .ok l) :
-    ∃ ns, Slots.strataSizes d query = .ok ns ∧ l = Slots.layout (FileUnits.ofCircuit c ns.toList.sum) ns := by
+    ∃ S ns, Partition.strata d query = .ok S ∧ FilePart.sizes S = some ns ∧
+      l = Slots.layout (FilePart.ofCircuit c ns.toList.sum) ns := by
   unfold Slots.fileLayout at h
-  obtain ⟨ns, hns, h⟩ := bind_eq_ok.1 h
-  refine ⟨ns, hns, ?_⟩
-  rw [← (Except.ok.inj h), ← Array.foldl_toList, foldl_add, zero_add]
+  obtain ⟨S, hS, h⟩ := bind_eq_ok.1 h
+  cases hns : FilePart.sizes S with
+  | none => rw [hns] at h; exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
+  | some ns =>
+    rw [hns] at h
+    refine ⟨S, ns, hS, hns, ?_⟩
+    rw [← (Except.ok.inj h), ← Array.foldl_toList, foldl_add, zero_add]
 
 /-- **The slots `checked` lists**: `v` is one when slot `v` holds a proof block whose unit is proved. -/
 theorem mem_checked (l : Slots.Layout) (proved : Array ℕ) (v : ℕ) :
@@ -449,13 +448,12 @@ theorem mem_checked (l : Slots.Layout) (proved : Array ℕ) (v : ℕ) :
 
 /-- **The checked slots of `Slots.layout`** are the proved units, where its strata cover the units: slot `v` is unit
 `v`. -/
-theorem mem_checked_layout (f : FileUnits) (ns : Array ℕ) (h : f.n ≤ ns.toList.sum) (proved : Array ℕ) (v : ℕ) :
-    v ∈ Slots.checked (Slots.layout f ns) proved ↔ v < f.n ∧ v ∈ proved := by
+theorem mem_checked_layout (f : FilePart.FilePart) (ns : Array ℕ) (h : f.n ≤ ns.toList.sum) (proved : Array ℕ)
+    (v : ℕ) : v ∈ Slots.checked (Slots.layout f ns) proved ↔ v < f.n ∧ v ∈ proved := by
   have hb := layout_blocks f ns h
   have hsize : (Slots.layout f ns).blocks.size = f.n := by
     rw [← Array.length_toList, hb, List.length_map, List.length_range]
-  have hget : ∀ (hv : v < (Slots.layout f ns).blocks.size),
-      (Slots.layout f ns).blocks[v] = ({ unit := some v, gates := f.block v } : Slots.ProofBlock) := by
+  have hget : ∀ (hv : v < (Slots.layout f ns).blocks.size), (Slots.layout f ns).blocks[v] = Slots.blockOf f v := by
     intro hv
     have := List.getElem_of_eq hb (by rw [Array.length_toList]; exact hv)
     rw [Array.getElem_toList, List.getElem_map, List.getElem_range] at this
@@ -464,10 +462,10 @@ theorem mem_checked_layout (f : FileUnits) (ns : Array ℕ) (h : f.n ≤ ns.toLi
   constructor
   · rintro ⟨hv, hu⟩
     rw [hget hv] at hu
-    exact ⟨hsize ▸ hv, Array.contains_iff_mem.1 (by simpa using hu)⟩
+    exact ⟨hsize ▸ hv, Array.contains_iff_mem.1 (by simpa [Slots.blockOf] using hu)⟩
   · rintro ⟨hv, hp⟩
     refine ⟨hsize ▸ hv, ?_⟩
     rw [hget]
-    simpa using Array.contains_iff_mem.2 hp
+    simpa [Slots.blockOf] using Array.contains_iff_mem.2 hp
 
 end Properties.SampledProofs.SecurityProofs

@@ -20,15 +20,14 @@ def popUnits (S : Array (String × Array (ℕ × ℕ))) : List ℕ := S.toList.f
 
 /-- **`Slots.layout`'s partition**, where its strata `ns` cover the units: one class, of strata sizes `ns` and of
 `Σ ns` proof units. -/
-theorem slotPartition_strata (f : FileUnits) (ns : Array ℕ) (hn : f.n = ns.toList.sum) :
+theorem slotPartition_strata (f : FilePart.FilePart) (ns : Array ℕ) (hn : f.n = ns.toList.sum) :
     ∃ c, slotPartition (Slots.layout f ns) = ⟨[c]⟩ ∧ strataSizes c = ns.toList ∧ c.flatten.length = ns.toList.sum := by
-  have hG : ((List.range f.n).map fun u => puGates ({ unit := some u, gates := f.block u } : Slots.ProofBlock)).length =
-      ns.toList.sum := by simp [hn]
+  have hG : ((List.range f.n).map fun u => puGates (Slots.blockOf f u)).length = ns.toList.sum := by simp [hn]
   exact ⟨_, slotPartition_layout f ns, List.map_splitLengths_length hG.ge, by rw [List.flatten_splitLengths hG.le, hG]⟩
 
 /-- **The design's `P_a` on `Slots.layout`'s partition**: its one rule over the strata `ns`, on `B`'s slots among the
 `Σ ns` units. -/
-theorem pa_layout (first : OneStage) (f : FileUnits) (ns : Array ℕ) (hn : f.n = ns.toList.sum) (B : Finset ℕ) :
+theorem pa_layout (first : OneStage) (f : FilePart.FilePart) (ns : Array ℕ) (hn : f.n = ns.toList.sum) (B : Finset ℕ) :
     (⟨[first]⟩ : Design).Pa (slotPartition (Slots.layout f ns)) B = first.Pa ns.toList (window 0 ns.toList.sum B) := by
   obtain ⟨c, hc, hs, hl⟩ := slotPartition_strata f ns hn
   rw [hc]
@@ -204,13 +203,13 @@ theorem drawMisses : DrawMisses := by
       exact absurd hD (by simp)
   | ok D =>
   dsimp only
-  obtain ⟨ns, hns, rfl⟩ := fileLayout_ok cf d query l hl
-  obtain ⟨S₀, hS₀, hpop, hsz⟩ := strataSizes_ok d query ns hns
+  obtain ⟨S₀, ns, hS₀, hns, rfl⟩ := fileLayout_ok cf d query l hl
+  obtain ⟨hpop, hsz⟩ := sizes_ok S₀ ns hns
   obtain ⟨rs, he, rfl⟩ := strata_ok d query S₀ hS₀
   set S := Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)) with hS
   have hpopU : popUnits S = List.range' 0 ns.toList.sum := hpop
   have hlenU : (popUnits S).length = ns.toList.sum := by rw [hpopU, List.length_range']
-  have hfn : (FileUnits.ofCircuit cf ns.toList.sum).n = ns.toList.sum := rfl
+  have hfn : (FilePart.ofCircuit cf ns.toList.sum).n = ns.toList.sum := rfl
   have hperm : (popUnits S).Perm (List.range' 0 (Flock.TemplateQuery.population rs)) :=
     strataOf_perm _ _ (partition_evaluate_tiles d query rs he)
   obtain ⟨n, named, derived, hn, hnamed, hd, hDc⟩ := slotDesign_ok rule d query table D hD

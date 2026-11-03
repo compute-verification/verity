@@ -156,7 +156,7 @@ theorem slotDesign_rules {rule : _root_.SampledProofs.Select.Rule} {p : _root_.S
 theorem fileLayout_classes {cf : _root_.Flock.Circuit} {p : _root_.SampledProofs.Program} {q : Lean.Json}
     {l : _root_.SampledProofs.Slots.Layout} (h : _root_.SampledProofs.Slots.fileLayout cf p q = .ok l) :
     ∃ c, (_root_.Properties.SampledProofs.slotPartition l).classes = [c] := by
-  obtain ⟨ns, -, rfl⟩ := _root_.Properties.SampledProofs.SecurityProofs.fileLayout_ok cf p q l h
+  obtain ⟨-, ns, -, -, rfl⟩ := _root_.Properties.SampledProofs.SecurityProofs.fileLayout_ok cf p q l h
   exact ⟨_, congrArg Partition.classes (_root_.Properties.SampledProofs.SecurityProofs.slotPartition_layout _ ns)⟩
 
 section Deployed
