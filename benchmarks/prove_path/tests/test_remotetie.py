@@ -11,22 +11,23 @@ reads only its digest, its open root and its tables' names.
 * **W**, H1's window registration (`pouw_h1_commit.registration`): each round's A table of K and input-ids table, made H1's
   way from the served values (`chunk_words` of each call's int8 codes and scale over M slots, call after call; `ids_words`
   of the step's input ids), committed under H1's run key at H1's nonces and domains (round 0's ids bound to the session).
-* **R**, the audited window's registration: the window circuit with H1's tables (`window_circuit.lower` with `Tables`), its
-  units filled from the same values (`window_rows.Rows`), recorded, committed and written through `interface.Window`.
-  `_registrar` makes R a v2 record chained right after W, registering each table the circuit reads at W's entry of it
-  under the circuit's name. It is a stand-in: window-commit doesn't take W yet.
+* **R**, the audited window's registration, as `prove_path.py window-commit --window-registration W --h1-key` makes it:
+  the window circuit with H1's tables (`window_circuit.lower` with `Tables`), its units filled from the same values
+  (`window_rows.Rows`), its tables W's rebuilt from the rows its proof blocks make (`pouw_h1_commit.reuse`), recorded,
+  committed and written through `interface.Window` as a v2 record chained right after W.
 
-**Honest** (slow): every row a proof block holds to a table is W's row there, and every served row of W is held by one.
+**Honest** (slow): every row a proof block holds to a table is W's row there, every served row of W is held by one, and
+`reuse` makes each table W's entry of it under the circuit's name.
 **One flipped table row** (slow): flipping a bit of round 1's o-projection row changes W's leaf there alone, so the honest
-reader's row opens against no root W registers; that reader is the one proof block of a template of its own, which
-`stratified:1` always draws; and a prover who records the flipped row has that proof block off its Definition, so its proof
-fails.
+reader's row opens against no root W registers and `reuse` refuses W'; that reader is the one proof block of a template
+of its own, which `stratified:1` always draws; and a prover who records the flipped row has that proof block off its
+Definition, so its proof fails.
 
 **Records** (opt-in, `VERITY_PROVE_PATH_REMOTETIE`: the window's record, commit and write take minutes): credit's ROOTS1 on R
 (`credit._arow`) passes, R reuses W's tables (`pouw_h1_commit.reused`) and is the record H1 names (`named`), its digest is
 credit's (`commit_of`) and one-stage's, and R1-R7 (`registration.check` with the log [W] and each table an output value of
-W's) accept it. With the flipped row they accept W' and its R' too: the records can't see a row, and only the reader's
-proof refuses it.
+W's) accept it. With the flipped row they accept W' and an R' written by hand after it: the records can't see a row, and
+only the reader's proof refuses it.
 """
 from __future__ import annotations
 
@@ -166,16 +167,14 @@ def _names() -> dict[str, str]:
             **{TABLES.ids(s): f"{SV.PREFIX}ids@{s}" for s in range(ROUNDS)}}
 
 
-def _registrar(W: dict, values) -> SimpleNamespace:
-    """A registrar `interface.Window.write` takes (`rows.registration`'s): one-stage's `record`, chained right after W,
-    registering each of ``values`` (the circuit's tables) at W's entry of it under the circuit's name."""
-    w, names = {e["value"]: e for e in W["registered"]}, _names()
+def _layout() -> dict:
+    """H1's window Program's layout (`pouw_h1_served.write_program`'s meta) as the tie reads it."""
+    return {"calls": [[n, b] for _ in range(ROUNDS) for b, (n, _k, _n) in enumerate(LINEARS)],
+            "linears": [list(x) for x in LINEARS], "m": M}
 
-    def record(program, query, law, scheme, roots, window, leaf_layer=None, previous=None, work_table=None):
-        return REG.record(program, query, law, scheme, roots, window, leaf_layer=leaf_layer, previous=REG.digest(W),
-                          work_table=work_table, registered=[{**w[names[p]], "value": p} for p in values])
 
-    return SimpleNamespace(record=record, KINDS=REG.KINDS, FORMAT=REG.FORMAT_V2, digest=REG.digest)
+def _reuse(toy, W: dict) -> dict:
+    return CT.reuse(W, _layout(), ROUNDS, H1_KEY, toy.rows.value)
 
 
 def _reads(circuit) -> dict[tuple[str, str, int], tuple[str, int]]:
@@ -216,7 +215,8 @@ def test_each_table_row_a_proof_block_holds_is_w_s_row_there_and_each_served_row
     """The circuit reads each round's tables of W (2 rounds, an A table of 3 calls of 32 rows of K's 1,026-word leaf and an
     input-ids table of 32 rows of a u32), and every row a proof block holds to one is W's row there: the quantizers' leaf
     rows ``o2`` the A rows H1 committed from their codes and scales, the token rows the ids. W's served rows (round 0's
-    32 a call, round 1's first) are each held once, and its padding rows by none."""
+    32 a call, round 1's first) are each held once, and its padding rows by none. So `reuse` makes each table, from the
+    rows its proof blocks make, W's entry of it under the circuit's name."""
     c = toy.low.circuit
     assert c.registered.values == ("row-table/0/k2048", "input-ids/0", "row-table/1/k2048", "input-ids/1")
     assert {p: toy.h1.tables[p].leaves for p in c.registered.values} == {
@@ -227,19 +227,24 @@ def test_each_table_row_a_proof_block_holds_is_w_s_row_there_and_each_served_row
     served = {(TABLES.a(0), M * c_ + i) for c_ in range(CALLS) for i in range(CLASS.prompt)}
     served |= {(TABLES.a(1), M * c_) for c_ in range(CALLS)} | {(TABLES.ids(0), i) for i in range(CLASS.prompt)}
     assert sorted(reads.values()) == sorted(served | {(TABLES.ids(1), 0)})
+    w = {e["value"]: e for e in toy.h1.W["registered"]}
+    assert {p: v.entry() for p, v in _reuse(toy, toy.h1.W).items()} == {p: {**w[_names()[p]], "value": p}
+                                                                        for p in c.registered.values}
 
 
 @pytest.mark.slow
 def test_a_flipped_table_row_opens_against_no_reader_and_its_reader_is_always_drawn_and_off_its_definition(toy):
     """W' (round 1's o-projection row flipped in one bit) differs from W at that leaf alone, so the honest reader's row,
-    committed under that leaf's salt, opens against no root W' registers. Its reader is the one proof block of its
-    template (`Int8RowQuant_v5` at round 1 and the o-projection's R), a stratum of its own whose sample under
-    `stratified:1` is that proof block (`draw.stratum_k`; R's own strata in the records' tier); and its Definition on its
-    input gives the honest row, so a prover that records W''s row instead has a proof block whose proof fails."""
+    committed under that leaf's salt, opens against no root W' registers, and `reuse` refuses W'. Its reader is the one
+    proof block of its template (`Int8RowQuant_v5` at round 1 and the o-projection's R), a stratum of its own whose sample
+    under `stratified:1` is that proof block (`draw.stratum_k`; R's own strata in the records' tier); and its Definition on
+    its input gives the honest row, so a prover that records W''s row instead has a proof block whose proof fails."""
     flipped = _flipped(toy.h1)
     honest, other = toy.h1.tables[FLIP[0]], flipped.tables[FLIP[0]]
     assert honest.root != other.root
     assert [j for j, (x, y) in enumerate(zip(honest.levels[0], other.levels[0])) if x != y] == [FLIP[1]]
+    with pytest.raises(ValueError, match=f"^{FLIP[0]}: the rows the audited circuit's proof blocks make of it are not"):
+        _reuse(toy, flipped.W)
     (tid, port, u), = [k for k, v in _reads(toy.low.circuit).items() if v == FLIP]
     units = toy.low.circuit.units
     assert units[tid] == 1 and "ROUND=1" in tid and port == "o2" and u == 0
@@ -252,26 +257,20 @@ def test_a_flipped_table_row_opens_against_no_reader_and_its_reader_is_always_dr
 
 @pytest.fixture(scope="module")
 def written(toy, tmp_path_factory) -> SimpleNamespace:
-    """The toy's window recorded, committed and written under `_registrar` (R in its ``registration.json``), and the
-    verifier's own window from its records."""
+    """The toy's window recorded, committed and written as window-commit writes it after W (R in its
+    ``registration.json``), and the verifier's own window from its records."""
     c, out = toy.low.circuit, tmp_path_factory.mktemp("window")
-    win = IF.Window(c, RUN, LAW, 64, registered={**toy.values, **{p: toy.h1.tables[p] for p in c.registered.values}},
-                    forms=WRS.FORMS)
+    win = IF.Window(c, RUN, LAW, 64, registered={**toy.values, **_reuse(toy, toy.h1.W)}, forms=WRS.FORMS)
     win.supply(G)
     toy.rows.record(win)
     committed = win.close()
     prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: toy.values[SS.SCAN_STATE].entry()}}}
-    win.write(committed, out, prov, registrar=_registrar(toy.h1.W, c.registered.values), index_salt=WRS.index_salt(KEY, 0))
+    win.write(committed, out, prov, registrar=REG, index_salt=WRS.index_salt(KEY, 0), previous=REG.digest(toy.h1.W))
     mine, _doc = IF.of_records(out, LAW, RA.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine,
                            leaf_layer=CS.leaf_layer(publics))
-
-
-def _layout() -> dict:
-    return {"calls": [[n, b] for _ in range(ROUNDS) for b, (n, _k, _n) in enumerate(LINEARS)],
-            "linears": [list(x) for x in LINEARS], "m": M}
 
 
 def _rounds(run) -> list[dict]:
@@ -315,9 +314,10 @@ def test_r_is_the_commit_record_credit_reads_and_the_registration_one_stage_acce
 @pytest.mark.slow
 @RECORDS
 def test_the_records_accept_a_flipped_table_row_so_only_its_readers_proof_refuses_it(toy, written):
-    """W' and its R' (the same window's record, chained after W' and reusing its tables) pass ROOTS1, H1's reuse check and
-    R1-R7 as W and R do: no record holds a row, so the flipped row is refused by its reader's proof alone. R' against W is
-    refused by each, so the checks aren't vacuous."""
+    """W' and an R' written by hand (the same window's record, chained after W' and registering its tables, which
+    window-commit's `reuse` refuses to make) pass ROOTS1, H1's reuse check and R1-R7 as W and R do: no record holds a row,
+    so the flipped row is refused by its reader's proof alone. R' against W is refused by each, so the checks aren't
+    vacuous."""
     flipped = _flipped(toy.h1)
     W2 = flipped.W
     R2 = {**written.R, "previous": REG.digest(W2), "registered": [
