@@ -3,6 +3,13 @@
  "packages":
  [{"type": "path",
    "scope": "",
+   "name": "core_vstar_recursive",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../service/vstar/recursive",
+   "configFile": "lakefile.toml"},
+  {"type": "path",
+   "scope": "",
    "name": "nci_check",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
@@ -55,7 +62,8 @@
    "name": "verity_difftest",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../network/nci/lean/../../../interface/../../difftest/lean",
+   "dir":
+   "../../service/vstar/recursive/../../sampled_proofs/../../difftest/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -63,7 +71,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../pouw/lean/check/../window/../../../../service/sampled_proofs/../../primitives/lms/lean",
+   "../../service/vstar/recursive/../../sampled_proofs/../../primitives/lms/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
