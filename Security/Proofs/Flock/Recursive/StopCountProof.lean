@@ -811,7 +811,7 @@ theorem Inv.seat {σ : St} (hI : Inv M σ) (s part : String) : Inv M (step M σ 
       · show bump σ.adm s (j + 1) s' p ≤ 1
         by_cases hq : s' = s ∧ p = j + 1
         · obtain ⟨rfl, rfl⟩ := hq
-          rw [bump_eq, hadm0]; exact Nat.le_refl _
+          rw [bump_eq]; omega
         · rw [bump_ne hq]; exact hI.admLe s' p
       · show bump σ.adm s (j + 1) s' 0 = 0
         have hq : ¬(s' = s ∧ 0 = j + 1) := fun h => Nat.succ_ne_zero _ h.2.symm
