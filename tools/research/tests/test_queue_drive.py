@@ -544,6 +544,37 @@ def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_ca
     assert f"argv: {'c' * 40} m1 --deferred ratchet-gate --base {'b' * 40} --ratchet-base {'a' * 40}" in tail, tail
 
 
+def test_the_after_landing_run_takes_a_check_slot_ahead_of_the_lean_checks(tmp_path, monkeypatch):
+    """Each part of the after-landing run (a shard, circuit-check's records step) asks for its check slot at
+    `POSTLAND_SLOT_RANK` (CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`), and a Lean check asks unranked,
+    whatever drive's own environment says: a ranked priority waiter takes the next free slot ahead of the unranked, so `main`
+    never waits on a slot for a Lean check of `next`."""
+    import contextlib
+    import os
+    import tempfile
+    import types
+
+    from research.drive import POSTLAND_SLOT_RANK, launched
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setenv("CHECK_SLOT_RANK", "7")
+    repo = tmp_path / "clone"
+    (repo / "tools" / "verity" / "check").mkdir(parents=True)
+    (repo / "tools" / "verity" / "check" / "train.sh").write_text(
+        'echo "rank=[$CHECK_SLOT_RANK]"\necho "RUN r20261103-140000-aaaa"\n')
+    d = Driver(types.SimpleNamespace(auth=(), workdir=repo), on="m1")
+
+    def tail(job: dict) -> str:
+        with contextlib.suppress(ChildProcessError):                     # its end, not a clock
+            os.waitpid(job["pid"], 0)
+        return launched(job)[1]
+
+    ranked = f"rank=[{POSTLAND_SLOT_RANK}]"
+    assert ranked in tail(d.launch_postland(repo, "c" * 40, "m1", "pytest", shard="1/3"))
+    assert ranked in tail(d.launch_postland(repo, "c" * 40, "m1", "circuit-check", cc_records=True))
+    assert "rank=[]" in tail(d.launch_lean(repo, "c" * 40, "m1"))
+
+
 def test_a_tick_sets_the_record_drivers_its_clone_lacks_and_plain_git_then_merges_two_records_with_merge_py(world, monkeypatch):
     """A queue clone seeded from a copy without the drivers (or with another value) gets every `RECORD_DRIVER` key on a tick,
     logged once, and a later tick only reads them; then a git without `git_env`'s settings merges two PRs' lean-audit.json
