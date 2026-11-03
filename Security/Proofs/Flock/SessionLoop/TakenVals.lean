@@ -15,8 +15,9 @@ released word plus the pad (`Loop.valsOf`). The switched session at the deployed
 Masked.dataE`) masks the values `vs` gives at the opened coins the same way (`Masked.swSrcE_masked_pad_any`). This file
 states the switched session's side by pad index, as the firewall's words:
 
-* **`Loop.vsWord`**: table `j`'s rep `r` value `k` of `vs` at the opened coins, at the table's base on the tape (its
-  mask slot and level 0's hiding, which a table's values may read), as the firewall's word; `0` from `n_E` on.
+* **`Loop.vsWord`**: table `j`'s rep `r` value `k` of `vs` at the opened coins and what the workers see of the tape
+  (`RefSession.seenOf`, as the switched session reads `vs`), at the table's base on the tape (its mask slot and level
+  0's hiding, which a table's values may read), as the firewall's word; `0` from `n_E` on.
 * **`Loop.RowsOK`**: each table's rows hold at `vs` at its base, at every nonce, opened coins and tape at which none of
   the table's zerocheck outer coins is `1`. Where they fail the switched session commits its pads tree over the moved
   pads (`Table.swPads`), while the frame commits it over the drawn ones, so a rep's first round, which carries the pads
@@ -61,10 +62,10 @@ set_option smartUnfolding false in
 /-- **The rows at the honest values are the table's own**: where each rep's batched constraint holds at `w`'s view at
 every draw, the rows hold at `w` and the table's values. -/
 theorem rowsAt_vals {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
-    (T : Table F K W Salt Seed D Hi VL) (w : W) (u : T.Mask) (V : T.Vis)
+    (T : Table F K W Salt Seed D Hi VL) (w : W) (u : T.Mask) (R : T.Vis)
     (h : ∀ (ω : T.Rand) (r : Fin 2),
       ∑ i, T.lam r (T.view w ω).pre i * T.hFull (ω.2.2.1 r) i = T.theta r (T.view w ω).pre) :
-    T.onVals.RowsAt (w, T.vals) u V :=
+    T.onVals.RowsAt (w, T.vals) u R :=
   fun ω _ _ r => h ω r
 
 end FlockSoundness.ZK.Table
@@ -79,9 +80,9 @@ open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 
 namespace Loop
 
-/-- **`vs`'s value at pad `k`** of table `j`'s rep `r`, at the opened coins `c`, read from what the workers see at the
-tape `τ` (`RefSession.seenOf`), at table `j`'s base on the tape (its mask slot and level 0's hiding, `Table.Vis`), as
-the firewall's word; `0` from `n_E` on. -/
+/-- **`vs`'s value at pad `k`** of table `j`'s rep `r`, at the opened coins `c` and what the workers see of the tape `τ`
+(`RefSession.seenOf`), at table `j`'s base on `τ` (its mask slot and level 0's hiding), as the firewall's word; `0`
+from `n_E` on. -/
 noncomputable def vsWord (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit)
     (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (k : ℕ) :
     _root_.Flock.F128 :=
@@ -181,9 +182,8 @@ theorem swSrcE_masked_vsWord (vs : (CoinLayer.session Loop.loopNr Masked.dataE).
   · rfl
   · contradiction
 
-/-- **`vs`'s `τ` commitment** at table `j`'s rep `r`, at the opened coins `c` and at table `j`'s base on the tape `τ`
-(the values read from what the workers see there): the switched source's (`Masked.swSrcE`), which where the rows hold
-commits the worker's view's `τ` (`swSrcE_tauCom`). -/
+/-- **`vs`'s `τ` commitment** at table `j`'s rep `r`, at the opened coins `c` and at table `j`'s base on the tape `τ`:
+the switched source's (`Masked.swSrcE`), which where the rows hold commits the worker's view's `τ` (`swSrcE_tauCom`). -/
 noncomputable def vsTau (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit)
     (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) :
     ByteArray :=
