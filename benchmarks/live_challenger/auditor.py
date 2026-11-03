@@ -193,8 +193,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   at that class's schedule instead (`SCAN_CLASSES`, `scan_schedule`: w63k4, the window circuit's 4,32,4, at 5
   egress cells), with its prompts of at most its KI ids (32) and `--tokens` at most its egress cells less the trailer
   (4) (`scan_bounds`), the network certifier's run `scan_zk.py prove --class CLASS --warden-run` reads.
-  `--window-per-group` (at most the scan's 4 lanes of prompts) sends them a group at a time, group g's half a bucket into link-window g·G
-  (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows g·G … (g+1)·G − 1, which
+  `--window-per-group` (at most the scan's 4 lanes of prompts) sends them a group at a time, group g's half a bucket
+  into link-window g·G (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows g·G … (g+1)·G − 1, which
   `out/groups.json` publishes, and `--minutes` must cover `warden_group_minutes` of its groups. The demo's stand-in (`benchmarks/network_traces/demo_stub.py`) serves the demo's class, prompts of exactly 8
   byte ids and exactly 24 out, id-form, and prints its prompts: `demo_stub.py prompts | … warden-rehearse --scan
   --prompts --tokens 24`. Its request carries `device: warden`; it
