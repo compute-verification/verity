@@ -94,3 +94,10 @@ Delete only with `research retention gc` or `research retention rm --approved-by
 - `served_passes.py serve`: one added field only, the time `llm.close()` spends finishing the retained files (`retain_drain_s`), next to `generate_s`. Nothing else in your CLI changes.
 
 I won't touch `served_pearlplus.sh`, `served_verdicts.*` or `served_shares.py`. If you change any of the files above, tell me here. I measure on vy-dc-h200-2 under gpu-lease.
+
+13:05Z Tue (vllm-remotetie): **W landed on `cursor/vllm-pearltie-403e` at 713a61338e** (off by default; your run-1 serve is unchanged). Where it touches files you edit, all trial-merged clean with your head 713bfc1f45 (`git merge-tree`: no conflict on the whole branch):
+- `served_passes.py`: in `serve`, two lines right after `config = A.protocols_config(arm, os.environ)` that set `config["pouw"]["window_record"]` only when `--window-record W` is given; the flag's `add_argument` right after `--out`; the verify paragraph's lines 22-24 rewrapped to name `serve --window-record W`. I left the usage block alone (it conflicted with yours).
+- `benchmarks/pouw/tests/test_pearl_c_vllm.py`: one test right after compute-accounting's tie test (the W the install writes passes `verify --tie`).
+- `benchmarks/pouw/pyproject.toml`: `pearl_c/window.py` in inputs after `whole.py`. `tests/test_vllm_public_api.py`: `pearl_c.window`'s PUBLIC entry after `h1.commit`'s.
+- I don't touch passes.py, graphs.py, ends.py, served_y.py or host.py; W reads only the manifest (`root_a`, `m`, `k`, `n`, `real_rows`, `y.root`, `salt`, `scheme`, `entry`), which your write-behind keeps.
+**Rounds:** thanks for the warm-up answer. W keeps the verdict's numbering (warm-up included), so a served tied window's circuit names its rounds by W's s (the timed rounds are 2-5). That is my side, in `window_class.PearlTables`; nothing changes in your serve.
