@@ -209,16 +209,17 @@ def test_an_input_is_measured_where_te_core_counted_traced_or_read_it_and_assume
 
     st = status(traced)
     assert {k for k, v in st.items() if v != "measured"} == {"delta_grad_bits"}
-    assert st["delta_grad_bits"] == ("assumed: unmeasured on 2 of 5 steps in structures with no traced Delta_grad, so "
-                                     "te_core fails Fit at every k; with it at 0, Fit still fails at both points, so "
-                                     "neither rho_console nor rho_served rests on it (the traced steps' largest 4e6 "
-                                     "bits)")
+    assert st["delta_grad_bits"] == ("assumed: unmeasured on 2 of 5 steps in structures with no traced Δ_grad, so the "
+                                     "slowdown code fails Fit at every k; with it at 0, Fit still fails at both "
+                                     "points, so neither rho_console nor rho_served rests on it (the traced steps' "
+                                     "largest 4e6 bits)")
     st = status(traced | {k: formalism.STUBS[k] for k in ("tau_bits", "u", "token_gates")})
     assert st["tau_bits"] == f"assumed: {formalism.STUBS['tau_bits']}"
     assert st["sigma"] == st["w_gates"] == st["w_fit_gates"] == f"assumed: {formalism.STUBS['token_gates']}"
     assert st["u_points"] == f"assumed: {formalism.STUBS['u']}" and st["u_in_points"] == "measured"
     assert status(traced | {"decoder_gates": formalism.DECODER["witness"]})["d_gates"] == "measured"
-    assert status({k: v for k, v in traced.items() if k != "a_bits"})["a_bits"] == "assumed: no label from te_core"
+    assert status({k: v for k, v in traced.items() if k != "a_bits"})["a_bits"] == \
+        "assumed: no label from the slowdown code"
     assert status(traced, {"tau_bits": "assumed: why"})["tau_bits"] == "assumed: why"
 
 
@@ -235,8 +236,8 @@ def test_an_unmeasured_delta_grad_names_its_steps_and_whether_fits_verdict_at_ei
            "structures": {"first": {"updated": []}, "train": struct, "odd": struct, "sync": {"updated": []},
                           "end": struct}}
     gaps = SW.untraced(rec, {"first": struct, "train": struct})
-    assert gaps == ["step 0: its structure updates nothing, and te_core.annotate takes such a step's trace only where "
-                    "it measures the step and a traced step of the run updates something",
+    assert gaps == ["step 0: its structure updates nothing, and the slowdown code takes such a step's trace only "
+                    "where the trace measures the step and a traced step of the run updates something",
                     "step 2: no traced step shares its structure",
                     "step 5: the program's last, its structure having no other step, not traced"]
     f = {"tail_share": 0.0, "u_in": [[0.0, 0.0], [1.0, 8.0]], "tau_ids": 1.0, "tau_other_bits": 0.0, "u1_bits": 8.0}
@@ -250,7 +251,8 @@ def test_an_unmeasured_delta_grad_names_its_steps_and_whether_fits_verdict_at_ei
                            delta_t_bits=1e3)
     assert SW.held(m) == ["console", "served"] and not formalism.at(m, *SW.POINTS["console"])["fit"]
     assert SW.status(m, read={"untraced": gaps, "steps": 6})["delta_grad_bits"] == (
-        f"assumed: unmeasured on 3 of 6 steps ({'; '.join(gaps)}), so te_core fails Fit at every k; Fit's verdict at "
+        f"assumed: unmeasured on 3 of 6 steps ({'; '.join(gaps)}), so the slowdown code fails Fit at every k; Fit's "
+        f"verdict at "
         f"console and served rests on it, Fit holding there with it at 0 (the traced steps' largest "
         f"{algorithm_policy.num(1e3)} bits)")
     four = dataclasses.replace(m, parts=(parts[0], dataclasses.replace(parts[1], steps=4)))
@@ -300,7 +302,7 @@ def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed
               "scaled by tokens (2 traced structures)")
     assert SW.products(bounds(stand)) == f"assumed: {shapes}; at the serving block, {off}"
     last = "step 9: the program's last, its structure having no other step, not traced"
-    alone = "te_core counting the traced steps' products alone"
+    alone = "the slowdown code counting the traced steps' products alone"
     assert SW.products(b, left=[last]) == f"assumed: none on 1 untraced step ({last}), {alone}; at the serving block, {off}"
     assert SW.products(bounds(stand), left=[last] * 4) == (
         f"assumed: {shapes}; and none on 4 untraced steps ({last}; {last}; {last}; and 1 more), {alone}; at the serving "
@@ -308,6 +310,31 @@ def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed
     why = bounds(None)["console"]["unmeasured"]["fresh_products"]
     assert SW.products(bounds(None)) == f"assumed: {why}"
     assert SW.products(bounds(None), rounds=True) == f"assumed: {why}{SW._UNTRACED}"
+
+
+def test_the_builders_own_words_in_a_published_string_name_no_code():
+    """What the builder adds to a row's input_status (its rounds' labels, its untraced steps, an unmeasured Δ_grad's
+    and the products input's wording) and its note names the code only as training's slowdown code: `CODE` finds no
+    code name in it, as it finds one in te_core's own names."""
+    assert all(SW.CODE.search(s) for s in ("te_core 4.12", "io_bound", "rows_of", "formalism.published", "ONE_CLASS",
+                                            "FRESH_VOID", "capture_step", "generate.py", "gemm/fp4", "`untraced`"))
+    struct = {"updated": [[1.0, 2, 3, 4, "x"]]}
+    rec = {"steps": [{"step": 0, "struct": "first", "tokens": 64}, {"step": 1, "struct": "train", "tokens": 64},
+                     {"step": 2, "struct": "odd", "tokens": 64}, {"step": 3, "struct": "end", "tokens": 64}],
+           "structures": {"first": {"updated": []}, "train": struct, "odd": struct, "end": struct}}
+    gaps = SW.untraced(rec, {"first": struct, "train": struct})
+    parts = (formalism.Part(3e12, 100, 2.4e12, 1e12, 3, 1e3), formalism.Part(1e12, 50, 0.8e12, 0, 3, None))
+    m = formalism.Measured(parts, 0.0, 8192, formalism.even(1e6), formalism.even(1e6), 1e3, 0.0, {},
+                           delta_t_bits=1e3)
+    st = SW.status(m, read={"untraced": gaps, "steps": 4})
+    con = {"unmeasured": {}, "inputs": {"fresh_products": {"stand_in": {"structures": ["a", "c"]}}}}
+    b = {"console": con, "served": {"unmeasured": {"fresh_products": "why"}}}
+    said = [SW.products(b, left=gaps * 2),
+            SW.products(b | {"console": con | {"unmeasured": {"fresh_products": "why"}}}, rounds=True)]
+    notes = [SW.note({"rows": [[x if c == "reading" else None for c in SW.COLUMNS]]}, "art:" + "0" * 64)
+             for x in ("A", "B")]
+    words = [SW.IDLE, SW._UNTRACED, *SW.ROUNDS.values(), *gaps, *st.values(), *said, *notes]
+    assert len(gaps) == 3 and [s for s in words if SW.CODE.search(s)] == []
 
 
 def test_a_binding_fresh_products_term_is_publisheds_and_the_products_input_names_the_untraced_steps_that_update(

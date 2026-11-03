@@ -26,14 +26,16 @@ quantity, E's size and the harness's decoder are measured, and a stub, an assump
 assumed. An unmeasured Δ_grad names the steps te_core has none for and why (`untraced`), and whether Fit's verdict at
 `POINTS` rests on it (`held`). Beside `KEYS`, `products` is the fresh-products kind's input (`products`): measured at
 the console's default, or assumed with te_core's reason or where untraced steps that update count none, and where the
-serving block's k leaves it unmeasured.
+serving block's k leaves it unmeasured. The words the builder adds there and in the note name no code (`CODE`): the
+code is training's slowdown code, and only te_core's reasons, which the builder relays as they are, are te_core's to
+word.
 
 A `rounds` row is the run's generation rounds alone (`rounds`), its setup and training steps dropped: a round is one
 counted step that codes the served weights, prefills its prompts and decodes. The capture can't trace a round (its
 decode loop's length is no token axis), so the counter's record is read with these substitutions (`ROUNDS`, each in
 the row's `input_status`): a round's tokens its prompts' and every generated token but the last (the counter counts
 the prompts' positions alone); every GEMM on the served codes (W4A4, emulated in bf16 on their decoded values) priced
-as NVFP4 (gemm/fp4); its affected gates the forward ops that read an update tensor (te_core's untraced convention); Δ
+as NVFP4 (gemm/fp4); its affected gates the forward ops that read an updated tensor (te_core's untraced convention); Δ
 the served update's bits from the run's notes (every served matrix's codes and scales with the gains in bf16, or the
 LoRA in bf16), and Δ_grad, the partial gradient and the gradient cut 0 (no backward); τ an id per prompt token and
 none per generated one; a, u and u_in te_core's stubs.
@@ -50,6 +52,7 @@ import argparse
 import dataclasses
 import json
 import math
+import re
 import subprocess
 import sys
 import tempfile
@@ -90,22 +93,27 @@ TRACE_FACTS = ("tokens", "sigma", "affected_share", "token_factor", "a_bits", "u
 #: te_core labels of quantities read off the run though te_core tags them bounds: E's size and the harness's decoder
 READ = (formalism.STUBS["delta_bits"], formalism.DECODER["witness"])
 #: why `untraced` names a step of a traced structure that updates nothing, which has no fresh products
-IDLE = ("its structure updates nothing, and te_core.annotate takes such a step's trace only where it measures the step "
-        "and a traced step of the run updates something")
+IDLE = ("its structure updates nothing, and the slowdown code takes such a step's trace only where the trace measures "
+        "the step and a traced step of the run updates something")
 _PRICED = "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) " \
-          "priced as NVFP4 (gemm/fp4)"
+          "priced as an NVFP4 GEMM"
 _PER_TOKEN = _PRICED + ", per token through the forward: each prompt token and every generated token but the last " \
                        "(the counter counts the prompts' alone)"
-_UNTRACED = "; a round is not traced (its decode loop's length is no token axis of the capture)"
+_UNTRACED = "; a round is not traced (the tracer has no token axis for its decode loop's length)"
 ROUNDS = {
     "C_gates": _PRICED, "w_gates": _PER_TOKEN, "sigma": _PRICED, "w_fit_gates": _PER_TOKEN,
     "tau_bits": "assumed: one id per prompt token and none per generated token, which the round samples" + _UNTRACED,
-    "a_bits": "assumed: te_core's stub, one token's bf16 residual stream (d_model x 16)" + _UNTRACED,
-    "u_points": "assumed: te_core's stub (A1), evenly spread to u(1) = Delta" + _UNTRACED,
-    "u_in_points": "assumed: te_core's stub (A1'), u_in = u" + _UNTRACED,
-    "alpha_ratio": "assumed: a round's affected work is its forward ops that read an update tensor (te_core's "
-                   "untraced convention)" + _UNTRACED,
+    "a_bits": "assumed: the slowdown code's default, one token's bf16 residual stream (the model's width times 16 bits)"
+              + _UNTRACED,
+    "u_points": "assumed: the slowdown code's default (assumption A1), spread evenly up to u(1) = Δ" + _UNTRACED,
+    "u_in_points": "assumed: the slowdown code's default (assumption A1′), u_in = u" + _UNTRACED,
+    "alpha_ratio": "assumed: a round's affected work is its forward ops that read an updated tensor (the slowdown "
+                   "code's convention for an untraced step)" + _UNTRACED,
 }
+#: a code name, which none of the builder's own words in a published string holds: they name the code only as
+#: training's slowdown code
+CODE = re.compile(r"te_core|io_bound|formalism|algorithm_policy|annotate|rows_of|capture_\w|gemm/|\w\.py\b|`|"
+                  r"\b[A-Z][A-Z0-9]*_[A-Z0-9_]+\b")
 ROUND_LABELS = {
     "tokens": "measured: each round's prompt positions (the counter's) and every generated token but the last, which "
               "the counter doesn't count, a sampled id being no data-stream position (the run's notes)",
@@ -290,7 +298,7 @@ def status(m: formalism.Measured, override: dict[str, str] | None = None,
     for key in KEYS:
         keys = LABELLED["delta_bits"] if key == "delta_t_bits" and m.delta_t_bits is None else LABELLED[key]
         bad = [m.labels.get(k) for k in keys if not _measured(m.labels.get(k))]
-        out[key] = "measured" if not bad else f"assumed: {bad[0] or 'no label from te_core'}"
+        out[key] = "measured" if not bad else f"assumed: {bad[0] or 'no label from the slowdown code'}"
         if key == "delta_grad_bits" and m.fit_delta_grad_bits is None:
             n = sum(p.steps for p in m.parts if p.tokens and p.delta_grad_bits is None)
             if gaps is not None and len(gaps) != n:
@@ -299,12 +307,12 @@ def status(m: formalism.Measured, override: dict[str, str] | None = None,
                                  f"doesn't name")
             where = (f"{n} of {read['steps']} steps ({'; '.join(gaps[:3])}{f'; and {n - 3} more' if n > 3 else ''})"
                      if gaps else f"{n} of {sum(p.steps for p in m.parts)} steps in structures with no traced "
-                                  f"Delta_grad")
+                                  f"Δ_grad")
             on = held(m)
             then = (f"Fit's verdict at {' and '.join(on)} rests on it, Fit holding there with it at 0" if on else
                     "with it at 0, Fit still fails at both points, so neither rho_console nor rho_served rests on it")
             have = m.delta_grad_bits
-            out[key] = (f"assumed: unmeasured on {where}, so te_core fails Fit at every k; {then}"
+            out[key] = (f"assumed: unmeasured on {where}, so the slowdown code fails Fit at every k; {then}"
                         + (f" (the traced steps' largest {algorithm_policy.num(have)} bits)" if have is not None else ""))
     return out | (override or {})
 
@@ -324,7 +332,7 @@ def products(b: dict[str, dict], rounds: bool = False, left: list[str] = ()) -> 
     if left:
         more = f"; and {len(left) - 3} more" if len(left) > 3 else ""
         said.append(f"none on {len(left)} untraced step{'s' if len(left) > 1 else ''} ({'; '.join(left[:3])}{more}), "
-                    f"te_core counting the traced steps' products alone")
+                    f"the slowdown code counting the traced steps' products alone")
     out = f"assumed: {'; and '.join(said)}" if said else "measured"
     if (off := b["served"]["unmeasured"].get("fresh_products")) is None:
         return out
@@ -437,7 +445,7 @@ def note(p: dict, art: str | None = None) -> str:
     got = {r[COLUMNS.index("reading")] for r in p["rows"]}
     how = ("reading B, a target, not a bound (tables: reading A's)" if got <= {"B"} else
            "reading A, one bound over the valid kinds (null: unmeasured)")
-    return (f"Small real runs, te_core {VERSION}: formalism.published, {how}. rho_default = rho_console, binding_kind, "
+    return (f"Small real runs, training's slowdown code {VERSION}: {how}. rho_default = rho_console, binding_kind, "
             f"rests_on and kinds at the console's default: c = {algorithm_policy.num(c, 5)} gates, one full {into:,}-in, "
             f"{out:,}-out session of the {policy.REFERENCE_PARAMS / 1e6:.0f}M reference with attention; k = {k:,.0f}. "
             f"rho_served at the registered serving block (c = {algorithm_policy.num(cs, 5)}, k = {ks:,}). input_status: "
