@@ -1096,7 +1096,7 @@ def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_e
     assert waited == [2, 4] and out["transcript_root"] == root.hex() and run.commits["tiles"] == 9
 
     lags = []
-    run.end, run.begin = (lambda lag=False: lags.append(lag) or {}), (lambda *a, **kw: None)
+    run.end, run.begin = (lambda lag=False, behind=False: lags.append(lag) or {}), (lambda *a, **kw: None)
     run.cur = PPD._Pass(None, matmuls=[None])
     for flag in (False, True):
         run.lag_ends = flag

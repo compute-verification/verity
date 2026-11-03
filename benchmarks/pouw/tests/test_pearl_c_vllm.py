@@ -763,6 +763,80 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
         assert len({p["activation_roots"] for p in passes}) == 3
 
 
+#: `_retained_files`' digest of the three steps below as the retention path wrote them when each call's copies, its record,
+#: y's root and the pass's files and manifest were all waited for in its step
+RETAINED_DIGEST = "6ea82b92968e7213c16a075e8c0d7910dcbe5ea32f8892f937b85165e3a8722d"
+
+
+def _retained_files(root: Path) -> dict[str, str]:
+    """Every file under `root` and its bytes' SHA-256."""
+    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+def test_a_step_completed_behind_it_retains_the_bytes_a_waiting_end_retains(monkeypatch, tmp_path):
+    """`PassEnds.retain_behind`: three served steps, each pass's files, records and manifest completed behind its step
+    (`retained_ends`, which the install's close waits for), retain every byte that ends completing them in the step do, the
+    same files as the path that waited for each call's copies (`RETAINED_DIGEST`); each file is the owner's alone (0600)
+    and each directory of a pass too (0700)."""
+    zeroed_y(monkeypatch)
+    rng = np.random.default_rng(23)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    steps = [[(0, 200), (1, 200)], [(0, 120), (1, 120)], [(0, 3), (1, 3)]]
+    got, cls = {}, PPD.PearlCDeviceRun
+    for behind in (False, True):
+        monkeypatch.setattr(cls, "retain_behind", behind)
+        (runner,) = _runners(monkeypatch)
+        root = tmp_path / f"behind-{behind}"
+        model, comp, option = _served(monkeypatch, PPD.Kernel(R, F, RecordingDev(), "0" * 64), weights,
+                                      {"transcript_dir": str(root)}, capacity=32, flag_rows=512)
+        core = _Core(runner(), _Engine(model, steps))
+        for _ in steps:
+            core.step()
+        comp.close()
+        assert all(p["manifest"] and p["excluded_rows"] is not None for p in option.details["passes"])
+        got[behind] = _retained_files(root)
+        modes = {p.stat().st_mode & 0o777 for p in root.rglob("*")}
+        assert modes == {0o600, 0o700}, sorted(map(oct, modes))
+    assert got[True] == got[False] and len(got[True]) == 3 * (1 + 2 + 2 * 2 * 2 + 2 * 2)
+    assert hashlib.sha256(json.dumps(got[True], sort_keys=True).encode()).hexdigest() == RETAINED_DIGEST
+
+
+def test_the_record_decided_from_the_rows_bytes_is_the_devices(monkeypatch):
+    """`screen.excluded_host`, which a device's retained call decides its record by from the bytes its rows' write lands
+    (the flags and A's rows as BF16), excludes the rows `screen.excluded` does from the flags and A's FP32 words."""
+    S = importlib.import_module("verity_vllm.protocols.pouw.pearl_c.screen")
+    rng = np.random.default_rng(31)
+    words = bf16_words(rng, 64, 1024).view(np.uint32)
+    words[::3, 1::8] = 0x47000000                             # 2^15 off the screen's stride: rows live_row rejects
+    x = torch.from_numpy(words.view(np.float32).copy())
+    flags = torch.from_numpy(rng.integers(0, 2, (64, 2), dtype=np.uint8))
+    want = S.excluded(flags[:, 0].bool(), flags[:, 1].bool(), x)
+    rows = x.to(torch.bfloat16).view(torch.uint8).numpy().view("<u2").reshape(64, 1024)
+    assert S.excluded_host(flags.numpy(), rows) == want and want and set(want) > set(np.flatnonzero(flags[:, 0].numpy()))
+
+
+def test_the_pinned_ring_hands_out_disjoint_regions_and_frees_them_in_order(monkeypatch):
+    """`host._Ring`: regions handed out are disjoint from every live one, a region given back out of order is free only
+    once every earlier one is, and a take that doesn't fit before the oldest live region (or past the end) waits."""
+    empty = torch.empty
+    monkeypatch.setattr(torch, "empty", lambda *a, pin_memory=False, **kw: empty(*a, **kw))
+    ring = PH._Ring(1000)
+    a, b, c = (ring.take(n) for n in (300, 300, 300))
+    assert [r[:2] for r, _ in (a, b, c)] == [[0, 300], [300, 600], [600, 900]] and ring.take(200) is None
+    ring.give(b[0])
+    assert ring.take(200) is None                             # b is free only once a is
+    ring.give(a[0])
+    d = ring.take(400)
+    assert d[0][:2] == [0, 400] and ring.take(250) is None    # the end past 900 is too short, 400..600 is c's way
+    ring.give(c[0])
+    e = ring.take(500)
+    assert e[0][:2] == [400, 900] and d[1].numel() == 400
+    ring.give(d[0])
+    ring.give(e[0])
+    assert not ring.live and ring.take(1000)[0][:2] == [0, 1000]
+
+
 def test_a_step_over_one_pass_is_refused_before_its_forward(monkeypatch):
     """`pouw_pass.step_tokens`: weights of n 256 and 128 take 4 + 2 tiles a 64-row tile, so a pass of 32 tiles holds 5 tile
     rows (320 tokens) and one of 512 screened rows 256 tokens over its two calls a step: a step is held to 256 tokens

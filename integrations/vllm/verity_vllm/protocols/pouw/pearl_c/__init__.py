@@ -36,10 +36,12 @@ torch's current stream, in the device's primary context:
   end, `pouw_pass`, holding a step to what one pass takes): the transcript is every call's A root and one tile tree over
   every leaf, in call order, under `audit.transcript_domain` (the audit `Prover`'s layout).  With a retain directory, the
   pass also writes what the prover opens from: A's rows (BF16, exact) and tree levels per call, and its real rows of y and
-  their tree (`served_y`, the tree built on the device; all in pinned host memory when the call returns, their files written
-  behind the pass's later calls by `host.write_behind`'s threads, which the pass's end joins first), B's rows and tree levels per
-  weight (linked to the first retained pass's), the leaves, the tile tree and the manifest (`write_manifest`) that the reference verifier reads
-  (``benchmarks/pouw/pearl_c_vllm/verify_run.py``).  A retained pass starts from poisoned outputs (`poison`): a replay of an
+  their tree (`served_y`, the tree built on the device; each copied as the call left it, a device's to pinned host memory on a
+  stream of its own, and written behind the pass's later calls by `host.write_behind`'s threads), B's rows and tree levels
+  per weight (linked to the first retained pass's), the leaves, the tile tree and the manifest (`write_manifest`) that the
+  reference verifier reads (``benchmarks/pouw/pearl_c_vllm/verify_run.py``), written once every file it names is.  A step's
+  retained pass is completed behind the step (`PassEnds.retained_ends`, which `finish` waits for); any other end waits
+  for its pass's.  A retained pass starts from poisoned outputs (`poison`): a replay of an
   earlier pass's calls finds that pass's bytes still in the buffers, and they would be right for it, so a skipped write
   must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.  A pass's state and its end
   are `ends`'s (`PassEnds`).
