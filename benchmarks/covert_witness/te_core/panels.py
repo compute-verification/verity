@@ -1,5 +1,6 @@
-"""The console's training panel, `training/frontier-branches`: held-out bits per byte against total training compute in
-Boolean gates, every line a frontier (at each loss, the least compute anything reached under that line's rules).
+"""One of the console's training panels, `training/frontier-branches`: held-out bits per byte against total training
+compute in Boolean gates, every line a frontier (at each loss, the least compute anything reached under that line's
+rules).
 
     python -m te_core.panels frontier-branches --out DIR [--publish] [--pretraining DIR]
                                                [te_core.rescore's ledger and quantities options]
@@ -22,6 +23,18 @@ or `v2.3-pilot`, the v2.3 harness's FineWeb-Edu; a loss on one is no loss on the
   every point of it, so S = 1 at every loss) has no rows, and a checkpoint whose ρ is infinite in a cell (no block
   there does any of its unreachable work) is on no throttled curve of that cell.
 
+Beside the curves, per branch point, the `candidate` rows: every checkpoint on its throttled curve at some cell of the
+dial (a cell whose curve is the honest one included), at C0 + |C| with |C| in `compute_after_gates`, carrying the
+inputs of ρ there so the console's dial computes ρ, W* and S at any (c, k) by te_core.algorithm_policy's `page_rho`:
+its `inputs`, with Δ in `delta_bits`, the start's forward w in `w_fwd_gates` (c = n·w tokens' gates), the
+profiles in `u_points` and `u_in_points`, and the other scalars in `rho_inputs`, one JSON object by their names
+(`PACKED`, the route taking 24 columns), te_core 4.x's per-part Fit (`w_fit_gates`, Δ_grad Fit's) and ᾱ/α_max
+(`alpha_ratio`) among them. A measured u_in has more points than a cell holds, so a candidate's goes through its points
+at the dial's k (`K_LEVELS`, `through`): x0 is exact there and linear between. `build` refuses a candidate whose
+columns don't give te_core.formalism.at's ρ and basis at every cell, so the throttled rows are the page's check set.
+Every row's `method_key` is its method's key in the console's `training/methods`: the record's direction/mechanism,
+and `SCRATCH` for a from-scratch point.
+
 It reads the valid records of the pin and of the pilot (pin.py's `pilot`, `frontier.pinned(pilot=True)`) unless `--pin`
 names the commits, and only checkpoints the scoring cap admits are scored (te_core.policy's `eligible`, the ladder's fit
 from `--ladder-fit`).
@@ -36,9 +49,11 @@ ratio of the starts' l0 (the search pool's whole documents) to it at the same ch
 whose point is its l0.
 
 Each curve keeps its envelope points only. The console's copy (`cut`) is the headline data's rows (`headline`: v3 once
-any start has v3 points, else the pilot), fit to the panels route's limits (te_core.console): the frontier, each honest
-curve and each marked throttled curve keep their points `FRONTIER_STEP` apart in loss, and every other throttled curve
-the most points (`POINTS`) that fit, the first to reach each of losses evenly spaced over its own span. DIR gets
+any start has v3 points, else the pilot), fit to the panels route's limits (te_core.console): every candidate stays,
+the frontier, each honest curve and each marked throttled curve keep their points `FRONTIER_STEP` apart in loss, and
+every other throttled curve the most points (`POINTS`) that fit, the first to reach each of losses evenly spaced over
+its own span; where every candidate doesn't fit at the fewest points, the most that do, those on the most cells'
+curves first (`ranked`), the note saying how many, before the other curves' points go further apart. DIR gets
 `frontier-branches.json` (uncut, every data), `console/frontier-branches.json` (cut, which `--publish` PUTs) and
 `frontier-branches.png`, plotted from the cut rows at the marked cells.
 """
@@ -57,7 +72,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from . import VERSION, console, formalism, frontier, plots, policy, rescore
+from . import VERSION, algorithm_policy, console, formalism, frontier, plots, policy, rescore
 
 NAME = "frontier-branches"
 PANEL = f"training/{NAME}"
@@ -69,12 +84,23 @@ DEFAULT = (policy.SESSION_TOKENS, policy.REFERENCE_K_BITS)
 #: the served demo's measured block, (c gates, k bits): one slot's 35-step session of Llama-3.2-1B int8 under vLLM, c
 #: in one-bit gates (a lower bound: its 133 BitAtx32_v1 activations a block are unpriced), k its fresh bits
 SERVED = (30_087_822_237_972, 145_568)
+#: the dial's k, where a candidate's `u_in_points` give x0 exactly (`through`)
+K_LEVELS = tuple(sorted({8 * kb for kb in K_BYTES} | {DEFAULT[1], SERVED[1]}))
 #: the data a record's held-out loss is on, the headline first: harness v3's, else the v2.3 harness's (`data_of`)
 DATA = ("v3", "v2.3-pilot")
 COLUMNS = ["curve", "data", "start", "start_compute_gates", "start_loss", "on_frontier", "c_tokens_per_block", "c_gates",
            "k_bits", "mark", "compute_total_gates", "compute_after_gates", "loss", "S", "run", "method", "delta_bits",
-           "basis"]
+           "basis", "method_key", "w_fwd_gates", "rho_inputs", "u_points", "u_in_points"]
 LOSSES = ("start_loss", "loss")
+#: the inputs of ρ a candidate's `rho_inputs` holds: te_core.algorithm_policy's `INPUTS` but those with columns of
+#: their own (Δ, w_fwd and the profiles), and te_core 4.x's two terms its `page_rho` reads
+PACKED = ("w_gates", "sigma", "tau_bits", "a_bits", "delta_t_bits", "d_gates", "delta_grad_bits", "w_fit_gates",
+          "alpha_ratio")
+#: the columns the console's copy keeps to te_core.algorithm_policy's `INPUT_DIGITS` (its other numbers 4 significant
+#: digits), so its dial reproduces ρ
+EXACT = ("delta_bits", "w_fwd_gates")
+#: the console's `training/methods` key of a from-scratch point
+SCRATCH = "scratch/adamw"
 #: learning_frontier's dense AdamW pretraining runs s, m and l (seed 0, 8 tokens per non-embedding parameter), each
 #: run's config.json, curve.json and theta.json under its run id
 PRETRAINING = "art:8c8df28509c05c7cc8f1db3ff584c44339f19019b453370afbd75b9e5fa88008"
@@ -193,7 +219,7 @@ def scratch(runs: list[dict], branches: list[Branch], shapes: dict[str, dict], r
     for b in branches:
         run, p = at.get(b.name, (None, None)) if b.data == DATA[1] else (None, None)
         out.append((b.c0, b.l0, {"data": b.data, "run": f"{run['run']}@{p['step']}" if run else b.name,
-                                 "start": b.name,
+                                 "start": b.name, "method_key": SCRATCH,
                                  "method": (what(run) + ", " if run else "from scratch, ") + f"the start {b.name}"}))
     for run in runs:
         same = next((s for s in shapes.values() if s.get("parameters") == run["parameters"]), None)
@@ -202,7 +228,8 @@ def scratch(runs: list[dict], branches: list[Branch], shapes: dict[str, dict], r
             raise SystemExit(f"panels: no forward MACs per token for {run['run']} ({run['parameters']} parameters): "
                              "add its count to te_core.panels' FORWARD_MACS")
         out += [(rate * policy.w_fwd({"forward_macs_per_token": macs}) * p["tokens"], p["bpb"] * ratio,
-                 {"data": DATA[1], "run": f"{run['run']}@{p['step']}", "method": what(run) + ", loss converted"})
+                 {"data": DATA[1], "run": f"{run['run']}@{p['step']}", "method": what(run) + ", loss converted",
+                  "method_key": SCRATCH})
                 for p in run["points"] if not start_of(run, p)]
     return out, ratio
 
@@ -213,6 +240,42 @@ def _method(r: dict) -> str:
 
 def _delta(r: dict) -> float | None:
     return r["measured"].delta_bits
+
+
+def through(u, ks) -> tuple[tuple[float, float], ...]:
+    """A non-decreasing profile `u` cut to its ends and its points at each of `ks` within its span: the same largest
+    share x with u(x) <= k (te_core.formalism's `bottom_share`, x0's bound) at each of `ks`, linear between."""
+    lo, hi = u[0][1], u[-1][1]
+    return (tuple(u[0]), *((formalism.bottom_share(u, k), k) for k in sorted(ks) if lo <= k < hi), tuple(u[-1]))
+
+
+def rho_columns(m: formalism.Measured, w: float) -> dict:
+    """A candidate's ρ columns at its checkpoint's quantities `m` from a start whose forward is `w` gates a token:
+    te_core.algorithm_policy's `inputs`, with u_in through the dial's k (`K_LEVELS`), where a measured u_in's many
+    points don't fit a cell."""
+    v = dict(zip(algorithm_policy.INPUTS, algorithm_policy.inputs(m, w)))
+    v |= {"w_fit_gates": m.w_fit, "alpha_ratio": m.alpha_ratio}
+    packed = ",".join(f'"{k}":' + ("null" if v[k] is None else algorithm_policy.num(v[k])) for k in PACKED)
+    u_in = through(algorithm_policy.profile(v["u_in_points"]), K_LEVELS)
+    return {"rho_inputs": "{" + packed + "}", "u_points": v["u_points"], "u_in_points": algorithm_policy.points(u_in)}
+
+
+def page_inputs(d: dict) -> dict:
+    """The inputs of ρ the console's dial reads from a candidate's columns `d`, as te_core.algorithm_policy's
+    `page_rho` takes them."""
+    return json.loads(d["rho_inputs"]) | {k: d[k] for k in ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")}
+
+
+def mismatches(d: dict, dial: dict, w: float) -> list[str]:
+    """Each cell of a checkpoint's `dial` (`Branch`'s) where te_core.algorithm_policy's `page_rho` on its candidate's
+    columns `d` misses te_core.formalism.at's ρ or basis."""
+    out = []
+    for (n, k), v in dial.items():
+        again, basis = algorithm_policy.page_rho(page_inputs(d), n * w, k)
+        want = "fit" if v["fit"] else "target"
+        if basis != want or not (again == v["rho"] or math.isclose(again, v["rho"], rel_tol=1e-4)):
+            out.append(f"{d['run']} at ({n:g}, {k:g}): te_core {v['rho']:.6g} {want}, columns {again:.6g} {basis}")
+    return out
 
 
 def row(**values) -> list:
@@ -229,18 +292,21 @@ def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source:
     points, ratio = scratch(runs, branches, shapes, rate)
     for b in branches:
         points += [(b.c0 + x, y, {"data": b.data, "run": f"{r['id']}@{r.get('checkpoint_step')}",
-                                  "method": f"{_method(r)} from {b.name}", "delta_bits": _delta(r)})
+                                  "method": f"{_method(r)} from {b.name}", "method_key": _method(r),
+                                  "delta_bits": _delta(r)})
                    for x, y, r in b.honest]
     envs = {d: plots.staircase([p for p in points if p[2]["data"] == d]) for d in DATA}
     rows = [row(curve="frontier", data=d, start="", compute_total_gates=x, loss=y, run=r["run"], method=r["method"],
-                delta_bits=r.get("delta_bits")) for d, env in envs.items() for x, y, r in env]
+                method_key=r["method_key"], delta_bits=r.get("delta_bits")) for d, env in envs.items() for x, y, r in env]
+    wrong = []
     for b in branches:
         b.on_frontier = any(r.get("start") == b.name for _, _, r in envs[b.data])
         head = {"data": b.data, "start": b.label, "start_compute_gates": b.c0, "start_loss": b.l0,
                 "on_frontier": "yes" if b.on_frontier else "no"}
         for x, y, r in b.honest:
             rows.append(row(curve="honest", **head, compute_total_gates=b.c0 + x, compute_after_gates=x, loss=y,
-                            run=f"{r['id']}@{r.get('checkpoint_step')}", method=_method(r), delta_bits=_delta(r)))
+                            run=f"{r['id']}@{r.get('checkpoint_step')}", method=_method(r), method_key=_method(r),
+                            delta_bits=_delta(r)))
         for (n, k), stair in b.throttled.items():
             if [(x, r["id"]) for x, _, r in stair] == [(x, r["id"]) for x, _, r in b.honest]:
                 continue
@@ -249,8 +315,18 @@ def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source:
                 rows.append(row(curve="throttled", **head, c_tokens_per_block=n, c_gates=n * b.w, k_bits=k,
                                 mark=b.cells[(n, k)], compute_total_gates=b.c0 + x, compute_after_gates=x, loss=y,
                                 S=x / h if h else None, run=f"{r['id']}@{r.get('checkpoint_step')}",
-                                method=_method(r), delta_bits=_delta(r),
+                                method=_method(r), method_key=_method(r), delta_bits=_delta(r),
                                 basis="fit" if r["dial"][(n, k)]["fit"] else "target"))
+        on = {f"{r['id']}@{r.get('checkpoint_step')}": r for stair in b.throttled.values() for _, _, r in stair}
+        for run, r in sorted(on.items(), key=lambda kv: (kv[1]["gates"], kv[1]["val_bpb"])):
+            rows.append(row(curve="candidate", **head, compute_total_gates=b.c0 + r["gates"],
+                            compute_after_gates=r["gates"], loss=r["val_bpb"], run=run, method=_method(r),
+                            method_key=_method(r), delta_bits=_delta(r), w_fwd_gates=b.w,
+                            **rho_columns(r["measured"], b.w)))
+            wrong += mismatches(dict(zip(COLUMNS, rounded(rows[-1]))), r["dial"], b.w)
+    if wrong:
+        raise ValueError(f"{PANEL}: {len(wrong)} cells where a candidate's columns don't give te_core.formalism.at's "
+                         f"rho ({'; '.join(wrong[:3])}): a record with several parts needs per-part columns")
     headline = next((d for d in DATA if any(b.data == d for b in branches)), DATA[-1])
     p = {"id": PANEL, "title": "The frontier and its branches: loss against total training compute", "kind": "table",
          "updated_at": stamp or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "source": source,
@@ -259,26 +335,31 @@ def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source:
                "headline": headline}
 
 
-def note(ratio: float, n: int | None, data: str, step: float = FRONTIER_STEP) -> str:
-    scratch = f"From-scratch loss: learning_frontier's x{ratio:.4f}. " if data == DATA[1] else "From scratch: the starts. "
+def note(ratio: float, n: int | None, data: str, step: float = FRONTIER_STEP,
+         candidates: tuple[int, int] | None = None) -> str:
+    """The panel's note; `candidates` (kept, of) says when a cut keeps fewer than every candidate."""
+    scratch = f"From-scratch loss: learning_frontier x{ratio:.4f}. " if data == DATA[1] else "From scratch: the starts. "
     thin = "" if n is None else (f" Other cells: {n + 1} points"
                                  + (f", rest {100 * step:g}% apart" if step != FRONTIER_STEP else "") + ".")
-    return (f"Held-out bits/byte ({data}) vs total training gates. frontier: the best unconstrained learner (from scratch "
-            "or a start). honest / throttled: the best unconstrained / constrained learner starting from checkpoint "
-            "`start`; throttled: |C| rho (formalism v2, A1/A1' bounds); S = W*/H, 1 at a cell with no rows. c: "
-            f"start-forward tokens; marked: reference, served demo. C0: dense AdamW's gates/token. {scratch}One seed."
-            + thin)
+    if candidates and candidates[0] < candidates[1]:
+        thin += f" Candidates: {candidates[0]} of {candidates[1]}."
+    return (f"Held-out bits/byte ({data}) vs total training gates. frontier: best unconstrained learner. "
+            "honest/throttled: best unconstrained/constrained learner from checkpoint `start`; throttled: |C| rho "
+            "(A1/A1' bounds); S = W*/H, 1 at cells with no rows. candidate: their checkpoints, with rho's inputs (u_in "
+            f"exact at grid k). c: start-forward tokens. C0: AdamW's gates/token. {scratch}One seed." + thin)
 
 
 def rounded(row: list) -> list:
     return [round(v, 5) if c in LOSSES and isinstance(v, float) else
-            float(f"{v:.4g}") if isinstance(v, float) else v for c, v in zip(COLUMNS, row)]
+            float(algorithm_policy.num(v) if c in EXACT else f"{v:.4g}") if isinstance(v, float) else v
+            for c, v in zip(COLUMNS, row)]
 
 
 def thinned(rows: list[list], n: int | None, step: float = FRONTIER_STEP) -> list[list]:
-    """The frontier's, each honest curve's and each marked throttled curve's points at least `step` apart in loss,
-    and each other throttled curve's at most n + 1, the first to reach each of n + 1 losses evenly spaced over its own
-    span; a curve's first and last points and the frontier's branch points always kept, and every point with n None."""
+    """Every candidate, the frontier's, each honest curve's and each marked throttled curve's points at least `step`
+    apart in loss, and each other throttled curve's at most n + 1, the first to reach each of n + 1 losses evenly
+    spaced over its own span; a curve's first and last points and the frontier's branch points always kept, and every
+    point with n None."""
     if n is None:
         return rows
     ix = {c: i for i, c in enumerate(COLUMNS)}
@@ -291,7 +372,9 @@ def thinned(rows: list[list], n: int | None, step: float = FRONTIER_STEP) -> lis
     out = []
     for (curve, data, _, _, _, mark), g in groups.items():
         loss = [r[ix["loss"]] for r in g]
-        if curve != "throttled" or mark:
+        if curve == "candidate":
+            kept = list(range(len(g)))
+        elif curve != "throttled" or mark:
             kept = [0]
             for i in range(1, len(g)):
                 if i == len(g) - 1 or loss[i] <= loss[kept[-1]] * (1 - step) or \
@@ -304,20 +387,59 @@ def thinned(rows: list[list], n: int | None, step: float = FRONTIER_STEP) -> lis
     return out
 
 
+def ranked(rows: list[list]) -> list[list]:
+    """The candidates among `rows`, those on the most dial cells' throttled curves first (each cell whose curve is the
+    honest one counting for a candidate on that), then by |C|."""
+    ix = {c: i for i, c in enumerate(COLUMNS)}
+    on: dict[tuple, int] = {}
+    own: dict[tuple, set] = {}
+    for r in rows:
+        if r[ix["curve"]] == "throttled":
+            b = (r[ix["data"]], r[ix["start"]])
+            on[(*b, r[ix["run"]])] = on.get((*b, r[ix["run"]]), 0) + 1
+            own.setdefault(b, set()).add((r[ix["c_tokens_per_block"]], r[ix["k_bits"]]))
+    honest = {(r[ix["data"]], r[ix["start"]], r[ix["run"]]) for r in rows if r[ix["curve"]] == "honest"}
+    every = len(cells(1.0))
+
+    def count(r):
+        b, run = (r[ix["data"]], r[ix["start"]]), r[ix["run"]]
+        return on.get((*b, run), 0) + (every - len(own.get(b, ())) if (*b, run) in honest else 0)
+    return sorted((r for r in rows if r[ix["curve"]] == "candidate"),
+                  key=lambda r: (-count(r), r[ix["compute_after_gates"]]))
+
+
 def cut(p: dict, ratio: float, data: str) -> dict:
     """`p`'s rows on `data` at the finest loss step (`STEPS`) and then the most points per unmarked throttled curve
-    (`POINTS`) whose body fits the panels route, numbers to 4 significant digits (losses to 5 decimals)."""
+    (`POINTS`) whose body fits the panels route, numbers to 4 significant digits (losses to 5 decimals); where every
+    candidate doesn't fit at a step's fewest points, the most of them that do there, in `ranked` order, before a
+    coarser step."""
     on = [r for r in p["rows"] if r[COLUMNS.index("data")] == data]
+    cand = ranked(on)
+
+    def attempt(n: int | None, step: float, keep: int) -> tuple[dict, bool]:
+        kept = {id(r) for r in cand[:keep]}
+        q = p | {"rows": [rounded(r) for r in thinned(on, n, step)
+                          if r[COLUMNS.index("curve")] != "candidate" or id(r) in kept],
+                 "note": note(ratio, n, data, step, (keep, len(cand)))}
+        if len(q["note"]) > console.NOTE_MAX:
+            raise ValueError(f"{PANEL}: its note is {len(q['note'])} characters, over {console.NOTE_MAX}")
+        if bad := console.refused(q):
+            raise ValueError(f"{PANEL}: the panels route refuses {len(bad)} cells ({'; '.join(bad[:3])}): make each "
+                             f"a number, a string of at most {console.CELL_MAX} characters or null")
+        return q, len(console.body(q)) <= console.BODY_MAX
+
     for step in STEPS:
         for n in POINTS if step == STEPS[0] else POINTS[1:]:
-            q = p | {"rows": [rounded(r) for r in thinned(on, n, step)], "note": note(ratio, n, data, step)}
-            if len(q["note"]) > console.NOTE_MAX:
-                raise ValueError(f"{PANEL}: its note is {len(q['note'])} characters, over {console.NOTE_MAX}")
-            if bad := console.refused(q):
-                raise ValueError(f"{PANEL}: the panels route refuses {len(bad)} cells ({'; '.join(bad[:3])}): make each "
-                                 f"a number, a string of at most {console.CELL_MAX} characters or null")
-            if len(console.body(q)) <= console.BODY_MAX:
+            q, ok = attempt(n, step, len(cand))
+            if ok:
                 return q
+        lo, hi, best = 0, len(cand) - 1, None
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            q, ok = attempt(POINTS[-1], step, mid)
+            lo, hi, best = (mid + 1, hi, q) if ok else (lo, mid - 1, best)
+        if best is not None:
+            return best
     raise ValueError(f"{PANEL}: no cut fits {console.BODY_MAX} bytes (the last is {len(console.body(q))})")
 
 

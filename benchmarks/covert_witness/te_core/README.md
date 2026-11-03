@@ -105,7 +105,10 @@ unconstrained learner (the frontier, from scratch or continuing a start, at C0 +
 (honest at C0 + |C|; throttled at C0 + |C|ρ per (c, k) of its dial, with S = W\*/H). Its dial is c in tokens of the
 start's forward (and `c_gates`) by k, with the reference policy and the served demo's measured block marked (`mark`);
 every curve is on one data (`data`: `v3` or `v2.3-pilot`), and the console's copy shows v3 once any start has v3
-points, else the pilot. `training/algorithm-policy` is `algorithm_policy`'s: per run and end loss it reaches
+points, else the pilot. Its `candidate` rows, every checkpoint on a throttled curve at some cell, carry the inputs the
+console's dial recomputes ρ from at any (c, k) (te_core 4.x's per-part Fit and ᾱ/α_max among them, u_in exact at the
+dial's k), and `build` refuses one whose columns miss `formalism.at` at a cell; every row's `method_key` is its
+`training/methods` key. `training/algorithm-policy` is `algorithm_policy`'s: per run and end loss it reaches
 (`frontier`'s targets), at its first checkpoint reaching it, the algorithm's inefficiency p = C/H (H the least |C| of
 any valid checkpoint from the start on the same data reaching that loss) against the policy's slowdown ρ, with the
 inputs the console's dial recomputes ρ from at any (c, k), so S = pρ. Every scoring command (`frontier`, `plots`,
@@ -209,7 +212,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `plots.py` | the five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
 | `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note, 24 columns; `refused`), and one panel's PUT |
 | `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
-| `panels.py` | a console training panel, `training/frontier-branches`: the frontier, each branch point's honest and throttled curves, its console cut, figure and PUT |
+| `panels.py` | a console training panel, `training/frontier-branches`: the frontier, each branch point's honest and throttled curves and ρ's candidates, its console cut, figure and PUT |
 | `algorithm_policy.py` | the other, `training/algorithm-policy`: per run and end loss, p = C/H against ρ with ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`), its console cut, figure and PUT |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
