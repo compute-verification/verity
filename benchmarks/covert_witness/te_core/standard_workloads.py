@@ -4,34 +4,33 @@ this te_core and priced by te_core.formalism at two dial points.
 
     python -m te_core.standard_workloads --out DIR [--rows FILE] [--publish]
 
-`--rows` (default `ROWS`, the island's rows.json) gives the reading, the stored traces (the island's trace.py output,
-chosen steps of the runs traced by a te_core, refused unless it is this one) and a row per workload and measured dial
-setting: its workload, model, dials (te_core.workloads' arguments), run id and record art, what the run was beside them
-(`about`, and a `note`), and `rounds` for a generation run (the island's generate.py). A row is the run's last
-checkpoint as te_core.ledger.ingest writes it (into a scratch ledger) with the
-run's traced structures (annotate.with_structures), measured by te_core.formalism.measure. `rho_inputs` holds `KEYS`
-(te_core.algorithm_policy's `INPUTS` with C_gates, w_fit_gates and alpha_ratio, to 6 significant digits);
-`input_status` gives each one's source, "measured" or "assumed: " and why, from te_core's labels: a count, a trace's
+`--rows` (default `ROWS`, the island's rows.json) gives the stored traces (the island's trace.py output, chosen steps
+of the runs traced by a te_core, refused unless it is this one) and a row per workload and measured dial setting: its
+workload, model, dials (te_core.workloads' arguments), run id and record art, what the run was beside them (`about`,
+and a `note`), and `rounds` for a generation run (the island's generate.py). A row is the run's last checkpoint as
+te_core.ledger.ingest writes it (into a scratch ledger) with the run's traced structures (annotate.with_structures),
+measured by te_core.formalism.measure, and priced as te_core.algorithm_policy prices a run: `rho_default` and
+`rho_console` are formalism.at's ρ under algorithm_policy's `READING` over its `IN_RHO` kinds, at the dial's default
+(`points`: c = 4,096 tokens of the start's forward, k = 80,000 bits) and at its `CONSOLE`, the console's default session
+("inf" where infinite); `binding_kind` is what ρ rests on at the default (algorithm_policy's `binding`), and
+`rho_terms` every kind's term at both points (algorithm_policy's `rho_terms`), those outside `IN_RHO` sensitivities,
+never the bound. `rho_inputs` holds `KEYS` (C_gates and algorithm_policy's `DIAL`, to 6 significant digits), from
+which algorithm_policy.page_rho gives ρ at any (c, k); `build` refuses a row whose rho_inputs miss ρ at either point.
+`input_status` gives each input's source, "measured" or "assumed: " and why, from te_core's labels: a count, a trace's
 quantity, E's size and the harness's decoder are measured, and a stub, an assumption or an unmeasured quantity is
-assumed. `rho_default` and `rho_console` are te_core's one bound, formalism.at's ρ under the row's `reading` (the rows
-file's, B where te_core refuses A: a row with no trace `entries`), at the dial's default (`points`: c = 4,096 tokens
-of the start's forward, k = 80,000 bits) and at `CONSOLE`, the console's default session ("inf" where infinite);
-`binding_kind` is what ρ rests on there (`binding`), and `rho_terms` each kind's term, ρ and binding kind under both
-readings at both points (A's refusal where te_core refuses it), with the kinds some steps have no input for, which
-te_core counts 0 (`unmeasured`). `rho_inputs` gives the token form (formalism.at with no reading) at any (c, k)
-(algorithm_policy.page_rho), and `build` refuses a row whose rho_inputs miss it at either point.
+assumed.
 
 A `rounds` row is the run's generation rounds alone (`rounds`), its setup and training steps dropped: a round is one
 counted step that codes the served weights, prefills its prompts and decodes. The capture can't trace a round (its
 decode loop's length is no token axis), so the counter's record is read with these substitutions (`ROUNDS`, each in
-the row's `input_status`): every GEMM on the served codes (W4A4, emulated in bf16 on their decoded values) priced as
-NVFP4 (gemm/fp4); its affected gates the forward ops that read an update tensor (te_core's untraced convention); Δ
+the row's `input_status`): a round's tokens its prompts' and every generated token but the last (the counter counts
+the prompts' positions alone); every GEMM on the served codes (W4A4, emulated in bf16 on their decoded values) priced
+as NVFP4 (gemm/fp4); its affected gates the forward ops that read an update tensor (te_core's untraced convention); Δ
 the served update's bits from the run's notes (every served matrix's codes and scales with the gains in bf16, or the
 LoRA in bf16), and Δ_grad, the partial gradient and the gradient cut 0 (no backward); τ an id per prompt token and
-none per generated one; a, u and u_in te_core's stubs. With no trace there are no `entries`, so a rounds row is read
-under B.
+none per generated one; a, u and u_in te_core's stubs.
 
-DIR gets the uncut table, each row with its labels, parts and formalism.at under both readings at both points
+DIR gets the uncut table, each row with its labels, parts and formalism.at at both points
 (tables/standard-workloads.json), and the console's copy (console/standard-workloads.json); `--publish` puts tables/
 in the evidence store, whose art id the note names, and PUTs the panel.
 """
@@ -55,13 +54,7 @@ NAME = "standard-workloads"
 PANEL = f"training/{NAME}"
 COLUMNS = ["workload", "model", "dials", "run", "rho_inputs", "input_status", "rho_default", "rho_console",
            "binding_kind", "rho_terms", "reading", "te_core"]
-KEYS = ("C_gates", *algorithm_policy.INPUTS, "w_fit_gates", "alpha_ratio")
-READINGS = ("A", "B")
-#: the console's default session: 4,096 input and 1,024 output tokens of the 45M reference model, c their forward at
-#: 2 x 740 gates a MAC, k the inputs' ids at 16 bits
-CONSOLE = (5_120 * 45e6 * 2 * 740, 65_536.0)
-#: the panels route's longest cell
-CELL_MAX = 4_096
+KEYS = ("C_gates", *algorithm_policy.DIAL)
 ROWS = Path(__file__).resolve().parents[1] / "islands" / NAME / "rows.json"
 FP4 = "float4_e2m1fn_x2"
 GEMMS = ("mm", "addmm", "bmm")
@@ -75,9 +68,11 @@ TRACE_FACTS = ("tokens", "sigma", "affected_share", "token_factor", "a_bits", "u
 READ = (formalism.STUBS["delta_bits"], formalism.DECODER["witness"])
 _PRICED = "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) " \
           "priced as NVFP4 (gemm/fp4)"
+_PER_TOKEN = _PRICED + ", per token through the forward: each prompt token and every generated token but the last " \
+                       "(the counter counts the prompts' alone)"
 _UNTRACED = "; a round is not traced (its decode loop's length is no token axis of the capture)"
 ROUNDS = {
-    "C_gates": _PRICED, "w_gates": _PRICED, "sigma": _PRICED, "w_fit_gates": _PRICED,
+    "C_gates": _PRICED, "w_gates": _PER_TOKEN, "sigma": _PRICED, "w_fit_gates": _PER_TOKEN,
     "tau_bits": "assumed: one id per prompt token and none per generated token, which the round samples" + _UNTRACED,
     "a_bits": "assumed: te_core's stub, one token's bf16 residual stream (d_model x 16)" + _UNTRACED,
     "u_points": "assumed: te_core's stub (A1), evenly spread to u(1) = Delta" + _UNTRACED,
@@ -86,6 +81,8 @@ ROUNDS = {
                    "untraced convention)" + _UNTRACED,
 }
 ROUND_LABELS = {
+    "tokens": "measured: each round's prompt positions (the counter's) and every generated token but the last, which "
+              "the counter doesn't count, a sampled id being no data-stream position (the run's notes)",
     "gates": "counted MACs in gates (te_core.gates), the GEMMs on served codes at gemm/fp4 (standard_workloads.rounds)",
     "token_gates": "counted: the rounds' forward in gates, the GEMMs on served codes at gemm/fp4",
     "affected_gates": "stub: the rounds' forward ops that read an update tensor, the GEMMs on served codes at gemm/fp4",
@@ -134,19 +131,21 @@ def coded(row: list, served: set[tuple[int, int]]) -> bool:
 
 def rounds(record: dict, notes: dict, served: set[tuple[int, int]]) -> dict:
     """`record` (generate.py's: each training step, and a round after each of `notes`' rounds) as its rounds alone,
-    the setup and the tail without work and the run's last checkpoint its one: every GEMM on served codes (`coded`)
-    marked NVFP4, each round structure's affected gates its forward ops that read an update tensor and its Δ_grad 0."""
+    the setup and the tail without work and the run's last checkpoint its one: each round's tokens its prompts' (the
+    counter's, which counts data-stream positions, so no sampled id) and every generated token but the last, every
+    GEMM on served codes (`coded`) marked NVFP4, each round structure's affected gates its forward ops that read an
+    update tensor and its Δ_grad 0."""
     after = [r["after_step"] for r in notes["rounds"]]
     if len(record["steps"]) != notes["args"]["steps"] + len(after):
         raise ValueError(f"{len(record['steps'])} steps, not {notes['args']['steps']} training steps and "
                          f"{len(after)} rounds: not generate.py's layout")
     at = {t + i: r for i, (t, r) in enumerate(zip(after, notes["rounds"]))}
-    steps = [s for s in record["steps"] if s["step"] in at]
+    steps = [dict(s) for s in record["steps"] if s["step"] in at]
     for s in steps:
         r = at[s["step"]]
-        if s["tokens"] != r["sequences"] * (r["prompt"] + r["generated"] - 1):
-            raise ValueError(f"round at step {s['step']}: {s['tokens']} tokens, not its prompts' and every generated "
-                             f"token but the last ({r})")
+        if s["tokens"] != r["sequences"] * r["prompt"]:
+            raise ValueError(f"round at step {s['step']}: {s['tokens']} tokens counted, not its prompts' ({r})")
+        s["tokens"] = r["sequences"] * (r["prompt"] + r["generated"] - 1)
     structures = {}
     for sid in {s["struct"] for s in steps}:
         st = record["structures"][sid]
@@ -242,69 +241,27 @@ def status(m: formalism.Measured, override: dict[str, str] | None = None) -> dic
 
 def points(w_fwd: float) -> dict[str, tuple[float, float]]:
     """The two dial points (c, k): the dial's default for a start whose forward is `w_fwd` gates a token, and the
-    console's."""
-    return {"default": algorithm_policy.default(w_fwd), "console": CONSOLE}
+    console's (algorithm_policy's `default` and `CONSOLE`)."""
+    return {"default": algorithm_policy.default(w_fwd), "console": algorithm_policy.CONSOLE}
 
 
-def priced(m: formalism.Measured, w_fwd: float) -> str:
-    """`KEYS` for `m` as the panel's JSON cell (numbers to 6 significant digits, te_core.algorithm_policy's `num`),
-    refused where page_rho on the cell misses formalism.at's token form (no reading) at either of `points`."""
+def priced(m: formalism.Measured, w_fwd: float, at: dict[str, dict]) -> str:
+    """`KEYS` for `m` as the panel's JSON cell, C_gates beside algorithm_policy's `rho_inputs` (numbers to 6
+    significant digits), refused where page_rho on the cell misses ρ or its basis at a point of `at` (formalism.at's
+    output at each of `points`)."""
     v = dict(zip(algorithm_policy.INPUTS, algorithm_policy.inputs(m, w_fwd)))
     v |= {"C_gates": m.gates, "w_fit_gates": m.w_fit, "alpha_ratio": m.alpha_ratio}
     if bad := [k for k in KEYS if isinstance(v[k], float) and not math.isfinite(v[k])]:
         raise ValueError(f"{', '.join(bad)} not finite")
-    text = "{" + ",".join(f'"{k}":' + ("null" if v[k] is None else json.dumps(v[k]) if isinstance(v[k], str)
-                                       else algorithm_policy.num(v[k])) for k in KEYS) + "}"
+    text = algorithm_policy.cell({"C_gates": m.gates} | json.loads(algorithm_policy.rho_inputs(m, w_fwd)))
     cell = json.loads(text)
-    for name, (c, k) in points(w_fwd).items():
-        want = formalism.at(m, c, k)
-        got, basis = algorithm_policy.page_rho(cell, c, k)
+    for name, want in at.items():
+        got, basis = algorithm_policy.page_rho(cell, want["c"], want["k"])
         if basis != ("fit" if want["fit"] else "target") or not (
                 got == want["rho"] or math.isclose(got, want["rho"], rel_tol=1e-4)):
-            raise ValueError(f"at {name} (c {c:.6g}, k {k:g}): te_core's rho {want['rho']:.6g} "
+            raise ValueError(f"at {name} (c {want['c']:.6g}, k {want['k']:g}): te_core's rho {want['rho']:.6g} "
                              f"{'fit' if want['fit'] else 'target'}, its rho_inputs' {got:.6g} {basis}")
     return text
-
-
-def bounds(m: formalism.Measured, at: dict[str, tuple[float, float]]) -> dict[str, dict | str]:
-    """formalism.at under each of `READINGS` at each point of `at`, or why te_core refuses the reading."""
-    out: dict[str, dict | str] = {}
-    for reading in READINGS:
-        try:
-            out[reading] = {name: formalism.at(m, c, k, reading) for name, (c, k) in at.items()}
-        except formalism.Refused as e:
-            out[reading] = f"refused: {e}"
-    return out
-
-
-def binding(v: dict) -> str:
-    """What formalism.at's ρ at a point rests on: "fit" where Fit holds, else the one bound's binding kind, "none"
-    where no kind's term exceeds 1."""
-    return "fit" if v["fit"] else v["bound"]["argmax"] if v["bound"]["max"] > 1 else "none"
-
-
-def binding_cell(at: dict[str, dict]) -> str:
-    kinds = {name: binding(v) for name, v in at.items()}
-    return kinds["default"] if len(set(kinds.values())) == 1 else "; ".join(f"{n}: {x}" for n, x in kinds.items())
-
-
-def unmeasured(m: formalism.Measured) -> dict[str, str]:
-    """Each kind of the one bound some part with token work has no input for, which te_core counts 0 there."""
-    total = sum(p.steps for p in m.parts if p.tokens)
-    out = {}
-    for kind, field in (("reduction", "partial_bits"), ("update", "grad_bits")):
-        if n := sum(p.steps for p in m.parts if p.tokens and getattr(p, field) is None):
-            out[kind] = f"{n} of {total} steps with token work have no traced {field}, counted 0"
-    return out
-
-
-def terms_cell(b: dict[str, dict | str], m: formalism.Measured) -> str:
-    """`bounds`' each reading at each point (its terms, ρ and binding kind; the refusal where te_core refuses the
-    reading) and `unmeasured`, as the panel's JSON cell."""
-    out: dict = {r: v if isinstance(v, str) else {
-        name: {kind: rho_cell(x["bound"]["terms"][kind]) for kind in formalism.KINDS}
-        | {"rho": rho_cell(x["rho"]), "binding": binding(x)} for name, x in v.items()} for r, v in b.items()}
-    return compact(out | ({"unmeasured": gaps} if (gaps := unmeasured(m)) else {}))
 
 
 def rho_cell(v: float) -> float | str:
@@ -329,59 +286,53 @@ def compact(d: dict) -> str:
 def build(spec: dict, stamp: str | None = None) -> tuple[dict, list[dict]]:
     """The panel and each row's details (module docstring) from the rows file's `spec`."""
     tr = traces(spec.get("traces", []))
+    reading, kinds = algorithm_policy.READING, algorithm_policy.IN_RHO
     rows, details = [], []
     for r in spec["rows"]:
         m, shape, read = measured(r, tr.get(r["run"], {}))
         w_fwd = policy.w_fwd(shape)
+        pts = points(w_fwd)
+        at = {name: formalism.at(m, c, k, reading, kinds) for name, (c, k) in pts.items()}
         try:
-            cell = priced(m, w_fwd)
+            cell = priced(m, w_fwd, at)
         except ValueError as e:
             raise SystemExit(f"{PANEL}: {r['workload']} {r['run']}: {e}") from None
-        b = bounds(m, points(w_fwd))
-        reading = spec["reading"] if isinstance(b[spec["reading"]], dict) else "B"
-        at = b[reading]
         st = status(m, ROUNDS if r.get("rounds") else None)
         said = "; ".join(r[x] for x in ("about", "note") if r.get(x))
         run = f"{r['run']} {r['art']}" + (f" ({said})" if said else "")
         rows.append([r["workload"], r["model"], compact(r["dials"]), run, cell, compact(st),
-                     rho_cell(at["default"]["rho"]), rho_cell(at["console"]["rho"]), binding_cell(at),
-                     terms_cell(b, m), reading, VERSION])
+                     rho_cell(at["default"]["rho"]), rho_cell(at["console"]["rho"]),
+                     algorithm_policy.binding(at["default"]),
+                     algorithm_policy.rho_terms(m, {name: (*pts[name], v) for name, v in at.items()}), reading,
+                     VERSION])
         details.append(finite({"workload": r["workload"], "run": r["run"], "art": r["art"], "read": read,
                                "w_fwd_gates": w_fwd, "labels": m.labels,
                                "parts": [dataclasses.asdict(p) for p in m.parts], "tail_share": m.tail_share,
-                               "reading": reading, "at": b}))
-    readings = sorted({row[COLUMNS.index("reading")] for row in rows})
+                               "reading": reading, "max_over": list(kinds), "at": at}))
     p = {"id": PANEL, "title": "Standard training under the policy: covert workloads measured on real runs",
          "kind": "table", "updated_at": stamp or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-         "source": f"python -m te_core.{NAME.replace('-', '_')} (te_core {VERSION}, reading {' and '.join(readings)}; "
-                   f"islands/{NAME})", "note": note(), "columns": COLUMNS, "rows": rows}
+         "source": f"python -m te_core.{NAME.replace('-', '_')} (te_core {VERSION}, reading {reading}; islands/{NAME})",
+         "note": note(), "columns": COLUMNS, "rows": rows}
     return p, details
 
 
 def note(art: str | None = None) -> str:
-    return (f"Covert workloads, each a small real run from a registered start, measured by te_core {VERSION}. rho: "
-            f"its one bound (formalism.at at the row's reading) at the dial's default (c = {policy.SESSION_TOKENS} "
-            f"w_fwd, k = {policy.REFERENCE_K_BITS:,} bits) and the console's (c = {algorithm_policy.num(CONSOLE[0], 5)}"
-            f" gates, k = {CONSOLE[1]:,.0f} bits); rho_terms: each kind's term, readings A and B; rho_inputs: the "
-            "token form at any (c, k) (page_rho). input_status: measured, or assumed and why."
-            + (f" Tables {art}." if art else ""))
+    c, k = algorithm_policy.CONSOLE
+    return (f"Covert workloads, each a small real run from a registered start, te_core {VERSION}. rho (target): "
+            f"reading {algorithm_policy.READING} over kinds {', '.join(algorithm_policy.IN_RHO)}, at the dial's default "
+            f"(c = {policy.SESSION_TOKENS} w_fwd, k = {policy.REFERENCE_K_BITS:,}) and the console's (c = "
+            f"{algorithm_policy.num(c, 5)}, k = {k:,}); low until te_core prices fresh products. binding_kind: fit "
+            "(c/(c-d)), token (A1, assumed) or none; rho_terms' other kinds are sensitivities, never the bound. "
+            "input_status: measured, or assumed and why." + (f" Tables {art}." if art else ""))
 
 
 def refused(p: dict) -> list[str]:
-    """What the panels route refuses in `p`: te_core.console's limits, with a cell up to `CELL_MAX` characters."""
-    out = [] if len(p["note"]) <= console.NOTE_MAX else [f"its note is {len(p['note'])} characters"]
+    """What the panels route refuses in `p`: te_core.console's `refused`, and its note and body over their limits."""
+    out = console.refused(p)
+    if len(p["note"]) > console.NOTE_MAX:
+        out.append(f"its note is {len(p['note'])} characters, over {console.NOTE_MAX}")
     if len(console.body(p)) > console.BODY_MAX:
-        out.append(f"its body is {len(console.body(p))} bytes")
-    cols = p["columns"]
-    if not 1 <= len(cols) <= console.COLUMNS_MAX or len(set(cols)) < len(cols) \
-            or any(len(c) > console.NAME_MAX for c in cols):
-        out.append(f"its {len(cols)} columns")
-    for i, r in enumerate(p["rows"]):
-        if len(r) != len(cols):
-            out.append(f"row {i} has {len(r)} cells")
-        out += [f"row {i}'s {c} ({len(v) if isinstance(v, str) else type(v).__name__})" for c, v in zip(cols, r)
-                if not (v is None or isinstance(v, (int, float)) and not isinstance(v, bool)
-                        or isinstance(v, str) and len(v) <= CELL_MAX)]
+        out.append(f"its body is {len(console.body(p))} bytes, over {console.BODY_MAX}")
     return out
 
 

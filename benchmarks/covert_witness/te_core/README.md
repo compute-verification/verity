@@ -158,9 +158,10 @@ loss (`policy.CAP_FALLBACK`), so a grown model is still scored; the rest are lef
 `training/standard-workloads` is `standard_workloads`'s, PUT by `python -m te_core.standard_workloads --out DIR
 --publish`: the standard covert workloads (dense, DiLoCo, RL, inference, LoRA, distillation), each a small real run from a
 registered start named in `islands/standard-workloads/rows.json`, measured by this te_core (its traced structures where
-the island traced them; a generation run's rounds alone, priced as NVFP4) and priced by the one bound (`formalism.at`
-under reading A where the trace has `entries`, else B) at the dial's default and the console's default session, with
-each kind's term under both readings and each input labelled measured or assumed and why. It is not scored against H.
+the island traced them; a generation run's rounds alone, priced as NVFP4) and priced as `training/algorithm-policy`
+prices a run (`formalism.at` under its `READING` over its `IN_RHO` kinds, every other kind's term a sensitivity) at the
+dial's default and the console's default session, each input labelled measured or assumed and why. It is not scored
+against H.
 
 ## What the integrator calls
 
