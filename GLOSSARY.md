@@ -224,6 +224,10 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "builder", "advice compiler", "circuit builder" for what compiles the advice; `Builder` | registered compiler |
 | "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, registered work; execution block, execution phase |
 | a served span: "window", `IntegrityPeriod`, PoUW's "commit period" and `window`, "sampling block", until renamed | execution phase |
+| PoUW's "epoch" and "window" for the served span (an execution phase is k whole aligned certifier windows, which keep their name); `Epoch`, `pass_epoch`, the `epoch` keys and arguments, `pouw-window` in `salt.context`, and the tags `verity/pouw/epoch-salt/v1`, `verity/pouw/epoch-coins/v1`, `verity/pouw-epoch-open/v2` and `verity/pouw-window-open/v1`, until a format version | execution phase |
+| "the epoch's live salt", "window salt", "epoch salt"; "epoch coins" | the execution phase's salt; the execution phase's coins |
+| "period" for H1's credit span; `period`, `period_credit`, `periodCredit` and the ledger's `period-open` and `period-close`, until renamed | credit period |
+| Dither's "noise period" L′ and its `lp`; Dither's bare "cell" | noise repeat length; output cell |
 | "sampling period" for work plus its audit | an execution phase and its verification phase |
 | "hm96 rows" in protocol prose (the commitments' docs keep it) | hiding commitments |
 | "proof service" | the proof system |
@@ -247,12 +251,14 @@ pins, fixtures and recorded runs bake in; a new family takes a fresh id (`test_t
 - **The card premise** (`CardWithinAccel`): anything the card computes in time T, the ACCEL machine computes within T at
   the card's rates. Its evidence is **the opcode table**, which places every opcode of the card on the ACCEL ops.
 - **Segment**: L consecutive inner indices of one output cell, between two committed prefix sums. A Dither proof block is
-  one segment of one cell.
-- **Noise period** L′: the period of Dither's noise along K; a segment is t = L/L′ noise periods.
+  one segment of one output cell.
+- **Noise repeat length** L′: the length after which Dither's noise repeats along K; a segment is t = L/L′ noise repeat
+  lengths.
+- **Credit period**: H1's span of credit, the execution phases between a period-open the auditor signs and its close.
 - **Prefix sums** T_s: Dither's committed running sums along a segment, stored as 16-bit elements.
 - **Dither** is the protocol, PoUW's no-fold design, at v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md` while
   experimental; the Lean's `Pouw.Dither`), proved over the ACCEL model. Its receipt: each segment's noised prefix sums
-  are committed as SHA-512 hiding commitments of 16 KiB, before the check coin, and the sampled cells are opened after
+  are committed as SHA-512 hiding commitments of 16 KiB, before the check coin, and the sampled output cells are opened after
   it. The served PoUW moves to it, and `SharedNoiseLucks` (the served H1 and J10-R folds') has no place in it.
 
 ## Narrower senses
@@ -292,8 +298,9 @@ pins, fixtures and recorded runs bake in; a new family takes a fresh id (`test_t
   - **Stage**: to stage a statement is to fix and write it before any coin draws (the firewall's staged statements).
     A step of a run is a phase (Older names); a stage of a Boolean lowering is a level; a pipeline stage keeps its
     sense (above).
-  - **Window**: the code's windows (`verity.ml.windows`, a served window circuit and its window record, PoUW's window and
-    its salt) are one period's served steps, and keep the word until renamed. A span of time is a period, a
+  - **Window**: the code's windows (`verity.ml.windows`, a served window circuit and its window record, PoUW's `window`
+    and its salt) are one period's served steps, and keep the word until renamed; in prose PoUW's window is its
+    execution phase, and a certifier window keeps its name. A span of time is a period, a
     server's gates between two memory wipes are a server block, and a sliding window is a model's term (above).
   - **Escape**: an incorrect proof block's chance to be accepted is its acceptance probability (Older names); the
     integrity profile's `escape` method keeps the old word. In vLLM's Program frontend, a host escape

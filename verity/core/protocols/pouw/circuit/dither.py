@@ -22,7 +22,7 @@ receipt ‖ be64(call) ‖ x), the receipt being the digest of the certifier's s
 * ``dA``, ``dB``: d[i, k] is bit k mod 512 (least significant first) of block i ceil(K / 512) + k div 512.
 * ``V``, ``U``: row r's entry c is ((w 161) >> 32) - 80 for w the little-endian u32 word r L′ + c of the stream.
 * ``P``: π_τ is Fisher–Yates over L′ with words τ L′ + c: c from L′ - 1 down to 1, x = (w (c + 1)) >> 32, swap c and x.
-* ``pad`` (a filler's only): seed_x = SHA-512(`FILL_SEEDS_TAG` ‖ window salt ‖ call coin ‖ x) for every stream, and
+* ``pad`` (a filler's only): seed_x = SHA-512(`FILL_SEEDS_TAG` ‖ execution-phase salt ‖ call coin ‖ x) for every stream, and
   A[i, k] is byte k of the pad stream's blocks i ceil(K / 64) .., as an int8. A fixed public pad lets a prover table A's
   subset sums once a period.
 
@@ -118,7 +118,7 @@ KEY = INST.default_key
 
 @dataclass(frozen=True)
 class Shape:
-    """A call: m rows of A against n rows of B at contraction k, HYB noise of period lp (L′), words every L inner indices,
+    """A call: m rows of A against n rows of B at contraction k, HYB noise of repeat length lp (L′), words every L inner indices,
     leaf rows of `row` bytes, and O committed (`o`; a filler's calls commit none)."""
 
     m: int
@@ -140,7 +140,7 @@ class Shape:
             raise ValueError(f"L is t L′, a multiple of L′ {self.lp}, not {self.L}")
         if min(self.L, self.k) > 8 * self.lp:
             raise ValueError(f"t = min(L, K) / L′ is at most 8 (verity/core/protocols/pouw/dither/PROTOCOL.md, The segment "
-                             f"and the noise period), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
+                             f"and the noise repeat length), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
         if self.row <= 0 or self.row % 16 or TILE_WORD_BYTES % self.row:
             raise ValueError(f"a row is a multiple of 16 bytes dividing {TILE_WORD_BYTES}, not {self.row}")
 

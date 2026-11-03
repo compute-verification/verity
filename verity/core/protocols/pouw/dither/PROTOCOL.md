@@ -11,14 +11,14 @@ exclusion"). This document still states the protocol at pub(μ°) until it is re
 
 The protocol is experimental. Its guarantee is `Pouw.Guarantees.Dither.WorkSound` and its card instances
 `Pouw.Guarantees.DitherInstance.WorkSoundAt`, over the ACCEL model `Accel`, with the clocks of `Timed`. The change whose
-Lean covers this document deletes it. The numbers are D6 v1.1's, and the segment and noise periods NOFOLD-OPT's (see
-"The segment and the noise period").
+Lean covers this document deletes it. The numbers are D6 v1.1's, and the segment and noise repeat lengths NOFOLD-OPT's (see
+"The segment and the noise repeat length").
 
 **Names.** Dither is the protocol, PoUW's no-fold design, and the ACCEL model is the physical model 𝓜 it is proved over
 (the Lean's `Accel`).
 
 **The receipt is no-fold.** Each segment's 16-bit noised prefix sums are committed as SHA-512
-hiding leaves before the check coin, and the sampled cells are opened after it; no word is folded into a keyed receipt.
+hiding leaves before the check coin, and the sampled output cells are opened after it; no word is folded into a keyed receipt.
 The served PoUW moves to this receipt, and `SharedNoiseLucks`, the premise its folds' detection rests on, has no place in
 Dither: detection rests on the value root's binding before the coin, SHA-512's extraction and the proved sampling rate.
 
@@ -66,7 +66,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
 The Lean predates these names. Its round is a sampling block, and its word is a proof block's committed value. Its `k`
 and `nsb` are k, and `k_draw` is q. Its `C` is W_reg, `H` is W_b, `H_o` is W_ans and `δ` is δ_coin. Its fleet's unit is
 a replica, and θ is 𝓜. A rename is to follow. Two premises have new names, which the Lean is to take: SHA-512's
-premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and the proof service's "the proof system is sound" is
+premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and the proof system's "the proof system is sound" is
 `ProofSystemSound` (the Lean's `ServiceSound`).
 
 ## What is committed
@@ -75,10 +75,10 @@ premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and the proof service'
 weights (for PV, A is P and B is the value cache).
 
 **Noise.** The live coins give each call its dithers d_A ∈ {0,1}^{m×K} and d_B ∈ {0,1}^{N×K}, and HYB noise:
-- U is N×L′ and V is m×L′, both uniform on ±80, periodic along K with period L′.
+- U is N×L′ and V is m×L′, both uniform on ±80, repeating along K with noise repeat length L′.
 - U's columns are permuted afresh (π_τ) in every noise tile τ.
-- A segment is t noise tiles, so L = t·L′. L, the word interval (one 16-bit word a cell every L inner indices), and L′,
-  the noise period, are separate parameters (see "The segment and the noise period").
+- A segment is t noise tiles, so L = t·L′. L, the word interval (one 16-bit word an output cell every L inner indices), and L′,
+  the noise repeat length, are separate parameters (see "The segment and the noise repeat length").
 
 **The tensor operands** are X = wrap8(A + d_A + V) and W′ = wrap8(B + d_B + U π_τ), tile by tile, with wrap indicators
 w_X and w_W.
@@ -89,7 +89,7 @@ w_X and w_W.
   Z_X = Σ_τ (A + d_A + V)_τ π_τᵀ, Y_W = Σ_τ (B + d_B)_τ, and T_S is taken at full width.
 
 T_S is implied by O, not committed: the s = S proof block, which opens the whole rows, derives it from O by that
-identity (NOFOLD-OPT; it takes no premise). At L ≥ K a cell commits O alone.
+identity (NOFOLD-OPT; it takes no premise). At L ≥ K an output cell commits O alone.
 
 **Leaves and roots.** Every root is a binary frame-v3-sha512 tree of hm96-sha512/row/v2 rows of 16 KiB, hiding leaves
 under the prover's salts (`verity.ml.commitments`: `rowleaf`, `hm96`, `merkle`). A 16 KiB row costs 8.6 SHA-512
@@ -97,17 +97,17 @@ compressions a KiB, against 8.9 for an 8-chunk leaf in a 16-ary tree, so Dither 
 (NOFOLD-OPT).
 - Each call has an operand root, bound in its sampling block's dither run's commit phase, and a value root holding its
   T_s and O, bound in that run's response phase (see "A sampling block's runs"), both before the block's check coin.
-  The sampled cells are opened after it.
+  The sampled output cells are opened after it.
 - The weights are in the period's weight root, bound once a period, before any of the period's coins.
 
 **The value root's layout**, pinned for kernels (KCOMMIT-FB). It is V31-GPU's `v31.py` layout at 16 KiB rows,
 under Dither's tag and without segment S's rows:
-- A call's m × N output is cut into 128 × 128 tiles, tile t = t_m·(N/128) + t_n, each tile's cells row-major
+- A call's m × N output is cut into 128 × 128 tiles, tile t = t_m·(N/128) + t_n, each tile's output cells row-major
   (c = 128 r + col). m and N are multiples of 128, and L′ a multiple of 32 dividing K.
 - A tile's words of segment s, for s = 1..S − 1, are its 16,384 T_s as little-endian u16 (32 KiB, two rows). Its O
   values are 16,384 little-endian u32 (64 KiB, four rows). So a tile takes P = 2(S − 1) + 4 rows, and no row is padded:
   - row t·P + 2(s − 1) + r, for r = 0, 1, is bytes [16,384 r, 16,384 (r + 1)) of tile t's segment-s words;
-  - row t·P + 2(S − 1) + h, for h = 0..3, is the O of tile t's cells 4,096 h to 4,096 h + 4,095.
+  - row t·P + 2(S − 1) + h, for h = 0..3, is the O of tile t's output cells 4,096 h to 4,096 h + 4,095.
 - A row's leaf is hm96's leaf over the row's `sha512/row/v2` digest (131,072 bits), salted with `prf_salt(Ks, off + pos)`:
   192 bytes of commit_gpu's PRF (`benchmarks/pouw/commit_gpu/reference.py`), keyed by the prover's private Ks, at the
   call's salt offset off plus the row's position pos. No coin feeds a salt. frame-v3-sha512's leaf prefix (the domain id
@@ -143,7 +143,7 @@ check passes, and O = −V·Y_Wᵀ costs L′/K + 1/m of the call's MACs. That f
 **What is credited.** Static matmuls and attention's PV, with O bound and a fresh dither bit on P. QKᵀ and V4's
 indexer are served plain and uncredited.
 
-**The segment and the noise period** per class of sampling block follow one rule. The pair (L, L′) maximizes
+**The segment and the noise repeat length** per class of sampling block follow one rule. The pair (L, L′) maximizes
 credited value per honest second, pub_μ°/T_honest, subject to γ ≤ 10 for that class. A class with no pair at γ ≤ 10 is
 credited at its least-γ pair only where that adds credited value per honest second; otherwise it is served plain.
 NOFOLD-OPT's picks, all with T_S implied by O and
@@ -196,7 +196,7 @@ Block b + 1's dither run starts at b's value-root receipt, beside b's check run.
 
 ## The proof block and its Program
 
-**A proof block** is one cell (i, j) and one segment s of a call. Its Program opens these from their hiding leaves,
+**A proof block** is one output cell (i, j) and one segment s of a call. Its Program opens these from their hiding leaves,
 inside the proof:
 - A's and B's row segments s (for s = S, the whole rows A[i,·] and B[j,·]), each from where its class binds it;
 - T_{s−1} (with T_0 = 0), and T_s for s < S or O for s = S, from the call's value root.
@@ -213,7 +213,7 @@ mod 2^16, from the whole rows, their wraps and the coins, and also checks O ≡ 
 
 C-Flock `--zk` proves it on the committed values. The Definition and its circuit-check sidecar are not written yet.
 
-O is checked only in its cell's last segment, never in a proof block of its own. At A = B = 0 its 32 bits alone are
+O is checked only in its output cell's last segment, never in a proof block of its own. At A = B = 0 its 32 bits alone are
 guessed with probability 0.1145 at K = 64, and its high word with probability 1.
 
 ## The outcome
@@ -463,7 +463,7 @@ Notes on the headline:
 - Without the registration (P21's variant, the draw normalised by wall-clock time), ε_skip would be 0.270–0.424%.
 - Coverage counts V4's 48.85e9 static MACs a token at their own shapes. With mHC's F32 GEMMs uncredited, V4's coverage
   is 96.4% on the H200 and 95.7% on the RTX PRO 6000.
-- The γ column is D6 v1.1's. At NOFOLD-OPT's picks (see "The segment and the noise period"), the static calls' γ is
+- The γ column is D6 v1.1's. At NOFOLD-OPT's picks (see "The segment and the noise repeat length"), the static calls' γ is
   1.05–1.15 on the RTX PRO 6000 with B pinned and 1.40–2.15 on the H200; the headline isn't restated at them yet.
 - What v3.2 changes and D6 v1.1 doesn't price:
   - E with the answers' proofs raises ε_net by at most 0.0006%.

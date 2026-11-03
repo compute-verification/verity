@@ -18,7 +18,7 @@ seeds both instead (v31.py's ``llm`` rows for B), for tests and shapes the check
 the root of one challenger session with families ``seeds`` and ``check``, a coin each a block. Then its sampling blocks run
 in one sequence. Block b's operand-root receipt is H(registration, b, block b-2's value-root receipt; the registration's
 digest for b < 2), and its seeds coin opens after it, so blocks 0 and 1's open with the session, before the wall starts. Call (s, layer)'s coin is ``derive(coin, "verity/pouw-accel/seeds/v1", ctx).stream(call)``, and its six
-seeds (pad dA dB U V P) are dither.call_seeds of that coin under the block's window salt, its operand-root receipt. Each
+seeds (pad dA dB U V P) are dither.call_seeds of that coin under the block's execution-phase salt, its operand-root receipt. Each
 call commits its words T_s = X W'^T mod 2^16 every L inner indices (no O, wraps or binding; `prep --served`: the served
 form, T_1 .. T_{S-1} and O = (A + d_A)(B + d_B)^T mod 2^32, its seeds still the filler's streams) under a frame-v3-sha512 root,
 its leaf pos salted prf_salt(Ks, off + pos) under the Prover's own Ks, off = c leaves for its c-th call (dither.salts);
@@ -89,7 +89,7 @@ LINEARS = (("qkv", 6144, 4096), ("o", 4096, 4096), ("up", 28672, 4096), ("down",
 LAYERS = LINEARS
 M = 16384
 NB = 32       # transformer blocks: step g runs block g mod NB
-LP, L = 512, 16384   # the noise period L' (a call's least; `lp_of`) and the word interval L: S = ceil(K / L) = 1 at every call's K
+LP, L = 512, 16384   # the noise repeat length L' (a call's least; `lp_of`) and the word interval L: S = ceil(K / L) = 1 at every call's K
 #: Dither's argument covers segments of at most T_MAX L' inner indices (a proof block's cost goes as c_t / t; v3.2 proves it
 #: for t <= 8), and v31's Fill takes L' <= LP_MAX, so a call takes a longer L' (`lp_of`), and a linear no L' covers runs as
 #: K-slices (`calls`)
@@ -347,7 +347,7 @@ def cmd_prep(a: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------------------------------------- the coins
 def call_seeds(coin: bytes, period: str, block: int, receipt: bytes, steps: int) -> list[bytes]:
     """The block's calls' seeds (384 bytes: dither's six streams, pad dA dB U V P), step-major, from its seeds coin: call
-    (s, layer)'s coin is the block coin's stream at it, and its seeds are dither.call_seeds under the block's window salt
+    (s, layer)'s coin is the block coin's stream at it, and its seeds are dither.call_seeds under the block's execution-phase salt
     (its operand-root receipt)."""
     key = derive(coin, "verity/pouw-accel/seeds/v1", {"period": period, "block": block, "receipt": receipt})
     return [v31.fill_seeds_bytes(v31.call_seeds(receipt, key.stream(("call", s, li), 64)))
@@ -1158,7 +1158,7 @@ def main(argv: list[str]) -> int:
     p = sub.add_parser("prep")
     p.add_argument("cfg")
     p.add_argument("--row", type=int, default=8192, help="leaf row bytes")
-    p.add_argument("--lp", type=int, default=LP, help="the least noise period L'")
+    p.add_argument("--lp", type=int, default=LP, help="the least noise repeat length L'")
     p.add_argument("--lp-max", type=int, default=LP_MAX, help="the longest L' (v31's Fill takes up to 1024)")
     p.add_argument("--L", type=int, help=f"the word interval L (default {L}; --small's 512)")
     g = p.add_mutually_exclusive_group(required=True)
