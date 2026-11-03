@@ -19,7 +19,9 @@
 # capture, timing nothing.  Then
 # (PIN=1, the default) harness/jobs/pin_target.sh pins this nvcc for sm_90a as TK (default 13.0.1-sm_90a) on its own lease,
 # (VOLUNTEER=1, the default) glm53_passes.py volunteer gives up prefill's and decode's rows over a debit cap in their records
-# on this machine's CPUs, after every lease is released and before any verifier coin, and
+# on this machine's CPUs, after every lease is released and before any verifier coin (VOLUNTEER=device: the words' counts
+# on a leased card from the ship's debit_sm90.cubin, every DEVICE_CHECK-th tile, default every one, replayed on the CPUs
+# too and held equal), and
 # (VERIFY=1, the default) glm53_passes.py verify replays DRAWS tiles of each pass there (default 459, the verdict's
 # `served_passes.DRAWS`), and
 # (FULL=1, the default) glm53_passes.py full checks prefill's and decode's outputs in full there (every tile's C~ and U by its
@@ -53,6 +55,7 @@ tar -C "$S" -xf "$IN/ship.tar" && (cd "$S" && sha256sum -c --quiet MANIFEST.sha2
 echo "ship rc $?" >> "$O/rc.txt"
 grep -q "ship rc 0" "$O/rc.txt" || { cat "$O/rc.txt"; exit 2; }
 cp "$S/pearl_c_sm90.cubin" "$D/" && rm -rf "$D/check" && cp -r "$S/check" "$D/check"
+[ -f "$S/debit_sm90.cubin" ] && cp "$S/debit_sm90.cubin" "$D/"
 cp "$S/source.txt" "$S/toolchain.txt" "$S/sass.json" "$S/MANIFEST.sha256" "$O/"
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvcc --version > "$O/nvcc.txt" 2>&1
@@ -92,6 +95,10 @@ if [ "${PIN:-1}" = 1 ]; then
 fi
 if [ "${VOLUNTEER:-1}" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then
   "$PY" "$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)" > "$O/volunteer.log" 2>&1
+  echo "volunteer rc $?" >> "$O/rc.txt"
+elif [ "${VOLUNTEER:-1}" = device ] && [ -f "$O/passes/decode/manifest.json" ]; then
+  gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" -- "$PY" "$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)" \
+    --device "$D/debit_sm90.cubin" --device-check "${DEVICE_CHECK:-1}" > "$O/volunteer.log" 2>&1
   echo "volunteer rc $?" >> "$O/rc.txt"
 fi
 if [ "${VERIFY:-1}" = 1 ] && [ -f "$O/passes/control/manifest.json" ]; then

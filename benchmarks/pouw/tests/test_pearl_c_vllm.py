@@ -1134,6 +1134,65 @@ def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_pa
     assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
 
 
+class _StandInDebit:
+    """`debit.Debit` without a card: `fast_tile.word_debits` (module `ft`) on the whole of A′ by B̃, with the words `bad`
+    names in the first call marked non-finite and their counts wrong, and one added to the first call's atoms at `off`."""
+
+    def __init__(self, ft, device, bad=(), off=None):
+        self.ft, self.device, self.bad, self.off, self.calls = ft, device, set(bad), off, []
+
+    def words(self, a, b):
+        self.calls.append((a.shape, b.shape))
+        atoms, zeros = (x.astype(np.uint16) for x in self.ft.word_debits(a.tolist(), b.tolist(), self.device))
+        bad = np.zeros(atoms.shape, bool)
+        if len(self.calls) == 1:
+            for i, j in self.bad:
+                bad[i, j], atoms[i, j] = True, atoms[i, j] + 7
+            if self.off is not None:
+                atoms[self.off] += 1
+        return atoms, zeros, bad
+
+
+def test_volunteer_pass_on_the_device_counts_every_tile_as_the_replay_and_gives_up_the_same_rows(tmp_path):
+    """`volunteer_pass.words_device` on a stand-in for the card (`_StandInDebit`): each call's A′ (its real rows) and each
+    weight's B̃ formed once as `encode` forms a tile's, every word's counts cut into the tiles in `scheme.tiles`' order with
+    filler rows zero, give every tile's counts as the CPU replay (`words`) gives them, so the pass gives up the same rows to
+    the same records root.  A tile with a word the device marks non-finite takes the replay's counts, and a count unlike
+    the replay's on a cross-checked tile stops the step before the records change."""
+    VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    coins, before = published(path), path.read_text()
+    p = VP.VR.load(path, coins)
+    want = VP.words(p, 1)
+    cubin = tmp_path / "debit_sm90.cubin"
+    cubin.write_bytes(b"stand-in")
+    # call 0's row 17 is in its second row tile (tile id 1), which no cross-check at every 2^20th tile replays
+    stand = _StandInDebit(VP.FT, p.scheme.device, bad=[(17, 3)])
+    VP._DEBIT[str(cubin.resolve())] = stand
+    VP._B_CODES.clear()
+    try:
+        got, on = VP.words_device(VP.VR.load(path, coins), 1, cubin, cross_check=1 << 20)
+        assert got.keys() == want.keys()
+        assert all(np.array_equal(got[t][0], want[t][0]) and np.array_equal(got[t][1], want[t][1]) for t in want)
+        assert [a for a, _ in stand.calls] == [(r.real_rows, r.matmul.shape.k) for r in p.records]
+        assert on["bad_tiles"] == 1 and on["replayed"] == 2 and on["cross_check"] == 1 << 20
+        VP._DEBIT[str(cubin.resolve())] = _StandInDebit(VP.FT, p.scheme.device, off=(0, 0))
+        with pytest.raises(RuntimeError, match="differ from the CPU replay's on 1 of 1 tiles"):
+            VP.volunteer(path, coins, 1, cubin, 1 << 20)
+        assert path.read_text() == before
+        VP._DEBIT[str(cubin.resolve())] = _StandInDebit(VP.FT, p.scheme.device)
+        out = VP.volunteer(path, coins, 1, cubin, 1)
+        assert out["ok"] and out["device"]["replayed"] == len(want) and "counted on the device" in out["line"]
+        dev_root = out["records_root"]["after"]
+    finally:
+        VP._DEBIT.clear()
+        VP._B_CODES.clear()
+    path.write_text(before)
+    cpu = VP.volunteer(path, coins, 1)
+    assert cpu["records_root"]["after"] == dev_root != cpu["records_root"]["before"]
+    assert (cpu["voluntary_a"], cpu["voluntary_b"]) == (out["voluntary_a"], out["voluntary_b"])
+
+
 def test_volunteer_words_gives_up_a_b_row_for_a_row_the_a_count_leaves_over():
     """V-EX allows ⌈m/64⌉ = 1 A row of a 16-row unit: of two credited rows over their row caps the one further over is
     given up as an A row, and the other gives up the B row holding its flagged atom-word.  A third row over its cap in the
