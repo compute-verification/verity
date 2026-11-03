@@ -5,6 +5,7 @@ another form is a change to one rule here, with the proof that the headlines cov
 general instance form (`scopeOkI`, once `wiresAcyclic` passed); with public outputs, the unit's form (`scopeOk`).
 -/
 import Flock.HmRow
+import Flock.JsonParse
 
 namespace Flock.ProvedScope
 
@@ -352,7 +353,7 @@ def NO_PROGRAM : String :=
 /-- `program_sha512` of the verifier's own `--program` bytes: SHA-512 of the canonical descriptor without `annotations`
 (`TemplateQuery.Desc`'s, the digest a partition object and META name); none for bytes that are not a JSON descriptor. -/
 def programDigest (b : ByteArray) : Option String := do
-  let j ← (Lean.Json.parse (← String.fromUTF8? b)).toOption
+  let j ← (JsonParse.parse (← String.fromUTF8? b)).toOption
   let bare := match j with
     | .obj kvs => Lean.Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
     | x => x
