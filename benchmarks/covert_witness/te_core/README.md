@@ -166,10 +166,13 @@ console's dial recomputes ρ from at any (c, k), in one JSON cell (`rho_inputs`;
 where the row's trace has entries and an op log: Fit's c/(c − d) where it holds, else the measured max where it
 exceeds 1, partial where a kind is unmeasured, else null where a kind is unmeasured, else 1, binding none; else
 reading B's, a target), the `te_core` that priced it, `binding_kind`, `rests_on` and `kinds` (the terms its max takes
-and the sensitivities it leaves out). Its coverage
+and the sensitivities it leaves out, a measured fresh-products term with its premises, P-width and P-chain, beside
+it). Its coverage
 (gain target by data by decade of ρ, with the reached cells' ρ at the registered serving block beside the console's
 default) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
-refuses, which no cell holds (`tables/refused.json` gives each one's reason). `--publish` GETs what the route serves
+refuses, which no cell holds (`tables/refused.json` gives each one's reason). A row `published` marks partial (a valid
+kind unmeasured, so ρ is only a lower bound) has basis `partial`: the figure draws it with a caret up and the cut
+picks the partial rows among themselves, but none is in a cell, on the others' front or the least S. `--publish` GETs what the route serves
 and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one with a run this
 build has no row for, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never
 empties a populated panel; a build with every served run replaces an older te_core's rows, however its coverage
