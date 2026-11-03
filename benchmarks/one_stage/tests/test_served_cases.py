@@ -1,8 +1,9 @@
-"""served_cases.py: sampled proofs' one-stage v1 case and the inference-only case (`verity/inference-only/v0`) for a
+"""served_cases.py: sampled proofs' one-stage v1 case (onsite's), remote's sampled proofs case (`verity/sampled-proofs/v1`:
+v2's case, ``case-v2.json``, in the form ``one-stage``) and the inference-only case (`verity/inference-only/v0`) for a
 served window, from its records audit's v1 case (a5's ``window/case.json``), PoUW's period case once its windows name the
-same record, and with ``--v2`` its v2 case (``case-v2.json``), each in a 0700 directory beside its Lean answer, in the
-directory form a composition reads as a case (remote's three subprotocols; no composite runs v2's), and every answer
-naming the window's registration record's digest.
+same record, and with ``--v2`` its bare v2 case, each in a 0700 directory beside its Lean answer, in the directory form a
+composition reads as a case (remote's three subprotocols; no composite runs v2's bare case), and every answer naming the
+window's registration record's digest. A window whose a5 wrote no v2 case has no sampled proofs case, refused saying why.
 
 Under H1's tie the window's record R is the Commit record H1 named before its sample coin, a v2 record chained right
 after H1's window registration W and reusing W's tables, as soundness's ``remotetie_demo.py`` builds them (`tied_serve`):
@@ -15,11 +16,14 @@ templates) v1's Lean (`sampled-proofs-one-stage check`) accepts an audit of it w
 one whose verdict refused, and names the record's digest either way; the inference-only case is accepted by the policy's
 Lean check (`inference-only check`) at Γ its gates and α its input bits a gate (which ``--from-division`` reads off the
 check's profile at no budget), and refused one gate or one bit under; v2's Lean (`sampled-proofs-one-stage-zk check`)
-names the record's digest as its commitment (it rejects the toy's v2 case, which holds no coins and no proofs). A
+names the record's digest as its commitment (it rejects the toy's v2 case, which holds no coins and no proofs), and so
+does sampled proofs' Lean (`vstar-recursive sampled check`) on that case in its form, which refuses v1's case in the same
+form by name. A
 tampered field is refused: by the Lean check (the record naming another Program, an input node in a block, θ on an
 unregistered input, an evidence key, the record repeated in the log) or by the producer before any Lean runs (no v1 case
 or one holding another key, a record that isn't v1's Program's, a previous record with no log, α and Γ not given, a v2
-case that isn't the audit's), and an answer that isn't the window's record's is written nowhere, its refusal saying the
+case that isn't the audit's, which refuses sampled proofs' too), and an answer that isn't the window's record's is
+written nowhere, its refusal saying the
 answer's reason. The slow test makes the inference-only case on the 4,32,4 class's own Program (TINY on the H200)."""
 
 from __future__ import annotations
@@ -69,6 +73,7 @@ TRIPLE = bind(CompositeDefinition("ServedCasesTestTriple", 0, (), lambda S_: (((
 SLOTS = 4
 INF = SC.INFERENCE_ONLY
 V1 = SC.V1
+SAMPLED = SC.SAMPLED
 UNNAMED = "the run's registration record is not the declared circuit's: its program is not the circuit's SHA-512"
 
 
@@ -152,7 +157,7 @@ def stand_in(tmp_path: Path, name: str, answer: dict | None) -> Path:
     exe, seen = tmp_path / name, tmp_path / f"{name}.seen"
     line = "" if answer is None else json.dumps(answer, sort_keys=True)
     exe.write_text(f"#!{sys.executable}\nimport json, os, sys\na = sys.argv[1:]\n"
-                   "files = a[1:4]\n"
+                   "files = a[a.index('check') + 1:][:3]\n"
                    "seen = {'argv': a, 'modes': [os.stat(f).st_mode & 0o777 for f in files],\n"
                    "        'dir': os.stat(os.path.dirname(files[0])).st_mode & 0o777,\n"
                    "        'commitment': open(files[1], 'rb').read().hex()}\n"
@@ -168,11 +173,11 @@ def answer(id: str, commitment: str | None, verdict: str = "accept") -> dict:
 
 
 def stand_ins(tmp_path: Path, case: dict, **answers: dict | None) -> list:
-    """``--v1-exe`` and ``--inference-only-exe`` stand-ins (``v1``, ``reg``) answering for ``case``'s record, or
-    ``answers``' instead."""
+    """``--v1-exe``, ``--sampled-exe`` and ``--inference-only-exe`` stand-ins (``v1``, ``sampled``, ``reg``) answering for
+    ``case``'s record, or ``answers``' instead."""
     d = digest_of(case)
-    got = {"v1": answer(V1, d), "reg": answer(INF, d)} | answers
-    return ["--v1-exe", stand_in(tmp_path, "v1", got["v1"]),
+    got = {"v1": answer(V1, d), "sampled": answer(SAMPLED, d), "reg": answer(INF, d)} | answers
+    return ["--v1-exe", stand_in(tmp_path, "v1", got["v1"]), "--sampled-exe", stand_in(tmp_path, "sampled", got["sampled"]),
             "--inference-only-exe", stand_in(tmp_path, "reg", got["reg"])]
 
 
@@ -259,7 +264,7 @@ def tied_serve(root: Path, commits: list | None = None) -> tuple[Path, dict, dic
     window naming R, its canonical JSON in hex as credit reads it). The dir, v1's case and W."""
     w = h1_registration()
     v1 = tied_v1_case(w)
-    audit_dir(root / "v3c-w0-4-32-4", v1, v2=False)
+    audit_dir(root / "v3c-w0-4-32-4", v1)
     h1_log(root / "h1", [(0, "registration", w), (0, "record", json.loads(bytes.fromhex(v1["commitment"])))])
     piece = root / SC.PERIOD_PIECE
     piece.mkdir(parents=True)
@@ -290,10 +295,16 @@ def v2_exe() -> Path:
     return PF.v2_executable()
 
 
+@pytest.fixture(scope="module")
+def sampled_exe() -> Path:
+    return SC.build(*SC.SAMPLED_LEAN)
+
+
 def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_path, capsys):
     """Each case is written in its own 0700 directory (files 0600) with the answer line its Lean printed, the Lean ran
-    on files in a 0700 scratch directory that is gone after, v1's case is a5's as a5 wrote it, v2's blobs went to its
-    Lean, and nothing printed carries a case's bytes."""
+    on files in a 0700 scratch directory that is gone after, v1's case is a5's as a5 wrote it, sampled proofs' is v2's
+    with the form ``one-stage`` in its params and its evidence and went to `vstar-recursive sampled check` with v2's
+    blobs, v2's blobs went to its Lean, and nothing printed carries a case's bytes."""
     program, query = toy()
     v1 = v1_case(program, query)
     d = digest_of(v1)
@@ -304,6 +315,7 @@ def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_p
                                   stand_in(tmp_path, "v2", answer(SC.V2, d)))
     assert (rc, refused) == (0, []), out
     assert cases == [{"dir": str(private / "sampled-proofs-v1"), "protocol": V1, "verdict": "accept"},
+                     {"dir": str(private / "sampled-proofs"), "protocol": SAMPLED, "verdict": "accept"},
                      {"dir": str(private / "inference-only"), "protocol": INF, "verdict": "accept"},
                      {"dir": str(private / "sampled-proofs-v2"), "protocol": SC.V2, "verdict": "accept"}]
     v2_case = json.loads((audit / "window" / "case-v2.json").read_text())
@@ -316,6 +328,10 @@ def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_p
         assert json.loads((cd / "answer.json").read_text())["commitment"] == d
     assert json.loads((private / "sampled-proofs-v1" / "case.json").read_text()) == v1
     assert json.loads((private / "sampled-proofs-v2" / "case.json").read_text()) == v2_case
+    sampled = json.loads((private / "sampled-proofs" / "case.json").read_text())
+    assert sampled == {**v2_case, "params": {**v2_case["params"], "form": "one-stage"}, "evidence": codec.canonical_json(
+        {**json.loads(bytes.fromhex(v2_case["evidence"])), "form": "one-stage"}).hex()}
+    assert "proofs" in sampled["params"] and "verdicts" not in json.loads(bytes.fromhex(sampled["evidence"]))
     reg = json.loads((private / "inference-only" / "case.json").read_text())
     assert sorted(reg) == ["commitment", "evidence", "params"]
     assert sorted(reg["params"]) == ["alpha", "gamma", "log", "parameters", "program"]
@@ -326,27 +342,31 @@ def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_p
     ev = json.loads(bytes.fromhex(reg["evidence"]))
     assert sorted(ev) == ["owner", "provenance", "theta"] and ev["theta"] == ev["provenance"] == []
     assert set(ev["owner"]) <= {"input", 0} and 0 in ev["owner"]
-    v1seen, v2seen, regseen = (json.loads((tmp_path / f"{n}.seen").read_text()) for n in ("v1", "v2", "reg"))
+    v1seen, sseen, v2seen, regseen = (json.loads((tmp_path / f"{n}.seen").read_text())
+                                      for n in ("v1", "sampled", "v2", "reg"))
     assert v2seen["argv"][4:] == v2_case["blobs"] and v1seen["argv"][4:] == regseen["argv"][4:] == []
-    assert all(s["modes"] == [0o600] * 3 and s["dir"] == 0o700 for s in (v1seen, v2seen, regseen))
-    assert v1seen["commitment"] == v2seen["commitment"] == regseen["commitment"] == v1["commitment"]
+    assert sseen["argv"][:2] == ["sampled", "check"] and sseen["argv"][5:] == v2_case["blobs"]
+    assert all(s["modes"] == [0o600] * 3 and s["dir"] == 0o700 for s in (v1seen, sseen, v2seen, regseen))
+    assert v1seen["commitment"] == sseen["commitment"] == v2seen["commitment"] == regseen["commitment"] == v1["commitment"]
     assert list((private / "scratch").iterdir()) == []
-    for secret in (v1["commitment"], v1["evidence"], reg["evidence"], v2_case["evidence"],
+    for secret in (v1["commitment"], v1["evidence"], reg["evidence"], v2_case["evidence"], sampled["evidence"],
                    reg["params"]["program"][:64]):
         assert secret not in out
 
 
 def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
-    """Without ``--v2``, v1's and the inference-only case are the run's every case: a window whose a5 wrote no v2 case
-    (a plain audit's) is complete, v2's Lean never runs, and no ``sampled-proofs-v2/`` is written."""
+    """Without ``--v2`` no bare v2 case is made and v2's Lean never runs. A window whose a5 wrote no v2 case (a plain
+    audit's) has no sampled proofs case either, which is refused saying why (remote's composite then names sampled
+    proofs missing), and v1's and the inference-only case are still written."""
     program, query = toy()
     v1 = v1_case(program, query)
     private = tmp_path / "private"
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1, v2="ValueError: this audit's are plain"),
                                   "--private", private, "--alpha", "1", "--gamma", 1, *stand_ins(tmp_path, v1))
-    assert (rc, refused) == (0, []), out
-    assert [c["protocol"] for c in cases] == [V1, INF]
+    assert rc == 1 and [c["protocol"] for c in cases] == [V1, INF], out
+    assert refused == [{"protocol": SAMPLED, "reason": "no v2 case: ValueError: this audit's are plain"}], refused
     assert sorted(p.name for p in private.iterdir()) == ["inference-only", "sampled-proofs-v1", "scratch"]
+    assert not (tmp_path / "sampled.seen").exists()
 
 
 @lean
@@ -357,8 +377,9 @@ def test_v1s_lean_checks_the_audits_case_and_names_the_records_digest(tmp_path, 
     record's digest either way, so its verdict is the case's (a failed proof is a visible failure, never a missing
     case)."""
     v1 = audited_v1_case(*toy(), accepted=accepted)
-    rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1, v2=False), "--private",
+    rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private",
                                   tmp_path / "private", "--alpha", "1", "--gamma", 1, "--v1-exe", v1_exe,
+                                  "--sampled-exe", stand_in(tmp_path, "sampled", answer(SAMPLED, digest_of(v1))),
                                   "--inference-only-exe", stand_in(tmp_path, "reg", answer(INF, digest_of(v1))))
     assert rc == 0 and refused == [], out
     assert [c["verdict"] for c in cases if c["protocol"] == V1] == [verdict]
@@ -388,7 +409,8 @@ def test_the_lean_check_accepts_the_inference_only_case_at_its_budgets_and_not_p
                     "alpha-under": (gates, f"{bits - 1}/{gates}")}[change]
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
                                   "--alpha", alpha, "--gamma", gamma, "--inference-only-exe", inference_only_exe,
-                                  "--v1-exe", stand_in(tmp_path, "v1", answer(V1, digest_of(v1))))
+                                  "--v1-exe", stand_in(tmp_path, "v1", answer(V1, digest_of(v1))),
+                                  "--sampled-exe", stand_in(tmp_path, "sampled", answer(SAMPLED, digest_of(v1))))
     assert rc == 0 and refused == [], out
     assert [c["verdict"] for c in cases if c["protocol"] == INF] == [verdict]
     got = json.loads((tmp_path / "private" / "inference-only" / "answer.json").read_text())
@@ -444,6 +466,25 @@ def test_v2s_lean_names_the_records_digest_so_its_rejection_is_written(tmp_path,
     assert got["protocol"] == SC.V2 and got["commitment"] == digest_of(v1)
 
 
+@lean
+def test_sampled_proofs_lean_names_the_records_digest_and_refuses_v1_by_name(tmp_path, capsys, sampled_exe):
+    """`vstar-recursive sampled check` reads the toy's v2 case in the form ``one-stage`` through its commitment and names
+    the record's digest; it rejects it, as v2's Lean does, and that rejection is the case's verdict. v1's case in the
+    same form is refused by name at its params, the reason remote's composite would give for a v1 case."""
+    program, query = toy()
+    v1 = v1_case(program, query)
+    rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
+                                  "--alpha", "1", "--gamma", 1, *stand_ins(tmp_path, v1), "--sampled-exe", sampled_exe)
+    assert rc == 0 and refused == [], out
+    assert [c["verdict"] for c in cases if c["protocol"] == SAMPLED] == ["reject"]
+    got = json.loads((tmp_path / "private" / "sampled-proofs" / "answer.json").read_text())
+    assert got["protocol"] == SAMPLED and got["commitment"] == digest_of(v1), got
+    got, _ = SC.lean_answer(sampled_exe, SC.with_form(v1), tmp_path / "scratch", SC.SAMPLED_CMD)
+    assert got["protocol"] == SAMPLED and got["verdict"] == "reject", got
+    assert got["reason"].startswith("params: the parameters name no proofs: one-stage v1 "), got
+    assert "is refused" in got["reason"], got
+
+
 @pytest.mark.parametrize("change, reason", [
     ("other-program", "the record names another Program than v1's params"),
     ("previous-no-log", "pass the deployment's log (--log)"),
@@ -470,7 +511,7 @@ def test_the_producer_refuses_an_inference_only_case_that_would_not_be_the_windo
             SC.inference_only_case(v1, 1, True)
         return
     rc, cases, refused, out = run(capsys, *argv)
-    assert rc == 1 and [c["protocol"] for c in cases] == [V1], out
+    assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED], out
     assert [r["protocol"] for r in refused] == [INF] and reason in refused[0]["reason"], refused
     assert not (tmp_path / "private" / "inference-only").exists() and not (tmp_path / "reg.seen").exists()
 
@@ -494,7 +535,7 @@ def test_from_division_reads_alpha_and_gamma_off_the_checks_profile(tmp_path, ca
                                                                 | {"profile": profile}))
     if reason is None:
         assert rc == 0 and refused == [], out
-        assert [sorted(c) for c in cases] == [["dir", "protocol", "verdict"]] * 2
+        assert [sorted(c) for c in cases] == [["dir", "protocol", "verdict"]] * 3
         assert SC.FROM_DIVISION not in out
         d = tmp_path / "private" / "inference-only"
         params = json.loads((d / "case.json").read_text())["params"]
@@ -513,7 +554,8 @@ def test_from_division_is_accepted_at_the_divisions_own_budgets(tmp_path, capsys
     gates, bits = budgets(toy_v1, inference_only_exe, tmp_path / "s")
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, toy_v1), "--private", tmp_path / "private",
                                   "--from-division", "--inference-only-exe", inference_only_exe,
-                                  "--v1-exe", stand_in(tmp_path, "v1", answer(V1, digest_of(toy_v1))))
+                                  "--v1-exe", stand_in(tmp_path, "v1", answer(V1, digest_of(toy_v1))),
+                                  "--sampled-exe", stand_in(tmp_path, "sampled", answer(SAMPLED, digest_of(toy_v1))))
     assert rc == 0 and refused == [], out
     f = Fraction(bits, gates)
     assert [(sorted(c), c["verdict"]) for c in cases if c["protocol"] == INF] == [(["dir", "protocol", "verdict"],
@@ -552,9 +594,9 @@ def test_a_log_that_chains_to_the_record_is_the_cases_log(tmp_path):
     ("key", "v2's case holds exactly"),
 ])
 def test_v2_is_refused_when_its_case_is_not_the_audits(tmp_path, capsys, change, reason):
-    """With ``--v2``, a5's v2 case is taken only as a5 wrote it for this audit: none when a5 wrote its error instead
-    (which says why) or nothing, and refused when it commits to another record, names a blob that isn't there or holds
-    another key."""
+    """a5's v2 case is taken only as a5 wrote it for this audit, for sampled proofs' case and with ``--v2`` for the bare
+    one: none when a5 wrote its error instead (which says why) or nothing, and refused when it commits to another record,
+    names a blob that isn't there or holds another key."""
     program, query = toy()
     v1 = v1_case(program, query)
     audit = audit_dir(tmp_path, v1, v2={"error": "ValueError: v2 verifies --zk sessions; this audit's are plain",
@@ -573,8 +615,9 @@ def test_v2_is_refused_when_its_case_is_not_the_audits(tmp_path, capsys, change,
                                   "--gamma", 1, *stand_ins(tmp_path, v1),
                                   "--v2", "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, digest_of(v1))))
     assert rc == 1 and [c["protocol"] for c in cases] == [V1, INF], out
-    assert [r["protocol"] for r in refused] == [SC.V2] and reason in refused[0]["reason"], refused
-    assert not (tmp_path / "private" / "sampled-proofs-v2").exists() and not (tmp_path / "v2.seen").exists()
+    assert [r["protocol"] for r in refused] == [SAMPLED, SC.V2] and all(reason in r["reason"] for r in refused), refused
+    for d, seen in (("sampled-proofs", "sampled"), ("sampled-proofs-v2", "v2")):
+        assert not (tmp_path / "private" / d).exists() and not (tmp_path / f"{seen}.seen").exists()
 
 
 @pytest.mark.parametrize("change, reason", [
@@ -595,11 +638,11 @@ def test_no_case_is_written_when_a5s_v1_case_is_not_one(tmp_path, capsys, change
     rc, cases, refused, out = run(capsys, "--audit", audit, "--private", tmp_path / "private", "--alpha", "1",
                                   "--gamma", 1, *stand_ins(tmp_path, v1))
     assert rc == 1 and cases == [], out
-    assert [r["protocol"] for r in refused] == [V1, INF] and all(reason in r["reason"] for r in refused), refused
+    assert [r["protocol"] for r in refused] == [V1, SAMPLED, INF] and all(reason in r["reason"] for r in refused), refused
     assert not (tmp_path / "private").exists() and not (tmp_path / "v1.seen").exists()
 
 
-@pytest.mark.parametrize("who", [V1, INF])
+@pytest.mark.parametrize("who", [V1, SAMPLED, INF])
 @pytest.mark.parametrize("change, reason", [
     ("other-digest", "'s answer commits to"),
     ("null-digest", "'s answer commits to None, not the window's registration record's digest: stand-in"),
@@ -615,13 +658,14 @@ def test_an_answer_that_is_not_the_windows_records_is_written_nowhere(tmp_path, 
     d = digest_of(v1)
     bad = {"other-digest": answer(who, "ee" * 64), "null-digest": answer(who, None, "reject"),
            "other-protocol": answer("verity/pouw/v1", d), "no-line": None}[change]
-    exes = stand_ins(tmp_path, v1, **{{V1: "v1", INF: "reg"}[who]: bad})
+    exes = stand_ins(tmp_path, v1, **{{V1: "v1", SAMPLED: "sampled", INF: "reg"}[who]: bad})
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
                                   "--alpha", "1", "--gamma", 1, *exes)
-    other = INF if who == V1 else V1
-    assert rc == 1 and [c["protocol"] for c in cases] == [other], out
+    others = [x for x in (V1, SAMPLED, INF) if x != who]
+    assert rc == 1 and [c["protocol"] for c in cases] == others, out
     assert [r["protocol"] for r in refused] == [who] and reason in refused[0]["reason"], refused
-    assert not (tmp_path / "private" / SC.DIRS[who]).exists() and (tmp_path / "private" / SC.DIRS[other]).is_dir()
+    assert not (tmp_path / "private" / SC.DIRS[who]).exists()
+    assert all((tmp_path / "private" / SC.DIRS[x]).is_dir() for x in others)
 
 
 def test_the_serve_dir_names_its_one_audited_window(tmp_path, capsys):
@@ -634,11 +678,11 @@ def test_the_serve_dir_names_its_one_audited_window(tmp_path, capsys):
     exes = stand_ins(tmp_path, v1)
     rc, cases, _, out = run(capsys, "--serve-dir", serve, "--private", serve / "private", "--alpha", "1", "--gamma", 1,
                             *exes)
-    assert rc == 0 and len(cases) == 2, out
+    assert rc == 0 and len(cases) == 3, out
     audit_dir(serve / "v3c-w1-a", v1)
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", serve / "private2", "--alpha", "1",
                                   "--gamma", 1, *exes)
-    assert rc == 1 and cases == [] and [r["protocol"] for r in refused] == [V1, INF], out
+    assert rc == 1 and cases == [] and [r["protocol"] for r in refused] == [V1, SAMPLED, INF], out
     assert "holds 2 audited windows" in refused[0]["reason"]
 
 
@@ -655,7 +699,7 @@ def test_under_h1s_tie_every_case_commits_to_the_record_h1_named(tmp_path, capsy
                                   *stand_ins(tmp_path, v1))
     assert (rc, refused) == (0, []), out
     assert cases == [{"dir": str(private / d_), "protocol": id, "verdict": "accept"} for id, d_ in (
-        (V1, "sampled-proofs-v1"), (INF, "inference-only"), (SC.PERIOD, "pouw-period"))]
+        (V1, "sampled-proofs-v1"), (SAMPLED, "sampled-proofs"), (INF, "inference-only"), (SC.PERIOD, "pouw-period"))]
     piece, got = serve / SC.PERIOD_PIECE, private / "pouw-period"
     assert stat.S_IMODE(got.stat().st_mode) == 0o700
     assert {f.name: stat.S_IMODE(f.stat().st_mode) for f in got.iterdir()} == {"case.json": 0o600, "answer.json": 0o600}
@@ -700,7 +744,7 @@ def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, ca
         (piece / "case.json").write_text(json.dumps({**json.loads((piece / "case.json").read_text()), "public": {}}))
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", serve / "private", "--alpha", "1",
                                   "--gamma", 1, *stand_ins(tmp_path, v1))
-    assert rc == 1 and [c["protocol"] for c in cases] == [V1, INF], out
+    assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED, INF], out
     want = reason.format(w=R.digest(w)[:16], r=digest_of(v1)[:16])
     assert [r["protocol"] for r in refused] == [SC.PERIOD] and want in refused[0]["reason"], refused
     assert not (serve / "private" / "pouw-period").exists()
@@ -715,15 +759,15 @@ def test_period_names_the_period_case_to_check_against_the_audits_record(tmp_pat
     log.write_text(json.dumps([w]))
     rc, cases, _, out = run(capsys, "--audit", audit, "--private", tmp_path / "p1", "--period", piece, "--log", log,
                             "--alpha", "1", "--gamma", 1, *exes)
-    assert rc == 0 and [c["protocol"] for c in cases] == [V1, INF, SC.PERIOD], out
+    assert rc == 0 and [c["protocol"] for c in cases] == [V1, SAMPLED, INF, SC.PERIOD], out
     rc, cases, _, out = run(capsys, "--audit", audit, "--private", tmp_path / "p2", "--log", log, "--alpha", "1",
                             "--gamma", 1, *exes)
-    assert rc == 0 and [c["protocol"] for c in cases] == [V1, INF], out
+    assert rc == 0 and [c["protocol"] for c in cases] == [V1, SAMPLED, INF], out
     (audit / "window" / "case.json").unlink()
     (audit / "window" / "case-error.txt").write_text("ValueError: the audit's record has no receipt\n")
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / "p3", "--alpha", "1",
                                   "--gamma", 1, *exes)
-    assert rc == 1 and cases == [] and [r["protocol"] for r in refused] == [V1, INF, SC.PERIOD], out
+    assert rc == 1 and cases == [] and [r["protocol"] for r in refused] == [V1, SAMPLED, INF, SC.PERIOD], out
     assert not (tmp_path / "p3").exists()
 
 
@@ -768,7 +812,7 @@ def test_the_policy_case_is_refused_when_the_serves_h1_log_does_not_reach_its_re
         (h1 / "log.jsonl").unlink()
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", serve / "private", "--alpha", "1",
                                   "--gamma", 1, *stand_ins(tmp_path, v1))
-    assert rc == 1 and [c["protocol"] for c in cases] == [V1, SC.PERIOD], out
+    assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED, SC.PERIOD], out
     assert [r["protocol"] for r in refused] == [INF] and reason in refused[0]["reason"], refused
 
 

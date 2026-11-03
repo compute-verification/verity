@@ -16,12 +16,13 @@ uv run --directory examples/lifecycle pytest tests/test_lifecycle.py     # hones
 (developer, verifier); `onsite.py` adds the network certifier, the memory challenger and the onsite verifier's subprotocols;
 `remote.py` is the two-party deployment; `tests/test_lifecycle.py` runs both, honest and with every deviation.
 
-**The proofs are a stand-in**, answering under the id both composites run for integrity, the one-stage audit
-(`SampledProofs.OneStage`). `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
+**The proofs are a stand-in**, answering under the id each composite runs for integrity (`lifecycle.SAMPLED`): onsite's
+the one-stage audit (`SampledProofs.OneStage`), remote's sampled proofs (`VStar.Recursive.Sampled`,
+`verity/sampled-proofs/v1`). `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
-It is sound for the example and not zero-knowledge, though its answer carries the id both composites run for integrity,
-the one-stage audit (`SampledProofs.OneStage`); Flock's zero-knowledge proofs behind the ZK server replace it
-(`verity/ml/flock/`, `verity/core/service/flock/`). Everything else is the repository's own code, as (b) says.
+It is sound for the example and not zero-knowledge, though its answer carries that id; Flock's zero-knowledge proofs
+behind the ZK server replace it (`verity/ml/flock/`, `verity/core/service/flock/`). Everything else is the repository's
+own code, as (b) says.
 
 ## Terms
 
