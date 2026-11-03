@@ -4178,9 +4178,10 @@ class RecordsRun:
         """The per-package reports (`audit-<tag>/report.json` beside an `audit.json`) that may be ``pkg``'s: a package audited
         beside PKG or a requirer, its `proved_in` one (`Security/Proofs` in a run of `Security`); its path is in the report.
         The tag is lean/check.py's: the package's repository path with each run of other characters as `_`
-        (`audit-Security_Proofs`)."""
-        tag = re.sub(r"[^A-Za-z0-9]+", "_", pkg.strip("/"))
-        each = (posixpath.join(posixpath.dirname(a), f"audit-{tag}", "report.json") for a in self.audits())
+        (`audit-Security_Proofs`), or its directory's name alone when the build is outside the checkout, as a records run's
+        is (`audit-Proofs`)."""
+        tags = dict.fromkeys((re.sub(r"[^A-Za-z0-9]+", "_", pkg.strip("/")), posixpath.basename(pkg.strip("/"))))
+        each = (posixpath.join(posixpath.dirname(a), f"audit-{t}", "report.json") for a in self.audits() for t in tags)
         return [p for p in each if p in self.files]
 
 
@@ -4404,7 +4405,8 @@ class RecordsGate:
 
     def _differs(self, head: str, commits: list[str], inputs: list[str]) -> set[str]:
         """The ``commits`` whose ``inputs`` aren't the head's, by one `git diff-tree --stdin`: a file of `RECORDS_SHARED` that
-        differs, or one of a package that a records run reads (`RECORDS_UNREAD_DIRS`, Markdown and READMEs aside, never Lean)."""
+        differs, or one of a package that a records run reads (`RECORDS_UNREAD_DIRS` aside, never Lean), Markdown and READMEs
+        aside in both."""
         if not commits:
             return set()
         r = subprocess.run(["git", "diff-tree", "--stdin", "--always", "-r", "-z", "--name-only", "--no-renames", "--", *inputs],
@@ -4423,15 +4425,16 @@ class RecordsGate:
                 continue
             if at is None:
                 raise QueueError(f"git diff-tree --stdin printed {tok!r} before any commit")
+            name = posixpath.basename(tok)
+            prose = name.lower().endswith(".md") or name.startswith("README")
             if any(tok == s or tok.startswith(s + "/") for s in shared):
-                out.add(at)
+                if not prose:
+                    out.add(at)
                 continue
             p = next((p for p in pkgs if p == "." or tok.startswith(p + "/")), None)
             rel = tok if p in (None, ".") else tok[len(p) + 1:]
-            name = posixpath.basename(rel)
             lean = name.endswith(".lean") or name.startswith("lakefile.") or name in ("lake-manifest.json", LEAN_LOCK)
-            if lean or not (RECORDS_UNREAD_DIRS & set(rel.split("/")[:-1]) or name.lower().endswith(".md")
-                            or name.startswith("README")):
+            if lean or not (RECORDS_UNREAD_DIRS & set(rel.split("/")[:-1]) or prose):
                 out.add(at)
         if n != len(commits):                                    # a pair it skipped (an object it couldn't read) is no match
             raise QueueError(f"git diff-tree --stdin compared {n} of {len(commits)} commits")
