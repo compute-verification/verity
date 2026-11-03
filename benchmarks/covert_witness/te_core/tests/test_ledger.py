@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from te_core import VERSION, frontier, launch
-from te_core.ledger import Ledger
+from te_core.ledger import Ledger, facts, ingest, notes_decoder
 from te_core.run import file_sha256
 
 PIN = "a" * 40
@@ -25,11 +25,11 @@ class Clock:
 
 
 def sub(led, **kw):
-    """A submission whose formalism block makes its |C| `macs` gates with no affected gates (ρ = 1 everywhere); `rho`
-    is its ρ in `CELL` for `scored`."""
+    """A submission whose formalism block makes its |C| `macs` gates with an empty E and no affected gates (ρ = 1
+    everywhere); `rho` is its ρ in `CELL` for `scored`."""
     body = {"macs": 100, "val_bpb": 1.0, "tier": 0, "start": "small", "start_bpb": 1.1, "mechanism": "dense",
             "reference": False, "program_sha256": "", "invalid": [], "run_te_core": VERSION,
-            "measurement_commit": PIN} | kw
+            "measurement_commit": PIN, "output": {"e_bytes": 0}} | kw
     body.setdefault("formalism", {"parts": [{"gates": body["macs"], "tokens": 10, "affected_gates": 0.0}], "u1_bits": 1e6})
     return led.append("submission", body)
 
@@ -182,6 +182,45 @@ def test_the_commits_of_one_version_are_one_pin(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "pin", SimpleNamespace(pinned=lambda: {"commit": PIN, "same_version": ["b" * 40]}))
     monkeypatch.setattr(sys, "path", list(sys.path))
     assert frontier.pinned() == (PIN, "b" * 40)
+
+
+def test_ingest_carries_each_checkpoints_decoder_facts(tmp_path):
+    """seed-mezo's 04:15Z finding: each checkpoint's output carries the harness's rebuild_macs and the decoder gates the
+    submission's notes give its E (the notes.checkpoints entry of its size; notes.decoder for the submitted E), which
+    te_core.formalism's decoder reads; the meta.json one directory up (the scorer's records/ART/) is found, one of
+    another θ is refused, and `facts` gives the same per checkpoint for a row ingested before 4.2."""
+    from test_score import record
+
+    rec = record(10) | {"tier": 0, "seed": 1, "theta_sha256": "t", "c": 10, "totals": {"cpu_s": 1, "wall_s": 1, "gpu_s": 1},
+                        "start": {"name": "s50", "digest": "d", "val_bpb": 1.2}}
+    rec["checkpoints"] = [{"step": 4, "val_bpb": 1.1, "e_bytes": 30, "rebuild_macs": 500, "source": "encode"},
+                          {"step": 9, "val_bpb": 1.0, "e_bytes": 50, "rebuild_macs": 900, "source": "submit"}]
+    run = tmp_path / "rec" / "run"
+    run.mkdir(parents=True)
+    (run / "run.json").write_text(json.dumps(rec))
+    notes = {"delta_bits": 400, "decoder": {"gates": 9e6, "macs": 712},
+             "checkpoints": [{"step": 3, "harness_step": 4, "e_bytes": 30, "decoder": {"gates": 5e6}}]}
+    meta = {"schema": "covert-witness/submission/v1", "start": "s50", "theta_digest": "d", "changed": ["embed"],
+            "notes": notes}
+    (tmp_path / "rec" / "meta.json").write_text(json.dumps(meta))
+    subs = ingest(run, Ledger(tmp_path / "l", "a"), direction="d", mechanism="m", run_id="run")
+    assert [s["output"] for s in subs] == [
+        {"e_bytes": 30, "source": "encode", "rebuild_macs": 500, "decoder_gates": 5e6},
+        {"e_bytes": 50, "source": "submit", "rebuild_macs": 900, "decoder_gates": 9e6}]
+    assert subs[0]["changed"] == ["embed"] and "checkpoints" not in subs[0]
+    known = facts(rec, None, meta)
+    assert known["checkpoints"] == {"4": {"rebuild_macs": 500, "decoder_gates": 5e6},
+                                    "9": {"rebuild_macs": 900, "decoder_gates": 9e6}}
+    old = [s | {"output": {k: s["output"][k] for k in ("e_bytes", "source")}} for s in subs]
+    assert [r["output"] for r in frontier.with_facts(old, {"run": known})] == [s["output"] for s in subs]
+    assert notes_decoder(meta | {"notes": notes | {"checkpoints": [notes["checkpoints"][0] | {"e_bytes": 50}]}},
+                         rec["checkpoints"][1]) is None  # two values for one E: neither
+    (tmp_path / "rec" / "meta.json").write_text(json.dumps(meta | {"theta_digest": "other"}))
+    with pytest.raises(ValueError, match="not this run's submission"):
+        ingest(run, Ledger(tmp_path / "l", "a"), direction="d", mechanism="m")
+    (tmp_path / "rec" / "meta.json").unlink()
+    subs = ingest(run, Ledger(tmp_path / "l", "a"), direction="d", mechanism="m")
+    assert [s["output"].get("decoder_gates") for s in subs] == [None, None] and subs[1]["output"]["rebuild_macs"] == 900
 
 
 def test_a_row_is_measured_once_its_run_is_ingested_with_its_traced_circuit():

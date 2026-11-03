@@ -98,9 +98,10 @@ to work in a search, and the rules no code enforces yet.
   is a scoring bug, never a covert advantage. A column of the reference directions alone may stand beside it as
   context. The table is `python -m te_core.frontier --formalism` (W*, H and S per target and (c, k) cell, with W*'s
   bounds and attack side), the five panels `python -m te_core.plots --out DIR` (P1-P4 and A2, off the console), and
-  both over v2.3's records `python -m te_core.rescore --out DIR`; the console's one training panel,
-  `training/frontier-branches`, is `python -m te_core.panels frontier-branches --out DIR --publish` (all from
-  benchmarks/covert_witness).
+  both over v2.3's records `python -m te_core.rescore --out DIR`; the console's training panels,
+  `training/algorithm-policy` (p = C/H against ρ per run, start and gain target, a gain being effective compute over
+  the start's own) and `training/frontier-fit` (each data's scaling law, through which a loss is effective compute),
+  are `python -m te_core.algorithm_policy --out DIR --publish` (all from benchmarks/covert_witness).
 - **Aim short complete schedules at each target.** A schedule sized to end at ℓ* (say 0.5%, 1% and 2% below the start's
   loss) usually reaches it for about half the compute of a checkpoint inside one long run, so both sides run them.
 - **A reported W* is the best attack known**, an upper bound (`.agents/skills/friction/SKILL.md`), and H the best

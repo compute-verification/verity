@@ -1,16 +1,19 @@
 """te_core.capture.circuit: the training formalism's quantities on recorded/islands/toy/train.py (V = 16, H = 8, fp32,
 4 x 8 tokens a step, measured at step 1): a dense update's u steps up by each matrix as one token's work first reads it
 (emb, fc, head), however the program writes the update; a is a token's hidden state; Δ_grad is the fp32 gradient and the
-state the forward doesn't read; frozen layers above the update are its tail; MeZO's gradient is one fp32 difference."""
+state the forward doesn't read, or a coded gradient's codes; frozen layers above the update are its tail; MeZO's
+gradient is one fp32 difference."""
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from te_core.capture import script
 from te_core.capture.circuit import StepCircuit, measure, vertex_cut
+from te_core.formalism import READ_BACKS
 
 PROGRAM = Path(__file__).parent / "recorded" / "islands" / "toy" / "train.py"
 V, H, B, CTX = 16, 8, 4, 8
@@ -50,6 +53,21 @@ def test_a_dense_update(starts, update, state):
     assert f["tail_share"] == pytest.approx(1 / 3, abs=0.01) and f["frozen_tail_share"] == 0
     if "--micro" in update:
         assert f["group_gates"] == pytest.approx(recorded(starts, "adamw").formalism["group_gates"] / 2)
+
+
+@pytest.mark.parametrize("micro", [1, 2])
+@pytest.mark.parametrize("update,per_value", [("vote-packed", 1), ("vote-bytes", 1), ("vote-planes", 2 + 16 / 8)])
+def test_a_coded_gradient_passes_at_its_code(starts, update, per_value, micro):
+    """Each partial gradient passes coded and is summed decoded, so the cut is the codes once a partial: quant's int32
+    words and a uint8 packing at 1 bit a vote, lowrank-restart's two bool planes at 1 bit an entry each and its f16
+    scales at 16 bits per 8 entries (the dW products the codes are made from stay at 32 bits an element). Under the 32-bit
+    floor on every cut value (te_core 4.2) the uint8 words were 4 bits a vote and the planes 32 bits an entry. The
+    codec's ops are the step's: |C| grows by their gates, all outside the token blocks."""
+    plain = recorded(starts, "inplace").formalism
+    f = recorded(starts, update, "--micro", str(micro)).formalism
+    assert f["grad_cut_bits"] == micro * per_value * VALUES and f["delta_grad_bits"] == f["grad_cut_bits"]
+    assert f["state_bits"] == 0 and f["u1_bits"] == 32 * VALUES and f["a_bits"] == 32 * H
+    assert f["gates"] > plain["gates"] and f["sigma"] < plain["sigma"]
 
 
 def test_frozen_layers_above_the_update_are_its_tail(starts):
@@ -94,10 +112,17 @@ def test_a_cache_rewritten_each_step(starts, source):
         assert f["affected_share"] >= plain["affected_share"] and f["a_bits"] == 2 * 32 * H
 
 
-def test_a_saved_circuit_measures_alike(starts, tmp_path):
-    g = recorded(starts, "adamw")
+@pytest.mark.parametrize("update", ["adamw", "mezo-clip"])
+def test_a_saved_circuit_measures_alike(starts, tmp_path, update):
+    """With the recording's read-back lists, which a saved circuit keeps (the scorer measures the saved one); one saved
+    without them measures without them, which te_core.formalism refuses as unchecked."""
+    g = recorded(starts, update)
     g.circuit.save(tmp_path / "c.npz")
     assert measure(StepCircuit.load(tmp_path / "c.npz")) == g.formalism
+    assert bool(g.formalism["data_dependent"]) is (update == "mezo-clip")
+    replace(g.circuit, read_backs=None).save(tmp_path / "old.npz")
+    old = measure(StepCircuit.load(tmp_path / "old.npz"))
+    assert "data_dependent" not in old and old == {k: v for k, v in g.formalism.items() if k not in READ_BACKS}
 
 
 def test_a_vertex_cut():
