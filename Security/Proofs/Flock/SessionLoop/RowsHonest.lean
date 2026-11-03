@@ -113,29 +113,29 @@ theorem vals_freed {x : Msg} (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE 
   · by_cases h1 : P < 64
     · have := round_r1 hPj
       refine hM ?_ (hA.ab ?_ P h1).1
-      all_goals try simp only [FlockComplete.CutEq.layOf, pl_r1ab, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold]
+      all_goals try simp only [FlockComplete.CutEq.layOf, pl_r1ab, ofCircuit_m, ofCircuit_kLog]
       all_goals omega
     by_cases h2 : P < 128
     · have := round_r1 hPj
       refine hM ?_ (hA.ab ?_ (P - 64) (by omega)).2
-      all_goals try simp only [FlockComplete.CutEq.layOf, pl_r1c, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold]
+      all_goals try simp only [FlockComplete.CutEq.layOf, pl_r1c, ofCircuit_m, ofCircuit_kLog]
       all_goals omega
     by_cases h3 : P < 128 + 2 * ((stAt x j).m - 6)
     · have := round_ml hPj (by omega) h3
       rcases Nat.mod_two_eq_zero_or_one (P - 128) with hp | hp
       · refine hM ?_ (hA.ml ((P - 128) / 2) ?_ ?_).1
-        all_goals try simp only [FlockComplete.CutEq.layOf, pl_ml, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold]
+        all_goals try simp only [FlockComplete.CutEq.layOf, pl_ml, ofCircuit_m, ofCircuit_kLog]
         all_goals omega
       · refine hM ?_ (hA.ml ((P - 128) / 2) ?_ ?_).2
-        all_goals try simp only [FlockComplete.CutEq.layOf, pl_ml, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold]
+        all_goals try simp only [FlockComplete.CutEq.layOf, pl_ml, ofCircuit_m, ofCircuit_kLog]
         all_goals omega
     have := round_f hPj (by omega)
     by_cases h4 : P < 129 + 2 * ((stAt x j).m - 6)
     · refine hM ?_ (hA.f ?_).1
-      all_goals try simp only [FlockComplete.CutEq.layOf, pl_fa, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold]
+      all_goals try simp only [FlockComplete.CutEq.layOf, pl_fa, ofCircuit_m, ofCircuit_kLog]
       all_goals omega
     · refine hM ?_ (hA.f ?_).2.1
-      all_goals try simp only [FlockComplete.CutEq.layOf, pl_fb, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold]
+      all_goals try simp only [FlockComplete.CutEq.layOf, pl_fb, ofCircuit_m, ofCircuit_kLog]
       all_goals omega
   · by_cases h5 : P < 130 + 2 * ((stAt x j).m - 6) + 2 * ((stAt x j).c.kLog - 6)
     · have := round_lc hPj (by omega) h5
@@ -303,7 +303,7 @@ theorem vsOfWord_of_takes (hreal : real = realOf src) {x : Msg} {w : Flock.Wit} 
     unfold vsWord
     rw [dite_eq_left hi]
     rfl
-  rw [vsOfWord_of_free _ bx _ _ _ hfw]
+  refine (vsOfWord_of_free _ bx _ _ _ hfw).trans ?_
   -- the round that frees it
   have hex : ∃ n a, n < refK x ∧ FreedAt (LeanRelease.ofLoopLink L₀ src real) (blind _ (bwOf _ bx)) x w ν
       ((CoinLayer.session loopNr Masked.dataE).seenOf x τ) ((List.ofFn c).take n) j r i a := by
@@ -337,15 +337,16 @@ theorem vsOfWord_of_takes (hreal : real = realOf src) {x : Msg} {w : Flock.Wit} 
   rw [hik, hwd, hd] at hw
   have hcc : ∀ k' : Fin (refK x), k'.val < repBase x (2 * j.val + r.val) + jj →
       c k' = (CoinLayer.session loopNr Masked.dataE).pad ((List.ofFn c).take n) k' :=
-    fun k' hk' => (RefSession.pad_take _ c n k' (by omega)).symm
-  rw [hw, vsWord_honestVals_tab hi, vsWord_honestVals_tab hi]
+    fun k' hk' => (RefSession.pad_take (CoinLayer.session loopNr Masked.dataE) c n k' (by omega)).symm
   have h1 : ((UE.tape x t).1 j).1 = ((UE.tape x τ).1 j).1 :=
     congrArg (fun s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z => (s j).1) hs
   have h2 : ((UE.tape x t).1 j).2.1 = ((UE.tape x τ).1 j).2.1 :=
     congrArg (fun s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z => (s j).2.1) hs
+  have hv := vals_freed (wtOf PE x w) (UE.tape x τ).1 (fun _ => (0, ByteArray.empty)) j r hcc hPs hPi hPj hi
+  refine hw.trans ((vsWord_honestVals_tab hi).trans
+    ((congrArg FlockLevel3.GF128.val ?_).trans (vsWord_honestVals_tab hi).symm))
   rw [h1, h2]
-  exact congrArg FlockLevel3.GF128.val
-    (vals_freed (wtOf PE x w) (UE.tape x τ).1 (fun _ => (0, ByteArray.empty)) j r hcc hPs hPi hPj hi).symm
+  exact hv.symm
 
 /-- **An honest worker's served values meet `RowsOK`**: at a witness under the relation, where the algebraic-phase
 worker `bx` takes the honest values (`TakesVals` at `honestVals`, the worker `phased bx post`), `vsServed bx` is the
