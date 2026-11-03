@@ -10,6 +10,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 from torch.nn.attention import SDPBackend, sdpa_kernel
+from torch.utils import flop_counter
 
 from model import SIZES, Size
 from te_core.flops import Counter
@@ -61,10 +62,21 @@ def test_an_adapter_on_a_gain_is_refused(name):
         per_token({"adapters": {name: 2}})
 
 
+@pytest.fixture
+def gpu_flash(monkeypatch):
+    """The CPU flash attention kernel priced as te_core.flops prices the GPUs' (torch's registry has no formula for the
+    CPU one before 2.15, and from 2.15 it is the same one)."""
+    aten = torch.ops.aten
+    for cpu, gpu in ((aten._scaled_dot_product_flash_attention_for_cpu, aten._scaled_dot_product_flash_attention),
+                     (aten._scaled_dot_product_flash_attention_for_cpu_backward,
+                      aten._scaled_dot_product_flash_attention_backward)):
+        monkeypatch.setitem(flop_counter.flop_registry, cpu, flop_counter.flop_registry[gpu])
+
+
 def counted(config: dict, trained: list[str], ctx: int) -> tuple[int, int]:
     """One `ctx`-token training step of the lf model `config` with `trained` its trainable tensors: 2x the matmul MACs
-    (weight matmuls and attention) te_core.flops counts on CPU under flash attention, the GPUs' kernel, and
-    `train_flops`' figure for the same step."""
+    (weight matmuls and attention) te_core.flops counts on CPU under flash attention, the GPUs' kernel (`gpu_flash`),
+    with no op it can't price, and `train_flops`' figure for the same step."""
     shapes = prepare.architecture(config)
     g = torch.Generator().manual_seed(1)
     theta = {k: torch.randn(s, generator=g) * 0.02 for k, s in shapes.items()}
@@ -79,6 +91,7 @@ def counted(config: dict, trained: list[str], ctx: int) -> tuple[int, int]:
         c.begin_step()
         F.cross_entropy(net.logits(idx)[0, :-1].float(), idx[0, 1:]).backward()
         c.end_step()
+    assert not c.unknown_ops and not c.foreign_ops
     rec = {"config": config, "tensors": {k: ["torch.float32", list(s)] for k, s in shapes.items()}}
     meter = prepare.train_flops(rec, {"full": trained}, [{"op": "train", "tokens": ctx, "ctx": ctx}])
     return 2 * c.steps[0].matmul_macs, meter["flops"]
@@ -91,7 +104,7 @@ TINY_TENSORS = sorted(prepare.architecture(TINY))
 @pytest.mark.parametrize("trained", [[n] for n in TINY_TENSORS]
                          + [TINY_TENSORS, ["blocks.1.wv.weight", "blocks.0.w_down.weight"]],
                          ids=lambda t: "all" if len(t) > 2 else "+".join(t))
-def test_the_meter_is_the_harness_count_of_a_training_step(trained):
+def test_the_meter_is_the_harness_count_of_a_training_step(trained, gpu_flash):
     """Wherever the lowest trained tensor sits: no input gradient at its own position, and attention's backward in each
     block at or above it."""
     harness, meter = counted(TINY, trained, 64)
@@ -118,7 +131,7 @@ def v3_shapes() -> dict[str, dict]:
 
 @pytest.mark.slow
 @pytest.mark.parametrize("name", list(v3_shapes()))
-def test_the_meter_is_the_harness_count_on_v3s_starts(name):
+def test_the_meter_is_the_harness_count_on_v3s_starts(name, gpu_flash):
     """At each v3 start's width, MLP, vocabulary and its whole context, every tensor trained: the coefficients the tiny
     model's test can't check at a start's own ratio of context to width, where the harness metered 14 to 16% over the
     causal-half attention `train_flops` once priced."""
