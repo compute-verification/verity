@@ -1,4 +1,4 @@
-# p2_stage: the staging decode
+# p2_stage: the store's load
 
 The simplest exact path from the P2-encoded weights store to the W8A8 GEMM on one H200: decode a
 layer's matrix with memory-accounting's P2 decode, unchanged, into a plaintext staging buffer, then run the exact GEMM

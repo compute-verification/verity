@@ -345,7 +345,7 @@ pins, fixtures and recorded runs bake in; a new family takes a fresh id (`test_t
   32-byte id) is one key and schedule on it across many periods.
 - **Lemma**: any proved statement that isn't a guarantee. A package keeps its lemmas in `SecurityProofs`, outside its spec,
   and they change freely while every guarantee proves the same statement.
-- **Spec**: a Lean package's trusted text, all a reader must trust to read its guarantees (`AGENTS.md`, "Lean").
+- **Spec**: all of a Lean package that a reader must trust to read its guarantees (`AGENTS.md`, "Lean").
 - **Lock**: a package's guarantee records in its `lean-audit.json` (`AGENTS.md`, "Lean"). A changed
   record means a guarantee now says something else. It protects only the guarantees
   and what they read, though it lists many lemmas too.

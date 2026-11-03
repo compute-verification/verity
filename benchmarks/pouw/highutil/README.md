@@ -13,7 +13,7 @@ resource for pricing it there; `summary.json` only bounds ε_undecl by 1 - the u
   small shapes `prep --small` writes, through v31.py's reference prover.
 - The period's GPU driver (`period.GpuDriver`) runs each layer's calls through accel_v31's binding (`v31lib.Prover` over
   `libv31.so`, one Prover a layer, all driven by one thread since the binding's contexts share their streams, each
-  call's commit beside the next call's compute), with both operands of every transformer block on the GPU. L is 16,384,
+  call's commit beside the next call's compute), with both operands of every layer on the GPU. L is 16,384,
   so every call has one segment (S = 1), and under `V31_LTW=1` (run.sh's default) a call at S = 1 takes cuBLASLt's int32
   X W'^T in place of v31's GEMM. Dither's argument covers a segment of at most 8 L' (`T_MAX`), and v31 takes L' <= 1024,
   so a call takes the least L' from 512 to `--lp-max` that covers its K (`period.lp_of`), and down (K = 14,336, which

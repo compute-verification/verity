@@ -930,7 +930,7 @@ client's view read back from its record, over a monitoring period of sampled aud
 inputs' bits, log2 of its possible faulty sets, their committed bits and the timing, and each window's audit fails with
 probability at most δ + ε_ks + ε_bind + Pr[B_tap].
 
-The inference-only policy charges an isolation block the ingress covert capacity from the last wipe before it starts,
+The inference-only policy charges an inference block the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of K, which the caller passes in bits
 (`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under the inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
 calibration report records the K it used.
@@ -975,7 +975,7 @@ the `8·B·N` bits read.
 ## The schedule's declared bound and the coins
 
 The two terms of the charge that the capacity bounds leave open, the content advice `A_c` and the coins (D7), are fixed in
-the trusted text: the last section of `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation. The coin
+the spec: the last section of `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation. The coin
 link that carries the coins: [protocol/coin-link.md](protocol/coin-link.md).
 
 ## Advice for arbitrary serving: what it can carry
@@ -1109,7 +1109,7 @@ Each assumption, and what breaks without it:
   their deadlines, so they stay out of anything published, or they are charged.
 - **A7, the advice set is fixed before the run.** The codec and the cap c are registered before the audit's first
   window, and the audit refuses advice over the cap, as it refuses a sync outside Σ_sync. `A_c = log2 #Ac` in the
-  trusted text needs the set fixed before the run. Without a registered cap, the realized charge is sound only in the
+  spec needs the set fixed before the run. Without a registered cap, the realized charge is sound only in the
   indexed form: for every c, the runs whose charge is at most c number at most 2^(c+1) times the rest.
 
 The claim does not say three things: that the advice is what serving did (attack 7), anything about rejected windows,
@@ -1731,7 +1731,7 @@ them.
     ties that premise to the record. A proof that opens the salt frame of a committed record opens it at that slot.
   - **What it costs.** The protocol fixes the salt frame's place in the queue and its bytes, so it adds nothing to the
     ingress count `(r_in + 1)^T`. Its release into the block carries the certifier's coins, which no outside party
-    chooses and nothing X sends can change, so it costs 0 bits by the argument the trusted text makes for the
+    chooses and nothing X sends can change, so it costs 0 bits by the argument the spec makes for the
     challenger's coins (D7, `Security/Definitions/NetworkCertifier/Guarantees.lean`). That text states the exemption for coin
     openings on a coin link, and doesn't name the certifier's salt yet.
 - **Back from maintenance** (`Proxy(start=k, position=p)`) is off by default, and with it off every record, wire and

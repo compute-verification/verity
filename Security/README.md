@@ -86,7 +86,7 @@ accept and the commitment binds both (`Properties.Composition`, proved). Onsite 
   `Definitions/Core/Assumptions/Challenger.lean` and listed in the lock: the challenger logs every coin it releases
   (`ChallengerLogsCoins`), flips each only after what it samples is recorded (`FlipsAfterRecorded`), and the verifier
   reads coins only from that log (`VerifierReadsLog`). Under them a sample drawn with a logged coin misses a set fixed
-  before it at most as often as the draw law allows (`Verity.Guarantees.SampleAfterRecorded`, proved); for
+  before it at most as often as the sampling design allows (`Verity.Guarantees.SampleAfterRecorded`, proved); for
   `CoinsConfidential` and `OneClock`, no `.lean`
   file defines either. Network certifiers and memory challengers are onsite's.
 - **Not the remote composite.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB
