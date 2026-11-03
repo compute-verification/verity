@@ -4079,9 +4079,9 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
         base = {k: v for k, v in evidence.items() if k != "verdicts"}
         d = Drawn(random.Random(kind), params=[DEPLOYED])
         v2 = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
-              "evidence": _hex(base | {"proofs": {"public": _sha(public), "sessions": []}}),
+              "evidence": _hex(base | {"proofs": {"sessions": []}}),
               "params": params | {"challenger": {"key": d.s.key.to_json(), "label": "draw"},
-                                  "proofs": {"circuit": _sha(circuit), "registered": None},
+                                  "proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None},
                                   "window_root": d.ledger.window["root"]}}
         out = server_v2.exchange(_json(v2))
         assert out["verdict"] == "reject" and out["reason"].startswith(stage), (kind, out)
