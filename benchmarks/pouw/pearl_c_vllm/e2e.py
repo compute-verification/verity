@@ -105,7 +105,18 @@ CONTROL_OMITS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "hash_l
 #: the verify's no-write controls, each a retained pass the reference replay must reject: every commitment write omitted, and (under
 #: ``--graphs``, whose leaves reach the pass through a copy) the tile leaves alone
 CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_leaf"})}
-#: ``--smoke --retain``'s served requests, each one chat prompt (vllm_bench's PROMPTS, by index) as a retained pass: the
+#: the smoke's chat prompts
+PROMPTS = [
+    "Explain why the sky is blue in two sentences.", "Write a haiku about matrix multiplication.",
+    "What is the capital of Australia, and why is it not Sydney?", "List three uses of a hash function.",
+    "Translate 'good morning, how are you?' into French and German.", "Summarize the plot of Hamlet in one paragraph.",
+    "Give a Python function that reverses a linked list.", "What are the main causes of inflation?",
+    "Describe the water cycle to a ten-year-old.", "Why do GPUs run neural networks faster than CPUs?",
+    "Write a limerick about a cat who loves tensors.", "What is the difference between TCP and UDP?",
+    "Explain proof of work in simple terms.", "Name the planets of the solar system in order.",
+    "How does a refrigerator keep food cold?", "What is a prime number? Give five examples.",
+]
+#: ``--smoke --retain``'s served requests, each one chat prompt (PROMPTS, by index) as a retained pass: the
 #: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control.
 #: Each is served at the fixed length SERVED_TOKENS under ignore_eos, and how it was served goes
 #: beside its pass as SERVED_RECORD (``{"ignore_eos", "max_tokens", "served"}``), which served_zk's committer registers
@@ -189,6 +200,17 @@ def engine(args, group: str):
         return LLM(**kw, compilation_config={"mode": 0})
     except TypeError:
         return LLM(**kw)
+
+
+def find_model(llm):
+    holder = {}
+
+    def grab(model):
+        holder["model"] = model
+        return None
+
+    llm.apply_model(grab)
+    return holder["model"]
 
 
 def install(model, args, coins):
@@ -516,7 +538,6 @@ def serve(conn, args, group: str, coins: dict) -> None:
         configure(args)
         import torch
         from vllm import SamplingParams
-        from vllm_bench import PROMPTS, find_model
 
         llm = engine(args, group)
         run = stack = whole = None

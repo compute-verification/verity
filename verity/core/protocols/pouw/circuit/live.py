@@ -11,7 +11,7 @@ unit a round, proved every round (never sampled).
     PouwLiveSlots_v1{T}   (slot: Array<T, U32>, req: Array<T, Array<5, U32>>, m: U32, s: U32) -> Value<1>
 
 T is the tables' leaf count, the pouw setting ``rows`` (H1's T, a multiple of 32: `pouw_h1_requests.slot_table` and
-`request_table` write T leaves each), so m ≤ T. The execution phase's slot M = `h1window.slot`, the least power of two at or above T
+`request_table` write T leaves each), so m ≤ T. The window's slot M = `h1window.slot`, the least power of two at or above T
 (and at least R), is credit's tile grid, not the unit's: M - T slots have no leaf, and their rows are dead. ``slot`` is
 round s's slot leaves: q + 1 for a row of request q, 0 (``EMPTY_SLOT``) past the batch. The step's rows are its requests'
 rows in order, row r spanning n_r slots of computed tokens (a cache hit is no row, nor is a CUDA-graph pad row past Σ_r n_r,
@@ -31,7 +31,7 @@ is round s's). These are the network advice's I1 request index and step rows. ok
 So ok = 1 means exactly the slots [0, m) are assigned to admitted requests, none past what its request can take that step:
 m is rule A's count (`admitted`), at most Σ_q takes. Without the last check one admitted request named in all T slots
 would credit m_s = T rows, the padded ones among them. A step that splits a prompt's prefill (chunked prefill), resumes a
-preempted request or verifies draft tokens is refused (its rows are more than `takes`); a static execution phase (the vLLM
+preempted request or verifies draft tokens is refused (its rows are more than `takes`); a static window (the vLLM
 integration's `pouw_h1_static.Static`) has none. A tile of the
 round whose rows all lie at or past m (R·ti ≥ m) is dead. Its admit bits, [i < m], are all 0, so its receipt is `h1tile`'s
 canonical dead-tile receipt (`PouwH1Tile_v4`, `h1tile.reference`'s gated branch). Dense credit's population is the live
@@ -40,20 +40,20 @@ tiles, so a dead tile is never sampled. The Lean statement is `Pouw.SecurityProo
 
 `live_ok` is the unit on words, and `traced(T)` its gate circuit.
 
-**The live Program** (`program`) is an execution phase's S rounds' units: one template, `PouwLiveSlots_v1{T}`, called once a round,
-unit s round s's. It is a Program of its own beside the execution phase's (`h1window.program`), so the execution phase's tile Program, its
+**The live Program** (`program`) is a window's S rounds' units: one template, `PouwLiveSlots_v1{T}`, called once a round,
+unit s round s's. It is a Program of its own beside the window's (`h1window.program`), so the window's tile Program, its
 partition and its sample are untouched. Its parameters are named `PREFIX` and their role: ``slots`` (S·T slot leaves, round
 s's from row s·T), ``requests`` (T headers, read by every round), ``m`` (S rows) and ``round`` (S rows, row s the unit's
 ``s``). Its circuit file is the period-open's
 ``circuit_files["live"]``, and its partition is ``Q_template_instances`` over its template (`query`).
 
 **Round s's statement** ``live@<s>`` reads registered values (`live_reads.reads_file`; the names below are
-`live_reads`', which builds no Program), each under the execution phase Program's digest:
+`live_reads`', which builds no Program), each under the window Program's digest:
 
 * port ``slot_<i>`` reads row i of round s's slot table ``<prefix>slots@<s>`` (`SLOTS`: T rows of `SLOT_WORDS` u16 words,
-  the leaf's u32 little-endian), bound to the execution phase's open root, its root round s's ``slots``;
+  the leaf's u32 little-endian), bound to the window's open root, its root round s's ``slots``;
 * port ``req_<i>`` reads row i of round 0's request table ``<prefix>requests@0`` (`REQUESTS`: T rows of `HEADER_WORDS`
-  words, the header's five u32 little-endian), bound to the execution phase's session (its root, round 0's ``request_table``, is
+  words, the header's five u32 little-endian), bound to the window's session (its root, round 0's ``request_table``, is
   inside the open root, as ``ids@0``'s is);
 * port ``m`` reads ``<prefix>m@<s>`` (`M_ROWS`) at its known content (`m_table`): one row, m's two words, under
   `core_check.public_row_salt` of the open root and s;
@@ -66,7 +66,7 @@ So a round's statement that proves ok = 1 at public m on the tables its round ro
 A's count, and one whose m isn't the round's served rows opens no row of ``live-ok``.
 
 **`PouwLiveSlots_v2{T}`** is v1 with one more public port, ``cap``, each request leaf's public cap: the max_tokens its
-credit period's open commits for request q (credit's fixed length, ``length.max_tokens``), 0 past them.
+period's open commits for request q (credit's fixed length, ``length.max_tokens``), 0 past them.
 
     PouwLiveSlots_v2{T}   (slot, req, m, s, cap: Array<T, U32>) -> Value<1>
 
@@ -77,8 +77,28 @@ a prover could still give request q another's cap, or a later round, and so move
 another. Under v2 each request takes a decode row in round s ≥ 1 only when s < its public max_tokens. Its Program
 (`program_v2`, ``PouwLiveWindow_v2``) has a fifth parameter ``caps``, T rows read by every round. Round s's statement reads
 port ``cap_<i>`` at row i of the known ``<prefix>caps`` (`live_reads.caps_table`: T rows, each one u32's two words, under
-`core_check.public_row_salt` of the open root and i), which credit builds from the credit period's committed max_tokens. Credit
-reads only v2 (`credit.LIVE_FN`). v1 stays unchanged.
+`core_check.public_row_salt` of the open root and i), which credit builds from the period's committed max_tokens. Credit
+reads only v2 (`credit.LIVE_FN`) up to T = `PIECE_ROWS`. v1 stays unchanged.
+
+**`PouwLiveRows_v1{T, R}`** is a round's live check cut by rows, for a T past `PIECE_ROWS`. v2 reads 3T + 3 rows, and
+C-Flock's composer lowers it as one unit inside its 2^27-bit block only up to T = 64 (T 128 takes a 2^28-bit block and T 512
+a 2^30-bit one: r20261027-194709-05e5), so its count can't grow with T. Piece j of round s reads R
+rows of round s's slot table, rows [base, base + R) with base = jR, the first R request headers and their public caps:
+
+    PouwLiveRows_v1{T, R}   (slot: Array<R, U32>, req: Array<R, Array<5, U32>>, m: U32, s: U32, base: U32,
+                             cap: Array<R, U32>) -> Value<1>
+
+ok = 1 iff m ≤ T; the live headers among the R (prompt length ≠ 0) are a prefix, each at its own index, and bound to the
+public caps as v2 binds them; every row i = base + k below m names a live request (1 ≤ slot ≤ N), every row from m on is
+``EMPTY_SLOT``; and a row naming request q is in q's own round (its header's round is s) and inside q's interval
+[first slot, first slot + prompt length), the first slot its header's. Distinct rows inside one interval are at most its
+prompt length, so the pieces of a round that all accept bound each request's rows by `takes` with no count carried between
+them, and m is rule A's count as v2's ok makes it. A decode row (a request named in a later round than its own) has no
+interval here and is refused; a round of a block whose requests take one token each (max_tokens 1) has none. Requests past
+the first R are named by no row. The live Program at T past `PIECE_ROWS` (`program_rows`) calls it ceil(T/R) times a
+round, unit s·P + j round s's piece j, every one proved. The Lean statement is `LiveCredit.live_rows`
+(`rowsOk` is `rows_ok`): a round whose pieces all accept meets v2's `liveOk2` on its view with the headers past R empty
+(`cut`), and its rule-A count over its whole request table is m (`rowsOk_admitted`).
 """
 from __future__ import annotations
 
@@ -98,10 +118,13 @@ from verity.ml.circuits.types import Array, Type
 from verity.core.protocols.pouw.circuit.live_reads import HEADER
 
 U32 = Array(32, BL.BIT)
-#: a request leaf's header words: index, round, slot, cap and prompt length
-INDEX, ROUND, CAP, PROMPT = 0, 1, 3, 4
+#: a request leaf's header words: index, round, first slot, cap and prompt length
+INDEX, ROUND, SLOT, CAP, PROMPT = 0, 1, 2, 3, 4
 PORTS = ("slot", "req", "m", "s")
 PORTS_V2 = (*PORTS, "cap")
+PORTS_ROWS = (*PORTS, "base", "cap")
+#: the largest T whose v2 unit C-Flock lowers inside one 2^27-bit block, and the rows of a piece past it
+PIECE_ROWS = 64
 
 
 def _check(slot: Sequence[int], req: Sequence[Sequence[int]]) -> None:
@@ -274,7 +297,7 @@ PouwLiveWindow = CompositeDefinition(
 
 
 def program(T: int, S: int, prefix: str = "") -> Program:
-    """The live Program of an execution phase of S rounds whose tables have T leaves, its parameters named ``prefix`` and their roles
+    """The live Program of a window of S rounds whose tables have T leaves, its parameters named ``prefix`` and their roles
     (`ROLES`). Refused (ValueError) when T or S isn't a positive integer."""
     if not all(isinstance(x, int) and not isinstance(x, bool) and x > 0 for x in (T, S)):
         raise ValueError(f"the live Program's T and S are positive integers, not {T!r} and {S!r}")
@@ -330,3 +353,157 @@ def program_v2(T: int, S: int, prefix: str = "") -> Program:
 def query_v2(T: int) -> dict[str, Any]:
     """The v2 live Program's partition query: every instance of its template one unit, unit s round s's."""
     return template_instances_query([template_v2(T)])
+
+
+def pieces(T: int, R: int = PIECE_ROWS) -> int:
+    """A round's pieces at T table rows: T / R, R dividing T."""
+    if not all(isinstance(x, int) and not isinstance(x, bool) and x > 0 for x in (T, R)) or T % R:
+        raise ValueError(f"a round's pieces cut its T rows into pieces of R rows, R dividing T, not T = {T!r}, R = {R!r}")
+    return T // R
+
+
+def rows_ok(slot: Sequence[int], req: Sequence[Sequence[int]], m: int, s: int, base: int, cap: Sequence[int], T: int) -> int:
+    """`PouwLiveRows_v1{T, R}` on words, R = len(slot): 1 iff m ≤ T, the live headers among the R are a prefix, each at its
+    own index, bound to the public caps `cap` (`caps_bound`), every row i = base + k below m names a live request and every
+    later row is 0, and a row naming request q is in q's round s and in [its first slot, its first slot + prompt length)."""
+    _check(slot, req)
+    live = [h[PROMPT] != 0 for h in req]
+    n = sum(live)
+
+    def row(k: int, x: int) -> bool:
+        i = base + k
+        if not (1 <= x <= n if i < m else x == 0):
+            return False
+        h = req[x - 1] if x else None
+        return h is None or (h[ROUND] == s and h[SLOT] <= i < h[SLOT] + h[PROMPT])
+
+    return int(m <= T and caps_bound(req, cap)
+               and all(live[q] or not live[q + 1] for q in range(len(req) - 1))
+               and all(h[INDEX] == q for q, h in enumerate(req) if live[q])
+               and all(row(k, x) for k, x in enumerate(slot)))
+
+
+def _types_rows(R: int) -> tuple[list[Type], Type]:
+    return [Array(R, U32), Array(R, Array(HEADER, U32)), U32, U32, U32, Array(R, U32)], BL.BIT
+
+
+def _le_const(C: Any, bits: Sequence[Any], k: int, lo: int) -> Any:
+    """bits ≤ k, bits unsigned and k a constant below 2^lo: bits' high part past `lo` zero and its low `lo` bits ≤ k."""
+    high = NOT(or_reduce(C, bits[lo:]))
+    return C.AND(high, NOT(sub(C, const_bits(k, lo), bits[:lo], lo)[1]))
+
+
+def _build_rows(T: int, R: int) -> Any:
+    w, lo = R.bit_length(), max((R - 1).bit_length(), 1)  # N ≤ R < 2^w; a row's offset k < R ≤ 2^lo
+
+    def build(C: Any, *e: Any) -> list:
+        o = (HEADER + 1) * R
+        slot, req, m, s, base, cap = e[:R], [e[R + HEADER * q:R + HEADER * (q + 1)] for q in range(R)], e[o], e[o + 1], \
+            e[o + 2], e[o + 3:o + 3 + R]
+        live = [or_reduce(C, h[PROMPT]) for h in req]
+        conds = [NOT(sub(C, const_bits(T, 32), m, 32)[1])]
+        for q in range(R):
+            index = and_reduce(C, [b if q >> j & 1 else NOT(b) for j, b in enumerate(req[q][INDEX])])
+            conds.append(NOT(C.AND(live[q], NOT(index))))
+            if q + 1 < R:
+                conds.append(NOT(C.AND(live[q + 1], NOT(live[q]))))
+        for q, (h, c) in enumerate(zip(req, cap)):
+            same = and_reduce(C, [NOT(a ^ b) for a, b in zip(h[CAP], c)] + [NOT(b) for b in h[ROUND]])
+            conds.append(NOT(live[q] ^ or_reduce(C, c)))
+            conds.append(NOT(C.AND(live[q], NOT(same))))
+        n = [ZERO] * w
+        for b in live:
+            n = add(C, n, [b], width=w)
+        # request q's interval [first, first + prompt) less base: below base when first < base (`before`), and
+        # past every row of the piece when first + prompt < base (`gone`)
+        spans = []
+        for h in req:
+            first, before = sub(C, h[SLOT], base, 32)
+            end = add(C, h[SLOT], h[PROMPT], width=32, carry_out=True)
+            last, gone = sub(C, end, base, 33)
+            prefill = and_reduce(C, [NOT(a ^ b) for a, b in zip(h[ROUND], s)])
+            spans.append((first, before, last, gone, prefill))
+        for k, x in enumerate(slot):
+            i = add(C, base, const_bits(k, 32), width=32, carry_out=True)
+            low, high = or_reduce(C, x[:w]), or_reduce(C, x[w:])
+            named = C.AND(C.AND(low, NOT(high)), NOT(sub(C, n, x[:w], w)[1]))
+            empty = NOT(OR(C, low, high))
+            below = sub(C, i, m, 33)[1]
+            conds.append(empty ^ C.AND(below, named ^ empty))
+            for q, onehot in enumerate(_onehot(C, x[:w], range(1, R + 1))):
+                first, before, last, gone, prefill = spans[q]
+                after_first = OR(C, before, _le_const(C, first, k, lo))
+                before_end = C.AND(NOT(gone), NOT(_le_const(C, last, k, lo)))
+                conds.append(NOT(C.AND(onehot, NOT(C.AND(prefill, C.AND(after_first, before_end))))))
+        return [and_reduce(C, conds)]
+
+    return build
+
+
+@functools.cache
+def traced_rows(T: int, R: int) -> Traced:
+    """`PouwLiveRows_v1`'s gate circuit at T table rows and R rows a piece."""
+    return trace(_build_rows(T, R), *_types_rows(R))
+
+
+def _refuse_rows(b: dict) -> str | None:
+    t, r = b.get("T"), b.get("R")
+    try:
+        pieces(t, r)
+    except ValueError as e:
+        return str(e)
+    return None
+
+
+PouwLiveRows = CompositeDefinition(
+    "PouwLiveRows", 1, ("T", "R"), lambda S: (tuple(zip(PORTS_ROWS, _types_rows(S.R)[0])), _types_rows(S.R)[1]),
+    lambda B, S, *c: emit(traced_rows(S.T, S.R), *_types_rows(S.R), B, *c), conformance="protocol-defined",
+    refuse=_refuse_rows,
+    doc="A piece of round s's live check cut by rows (`circuit.live`): R slot leaves, rows [base, base + R) of the round's "
+        "T, the first R headers of round 0's request table (index, round, first slot, cap, prompt length), the public m, "
+        "the public round s, the public base and the first R public caps, to 1 iff m <= T, the live headers (prompt length "
+        "nonzero) are a prefix each at its own index and bound to the public caps as PouwLiveSlots_v2 binds them, every row "
+        "below m names a live request and every row from m on is 0, and a row naming request q is in q's round s and in "
+        "[q's first slot, q's first slot + its prompt length).")
+
+
+def template_rows(T: int, R: int = PIECE_ROWS) -> Any:
+    """The pieced live Program's one template: `PouwLiveRows_v1` at T table rows and R rows a piece."""
+    return bind(PouwLiveRows, T=int(T), R=int(R))
+
+
+def _rows_signature(S: Any) -> tuple:
+    slot, req, m, s, base, cap = _types_rows(S.R)[0]
+    params = ((S.PREFIX + "slots", Array(S.S * S.T, slot.elem)), (S.PREFIX + "requests", Array(S.T, req.elem)),
+              (S.PREFIX + "m", Array(S.S, m)), (S.PREFIX + "round", Array(S.S, s)),
+              (S.PREFIX + "base", Array(pieces(S.T, S.R), base)), (S.PREFIX + "caps", Array(S.T, cap.elem)))
+    return params, Array(S.S * pieces(S.T, S.R), BL.BIT)
+
+
+def _rows_body(B: Any, S: Any, slots: Any, requests: Any, m: Any, rounds: Any, bases: Any, caps: Any) -> Any:
+    unit, P = template_rows(S.T, S.R), pieces(S.T, S.R)
+    outs = [B.call(unit, slots[s * S.T + j * S.R:s * S.T + (j + 1) * S.R], requests[:S.R], m[s], rounds[s], bases[j],
+                   caps[:S.R]) for s in range(S.S) for j in range(P)]
+    return coll_concat(_rows_signature(S)[1], outs)
+
+
+PouwLiveRowsProgram = CompositeDefinition(
+    "PouwLivePieces", 1, ("T", "S", "R", "PREFIX"), _rows_signature, _rows_body, register=False,
+    doc="A block's S rounds' live checks cut by rows: round s's piece j, PouwLiveRows_v1{T, R} on rows [s T + j R, s T + "
+        "(j + 1) R) of PREFIX slots, the first R headers of PREFIX requests, row s of PREFIX m and of PREFIX round, row j "
+        "of PREFIX base (j R) and the first R of PREFIX caps, unit s P + j for P = T / R; every parameter named PREFIX and "
+        "its role.")
+
+
+def program_rows(T: int, S: int, prefix: str = "", R: int = PIECE_ROWS) -> Program:
+    """The pieced live Program, credit's past T = `PIECE_ROWS`: S rounds of T / R pieces, parameters ``prefix`` and their
+    roles (`live_reads.ROLES_ROWS`). Refused (ValueError) when S isn't a positive integer or R doesn't divide T."""
+    pieces(T, R)
+    if not (isinstance(S, int) and not isinstance(S, bool) and S > 0):
+        raise ValueError(f"the live Program's S is a positive integer, not {S!r}")
+    return Program(bind(PouwLiveRowsProgram, T=T, S=S, R=R, PREFIX=str(prefix)))
+
+
+def query_rows(T: int, R: int = PIECE_ROWS) -> dict[str, Any]:
+    """The pieced live Program's partition query: every instance of its template one unit, unit s·P + j round s's piece j."""
+    return template_instances_query([template_rows(T, R)])
