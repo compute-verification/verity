@@ -50,7 +50,8 @@ that audited another server than the node it ran on says so in ``DIR/served.json
 ``source`` ``fixture`` for an answer brought from a recorded run); one that names no server there leaves its answer about
 the node it ran on. ``--only`` and ``--skip`` (a component each, repeatable) run those pieces alone, or all but those.
 ``--product`` (default onsite; served_verdicts.sh passes its PRODUCT) is the product the run composes (`block_record.PRODUCTS`): onsite's
-every subprotocol, remote's sampled proofs and PoUW alone. A piece the product drops isn't run, whatever its command,
+every subprotocol, remote's sampled proofs and PoUW alone, remote-network's those and the network certifier. A piece
+the product drops isn't run, whatever its command,
 and prints a ``DROPPED`` line naming it.
 
 ``gate``: before serving with H1's coins from infra's gate (``--gate``, default ``H1_GATE``): refused while the key's lane

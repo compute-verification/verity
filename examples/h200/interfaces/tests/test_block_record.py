@@ -153,7 +153,25 @@ def test_remote_composes_sampled_proofs_and_pouw_alone_its_other_legs_dropped() 
     assert set(R.check(unnamed)) == {"composed:verdict", "composed:missing"}
     unknown = copy.deepcopy(rec)
     unknown["composed"]["product"] = "offsite"
-    assert R.check(unknown) == {"composed:product": "not one of ['onsite', 'remote']"}
+    assert R.check(unknown) == {"composed:product": "not one of ['onsite', 'remote', 'remote-network']"}
+
+
+def test_remote_network_composes_remotes_legs_and_the_network_certifiers() -> None:
+    """Remote-network's product: sampled proofs, PoUW and the network certifier accepted on the block's server compose
+    to accept, the wipe, PoUS and bandwidth dropped; without the network certifier's leg it is pending on it."""
+    report, _ = _accepting_report()
+    keep = {R.RUNNER_KEYS[leg] for leg in R.PRODUCTS["remote-network"]}
+    report["protocols"] = {k: v for k, v in report["protocols"].items() if k in keep}
+    rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, product="remote-network")
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert R.check(rec) == {}
+    c = rec["composed"]
+    assert (c["verdict"], c["product"], c["missing"], c["dropped"]) == (
+        "accept", "remote-network", [], ["bandwidth", "pous", "wipe"])
+    assert c["legs"] == {"certifier": "accept", "integrity": "accept", "pouw": "accept"}
+    del report["protocols"][R.RUNNER_KEYS["certifier"]]
+    c = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, product="remote-network")["composed"]
+    assert (c["verdict"], c["missing"]) == ("pending", ["certifier"])
 
 
 def test_a_leg_carries_its_answers_placement_and_no_other_profile() -> None:

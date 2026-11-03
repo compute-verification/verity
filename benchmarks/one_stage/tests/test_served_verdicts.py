@@ -1086,12 +1086,17 @@ def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused
      "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CHAIN_CMD is set: unset it"),
     ("remote", {"CERTIFIER_FRONT": FRONT},
      "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_FRONT is set: unset it"),
+    ("remote-network", {}, None),
+    ("remote-network", {"CERTIFIER_CHAIN_CMD": "true", "CERTIFIER_PERIOD_CMD": "true"}, None),
+    ("remote-network", {"POUS_CMD": "true"},
+     "PREFLIGHT: PRODUCT=remote-network runs no onsite piece but the network certifier's, and POUS_CMD is set: unset it"),
     ("onsite", {}, None),
-    ("offsite", {}, "PREFLIGHT: PRODUCT is onsite or remote, not offsite"),
+    ("offsite", {}, "PREFLIGHT: PRODUCT is onsite, remote or remote-network, not offsite"),
 ])
 def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_command(tmp_path, product, extra, line):
     """PRODUCT=remote drops the onsite pieces: in a tree that has the wipe's piece its default WIPE_CMD isn't set, and
-    the preflight refuses any onsite piece's command set, before anything runs."""
+    the preflight refuses any onsite piece's command set, before anything runs. PRODUCT=remote-network takes the network
+    certifier's commands and refuses the other onsite pieces' as remote does."""
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
     _script(venv / "python", f'exec {sys.executable} "$@"')
@@ -1106,7 +1111,8 @@ def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_comma
 FAKE_COMPOSITE = '''import json, sys
 from pathlib import Path
 COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"),
-              "remote": ("verity/pouw/v1", "verity/sampled-proofs/one-stage/v2")}
+              "remote": ("verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"),
+              "remote-network": ("verity/certifier/v9", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v2")}
 if __name__ == "__main__":
     a = sys.argv[1:]
     Path(a[a.index("--private-out") + 1]).mkdir(parents=True)
@@ -1131,7 +1137,8 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     and without composite.py in the tree it says so and fails, since no Lean answered. PRODUCT=remote needs no
     served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone. A serve dir with no V3c
     audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
-    case."""
+    case. PRODUCT=remote-network runs remote's Lean and remote-network's, the latter built in onsite's package and given
+    the network certifier's case where its piece released it, OUT/pieces/certifier."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     out.mkdir()
     _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
@@ -1176,15 +1183,20 @@ sys.exit(1)
         "COMPOSITE NOT_WRITTEN verity/inference-only/v0",
         "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
         "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
+        "COMPOSITE remote-network: NOT_ESTABLISHED missing verity/wipe/v0",
+        "COMPOSITE remote-network: VERDICT verity/remote-network/v0 reject components",
         "COMPOSITE onsite: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE onsite: VERDICT verity/onsite/v0 reject components",
         on]
     p = d / "private" / "composite"
     assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
+    assert json.loads((p / "remote-network" / "private" / "argv.json").read_text()) == [str(d / "private" / "other"),
+                                                                                        str(v2)]
     assert json.loads((p / "onsite" / "private" / "argv.json").read_text()) == [str(d / "private" / "pous" / "w0")]
+    assert (tree / "verity" / "core" / "protocols" / "onsite" / ".lake" / "build" / "bin" / "remote-network").is_file()
     assert oct((d / "private").stat().st_mode & 0o777) == "0o700"
     assert sorted(out.iterdir()) == [out / "composite", out / "verdicts.txt"]
     assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == [
-        "composite/onsite/composite.json", "composite/remote/composite.json"]
+        "composite/onsite/composite.json", "composite/remote-network/composite.json", "composite/remote/composite.json"]
     (tree / "benchmarks" / "one_stage" / "composite.py").unlink()
     (out / "verdicts.txt").unlink()
     shutil.rmtree(out / "composite")
@@ -1210,6 +1222,27 @@ sys.exit(1)
     shutil.rmtree(d / "private")
     assert run().returncode == 0
     assert json.loads((tmp_path / "served_cases.argv").read_text()) == ["--audit", str(d / "sampled-proofs-served")]
+    (out / "verdicts.txt").unlink()
+    shutil.rmtree(out / "composite")
+    shutil.rmtree(d / "private")
+    cert = out / "pieces" / "certifier"
+    cert.mkdir(parents=True)
+    (cert / "case.json").write_text('{"evidence": "beef"}')
+    (cert / "answer.json").write_text('{"protocol": "verity/certifier/v9", "verdict": "accept"}')
+    env["PRODUCT"] = "remote-network"
+    r = run()
+    assert r.returncode == 0, r.stderr
+    assert (out / "verdicts.txt").read_text().splitlines() == [
+        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE CASE verity/registration/v0 accept",
+        "COMPOSITE NOT_WRITTEN verity/inference-only/v0", "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
+        "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
+        "COMPOSITE remote-network: NOT_ESTABLISHED missing verity/wipe/v0",
+        "COMPOSITE remote-network: VERDICT verity/remote-network/v0 reject components",
+        on]
+    assert sorted(x.name for x in (out / "composite").iterdir()) == ["remote", "remote-network"]
+    assert not (p / "onsite").exists()
+    assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
+    assert json.loads((p / "remote-network" / "private" / "argv.json").read_text()) == [str(v2), str(cert)]
 
 
 DIGEST = "5e" * 64

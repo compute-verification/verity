@@ -82,11 +82,13 @@
 #     one accepted on this node; any other server's answer is carried as elsewhere. The certifier's chain files that list
 #     or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/certifier. Then,
 #     unless COMPOSITE is set empty,
-#     remote's and onsite's Lean verdicts on the run's cases (`served_composite.sh`'s docstring). Their verdicts gate
+#     the product's composites' Lean verdicts on the run's cases (`served_composite.sh`'s docstring). Their verdicts gate
 #     nothing, but a composite that didn't run (a tree without composite.py) or whose Lean didn't answer fails the run.
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
 #     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
-#     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's.
+#     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's;
+#     remote-network remote's pieces and the network certifier's (CERTIFIER_CMD or the split's), the wipe's, PoUS's and
+#     bandwidth's dropped as remote drops them, its composites remote's and remote-network's.
 #  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
@@ -212,7 +214,11 @@ case $PRODUCT in
     for v in WIPE_CMD POUS_CMD BANDWIDTH_CMD CERTIFIER_CMD CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD CERTIFIER_FRONT; do
       [ -z "${!v:-}" ] || { say "PREFLIGHT: PRODUCT=remote runs no onsite piece, and $v is set: unset it"; exit 3; }
     done ;;
-  *) say "PREFLIGHT: PRODUCT is onsite or remote, not $PRODUCT"; exit 3 ;;
+  remote-network)
+    for v in WIPE_CMD POUS_CMD BANDWIDTH_CMD; do
+      [ -z "${!v:-}" ] || { say "PREFLIGHT: PRODUCT=remote-network runs no onsite piece but the network certifier's, and $v is set: unset it"; exit 3; }
+    done ;;
+  *) say "PREFLIGHT: PRODUCT is onsite, remote or remote-network, not $PRODUCT"; exit 3 ;;
 esac
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"

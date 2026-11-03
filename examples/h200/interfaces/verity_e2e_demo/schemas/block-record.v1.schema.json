@@ -71,7 +71,7 @@
     "legs": {"type": "object", "additionalProperties": {"$ref": "#/$defs/verdict"}},
     "missing": {"type": "array", "items": {"type": "string"}},
     "elsewhere": {"type": "array", "items": {"type": "string"}},
-    "product": {"enum": ["remote"]},
+    "product": {"enum": ["remote", "remote-network"]},
     "dropped": {"type": "array", "items": {"type": "string"}},
     "onsite": {"oneOf": [{"type": "null"}, {"type": "object", "required": ["protocol", "verdict", "reason"]}]},
     "joint_horizon": {
