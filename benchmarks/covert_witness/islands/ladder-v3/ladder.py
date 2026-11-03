@@ -3,8 +3,9 @@ warmup-stable-decay run per size, with cooldown branches that each decay the rat
 per non-embedding parameter), so each branch's end is a fully annealed start, registered in covert_witness's start format.
 
 The model is covert_witness's `lf` family (model.py, what `prepare.Net` rebuilds) with data v3's tokenizer, bpe32k: 32,000
-tokens, the embedding tied. Sizes `s`, `m` and `l16`. Block matrices train with Muon, the tied embedding and the norm gains
-with AdamW. A branch at saturation t has N = t * non-embedding parameters / tokens per step steps, the last `--cool` of them
+tokens, the embedding tied. Sizes `s`, `m`, `l16` and `xl` (about 20M, 60M, 200M and 600M non-embedding parameters,
+head dimension 64, the SwiGLU width 2.75 d but m's 2.67 d). Block matrices train with Muon, the tied embedding and the norm
+gains with AdamW. A branch at saturation t has N = t * non-embedding parameters / tokens per step steps, the last `--cool` of them
 its cooldown: it forks from the main run at N - cooldown and, when done, the main run resumes from the weights and
 optimizer state it forked from, so every branch is exactly one standalone warmup-stable-decay run of N steps on the same
 stream prefix. The top branch is the main run's own end. `--extra` saturations are branches that only add points to the
@@ -56,7 +57,8 @@ import data_v3  # noqa: E402
 import prepare  # noqa: E402
 from model import CTX, LM, Size  # noqa: E402
 
-SIZES = {s.name: s for s in (Size("s", 512, 6, 8, 1408), Size("m", 768, 8, 12, 2048), Size("l16", 1024, 16, 16, 2816))}
+SIZES = {s.name: s for s in (Size("s", 512, 6, 8, 1408), Size("m", 768, 8, 12, 2048), Size("l16", 1024, 16, 16, 2816),
+                             Size("xl", 1536, 21, 24, 4224))}
 RECIPE = "te-ladder/v1"
 TOKENIZER, VOCAB = data_v3.TOKENIZER, data_v3.VOCAB
 
