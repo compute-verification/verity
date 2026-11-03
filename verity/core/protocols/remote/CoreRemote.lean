@@ -268,17 +268,21 @@ private def sampled (log : Array Json) (outputs : Option Json) : Answer :=
   answerOf (noBlobs VStar.Recursive.Sampled.protocol) (sampledOn log outputs recR)
 
 -- the policy accepts `R` after `W`, the log's first record, whose digest `R`'s previous names; with no `W` before it, the
--- log's chain refuses `R`
+-- log's chain refuses `R` (`trusted`)
 #guard (policy #[recW]).verdict == .accept
 #guard (policy #[]).verdict == .reject
+#guard (policy #[]).reason.map (·.startsWith "trusted: ") == some true
 
 -- sampled proofs' one-stage audit accepts `R` after `W`, its tables output values that reuse `W`'s entries; it refuses
--- `R` without the outputs (R7 holds the tables to the audited circuit's own domains, which `W`'s are not), with outputs
--- naming a record that isn't the log's, and with no `W` in the log
+-- `R` without the outputs (`R7-domain`: R7 holds the tables to the audited circuit's own domains, which `W`'s are not),
+-- with outputs naming a record that isn't the log's (`R7-output`), and with no `W` in the log (`R6-previous` too)
 #guard (sampled #[recW] (some (outputsOf (digestOf recW)))).verdict == .accept
 #guard (sampled #[recW] none).verdict == .reject
+#guard (sampled #[recW] none).reason == some "registration: R7-domain"
 #guard (sampled #[recW] (some (outputsOf (rep "77")))).verdict == .reject
+#guard (sampled #[recW] (some (outputsOf (rep "77")))).reason == some "registration: R7-output, R7-domain"
 #guard (sampled #[] (some (outputsOf (digestOf recW)))).verdict == .reject
+#guard (sampled #[] (some (outputsOf (digestOf recW)))).reason == some "registration: R6-previous, R7-output, R7-domain"
 
 -- PoUW's ROOTS1 (`Internal.arow`) holds the window's tables to `R`'s, which are `W`'s entries; `W` registers them under
 -- the window's names, not the Commit's
@@ -289,7 +293,7 @@ private def arowOn (rec : Json) : Option (Except (String × String) Unit) :=
   (PouwCheck.Credit.commitOf? (.str (Flock.hexOf (textOf rec).toUTF8))).map fun (_, reg) =>
     PouwCheck.Credit.Internal.arow rounds (Json.arr #[windowA, windowIds]) reg layout "pouw/h1/"
 #guard (arowOn recR).map (·.toOption.isSome) == some true
-#guard (arowOn recW).map (·.toOption.isNone) == some true
+#guard (arowOn recW).map (fun r => match r with | .error (c, _) => c | .ok _ => "ok") == some "arow"
 
 -- the tie: the period's one window on `R` holds it, a window on `W` is a stray
 #guard windows.strays [policyOn #[recW] recR, periodNaming [recR]] == none
@@ -302,7 +306,7 @@ private def remoteOn (window : Json) : Answer :=
   let xs := [policyOn #[recW] recR, periodNaming [window], sampledOn #[recW] (some (outputsOf (digestOf recW))) recR]
   Cases.answerCases (protocol.on #[]) xs (boundOn (components.map noBlobs) xs)
 #guard (remoteOn recR).verdict == .reject
-#guard (remoteOn recR).reason.map (·.startsWith s!"{PouwCheck.Period.protocolId} reject: ") == some true
+#guard (remoteOn recR).reason.map (·.startsWith s!"{PouwCheck.Period.protocolId} reject: period: ") == some true
 #guard (remoteOn recR).reason.map (fun r => contains r s!"{NciCheck.Protocol.protocolId} reject" ||
   contains r s!"{VStar.Recursive.Sampled.protocol.id} reject") == some false
 
