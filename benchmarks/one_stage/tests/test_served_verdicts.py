@@ -2269,12 +2269,13 @@ def _env_of(f: Path, names: str) -> dict[str, str]:
     return dict(x.split("=", 1) for x in said.splitlines())
 
 
-def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, **extra: str) -> subprocess.CompletedProcess:
+def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True,
+            **extra: str) -> subprocess.CompletedProcess:
     """Window 7 of a toy serve dir as the served node leaves it at its record under H1's tie: its records audits' cases
     (a5's v2 case naming ``blobs``, relative to the serve dir unless absolute), H1's log and records, PoUW's period case,
-    the window's seal, Commit line and request, every file of `HELD_BACK`, and in $OUT the record's pieces and
-    inference-only verdict; then `served_verdicts.sh handoff` on vy-dc-h200 at the tree of commit SHA (``extra`` adds to
-    the environment)."""
+    the window's seal, Commit line and request, every file of `HELD_BACK`, and in $OUT the record's pieces and (if
+    ``verdict``) inference-only verdict; then `served_verdicts.sh handoff` on vy-dc-h200 at the tree of commit SHA
+    (``extra`` adds to the environment)."""
     d, out = tmp_path / "serve", tmp_path / "served-out"
     sp = "sampled-proofs-served"
     files = {"seals.jsonl": {"window": 7, "requests": ["a"]},
@@ -2299,7 +2300,8 @@ def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, **extra: str) -> sub
     for f, body in (("answer.json", {"verdict": "accept"}), ("served.json", {"server": "vy-dc-h200"}), ("piece.log", "")):
         (out / "pieces" / "pouw" / f).write_text(json.dumps(body))
     (out / "record").mkdir()
-    (out / "record" / "inference-only.json").write_text(json.dumps({"verdict": "accept"}))
+    if verdict:
+        (out / "record" / "inference-only.json").write_text(json.dumps({"verdict": "accept"}))
     (tmp_path / "served-tree").mkdir(exist_ok=True)
     env = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(tmp_path / "served-venv"),
            "D": str(d), "K": "7", "OUT": str(out), "SERVE_ROOT": str(tmp_path / "root"), "V3C_CLASS": W63K4,
@@ -2334,6 +2336,15 @@ def test_the_served_nodes_compose_hand_off_lists_and_hashes_the_verifier_side_fi
     assert sorted(p.name for p in (dc / "pieces" / "pouw").iterdir()) == ["answer.json", "served.json"]
     assert (out / "verdicts.txt").read_text().splitlines() == [HANDOFF_LINE.replace("{d}", str(d))]
     assert not _window_data(out, 7) and oct(dc.stat().st_mode & 0o777) == "0o700"
+
+
+def test_a_hand_off_of_a_record_with_no_inference_only_verdict_lists_the_rest(tmp_path):
+    """A record with no inference-only verdict still hands off: its list is every other file, and nothing is refused."""
+    run = _handed(tmp_path, verdict=False)
+    assert run.returncode == 0, run.stderr
+    listed = (tmp_path / "serve" / "private" / "compose" / "inputs.txt").read_text().splitlines()
+    own = [f for f in HANDED_OWN if f != "private/compose/inference-only.json"]
+    assert listed == [*sorted([*HANDED_READS, *BLOBS, *own]), "private/compose/inputs.sha256"]
 
 
 @pytest.mark.parametrize("blob, said", [

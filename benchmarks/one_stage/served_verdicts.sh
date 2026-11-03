@@ -905,7 +905,9 @@ for x in open(sys.argv[1]):
     if x.strip():
         print("h1/" + str(json.loads(x).get("file")))' "$D/h1/log.jsonl"
     [ -z "$blobs" ] || printf '%s\n' "$blobs"
-    (cd "$D" && find private/compose/pieces private/compose/compose.env private/compose/inference-only.json -type f 2>/dev/null)
+    for f in pieces compose.env inference-only.json; do
+      [ ! -e "$D/private/compose/$f" ] || (cd "$D" && find "private/compose/$f" -type f)
+    done
   } | (cd "$D" && while IFS= read -r f; do [ ! -f "$f" ] || echo "$f"; done) | LC_ALL=C sort -u
 }
 handoff() {  # the compose hand-off in private/compose, from the pieces in $1 and the inference-only verdict $2
