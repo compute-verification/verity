@@ -1,19 +1,25 @@
 """Drive's side of the task executor (`research.executor`, drive.toml's `executor`), on the file-backed fake transport: off
 changes nothing; shadow enqueues each checked tip's check with no graph beside its after-landing run, reads the graph the
-executor listed, and records how their verdicts compare by its keys; on verifies a tip, and moves `main`, only once every
-task's verdict is pass.  `QueueTransport` reads the executor's graph through the store's remote."""
+executor listed, and records how their verdicts compare by its keys; on enqueues each tip as graph/v2, reads its tasks'
+results by key (a task that reads others by the key the contract's rule gives it), judges a failure by policy.toml's
+allowances, names the landing whose change touches what a red task depends on, and moves `main` only once every task on the
+gate passed.  `QueueTransport` reads the executor's graphs and results through the store's remote."""
 from __future__ import annotations
 
+import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
-from research.drive import AFTER_LANDING
-from research.executor import (AFTER_LANDING_PRIORITY, SHADOW_WAIT_S, TASKS_GRAPH_KIND, Executor, FileTransport, QueueTransport,
-                               Shadowed, agrees, compare, keyed, old_verdicts, shadow_records, shadow_report)
+from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, FIX_WINDOW_S, task_files
+from research.executor import (AFTER_LANDING_PRIORITY, BLOCKED, GRAPH_V2, SHADOW_WAIT_S, TASKS_GRAPH_KIND, Executor, FileTransport,
+                               QueueTransport, Shadowed, agrees, compare, keyed, old_verdicts, shadow_records, shadow_report,
+                               task_key, task_target)
 from research.store.local import LocalStore
 from research.store import vocab
-from test_drive_review import Review, _main
+from test_drive_policy import EXPIRED, LIVE, _policy
+from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning
 from test_queue import World, _git
 
 K_SUITE, K_LEAN = "a" * 128, "b" * 128
@@ -41,9 +47,6 @@ def _graph(tip: str) -> dict:
 def _executor(h: Review, tmp_path, mode: str) -> FileTransport:
     fake = FileTransport(tmp_path / "executor")
     h.d.executor, h.d._tasks = mode, Executor(fake)
-    h.listings: list[str] = []
-    h.d.list_tasks = lambda repo, tip: h.listings.append(tip) or {"tip": tip}
-    h.d.listed_tasks = lambda rec: (_graph(rec["tip"]), None)
     return fake
 
 
@@ -160,7 +163,7 @@ def test_off_changes_nothing(world, monkeypatch, tmp_path):
     _passed_run(h, tmp_path)
     h.tick()
     assert _main(world) == tip != main and len(h.posted) == 1
-    assert h.listings == [] and fake.enqueued() == [] and "executor" not in h.q.load_state()["drive"]
+    assert fake.enqueued() == [] and "executor" not in h.q.load_state()["drive"]
     assert world.store.labels(f"commit:{tip}") == []
 
 
@@ -168,7 +171,7 @@ def test_shadow_enqueues_each_tips_check_without_a_graph_and_compares_by_the_exe
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "shadow")
     one = _land(h, 1)
-    assert len(h.posted) == 1 and h.listings == [], "the run launches as before, and drive's host lists no graph"
+    assert len(h.posted) == 1, "the run launches as before"
     assert fake.enqueued() == [{"check": f"after-landing:{one}", "priority": AFTER_LANDING_PRIORITY, "graph": None}]
     for k in _list(fake, one).values():
         fake.finish(k, "pass")
@@ -199,7 +202,7 @@ def test_shadow_enqueues_each_tips_check_without_a_graph_and_compares_by_the_exe
     text, ok = shadow_report(shadow_records(world.store, pull=False), 10)
     assert not ok and f"{two[:12]}" in text and "flock-rust-tests: run pass, executor fail" in text, text
     assert f"agree {n}/{n}, disagree 0" in text and "the newest 0 agree" in text
-    assert h.listings == [] and [r["graph"] for r in fake.enqueued()] == [None, None]
+    assert [r["graph"] for r in fake.enqueued()] == [None, None] and all("schema" not in r for r in fake.enqueued())
 
 
 def test_a_shadow_tip_is_pending_until_the_executor_labels_its_graph_then_agrees_by_its_keys(world, monkeypatch, tmp_path):
@@ -225,7 +228,6 @@ def test_a_shadow_tip_is_pending_until_the_executor_labels_its_graph_then_agrees
     h.tick()
     (rec,) = world.store.labels(f"commit:{one}", key=vocab.EXECUTOR_SHADOW)
     assert agrees(rec.value) and rec.value["graph"] == _graph_id(fake, one), rec.value
-    assert h.listings == []
 
 
 def test_a_graph_the_executor_never_labels_is_recorded_incomplete_after_the_wait(world, monkeypatch, tmp_path):
@@ -245,7 +247,6 @@ def test_a_graph_the_executor_never_labels_is_recorded_incomplete_after_the_wait
     assert one not in h.q.load_state()["drive"].get("executor", {}) and _main(world) == one
     text, ok = shadow_report(shadow_records(world.store, pull=False), 10)
     assert not ok and "incomplete: the executor labelled no task graph" in text, text
-    assert h.listings == []
 
 
 def test_a_graph_of_another_commit_is_refused_and_the_tip_recorded_incomplete(world, monkeypatch, tmp_path):
@@ -324,42 +325,271 @@ def test_shadow_reports_the_switch_gate_once_three_tips_in_a_row_agree():
     assert not shadow_report(recs[:2] + recs[3:], 10)[1]
 
 
-def test_on_launches_no_run_and_promotes_main_only_once_every_key_passed(world, monkeypatch, tmp_path):
+# -- on: graph/v2, its results read by key
+
+#: the graph/v2 envs of the fakes here; only their digests enter a key
+ENVS = {"py": {"spec": ["uv.lock"], "digest": "sha512:" + "e" * 128},
+        "lean": {"spec": ["lean-toolchain"], "digest": "sha512:" + "f" * 128}}
+TEST = "tests/test_x.py::test_y"
+FP8 = "partition/gate-recomputed ScaledMmFp8Block_v1"
+X, A, B, FP8_TASK = "test-file:pkg/tests/test_x.py", "lean-module:A.lean", "lean-module:B.lean", "circuit-binding:fp8"
+
+
+def _digest(text: str) -> str:
+    return "sha512:" + hashlib.sha512(text.encode()).hexdigest()
+
+
+def _task(tid: str, inputs: tuple[str, ...], reads: tuple[str, ...] = (), out: bool = False, **vars) -> dict:
+    """A graph/v2 task, its kind its id's prefix, in the lean env when it is Lean: ``reads`` the `olean` of each task named,
+    ``out``, it builds one itself."""
+    kind = tid.partition(":")[0]
+    return {"id": tid, "kind": kind, "about": tid, "env": "lean" if kind.startswith("lean") else "py",
+            "argv": ["verity", "graph", "run", tid], "vars": vars, "inputs": list(inputs),
+            "reads": [{"task": r, "output": "olean"} for r in reads],
+            "outputs": [{"name": "olean", "path": f"out/{tid.partition(':')[2]}.olean"}] if out else [],
+            "resources": {"cores": 1, "mem_gb": 1, "disk_gb": 1}, "timeout_s": 60, "key": None}
+
+
+def _v2(tip: str, *tasks: dict) -> dict:
+    """``tip``'s graph/v2 of ``tasks``, each that reads none keyed by the contract's rule, as `verity graph` keys it."""
+    files = {p: _digest(p) for t in tasks for p in t["inputs"]}
+    return {"schema": GRAPH_V2, "commit": tip, "envs": ENVS, "files": files,
+            "tasks": [{**t, "key": None if t["reads"] else task_key(t, files, ENVS[t["env"]]["digest"], {})} for t in tasks]}
+
+
+#: a task of each other after-landing job, its kind the job's name, so that a graph has a task of every job `main` waits for
+WHOLE_V2 = tuple(_task(f"{j}:all", ()) for j in AFTER_LANDING if j not in ("pytest", "lean-audit", "circuit-check"))
+
+
+def _graph_v2(tip: str, whole: bool = True) -> dict:
+    """A test file of suite `pkg/`, Lean module B reading A's olean, a circuit-check binding, and (``whole``) `WHOLE_V2`."""
+    return _v2(tip, _task(X, ("pkg/tests/test_x.py", "pkg/x.py"), suite="pkg"), _task(A, ("A.lean",), out=True),
+               _task(B, ("B.lean",), reads=(A,), out=True), _task(FP8_TASK, ("pkg/fp8.circuit-check.py",), binding="fp8"),
+               *(WHOLE_V2 if whole else ()))
+
+
+def _result(task: dict, key: str, status: str = "pass", **detail) -> dict:
+    """A result/v1 of ``task`` under ``key``, each output's digest one of the key's own."""
+    return {"schema": "verity-result/v1", "task": task["id"], "key": key, "status": status, "seconds": 1.0, "cpu_s": 1.0,
+            "peak_rss_gb": 0.1, "outputs": {o["name"]: _digest(f"{key}/{o['name']}") for o in task["outputs"]},
+            "undeclared_reads": [], "detail": detail, "log": None}
+
+
+def _reader_key(g: dict, reader: str, producer: str) -> str:
+    """The key the contract's rule gives ``reader`` once ``producer`` passed with `_result`'s outputs."""
+    by = {t["id"]: t for t in g["tasks"]}
+    p = by[producer]
+    return task_key(by[reader], g["files"], ENVS[by[reader]["env"]]["digest"], {producer: _result(p, p["key"])["outputs"]})
+
+
+def _results(fake: FileTransport, g: dict, fails: dict[str, dict] | None = None, reader: str | None = "pass") -> None:
+    """Each keyed task of ``g`` finished: those ``fails`` names failed with their detail, the rest passed; and B, which reads A,
+    under the key A's result gives it (``reader``: its status, None for no result yet)."""
+    fails = fails or {}
+    for t in g["tasks"]:
+        if t["key"]:
+            fake.finish_result(_result(t, t["key"], "fail" if t["id"] in fails else "pass", **fails.get(t["id"], {})))
+    if reader:
+        fake.finish_result(_result(next(t for t in g["tasks"] if t["id"] == B), _reader_key(g, B, A), reader))
+
+
+def test_the_key_rule_reproduces_the_contracts_vectors():
+    """The key drive computes for a task that reads others is the one `verity graph` and the executor compute
+    (`tools/verity/graph/tests/key_vectors.json`, which both sides of the contract reproduce)."""
+    vectors = json.loads((Path(__file__).resolve().parents[3] / "tools/verity/graph/tests/key_vectors.json").read_text())
+    files = {f["path"]: f["digest"] for f in vectors["files"]}
+    assert len(vectors["keys"]) >= 10
+    for v in vectors["keys"]:
+        assert task_key(v["task"], files, v["env_digest"], v["read_digests"]) == v["key"], v["name"]
+    assert task_target(v["key"]) == f"task:{v['key'].removeprefix('sha512:')}" and task_target("a" * 128) == f"task:{'a' * 128}"
+
+
+def test_settle_keys_a_reader_once_what_it_reads_passed_and_blocks_it_behind_a_failure(tmp_path):
+    tip = "1" * 40
+    g = _v2(tip, _task(A, ("A.lean",), out=True), _task(B, ("B.lean",), reads=(A,), out=True),
+            _task("lean-module:C.lean", ("C.lean",), reads=(B,)), _task("lean-module:D.lean", ("D.lean",)))
+    by = {t["id"]: t for t in g["tasks"]}
+    fake = FileTransport(tmp_path)
+    ex = Executor(fake)
+    assert {i: s for i, (s, _) in ex.settle(g).items()} == dict.fromkeys(by, "pending")
+    fake.finish_result(_result(by[A], by[A]["key"]))
+    fake.finish_result(_result(by[B], "sha512:" + "0" * 128))   # under a key that isn't B's: not B's result
+    got = ex.settle(g)
+    assert got[A] == ("pass", _result(by[A], by[A]["key"])) and got[B][0] == "pending" and got["lean-module:C.lean"][0] == "pending"
+    kb = _reader_key(g, B, A)
+    fake.finish_result(_result(by[B], kb, "fail"))
+    got = ex.settle(g)
+    assert got[B] == ("fail", _result(by[B], kb, "fail")) and got["lean-module:C.lean"] == (BLOCKED, None)
+    assert got["lean-module:D.lean"] == ("pending", None)
+    fake.finish_result(_result(by[B], kb))                       # a pass beside a fail: still failed
+    assert ex.settle(g)[B][0] == "fail"
+    other = FileTransport(tmp_path / "other")
+    other.finish_result({**_result(by[A], by[A]["key"]), "outputs": {}})
+    assert Executor(other).settle(g)[B] == (BLOCKED, None), "A passed without the olean B reads"
+    errors = FileTransport(tmp_path / "errors")
+    errors.finish_result({**_result(by[A], by[A]["key"]), "status": "error"})
+    assert Executor(errors).settle(g)[A][0] == "pending", "an error is never a result"
+    assert task_files(g, ["lean-module:C.lean"]) == {"C.lean", "B.lean", "A.lean", "lean-toolchain"}
+    fake.list_graph(f"after-landing:{tip}", {**g, "files": {p: d for p, d in g["files"].items() if p != "B.lean"}})
+    with pytest.raises(ValueError, match=f"has a task with no key to compute: {B}"):
+        ex.graph_v2(f"after-landing:{tip}")
+
+
+def test_on_enqueues_graph_v2_and_verifies_the_tip_once_every_task_passed_by_key(world, monkeypatch, tmp_path):
+    """No run: the tip's check goes on the queue as graph/v2 with no graph, and the tip is verified, and `main` follows, once
+    every task's result under its key passed, B's under the key A's result gives it."""
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "on")
     main = _main(world)
     tip = _land(h, 1)
-    assert h.posted == [] and h.listings == [tip]
+    check = f"after-landing:{tip}"
+    assert h.posted == [] and fake.enqueued() == [{"check": check, "priority": AFTER_LANDING_PRIORITY, "graph": None,
+                                                   "schema": GRAPH_V2}]
     h.tick()
-    keys = _keys(fake, 0)
-    assert fake.enqueued()[0]["priority"] == 1 and _main(world) == main
-    for k in list(keys.values())[:-1]:
-        fake.finish(k, "pass")
-    h.tick()
-    assert _main(world) == main, "a task still pending: `main` stays"
-    fake.finish(list(keys.values())[-1], "pass")
+    assert _main(world) == main and h.postland()["run"]["tasks"] == {"check": check}, "no graph labelled yet"
+    g = _graph_v2(tip)
+    fake.list_graph(check, g)
+    _results(fake, g, reader=None)
+    fake.finish_result(_result(g["tasks"][2], "sha512:" + "0" * 128))   # a result of B under a key that isn't its own
     h.tick()
     pl = h.postland()
-    assert _main(world) == tip and pl["verified"] == tip and pl["run"] is None and h.posted == []
-    assert pl["verified_as"]["executor"] == f"after-landing:{tip}"
-    assert any(f"(the executor's after-landing:{tip})" in x for x in world.logs), world.logs
+    assert _main(world) == main and pl["run"]["tasks"] == {"check": check, "graph": fake.graph(check, GRAPH_V2)[0]}, \
+        "B is pending: `main` stays"
+    _results(fake, g)
+    h.tick()
+    pl = h.postland()
+    assert _main(world) == tip and pl["verified"] == tip and pl["run"] is None and h.posted == [] and not pl.get("red")
+    assert pl["verified_as"] == {"steps": list(AFTER_LANDING), "no_cache": False, "executor": check}
+    assert len(fake.enqueued()) == 1 and any(f"(the executor's {check})" in x for x in world.logs), world.logs
 
 
-def test_on_refuses_main_on_a_failed_task_and_tells_ci(world, monkeypatch, tmp_path):
+def test_on_a_graph_with_no_task_of_a_job_main_waits_for_gates_nothing_and_is_told(world, monkeypatch, tmp_path):
+    """The check stands for the jobs its graph has tasks of: with none of some job `main` waits for (one graph/v2 has no family
+    of), every task passing verifies the tip on its jobs alone, `main` stays, and `CI` is told what the graph lacks."""
+    _move_main(world, GATED_TREE)
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "on")
     main = _main(world)
     tip = _land(h, 1)
-    h.tick()
-    keys = _keys(fake, 0)
-    for t, k in keys.items():
-        fake.finish(k, "fail" if t == "lean-audit:Security" else "pass")
+    g = _graph_v2(tip, whole=False)
+    fake.list_graph(f"after-landing:{tip}", g)
+    _results(fake, g)
     h.tick()
     pl = h.postland()
-    assert _main(world) == main and pl["failed"] == tip and pl["verified"] != tip and pl["run"] is None
-    assert any(f"failed 1 of {N_TASKS} tasks: lean-audit:Security" in p for p in h.posts), h.posts
+    assert pl["verified"] == tip and pl["verified_as"]["steps"] == ["lean-audit", "pytest", "circuit-check"]
+    assert _main(world) == main and pl.get("gated") != tip and pl["run"] is None
+    lacks = [j for j in AFTER_LANDING if j not in (*AFTER_LANDING_OPTIONAL, "pytest", "lean-audit", "circuit-check")]
+    (told,) = [p for p in h.posts if "its graph has no task of" in p]
+    assert f"has no task of {', '.join(lacks)}, which `main` waits for there" in told, told
+
+
+def test_on_names_the_one_landing_of_the_batch_whose_change_touches_the_failed_tasks_inputs(world, monkeypatch, tmp_path):
+    """Three landings in one check; the failed test file's inputs are `pkg/tests/test_x.py` and `pkg/x.py`, which only #2
+    changes (#3 changes `pkg/y.py`, in the suite's directory, which a run's rule would blame too).  The red is its suite's,
+    names #2, rings #2's lane and the suite's owner, and reverts #2 on `checked` once no fix is marked in `FIX_WINDOW_S`."""
+    _owning(world, {"lane-2": [], "pkg-owner": ["pkg/"]})
+    _move_main(world, {**GATED_TREE, "pkg/pyproject.toml": '[project]\nname = "My_Pkg"\n'})
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "on")
+    main = _main(world)
+    for n, f in ((1, "a.txt"), (2, "pkg/x.py"), (3, "pkg/y.py")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+        h.review(n)
+    assert h.tick().startswith("landed #3"), world.logs
+    tip = _checked(world)
+    (row,) = fake.enqueued()
+    g = _graph_v2(tip)
+    fake.list_graph(row["check"], g)
+    _results(fake, g, {X: {"exit": 1, "failed_tests": [TEST], "passed": 2, "failed": 1}}, reader=None)
     h.tick()
-    assert h.listings == [tip] and h.posted == [], "a failed tip isn't checked again"
+    (ring,) = [p for p in h.posts if "is red on" in p]
+    assert ring.startswith("@lane-2 @pkg-owner queue: suite my-pkg is red on `checked`"), ring
+    assert f"{X}: failed {TEST}" in ring and f"(run {row['check']})" in ring, ring
+    assert f"Culprit: #2 (its change touches pkg/x.py, which {X} depends on), of the 3 landing(s) since" in ring, ring
+    r = h.postland()["red"]["suite my-pkg"]
+    assert r["culprit"][0] == 2 and r["base"] == main and r["paths"] == ["pkg/x.py"] and r["step"] == "pytest"
+    assert h.postland()["run"] is not None, "B is still pending: the check goes on, red named at once"
+    _results(fake, g, {X: {"exit": 1, "failed_tests": [TEST]}})
+    h.tick()
+    pl = h.postland()
+    assert pl["failed"] == tip and pl["run"] is None and _main(world) == main and pl.get("gated") != tip
+    assert len([p for p in h.posts if "is red on" in p]) == 1, "named once per tip"
+    h.clock += FIX_WINDOW_S + 1
+    h.tick()
+    reverted = _checked(world)
+    assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and _main(world) == main
+    assert "pkg/x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
+    assert "pkg/y.py" in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
+    assert any(p.startswith("@lane-2 @pkg-owner queue: #2 reverted on `checked`") for p in h.posts), h.posts
+    assert fake.enqueued()[-1]["check"] == f"after-landing:{reverted}", "the revert's tip is checked next"
+
+
+@pytest.mark.parametrize("expires, exit_, red", [(LIVE, 1, False), (EXPIRED, 1, True), (LIVE, 2, True)])
+def test_on_a_failed_task_an_unexpired_allowance_covers_is_not_red(world, monkeypatch, tmp_path, expires, exit_, red):
+    """policy.toml's `suite NAME::TEST` covers a test-file task that failed on that test alone (pytest's exit 1): the tip is
+    verified.  Expired, it is as if absent and the ring names it; and a file that failed beyond its tests (exit 2, collecting
+    failed) isn't covered by its tests' allowances."""
+    _move_main(world, {**GATED_TREE, "pkg/pyproject.toml": '[project]\nname = "My_Pkg"\n',
+                       "tools/verity/check/policy.toml": _policy((f"suite my-pkg::{TEST}", "ci", expires))})
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "on")
+    main = _main(world)
+    tip = _land(h, 1)
+    g = _graph_v2(tip)
+    fake.list_graph(f"after-landing:{tip}", g)
+    _results(fake, g, {X: {"exit": exit_, "failed_tests": [TEST]}})
+    h.tick()
+    pl = h.postland()
+    rings = [p for p in h.posts if "is red on" in p]
+    if not red:
+        assert _main(world) == tip and pl["verified"] == tip and rings == [] and not pl.get("red"), (h.posts, world.logs)
+        assert any("or failed only on what an allowance covers (1)" in x for x in world.logs), world.logs
+        return
+    assert _main(world) == main and pl["failed"] == tip and list(pl["red"]) == ["suite my-pkg"]
+    (ring,) = rings
+    assert "None of the 1 landing(s)" in ring and "Reverted nothing" in ring, ring
+    assert ("Its allowance in policy.toml expired" in ring) == (expires == EXPIRED), ring
+
+
+@pytest.mark.parametrize("allowed", [False, True])
+def test_on_a_red_task_off_the_gate_holds_no_promotion_and_reverts_its_culprit_at_once(world, monkeypatch, tmp_path, allowed):
+    """A circuit-check task is off the merge gate (policy.toml's `off_gate`): every task on the gate passed, so `main` follows
+    the tip though the binding failed; its red is circuit-check's, whose culprit is reverted at once.  An allowance of each
+    failure it names covers it, and the tip is verified."""
+    _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(*([(f"circuit-check {FP8}", "ci", LIVE)] * allowed))})
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "on")
+    world.gh.put(1, world.change({"pkg/fp8.circuit-check.py": "X = 1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    tip = _checked(world)
+    g = _graph_v2(tip)
+    fake.list_graph(f"after-landing:{tip}", g)
+    _results(fake, g, {FP8_TASK: {"failures": [f"{FP8}{{N=4}}: 3 mismatches"]}})
+    h.tick()
+    pl = h.postland()
+    assert _main(world) == tip and any(f"(the executor's after-landing:{tip})" in x for x in world.logs), world.logs
+    if allowed:
+        assert pl["verified"] == tip and not pl.get("red") and _checked(world) == tip and pl.get("failed") != tip
+        return
+    assert pl["gated"] == tip and pl["gated_by"] == f"after-landing:{tip}" and pl["failed"] == tip
+    assert list(pl["red"]) == ["step circuit-check"]
+    (ring,) = [p for p in h.posts if "Culprit: #1" in p]
+    assert "step circuit-check is red on `checked`" in ring and "Drive reverts #1 now" in ring, ring
+    reverted = _checked(world)
+    assert _git(world.origin, "rev-parse", f"{reverted}^") == tip
+    assert "pkg/fp8.circuit-check.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
+
+
+def test_on_a_graph_of_another_commit_is_told_and_the_check_enqueued_again(world, monkeypatch, tmp_path):
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "on")
+    tip = _land(h, 1)
+    fake.list_graph(f"after-landing:{tip}", _graph_v2("9" * 40))
+    h.tick()
+    assert any("is of commit " + "9" * 40 in p and "the next tick enqueues" in p for p in h.posts), h.posts
+    assert [r["check"] for r in fake.enqueued()] == [f"after-landing:{tip}"] * 2 and h.postland()["run"]["tasks"] == {
+        "check": f"after-landing:{tip}"}, "the tick that refused it enqueues it again"
 
 
 def test_drive_runs_the_enqueue_command_drive_toml_names(world, monkeypatch, tmp_path):
@@ -425,3 +655,40 @@ def test_the_queue_transport_enqueues_a_check_with_no_graph_and_reads_the_graph_
     executor_store.push_labels([f"commit:{'2' * 40}"])
     with pytest.raises(ValueError, match=f"names {other}, a fixture/v1, not a tasks-graph/v1"):
         ex.graph(f"after-landing:{'2' * 40}")
+
+
+def test_the_queue_transport_enqueues_graph_v2_and_reads_its_graph_and_results_through_the_remote(tmp_path):
+    """`on`'s check goes in with `--schema verity-graph/v2`; the executor's store put the `verity-graph/v2` artifact and its
+    `verity_graph` label on `commit:<sha>`, and each result/v1 as a `result` label on `task:<key>` without `sha512:`, and
+    drive's store pulls them from the remote."""
+    import sys
+
+    (tmp_path / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    executor_store = LocalStore(tmp_path / "executor-store", config_path=tmp_path / "store.toml")
+    drive_store = LocalStore(tmp_path / "drive-store", config_path=tmp_path / "store.toml")
+    seen, stub = tmp_path / "argv.txt", tmp_path / "enqueue.py"
+    stub.write_text(f"import sys\nopen({str(seen)!r}, 'w').write(' '.join(sys.argv[1:]))\n")
+    tip = "1" * 40
+    check = f"after-landing:{tip}"
+    ex = Executor(QueueTransport(drive_store, command=(sys.executable, str(stub))))
+    ex.enqueue_graph(check, AFTER_LANDING_PRIORITY)
+    assert seen.read_text() == f"--priority 1 --check {check} --schema {GRAPH_V2}"
+    assert ex.graph_v2(check) is None
+
+    g = _graph_v2(tip)
+    (f := tmp_path / "graph.json").write_text(json.dumps(g))
+    art = executor_store.put_artifact(GRAPH_V2, {}, file=f)
+    executor_store.push(art)
+    executor_store.add_label(f"commit:{tip}", vocab.VERITY_GRAPH, art, "executor")
+    executor_store.push_labels([f"commit:{tip}"])
+    assert ex.graph(check) is None, "a graph/v2 is no tasks/v1 graph"
+    assert ex.graph_v2(check) == (art, g)
+
+    by = {t["id"]: t for t in g["tasks"]}
+    done = [(by[X], by[X]["key"], "fail"), (by[A], by[A]["key"], "pass"), (by[B], _reader_key(g, B, A), "pass")]
+    for task, key, status in done:
+        executor_store.add_label(task_target(key), vocab.TASK_RESULT, _result(task, key, status), "executor")
+    executor_store.push_labels([task_target(k) for _, k, _ in done])
+    got = ex.settle(g)
+    assert {i: got[i][0] for i in (X, A, B, FP8_TASK)} == {X: "fail", A: "pass", B: "pass", FP8_TASK: "pending"}, got
+    assert got[B][1] == _result(by[B], _reader_key(g, B, A))
