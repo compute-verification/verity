@@ -77,9 +77,7 @@ theorem sized_round (coins : Got) (live : Bool) (c : ByteArray) (got : Got) :
     all_goals
       simp only [stepAsks, StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure, Step.bind,
         hn]
-      first
-        | (refine sized_pure_bind ?_; dsimp only; split <;> exact trivial)
-        | (split <;> exact trivial)
+      refine sized_pure_bind ?_; dsimp only; split <;> exact trivial
 
 theorem asksRel_sized (coins : Got) (live : Bool) :
     AsksRel sizedSim (stepAsks coins live).toC (stepAsks coins live).toC :=
