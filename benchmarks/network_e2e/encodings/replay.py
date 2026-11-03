@@ -962,8 +962,9 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
     A request's certified ingress is the client's send time (`ingress="client"`, a passive certifier on the link),
     or with `ingress="warden"` the server's own arrival stamp (`arrival`, its body read), the order vLLM schedules in.
     That is not what design v3's warden certifies: behind it the engine still follows the body read, and the warden's
-    release order (a, ordinal) leaves order exceptions to charge (the corpus's `<trace>.released` traces carry it as
-    their ingress). `ingress="warden"` is the floor a server admitting in release order at the next bucket would give."""
+    release order (by release bucket, then ordinal) leaves order exceptions to charge (the corpus's `<trace>.released`
+    traces carry it as their ingress). `ingress="warden"` is the floor a server admitting in release order at the next
+    bucket would give."""
     d = Path(d)
     argv = json.loads((d / "meta.json").read_text())["server_argv"]
 

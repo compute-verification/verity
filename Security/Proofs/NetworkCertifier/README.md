@@ -392,9 +392,9 @@ The ingress bound adds these:
     modelled. Over the first `m` whole windows each execution phase contributes `(r ℓ + 1)^T`
     (`EncardIngressObsDecodableLePerWindow`).
 12. **No Program, no clock.** The bound reads no Program and no advice: the outside sender chooses when frames arrive,
-    so no clock pins ingress timing. Jitter on the inward release adds `D^n` (J, `D = 1` when tested ideal). W3's frame
-    length and the FIFO rule are not used; the FIFO certifier attains the bound (`EncardFifoGrids`, read for the ingress
-    grid).
+    so no clock pins ingress timing. Jitter on the inward release adds `D^n` (`JitterBounded`, `D = 1` when tested
+    ideal). W3's frame length and the FIFO rule are not used; the FIFO certifier attains the bound (`EncardFifoGrids`,
+    read for the ingress grid).
 
 The constant-rate Program adds these:
 
