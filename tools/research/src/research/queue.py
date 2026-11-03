@@ -45,7 +45,7 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    skipped";
                                                    --no-preflight skips it (the lander's)
     research queue drive [--on MACHINE] [--config PATH [--config-from-tree]] [--marked-after TS] [--first N,...]
-                         [--[no-]regenerate-locks] [--[no-]after-landing-no-cache] [--dry-run]
+                         [--[no-]regenerate-locks] [--[no-]after-landing-no-cache] [--priority-file PATH] [--dry-run]
                                                    one tick of the landing automation (`research.drive`): sync and land the
                                                    reviewed prefix of `next` on `checked`, a Lean change once its Lean check
                                                    passed, then check `checked` (--after-landing-no-cache: reusing no pass but
@@ -58,7 +58,10 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    naming each key, unless every key it sets has main's value.  Before it syncs,
                                                    the tick refuses, with the fix, a name its flags use that doesn't exist
                                                    (`drive_names`: the landing branch and drive's push to it, each machine of
-                                                   `on`, each landing gate at `main`); the effective flags print once a tick
+                                                   `on`, each landing gate at `main`); the effective flags print once a tick.
+                                                   --priority-file PATH: drive's priority list, PR numbers separated by spaces
+                                                   or commas, read again at each sync (`Queue.priority`): no file is an empty
+                                                   list, and one it can't read is logged once and taken as empty
     research queue review [N (--land [--ref NOTE] | --hold REASON) --by LANE] [--sha SHA] [--json]
                                                    without N: `next`'s members above `checked` that no land verdict at their head
                                                    lands, bottom first (number, head, owner, files, whether it waits for a Lean
@@ -199,7 +202,9 @@ twice, and a pass stands onto a rebuilt base that changed nothing its change tou
 while its change deletes none (`Queue._standing`); a verdict read back takes neither a preflight's place nor its time.  A
 sync's preflights start only within `PREFLIGHT_BUDGET_S` of wall time together (four at once for a minute spend a minute of
 it), and a PR whose preflight hasn't run waits off `next`, untold, for a later sync, with the PRs that contain it; those the
-last sync left waiting take the budget first (the state's `preflight_waited`), so every PR is reached in turn.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
+last sync left waiting take the budget first (the state's `preflight_waited`), so every PR is reached in turn.  The PRs of
+drive's priority list (`Queue.priority`), with those they contain, go first of what a sync merges anew, and their preflights
+start whatever the budget and the PRs left waiting.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
 with the gate's fix, and a PR whose lock merge drops an entry `next`'s statements still need (`lock_drops`), naming each:
 each PR the sync merges is judged, a new one or one merged again above a
@@ -716,6 +721,24 @@ def drive_flags(clone: Path, config: str | None = None, from_tree: bool = False)
                          + "; ".join(f"{k} = {mine.toml(k)} there, {flags.toml(k)} at main" for k in differ)
                          + f". Commit the change to {DRIVE_FLAGS}, or remove the key from {config}")
     return flags, where
+
+
+def priority_list(path: Path) -> frozenset[int]:
+    """Drive's priority list (`--priority-file`, `Queue.priority`): the PR numbers ``path`` holds, separated by spaces or commas;
+    empty when there is no such file.  QueueError, with the fix, when it can't be read or holds anything else."""
+    try:
+        if not path.exists():
+            return frozenset()
+        text = path.read_text()
+    except (OSError, UnicodeDecodeError) as e:
+        raise QueueError(f"--priority-file {path} can't be read ({getattr(e, 'strerror', None) or e}): make it a text file of "
+                         "PR numbers separated by spaces or commas, or remove it") from None
+    words = [w for w in re.split(r"[\s,]+", text) if w]
+    if bad := [w for w in words if not re.fullmatch(r"[1-9][0-9]*", w)]:
+        raise QueueError(f"--priority-file {path} holds {', '.join(map(repr, bad[:5]))}, which "
+                         f"{'is not a PR number' if len(bad) == 1 else 'are not PR numbers'}: write PR numbers separated by "
+                         "spaces or commas")
+    return frozenset(map(int, words))
 
 
 def drive_machines() -> tuple[set[str], dict[str, str]]:
@@ -1282,6 +1305,12 @@ class Queue:
         self._preflight_ahead: set[int] = set()
         #: the merges this sync took a recorded preflight verdict for instead of running one (`_preflighted`)
         self._preflights_reused = 0
+        #: drive's priority list (`--priority-file`: `priority_file`, read again at each sync, `priority_list`): these PRs and
+        #: those they contain (`_prioritized`) go first of what a sync merges anew (`order`), and their preflights start
+        #: whatever `PREFLIGHT_BUDGET_S` and the PRs the last sync left waiting (`_preflighted`)
+        self.priority: frozenset[int] = frozenset()
+        self.priority_file: Path | None = None
+        self._prioritized: set[int] = set()
         #: releases the workdir's lock (`_lock`): a command that only reads calls it once its clone and fetches are done, so a
         #: listing that reads hundreds of members' labels doesn't refuse a verdict meanwhile
         self.unlock: Callable[[], None] = lambda: None
@@ -1582,7 +1611,8 @@ class Queue:
     def order(self, chain: list[Member], entries: dict[int, Entry], lift: Iterable[int] = (),
               park: Iterable[int] = ()) -> list[int]:
         """Members that keep their head, or move it to a descendant (`_same_or_fixed`), keep their order; the rest follow by PR
-        number, each after the PRs it contains.  The PRs
+        number, those of drive's priority list and the PRs they contain first (`_prioritized`), each after the PRs it contains.
+        The PRs
         in `first` (`--first`) that are ready go below all of them, in the order given, so they land first; but
         above the bottom `hold` members, which a running or passed check covers: each keeps its place and its merge, and the PRs
         it contains that come new go above them too, until one of them stops standing (`_stands`) or is parked; then the rebuild
@@ -1632,9 +1662,11 @@ class Queue:
                     and all(a in self._lifted or a in below for a in entries[n].after)):
                 self._lifted.append(n)
         self._parked = [n for n in kept if n in parked] + sorted(parked - set(kept))
-        # a newly ready PR that makes circuit-check run cold goes above the warm ones; members already on `next` keep their place,
-        # and so the check that covers them
-        for n in held + [f for f in self.first if f in ready] + self._lifted + kept + [n for n in new if n not in cold] + sorted(cold):
+        # a newly ready PR that makes circuit-check run cold goes above the warm ones, unless drive's priority list puts it first;
+        # members already on `next` keep their place, and so the check that covers them
+        ahead = [n for n in new if n in self._prioritized]
+        for n in (held + [f for f in self.first if f in ready] + self._lifted + kept + ahead
+                  + [n for n in new if n not in cold and n not in ahead] + sorted(cold.difference(ahead))):
             if n not in parked:
                 place(n)
         for n in self._parked:
@@ -1685,11 +1717,12 @@ class Queue:
         `next`), at ``heads``: those whose own change is no Lean change (`_own_lean`)
         and that contain no Lean change of ``tail`` first, then the rest, each part in ``tail``'s order (`first`'s, then
         admission's).  A Lean change waits for a Lean check (`drive`'s review landing), and what sits above it waits with it.
-        Only the tail moves: a rebuild of what the sync keeps would take a running Lean check's commit off `next`."""
+        Only the tail moves: a rebuild of what the sync keeps would take a running Lean check's commit off `next`.  A PR of
+        drive's priority list, or one it contains (`_prioritized`), stays first, where `order` put it, whatever its change."""
         late: set[int] = set()
         for n in tail:
-            if any(a in late for a in entries[n].after) or self._own_lean(heads[n], [heads.get(a, entries[a].pr.head)
-                                                                                      for a in entries[n].after]):
+            if any(a in late for a in entries[n].after) or (n not in self._prioritized and self._own_lean(
+                    heads[n], [heads.get(a, entries[a].pr.head) for a in entries[n].after])):
                 late.add(n)
         return [n for n in tail if n not in late] + [n for n in tail if n in late]
 
@@ -1906,7 +1939,9 @@ class Queue:
         of wall time (`_preflight_spent`); past it the PR waits off `next` for a later sync.  The PRs the last sync left
         waiting (the state's `preflight_waited`), and those they contain, take the budget first: while one of them is still to
         come in this sync, any other PR waits too instead of spending it, so the PRs before one the budget skipped can't skip
-        it again sync after sync, and every PR is reached in turn."""
+        it again sync after sync, and every PR is reached in turn.  A PR of drive's priority list, or one it contains
+        (`_prioritized`), waits for neither: its preflight starts whatever the budget, and its time is spent of it as any
+        other's."""
         base_tree, tree = _out(self.workdir, "rev-parse", f"{tip}^{{tree}}", f"{commit}^{{tree}}").split()
         key = f"{pr.head}:{base_tree}"
         for got in (flights["now"].get(key), flights["before"].get(key)):
@@ -1918,12 +1953,13 @@ class Queue:
             flights["now"][key] = {"pr": pr.number, "head": pr.head, "tree": tree, "why": None}
             self._preflights_reused += 1
             return True, None
-        if self._preflight_ahead and pr.number not in self._preflight_first:
-            return False, (f"its preflight onto `{self.branch}` hasn't run: the PRs the last sync left waiting for theirs go "
-                           f"first ({' '.join(f'#{n}' for n in sorted(self._preflight_ahead))}), so a later sync runs it")
-        if self._preflight_spent() >= PREFLIGHT_BUDGET_S:
-            return False, (f"its preflight onto `{self.branch}` hasn't run: this sync's preflights took their "
-                           f"{PREFLIGHT_BUDGET_S:g} s, so a later sync runs it")
+        if pr.number not in self._prioritized:
+            if self._preflight_ahead and pr.number not in self._preflight_first:
+                return False, (f"its preflight onto `{self.branch}` hasn't run: the PRs the last sync left waiting for theirs go "
+                               f"first ({' '.join(f'#{n}' for n in sorted(self._preflight_ahead))}), so a later sync runs it")
+            if self._preflight_spent() >= PREFLIGHT_BUDGET_S:
+                return False, (f"its preflight onto `{self.branch}` hasn't run: this sync's preflights took their "
+                               f"{PREFLIGHT_BUDGET_S:g} s, so a later sync runs it")
         f = _Flight(pr, key, tree, self.clock())
         f.future = pool.submit(self._fly, f, tip, commit, list(members))
         self._flown.append(f)
@@ -2027,11 +2063,30 @@ class Queue:
                                for a in AGENT_RE.findall(str(h.get("holder", "")))})
         return self._registry
 
+    def _read_priority(self, state: dict) -> frozenset[int]:
+        """Drive's priority list from `priority_file` (`priority_list`), logged when it changes (the state's `priority`); one it
+        can't read is empty, its error logged once while it stays the same (`priority_error`)."""
+        try:
+            got = priority_list(self.priority_file)
+        except QueueError as e:
+            if state.get("priority_error") != str(e):
+                self.log(f"research queue: {e}; drive's priority list is empty until the file is fixed")
+            state["priority_error"], state["priority"] = str(e), []
+            return frozenset()
+        state.pop("priority_error", None)
+        if sorted(got) != state.get("priority", []):
+            self.log(f"research queue: drive's priority list ({self.priority_file}): "
+                     + (" ".join(f"#{n}" for n in sorted(got)) or "empty"))
+            state["priority"] = sorted(got)
+        return got
+
     def sync(self, dry_run: bool = False) -> tuple[list[Member], dict[int, Entry]]:
         """Rebuild `next` (see the module's `next`).  Off drive it refuses before anything (`_drive_only`)."""
         self._drive_only(self.branch, "queue sync", dry_run)
         self._clone()
         state = self.load_state()
+        if self.priority_file is not None:
+            self.priority = self._read_priority(state)
         open_prs = self.github.open_prs()
         prs, waiting = self.fetch_prs([p for p in open_prs if p.base == "main"])
         # a PR landed on `checked` stays open until `main` reaches it; a move or a head restacked through one lands at a commit
@@ -2044,6 +2099,8 @@ class Queue:
         chain = self.chain()
         entries = self.entries(prs, state)
         entries.update(waiting)
+        listed = [n for n in self.priority if n in entries]
+        self._prioritized = set(listed).union(*(entries[n].after for n in listed))
         frozen = {m.pr: m.head for m in chain if self._frozen(m, entries) or self._pending(m, entries)}
         # what the last sync left out at its head is tried again above the rest: in `--first`'s place or among members `next`
         # keeps, it would be left out again and every member above it merged again, each tick keeping none of them
@@ -5121,6 +5178,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--first", metavar="N[,N...]", help="sync/drive: put these ready PRs at the bottom of `next`, in this "
                                                         "order, ahead of members that keep their place (a fix `main` "
                                                         "needs)")
+    ap.add_argument("--priority-file", type=Path, metavar="PATH",
+                    help="sync/drive: drive's priority list, a file of PR numbers separated by spaces or commas, read again at "
+                         "each sync (none: an empty list; one it can't read: an error logged once, and an empty list); these PRs "
+                         "and those they contain go first of what the sync merges anew, and their preflights start whatever the "
+                         "budget and the PRs the last sync left waiting")
     ap.add_argument("--after-landing-no-cache", action=argparse.BooleanOptionalAction,
                     help="drive: run the after-landing check reusing no pass but circuit-check's per-target ones "
                          "(check.py --no-cache --circuit-cache)")
@@ -5204,6 +5266,8 @@ def main(argv: list[str]) -> int:
             return 1
     if a.first and not re.fullmatch(r"\d+(,\d+)*", a.first):
         ap.error(f"--first {a.first!r}: PR numbers separated by commas")
+    if a.priority_file and a.command not in ("sync", "drive"):
+        ap.error("--priority-file is for sync and drive only")
     if a.marked_after and not MARK_TIME_RE.fullmatch(a.marked_after):
         ap.error(f"--marked-after {a.marked_after!r}: a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
     if (a.config or a.config_from_tree) and a.command != "drive":
@@ -5349,6 +5413,7 @@ def main(argv: list[str]) -> int:
             q.log = one_line_at_a_time(q.log)
             q.preflight = Preflight(q.workdir, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by), log=q.log,
                                     root=a.preflight_root).onto
+            q.priority_file = a.priority_file
         if a.command == "sync":
             q.hand_sync(dry_run=a.dry_run)
             return 0
