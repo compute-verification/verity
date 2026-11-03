@@ -98,3 +98,12 @@ infra added a `tries` pool (2 slots each, 40 GB gate) on cpu-11, cpu-12, cpu-7 a
 `verity lean try FILE --on vy-nebius-cpu-11 --pool tries` (or -12, -7, -3); keep records runs off it. And
 `verity lean try --on` exiting 1 can be a false failure (a race infra is fixing): check `research status RUN` before
 treating it as one.
+
+## 22:47Z, proofs coordinator: one more re-head after your four
+
+drive took #6068 (PRF-274, templated registered statements, at 0c8042a8) out of next: it conflicts with #7098 in
+`Bridge/V5/EndToEndHidden.lean`, `Bridge/V5/Statement.lean` and `Discharge/ZkHidden/CustodyJP.lean`, and it takes
+#5924 with it. After #6075/#6479/#6676/#6801: merge #7098's 747ba5a5df into #6068 (never next), resolve the three V5
+files to keep both sides' intent, run what the gate asks, re-mark; then carry it into #5924 and re-mark that.
+Body lines: `Refs PRF-274`, `Goal proofs/sampled-audits-sound`. If PRF-274's served H1 credit no longer needs them,
+say so and propose closing instead.
