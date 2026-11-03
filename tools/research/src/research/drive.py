@@ -759,32 +759,31 @@ def failed_steps(run_dir: Path) -> list[dict]:
     return out
 
 
-def suite_inputs(repo: Path, commit: str, suite: str) -> list[str]:
-    """The paths suite ``suite`` (its directory) reads at ``commit``: its directory and its `[tool.verity.tests] inputs`; the
-    repository's own suite (``.``) only its inputs."""
+def suite_pyproject(repo: Path, commit: str, suite: str) -> dict:
+    """Suite ``suite``'s (its directory's) pyproject.toml at ``commit``; {} when it has none or it isn't TOML."""
     import tomllib
 
     own = "pyproject.toml" if suite.strip("/") in ("", ".") else f"{suite.strip('/')}/pyproject.toml"
     r = _git(repo, "show", f"{commit}:{own}", check=False)
     try:
-        inputs = tomllib.loads(r.stdout).get("tool", {}).get("verity", {}).get("tests", {}).get("inputs", []) if not r.returncode else []
+        return tomllib.loads(r.stdout) if not r.returncode else {}
     except tomllib.TOMLDecodeError:
-        inputs = []
+        return {}
+
+
+def suite_inputs(repo: Path, commit: str, suite: str) -> list[str]:
+    """The paths suite ``suite`` (its directory) reads at ``commit``: its directory and its `[tool.verity.tests] inputs`; the
+    repository's own suite (``.``) only its inputs."""
+    inputs = suite_pyproject(repo, commit, suite).get("tool", {}).get("verity", {}).get("tests", {}).get("inputs", [])
     return [i for i in ([] if suite in ("", ".") else [suite]) + [str(x) for x in inputs] if i]
 
 
 def suite_name(repo: Path, commit: str, suite: str) -> str:
     """The name `suites.py` gives the suite in directory ``suite`` at ``commit`` (its `discover`): `repository` for the root,
     else its pyproject.toml's project name, normalized, else its path."""
-    import tomllib
-
     if suite.strip("/") in ("", "."):
         return "repository"
-    r = _git(repo, "show", f"{commit}:{suite.strip('/')}/pyproject.toml", check=False)
-    try:
-        name = tomllib.loads(r.stdout).get("project", {}).get("name") if not r.returncode else None
-    except tomllib.TOMLDecodeError:
-        name = None
+    name = suite_pyproject(repo, commit, suite).get("project", {}).get("name")
     return re.sub(r"[-_.]+", "-", name).lower() if isinstance(name, str) else suite
 
 
