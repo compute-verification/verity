@@ -1026,6 +1026,140 @@ def test_a_records_trace_rows_are_its_traced_steps_products():
     assert b["inputs"]["fresh_products"]["stand_in"] == g["products"]["stand_in"]
 
 
+def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does():
+    """A ledger row keeps the products its ingest took from its trace's rows, and the scorer's traces were ingested by
+    the te_core that captured them: at 4.8 with the trace's order unknown, which `fresh_products` never measures, and
+    an upcast operand's product an expansion; at 4.10 and 4.11 with no `system`, which it reads as products of no
+    trace, by the one-class rule (`ONE_CLASS`) that misses attention's chains; at 4.12 with a system that counts the
+    products reading gathered rows, which its rows can't name; at 4.12.1 at the console's k only, though the trace
+    keeps rows at each k of the dial (`at`). `complete` reads them as this te_core's ingest of the same rows over the
+    same traced steps (`traced_products`: their kinds' MACs over the rows' own, 2.5 here with a stand-in), so rows
+    captured before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`) and rows with `fed` and `gathered` are
+    measured on their system, at each k their trace keeps rows at (the served block's here), with no re-ingest;
+    products a record has of its own stand."""
+    row = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m": 4, "k": 512, "n": 8},
+           "token_dims": ["m"], "macs": 16384, "outputs": 32, "affected": [True, True], "widths": [16, 16],
+           "rates": [16.0, 16.0], "paid": [True, False], "self": False, "b_c": 32, "k_whole": 512,
+           "gates_per_mac": 1480.0, "cell_gates": 23682.0}
+    theta = row | {"count": 1, "affected": [True, False], "rates": [16.0, 0.0], "paid": [True, False]}
+    block = {"capture": F.PRODUCTS_FROM, "k": 65536.0, "order": "unknown", "tokens": 8, "gates": None,
+             "rows": [row, theta]}
+    log = [["fwd", "theta", "mm", "[[8]]", 1, 80]]
+
+    def record(block):
+        return {"steps": [{"step": 0, "tokens": 8, "struct": "a", "by": {"fwd/theta": 80}},
+                          {"step": 1, "tokens": 8, "struct": "a", "by": {"fwd/theta": 80}},
+                          {"step": 2, "tokens": 4, "struct": "a+traced4", "by": {"fwd/theta": 40}}],
+                "structures": dict.fromkeys(("a", "a+traced4"), {"updated": [], "log": log, "affected_share": 0.5,
+                                                                 "sigma": 1.0, "token_factor": 2.0,
+                                                                 "delta_grad_bits": 10}),
+                "formalism": {"trace": {"products": block}}}
+
+    c, k, out = 1e11, 65536.0, {"output": {"e_bytes": 10}}
+
+    def fresh(f, k=k):
+        b = F.bound(F.complete(f, out, SHAPE), c, k)
+        return b["terms"]["fresh_products"], b["unmeasured"].get("fresh_products"), b["inputs"]["fresh_products"]
+
+    def before_412(f):
+        return f | {"products": {x: v for x, v in f["products"].items() if x not in ("system", "p_match", "gathered")}}
+
+    now = F.of_record(record(block))
+    assert now["products"]["products"][0]["macs"] == 2.5 * 2 * 16384 and "stand_in" in now["products"]
+    assert now["products"]["system"] is None and fresh(now)[:2] == (None, F.FRESH_RETRACE)
+    at_48 = now | {"products": {"k": 65536.0, "order": "unknown", "capture": F.PRODUCTS_FROM, "products": [],
+                                "kinds_macs": {"expansion": 2.5 * 2 * 16384, "theta": 2.5 * 16384},
+                                "stand_in": now["products"]["stand_in"]}}
+    at_411 = before_412(now)
+    stored = F.complete(at_48 | {"trace": {}}, out, SHAPE)
+    assert stored.products == at_48["products"] and fresh(at_48 | {"trace": {}})[0] is None
+    one_class = fresh(at_411 | {"trace": {}})
+    assert one_class[0] > 0 and one_class[2]["whole_making"] == F.ONE_CLASS
+    fed = [r | {"fed": [], "P": 1.0} for r in block["rows"]]
+    now_412 = F.of_record(record(block | {"capture": "4.12", "p_match": [], "rows": fed}))
+    assert now_412["products"]["system"] is None
+    at_412 = before_412(now_412)
+    at_412["products"] |= {"system": F.system_of([r | {"gathered": [False, False]} for r in fed]), "p_match": []}
+    stale = fresh(at_412 | {"trace": {}})
+    assert stale[0] > 0 and stale[2]["whole_making"] != F.ONE_CLASS
+    for old, rows in ((at_48, now), (at_411, now), (at_412, now_412)):
+        assert F.complete(old, out, SHAPE).products == rows["products"]
+        assert fresh(old)[:2] == (None, F.FRESH_RETRACE)
+    captured = block | {"capture": F.SYSTEM_FROM, "p_match": [],
+                        "rows": [r | {"gathered": [False, False]} for r in fed]}
+    now = F.of_record(record(captured))
+    assert now["products"]["system"] is not None
+    term, why, got = fresh(before_412(now))
+    assert (term, why) == fresh(now)[:2] and term > 0 and why is None and got["whole_making"] != F.ONE_CLASS
+    served = 145_568.0
+    dial = F.of_record(record(captured | {"at": {f"{served:.0f}": {"k": served, "rows": captured["rows"],
+                                                                   "p_match": []}}}))
+    at_4121 = dial | {"products": {x: v for x, v in dial["products"].items() if x != "at"}}
+    assert "keep none at it" in fresh(at_4121 | {"trace": {}}, served)[1]
+    term, why, got = fresh(at_4121, served)
+    assert why is None and term > 0 and (term, why) == fresh(dial, served)[:2] and got["k_classified"] == served
+    own = {"k": 65536.0, "order": "chain", "products": []}
+    assert F.complete(now | {"products": own}, out, SHAPE).products == own
+
+
+def test_a_ledger_row_publishes_what_its_trace_rows_give_at_every_dial_k_whatever_te_core_ingested_it(monkeypatch):
+    """The 45M dense step's 4.12.1 capture (`dense_45m.products.json`) as a ledger row's trace. Ingested at 4.11 (rows
+    with no `fed`, `P` or `gathered`, products with no system) the row published the one-class rule's number; read
+    now it publishes the fresh-products kind unmeasured with the retrace reason until it is traced again. Ingested at
+    4.12.1 (products at the console's k only, none at the dial's other k, no `fed` and no shared-prefix trim) it
+    publishes at the served block's 145,568 bits, and at every k of the dial, what a fresh ingest of the same record
+    does, where its stored products kept none there."""
+    from te_core.capture.products import DIAL_K
+
+    fixture = json.loads((FIXTURES / "dense_45m.products.json").read_text())
+    log = [["fwd", "theta", "mm", "[[8]]", 1, 80]]
+
+    def row(block):
+        record = {"steps": [{"step": 0, "tokens": 512, "struct": "a", "by": {"fwd/theta": 80}}],
+                  "structures": {"a": {"updated": [], "log": log, "affected_share": 0.5, "sigma": 1.0,
+                                       "token_factor": 1.0, "delta_grad_bits": 1e9}},
+                  "formalism": {"trace": {"products": block, "data_dependent": [], "carried_scalars": [],
+                                          "affected_share": 0.5, "u1_bits": 1e6}}}
+        return {"formalism": F.of_record(record), "output": {"e_bytes": 1e8}}
+
+    def fresh(r, c, k):
+        b = F.bound(F.measure(r, SHAPE), c, k)
+        return b["terms"]["fresh_products"], b["unmeasured"].get("fresh_products")
+
+    def stored(r):
+        trace = {x: v for x, v in r["formalism"]["trace"].items() if x != "products"}
+        return r | {"formalism": r["formalism"] | {"trace": trace}}
+
+    c = policy.CONSOLE[0]
+    rows = [{x: v for x, v in r.items() if x not in ("fed", "P", "gathered")} for r in fixture["rows"]]
+    at_411 = row({x: v for x, v in fixture.items() if x not in ("at", "p_match")} | {"capture": "4.11", "rows": rows})
+    at_411["formalism"]["products"] = {x: v for x, v in at_411["formalism"]["products"].items()
+                                       if x not in ("system", "p_match", "gathered", "shared_prefix")}
+    one_class, why = fresh(stored(at_411), c, policy.CONSOLE[1])
+    assert one_class > 0 and why is None
+    assert fresh(at_411, c, policy.CONSOLE[1]) == (None, F.FRESH_RETRACE)
+    was = F.published(F.measure(stored(at_411), SHAPE), c, policy.CONSOLE[1], "A")
+    p = F.published(F.measure(at_411, SHAPE), c, policy.CONSOLE[1], "A")
+    assert was["terms"]["fresh_products"] == one_class and p["terms"]["fresh_products"] is None
+
+    now = row(fixture)
+    with monkeypatch.context() as mp:
+        mp.setattr(F, "SHARED_PREFIX", 0)
+        at_4121 = row(fixture)
+    at_4121["formalism"]["products"] = {x: v for x, v in at_4121["formalism"]["products"].items()
+                                        if x not in ("at", "shared_prefix")}
+    at_4121["formalism"]["products"]["products"] = [{x: v for x, v in q.items() if x != "fed"}
+                                                    for q in at_4121["formalism"]["products"]["products"]]
+    served = 145_568.0
+    assert "keep none at it" in fresh(stored(at_4121), c, served)[1]
+    assert F.measure(at_4121, SHAPE).products == F.measure(now, SHAPE).products
+    term, why = fresh(at_4121, c, served)
+    assert why is None and term == fresh(now, c, served)[0] > 0
+    for k in DIAL_K:
+        assert fresh(at_4121, c, k) == fresh(now, c, k)
+        assert F.published(F.measure(at_4121, SHAPE), c, k, "A") == F.published(F.measure(now, SHAPE), c, k, "A")
+
+
 def test_a_ledger_rows_log_puts_theta_and_attention_products_aside_and_the_rest_unknown():
     """On a macs_log (te_core.tiles.of_log): a product whose non-token operand is θ (its role theta) is θ's, a fused
     attention op's products are attention's, and an updated one's, whose operands the log says only depend on the
