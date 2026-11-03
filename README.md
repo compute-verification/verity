@@ -123,7 +123,8 @@ GPU machine.
 | Lifecycle | Both composites, onsite and remote, stepped through one monitoring period on CPU in about 2 s: a toy two-layer int8 model, every party simulated in one process, a labelled stand-in for C-Flock's prover, and the verdict by the composition's Python mirror, with every deviation it lists refused. The only example that steps through the whole remote composite. It runs; nothing about it is proved. | `verity example lifecycle` | `examples/lifecycle/README.md` |
 | Full utilization | An 8B model's linear layers in s8 at M = 16,384 on one H200, with PoUW crediting the work through Dither's no-fold receipt. No runner yet. | none yet | `examples/dither_full_util/README.md` |
 
-The remote protocol's verifier, `remote check`, has no run of record yet; its first is due Wed 28 Oct, 11 AM PDT.
+The remote protocol's verifier, `remote check`, has no passing run of record: the vLLM demo runs it on its served run,
+where PoUW's verdict is a development run that credits nothing.
 `verity example lifecycle` is the only example that steps through the whole remote composite, with a stand-in prover.
 The remote protocol's demo is the vLLM demo (`verity example vllm`): sampled proofs and PoUW on one served run, with
 PoUW's verdict a development run that credits nothing, while `verity example h200` runs remote's sampled-proofs half

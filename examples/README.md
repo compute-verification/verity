@@ -20,12 +20,13 @@ establishes with no hardware of its own at the prover's site. It composes two pr
 Remote accepts only when both accept over one commitment that binds both; either one's rejection rejects it, whatever the
 other answers. It rests on live coins (flipped after the commitment, never flipped again) and on what each subprotocol's own
 guarantee assumes; each subprotocol states its guarantee in `Security/`, and the composite states none of its own in Lean
-yet, so no example's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet; its first is due
-Wed 28 Oct, 11 AM PDT. `lifecycle/` is the only example that steps through the whole remote composite, on CPU with a
+yet, so no example's `proof` is past `none`. Its verifier, `remote check`, has no passing run of record
+(`vllm/example.toml`). `lifecycle/` is the only example that steps through the whole remote composite, on CPU with a
 stand-in prover. Its demo is the vLLM demo (`verity example vllm`): one served run of Llama-3.2-1B INT8 on one H200,
-sampled proofs and PoUW on the served model, whose PoUW verdict is a development run that credits nothing; `h200/` runs
-remote's sampled-proofs half. Five other things are called "remote" (PoUB among them);
-`verity/core/protocols/remote/README.md`, "Which remote", lists them.
+sampled proofs and PoUW on the served model, which runs `remote check` on the served run's cases; its PoUW verdict is a
+development run that credits nothing, so the remote verdict can't accept yet. `h200/` runs remote's sampled-proofs
+half. Five other things are called "remote" (PoUB among them); `verity/core/protocols/remote/README.md`, "Which
+remote", lists them.
 
 ## How far an example runs, and how far it's proved
 
