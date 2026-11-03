@@ -7,9 +7,9 @@ import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
 most `2^32`. The audit reads it at the bounds every accepted statement meets: the inner setup's calls at most
 `innerB ≤ 2^43` (`innerSetupCalls_le_acc`), the inner verifier's `2^28 + (innerB + 2^24) ≤ 2^43`
 (`innerCalls_R_le_acc'`), and V\*'s setup calls `nS x · 17716871168` (`setupCalls_deployedB_le_cap`), at most
-`16 · 17716871168 ≈ 2^{38.04}` at `16` parts. At the deployment's tables (`OneTableAt`: `SizesAt` but for its inner-setup
-bound) and at `|S(x_I)|, n ≤ 2^43` and `v ≤ 16 · 17716871168`, `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−166.95}`
-(`kappa_eps_oneTable_cap`).
+`16 · 17716871168 ≈ 2^{38.04}` at the verifier's cap of `16` parts (`RecBudget.MAX_STATEMENTS`, `nS_le_sixteen`). At the
+deployment's tables (`OneTableAt`: `SizesAt` but for its inner-setup bound) and at `|S(x_I)|, n ≤ 2^43` and
+`v ≤ nS x · 17716871168`, `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−166.95}` (`kappa_eps_oneTable_cap`).
 
 `κ` reads neither the setup nor `n` nor `v`, so it is `kappa_eps_core`'s. `ε`'s five terms read
 `c_S = c_Be + |S(x_I)| + 2(n + v)`, now at most `27038170529924 ≈ 2^{44.62}`, so each `u` but `γ`'s grows by `c_S`'s
@@ -117,10 +117,11 @@ theorem kappa_eps_of_cap {C W' : Type} [Fintype C] [Nonempty C] [Inhabited C] (D
     (by omega) hVI hkI hwI hW hnS hkx hκI hκs hγs hws hks
 
 /-- **Route 2C's split bound at the audit's call caps: `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−166.95}`**, at
-`kappa_eps_deployed`'s records and tables (`hin`, `h1`, `hO`, `hn`), at an inner setup of at most `2^43` calls (`hS`)
-and at call bounds `n ≤ 2^43` and `v ≤ 16 · 17716871168` (`hU`, `hV`): what `innerSetupCalls_le_acc` proves of the
-inner setup and `innerCalls_R_le_acc'` of the inner verifier's calls at every accepted statement, and what
-`setupCalls_deployedB_le_cap` proves of V\*'s setup calls at `16` parts. With `bitsLin2KOn_of_ksLin2On` it makes
+`kappa_eps_deployed`'s records and tables (`hin`, `h1`, `hO`), at an inner setup of at most `2^43` calls (`hS`) and at
+call bounds `n ≤ 2^43` and `v ≤ nS x · 17716871168` (`hU`, `hV`): what `innerSetupCalls_le_acc` proves of the inner
+setup and `innerCalls_R_le_acc'` of the inner verifier's calls at every accepted statement, and what
+`setupCalls_deployedB_le_cap` proves of V\*'s setup calls. The parts are at most `16`, the verifier's cap
+(`nS_le_sixteen`, from `hO`), so `v ≤ 16 · 17716871168`. With `bitsLin2KOn_of_ksLin2On` it makes
 `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−166.95}`. -/
 theorem kappa_eps_deployed_cap (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
@@ -130,8 +131,8 @@ theorem kappa_eps_deployed_cap (rel : _root_.Flock.Readable.Parsed → _root_.Fl
     {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hin : FlockDeploy.PlainIn (xIOf x) s spec sts) (h1 : sts.size = 1)
     (hO : ∀ j < nS x, ∃ i spec' sts', PartIn (staged b.st x (pick b.st x j) j) i spec' sts' ∧ sts'.size = 1)
-    (hn : nS x ≤ 16) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 43) {n : ℕ} (hU : n ≤ 2 ^ 43) {v : ℕ}
-    (hV : v ≤ 16 * 17716871168) :
+    (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 43) {n : ℕ} (hU : n ≤ 2 ^ 43) {v : ℕ}
+    (hV : v ≤ nS x * 17716871168) :
     Claims.Recursion.κ ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
         (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI) x ≤
         2 ^ (-(167.7 : ℝ)) ∧
@@ -139,6 +140,8 @@ theorem kappa_eps_deployed_cap (rel : _root_.Flock.Readable.Parsed → _root_.Fl
         ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
         (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI)
         FlockDeploy.KS.CpDep x n v ≤ 2 ^ (-(166.95 : ℝ)) := by
+  have hn := nS_le_sixteen hO
+  have hV16 : v ≤ 16 * 17716871168 := hV.trans (Nat.mul_le_mul_right _ hn)
   have hVI : (FlockDeploy.deployPlain rel).V.k (xIOf x) ≤ 4402 := by
     have := FlockDeploy.Vk_plain_le rel hin
     omega
@@ -162,7 +165,7 @@ theorem kappa_eps_deployed_cap (rel : _root_.Flock.Readable.Parsed → _root_.Fl
     rwa [h1, Nat.cast_one, one_mul] at this
   refine kappa_eps_of_cap ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
     (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI)
-    FlockDeploy.KS.CpDep x n v hVI hkI rfl (CpDep_width_le_tight (xIOf x)) hn hS hU hV hkx hκI (fun j => ?_)
+    FlockDeploy.KS.CpDep x n v hVI hkI rfl (CpDep_width_le_tight (xIOf x)) hn hS hU hV16 hkx hκI (fun j => ?_)
     (fun j => ?_) (fun _ => rfl) (fun j => ?_)
   · obtain ⟨i, spec', sts', hp, hp1⟩ := hO j j.isLt
     have := numsOf_κ_le hp
@@ -175,15 +178,14 @@ theorem kappa_eps_deployed_cap (rel : _root_.Flock.Readable.Parsed → _root_.Fl
     exact k_le_one (N := N₀O (staged b.st x (pick b.st x j) j)) hhi
 
 /-- **The deployment's tables at a statement `x`**, `SizesAt` but for its inner-setup bound (which every accepted
-statement meets at `2^43`, `innerSetupCalls_le_acc`): its inner statement is one plain table, and it stages at most
-`16` V\* parts, each one `--zk` table. -/
+statement meets at `2^43`, `innerSetupCalls_le_acc`): its inner statement is one plain table, and each V\* part it
+stages is one `--zk` table. The parts are at most `16`, the verifier's cap (`nS_le_sixteen`). -/
 def OneTableAt (b : Brings) (x : Msg) : Prop :=
   (∃ s spec sts, FlockDeploy.PlainIn (xIOf x) s spec sts ∧ sts.size = 1) ∧
-    (∀ j < nS x, ∃ i spec' sts', PartIn (staged b.st x (pick b.st x j) j) i spec' sts' ∧ sts'.size = 1) ∧
-    nS x ≤ 16
+    ∀ j < nS x, ∃ i spec' sts', PartIn (staged b.st x (pick b.st x j) j) i spec' sts' ∧ sts'.size = 1
 
 theorem SizesAt.oneTableAt {b : Brings} {x : Msg} (h : SizesAt b x) : OneTableAt b x :=
-  ⟨h.1, h.2.1, h.2.2.1⟩
+  ⟨h.1, h.2.1⟩
 
 /-- **`kappa_eps_deployed_cap` at a statement at the deployment's tables** (`OneTableAt b x`). -/
 theorem kappa_eps_oneTable_cap (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
@@ -191,7 +193,7 @@ theorem kappa_eps_oneTable_cap (rel : _root_.Flock.Readable.Parsed → _root_.Fl
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) {x : Msg} (h : OneTableAt b x)
-    (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 43) {n : ℕ} (hU : n ≤ 2 ^ 43) {v : ℕ} (hV : v ≤ 16 * 17716871168) :
+    (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 43) {n : ℕ} (hU : n ≤ 2 ^ 43) {v : ℕ} (hV : v ≤ nS x * 17716871168) :
     Claims.Recursion.κ ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
         (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI) x ≤
         2 ^ (-(167.7 : ℝ)) ∧
@@ -199,7 +201,7 @@ theorem kappa_eps_oneTable_cap (rel : _root_.Flock.Readable.Parsed → _root_.Fl
         ((recBoundAt rel b L).record (bdDeployed rel nextE colsE wE join rowIn final w).IVStar)
         (Claims.Recursion.Inner.ofFlock (bdDeployed rel nextE colsE wE join rowIn final w).deploy decI)
         FlockDeploy.KS.CpDep x n v ≤ 2 ^ (-(166.95 : ℝ)) := by
-  obtain ⟨⟨s, spec, sts, hin, h1⟩, hO, hn⟩ := h
-  exact kappa_eps_deployed_cap rel b L nextE colsE wE join rowIn final w decI hin h1 hO hn hS hU hV
+  obtain ⟨⟨s, spec, sts, hin, h1⟩, hO⟩ := h
+  exact kappa_eps_deployed_cap rel b L nextE colsE wE join rowIn final w decI hin h1 hO hS hU hV
 
 end RecDeploy

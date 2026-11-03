@@ -17,9 +17,10 @@ component), at every composite, with zero knowledge (`RecursiveFirewallPrivate`)
   and every composite `k`, at the verdict `Acc`, with the call bounds `nI₀`, `vS₀` and the level `λ = 135.7` fixed. The
   guarantee takes it at the recursive configuration's verdict, `RecVerdict`.
 * Its knowledge-soundness term is `Dep.ksAt`: `t'·2^{-135.7}`, and at a draw whose statement is at the deployment's
-  tables (`Dep.OneTable`: one plain inner table, at most `16` V\* parts of one `--zk` table each) the least of it and
+  tables (`Dep.OneTable`: one plain inner table, and each V\* part one `--zk` table) the least of it and
   `2^{-167.7} + t'·2^{-166.95}` (`RecDeploy.kappa_eps_oneTable_cap`), where the inner setup's calls and `nI₀` are at
-  most `2^43` and `vS₀` at most `16·17716871168 ≈ 2^{38.04}`.
+  most `2^43` and `vS₀ = nS·17716871168` (`RecDeploy.setupCalls_deployedB_le_cap`) is at most
+  `16·17716871168 ≈ 2^{38.04}`, at the verifier's cap of `16` V\* parts (`RecDeploy.nS_le_sixteen`).
 * It follows from `RecursiveKS`, read by name (`sampledProofsRecursive_of_ks`): an accepted play shows an accepted run of
   the deployed recursive verifier (`verdict_run`), off which `RecDeploy.lamLin2_R_ge_in` and
   `RecDeploy.setupCalls_deployedB_le_cap` read the call bounds and `RecDeploy.lamLin2_deployed_ge_dep_tight` reads
@@ -50,21 +51,22 @@ with `c_B = SetupCount.innerB` the inner setup's and `c_V = 2^24` a decision's. 
 def nI₀ : Msg → ℕ := fun _ => 2 ^ 28 + (SetupCount.innerB + 2 ^ 24)
 
 /-- **V\*'s setup calls**, at most, at a statement some run accepts: `17716871168` a staged part
-(`setupCalls_deployedB_le_cap`). -/
+(`setupCalls_deployedB_le_cap`), at most `16 · 17716871168` since the verifier refuses more than `16` parts
+(`nS_le_of_partIn`). -/
 def vS₀ : Msg → ℕ := fun x => nS x * 17716871168
 
 /-- **The call bounds and the level at an accepted statement**: where some run of the deployed recursive verifier
 accepts `x`, the inner verifier's calls are at most `nI₀ x` on every run (`RecDeploy.lamLin2_R_ge_in`), V\*'s setup
 calls at most `vS₀ x` (`RecDeploy.setupCalls_deployedB_le_cap`), route 2C's `λ₂` at those counts is at least `135.7`
 (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and at the deployment's tables the inner setup's calls and `nI₀ x` are at
-most `2^43` (`RecDeploy.innerSetupCalls_le_acc`) and `vS₀ x` at most `16 · 17716871168`, every premise read from the
-run. -/
+most `2^43` (`RecDeploy.innerSetupCalls_le_acc`) and `vS₀ x` is `setupCalls_deployedB_le_cap`'s `nS x · 17716871168`,
+every premise read from the run. -/
 theorem calls_lam (q : Dep) {x : Msg} (h : q.RunAccepts x) :
     (∀ cs ws, (q.D.innerCalls FlockDeploy.sha512 x cs ws).length ≤ nI₀ x) ∧
       (135.7 : ℝ) ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI₀ x) (vS₀ x) ∧
       (∀ ps, (Claims.Recursion.setupCalls FlockDeploy.sha512 q.D (q.D.vstar x ps)).length ≤ vS₀ x) ∧
       (q.OneTable x →
-        (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI₀ x ≤ 2 ^ 43 ∧ vS₀ x ≤ 16 * 17716871168) := by
+        (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI₀ x ≤ 2 ^ 43 ∧ vS₀ x ≤ nS x * 17716871168) := by
   obtain ⟨Ω, P, ω, r, hacc⟩ := h
   have hacc' : (Claims.run FlockDeploy.sha512 P (RecDeploy.V (boundAt q.wE q.w).IVStar
       (deployedB { deployedB q.b with tr := recTr q.aux q.nOf q.hd q.recRest }).st) x ω r).out = .acc := hacc
@@ -74,7 +76,7 @@ theorem calls_lam (q : Dep) {x : Msg} (h : q.RunAccepts x) :
     rowInDeployed DeployedR.finalR q.w q.decI FlockDeploy.sha512 hacc' ps
   obtain ⟨s, spec, sts, hin⟩ := plainIn_of_run_acc hacc'
   have hO := partIn_of_run_acc hacc'
-  have hnS := nS_le_of_partIn hO
+  have hnS : nS x ≤ 2 ^ 16 := (nS_le_of_partIn hO).trans (by decide)
   have hc : 2 ^ 28 + (SetupCount.innerB + 2 ^ 24) ≤ 2 ^ 43 := by
     unfold SetupCount.innerB SetupCount.perRow
     norm_num
@@ -87,9 +89,8 @@ theorem calls_lam (q : Dep) {x : Msg} (h : q.RunAccepts x) :
     rw [(FlockDeploy.setupM_eval FlockDeploy.sha512 s'.read).2]
     exact (hle _).trans SetupCount.innerB_le
   have hcap : q.OneTable x →
-      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI₀ x ≤ 2 ^ 43 ∧ vS₀ x ≤ 16 * 17716871168 := by
-    rintro ⟨-, -, hn16⟩
-    exact ⟨hset, hc, show nS x * 17716871168 ≤ 16 * 17716871168 from Nat.mul_le_mul_right _ hn16⟩
+      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI₀ x ≤ 2 ^ 43 ∧ vS₀ x ≤ nS x * 17716871168 :=
+    fun _ => ⟨hset, hc, le_rfl⟩
   exact ⟨(H []).1, lamLin2_deployed_ge_dep_tight _root_.Flock.Readable.relation
     (deployedB { deployedB q.b with tr := recTr q.aux q.nOf q.hd q.recRest }) (DeployedR.layR OpenRows.elemR)
     (FlockDeploy.nextR DeployedR.rdR) (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation DeployedR.rdR).cols

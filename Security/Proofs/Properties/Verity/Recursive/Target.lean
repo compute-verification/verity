@@ -242,10 +242,11 @@ def Dep.RunAccepts (q : Dep) (x : Msg) : Prop :=
     (Claims.run FlockDeploy.sha512 P q.D.V x ω r).out = .acc
 
 /-- **`κ ≤ 2^{-167.7}` and `ε ≤ 2^{-166.95}` at a statement at the deployment's tables**, at an inner setup of at most
-`2^43` calls and call bounds `n ≤ 2^43` and `v ≤ 16 · 17716871168`: `RecDeploy.kappa_eps_oneTable_cap` at the deployed
-recursive record. -/
+`2^43` calls and call bounds `n ≤ 2^43` and `v ≤ nS x · 17716871168` (`setupCalls_deployedB_le_cap`'s, at most
+`16 · 17716871168` at the verifier's 16-part cap): `RecDeploy.kappa_eps_oneTable_cap` at the deployed recursive
+record. -/
 theorem Dep.kappa_eps_oneTable (q : Dep) {x : Msg} (h : q.OneTable x) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 43)
-    {n v : ℕ} (hn : n ≤ 2 ^ 43) (hv : v ≤ 16 * 17716871168) :
+    {n v : ℕ} (hn : n ≤ 2 ^ 43) (hv : v ≤ nS x * 17716871168) :
     Claims.Recursion.κ q.D q.I x ≤ 2 ^ (-(167.7 : ℝ)) ∧
       Claims.Recursion.epsLin2 q.D q.I FlockDeploy.KS.CpDep x n v ≤ 2 ^ (-(166.95 : ℝ)) :=
   kappa_eps_oneTable_cap _root_.Flock.Readable.relation { deployedB q.b with tr := recTr q.aux q.nOf q.hd q.recRest }
@@ -532,7 +533,7 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
       (Claims.Recursion.setupCalls FlockDeploy.sha512 q.D (q.D.vstar x ps)).length ≤ vS x)
     (hlam : ∀ x, q.RunAccepts x → lam ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI x) (vS x))
     (hcap : ∀ x, q.RunAccepts x → q.OneTable x →
-      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI x ≤ 2 ^ 43 ∧ vS x ≤ 16 * 17716871168)
+      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI x ≤ 2 ^ 43 ∧ vS x ≤ nS x * 17716871168)
     (V : Vocab d α) (k : Verity.Registration.Composite) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
@@ -646,7 +647,7 @@ theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
       (Claims.Recursion.setupCalls FlockDeploy.sha512 q.D (q.D.vstar x ps)).length ≤ vS x)
     (hlam : ∀ x, q.RunAccepts x → lam ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI x) (vS x))
     (hcap : ∀ x, q.RunAccepts x → q.OneTable x →
-      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI x ≤ 2 ^ 43 ∧ vS x ≤ 16 * 17716871168)
+      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI x ≤ 2 ^ 43 ∧ vS x ≤ nS x * 17716871168)
     (V : Vocab d α) (k : Verity.Registration.Composite) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
@@ -692,8 +693,8 @@ It takes these hypotheses:
 * `RecursiveKSAt` at the deployed brings (`hKS`);
 * the decoders meet the list-decoding spec (`hdecI`, `hdecO`);
 * the inner and setup call bounds `nI`, `vS` and the level `λ` (`hn`, `hv`, `hlam`), and at the deployment's tables
-  the inner setup's calls and `nI` at most `2^43` and `vS` at most `16 · 17716871168` (`hcap`), at the statements some
-  run of the deployed recursive verifier accepts (`Dep.RunAccepts`);
+  the inner setup's calls and `nI` at most `2^43` and `vS` at most `nS · 17716871168`, `setupCalls_deployedB_le_cap`'s
+  bound (`hcap`), at the statements some run of the deployed recursive verifier accepts (`Dep.RunAccepts`);
 * `K₀` covers the claim's `ε` share (`hK₀`), and the session's draw misses any `K₀` units with probability at most `δs`
   (`hdraw`);
 * the vocabulary's extractor is the recursive configuration's (`hX`, `Dep.extract` at `S`);
@@ -717,7 +718,7 @@ theorem sampledProofsRecursive (q : Dep)
       (Claims.Recursion.setupCalls FlockDeploy.sha512 q.D (q.D.vstar x ps)).length ≤ vS x)
     (hlam : ∀ x, q.RunAccepts x → lam ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI x) (vS x))
     (hcap : ∀ x, q.RunAccepts x → q.OneTable x →
-      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI x ≤ 2 ^ 43 ∧ vS x ≤ 16 * 17716871168)
+      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI x ≤ 2 ^ 43 ∧ vS x ≤ nS x * 17716871168)
     (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c)) (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
