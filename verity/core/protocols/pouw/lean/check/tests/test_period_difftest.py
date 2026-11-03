@@ -1,9 +1,9 @@
-"""`verity.core.protocols.pouw.period_check` held to `pouw-period serve`, PoUW's verifier of record for a period
+"""`verity.core.protocols.pouw.period_check` held to `pouw-period serve`, PoUW's verifier of record for a credit period
 (`PouwCheck.Period`, ``verity/pouw/period/v1``, onsite's work component), on the shared harness (`verity_difftest`,
-`of_record="lean"`): one `ProtocolPort` over the cases `pouw_period_cases` generates (a period of the auditor's ledger
-and its windows, honest or with one mutation aimed at every refusal of `credit.period_credit`, and the protocol's own
-framing broken, and a period in each form the period's guarantee doesn't cover), compared outcome for outcome, its reason included: the reason is the refusal `credit.period_credit`
-names, so agreeing on it holds which rule refused the period."""
+`of_record="lean"`): one `ProtocolPort` over the cases `pouw_period_cases` generates (a credit period of the auditor's ledger
+and its execution phases, honest or with one mutation aimed at every refusal of `credit.period_credit`, and the protocol's own
+framing broken, and a credit period in each form the credit period's guarantee doesn't cover), compared outcome for outcome, its reason included: the reason is the refusal `credit.period_credit`
+names, so agreeing on it holds which rule refused the credit period."""
 from __future__ import annotations
 
 import json
@@ -48,8 +48,8 @@ server = D.server_fixture(PORT)
 
 @pytest.mark.slow
 def test_pouw_period(server):
-    """Generated periods, then each mutation over two seeds (`replay`), so every refusal is reached whatever the draw: an
-    honest period is accepted with its credit and profile, every refusal of `credit.period_credit` rejects it with that
+    """Generated credit periods, then each mutation over two seeds (`replay`), so every refusal is reached whatever the draw: an
+    honest credit period is accepted with its credit and profile, every refusal of `credit.period_credit` rejects it with that
     refusal, and each framing break is refused at the input it breaks."""
     RULES.clear()
     stats = D.run(PORT, examples=60, server=server)
@@ -64,7 +64,7 @@ def test_pouw_period(server):
 
 
 def test_an_honest_period_is_its_credit():
-    """An honest period's answer is `credit._period_outcomes`' credit, its digest the ledger's under the protocol's tag,
+    """An honest credit period's answer is `credit._period_outcomes`' credit, its digest the ledger's under the protocol's tag,
     and a framing break is refused naming its input."""
     case = cases.instance(random.Random("honest/credit"))
     a = PC.case(case)
@@ -82,7 +82,7 @@ def test_an_honest_period_is_its_credit():
                                       ("form-v6", "is not over PouwH1Tile_v5"), ("form-strata", "units at 2 K's")])
 def test_an_uncovered_form_is_refused_by_name(name, why):
     """Every form `H1J10RCheckedCreditPeriod` doesn't cover is refused before the credit, naming the form and the
-    guarantee, and the same period in the covered form (J10-R's per-call unit over PouwH1Tile_v5, at one K) is credited."""
+    guarantee, and the same credit period in the covered form (J10-R's per-call unit over PouwH1Tile_v5, at one K) is credited."""
     for seed in range(3):
         got = PC.case(cases.instance(random.Random(f"{name}/{seed}"), name))
         assert got["verdict"] == "reject" and got["reason"].startswith("form: window "), (name, got["reason"])
@@ -92,8 +92,8 @@ def test_an_uncovered_form_is_refused_by_name(name, why):
 
 @pytest.mark.parametrize("raw", [b"\xff", b"\xed\xa0\x80", b'{"program_fn":"\xc0\xaf"}'])
 def test_a_descriptor_not_utf8_is_left_to_the_credit(raw):
-    """A window whose descriptor isn't UTF-8 (a stray byte, a surrogate, an overlong) is no form of its own, as Lean's
-    `String.fromUTF8?` reads it, and the period is rejected by `credit.period_credit`, not credited."""
+    """An execution phase whose descriptor isn't UTF-8 (a stray byte, a surrogate, an overlong) is no form of its own, as Lean's
+    `String.fromUTF8?` reads it, and the credit period is rejected by `credit.period_credit`, not credited."""
     assert PC._window_form("p", 0, {"descriptor": raw.hex()}) is None
     d = cases.credit_cases.period_instance(random.Random("utf8"), "honest", **cases.COVERED)
     d["windows"][0]["descriptor"] = raw.hex()

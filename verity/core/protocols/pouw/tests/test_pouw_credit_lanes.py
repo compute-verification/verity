@@ -1,11 +1,11 @@
 """`credit`'s lanes form (`leaf_lanes`): at a K the period-open commits as ``lane<K>`` and ``combine<K>``, credit
-still draws the window's leaves, and each drawn leaf is proved as `leaf_lanes.statements` (R/4)(C/8) lanes and the
+still draws the execution phase's leaves, and each drawn leaf is proved as `leaf_lanes.statements` (R/4)(C/8) lanes and the
 combine, each verified against its own one-call leaf Program, a population of one, with the ``--registered`` file credit
-builds at the leaf's served place, its partials ``<prefix>partials@<u>`` held to one produced record under the window's
+builds at the leaf's served place, its partials ``<prefix>partials@<u>`` held to one produced record under the execution phase's
 draw root. Every refusal of the form is shown here: ``missing``, ``outcome``, ``failed``, ``circuit``, ``proof``,
 ``registration`` and ``lanes-shape``.
 
-The window is `test_circuit_h1window`'s stand-in tile at 8 × 16 (four lanes) and K = 384 and 416, so `credit.LANES_TILES`
+The execution phase is `test_circuit_h1window`'s stand-in tile at 8 × 16 (four lanes) and K = 384 and 416, so `credit.LANES_TILES`
 is widened to it; the 32 × 32 refusal is shown on its own. The stand-in's unit is not h1zy's, so its leaf Programs are
 stand-in bytes that `leaf_of` is replaced to accept; the slow test holds `leaf_of` and `leaf_unit_id` to the real
 `h1window.leaf_program`. The verifier is a stand-in `run` that accepts a session exactly when credit hands it the files
@@ -90,7 +90,7 @@ def _sha(b: bytes) -> str:
 
 @pytest.fixture
 def lanes(monkeypatch) -> None:
-    """The stand-in window's lanes allowed: its 8 × 16 tile, and its leaf Programs the stand-in bytes."""
+    """The stand-in execution phase's lanes allowed: its 8 × 16 tile, and its leaf Programs the stand-in bytes."""
     monkeypatch.setattr(Cr, "LANES_TILES", (*Cr.LANES_TILES, LEAF))
     monkeypatch.setattr(Cr, "leaf_unit_id", lambda shape, k, kind: unit_id(kind, k))
     monkeypatch.setattr(Cr, "leaf_of", lambda leaf, unit, k, kind: leaf == leaf_desc(kind, k) and unit == unit_id(kind, k))
@@ -110,7 +110,7 @@ def _roots(w: dict) -> dict[str, str]:
 
 
 def prove(w: dict, to: Path, files: dict, units=DRAWN) -> tuple[dict, dict]:
-    """The window's lanes evidence as an honest prover delivers it, and what each statement was proved against (by its
+    """The execution phase's lanes evidence as an honest prover delivers it, and what each statement was proved against (by its
     public file): each tile-form call's statement as `test_pouw_credit_statements.prove`'s, and each drawn lanes-form
     leaf's partials committed under the draw root and its lanes and combine, each against its leaf Program, its
     `leaf_partition_of` query and `h1window.leaf_reads_file`'s served file with `h1window.leaf_known_ports`."""
@@ -198,8 +198,8 @@ def _leaf_statements(evidence: dict, u: int | None = None) -> list[int]:
 
 def test_each_drawn_leaf_proved_as_its_lanes_and_combine_is_one_accepted_outcome(world, lanes, tmp_path):
     """Every drawn leaf at a lanes-form K, its four lanes and its combine verified against its leaf Programs with credit's
-    own files, is one accepted outcome under the window's program, its registered finding its statements' reads of the
-    window's tables (each of its tables' values, at the window's roots), which `_proved` holds to the draw. Beside a
+    own files, is one accepted outcome under the execution phase's program, its registered finding its statements' reads of the
+    execution phase's tables (each of its tables' values, at the execution phase's roots), which `_proved` holds to the draw. Beside a
     tile-form K's call statement, verified as before."""
     for files in (files_of(), files_of((384,), (416,))):
         evidence, proved = prove(world, tmp_path / str(len(files)), files)
@@ -244,14 +244,14 @@ def test_a_leaf_with_a_statement_missing_or_no_lanes_evidence_is_refused(world, 
     short = {**evidence, "statements": [s for j, s in enumerate(evidence["statements"]) if j != i]}
     assert verified(world, short, files, runner(proved))[1] == ("missing", (
         "drawn leaf 6 has no statement ['combine', None]: every drawn leaf's lanes and combine are proved and verified, "
-        "and a leaf with one missing refuses the window (no partial credit)"))
+        "and a leaf with one missing refuses the execution phase (no partial credit)"))
     got, why = verified(world, [], files, runner(proved))
     assert got is None and why[0] == "missing" and why[1].startswith("drawn leaf 1 is at a lanes-form K")
 
 
 def test_leaf_statements_the_draw_did_not_ask_for_are_refused(world, lanes, tmp_path):
     """A leaf statement proved twice (a retry), one of a unit no drawn leaf, and one that is no lane or combine of the
-    tile: each refuses the window, whatever its other statements' verdicts."""
+    tile: each refuses the execution phase, whatever its other statements' verdicts."""
     files = files_of()
     evidence, proved = prove(world, tmp_path, files)
     s = evidence["statements"][_leaf_statements(evidence)[0]]
@@ -284,7 +284,7 @@ def test_a_leaf_program_other_than_the_committed_one_is_refused(world, lanes, tm
     evidence, proved = prove(world, tmp_path, files)
     other = {**evidence, "leaf_programs": {**evidence["leaf_programs"], "combine384": b"another".hex()}}
     got, why = verified(world, other, files, runner(proved))
-    assert got is None and why == ("circuit", "the window's combine384 leaf Program is not the one the period-open "
+    assert got is None and why == ("circuit", "the execution phase's combine384 leaf Program is not the one the period-open "
                                               "committed (leaf_programs combine384): verify each lanes-form statement "
                                               "against it")
     monkeypatch.setattr(Cr, "leaf_of", lambda *_: False)
@@ -294,7 +294,7 @@ def test_a_leaf_program_other_than_the_committed_one_is_refused(world, lanes, tm
 
 def test_a_leaf_opening_other_values_roots_or_rows_is_refused(world, lanes, tmp_path):
     """Each is ``registration``: a session reporting another root for a read; a produced record under another draw coin
-    or missing a leaf's partials (its P- codes); a call whose receipts the window doesn't register; a session reporting
+    or missing a leaf's partials (its P- codes); a call whose receipts the execution phase doesn't register; a session reporting
     another opening of a partials row, or none (P-shared: a verdict without its openings, as `proofs.Finding` is today,
     fails closed)."""
     files = files_of()
@@ -313,7 +313,7 @@ def test_a_leaf_opening_other_values_roots_or_rows_is_refused(world, lanes, tmp_
     for bad, codes in (({**rec, "draw": "c1" * 64}, "P-draw"),
                        ({**rec, "produced": rec["produced"][1:]}, "P-values")):
         got, why = verified(world, {**evidence, "produced": bad}, files, runner(proved))
-        assert got is None and why[0] == "registration" and why[1].startswith(f"the window's produced record ({PR.FORMAT}) "
+        assert got is None and why[0] == "registration" and why[1].startswith(f"the execution phase's produced record ({PR.FORMAT}) "
                                                                               f"fails {codes}"), why
     receipt = HW.place(world["prog"], 6, STEPS)[LL.RECEIPT][0]
     got, why = verified(world, evidence, files, runner(proved), entries=[e for e in world["entries"] if e["value"] != receipt])
@@ -339,7 +339,7 @@ def test_a_drawn_leaf_outside_leaflanessound_is_refused_lanes_shape(world, tmp_p
     files = files_of()
     evidence, proved = prove(world, tmp_path, files)
     got, why = verified(world, evidence, files, runner(proved))
-    assert got is None and why[0] == "lanes-shape" and why[1].startswith("drawn leaf 1: the window's 8 × 16 tile")
+    assert got is None and why[0] == "lanes-shape" and why[1].startswith("drawn leaf 1: the execution phase's 8 × 16 tile")
     tile = {"tile": [32, 32]}
     plain, j10r = {"tiles": {k: {"j10r": False} for k in (352, 384, 400, 14336, 4096)}}, {"tiles": {4096: {"j10r": True}}}
     assert Cr.lanes_shape(tile, plain, 384) is None
@@ -377,9 +377,9 @@ def test_each_k_is_committed_in_one_form_with_its_leaf_programs():
 
 @pytest.mark.slow
 def test_credit_reads_the_real_leaf_programs_off_their_descriptors():
-    """At the real zy unit (16 × 8, K = 384): `leaf_unit_id` reads K's lane and combine unit ids off the window's
+    """At the real zy unit (16 × 8, K = 384): `leaf_unit_id` reads K's lane and combine unit ids off the execution phase's
     descriptor (each its descriptor id, as the partition names templates), and `leaf_of` accepts `h1window.leaf_program`'s descriptor for its kind and K and no other. What the
-    stand-in can't show is that credit's descriptor-level check matches the real derivation: the window traces the tile's
+    stand-in can't show is that credit's descriptor-level check matches the real derivation: the execution phase traces the tile's
     seed and noise circuits (about 30 s), and each leaf Program's descriptor takes about 6 s."""
     k, tile = 384, (16, 8)
     prog = HW.program((("q_proj", k, 16), ("k_proj", k, 8)), (("q_proj", 0), ("k_proj", 0)), 16, tile, prefix="h1/w/")

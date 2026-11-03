@@ -2,11 +2,11 @@ import CoreProtocol.Cli
 import PouwCheck.Credit
 
 /-!
-# A PoUW period as a `Core.Protocol`: `verity/pouw/period/v1`
+# A PoUW credit period as a `Core.Protocol`: `verity/pouw/period/v1`
 
-Onsite's work component (`Core.Onsite.components`). A period is the windows the auditor's ledger lists between the
-period's open and its close, and it earns all or nothing: `Credit.periodCredit` credits it only when every one of its
-windows is credited (`Credit.window`), and a refused window refuses the period. `pouw-period` runs it through
+Onsite's work component (`Core.Onsite.components`). A credit period is the execution phases the auditor's ledger lists between the
+credit period's open and its close, and it earns all or nothing: `Credit.periodCredit` credits it only when every one of its
+execution phases is credited (`Credit.window`), and a refused execution phase refuses the credit period. `pouw-period` runs it through
 `Core.Protocol.main`, and `tests/test_period_difftest.py` holds it to its Python, `verity/core/protocols/pouw/period_check.py`.
 
 **Params**, canonical JSON with exactly these keys, the verifier's own:
@@ -14,28 +14,28 @@ windows is credited (`Credit.window`), and a refused window refuses the period. 
     {"key": challenger key, "main": [commit, …], "name": period}
 
 the challenger key the verifier pins (`SampledProofs.Challenger.ChallengerKey`), its own copy of main's first-parent
-history (newest first) and the name of the period it credits, a string.
+history (newest first) and the name of the credit period it credits, a string.
 
 **Commitment**, canonical JSON: the auditor's ledger, the list of the lines the challenger signed (`ledgerEntry?`). Its
-period's open commits the period's circuit, its draw K, its table rows T, its weights' root and model and its fixed
-length before any coin of the period, and each window's session its roots before their coins. Its digest is
+credit period's open commits the credit period's circuit, its draw K, its table rows T, its weights' root and model and its fixed
+length before any coin of the credit period, and each execution phase's session its roots before their coins. Its digest is
 SHA-512(`commitmentTag` ‖ 0 ‖ the commitment's bytes).
 
 **Evidence**, canonical JSON `{"pins": pins, "windows": [window, …]}`: the challenger host's published pins log, and each
-window's evidence in the close's order, `Credit.PERIOD_KEYS` (its identity, session, salt, manifest, served rows, Commit
+execution phase's evidence in the close's order, `Credit.PERIOD_KEYS` (its identity, session, salt, manifest, served rows, Commit
 record, round log, draw, descriptor, registered entries, each drawn unit's proof outcome and its live evidence).
 
-**The check** first refuses, by name (`form: why`, `form`), every window in a form the period's proved guarantee
+**The check** first refuses, by name (`form: why`, `form`), every execution phase in a form the credit period's proved guarantee
 (`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`) doesn't cover: a Pearl-C pass, a circuit that is not an H1
-window (a per-tile protocol's tile, a Pearl-C leaf), a template over per-unit noise (`PouwH1Tile` v1, v3 or v4), a
+execution phase (a per-tile protocol's tile, a Pearl-C leaf), a template over per-unit noise (`PouwH1Tile` v1, v3 or v4), a
 J10-R unit over a tile other than `PouwH1Tile_v5` (v6), or units at more than one K (more than one stratum). Then it is
-`Credit.periodCredit` on them: it accepts with the period's credit, or rejects with the first refusal, `code: why`. It
-never leaves a period undecided.
+`Credit.periodCredit` on them: it accepts with the credit period's credit, or rejects with the first refusal, `code: why`. It
+never leaves a credit period undecided.
 
-**Public**, on acceptance: `Credit.PeriodCredit.toJson`, each window's credited calls, its credited served work, the K
-the period's open committed, the δ (`Credit.DELTA`) and each window's ε at it.
+**Public**, on acceptance: `Credit.PeriodCredit.toJson`, each execution phase's credited calls, its credited served work, the K
+the credit period's open committed, the δ (`Credit.DELTA`) and each execution phase's ε at it.
 
-**Profile**: the period's name and its number of windows.
+**Profile**: the credit period's name and its number of execution phases.
 
 What it doesn't check: each drawn unit's statement and each round's live statement, whose proof outcomes the evidence
 carries as the verifier of record's verdicts (`PouwCheck.Verified` and `PouwCheck.LiveVerified` judge them, with
@@ -99,32 +99,32 @@ def COVERED_TILE : String := "PouwH1Tile_v5{"
 def count (s pat : String) : Nat := (s.splitOn pat).length - 1
 
 def passForm (nm : String) (i : Nat) : String :=
-  s!"window {i} of period {nm} is a Pearl-C pass (\{context, descriptor, manifest, session}), which this protocol " ++
-  s!"never credits: a Pearl-C pass earns only in a Pearl-C period, and {GUARANTEE} covers H1 windows at J10-R alone"
+  s!"execution phase {i} of credit period {nm} is a Pearl-C pass (\{context, descriptor, manifest, session}), which this protocol " ++
+  s!"never credits: a Pearl-C pass earns only in a Pearl-C credit period, and {GUARANTEE} covers H1 execution phases at J10-R alone"
 
 def notH1 (nm : String) (i : Nat) (fn : String) : String :=
   let name := (fn.splitOn "{").headD ""
-  s!"window {i} of period {nm} proves {name}, not an H1 window ({Credit.WINDOW_FN}): a " ++
+  s!"execution phase {i} of credit period {nm} proves {name}, not an H1 window ({Credit.WINDOW_FN}): a " ++
   "per-tile protocol's tile (PouwH1Tile_v1 at K = 64, 4 × 8, or a Pearl-C leaf) or any other circuit is outside " ++
-  s!"{GUARANTEE}, which covers H1 windows at J10-R alone"
+  s!"{GUARANTEE}, which covers H1 execution phases at J10-R alone"
 
 def perUnit (nm : String) (i k : Nat) : String :=
-  s!"window {i} of period {nm} is an H1 window whose template at K = {k} takes per-unit noise (its parameters end " ++
+  s!"execution phase {i} of credit period {nm} is an H1 execution phase whose template at K = {k} takes per-unit noise (its parameters end " ++
   "in roots, not J10-R's call and blocks: PouwH1Tile_v1, v3 or v4), which " ++
   s!"{GUARANTEE} doesn't cover: serve it over J10-R's PouwH1Tile_v5"
 
 def notV5 (nm : String) (i k : Nat) : String :=
-  s!"window {i} of period {nm} is a J10-R window whose unit at K = {k} is not over PouwH1Tile_v5 alone (v6's " ++
+  s!"execution phase {i} of credit period {nm} is a J10-R execution phase whose unit at K = {k} is not over PouwH1Tile_v5 alone (v6's " ++
   s!"one-stream z, or no named tile): {GUARANTEE} covers the per-call unit over PouwH1Tile_v5, proved as its 32 " ++
   "lanes and their combine"
 
 def manyStrata (nm : String) (i : Nat) (ks : List Nat) : String :=
-  s!"window {i} of period {nm} has units at {ks.length} K's ({Credit.listStr ks}), so its draw is over that many " ++
-  s!"strata, and {GUARANTEE} draws from one tile stratum (TileDrawIsCoin): serve a window's linears at one K"
+  s!"execution phase {i} of credit period {nm} has units at {ks.length} K's ({Credit.listStr ks}), so its draw is over that many " ++
+  s!"strata, and {GUARANTEE} draws from one tile stratum (TileDrawIsCoin): serve an execution phase's linears at one K"
 
-/-- Why window `i` of period `nm` is a form `GUARANTEE` doesn't cover, read from its evidence alone: a Pearl-C pass,
+/-- Why execution phase `i` of credit period `nm` is a form `GUARANTEE` doesn't cover, read from its evidence alone: a Pearl-C pass,
 a circuit that is not an H1 window, a template over per-unit noise, a J10-R unit over a tile other than
-`COVERED_TILE`, or units at more than one K. `none` for a covered window, and for evidence too malformed to read,
+`COVERED_TILE`, or units at more than one K. `none` for a covered execution phase, and for evidence too malformed to read,
 which `Credit.periodCredit` refuses. -/
 def windowForm (nm : String) (i : Nat) (w : Json) : Option String := Id.run do
   if keys w == some PASS_KEYS then return some (passForm nm i)
@@ -151,7 +151,7 @@ def windowForm (nm : String) (i : Nat) (w : Json) : Option String := Id.run do
   if 1 < ks.length then return some (manyStrata nm i ks)
   return none
 
-/-- The first window of `windows` in a form `GUARANTEE` doesn't cover (`windowForm`), else `none`. -/
+/-- The first execution phase of `windows` in a form `GUARANTEE` doesn't cover (`windowForm`), else `none`. -/
 def form (nm : String) (windows : Json) : Option String := Id.run do
   let .arr ws := windows | return none
   for (w, i) in ws.toList.zipIdx do
@@ -192,7 +192,7 @@ def protocol : Core.Protocol where
   some "commitment: the auditor's ledger is not a list of its lines"
 #guard (protocol.answer "{\"key\":null,\"main\":[],\"name\":\"p\"}".toUTF8 "[]".toUTF8 "{}".toUTF8).reason ==
   some "evidence: keys are not pins, windows"
--- well-formed inputs reach `periodCredit`, whose refusal is the period's
+-- well-formed inputs reach `periodCredit`, whose refusal is the credit period's
 #guard (protocol.answer "{\"key\":null,\"main\":[],\"name\":\"p\"}".toUTF8 "[]".toUTF8
   "{\"pins\":[],\"windows\":7}".toUTF8).reason == some s!"period: {Credit.WINDOWS_FORM}"
 

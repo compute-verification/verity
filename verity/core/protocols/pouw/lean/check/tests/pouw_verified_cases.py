@@ -17,13 +17,13 @@ and give a descriptor that is no H1 execution phase's. Its mutations of the answ
 fail to run (``error``) or refuse it (``refused``), reject one session (``rejected``), open a public table or the ok
 rows at another port, value or root, open no ok row (``ok-none``), and prove a unit of another call (``unit-other``).
 
-A `lanes` case (`lanes_instance`, `LANES_NAMES`) is a 32 × 32 window with one K in the lanes form (``lane<K>`` and
+A `lanes` case (`lanes_instance`, `LANES_NAMES`) is a 32 × 32 execution phase with one K in the lanes form (``lane<K>`` and
 ``combine<K>``, its leaf Programs `leaf_desc`'s, its zy unit's TILE the one they are over) and perhaps one in the tile
 form, one or two drawn leaves at the lanes-form K and perhaps tile-form units, and the lanes evidence: each drawn leaf's
 lanes and combine statements among the calls' in a shuffled order, and the produced record of their partials under the
-window's draw root. Its answers accept each leaf session with every port of its ``--registered`` file, and the rows it
+execution phase's draw root. Its answers accept each leaf session with every port of its ``--registered`` file, and the rows it
 opened of the partials and the known rows (``openings``). Its mutations: a K outside `LeafLanesSound`'s reach, no lanes
-evidence, a leaf's statement dropped, a leaf Program other than the committed one or not the window's own, a statement
+evidence, a leaf's statement dropped, a leaf Program other than the committed one or not the execution phase's own, a statement
 twice, of an undrawn unit or none of the leaf's, the produced record's P- codes, a table the leaf reads unregistered,
 the draw malformed, the evidence's or the circuit files' lanes form broken; then a leaf session's partials or known row
 opened at another opening or reported without openings (``P-shared``), its ports at another root, rejected, proving
@@ -222,7 +222,7 @@ def _bc(rng: random.Random) -> str:
 
 
 def lanes_instance(rng: random.Random, name: str = "lanes-honest") -> dict:
-    """A `lanes` case: `verified_instance`'s arguments over a window with a lanes-form K, `name`'s mutation applied
+    """A `lanes` case: `verified_instance`'s arguments over an execution phase with a lanes-form K, `name`'s mutation applied
     (`LANES_NAMES`)."""
     shape_off = name == "lanes-shape" and rng.random() < 0.5
     r, c = (16, 16) if shape_off else (32, 32)

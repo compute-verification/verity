@@ -1,8 +1,8 @@
-"""`credit.pearl_c_period_credit` (the Pearl-C period rule): a live Pearl-C pass earns only inside a
-Pearl-C period, which earns only when the presented passes' epochs are exactly its close's sessions, every session is a
-Pearl-C salt session, credited and pinned, every pass is accepted, each weights' root's epochs are numbered on from the
-lane's earlier credited periods with no gap, and no two passes of one epoch hold one call index. An honest sequence of
-two periods is credited; each clause, an abandoned complete salt-only session and a gap in k refuse the period."""
+"""`credit.pearl_c_period_credit` (the Pearl-C credit period rule): a live Pearl-C pass earns only inside a
+Pearl-C credit period, which earns only when the presented passes' execution phases are exactly its close's sessions, every session is a
+Pearl-C salt session, credited and pinned, every pass is accepted, each weights' root's execution phases are numbered on from the
+lane's earlier credited periods with no gap, and no two passes of one execution phase hold one call index. An honest sequence of
+two credit periods is credited; each clause, an abandoned complete salt-only session and a gap in k refuse the credit period."""
 from __future__ import annotations
 
 import copy
@@ -35,8 +35,8 @@ CIRCUIT = hashlib.sha512(DESCRIPTOR).hexdigest()
 
 
 class Lane:
-    """One lane's auditor ledger, in time order, signed under key 0 at increasing leaves: Pearl-C periods (`open`,
-    `close`) and salt sessions (`epoch`), each session reserved, opened on its epoch's root, its record and close
+    """One lane's auditor ledger, in time order, signed under key 0 at increasing leaves: Pearl-C credit periods (`open`,
+    `close`) and salt sessions (`epoch`), each session reserved, opened on its execution phase's root, its record and close
     signed at the two leaves after its open and ended as the gate ends it."""
 
     def __init__(self, seed: str) -> None:
@@ -54,13 +54,13 @@ class Lane:
         self._ledger = None
 
     def open(self, name: str, circuit: str = CIRCUIT, **fields: Any) -> None:
-        """Period `name`'s open, committing `circuit` and the further `fields` (its pin and freshness floor)."""
+        """Credit period `name`'s open, committing `circuit` and the further `fields` (its pin and freshness floor)."""
         self._push(("period-open", None, {"period": name, "lane": rc.LANE, "by": rc.LANE, "cap": 4, "circuit": circuit,
                                           "key_sha512": hashlib.sha512(self.pub).hexdigest(), **fields}))
         self.name, self.members = name, []
 
     def epoch(self, w: bytes, k: int, h1: bool = False, pinned: str | None = None) -> str:
-        """Epoch k over weights' root `w`: a salt-only session (H1's three-family layout, every coin released, when
+        """Execution phase k over weights' root `w`: a salt-only session (H1's three-family layout, every coin released, when
         `h1`), its salt coin opened after `salt.epoch_open_root(w, k)`, its open naming commit `pinned` (a commit of
         `rc.PINS[0]` pins, which every sealed prefix holds) when given."""
         rng, r, sid = self.rng, PS.epoch_open_root(w, k), rc.session_id(self.rng)
@@ -98,14 +98,14 @@ class Lane:
         return list(self._ledger)
 
     def args(self, name: str, passes: Any, *earlier: Any) -> tuple:
-        """`pearl_c_period_credit`'s arguments for period `name`'s `passes`, the lane's earlier epochs `earlier` (none
+        """`pearl_c_period_credit`'s arguments for credit period `name`'s `passes`, the lane's earlier execution phases `earlier` (none
         when not given)."""
         key = next(iter(self.sessions.values()))[0].key()
         return (key, self.ledger(), list(rc.PINS), list(rc.MAIN), name, passes, earlier[0] if earlier else [],
                 rc.lms_verify)
 
     def manifest(self, sid: str, base: dict, first: int) -> dict:
-        """A pass of session `sid`'s epoch over `base`'s workload, its call indices from `first` on."""
+        """A pass of session `sid`'s execution phase over `base`'s workload, its call indices from `first` on."""
         s, w, k = self.sessions[sid]
         c, o = s.ch.commitment, s.salt[0]
         salt = derive(o.coin, EPOCH_SALT_DOMAIN, {"epoch": c.epoch, "coins": c.root, "weights": w}).stream("salt", 32)
@@ -133,8 +133,8 @@ def _base(rng: random.Random) -> tuple[dict, bytes, int]:
 
 
 def _two_periods(seed: str) -> tuple[Lane, list[dict], list[dict], list[bytes]]:
-    """Period A: epoch 0 over W (two passes, the second's calls numbered on from the first's) and epoch 1 over W;
-    period B: epoch 2 over W and epoch 0 over a second weights' root W2."""
+    """Credit period A: execution phase 0 over W (two passes, the second's calls numbered on from the first's) and execution phase 1 over W;
+    credit period B: execution phase 2 over W and execution phase 0 over a second weights' root W2."""
     lane = Lane(seed)
     (b1, w, n), (b2, w2, _) = _base(lane.rng), _base(lane.rng)
     lane.open("p-a")
@@ -159,7 +159,7 @@ def test_an_honest_two_period_sequence_is_credited():
 
 
 def test_a_pass_whose_epoch_the_close_does_not_list_or_a_session_with_no_pass_refuses_the_period():
-    """Clause 1, exact match: the presented epochs are exactly the close's sessions, in its order."""
+    """Clause 1, exact match: the presented execution phases are exactly the close's sessions, in its order."""
     lane, a, b, _ = _two_periods("exact")
     p0, p0b, p1 = a
     assert Cr.pearl_c_period_credit(*lane.args("p-a", [p0, p0b]))[1][0] == "missing"
@@ -171,7 +171,7 @@ def test_a_pass_whose_epoch_the_close_does_not_list_or_a_session_with_no_pass_re
 
 def test_an_abandoned_complete_salt_only_session_refuses_its_period():
     """A complete salt-only session ends like a used one, so a prover could open several and keep the salt it likes:
-    one the close lists that no presented pass names refuses the whole period, wherever it falls in the close."""
+    one the close lists that no presented pass names refuses the whole credit period, wherever it falls in the close."""
     for where in range(3):
         lane = Lane(f"abandoned/{where}")
         base, w, n = _base(lane.rng)
@@ -187,7 +187,7 @@ def test_an_abandoned_complete_salt_only_session_refuses_its_period():
 
 
 def test_a_session_not_salt_only_refuses_the_period():
-    """Clause 2: an H1 window's session (salt and rounds, every coin released, so the period's close is complete)
+    """Clause 2: an H1 execution phase's session (salt and rounds, every coin released, so the credit period's close is complete)
     opened on an epoch's root is not a Pearl-C salt session, and H1's window check refuses a salt-only session."""
     lane = Lane("salt-only")
     base, w, n = _base(lane.rng)
@@ -201,8 +201,8 @@ def test_a_session_not_salt_only_refuses_the_period():
 
 
 def test_a_session_of_another_circuit_refuses_the_period():
-    """Clause 3: each pass's session is credited toward its period, the pass's descriptor hashing to the circuit the
-    period's open committed."""
+    """Clause 3: each pass's session is credited toward its credit period, the pass's descriptor hashing to the circuit the
+    credit period's open committed."""
     lane, a, _, _ = _two_periods("circuit")
     passes = list(a)
     passes[1] = {**passes[1], "descriptor": b"another circuit".hex()}
@@ -211,7 +211,7 @@ def test_a_session_of_another_circuit_refuses_the_period():
 
 
 def test_a_session_pinned_behind_its_periods_open_pin_refuses_the_period():
-    """Clause 3a, H1's period pin floor: a period opened under MAIN[2] with a freshness floor of one first-parent commit
+    """Clause 3a, H1's credit period pin floor: a credit period opened under MAIN[2] with a freshness floor of one first-parent commit
     refuses a session pinned at MAIN[4], two behind it, with ``pin``; at a floor of two the same session is credited."""
     for floor, refused in ((1, True), (2, False)):
         lane = Lane(f"pin/{floor}")
@@ -221,14 +221,14 @@ def test_a_session_pinned_behind_its_periods_open_pin_refuses_the_period():
         lane.close()
         got, why = Cr.pearl_c_period_credit(*lane.args("p-a", [lane.pass_(sid, base)]))
         if refused:
-            assert got is None and why[0] == "pin" and "pass 0 of period p-a is pinned 2 first-parent" in why[1], why
+            assert got is None and why[0] == "pin" and "pass 0 of credit period p-a is pinned 2 first-parent" in why[1], why
         else:
             assert why is None and got["epochs"] == [[w.hex(), 0]]
 
 
 def test_a_refused_pass_refuses_the_period():
     """Clause 4: each pass passes `core_check.pass_epoch` under the live inputs: a context naming another manifest, or
-    a salt that isn't its live coin's, refuses the period."""
+    a salt that isn't its live coin's, refuses the credit period."""
     lane, a, _, _ = _two_periods("pass")
     p0, p0b, p1 = a
     named = {**p0b, "context": p0["context"]}
@@ -247,7 +247,7 @@ def test_a_context_not_a_string_refuses_the_period_as_a_refused_pass():
     p0, p0b, p1 = a
     for context in (None, 7, [p0b["context"]], {"context": p0b["context"]}):
         got, why = Cr.pearl_c_period_credit(*lane.args("p-a", [p0, {**p0b, "context": context}, p1]))
-        assert got is None and why[0] == Cr.PASS_REFUSED and "pass 1 of period p-a" in why[1], context
+        assert got is None and why[0] == Cr.PASS_REFUSED and "pass 1 of credit period p-a" in why[1], context
         assert "context is not a string" in why[1]
 
 
@@ -280,7 +280,7 @@ def _retained(lane: Lane, sid: str, base: dict) -> bytes:
 
 def test_a_pass_retained_in_vllms_form_is_accepted_and_credited_in_a_one_epoch_period():
     """A retained manifest exactly as the vLLM integration writes it passes `core_check.pass_epoch` under the live inputs (``live
-    coin``), and its one-epoch period credits it."""
+    coin``), and its one-epoch credit period credits it."""
     lane = Lane("retained")
     base, w, _ = _base(lane.rng)
     lane.open("p-a")
@@ -297,19 +297,19 @@ def test_a_pass_retained_in_vllms_form_is_accepted_and_credited_in_a_one_epoch_p
 
 
 def test_epochs_not_numbered_on_from_the_earlier_periods_refuse():
-    """Clause 5: each weights' root's epochs continue from the lane's earlier credited periods: period B alone (its W
-    from 2, not 0), period A again after itself (a repeat) and period B after an earlier list missing epoch 1 refuse."""
+    """Clause 5: each weights' root's execution phases continue from the lane's earlier credited periods: credit period B alone (its W
+    from 2, not 0), credit period A again after itself (a repeat) and credit period B after an earlier list missing execution phase 1 refuse."""
     lane, a, b, (w, _) = _two_periods("index")
     for earlier in ([], [[w.hex(), 0], [w.hex(), 1], [w.hex(), 2]], [[w.hex(), 0]]):
         _, why = Cr.pearl_c_period_credit(*lane.args("p-b", b, earlier))
         assert why[0] == Cr.INDEX and "with no gap or repeat" in why[1], earlier
     _, why = Cr.pearl_c_period_credit(*lane.args("p-a", a, [[w.hex(), 1]]))
-    assert why[0] == Cr.INDEX and "is not epoch 2" in why[1]
+    assert why[0] == Cr.INDEX and "is not execution phase 2" in why[1]
 
 
 def test_a_gap_in_k_spends_the_weights_root():
-    """Epoch 1 over W opened outside every period (so never credited): the next period's epoch 2 over W is refused.
-    The ledger opens epoch 1's root only once (`challenger.verify_ledger`), so no later period can credit it either,
+    """Execution phase 1 over W opened outside every credit period (so never credited): the next credit period's execution phase 2 over W is refused.
+    The ledger opens execution phase 1's root only once (`challenger.verify_ledger`), so no later credit period can credit it either,
     and W is spent."""
     lane = Lane("gap")
     base, w, n = _base(lane.rng)
@@ -323,11 +323,11 @@ def test_a_gap_in_k_spends_the_weights_root():
     got, why = Cr.pearl_c_period_credit(*lane.args("p-a", [lane.pass_(s0, base)]))
     assert why is None
     _, why = Cr.pearl_c_period_credit(*lane.args("p-b", [lane.pass_(s2, base)], got["epochs"]))
-    assert why[0] == Cr.INDEX and "is not epoch 1" in why[1] and "re-key hm96" in why[1]
+    assert why[0] == Cr.INDEX and "is not execution phase 1" in why[1] and "re-key hm96" in why[1]
 
 
 def test_two_passes_of_one_epoch_sharing_a_call_index_refuse_the_period():
-    """Clause 6 (`passes_distinct`): a call index two passes of one epoch hold repeats its seeds and tickets."""
+    """Clause 6 (`passes_distinct`): a call index two passes of one execution phase hold repeats its seeds and tickets."""
     lane, a, _, _ = _two_periods("distinct")
     p0, _, p1 = a
     sid = json.loads(bytes.fromhex(p0["manifest"]))["session"]["session"]
@@ -348,4 +348,4 @@ def test_malformed_evidence_is_refused():
     man = json.loads(bytes.fromhex(p0["manifest"]))
     del man["pass_index"]
     _, why = Cr.pearl_c_period_credit(*lane.args("p-a", [{**p0, "manifest": json.dumps(man).encode().hex()}]))
-    assert why[0] == Cr.PASS_REFUSED and "names no salt epoch" in why[1]
+    assert why[0] == Cr.PASS_REFUSED and "names no salt execution phase" in why[1]

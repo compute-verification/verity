@@ -1,6 +1,6 @@
 """`verity.core.protocols.pouw.core_check` held to `pouw-check serve`, PoUW's verifier of record (`pouw.verifier`), on
 the shared harness (`verity_difftest`, `of_record="lean"`): one `ProtocolPort`, over the cases `pouw_check_cases`
-generates from a Hypothesis-controlled `random.Random` (honest windows, and one mutation each aimed at every refusal, the
+generates from a Hypothesis-controlled `random.Random` (honest execution phases, and one mutation each aimed at every refusal, the
 case's framing included), so a run is deterministic and shrinks. Every port here holds the Python to the Lean.
 
 The harness compares an outcome's verdict, commitment, public outputs and profile. The reference writes the port's
@@ -8,36 +8,36 @@ reasons too, `Core.Protocol.case`'s framing included, so this port compares the 
 that refused, and agreeing on it holds which rule refused, not only that one did.
 
 `pouw-check-difftest`'s `opening` against `core_check.opening`: one `Port`, over the openings `pouw_opening_cases`
-generates (honest openings of a call's tile or the filler's, unsalted or a salted unit's in a certified window, and one
+generates (honest openings of a call's tile or the filler's, unsalted or a salted unit's in a certified execution phase, and one
 mutation each aimed at every refusal or at a reading both sides share), compared output for output: null, or the same
 reason.
 
 Its `pass` and `draw` against `core_check.pass_epoch` and `core_check.draw`: one `Port` each, over the cases
-`pouw_pass_cases` generates (honest passes of each coin version, a recorded beacon's, a certified window's and a live
+`pouw_pass_cases` generates (honest passes of each coin version, a recorded beacon's, a certified execution phase's and a live
 Pearl-C pass's, and honest draws, then one mutation each aimed at every refusal), compared output for output: how the
 salt was had, or the same refusal.
 
 Its `window` and `period` against `credit.window` and `credit.period_credit`, the only entries, and its `credit`,
 `drawn`, `window-drawn`, `outcome`, `a-link` and `weights` against the steps they run or will, `credit._credited`,
 `credit.drawn`, `credit._window_drawn` (at the strata of the descriptor's layout, `Credit.descriptorDrawn`, the sample the
-J10-R period's statement reads), `credit._outcome`, `credit._a_link` and `credit._weights` (`PouwCheck.Credit.Internal`'s):
+J10-R credit period's statement reads), `credit._outcome`, `credit._a_link` and `credit._weights` (`PouwCheck.Credit.Internal`'s):
 one `Port` each, over the cases
-`pouw_credit_cases` generates (a served window whose sampling coin opened after its sample root over the manifest's credit bits,
-the units a sampling coin selects from a window's layout and each of them proved, a served window whole with its layout read
+`pouw_credit_cases` generates (a served execution phase whose sampling coin opened after its sample root over the manifest's credit bits,
+the units a sampling coin selects from an execution phase's layout and each of them proved, a served execution phase whole with its layout read
 from its circuit's descriptor (`credit.layout_of`) and its round log held to the challenger's (`core_check.rounds`) and
-to its A trees, a period of the
-auditor's ledger and its windows, a window's A trees under its round roots, a window's registered weights under its
+to its A trees, a credit period of the
+auditor's ledger and its execution phases, an execution phase's A trees under its round roots, an execution phase's registered weights under its
 open root, then one mutation each aimed at every refusal), compared output for output: the credited calls, the sampled
 proof blocks, the weights' root or null, or the same refusal.
 
 Its `rounds` against `core_check.rounds`: one `Port`, over the live windows `pouw_rounds_cases` generates (a live epoch's
 round coins, each opened after its recorded round root, read through the challenger's signed session the auditor's signed
-ledger opens and ends for the window, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
-Its `salt` against `core_check.salt` likewise, over the live windows' salt coins the same module generates, read through
+ledger opens and ends for the execution phase, then one mutation each aimed at every refusal), compared output for output: null, or the same refusal.
+Its `salt` against `core_check.salt` likewise, over the live execution phases' salt coins the same module generates, read through
 the same session, reserved before it opened (opened after the session's open root, `salt.window_open_root`). Its
 `live-salt` against `core_check.live_salt` likewise, over the live Pearl-C passes `pouw_pass_cases` generates (a
-salt-only session the auditor's ledger reserves, opens on the pass's salt epoch's root and ends complete, its commitment
-read from the session's own files, a drawn `pass_index` and call indices offset within the epoch), compared output for
+salt-only session the auditor's ledger reserves, opens on the pass's salt execution phase's root and ends complete, its commitment
+read from the session's own files, a drawn `pass_index` and call indices offset within the execution phase), compared output for
 output: the salt, or the same refusal.
 
 Its `chunks` against `weights.chunks` (an H1 lane's chunks along K, the chunk rows a table at K commits a row as): every
@@ -227,7 +227,7 @@ pass_server = D.server_fixture(PASS)
 
 
 def test_pass_and_draw(pass_server):
-    """Generated passes (a certified window's among them) and draws, then each mutation over a few seeds (`replay`), so
+    """Generated passes (a certified execution phase's among them) and draws, then each mutation over a few seeds (`replay`), so
     every refusal is reached whatever the sample."""
     PASSED.clear()
     stats = {"pass": D.run(PASS, examples=1500, server=pass_server), "draw": D.run(DRAW, examples=1000, server=pass_server)}
@@ -349,21 +349,21 @@ REGISTERED_FILE = _port("registered-file", registered_file, credit_cases.registe
 
 
 def test_credit(pass_server):
-    """Generated served windows' credited sets, sampled proof blocks and their outcomes, whole windows and periods, and A rows,
-    then each mutation over a few seeds (`replay`): a window's tile at a K its proof doesn't cover (2^17 or past, or no
+    """Generated served execution phases' credited sets, sampled proof blocks and their outcomes, whole execution phases and credit periods, and A rows,
+    then each mutation over a few seeds (`replay`): an execution phase's tile at a K its proof doesn't cover (2^17 or past, or no
     multiple of 32), a credit bit flipped after the sampling coin, units the prover chose, a sampled proof block failed or missing,
-    a period unclosed or a window of it missing or out of order, an A tree the round roots
-    didn't commit, a window's round log the challenger never received, entries or a sampled proof block's proof of another
-    registration than the window's or an entry whose root is not its sessions', B rows other than the ones a window's
-    open root binds or registered under another domain, name or rows, a window whose B rows (one row's s_w, or every
-    code zeroed) are not the ones its period's open signed, a period whose open signs no weights' root or names no
+    a credit period unclosed or an execution phase of it missing or out of order, an A tree the round roots
+    didn't commit, an execution phase's round log the challenger never received, entries or a sampled proof block's proof of another
+    registration than the execution phase's or an entry whose root is not its sessions', B rows other than the ones an execution phase's
+    open root binds or registered under another domain, name or rows, an execution phase whose B rows (one row's s_w, or every
+    code zeroed) are not the ones its credit period's open signed, a credit period whose open signs no weights' root or names no
     model `models.json` pins (none, malformed, another checkpoint, another role), a round's A table of a K (a row off,
     its calls' rows offset by one call, a call missing) or a round's input-ids table other than the served Commit's or a
     Commit record the sample root doesn't bind, round 0's input-ids table outside round 0's request table or bound to
     another session, round 0's request table at another root than request_table, twice, under another PREFIX or bound
-    to another session or to the open root, a call's served rows m_s past the period's T table rows, other than its step's or malformed (an
-    honest window's empty step credits none of its calls), a T whose slot is not the window's M or that is no positive
-    integer, a period whose open commits no T or a malformed one, a window's live evidence whose live Program is not
+    to another session or to the open root, a call's served rows m_s past the credit period's T table rows, other than its step's or malformed (an
+    honest execution phase's empty step credits none of its calls), a T whose slot is not the execution phase's M or that is no positive
+    integer, a credit period whose open commits no T or a malformed one, an execution phase's live evidence whose live Program is not
     at its T, S and PREFIX or whose round's live@<s> outcome is missing, rejected, twice, of another circuit or opened
     another m@<s> than the manifest's m_s, another round@<s> than its round, other slot or request tables or other
     ok rows, and every other
@@ -390,7 +390,7 @@ def test_credit(pass_server):
     assert {"credit accept", "drawn accept", "window-drawn accept", "outcome accept", "window accept", "period accept",
             "a-link accept", "weights accept", "registered-file accept", "registered-file accept j10r",
             "registered-file accept j10r chunked"} <= set(CREDITED)
-    for part in ("credit draw: the draw root over the manifest", "credit draw: the window's draw root is not",
+    for part in ("credit draw: the draw root over the manifest", "credit draw: the execution phase's draw root is not",
                  "credit draw: the challenger's session closed with no draw coin", "credit credit: manifest row # has no",
                  "credit credit: call # is credited with no z", "credit coin: the draw coin: ",
                  "credit coin: the draw's session is not trusted",
@@ -399,106 +399,106 @@ def test_credit(pass_server):
                  "outcome outcome: unit # has two", "outcome outcome: unit # has a proof outcome and was not drawn",
                  "drawn layout: linear ", "drawn layout: the A slot #", "drawn layout: the A blocks of K = #",
                  "drawn layout: a call of lm_head", "drawn draw: the draw coin is not", "drawn draw: the draw's stream",
-                 "window tile-k: the window's tile at K = # is outside the K its proof covers, multiples of # below #",
-                 "so the period earns nothing: tile-k: the window's tile at K = #",
+                 "window tile-k: the execution phase's tile at K = # is outside the K its proof covers, multiples of # below #",
+                 "so the credit period earns nothing: tile-k: the execution phase's tile at K = #",
                  "pad its linears' A and B rows with zero codes to K = #",
                  "split its linears' k range into linears of at most K = # each",
                  "window manifest: the manifest's # rows", "window outcome: unit # has a proof outcome and was not",
-                 "window manifest: manifest row # states no served rows m_s at most the period's T = # table rows",
-                 "window layout: the period's T = # table rows give an A slot of # rows, not the window's M = #",
-                 "window layout: the period's table rows T are not a positive integer",
-                 "period layout: period ", "'s open commits no table rows T (rows, a positive integer",
-                 "so the period earns nothing: layout: the period's T = # table rows give an A slot",
+                 "window manifest: manifest row # states no served rows m_s at most the credit period's T = # table rows",
+                 "window layout: the credit period's T = # table rows give an A slot of # rows, not the execution phase's M = #",
+                 "window layout: the credit period's table rows T are not a positive integer",
+                 "period layout: credit period ", "'s open commits no table rows T (rows, a positive integer",
+                 "so the credit period earns nothing: layout: the credit period's T = # table rows give an A slot",
                  "window manifest: call # states # served rows and call # #, both of step #",
-                 "period period: period ", "period missing: session #", "period order: session #",
-                 "period period: the sessions presented run past", "period period: session ", "period window: window #",
-                 "period coin: the auditor's ledger is not trusted", "period circuit: window # of period ",
+                 "period period: credit period ", "period missing: session #", "period order: session #",
+                 "period period: the sessions presented run past", "period period: session ", "period window: execution phase #",
+                 "period coin: the auditor's ledger is not trusted", "period circuit: execution phase # of credit period ",
                  "drawn budget: the draw's K is not",
-                 "drawn budget: the window's # units are fewer than K", "period budget: period ",
-                 "the one period", "commits no cap or circuit", "the window's descriptor is not the bytes",
-                 "window layout: the window's circuit's units are not its record's tiles",
-                 "window layout: the window's circuit is not an H# window",
-                 "window layout: the window's template at K = # is not h#window's",
-                 "window layout: the window's descriptor is not a verity-ir/descriptor/v#",
-                 "window layout: the window's TILES are at K = ", "window layout: the window's layout is not",
-                 "window layout: a call of lm_head", "so the period earns nothing: layout: ",
+                 "drawn budget: the execution phase's # units are fewer than K", "period budget: credit period ",
+                 "the one credit period", "commits no cap or circuit", "the execution phase's descriptor is not the bytes",
+                 "window layout: the execution phase's circuit's units are not its record's tiles",
+                 "window layout: the execution phase's circuit is not an H# window",
+                 "window layout: the execution phase's template at K = # is not h#window's",
+                 "window layout: the execution phase's descriptor is not a verity-ir/descriptor/v#",
+                 "window layout: the execution phase's TILES are at K = ", "window layout: the execution phase's layout is not",
+                 "window layout: a call of lm_head", "so the credit period earns nothing: layout: ",
                  "a-link a-link: registered A value h#/w#/a/#'s root is not the tree",
                  "a-link a-link: round #'s root is not over", "don't tile its rows",
-                 "a-link a-link: the window registers no A value", "which is no registered A value",
-                 "weights weights: the window's registered weights are not the ones its open root binds",
-                 "weights weights: the window registers no weights", "weights weights: the window registers K = #",
+                 "a-link a-link: the execution phase registers no A value", "which is no registered A value",
+                 "weights weights: the execution phase's registered weights are not the ones its open root binds",
+                 "weights weights: the execution phase registers no weights", "weights weights: the execution phase registers K = #",
                  "'s entry is not the registration of K = #'s B rows", "b/<K> of a K of its circuit",
-                 "weights weights: the window's circuit is not its descriptor's SHA#",
+                 "weights weights: the execution phase's circuit is not its descriptor's SHA#",
                  "window rounds: the round roots are not the roots the challenger's log shows it received",
                  "window coin: pouw/round coin #: coin was not opened after", "window a-link: registered A value ",
-                 "window a-link: the window registers no A value",
-                 "so the period earns nothing: rounds: the round roots are not",
+                 "window a-link: the execution phase registers no A value",
+                 "so the credit period earns nothing: rounds: the round roots are not",
                  "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}",
-                 "domain is not the one the window's registration gives it (the registered domain of h#/w#/a/#",
+                 "domain is not the one the execution phase's registration gives it (the registered domain of h#/w#/a/#",
                  "window registration: drawn unit #'s proof opened port ",
-                 "against another root than the one the window registered for",
+                 "against another root than the one the execution phase registered for",
                  "window registration: drawn unit #'s proof was verified against another circuit",
-                 "opened no A value …/a/# or …/a/#@# (its call's round's) of the window", "'s proof opened no weights ",
-                 "which the window registers not",
-                 "which the window registers twice", "'s entry is not one-stage's {value, root, leaves, words, domain}",
-                 "so the period earns nothing: registration: drawn unit #",
-                 "window weights: the window's registered weights' root ",
-                 "open signed: a B row's codes or s_w differ from the ones the period registered",
+                 "opened no A value …/a/# or …/a/#@# (its call's round's) of the execution phase", "'s proof opened no weights ",
+                 "which the execution phase registers not",
+                 "which the execution phase registers twice", "'s entry is not one-stage's {value, root, leaves, words, domain}",
+                 "so the credit period earns nothing: registration: drawn unit #",
+                 "window weights: the execution phase's registered weights' root ",
+                 "open signed: a B row's codes or s_w differ from the ones the credit period registered",
                  "'s open signs no weights' root (weights_root, a SHA# digest",
                  "'s open signs a weights' root but no model (model, {name, checkpoint_sha#})",
-                 "with another checkpoint than the one credit pins for it: open the period with the gate's --model",
-                 "which is no checkpoint role credit pins: open the period with the gate's --model",
-                 "window weights: period ",
-                 "window weights: the window is in no period of the auditor's ledger",
-                 "window weights: the window's round# request table's root is not",
-                 "window weights: the window's registered weights are not the ones its open root binds",
-                 "window weights: registered weights ", "period weights: period ",
-                 "so the period earns nothing: weights: the window's registered weights' root",
-                 "registered-file registration: call #'s statement reads ", "which the window registers not: register",
-                 "which the window registers twice: register",
-                 "credit commit: the window's Commit record is not the bytes in lowercase hex",
-                 "window commit: the window's Commit record is not the bytes in lowercase hex",
-                 "window draw: the window's draw root is not over its manifest (each call's credit bit among it), its "
+                 "with another checkpoint than the one credit pins for it: open the credit period with the gate's --model",
+                 "which is no checkpoint role credit pins: open the credit period with the gate's --model",
+                 "window weights: credit period ",
+                 "window weights: the execution phase is in no credit period of the auditor's ledger",
+                 "window weights: the execution phase's round# request table's root is not",
+                 "window weights: the execution phase's registered weights are not the ones its open root binds",
+                 "window weights: registered weights ", "period weights: credit period ",
+                 "so the credit period earns nothing: weights: the execution phase's registered weights' root",
+                 "registered-file registration: call #'s statement reads ", "which the execution phase registers not: register",
+                 "which the execution phase registers twice: register",
+                 "credit commit: the execution phase's Commit record is not the bytes in lowercase hex",
+                 "window commit: the execution phase's Commit record is not the bytes in lowercase hex",
+                 "window draw: the execution phase's draw root is not over its manifest (each call's credit bit among it), its "
                  "Commit record", "window arow: round #'s A table of K = # ", "is not the Commit's row-table/#/k#",
-                 "the window's layout gives it (credit.table_rows", "(the verifier hashes its pads)",
+                 "the execution phase's layout gives it (credit.table_rows", "(the verifier hashes its pads)",
                  "window arow: round #'s input-ids table ", "is not the Commit's input-ids/#",
-                 "window arow: the window registers no round #'s input-ids table",
+                 "window arow: the execution phase registers no round #'s input-ids table",
                  "window arow: the Commit record registers row-table/#/k#",
                  "which only round # commits",
-                 "window arow: round #'s request root (requests, the one the window's open root binds) is not",
-                 "window registration: registered value ", "ids@#'s domain is not the one the window's registration",
-                 "requests@#'s domain is not the one the window's registration",
-                 "window arow: the window's request table's root is not round #'s request_table",
-                 "window arow: the window registers request table x/",
-                 "or receipt table of the window", "'s receipt table, its round #'s, which only round # commits",
-                 "a-link a-link: registered receipt table ", "registered-file registration: the window registers ",
+                 "window arow: round #'s request root (requests, the one the execution phase's open root binds) is not",
+                 "window registration: registered value ", "ids@#'s domain is not the one the execution phase's registration",
+                 "requests@#'s domain is not the one the execution phase's registration",
+                 "window arow: the execution phase's request table's root is not round #'s request_table",
+                 "window arow: the execution phase registers request table x/",
+                 "or receipt table of the execution phase", "'s receipt table, its round #'s, which only round # commits",
+                 "a-link a-link: registered receipt table ", "registered-file registration: the execution phase registers ",
                  "'s template returns no receipt of whole #-bit words", "'s seed reads the roots of ",
                  "its units' ok rows, which are the verifier's own",
-                 "registered-file layout: the window's template at K = # is not h#window's",
-                 "window live: the window registers h#/w#/slots@# not", "window live: the window registers h#/w#/requests@# not",
+                 "registered-file layout: the execution phase's template at K = # is not h#window's",
+                 "window live: the execution phase registers h#/w#/slots@# not", "window live: the execution phase registers h#/w#/requests@# not",
                  "rows of # #-bit words its live unit reads",
-                 "window live: the window's live evidence is not {descriptor, proofs}",
-                 "window live: the window's live descriptor is not a verity-ir/descriptor/v#",
-                 "window live: the window's live circuit is not a live Program",
-                 "window live: the window's live circuit's units are not its rounds",
-                 "window live: the window's live Program is at T = #", "rounds, not the window's #: every round's",
-                 "window live: the window's live Program's PREFIX is not its circuit's",
+                 "window live: the execution phase's live evidence is not {descriptor, proofs}",
+                 "window live: the execution phase's live descriptor is not a verity-ir/descriptor/v#",
+                 "window live: the execution phase's live circuit is not a live Program",
+                 "window live: the execution phase's live circuit's units are not its rounds",
+                 "window live: the execution phase's live Program is at T = #", "rounds, not the execution phase's #: every round's",
+                 "window live: the execution phase's live Program's PREFIX is not its circuit's",
                  "has no proof outcome: every round's served rows m_s is proved",
                  "has two proof outcomes: each round's is proved and verified once",
-                 "window live: live unit # has a proof outcome and the window has # rounds",
+                 "window live: live unit # has a proof outcome and the execution phase has # rounds",
                  "proof was rejected: its served rows m_s = # are not proved",
-                 "proof was verified against another circuit than the window's live Program",
+                 "proof was verified against another circuit than the execution phase's live Program",
                  "proof opened other ports, values or roots than its statement reads",
-                 "window live: the window's live proof outcomes are not a list",
-                 "so the period earns nothing: live: round #"):
+                 "window live: the execution phase's live proof outcomes are not a list",
+                 "so the credit period earns nothing: live: round #"):
         assert any(part in k for k in CREDITED), part
-    assert any(k.startswith("window a-link: ") and "the window's layout gives it" in k for k in CREDITED)
+    assert any(k.startswith("window a-link: ") and "the execution phase's layout gives it" in k for k in CREDITED)
 
 
 def test_honest_j10r_windows_are_credited(pass_server):
-    """The compiled `Credit.window` credits honest J10-R windows (`window_instance`'s ``j10r``: J10-R units, two row tiles
+    """The compiled `Credit.window` credits honest J10-R execution phases (`window_instance`'s ``j10r``: J10-R units, two row tiles
     a call), as the Python verifier does: the code fact `Proofs.Pouw.PeriodJ10R.Honest`'s `j10r_meets` takes as `hacc`.
-    `test_credit` replays these cases but holds only the two sides to each other. A window whose calls all carry credit
+    `test_credit` replays these cases but holds only the two sides to each other. An execution phase whose calls all carry credit
     bit false is credited with nothing, so the test asks only that some of them credit a call."""
     credited = []
     for seed in range(3):
@@ -576,8 +576,8 @@ ROUNDS = D.Port("pouw-check-difftest", "rounds", rounds, package=LEAN, need_reje
 
 
 def test_rounds(pass_server):
-    """Generated live windows' round coins, then each mutation over a few seeds (`replay`): a coin opened twice, one opened
-    before its round's root was recorded, a foreign epoch's, and every other refusal of `core_check.rounds`."""
+    """Generated live execution phases' round coins, then each mutation over a few seeds (`replay`): a coin opened twice, one opened
+    before its round's root was recorded, a foreign execution phase's, and every other refusal of `core_check.rounds`."""
     ROUNDED.clear()
     stats = D.run(ROUNDS, examples=600, server=pass_server)
     swept = Counter(D.replay(ROUNDS, rounds_cases.rounds_instance(random.Random(f"{name}/{seed}"), name), pass_server)[0]
@@ -616,9 +616,9 @@ SALT = D.Port("pouw-check-difftest", "salt", salt, package=LEAN, need_rejects=Fa
 
 
 def test_salt(pass_server):
-    """Generated live windows' salt coins, read through the challenger's signed session the auditor's signed ledger
-    reserves, opens and ends for the window, then each mutation over a few seeds (`replay`): a session opened without a
-    reserve, the open root under another session's id or of another window's weights or requests, H1's salt opened
+    """Generated live execution phases' salt coins, read through the challenger's signed session the auditor's signed ledger
+    reserves, opens and ends for the execution phase, then each mutation over a few seeds (`replay`): a session opened without a
+    reserve, the open root under another session's id or of another execution phase's weights or requests, H1's salt opened
     after the weights' root, a log showing another root, and every other refusal of `core_check.salt`."""
     SALTED.clear()
     stats = D.run(SALT, examples=400, server=pass_server)
@@ -654,9 +654,9 @@ LIVE_SALT = D.Port("pouw-check-difftest", "live-salt", live_salt, package=LEAN, 
 
 def test_live_salt(pass_server):
     """Generated live Pearl-C passes, salted by a salt-only session the auditor's signed ledger reserves, opens on the
-    pass's salt epoch's root and ends complete, read through the session's own files, then each mutation over a few
+    pass's salt execution phase's root and ends complete, read through the session's own files, then each mutation over a few
     seeds (`replay`): a `pass_index` that isn't an integer in [0, 2^64), a call index of 2^32 or more, a session opened
-    on another root (W itself, another epoch's, or one the manifest doesn't name), H1's layout, a session reserved for another layout or ended
+    on another root (W itself, another execution phase's, or one the manifest doesn't name), H1's layout, a session reserved for another layout or ended
     incomplete, a log showing another root, coins other than the session's, a session the manifest misnames, and every
     other refusal of `core_check.live_salt`."""
     LIVE_SALTED.clear()

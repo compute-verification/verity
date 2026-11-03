@@ -1,4 +1,4 @@
-"""The Lean verifier of record of a served window's statements (`PouwCheck.Verified`, `pouw-check-difftest`'s
+"""The Lean verifier of record of a served execution phase's statements (`PouwCheck.Verified`, `pouw-check-difftest`'s
 ``credit-verified``) held to its Python reference, `credit._asks` and `credit._verified`, on `pouw_verified_cases`:
 with `runs` null, the verifier runs the Lean names (or the verdict, when it names none); with the answers, the verdict,
 each sampled proof block's outcome or the refusal, string for string, the lanes form's (`PouwCheck.Lanes`) among them.
@@ -58,7 +58,7 @@ server = D.server_fixture(VERIFIED_PORT)
 
 
 def test_verified(server):
-    """Generated windows' statements, null and answered, then each mutation over a few seeds (`replay`; ten for a
+    """Generated execution phases' statements, null and answered, then each mutation over a few seeds (`replay`; ten for a
     lanes mutation, which picks among more variants), so every refusal before the verifier runs and of its answers is
     reached whatever the sample."""
     VERIFIED.clear()
@@ -68,23 +68,23 @@ def test_verified(server):
     print(f"pouw-check-difftest credit-verified: {stats}; and {sum(swept.values())} swept ({dict(swept)}); by outcome: "
           f"{dict(sorted(VERIFIED.items()))}")
     assert {"run", "accept", "lanes: accept"} <= set(VERIFIED)
-    for part in ("circuit: the committed circuit files are not", "proof: the window's statements are not a list",
+    for part in ("circuit: the committed circuit files are not", "proof: the execution phase's statements are not a list",
                  "outcome: call # has two statements", "outcome: call # has a statement and no drawn unit",
-                 "circuit: the period's open commits no circuit file for K = #",
-                 "registration: the window registers ", "which the window registers not", "layout: ",
+                 "circuit: the credit period's open commits no circuit file for K = #",
+                 "registration: the execution phase registers ", "which the execution phase registers not", "layout: ",
                  "proof: call #'s statement could not be verified", "'s statement: the statement's public file",
                  "failed: call #'s session ", "opened a public table at another port",
                  "opened the ok rows at another port", "which is no unit of call #",
-                 "lanes-shape: drawn leaf #: the window's # × # tile", "lanes-shape: drawn leaf #: K = # is below LEAST_K",
+                 "lanes-shape: drawn leaf #: the execution phase's # × # tile", "lanes-shape: drawn leaf #: K = # is below LEAST_K",
                  "lanes-shape: drawn leaf #: K = # fails PouwWindow.Lanes.Tile.check",
                  "lanes-shape: drawn leaf #: K = #'s lanes are # chunk lanes",
-                 "is at a lanes-form K and the window carries no lanes evidence", "missing: drawn leaf # has no statement",
+                 "is at a lanes-form K and the execution phase carries no lanes evidence", "missing: drawn leaf # has no statement",
                  "leaf Program is not the one the period-open committed", "leaf Program is not h#window.leaf_program's",
                  "is proved twice", "has a leaf statement and is no drawn lanes-form leaf",
-                 "is none of leaf_lanes.statements", "the window's produced record (verity/registration/produced/v#) "
-                 "fails P-", "combine reads its call's receipts", "the window's draw root, the produced record's",
-                 "the window's draw coin, the produced record's draw, is not a live opening",
-                 "proof: the window's lanes evidence is not", "of its lanes form's two files", "commits both k#",
+                 "is none of leaf_lanes.statements", "the execution phase's produced record (verity/registration/produced/v#) "
+                 "fails P-", "combine reads its call's receipts", "the execution phase's draw root, the produced record's",
+                 "the execution phase's draw coin, the produced record's draw, is not a live opening",
+                 "proof: the execution phase's lanes evidence is not", "of its lanes form's two files", "commits both k#",
                  "leaf_programs is not", "(P-shared)", "(P-opened)", "opened its ports at other values or roots",
                  "failed: drawn leaf #'s ", "(checkFull)", "# statement could not be verified",
                  "# statement: the statement's public file"):

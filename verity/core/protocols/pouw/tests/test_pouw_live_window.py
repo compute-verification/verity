@@ -85,7 +85,7 @@ def test_only_a_live_epochs_coins_carry_a_window():
 
 def test_a_windows_draw_session_is_its_draw_coin_alone():
     """`draw_epoch_reason`: `LIVE_SCHEME` over `DRAW_FAMILIES` alone, the session the gate opens withheld on the
-    window's draw root. The window's own layout, a draw beside the rounds, and another scheme are refused."""
+    execution phase's draw root. The execution phase's own layout, a draw beside the rounds, and another scheme are refused."""
     draw = Wd.draw_challenger(7, entropy("d")).commitment
     assert draw.families == ((Wd.DRAW, 1),) and Wd.draw_epoch_reason(draw) is None
     assert Wd.live_epoch_reason(draw) is not None

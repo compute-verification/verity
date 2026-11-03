@@ -95,7 +95,7 @@ class Session:
                  sid: str = "s-1", draw: Callable[[Ch.LiveRecord | None], bytes] | None = None,
                  leaf: int = RECORD_LEAF) -> None:
         self.ch, self.k, self.sid, self.leaf = ch, _key(seed), sid, leaf
-        #: a credit case's window session's draw session (`ledger_events` opens it after this one's end), and as a draw
+        #: a credit case's execution phase session's draw session (`ledger_events` opens it after this one's end), and as a draw
         #: session, the root its ledger open names (``on``) and whether that open marks it withheld (``withheld``)
         self.drawn: Session | None = None
         self.on, self.withheld = "", True

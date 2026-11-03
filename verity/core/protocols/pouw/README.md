@@ -139,5 +139,5 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
 - `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest; `lean/check/README.md` and
   `lean/window/README.md` map each Lean module to its Python.
 - `dither/`: Dither, experimental, with its `PROTOCOL.md`.
-- `tests/`: the package's suite, with the schemes' and the window's pinned vectors under `tests/vectors`.
+- `tests/`: the package's suite, with the schemes' and the execution phase's pinned vectors under `tests/vectors`.
   `benchmarks/pouw/` is the measuring side; nothing here imports it.

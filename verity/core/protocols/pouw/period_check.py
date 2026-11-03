@@ -1,13 +1,13 @@
-"""A PoUW period as a core protocol, ``verity/pouw/period/v1``: the Python the Lean `PouwCheck.Period` (``pouw-period``,
-PoUW's verifier of record for a period and onsite's work component) is held to by ``lean/check/tests/test_period_difftest.py``.
+"""A PoUW credit period as a core protocol, ``verity/pouw/period/v1``: the Python the Lean `PouwCheck.Period` (``pouw-period``,
+PoUW's verifier of record for a credit period and onsite's work component) is held to by ``lean/check/tests/test_period_difftest.py``.
 
 Its parameters are the verifier's own, ``{key, main, name}``: the challenger key it pins, its copy of main's
-first-parent history and the period it credits. Its commitment is the auditor's ledger (the lines the challenger signed),
+first-parent history and the credit period it credits. Its commitment is the auditor's ledger (the lines the challenger signed),
 its digest SHA-512(`COMMITMENT_TAG` ‖ 0 ‖ its bytes). Its evidence is ``{pins, windows}``: the challenger host's pins log
-and each window's evidence in the close's order (`credit.PROVED_KEYS`). The check first refuses, by name (``form``),
-every window in a form the period's proved guarantee (`GUARANTEE`) doesn't cover: a Pearl-C pass, a circuit that is not
+and each execution phase's evidence in the close's order (`credit.PROVED_KEYS`). The check first refuses, by name (``form``),
+every execution phase in a form the credit period's proved guarantee (`GUARANTEE`) doesn't cover: a Pearl-C pass, a circuit that is not
 an H1 window, a template over per-unit noise (``PouwH1Tile`` v1, v3 or v4), a J10-R unit over a tile other than
-``PouwH1Tile_v5`` (v6), or units at more than one K. Then it is `credit._period_outcomes`, all or nothing: it accepts with the period's credit (``{windows, work, k, delta, eps}``) and the profile ``{period, windows}``,
+``PouwH1Tile_v5`` (v6), or units at more than one K. Then it is `credit._period_outcomes`, all or nothing: it accepts with the credit period's credit (``{windows, work, k, delta, eps}``) and the profile ``{period, windows}``,
 or rejects with the first refusal, ``code: why``. Each drawn unit's and each round's proof outcome is the verifier of
 record's verdict, which the evidence carries."""
 from __future__ import annotations
@@ -58,13 +58,13 @@ COVERED_TILE = "PouwH1Tile_v5{"
 
 
 def _window_form(nm: str, i: int, w: Any) -> str | None:
-    """`PouwCheck.Period.windowForm`: why window `i` of period `nm` is a form `GUARANTEE` doesn't cover, read from its
-    evidence alone, or None for a covered window and for evidence too malformed to read (`credit.period_credit`
+    """`PouwCheck.Period.windowForm`: why execution phase `i` of credit period `nm` is a form `GUARANTEE` doesn't cover, read from its
+    evidence alone, or None for a covered execution phase and for evidence too malformed to read (`credit.period_credit`
     refuses it)."""
     if isinstance(w, dict) and sorted(w) == list(Cr.PEARL_C_KEYS):
-        return (f"window {i} of period {nm} is a Pearl-C pass ({{context, descriptor, manifest, session}}), which this "
-                f"protocol never credits: a Pearl-C pass earns only in a Pearl-C period, and {GUARANTEE} covers H1 "
-                "windows at J10-R alone")
+        return (f"execution phase {i} of credit period {nm} is a Pearl-C pass ({{context, descriptor, manifest, session}}), which this "
+                f"protocol never credits: a Pearl-C pass earns only in a Pearl-C credit period, and {GUARANTEE} covers H1 "
+                "execution phases at J10-R alone")
     h = w.get("descriptor") if isinstance(w, dict) else None
     if not (type(h) is str and Cr._HEX.fullmatch(h)):
         return None
@@ -78,9 +78,9 @@ def _window_form(nm: str, i: int, w: Any) -> str | None:
         return None
     defs = j.get("definitions")
     if not fn.startswith(Cr.WINDOW_FN + "{"):
-        return (f"window {i} of period {nm} proves {fn.split('{')[0]}, not an H1 window ({Cr.WINDOW_FN}): a "
+        return (f"execution phase {i} of credit period {nm} proves {fn.split('{')[0]}, not an H1 window ({Cr.WINDOW_FN}): a "
                 "per-tile protocol's tile (PouwH1Tile_v1 at K = 64, 4 × 8, or a Pearl-C leaf) or any other circuit is "
-                f"outside {GUARANTEE}, which covers H1 windows at J10-R alone")
+                f"outside {GUARANTEE}, which covers H1 execution phases at J10-R alone")
     s = next((v for k, v in Cr._record(fn) if k == "TILES"), None)
     ok, ts = Cr._loads(s) if s is not None else (False, None)
     if not ok or type(ts) is not list:
@@ -98,24 +98,24 @@ def _window_form(nm: str, i: int, w: Any) -> str | None:
         if got is None:
             return None
         if not got[2]:
-            return (f"window {i} of period {nm} is an H1 window whose template at K = {k} takes per-unit noise (its "
+            return (f"execution phase {i} of credit period {nm} is an H1 execution phase whose template at K = {k} takes per-unit noise (its "
                     "parameters end in roots, not J10-R's call and blocks: PouwH1Tile_v1, v3 or v4), which "
                     f"{GUARANTEE} doesn't cover: serve it over J10-R's PouwH1Tile_v5")
         u = Cr._canonical(dj["bindings"]["UNIT"])
         if not (0 < u.count(TILE_ID) == u.count(COVERED_TILE)):
-            return (f"window {i} of period {nm} is a J10-R window whose unit at K = {k} is not over PouwH1Tile_v5 "
+            return (f"execution phase {i} of credit period {nm} is a J10-R execution phase whose unit at K = {k} is not over PouwH1Tile_v5 "
                     f"alone (v6's one-stream z, or no named tile): {GUARANTEE} covers the per-call unit over "
                     "PouwH1Tile_v5, proved as its 32 lanes and their combine")
         ks.append(k)
     if len(ks) > 1:
-        return (f"window {i} of period {nm} has units at {len(ks)} K's ({ks}), so its draw is over that "
-                f"many strata, and {GUARANTEE} draws from one tile stratum (TileDrawIsCoin): serve a window's linears "
+        return (f"execution phase {i} of credit period {nm} has units at {len(ks)} K's ({ks}), so its draw is over that "
+                f"many strata, and {GUARANTEE} draws from one tile stratum (TileDrawIsCoin): serve an execution phase's linears "
                 "at one K")
     return None
 
 
 def form(nm: str, windows: Any) -> str | None:
-    """`PouwCheck.Period.form`: the first window of `windows` in a form `GUARANTEE` doesn't cover, else None."""
+    """`PouwCheck.Period.form`: the first execution phase of `windows` in a form `GUARANTEE` doesn't cover, else None."""
     for i, w in enumerate(windows if type(windows) is list else []):
         if (why := _window_form(nm, i, w)) is not None:
             return why
@@ -123,8 +123,8 @@ def form(nm: str, windows: Any) -> str | None:
 
 
 def check(p: dict, c: dict, e: dict) -> tuple[str, str | None, tuple[Any, Any] | None]:
-    """`PouwCheck.Period.check`: the first window in a form the period's guarantee doesn't cover (``form``), else the
-    period's credit and profile, or the first refusal."""
+    """`PouwCheck.Period.check`: the first execution phase in a form the credit period's guarantee doesn't cover (``form``), else the
+    credit period's credit and profile, or the first refusal."""
     if (why := form(p["name"], e["windows"])) is not None:
         return "reject", f"form: {why}", None
     got, refused = Cr._period_outcomes(p["key"], c["ledger"], e["pins"], p["main"], p["name"], e["windows"],
