@@ -518,6 +518,8 @@ def rehearse(port: int, serve_dir: Path, out: Path, names: list[str], flags: lis
         print(f"ATTACK {json.dumps(public(v), sort_keys=True)}", flush=True)
     (out / "attacks.json").write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
     (out / "attacks.public.json").write_text(json.dumps([public(v) for v in got], indent=1, sort_keys=True) + "\n")
+    (out / "session.json").write_text(json.dumps({"rc": 0 if got and all(v["ok"] for v in got) else 1,
+                                                  "ended": f"the rehearsal of {len(got)} attacks ended"}) + "\n")
     return got
 
 

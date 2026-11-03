@@ -303,7 +303,7 @@ def test_a_response_held_past_its_first_cells_deadline_fails_closed_late_and_cer
     assert sorted(map(str, (c["failed"] for c in run.warden.log))) == ["None"] * 3 + ["late"]
     assert {why for _, why in run.io["violations"]} == {WC.FAILED_CELL}
     got = _judged("late", run)
-    assert got["piece"] == "missing" and "the warden's own check" in got["why"]
+    assert got["piece"] == "missing" and "the network certifier's own check" in got["why"]
 
 
 def test_a_padding_cell_is_no_outputs_and_at_the_cap_fails_closed_limit(tmp_path):
@@ -366,7 +366,7 @@ def test_bind_refuses_a_certified_request_served_twice_or_never(honest):
         CP.bind(honest.served, honest.io, run_id, twice)
     with pytest.raises(CP.Rejected, match=f"'user-3' is no served request: {CP.UNSERVED}"):
         CP.bind(honest.served[:3], honest.io, run_id, honest.served[:3])
-    with pytest.raises(CP.Rejected, match=f"carries no release of the warden's run .*{CP.NOT_SEEN}"):
+    with pytest.raises(CP.Rejected, match=f"carries no release of the network certifier's run .*{CP.NOT_SEEN}"):
         CP.bind(honest.served, honest.io, "ab" * 16, honest.served)
     assert CP.bind(honest.served, honest.io, run_id, honest.served).keys() == {f"user-{j}" for j in range(4)}
 
@@ -502,6 +502,7 @@ def test_a_rehearsal_plays_each_attack_in_a_front_of_its_own_and_publishes_its_v
     assert pub == [AT.public(v) for v in got] and all("why" not in v for v in pub)
     assert json.loads((out / "attacks.json").read_text()) == got
     assert json.loads((out / "pad" / "verdict.json").read_text()) == got[1]
+    assert json.loads((out / "session.json").read_text()) == {"rc": 1, "ended": "the rehearsal of 3 attacks ended"}
     lines = [x for x in capsys.readouterr().out.splitlines() if x.startswith("ATTACK ")]
     assert [json.loads(x.removeprefix("ATTACK ")) for x in lines] == pub
     called = []

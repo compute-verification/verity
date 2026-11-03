@@ -157,8 +157,8 @@ CASE = "case.json"
 V3C_SCAN_CLASS = "w63k4"
 #: what `bind`'s rejects say: a served request the network certifier didn't carry, a certified one the endpoint didn't
 #: serve, and one certified request served twice
-NOT_SEEN = "the window served traffic the warden didn't see"
-UNSERVED = "the warden carried traffic the endpoint didn't serve"
+NOT_SEEN = "the window served traffic the network certifier didn't see"
+UNSERVED = "the network certifier carried traffic the endpoint didn't serve"
 SHARED = "one certified request served twice"
 #: the split piece's chain step's accept, which its period step reads
 CHAINED = "chain.json"
@@ -416,11 +416,12 @@ def rehearsed(run: Path) -> None:
         except (OSError, ValueError, KeyError, SystemExit):
             violations = []
         if any(why == WC.NOT_ID_CELL for _, why in violations):
-            raise Rejected(f"the warden's certified egress holds {WC.NOT_ID_CELL.removeprefix('an ')}: bytes the server "
-                           f"sent that are no output's; the warden's own check: {problems[:4]}")
+            raise Rejected(f"the network certifier's certified egress holds {WC.NOT_ID_CELL.removeprefix('an ')}: "
+                           f"bytes the server sent that are no output's; the network certifier's own check: "
+                           f"{problems[:4]}")
         raise NotRun(f"the gate's rehearsal didn't pass, so it certified no served answer: exit {end.get('rc')}, "
                      f"{end.get('ended')}; its check accepted {v.get('accepted')} with {v.get('problems')} problems, "
-                     f"failed {v.get('failed')}; the warden's own check: {problems[:4]}")
+                     f"failed {v.get('failed')}; the network certifier's own check: {problems[:4]}")
 
 
 def release_run(r: dict) -> str | None:
@@ -445,7 +446,7 @@ def bind(reqs: list[dict], io: dict, run_id: str | None = None, served: list[dic
         if c is None:
             raise Rejected(f"window request {eid}'s user {user!r} is no certified request: {NOT_SEEN}")
         if run_id is not None and release_run(r) != run_id:
-            raise Rejected(f"window request {eid} (user {user!r}) carries no release of the warden's run "
+            raise Rejected(f"window request {eid} (user {user!r}) carries no release of the network certifier's run "
                            f"({r.get('release')!r}): {NOT_SEEN}")
         for key, theirs in (("prompt_ids", "prompt"), ("streamed_ids", "output")):
             if key in r and r[key] != c[theirs]:
