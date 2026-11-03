@@ -2778,7 +2778,7 @@ def touched_by(repo: Path, members: list[Member], files: list[str], cache: dict[
 
 def _lock(workdir: Path):
     workdir.parent.mkdir(parents=True, exist_ok=True)
-    f = open(workdir.parent / f"{workdir.name}.lock", "w")  # noqa: SIM115  (held until the process exits)
+    f = open(workdir.parent / f"{workdir.name}.lock", "w")  # held until the process exits
     try:
         fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:

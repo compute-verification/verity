@@ -564,8 +564,10 @@ def test_prs_whose_only_conflicts_are_in_pins_merge_with_each_pin_rebuilt_from_t
     merged = {k: v for k, v in {**one, **two, f"{POUS}/lakefile.toml": "l1\n", "Security/Proofs/lakefile.toml": "s1\n"}.items()
               if v is not None}
     assert all(_git(world.origin, "show", f"refs/heads/next:{p}") + "\n" == t for p, t in merged.items())
-    show = lambda p: subprocess.run(["git", "show", f"refs/heads/next:{p}"], cwd=world.origin, check=True, capture_output=True,
-                                    text=True).stdout
+    def show(p: str) -> str:
+        return subprocess.run(["git", "show", f"refs/heads/next:{p}"], cwd=world.origin, check=True, capture_output=True,
+                              text=True).stdout
+
     assert show(TRUSTED) == _trusted(["lean-toolchain", "lakefile.toml", UP, "New1.lean", "New2.lean"], merged)
     assert show(EXFIL) == _exfil(["Security/Proofs/lakefile.toml", "x.lean", "y.lean", "z.lean"], merged)
     tip = _git(world.origin, "rev-parse", "refs/heads/next")
@@ -1983,7 +1985,9 @@ def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, c
     for verb in ("sync",):
         assert research_main(["queue", verb, *base]) == 1
         assert f"/data/infra/drive.sh queue {verb}" in capsys.readouterr().err
-    refs = lambda: _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
+    def refs() -> str:
+        return _git(world.origin, "for-each-ref", "--format=%(refname) %(objectname)", "refs/heads/")
+
     before = refs()
     research_main(["queue", "eject", "1", "--reason", "x", "--by", "ci", *base])
     assert refs() == before and "drive's next tick rebuilds `next` without it" in capsys.readouterr().out
@@ -3888,7 +3892,9 @@ def test_a_remote_quick_tier_that_cannot_launch_or_is_never_seen_to_end_fails_af
     monkeypatch.setattr(Q, "REMOTE_GRACE_S", 30)
     world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
     pr = world.gh.prs[1]
-    refused = lambda argv, cwd: subprocess.CompletedProcess(argv, 3, "", "research run: refused: vy-test isn't in machines.toml\n")
+    def refused(argv, cwd):
+        return subprocess.CompletedProcess(argv, 3, "", "research run: refused: vy-test isn't in machines.toml\n")
+
     tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp), launch=refused)
     assert tier(pr) == "`research run --on vy-test` failed (exit 3): research run: refused: vy-test isn't in machines.toml" and sleeps == []
     tier, sleeps = _remote_tier(world, monkeypatch, Machine(world.tmp, outcome=_reports({"state": "running"})), timeout_s=60, wait_s=30)
@@ -3925,10 +3931,13 @@ def test_a_remote_quick_tier_on_auto_runs_on_the_machine_placed_and_without_one_
 
     machine = Machine(world.tmp, outcome=_reports())
     asked = []
-    placed = lambda spec, repo: asked.append(spec) or ("vy-test", "a check slot and a Lean check slot are free (check slots: d free)")
+    def placed(spec, repo):
+        asked.append(spec)
+        return "vy-test", "a check slot and a Lean check slot are free (check slots: d free)"
+
     tier, _ = _remote_tier(world, monkeypatch, machine, place=placed)
     tier.on = "auto"
-    world.gh.put(1, h1 := world.change({"a.txt": "a1\n"}), ready=False)
+    world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
     assert Q.ready(world.gh, world.store, 1, "lane-1", tier) == 0 and asked == ["auto"]
     flags = machine.launched[-1][:machine.launched[-1].index("--")]
     assert flags[flags.index("--on") + 1] == "vy-test"
