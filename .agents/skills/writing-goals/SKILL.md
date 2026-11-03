@@ -82,6 +82,17 @@ within two days."
 
 Rules:
 
+- Write what Daniel needs to judge the forecast: what will be true, where it stands, the plan. A derivation, a proof
+  sketch or a list of runs goes in the linked issue or note; the goal links it.
+- Current truth only: no corrections, no "moved to", no history of the goal. The page shows when it was last written.
+- Say where work stands in outcome words: running, in review, waiting to merge, on main. Not the pipeline's words:
+  "approved for landing", "marked", "the landing loop", "drive", "a train".
+- Name who does a step as @handle in its sentence ("@ci moves main on it"), never as a tag in parentheses.
+- A step's day is usually enough ("Tue", "by Wed noon"). Give the hour only when another goal waits on it.
+- Leave out what Daniel doesn't act on: run counts, restarts, idle machines, GPU counts.
+- Plain words over coined ones. "Fresh products", "whole-making", "the sealed shard" and "a live coin" are terms you
+  made; say what they mean ("matrix products whose two inputs were both just computed"), or define the term once.
+
 - Measured numbers are LaTeX: $9.5$ ms, $98.75\%$, $0$ of $6{,}256$ tiles. Bold only dates and decisions waiting on
   Daniel, never a sentence or a clause.
 - Code (backticks) is for a literal someone would type, flip or match: a GPU target (`sm_90a`), a number format
@@ -90,7 +101,8 @@ Rules:
   Llama 3.2 1B, the H200. The site refuses a word with an underscore outside code.
 - No fixed labels, but every list has a lead-in line ending in a colon that says what it is, in the goal's own words:
   "So far, on the pilot:", "Plan:", "Proved:", "Left:", "By Tue 6 AM:". The site refuses a list without one.
-- Math is LaTeX between dollar signs: $\rho$, $p = C/H$. The site refuses a Greek character (ρ, ε) outside math or code.
+- Math is LaTeX between dollar signs: $\rho$, $p = C/H$, $2^{-256}$. The site refuses a Greek character (ρ, ε) or a
+  superscript (2⁻²⁵⁶) outside math or code.
 - No "why it matters" when the title already says it. No "to check it" unless the evidence isn't obvious, and then one
   line naming it.
 - Sub-bullets are welcome: indent them three spaces under their item.
@@ -102,7 +114,7 @@ Rules:
 - The site refuses a word Daniel has said he doesn't know, and its refusal says what to write instead. The list is
   `UNKNOWN` in the website repository's goals check (`plain.ts`); when he says he doesn't know a word, tell dashboard,
   who adds it with his words.
-- Define a term the first time you use it. Give numbers with units and what they compare to.
+- Give numbers with units and what they compare to.
 - Link another goal with `[text](#goal-id)` and an ask with `[text](ask:<card id>)`; both render as chips. Never a
   bare id.
 
