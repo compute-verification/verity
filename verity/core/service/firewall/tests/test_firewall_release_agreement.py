@@ -182,17 +182,23 @@ def _tallied(reference, tally: Counter, key):
     return ref
 
 
+def _op_key(value: dict, out: dict) -> str:
+    """The op and its result's kind, an open refused under the unended rule (`_unended`) apart from the other refusals."""
+    return f"{value['op'][0]}:{'unended' if _unended(out['result']) else _result(out)}"
+
+
 def _assert_ops_seen(tally: Counter) -> None:
     ops = {k.split(":")[0] for k in tally}
     assert ops == {"open", "finish", "stop", "release", "admit", "failures", "slot"}, tally
     for k in ("open:ok", "open:refused", "open:error", "admit:ok", "admit:refused"):
         assert tally[k] >= 10, (k, tally)
+    assert tally["open:unended"] >= 5, tally
 
 
 @pytest.mark.slow
 def test_every_op_agrees_with_python(lean):
     tally: Counter = Counter()
-    ref = _tallied(R.python_op, tally, lambda v, out: f"{v['op'][0]}:{_result(out)}")
+    ref = _tallied(R.python_op, tally, _op_key)
     stats = D.run(port("op", ref, R.op_input()), examples=1500, seed=SEED, server=lean)
     print(f"op vs Python, seed {SEED}: {stats}, {dict(sorted(tally.items()))}")
     assert stats.rejects >= 50, stats
