@@ -622,6 +622,9 @@ class DriveFlags:
     #: the task executor after landing (`research.executor`, `drive.Driver`): "off"; "shadow", each tip's task graph enqueued beside
     #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts alone decide
     executor: str = "off"
+    #: infra's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it puts
+    #: `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
+    executor_enqueue: tuple[str, ...] = ()
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
@@ -671,6 +674,11 @@ class DriveFlags:
             if doc["executor"] not in EXECUTOR_MODES:
                 raise bad("executor", f"one of {', '.join(EXECUTOR_MODES)}")
             got["executor"] = doc["executor"]
+        if "executor_enqueue" in doc:
+            v = doc["executor_enqueue"]
+            if not (isinstance(v, list) and v and all(isinstance(x, str) and x for x in v)):
+                raise bad("executor_enqueue", "a command as a non-empty list of its words, as [\"python3\", \"enqueue.py\"]")
+            got["executor_enqueue"] = tuple(v)
         if "marked_after" in doc:
             if not (isinstance(doc["marked_after"], str) and MARK_TIME_RE.fullmatch(doc["marked_after"])):
                 raise bad("marked_after", "a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
@@ -5833,7 +5841,8 @@ def main(argv: list[str]) -> int:
                    stale_days=flags.stale_days, stale_close_days=flags.stale_close_days,
                    stale_keep=flags.stale_keep, after_landing_shards=flags.after_landing_shards,
                    lowrisk_lane=flags.lowrisk_lane, lowrisk_per_tick=flags.lowrisk_per_tick,
-                   lowrisk_excludes=flags.lowrisk_excludes, executor=flags.executor).tick(dry_run=a.dry_run)
+                   lowrisk_excludes=flags.lowrisk_excludes, executor=flags.executor,
+                   executor_enqueue=flags.executor_enqueue).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
