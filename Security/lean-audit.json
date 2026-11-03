@@ -6803,60 +6803,6 @@
    "assumptions": [],
    "type_hash": "0e7c61e7cf8c6b4569aa536ba814bf87f8d5ab897f2fa13b12e49372fa921f46"
   },
-  "Flock.SecurityProofs.UnrelLeBudget": {
-   "owner": "@network-accounting",
-   "signature": ["Flock.SecurityProofs.UnrelLeBudget : Flock.Guarantees.UnrelLeBudget"],
-   "assumptions": [],
-   "type_hash": ""
-  },
-  "Flock.SecurityProofs.UnrelLeBudget_honest": {
-   "owner": "@network-accounting",
-   "signature": [],
-   "assumptions": [],
-   "type_hash": ""
-  },
-  "Flock.SecurityProofs.UnrelLeBudget_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [],
-   "assumptions": [],
-   "type_hash": ""
-  },
-  "Flock.SecurityProofs.UnreleasedLeBudget": {
-   "owner": "@network-accounting",
-   "signature": ["Flock.SecurityProofs.UnreleasedLeBudget : Flock.Guarantees.UnreleasedLeBudget"],
-   "assumptions": [],
-   "type_hash": ""
-  },
-  "Flock.SecurityProofs.UnreleasedLeBudget_honest": {
-   "owner": "@network-accounting",
-   "signature": [],
-   "assumptions": [],
-   "type_hash": ""
-  },
-  "Flock.SecurityProofs.UnreleasedLeBudget_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [],
-   "assumptions": [],
-   "type_hash": ""
-  },
-  "Flock.SecurityProofs.StreamStopBudget": {
-   "owner": "@network-accounting",
-   "signature": ["Flock.SecurityProofs.StreamStopBudget : Flock.Guarantees.StreamStopBudget"],
-   "assumptions": [],
-   "type_hash": ""
-  },
-  "Flock.SecurityProofs.StreamStopBudget_honest": {
-   "owner": "@network-accounting",
-   "signature": [],
-   "assumptions": [],
-   "type_hash": ""
-  },
-  "Flock.SecurityProofs.StreamStopBudget_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [],
-   "assumptions": [],
-   "type_hash": ""
-  },
   "Flock.SecurityProofs.RecursionClaimsStated": {
    "owner": "@proofs",
    "signature": ["Flock.SecurityProofs.RecursionClaimsStated : Flock.Guarantees.RecursionClaimsStated"],
@@ -6982,6 +6928,128 @@
    "signature": ["Flock.SecurityProofs.SoundAtBridge : Flock.Guarantees.SoundAtBridge"],
    "assumptions": [],
    "type_hash": "a65a67acd33540e7e76f251161afecd4384bc96480823282207852754b72e8fc"
+  },
+  "Flock.SecurityProofs.StreamStopBudget": {
+   "owner": "@network-accounting",
+   "signature": ["Flock.SecurityProofs.StreamStopBudget : Flock.Guarantees.StreamStopBudget"],
+   "assumptions": [],
+   "type_hash": "eed943b15a44485a2eb04e006494ca136fa993bba5f07fde0320d69b6fac8999"
+  },
+  "Flock.SecurityProofs.StreamStopBudget_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Flock.SecurityProofs.StreamStopBudget_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Firewall.budgetOf (Flock.StopCount.run Flock.StopCount.Witness.one Flock.StopCount.Witness.honestStream).evs",
+    "        \"st\")",
+    "      (Option.some 1))",
+    "    (And",
+    "      (Eq",
+    "        (Option.isNone",
+    "          (Flock.StopCount.streamStop (Matrix.vecCons 2 (Matrix.vecCons 2 Matrix.vecEmpty)) Flock.StopCount.Witness.one",
+    "            (Flock.StopCount.run Flock.StopCount.Witness.one Flock.StopCount.Witness.honestStream)",
+    "            Flock.StopCount.Witness.two 0))",
+    "        Bool.true)",
+    "      (Eq",
+    "        (Option.isSome",
+    "          (Flock.StopCount.streamStop (Matrix.vecCons 2 (Matrix.vecCons 2 Matrix.vecEmpty)) Flock.StopCount.Witness.one",
+    "            (Flock.StopCount.run Flock.StopCount.Witness.one Flock.StopCount.Witness.honestStream)",
+    "            Flock.StopCount.Witness.two 1))",
+    "        Bool.true))"
+   ],
+   "assumptions": [],
+   "type_hash": "8ad4e224a8a1d9006015f53f24d7d25bdcf26654baf8a2aa38e2c7f2fa484682"
+  },
+  "Flock.SecurityProofs.StreamStopBudget_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Flock.SecurityProofs.StreamStopBudget_nontrivial :",
+    "  Not",
+    "    (Flock.StopCount.StreamStopWithin Flock.StopCount.Witness.one",
+    "      (Flock.StopCount.Witness.runMade Flock.StopCount.Witness.one Flock.StopCount.Witness.twoSteps) \"st\")"
+   ],
+   "assumptions": [],
+   "type_hash": "2a2ab42ca0938b0e1e0e32692d9aae4adec53651b3cdcb9d1859dfe9ec13372d"
+  },
+  "Flock.SecurityProofs.UnrelLeBudget": {
+   "owner": "@network-accounting",
+   "signature": ["Flock.SecurityProofs.UnrelLeBudget : Flock.Guarantees.UnrelLeBudget"],
+   "assumptions": [],
+   "type_hash": "e6f8096846164b8416fe68ab456641e1b8ab43c5c65dfcfbfdaf4fe3660e179a"
+  },
+  "Flock.SecurityProofs.UnrelLeBudget_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Flock.SecurityProofs.UnrelLeBudget_honest :",
+    "  And (Eq (Core.Firewall.budgetOf (Flock.StopCount.opsRun Flock.StopCount.Witness.honestOps) \"st\") (Option.some 1))",
+    "    (And",
+    "      (Eq (Flock.StopCount.unrelOn (Flock.StopCount.opsRun Flock.StopCount.Witness.honestOps) \"st\" \"r0000\") Bool.false)",
+    "      (And",
+    "        (Eq (Core.Firewall.openOf (Flock.StopCount.opsRun Flock.StopCount.Witness.honestOps) \"r0001\").isSome Bool.true)",
+    "        (Eq (Flock.StopCount.unrel (Flock.StopCount.opsRun Flock.StopCount.Witness.honestOps) \"st\").card 1)))"
+   ],
+   "assumptions": [],
+   "type_hash": "6d3cd6b60795d7e92324f57e33edfb4812aa03669c0e254167c55014f5aff59f"
+  },
+  "Flock.SecurityProofs.UnrelLeBudget_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Flock.SecurityProofs.UnrelLeBudget_nontrivial :",
+    "  Not (Flock.StopCount.UnrelWithin (Flock.StopCount.Witness.opsMade Flock.StopCount.Witness.twoOps) \"st\")"
+   ],
+   "assumptions": [],
+   "type_hash": "8e60cb62e688f13b91bb9ee0cb237d676cae866929feed2e23b433b682178822"
+  },
+  "Flock.SecurityProofs.UnreleasedLeBudget": {
+   "owner": "@network-accounting",
+   "signature": ["Flock.SecurityProofs.UnreleasedLeBudget : Flock.Guarantees.UnreleasedLeBudget"],
+   "assumptions": [],
+   "type_hash": "d592f94d7bfbafcaae027b513b1f2c56f6e37dc7c2da16429933da81371d7070"
+  },
+  "Flock.SecurityProofs.UnreleasedLeBudget_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Flock.SecurityProofs.UnreleasedLeBudget_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Firewall.budgetOf (Flock.StopCount.run Flock.StopCount.Witness.one Flock.StopCount.Witness.honestStream).evs",
+    "        \"st\")",
+    "      (Option.some 1))",
+    "    (And",
+    "      (Eq",
+    "        (Flock.StopCount.unreleasedOf",
+    "          (Flock.StopCount.run Flock.StopCount.Witness.one Flock.StopCount.Witness.honestStream) \"r0000\")",
+    "        Bool.false)",
+    "      (And",
+    "        (Eq",
+    "          (Flock.StopCount.unreleasedOf",
+    "            (Flock.StopCount.run Flock.StopCount.Witness.one Flock.StopCount.Witness.honestStream) \"r0001\")",
+    "          Bool.true)",
+    "        (Eq",
+    "          (Finset.filter",
+    "              (fun i =>",
+    "                Eq",
+    "                  (Flock.StopCount.unreleasedOf",
+    "                    (Flock.StopCount.run Flock.StopCount.Witness.one Flock.StopCount.Witness.honestStream)",
+    "                    (Flock.StopCount.Witness.two i))",
+    "                  Bool.true)",
+    "              Finset.univ).card",
+    "          1)))"
+   ],
+   "assumptions": [],
+   "type_hash": "e211c51f2f5e0e4cdcc86df860ad4e5664de8269d1c5ca7008c125e2d1547ec6"
+  },
+  "Flock.SecurityProofs.UnreleasedLeBudget_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Flock.SecurityProofs.UnreleasedLeBudget_nontrivial :",
+    "  Not",
+    "    (Flock.StopCount.UnreleasedWithin",
+    "      (Flock.StopCount.Witness.runMade Flock.StopCount.Witness.one Flock.StopCount.Witness.twoSteps) \"st\")"
+   ],
+   "assumptions": [],
+   "type_hash": "4e536d2b9bf47ef33eb5afb3162c00d85a2ab5723204ef23d00ffcf987bae676"
   },
   "Flock.SecurityProofs.ZeroKnowledgeHidden": {
    "owner": "@proofs",
@@ -35677,7 +35745,13 @@
    "guarantees": [
     "Flock.SecurityProofs.RecStopsOfRun",
     "Flock.SecurityProofs.RecStopsOfRun_honest",
-    "Flock.SecurityProofs.RecStopsOfRun_nontrivial"
+    "Flock.SecurityProofs.RecStopsOfRun_nontrivial",
+    "Flock.SecurityProofs.StreamStopBudget",
+    "Flock.SecurityProofs.StreamStopBudget_honest",
+    "Flock.SecurityProofs.StreamStopBudget_nontrivial",
+    "Flock.SecurityProofs.UnreleasedLeBudget",
+    "Flock.SecurityProofs.UnreleasedLeBudget_honest",
+    "Flock.SecurityProofs.UnreleasedLeBudget_nontrivial"
    ]
   },
   "Firewall.Record": {
@@ -35759,7 +35833,16 @@
    "guarantees": [
     "Flock.SecurityProofs.RecStopsOfRun",
     "Flock.SecurityProofs.RecStopsOfRun_honest",
-    "Flock.SecurityProofs.RecStopsOfRun_nontrivial"
+    "Flock.SecurityProofs.RecStopsOfRun_nontrivial",
+    "Flock.SecurityProofs.StreamStopBudget",
+    "Flock.SecurityProofs.StreamStopBudget_honest",
+    "Flock.SecurityProofs.StreamStopBudget_nontrivial",
+    "Flock.SecurityProofs.UnrelLeBudget",
+    "Flock.SecurityProofs.UnrelLeBudget_honest",
+    "Flock.SecurityProofs.UnrelLeBudget_nontrivial",
+    "Flock.SecurityProofs.UnreleasedLeBudget",
+    "Flock.SecurityProofs.UnreleasedLeBudget_honest",
+    "Flock.SecurityProofs.UnreleasedLeBudget_nontrivial"
    ]
   },
   "Firewall.Release": {
@@ -35783,7 +35866,13 @@
    "guarantees": [
     "Flock.SecurityProofs.RecStopsOfRun",
     "Flock.SecurityProofs.RecStopsOfRun_honest",
-    "Flock.SecurityProofs.RecStopsOfRun_nontrivial"
+    "Flock.SecurityProofs.RecStopsOfRun_nontrivial",
+    "Flock.SecurityProofs.StreamStopBudget",
+    "Flock.SecurityProofs.StreamStopBudget_honest",
+    "Flock.SecurityProofs.StreamStopBudget_nontrivial",
+    "Flock.SecurityProofs.UnreleasedLeBudget",
+    "Flock.SecurityProofs.UnreleasedLeBudget_honest",
+    "Flock.SecurityProofs.UnreleasedLeBudget_nontrivial"
    ]
   },
   "Flock.Bytes": {
@@ -35904,6 +35993,12 @@
     "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.SampledKSLiveV5",
     "Flock.SecurityProofs.SampledKSLiveV5Honest",
+    "Flock.SecurityProofs.StreamStopBudget",
+    "Flock.SecurityProofs.StreamStopBudget_honest",
+    "Flock.SecurityProofs.StreamStopBudget_nontrivial",
+    "Flock.SecurityProofs.UnreleasedLeBudget",
+    "Flock.SecurityProofs.UnreleasedLeBudget_honest",
+    "Flock.SecurityProofs.UnreleasedLeBudget_nontrivial",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "Flock.SecurityProofs.recursiveZK_os_gap",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
@@ -54277,7 +54372,7 @@
    ]
   },
   "Proofs.Flock.Recursive.StopCount": {
-   "digest": "3d56d913658011f637ba92316004ab6db43540db8f23cb79ba4be2892bb30348",
+   "digest": "7c84c869534a4e7d335432631c8c2bff59cecbb2e3a9ad852b4e620a75225d12",
    "definitions": {
     "Flock.Guarantees.RecStopsOfRun": "42cfb5895b5b3889506f4c7d38fe3a0cc15142fe6e95b0e5c3f10a2b4c2679cf",
     "Flock.StopCount.Holder": "c61158a7c5a97a3a86fdc8410d5c917e71e0fc30c9d69603962f6913a9a751f3",
@@ -54313,6 +54408,7 @@
     "Flock.StopCount.nOf": "352ebea6c07fd79a9fb4ec6929aa3d188e075dc47b3fb1320219eeee9ff3a1fa",
     "Flock.StopCount.put": "db27d75daca904a6aeaf644088a14d7f0e1cfe7b7e129c19a221273960d2d442",
     "Flock.StopCount.recStop": "322e51433cf2b87134d7c3383fa40cccd9a36dde9c993a19c7ec30939b99623f",
+    "Flock.StopCount.recStopAt": "adf4ef40bfac6fff88acb00b32db2215fbca6f62783683cc899c61afc5594e9e",
     "Flock.StopCount.run": "ccf0950b821acca99315afe00e80901a9bf00a40cc4193fd3637bb120eb72321",
     "Flock.StopCount.schedOf": "50d23ddd96ce61602d161408b780a2088ff43c5f1b405ae6b916fab5e9e7773a",
     "Flock.StopCount.step": "128f2997cd584857491c30c9c1082a562de96c503ce5f20dbb27d7d5ae1c56cc",
@@ -54322,7 +54418,64 @@
    "guarantees": [
     "Flock.SecurityProofs.RecStopsOfRun",
     "Flock.SecurityProofs.RecStopsOfRun_honest",
-    "Flock.SecurityProofs.RecStopsOfRun_nontrivial"
+    "Flock.SecurityProofs.RecStopsOfRun_nontrivial",
+    "Flock.SecurityProofs.StreamStopBudget",
+    "Flock.SecurityProofs.StreamStopBudget_honest",
+    "Flock.SecurityProofs.StreamStopBudget_nontrivial",
+    "Flock.SecurityProofs.UnreleasedLeBudget",
+    "Flock.SecurityProofs.UnreleasedLeBudget_honest",
+    "Flock.SecurityProofs.UnreleasedLeBudget_nontrivial"
+   ]
+  },
+  "Proofs.Flock.Recursive.StopCountBudget": {
+   "digest": "c231c080397be19f3858b1450ac69a668acd95117522d1853c53cc3ad3f4b5fb",
+   "definitions": {
+    "Flock.Guarantees.StreamStopBudget": "5dee8b865f468434ca0f6595a468a1e5eda45d1d925ef59fd024918427ba6600",
+    "Flock.Guarantees.UnrelLeBudget": "b22dd27146d50eb268128c9293438070c2493c2c88c332c4c97a34aef3c55133",
+    "Flock.Guarantees.UnreleasedLeBudget": "35b7b7b67b5647f150f6ca206735183510ab8f6cbef371464f2a5ea884913f83",
+    "Flock.StopCount.RecOp": "2e3e19b44ca143d7c8e411272929085b09da2af73b9d434af37c3b3f34ba09b2",
+    "Flock.StopCount.RecOp.admit": "a7cb7ac8cb3f4de574a10cceefe3adce87bfb5324d9625785769cb8b54280596",
+    "Flock.StopCount.RecOp.apply": "2fd3899b81eaeab73b2f84beba0318043e7f24e49fc52e85c0307066ffdcf8ea",
+    "Flock.StopCount.RecOp.casesOn": "d36748f5c07285b399c708b218cc79a2b85d6c4646226a8ee659dae406ee04fe",
+    "Flock.StopCount.RecOp.ctorIdx": "b75466f2e088ff32d5a807f6f9e2f49485c9ab81c932d07a8a26cc678ed16f26",
+    "Flock.StopCount.RecOp.finish": "f9540d7a6d9b02d6bdd44cd4b7622291eb4345514f23b0b69d656dd1ae913627",
+    "Flock.StopCount.RecOp.openRec": "3c2a25baf7c1d6ff914c04e5c2934b24c9c68f37e18dc82f31159b3066426d56",
+    "Flock.StopCount.RecOp.rec": "5b277265b3cd4a1c50575583d7d71a271d6713cd7464a44f49be4f704bcf6eed",
+    "Flock.StopCount.RecOp.release": "45c5294cf648b82d1acb3b13d40ee0b13a6b7ad41581d60849bbaf0d1ffe18ab",
+    "Flock.StopCount.RecOp.slot": "da83766786bdd5256790a75507893dea1105f4982672b0e516cf7ef26607509c",
+    "Flock.StopCount.RecOp.stop": "1edca87dca9e6ae0d66bc950f01ba589bf3c5b385d8275a63163594d4f8b0153",
+    "Flock.StopCount.RecOp.wait": "bfb70f6b9b59885433df4df7669ac6975c1bd5c48889540f9bcbd937a99e9e0e",
+    "Flock.StopCount.StreamStopWithin": "33292b3534be45835694823af6922e76627e321249c1e5dc5f81b2ffcf5cae10",
+    "Flock.StopCount.UnrelWithin": "5d991cc64e16460b93c0e406050d0550383c047b6c87de5d449d5a4fd769ee49",
+    "Flock.StopCount.UnreleasedWithin": "85a5bc60d98b041553268cf284d77943684d764a5ad91e45d1a28571b92f59b6",
+    "Flock.StopCount.Witness.applyMade": "7479c994c71ed0e821bceefc917a7a487c4685cf431670ccdd0524911e392062",
+    "Flock.StopCount.Witness.applyMade._sparseCasesOn_1": "aa22c66e37d25440ee8c3349f01117e5c7a2eea06844cccdbc274e80f9ee8e45",
+    "Flock.StopCount.Witness.honestOps": "e6660f7034965f2fb0d0a95aac63b5eea4e152cf31372af4420eadf7238ed8c6",
+    "Flock.StopCount.Witness.honestStream": "0585bf3516773c21f0b72280985cae305caf1b164df2432008b382942221061d",
+    "Flock.StopCount.Witness.openMade": "fafa3c3efbad95e9d54d7f65f41316093dc4ba9d485bbefc02f201786b670d88",
+    "Flock.StopCount.Witness.opsMade": "943031d16c906c4b8b052ad192164e86149bc3b37594cec3b2b263e687bdc61c",
+    "Flock.StopCount.Witness.runMade": "4c8f26a409ba8f0028958339a2349c4fb164e03deb01f6ea5ef7a332fe337768",
+    "Flock.StopCount.Witness.stepMade": "ecd56e5ce77a58e5a888a7aaa243a4251b9d948bda81a4eaeecdbae7e1bb9fbe",
+    "Flock.StopCount.Witness.stepMade._sparseCasesOn_1": "837cd221bae7760f40879d8a39d04693949aaa3b2bfe5582e3808a82e99d4912",
+    "Flock.StopCount.Witness.stepMade._sparseCasesOn_4": "d2512d98a9841e486b4ecec49411afc866099488d26d2b0a893828bb64174b20",
+    "Flock.StopCount.Witness.two": "b6c5120d12b6adc39d827ea38369ff35ae03079e4551d85968b40955474f69ce",
+    "Flock.StopCount.Witness.twoOps": "bbd96521f580f38a19d95abf7c4a672c69b45da3ce7112f770992501b3c44450",
+    "Flock.StopCount.Witness.twoSteps": "2b31eeed97d762dd6dc1ffc6b41240abc1b41320570d716752011e4bdba6ed36",
+    "Flock.StopCount.openedSet": "5995c700c928c19720104427569ddc04e830ef56ab61f75662cc7287ce6adc36",
+    "Flock.StopCount.opsRun": "c0696f8f8837015e00219c42ae3b56ae016da3833b8ba65c2f801fda2e1aa79a",
+    "Flock.StopCount.unrel": "c421fd5a9be6baee753349f0b3442a8476463195872255aaab82c69f4fa6f7e1",
+    "Flock.StopCount.unrelOn": "d1cb9a96638ad17f5a283a51c348faff7b8c224ec9660fb591d8124de2460aba"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.StreamStopBudget",
+    "Flock.SecurityProofs.StreamStopBudget_honest",
+    "Flock.SecurityProofs.StreamStopBudget_nontrivial",
+    "Flock.SecurityProofs.UnrelLeBudget",
+    "Flock.SecurityProofs.UnrelLeBudget_honest",
+    "Flock.SecurityProofs.UnrelLeBudget_nontrivial",
+    "Flock.SecurityProofs.UnreleasedLeBudget",
+    "Flock.SecurityProofs.UnreleasedLeBudget_honest",
+    "Flock.SecurityProofs.UnreleasedLeBudget_nontrivial"
    ]
   },
   "Proofs.Flock.Recursive.StopCountProof": {
@@ -54335,7 +54488,26 @@
     "Flock.StopCount.Witness.stepAll._sparseCasesOn_3": "b65538676ec65213e5e1019007663fe8717a7d21c594c0958722e9f06c4143f0",
     "Flock.StopCount.Witness.unordered": "ce222455ad568863944ea84d859505a28b593b4d5c5b3c2608a50961ba1419a4"
    },
-   "guarantees": ["Flock.SecurityProofs.RecStopsOfRun_honest", "Flock.SecurityProofs.RecStopsOfRun_nontrivial"]
+   "guarantees": [
+    "Flock.SecurityProofs.RecStopsOfRun_honest",
+    "Flock.SecurityProofs.RecStopsOfRun_nontrivial",
+    "Flock.SecurityProofs.StreamStopBudget_honest",
+    "Flock.SecurityProofs.StreamStopBudget_nontrivial",
+    "Flock.SecurityProofs.UnreleasedLeBudget_honest",
+    "Flock.SecurityProofs.UnreleasedLeBudget_nontrivial"
+   ]
+  },
+  "Proofs.Flock.Recursive.StopCountStream": {
+   "digest": "1602dca281740b6890b6864848102a95c22e9ae2488701269a1672184cbf3790",
+   "definitions": {
+    "Flock.StopCount.Pattern": "cfe20cb5814ebbc5b7848a008225f591ac8b408ad349701856c8de573f3013d8",
+    "Flock.StopCount.streamStop": "c597f919dc55d7ad00f774d5778099fee30bbf0c877e63343c69263bbf9b1022"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.StreamStopBudget",
+    "Flock.SecurityProofs.StreamStopBudget_honest",
+    "Flock.SecurityProofs.StreamStopBudget_nontrivial"
+   ]
   },
   "Proofs.Flock.Recursive.StopLeak": {
    "digest": "cac9deb7b7760214f290db85ab097810f05c1710c2a710ac2e8b8a84a5f1220c",
@@ -54345,7 +54517,10 @@
    "guarantees": [
     "Flock.SecurityProofs.RecStopsOfRun",
     "Flock.SecurityProofs.RecStopsOfRun_honest",
-    "Flock.SecurityProofs.RecStopsOfRun_nontrivial"
+    "Flock.SecurityProofs.RecStopsOfRun_nontrivial",
+    "Flock.SecurityProofs.StreamStopBudget",
+    "Flock.SecurityProofs.StreamStopBudget_honest",
+    "Flock.SecurityProofs.StreamStopBudget_nontrivial"
    ]
   },
   "Proofs.Flock.Recursive.Target": {
