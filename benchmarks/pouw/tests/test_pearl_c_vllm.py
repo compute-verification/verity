@@ -390,7 +390,7 @@ def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_th
     assert {k: f[k] for k in ("rows", "tree")} == {"rows": {"path": f"calls/{index}.rows.bf16", "bytes": 2 * 32 * 1024},
                                                    "tree": {"path": f"calls/{index}.tree", "bytes": f["tree"]["bytes"]}}
     assert f["y"]["rows"] == {"path": f"y/{index}.rows.bf16", "bytes": 2 * 32 * 256}
-    assert len(run.cur.writes) == 4 and not any((tmp_path / "ok" / g["path"]).exists() for g in (f["rows"], f["y"]["rows"]))
+    assert len(run.cur.writes) == 1 and not any((tmp_path / "ok" / g["path"]).exists() for g in (f["rows"], f["y"]["rows"]))
     with torch.inference_mode():                              # the call's buffers are made as vLLM's calls make them
         sh.xa.fill_(7.0)
         sh.buf("tree_a").fill_(7)

@@ -38,6 +38,7 @@ class _Pass:
     poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
     stepped: bool = False            # begun by an engine step's end (`PearlCDeviceRun.end_pass`'s ``step``)
     base: int | None = None          # its call at position p has index base + p; None until its first call (`call_index`)
+    dirs: set[str] = field(default_factory=set)   # the directories under ``retain`` its retained calls have made
 
 
 class PassEnds:
@@ -143,11 +144,11 @@ class PassEnds:
         host, and the record and y's root, decided from the bytes the writes land (`screen.excluded_host`)."""
         import torch
         d = cur.retain / "calls"
-        if not d.is_dir():
-            cur.retain.mkdir(mode=0o700, parents=True, exist_ok=True)
-            d.mkdir(mode=0o700, exist_ok=True)
-        if y is not None:
-            (cur.retain / "y").mkdir(mode=0o700, exist_ok=True)
+        for name in ("calls",) if y is None else ("calls", "y"):
+            if name not in cur.dirs:
+                cur.retain.mkdir(mode=0o700, parents=True, exist_ok=True)
+                (cur.retain / name).mkdir(mode=0o700, exist_ok=True)
+                cur.dirs.add(name)
         unit, ex, rec = (mm, m, mm.shape.k), self.weights[mm.weight].excluded, len(cur.records)
         files = {"rows": None, "tree": None} | ({} if y is None else {"y": {"root": None, "rows": None, "tree": None}})
         paths = (d / f"{mm.index}.rows.bf16", d / f"{mm.index}.tree",
@@ -178,7 +179,7 @@ class PassEnds:
                 out = [(paths[0], rows.view(torch.uint8), False, record, held), (paths[1], a_tree, True)]
                 if ys:
                     out += [(paths[2], ys[0], False), (paths[3], SY.y_tree(self, ys[0], mm.index), True, y_root)]
-                got = write_behind(tuple(out), cur.writes, fresh=True)
+                got = write_behind(tuple(out), cur.writes, fresh=True, here=True)
         files.update(rows=got[0], tree=got[1])
         if y is not None:
             files["y"].update(rows=got[2], tree=got[3])

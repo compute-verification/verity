@@ -360,25 +360,33 @@ class _Copies:
         import torch
         self.stream, self.arena = torch.cuda.Stream(device=device), _Arena(RING_BYTES, ARENA_RINGS)
 
-    def start(self, srcs: list[Any], fresh: bool = False) -> tuple[list[Any], list[Callable[[], None]], Any]:
+    def start(self, srcs: list[Any], fresh: bool = False, here: bool = False) -> tuple[list[Any], list[Callable[[], None]], Any]:
         """Each source's bytes as they are now on the current stream, copied to host memory behind it: (the host tensors,
         each one's give-back, the event after the copies).  `fresh`: nothing writes the sources after this, so they are
-        read as they are, not copied on the device first."""
+        read as they are, not copied on the device first.  `here`: the copies go on the current stream itself, in its
+        order (a stream already behind the caller's, `PassEnds._retained`'s)."""
         import torch
         current = torch.cuda.current_stream(srcs[0].device)
         kept = srcs if fresh else [s.clone() for s in srcs]
+        if here:
+            return self._copied(kept, current, False)
         self.stream.wait_stream(current)
-        hosts, gives = [], []
         with torch.cuda.stream(self.stream):
-            for src in kept:
-                give, host = self.arena.take(src.numel())
-                host = host[:src.numel()]
-                host.copy_(src, non_blocking=True)
-                src.record_stream(self.stream)
-                hosts.append(host)
-                gives.append(give)
-            done = torch.cuda.Event()
-            done.record(self.stream)
+            return self._copied(kept, self.stream, True)
+
+    def _copied(self, kept: list[Any], stream: Any, held: bool) -> tuple[list[Any], list[Callable[[], None]], Any]:
+        import torch
+        hosts, gives = [], []
+        for src in kept:
+            give, host = self.arena.take(src.numel())
+            host = host[:src.numel()]
+            host.copy_(src, non_blocking=True)
+            if held:
+                src.record_stream(stream)
+            hosts.append(host)
+            gives.append(give)
+        done = torch.cuda.Event()
+        done.record(stream)
         return hosts, gives, done
 
 
@@ -389,42 +397,43 @@ def _copies(device: Any) -> _Copies:
     return _copiers[key]
 
 
-def write_behind(files: tuple[tuple, ...], pending: list[Future], fresh: bool = False) -> list[dict]:
+def write_behind(files: tuple[tuple, ...], pending: list[Future], fresh: bool = False, here: bool = False) -> list[dict]:
     """`_write`'s entries for tensors' bytes, each file (path, tensor, digest[, then, *also]), with the files written
     behind the caller: the bytes are copied as they are now on the current stream (a device's to the host on a stream of its
-    own, through `_Copies`' arena, with no wait on the caller's), and `WRITE_THREADS` threads write the files, each write's
-    future appended to `pending`, which the pass's end joins (`joined`) before its manifest names them; a digest's
-    ``sha256`` lands in its entry with its write, and a file's ``then`` is called with its bytes and those of its `also`
-    tensors (uint8 host tensors, copied with it) once they are written.  `fresh`: nothing writes the tensors after this
-    (`_Copies.start`)."""
+    own, through `_Copies`' arena, with no wait on the caller's), and one of `WRITE_THREADS` threads writes the files in
+    order, its future appended to `pending`, which the pass's end joins (`joined`) before its manifest names them; a
+    digest's ``sha256`` lands in its entry with its write, and a file's ``then`` is called with its bytes and those of its
+    `also` tensors (uint8 host tensors, copied with it) once they are written.  `fresh` and `here`: `_Copies.start`'s."""
     import torch
     files = [(path, t, digest, (more or (None,))[0], tuple(more[1:])) for path, t, digest, *more in files]
     srcs = [s.contiguous().reshape(-1).view(torch.uint8) for _, t, _, _, also in files for s in (t, *also)]
     if srcs and srcs[0].is_cuda:
-        hosts, gives, done = _copies(srcs[0].device).start(srcs, fresh)
+        hosts, gives, done = _copies(srcs[0].device).start(srcs, fresh, here)
     else:
-        hosts, gives, done = [s.clone() for s in srcs], [lambda: None] * len(srcs), None
+        hosts, gives, done = [s.clone() for s in srcs], [], None
     global _writers
     if _writers is None or _writers[0] != os.getpid():    # a forked child has none of its parent's threads
         _writers = (os.getpid(), ThreadPoolExecutor(WRITE_THREADS, thread_name_prefix="pearl-c-retain"))
-    entries, at = [], 0
+    entries, batch, at = [], [], 0
     for path, _, digest, then, also in files:
         k = 1 + len(also)
         entry = _entry(path, hosts[at].numel())
-        pending.append(_writers[1].submit(_landed, path, hosts[at:at + k], digest, entry, done, gives[at:at + k], then))
+        batch.append((path, hosts[at:at + k], digest, entry, then))
         entries.append(entry)
         at += k
+    if batch:
+        pending.append(_writers[1].submit(_landed, batch, done, gives))
     return entries
 
 
-def _landed(path: Path, hosts: list[Any], digest: bool, entry: dict, done: Any, gives: list[Callable[[], None]],
-            then: Callable[..., None] | None) -> None:
+def _landed(batch: list[tuple], done: Any, gives: list[Callable[[], None]]) -> None:
     try:
         if done is not None:
             done.synchronize()
-        _write_host(path, hosts[0], digest, entry)
-        if then is not None:
-            then(*hosts)
+        for path, hosts, digest, entry, then in batch:
+            _write_host(path, hosts[0], digest, entry)
+            if then is not None:
+                then(*hosts)
     finally:
         for give in gives:
             give()
