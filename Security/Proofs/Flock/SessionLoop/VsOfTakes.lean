@@ -248,6 +248,84 @@ theorem vsOfWord_of_free (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : Coin
 
 end Takes
 
+/-- **A live history's round `q` passes the frame's check**: at its first `q ≥ 1` openings past `Hello`, the worker's
+round passes the check from the state the frame takes the coins at, and the loop's state one opening on is at the place
+the check leaves (`step_pos`). -/
+theorem round_at
+    (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    {x : Msg} {w : Flock.Wit} (hP : (LeanRelease.ofLoop Masked.dataE L₀ real).ProgChecks x w)
+    (wk : (LeanRelease.ofLoop Masked.dataE L₀ real).toSrv.Worker)
+    (ρ : (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand)
+    (κ : (LeanRelease.ofLoop Masked.dataE L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg))
+    (hl : (LeanRelease.ofLoop Masked.dataE L₀ real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
+    (hlt : ops.length < refK x) {q : ℕ} (h1 : 1 ≤ q) (h2 : q < ops.length) :
+    ∃ vq M o sq,
+      wk x w ρ ((m₀, ρ₀) :: ops.take q) 0 = some (vq, false) ∧
+      (LeanRelease.ofLoop Masked.dataE L₀ real).answered x ρ ((m₀, ρ₀) :: ops.take q) = .ok M ∧
+      (LeanRelease.ofLoop Masked.dataE L₀ real).checkAt x w ρ ((m₀, ρ₀) :: ops.take q) M false vq =
+        .ok (o, sq, none) ∧
+      (progOf x ((ops.take (q + 1)).map fun p => CoinLayer.rd p.2)).pos = sq.pos := by
+  have hlen : ((m₀, ρ₀) :: ops.take q).length = q + 1 := by
+    rw [List.length_cons, List.length_take, Nat.min_eq_left h2.le]
+  have hlast : (LeanRelease.ofLoop Masked.dataE L₀ real).last x = refK x + 1 :=
+    LeanRelease.loop_last loopNr Masked.dataE _ x
+  have hlq := LeanRelease.live_take (LeanRelease.ofLoop Masked.dataE L₀ real) _ x w ρ κ _ hl (q + 1)
+  rw [List.take_succ_cons] at hlq
+  have hkq : (LeanRelease.ofLoop Masked.dataE L₀ real).kindAt x ((m₀, ρ₀) :: ops.take q).length = .masked :=
+    LeanRelease.kindAt_masked_of _ (by rw [hlen]; omega) (by rw [hlen, hlast]; omega)
+  obtain ⟨vq, hvq, -⟩ := LeanRelease.live_some (LeanRelease.ofLoop Masked.dataE L₀ real) _ x w ρ κ _ hkq hlq
+  obtain ⟨M, o, sq, hM, hc⟩ :=
+    LeanRelease.check_of_live (LeanRelease.ofLoop Masked.dataE L₀ real) _ x w ρ κ _ vq hlq hkq hvq
+  refine ⟨vq, M, o, sq, hvq, hM, hc, ?_⟩
+  have e := step_pos hP ρ ((m₀, ρ₀) :: ops.take q) (ops[q]).2 hM hkq hc
+  rw [← tail_snoc_take (m₀, ρ₀) ops h2 (0 :: o.data.toList) CoinLayer.rd]
+  exact e
+
+/-- **Through a rep's rounds past its first the loop's place only moves on**: along a live history, from its first
+`n₁ ≥ 1` openings to its first `n₂`, where each round between is a rep stream's round past its first, the loop's state
+at the answers is no earlier at `n₂` (`round_at`, `answered_pos_same`, `check_pos`). -/
+theorem progOf_pos_mono
+    (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    {x : Msg} {w : Flock.Wit} (hP : (LeanRelease.ofLoop Masked.dataE L₀ real).ProgChecks x w)
+    (wk : (LeanRelease.ofLoop Masked.dataE L₀ real).toSrv.Worker)
+    (ρ : (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand)
+    (κ : (LeanRelease.ofLoop Masked.dataE L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg))
+    (hl : (LeanRelease.ofLoop Masked.dataE L₀ real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
+    (hlt : ops.length < refK x) {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
+    (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) {n₁ n₂ : ℕ} (h1 : 1 ≤ n₁) (h12 : n₁ ≤ n₂)
+    (h2 : n₂ ≤ ops.length)
+    (hin : ∀ p, n₁ ≤ p → p < n₂ → ∃ j', (CoinLayer.locate (roundsOf spec sts) 0 (p - 1)).2 = j' + 1) :
+    (progOf x ((ops.take n₁).map fun p => CoinLayer.rd p.2)).pos ≤
+      (progOf x ((ops.take n₂).map fun p => CoinLayer.rd p.2)).pos := by
+  have hwalk : ∀ d, n₁ + d ≤ n₂ → (progOf x ((ops.take n₁).map fun p => CoinLayer.rd p.2)).pos ≤
+      (progOf x ((ops.take (n₁ + d)).map fun p => CoinLayer.rd p.2)).pos := by
+    intro d
+    induction d with
+    | zero => intro _; exact le_rfl
+    | succ d ih =>
+      intro hd
+      have ih' := ih (by omega)
+      obtain ⟨vq, M, o, sq, -, hM, hc, hp⟩ :=
+        round_at L₀ real hP wk ρ κ m₀ ρ₀ ops hl hlt (q := n₁ + d) (by omega) (by omega)
+      obtain ⟨j', hj'⟩ := hin (n₁ + d) (by omega) (by omega)
+      have hpos := answered_pos_same Masked.dataE L₀ real x ρ (m₀, ρ₀) (ops.take (n₁ + d)) hM hx
+        (q := n₁ + d - 1) (by simp only [List.length_take]; omega) hj'
+      unfold LeanRelease.checkAt at hc
+      have hcp := check_pos (m := M) (st := false) hc
+      have hp' : (progOf x ((ops.take (n₁ + (d + 1))).map fun p => CoinLayer.rd p.2)).pos = sq.pos := hp
+      rw [hp']
+      omega
+  have h := hwalk (n₂ - n₁) (by omega)
+  rwa [show n₁ + (n₂ - n₁) = n₂ by omega] at h
+
 /-- **Two rounds that free one pad along one coin vector free it as one word**: where pad `i` of rep stream `2j + r` is
 freed after a history opening the coins' first `n₁` and after one opening their first `n₂ ≥ n₁` (`FreedAt`, at the
 same nonce and what the workers see), by a worker of the algebraic phase, the two words are one. At `n₁ = n₂` the
@@ -299,8 +377,6 @@ theorem freedAt_unique
     have e2 := locate_fst_mono (roundsOf spec (Masked.stsOf x)) 0 q' (n₂ - 1) (by omega)
     have hne := locate_snd_ne_zero (roundsOf spec (Masked.stsOf x)) 0 (n₁ - 1) q' (by omega) (by omega)
     exact ⟨(CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 q').2 - 1, by omega⟩
-  have hlast : (LeanRelease.ofLoop Masked.dataE L₀ real).last x = refK x + 1 :=
-    LeanRelease.loop_last loopNr Masked.dataE _ x
   have ho₁ := cfg_order_of_rep (LeanRelease.ofLoop Masked.dataE L₀ real) (ρ := (ν, t₁))
     (h := (m₀₁, ρ₀₁) :: ops₁) (k := 2 * j.val + r.val) hr₁
   have ho₂ := cfg_order_of_rep (LeanRelease.ofLoop Masked.dataE L₀ real) (ρ := (ν, t₂))
@@ -354,28 +430,8 @@ theorem freedAt_unique
     rw [hv, hfr, hk]
   · -- a longer prefix: the rep's later rounds start past every place round `n₁` frees
     exfalso
-    have hround : ∀ q, n₁ ≤ q → q < n₂ → ∃ vq M o sq,
-        blind _ (bwOf _ bx) x w (ν, t₂) ((m₀₂, ρ₀₂) :: ops₂.take q) 0 = some (vq, false) ∧
-        (LeanRelease.ofLoop Masked.dataE L₀ real).answered x (ν, t₂) ((m₀₂, ρ₀₂) :: ops₂.take q) = .ok M ∧
-        (LeanRelease.ofLoop Masked.dataE L₀ real).checkAt x w (ν, t₂) ((m₀₂, ρ₀₂) :: ops₂.take q) M false vq =
-          .ok (o, sq, none) ∧
-        (progOf x ((ops₂.take (q + 1)).map fun p => CoinLayer.rd p.2)).pos = sq.pos := by
-      intro q h1 h2
-      have hq2 : q < ops₂.length := by omega
-      have hlen : ((m₀₂, ρ₀₂) :: ops₂.take q).length = q + 1 := by
-        rw [List.length_cons, List.length_take, Nat.min_eq_left hq2.le]
-      have hlq := LeanRelease.live_take (LeanRelease.ofLoop Masked.dataE L₀ real) _ x w (ν, t₂) κ₂ _ hl₂ (q + 1)
-      rw [List.take_succ_cons] at hlq
-      have hkq : (LeanRelease.ofLoop Masked.dataE L₀ real).kindAt x ((m₀₂, ρ₀₂) :: ops₂.take q).length = .masked :=
-        LeanRelease.kindAt_masked_of _ (by rw [hlen]; omega) (by rw [hlen, hlast]; omega)
-      obtain ⟨vq, hvq, -⟩ := LeanRelease.live_some (LeanRelease.ofLoop Masked.dataE L₀ real) _ x w (ν, t₂) κ₂ _ hkq hlq
-      obtain ⟨M, o, sq, hM, hc⟩ :=
-        LeanRelease.check_of_live (LeanRelease.ofLoop Masked.dataE L₀ real) _ x w (ν, t₂) κ₂ _ vq hlq hkq hvq
-      refine ⟨vq, M, o, sq, hvq, hM, hc, ?_⟩
-      have e := step_pos hP (ν, t₂) ((m₀₂, ρ₀₂) :: ops₂.take q) (ops₂[q]).2 hM hkq hc
-      rw [← tail_snoc_take (m₀₂, ρ₀₂) ops₂ hq2 (0 :: o.data.toList) CoinLayer.rd]
-      exact e
-    obtain ⟨vG, MG, oG, sG, hvG, hMG, hcG, hpG⟩ := hround n₁ le_rfl hlt
+    obtain ⟨vG, MG, oG, sG, hvG, hMG, hcG, hpG⟩ :=
+      round_at L₀ real hP _ (ν, t₂) κ₂ m₀₂ ρ₀₂ ops₂ hl₂ hlt₂ (q := n₁) (by omega) (by omega)
     have hD : (ops₂.take n₁).map (fun p => CoinLayer.rd p.2) = ops₁.map (fun p => CoinLayer.rd p.2) := by
       rw [List.map_take, hpre]
     have hMm : MG = m₁ := by
@@ -408,27 +464,11 @@ theorem freedAt_unique
       have hb : m₁.pos + frG.size ≤ sG.pos := (Free.roundFree_pos hfG).1
       rw [hpG, ← hfr]
       exact hb
-    have hwalk : ∀ d, n₁ + 1 + d ≤ n₂ →
-        m₁.pos + fr₁.size ≤ (progOf x ((ops₂.take (n₁ + 1 + d)).map fun p => CoinLayer.rd p.2)).pos := by
-      intro d
-      induction d with
-      | zero => intro _; exact hbase
-      | succ d ih =>
-        intro hd
-        have ih' := ih (by omega)
-        obtain ⟨vq, M, o, sq, -, hM, hc, hp⟩ := hround (n₁ + 1 + d) (by omega) (by omega)
-        obtain ⟨j', hj'⟩ := hin (n₁ + d) (by omega) (by omega)
-        have hpos := answered_pos_same Masked.dataE L₀ real x (ν, t₂) (m₀₂, ρ₀₂) (ops₂.take (n₁ + 1 + d)) hM hx
-          (by simp only [List.length_take]; omega) hj'
-        unfold LeanRelease.checkAt at hc
-        have hcp := check_pos (m := M) (st := false) hc
-        have hp' : (progOf x ((ops₂.take (n₁ + 1 + (d + 1))).map fun p => CoinLayer.rd p.2)).pos = sq.pos := hp
-        rw [hp']
-        omega
+    have hw := progOf_pos_mono L₀ real hP _ (ν, t₂) κ₂ m₀₂ ρ₀₂ ops₂ hl₂ hlt₂ hx (n₁ := n₁ + 1) (n₂ := n₂)
+      (by omega) (by omega) (by omega) (fun p h1 h2 => hin (p - 1) (by omega) (by omega))
     obtain ⟨j₂, hj₂⟩ := hin (n₂ - 1) (by omega) (by omega)
     have hm₂ := answered_pos_same Masked.dataE L₀ real x (ν, t₂) (m₀₂, ρ₀₂) ops₂ ha₂ hx (by omega) hj₂
-    have hw := hwalk (n₂ - n₁ - 1) (by omega)
-    rw [show n₁ + 1 + (n₂ - n₁ - 1) = n₂ by omega, ← hl₂', List.take_length] at hw
+    rw [← hl₂', List.take_length] at hw
     omega
 
 /-- **A pad-blind worker of the algebraic phase meets `TakesVals` at its own values**: at `SessionLoopZKDeployed`'s
