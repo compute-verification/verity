@@ -33,8 +33,9 @@ ROUND_LOG = [CODED, ["fwd", "act", "mm", json.dumps([[8, U], [U, 8]]), 1, 8 * U 
              ["fwd", "updated", "mul", json.dumps([[8, U], [U]]), 1, 8 * U]]
 
 
-def record(round_tokens: int = 8, round_log=ROUND_LOG) -> dict:
-    """generate.py's layout: training steps 0 and 2, each followed by a round (steps 1 and 3), and two checkpoints."""
+def record(round_tokens: int = 6, round_log=ROUND_LOG) -> dict:
+    """generate.py's layout: training steps 0 and 2, each followed by a round (steps 1 and 3) whose counted tokens are
+    its prompts', and two checkpoints."""
     train = [["fwd", "updated", "mm", json.dumps([[64, 2 * U], [2 * U, U]]), 1, 64 * 2 * U * U],
              ["bwd", "grad", "mm", json.dumps([[2 * U, 64], [64, U]]), 2, 2 * 64 * 2 * U * U]]
     steps = [{"step": i, "tokens": round_tokens if i % 2 else 64, "struct": "round" if i % 2 else "train"}
@@ -132,8 +133,10 @@ def test_an_input_is_measured_where_te_core_counted_traced_or_read_it_and_assume
 
 
 def test_a_generation_runs_record_is_its_rounds_with_gemms_on_served_codes_priced_as_nvfp4():
-    got = SW.rounds(record(), NOTES, SERVED)
+    rec = record()
+    got = SW.rounds(rec, NOTES, SERVED)
     assert [s["step"] for s in got["steps"]] == [1, 3]
+    assert [s["tokens"] for s in got["steps"]] == [2 * (3 + 2 - 1)] * 2 and rec["steps"][1]["tokens"] == 2 * 3
     assert list(got["structures"]) == ["round"]
     st = got["structures"]["round"]
     assert st["log"][0] == [*CODED[:3], f"{CODED[3]} {SW.FP4}", *CODED[4:]]
@@ -145,10 +148,11 @@ def test_a_generation_runs_record_is_its_rounds_with_gemms_on_served_codes_price
     assert st["delta_grad_bits"] == 0.0
     assert got["setup"]["by"] == got["tail"]["by"] == {} and got["setup"]["macs"] == got["tail"]["macs"] == 0
     assert got["checkpoints"] == [{"step": 4}]
+    assert set(SW.ROUNDS) <= set(SW.KEYS) and all(v.startswith("assumed: ") for v in SW.ROUNDS.values())
 
 
 @pytest.mark.parametrize("rec, match", [
-    (record(round_tokens=10), "not its prompts' and every generated token but the last"),
+    (record(round_tokens=8), "8 tokens counted, not its prompts'"),
     (record() | {"steps": record()["steps"][:3]}, "not generate.py's layout"),
     (record(round_log=[*ROUND_LOG, ["bwd", "grad", "mm", json.dumps([[U, 8], [8, U]]), 1, 8 * U * U]]), "a backward"),
 ])

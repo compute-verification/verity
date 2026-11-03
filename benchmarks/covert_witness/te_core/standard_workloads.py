@@ -24,8 +24,9 @@ te_core counts 0 (`unmeasured`). `rho_inputs` gives the token form (formalism.at
 A `rounds` row is the run's generation rounds alone (`rounds`), its setup and training steps dropped: a round is one
 counted step that codes the served weights, prefills its prompts and decodes. The capture can't trace a round (its
 decode loop's length is no token axis), so the counter's record is read with these substitutions (`ROUNDS`, each in
-the row's `input_status`): every GEMM on the served codes (W4A4, emulated in bf16 on their decoded values) priced as
-NVFP4 (gemm/fp4); its affected gates the forward ops that read an update tensor (te_core's untraced convention); Δ
+the row's `input_status`): a round's tokens its prompts' and every generated token but the last (the counter counts
+the prompts' positions alone); every GEMM on the served codes (W4A4, emulated in bf16 on their decoded values) priced
+as NVFP4 (gemm/fp4); its affected gates the forward ops that read an update tensor (te_core's untraced convention); Δ
 the served update's bits from the run's notes (every served matrix's codes and scales with the gains in bf16, or the
 LoRA in bf16), and Δ_grad, the partial gradient and the gradient cut 0 (no backward); τ an id per prompt token and
 none per generated one; a, u and u_in te_core's stubs. With no trace there are no `entries`, so a rounds row is read
@@ -75,9 +76,11 @@ TRACE_FACTS = ("tokens", "sigma", "affected_share", "token_factor", "a_bits", "u
 READ = (formalism.STUBS["delta_bits"], formalism.DECODER["witness"])
 _PRICED = "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) " \
           "priced as NVFP4 (gemm/fp4)"
+_PER_TOKEN = _PRICED + ", per token through the forward: each prompt token and every generated token but the last " \
+                       "(the counter counts the prompts' alone)"
 _UNTRACED = "; a round is not traced (its decode loop's length is no token axis of the capture)"
 ROUNDS = {
-    "C_gates": _PRICED, "w_gates": _PRICED, "sigma": _PRICED, "w_fit_gates": _PRICED,
+    "C_gates": _PRICED, "w_gates": _PER_TOKEN, "sigma": _PRICED, "w_fit_gates": _PER_TOKEN,
     "tau_bits": "assumed: one id per prompt token and none per generated token, which the round samples" + _UNTRACED,
     "a_bits": "assumed: te_core's stub, one token's bf16 residual stream (d_model x 16)" + _UNTRACED,
     "u_points": "assumed: te_core's stub (A1), evenly spread to u(1) = Delta" + _UNTRACED,
@@ -86,6 +89,8 @@ ROUNDS = {
                    "untraced convention)" + _UNTRACED,
 }
 ROUND_LABELS = {
+    "tokens": "measured: each round's prompt positions (the counter's) and every generated token but the last, which "
+              "the counter doesn't count, a sampled id being no data-stream position (the run's notes)",
     "gates": "counted MACs in gates (te_core.gates), the GEMMs on served codes at gemm/fp4 (standard_workloads.rounds)",
     "token_gates": "counted: the rounds' forward in gates, the GEMMs on served codes at gemm/fp4",
     "affected_gates": "stub: the rounds' forward ops that read an update tensor, the GEMMs on served codes at gemm/fp4",
@@ -134,19 +139,21 @@ def coded(row: list, served: set[tuple[int, int]]) -> bool:
 
 def rounds(record: dict, notes: dict, served: set[tuple[int, int]]) -> dict:
     """`record` (generate.py's: each training step, and a round after each of `notes`' rounds) as its rounds alone,
-    the setup and the tail without work and the run's last checkpoint its one: every GEMM on served codes (`coded`)
-    marked NVFP4, each round structure's affected gates its forward ops that read an update tensor and its Δ_grad 0."""
+    the setup and the tail without work and the run's last checkpoint its one: each round's tokens its prompts' (the
+    counter's, which counts data-stream positions, so no sampled id) and every generated token but the last, every
+    GEMM on served codes (`coded`) marked NVFP4, each round structure's affected gates its forward ops that read an
+    update tensor and its Δ_grad 0."""
     after = [r["after_step"] for r in notes["rounds"]]
     if len(record["steps"]) != notes["args"]["steps"] + len(after):
         raise ValueError(f"{len(record['steps'])} steps, not {notes['args']['steps']} training steps and "
                          f"{len(after)} rounds: not generate.py's layout")
     at = {t + i: r for i, (t, r) in enumerate(zip(after, notes["rounds"]))}
-    steps = [s for s in record["steps"] if s["step"] in at]
+    steps = [dict(s) for s in record["steps"] if s["step"] in at]
     for s in steps:
         r = at[s["step"]]
-        if s["tokens"] != r["sequences"] * (r["prompt"] + r["generated"] - 1):
-            raise ValueError(f"round at step {s['step']}: {s['tokens']} tokens, not its prompts' and every generated "
-                             f"token but the last ({r})")
+        if s["tokens"] != r["sequences"] * r["prompt"]:
+            raise ValueError(f"round at step {s['step']}: {s['tokens']} tokens counted, not its prompts' ({r})")
+        s["tokens"] = r["sequences"] * (r["prompt"] + r["generated"] - 1)
     structures = {}
     for sid in {s["struct"] for s in steps}:
         st = record["structures"][sid]
