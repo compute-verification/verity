@@ -11,7 +11,7 @@ import pytest
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits import ports as P
 from verity.ml.circuits.codec import decode_program, descriptor_id, encode_program, program_digest
-from verity.ml.circuits.defs import CompositeDefinition, DefinitionTable, PrimitiveDefinition, bind
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.ml.circuits.population import mixed_population_program
 from verity.ml.circuits.refs import runs as ref_runs
 from verity.ml.circuits.types import Array, Value
@@ -94,7 +94,7 @@ def test_a_value_that_is_no_new_name_of_a_leaf_and_a_bit_or_of_a_v0_population_i
 
 def test_a_population_with_values_decodes_to_itself():
     prog = mixed_population_program(MEMBERS, values=VALUES)
-    registry = DefinitionTable()
+    registry = Registry()
     for prim in (TAdd, TKeyFold):
         registry.add(prim)
     decoded = decode_program(json.loads(json.dumps(encode_program(prog))), registry)
