@@ -345,3 +345,14 @@ def test_the_gates_are_read_whatever_other_keys_drive_toml_holds(tmp_path):
     _git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "y")
     with pytest.raises(QueueError, match="landing_gates"):
         gates_at(tmp_path, "main")
+
+
+def test_the_low_risk_lane_excludes_what_runs_with_the_control_pods_or_every_agents_credentials():
+    """A change to infra, the research tool, the agent guard and its hooks, or the environment runs on the control pod or on
+    every agent once it is on main, so it lands only on a review, never on a ready mark alone."""
+    import tomllib
+
+    root = Path(__file__).resolve().parents[3]
+    excludes = tomllib.loads((root / "tools/verity/check/drive.toml").read_text())["lowrisk_excludes"]
+    for path in ("infra/", "tools/research/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"):
+        assert path in excludes, f"drive.toml's lowrisk_excludes lacks {path}"
