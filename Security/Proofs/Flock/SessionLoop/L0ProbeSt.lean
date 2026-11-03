@@ -121,21 +121,22 @@ theorem release_sched_l0_st_probe (vs : Loop.finS.SwVals) (L₀ : LeanRelease Fl
     exact e.symm
   hb_mark "L105"
   rw [dropDom_l0Body h1 (by omega)]
-  hb_mark "L106"
-  congr 1
+  -- `congr 1` would retry `rfl` at default transparency on the two bodies, which exhausts `whnf`
+  hb_mark "L107"
+  refine congrArg (List.cons _) ?_
   -- the table and extra lanes are the tape's
-  hb_mark "L108"
-  have hre' : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) := by rw [hreal] at hre; exact hre
   hb_mark "L109"
-  have hg := (hS0.realOf ν t j r hre').2.2.2
+  have hre' : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) := by rw [hreal] at hre; exact hre
   hb_mark "L110"
+  have hg := (hS0.realOf ν t j r hre').2.2.2
+  hb_mark "L111"
   have hex := (Loop.Level0Src.realOf_lanes hS0 ν t j r hre').1
   -- the frame's pads are the tape's
-  hb_mark "L112"
-  have hlay := LeanRelease.lay_ofLoopLink (L₀ := L₀) src real j r hds
   hb_mark "L113"
-  have hzD := Loop.RepSrc.size hRS (ofLoopLink L₀ src real) (LeanRelease.draws_ofLoopLink src real) ν t j r hlay
+  have hlay := LeanRelease.lay_ofLoopLink (L₀ := L₀) src real j r hds
   hb_mark "L114"
+  have hzD := Loop.RepSrc.size hRS (ofLoopLink L₀ src real) (LeanRelease.draws_ofLoopLink src real) ν t j r hlay
+  hb_mark "L115"
   have hH : ((ofLoop Masked.dataE (withFiles (withLink L₀ src) src) real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).h =
       (FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j)).h := by
     have e := (cfg_tapeOfDraws (ofLoopLink L₀ src real) x (ν, t) ((m₀, ρ₀) :: ops) (Masked.UE.tapeZk t)
@@ -144,9 +145,9 @@ theorem release_sched_l0_st_probe (vs : Loop.finS.SwVals) (L₀ : LeanRelease Fl
       (Masked.UE.tapeZk t)] at e
     exact e
   -- the openings' words are the opened coins
-  hb_mark "L122"
-  have hCM : _root_.Flock.Firewall.Frames.COIN_MAX = 65536 := rfl
   hb_mark "L123"
+  have hCM : _root_.Flock.Firewall.Frames.COIN_MAX = 65536 := rfl
+  hb_mark "L124"
   have hW : ∀ p e, p < ops.length → e < min (loopNr x p) _root_.Flock.Firewall.Frames.COIN_MAX →
       (wordsAt x (ops.map fun p => CoinLayer.rd p.2) p)[e]! = Masked.slotAt (Loop.finS.pad (K := refK x) cs) p e := by
     intro p e hp he
@@ -154,16 +155,16 @@ theorem release_sched_l0_st_probe (vs : Loop.finS.SwVals) (L₀ : LeanRelease Fl
       (by rw [wordsAt_size x ops hp le_rfl]; exact he)
     rw [List.take_length] at hw
     exact hw.trans (congrArg (fun c => Masked.slotAt (Loop.finS.pad (K := refK x) c) p e) hcs)
-  hb_mark "L130"
-  have htm : tr.st.m = (Masked.stAt x j).m := by rw [hT1]; rfl
   hb_mark "L131"
-  have htk : tr.st.fold.kLog = (Masked.stAt x j).c.kLog := by rw [hT1]; rfl
+  have htm : tr.st.m = (Masked.stAt x j).m := by rw [hT1]; rfl
   hb_mark "L132"
+  have htk : tr.st.fold.kLog = (Masked.stAt x j).c.kLog := by rw [hT1]; rfl
+  hb_mark "L133"
   have hRk : Masked.rankSlot x j.val r.val = Masked.repBase x (2 * j.val + r.val) +
       ((Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6) := by
     show Masked.repBase x (2 * j.val + r.val) + ((Masked.stsOf x)[j.val]!.m + (Masked.stsOf x)[j.val]!.c.kLog - 6) = _
     rw [hstj]
-  hb_mark "L136"
+  hb_mark "L137"
   have hLR : Masked.ligP0 x j r = Masked.repBase x (2 * j.val + r.val) +
       ((Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6) +
         (2 + spec.points * (Masked.stAt x j).regions.size + 1) := by
@@ -172,48 +173,48 @@ theorem release_sched_l0_st_probe (vs : Loop.finS.SwVals) (L₀ : LeanRelease Fl
     rw [hP0, Masked.repBase_eq hsx, hst, hPR]
     omega
   -- the loop's counts at the algebraic phase's and the ring switch's rounds
-  hb_mark "L144"
-  obtain ⟨hp1, hp3, hp5, hp7, hpN⟩ := loopNr_piop hsx hq2 hz (by rw [hst]; omega) (by rw [hst]; exact hk6)
   hb_mark "L145"
+  obtain ⟨hp1, hp3, hp5, hp7, hpN⟩ := loopNr_piop hsx hq2 hz (by rw [hst]; omega) (by rw [hst]; exact hk6)
+  hb_mark "L146"
   rw [hst, ← Masked.repBase_eq hsx (2 * j.val + r.val)] at hp1 hp3 hp5 hp7 hpN
   -- the extra claims: the table's regions at each link point, the session's
-  hb_mark "L147"
-  obtain ⟨hmp, hmp0, hpc⟩ := Masked.live_links hx hsx hq2
   hb_mark "L148"
-  have hmp' : (Masked.stAt x j).mPts = spec.mPts := by rw [← hst]; exact hmp
+  obtain ⟨hmp, hmp0, hpc⟩ := Masked.live_links hx hsx hq2
   hb_mark "L149"
+  have hmp' : (Masked.stAt x j).mPts = spec.mPts := by rw [← hst]; exact hmp
+  hb_mark "L150"
   have hl0 : loopNr x 0 = spec.points * spec.mPts := by
     show (reqOf x 0).2 = _
     rw [reqOf_eq hsx]
     rfl
-  hb_mark "L153"
+  hb_mark "L154"
   have hW0 : (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0).size = spec.points * spec.mPts := by
     have e := wordsAt_size x ops (s := ops.length) (p := 0) hpos le_rfl
     rw [List.take_length] at e
     rw [e, hl0, Nat.min_eq_left hpc]
-  hb_mark "L157"
+  hb_mark "L158"
   have hXS : xs.size = spec.points * (Masked.stAt x j).regions.size := by
     rw [hxs, Count.extras_size, Count.linkPoints_size, hW0, hmp', Nat.mul_div_cancel _ hmp0]
     exact Nat.mul_comm _ _
-  hb_mark "L160"
-  obtain ⟨hpts2, -, hregs⟩ := Masked.live_bounds hx hsx
   hb_mark "L161"
+  obtain ⟨hpts2, -, hregs⟩ := Masked.live_bounds hx hsx
+  hb_mark "L162"
   have hpr : spec.points * (Masked.stAt x j).regions.size ≤ 2048 := by
     have hrg : (Masked.stAt x j).regions.size ≤ 1024 := hregs j.val hj
     rw [hpts2]
     omega
-  hb_mark "L165"
+  hb_mark "L166"
   have heS : (Masked.stAt x j).extraClaims (Masked.ptsE (Loop.finS.pad (K := refK x) cs) spec) = .ok extras := by
     have hext' := hext
     rw [Masked.tabsOf_stAt] at hext'
     exact hext'
-  hb_mark "L169"
+  hb_mark "L170"
   have hXE : extras.map (·.x) = xs := by
     have e := Loop.linkPoints_slot hx hsx hpos hlt.le hq2
     rw [Masked.stsOf_half] at e
     rw [hxs, extraClaims_xs heS, ← hcs, ← e]
   -- the basis of the loop's switched vectors is the switched source's
-  hb_mark "L174"
+  hb_mark "L175"
   have hsw := sws_of_pts (st := tr.st) (W := fun p e => (wordsAt x (ops.map fun p => CoinLayer.rd p.2) p)[e]!)
     (C := Masked.ligCoin (Loop.finS.pad (K := refK x) cs)) (R := Masked.repBase x (2 * j.val + r.val))
     (L₁ := Masked.rankSlot x j.val r.val)
@@ -241,17 +242,17 @@ theorem release_sched_l0_st_probe (vs : Loop.finS.SwVals) (L₀ : LeanRelease Fl
         hpN, hCM, Nat.min_eq_left (by omega)]
       omega))
     hXE
-  hb_mark "L201"
-  beta_reduce at hsw
   hb_mark "L202"
+  beta_reduce at hsw
+  hb_mark "L203"
   have htabj : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]! = _root_.Flock.Setup.ofCircuit (Masked.stAt x j) := by
     have hj' : j.val < (FlockDeploy.tabsOf (Masked.stsOf x)).size := by simpa [FlockDeploy.tabsOf] using hj
     rw [getElem!_pos _ j.val hj']
     simp only [FlockDeploy.tabsOf, Array.getElem_map]
     rfl
-  hb_mark "L207"
-  have htabst : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]! = tr.st := htabj.trans hT1.symm
   hb_mark "L208"
+  have htabst : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]! = tr.st := htabj.trans hT1.symm
+  hb_mark "L209"
   have hbasis : FlockComplete.basisVals (FlockComplete.Replay.Rs.sws
         (_root_.Flock.abcClaims tr.st.m tr.st.kLog zc lc ++ _root_.Flock.Firewall.Finish.claimsOf xs)
         ⟨fun k e => (wordsAt x (ops.map fun p => CoinLayer.rd p.2) (Masked.rankSlot x j.val r.val + k))[e]!,
@@ -275,38 +276,38 @@ theorem release_sched_l0_st_probe (vs : Loop.finS.SwVals) (L₀ : LeanRelease Fl
     · with_reducible rfl
     · with_reducible rfl
   -- the loop's counts at level 0's rounds
-  hb_mark "L231"
-  have hsn := Count.sched_n hz
   hb_mark "L232"
+  have hsn := Count.sched_n hz
+  hb_mark "L233"
   have hn0 : loopNr x (Masked.ligP0 x j r) = (Masked.zkTab x j).sch.n := by
     have e := loopNr_l0 hsx hq2 hz (by rw [hst]; omega) (by rw [hst]; exact hk6) (i := 0) (Nat.zero_le _)
     rw [Nat.add_zero, if_pos rfl] at e
     rw [hP0]
     exact e
-  hb_mark "L237"
+  hb_mark "L238"
   have hnl : ∀ a, 1 ≤ a → a ≤ (Masked.zkTab x j).sch.k0 + 3 → loopNr x (Masked.ligP0 x j r + a) = l0Nc a := by
     intro a ha1 ha2
     rw [hP0]
     exact loopNr_l0r hsx hq2 hz (by rw [hst]; omega) (by rw [hst]; exact hk6) ha1 ha2
   -- body `i` at the session's pads, table, extra lanes and basis, then at the opened coins
-  hb_mark "L242"
+  hb_mark "L243"
   rw [hbasis, hg, hex, hH, Loop.l0BodyAt_vs hL0 ν t (Loop.finS.pad (K := refK x) cs) hN hsx j r hext P' T' cap'
     (fun _ _ => 0) i]
-  hb_mark "L244"
+  hb_mark "L245"
   refine (FlockComplete.LigLock.l0BodyAt_bind_congr h1 [] P' T T' _ cap').trans
     (FlockComplete.LigLock.l0BodyAt_congr_lt ?_ ?_ ?_)
-  hb_mark "L246"
+  hb_mark "L247"
   · intro _ e he
     exact hW (Masked.ligP0 x j r) e (by omega) (by
       rw [hn0, Nat.min_eq_left (show (Masked.zkTab x j).sch.n ≤ _root_.Flock.Firewall.Frames.COIN_MAX by
         rw [hCM]; omega)]
       exact he)
-  hb_mark "L251"
+  hb_mark "L252"
   · intro hi2
     exact hW (Masked.ligP0 x j r + 1) 0 (by omega) (by
       rw [hnl 1 le_rfl (by omega), hCM]
       decide)
-  hb_mark "L255"
+  hb_mark "L256"
   · intro jj _ hj3 e he
     exact hW (Masked.ligP0 x j r + 2 + jj) e (by omega) (by
       rw [show Masked.ligP0 x j r + 2 + jj = Masked.ligP0 x j r + (2 + jj) by omega,
