@@ -1,0 +1,10 @@
+# The training-efficiency dataset's exporter (README.md). Not a package: it runs from `benchmarks/covert_witness/` as
+# `python -m dataset.export`, and its tests run here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/covert_witness/dataset`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".."]
+
+[tool.verity.tests]
+# export.py imports te_core, which holds every formula the dataset is scored and plotted by.
+inputs = ["benchmarks/covert_witness/te_core"]
