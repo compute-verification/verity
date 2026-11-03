@@ -332,6 +332,108 @@ theorem basisVals_eq_fast (sws : Array Switched) (l : Nat) : basisVals sws l = b
   · rfl
   · exact F128.mul_zero _
 
+/-- `Stmt.placeSlot`'s writes `out[at_ + i] := …` for offsets `i, …, i + fuel − 1`, each value read from `v` at `dv + i`. -/
+def writeOff (v : Array F128) (dv at_ : Nat) : Nat → Nat → Array F128 → Array F128
+  | 0, _, out => out
+  | fuel + 1, i, out => writeOff v dv at_ fuel (i + 1) (out.set! (at_ + i) v[dv + i]!)
+
+theorem placeSlot_eq_writeOff (s : F128) (base v : Array F128) (dv at_ : Nat) :
+    ∀ fuel i out, (∀ t, i ≤ t → t < i + fuel → v[dv + t]! = s * base[t]!) →
+      Stmt.placeSlot s base at_ fuel i out = writeOff v dv at_ fuel i out
+  | 0, _, _, _ => rfl
+  | fuel + 1, i, out, h => by
+    rw [Stmt.placeSlot, writeOff, h i (Nat.le_refl i) (by omega)]
+    exact placeSlot_eq_writeOff s base v dv at_ fuel (i + 1) _ fun t h1 h2 => h t (by omega) (by omega)
+
+/-- `Stmt.placeRange`'s slots `k, …, k + fuel − 1` of range `r`, slot `k`'s `2^slotLog` values read from `v` at
+`k · 2^slotLog`. -/
+def placeRangeW (r : Range) (v : Array F128) : Nat → Nat → Array F128 → Array F128
+  | 0, _, out => out
+  | fuel + 1, k, out =>
+    placeRangeW r v fuel (k + 1) (writeOff v (k * 2 ^ r.slotLog) ((r.pos0 + k) * 2 ^ r.slotLog) (2 ^ r.slotLog) 0 out)
+
+theorem placeRange_eq_W (r : Range) (eHi base v : Array F128) (c : Nat)
+    (hv : ∀ k t, k < c → t < 2 ^ r.slotLog → v[k * 2 ^ r.slotLog + t]! = eHi[r.pos0 + k]! * base[t]!) :
+    ∀ fuel k out, k + fuel ≤ c → Stmt.placeRange r eHi base fuel k out = placeRangeW r v fuel k out
+  | 0, _, _, _ => rfl
+  | fuel + 1, k, out, hk => by
+    rw [Stmt.placeRange, placeRangeW]
+    rw [placeSlot_eq_writeOff eHi[r.pos0 + k]! base v (k * 2 ^ r.slotLog) ((r.pos0 + k) * 2 ^ r.slotLog)
+      (2 ^ r.slotLog) 0 out fun t _ h2 => hv k t (by omega) (by omega)]
+    exact placeRange_eq_W r eHi base v c hv fuel (k + 1) _ (by omega)
+
+/-- `Stmt.placeRange r eHi base r.count 0 out` on slots of `n = 2^slotLog` entries: every product `eHi[pos0 + k]·base[t]`
+in tasks (`parGen`), then written in `placeRange`'s order (`placeRangeW`). -/
+def placeRangeN (r : Range) (eHi base out : Array F128) (n : Nat) : Array F128 :=
+  placeRangeW r (parGen (fun t => eHi[r.pos0 + t / n]! * base[t % n]!) (r.count * n)) r.count 0 out
+
+def placeRangePar (r : Range) (eHi base out : Array F128) : Array F128 := placeRangeN r eHi base out (2 ^ r.slotLog)
+
+theorem placeRangePar_eq (r : Range) (eHi base out : Array F128) :
+    placeRangePar r eHi base out = Stmt.placeRange r eHi base r.count 0 out := by
+  have hv : ∀ k t, k < r.count → t < 2 ^ r.slotLog →
+      ((Array.range (r.count * 2 ^ r.slotLog)).map fun t =>
+        eHi[r.pos0 + t / 2 ^ r.slotLog]! * base[t % 2 ^ r.slotLog]!)[k * 2 ^ r.slotLog + t]! =
+        eHi[r.pos0 + k]! * base[t]! := by
+    intro k t hk ht
+    have hb : k * 2 ^ r.slotLog + t < r.count * 2 ^ r.slotLog :=
+      Nat.lt_of_lt_of_le (Nat.add_lt_add_left ht _) (by rw [← Nat.succ_mul]; exact Nat.mul_le_mul_right _ hk)
+    have h1 : (k * 2 ^ r.slotLog + t) / 2 ^ r.slotLog = k := by
+      rw [Nat.add_comm (k * 2 ^ r.slotLog) t, Nat.add_mul_div_right t k (Nat.two_pow_pos r.slotLog),
+        Nat.div_eq_of_lt ht, Nat.zero_add]
+    have h2 : (k * 2 ^ r.slotLog + t) % 2 ^ r.slotLog = t := by
+      rw [Nat.add_comm (k * 2 ^ r.slotLog) t, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt ht]
+    rw [getElem!_range_map _ hb]
+    show eHi[r.pos0 + (k * 2 ^ r.slotLog + t) / 2 ^ r.slotLog]! * base[(k * 2 ^ r.slotLog + t) % 2 ^ r.slotLog]! = _
+    rw [h1, h2]
+  rw [placeRangePar, placeRangeN, parGen_eq]
+  exact (placeRange_eq_W r eHi base _ r.count hv r.count 0 out (Nat.le_of_eq (Nat.zero_add _))).symm
+
+/-- `Stmt.foldRanges` with each range placed by `placeRangePar` and its `eq(ρ[sl − 6 ..], ·)` by `eqTablePar`. -/
+def foldRangesPar (st : Stmt) (alpha : F128) (lw rho : Array F128) :
+    List Range → Array ((Kind × Nat) × Array F128) → Array F128 → V (Array F128)
+  | [], _, out => pure out
+  | r :: rs, bases, out => do
+    let key := (r.kind, r.slotLog)
+    let (base, bases') ← match bases.find? (fun kb => decide (kb.1 = key)) with
+      | some (_, b) => pure (b, bases)
+      | none => do
+        let b ← st.slotBase alpha lw rho key
+        pure (b, bases.push (key, b))
+    let eHi := eqTablePar (rho.extract (r.slotLog - 6) rho.size)
+    foldRangesPar st alpha lw rho rs bases' (placeRangePar r eHi base out)
+
+theorem foldRangesPar_eq (st : Stmt) (alpha : F128) (lw rho : Array F128) :
+    ∀ rs bases out, foldRangesPar st alpha lw rho rs bases out = st.foldRanges alpha lw rho rs bases out
+  | [], _, _ => rfl
+  | r :: rs, bases, out => by
+    rw [foldRangesPar, Stmt.foldRanges]
+    simp only [eqTablePar_eq, placeRangePar_eq, foldRangesPar_eq st alpha lw rho rs]
+    rfl
+
+/-- `Stmt.fold` with the ranges placed by `foldRangesPar` and `eq(ρ, ·)` by `eqTablePar`. -/
+def foldPar (st : Stmt) (alpha : F128) (lw : Array F128) (rho : Array F128) : V (Array F128) := do
+  let kl := st.c.kLog
+  if rho.size + 6 != kl || lw.size != 64 then throw "lincheck fold: the point is not the block's"
+  let out ← foldRangesPar st alpha lw rho st.c.ranges.toList #[] (Array.replicate (2 ^ kl) 0)
+  let eIn := eqTablePar rho
+  let e := fun (i : Nat) => lw[i % 64]! * eIn[i / 64]!
+  return Stmt.addDelta e st.db.toList (Stmt.addDelta (fun i => alpha * e i) st.da.toList out)
+
+theorem foldPar_eq : @foldPar = @Stmt.fold := by
+  funext st alpha lw rho
+  simp only [foldPar, Stmt.fold, foldRangesPar_eq, eqTablePar_eq]
+
+/-- `Setup.ofCircuit st` with its circuit fold run as `foldPar`: the ZK server's own setups (`Frames.placeOf`,
+`Frames.algOf`, `serveLoop`), never the verifier's, whose compiled path reaches `Stmt.fold` (`verifier` in
+`lean-audit.json`). -/
+def ofCircuitFw (st : Stmt) : Setup := { Setup.ofCircuit st with fold := { st.circuitFold with fold := foldPar st } }
+
+theorem ofCircuitFw_eq : @ofCircuitFw = @Setup.ofCircuit := by
+  funext st
+  rw [ofCircuitFw, foldPar_eq]
+  rfl
+
 end Fast
 
 /-- Compiled code runs `switchVecFast` and `basisValsFast`; the kernel and every proof see `switchVec` and `basisVals`.
@@ -907,5 +1009,37 @@ def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : I
         let _ ← serve ch IO.getRandomBytes spec (sts.map Setup.ofCircuit)
           (fun r => do return ((← l0s.get).slots.find? (·.l0.root == r)).map (·.l0)) keep file own true
   | _ => say s!"err a request `{line.trim}`"
+
+/-- `serveLoop` on the statements' setups `sts.map setup`. -/
+def serveLoopWith (setup : Stmt → Setup) (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs)
+    (l0s : IO.Ref Level0.Slots) (keep : ByteArray → Nat → Array ByteArray → IO Unit)
+    (file : ByteArray → Nat → ByteArray → IO (Option String))
+    (own : Nat → Nat → ByteArray → IO (Option (Except String Own))) (line : String) : IO Unit := do
+  let say := fun (s : String) => do
+    ch.write (s ++ "\n").toUTF8
+    ch.flush
+  match (line.replace "\n" "").splitOn " " with
+  | ["finish", len] =>
+    let some len := len.toNat? | say s!"err a request `{line.trim}`"
+    let text := (String.fromUTF8? (← ch.readExact len)).getD "?"
+    match Hello.drawOf text with
+    | .error e => say s!"err {e.replace "\n" " "}"
+    | .ok draw =>
+      match ← S.setupAt specs draw with
+      | .error e => say s!"err setup: {e.replace "\n" " "}"
+      | .ok (spec, sts) =>
+        say "ok 0"
+        let _ ← serve ch IO.getRandomBytes spec (sts.map setup)
+          (fun r => do return ((← l0s.get).slots.find? (·.l0.root == r)).map (·.l0)) keep file own true
+  | _ => say s!"err a request `{line.trim}`"
+
+def serveLoopFw : Frame.Chan → Hello.Setup → Hello.Specs → IO.Ref Level0.Slots →
+    (ByteArray → Nat → Array ByteArray → IO Unit) → (ByteArray → Nat → ByteArray → IO (Option String)) →
+    (Nat → Nat → ByteArray → IO (Option (Except String Own))) → String → IO Unit := serveLoopWith Fast.ofCircuitFw
+
+/-- Compiled code runs `serveLoopFw`, the finish's lincheck folds in tasks (`Fast.foldPar`); the kernel and every proof
+see `serveLoop`. -/
+@[csimp] theorem serveLoop_eq_fw : @serveLoop = @serveLoopFw :=
+  (congrArg serveLoopWith Fast.ofCircuitFw_eq).symm
 
 end Flock.Firewall.Finish

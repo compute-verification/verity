@@ -167,6 +167,46 @@ def algOf (st : Stmt) (root dom : ByteArray) : V (Array (ByteArray × Nat)) := d
   let (sch, _) ← Zk.schedule st.m
   Skeleton.rounds (Setup.ofCircuit st) sch.k0 root dom
 
+/-- `placeOf` on the statement's setup `setup st`. -/
+def placeOfWith (setup : Stmt → Setup) (salts : Array (ByteArray × Nat × Array ByteArray)) (l0 : Level0.Level0)
+    (s : Release) (p : Rep) (dom : ByteArray) : Except String (Frame.Place × Nat × Rep) := do
+  let k := p.coins.size
+  if h : k < p.alg.size then return (.sched p.alg[k].1, p.alg[k].2, p)
+  if p.opened then return (.own, 0, p)
+  let mut p := p
+  if p.opening.isNone then
+    let some st := s.sts[p.table]? | throw s!"table {p.table} of the session's {s.sts.size}"
+    let some c := s.link | throw "the opening before the session's Commit coins"
+    let some (_, _, hi) := salts.find? fun (r, q, _) => r == l0.root && q == p.rep
+      | throw s!"table {p.table} rep {p.rep}'s opening before its salts for levels ≥ 1"
+    let t ← tabOfLevel0 (setup st) l0
+    let xs := Drive.extras st (Drive.linkPoints st c)
+    p := { p with opening := some (Drive.openStep t p.rep dom xs hi (p.coins.extract 0 p.alg.size)) }
+  match p.opening with
+  | some (.ask c n _) => return (.sched c, n, { p with toOpening := true })
+  | some (.done _) => return (.own, 0, { p with opened := true, opening := none })
+  | some (.fail e) => throw e
+  | none => throw "no opening"
+
+/-- `algOf` on the statement's setup `setup st`. -/
+def algOfWith (setup : Stmt → Setup) (st : Stmt) (root dom : ByteArray) : V (Array (ByteArray × Nat)) := do
+  let (sch, _) ← Zk.schedule st.m
+  Skeleton.rounds (setup st) sch.k0 root dom
+
+def placeOfFw : Array (ByteArray × Nat × Array ByteArray) → Level0.Level0 → Release → Rep → ByteArray →
+    Except String (Frame.Place × Nat × Rep) := placeOfWith Fast.ofCircuitFw
+
+def algOfFw : Stmt → ByteArray → ByteArray → V (Array (ByteArray × Nat)) := algOfWith Fast.ofCircuitFw
+
+/-- Compiled code runs `placeOfFw` and `algOfFw`, the lincheck fold in tasks (`Fast.foldPar`); the kernel and every proof
+see `placeOf` and `algOf`. `@[csimp]` rewrites only code compiled after it, so it stays above `withAlg` and
+`roundPlace`. -/
+@[csimp] theorem placeOf_eq_fw : @placeOf = @placeOfFw :=
+  (congrArg placeOfWith Fast.ofCircuitFw_eq).symm
+
+@[csimp] theorem algOf_eq_fw : @algOf = @algOfFw :=
+  (congrArg algOfWith Fast.ofCircuitFw_eq).symm
+
 /-- `p` with its algebraic phase's scheduled rounds (`algOf`) on the session's level 0 `l0`, the table being `name`,
 computed once. -/
 def withAlg (s : Release) (l0 : Level0.Level0) (name : String) (p : Rep) : V Rep := do
