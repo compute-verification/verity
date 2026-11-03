@@ -28,12 +28,23 @@ strategy of the period's game projects to. This module states its C-Flock side.
   ports V5's key program is the claim's (`keyProgP_empty`), and the files the session reads parse to it
   (`Live.circuit_eq`).
 * **The projection** (`Constructions`): a strategy of the period's game is read as a strategy of the live audit. A
-  C-Flock strategy flips no coin of its own, so the device's other releases the strategy may ask for (`Coins`: other
-  families' coins, other trees' samples) widen the draw's sample (`Live.extend`), which the draw doesn't read: the draw's
-  law, A3 and the leg's δ are the session's.
+  C-Flock strategy flips no coin of its own, so the device's other releases the strategy may ask for (`Widening`:
+  other families' coins, other trees' samples) widen the draw's sample (`Live.extend`), which the draw doesn't read: the
+  draw's law, A3 and the leg's δ are the session's.
 * **The coupling** (`CouplingTarget`), the projection's target: the sampled verdict is at most as likely in the period's
   game as flock-verify `--zk`'s acceptance in the live audit at the projected strategy, plus the two-continuation
   finders' terms, the tree openings' hiding term, the read finder's collision and the forger's forgery.
+* **The component** (`ReadsV2`): the composite's `.sampled` component is v2. Both composites name v1
+  (`Verity.component`), whose verdicts are the prover's, so the leg and the coupling take it as a hypothesis.
+* **The session v2 sets up on the parameters and the committed files** (`SetsUp`): v2's parameters in the composite's
+  (`ParamsAt`), the session's inputs as v2 hands them to flock-verify (the statement, one table, the verifier's
+  partition object and program, no recomputation of public input words), the committed circuit and public files and
+  the vocabulary's reading of them, the law the draw reads over the population (`lawAt`), and the claim's share.
+* **The vocabulary's sampled fields at the deployment's sessions** (`Deployed`, `Covers`): at most one session at each
+  parameters and committed files, each one v2 sets up, with the deployment's writer, device bytes and bound
+  parameters. Soundness's `Vocab` reads the constructions' read finder and forger at `.sampled`, no loss term, and at
+  each session the extractor at the projected strategy, the leg's per-finder premises in `error`'s condition, and a
+  published `δ` at least the session's. Where there is no session the sampled verdict never accepts.
 * **The per-finder SHA-512 premises at a strategy and a budget** (`Live.FinderCR`): `cr/sha-512` at each table's
   knowledge finders (`TableCRZ`: the fork, pads, τ and level-0 finders at `2t + 2v`, the self-clash finder at `t + v`)
   and `ecr/sha-512` at the link finders (`LinkCRZC`, at `t + w` per run), at `t` the strategy's SHA-512 calls.
@@ -148,16 +159,16 @@ structure Live where
 
 attribute [instance] Live.fΩ Live.nΩ
 
-/-- **The coins a projection reads beside the draw's sample**: a finite type of the device's other releases, those a
+/-- **The widening of the draw's sample a projection reads**: a finite type of the device's other releases, those a
 strategy of the period's game may ask for that the session doesn't read (other families' coins, other trees' samples). A
 C-Flock strategy flips no coin of its own, so the projected strategy reads them off the draw's sample, widened by them
 (`Live.extend`). -/
-structure Coins where
+structure Widening where
   T : Type
   [fT : Fintype T]
   [nT : Nonempty T]
 
-attribute [instance] Coins.fT Coins.nT
+attribute [instance] Widening.fT Widening.nT
 
 /-- A3 at a sample widened by a second uniform coin that the bytes don't read. -/
 theorem uniform_fst {Ω T : Type} [Fintype Ω] [Fintype T] [Nonempty T] {m : ℕ} {Lb : Fin m → ℕ}
@@ -171,7 +182,7 @@ variable (A : Live)
 
 /-- **The session with the draw's sample widened by the coins `S`**: the draw reads only the session's bytes, so the
 draw's law is the session's and A3 holds at the widened sample (`uniform_fst`). -/
-noncomputable def extend (S : Coins) : Live where
+noncomputable def extend (S : Widening) : Live where
   __ := A
   Ω := A.Ω × S.T
   fΩ := inferInstance
@@ -327,7 +338,7 @@ two-continuation finders, one per round the device opens after a digest of the p
 the commitment is a digest of, each at most `2t + 2h` SHA-512 calls on every coin (`Live.qM`). -/
 structure Constructions (V : Vocab d α) where
   coins : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
-    Verity.Game.Strategy (V.game θ F c) → Coins
+    Verity.Game.Strategy (V.game θ F c) → Widening
   project : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     (σ : Verity.Game.Strategy (V.game θ F c)) → FlockSoundness.Game.Strategy (A.extend (coins A θ F c σ)).game
   readFinder : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) →
@@ -378,5 +389,72 @@ def CouplingTarget (V : Vocab d α) (k : Verity.Registration.Composite) (K : Con
           ENNReal.ofReal (Real.sqrt ((K.recordFinder A θ F c σ).Pr Verity.sha512Msg)) + A.hidingTerm +
           ENNReal.ofReal ((K.readFinder θ F c σ).Pr Verity.sha512Msg) +
           ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))
+
+/-- **Composite `k` reads sampled proofs at v2**: its `.sampled` component is one-stage v2's audit, whose check computes
+each session's verdict from the session's files. At v1 (`SampledProofs.OneStage.protocol`) the verdicts are the
+prover's. -/
+def ReadsV2 (k : Verity.Registration.Composite) : Prop :=
+  Verity.component k .sampled = some _root_.SampledProofs.OneStageZk.protocol
+
+/-- **v2's parameters in the composite's parameters `θ`**: the component parameters the composition's format decodes
+under v2's id, read by v2's decoder, as `Verity.CaseAccepts` reads a component's
+(`Properties.Composition.DecodedAccepted`). -/
+def ParamsAt (θ : ByteArray) (p : _root_.SampledProofs.OneStageZk.Params) : Prop :=
+  ∃ ps, (_root_.Core.canonicalJson θ >>= _root_.Core.Composition.decodeParams) = .ok ps ∧
+    ∃ x ∈ ps, x.id = _root_.SampledProofs.OneStageZk.PROTOCOL ∧
+      (_root_.Core.canonicalJson x.params.toUTF8 >>= _root_.SampledProofs.OneStageZk.paramsOfJson) = .ok p
+
+/-- **The C-Flock law the draw reads over `n` units** under the verifier `v`'s agreed law: the law
+`SampledProofs.Draw.deriveLaw` derives, or else the expanded rule's (`SampledProofs.Draw.flockLaw` at
+`SampledProofs.Draw.derive`'s), as `SampledProofs.OneStage.drawnFrom` reads it before `SampledProofs.Draw.drawUnits`
+draws. -/
+def lawAt (v : _root_.SampledProofs.Registration.Verifier) (n : ℕ) : Flock.V Flock.Draw.Law := do
+  let lawJ ← _root_.SampledProofs.Draw.derive v.program v.query v.law v.workTable
+  let derived ← _root_.SampledProofs.Draw.deriveLaw v.program v.query v.law v.workTable
+  pure (derived.getD (← _root_.SampledProofs.Draw.flockLaw lawJ n))
+
+/-- **`A` is the session v2 sets up on the parameters `θ` and the committed files `F`**: v2's parameters in the
+composite's (`ParamsAt`), with the verifier's partition object and program as flock-verify's inputs and the law the draw
+reads over the population (`lawAt`); the statement's tags, one table, no work, stratified or closure input and no
+recomputation of public input words, as `SampledProofs.OneStageZk.inputsOf` hands them; the committed circuit and public
+files, and the vocabulary's reading of the files (`Vocab.read`) as the session's, its lookup tables included; and the
+claim's share, the published certificate's. The writer, the device's bytes and the bound's parameters are the
+deployment's session's (`Deployed`). -/
+structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Live) : Prop where
+  params : ∃ p, ParamsAt θ p ∧ A.I.partition = some p.own.partition ∧ A.I.program = some p.own.program ∧
+    lawAt p.base.verifier A.n = .ok A.law
+  tags : Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some A.I.tags
+  count : A.I.count = 1
+  work : A.I.work = none
+  stratified : A.I.stratified = none
+  closure : A.I.closure = none
+  own : A.own = none
+  circuit : A.I.circuitFile = V.circuitFile θ F
+  publicFile : A.I.publicFile = V.publicFile θ F
+  read : V.read θ F = A.fileRead
+  share : (V.certOf θ).ε = A.ε
+
+/-- **The deployment's sessions `S` cover the sampled verdict at composite `k`**: where `S` holds no session, no
+strategy of the period's game makes the sampled verdict accept. -/
+def Covers (V : Vocab d α) (k : Verity.Registration.Composite) (S : ByteArray → Array ByteArray → Option Live) :
+    Prop :=
+  ∀ θ F, S θ F = none → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
+    Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0
+
+/-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's sessions `S`**: each session
+`S` holds is the one v2 sets up (`SetsUp`); the finder is `K`'s read finder and the forger `K`'s, with no loss term; and
+at each session the extractor is the session's at the projected strategy (`Live.extract`), `error`'s condition holds the
+leg's per-finder premises (`FinderCR`), and the published `δ` is at least the session's at the read finder's published
+bound (`Live.delta`). -/
+structure Deployed (V : Vocab d α) (K : Constructions V) (S : ByteArray → Array ByteArray → Option Live) : Prop where
+  setsUp : ∀ θ F A, S θ F = some A → SetsUp V θ F A
+  finder : ∀ θ F c σ, V.finder .sampled θ F c σ = K.readFinder θ F c σ
+  forger : ∀ θ F c σ, V.forger .sampled θ F c σ = K.forger θ F c σ
+  loss : ∀ θ x, V.loss .sampled θ x = 0
+  extract : ∀ θ F A, S θ F = some A → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
+    HEq (V.extract θ F c σ) ((K.live A θ F c σ).extract (K.project A θ F c σ))
+  finderCR : ∀ θ F A, S θ F = some A → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
+    V.finderCR .sampled θ F c σ → FinderCR V K A θ F c σ
+  delta : ∀ θ F A, S θ F = some A → ∀ t, A.delta t (V.crBound θ .sampled t) ≤ V.delta θ .sampled t
 
 end Verity.Sampled
