@@ -181,7 +181,8 @@ class Detection:
             raise ValueError(f"sampled proofs need {unset}")
 
     def q(self) -> float:
-        """The detection probability per incorrect block: the proof share over the cost of proving a unit."""
+        """One minus the acceptance probability per incorrect block: the proof share over the cost of proving a
+        unit."""
         return self.proof_share / (self.overhead + self.replay) if self.sampled else 1.0
 
     def injected(self) -> float:
