@@ -30,9 +30,9 @@ collision, or the forger outputs a forgery of the device's LMS signature.
   of `records` under `keyOf`'s key, `drawCoins` reads from it the coins v2's check read, and v2 held the sessions'
   records to the coin trees it read from it (`Verity.Sampled.Trees.accepted_trees`).
 * **An accepted read is a run's log** (`accepted_run`): where v2's check reads a log, it is what `readLines` reads
-  from the lines of a run of the device that the device's ledger opens withheld on the draw's window, with the run's
-  released coins as the draw's (`Challenger.Drawn.drawn_log`), or one of the records under `keyOf`'s key carries a
-  break. The records the evidence names each pass the coin trees `coinTreesOf` reads from that run's log
+  from the lines of a run of the device that the device's ledger opens withheld on the draw's window, whose release
+  log reads as its coin commitment's, with the run's released coins as the draw's (`Challenger.Drawn.drawn_log`), or
+  one of the records under `keyOf`'s key carries a break. The records the evidence names each pass the coin trees `coinTreesOf` reads from that run's log
   (`trees_of`, `records_of`).
 * **The constructions** at a strategy, on a uniform tape of its play (`Verity.Game.Tape`), at the device's history at
   each play (`dev`). The read finder (`readFinder`) outputs the first collision `findBreak` finds in a record, else the
@@ -54,8 +54,8 @@ collision, or the forger outputs a forgery of the device's LMS signature.
   Then an accepted play that isn't `Logged` is at most as likely as the read finder's collision plus the forger's
   forgery.
 * **Where the device printed its log** (`binds_of_prints`): if at every play under the parameters the device's runs
-  print the play's log as `readLines` reads it, with the play's fresh coins as the runs' released coins
-  (`Lines.PrintsLog`), `Binds` holds: an accepted read is the log's (`Lines.read_run`), so where it isn't `Logged` an
+  print the play's log as `readLines` reads it, with the play's fresh coins as the runs' released coins wherever a
+  run's release log reads as its coin commitment's (`Lines.PrintsLog`), `Binds` holds: an accepted read is the log's (`Lines.read_run`), so where it isn't `Logged` an
   opening's read coins differ from the released ones under one digest (`Lines.open_collision`).
 -/
 
@@ -458,15 +458,18 @@ theorem records_of {s : Sent} {e : SampledProofs.OneStageZk.Evidence} {ts : Arra
 /-- **An accepted read is `readLines` over a run of the device**: at a composite that reads sampled proofs at v2, on a
 run accepted as a `same` composition whose sampled component accepts its own case, where v2's check reads a log
 (`Verity.Sampled.coinsRead`), that log is what `readLines` reads from the lines of a run of the device under the
-challenger's key, a run the device's own ledger opens withheld on the draw's window, with that run's released coins as
-the draw's, on the records the evidence names, each of which passes the coin trees the run's log holds
-(`coinTreesOf`, `sessionTreeReason`); or one of the run's v2 records under the parameters' key carries a break. -/
+challenger's key, a run the device's own ledger opens withheld on the draw's window, whose release log reads as its
+coin commitment's (`releasedRootsOf`), with that run's released coins as the draw's, on the records the evidence
+names, each of which passes the coin trees the run's log holds (`coinTreesOf`, `sessionTreeReason`); or one of the
+run's v2 records under the parameters' key carries a break. -/
 theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev : History) {s : Sent}
     (hs : SameAccepts k s) (ha : ComponentAccepts k .sampled s) {l : List Release}
     (hl : Verity.Sampled.coinsRead s = some l) :
     (∃ x ∈ records s, keyOf s.params = some x.1.key ∧ Break dev x.1.key x.1.label x.2) ∨
       ∃ (d : Draws) (e : SampledProofs.OneStageZk.Evidence) (recs : List Json), ∃ r ∈ dev.runs d.key.pub,
-        OpensOn dev d.key.pub d.window r.id ∧ Verity.Sampled.recordsOf s e = some recs ∧
+        OpensOn dev d.key.pub d.window r.id ∧
+        (∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) ∧
+        Verity.Sampled.recordsOf s e = some recs ∧
         Verity.Sampled.readLines d.label d.after recs r.log.tail [] none (r.released d.label d.after) = some l ∧
         ∃ ts, coinTreesOf r.log = .ok ts ∧ ∀ rec ∈ recs, sessionTreeReason ts rec = none := by
   unfold Verity.Sampled.coinsRead at hl
@@ -504,9 +507,9 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
               cases hw : p.base.verifier.windowRoot with
               | none => rw [hw] at hd; cases hd
               | some w => rw [hw] at hd; cases hd; exact ⟨rfl, rfl⟩
-            rcases Drawn.drawn_log (dev := dev) hdraw with ⟨r, hr, ho, hξr, ls, hlog, hls⟩ | b
+            rcases Drawn.drawn_log (dev := dev) hdraw with ⟨r, hr, ho, hξr, hcr, ls, hlog, hls⟩ | b
             · have hlr : lines = r.log := Except.ok.inj (hlines.symm.trans (linesOf_eq hlog hls))
-              refine .inr ⟨d, e, recs, r, hr, ho, hrecs, ?_, ts, trees_of hts hlog hls, records_of hheld hrecs⟩
+              refine .inr ⟨d, e, recs, r, hr, ho, hcr, hrecs, ?_, ts, trees_of hts hlog hls, records_of hheld hrecs⟩
               rw [← hξr, ← hlr, hdl, hda]
               exact hl
             · exact .inl ⟨(d, e.base.coins), hrec, hkey, b⟩
@@ -936,9 +939,9 @@ theorem binds_of_prints (V : Vocab d α) (k : Verity.Registration.Composite) (de
   | none => exact (hl fun log hlog => by simp [readsV2, hc] at hlog).elim
   | some l =>
     rcases accepted_run (composite_readsV2 k) (dev o) hs ha hc with ⟨x, hx, hk, hb⟩ |
-      ⟨dr, e, recs, r, hr, ho, -, h, ts, hts, hrecs⟩
+      ⟨dr, e, recs, r, hr, ho, hcr, -, h, ts, hts, hrecs⟩
     · exact .inl ⟨x, hx, by rw [← hθ]; exact hk, hb⟩
-    · have hread := Lines.read_run (hP o hθ) hr ho hts hrecs h
+    · have hread := Lines.read_run (hP o hθ) hr ho hcr hts hrecs h
       obtain ⟨out', hout, hag⟩ := Lines.opens_read hc
       have hcoins : ¬ List.Forall₂ (fun y x => y.coins ≠ [] → y.coins = x.coins) l o.log := fun hc' =>
         hl fun log hlog => by
