@@ -11,7 +11,8 @@ which every record carries. Findings, negative results and tool announcements go
 
 te_core scores by the training formalism v2. |C|, c, w and d are Boolean gates (`gates`: each counted op at its
 circuit Definition's price, a bf16 GEMM MAC being `HopperBF16WgmmaDot16_v2`'s 23,682 gates / 16 = 1,480.1), every
-other quantity bits.
+other quantity bits. A gate is any of AND, XOR and NOT, so a count is about 3x its AND count (3.0x for a bf16 GEMM,
+`gates.UNIT`, which the training panels' titles state).
 
 - **θ (registered weights)**: a start's weights, registered once at the start of the monitoring period, so every value
   computed during the run is new.
@@ -73,11 +74,13 @@ other quantity bits.
   kinds (fresh products, token, decoding) of each kind's share of |C| over its cap a block. It returns each kind's
   term (None, with the reason, where unmeasured), the max, the kind it binds on and what each kind rests on: fresh
   products Loomis-Whitney's cap (a theorem under `io_bound`'s premises, P-width among them, an assumption on a
-  reference circuit: `io_bound`'s bound on the products `formalism.products_of` takes from captured steps, measured
+  reference circuit: `io_bound`'s bound on the products `formalism.products_of` takes from captured steps, or
+  `formalism.products_of_trace` from the product rows a trace keeps from te_core 4.8 on (`capture.products`), measured
   where the capture says they're summed in a chain, since `io_bound` has the chain constant only and the tree
-  constant applies where the trace doesn't give the order; a record with only an op log, every ledger row so far, has
-  its log's product rows, `formalism.products_of_ops`, but no operand's freshness, so the term is unmeasured there
-  with the share of MACs it leaves unknown), token A1 under reading A with its witness family, decoding assumption
+  constant applies where the trace doesn't give the order, as no trace does; a record with only an op log, a ledger
+  row traced before 4.8, has its log's product rows, `formalism.products_of_ops`, but no operand's freshness, so the
+  term is unmeasured there with the share of MACs it leaves unknown), token A1 under reading A with its witness
+  family, decoding assumption
   (D). Where Fit fails ρ is max(1, that max). Gradient reduction, update application, reading B's token form and the
   per-gate token term come out beside it as labelled sensitivities, never in the max: (R) and (U) hold only for
   partitions split by tokens, and per_gate only for blocks that are no union of witnesses. `rho_vectors.json` holds
@@ -145,20 +148,24 @@ data with neither a start that has a scored checkpoint nor a ladder point has no
 from-scratch losses or prices C0. A fit takes three points (`FIT_MIN`), and one on fewer than five from scratch
 (`FIT_TARGET`) is provisional: its status and note say so, the note with its points' residuals and the ladder's runs
 off its frontier. `training/algorithm-policy` is `algorithm_policy`'s: per run, start and gain target g (1.1, 2 and
-11, a checkpoint's gain its effective compute through that fit over C0), "yes" at the run's first checkpoint reaching
-g, else "no" at its last, with the algorithm's inefficiency p = C/H (H the least |C| of any checkpoint from the start
-on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ at
-the dial's default (`rho_default`), and the inputs the console's dial recomputes ρ from at any (c, k), in one JSON
-cell (`rho_inputs`; te_core 4.x's per-part Fit and ᾱ/α_max among them, u_in exact at the dial's k), so S = pρ;
-`build` refuses a row whose cells miss `formalism.at` at a dial cell. Beside them, `formalism.published` at the
-console's default policy: `rho_console` (the one bound's ρ under reading A where the row's trace has entries and an op
-log, else reading B's, a target), its `reading`, the `te_core` that priced it, `binding_kind`, `rests_on` and `kinds`
-(the terms its max takes and the sensitivities it leaves out). Its coverage (gain
-target by data by decade of ρ) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
+11, a checkpoint's gain C(L1)/C(L0) on that fit, from the start's loss L0 to its own L1, so every target is below
+L0), "yes" at the run's first checkpoint reaching g, else "no" at its last, with the algorithm's inefficiency p = C/H
+(H the least |C| of any checkpoint from the start
+on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ,
+`formalism.published` at the console's default policy (`policy.CONSOLE`, the one default: `rho_default`, a number,
+and `rho_console`; `rho_served` at the registered serving block, `panels.SERVED`), so S = pρ, and the inputs the
+console's dial recomputes ρ from at any (c, k), in one JSON cell (`rho_inputs`; te_core 4.x's per-part Fit and
+ᾱ/α_max among them, u_in exact at the dial's k and the console's); `build` refuses a row whose cells miss
+`formalism.at` at a dial cell or the console's default. Beside them: its `reading` (the one bound's ρ under reading A
+where the row's trace has entries and an op log, else reading B's, a target), the `te_core` that priced it,
+`binding_kind`, `rests_on` and `kinds` (the terms its max takes and the sensitivities it leaves out). Its coverage
+(gain target by data by decade of ρ, with the reached cells' ρ at the registered serving block beside the console's
+default) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
 refuses, which no cell holds (`tables/refused.json` gives each one's reason). `--publish` GETs what the route serves
-and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one whose coverage
-this build fills less of, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never
-empties a populated panel. `training/frontier-branches` (`panels`'s: the frontier and each start's honest and throttled branches over
+and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one with a run this
+build has no row for, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never
+empties a populated panel; a build with every served run replaces an older te_core's rows, however its coverage
+moves. `training/frontier-branches` (`panels`'s: the frontier and each start's honest and throttled branches over
 the dial) is retired from the console and no longer PUT; `panels` still holds the dial both use (`dial`, `rho_columns`,
 `page_inputs`, `mismatches`). Every scoring command (`frontier`, `plots`, `rescore`, `panels`, `frontier_fit`,
 `algorithm_policy`) applies one cap, `policy.eligible`: a checkpoint is scored only when its model's forward gates per
@@ -258,7 +265,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share (torch-free) |
 | `gates.py` | each counted op's price in Boolean gates from the circuits' Definitions (`DEFINITIONS`, `PRICES`, `kind_of`, `of_log`) |
 | `policy.py` | a start's reference shapes (inference block, reference policy, server block), the (c, k) grid in decades, and `cells`, both by key; the console's policy (`CONSOLE`), one full session of the 45M reference in gates (`session_gates`, `session`: the matrices, the LM head and attention's score and value products over the session's context, at the shape `SHAPES` states for each size), which every producer reads |
-| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it, and the one bound over the kinds that are lower bounds on their own under reading A, its sensitivities beside it (`bound`, `packer`, `per_gate`, `fresh_products`, `KINDS`, `RESTS_ON`, `SENSITIVITIES`), the fresh-products kind's inputs from captured steps (`products_of`, `ORDERS`), and an op log's product rows, which can't tell a fresh operand (`products_of_ops`, `LOG_KIND`, `LOG_UNKNOWN`), and the console's ρ on it (`published`, at `policy.CONSOLE` by default, `RESTS_ON_CELL`, `CELL_SENSITIVITIES`, `READING_A`); `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
+| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it, and the one bound over the kinds that are lower bounds on their own under reading A, its sensitivities beside it (`bound`, `packer`, `per_gate`, `fresh_products`, `KINDS`, `RESTS_ON`, `SENSITIVITIES`), the fresh-products kind's inputs from captured steps (`products_of`, `ORDERS`) and from a trace's product rows (`products_of_trace`, `product_kind`, `PRODUCTS_FROM`, `TRACED_PRODUCTS`), and an op log's product rows, which can't tell a fresh operand (`products_of_ops`, `LOG_KIND`, `LOG_UNKNOWN`), and the console's ρ on it (`published`, at `policy.CONSOLE` by default, `RESTS_ON_CELL`, `CELL_SENSITIVITIES`, `READING_A`); `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
 | `plots.py` | the five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
 | `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note, 4,096-character cells, 24 columns; `refused`), one panel's PUT and the panels the route serves (`served`) |
 | `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
@@ -274,7 +281,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |
-| `capture/` | the step circuit: one training step traced on fakes (`make_fx`, or `capture.script`'s recorder for a covert_witness script from its launch record), its \|C\|, U by update dependence, D and the cut without running, in `flops`'s record form, and the formalism's quantities on it (`capture.circuit`, reading A's checker `check` among them); its own suite. Its op sets are `flops`'s (`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`, `GEMM_LIKE`, `NOT_GEMM`, `TOKEN_INDEX`, `GATHERS`), and so is its rule for an updated node with no multiplication |
+| `capture/` | the step circuit: one training step traced on fakes (`make_fx`, or `capture.script`'s recorder for a covert_witness script from its launch record), its \|C\|, U by update dependence, D and the cut without running, in `flops`'s record form, and the formalism's quantities on it (`capture.circuit`, reading A's checker `check` among them), with the step's matrix products as `io_bound` reads them (`capture.products`: dims, each operand's θ′-dependence, passed widths and rates keyed by the capture's values, the order unknown); its own suite. Its op sets are `flops`'s (`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`, `GEMM_LIKE`, `NOT_GEMM`, `TOKEN_INDEX`, `GATHERS`), and so is its rule for an updated node with no multiplication |
 | `tests/` | a suite (`uv run tools/verity/check/suites.py benchmarks/covert_witness/te_core`); `cw_fake/` is a fake `prepare` and island |
 
 ## Limits of the count

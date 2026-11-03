@@ -85,8 +85,8 @@ DEFAULT = (policy.SESSION_TOKENS, policy.REFERENCE_K_BITS)
 #: the served demo's measured block, (c gates, k bits): one slot's 35-step session of Llama-3.2-1B int8 under vLLM, c
 #: in one-bit gates (a lower bound: its 133 BitAtx32_v1 activations a block are unpriced), k its fresh bits
 SERVED = (30_087_822_237_972, 145_568)
-#: the dial's k, where a candidate's `u_in_points` give x0 exactly (`through`)
-K_LEVELS = tuple(sorted({8 * kb for kb in K_BYTES} | {DEFAULT[1], SERVED[1]}))
+#: the dial's k and the console default's, where a candidate's `u_in_points` give x0 exactly (`through`)
+K_LEVELS = tuple(sorted({8 * kb for kb in K_BYTES} | {DEFAULT[1], SERVED[1], int(policy.CONSOLE[1])}))
 #: the data a record's held-out loss is on, the headline first: harness v3's, else the v2.3 harness's (`data_of`)
 DATA = ("v3", "v2.3-pilot")
 COLUMNS = ["curve", "data", "start", "start_compute_gates", "start_loss", "on_frontier", "c_tokens_per_block", "c_gates",

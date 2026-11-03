@@ -39,7 +39,7 @@ binding kind, none or unmeasured, and `RESTS_ON[basis]` what it rests on. The ki
   ruling). The term is io_bound's proved figure without P-cell (`FRESH_FIGURE`), which needs no premise on how a
   partition splits a multiplier's gates (the coordinator's 06:57Z obligation 1 and 12:09Z ruling: P-cell is a
   premise on the partition, which the attacker chooses); it rests on P-width and P-chain and no A1. The figure under
-  P-cell (every block holding whole GEMM gadgets), te_core.formalism.fresh_products' own term in 4.7, is the
+  P-cell (every block holding whole GEMM gadgets), te_core.formalism.fresh_products' own term in 4.8, is the
   sensitivity beside it (`fresh_cell`, 19 times the term on the dense default and on the LoRA's). A product with an
   operand in θ (a frozen weight, a registered teacher's) isn't fresh, nor is the
   lowest layer's attention input projection's (its input is gathered embedding rows, which io_bound's P-width prices
@@ -167,7 +167,7 @@ FIRST_ADAPTED = {name: sum(x in ("q", "k", "v") for x in ms) or sum(x in ("gate"
                  for name, ms in TARGET_MATRICES.items()}
 #: the widest dimension of each LoRA target set's matrices, in d_models (a factor is it by the rank)
 TARGET_WIDEST = {name: max(max(MATRICES[x]) for x in ms) for name, ms in TARGET_MATRICES.items()}
-#: te_core.io_bound's commit in this tree, whose `bound` prices the fresh products (te_core 4.7's, by
+#: te_core.io_bound's commit in this tree, whose `bound` prices the fresh products (te_core 4.8's, by
 #: te_core.formalism.fresh_products; the linear form on its best subset since d473341d6b)
 IO_BOUND = "cursor/te-io-bound-4207 at 3c2afa62aa"
 #: the order a model's products are summed in (te_core.formalism.ORDERS): the standard algorithm's, te_core's GEMM
@@ -176,7 +176,7 @@ IO_BOUND = "cursor/te-io-bound-4207 at 3c2afa62aa"
 ORDER = "chain"
 #: io_bound's proved figures: the fresh-products kind's term without P-cell, a premise on the partition, which the
 #: attacker chooses, and the one under P-cell beside it (coordinator 12:09Z, until Daniel answers the premises ask;
-#: te_core.formalism.fresh_products takes the one under P-cell in 4.7)
+#: te_core.formalism.fresh_products takes the one under P-cell in 4.8)
 FRESH_FIGURE, FRESH_CELL = "rho_no_cell", "rho"
 #: why reading A's kinds are unmeasured here
 NO_TRACE = ("unmeasured: te_core 4.5's packer reads a trace's entries and op log (its runs and matrix-product tiles), "
@@ -198,7 +198,7 @@ VALID = {
 #: the fresh-products figure under P-cell beside ρ, a sensitivity (coordinator 12:09Z)
 P_CELL = ("sensitivity, premise P-cell beside the term's P-width and P-chain (te_core.io_bound): every block holds "
           "whole GEMM gadgets, a premise on the partition, which the attacker chooses (coordinator 12:09Z); "
-          "te_core.formalism.fresh_products' term in 4.7")
+          "te_core.formalism.fresh_products' term in 4.8")
 #: what the bound publishes beside ρ, never in its max (te_core.formalism.SENSITIVITIES), and the fresh products' under
 #: P-cell
 SENSITIVITIES = dict(formalism.SENSITIVITIES) | {"fresh_cell": P_CELL}
@@ -1040,7 +1040,7 @@ def fresh(m: Model, c: float, k: float) -> tuple[float | None, str | None, dict,
     """The fresh-products kind at (c, k): te_core.formalism.fresh_products on `products`, the model's `Measured.products`
     at k and summed in `ORDER`; its term where formalism measures it, io_bound's proved figure without P-cell
     (`FRESH_FIGURE`), else None with formalism's reason; the figure under P-cell beside it, the sensitivity
-    `fresh_cell` (`FRESH_CELL`, formalism's own term in 4.7); and Λ (None: void, past whole_chain's r = 1/4, its
+    `fresh_cell` (`FRESH_CELL`, formalism's own term in 4.8); and Λ (None: void, past whole_chain's r = 1/4, its
     figures 0), the counted share of |C|, attention's share (uncounted) and the term's figure at the numerical Λ."""
     me = replace(m.measured, products={"k": float(k), "order": ORDER, "products": products(m, c, k)})
     _, why, got = formalism.fresh_products(me, c, k)

@@ -1,6 +1,6 @@
 {
  "id": "te_core.workloads",
- "te_core": "4.7",
+ "te_core": "4.8",
  "reading": "A",
  "spec": "note:training-20261103T0600Z-draft-workload-models",
  "io_bound": "cursor/te-io-bound-4207 at 3c2afa62aa",
@@ -18,7 +18,7 @@
   "token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
   "decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, alpha_max (x0 s + s*))) affected gates, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
   "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate at the best witness that holds it (per_gate); a block holding one gate of a product beside another product's tile or the best run holds more, for a few bits of that gate's own operands",
-  "fresh_cell": "sensitivity, premise P-cell beside the term's P-width and P-chain (te_core.io_bound): every block holds whole GEMM gadgets, a premise on the partition, which the attacker chooses (coordinator 12:09Z); te_core.formalism.fresh_products' term in 4.7"
+  "fresh_cell": "sensitivity, premise P-cell beside the term's P-width and P-chain (te_core.io_bound): every block holds whole GEMM gadgets, a premise on the partition, which the attacker chooses (coordinator 12:09Z); te_core.formalism.fresh_products' term in 4.8"
  },
  "target": "target: A1 at reading B, not a bound: te_core.formalism.published at reading B, Fit's c/(c - d) where it holds, else Slowdown's token form (sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading)",
  "rests_on": {
