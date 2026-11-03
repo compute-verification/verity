@@ -162,9 +162,9 @@ empties a populated panel. `training/frontier-branches` (`panels`'s: the frontie
 the dial) is retired from the console and no longer PUT; `panels` still holds the dial both use (`dial`, `rho_columns`,
 `page_inputs`, `mismatches`). Every scoring command (`frontier`, `plots`, `rescore`, `panels`, `frontier_fit`,
 `algorithm_policy`) applies one cap, `policy.eligible`: a checkpoint is scored only when its model's forward gates per
-token are at most the greater of its start's and the compute-optimal model's at its loss under the ladder's fit (their
-`--ladder-fit FILE`, `policy.ladder_fit`), and twice its start's where there is no fit or the fit doesn't reach its
-loss (`policy.CAP_FALLBACK`), so a grown model is still scored; the rest are left out as `over-cap`.
+token are at most the greater of twice its start's (`policy.CAP_FALLBACK`) and the compute-optimal model's at its loss
+under the ladder's fit (their `--ladder-fit FILE`, `policy.ladder_fit`), and twice its start's where there is no fit or
+the fit doesn't reach its loss, so a grown model is still scored; the rest are left out as `over-cap`.
 
 ## What the integrator calls
 
