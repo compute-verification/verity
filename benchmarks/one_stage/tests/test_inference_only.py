@@ -6,9 +6,10 @@ at the declared utilization over the lease, rounded up to the grid, from the cla
 session's gates and fresh bits with every weight held, and n; and on toy serve dirs over small circuit records the verdict
 accepts within (c, k, n), refuses past each, and refuses as undecided what the rule can't decide (no policy, one written
 after the serve began unless said retroactive, a primitive with no price, a closed window with no seal, a window the
-class doesn't take), its public form naming no window and counting none: it judges n on the exact count, which only the
-private form holds, and publishes each count at least 16 and on the grid, so runs whose counts differ below 16 publish
-the same verdict. The slow test runs `nci-check --count`."""
+class doesn't take), its public form naming no window and publishing no count: it judges n on the exact count, which
+only the private form holds, so runs whose counts differ publish one verdict, unless n falls between them, and then
+differ in their judgment alone; and it keeps none of `nci-check --count`'s counts. The slow test runs `nci-check
+--count`."""
 from __future__ import annotations
 
 import json
@@ -25,7 +26,6 @@ sys.path.insert(0, str(HERE.parent))
 
 import inference_only as IO  # noqa: E402
 import served_verdicts as SV  # noqa: E402
-from verity.ml.circuits import partition_v2 as PV2  # noqa: E402
 from verity.ml.definitions.registry.catalog import load  # noqa: E402
 from verity.ml.definitions.registry.sampling import bit_at  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
@@ -178,22 +178,26 @@ def _policy(row: dict, **over) -> dict:
 FULL = {7: [{}, {}], 11: [{}, {"prompt": 1}], 13: [{"outputs": 1}]}
 
 
-def test_a_run_within_its_policy_is_accepted_and_its_public_form_counts_no_window(small, tmp_path):
+def test_a_run_within_its_policy_is_accepted_and_its_public_form_holds_no_count(small, tmp_path):
     """Three sealed windows of the class (one with a slot empty) are six blocks of its session: within (c, k, n) at their
-    own gates and fresh bits and n = 6 the run is accepted, since n is judged on the exact count, though the public
-    verdict publishes 16. The public verdict is its own public form, says how its counts are published and judged, and
-    holds no window's number or count of them; the private one holds the exact counts."""
+    own gates and fresh bits and n = 6 the run is accepted, n judged on that exact count. The public verdict is its own
+    public form: the judgment, the class's session, gates and fresh bits a block, slots and positions, saying that n was
+    judged on the exact count, and no count of blocks or of windows and no window's number; the private one holds the
+    exact counts."""
     row = IO.session_row(small, None, None)
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None)
     assert (pub["verdict"], pub["reason"], pub["complies"], pub["failure"]) == ("accept", None, True, None)
-    assert pub["blocks"] == [[row["definition"], row["gates"], row["fresh"], 16]] and pub["total"] == 16
-    assert pub["counts"] == IO.COUNTS and "max(16, grid(count))" in IO.COUNTS and "exact" in IO.COUNTS
+    assert pub["classes"] == [[row["definition"], row["gates"], row["fresh"]]] and not {"blocks", "total"} & set(pub)
+    assert (pub["slots"], pub["positions"], pub["c"], pub["k"], pub["n"]) == (2, row["positions"], row["gates"],
+                                                                              row["fresh"], 6)
+    assert (pub["format"], pub["counts"]) == ("verity-bench/inference-only-verdict/v3", IO.COUNTS)
+    assert IO.COUNTS.startswith("none published") and "exact count" in IO.COUNTS
     assert pub["registered_session"] is True and pub["serve_began_utc"] == "2025-11-01T12:26:40+00:00"
     assert SV.public_json(pub) == pub and not {"sealed", "outside_class", "retroactive"} & set(pub)
     assert (full["sealed"], full["blocks"], full["total"], full["outside_class"]) == (
         3, [[row["definition"], row["gates"], row["fresh"], 6]], 6, {})
-    assert IO.line(pub).startswith("accept: 16 blocks (published as max(16, grid); n is judged on the exact count, held "
-                                   "on the node) of session")
+    assert IO.line(pub).startswith("accept: session ") and IO.line(pub).endswith(
+        "n 6 (no count published: n is judged on the blocks' exact count, held on the node)")
 
 
 @pytest.mark.parametrize(("over", "why"), [
@@ -208,35 +212,34 @@ def test_a_run_past_its_policy_is_refused(small, tmp_path, over, why):
     pub, _ = IO.verdict(_policy(row, **at), small, _serve(tmp_path / "s", FULL), None, None)
     assert pub["verdict"] == "refuse" and why in pub["reason"] and pub["complies"] is False
     assert pub["failure"] == ([None, "count"] if "n" in over else [0, "gates" if "c" in over else "fresh"])
-    assert pub["total"] == 16 and ("n" not in over or pub["reason"] == why)
+    assert not {"blocks", "total"} & set(pub) and ("n" not in over or pub["reason"] == why)
 
 
-def test_published_counts_are_on_the_grid_and_at_least_16():
-    """A published count is 16 for any count up to 16, where the grid is exact and would publish the count itself, and
-    the grid's above it."""
-    assert IO.FLOOR == 16 == 1 << PV2.GRID_BITS and all(PV2.grid(x) == x for x in range(IO.FLOOR))
-    assert [IO.published(x) for x in (0, 1, 4, 15, 16, 17, 31, 33, 100)] == [16, 16, 16, 16, 16, 18, 32, 36, 104]
-    assert all(IO.published(x) == PV2.grid(x) >= x for x in range(IO.FLOOR, 4096))
-
-
-def test_n_is_judged_on_the_exact_count_and_runs_under_16_blocks_publish_one_verdict(small, tmp_path):
-    """Runs of one to eight windows, two to 16 blocks, publish one public verdict and line at n = 16, each total 16, and
-    differ only in their private verdicts' exact counts; at n = 3, under the floor, two blocks are accepted and four
-    refused, each published as 16, by the exact count against n."""
+def test_no_public_field_carries_a_count_and_n_is_judged_on_the_exact_one(small, tmp_path):
+    """Runs of one to 17 windows, two to 34 blocks, which a 16-block floor on the grid publishes as 16 and as 36, publish
+    one public verdict and one line at n = 64, and differ only in their private verdicts' exact counts, which the count
+    rule judges. At n = 1 one window is refused; at n = 3 one window's two blocks are accepted and two windows' four
+    refused, and the two public verdicts differ in their judgment alone."""
     row = IO.session_row(small, None, None)
-    runs = {w: _serve(tmp_path / f"w{w}", {7 + j: [{}, {}] for j in range(w)}) for w in (1, 2, 3, 8)}
-    seen = {w: IO.verdict(_policy(row, n=16), small, d, None, None) for w, d in runs.items()}
+    runs = {w: _serve(tmp_path / f"w{w}", {7 + j: [{}, {}] for j in range(w)}) for w in (1, 2, 3, 8, 17)}
+    seen = {w: IO.verdict(_policy(row, n=64), small, d, None, None) for w, d in runs.items()}
     pubs = [pub for pub, _ in seen.values()]
-    assert all(p == pubs[0] for p in pubs) and pubs[0]["verdict"] == "accept" and pubs[0]["total"] == 16
-    assert len({IO.line(p) for p in pubs}) == 1
-    assert [full["total"] for _, full in seen.values()] == [2, 4, 6, 16]
+    assert all(p == pubs[0] for p in pubs) and pubs[0]["verdict"] == "accept" and len({IO.line(p) for p in pubs}) == 1
+    assert [full["blocks"] for _, full in seen.values()] == [[[row["definition"], row["gates"], row["fresh"], 2 * w]]
+                                                             for w in runs]
+    assert [full["total"] for _, full in seen.values()] == [2, 4, 6, 16, 34]
+    for pub, full in seen.values():
+        got = IO.judge(full["blocks"], pub["c"], pub["k"], pub["n"])
+        assert (pub["complies"], pub["failure"]) == (got["complies"], got["failure"])
+    one, _ = IO.verdict(_policy(row, n=1), small, runs[1], None, None)
+    assert (one["verdict"], one["reason"], one["failure"]) == (
+        "refuse", "the blocks' exact count is more than n = 1", [None, "count"])
     one, _ = IO.verdict(_policy(row, n=3), small, runs[1], None, None)
     two, full = IO.verdict(_policy(row, n=3), small, runs[2], None, None)
-    assert (one["verdict"], one["total"]) == ("accept", 16)
-    assert (two["verdict"], two["reason"], two["total"], full["total"]) == (
-        "refuse", "the blocks' exact count is more than n = 3", 16, 4)
-    assert {k: v for k, v in one.items() if k not in ("verdict", "reason", "complies", "failure")} == \
-        {k: v for k, v in two.items() if k not in ("verdict", "reason", "complies", "failure")}
+    assert (one["verdict"], two["verdict"], two["reason"], full["total"]) == (
+        "accept", "refuse", "the blocks' exact count is more than n = 3", 4)
+    judgment = ("verdict", "reason", "complies", "failure")
+    assert {k: v for k, v in one.items() if k not in judgment} == {k: v for k, v in two.items() if k not in judgment}
 
 
 @pytest.mark.parametrize(("windows", "unsealed", "why"), [
@@ -255,7 +258,8 @@ def test_what_the_count_cant_decide_is_refused(small, tmp_path, windows, unseale
     row = IO.session_row(small, None, None)
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", windows, unsealed), None, None)
     assert pub["verdict"] == "refuse" and pub["reason"].startswith("undecided: ") and why in pub["reason"]
-    assert pub["complies"] is False and "blocks" not in pub and not any(ch.isdigit() for ch in pub["reason"])
+    assert pub["complies"] is False and not {"classes", "blocks", "total"} & set(pub)
+    assert not any(ch.isdigit() for ch in pub["reason"])
     assert set(full["outside_class"]) == ({"8"} if unsealed else set() if not windows else {"7"})
 
 
@@ -272,7 +276,7 @@ def test_a_policy_written_after_the_serve_began_is_read_only_when_said_retroacti
     assert (pub["verdict"], pub["retroactive"]) == ("accept", "served before the step existed")
     (unstarted := _serve(tmp_path / "t", FULL)).joinpath("serve.json").unlink()
     pub, _ = IO.verdict(_policy(row), small, unstarted, None, None, retroactive="served before the step existed")
-    assert pub["verdict"] == "refuse" and "records no start" in pub["reason"] and "blocks" not in pub
+    assert pub["verdict"] == "refuse" and "records no start" in pub["reason"] and "classes" not in pub
     for pol, doc, why in ((None, small, "no policy"), ({**_policy(row), "format": "x"}, small, "no policy"),
                           (_policy(row), None, "no circuit record"),
                           (_policy(row), {k: v for k, v in small.items() if k != "blocks"}, "states no inference blocks")):
@@ -294,11 +298,12 @@ def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(sma
                     "--private", str(d / "private" / "inference-only.json")]) == 0
     pub = json.loads((tmp_path / "out" / "inference-only.json").read_text())
     full = json.loads((d / "private" / "inference-only.json").read_text())
-    assert pub["verdict"] == "accept" and full["sealed"] == 3 and "sealed" not in pub
-    assert (pub["total"], full["total"], pub["format"]) == (16, 6, "verity-bench/inference-only-verdict/v2")
+    assert pub["verdict"] == "accept" and full["sealed"] == 3 and not {"sealed", "blocks", "total"} & set(pub)
+    assert (full["blocks"][0][3], full["total"], pub["format"]) == (6, 6, "verity-bench/inference-only-verdict/v3")
     assert stat.S_IMODE((d / "private" / "inference-only.json").stat().st_mode) == 0o600
-    assert capsys.readouterr().out.startswith("INFERENCE-ONLY accept: 16 blocks (published as max(16, grid); n is judged "
-                                              "on the exact count")
+    said = capsys.readouterr().out
+    assert said.startswith("INFERENCE-ONLY accept: session ") and "(no count published: n is judged on the blocks' exact " \
+        "count, held on the node)" in said
 
 
 def test_lean_counts_refusal_is_said_not_judged(small, tmp_path):
@@ -314,6 +319,23 @@ def test_lean_counts_refusal_is_said_not_judged(small, tmp_path):
         assert list(tmp_path.glob("tmp*.json")) == []
 
 
+def test_the_record_keeps_none_of_nci_checks_counts(small, tmp_path):
+    """`nci-check --count` prints its rows, each with its count of blocks, and their total; the verdict keeps its gates a
+    block, whether they agree, and its fresh bits, verdict and failure with θ empty, and none of its counts."""
+    row = IO.session_row(small, None, None)
+    said = {"blocks": [[row["key"], row["gates"], row["fresh"] + 5, 2]], "total": 2, "complies": False,
+            "failure": [0, "fresh"]}
+    (tmp_path / "said.json").write_text(json.dumps(said))
+    exe = tmp_path / "nci-check"
+    exe.write_text(f"#!/bin/sh\ncat '{tmp_path / 'said.json'}'\n")
+    exe.chmod(0o755)
+    pub, _ = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
+    assert pub["verdict"] == "accept" and pub["lean"] == {
+        "gates": row["gates"], "agrees_on_gates": True,
+        "with_theta_empty": {"fresh": row["fresh"] + 5, "complies": False, "failure": [0, "fresh"]}}
+    assert IO.line(pub).endswith(f"; nci-check --count: {row['gates']} gates a block (agrees)")
+
+
 @pytest.mark.slow
 def test_nci_check_counts_the_verdicts_gates_on_the_session_program(small, tmp_path):
     """The compiled `nci-check --count` on `small`'s session Program counts the verdict's gates a block: the Lean the
@@ -325,4 +347,5 @@ def test_nci_check_counts_the_verdicts_gates_on_the_session_program(small, tmp_p
     row = IO.session_row(small, None, None)
     pub, _ = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     assert pub["verdict"] == "accept" and pub["lean"]["agrees_on_gates"] is True and pub["lean"]["gates"] == row["gates"]
+    assert set(pub["lean"]) == {"gates", "agrees_on_gates", "with_theta_empty"}
     assert set(pub["lean"]["with_theta_empty"]) == {"fresh", "complies", "failure"}
