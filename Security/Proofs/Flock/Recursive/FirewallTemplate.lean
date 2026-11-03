@@ -3,12 +3,14 @@ import Proofs.Flock.Recursive.FirewallRun
 /-!
 # The firewall sends the schedule's transcript
 
-`run_blank`: a session the firewall (`Flock.Firewall.run`) finishes sends, but for its commit strings, `tmpl s o`, the
-pinned schedule `s`'s transcript with Commit's tables in the order `o` the worker named them (`namesOf`). Every count,
-name, stream, parent and position it sends is the schedule's, through the field-by-field pins beside `step`'s canonical
-compares (`roundSpec`, Commit's node counts, Finish's round count). With `FirewallRun.run_of_one`, a session that finishes
-at one salt list, its commit strings those of 64-byte digests `D`, sends `tmpl s o` filled with `D`'s commit strings at
-every salt list of that length (`sends_of_one`).
+`run_blank_tables`: a session the firewall (`Flock.Firewall.run`) finishes sends, but for its commit strings,
+`tmpl s s.tables`, the pinned schedule `s`'s transcript with Commit's tables in the schedule's order
+(`Schedule.tables`), the only order `step` takes, so the tables its Commit names (`namesOf`) are the schedule's
+(`namesOf_run`). Every count, name, order, stream, parent and position it sends is the schedule's, through the
+field-by-field pins beside `step`'s canonical compares (`roundSpec`, Commit's node counts and order, Finish's round
+count). With `FirewallRun.run_of_one`, a session that finishes at one salt list, its Commit naming the tables `o`
+(`s.tables`, by `namesOf_run`), its commit strings those of 64-byte digests `D`, sends `tmpl s o` filled with `D`'s
+commit strings at every salt list of that length (`sends_of_one`).
 
 The proof reads `step` one case at a time from states equal but for their salts (`H`, `Like`), and carries `Inv` through
 `run`'s loop: what was sent, blanked, is what the state's flags say the schedule has had so far (`sofar`).
@@ -67,7 +69,7 @@ theorem namesOf_blank (l : List Sent) : namesOf (l.map blank) = namesOf l := by
 
 /-- What the schedule has had so far at a state: its flags and its round count. -/
 def sofar (s : Schedule) (st : State) : List Sent :=
-  (if st.hello then [.hello s.hello] else []) ++ (if st.committed then [commitT s (st.roots.map (·.1))] else []) ++
+  (if st.hello then [.hello s.hello] else []) ++ (if st.committed then [commitT s s.tables] else []) ++
     (if st.linked then [.link s.y] else []) ++ roundsT s st.rounds ++ (if st.finished then [.finish true] else [])
 
 /-- The firewall's invariant: what it sent, blanked, is what the schedule has had so far, and its flags come in order. -/
@@ -300,6 +302,7 @@ theorem step_commit (s : Schedule) (rootF : ByteArray) (roots publics : List (St
     exact H.pure fun _ h => h
   refine H.bind H.lift fun _ => H.intro fun _ => ?_
   refine H.ite (fun _ => H.throw_bind) fun hpin => ?_
+  refine H.ite (fun _ => H.throw_bind) fun hord => ?_
   refine H.bind (H.mapM _ blankRoot (fun e => (e.1, blanks (e.2.size / NODE_BYTES))) (fun e => ?_) _)
     fun tops => H.intro fun hT => ?_
   · obtain ⟨n, c⟩ := e
@@ -315,7 +318,9 @@ theorem step_commit (s : Schedule) (rootF : ByteArray) (roots publics : List (St
     rintro ⟨n, c⟩ he
     simp only [List.any_eq_true, not_exists, not_and] at hpin
     simpa using hpin (n, c) he
-  have hC : commitT s (roots.map (·.1)) = blank (.commit tops) := by
+  have hord : roots.map (·.1) = s.tables := by simpa using hord
+  have hC : commitT s s.tables = blank (.commit tops) := by
+    rw [← hord]
     simp only [commitT, blank, hT, List.map_map]
     congr 1
     refine List.map_congr_left fun e he => ?_
@@ -481,9 +486,9 @@ theorem loop_inv (s : Schedule) (reqs salts : List ByteArray) : Inv s (loop s re
   · exact ⟨_, _, rfl, rfl, rfl, hr⟩
 
 /-- **A finished session sends the schedule's transcript**: blanked, what the firewall sent on a session it finished is
-`tmpl s o`, `o` the tables its Commit named, in order. -/
-theorem run_blank (s : Schedule) (reqs ys : List ByteArray) (h : (run s reqs ys).2 = true) :
-    (run s reqs ys).1.toList.map blank = tmpl s (namesOf (run s reqs ys).1.toList) := by
+`tmpl s s.tables`, Commit's tables in the schedule's order, the only order `step` takes them in. -/
+theorem run_blank_tables (s : Schedule) (reqs ys : List ByteArray) (h : (run s reqs ys).2 = true) :
+    (run s reqs ys).1.toList.map blank = tmpl s s.tables := by
   have hI := loop_inv s reqs ys
   rw [run_eq] at h ⊢
   have hf : (loop s reqs ys).1.finished = true := by
@@ -491,11 +496,21 @@ theorem run_blank (s : Schedule) (reqs ys : List ByteArray) (h : (run s reqs ys)
     exact h.1
   obtain ⟨hl, hr⟩ := hI.finished hf
   have hc := hI.committed hl
-  have e : (loop s reqs ys).1.sent.toList.map blank = tmpl s ((loop s reqs ys).1.roots.map (·.1)) := by
+  have e : (loop s reqs ys).1.sent.toList.map blank = tmpl s s.tables := by
     rw [hI.sent]
     simp [sofar, tmpl, hI.hello hc, hc, hl, hr, hf]
-  show _ = tmpl s (namesOf (loop s reqs ys).1.sent.toList)
-  rw [e, ← namesOf_blank, e, namesOf_tmpl]
+  exact e
+
+/-- **A finished session's Commit names the schedule's tables, in its order**: the order is never the worker's. -/
+theorem namesOf_run (s : Schedule) (reqs ys : List ByteArray) (h : (run s reqs ys).2 = true) :
+    namesOf (run s reqs ys).1.toList = s.tables := by
+  rw [← namesOf_blank, run_blank_tables s reqs ys h, namesOf_tmpl]
+
+/-- `run_blank_tables` at the tables the session's Commit named, which are the schedule's (`namesOf_run`). -/
+theorem run_blank (s : Schedule) (reqs ys : List ByteArray) (h : (run s reqs ys).2 = true) :
+    (run s reqs ys).1.toList.map blank = tmpl s (namesOf (run s reqs ys).1.toList) := by
+  rw [namesOf_run s reqs ys h]
+  exact run_blank_tables s reqs ys h
 
 /-! ## What the firewall sends, at every salt list -/
 

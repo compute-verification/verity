@@ -16,6 +16,7 @@ those of the messages `msgs`, each reading the strings before it.
 
 * `firewallSends_of_accepts`: `FirewallAccepts s reqs msgs tables → FirewallSends s reqs msgs (firewallT s tables)`, by
   `FirewallTemplate.sends_of_one` at the zero salts and `firewallStrings`' unfolding.
+* `tables_eq_of_accepts`: there `tables` is the schedule's order `s.tables`, the only one the firewall takes.
 * `recursiveFirewallPrivate_of_accepts`: `RecursiveFirewallPrivate`'s two ways with `FirewallAccepts` in place of
   `FirewallSends`, its simulated view at `firewallT s tables`, which reads only the schedule and the table order.
 * `liveSends`, `liveSends_of_accepts`: the deployed send check, `flock-firewall live` (`FirewallLive.liveRun`), sends
@@ -93,6 +94,17 @@ theorem firewallSends_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Fl
   refine congrArg (fun l => ((FirewallRun.fillAll (FirewallTemplate.tmpl s tables) l).toArray, true)) ?_
   exact congrArg List.ofFn (funext fun i => (firewallStrings_eq (msgs P w r a p) ys i).symm)
 
+/-- **The table order is the schedule's**: under `FirewallAccepts s reqs msgs tables`, `tables` is `s.tables`, the only
+order the firewall takes Commit's tables in (`FirewallTemplate.namesOf_run`), so `firewallT s tables` reads the schedule
+alone. -/
+theorem tables_eq_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.Firewall.Schedule)
+    (reqs : Prog → Wit → Rr → Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+    (msgs : Prog → Wit → Rr → Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (tables : List String)
+    (h : Flock.Guarantees.FirewallAccepts s reqs msgs tables) (P : Prog) (w : Wit) (r : Rr) (a : Ωa) (p : Ωp)
+    (l : Fin nh → ByteArray) : tables = s.tables := by
+  obtain ⟨hfin, ho, -⟩ := h P w r a p l
+  exact ho.symm.trans (FirewallTemplate.namesOf_run s _ _ hfin)
+
 /-- **(ii) at the firewall and V*'s code, from the honest worker's half**: `RecursiveFirewallPrivate`'s two ways with
 `FirewallAccepts` in place of `FirewallSends`, the simulated view filling the schedule's transcript `firewallT s tables`
 with ideal commit strings. -/
@@ -155,15 +167,15 @@ theorem liveSends_of_accepts {Prog Wit Rr Ωa Ωp : Type} {nh : ℕ} (s : Flock.
   liveSends s reqs msgs _ (firewallSends_of_accepts s reqs msgs tables hA) P w r a p ys zs L sent t hreqs hsalts hlive
 
 /-- **The honest worker's half of `FirewallSends`**: at a schedule the firewall holds a session to, the honest worker's
-requests (`honestReqs`) pass the firewall, Commit naming the tables `tables`, and commit its rows' messages
-(`FirewallHonest.honestMsgs`), wherever at every commit strings it follows the schedule (`FirewallHonest.Fits`) and its
-rows read only the commit strings before them (`FirewallHonest.Causal`). -/
+requests (`honestReqs`) pass the firewall, Commit naming the schedule's tables (`Schedule.tables`), and commit its rows'
+messages (`FirewallHonest.honestMsgs`), wherever at every commit strings it follows the schedule (`FirewallHonest.Fits`)
+and its rows read only the commit strings before them (`FirewallHonest.Causal`). -/
 theorem honestReqs_accepts {Prog Wit Rr Ωa Ωp : Type} (s : Flock.Firewall.Schedule)
-    (hs : FirewallHonest.Canonical s) (tables : List String)
+    (hs : FirewallHonest.Canonical s)
     (D : Prog → Wit → Rr → Ωa → Ωp → (Fin (FirewallHonest.rowCount s) → ByteArray) → Flock.Firewall.Honest)
-    (hD : ∀ P w r a p l, FirewallHonest.Fits s tables (D P w r a p l)) (hc : FirewallHonest.Causal s D) :
+    (hD : ∀ P w r a p l, FirewallHonest.Fits s (D P w r a p l)) (hc : FirewallHonest.Causal s D) :
     Flock.Guarantees.FirewallAccepts s (fun P w r a p l => Flock.Firewall.honestReqs s (D P w r a p l))
-      (FirewallHonest.honestMsgs s D) tables :=
+      (FirewallHonest.honestMsgs s D) s.tables :=
   FirewallHonest.honest_accepts hs hD hc Flock.Guarantees.zeroSalt
 
 end Flock.SecurityProofs

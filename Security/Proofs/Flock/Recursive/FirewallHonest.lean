@@ -8,11 +8,12 @@ import Proofs.Flock.Recursive.FirewallSteps
 # The honest worker's requests pass the firewall
 
 `run_honestReqs`: on the honest worker's requests (`Flock.Firewall.honestReqs`) the firewall (`Flock.Firewall.run`), at
-any salts as many as the schedule's rows (`rowCount`), finishes, its Commit names the tables in the worker's order, and
-its commit strings are those of the worker's rows (`honestRows`: each table's level-0 top in Commit's order, then each
-round's fresh tops and message) in salt order. It holds at every schedule the firewall holds a session to
-(`Canonical`) and every worker that follows it (`Fits`): its Commit's tables the schedule's roots, each stream opened
-once before its first round, and each round's caps, copies, fresh tops and message the schedule's entry.
+any salts as many as the schedule's rows (`rowCount`), finishes, its Commit names the schedule's tables
+(`Schedule.tables`), and its commit strings are those of the worker's rows (`honestRows`: each table's level-0 top in
+Commit's order, then each round's fresh tops and message) in salt order. It holds at every schedule the firewall holds a
+session to (`Canonical`) and every worker that follows it (`Fits`): its Commit's tables the schedule's roots in the
+schedule's order, each stream opened once before its first round, and each round's caps, copies, fresh tops and message
+the schedule's entry.
 
 The proof follows the firewall's loop (`FirewallSteps.Goes`) through the requests. What `Schedule.canonical` checks is
 `Facts`. The Pings, Register, Hello, the first `Open`s, Commit and Link reach the loop's invariant (`At`): each salt of
@@ -40,9 +41,6 @@ def rootsOf (s : Schedule) : List (String × Nat) :=
   match s.roots with
   | .obj ⟨⟨t⟩⟩ => t.toListModel.map fun e => (e.1, (natOf? e.2).getD 0)
   | _ => []
-
-/-- The schedule's tables, in key order. -/
-def tablesOf (s : Schedule) : List String := (rootsOf s).map (·.1)
 
 /-- Round `i`'s rows in the schedule: its fresh tops' nodes and its message rows. -/
 def roundCount (s : Schedule) (i : Nat) : Nat :=
@@ -99,15 +97,15 @@ def RoundOK (s : Schedule) (h : Honest) (i : Nat) : Prop :=
       stream ∈ (List.range (i + 2)).flatMap h.opens
   | none => True
 
-/-- **The worker follows the schedule**, Commit naming the tables `tables`: each length in its word (`ReqFits`), Σ a
-plain string, Commit's tables the schedule's roots with their node counts (in the order `tables`), each stream opened
-once at a place up to the last round's, and each round as the firewall takes it (`RoundOK`). -/
-structure Fits (s : Schedule) (tables : List String) (h : Honest) : Prop where
+/-- **The worker follows the schedule**: each length in its word (`ReqFits`), Σ a plain string, Commit's tables the
+schedule's roots with their node counts in the schedule's order (`Schedule.tables`), each stream opened once at a place
+up to the last round's, and each round as the firewall takes it (`RoundOK`). -/
+structure Fits (s : Schedule) (h : Honest) : Prop where
   pings : ∀ b ∈ h.pings, b.size < 2 ^ 32
   sigma : plainStr h.sigma = true
   hello : FirewallWire.ReqFits (.hello (printJson (helloWith s.hello h.sigma)))
   commit : FirewallWire.ReqFits (.commit h.rootF h.roots [])
-  tables : h.roots.map (·.1) = tables
+  tables : h.roots.map (·.1) = s.tables
   roots : (h.roots.map fun e => (e.1, e.2.size / NODE_BYTES)).Perm (rootsOf s)
   caps : ∀ e ∈ h.roots, isCap e.2 = true
   link : 16 * s.y < 2 ^ 32
@@ -208,17 +206,17 @@ theorem streams_nodup {s : Schedule} (hF : Facts s) : (s.streams.map (·.1)).Nod
   FirewallObj.Asc.ne (key := id) hF.streams
 
 section
-variable {s : Schedule} {tables : List String} {h : Honest}
+variable {s : Schedule} {h : Honest}
 
 /-- Commit's tables are distinct. -/
-theorem roots_nodup (hF : Facts s) (hf : Fits s tables h) : (h.roots.map (·.1)).Nodup := by
+theorem roots_nodup (hF : Facts s) (hf : Fits s h) : (h.roots.map (·.1)).Nodup := by
   obtain ⟨t, he, ht, _⟩ := hF.roots
   have hp := hf.roots.map Prod.fst
   rw [List.map_map, rootsOf_obj he, List.map_map] at hp
   exact hp.nodup_iff.mpr (List.pairwise_map.mpr (FirewallObj.Asc.ne (FirewallObj.asc_ordered ht)))
 
 /-- Commit's node counts have the schedule's roots' canonical form. -/
-theorem commit_pin (hF : Facts s) (hf : Fits s tables h) :
+theorem commit_pin (hF : Facts s) (hf : Fits s h) :
     canonForm (Json.mkObj (h.roots.map fun e => (e.1, jnat (e.2.size / NODE_BYTES)))) = canonForm s.roots := by
   obtain ⟨t, he, ht, hn⟩ := hF.roots
   rw [he, FirewallObj.mkObj_eq]
@@ -236,7 +234,7 @@ theorem commit_pin (hF : Facts s) (hf : Fits s tables h) :
   rw [← natOf?_eq hc]
 
 /-- Each table's node count is the schedule's. -/
-theorem commit_nat (hF : Facts s) (hf : Fits s tables h) :
+theorem commit_nat (hF : Facts s) (hf : Fits s h) :
     ∀ e ∈ h.roots, natOf? (s.roots.getObjValD e.1) = some (e.2.size / NODE_BYTES) := by
   intro e he
   obtain ⟨t, hes, ht, hn⟩ := hF.roots
@@ -250,7 +248,7 @@ theorem commit_nat (hF : Facts s) (hf : Fits s tables h) :
   rw [hc, hxe.2]
 
 /-- A stream whose table has a root in the schedule has one in the worker's Commit. -/
-theorem rootOf_isSome (hF : Facts s) (hf : Fits s tables h) {stream : String} (hr : Rooted s stream) :
+theorem rootOf_isSome (hF : Facts s) (hf : Fits s h) {stream : String} (hr : Rooted s stream) :
     (rootOf h stream).isSome = true := by
   obtain ⟨t, hes, ht, _⟩ := hF.roots
   unfold Rooted at hr
@@ -282,7 +280,7 @@ theorem openedTo_sublist (h : Honest) {p q : Nat} (hpq : p ≤ q) : (openedTo h 
       exact (ih (by omega)).trans (List.sublist_append_left _ _)
     · rw [show p = q + 1 by omega]; exact List.Sublist.refl _
 
-theorem opened_nodup (hF : Facts s) (hf : Fits s tables h) : (openedTo h (s.rounds.size + 1)).Nodup :=
+theorem opened_nodup (hF : Facts s) (hf : Fits s h) : (openedTo h (s.rounds.size + 1)).Nodup :=
   hf.opened.nodup_iff.mpr (streams_nodup hF)
 
 theorem cnt_zero (s : Schedule) (n : String) : cnt s 0 n = 0 := by
@@ -356,7 +354,7 @@ theorem round_of_cnt {j : Nat} {n : String} (h : 0 < cnt s j n) :
   · simp [hn] at hrk
 
 /-- A stream the worker opens just before round `j` has no round before it. -/
-theorem cnt_new (hF : Facts s) (hf : Fits s tables h) {j : Nat} (hj : j < s.rounds.size) {n : String}
+theorem cnt_new (hF : Facts s) (hf : Fits s h) {j : Nat} (hj : j < s.rounds.size) {n : String}
     (hn : n ∈ h.opens (j + 1)) : cnt s j n = 0 := by
   refine Nat.eq_zero_of_not_pos fun hpos => ?_
   obtain ⟨i, hij, hi, ⟨stream, k, m, tops, level0, commits⟩, hsp, hsn⟩ := round_of_cnt hpos
@@ -373,7 +371,7 @@ theorem cnt_new (hF : Facts s) (hf : Fits s tables h) {j : Nat} (hj : j < s.roun
 theorem length_topRows (top : ByteArray) : (topRows top).length = top.size / NODE_BYTES := by
   simp [topRows]
 
-theorem length_roundRows (hF : Facts s) (hf : Fits s tables h) {i : Nat} (hi : i < s.rounds.size) :
+theorem length_roundRows (hF : Facts s) (hf : Fits s h) {i : Nat} (hi : i < s.rounds.size) :
     (roundRows s h i).length = roundCount s i := by
   obtain ⟨⟨stream, k, n, tops, level0, commits⟩, hsp, -⟩ := hF.rounds i hi
   have hR := hf.rounds i hi
@@ -400,7 +398,7 @@ theorem length_pre_le (s : Schedule) (h : Honest) (j : Nat) : ∀ d, (pre s h j)
     exact Nat.le_trans (length_pre_le s h j d) (Nat.le_add_right _ _)
 
 /-- The worker's rows are the schedule's count. -/
-theorem length_honestRows {s : Schedule} (hs : Canonical s) {tables : List String} {h : Honest} (hf : Fits s tables h) :
+theorem length_honestRows {s : Schedule} (hs : Canonical s) {h : Honest} (hf : Fits s h) :
     (honestRows s h).length = rowCount s := by
   have hF := facts_of hs
   unfold honestRows rowCount
@@ -438,7 +436,7 @@ structure At (s : Schedule) (h : Honest) (ys : List ByteArray) (j o : Nat) (st :
 open FirewallSteps
 
 section
-variable {s : Schedule} {tables : List String} {h : Honest}
+variable {s : Schedule} {h : Honest}
 
 theorem find_F {j : Nat} {O : List String} {n : String} (hm : n ∈ O) :
     (O.map (F s j)).find? (·.1 == n) = some (F s j n) := by
@@ -484,7 +482,7 @@ theorem goes_opens_aux {g : String → Option Req} {j : Nat} :
     exact goes_append s [_] _ hone hrest
 
 /-- **The worker's `Open`s at its place `p`**, each stream new there. -/
-theorem goes_opens (hF : Facts s) (hf : Fits s tables h) {j p : Nat} (hp : p ≤ s.rounds.size)
+theorem goes_opens (hF : Facts s) (hf : Fits s h) {j p : Nat} (hp : p ≤ s.rounds.size)
     (hz : ∀ n ∈ h.opens p, cnt s j n = 0) {st : State} (hfin : st.finished = false)
     (hs : st.streams = (openedTo h p).map (F s j)) :
     Goes s ((honestOpens s h p).map putReq) st { st with streams := (openedTo h (p + 1)).map (F s j) } := by
@@ -500,7 +498,7 @@ theorem goes_opens (hF : Facts s) (hf : Fits s tables h) {j p : Nat} (hp : p ≤
     obtain ⟨w, parent, pos, c⟩ := x
     exact ⟨w, parent, pos, c, h.label e.1, hx, by simp [hx]⟩
 
-theorem pre_le (hs : Canonical s) (hf : Fits s tables h) {ys : List ByteArray} (hy : ys.length = rowCount s) {j : Nat}
+theorem pre_le (hs : Canonical s) (hf : Fits s h) {ys : List ByteArray} (hy : ys.length = rowCount s) {j : Nat}
     (hj : j ≤ s.rounds.size) : (pre s h j).length ≤ ys.length := by
   have := length_pre_le s h j (s.rounds.size - j)
   rw [show j + (s.rounds.size - j) = s.rounds.size by omega] at this
@@ -517,7 +515,7 @@ theorem caps_fit {r : HonestRound} (hi : ∀ a ∈ r.items, FirewallWire.ItemFit
     | (subst hca; exact this.2)
 
 /-- **Round `j`** from the loop's invariant, its stream opened. -/
-theorem goes_round (hs : Canonical s) (hf : Fits s tables h) {ys : List ByteArray} (hy : ys.length = rowCount s)
+theorem goes_round (hs : Canonical s) (hf : Fits s h) {ys : List ByteArray} (hy : ys.length = rowCount s)
     {j : Nat} (hj : j < s.rounds.size) {st : State} (hA : At s h ys j (j + 2) st) :
     ∃ t, Goes s ((honestRound s h j).map putReq) st t ∧ At s h ys (j + 1) (j + 2) t := by
   have hF := facts_of hs
@@ -608,7 +606,7 @@ theorem goes_round (hs : Canonical s) (hf : Fits s tables h) {ys : List ByteArra
     rw [cs_append, List.drop_drop]
 
 /-- **The rounds**, each after the worker's `Open`s just before it. -/
-theorem goes_rounds (hs : Canonical s) (hf : Fits s tables h) {ys : List ByteArray} (hy : ys.length = rowCount s)
+theorem goes_rounds (hs : Canonical s) (hf : Fits s h) {ys : List ByteArray} (hy : ys.length = rowCount s)
     {st : State} (hA : At s h ys 0 1 st) : ∀ j ≤ s.rounds.size, ∃ t,
       Goes s ((List.range j).flatMap fun i => (honestOpens s h (i + 1) ++ honestRound s h i).map putReq) st t ∧
         At s h ys j (j + 1) t
@@ -641,7 +639,7 @@ theorem goes_proofs (s : Schedule) : ∀ (l : List (String × Nat × ByteArray))
       (goes_proofs s l (fun p hp => hl p (List.mem_cons_of_mem _ hp)) st hfin)
 
 /-- Finish's pin: each stream opened, with the schedule's count of rounds. -/
-theorem finish_pin (hF : Facts s) (hf : Fits s tables h) :
+theorem finish_pin (hF : Facts s) (hf : Fits s h) :
     canonForm (Json.mkObj (((openedTo h (s.rounds.size + 1)).map (F s s.rounds.size)).map fun e => (e.1, jnat e.2.2))) =
       canonForm (Json.mkObj (s.streams.map fun e => (e.1, jnat e.2.2.2))) := by
   have hnd : List.Pairwise (· ≠ ·) (s.streams.map (·.1)) := streams_nodup hF
@@ -660,12 +658,12 @@ theorem finish_pin (hF : Facts s) (hf : Fits s tables h) :
 end
 
 /-- **The firewall finishes on the honest worker's requests**: at salts `ys`, as many as the schedule's rows, it
-finishes, its Commit names the tables `tables`, and its commit strings are those of the worker's rows under `ys`, in
+finishes, its Commit names the schedule's tables, and its commit strings are those of the worker's rows under `ys`, in
 salt order. -/
-theorem run_honestReqs {s : Schedule} (hs : Canonical s) {tables : List String} {h : Honest} (hf : Fits s tables h)
+theorem run_honestReqs {s : Schedule} (hs : Canonical s) {h : Honest} (hf : Fits s h)
     (ys : List ByteArray) (hy : ys.length = rowCount s) :
     (run s (honestReqs s h) ys).2 = true ∧
-      FirewallTemplate.namesOf (run s (honestReqs s h) ys).1.toList = tables ∧
+      FirewallTemplate.namesOf (run s (honestReqs s h) ys).1.toList = s.tables ∧
       FirewallRun.holesOf (run s (honestReqs s h) ys).1 =
         List.zipWith (fun row y => Hm96.Default512.commitString (rowDigest row) y) (honestRows s h) ys := by
   have hF := facts_of hs
@@ -684,7 +682,7 @@ theorem run_honestReqs {s : Schedule} (hs : Canonical s) {tables : List String} 
   obtain ⟨⟨⟩, _, hc3, tops, rfl, htn, hth⟩ := run_commit s h.rootF h.roots
     (st := { salts := ys, hello := true, sent := (#[] : Array Sent).push (.hello s.hello),
              streams := (openedTo h 1).map (F s 0) })
-    rfl rfl rfl (roots_nodup hF hf) hf.caps (commit_pin hF hf) (commit_nat hF hf) hl0
+    rfl rfl rfl (roots_nodup hF hf) hf.caps (commit_pin hF hf) (commit_nat hF hf) hf.tables hl0
   have g5 := goes_one (FirewallWire.decode_putReq hf.commit) hc3
   let st3 : State :=
     { salts := ys.drop (h.roots.flatMap fun e => topRows e.2).length
@@ -715,9 +713,9 @@ theorem run_honestReqs {s : Schedule} (hs : Canonical s) {tables : List String} 
   rw [run_of_goes hg]
   obtain ⟨a, tops5, rest, hsent, htn5⟩ := hA5.names
   refine ⟨rfl, ?_, ?_⟩
-  · show FirewallTemplate.namesOf (st5.sent.push _).toList = tables
+  · show FirewallTemplate.namesOf (st5.sent.push _).toList = s.tables
     rw [Array.toList_push, hsent]
-    show tops5.map (·.1) = tables
+    show tops5.map (·.1) = s.tables
     rw [htn5, hf.tables]
   · show FirewallRun.holesOf (st5.sent.push _) = _
     rw [FirewallRun.holesOf_push, hA5.holes]
@@ -745,9 +743,9 @@ def honestMsgs {Prog Wit Rr Ωa Ωp : Type} (s : Schedule)
 
 /-- At the commit strings `l`, message `i` read at `l`'s strings before it hashes to the digest of the worker's row `i`
 at `l`. -/
-theorem honestMsgs_digest {Prog Wit Rr Ωa Ωp : Type} {s : Schedule} (hs : Canonical s) {tables : List String}
+theorem honestMsgs_digest {Prog Wit Rr Ωa Ωp : Type} {s : Schedule} (hs : Canonical s) 
     {D : Prog → Wit → Rr → Ωa → Ωp → (Fin (rowCount s) → ByteArray) → Honest}
-    (hD : ∀ P w r a p l, Fits s tables (D P w r a p l)) (hc : Causal s D)
+    (hD : ∀ P w r a p l, Fits s (D P w r a p l)) (hc : Causal s D)
     (P : Prog) (w : Wit) (r : Rr) (a : Ωa) (p : Ωp) (l : Fin (rowCount s) → ByteArray) (i : Fin (rowCount s)) :
     Sha512.hash (honestMsgs s D P w r a p i fun j => l (Fin.castLE (Nat.le_of_lt i.isLt) j)) =
       rowDigest ((honestRows s (D P w r a p l))[i.val]'(by
@@ -759,15 +757,15 @@ theorem honestMsgs_digest {Prog Wit Rr Ωa Ωp : Type} {s : Schedule} (hs : Cano
   rfl
 
 /-- **`FirewallAccepts`'s body at one salt `y`**: at every commit strings `l`, the firewall at `rowCount s` salts `y`
-finishes on the worker's requests, Commit names the tables `tables`, and its commit strings are those of `honestMsgs`
+finishes on the worker's requests, Commit names the schedule's tables, and its commit strings are those of `honestMsgs`
 under `y`, message `i` read at `l`'s strings before it. -/
-theorem honest_accepts {Prog Wit Rr Ωa Ωp : Type} {s : Schedule} (hs : Canonical s) {tables : List String}
+theorem honest_accepts {Prog Wit Rr Ωa Ωp : Type} {s : Schedule} (hs : Canonical s) 
     {D : Prog → Wit → Rr → Ωa → Ωp → (Fin (rowCount s) → ByteArray) → Honest}
-    (hD : ∀ P w r a p l, Fits s tables (D P w r a p l)) (hc : Causal s D) (y : ByteArray)
+    (hD : ∀ P w r a p l, Fits s (D P w r a p l)) (hc : Causal s D) (y : ByteArray)
     (P : Prog) (w : Wit) (r : Rr) (a : Ωa) (p : Ωp) (l : Fin (rowCount s) → ByteArray) :
     (run s (honestReqs s (D P w r a p l)) (List.ofFn fun _ : Fin (rowCount s) => y)).2 = true ∧
       FirewallTemplate.namesOf
-          (run s (honestReqs s (D P w r a p l)) (List.ofFn fun _ : Fin (rowCount s) => y)).1.toList = tables ∧
+          (run s (honestReqs s (D P w r a p l)) (List.ofFn fun _ : Fin (rowCount s) => y)).1.toList = s.tables ∧
       FirewallRun.holesOf (run s (honestReqs s (D P w r a p l)) (List.ofFn fun _ : Fin (rowCount s) => y)).1 =
         List.ofFn fun i => Hm96.Default512.commitString
           (Sha512.hash (honestMsgs s D P w r a p i fun j => l (Fin.castLE (Nat.le_of_lt i.isLt) j))) y := by

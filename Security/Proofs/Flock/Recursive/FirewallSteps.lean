@@ -174,14 +174,6 @@ theorem goes_append (s : Schedule) : ∀ (a b : List ByteArray) {st t u : State}
   | [], _, _, _, _, ha, hb => by subst ha; exact hb
   | _ :: a, b, _, _, _, ⟨v, hv, ha⟩, hb => ⟨v, hv, goes_append s a b ha hb⟩
 
-theorem goes_flatMap (s : Schedule) (F : Nat → List ByteArray) (S : Nat → State)
-    (h : ∀ i < n, Goes s (F i) (S i) (S (i + 1))) : Goes s ((List.range n).flatMap F) (S 0) (S n) := by
-  induction n with
-  | zero => rfl
-  | succ n ih =>
-    rw [List.range_succ, List.flatMap_append, List.flatMap_singleton]
-    exact goes_append s _ _ (ih fun i hi => h i (by omega)) (h n (by omega))
-
 theorem forIn_goes (s : Schedule) : ∀ (reqs : List ByteArray) {st t : State}, Goes s reqs st t →
     Id.run (forIn reqs (st, false) (FirewallRun.body s)) = (t, false)
   | [], _, _, h => by subst h; rfl
@@ -292,14 +284,15 @@ theorem run_hello (s : Schedule) {H L : FirewallObj.Tree} {A B : List ((_ : Stri
   refine Runs.ite_neg (by simp [FirewallJson.fractional_printJson hp]) ?_
   exact Runs.lift_bind (pinned_ok (by rw [hT]; exact hcan)) (Runs.modify_bind (Runs.send rfl))
 
-/-- **Commit** of tables with distinct names, each top a whole number of nodes, their node counts the schedule's roots,
-after Hello and before any other Commit: it draws a salt for each node and sends each table's commit strings. -/
+/-- **Commit** of tables with distinct names in the schedule's order, each top a whole number of nodes, their node counts
+the schedule's roots, after Hello and before any other Commit: it draws a salt for each node and sends each table's
+commit strings. -/
 theorem run_commit (s : Schedule) (rootF : ByteArray) (roots : List (String × ByteArray)) {st : State}
     (hf : st.finished = false) (hh : st.hello = true) (hc : st.committed = false) (hnd : (roots.map (·.1)).Nodup)
     (hcap : ∀ e ∈ roots, isCap e.2 = true)
     (hpin : canonForm (Json.mkObj (roots.map fun e => (e.1, jnat (e.2.size / NODE_BYTES)))) = canonForm s.roots)
     (hnat : ∀ e ∈ roots, natOf? (s.roots.getObjValD e.1) = some (e.2.size / NODE_BYTES))
-    (hl : (roots.flatMap fun e => topRows e.2).length ≤ st.salts.length) :
+    (hord : roots.map (·.1) = s.tables) (hl : (roots.flatMap fun e => topRows e.2).length ≤ st.salts.length) :
     Runs (step s (.commit rootF roots [])) st fun _ t => ∃ tops,
       t = { st with committed := true, roots := roots,
                     salts := st.salts.drop (roots.flatMap fun e => topRows e.2).length,
@@ -321,6 +314,7 @@ theorem run_commit (s : Schedule) (rootF : ByteArray) (roots : List (String × B
   · simp only [List.any_eq_true, not_exists, not_and]
     rintro ⟨n, v⟩ hv
     simp [hnat _ hv]
+  refine Runs.ite_neg (by simp [hord]) ?_
   refine Runs.bind ((draws_mapM (α := String × ByteArray) (β := String × List ByteArray) (γ := String) _
     (fun e => topRows e.2) (fun b => b.2) (fun b => b.1) (fun e => e.1) roots ?_).runs hl) ?_
   · rintro ⟨n, v⟩ _ st' hl'
