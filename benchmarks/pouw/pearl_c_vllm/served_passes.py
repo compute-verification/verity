@@ -11,7 +11,12 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
 ``serve`` builds the spec's preset with its Pearl-C arm (`pearl_c_arm`: ``--arm``, else the spec's one; `verity_bench`'s
 ``engine_args`` and ``protocols_config``, whose in-process challenger is the epoch's coins) and the pouw setting
 ``transcript_dir`` DIR, so each pass is retained in its own ``DIR/pass-NNNNN``; the challenger's coin commitment goes to
-``DIR/coins.json`` before the engine starts.  A warm-up ``generate`` of one short request takes the first calls' one-time
+``DIR/coins.json`` before the engine starts.  With ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER`` set the epoch's
+salt coin is a live session's on the auditor host instead (`bench_arm.live_coins`: a salt-only session reserved under
+``PEARLC_CHALLENGER_LANE`` before the engine starts, which the install opens on its salt epoch's root and closes at
+``close``), and ``DIR/coins.json`` is that session's commitment, written once the install has opened it; the document's
+``coins`` says which (`served_step.coins_of`: the source, the session without its secret, and how it closed).  A warm-up
+``generate`` of one short request takes the first calls' one-time
 costs (the screen's Triton build); then one timed ``generate`` call serves R requests of P seeded random prompt tokens and
 O output tokens each (greedy, EOS ignored): vLLM's scheduler steps the engine, and nothing but the option ends a pass.  It
 writes each pass's counts, commitment, manifest, linear MACs (its calls' real rows × n × k) and whether the timed call made
@@ -118,14 +123,24 @@ def serve(args: argparse.Namespace) -> int:
     passes.mkdir(parents=True, exist_ok=True)
     if args.retain:
         config["pouw"]["transcript_dir"] = str(passes)
-    (passes / "coins.json").write_text(json.dumps(config["pouw"]["coins"].commitment.to_json()) + "\n")
+    sys.path.insert(0, str(HERE))
+    import bench_arm as BA
+    import served_step as SS
+
+    config["pouw"], reserved = BA.live_coins(config["pouw"], settings.PEARLC_CHALLENGER_GATE, settings.PEARLC_CHALLENGER_PEER,
+                                             settings.PEARLC_BENCH_EPOCH, settings.PEARLC_CHALLENGER_LANE)
+    if reserved is None:
+        (passes / "coins.json").write_text(json.dumps(config["pouw"]["coins"].commitment.to_json()) + "\n")
     engine_env.apply_engine(None)
     from verity_vllm import LLM
     from verity_vllm.protocols.pouw import pearl_c as PPD
     from vllm import SamplingParams
 
     llm = LLM(preset.model, revision=preset.revision, protocols=",".join(arm.protocols), protocols_config=config, **engine)
-    run = llm.protocols.get("pouw").end_pass.__self__
+    option = llm.protocols.get("pouw")
+    run = option.end_pass.__self__
+    if reserved is not None:
+        (passes / "coins.json").write_text(json.dumps(run.commits["coins"]) + "\n")
     core, walls = llm._engine.llm.llm_engine, []
     step = core.step
 
@@ -159,14 +174,18 @@ def serve(args: argparse.Namespace) -> int:
            "max_step_tokens": run.details.get("max_step_tokens"), "caps": caps, "passes": got, "passes_with_calls": len(held),
            "over_caps": over,
            "ok": sum(p["timed"] for p in held) >= 3 and not over and (not args.retain or all(p.get("manifest") for p in held))}
+    doc["coins"] = SS.coins_of(option, reserved)
     for path in (Path(args.out), passes / "served.json"):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(doc, indent=1) + "\n")
     ts = doc["step_s"]
     shown = ", ".join(f"{s:.3f}" for s in ts[:8]) + (f", … ({len(ts)} steps)" if len(ts) > 8 else "")
+    coins = doc["coins"]
+    session = (coins["session"] or {}).get("session")
+    whose = f" (session {session}, closed {coins['closed']})" if session else ""
     print(f"served {doc['served_tokens']} tokens in {wall:.3f} s and {len(walls)} engine steps (a warm-up's among them), "
           f"{'every pass retained' if args.retain else 'no pass retained'}: the timed steps {shown} s; {len(held)} passes "
-          f"with calls, {len(over)} over their caps -> {'OK' if doc['ok'] else 'FAIL'}")
+          f"with calls, {len(over)} over their caps; coins {coins['source']}{whose} -> {'OK' if doc['ok'] else 'FAIL'}")
     return 0 if doc["ok"] else 1
 
 
@@ -193,8 +212,8 @@ def timed_credit(served: dict, work: dict, coins) -> dict:
 
 
 def volunteer(args: argparse.Namespace) -> int:
-    from verity.core.protocols.pouw.coins import CoinCommitment
     sys.path.insert(0, str(HERE))
+    import verify_run as VR
     import volunteer_pass as VP
 
     passes = Path(args.passes)
@@ -203,7 +222,7 @@ def volunteer(args: argparse.Namespace) -> int:
         print(f"volunteer FAIL: {UNRETAINED[1]}", flush=True)
         return 1
     paths, _ = manifests(passes)
-    coins = CoinCommitment.from_json(json.loads((passes / "coins.json").read_text()))
+    coins = VR.epoch_coins(passes / "coins.json")
     got = []
     for path in paths:
         t = time.perf_counter()
@@ -225,7 +244,6 @@ def volunteer(args: argparse.Namespace) -> int:
 
 
 def verify(args: argparse.Namespace) -> int:
-    from verity.core.protocols.pouw.coins import CoinCommitment
     sys.path.insert(0, str(HERE))
     import verify_run as VR
 
@@ -236,7 +254,7 @@ def verify(args: argparse.Namespace) -> int:
     if served is not None and served.get("retained") is False:
         doc.update(refused=list(UNRETAINED), **VR.rejected(": ".join(UNRETAINED), args.commit))
     else:
-        coins = CoinCommitment.from_json(json.loads((passes / "coins.json").read_text()))
+        coins = VR.epoch_coins(passes / "coins.json")
         window = json.loads(Path(args.tie).read_text()) if args.tie else None
         doc.update(VR.verify_passes(args.manifest or manifests(passes)[0], args.draws, args.jobs, args.commit, coins,
                                     fast=args.fast, cross_check=args.cross_check, delta=args.delta, window=window))

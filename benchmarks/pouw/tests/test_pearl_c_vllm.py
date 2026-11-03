@@ -10,6 +10,7 @@ import importlib.util
 import json
 import math
 import random
+import shlex
 import shutil
 import sys
 import threading
@@ -937,7 +938,8 @@ def honest_pass(tmp_path, request):
     return proved_pass(tmp_path, request.param)
 
 
-def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None):
+def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None,
+                live: int | None = None):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
@@ -946,7 +948,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     h100 record (Hopper's 14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits
     one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
     The calls have the epoch's indices `indices`, and every pass built here is of the one epoch (the same weights, key and
-    salt coin), as passes of one install are."""
+    salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt epoch
+    `live`'s root over the weights' root (`live_coin`), and the manifest names that epoch (``pass_index``)."""
     if key is None:
         key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
@@ -961,8 +964,12 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     work = Workload((Matmul(i0, Shape(32, k, 16), 0), Matmul(i1, Shape(16, k, 32), 1)))
     prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=key)
     salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)  # noqa: E731
-    coins = salt_coin(prover.weight_roots)
-    epoch = Epoch.start(work, prover.weight_roots, *coins)
+    if live is None:
+        coins = salt_coin(prover.weight_roots)
+        epoch = Epoch.start(work, prover.weight_roots, *coins)
+    else:
+        coins = live_coin(PS.epoch_open_root(weights_root(prover.weight_roots), live))
+        epoch = PPD.epoch_of(work, prover.weight_roots, *coins, live)
     tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
     splits = {w: PW.Split(k) for w in wrows}
     records = CW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
@@ -996,6 +1003,7 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{scheme}", "scheme": scheme,
             "instance": {"k_min": 32, "tile": [16, 16]},
             "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
+            **({} if live is None else {"pass_index": live}),
             "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
             "commitment": {"root": tr.commitment.root.hex(), "count": count},
             "leaves": PPD._write(tmp_path / "leaves", b"".join(leaves)),
@@ -1545,6 +1553,82 @@ def test_a_retained_pass_salted_by_a_live_session_restarts_only_under_that_sessi
     early = {**man, "salt_opening": {**o.to_json(), "after": weights_root({0: roots[0], 1: bytes(32)}).hex()}}
     with pytest.raises(DomainError, match="not opened after"):
         PPD.manifest_epoch(early, c)
+
+
+def test_a_runs_coins_file_is_a_live_sessions_commitment_or_an_in_process_challengers(tmp_path):
+    """`verify_run.epoch_coins`, the coins file every step of a served run reads (``served_passes.py volunteer`` and
+    ``verify``, ``verify_run.py --coins``, ``volunteer_pass.py --coins``): a live session's commitment when its scheme is
+    `window.LIVE_SCHEME`, under which a pass salted by that session restarts its epoch, else an in-process challenger's;
+    a pass restarts under its own epoch's commitment only."""
+    live = proved_pass(tmp_path / "live", PROMOTED[0], live=0)[0]
+    plain = proved_pass(tmp_path / "plain", PROMOTED[0])[0]
+    c, cp = VR.epoch_coins(live.parent / "coins.json"), VR.epoch_coins(plain.parent / "coins.json")
+    assert isinstance(c, Ch.LiveCommitment) and isinstance(cp, CoinCommitment) and c.to_json()["scheme"] == Wd.LIVE_SCHEME
+    man = json.loads(live.read_text())
+    assert man["pass_index"] == 0 and man["coins"] == c.to_json()
+    assert VR.load(live, c).epoch.salt.hex() == man["salt"] != json.loads(plain.read_text())["salt"]
+    assert VR.load(plain, cp).epoch.salt.hex() == json.loads(plain.read_text())["salt"]
+    for path, other in ((live, cp), (plain, c)):
+        with pytest.raises(DomainError, match="not the epoch's"):
+            VR.load(path, other)
+
+
+@pytest.mark.slow
+def test_served_passes_verify_accepts_a_run_salted_by_a_live_session(tmp_path):
+    """A served run whose epoch's salt coin is a live session's (``serve`` with the challenger gate): ``verify`` reads its
+    coins file as that session's commitment and accepts its honest pass."""
+    path = proved_pass(tmp_path, PROMOTED[0], live=0)[0]
+    (path.parent / "served.json").write_text(json.dumps({"run": RUN, "passes": [{"pass": 0, "units": 2, "tiles": 4,
+                                                                                 "manifest": str(path)}]}))
+    rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json")
+    assert rc == 0 and answer["verdict"] == "accept" and doc["line"].startswith("ACCEPT"), doc["line"]
+
+
+def test_live_coins_reserve_a_salt_only_session_whose_settings_the_install_takes():
+    """`bench_arm.live_coins` (``served_passes.py serve``'s and ``served_step.py``'s): given the gate and this node's peer
+    name, the PoUW settings drop their in-process coins and take a salt-only session the gate reserves under the lane once
+    its ledger shows the lane's open period (``reserve --peer P --scheme S --families [["pouw/salt",1]] --epoch N``): the
+    challenger on this node, the reserve answer, the gate's open and that period, which `pouw.Settings` reads and the
+    challenger's settings refuse nothing of.  Neither given leaves the settings, and their coins in-process, untouched;
+    one alone is refused, and a reserve while the lane's open period is H1's is refused before it is asked."""
+    from verity_vllm.protocols import pouw
+    from verity_vllm.protocols.pouw.h1 import settings as PHS
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+
+    BA = load("pearl_c_vllm_bench_arm", KERNEL.parent / "pearl_c_vllm" / "bench_arm.py")
+    gate = "ssh -i KEY -o BatchMode=yes research@gate"
+    reserved = {"session": "s20261103T140000Z-0001", "seq": 7, "peer": "vy-dc-h200", "by": "vllm",
+                "expires_utc": "2026-11-03T16:00:00Z"}
+    ledger, asked = [], []
+
+    def run(argv):
+        assert argv[:-1] == shlex.split(gate)
+        asked.append(shlex.split(argv[-1]))
+        if asked[-1][0] == "ledger":
+            return 0, "".join(json.dumps(e) + "\n" for e in ledger)
+        return 0, json.dumps(reserved)
+
+    base = {"device": "cuda", "kernel": "k", "transcript_dir": "passes", "coins": Challenger(0, random.Random(7).randbytes)}
+    assert BA.live_coins(base, None, None, 5, "vllm", run) == (base, None) and asked == []
+    got, answer = BA.live_coins(base, gate, "vy-dc-h200", 5, "vllm", run)
+    assert answer == reserved and "coins" not in got and "coins" in base
+    assert {k: got[k] for k in ("device", "kernel", "transcript_dir", "challenger", "session", "period")} == {
+        "device": "cuda", "kernel": "k", "transcript_dir": "passes", "challenger": "127.0.0.1:0", "session": reserved,
+        "period": None}
+    assert asked == [["ledger"], ["reserve", "--peer", "vy-dc-h200", "--scheme", Wd.LIVE_SCHEME, "--families",
+                                  json.dumps([list(f) for f in Wd.SALT_FAMILIES], separators=(",", ":")), "--epoch", "5"]]
+    settings = pouw.Settings.of(got)
+    assert (settings.coins, settings.challenger, settings.session, settings.period) == (None, "127.0.0.1:0", reserved, None)
+    assert PHS.refusals(SCHEME, settings, "serve") == []
+    for one in ((gate, None), (None, "vy-dc-h200")):
+        with pytest.raises(ValueError, match="together"):
+            BA.live_coins(base, *one, 5, "vllm", run)
+    ledger.append({"kind": "period-open", "session": None, "body": {"period": "p1", "lane": "vllm",
+                                                                     **dict.fromkeys(PHW.H1_PERIOD, 1)}})
+    asked.clear()
+    with pytest.raises(ValueError, match="refused before reserving a salt-only session: the lane's open period p1 is H1's"):
+        BA.live_coins(base, gate, "vy-dc-h200", 5, "vllm", run)
+    assert asked == [["ledger"]]
 
 
 @pytest.mark.slow

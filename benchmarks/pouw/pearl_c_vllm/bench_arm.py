@@ -78,11 +78,11 @@ class _LiveSession:
     #: the arm's salt epoch over its weights' root: one install, under a fresh hm96 key
     k = 0
 
-    def __init__(self, gate: str, peer: str, epoch: int, lane: str) -> None:
+    def __init__(self, gate: str, peer: str, epoch: int, lane: str, run: Any = None) -> None:
         from verity_vllm.pipeline.commit_coins import ChallengerGate
         from verity_vllm.protocols.pouw.h1 import window as PHW
 
-        self.gate = ChallengerGate(gate)
+        self.gate = ChallengerGate(gate, run)
         self.reserved, self.period = PHW.reserve_salt(self.gate.call, self.gate.ledger, lane, peer, epoch)
         self.client = self.commitment = None
         self.carried: dict[str, Any] = {}
@@ -98,6 +98,28 @@ class _LiveSession:
         if self.client is not None:
             client, self.client = self.client, None
             client.close()
+
+
+def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: int, lane: str,
+               run: Any = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """A protocols config's PoUW settings `pouw` with the salt coin a live session's on the auditor host when `gate` (infra's
+    gate as an ssh command) and `peer` (this node in the challenger host's peers) are given: a salt-only session reserved
+    now under lane `lane` (`_LiveSession`, `run` its gate's subprocess in tests), which the install opens on its salt
+    epoch's root (`salt.epoch_open_root` of the weights' root and the epoch's number) and draws its salt coin from
+    (`pouw_h1_window.salt_session`), through the settings ``challenger`` (this node's 127.0.0.1, at the port the gate's open
+    answers), ``session`` (the reserve answer), ``gate`` and ``period`` (the lane's open period the reserve joined), its
+    in-process ``coins`` dropped. Returns the settings and the reserve answer: `pouw` itself and None when neither is
+    given, the coins then in-process. ValueError when one is given without the other, or the reserve is refused."""
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+
+    if (gate, peer) == (None, None):
+        return pouw, None
+    if gate is None or peer is None:
+        raise ValueError("live coins take PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER (this "
+                         "node's name in the challenger host's peers) together")
+    session = _LiveSession(gate, peer, epoch, lane, run)
+    return ({**{k: v for k, v in pouw.items() if k != "coins"}, "challenger": "127.0.0.1:0", "session": session.reserved,
+             "gate": PHW.gate_of(session.gate.call), "period": session.period}, session.reserved)
 
 
 class PearlCArm:

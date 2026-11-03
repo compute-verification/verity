@@ -4,8 +4,9 @@
   python benchmarks/pouw/pearl_c_vllm/verify_run.py RUN_DIR/manifest.json --coins COINS.json [--draws T] [--jobs J] [--commit SHA] [--fast]
 
 - **The epoch** is re-started from the manifest's salt coin and every weight's root (`Epoch.start`): the coin must open
-  against the epoch's coin commitment as the challenger published it (``--coins``, not the pass's copy), as the salt coin,
-  opened after the weights' root, and the salt must be the manifest's.  A pass recorded before epoch coins (a v1 manifest)
+  against the epoch's coin commitment as the challenger published it (``--coins``, not the pass's copy; a live session's
+  when its scheme is `window.LIVE_SCHEME`, `epoch_coins`), as the salt coin, opened after the weights' root (a live
+  session's after its salt epoch's root), and the salt must be the manifest's.  A pass recorded before epoch coins (a v1 manifest)
   carries a beacon instead, and is read only with ``--recorded`` (`Epoch.unverified`, a salt that claims nothing).
 - **The call indices** are each below 2^32 and none twice (`credit.passes_distinct`: ``call-range``, ``repeated-call``);
   `served_passes.py` holds a run's passes of one salt to distinct indices too.
@@ -76,6 +77,8 @@ from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Matmul, Shape, Tile, tagged
 from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+from verity.core.protocols.pouw.window import LIVE_SCHEME
+from verity.core.protocols.sampled_proofs.challenger import LiveCommitment
 from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
 from verity.errors import ProtocolError
 from verity.ml.randomness import derive
@@ -221,7 +224,16 @@ class Pass:
         return [(pos, ids[(pos, t.rows[0], t.cols[0])]) for pos, t in picks]
 
 
-def load(path: Path, coins: CoinCommitment | None = None, recorded: bool = False, man: dict | None = None) -> Pass:
+def epoch_coins(path: Path) -> CoinCommitment | LiveCommitment:
+    """The epoch's coin commitment in the coins file at `path` (a run's ``coins.json``): a live session's when its scheme is
+    `window.LIVE_SCHEME`, else an in-process challenger's."""
+    doc = json.loads(Path(path).read_text())
+    live = isinstance(doc, dict) and doc.get("scheme") == LIVE_SCHEME
+    return (LiveCommitment if live else CoinCommitment).from_json(doc)
+
+
+def load(path: Path, coins: CoinCommitment | LiveCommitment | None = None, recorded: bool = False,
+         man: dict | None = None) -> Pass:
     """The pass at manifest `path`, its epoch re-started under `coins` (`pouw_pearl_c_device.manifest_epoch`); raises
     `Refused` or ValueError on a pass that can't be checked."""
     man = read(path)[0] if man is None else man
@@ -576,7 +588,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--coins", type=Path, help="the epoch's coin commitment as its challenger published it (e2e.py's coins.json)")
     p.add_argument("--recorded", action="store_true", help="the pass was recorded before epoch coins: its salt is its beacon's")
     a = p.parse_args(argv)
-    coins = CoinCommitment.from_json(json.loads(a.coins.read_text())) if a.coins else None
+    coins = epoch_coins(a.coins) if a.coins else None
     r = verify(a.manifest, a.draws, a.jobs, a.commit, fast=a.fast, cross_check=a.cross_check, coins=coins, recorded=a.recorded)
     print(r["line"], flush=True)
     (a.manifest.parent / "verify.json").write_text(json.dumps(r, indent=1) + "\n")
