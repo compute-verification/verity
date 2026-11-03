@@ -718,20 +718,23 @@ RESTS_ON_CELL = {
     "decoding": "assumption (D), with A1 (reading A)",
     "target": "target: A1 at reading B, not a bound",
     "none": "no measured kind > 1",
+    "unmeasured": "unmeasured",
 }
 #: the sensitivities a published ρ carries beside it (the coordinator's 08:28Z: reduction and update), on every console
 #: row, so the others (`SENSITIVITIES`) stay in `bound`
 CELL_SENSITIVITIES = ("reduction", "update")
-#: whether a row whose token kind is measured (its trace's `entries` and an op log) publishes reading A: since te_core
-#: 4.5's packer, whose witness family has matrix-product and weight-gradient tiles (coordinator 09:02Z: every row
-#: reading B's, a target, until then)
-READING_A = True
+#: whether a row whose token kind is measured (its trace's `entries` and an op log) publishes reading A: not until the
+#: bound's fresh-products kind is measured too (coordinator 09:02Z: reading B "until te_core 4.5 lands, with
+#: matrix-product tiles in the packer and the fresh-products kind wired in"), since until then a reading-A row
+#: publishes 1 wherever its weak token term is at most 1 (the algorithm-policy builder's 10:47Z SMELL)
+READING_A = False
 
 
 def published(m: Measured, c: float, k: float, reading: str | None = None) -> dict:
     """The published ρ at (c, k) (coordinator 08:26Z), `at`'s: under reading A (`reading`, else where `READING_A` and
-    the row's token kind is measured), Fit's c/(c − d) where it holds, else max(1, the one bound's max over `KINDS`; 1
-    where none is measured); under reading B Slowdown's token form, a target. Beside it the binding kind (fit, a kind,
+    the row's token kind is measured), Fit's c/(c − d) where it holds, else max(1, the one bound's max over `KINDS`;
+    None, binding none and resting on `unmeasured`, where none is measured, never 1, which would read as no slowdown
+    (coordinator 09:46Z)); under reading B Slowdown's token form, a target. Beside it the binding kind (fit, a kind,
     target, or none), what it rests on (`RESTS_ON_CELL`), the terms its max takes (None: unmeasured; under reading B
     the token form) and the bound's `CELL_SENSITIVITIES`."""
     if reading is None:
@@ -749,9 +752,9 @@ def published(m: Measured, c: float, k: float, reading: str | None = None) -> di
     else:
         binding = b["binding"] if b["max"] is not None and b["max"] > 1 else "none"
     terms = dict(b["terms"]) if reading == "A" else {"token_form": v["slowdown"]}
-    return {"reading": reading, "label": f"te_core {VERSION}, reading {reading}",
-            "rho": 1.0 if v["rho"] is None else v["rho"], "binding_kind": binding,
-            "rests_on": RESTS_ON_CELL[binding], "terms": terms,
+    return {"reading": reading, "label": f"te_core {VERSION}, reading {reading}", "rho": v["rho"],
+            "binding_kind": binding, "rests_on": RESTS_ON_CELL["unmeasured" if v["rho"] is None else binding],
+            "terms": terms,
             "sensitivities": {name: b["sensitivities"][name] for name in CELL_SENSITIVITIES}}
 
 
