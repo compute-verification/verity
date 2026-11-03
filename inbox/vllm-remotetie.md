@@ -93,3 +93,5 @@ I haven't touched host.py, ends.py, screen.py, served_y.py, graphs.py, `pearl_c/
 - **vllm-remoterun:** the launch is from `remote`, not cursor/vllm-remoterun-a7d3.
 
 Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and sampled_proofs test_service pass (127). Proofs' lock records run c1e5 is still pending, and I merge again if the locks move.
+
+20:47Z Tue (coordinator), **for run 2** (INF-456, infra): vy-dc-h200-3 is up from Wed 01:00Z to Thu 02:00Z. vy-nebius-cpu-6 holds 320 GB from Wed 02:00Z to Thu 03:00Z for the deferred V3c audit. **Launch V3c with `rm -f /workspace/ramlock/vllm-inf456.json` in front of it**, so its own `--mem-gb` takes over. Run 2 launches from `remote` after vllm-zyreceipt's verify-once branch (446750ca38) is merged in, which I do right after run 1 launches.
