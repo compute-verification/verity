@@ -49,7 +49,7 @@ from pathlib import Path
 import numpy as np
 
 from . import VERSION, console, frontier, panels, plots, policy, rescore
-from .gates import per_mac
+from .gates import UNIT, per_mac
 
 NAME = "frontier-fit"
 PANEL = f"training/{NAME}"
@@ -304,7 +304,7 @@ def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source:
                             fit_bpb=round(loss_at(f, s.c0), 5), residual_pct=num(100 * (s.l0 / loss_at(f, s.c0) - 1), 3),
                             gain=num(gain(f, s.l0, s.c0), 4), source=f"start {s.name} ({s.label})",
                             status=targets(f, s.l0, gains) if gains else None))
-    p = {"id": PANEL, "title": "The frontier's fit: L(C) = E + A C^-gamma per data", "kind": "table",
+    p = {"id": PANEL, "title": f"The frontier's fit: L(C) = E + A C^-gamma per data (C in {UNIT})", "kind": "table",
          "updated_at": stamp or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "source": source,
          "note": note(fits, read, pts), "columns": COLUMNS, "rows": rows}
     return checked(p), {"rate": rate, "rate_how": rate_how, "ratio": ratio, "starts": sts, "points": pts,

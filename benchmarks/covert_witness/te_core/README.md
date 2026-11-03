@@ -11,7 +11,8 @@ which every record carries. Findings, negative results and tool announcements go
 
 te_core scores by the training formalism v2. |C|, c, w and d are Boolean gates (`gates`: each counted op at its
 circuit Definition's price, a bf16 GEMM MAC being `HopperBF16WgmmaDot16_v2`'s 23,682 gates / 16 = 1,480.1), every
-other quantity bits.
+other quantity bits. A gate is any of AND, XOR and NOT, so a count is about 3x its AND count (3.0x for a bf16 GEMM,
+`gates.UNIT`, which the training panels' titles state).
 
 - **θ (registered weights)**: a start's weights, registered once at the start of the monitoring period, so every value
   computed during the run is new.

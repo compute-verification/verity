@@ -75,6 +75,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
 from . import VERSION, console, formalism, frontier_fit, panels, plots, policy, rescore
+from .gates import UNIT
 
 NAME = "algorithm-policy"
 PANEL = f"training/{NAME}"
@@ -302,7 +303,8 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
         raise ValueError(f"{PANEL}: {len(wrong)} cells where a row's columns don't give te_core.formalism.at's rho "
                          f"({'; '.join(wrong[:3])}): the dial (page_rho) has no context charge (--charge-context), "
                          f"and its inputs have {INPUT_DIGITS} significant digits")
-    return {"id": PANEL, "title": "Algorithm against policy: p = C/H against rho at each gain target",
+    return {"id": PANEL, "title": f"Algorithm against policy: p = C/H against rho at each gain target (C, H and c in "
+                                  f"{UNIT})",
             "kind": "table", "updated_at": stamp or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "source": source,
             "note": note(), "columns": COLUMNS, "rows": rows}
 
@@ -641,10 +643,10 @@ def figure(p: dict, out: Path) -> Path:
              for i, s in enumerate(starts)]
     keys.append(Line2D([], [], marker="o", ls="none", mfc="none", mec="red", ms=9, label="least S reached"))
     fig.legend(handles=keys, loc="lower center", ncol=min(len(keys), 7), fontsize=7, bbox_to_anchor=(0.5, 0.04))
-    fig.suptitle(f"{p['title']}, {data} data (grey: iso-S, S = p rho; dotted: the coverage's decades of rho)",
+    fig.suptitle(f"{p['title']}, {data} data\n(grey: iso-S, S = p rho; dotted: the coverage's decades of rho)",
                  fontsize=10)
     fig.text(0.01, 0.005, p["note"], fontsize=5.5, wrap=True, va="bottom")
-    fig.tight_layout(rect=(0, 0.12, 1, 0.96))
+    fig.tight_layout(rect=(0, 0.12, 1, 0.93))
     path = out / f"{NAME}.png"
     fig.savefig(path, dpi=130)
     plt.close(fig)
