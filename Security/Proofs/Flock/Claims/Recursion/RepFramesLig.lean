@@ -230,7 +230,7 @@ theorem ligFrames_fields {sh : Shape} {p p' : Proof} (hp : DecodeZL.ProofSizes s
 
 /-- **Two reps accepted on one stream agree in every field but `params`, `finalC`, `initialCap` and the openings**:
 `rep_bind_fields` with `ligFrames_fields`, at a schedule of at least two levels. -/
-theorem rep_bind_lig (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : Session) (i r : ℕ)
+theorem rep_bind_lig (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes bytes' cap cap' : ByteArray) (hm : 14 ≤ st.m) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default)) (hk : st.fold.kLog = st.kLog)
     (h : verifyRep spec st sch sess i r bytes = .ok cap) (h' : verifyRep spec st sch sess i r bytes' = .ok cap')

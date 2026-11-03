@@ -46,6 +46,10 @@ name = "core_memory_challenger"
 path = "../../verity/core/devices/memory_challenger/lean"
 
 [[require]]
+name = "core_firewall"
+path = "../../verity/core/service/firewall"
+
+[[require]]
 name = "network_check"
 path = "../../verity/core/protocols/network/lean"
 
@@ -84,7 +88,8 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Pous.Period", "Properties.Pous.EndToEndAt", "Properties.Pous.PeriodAt", "Properties.Pous.PeriodDeployed",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld", "Properties.Attest", "Properties.Pous.Component",
   "Properties.NetworkCertifier", "Properties.NetworkCertifier.LinkWindow", "Properties.CertifierNetwork",
-  "Properties.CertifierNetwork.Runs", "Properties.Identity", "Properties.NciDesc", "Properties.NciDesc.Verdict",
+  "Properties.CertifierNetwork.Runs", "Properties.Identity", "Properties.Annot", "Properties.NciDesc",
+  "Properties.NciDesc.Verdict",
   "Properties.NciDesc.Cover", "Properties.Nci.Baseline", "Properties.SampledProofs", "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt", "Properties.Evaluate", "Properties.NetworkRecords", "Properties.NetworkPeriod",
   "Properties.NetworkScan", "Properties.Accounting.Requirement", "Properties.Accounting.Compose",
@@ -94,4 +99,4 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.RemoteAudit.Component",
   "Properties.Composition", "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Flock.Circuit", "Properties.Pous.WipeSigned",
-  "Properties.Challenger"]
+  "Properties.Challenger", "Properties.Firewall"]

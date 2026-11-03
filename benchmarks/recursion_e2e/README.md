@@ -115,9 +115,9 @@ with `GPU=0`. The inner statement is `N` instances of `GemmCoordinate_v2{K, DOT=
 What the recursive audit has that the pod script doesn't run, so no number here covers it:
 
 - **The recursive run through the ZK server's release side** (live PROTOCOL.md §10.5): `rec_live --firewall DIR --parts
-  L0,…,alg` opening one recursive run per inner run, each outer proof released through `python -m verity_flock.firewall
+  L0,…,alg --budget b` opening one recursive run per inner run, each outer proof released through `python -m verity_flock.firewall
   relay` or `flock-circuit prove --firewall-state DIR --session ID --part NAME`, one outer slot, statements in order. Only
-  the tests run it (`verity/ml/flock/tests/test_rec_live_firewall.py`). The pod script proves each V* statement against its own `serve`.
+  the tests run it (`verity/ml/flock/tests/test_firewall_release.py`). The pod script proves each V* statement against its own `serve`.
 - **One verdict over the whole recursive run.** STEP=lean verifies each V* release on its own and composes their
   verdicts once (`rec-compose`, over the run's record), but no one command takes the inner record and every V* release
   and answers once: the inner run's own verdict (`INNER_LEAN=1`) stays a separate line.

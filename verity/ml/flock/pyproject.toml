@@ -48,6 +48,8 @@ inputs = [
     # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
     # the flock-verify artifact
     "verity/core/service/flock/Flock/Test/RecCap.lean",
+    # `flock-firewall live` starts from this directory, where the guard reads its argument `live` as the crate's directory
+    "verity/ml/flock/live/PROTOCOL.md",
 ]
 parallel = true
 # an xdist worker peaked at 15.6 GB (38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this
@@ -57,6 +59,7 @@ timeout_s = 14400
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
 artifacts = ["verity/core/service/flock/.lake/build/bin/flock-verify",
              "verity/core/service/flock/.lake/build/bin/flock-firewall",
+             "verity/core/service/flock/.lake/build/bin/flock-frame-tape",
              "verity/core/service/flock/.lake/build/bin/flock-rec-sparse",
              "verity/core/service/flock/.lake/build/bin/flock-witness",
              "verity/core/service/flock/.lake/build/bin/flock-rec-opening",
