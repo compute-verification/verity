@@ -16,7 +16,9 @@ from slack_events.deps import DEAD, DEAD_TOPIC, LAST_SUCCESS
 
 
 def private(ts: str, key: str = "chat-luke", who: str = "luke") -> str:
-    return f"from {who}, #{key} thread {ts}: (a post in a private channel: research msg read --channel {key} --thread {ts})"
+    """The doorbell of a person's chat post rung as they post it (the tests' clock stands still)."""
+    return (f"from {who} (a person, waiting under a minute), #{key} thread {ts}: (a post in a private channel: research msg "
+            f"read --channel {key} --thread {ts})")
 
 
 def router_lines(world, ch: str, ts: str) -> list[str]:
@@ -56,11 +58,11 @@ def test_an_addressed_chat_post_rings_the_names_it_starts_with_and_posts_no_rout
 def test_an_unaddressed_ask_post_rings_top_with_its_text_and_an_addressed_one_its_names(world, ch, key):
     plain = world.slack.add(ch, text="what is the TP8 status?", user=DANIEL)
     assert consume(world.deps, world.event(ch, plain), 1) == "unaddressed: @top"
-    assert world.rung("top") == [f"from daniel, #{key} thread {plain['ts']}: what is the TP8 status?"]
+    assert world.rung("top") == [f"from daniel (a person, waiting under a minute), #{key} thread {plain['ts']}: what is the TP8 status?"]
     assert router_lines(world, ch, plain["ts"]) == [NO_MODEL]
     named = world.slack.add(ch, text="@circuits when does the sweep land?", user=DANIEL)
     assert consume(world.deps, world.event(ch, named), 1) == "rule"
-    assert world.rung("circuits") == [f"from daniel, #{key} thread {named['ts']}: @circuits when does the sweep land?"]
+    assert world.rung("circuits") == [f"from daniel (a person, waiting under a minute), #{key} thread {named['ts']}: @circuits when does the sweep land?"]
 
 
 @pytest.mark.parametrize("where,msg,why", [

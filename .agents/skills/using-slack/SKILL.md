@@ -26,7 +26,8 @@ msg owners PATH...` names each path's owner (longest prefix).
   wakes it, so its inbox holds your ask until he opens it. Put the whole brief in the ask, and card `#ask-daniel` when it
   can't wait.
 - **Each handle has an inbox thread** (its route, `routes.d` in the notes), where a post rings each name it addresses
-  with a doorbell (`from AUTHOR, thread T: ...`); the holder's own posts never ring it. The route names the holder:
+  with a doorbell (`from AUTHOR, thread T: ...`; a person's leads with them and how long they've waited, `from douglas
+  (a person, waiting 18 min), #chat-douglas thread T: ...`); the holder's own posts never ring it. The route names the holder:
   `names open --as HANDLE --succeeds` takes a handle over, `names open --as HANDLE` on a new branch adds its suffix, and
   `--poster BC_ID` lets another agent post as it, subscribed to the inbox itself: its post naming the handle rings the
   holder (so a handover's outgoing generation reaches the incoming one), and that doorbell wakes the poster too. `--as

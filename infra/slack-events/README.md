@@ -24,7 +24,7 @@ gets their chat when they join the workspace.
     topic is empty or 45 s have passed. A failure retries with backoff; after 5 deliveries the message goes to
     `slack-events-dead`, a failure line goes in its thread and @top is rung.
   - `slack_events/crons.py`: the watchdog (every 5 minutes) rings again a chat post with no 👀 and no lane reply after
-    15 minutes, rings @top and says so in the thread after 60, and once a day (16:00Z) posts the open chat threads to
+    15 minutes, rings @top and says so in the thread after 60, each doorbell URGENT (a person is waiting), and once a day (16:00Z) posts the open chat threads to
     @top's inbox. Reconciliation (every 10 minutes) re-enqueues, keyed on channel and ts, a person's post of the last
     hour that should ring someone and has neither a routing line nor a doorbell. Both keep no state but what they post.
   - `slack_events/router.py`: `route_unaddressed`, the seam for routing by model. It returns None (no-model mode)

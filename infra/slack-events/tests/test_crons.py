@@ -13,8 +13,10 @@ from slack_events.crons import DAILY_HEAD, ESCALATE_S, ESCALATED, ESCALATION, RE
 from slack_events.deps import CANARY_DONE, CANARY_SENT, DEAD, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, STALL_RUNG, TOPIC
 
 
-def private(ts: str, reminder: str | None = None) -> str:
-    return (f"from luke, #chat-luke thread {ts}: " + (f"reminder ({reminder}): " if reminder else "")
+def private(ts: str, reminder: str | None = None, waited: str = "under a minute") -> str:
+    """Luke's doorbell for his post `ts`, rung `waited` after he posted it; the watchdog's `reminder`s are urgent."""
+    return (f"from luke (a person, waiting {waited}){' (URGENT)' if reminder else ''}, #chat-luke thread {ts}: "
+            + (f"reminder ({reminder}): " if reminder else "")
             + f"(a post in a private channel: research msg read --channel chat-luke --thread {ts})")
 
 
@@ -32,7 +34,7 @@ def test_a_chat_post_with_no_eyes_and_no_lane_reply_rings_again_after_15_min_onc
     assert crons.watchdog(world.deps)["reminded"] == 1
     world.clock.t += 300
     crons.watchdog(world.deps)
-    assert world.rung("circuits") == [private(post["ts"]), private(post["ts"], REMINDER)] and world.rung("top") == []
+    assert world.rung("circuits") == [private(post["ts"]), private(post["ts"], REMINDER, "15 min")] and world.rung("top") == []
     assert world.deps.cache.get(LAST_SUCCESS) == world.clock()
 
 
@@ -53,7 +55,7 @@ def test_after_60_min_with_no_lane_reply_it_rings_top_and_says_so_in_the_thread_
     assert crons.watchdog(world.deps)["escalated"] == 1
     world.clock.t += 300
     assert crons.watchdog(world.deps)["escalated"] == 0
-    assert world.rung("top") == [private(post["ts"], ESCALATION)]
+    assert world.rung("top") == [private(post["ts"], ESCALATION, "60 min")]
     assert [m["text"] for m in world.slack.thread(CHAT, post["ts"]) if m.get("username") == "router"] == [ESCALATED]
 
 
@@ -64,14 +66,14 @@ def test_an_escalation_that_did_not_ring_posts_no_line_and_the_next_run_tries_ag
     assert crons.watchdog(world.deps)["escalated"] == 0
     world.slack.fail = set()
     world.clock.t += 300
-    assert crons.watchdog(world.deps)["escalated"] == 1 and world.rung("top") == [private(post["ts"], ESCALATION)]
+    assert crons.watchdog(world.deps)["escalated"] == 1 and world.rung("top") == [private(post["ts"], ESCALATION, "65 min")]
 
 
 def test_an_unaddressed_post_already_at_top_is_reminded_to_top(world):
     post = routed(world, "how do I read a PoUW receipt?")
     world.clock.t += REMIND_S + 1
     crons.watchdog(world.deps)
-    assert world.rung("top") == [private(post["ts"]), private(post["ts"], REMINDER)]
+    assert world.rung("top") == [private(post["ts"]), private(post["ts"], REMINDER, "15 min")]
 
 
 def test_once_a_day_top_gets_the_list_of_open_threads(world):

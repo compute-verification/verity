@@ -1439,9 +1439,11 @@ def rings_own_inbox(routes: Routes | None, handle: str, sender: str | None) -> b
 
 
 _CHANNEL = r"#[A-Za-z0-9][A-Za-z0-9._-]*"
+_PERSON = r"(?: \(a person, waiting [^()]*\))?"                 # a person's post: who is waiting, and how long
 #: groups: author, urgent, thread, reply; a post outside the front door names its channel before `thread` (`doorbell_channel`)
-DOORBELL_RE = re.compile(rf"^from ([a-z0-9][a-z0-9._-]*)( \(URGENT\))?, (?:{_CHANNEL} )?thread (\d+\.\d+)(?:, reply (\d+\.\d+))?: ")
-DOORBELL_CHANNEL_RE = re.compile(rf"^from [a-z0-9][a-z0-9._-]*(?: \(URGENT\))?, ({_CHANNEL}) thread \d")
+DOORBELL_RE = re.compile(rf"^from ([a-z0-9][a-z0-9._-]*){_PERSON}( \(URGENT\))?, (?:{_CHANNEL} )?thread (\d+\.\d+)"
+                         r"(?:, reply (\d+\.\d+))?: ")
+DOORBELL_CHANNEL_RE = re.compile(rf"^from [a-z0-9][a-z0-9._-]*{_PERSON}(?: \(URGENT\))?, ({_CHANNEL}) thread \d")
 CHANNEL_ID_RE = re.compile(r"^[CDG][A-Z0-9]{2,}$")
 
 
@@ -1449,13 +1451,21 @@ def _channel_flag(channel: str) -> str:
     return f"--channel-id {channel}" if CHANNEL_ID_RE.match(channel) else f"--channel {channel}"
 
 
+def waiting(s: float) -> str:
+    """How long a person has waited, as a doorbell says it."""
+    m = int(max(0.0, s) // 60)
+    return "under a minute" if m < 1 else f"{m} min" if m < 120 else f"{s / 3600:.1f} h"
+
+
 def doorbell(author: str, thread: str, ts: str, text: str, urgent: bool = False, channel: str | None = None,
-             private: bool = False, reminder: str | None = None) -> str:
+             private: bool = False, reminder: str | None = None, waited: float | None = None) -> str:
     """The post itself, so its reader can act without another read: `from infra, thread T[, reply R]: <text>`.  A post in a
     channel other than the front door names it (its registry key, else its id), so its reader answers there: `from daniel,
-    #ask-the-team thread T: <text>`.  A `private` post's (a chat's) carries no text, since anyone in the front door reads
-    the inboxes, only where to read it.  A `reminder` (the Slack events service's watchdog) leads the body with
-    `reminder (WHY): `.  Never starts with `@`, so it can't route itself."""
+    #ask-the-team thread T: <text>`.  A person's post (`waited`, the seconds since they posted) leads with them and how
+    long they have waited: `from douglas (a person, waiting 18 min), #chat-douglas thread T: ...`.  A `private` post's (a
+    chat's) carries no text, since anyone in the front door reads the inboxes, only where to read it.  A `reminder` (the
+    Slack events service's watchdog) leads the body with `reminder (WHY): `.  Never starts with `@`, so it can't route
+    itself."""
     body = plain(text)
     if private:
         body = f"(a post in a private channel: research msg read {_channel_flag(channel or '?')} --thread {thread})"
@@ -1463,7 +1473,8 @@ def doorbell(author: str, thread: str, ts: str, text: str, urgent: bool = False,
         read = f"research msg read {_channel_flag(channel)} --thread {thread}" if channel else f"research msg read --thread {thread}"
         body = body[:DOORBELL_MAX].rstrip() + f"\u2026 (the rest: `{read}`)"
     where = (f"#{channel} " if channel else "") + f"thread {thread}" + (f", reply {ts}" if ts and ts != thread else "")
-    return f"from {author}{' (URGENT)' if urgent else ''}, {where}: " + (f"reminder ({reminder}): " if reminder else "") + body
+    who = author + (f" (a person, waiting {waiting(waited)})" if waited is not None else "")
+    return f"from {who}{' (URGENT)' if urgent else ''}, {where}: " + (f"reminder ({reminder}): " if reminder else "") + body
 
 
 def doorbell_channel(text: str) -> str | None:
@@ -1544,6 +1555,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
         lines.append("no doorbells: " + ("another app's bot posted it, not Verity's" if reg.get("bot_id") else
                                          "the registry records no bot_id (`research msg groups sync --apply` writes it)"))
     humans = people_names(reg)
+    waited = now - float(msg["ts"]) if person(msg, reg) and re.fullmatch(r"\d+\.\d+", str(msg.get("ts") or "")) else None
     own = False
     if names is not None:
         targets = names
@@ -1597,7 +1609,7 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
                 continue
             api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
                      unfurl_media="false", text=doorbell(author, src, msg.get("ts") or src, msg.get("text", ""), urgent, where,
-                                                         private, reminder))
+                                                         private, reminder, waited))
             lines.append(f"@{to}: rang" + (f" (for @{name}, finished)" if to != name else ""))
         except SlackError as e:                                      # the others still ring; `deliver` rings this one later
             lines.append(f"@{to}: NOT RUNG ({e})")

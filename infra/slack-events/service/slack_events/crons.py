@@ -2,7 +2,7 @@
 what they find next time); both stamp last_success_at in the cache.
 
 - `watchdog` (every 5 minutes): a person's chat post that rang someone and has no 👀 and no lane reply after REMIND_S rings
-  again; after ESCALATE_S with no lane reply it rings @top and says so in the thread; in the run that falls in DAILY_AT, a
+  again, urgent, as every doorbell it rings is (a person is waiting); after ESCALATE_S with no lane reply it rings @top and says so in the thread; in the run that falls in DAILY_AT, a
   list of the chat threads still open goes to @top's inbox.  And `stall`: an event published STALL_S ago or more with no
   message done by the consumer since rings @comms (at most hourly), since health's other numbers can't show it; and
   `canary`, each hour, publishes a synthetic event that only the consumer can stamp done, so `stall` has one to judge.
@@ -100,14 +100,14 @@ def watchdog(deps: Deps) -> dict:
                     if not any(rs.ours(m, reg) and m.get("username") == "router" and (m.get("text") or "").startswith(ESCALATED)
                                for m in later):
                         lines = rs.deliver(api, reg, rs.Routes(), ch, msg, now=now, log=_Log(deps), names=["top"],
-                                           reminder=ESCALATION)
+                                           reminder=ESCALATION, urgent=True)
                         if any("NOT RUNG" in s for s in lines):
                             continue                                       # the line would stop the next run's try
                         api.call("chat.postMessage", channel=ch, thread_ts=root, username="router", text=ESCALATED,
                                  unfurl_links="false")
                         counts["escalated"] += 1
                 elif not any(r.get("name") == "eyes" for r in p.get("reactions") or []):
-                    rs.deliver(api, reg, rs.Routes(), ch, msg, now=now, log=_Log(deps), reminder=REMINDER)
+                    rs.deliver(api, reg, rs.Routes(), ch, msg, now=now, log=_Log(deps), reminder=REMINDER, urgent=True)
                     counts["reminded"] += 1
     if _daily_due(now):
         counts["daily"] = daily(deps, reg, still_open, now)
