@@ -86,7 +86,8 @@ def test_a_dense_step_and_a_lora_step_have_a_finite_token_term_at_the_console_de
     and tiles still holds a few percent of c, so the token term is finite (4.4's runs alone gave ∞, the
     full-token-state overclaim), above 1, and binds: ρ is it, below the per-gate sensitivity, which isn't closed under
     unions. With k = 8 Mbit (dense) or 800 kbit (LoRA, whose update is 10 times smaller) a block holds c: the term is
-    the affected share. Fresh products are unmeasured, and nearly every token gate is in a tile."""
+    the affected share. Fresh products are unmeasured at these k (the fixtures' products are classified at the
+    console's), and nearly every token gate is in a tile."""
     default = rho_vectors.CELLS[0]
     for case, k in (("dense", 8_000_000), ("lora", 800_000)):
         a = by(built, case, *default)
@@ -129,9 +130,10 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
     kind with what it rests on, and since 4.5's packer (`READING_A`; the coordinator's 09:02Z: reading B until then) a
     row whose token kind is measured publishes reading A, `at`'s ρ, with the bound's terms and its reduction and update
     sensitivities (the console's cell has room for no more). At the
-    dial's default the dense, LoRA and grown-adapter steps bind on the token kind; the adapter with its live code
-    publishes 1, no kind above 1, labelled with the measured kind its max takes (coordinator 11:18Z), its reduction
-    sensitivity above 9 beside it. A row without entries or an op log
+    dial's default the dense, LoRA and grown-adapter steps bind on the token kind, partial since their fresh products
+    are classified at the console's k; the adapter with its live code has no measured kind above 1 and fresh products
+    unmeasured there, so it publishes None, saying so (coordinator 12:20Z), its reduction sensitivity above 9 beside
+    it. A row without entries or an op log
     publishes reading B, Slowdown's token form, a target, and so does every row where `READING_A` is off (on since
     the coordinator's 11:18Z ruling); read under A, such a row measures no kind, so it publishes None,
     binding none and resting on `unmeasured`, never 1 (coordinator 09:46Z)."""
@@ -142,25 +144,85 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
         one = formalism.published(m, v["c"], v["k"], "A")
         assert formalism.published(m, v["c"], v["k"])["reading"] == ("A" if formalism.READING_A else "B")
         assert one["reading"] == "A" and not v["fit"]
-        assert not differences(rho_vectors.finite([one["rho"], one["terms"], one["sensitivities"]]),
-                               [v["rho"], v["terms"], {n: v["sensitivities"][n] for n in formalism.CELL_SENSITIVITIES}])
-        assert one["binding_kind"] == v["binding"] and one["binding_kind"] in formalism.KINDS
-        assert one["rests_on"] == formalism.RESTS_ON_CELL[one["binding_kind"]]
-        assert case == "adapter-live" or one["binding_kind"] == "token"
+        assert not differences(rho_vectors.finite([one["terms"], one["sensitivities"]]),
+                               [v["terms"], {n: v["sensitivities"][n] for n in formalism.CELL_SENSITIVITIES}])
+        assert one["rests_on"] == formalism.RESTS_ON_CELL["unmeasured" if one["rho"] is None else one["binding_kind"]]
+        if case != "adapter-live":
+            assert (one["rho"], one["binding_kind"]) == (num(v["rho"]), "token") == (num(v["rho"]), v["binding"])
+            assert one["partial"] and one["why"] is None
     live = formalism.published(formalism.from_json(built["measured"]["adapter-live"]), v["c"], v["k"], "A")
-    assert live["rho"] == 1.0 and num(live["terms"][live["binding_kind"]]) <= 1
+    assert (live["rho"], live["binding_kind"], live["partial"]) == (None, "unmeasured", False)
+    assert live["why"] == "the measured kinds give at most 1; fresh products unmeasured"
+    assert max(num(t) for t in live["terms"].values() if t is not None) <= 1
     assert live["sensitivities"]["reduction"] > 9
     for gone in ("entries", "ops"):
         m = formalism.from_json(built["measured"]["dense"] | {gone: None})
         b, at = formalism.published(m, v["c"], v["k"]), formalism.at(m, v["c"], v["k"])
         assert (b["reading"], b["binding_kind"], b["rho"]) == ("B", "target", at["rho"])
-        assert b["terms"] == {"token_form": at["slowdown"]} and list(b["sensitivities"]) == ["reduction", "update"]
+        assert b["terms"] == {"token_form": at["slowdown"]} and tuple(b["sensitivities"]) == formalism.CELL_SENSITIVITIES
         assert b["rests_on"] == formalism.RESTS_ON_CELL["target"]
         a = formalism.published(m, v["c"], v["k"], "A")
-        assert (a["reading"], a["rho"], a["binding_kind"], a["rests_on"]) == ("A", None, "none", "unmeasured")
+        assert (a["reading"], a["rho"], a["binding_kind"], a["rests_on"]) == ("A", None, "unmeasured", "unmeasured")
+        assert a["why"] == "no kind is measured"
         assert set(a["terms"]) == set(formalism.KINDS) and all(t is None for t in a["terms"].values())
     m = formalism.from_json(built["measured"]["dense"])
     assert formalism.published(m) == formalism.published(m, *policy.CONSOLE)
+
+
+def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_cell_figure_beside_it(built):
+    """The console's port of the fresh-products term tests against these: on each of io_bound's hand-written product
+    sets the term is io_bound's own vector's proved figure without P-cell and fresh_cell its figure with it, summed in
+    the reference circuit's chain whether the order is declared or not; a circuit that declares a tree is unmeasured;
+    the 45M start's dense step's term is 1.65e5, its fresh_cell 3.04e6."""
+    f = built["fresh"]
+    assert (f["p_cell"], f["order"]) == (formalism.P_CELL, formalism.ORDER) == (False, "chain")
+    assert f["rests_on"] == formalism.RESTS_ON_CELL["fresh_products"] and "without P-cell" in f["rests_on"]
+    vs = {v["name"]: v for v in f["vectors"]}
+    from te_core import io_bound
+
+    for want in io_bound.vectors()["vectors"]:
+        v = vs[want["name"]]
+        assert v["inputs"]["c"] == want["inputs"]["c"] and v["inputs"]["products"]["products"] == want["inputs"][
+            "products"]
+        assert (v["term"], v["fresh_cell"], v["order"], v["why"]) == (
+            want["term"]["proved_rho_no_cell"], want["term"]["proved_rho"], "chain", None)
+    square = vs["one product, square, console"]
+    assert vs["one product, square, console, no order declared"]["term"] == square["term"] > 1
+    tree = vs["one product, square, console, a circuit that declares a tree"]
+    assert (tree["term"], tree["fresh_cell"], tree["order"]) == (None, None, "tree") and "tree" in tree["why"]
+    dense = vs["the 45M start's dense step, its trace's order unknown"]
+    assert (dense["inputs"]["c"], dense["inputs"]["k"]) == policy.CONSOLE and dense["order"] == "chain"
+    assert dense["inputs"]["products"]["trace_order"] == "unknown"
+    assert dense["term"] == pytest.approx(1.650e5, rel=1e-3) and dense["fresh_cell"] == pytest.approx(3.041e6, rel=1e-3)
+
+
+def test_the_published_vectors_take_each_case_of_the_rule(built):
+    """The console's port of `published` tests against these: each vector is `published` under reading A on its
+    case's `measured`, and together they take every case of the rule: Fit; the measured max above 1, partial where a
+    kind is unmeasured and not where none is; None where a kind is unmeasured and no measured term exceeds 1; 1,
+    binding none, where every kind is measured and none exceeds 1."""
+    seen = set()
+    for v in built["published"]:
+        m = formalism.from_json(built["measured"][v["case"]])
+        one = rho_vectors.finite(formalism.published(m, v["c"], v["k"], "A"))
+        assert not differences({x: v[x] for x in one}, one)
+        terms = {kind: num(t) for kind, t in v["terms"].items() if t is not None}
+        off = set(v["terms"]) - set(terms)
+        if v["binding_kind"] == "fit":
+            seen.add("fit")
+        elif v["binding_kind"] in formalism.KINDS:
+            assert v["rho"] == max(terms.values()) == terms[v["binding_kind"]] > 1 and v["partial"] == bool(off)
+            seen.add(("max", v["partial"]))
+        elif v["binding_kind"] == "unmeasured":
+            assert v["rho"] is None and off and max(terms.values()) <= 1 and v["why"]
+            seen.add("unmeasured")
+        else:
+            assert (v["binding_kind"], v["rho"], v["rests_on"]) == ("none", 1.0, "no kind exceeds 1") and not off
+            assert max(terms.values()) <= 1
+            seen.add("none")
+        assert v["rests_on"] == formalism.RESTS_ON_CELL["unmeasured" if v["rho"] is None else v["binding_kind"]]
+        assert v["label"] == f"te_core {VERSION}, reading A"
+    assert seen == {"fit", ("max", True), ("max", False), "unmeasured", "none"}
 
 
 def test_the_session_vectors_are_their_rule_at_every_stated_size(built):
