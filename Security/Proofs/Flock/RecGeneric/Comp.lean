@@ -112,10 +112,13 @@ def ownAt (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg
     (u : (Fin (K.V.k x) → Coin) × K.EO.C x) : List (Msg × Msg) :=
   K.own H x (run H P K.V x ω u.1).msgs
 
-/-- A rerun's SHA-512 calls: the compiled run's, both parties', and `E_O`'s. -/
+/-- **A rerun's SHA-512 calls**: the compiled run's, both parties', `E_O`'s, and one per evaluation a finder searches
+there (`rerunCalls`, `ownAt`), which it evaluates itself to search them. A run finder's cost is these over the reruns it
+names (`RunFinder.finder`), so its declared cost is every call its search makes. -/
 def rerunCost (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (u : (Fin (K.V.k x) → Coin) × K.EO.C x) : ℕ :=
-  (run H P K.V x ω u.1).pLog.length + (run H P K.V x ω u.1).vLog.length + (K.EO.eval H P x ω u.1 u.2).2.1
+  (run H P K.V x ω u.1).pLog.length + (run H P K.V x ω u.1).vLog.length + (K.EO.eval H P x ω u.1 u.2).2.1 +
+    (K.rerunCalls H P x ω u).length + (K.ownAt H P x ω u).length
 
 /-- **The composite's reruns, as the inner terms' finders read them**: each run of the model is a rerun; a fork at the
 inner round `j` keeps the compiled coins before `min j k_Π`; a rerun is accepted where the inner view `E_O`'s witnesses
