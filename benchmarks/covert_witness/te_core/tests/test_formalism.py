@@ -602,8 +602,9 @@ def test_the_fresh_products_kind_is_io_bounds_bound_on_the_runs_products():
     assert 100 < rho < 1e3 and b["terms"]["fresh_products"] == rho and b["binding"] == "fresh_products"
     assert "fresh_products" not in b["unmeasured"]
     assert b["inputs"]["fresh_products"]["io_bound"]["share"] == pytest.approx(0.5, rel=1e-12)
-    assert F.published(chain)["binding_kind"] == "fresh_products"
-    assert F.published(chain)["rho"] == pytest.approx(rho * policy.CONSOLE[0] / c, rel=1e-12)
+    assert F.published(chain)["reading"] == ("A" if F.READING_A else "B")
+    assert F.published(chain, reading="A")["binding_kind"] == "fresh_products"
+    assert F.published(chain, reading="A")["rho"] == pytest.approx(rho * policy.CONSOLE[0] / c, rel=1e-12)
     for order, why in ((None, "isn't in the trace, so the tree constant applies"), ("tree", "summed in a tree")):
         other = F.bound(replace(chain, products=chain.products | {"order": order}), c, k)
         assert other["terms"]["fresh_products"] is None and why in other["unmeasured"]["fresh_products"]
