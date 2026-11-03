@@ -72,11 +72,12 @@ PUBLIC = {
                                              "and shared by key by the steps that judge them (Answers), the drawn runs "
                                              "filled J at a time (window_runs, fill, jobs), which drawn.py fill and "
                                              "pouw_piece.py period read",
-    "verity_vllm.protocols.pouw.pearl_c.served_y": "I1: Pearl+'s committed served y: each call's y rows, its domain and "
-                                                   "tree (y_domain, commit_y, retain_y), which verify_run opens and checks",
     "verity_vllm.protocols.pouw.h1.receipts": "I1: served H1's receipt producer, the zy receipts serve-openai's "
                                               "--h1-receipts registers (Receipts) and its noise kernel, which PoUW's "
                                               "benchmarks time and gate",
+    "verity_vllm.protocols.pouw.pearl_c.served_y": "I1: Pearl+'s served y as a retained pass commits it, a call's real rows "
+                                                   "under its domain (y_domain, commit_y, retain_y) and on its device "
+                                                   "(DeviceTrees), which verify_run opens on each drawn tile",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.

@@ -23,9 +23,9 @@ forward no call's Python runs, so the forward's host work is done at once, aroun
 `whole_replay` uploads its slots; after it, while the GPU runs the forward, `whole_replayed` appends its matmuls, tiles and
 screened rows to the pass and stages the next forward's slots, which the next `whole_replay` uploads when the pass is where
 they were staged for (else it makes them itself: the same bytes either way).  A retained pass's capture also copies each
-call's A words and tree, as its steps leave them, to its stage (its weight's at its m₁₆: vLLM captures a forward at each of
-its batch sizes, and a call's A words and tree are sized by m₁₆), from which `whole_replayed` writes the call's record and
-files, as `_retained` writes them for a call made alone.
+call's A words and tree, as its steps leave them, and its real rows of y, before the forward's next op, to its stage (its
+weight's at its m₁₆: vLLM captures a forward at each of its batch sizes, and a call's A words and tree are sized by m₁₆), from
+which `whole_replayed` writes the call's record and files, as `_retained` writes them for a call made alone.
 
 With ``whole_defer`` (and hashing), a whole capture forks each call's tile hashing and scatter, after its GEMM, onto a side
 stream of the run's own, and the next call joins it after its own A tree, so the two run side by side in the forward's graph;
@@ -69,12 +69,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity.core.protocols.pouw.protocol import Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 
 from verity_vllm.protocols.pouw.pearl_c.passes import call_index
-from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _event, _Lane, _write, _zeros, torch_uint8
-from verity_vllm.protocols.pouw.pearl_c.screen import excluded, scatter_into
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+from verity_vllm.protocols.pouw.pearl_c.host import _event, _Lane, _zeros, torch_uint8
+from verity_vllm.protocols.pouw.pearl_c.screen import scatter_into
 
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
 #: a small share of the call, and a graph's own y would cost m x n of memory per weight
@@ -126,6 +124,8 @@ class _Graph:
     side_cut: int = 0
     ev_tree: Any = None
     execs: tuple = ()
+    #: the byte a poison left in `y` and `leaves`, until a call takes the graph (`PassEnds._poison_graphs`)
+    poisoned: int | None = None
 
 
 @dataclass(frozen=True)
@@ -157,15 +157,18 @@ class _Slots:
 class GraphCalls:
     """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``driver``, ``fork``, ``order``, ``nb`` (its
     trees' node bytes), ``key_slots``, ``offs``, ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and
-    ``_graphs``, its `_call_steps` and `_call_cuts`, and its pass and the pass's buffers (``roots_buf``, ``flag_buf``, whose
+    ``_graphs``, ``shapes``, its `_call_steps` and `_call_cuts`, and its pass and the pass's buffers (``roots_buf``, ``flag_buf``, whose
     lengths bound it)."""
 
     #: while vLLM captures forwards (`whole_capture_begin`), the calls made inside its stream capture, in order; None otherwise
     _whole: list[WholeCall] | None = None
-    #: whether those forwards are a retained pass's, whose capture copies each call's A words and tree to its stage
+    #: whether those forwards are a retained pass's, whose capture copies each call's A words, A tree and y to its stage
     _whole_retained: bool = False
-    #: each (weight, m₁₆)'s stage, (A words, A tree) as its call's steps leave them, made at its first retained warm-up
-    _stages: dict[tuple[int, int], tuple[Any, Any]] | None = None
+    #: each (weight, m₁₆)'s stage, (A words, A tree, y's m₁₆ rows) as its call's steps leave them, made at its first retained
+    #: warm-up; y is copied in the capture right after the call, ahead of the forward's next op, which may change it in place
+    _stages: dict[tuple[int, int], tuple[Any, Any, Any]] | None = None
+    #: the byte a poison left in every stage, until a replay or a new stage (`PassEnds._poison_graphs`)
+    _stages_poisoned: int | None = None
     #: the slots the last `whole_replay` uploaded, and those `whole_replayed` staged for the forward after it
     _uploaded: _Slots | None = None
     _next: _Slots | None = None
@@ -204,20 +207,26 @@ class GraphCalls:
 
     def _graph_call(self, w: int, sh: Any, pipe: Any, raw: int, tiles: int, m: int, index: int, caller: Any) -> tuple[Any, bool]:
         """A graphed call: inside vLLM's capture of a whole forward, its steps launched into that capture (and in a retained
-        pass's, the copies to its stage, once its A tree is done); otherwise its own graph replayed after its slot.  vLLM's
-        warm-up forward before each capture runs outside it, and makes the graphs and stages."""
+        pass's, the copies to its stage, once its A tree is done: A's words and tree, and y's m real rows); otherwise its own
+        graph replayed after its slot.  vLLM's warm-up forward before each capture runs outside it, and makes the graphs and
+        stages."""
         if self._whole is not None and _capturing():
             self._whole.append(WholeCall(w, m, sh.k, sh.n, sh.m16, tiles))
             out = self._into(w, sh, pipe, raw, tiles, m)
             if self._whole_retained:
                 self._tree_joined()
-                for stage, t in zip(self._stages[w, sh.m16], self._kept(sh, pipe), strict=True):
+                xa, tree, y = self._stages[w, sh.m16]
+                for stage, t in zip((xa, tree), self._kept(sh, pipe), strict=True):
                     stage.copy_(t)
+                y[:m].copy_(out[0][:m])
             if self._statement_on():
                 self.statement.stage(w, sh)
             return out
         if self._whole is not None and self._whole_retained and (w, sh.m16) not in self._stages:
-            self._stages[w, sh.m16] = tuple(t.new_empty(t.shape) for t in self._kept(sh, pipe))
+            import torch
+            self._stages[w, sh.m16] = (*(t.new_empty(t.shape) for t in self._kept(sh, pipe)),
+                                       sh.xa.new_empty((sh.m16, sh.n), dtype=torch.bfloat16))
+            self._stages_poisoned = None
         if self._whole is not None and self._statement_on():
             self.statement.prepare(w, sh)
         if self.hashing:
@@ -228,22 +237,6 @@ class GraphCalls:
     def _kept(sh: Any, pipe: Any) -> tuple[Any, Any]:
         """What a retained call keeps of its shape's buffers once its steps ran: A's words (m₁₆ rows) and A's tree."""
         return sh.xa[:sh.m16], sh.buf("tree_a")[:pipe.size["tree_a"]]
-
-    def _retained(self, cur: Any, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any, y: Any = None) -> None:
-        """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree,
-        and given its real rows of `y`, y committed: `served_y`)."""
-        import torch
-        cur.records.append(PW.UnitRecord(mm, m, mm.shape.k, excluded(flags[:, 0].bool(), flags[:, 1].bool(), xa[:m]),
-                                         self.weights[mm.weight].excluded))
-        d = cur.retain / "calls"
-        d.mkdir(parents=True, exist_ok=True)
-        rows = _bytes(xa.to(torch.bfloat16).view(torch.uint8))
-        files = {"rows": _write(d / f"{mm.index}.rows.bf16", rows, digest=False),
-                 "tree": _write(d / f"{mm.index}.tree", _bytes(tree))}
-        if y is not None:
-            files["y"] = SY.retain_y(cur.retain, mm.index, _bytes(y.contiguous().view(torch.uint8)), mm.shape.n, self.salt,
-                                     self.salt_key)
-        cur.files.append(files)
 
     def whole_key(self, retained: bool | None = None) -> tuple | None:
         """What a forward captured whole depends on (hashing, omitted steps, schedule, with hashing whether its pass is
@@ -330,19 +323,13 @@ class GraphCalls:
 
     def _keep_whole(self, calls: tuple[WholeCall, ...], flags_at: int) -> None:
         """A retained pass's records and files of a forward replayed whole, its first call's flags at row `flags_at` of the
-        pass's buffer: each call's from its stage and its flags, as a call made alone keeps them."""
+        pass's buffer: each call's from its stage (A's words and tree, and its real rows of y) and its flags, as a call made
+        alone keeps them."""
         cur = self.cur
         for mm, c in zip(cur.matmuls[len(cur.matmuls) - len(calls):], calls, strict=True):
-            self._retained(cur, mm, c.m, self.flag_buf[flags_at:flags_at + c.m], *self._stages[c.w, c.m16])
+            xa, tree, y = self._stages[c.w, c.m16]
+            self._retained(cur, mm, c.m, self.flag_buf[flags_at:flags_at + c.m], xa, tree, y=y[:c.m])
             flags_at += c.m
-
-    def _graph_buffers(self):
-        """Every buffer the graphs write, as bytes: each graph's y and leaves, and each stage."""
-        import torch
-        for g in self._graphs.values():
-            yield from (g.y.view(torch.uint8), g.leaves)
-        for stage in (self._stages or {}).values():
-            yield from (t.view(torch.uint8) for t in stage)
 
     def _slots(self, calls: tuple[WholeCall, ...], at: tuple[int, int, int]) -> _Slots:
         import numpy as np
@@ -364,6 +351,7 @@ class GraphCalls:
         whether `whole_replayed` had staged them, for these calls from where the pass is."""
         cur = self.cur
         call_index(self, len(calls))
+        self._unpoisoned()
         if not self.hashing or not calls:
             return False
         at, s = (len(cur.matmuls), cur.tiles, cur.flag_rows), self._next
@@ -452,6 +440,7 @@ class GraphCalls:
                                                                      self.roots_buf, g.offs))
                 g.side_cut += 1
             self._graphs[key] = g
+        g.poisoned = None
         return g, rows > 0
 
     def _main_steps(self, pipe: Any, steps: list, screen: Any, aside: bool) -> tuple[list, int]:
@@ -599,6 +588,7 @@ class GraphCalls:
             self._graphs[key] = g
         else:
             g.graph.replay()
+        g.poisoned = None
         return g.y.clone(), screen
 
     def _graph_key(self, w: int, sh: Any, m: int) -> tuple[tuple, bool]:

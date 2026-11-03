@@ -180,10 +180,26 @@ def test_kernel_constants_match_the_reference():
     assert C.PearlC(forming="v1", device=H100, hashing="h3").name == "pearl-c-h100-v1-h3"
 
 
+def test_bf16_rows_are_off_unless_pearlc_bf16_rows_is_1(monkeypatch):
+    """BF16_ROWS is an opt-in: unset (or anything but ``1``) a split pipeline's pd_commit reads its FP32 words, as the
+    registry declares, so a capture that would race on the rows doesn't run them by default."""
+    from verity_config.settings import of
+
+    for raw, on in ((None, False), ("0", False), ("true", False), ("1", True)):
+        if raw is None:
+            monkeypatch.delenv("PEARLC_BF16_ROWS", raising=False)
+        else:
+            monkeypatch.setenv("PEARLC_BF16_ROWS", raw)
+        assert load("pearl_c_sm90_run_bf16_rows", HERE / "run.py").BF16_ROWS is on
+        assert of(HERE.parent / "settings.py").PEARLC_BF16_ROWS is on
+    sys.modules.pop("pearl_c_sm90_run_bf16_rows")
+
+
 def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_takes_them(monkeypatch):
     """`Pipeline.reads_bf16`: a split pd pipeline, from a cubin with BF16_ROWS_MARK, under BF16_ROWS.  Its ``rows_a`` then
     gives pd_commit the rows set on it (`rows_bf16`) at p15 and their count at i5, and mode 0 and unset rows launch as
     before; rows set on a pipeline that doesn't read them are refused.  `widen_a` with `pdl` False launches plainly."""
+    monkeypatch.setattr(RUN, "BF16_ROWS", True)
     launched = []
 
     class D:
@@ -232,6 +248,31 @@ def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_take
     RUN.widen_a(dev, 1, 2, 8, 16, 4096)
     RUN.widen_a(dev, 1, 2, 8, 16, 4096, pdl=False)
     assert calls == ["programmatic", "plain"]
+
+
+def test_the_whole_check_refuses_a_capture_forking_a_tree_and_a_scales_where_a_commitment_reads_bf16_rows(monkeypatch):
+    """`e2e.bf16_race`: a whole capture with hashing forking each call's A tree and A scales (`whole_defer_a`,
+    `whole_fork_stats`) on this kernel, under BF16_ROWS and from a cubin with BF16_ROWS_MARK (`Pipeline.reads_bf16`'s own),
+    races, so `e2e.whole_check` fails it before capturing anything (the stand-in run has nothing to capture with), naming
+    the race and the setting that serves without it (`e2e.BF16_RACE`).  Without either option, hashing, the mark,
+    BF16_ROWS or a kernel that has BF16 rows at all, nothing is refused."""
+    E2E = load("pearl_c_vllm_e2e_bf16_race", HERE.parent / "pearl_c_vllm" / "e2e.py")
+    marked = SimpleNamespace(has=lambda name: name == RUN.BF16_ROWS_MARK)
+    kernel = SimpleNamespace(run=RUN, dev=marked)
+
+    def run(**kw):
+        return SimpleNamespace(**{"kernel": kernel, "hashing": True, "whole_defer_a": True, "whole_fork_stats": True, **kw})
+    monkeypatch.setattr(RUN, "BF16_ROWS", True)
+    got = E2E.whole_check(run(), {})
+    assert got == {"check": "whole", "hashing": True, "refused": E2E.BF16_RACE, "ok": False}
+    assert all(w in got["refused"] for w in ("rows_a", "widen_a", "PEARLC_BF16_ROWS=0", "PEARLC_WHOLE_FORK_STATS=0"))
+    for kw in ({"whole_defer_a": False}, {"whole_fork_stats": False}, {"hashing": False},
+               {"kernel": SimpleNamespace(run=RUN, dev=SimpleNamespace(has=lambda name: False))},
+               {"kernel": SimpleNamespace(run=RUN, dev=object())},
+               {"kernel": SimpleNamespace(run=SimpleNamespace(), dev=marked)}):
+        assert not E2E.bf16_race(run(**kw)), kw
+    monkeypatch.setattr(RUN, "BF16_ROWS", False)
+    assert not E2E.bf16_race(run())
 
 
 def test_a_programmatic_launch_waits_at_its_entry():
