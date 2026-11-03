@@ -214,6 +214,14 @@ def caps(ops: list[dict], phase: str, k: float, size: float) -> list[tuple[float
     return out
 
 
+def held(ops: list[dict], k: float) -> float:
+    """The most of the ops' gates, every phase's, that tiles in one block reading at most k bits hold beside each
+    other: each product's tile cap at k (each tile reads at most the block's k bits, and an array the block reads once
+    may serve every product it is an operand of), and every gate no tile places (it rides free)."""
+    return sum(sum(cap(op, p, k, math.inf) for p in op["products"]) if op["products"] else op["gates"]
+               for op in ops if op["gates"])
+
+
 def unplaced(ops: list[dict]) -> float:
     """The share of the token ops' gates with no tile (they ride free)."""
     tok = [op for op in ops if op["phase"] in TOKEN_PHASES]

@@ -1247,6 +1247,7 @@
      "tokens": 2048
     }
    ],
+   "products": null,
    "tail_share": 0.9886722037463094,
    "tau_bits": 16.046875,
    "u": [
@@ -2521,6 +2522,7 @@
      "tokens": 2048
     }
    ],
+   "products": null,
    "tail_share": 0.9886722037463094,
    "tau_bits": 16.046875,
    "u": [
@@ -4504,6 +4506,7 @@
      "tokens": 2048
     }
    ],
+   "products": null,
    "tail_share": 0.9839505013150606,
    "tau_bits": 16.015625,
    "u": [
@@ -7929,6 +7932,7 @@
      "tokens": 2048
     }
    ],
+   "products": null,
    "tail_share": 0.9981917317164438,
    "tau_bits": 16.015625,
    "u": [
@@ -8216,15 +8220,605 @@
  "program": "islands/wildcard/train.py at 9460fcd228 on the tiny start, --batch 2 --micro 2 --warmup 1, traced at step 1 (te_core.capture.script)",
  "rests_on": {
   "decoding": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d gates; with A1 (reading A) and the token kind's witness family",
-  "fresh_products": "theorem for this circuit: the Loomis-Whitney cap on a block's MACs of products of two fresh operands, amortized over the partition (te_core.io_bound), given the standard algorithm and the widths the step passes",
-  "token": "assumption (A1, reading A) with its witness family: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them (te_core.tiles); a block reading the update code at c gates"
+  "fresh_products": "theorem for this circuit: te_core.io_bound's Loomis-Whitney cap on a block's MACs of products of two fresh operands, amortized over the partition, each operand and partial sum at its passed width, at the chain constant (its premise P-chain; products summed in a tree, or in an order the trace doesn't give, take the tree constant, which io_bound doesn't have yet), given its premises P-cell, P-width (a reference circuit's) and P-share and the standard algorithm",
+  "token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them (te_core.tiles); a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates"
  },
  "rule": "rho = rho_fit where Fit holds, else max(1, the max over the kinds' measured terms); null where no kind is measured. Sensitivities are never in the max.",
- "schema": "te-core/rho-vectors/v2",
+ "schema": "te-core/rho-vectors/v3",
  "sensitivities": {
+  "decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, alpha_max (x0 s + s*))) affected gates, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
+  "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate at the best witness that holds it (per_gate); a block holding one gate of a product beside another product's tile or the best run holds more, for a few bits of that gate's own operands",
   "reduction": "sensitivity, assumption (R): each block holding a step's token work passes one partial gradient at its passed width (partial_cut_bits), and the step's token work fills at least ceil(N w / c) blocks; it holds only for partitions split by tokens (a block holding only frozen layers passes no partial)",
   "token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
   "update": "sensitivity, assumption (U): where two or more blocks hold a step's token work, the block applying the update to a coordinate reads its share of the gradient's cut (grad_cut_bits), the weights read once and theta free; it holds only for partitions split by tokens (a tensor's gradient made and applied in one block breaks it)"
+ },
+ "sessions": {
+  "about": "te_core.policy.session: one session of the reference model, each of its tokens a forward, every product of two operands at the served precision's GEMM price; the elementwise ops left out",
+  "console": {
+   "c": 536681984163840.0,
+   "in_tokens": 4096,
+   "k": 65536.0,
+   "out_tokens": 1024,
+   "params": 45029888
+  },
+  "rule": "c = (tokens\u00b7n_layer\u00b7(4\u00b7d_model\u00b2 + 3\u00b7d_model\u00b7d_ff) + tokens\u00b7d_model\u00b7vocab + 2\u00b7n_layer\u00b7d_model\u00b7attended) x gates_per_mac, tokens = in + out, attended = in\u00b2 + out\u00b7in + out\u00b7(out + 1)/2 (a prompt token over the whole prompt, the j-th output token over the prompt and the output tokens up to itself); k = in x ceil(log2 vocab)",
+  "vectors": [
+   {
+    "attended": 21496320,
+    "gates": 536681984163840.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 4096,
+    "k_bits": 65536,
+    "macs": {
+     "attention": 132073390080,
+     "lm_head": 131868917760,
+     "matrices": 98650030080
+    },
+    "out_tokens": 1024,
+    "params": 45029888,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 50304
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 15205888,
+    "gates": 479477500084224.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 2048,
+    "k_bits": 32768,
+    "macs": {
+     "attention": 93424975872,
+     "lm_head": 131868917760,
+     "matrices": 98650030080
+    },
+    "out_tokens": 3072,
+    "params": 45029888,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 50304
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 285737472,
+    "gates": 3758533883854848.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 16384,
+    "k_bits": 262144,
+    "macs": {
+     "attention": 1755571027968,
+     "lm_head": 448354320384,
+     "matrices": 335410102272
+    },
+    "out_tokens": 1024,
+    "params": 45029888,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 50304
+    },
+    "tokens": 17408
+   },
+   {
+    "attended": 1048576,
+    "gates": 77775004237824.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1024,
+    "k_bits": 16384,
+    "macs": {
+     "attention": 6442450944,
+     "lm_head": 26373783552,
+     "matrices": 19730006016
+    },
+    "out_tokens": 0,
+    "params": 45029888,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 50304
+    },
+    "tokens": 1024
+   },
+   {
+    "attended": 3,
+    "gates": 133307304192.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1,
+    "k_bits": 16,
+    "macs": {
+     "attention": 18432,
+     "lm_head": 51511296,
+     "matrices": 38535168
+    },
+    "out_tokens": 1,
+    "params": 45029888,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 50304
+    },
+    "tokens": 2
+   },
+   {
+    "attended": 21496320,
+    "gates": 1112847447490560.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 4096,
+    "k_bits": 65536,
+    "macs": {
+     "attention": 264146780160,
+     "lm_head": 197803376640,
+     "matrices": 289910292480
+    },
+    "out_tokens": 1024,
+    "params": 95269632,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 50304
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 15205888,
+    "gates": 998438479331328.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 2048,
+    "k_bits": 32768,
+    "macs": {
+     "attention": 186849951744,
+     "lm_head": 197803376640,
+     "matrices": 289910292480
+    },
+    "out_tokens": 3072,
+    "params": 95269632,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 50304
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 285737472,
+    "gates": 7651311596863488.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 16384,
+    "k_bits": 262144,
+    "macs": {
+     "attention": 3511142055936,
+     "lm_head": 672531480576,
+     "matrices": 985694994432
+    },
+    "out_tokens": 1024,
+    "params": 95269632,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 50304
+    },
+    "tokens": 17408
+   },
+   {
+    "attended": 1048576,
+    "gates": 163446704308224.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1024,
+    "k_bits": 16384,
+    "macs": {
+     "attention": 12884901888,
+     "lm_head": 39560675328,
+     "matrices": 57982058496
+    },
+    "out_tokens": 0,
+    "params": 95269632,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 50304
+    },
+    "tokens": 1024
+   },
+   {
+    "attended": 3,
+    "gates": 282037842432.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1,
+    "k_bits": 16,
+    "macs": {
+     "attention": 36864,
+     "lm_head": 77266944,
+     "matrices": 113246208
+    },
+    "out_tokens": 1,
+    "params": 95269632,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 50304
+    },
+    "tokens": 2
+   },
+   {
+    "attended": 21496320,
+    "gates": 465661386424320.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 4096,
+    "k_bits": 61440,
+    "macs": {
+     "attention": 132073390080,
+     "lm_head": 83886080000,
+     "matrices": 98650030080
+    },
+    "out_tokens": 1024,
+    "params": 35658240,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 32000
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 15205888,
+    "gates": 408456902344704.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 2048,
+    "k_bits": 30720,
+    "macs": {
+     "attention": 93424975872,
+     "lm_head": 83886080000,
+     "matrices": 98650030080
+    },
+    "out_tokens": 3072,
+    "params": 35658240,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 32000
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 285737472,
+    "gates": 3517063851540480.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 16384,
+    "k_bits": 245760,
+    "macs": {
+     "attention": 1755571027968,
+     "lm_head": 285212672000,
+     "matrices": 335410102272
+    },
+    "out_tokens": 1024,
+    "params": 35658240,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 32000
+    },
+    "tokens": 17408
+   },
+   {
+    "attended": 1048576,
+    "gates": 63570884689920.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1024,
+    "k_bits": 15360,
+    "macs": {
+     "attention": 6442450944,
+     "lm_head": 16777216000,
+     "matrices": 19730006016
+    },
+    "out_tokens": 0,
+    "params": 35658240,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 32000
+    },
+    "tokens": 1024
+   },
+   {
+    "attended": 3,
+    "gates": 105564883200.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1,
+    "k_bits": 15,
+    "macs": {
+     "attention": 18432,
+     "lm_head": 32768000,
+     "matrices": 38535168
+    },
+    "out_tokens": 1,
+    "params": 35658240,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 32000
+    },
+    "tokens": 2
+   },
+   {
+    "attended": 21496320,
+    "gates": 1006316550881280.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 4096,
+    "k_bits": 61440,
+    "macs": {
+     "attention": 264146780160,
+     "lm_head": 125829120000,
+     "matrices": 289910292480
+    },
+    "out_tokens": 1024,
+    "params": 81212160,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 32000
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 15205888,
+    "gates": 891907582722048.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 2048,
+    "k_bits": 30720,
+    "macs": {
+     "attention": 186849951744,
+     "lm_head": 125829120000,
+     "matrices": 289910292480
+    },
+    "out_tokens": 3072,
+    "params": 81212160,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 32000
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 285737472,
+    "gates": 7289106548391936.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 16384,
+    "k_bits": 245760,
+    "macs": {
+     "attention": 3511142055936,
+     "lm_head": 427819008000,
+     "matrices": 985694994432
+    },
+    "out_tokens": 1024,
+    "params": 81212160,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 32000
+    },
+    "tokens": 17408
+   },
+   {
+    "attended": 1048576,
+    "gates": 142140524986368.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1024,
+    "k_bits": 15360,
+    "macs": {
+     "attention": 12884901888,
+     "lm_head": 25165824000,
+     "matrices": 57982058496
+    },
+    "out_tokens": 0,
+    "params": 81212160,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 32000
+    },
+    "tokens": 1024
+   },
+   {
+    "attended": 3,
+    "gates": 240424210944.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1,
+    "k_bits": 15,
+    "macs": {
+     "attention": 36864,
+     "lm_head": 49152000,
+     "matrices": 113246208
+    },
+    "out_tokens": 1,
+    "params": 81212160,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 32000
+    },
+    "tokens": 2
+   },
+   {
+    "attended": 21496320,
+    "gates": 2848397784514560.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 4096,
+    "k_bits": 61440,
+    "macs": {
+     "attention": 704391413760,
+     "lm_head": 167772160000,
+     "matrices": 1052266987520
+    },
+    "out_tokens": 1024,
+    "params": 238322688,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2816,
+     "d_model": 1024,
+     "n_head": 16,
+     "n_layer": 16,
+     "vocab": 32000
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 15205888,
+    "gates": 2543307202756608.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 2048,
+    "k_bits": 30720,
+    "macs": {
+     "attention": 498266537984,
+     "lm_head": 167772160000,
+     "matrices": 1052266987520
+    },
+    "out_tokens": 3072,
+    "params": 238322688,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2816,
+     "d_model": 1024,
+     "n_head": 16,
+     "n_layer": 16,
+     "vocab": 32000
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 285737472,
+    "gates": 1.999823320173773e+16,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 16384,
+    "k_bits": 245760,
+    "macs": {
+     "attention": 9363045482496,
+     "lm_head": 570425344000,
+     "matrices": 3577707757568
+    },
+    "out_tokens": 1024,
+    "params": 238322688,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2816,
+     "d_model": 1024,
+     "n_head": 16,
+     "n_layer": 16,
+     "vocab": 32000
+    },
+    "tokens": 17408
+   },
+   {
+    "attended": 1048576,
+    "gates": 412018796396544.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1024,
+    "k_bits": 15360,
+    "macs": {
+     "attention": 34359738368,
+     "lm_head": 33554432000,
+     "matrices": 210453397504
+    },
+    "out_tokens": 0,
+    "params": 238322688,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2816,
+     "d_model": 1024,
+     "n_head": 16,
+     "n_layer": 16,
+     "vocab": 32000
+    },
+    "tokens": 1024
+   },
+   {
+    "attended": 3,
+    "gates": 705540206592.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1,
+    "k_bits": 15,
+    "macs": {
+     "attention": 98304,
+     "lm_head": 65536000,
+     "matrices": 411041792
+    },
+    "out_tokens": 1,
+    "params": 238322688,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2816,
+     "d_model": 1024,
+     "n_head": 16,
+     "n_layer": 16,
+     "vocab": 32000
+    },
+    "tokens": 2
+   }
+  ]
  },
  "start": {
   "d_model": 64,
@@ -8248,9 +8842,39 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 1188322487411.0,
      "unplaced": 0.002421814475777709
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "s_star": 2471.6805093657736,
+     "share": 0.6520858971202714,
+     "x0": 8.333582376964214e-05
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 7658799104.0
+     },
+     "order": "unknown",
+     "rows": 35,
+     "source": "op log",
+     "unknown_share": 0.5292753623188405
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 1188322487411.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       2
@@ -8269,6 +8893,7 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 1188322487411.0,
      "unplaced": 0.002421814475777709
     },
     "token_form": {
@@ -8291,23 +8916,25 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.5, reading A",
-   "max": 501.0542637591155,
-   "rho": 501.0542637591155,
+   "label": "te_core 4.7, reading A",
+   "max": 11.065531262155444,
+   "rho": 11.065531262155444,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 501.0542637591155,
     "reduction": 9.776271345877682,
     "token_form": 0.5483513212839408,
     "update": 9.776271345877682
    },
    "terms": {
-    "decoding": 501.0542637591155,
+    "decoding": 11.065531262155444,
     "fresh_products": null,
-    "token": 501.0542637591155
+    "token": 11.065531262155444
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -8323,9 +8950,39 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 8472607790387.0,
      "unplaced": 0.002421814475777709
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "s_star": 24716.805093657735,
+     "share": 0.6520858971202714,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 7658799104.0
+     },
+     "order": "unknown",
+     "rows": 35,
+     "source": "op log",
+     "unknown_share": 0.5292753623188405
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 8472607790387.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       2
@@ -8344,6 +9001,7 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 8472607790387.0,
      "unplaced": 0.002421814475777709
     },
     "token_form": {
@@ -8366,11 +9024,13 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.7, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202714,
     "reduction": 0.9776271345877682,
     "token_form": 0.0,
     "update": 0.9776271345877682
@@ -8382,7 +9042,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -8398,9 +9058,39 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
      "unplaced": 0.002421814475777709
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "s_star": 247168.05093657735,
+     "share": 0.6520858971202714,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 7658799104.0
+     },
+     "order": "unknown",
+     "rows": 35,
+     "source": "op log",
+     "unknown_share": 0.5292753623188405
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       2
@@ -8419,6 +9109,7 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
      "unplaced": 0.002421814475777709
     },
     "token_form": {
@@ -8441,11 +9132,13 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.7, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202714,
     "reduction": 0.09776271345877682,
     "token_form": 0.0,
     "update": 0.09776271345877682
@@ -8457,7 +9150,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -8473,9 +9166,39 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
      "unplaced": 0.002421814475777709
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 492509817600.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "s_star": 247168.05093657735,
+     "share": 0.6520858971202714,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 7658799104.0
+     },
+     "order": "unknown",
+     "rows": 35,
+     "source": "op log",
+     "unknown_share": 0.5292753623188405
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       62
@@ -8494,6 +9217,7 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
      "unplaced": 0.002421814475777709
     },
     "token_form": {
@@ -8516,23 +9240,25 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
-   "max": 0.6520858971202717,
+   "label": "te_core 4.7, reading A",
+   "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202717,
     "reduction": 0.14559388478968227,
     "token_form": 0.0,
     "update": 0.0023867849965521688
    },
    "terms": {
-    "decoding": 0.6520858971202717,
+    "decoding": 0.6520858971202714,
     "fresh_products": null,
-    "token": 0.6520858971202717
+    "token": 0.6520858971202714
    },
    "tokens_per_block": 100,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -8548,9 +9274,39 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 30480169048499.0,
      "unplaced": 0.002421814475777709
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 4925098176.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "s_star": 2481504.0,
+     "share": 0.6520858971202714,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 7658799104.0
+     },
+     "order": "unknown",
+     "rows": 35,
+     "source": "op log",
+     "unknown_share": 0.5292753623188405
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 30480169048499.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       6188
@@ -8569,6 +9325,7 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 30480169048499.0,
      "unplaced": 0.002421814475777709
     },
     "token_form": {
@@ -8591,11 +9348,13 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.7, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202714,
     "reduction": 0.014767038773668266,
     "token_form": 0.0,
     "update": 2.3867849965521684e-06
@@ -8607,7 +9366,7 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -8623,9 +9382,39 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 1188322487411.0,
      "unplaced": 0.002421814475777709
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "s_star": 2471.6805093657736,
+     "share": 0.6520858971202714,
+     "x0": 8.333582376964214e-05
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 7658799104.0
+     },
+     "order": "unknown",
+     "rows": 35,
+     "source": "op log",
+     "unknown_share": 0.5292753623188405
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 1188322487411.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       2
@@ -8644,6 +9433,7 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 1188322487411.0,
      "unplaced": 0.002421814475777709
     },
     "token_form": {
@@ -8666,11 +9456,13 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.7, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202714,
     "reduction": 9.776271345877682,
     "token_form": 0.0,
     "update": 9.776271345877682
@@ -8682,7 +9474,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -8698,9 +9490,39 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 8472607790387.0,
      "unplaced": 0.002421814475777709
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "s_star": 24716.805093657735,
+     "share": 0.6520858971202714,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 7658799104.0
+     },
+     "order": "unknown",
+     "rows": 35,
+     "source": "op log",
+     "unknown_share": 0.5292753623188405
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 8472607790387.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       2
@@ -8719,6 +9541,7 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 8472607790387.0,
      "unplaced": 0.002421814475777709
     },
     "token_form": {
@@ -8741,11 +9564,13 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.7, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202714,
     "reduction": 0.9776271345877682,
     "token_form": 0.0,
     "update": 0.9776271345877682
@@ -8757,7 +9582,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -8773,9 +9598,39 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
      "unplaced": 0.002421814475777709
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "s_star": 247168.05093657735,
+     "share": 0.6520858971202714,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 7658799104.0
+     },
+     "order": "unknown",
+     "rows": 35,
+     "source": "op log",
+     "unknown_share": 0.5292753623188405
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       2
@@ -8794,6 +9649,7 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
      "unplaced": 0.002421814475777709
     },
     "token_form": {
@@ -8816,11 +9672,13 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.7, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202714,
     "reduction": 0.09776271345877682,
     "token_form": 0.0,
     "update": 0.09776271345877682
@@ -8832,7 +9690,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -8848,9 +9706,39 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
      "unplaced": 0.002421814475777709
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 492509817600.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "s_star": 247168.05093657735,
+     "share": 0.6520858971202714,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 7658799104.0
+     },
+     "order": "unknown",
+     "rows": 35,
+     "source": "op log",
+     "unknown_share": 0.5292753623188405
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       62
@@ -8869,6 +9757,7 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
      "unplaced": 0.002421814475777709
     },
     "token_form": {
@@ -8891,23 +9780,25 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
-   "max": 0.6520858971202717,
+   "label": "te_core 4.7, reading A",
+   "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202717,
     "reduction": 0.14559388478968227,
     "token_form": 0.0,
     "update": 0.0023867849965521688
    },
    "terms": {
-    "decoding": 0.6520858971202717,
+    "decoding": 0.6520858971202714,
     "fresh_products": null,
-    "token": 0.6520858971202717
+    "token": 0.6520858971202714
    },
    "tokens_per_block": 100,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -8923,9 +9814,39 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 30480169048499.0,
      "unplaced": 0.002421814475777709
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 9704925966.0,
+     "cap": 4925098176.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "s_star": 2481504.0,
+     "share": 0.6520858971202714,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 7658799104.0
+     },
+     "order": "unknown",
+     "rows": 35,
+     "source": "op log",
+     "unknown_share": 0.5292753623188405
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 30480169048499.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       6188
@@ -8944,6 +9865,7 @@
      "positions": 1024,
      "segments": 14,
      "share": 0.6520858971202714,
+     "tiles_gates": 30480169048499.0,
      "unplaced": 0.002421814475777709
     },
     "token_form": {
@@ -8966,11 +9888,13 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.7, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202714,
     "reduction": 0.014767038773668266,
     "token_form": 0.0,
     "update": 2.3867849965521684e-06
@@ -8982,7 +9906,7 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 53% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -8998,9 +9922,39 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9996631800490919,
+     "tiles_gates": 1681060789271.0,
      "unplaced": 0.00277295310105781
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 19995400872.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "s_star": 76.8711329152391,
+     "share": 0.9996631800490919,
+     "x0": 0.00034364702383247125
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6593445888.0,
+      "unknown": 8858370048.0
+     },
+     "order": "unknown",
+     "rows": 56,
+     "source": "op log",
+     "unknown_share": 0.5732899022801303
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 1681060789271.0,
+     "unplaced": 0.00277295310105781
+    },
     "reduction": {
      "blocks": [
       3
@@ -9019,6 +9973,7 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9996631800490919,
+     "tiles_gates": 1681060789271.0,
      "unplaced": 0.00277295310105781
     },
     "token_form": {
@@ -9041,23 +9996,25 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.5, reading A",
-   "max": 146.76517300380573,
-   "rho": 146.76517300380573,
+   "label": "te_core 4.7, reading A",
+   "max": 8.35335685982954,
+   "rho": 8.35335685982954,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.9996631800490918,
+    "per_gate": 146.76517300380573,
     "reduction": 42.05663060357565,
     "token_form": 13.115530738562539,
     "update": 21.028315301787824
    },
    "terms": {
-    "decoding": 146.76517300380573,
+    "decoding": 8.35335685982954,
     "fresh_products": null,
-    "token": 146.76517300380573
+    "token": 8.35335685982954
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 57% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -9073,9 +10030,39 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9996631800490919,
+     "tiles_gates": 12531690772247.0,
      "unplaced": 0.00277295310105781
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 19995400872.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "s_star": 768.711329152391,
+     "share": 0.9996631800490919,
+     "x0": 0.08627081452593345
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6593445888.0,
+      "unknown": 8858370048.0
+     },
+     "order": "unknown",
+     "rows": 56,
+     "source": "op log",
+     "unknown_share": 0.5732899022801303
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 12531690772247.0,
+     "unplaced": 0.00277295310105781
+    },
     "reduction": {
      "blocks": [
       3
@@ -9094,6 +10081,7 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9996631800490919,
+     "tiles_gates": 12531690772247.0,
      "unplaced": 0.00277295310105781
     },
     "token_form": {
@@ -9116,23 +10104,25 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.5, reading A",
-   "max": 14.306487096221096,
-   "rho": 14.306487096221096,
+   "label": "te_core 4.7, reading A",
+   "max": 0.999663180049092,
+   "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.9996631800490918,
+    "per_gate": 14.306487096221096,
     "reduction": 4.2056630603575655,
     "token_form": 1.1988162915313898,
     "update": 2.1028315301787828
    },
    "terms": {
-    "decoding": 14.306487096221096,
+    "decoding": 0.999663180049092,
     "fresh_products": null,
-    "token": 14.306487096221096
+    "token": 0.999663180049092
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 57% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -9148,9 +10138,39 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9996631800490919,
+     "tiles_gates": 32720902510871.0,
      "unplaced": 0.00277295310105781
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 19995400872.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "s_star": 7687.11329152391,
+     "share": 0.9996631800490919,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6593445888.0,
+      "unknown": 8858370048.0
+     },
+     "order": "unknown",
+     "rows": 56,
+     "source": "op log",
+     "unknown_share": 0.5732899022801303
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 32720902510871.0,
+     "unplaced": 0.00277295310105781
+    },
     "reduction": {
      "blocks": [
       3
@@ -9169,6 +10189,7 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9996631800490919,
+     "tiles_gates": 32720902510871.0,
      "unplaced": 0.00277295310105781
     },
     "token_form": {
@@ -9191,11 +10212,13 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.7, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.9996631800490918,
+    "per_gate": 0.999663180049092,
     "reduction": 0.4205663060357565,
     "token_form": 0.0,
     "update": 0.21028315301787825
@@ -9207,7 +10230,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 57% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -9223,9 +10246,39 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9996631800490919,
+     "tiles_gates": 32720902510871.0,
      "unplaced": 0.00277295310105781
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 19995400872.0,
+     "cap": 492509817600.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "s_star": 7687.11329152391,
+     "share": 0.9996631800490919,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6593445888.0,
+      "unknown": 8858370048.0
+     },
+     "order": "unknown",
+     "rows": 56,
+     "source": "op log",
+     "unknown_share": 0.5732899022801303
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 32720902510871.0,
+     "unplaced": 0.00277295310105781
+    },
     "reduction": {
      "blocks": [
       84
@@ -9244,6 +10297,7 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9996631800490919,
+     "tiles_gates": 32720902510871.0,
      "unplaced": 0.00277295310105781
     },
     "token_form": {
@@ -9266,23 +10320,25 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
-   "max": 0.9996631800490918,
+   "label": "te_core 4.7, reading A",
+   "max": 0.9996631800490919,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.9996631800490919,
+    "per_gate": 0.9996631800490918,
     "reduction": 0.42611088135947006,
     "token_form": 0.0,
     "update": 0.005133866040475543
    },
    "terms": {
-    "decoding": 0.9996631800490918,
+    "decoding": 0.9996631800490919,
     "fresh_products": null,
-    "token": 0.9996631800490918
+    "token": 0.9996631800490919
    },
    "tokens_per_block": 100,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 57% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -9298,9 +10354,39 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9996631800490919,
+     "tiles_gates": 40964378605847.0,
      "unplaced": 0.00277295310105781
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 19995400872.0,
+     "cap": 4925098176.0,
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "s_star": 76871.13291523911,
+     "share": 0.9996631800490919,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6593445888.0,
+      "unknown": 8858370048.0
+     },
+     "order": "unknown",
+     "rows": 56,
+     "source": "op log",
+     "unknown_share": 0.5732899022801303
+    },
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 40964378605847.0,
+     "unplaced": 0.00277295310105781
+    },
     "reduction": {
      "blocks": [
       8316
@@ -9319,6 +10405,7 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9996631800490919,
+     "tiles_gates": 40964378605847.0,
      "unplaced": 0.00277295310105781
     },
     "token_form": {
@@ -9341,11 +10428,13 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.5, reading A",
+   "label": "te_core 4.7, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
+    "decoding_form": 0.9996631800490918,
+    "per_gate": 0.999663180049092,
     "reduction": 0.042688096126554144,
     "token_form": 0.0,
     "update": 5.1338660404755435e-06
@@ -9357,7 +10446,7 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 57% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -9373,9 +10462,39 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9999300519868621,
+     "tiles_gates": 1761588219799.0,
      "unplaced": 0.0033159298525524223
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 19894357672.0,
+     "cap": 20167818969088.0,
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "s_star": 77.98372904034717,
+     "share": 0.9999300519868621,
+     "x0": 0.08805491470908546
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 8485076992.0
+     },
+     "order": "unknown",
+     "rows": 126,
+     "source": "op log",
+     "unknown_share": 0.5547024952015355
+    },
+    "per_gate": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 1761588219799.0,
+     "unplaced": 0.0033159298525524223
+    },
     "reduction": {
      "blocks": [
       3
@@ -9394,6 +10513,7 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9999300519868621,
+     "tiles_gates": 1761588219799.0,
      "unplaced": 0.0033159298525524223
     },
     "token_form": {
@@ -9416,23 +10536,25 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.5, reading A",
-   "max": 134.7778543633552,
-   "rho": 134.7778543633552,
+   "label": "te_core 4.7, reading A",
+   "max": 2.7344655410785834,
+   "rho": 2.7344655410785834,
    "rho_fit": 1.000266918292764,
    "sensitivities": {
+    "decoding_form": 1.000196951609222,
+    "per_gate": 134.7778543633552,
     "reduction": 4.15717585271444,
     "token_form": 11.857120347569653,
     "update": 2.07858792635722
    },
    "terms": {
-    "decoding": 134.7778543633552,
+    "decoding": 2.7344655410785834,
     "fresh_products": null,
-    "token": 134.7778543633552
+    "token": 2.7344655410785834
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 55% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -9448,9 +10570,39 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9999300519868621,
+     "tiles_gates": 12513481313815.0,
      "unplaced": 0.0033159298525524223
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 19894357672.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "s_star": 779.8372904034717,
+     "share": 0.9999300519868621,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 8485076992.0
+     },
+     "order": "unknown",
+     "rows": 126,
+     "source": "op log",
+     "unknown_share": 0.5547024952015355
+    },
+    "per_gate": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 12513481313815.0,
+     "unplaced": 0.0033159298525524223
+    },
     "reduction": {
      "blocks": [
       3
@@ -9469,6 +10621,7 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9999300519868621,
+     "tiles_gates": 12513481313815.0,
      "unplaced": 0.0033159298525524223
     },
     "token_form": {
@@ -9491,23 +10644,25 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.5, reading A",
-   "max": 0.9999300519868621,
+   "label": "te_core 4.7, reading A",
+   "max": 0.9999300519868622,
    "rho": 1.0,
    "rho_fit": 1.000266918292764,
    "sensitivities": {
+    "decoding_form": 0.9999300519868622,
+    "per_gate": 0.9999300519868621,
     "reduction": 0.41571758527144403,
     "token_form": 0.0,
     "update": 0.20785879263572202
    },
    "terms": {
-    "decoding": 0.9999300519868621,
+    "decoding": 0.9999300519868622,
     "fresh_products": null,
-    "token": 0.9999300519868621
+    "token": 0.9999300519868622
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 55% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -9523,9 +10678,39 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9999300519868621,
+     "tiles_gates": 32503018553623.0,
      "unplaced": 0.0033159298525524223
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 19894357672.0,
+     "cap": 20173202128896.0,
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "s_star": 7798.372904034717,
+     "share": 0.9999300519868621,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 8485076992.0
+     },
+     "order": "unknown",
+     "rows": 126,
+     "source": "op log",
+     "unknown_share": 0.5547024952015355
+    },
+    "per_gate": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 32503018553623.0,
+     "unplaced": 0.0033159298525524223
+    },
     "reduction": {
      "blocks": [
       3
@@ -9544,6 +10729,7 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9999300519868621,
+     "tiles_gates": 32503018553623.0,
      "unplaced": 0.0033159298525524223
     },
     "token_form": {
@@ -9566,23 +10752,25 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
-   "max": 0.9999300519868621,
+   "label": "te_core 4.7, reading A",
+   "max": 0.9999300519868622,
    "rho": 1.000266918292764,
    "rho_fit": 1.000266918292764,
    "sensitivities": {
+    "decoding_form": 0.9999300519868622,
+    "per_gate": 0.9999300519868621,
     "reduction": 0.041571758527144405,
     "token_form": 0.0,
     "update": 0.020785879263572202
    },
    "terms": {
-    "decoding": 0.9999300519868621,
+    "decoding": 0.9999300519868622,
     "fresh_products": null,
-    "token": 0.9999300519868621
+    "token": 0.9999300519868622
    },
    "tokens_per_block": 4096,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 55% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -9598,9 +10786,39 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9999300519868621,
+     "tiles_gates": 32503018553623.0,
      "unplaced": 0.0033159298525524223
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 19894357672.0,
+     "cap": 492509817600.0,
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "s_star": 7798.372904034717,
+     "share": 0.9999300519868621,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 8485076992.0
+     },
+     "order": "unknown",
+     "rows": 126,
+     "source": "op log",
+     "unknown_share": 0.5547024952015355
+    },
+    "per_gate": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 32503018553623.0,
+     "unplaced": 0.0033159298525524223
+    },
     "reduction": {
      "blocks": [
       83
@@ -9619,6 +10837,7 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9999300519868621,
+     "tiles_gates": 32503018553623.0,
      "unplaced": 0.0033159298525524223
     },
     "token_form": {
@@ -9641,23 +10860,25 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.5, reading A",
-   "max": 0.9999300519868621,
+   "label": "te_core 4.7, reading A",
+   "max": 0.9999300519868622,
    "rho": 1.0110508421616675,
    "rho_fit": 1.0110508421616675,
    "sensitivities": {
+    "decoding_form": 0.9999300519868621,
+    "per_gate": 0.9999300519868621,
     "reduction": 0.041612355947581066,
     "token_form": 0.0,
     "update": 0.0005074677554583057
    },
    "terms": {
-    "decoding": 0.9999300519868621,
+    "decoding": 0.9999300519868622,
     "fresh_products": null,
-    "token": 0.9999300519868621
+    "token": 0.9999300519868622
    },
    "tokens_per_block": 100,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 55% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   },
   {
@@ -9673,9 +10894,39 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9999300519868621,
+     "tiles_gates": 40746494648599.0,
      "unplaced": 0.0033159298525524223
     },
-    "fresh_products": {},
+    "decoding_form": {
+     "alpha_max": 19894357672.0,
+     "cap": 4925098176.0,
+     "decoder_gates": 5383159808.0,
+     "delta_bits": null,
+     "s_star": 77983.72904034717,
+     "share": 0.9999300519868621,
+     "x0": 1.0
+    },
+    "fresh_products": {
+     "macs": {
+      "attention": 0,
+      "theta": 6811549696.0,
+      "unknown": 8485076992.0
+     },
+     "order": "unknown",
+     "rows": 126,
+     "source": "op log",
+     "unknown_share": 0.5547024952015355
+    },
+    "per_gate": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": null,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 40746494648599.0,
+     "unplaced": 0.0033159298525524223
+    },
     "reduction": {
      "blocks": [
       8273
@@ -9694,6 +10945,7 @@
      "positions": 1024,
      "segments": 19,
      "share": 0.9999300519868621,
+     "tiles_gates": 40746494648599.0,
      "unplaced": 0.0033159298525524223
     },
     "token_form": {
@@ -9716,26 +10968,28 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.5, reading A",
-   "max": 0.9999300519868621,
+   "label": "te_core 4.7, reading A",
+   "max": 0.9999300519868622,
    "rho": 1.0,
    "rho_fit": "inf",
    "sensitivities": {
+    "decoding_form": 0.9999300519868622,
+    "per_gate": 0.9999300519868621,
     "reduction": 0.004197773273151105,
     "token_form": 0.0,
     "update": 5.074677554583057e-07
    },
    "terms": {
-    "decoding": 0.9999300519868621,
+    "decoding": 0.9999300519868622,
     "fresh_products": null,
-    "token": 0.9999300519868621
+    "token": 0.9999300519868622
    },
    "tokens_per_block": 1,
    "unmeasured": {
-    "fresh_products": "unmeasured: te_core.io_bound, the fresh-products kind's calculator, isn't in this tree yet"
+    "fresh_products": "unmeasured: the record's capture keeps each product's dims, its op's dtype and its op log's class, not its operands' \u03b8\u2032-dependence or the widths and rates they're passed at (P-width's dataflow side, which te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn); 55% of its products' MACs have operands of unknown freshness (the rest a \u03b8 operand or attention's), and the order is unknown"
    }
   }
  ],
- "version": "4.5",
+ "version": "4.7",
  "w_fwd_gates": 4925098176.0
 }

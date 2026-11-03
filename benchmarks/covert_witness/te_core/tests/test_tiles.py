@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import math
 
 import pytest
 import torch
@@ -95,3 +96,6 @@ def test_a_log_places_its_gemms_and_lets_the_rest_ride_free():
                                                 / sum(o["gates"] for o in ops))
     caps = tiles.caps(ops, "fwd", 80_000, 1e30)
     assert sum(g for g, _ in caps) == pytest.approx(sum(o["gates"] for o in ops if o["phase"] == "fwd"))
+    beside = sum(tiles.cap(o, p, 80_000, math.inf) for o in ops for p in o["products"])
+    assert tiles.held(ops, 80_000) == pytest.approx(beside + sum(o["gates"] for o in ops if not o["products"]))
+    assert beside < tiles.held(ops, 8e6) <= sum(o["gates"] for o in ops)
