@@ -12,6 +12,7 @@
       "macs": 500000000000000.0,
       "outputs": 976562500000.0,
       "k_dim": 512,
+      "k_whole": 512,
       "b_a": 16,
       "b_b": 16,
       "b_c": 32,
@@ -30,15 +31,15 @@
     "gamma0": 52800913.48863769,
     "Q": 8357124388217926.0,
     "feed": 1.4142135623730951,
-    "whole_chain": 1.0058650933260544,
-    "lam_proved": 1.6425708191505433,
+    "whole_chain": 1.0079053348372358,
+    "lam_proved": 1.645902519586836,
     "lam_numerical": 1.1547005383792517
    },
    "term": {
-    "proved_blocks": 4660126375.801936,
-    "proved_rho": 1589103.0941484603,
-    "proved_rho_main": 2909760.460394107,
-    "proved_rho_no_cell": 133720.74062636937,
+    "proved_blocks": 4647926359.791145,
+    "proved_rho": 1584942.8886887806,
+    "proved_rho_main": 2903870.4091425687,
+    "proved_rho_no_cell": 133669.18332033395,
     "numerical_blocks": 7293250813.455334,
     "numerical_rho": 2486998.5273882686,
     "numerical_rho_main": 4139157.698557881,
@@ -57,6 +58,7 @@
       "macs": 500000000000000.0,
       "outputs": 976562500000.0,
       "k_dim": 512,
+      "k_whole": 512,
       "b_a": 16,
       "b_b": 16,
       "b_c": 32,
@@ -75,15 +77,15 @@
     "gamma0": 71212547.26535791,
     "Q": 8357124388217926.0,
     "feed": 1.4142135623730951,
-    "whole_chain": 1.0071610771217006,
-    "lam_proved": 1.6446871518267088,
+    "whole_chain": 1.0096755074310009,
+    "lam_proved": 1.6487931993277583,
     "lam_numerical": 1.1547005383792517
    },
    "term": {
-    "proved_blocks": 3347696549.6664596,
-    "proved_rho": 851988.771890114,
-    "proved_rho_main": 1608112.2663481152,
-    "proved_rho_no_cell": 80125.79821967799,
+    "proved_blocks": 3336800012.618031,
+    "proved_rho": 849215.6032112889,
+    "proved_rho_main": 1604107.5280004935,
+    "proved_rho_no_cell": 80083.98546215784,
     "numerical_blocks": 5271722852.359363,
     "numerical_rho": 1341653.4659254577,
     "numerical_rho_main": 2290499.9999999995,
@@ -92,7 +94,7 @@
    }
   },
   {
-   "name": "short chains, K = 16",
+   "name": "short chains, K = 16, none whole by itself",
    "inputs": {
     "c": 341000000000000.0,
     "k": 65536,
@@ -102,6 +104,7 @@
       "macs": 50000000000000.0,
       "outputs": 3125000000000.0,
       "k_dim": 16,
+      "k_whole": null,
       "b_a": 16,
       "b_b": 16,
       "b_c": 32,
@@ -120,19 +123,111 @@
     "gamma0": 52800913.48863769,
     "Q": 2.6742798042297364e+16,
     "feed": 1.4142135623730951,
-    "whole_chain": 11.180339887498949,
-    "lam_proved": 18.25741858350554,
+    "whole_chain": 1.0,
+    "lam_proved": 1.6329931618554523,
     "lam_numerical": 1.1547005383792517
    },
    "term": {
-    "proved_blocks": 563830.36844975,
-    "proved_rho": 1922.6615564136475,
-    "proved_rho_main": 261783.31844127097,
-    "proved_rho_no_cell": 1878.8034491815401,
+    "proved_blocks": 61623661.75846265,
+    "proved_rho": 210136.68659635764,
+    "proved_rho_main": 2926826.4770507812,
+    "proved_rho_no_cell": 70956.67733999362,
     "numerical_blocks": 116837636.34990717,
     "numerical_rho": 398416.33995318343,
     "numerical_rho_main": 4139157.6985578807,
     "numerical_rho_no_cell": 89455.79845437413,
+    "share": 0.7400625
+   }
+  },
+  {
+   "name": "operands made whole from K = 128 chains",
+   "inputs": {
+    "c": 341000000000000.0,
+    "k": 65536,
+    "C_gates": 1e+18,
+    "products": [
+     {
+      "macs": 500000000000000.0,
+      "outputs": 976562500000.0,
+      "k_dim": 512,
+      "k_whole": 128,
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "gates_per_mac": 1480.125,
+      "cell_gates": 23682.0
+     }
+    ]
+   },
+   "cap": {
+    "alpha": [
+     35673.279951786295
+    ],
+    "beta": [
+     2048.0
+    ],
+    "gamma0": 52800913.48863769,
+    "Q": 8357124388217926.0,
+    "feed": 1.4142135623730951,
+    "whole_chain": 1.1552955921498973,
+    "lam_proved": 1.8865898019025278,
+    "lam_numerical": 1.1547005383792517
+   },
+   "term": {
+    "proved_blocks": 3890610352.869883,
+    "proved_rho": 1326698.13032863,
+    "proved_rho_main": 2533400.540033422,
+    "proved_rho_no_cell": 130011.70729559234,
+    "numerical_blocks": 7293250813.455334,
+    "numerical_rho": 2486998.5273882686,
+    "numerical_rho_main": 4139157.698557881,
+    "numerical_rho_no_cell": 141556.32471271843,
+    "share": 0.7400625
+   }
+  },
+  {
+   "name": "operands made whole from K = 64 chains: proved bound void",
+   "inputs": {
+    "c": 341000000000000.0,
+    "k": 65536,
+    "C_gates": 1e+18,
+    "products": [
+     {
+      "macs": 500000000000000.0,
+      "outputs": 976562500000.0,
+      "k_dim": 512,
+      "k_whole": 64,
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "gates_per_mac": 1480.125,
+      "cell_gates": 23682.0
+     }
+    ]
+   },
+   "cap": {
+    "alpha": [
+     35673.279951786295
+    ],
+    "beta": [
+     2048.0
+    ],
+    "gamma0": 52800913.48863769,
+    "Q": 8357124388217926.0,
+    "feed": 1.4142135623730951,
+    "whole_chain": null,
+    "lam_proved": null,
+    "lam_numerical": 1.1547005383792517
+   },
+   "term": {
+    "proved_blocks": 0.0,
+    "proved_rho": 0.0,
+    "proved_rho_main": 0.0,
+    "proved_rho_no_cell": 0.0,
+    "numerical_blocks": 7293250813.455334,
+    "numerical_rho": 2486998.5273882686,
+    "numerical_rho_main": 4139157.698557881,
+    "numerical_rho_no_cell": 141556.32471271843,
     "share": 0.7400625
    }
   },
@@ -147,6 +242,7 @@
       "macs": 400000000000000.0,
       "outputs": 781250000000.0,
       "k_dim": 512,
+      "k_whole": 512,
       "b_a": 16,
       "b_b": 16,
       "b_c": 32,
@@ -157,6 +253,7 @@
       "macs": 200000000000000.0,
       "outputs": 142045454545.45456,
       "k_dim": 1408,
+      "k_whole": 512,
       "b_a": 8,
       "b_b": 16,
       "b_c": 32,
@@ -177,15 +274,15 @@
     "gamma0": 52800913.48863769,
     "Q": 6775995544953780.0,
     "feed": 1.4142135623730951,
-    "whole_chain": 1.0117416084682433,
-    "lam_proved": 1.6521671281932777,
+    "whole_chain": 1.0160016278275286,
+    "lam_proved": 1.6591237106763623,
     "lam_numerical": 1.1547005383792517
    },
    "term": {
-    "proved_blocks": 4149862274.4805064,
-    "proved_rho": 1415103.0355978527,
-    "proved_rho_main": 2537292.728515849,
-    "proved_rho_no_cell": 117796.25705051053,
+    "proved_blocks": 4127530425.025537,
+    "proved_rho": 1407487.8749337082,
+    "proved_rho_main": 2526654.0485692793,
+    "proved_rho_no_cell": 117704.1036824236,
     "numerical_blocks": 6521063603.090092,
     "numerical_rho": 2223682.6886537215,
     "numerical_rho_main": 3630405.894277741,
@@ -204,6 +301,7 @@
       "macs": 50000000000000.0,
       "outputs": 97656250000.0,
       "k_dim": 512,
+      "k_whole": 512,
       "b_a": 32,
       "b_b": 32,
       "b_c": 32,
@@ -222,15 +320,15 @@
     "gamma0": 225401619.3753617,
     "Q": 1.522958459854126e+16,
     "feed": 2.0,
-    "whole_chain": 1.0029311175461542,
-    "lam_proved": 2.3161702027756976,
+    "whole_chain": 1.0039292972262248,
+    "lam_proved": 2.3184754000036514,
     "lam_numerical": 1.1547005383792517
    },
    "term": {
-    "proved_blocks": 726662734.8106761,
-    "proved_rho": 247791.99257044055,
-    "proved_rho_main": 412706.079823812,
-    "proved_rho_no_cell": 115953.06066839154,
+    "proved_blocks": 725759908.7370663,
+    "proved_rho": 247484.1288793396,
+    "proved_rho_main": 412295.7373586006,
+    "proved_rho_no_cell": 115879.00240297269,
     "numerical_blocks": 1690104634.547112,
     "numerical_rho": 576325.6803805652,
     "numerical_rho_main": 827831.5397115762,

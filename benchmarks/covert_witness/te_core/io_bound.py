@@ -32,9 +32,12 @@ least that times c/|C| (`bound`). Dropping B gives ρ ≥ σ·c/Γ, σ = G/|C| t
 dW read X, W and dY two times each) do at most 2/√3 of the single-product cap (`SHARE`: Cauchy–Schwarz, then
 xy + yz + zx ≤ (x + y + z)²/3). A partial sum read in and finished into the next product's operand pays both faces by
 splitting its b_C bits: `feed` = √(b_C/(b_C − b)) for b ≤ b_C/2, else 2√(b/b_C). Operand entries a block makes whole
-from chains it runs itself number at most (k/(2·K·b))² for contraction length K, worth `whole_chain` =
-(1 + k/(4·K²·b))^{3/2}. Proved: Λ = SHARE·feed·whole_chain, at the counted products' widest operand and shortest K.
-Found by search over small chained triples: Λ = 2/√3 (the "numerical" figures).
+from chains it runs itself, their own operands read or made whole in turn, number at most e·k/b, e the least root of
+e = r·(1 + e)² with r = k/(3·K²·b) (LW on each source product, 4/3 for sources sharing arrays), worth `whole_chain` =
+(1 + e)^{3/2}. K is the shortest chain that makes a counted operand whole by itself (`Row.k_whole`: an operand that
+also needs a value paid at its width, such as a frozen weight's product, gains nothing); past r = 1/4 there is no root
+and the proved bound is void. Proved: Λ = SHARE·feed·whole_chain, at the counted products' widest operand. Found by
+search over small chained triples: Λ = 2/√3 (the "numerical" figures).
 
 **Premises.**
 - P-chain: the circuit accumulates each output entry along one chain of gadgets from a zero word, so Σ s ≤ |O|. A
@@ -92,8 +95,12 @@ def feed(b: float, b_c: float = ACC_BITS) -> float:
 
 
 def whole_chain(k: float, k_min: float, b_min: float) -> float:
-    """Λ's factor for operand entries made whole in the block: at most (k/(2Kb))² of them, each worth b bits."""
-    return (1 + k / (4 * k_min ** 2 * b_min)) ** 1.5
+    """Λ's factor for operand entries made whole in the block from chains of length ≥ `k_min` (module docstring); ∞
+    where no bound exists (r > 1/4)."""
+    r = k / (3 * k_min ** 2 * b_min)
+    if r > 0.25:
+        return math.inf
+    return (1 + 2 * r / (1 - 2 * r + math.sqrt(1 - 4 * r))) ** 1.5
 
 
 def blocks(G: float, gamma: float, B: float) -> float:
@@ -106,22 +113,28 @@ def blocks(G: float, gamma: float, B: float) -> float:
 
 def bound(products: list[dict], c: float, k: float, C: float) -> dict:
     """The bound (module docstring) at policy (c, k) on a step of |C| = `C` gates whose counted products are `products`,
-    each {"macs", "outputs", "k_dim", "b_a", "b_b", "b_c", "gates_per_mac", "cell_gates"}: the cap's terms, Λ proved and
-    numerical, and for each the blocks and ρ with P-cell, without its B term (`rho_main`) and without P-cell."""
+    each {"macs", "outputs", "k_dim", "k_whole", "b_a", "b_b", "b_c", "gates_per_mac", "cell_gates"} (`k_whole` None:
+    no chain makes an operand whole by itself): the cap's terms, Λ proved and numerical, and for each the blocks and ρ
+    with P-cell, without its B term (`rho_main`) and without P-cell. A void Λ (`whole_chain` past r = 1/4) is None, its
+    blocks and ρ 0."""
     ps = [p for p in products if p["macs"]]
     G = sum(p["gates_per_mac"] * p["macs"] for p in ps)
     out = {"c": c, "k": k, "C_gates": C, "G": G, "share": G / C if C else 0.0}
+    zero = {"lam": 0.0, "gamma": 0.0, "B": 0.0, "blocks": 0.0, "rho": 0.0, "rho_main": 0.0, "blocks_no_cell": 0.0,
+            "rho_no_cell": 0.0}
     if not ps:
-        zero = {"lam": 0.0, "gamma": 0.0, "B": 0.0, "blocks": 0.0, "rho": 0.0, "rho_main": 0.0, "blocks_no_cell": 0.0,
-                "rho_no_cell": 0.0}
         return out | {"gamma0": 0.0, "Q": 0.0, "feed": 1.0, "whole_chain": 1.0, "proved": zero, "numerical": zero}
     gamma0 = max(p["gates_per_mac"] * alpha(k, p["b_a"], p["b_b"], p["b_c"]) for p in ps)
     Q = sum(p["gates_per_mac"] ** 2 * p["outputs"] / (p["b_a"] * p["b_b"]) for p in ps)
     fd = max(feed(max(p["b_a"], p["b_b"]), p["b_c"]) for p in ps)
-    wc = whole_chain(k, min(p["k_dim"] for p in ps), min(min(p["b_a"], p["b_b"]) for p in ps))
+    whole = [p["k_whole"] for p in ps if p.get("k_whole")]
+    wc = whole_chain(k, min(whole), min(min(p["b_a"], p["b_b"]) for p in ps)) if whole else 1.0
     cell = max(p["cell_gates"] for p in ps)
-    out |= {"gamma0": gamma0, "Q": Q, "feed": fd, "whole_chain": wc}
+    out |= {"gamma0": gamma0, "Q": Q, "feed": fd, "whole_chain": wc if math.isfinite(wc) else None}
     for name, lam in (("proved", SHARE * fd * wc), ("numerical", SHARE)):
+        if not math.isfinite(lam):
+            out[name] = zero | {"lam": None, "gamma": None, "B": None}
+            continue
         gamma, B = lam * gamma0, lam * (k / 2) * math.sqrt(Q)
         n, n_cell = blocks(G, gamma, B), blocks(G, gamma + k * cell, B)
         out[name] = {"lam": lam, "gamma": gamma, "B": B, "blocks": n, "rho": n * c / C, "rho_main": G / gamma * c / C,
@@ -149,9 +162,12 @@ class Row:
     rates: tuple[float, float]
     kind: str
     step: int = 0
+    #: the shortest chain that makes an operand entry whole by itself (`_chain_ks`), ∞ where none does
+    k_whole: float = math.inf
 
     def product(self) -> dict:
-        return {"macs": self.macs, "outputs": self.outputs, "k_dim": self.k_dim, "b_a": self.widths[0],
+        return {"macs": self.macs, "outputs": self.outputs, "k_dim": self.k_dim,
+                "k_whole": self.k_whole if math.isfinite(self.k_whole) else None, "b_a": self.widths[0],
                 "b_b": self.widths[1], "b_c": ACC_BITS, "gates_per_mac": self.gates_per_mac, "cell_gates": self.cell_gates}
 
 
@@ -277,10 +293,14 @@ class _Rates:
     - an affected graph attribute (a parameter or state the run produced) and a sum over tokens (a parameter-indexed
       GEMM result) are paid at their width;
     - a gather by token data is 0: its rows repeat over the tokens that share an index;
-    - a token-indexed GEMM result with an affected parameter side is paid at its width (a θ′ face costs K·b bits a
-      column, which no block amortizes over all of a row's columns); with a parameter side outside the update it is its
-      token side's rate times K/n (a frozen weight widening n > K passes fewer bits an entry than its width, narrowing
-      restores them);
+    - a token-indexed GEMM result with an affected parameter side is 4·K²·b_tok·b_par/k at policy k, its sides at their
+      widths: by LW, x rows and y columns of K entries read in k bits make at most x·y entries, so a block making E of
+      them whole pays 2K·√(b_tok·b_par·E) bits, at least that an entry within k (the result's width b once
+      K² ≥ k/(4b): K ≥ 32 at the console's k and 16 bits, which a rank-16 adapter's second product is not). A token side
+      cheaper than its width (a gather's rows) makes whole columns of the result, which a consumer's chains use at most
+      k²/(K·b·b_C) MACs a block, within its α once K ≥ 3^{3/2}·√(k/b_C) (235 at the console's k); below that the
+      result is priced as if the weight were θ. With a parameter side outside the update it is its token side's rate
+      times K/n (a frozen weight widening n > K passes fewer bits an entry than its width, narrowing restores them);
     - an attention product is rate(A)·K/n + rate(B)·K/m;
     - a view or cast keeps its argument's rate, a repeating view spreads it, a concatenation sums its parts', and any
       other op takes the largest rate(input)·numel(input)/numel(output) over its affected inputs (a broadcast gain passes
@@ -288,10 +308,10 @@ class _Rates:
 
     each capped at the value's width. Unaffected values cost nothing: a block computes them from θ and token data."""
 
-    def __init__(self, st: _Step) -> None:
+    def __init__(self, st: _Step, k: float) -> None:
         from te_core.capture.structure import _GATHERS, _WALK, _gemms, _pk
 
-        self.st = st
+        self.st, self.k = st, k
         rate: dict = {}
         for n in st.nodes:
             if not st.affected(n):
@@ -338,8 +358,9 @@ class _Rates:
             return ra * d["k"] / max(d["n"], 1) + rb * d["k"] / max(d["m"], 1)
         token_a = "m" in td or "n" not in td
         param, r_tok, spread = (B, ra, d["n"]) if token_a else (A, rb, d["m"])
-        if st.reads_affected(n, param):
-            return math.inf
+        tok = A if token_a else B
+        if st.reads_affected(n, param) and (r_tok >= 0.999 * _width(tok) or d["k"] >= 3 ** 1.5 * math.sqrt(self.k / ACC_BITS)):
+            return 4 * d["k"] ** 2 * _width(tok) * _width(param) / self.k
         return r_tok * d["k"] / max(spread, 1)
 
     def paid(self, a) -> bool:
@@ -367,6 +388,31 @@ def _passed_width(st: _Step, n, a) -> int:
     return b
 
 
+def _chain_ks(st: _Step) -> dict:
+    """For each value, the longest chain among those a block must run to make an entry of it whole (`Row.k_whole`): a
+    GEMM with both operands affected is its K (its longest part's); a value read at its width (an updated parameter or
+    state, a GEMM's output with an operand outside the update) is ∞, an unaffected one 0; any other op takes the largest
+    over its affected arguments at least its size (each is needed; a smaller one, a broadcast gain or a row's
+    statistic, is shared by many entries)."""
+    from te_core.capture.structure import _gemms
+
+    out: dict = {}
+    for n in st.nodes:
+        if not st.affected(n):
+            out[n] = 0.0
+        elif n.op != "call_function":
+            out[n] = math.inf
+        elif n.target is operator.getitem:
+            out[n] = out.get(n.args[0], math.inf)
+        elif gs := _gemms(n):
+            both = all(st.reads_affected(n, g.operands[0]) and st.reads_affected(n, g.operands[1]) for g in gs)
+            out[n] = float(max(g.dims["k"] for g in gs)) if both else math.inf
+        else:
+            ins = [a for a in _tensor_args(n) if st.reads_affected(n, a) and _numel(a) >= _numel(n)]
+            out[n] = max((out.get(a, math.inf) for a in ins), default=0.0)
+    return out
+
+
 def _gemm_price(phase: str, op: str, dtype: str | None, gemm_dtype: str | None) -> tuple[float, float]:
     """(gates a MAC, gates a gadget) of a GEMM: its operands' dtype's Definition, or `gemm_dtype`'s for a forward or
     backward GEMM whose operands are wider (CPU autocast runs scaled-dot-product attention's math backend in fp32, a GPU
@@ -384,9 +430,10 @@ def _gemm_price(phase: str, op: str, dtype: str | None, gemm_dtype: str | None) 
     return per_mac(kind), float(gates(name))
 
 
-def rows_of(graph, gemm_dtype: str | None = None) -> list[Row]:
-    """Every GEMM of a step captured by `capture_step`/`capture_fn` as a `Row`: its operands' affected flags (each depends
-    on θ′, the step's dependent slots), passed widths (`_passed_width`) and rates (`_Rates`), and its kind:
+def rows_of(graph, gemm_dtype: str | None = None, k: float = CONSOLE[1]) -> list[Row]:
+    """Every GEMM of a step captured by `capture_step`/`capture_fn` as a `Row` at policy k: its operands' affected flags
+    (each depends on θ′, the step's dependent slots), passed widths (`_passed_width`), rates (`_Rates`) and shortest
+    whole-making chain (`_chain_ks`), and its kind:
 
     - ``fresh``: both operands affected and paid at their width (the bound counts it);
     - ``theta``: one operand affected; the other is θ or computed from θ and token data, so a block reads it for nothing;
@@ -398,7 +445,7 @@ def rows_of(graph, gemm_dtype: str | None = None) -> list[Row]:
     from te_core.capture.structure import _dtype_name, _gemms, _macs, _pk
 
     st = _Step(graph)
-    rates = _Rates(st)
+    rates, chain_k = _Rates(st, k), _chain_ks(st)
     by_name = {n.name: n for n in st.nodes}
     rows = []
     for m in graph.matmuls:
@@ -421,9 +468,10 @@ def rows_of(graph, gemm_dtype: str | None = None) -> list[Row]:
             kind = "expansion"
         gpm, cell = _gemm_price(m.phase, _pk(n.target), _dtype_name(A), gemm_dtype)
         d = g.dims
+        whole = min((v for v in (chain_k.get(A, 0.0), chain_k.get(B, 0.0)) if v > 0), default=math.inf)
         rows.append(Row(n.name, g.part, m.phase, str(n.target), dict(d), _macs(d), d["batch"] * d["m"] * d["n"], d["k"],
                         gpm, cell, aff, (_passed_width(st, n, A), _passed_width(st, n, B)),
-                        (rates.rate.get(A, 0.0), rates.rate.get(B, 0.0)), kind, m.step))
+                        (rates.rate.get(A, 0.0), rates.rate.get(B, 0.0)), kind, m.step, whole))
     return rows
 
 
@@ -483,14 +531,16 @@ def summarize(rows: list[Row], C: float) -> dict:
 
 
 def table(rows: list[Row]) -> list[dict]:
-    """The rows grouped by (phase, op, dims, kind, affected, widths), with counts and MACs: one line per distinct product."""
+    """The rows grouped by (phase, op, dims, kind, affected, widths, rates, k_whole), with counts and MACs: one line per
+    distinct product."""
     groups: dict = {}
     for r in rows:
+        whole = r.k_whole if math.isfinite(r.k_whole) else None
         key = (r.phase, r.op, json.dumps(r.dims, sort_keys=True), r.kind, r.affected, r.widths,
-               tuple(round(x, 3) for x in r.rates))
+               tuple(round(x, 3) for x in r.rates), whole)
         e = groups.setdefault(key, {"phase": r.phase, "op": r.op, "dims": r.dims, "kind": r.kind,
                                     "affected": list(r.affected), "widths": list(r.widths),
-                                    "rates": [round(x, 3) for x in r.rates], "count": 0, "macs": 0})
+                                    "rates": [round(x, 3) for x in r.rates], "k_whole": whole, "count": 0, "macs": 0})
         e["count"] += 1
         e["macs"] += r.macs
     return sorted(groups.values(), key=lambda e: (KINDS.index(e["kind"]), e["phase"], -e["macs"]))
@@ -618,26 +668,34 @@ def capture(name: str, size: str = "s", vocab: int = 32000, batch: int = 256, ct
 
 
 def measure(graph, policies: dict, gemm_dtype: str | None = "bfloat16") -> dict:
-    """A captured step's rows, |C|, kinds and the bound at each policy {name: (c, k)}."""
-    rows = rows_of(graph, gemm_dtype)
+    """A captured step's |C| and, at each policy {name: (c, k)}, its rows' kinds and products (`rows_of` at k) and the
+    bound."""
     C = step_gates(graph, gemm_dtype)
-    fresh = [r.product() for r in rows if r.kind == "fresh"]
-    return {"name": graph.name, "tokens": graph.tokens, "C_gates": C, "kinds": summarize(rows, C), "products": table(rows),
-            "bounds": {p: bound(fresh, c, k, C) for p, (c, k) in policies.items()}}
+    out = {"name": graph.name, "tokens": graph.tokens, "C_gates": C, "policies": {}}
+    for p, (c, k) in policies.items():
+        rows = rows_of(graph, gemm_dtype, k)
+        fresh = [r.product() for r in rows if r.kind == "fresh"]
+        out["policies"][p] = {"c": c, "k": k, "kinds": summarize(rows, C), "products": table(rows),
+                              "bound": bound(fresh, c, k, C)}
+    return out
 
 
 def vectors() -> dict:
     """Test vectors: hand-written product sets at the console's and the panels' policies, with the cap and the term."""
     bf16 = {"b_a": 16, "b_b": 16, "b_c": ACC_BITS, "gates_per_mac": 23682 / 16, "cell_gates": 23682.0}
+    square = {"macs": 5e14, "outputs": 5e14 / 512, "k_dim": 512, "k_whole": 512} | bf16
     cases = [
-        ("one product, square, console", CONSOLE, 1e18, [{"macs": 5e14, "outputs": 5e14 / 512, "k_dim": 512} | bf16]),
-        ("one product, square, panel", (2.545e14, PANEL_K), 1e18, [{"macs": 5e14, "outputs": 5e14 / 512, "k_dim": 512} | bf16]),
-        ("short chains, K = 16", CONSOLE, 1e17, [{"macs": 5e13, "outputs": 5e13 / 16, "k_dim": 16} | bf16]),
-        ("mixed widths", CONSOLE, 1e18, [{"macs": 4e14, "outputs": 4e14 / 512, "k_dim": 512} | bf16,
-                                         {"macs": 2e14, "outputs": 2e14 / 1408, "k_dim": 1408, "b_a": 8, "b_b": 16,
-                                          "b_c": ACC_BITS, "gates_per_mac": 9128 / 32, "cell_gates": 9128.0}]),
-        ("f32 operands", CONSOLE, 1e18, [{"macs": 5e13, "outputs": 5e13 / 512, "k_dim": 512, "b_a": 32, "b_b": 32,
-                                          "b_c": ACC_BITS, "gates_per_mac": 12637.0, "cell_gates": 12637.0}]),
+        ("one product, square, console", CONSOLE, 1e18, [square]),
+        ("one product, square, panel", (2.545e14, PANEL_K), 1e18, [square]),
+        ("short chains, K = 16, none whole by itself", CONSOLE, 1e17,
+         [{"macs": 5e13, "outputs": 5e13 / 16, "k_dim": 16, "k_whole": None} | bf16]),
+        ("operands made whole from K = 128 chains", CONSOLE, 1e18, [square | {"k_whole": 128}]),
+        ("operands made whole from K = 64 chains: proved bound void", CONSOLE, 1e18, [square | {"k_whole": 64}]),
+        ("mixed widths", CONSOLE, 1e18, [{"macs": 4e14, "outputs": 4e14 / 512, "k_dim": 512, "k_whole": 512} | bf16,
+                                         {"macs": 2e14, "outputs": 2e14 / 1408, "k_dim": 1408, "k_whole": 512, "b_a": 8,
+                                          "b_b": 16, "b_c": ACC_BITS, "gates_per_mac": 9128 / 32, "cell_gates": 9128.0}]),
+        ("f32 operands", CONSOLE, 1e18, [{"macs": 5e13, "outputs": 5e13 / 512, "k_dim": 512, "k_whole": 512, "b_a": 32,
+                                          "b_b": 32, "b_c": ACC_BITS, "gates_per_mac": 12637.0, "cell_gates": 12637.0}]),
         ("nothing counted", CONSOLE, 1e18, []),
     ]
     out = []
@@ -681,10 +739,10 @@ def main(argv=None) -> int:
             fwd = sum(r.macs * r.gates_per_mac for r in rows if r.phase == "forward") / g.tokens
         res = measure(g, {"console": CONSOLE, "panel": (PANEL_TOKENS * fwd, PANEL_K)})
         results.append(res)
-        k = res["kinds"]
-        print(json.dumps({"step": name, "C_gates": res["C_gates"], "shares": {x: round(e["share"], 5) for x, e in k.items()},
-                          "rho": {p: {lam: round(b[lam]["rho"]) for lam in ("proved", "numerical")}
-                                  for p, b in res["bounds"].items()}}), flush=True)
+        print(json.dumps({"step": name, "C_gates": res["C_gates"], "policies": {
+            p: {"shares": {x: round(e["share"], 5) for x, e in r["kinds"].items()},
+                "rho": {lam: round(r["bound"][lam]["rho"]) for lam in ("proved", "numerical")}}
+            for p, r in res["policies"].items()}}), flush=True)
     if a.out:
         Path(a.out).write_text(json.dumps({"fwd_gates_per_token": fwd, "steps": results}, indent=1) + "\n")
     return 0

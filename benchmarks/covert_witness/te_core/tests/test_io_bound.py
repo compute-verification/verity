@@ -19,6 +19,8 @@ from te_core.capture import capture_step
 #: the tiny model's steps: d 64, d_ff 192, 256 tokens a micro-step, head dim 32, and a vocabulary no other dim equals
 VOCAB = 320
 TINY = {"size": "tiny", "vocab": VOCAB, "batch": 8, "ctx": 64, "micro_steps": 2}
+#: the console's k scaled to the tiny model: a block holds 1/64 of a d × d weight, as at the s shape
+K_TINY = 1024
 WIDTHS = (1, 2, 4, 8, 16, 32)
 
 
@@ -53,7 +55,7 @@ def test_each_vectors_term_solves_its_cap():
         assert 0 <= term["share"] < 1, v["name"]
         for lam in ("proved", "numerical"):
             n, L = term[f"{lam}_blocks"], cap[f"lam_{lam}"]
-            if not i["products"]:
+            if not i["products"] or L is None:   # nothing counted, or Λ void
                 assert n == 0 and term[f"{lam}_rho"] == 0
                 continue
             gamma, B = L * cap["gamma0"], L * i["k"] / 2 * math.sqrt(cap["Q"])
@@ -62,6 +64,8 @@ def test_each_vectors_term_solves_its_cap():
             assert term[f"{lam}_rho_main"] == pytest.approx(G / gamma * i["c"] / i["C_gates"], rel=1e-12)
             assert term[f"{lam}_rho_no_cell"] <= term[f"{lam}_rho"] <= term[f"{lam}_rho_main"]
         assert term["proved_rho"] <= term["numerical_rho"]
+    void = [v for v in json.loads(iob.VECTORS.read_text())["vectors"] if v["cap"]["lam_proved"] is None]
+    assert [v["cap"]["whole_chain"] for v in void] == [None]
 
 
 # -- the closed forms ---------------------------------------------------------------------------------------------------
@@ -80,8 +84,14 @@ def test_lambdas_factors():
     assert iob.feed(0) == 1 and iob.feed(16) == pytest.approx(math.sqrt(2)) and iob.feed(32) == pytest.approx(2)
     assert iob.feed(8) == pytest.approx(math.sqrt(4 / 3))
     assert iob.feed(16 - 1e-9) == pytest.approx(iob.feed(16 + 1e-9))   # continuous where the two forms meet
-    assert iob.whole_chain(65536, 512, 16) == pytest.approx((1 + 1 / 256) ** 1.5)
-    assert iob.whole_chain(65536, 16, 16) == pytest.approx(5 ** 1.5)
+    for K in (128, 512, 1408, 65536):
+        r = 65536 / (3 * K * K * 16)
+        u = 0.0   # nested whole-making from nothing: u ← r·(1 + u)², which climbs to the least root
+        for _ in range(200):
+            u = r * (1 + u) ** 2
+        assert iob.whole_chain(65536, K, 16) == pytest.approx((1 + u) ** 1.5, rel=1e-12)
+    assert iob.whole_chain(65536, 512, 16) == pytest.approx(1.0079, abs=1e-4)
+    assert iob.whole_chain(65536, 64, 16) == math.inf   # r = 1/3: no root, the proved bound is void
 
 
 def test_blocks_is_the_least_n():
@@ -199,9 +209,9 @@ def test_a_fed_pair_does_at_most_feed_of_one():
 
 # -- captured steps -----------------------------------------------------------------------------------------------------
 
-def _rows(name: str, **kw):
+def _rows(name: str, k: float = K_TINY, **kw):
     g = iob.capture(name, **(TINY | kw))
-    return g, iob.rows_of(g, "bfloat16")
+    return g, iob.rows_of(g, "bfloat16", k)
 
 
 def _dims(r) -> set:
@@ -220,8 +230,14 @@ def test_dense_counts_its_block_products_but_not_the_first_layers_or_newton_schu
     assert {r.phase for r in rows if r.kind == "self"} == {"optimizer"}
     C = iob.step_gates(g, "bfloat16")
     assert sum(r.macs * r.gates_per_mac for r in rows) < C
-    m = iob.measure(g, {"console": iob.CONSOLE})
-    assert 0.5 < m["kinds"]["fresh"]["share"] < 1 and m["bounds"]["console"]["proved"]["rho"] > 0
+    assert min(r.k_whole for r in rows if r.kind == "fresh") == 64   # d: the q/k/v/o and gate/up chains
+    m = iob.measure(g, {"tiny": (1e9, K_TINY), "console": iob.CONSOLE})["policies"]
+    assert 0.5 < m["tiny"]["kinds"]["fresh"]["share"] < 1 and m["tiny"]["bound"]["proved"]["rho"] > 0
+    # at the console's k a block holds a whole 64 × 64 weight: layer 0's q, k, v come whole from the embedding's rows
+    # (64 < 3^{3/2}·√(k/32)), so later layers' operands are cheap too, and 64-long chains make operands whole faster
+    # than a block reads them (r = 1/3): the proved bound is void
+    assert m["console"]["kinds"]["expansion"]["share"] > m["tiny"]["kinds"]["expansion"]["share"]
+    assert m["console"]["bound"]["proved"]["lam"] is None and m["console"]["bound"]["proved"]["rho"] == 0
 
 
 def test_lora_counts_only_its_adapters():
@@ -232,6 +248,8 @@ def test_lora_counts_only_its_adapters():
     first = [r for r in rows if r.affected == (False, True)]   # layer 0's x·aᵀ: x is the frozen embedding's rows
     assert first and all(r.kind == "theta" and r.dims["n"] == 16 for r in first)
     assert all(r.phase == "forward" for r in rows if r.kind == "unaffected")   # layer 0's base q, k, v
+    # the rank-16 chains are summed with the frozen base's output, which is paid: no counted operand is made whole by them
+    assert min(r.k_whole for r in rows if r.kind == "fresh") > 16
 
 
 def test_a_frozen_embedding_puts_the_head_at_theta():
@@ -268,12 +286,38 @@ class _Widening(nn.Module):
 
 @pytest.mark.parametrize("wide, kind", [(64, "expansion"), (16, "fresh"), (4, "fresh")])
 def test_a_frozen_widening_passes_fewer_bits_an_entry_than_its_width(wide, kind):
-    """`last` reads up(h) with `up` frozen: an entry costs a block 32·16/wide bits, below its 32 when wide > 16."""
+    """`last` reads up(h) with `up` frozen: an entry costs a block 32·16/wide bits, below its 32 when wide > 16 (at a k
+    of 64 bits, a fraction of one weight column, as the console's k is of the s shape's)."""
     torch.manual_seed(0)
     m = _Widening(16, wide)
     m.up.requires_grad_(False)
     g = capture_step(m, torch.optim.SGD([p for p in m.parameters() if p.requires_grad], lr=0.1),
                      lambda mm, b: F.mse_loss(mm(b[0]), b[1]), (torch.empty(6, 16), torch.empty(6, 16)))
-    first, up, last = [r for r in iob.rows_of(g) if r.phase == "forward"]
+    first, up, last = [r for r in iob.rows_of(g, k=64) if r.phase == "forward"]
     assert (first.kind, up.kind, last.kind) == ("theta", "theta", kind)
     assert last.rates[0] == pytest.approx(min(32, 32 * 16 / wide)) and last.widths == (32, 32)
+
+
+class _LowRank(nn.Module):
+    def __init__(self, d: int, r: int) -> None:
+        super().__init__()
+        self.first = nn.Linear(d, d, bias=False)
+        self.a = nn.Linear(d, r, bias=False)
+        self.b = nn.Linear(r, d, bias=False)
+        self.last = nn.Linear(d, d, bias=False)
+
+    def forward(self, x):
+        return self.last(self.b(self.a(self.first(x))))
+
+
+@pytest.mark.parametrize("r, kind", [(4, "expansion"), (64, "fresh")])
+def test_a_short_chain_through_a_trained_weight_makes_its_outputs_cheap(r, kind):
+    """b's output: x rows of a(·) and y rows of b's weight, r entries each at 32 bits, make x·y entries whole, so within
+    the console's k an entry costs a block 4·r²·32·32/k bits: 1 at r = 4, its width 32 at r = 64."""
+    torch.manual_seed(0)
+    m = _LowRank(256, r)
+    g = capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1), lambda mm, b: F.mse_loss(mm(b[0]), b[1]),
+                     (torch.empty(6, 256), torch.empty(6, 256)))
+    first, a, b, last = [x for x in iob.rows_of(g) if x.phase == "forward"]
+    assert (first.kind, a.kind, b.kind, last.kind) == ("theta", "fresh", "fresh", kind)
+    assert last.rates[0] == pytest.approx(min(32, 4 * r * r * 32 * 32 / iob.CONSOLE[1])) and last.k_whole == r
