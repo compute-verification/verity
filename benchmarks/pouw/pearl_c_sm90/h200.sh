@@ -21,6 +21,9 @@
 # (FULL=1, the default) glm53_passes.py full checks prefill's and decode's outputs in full there (every tile's C~ and U by its
 # leaf, every real row's served y): about 17 CPU-hours for glm53 (13 min on a CPU pod at --jobs 96), so FULL=0 leaves it
 # to a run elsewhere on the published passes.
+# With LOCK_MHZ the timing steps run with the leased card's SM clock locked there (`sudo -n nvidia-smi -lgc`, reset with
+# -rgc when the lease ends), where the node allows it: the lock's outcome goes to $OUT/clock.txt, not rc.txt, so a node
+# that refuses it times unlocked; either way $OUT/smi.csv samples the card's clocks every 200 ms through the timing.
 # VERITY_BENCH_VENV names the Python with torch and vLLM (default /workspace/cp/venv312), CUDA the toolkit (default
 # /usr/local/cuda-13.0).  Every step's exit code is in $OUT/rc.txt; exits non-zero if any step failed.
 set -uo pipefail
@@ -39,7 +42,7 @@ SHAPES=""
 for nk in $NKS; do
   SHAPES="$SHAPES 64x$nk 8192x$nk"
 done
-export O D PY SHAPES MODEL LAYERS
+export O D PY SHAPES MODEL LAYERS LOCK_MHZ=${LOCK_MHZ:-}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 : > "$O/rc.txt"
 tar -C "$S" -xf "$IN/ship.tar" && (cd "$S" && sha256sum -c --quiet MANIFEST.sha256)
@@ -59,12 +62,24 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" -- bash -c '
   [ "$rc" = 0 ] || exit "$rc"
   "$PY" "$D/glm53_passes.py" capture --model "$MODEL" --out "$O/passes" > "$O/capture.log" 2>&1
   echo "capture rc $?" >> "$O/rc.txt"
+  U=$GPU_LEASE_UUID
+  if [ -n "$LOCK_MHZ" ]; then
+    trap "sudo -n nvidia-smi -i $U -rgc >> $O/lock.txt 2>&1" EXIT
+    sudo -n nvidia-smi -i "$U" -lgc "$LOCK_MHZ,$LOCK_MHZ" > "$O/lock.txt" 2>&1
+    echo "lock $LOCK_MHZ MHz: nvidia-smi -lgc exit $?" > "$O/clock.txt"
+  else
+    echo "unlocked" > "$O/clock.txt"
+  fi
+  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.mem,temperature.gpu,clocks_event_reasons.active --format=csv,noheader \
+    -lms 200 -i "$U" > "$O/smi.csv" 2>&1 &
+  smi=$!
   "$PY" "$D/glm53_timing.py" --model "$MODEL" --out "$O" --graphs --schedule serial deferred-a > "$O/timing.log" 2>&1
   echo "timing rc $?" >> "$O/rc.txt"
   PEARLC_CHAIN=h3 "$PY" "$D/glm53_timing.py" --model "$MODEL" --out "$O/timing-h3" --m 2048 8192 > "$O/timing-h3.log" 2>&1
   echo "timing h3 rc $?" >> "$O/rc.txt"
   "$PY" "$D/glm53_timing.py" --model "$MODEL" --whole --layers "$LAYERS" --out "$O/whole" > "$O/whole.log" 2>&1
-  echo "whole rc $?" >> "$O/rc.txt"'
+  echo "whole rc $?" >> "$O/rc.txt"
+  kill "$smi"'
 echo "lease rc $?" >> "$O/rc.txt"
 if [ "${PIN:-1}" = 1 ]; then
   bash benchmarks/pouw/harness/jobs/pin_target.sh "${TK:-13.0.1-sm_90a}" "$CUDA" > "$O/pin.log" 2>&1

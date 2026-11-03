@@ -197,7 +197,8 @@ def test_h200_session_runs_the_tables_shapes():
     prefill's 8192; every step after the check runs at MODEL's linears; it times each linear under the serial schedule,
     graphed and eager, and deferred-a, decode's forward whole (--whole, every in-domain shape) over llama32_1b's every layer
     and one of glm53's, and prefill under the h3 chain beside the default one, and checks the captured passes' outputs in
-    full after every lease."""
+    full after every lease.  With LOCK_MHZ the timing runs at the card's locked clock, reset when the lease ends, the lock's
+    outcome kept out of rc.txt."""
     sh = (HERE / "h200.sh").read_text()
     listed = {m: (nks, int(layers)) for m, nks, layers in
               re.findall(r'^\s*(\w+)\) NKS="([\dx ]+)"; LAYERS=\$\{LAYERS:-(\d+)\} ;;$', sh, re.M)}
@@ -212,6 +213,9 @@ def test_h200_session_runs_the_tables_shapes():
     assert '"$D/glm53_timing.py" --model "$MODEL" --whole --layers "$LAYERS" --out "$O/whole"' in sh
     assert 'PEARLC_CHAIN=h3 "$PY" "$D/glm53_timing.py" --model "$MODEL" --out "$O/timing-h3" --m 2048 8192' in sh
     assert sh.index('"$D/glm53_passes.py" full --out "$O/passes" --jobs "$(nproc)"') > sh.index('echo "lease rc $?"')
+    lock, trap = sh.index('sudo -n nvidia-smi -i "$U" -lgc "$LOCK_MHZ,$LOCK_MHZ"'), sh.index('trap "sudo -n nvidia-smi -i $U -rgc')
+    assert trap < lock < sh.index('"$D/glm53_timing.py" --model "$MODEL" --out "$O" --graphs')
+    assert '-lgc exit $?" > "$O/clock.txt"' in sh and "kill \"$smi\"'" in sh
 
 
 def test_slowdowns_divide_by_the_fastest_stock_call_its_graph_and_the_plain_gemm_apart():
