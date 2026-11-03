@@ -1,6 +1,7 @@
 """te_core.rho_vectors: the one bound's published test vectors are what te_core.formalism makes from the capture's
 fixtures, their inputs reproduce through `from_json` (the console's route), and they say what reading A, with its
-matrix-product tiles, says of wildcard's grown adapter, a dense step and a LoRA step on the tiny start."""
+matrix-product tiles, says of wildcard's grown adapter, a dense step and a LoRA step on the tiny start; and the
+console's c, te_core.policy's session at every stated size, is its rule."""
 from __future__ import annotations
 
 import json
@@ -9,7 +10,7 @@ from dataclasses import asdict
 
 import pytest
 
-from te_core import VERSION, formalism, rho_vectors, tiles
+from te_core import VERSION, formalism, policy, rho_vectors, tiles
 from te_core.flops import forward_macs_per_token
 
 
@@ -150,6 +151,31 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
         assert (b["reading"], b["binding_kind"], b["rho"]) == ("B", "target", at["rho"])
         assert b["terms"] == {"token_form": at["slowdown"]} and list(b["sensitivities"]) == ["reduction", "update"]
         assert b["rests_on"] == formalism.RESTS_ON_CELL["target"]
+    m = formalism.from_json(built["measured"]["dense"])
+    assert formalism.published(m) == formalism.published(m, *policy.CONSOLE)
+
+
+def test_the_session_vectors_are_their_rule_at_every_stated_size(built):
+    """The console's port of session_gates tests against these: each vector's outputs are its rule on its inputs, every
+    size `SHAPES` states and every session of `SESSIONS` has one, and the console's c is the 45M one at 4,096 in and
+    1,024 out."""
+    s = built["sessions"]
+    assert {(v["params"], v["in_tokens"], v["out_tokens"]) for v in s["vectors"]} == {
+        (p, i, o) for p in policy.SHAPES for i, o in rho_vectors.SESSIONS}
+    for v in s["vectors"]:
+        sh, i, o = v["shape"], v["in_tokens"], v["out_tokens"]
+        d, n, f, voc = sh["d_model"], sh["n_layer"], sh["d_ff"], sh["vocab"]
+        assert sh == policy.SHAPES[v["params"]] and policy.parameters(sh) == v["params"]
+        attended = i * i + o * i + o * (o + 1) // 2
+        macs = {"matrices": (i + o) * n * (4 * d * d + 3 * d * f), "lm_head": (i + o) * d * voc,
+                "attention": 2 * n * d * attended}
+        assert (v["tokens"], v["attended"], v["macs"]) == (i + o, attended, macs)
+        assert v["gates_per_mac"] == 1480.125 and v["gates"] == sum(macs.values()) * 1480.125
+        assert v["k_bits"] == i * math.ceil(math.log2(voc))
+    console = next(v for v in s["vectors"] if (v["params"], v["in_tokens"], v["out_tokens"]) == (45_029_888, 4096, 1024))
+    assert s["console"] == {"params": 45_029_888, "in_tokens": 4096, "out_tokens": 1024, "c": console["gates"],
+                            "k": float(console["k_bits"])}
+    assert (s["console"]["c"], s["console"]["k"]) == policy.CONSOLE
 
 
 def test_the_tiny_starts_forward_is_the_counters():
