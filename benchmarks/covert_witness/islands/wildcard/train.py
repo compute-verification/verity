@@ -958,7 +958,9 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
         opts.append((torch.optim.AdamW([g for g in groups if g["params"]], betas=(0.9, a.beta2), weight_decay=a.wd,
                                        fused=prepare.DEVICE.startswith("cuda")), None))
     else:
-        trainable = {"full": tuned}
+        # the witness checks the declared set covers every changed tensor, and a grown block's untrained tensors
+        # (an adapter's zero attention) are new, so changed
+        trainable = {"full": sorted(set(tuned) | set(GROWN.get("new", [])))}
         emb = ["embed"] if a.embed_lr and "embed" in mats else []
         if a.method == "muon" and mats:
             muon = [n for n in mats if n not in emb]
