@@ -846,10 +846,6 @@
    "owner": "@proofs",
    "digest": "7819f5333d7e0115cdef8648e0b574f3ab70a5593e18dc5e928a75857670beb7"
   },
-  "Claims.ZKMal.RefSession.SwCausal": {
-   "owner": "@proofs",
-   "digest": "d6f56706f6312715121364728fb2daf88b9c5458206ab23002a9dab3a776160c"
-  },
   "Claims.ZKMal.RefSession.SwCausalOn": {
    "owner": "@proofs",
    "digest": "58f5fc986e02ce518229f5e340cab750fc87b93e00cc3626780c26938a16776e"
