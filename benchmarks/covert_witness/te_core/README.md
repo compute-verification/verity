@@ -24,8 +24,9 @@ d are Boolean gates (`gates`: each counted op at its circuit Definition's price,
 - **Step**: a program's `te.step()`; for a covert_witness script, the work from one call of its data stream
   (`prepare.TrainData.next`) to the next. A part C_j is one step structure's steps (with the setup and the tail).
 - **Token block**: one token's computation in one step, its forward and backward (the optimizer is in none). A step's
-  tokens are the ones it consumes: the union of the positions its token-index ops read, per storage, so micro-batches
-  and a token read twice count once each.
+  tokens are the ones it consumes: the union of the positions its token-index ops read in each token input, so
+  micro-batches and a token read twice count once each, and an index computed from token data (a sampled head's
+  unique targets, a QAT code) is no token.
 - **θ' (persistent value)**: a value the run produced that is carried from one step to the next and isn't θ or token
   data: the new slow weights, an optimizer's state, an error-feedback buffer, a gradient accumulator.
 - **A (affected gates)**: every gate that depends on θ', forward, backward and optimizer, through any path of the

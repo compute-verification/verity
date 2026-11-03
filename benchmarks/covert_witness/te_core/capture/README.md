@@ -4,7 +4,8 @@ A search agent writes ordinary PyTorch training code. `capture_step` traces one 
 autograd's backward and the optimizer's update) into an ATen graph with shapes and dtypes and no values, and reads from
 that graph what te_core scores: every multiplication's MACs, the role of each GEMM, its token dims, the updated MACs
 upstream of it, and the training formalism's quantities measured on the step as a circuit of values and gates
-(`circuit.py`: φ and σ, the tokens consumed, τ, a, the profile u(x) with its no-update share t, and Δ_grad).
+(`circuit.py`: σ and the affected share, the tokens consumed, τ, a, the profiles u_in(x) and u(x) with the no-update
+share t, and Δ_grad).
 Updated means update-dependent: computed, through any path, from a value the run produced and
 carries across steps (the trained weights, optimizer state, any buffer it writes from them), so a model scores the same
 however its circuit is written (LoRA merged or not, a tied lookup, a cache of θ). A run's circuit C is the sum of its distinct step graphs (`capture_run`), so the size of C is exact in
