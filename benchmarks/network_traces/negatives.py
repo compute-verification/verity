@@ -34,7 +34,7 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
 - ``Issuer.refused``: no check's but the certifier's: it certifies no record whose status isn't complete
   (`certificate.Issuer`, which lists the link-window in `refused`), so the window has no certified record and the
   link stops there;
-- pending checks, by the names their drafts give them: ``NetworkCheck.Period.stateTied`` (the scan: its ingress units
+- pending checks, by the names their drafts give them: ``NetworkPeriod.state`` (the scan: its ingress units
   read each request's prompt off the network certifier's cells into the scan's state, from the empty state, and the
   period check holds the state the compute audit's Programs read, its ``SCAN_STATE``, to the scan's, `stateTied`,
   with each lane's slot entries the audit's, `wired`; no advice is read),
@@ -113,8 +113,9 @@ SAMPLED = "runner.sampler/sampled_token_ids"
 HEAD = "NetworkHeadCheck_v2"
 SERVED = "NetworkServedCounts_v1"
 TIE = "IoTieWindow"
-#: the scan's tie of the compute to the certified ingress: the period check's `stateTied` (`NetworkCheck.Period`)
-SCAN_TIED = "NetworkCheck.Period.stateTied"
+#: the scan's tie of the compute to the certified ingress: the period check's state finding (`NetworkCheck.Period`'s
+#: `stateCheck`, of `stateTied`)
+SCAN_TIED = "NetworkPeriod.state"
 #: the verifier's registered read of a network certifier cell at its position under the network certifier's signed root
 #: (`warden_rows.opens`, the Lean verifier's check of a proof block's registered port)
 WARDEN_READ = "Flock.Registered.checkPort"
