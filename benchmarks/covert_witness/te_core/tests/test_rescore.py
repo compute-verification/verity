@@ -81,6 +81,7 @@ def test_the_analysis_blocks_score_the_rows_they_cover_and_the_rest_are_left_out
     kept = [json.loads(line) for line in (out / "formalism.jsonl").read_text().splitlines()]
     assert [k["id"] for k in kept] == ["r0", "r1", "r2"] and {k["source"] for k in kept} == {"analysis"}
     assert [k["family"] for k in kept] == ["full", "full", "adapter"]
+    assert {fr["te_core_version"], *(k["te_core_version"] for k in kept)} == {rescore.VERSION}
     f0, f1 = kept[0]["formalism"], kept[1]["formalism"]
     u, u_in = formalism.tail(8 * 9e7, 0.5)
     assert (f0["u"], f0["u_in"], f0["tail_share"]) == ([list(p) for p in u], [list(p) for p in u_in], 0.5)

@@ -17,7 +17,8 @@ side's best-known values beside it), with H and W* over every checkpoint of ever
   `console/<name>.json`, each cut to the route's limits (te_core.console); they are off the console, so nothing is PUT
   (its training panels, te_core.panels' and te_core.algorithm_policy's, read the ledger and the quantities through
   `arguments` and `load`);
-- `formalism.jsonl`: each scored row's block and its source;
+- `formalism.jsonl`: each scored row's block and its source; it and `frontier.json` carry te_core's VERSION
+  (`te_core_version`);
 - with the measured quantities and the analysis in the checkout, `compare.json` and `compare.md`: each scored row's
   quantities beside the analysis's for the same checkpoint (their ratios), the policy's S and route per start and
   target under each, and each route row's Slowdown bound measured over analysis as the ratios of its factors
@@ -377,7 +378,7 @@ def main(argv=None) -> int:
     kept = [r for r in valid if keep is None or keep(r)]
     missing = sorted(r["id"] for r in valid if keep is not None and not keep(r))
     (a.out / "frontier.json").write_text(json.dumps(
-        {"pin": list(pin), "left_out": left_out, "quantities": how,
+        {"te_core_version": VERSION, "pin": list(pin), "left_out": left_out, "quantities": how,
          "not_analysed": missing if mode == ANALYSED else [], "not_measured": missing if mode == MEASURED else []}
         | rep, indent=1, default=str) + "\n")
     (a.out / "frontier.md").write_text(frontier.formalism_markdown(rep) + "\n")
@@ -385,7 +386,8 @@ def main(argv=None) -> int:
         for r in kept:
             f.write(json.dumps({"id": r["id"], "run_id": r.get("run_id"), "start": r["start"],
                                 "checkpoint_step": r.get("checkpoint_step"), "source": source[r["id"]],
-                                "family": r.get("family"), "formalism": r.get("formalism")}, default=str) + "\n")
+                                "family": r.get("family"), "formalism": r.get("formalism"),
+                                "te_core_version": VERSION}, default=str) + "\n")
     if mode == MEASURED and blocks:
         arows, asource = attach(rows, blocks)
         arows = with_context(arows, shapes) if a.charge_context else arows

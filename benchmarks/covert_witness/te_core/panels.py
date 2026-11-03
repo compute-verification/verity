@@ -33,7 +33,7 @@ profiles in `u_points` and `u_in_points`, and the other scalars in `rho_inputs`,
 at the dial's k (`K_LEVELS`, `through`): x0 is exact there and linear between. `build` refuses a candidate whose
 columns don't give te_core.formalism.at's ρ and basis at every cell, so the throttled rows are the page's check set.
 Every row's `method_key` is its method's key in the console's `training/methods`: the record's direction/mechanism,
-and `SCRATCH` for a from-scratch point.
+and `SCRATCH` for a from-scratch point; and its `te_core_version`, the te_core VERSION whose ρ it carries.
 
 It reads the valid records of the pin and of the pilot (pin.py's `pilot`, `frontier.pinned(pilot=True)`) unless `--pin`
 names the commits, and only checkpoints the scoring cap admits are scored (te_core.policy's `eligible`, the ladder's fit
@@ -90,7 +90,7 @@ K_LEVELS = tuple(sorted({8 * kb for kb in K_BYTES} | {DEFAULT[1], SERVED[1]}))
 DATA = ("v3", "v2.3-pilot")
 COLUMNS = ["curve", "data", "start", "start_compute_gates", "start_loss", "on_frontier", "c_tokens_per_block", "c_gates",
            "k_bits", "mark", "compute_total_gates", "compute_after_gates", "loss", "S", "run", "method", "delta_bits",
-           "basis", "method_key", "w_fwd_gates", "rho_inputs", "u_points", "u_in_points"]
+           "basis", "method_key", "w_fwd_gates", "rho_inputs", "u_points", "u_in_points", "te_core_version"]
 LOSSES = ("start_loss", "loss")
 #: the inputs of ρ a candidate's `rho_inputs` holds: te_core.algorithm_policy's `INPUTS` but those with columns of
 #: their own (Δ, w_fwd and the profiles), and te_core 4.x's two terms its `page_rho` reads
@@ -279,7 +279,8 @@ def mismatches(d: dict, dial: dict, w: float) -> list[str]:
 
 
 def row(**values) -> list:
-    return [values.get(c) for c in COLUMNS]
+    """One row of COLUMNS; every row carries the te_core VERSION that priced it (`te_core_version`)."""
+    return [({"te_core_version": VERSION} | values).get(c) for c in COLUMNS]
 
 
 def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source: str,
