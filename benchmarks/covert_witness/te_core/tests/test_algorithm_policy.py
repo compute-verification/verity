@@ -65,10 +65,12 @@ def run(tmp_path, monkeypatch, runs=RUNS, *extra, index=None) -> tuple[int, dict
 
 
 def dial(d: dict, c: float, k: float) -> tuple[float, str]:
-    """The training notes' draft formula for ρ on a row's columns alone,
-    written apart from te_core.formalism: Fit for the training, else Slowdown's bound from u and u_in's points."""
+    """The training notes' draft formula for ρ on a row's columns alone, with te_core 4.x's per-part Fit (w_fit_gates)
+    and ᾱ/α_max (alpha_ratio) where the row has them, written apart from te_core.formalism: Fit for the training, else
+    Slowdown's bound from u and u_in's points."""
     s, dg = c / d["w_gates"], d["delta_grad_bits"]
-    if d["delta_bits"] + s * d["tau_bits"] <= k and dg is not None and 2 * dg <= k and d["delta_t_bits"] + dg <= k:
+    s_fit = c / d.get("w_fit_gates", d["w_gates"])
+    if d["delta_bits"] + s_fit * d["tau_bits"] <= k and dg is not None and 2 * dg <= k and d["delta_t_bits"] + dg <= k:
         return c / (c - d["d_gates"]), "fit"
     u, u_in = AP.profile(d["u_points"]), AP.profile(d["u_in_points"])
     x0 = 0.0
@@ -89,7 +91,7 @@ def dial(d: dict, c: float, k: float) -> tuple[float, str]:
             ux = ua if xb == xa else ua + (ub - ua) * (x - xa) / (xb - xa)
             if x > 0 and ux <= k:
                 best = max(best, x * (k - ux))
-    lead = d["sigma"] * (1 - x0) * s
+    lead = d["sigma"] * (1 - x0) * s * d.get("alpha_ratio", 1.0)
     return (1.0 if lead == 0 else max(1.0, lead * d["a_bits"] / best) if best > 0 else math.inf), "target"
 
 
