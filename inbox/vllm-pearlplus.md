@@ -74,3 +74,5 @@ W numbers its rounds as the verdict does: round s is the s-th pass with calls, i
 4. Estimate run 1's own disk need (the retained passes at whole-window retention, the transcripts and the record), and make sure the node has it free at launch, with headroom.
 
 Delete only with `research retention gc` or `research retention rm --approved-by @vllm`, never a bare rm. Reply on infra's thread (1793631754.023379) through your final message to me, or post on VLLM-182.
+
+12:30Z Tue (coordinator): **`remote` is now da549f2036**: training's #7101, the inference-only verdict v3, which publishes the judgment against n and no count. The INFERENCE-ONLY line now reads "accept: session … (no count published: …)". Merge `remote`. block-counts on `remote` still publishes padded counts. vllm-ibcounts is fixing that on a branch from `remote` by 18:00Z, and I merge it before the run.
