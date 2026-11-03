@@ -18,11 +18,13 @@ from the history before each.
 * **The public stop** (`stop`): once it holds at a history within the prefix, the prover sends the empty message, and
   every session after it is silent.
 * **The simulator** (`Rec.sim`): zero messages under fresh salts for the prefix's strings (`Rec.Compiled.S₀`), cut where
-  the stop fires, then `O`'s simulator on each session's statement after the history it simulated.
+  the stop fires, then `O`'s simulator on each session's statement after the history it simulated, where the
+  continuation test `go` holds at it.
 
 What the recursion rests on is stated here as conditions on `G` and `O`: zero knowledge of `O` (`ZkSystem.ZK`), the
 prefix's strings are hm96 commitments (`Rec.Compiled.Commits`), each session's shape is public (`Rec.Compiled.ByShape`),
-and each session's witness is in `O`'s relation unless the stop fired (`Rec.Compiled.WitnessIn`).
+each session's witness is in `O`'s relation unless the stop fired (`Rec.Compiled.WitnessIn`), and the continuation test
+is `goesOn` at every real run (`Rec.Compiled.GoesOnAt`).
 -/
 
 namespace Verity
@@ -162,6 +164,13 @@ def WitnessIn {NO ΩO : Msg → Type} (H : Msg → Msg) (O : ZkSystem WS NO ΩO)
     (∀ i (hi : i < u.length), i < G.kI x + 1 → u[i].1 = (((G.P₀ w x).next x (u.take i) t₀).eval H).1) →
     fired (G.stop x) (G.kI x + 1) u = false → O.R (G.xs x j u) (G.ws j w x t₀ u)
 
+/-- **The continuation test is `goesOn` at every real run**: at each session `j < nS x`, `go j x` agrees with
+`goesOn (start x j)` at every run of `start x j` rounds against any verifier, so the simulator may go on at a simulated
+history by any test the real runs can't tell from `goesOn`: `goesOn` itself, or that the last answer is a message. -/
+def GoesOnAt (go : ℕ → Msg → List (Msg × Out) → Bool) : Prop :=
+  ∀ x, ∀ j < G.nS x, ∀ (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg),
+    go j x (interact ask pm (G.start x j) []) = goesOn (G.start x j) (interact ask pm (G.start x j) [])
+
 end Rec.Compiled
 
 section System
@@ -175,28 +184,30 @@ noncomputable def Rec.prover (O : ZkSystem WS NO ΩO) (G : Rec.Compiled W WS Sa 
   (stopP ((G.lay x).prover (fun w => G.P₀ w x) (Rec.slotP O (G.NB x) (G.ΩB x)) (G.nS x) w) G.stop
     (G.lay x).k₀).comap (Layout.flatten (G.T₀ x) 0 (G.NB x) (G.ΩB x) (G.nS x))
 
-/-- The recursion's simulator at `x`: the prefix's, cut where the stop fires, then each session's, silent once the stop
-has fired. -/
-noncomputable def Rec.simAt (O : ZkSystem WS NO ΩO) (G : Rec.Compiled W WS Sa Gp) (x : Msg) : Simulator :=
+/-- The recursion's simulator at `x`: the prefix's, cut where the stop fires, then each session's where `go` holds at
+the history it simulated, silent once the stop has fired. -/
+noncomputable def Rec.simAt (O : ZkSystem WS NO ΩO) (G : Rec.Compiled W WS Sa Gp)
+    (go : ℕ → Msg → List (Msg × Out) → Bool) (x : Msg) : Simulator :=
   iterSimG (G.T₀ x) 0 (G.NB x) (G.ΩB x) (Layout.seq (G.T₀ x) 0 (G.NB x) (G.ΩB x) ((G.lay x).stopped G.stop))
     (censorSim G.S₀ G.stop (G.lay x).k₀) (fun j x' => G.CS x' j)
-    (stopProgB G.stop (G.lay x).k₀ (G.lay x).n fun j x' u => progOf O.S (G.CS x' j) (G.xs x' j u))
-    (fun j x' => goesOn (G.start x' j)) (G.nS x)
+    (stopProgB G.stop (G.lay x).k₀ (G.lay x).n fun j x' u => progOf O.S (G.CS x' j) (G.xs x' j u)) go (G.nS x)
 
-/-- **The recursion's simulator**: at each statement, `Rec.simAt`'s there. -/
-noncomputable def Rec.sim (O : ZkSystem WS NO ΩO) (G : Rec.Compiled W WS Sa Gp) : Simulator where
-  C x := (Rec.simAt O G x).C x
-  prog x := (Rec.simAt O G x).prog x
+/-- **The recursion's simulator** with the continuation test `go`: at each statement, `Rec.simAt`'s there. -/
+noncomputable def Rec.sim (O : ZkSystem WS NO ΩO) (G : Rec.Compiled W WS Sa Gp)
+    (go : ℕ → Msg → List (Msg × Out) → Bool) : Simulator where
+  C x := (Rec.simAt O G go x).C x
+  prog x := (Rec.simAt O G go x).prog x
 
-/-- **The recursion as a proof system**: `start x (nS x)` rounds, its prover and simulator, `G`'s relation, and the
-bound `2 (kI + nC) δ₁ + Σ_j εS δ₁ x j` and `nS x · γS x`. -/
-noncomputable def Rec.system (O : ZkSystem WS NO ΩO) (G : Rec.Compiled W WS Sa Gp) :
+/-- **The recursion as a proof system**: `start x (nS x)` rounds, its prover and simulator (with the continuation test
+`go`), `G`'s relation, and the bound `2 (kI + nC) δ₁ + Σ_j εS δ₁ x j` and `nS x · γS x`. -/
+noncomputable def Rec.system (O : ZkSystem WS NO ΩO) (G : Rec.Compiled W WS Sa Gp)
+    (go : ℕ → Msg → List (Msg × Out) → Bool) :
     ZkSystem W (fun x => ((G.T₀ x).iter 0 (G.NB x) (G.ΩB x) (G.nS x)).N)
       (fun x => ((G.T₀ x).iter 0 (G.NB x) (G.ΩB x) (G.nS x)).Ω) where
   k x := G.start x (G.nS x)
   P := Rec.prover O G
   R := G.R
-  S := Rec.sim O G
+  S := Rec.sim O G go
   εzk δ₁ x := 2 * ((G.kI x : ℝ) + G.nC x) * δ₁ + ∑ j ∈ Finset.range (G.nS x), G.εS δ₁ x j
   γzk x := G.nS x * G.γS x
 
