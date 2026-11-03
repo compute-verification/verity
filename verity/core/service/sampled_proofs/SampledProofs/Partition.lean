@@ -226,16 +226,17 @@ def acts (p : Program) (query : Json) : V (Array Act) := do
   if (Flock.TemplateQuery.templatesOf name version (getD q "params")).isSome then
     return rs.flatMap fun r =>
       let d := root.nodes[r.node]!.fn
-      (Array.range r.count).map fun m => { k := r.node, m, d, first := r.first + m, units := #[#[(0, (P.defs[d]!).gates)]] }
+      (Array.range r.count).map fun m =>
+        ({ k := r.node, m, d, first := r.first + m, units := #[#[(0, (P.defs[d]!).gates)]] } : Act)
   if name == "Q_word" then
-    let mut out := #[]
+    let mut out : Array Act := #[]
     let mut first := 0
     for (k, d, c) in ← wordCalls P do
       let units ← wordGates P d c
       out := out.push { k, m := 0, d, first, units }
       first := first + units.size
     return out
-  let mut out := #[]
+  let mut out : Array Act := #[]
   let mut first := 0
   for c in ← Flock.Qcall.evaluate P X do
     out := out.push { k := c.k, m := 0, d := c.d, first, units := c.c.units.map fun u => #[(u.lo, u.hi)] }
@@ -324,6 +325,6 @@ def unitInputs (p : Program) (as : Array Act) : V (Array (Array Nat)) := do
             owner := owner.insert g (min u (owner.getD g u))
         ℓ := ℓ + 1
   let n := as.foldl (· + ·.units.size) 0
-  return (owner.toArray.qsort (·.1 < ·.1)).foldl (fun out (g, u) => out.modify u (·.push g)) (Array.replicate n #[])
+  return (owner.toArray.qsort (·.1 < ·.1)).foldl (fun out (g, u) => out.modify u (·.push g)) (Array.replicate n (#[] : Array Nat))
 
 end SampledProofs.Partition
