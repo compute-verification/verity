@@ -20,7 +20,7 @@ from circuit_check import cli
 from circuit_check import known as KN
 from circuit_check import shard as SH
 from circuit_check import targets as TG
-from test_cache import REPO, _bindings, _tree
+from test_cache import REPO, _bindings, _edit, _tree
 from test_units import BINDINGS as UNIT_BINDINGS
 from test_units import FORKED as UNITS_FORKED
 from test_units import HARNESS as UNITS
@@ -387,6 +387,19 @@ def test_every_shard_from_a_copy_of_one_records_only_run_s_cache_builds_no_bindi
 
 #: `test_units`' setup, then ``circuit-check --all --bindings -j 2`` (`cli.bindings`) from the records in the tree's cache
 BINDINGS_ONLY = UNITS[:UNITS.index("rep = cli.run(")] + 'print(json.dumps(cli.bindings(root / "cache", log=None, jobs=2)))\n'
+#: `test_units`' bindings, each root function writing its units to ``<root>-roots.jsonl`` (beside the tree) as it runs
+ROOTS_LOGGED = ("def bindings():\n    for units, make in catalog.BINDINGS:\n        yield units, make,",
+                "def rooted(units, make):\n"
+                "    def run():\n"
+                "        with CC.internal(), open(root.parent / f'{root.name}-roots.jsonl', 'a') as f:\n"
+                "            f.write(json.dumps(units) + '\\n')\n"
+                "        return make()\n"
+                "    return run\n\n\n"
+                "def bindings():\n    for units, make in catalog.BINDINGS:\n        yield units, rooted(units, make),")
+
+
+def _roots_made(log: Path) -> set[str]:
+    return {SH.binding(json.loads(ln)) for ln in log.read_text().splitlines()} if log.exists() else set()
 
 
 def _py(root: Path, harness: str) -> subprocess.CompletedProcess:
@@ -394,13 +407,24 @@ def _py(root: Path, harness: str) -> subprocess.CompletedProcess:
                           env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
 
 
+def _forked(name: str) -> str:
+    """`test_units`' forked ``--all`` as ``--binding name`` runs it, its bindings' roots logged (`ROOTS_LOGGED`)."""
+    # the real registry, which `targets.load_registries` loads before any check and the harness's stand-in doesn't: else the
+    # first check to load it records the kernels it registers as reads this process can't digest
+    return UNITS_FORKED.replace(*ROOTS_LOGGED).replace("fork=True)", f"fork=True, binding={name!r})").replace(
+        "rep = cli.run(", "from verity.ml.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(", 1)
+
+
 @pytest.mark.slow
 def test_each_binding_from_a_copy_of_one_records_only_run_s_cache_checks_its_own_targets_and_together_the_list(tmp_path):
     """``--bindings`` names each catalog binding with the targets ``--binding`` checks under it: together the whole list, each
     target once.  Each forked ``--binding`` run, in a tree of its own from a copy of one ``--records-only`` run's cache (a task
-    on another machine), builds no binding and no body in its own process and checks exactly its targets, with the verdicts a
-    full build gives; run again, it reuses every target.  With no record it refuses rather than build, and given a name no
-    catalog binding has, rather than check nothing."""
+    on another machine), builds no binding and no body in its own process, makes only its own binding's roots (the catalog's
+    roots record lists the others'), keys and checks exactly its targets, with the verdicts a full build gives; run again, it
+    reuses every target.  With the roots record stale (a module no binding reads edited) it makes every binding's roots, with
+    the same verdicts.  With no record it refuses rather than build, and given a name no catalog binding has, rather than
+    check nothing."""
+    assert UNITS_FORKED.count(ROOTS_LOGGED[0]) == 1
     root = _tree(tmp_path / "t")
     _bindings(root, *UNIT_BINDINGS)
     cold = _py(root, UNITS.replace("units=True)", "units=True, binding='_core_roots')"))
@@ -414,18 +438,116 @@ def test_each_binding_from_a_copy_of_one_records_only_run_s_cache_checks_its_own
     values: dict = {}
     for i, (name, targets) in enumerate(named["bindings"].items()):
         tree = _copied(root, tmp_path / f"b{i}")
-        # the real registry, which `targets.load_registries` loads before any check and the harness's stand-in doesn't: else the
-        # first check to load it records the kernels it registers as reads this process can't digest
-        forked = UNITS_FORKED.replace("fork=True)", f"fork=True, binding={name!r})").replace(
-            "rep = cli.run(", "from verity.ml.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(", 1)
-        out = _run_units(tree, forked)
+        out = _run_units(tree, _forked(name))
         assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and out["here"] == [], (name, out["stats"])
         assert sorted(out["values"]) == sorted(label for _, label in targets) and out["hits"] == [], name
+        assert _roots_made(tmp_path / f"b{i}-roots.jsonl") == {name} - {"<registered>"}, name
+        assert len(out["keys"]) == len(out["values"]), (name, out["keys"])
         values.update(out["values"])
         if name == "_core_roots":
-            again = _run_units(tree, forked)
+            again = _run_units(tree, _forked(name))
             assert again["stats"]["units"] == out["stats"]["units"] and again["here"] == [], again["stats"]
             assert again["hits"] == sorted(again["values"]) == sorted(out["values"]), again
     assert values == _fresh(root)["values"]
+    stale = _copied(root, tmp_path / "stale")
+    _edit(stale, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")
+    out = _run_units(stale, _forked("_core_roots"))
+    assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and out["here"] == [], out["stats"]
+    assert _roots_made(tmp_path / "stale-roots.jsonl") == set(named["bindings"]) - {"<registered>"}
+    assert out["values"] == {t: values[t] for _, t in named["bindings"]["_core_roots"]}
     unknown = _py(root, UNITS.replace("units=True)", "units=True, binding='_no_roots')"))
     assert unknown.returncode and cli.NO_BINDING in unknown.stderr, unknown.stderr
+
+
+#: two bindings past `test_units`' whose roots register beyond themselves: ``_late_roots`` a primitive of a module only it
+#: imports (`syn.late.lz`: the registries import `syn`'s top-level modules) and a member of a family its id makes
+#: (`SynWide{n}`, `codec.register_lazy_family`); ``_minted_roots`` a composite its factory makes, which no id makes
+LATE = {
+    "syn/wide.py": """
+from verity.ml.circuits.codec import register_lazy_family
+from verity.ml.circuits.defs import PrimitiveDefinition
+
+from syn.prims import V
+
+_MADE = {}
+
+
+def wide(n):
+    if n not in _MADE:
+        _MADE[n] = PrimitiveDefinition(f"SynWide{n}", 1, (("a", V), ("b", V)), V, lambda a, b: a | b)
+    return _MADE[n]
+
+
+register_lazy_family(r"^SynWide(\\d+)_v1$", lambda m: wide(int(m[1])))
+""",
+    "syn/late/__init__.py": "",
+    "syn/late/lz.py": """
+from verity.ml.circuits import primitive
+
+from syn.prims import V
+
+
+@primitive("SynLz", 1, [("a", V), ("b", V)], V)
+def SynLz(a, b):
+    return a & b
+""",
+    "syn/fresh.py": """
+from verity.ml.circuits import composite
+
+from syn.prims import SynAdd, V
+
+_MADE = []
+
+
+def made():
+    if not _MADE:
+        @composite("SynFresh", 1, [], lambda S: ((("a", V), ("b", V)), V))
+        def SynFresh(B, S, a, b):
+            return B.call(SynAdd, a, b)
+        _MADE.append(SynFresh)
+    return _MADE[0]
+""",
+}
+LATE_ROOTS = ("\ndef late():\n    from syn import wide\n    from syn.late import lz\n    return [lz.SynLz, wide.wide(7)]\n\n\n"
+              "def minted():\n    from syn import fresh\n    return [bind(fresh.made())]\n\n")
+#: what the forked run's own process has registered of the tree's Definitions, in order, and imported of its modules
+HELD_HERE = ('"here": here,', '"here": here, "registry": [f for f in dict.keys(__import__("verity.ml.circuits.defs", '
+             'fromlist=["REGISTRY"]).REGISTRY.defs) if f.startswith("Syn")], "modules": sorted(m for m in sys.modules '
+             'if m.startswith("syn")),')
+
+
+def _late_tree(at: Path) -> Path:
+    root = _tree(at)
+    for rel, text in LATE.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text.lstrip("\n"))
+    _edit(root, "syn/catalog.py", "\nBINDINGS = [", LATE_ROOTS + "\nBINDINGS = [")
+    _bindings(root, *UNIT_BINDINGS, '(("_late_roots",), late)', '(("_minted_roots",), minted)')
+    return root
+
+
+@pytest.mark.slow
+def test_a_binding_run_does_in_each_other_binding_s_place_what_making_its_roots_did_beyond_them(tmp_path):
+    """A ``--binding`` run from a copy of one ``--records-only`` run's cache makes another binding's roots only where what
+    making them did beyond them (the catalog's roots record notes it) can't be done in their place: ``_late_roots``' import of
+    `syn.late.lz` and its ``SynWide7_v1``, made by its id, are done (`units._replay`), and ``_minted_roots``' composite, which
+    no id makes, is made.  So this process's registry and its in-tree modules are, in order, the ones a run that makes every
+    binding's roots has (the roots record stale), with that run's verdicts: C-Flock lowers a word primitive by the first
+    Boolean Definition registered of that word, which another binding's roots can be the first to register."""
+    root = _late_tree(tmp_path / "t")
+    assert _records_only(root)["stored"] == 7
+    lazy, stale = _late_tree(tmp_path / "lazy"), _late_tree(tmp_path / "stale")
+    for tree in (lazy, stale):
+        shutil.copytree(root / "cache", tree / "cache")
+    _edit(stale, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")
+    harness = _forked("_core_roots").replace(*HELD_HERE)
+    assert harness.count('"registry": [') == 1
+    got, full = _run_units(lazy, harness), _run_units(stale, harness)
+    assert _roots_made(tmp_path / "lazy-roots.jsonl") == {"_core_roots", "_minted_roots"}
+    assert _roots_made(tmp_path / "stale-roots.jsonl") == {"_core_roots", "_model_roots", "_sized_roots", "_xor_roots",
+                                                           "_late_roots", "_minted_roots"}
+    assert got["registry"] == full["registry"] and got["modules"] == full["modules"], (got, full)
+    assert [f for f in got["registry"] if f in ("SynLz_v1", "SynWide7_v1", "SynFresh_v1")] == \
+        ["SynLz_v1", "SynWide7_v1", "SynFresh_v1"] and "syn.late.lz" in got["modules"], got
+    assert got["stats"]["units"] == full["stats"]["units"] == {"reused": 7, "rebuilt": [], "stored": 0}, (got, full)
+    assert got["here"] == full["here"] == [] and got["values"] == full["values"] and got["values"], (got, full)
