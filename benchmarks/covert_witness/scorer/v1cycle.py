@@ -266,8 +266,10 @@ def replaces(new: Path) -> bool:
 
 def retrace_order(v3: set[str]) -> dict[str, int]:
     """v3's runs a retrace takes first (coordinator 12:20Z), from the newest algorithm-policy table a refresh wrote
-    under OUT_ROOT: 0 a run that reached a gain, 1 each family's best not-reached run (by gain; method_key where the
-    family is unnamed). The rest of v3 follows, then the pilot."""
+    under OUT_ROOT: 0 a run that reached a gain, by its row or, a run with no row (refused or not yet traced, such as
+    sparse's and quant's first 1.1x points, coordinator 15:08Z), by a checkpoint's loss in the ledger at or under a
+    reached row's at the least gain target from its start; 1 each family's best not-reached run (by gain; method_key
+    where the family is unnamed). The rest of v3 follows, then the pilot."""
     for t in sorted(OUT_ROOT.glob("2026-*/algorithm-policy/tables/algorithm-policy.json"), reverse=True):
         try:
             p = json.loads(t.read_text())
@@ -276,6 +278,17 @@ def retrace_order(v3: set[str]) -> dict[str, int]:
         ix = {c: i for i, c in enumerate(p["columns"])}
         rows = [r for r in p["rows"] if r[ix["record"]].rsplit("@", 1)[0] in v3]
         rank = {r[ix["record"]].rsplit("@", 1)[0]: 0 for r in rows if r[ix["reached"]] == "yes"}
+        start = {r["run_id"]: r["start"] for r in trace40.scope()}
+        least = min((r[ix["gain_target"]] for r in rows), default=None)
+        bar: dict[str, float] = {}
+        for r in rows:
+            if r[ix["reached"]] == "yes" and r[ix["gain_target"]] == least:
+                s = start.get(r[ix["record"]].rsplit("@", 1)[0])
+                bar[s] = max(bar.get(s, -math.inf), r[ix["end_loss"]])
+        for line in (trace40.LEDGER / "index.jsonl").open():
+            x = json.loads(line)
+            if x.get("run_id") in v3 and (x.get("val_bpb") or math.inf) <= bar.get(start.get(x["run_id"]), -math.inf):
+                rank[x["run_id"]] = 0
         best: dict[str, tuple[float, str]] = {}
         for r in rows:
             run, fam, gain = r[ix["record"]].rsplit("@", 1)[0], r[ix["family"]] or r[ix["method_key"]], r[ix["gain"]]
