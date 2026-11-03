@@ -63,6 +63,8 @@ COUNT += 1  # dead_free's TokenSelectGroups_v1, a line of its own so it merges w
 
 COUNT += 2  # ops' `ScaledMmS8ResidualCoordinateRows_v1` and `_v2`, a line of its own
 
+COUNT += 1  # `boolean_transcendental`'s F32ExpRn_v2, a line of its own so it merges with any other change to the count
+
 COUNT += 2  # `b1`'s RMSNormFusedCudaAdd_v1 and RMSNormFusedCudaTail_v1, a line of its own so it merges with any other change to the count
 
 COUNT += 2  # ops' `PvRowPad_v1` and `_v2`, a line of its own so it merges with any other change to the count
