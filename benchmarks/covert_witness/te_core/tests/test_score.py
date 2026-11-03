@@ -51,7 +51,8 @@ def test_with_structures_scales_the_traced_rows():
 
 TRACE = {"sigma": 0.9, "affected_share": 0.75, "token_factor": 2.0, "delta_grad_bits": 640, "tau_ids": 1.125,
          "tau_other_bits": 0.0, "a_bits": 256.0, "u_in": [[0.0, 0.0], [0.0, 512.0], [0.5, 1024.0], [1.0, 1024.0]],
-         "u1_bits": 1024.0, "tail_share": 1 / 3, "frozen_tail_share": 0.0, "update_cut_bits": 1024}
+         "u1_bits": 1024.0, "tail_share": 1 / 3, "frozen_tail_share": 0.0, "update_cut_bits": 1024,
+         "data_dependent": [], "carried_scalars": []}
 
 
 def test_with_structures_carries_the_traced_formalism():
@@ -86,3 +87,23 @@ def test_with_structures_carries_the_traced_formalism():
     assert m.u_in == u_in and m.u == formalism.with_tail(u_in, 1 / 3)
     assert {k: m.labels[k] for k in ("tau_bits", "affected_gates", "token_gates", "u", "u_in")} == {
         k: formalism.TRACED[k] for k in ("tau_bits", "affected_gates", "token_gates", "u", "u_in")}
+
+
+def test_with_structures_lists_the_read_backs_of_every_traced_structure_its_steps_take():
+    """The record's `trace` takes the most-MACs structure's quantities and every taken structure's read-back lists; a
+    structure traced before te_core 4.2 (no lists) leaves them out, so te_core.formalism refuses the row as unchecked."""
+    from te_core import formalism
+
+    rec = record(3)
+    rec["structures"]["t"] = dict(rec["structures"]["s"])
+    rec["steps"][2]["struct"] = "t"
+    clip = {"kind": "a comparison of a read-back float", "where": "train.py:9", "steps": [0, 2], "count": 3}
+    a = {"updated": [[50, 0, 800, 16, 16]], "formalism": TRACE}
+    b = {"updated": [[50, 0, 800, 16, 16]], "formalism": TRACE | {"affected_share": 0.5, "data_dependent": [clip]}}
+    trace = with_structures(rec, {"s": a, "t": b})["formalism"]["trace"]
+    assert trace["affected_share"] == 0.75 and trace["data_dependent"] == [clip] and trace["carried_scalars"] == []
+    assert with_structures(rec, {"s": a, "t": a})["formalism"]["trace"] == TRACE
+    old = {"updated": a["updated"], "formalism": {k: v for k, v in TRACE.items() if k not in formalism.READ_BACKS}}
+    row = {"formalism": with_structures(rec, {"s": a, "t": old})["formalism"], "output": {"e_bytes": 100}}
+    assert not set(formalism.READ_BACKS) & set(row["formalism"]["trace"])
+    assert formalism.refusal(row).startswith("read-backs unchecked")
