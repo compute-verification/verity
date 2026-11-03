@@ -348,7 +348,7 @@ theorem RecursiveZKLoopAnySum_nontrivial :
       zero_le) ?_ (by rw [fwHoles_sched0]; simp)
   · rcases c with ⟨k | c', x⟩
     · exact Bool.false_ne_true hc.1
-    · exact Bool.true_ne_false hc.2
+    · exact Bool.false_ne_true hc.2.symm
   · refine ENNReal.iSup_eq_zero.2 fun _ => ?_
     simp [OuterZK.LoopSessions.atWorker]
 
