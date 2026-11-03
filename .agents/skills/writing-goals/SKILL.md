@@ -5,8 +5,8 @@ description: >
   goal is (something that finishes, with one owner and a date), tags from the fixed list of projects, three tiers (a
   project in Daniel's words, a piece of one, a step; derived from what waits on what, overridable), what a goal waits on (links to goals and Daniel's asks, never free text), why an off-track goal
   is off track, and how to write the description so Daniel can skim it (one plain opening sentence, then the shape that
-  fits: landing, research or proof; bold only for key expressions; a lead-in line for every list, math in LaTeX, and no
-  word he has said he doesn't know, all three refused by the site). Covers `research goals
+  fits: landing, research or proof; measured numbers in LaTeX, literals as code, leads as @handle; a lead-in line for
+  every list and no word he has said he doesn't know, refused by the site). Covers `research goals
   show|set|confirm|done|remove|replace` and the API it calls. Use when writing, updating or confirming a goal, adding a
   dependency, or rewriting your goals for a sync.
 ---
@@ -82,7 +82,12 @@ within two days."
 
 Rules:
 
-- Bold only key expressions: numbers, dates and decisions waiting on Daniel. Never a sentence or a clause.
+- Measured numbers are LaTeX: $9.5$ ms, $98.75\%$, $0$ of $6{,}256$ tiles. Bold only dates and decisions waiting on
+  Daniel, never a sentence or a clause.
+- Code (backticks) is for a literal someone would type, flip or match: a GPU target (`sm_90a`), a number format
+  (`fp8`, `bf16`), a served option (`--enable-chunked-prefill`), a command (`research goals set`). Name the literal
+  when it's the thing someone flips or checks, not "one fast path". Names of things stay plain: vLLM, cuBLASLt,
+  Llama 3.2 1B, the H200. The site refuses a word with an underscore outside code.
 - No fixed labels, but every list has a lead-in line ending in a colon that says what it is, in the goal's own words:
   "So far, on the pilot:", "Plan:", "Proved:", "Left:", "By Tue 6 AM:". The site refuses a list without one.
 - Math is LaTeX between dollar signs: $\rho$, $p = C/H$. The site refuses a Greek character (ρ, ε) outside math or code.
@@ -91,12 +96,15 @@ Rules:
 - Sub-bullets are welcome: indent them three spaces under their item.
 - Times are Pacific, written like "Mon 10 PM", with no zone and never UTC.
 - No PR numbers, ticket ids, branch names, run ids, agent ids, file paths or code names (a package, module or
-  function: "te_core", "page_rho"). Say what the thing does. Name teams by handle (ci, proofs).
+  function: "te_core", "page_rho"). Say what the thing does.
+- Name a lead as @handle (@ci, @proofs): the page sets it as the lead's chip, apart from the project tags and the
+  software a handle is named after.
 - The site refuses a word Daniel has said he doesn't know, and its refusal says what to write instead. The list is
   `UNKNOWN` in the website repository's goals check (`plain.ts`); when he says he doesn't know a word, tell dashboard,
   who adds it with his words.
 - Define a term the first time you use it. Give numbers with units and what they compare to.
-- Link another goal with `[text](#goal-id)` and an ask with `[text](ask:<card id>)`; both render as chips.
+- Link another goal with `[text](#goal-id)` and an ask with `[text](ask:<card id>)`; both render as chips. Never a
+  bare id.
 
 A research goal, as Daniel approved it:
 
@@ -105,13 +113,13 @@ For a ladder of fully trained models, the cheapest covert route to each lower lo
 honest one, under the training formalism (v2).
 
 So far, on the FineWeb-Edu pilot:
-- slowdown at the default policy is about **200–430** for most routes;
-- as low as **1** for adapters on the embedding. That rests on the theorem's attention loose end: **your call**,
+- slowdown at the default policy is about $200$ to $430$ for most routes;
+- as low as $1$ for adapters on the embedding. That rests on the theorem's attention loose end: **your call**,
   sent 5:28 PM.
 
 Plan:
 1. Tonight the 20M, 60M and 200M starts retrain on OLMo 2's pretraining mix.
-2. Every frontier point is rerun on the sealed shard at **three seeds**.
+2. Every frontier point is rerun on the sealed shard at $3$ seeds.
 3. Both training plots from those runs by **Wed 8 AM**.
 
 Every slowdown rests on assumptions A1 and A1′ until the Slowdown theorem is proved in Lean.
@@ -120,7 +128,7 @@ Every slowdown rests on assumptions A1 and A1′ until the Slowdown theorem is p
 A proof goal:
 
 ~~~markdown
-What the zero-knowledge server releases reveals at most about **one bit** a session, plus the counted bits of where a
+What the zero-knowledge server releases reveals at most about $1$ bit a session, plus the counted bits of where a
 session stopped, when the worker runs the honest prover.
 
 Proved:
@@ -131,7 +139,7 @@ Left:
 - the honest worker's requests, in Lean, shown to pass the server's checks:
   [memory accounting](#accounting/honest-requests-pass-firewall), with
   [proofs making the checks provable](#proofs/firewall-checks-provable);
-- the stop leak, about **11 bits** a session, proved from the session's rules:
+- the stop leak, about $11$ bits a session, proved from the session's rules:
   [network accounting](#accounting/stop-leak-proved).
 
 Due **Fri**. **Wed** would need both pieces within two days.
