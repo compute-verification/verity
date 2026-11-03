@@ -137,7 +137,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   challenger's (parameters naming none are refused), read as v1 reads them (`OneStage.coinsOf`; `oneStageZkReads` in
   `Security/Properties/Challenger.lean`). The check runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, accepts a
-  session only where the public file's units are the registration's population in order (`FilePart.check`), binds
+  session only if the public file's units are the registration's population in order (`FilePart.check`), binds
   the evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `checkAt` at those coins.
   So are each session's: before any verdict, the check holds every session's record to the coin trees the signed
   release log shows the challenger sampled and opened (`SampledProofs/ChallengerTrees.lean`,
@@ -392,7 +392,7 @@ digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`.
 
 The Lean verifier's executable reads the same object (`Flock/HmRow.lean`, `Flock/TemplateQuery.lean`), but no theorem
 states it. The guarantees read the circuit file's partition, `Flock.Bridge.partOf`; that the deployed record's is it
-is `RelDeployTarget`'s hypothesis, discharged once the deployed layout is built from `FilePart.ofCircuit`. Pinned by
+is `RelDeployTarget`'s hypothesis, discharged once the layout is built from `FilePart.ofCircuit`. Pinned by
 core's `verity/ml/circuits/tests/partition_vectors.json` and `template_instance_vectors.json`, which
 `tests/test_one_stage.py` replays, with the object's refusals and digest.
 
