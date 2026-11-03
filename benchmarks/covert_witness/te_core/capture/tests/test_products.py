@@ -496,8 +496,8 @@ class Flattened(nn.Module):
 def test_a_coded_messages_levels_times_their_groups_scale_are_elementwise_through_the_view_that_groups_them(bits):
     """lowrank's minimal case: unpacked levels [1, 256 // per, per] are flat along their per lanes, and the view to the
     groups [1, 2, 128] merges the lanes with 128 // per bytes into one dim, which no dim of its own can say flat; their
-    multiplication by each group's scale [1, 2, 1] is elementwise, since on the grid both shapes share ([1, 2, 128 //
-    per, per], `products._grid`) the scale is flat along the bytes and the lanes, the levels along the lanes. 4.12.9's
+    multiplication by each group's scale [1, 2, 1] is elementwise, since on the grid both share ([1, 2, 128 // per,
+    per], `products._cells`) the scale is flat along the bytes and the lanes, the levels along the lanes. 4.12.9's
     check found it at 2 bits (a mul of 256 multiplications), where the levels have fewer entries than the step's, and
     not at 4 and 8."""
     torch.manual_seed(0)
@@ -542,3 +542,89 @@ def test_a_bf16_steps_matrix_vector_products_are_priced_as_gemms():
     assert mv and all(r["gates_per_mac"] == gates.per_mac("gemm/bf16") for r in mv)
     assert {r.op for r in io_bound.rows_of(g, "bfloat16")} == {"aten.mm.default", "aten.mv.default"}
     assert got["gates"] == io_bound.step_gates(g, "bfloat16") > 0
+
+
+class Packed(nn.Module):
+    """The wildcard topcode cut's forward code: a layer's outputs, each token's 64 on 2^bits levels by a bf16 step
+    (2 bits: their RMS's, 4: their absmax's), the codes passed through bytes as the cut's through_bytes passes them
+    (eight to `bits` bytes, unpacked over 8 lanes and viewed back to the token's 64), decoded (j + 0.5) * step and
+    passed straight through (`scale`); or, the control, the levels times a trained vector of the 64 (`vector`)."""
+
+    def __init__(self, bits: int, form: str = "scale") -> None:
+        super().__init__()
+        self.bits, self.form = bits, form
+        self.w = nn.Linear(32, 64, bias=False)
+        self.head = nn.Linear(64, 8, bias=False)
+        if form == "vector":
+            self.v = nn.Parameter(torch.randn(64))
+        self.register_buffer("lanes", torch.arange(8))
+        self.register_buffer("octets", torch.arange(bits))
+
+    def forward(self, x):
+        bits, half = self.bits, 2 ** (self.bits - 1)
+        y = self.w(x)
+        with torch.no_grad():
+            g = y.reshape(-1, 1, 64)
+            step = (g.pow(2).mean(-1, keepdim=True).sqrt() * 0.9957 if bits == 2 else
+                    g.abs().amax(-1, keepdim=True) * (2.0 / 2 ** bits)).to(torch.bfloat16).float().clamp_min(1e-30)
+            c = (torch.floor(g / step).clamp(-half, half - 1) + half).long()
+            word = (c.reshape(*c.shape[:-1], -1, 8) << (bits * self.lanes)).sum(-1)
+            packed = ((word.unsqueeze(-1) >> (8 * self.octets)) & 255).to(torch.uint8)
+            word = (packed.long() << (8 * self.octets)).sum(-1)
+            j = ((word.unsqueeze(-1) >> (bits * self.lanes)) & (2 ** bits - 1)).reshape(c.shape).float() - half
+        if self.form == "vector":
+            return self.head(y + ((j + 0.5) * self.v).reshape(y.shape))
+        return self.head(y + (((j + 0.5) * step).reshape(y.shape) - y).detach())
+
+
+@pytest.mark.parametrize("bits, form, found", ((2, "scale", []), (4, "scale", []),
+                                               (2, "vector", [{"op": "mul", "count": 1, "macs": 2 * 16 * 64}])))
+def test_a_code_passed_through_bytes_and_decoded_by_its_step_is_elementwise(bits, form, found):
+    """The unpacked levels [32, 1, 8, 8] are flat along their 8 lanes, and the view back to [32, 1, 64] keeps that run
+    of the index, however it merges the lanes with the bytes, through the cast and the maps that follow; their
+    multiplication by each token's step [32, 1, 1], flat along all 64, is elementwise. 4.12.12's check followed a
+    view that regroups dims only where it is the multiplication's own operand, so it found the topcode cut's decode,
+    a map after the view, at both widths. Times a trained vector of the 64, which varies along the lanes the levels
+    are flat along, it is an outer product, found."""
+    torch.manual_seed(0)
+    assert _elementwise(Packed(bits, form), torch.randn(2, 16, 32), torch.randn(2, 16, 8)) == found
+
+
+class Clipped(nn.Module):
+    """A trained 16 x 8 weight of which a layer reads 4 rows, so its gradient is a padded one (`clip`); or, the
+    control, a frozen 16 x 8 weight plus the outer product of a trained 4-vector padded to 16 and a trained 8-vector
+    (`outer`)."""
+
+    def __init__(self, form: str) -> None:
+        super().__init__()
+        self.form = form
+        self.A = nn.Parameter(torch.randn(16, 8), requires_grad=form == "clip")
+        if form == "outer":
+            self.u, self.w = nn.Parameter(torch.randn(4)), nn.Parameter(torch.randn(8))
+
+    def forward(self, x):
+        if self.form == "clip":
+            return tF.linear(x, self.A[:4])
+        return tF.linear(x, self.A + tF.pad(self.u, (0, 12))[:, None] * self.w[None, :])
+
+
+@pytest.mark.parametrize("form, found", (("clip", []), ("outer", [{"op": "mul", "count": 1, "macs": 128}])))
+def test_a_gradient_scaled_by_its_clip_coefficient_is_elementwise(form, found):
+    """clip_grad_norm_ scales each gradient in place by one coefficient, a norm's, which has one entry and so is flat
+    along the whole index: it mixes with nothing, whatever the gradient's runs are. 4.12.12's check found the
+    wildcard adapter's clipped gradients so, each padded by its slice's backward, whose runs it can't tell. A
+    padded vector, whose runs it can't tell either, times a trained vector's broadcast is still an outer product."""
+    torch.manual_seed(0)
+
+    def step(mm, b, opts):
+        for o in opts:
+            o.zero_grad()
+        tF.mse_loss(mm(b[0]), b[1]).backward()
+        torch.nn.utils.clip_grad_norm_([p for p in mm.parameters() if p.requires_grad], 1.0)
+        for o in opts:
+            o.step()
+
+    m = Clipped(form)
+    g = capture_fn(step, m, (torch.randn(2, 16, 8), torch.randn(2, 16, 4 if form == "clip" else 16)),
+                   optimizers=torch.optim.SGD([p for p in m.parameters() if p.requires_grad], lr=0.1))
+    assert products.rows(g, policy.CONSOLE[1])["elementwise_products"] == found
