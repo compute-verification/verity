@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # The ZK server's negative controls through the Lean session loop: one honest firewalled CPU `prove --zk` session (FC_FIREWALL=1
 # FC_HOST_WITNESS=1), then one session per FC_FIREWALL_TAMPER control (the device dishonest in one named way, live
-# PROTOCOL.md §10.1), each against the same `serve --zk`. The honest session must be accepted, and every control must end in a
+# PROTOCOL.md §10.1), each against the same `serve --zk`. The honest session must be accepted with no rep stopped (no
+# `frames: ... stops the rep` line, no `prover_stopped`): each honest round passes the Lean frame's checks, the completeness
+# `Loop.HonestRoundsPass` names (Security/Proofs/Flock/SessionLoop/Fill.lean). Every control must end in a
 # visible refusal at its `Finish`, never before: the verifier's verdict (its `SESSION` line) does not accept, after as many
 # rounds as the honest session's, and the prover's record carries the control's own refusal (`EXPECT` below:
 # `prover_stopped`'s, the ZK server's, and the verdict's `why`, the Lean frame's stop where it stopped a rep). A `cut-MODE` control (a worker that fails) runs at its table's device rounds 2, half way and the last of
@@ -91,7 +93,8 @@ rounds = (rows[0].get("auditor") or {}).get("rounds") if rows else None
 for r in rows:
     a = r.get("auditor") or {}
     if r["control"] == "honest":
-        r["ok"] = r.get("accepted") is True and a.get("accepted") is True and bool(rounds)
+        r["ok"] = (r.get("accepted") is True and a.get("accepted") is True and bool(rounds)
+                   and not r.get("frame_stops") and not r.get("prover_stopped"))
     else:
         stopped, frame = EXPECT[r["control"].split("@")[0]]
         why, ps = r.get("why") or "", r.get("prover_stopped") or ""
