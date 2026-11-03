@@ -826,6 +826,25 @@ def test_a_pearlplus_piece_sets_the_unretained_serve_of_its_load_beside_its_shar
     assert line["verdict"] == "accept" and line["unretained"]["generate_s"] == 0.5
 
 
+def test_a_pearlplus_piece_sets_the_provers_replay_beside_its_shares(tmp_path, capsys):
+    """The prover's replay of every tile before the coin (``served_passes.py volunteer``'s seconds on its processes) is a
+    CPU term beside the GPU shares: the cores it takes to keep pace with the timed call's wall. One whose document has no
+    seconds says why, and neither decides the verdict."""
+    served, verified = _pearlplus_run()
+    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered={"s": 110.0, "jobs": 32, "ok": True})
+    assert doc["verdict"] == "accept" and doc["shares"]["replay"] == {"s": 110.0, "cpus": 32, "core_s": 3520.0, "of_wall": 55.0,
+                                                                      "cores_to_keep_pace": 1760.0}
+    assert S.development_line(doc)["replay"] == {"s": 110.0, "cpus": 32, "cores_to_keep_pace": 1760.0}
+    assert S.development_line(S.pearlplus(tmp_path / "plain", served, verified))["replay"] is None
+    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered={"jobs": 32})
+    assert doc["verdict"] == "accept" and "KeyError" in S.development_line(doc)["replay"]
+    for name, d in (("served.json", served), ("v.json", verified), ("vol.json", {"s": 110.0, "jobs": 32})):
+        (tmp_path / name).write_text(json.dumps(d))
+    assert S.main(["pearlplus", str(tmp_path / "cli"), "--served", str(tmp_path / "served.json"), "--verify",
+                   str(tmp_path / "v.json"), "--volunteer", str(tmp_path / "vol.json")]) == 0
+    assert json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))["replay"]["cores_to_keep_pace"] == 1760.0
+
+
 @pytest.mark.parametrize("served, verified, reason", [
     (True, False, "Pearl+'s verdict rejects the run: pass 1 tile 7: B opening"),
     (True, None, "no verdict: served_passes.py verify wrote no document"),

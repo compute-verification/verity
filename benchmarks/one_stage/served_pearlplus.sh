@@ -100,6 +100,7 @@ fi
 
 UN=()
 [ -s "$Q/served-unretained.json" ] && UN=(--unretained "$Q/served-unretained.json")
+[ -s "$Q/volunteer.json" ] && UN+=(--volunteer "$Q/volunteer.json")
 "$TPY" benchmarks/one_stage/served_verdicts.py pearlplus "$P" --served "$Q/served.json" --verify "$P/verify.json" \
   ${UN[@]+"${UN[@]}"} > "$Q/pearlplus.log" 2>&1
 rc=$?

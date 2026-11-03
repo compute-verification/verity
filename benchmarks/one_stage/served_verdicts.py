@@ -517,12 +517,13 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
 def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
     """A development piece's line (`pouw`'s document): its verdict, why it rejects, the window's session and how each
     check came out, core's credit refusal, and that it credits nothing. `pearlplus`'s: its verdict, why it rejects, its
-    passes, Pearl+'s verdict's credit (its credited and credited cells' MACs and ε), its shares at the tensor clock, and the
-    unretained serve's wall and declared share there (None without one, or why it has none)."""
+    passes, Pearl+'s verdict's credit (its credited and credited cells' MACs and ε), its shares at the tensor clock, the
+    unretained serve's wall and declared share there, and the prover's replay's seconds, cores and the cores it takes to keep
+    pace (each None without one, or why it has none)."""
     if doc.get("piece") == "pearlplus":
         shares = doc.get("shares") or {}
         at = (shares.get("readings") or {}).get("tensor") or {}
-        un = shares.get("unretained")
+        un, rp = shares.get("unretained"), shares.get("replay")
         credit = doc.get("credit")
         return {"verdict": doc.get("verdict"), "development": True, "credited": False, "reasons": doc.get("reasons"),
                 **{k: doc.get(k) for k in ("scheme", "passes", "served_tokens", "generate_s")},
@@ -530,7 +531,8 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
                 "shares_at_tensor_clock": {k: at.get(k) for k in ("declared_linears", "credited")},
                 "unretained": None if un is None else un.get("error") or {
                     "generate_s": un.get("wall_s"),
-                    "declared_linears_at_tensor_clock": ((un.get("readings") or {}).get("tensor") or {}).get("declared_linears")}}
+                    "declared_linears_at_tensor_clock": ((un.get("readings") or {}).get("tensor") or {}).get("declared_linears")},
+                "replay": None if rp is None else rp.get("error") or {k: rp.get(k) for k in ("s", "cpus", "cores_to_keep_pace")}}
     check, credit = doc.get("check") or {}, doc.get("credit") or {}
     return {"verdict": doc.get("verdict"), "development": True, "credited": False, "reasons": doc.get("reasons"),
             "coin_source": doc.get("coin_source"), "session": (doc.get("session") or {}).get("session"),
@@ -813,7 +815,7 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
 
 
 def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str, Any] | None,
-              unretained: Mapping[str, Any] | None = None) -> dict[str, Any]:
+              unretained: Mapping[str, Any] | None = None, volunteered: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """PoUW's development piece under POUW=pearlplus (``served_pearlplus.sh``), its document written to
     ``out/development.json``: Pearl+'s own served run (``served``, `served_passes.py serve`'s document) and Pearl+'s
     verdict over every pass it retained (``verified``, its ``verify``'s; None where either wrote none). Its verdict is
@@ -821,7 +823,9 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     carries that verdict's line and credit at Pearl's Assumption 1 (``credit``, the answer's ``public.work``), its shares
     are `served_shares.pearlplus_shares`'s, and it credits nothing (`PEARLPLUS_WHY`). ``unretained``, the same load served
     with no pass retained (``serve --no-retain``), adds the shares' ``unretained`` (`served_shares.pearlplus_unretained`),
-    or why there are none; it is a measurement and never decides the verdict."""
+    or why there are none; it is a measurement and never decides the verdict. ``volunteered``, the prover's replay of every
+    tile before the coin (``served_passes.py volunteer``'s document), adds the shares' ``replay`` (`served_shares.replay_term`:
+    its seconds on its processes, as the cores it takes to keep pace with the timed call's wall), a measurement too."""
     import served_shares as SS
 
     out.mkdir(parents=True, exist_ok=True)
@@ -854,6 +858,11 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
                 doc["shares"]["unretained"] = SS.pearlplus_unretained(doc["shares"], dict(served), dict(unretained))
             except (KeyError, TypeError, ValueError) as e:
                 doc["shares"]["unretained"] = {"error": f"{type(e).__name__}: {e}"[:600]}
+        if doc["shares"] is not None and volunteered is not None:
+            try:
+                doc["shares"]["replay"] = SS.replay_term(volunteered["s"], volunteered["jobs"], doc["shares"]["wall_s"])
+            except (KeyError, TypeError, ValueError) as e:
+                doc["shares"]["replay"] = {"error": f"{type(e).__name__}: {e}"[:600]}
     doc.update(verdict="reject" if reasons else "accept", reasons=reasons)
     (out / DEVELOPMENT).write_text(json.dumps(doc, indent=1, sort_keys=True, default=str) + "\n")
     return doc
@@ -1135,6 +1144,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     pp.add_argument("--served", type=Path, help="served_passes.py serve's document")
     pp.add_argument("--verify", type=Path, help="served_passes.py verify's document")
     pp.add_argument("--unretained", type=Path, help="served_passes.py serve --no-retain's document of the same load")
+    pp.add_argument("--volunteer", type=Path, help="served_passes.py volunteer's document of the run")
     rg = sub.add_parser("public-registration")
     rg.add_argument("registration", type=Path)
     pl = sub.add_parser("public-lines")
@@ -1254,7 +1264,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "pearlplus":
         doc = pearlplus(a.out, _json(a.served) if a.served else None, _json(a.verify) if a.verify else None,
-                        _json(a.unretained) if a.unretained else None)
+                        _json(a.unretained) if a.unretained else None, _json(a.volunteer) if a.volunteer else None)
         print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
         return 0
     if a.cmd == "pieces":
