@@ -271,10 +271,13 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
 strings = []
 
 [keep_in]
-# the firewall's Lake and uv package stays where it is (its modules follow `Firewall`); PoUB's remote audit, whose
-# `draws` (the coins' draws) and `samples` (a window's sample cap), and `draw` (the pooled-draw term) and `sample`, are
-# two things each, so its `draw` and `draws` wait for a name of its owner's; a vector file Rust includes by name; the
-# vLLM pouw-serve options whose field is its flag's attribute; a versioned schema's file
+# the firewall's Lake and uv package stays where it is (its modules follow `Firewall`), and so does the module
+# `verity_flock.firewall`; the placement gate's role `firewall`; the games' coin `draw`; a name beside the name it would
+# become in one scope (`WorkProfile`'s `drawn` and `sampled`, `network_verdict`'s parameter `drawn` and its local
+# `sampled`, with the keyword its test passes); PoUB's remote audit, whose `draws` (the coins' draws) and `samples` (a
+# window's sample cap), and `draw` (the pooled-draw term) and `sample`, are two things each, so its `draw` and `draws`
+# and their modules wait for a name of its owner's; a vector file Rust includes by name; the vLLM pouw-serve options
+# whose field is its flag's attribute; a versioned schema's file
 "verity/core/service/firewall/**" = ["firewall"]
 "verity/ml/flock/python/verity_flock/firewall.py" = ["firewall"]
 "benchmarks/numerical/python/verity_numerical/bench/placement.py" = ["firewall"]
@@ -282,6 +285,8 @@ strings = []
 "Security/Definitions/Core/Game.lean" = ["draw"]
 "Security/Definitions/Flock/Game.lean" = ["draw"]
 "benchmarks/pouw/clear/clear_audit.py" = ["drawn"]
+"verity/core/protocols/certifier/service.py" = ["drawn"]
+"verity/core/protocols/certifier/tests/test_network_certifier_period.py" = ["drawn"]
 "verity/core/protocols/remote_bandwidth/**" = ["draw", "draws", "Draw", "Draws"]
 "benchmarks/remote_session/**" = ["draw", "draws", "Draw", "Draws"]
 "Security/Properties/RemoteAudit*" = ["draw", "draws", "Draw", "Draws"]
