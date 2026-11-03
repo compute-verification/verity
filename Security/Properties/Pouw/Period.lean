@@ -157,10 +157,10 @@ noncomputable def prefixLen (ws : Executions Ω n) (p : Params) (x : Paths Ω n)
 end Executions
 
 open Classical in
-/-- **The accepted prefix's live words**: the words of each window's live tiles (`Period.liveAt`), over the windows
+/-- **The accepted prefix's live words**: the words of each window's live tiles (`WindowPlay.liveAt`), over the windows
 before the check's first refusal. `creditedLive` with the check's prefix for the run's. -/
 noncomputable def checkedLive {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (p : Params)
+    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (p : Params)
     (ws : Executions (Paths C Cd.rounds × B) n) (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if ws.AcceptedUpTo p x w then ∑ t : Fin Np, (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ) else 0
 
@@ -243,7 +243,7 @@ def CheckedWorkPeriod : Prop :=
     (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
-    (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n K T L U)
     (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → ℝ) (ρ p p0 a b wmax Λ δs δbind δks : ℝ),
     Scope Sc Cd δs →
@@ -278,7 +278,7 @@ def CheckedCreditPeriod : Prop :=
     (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
-    (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n K T L U)
     (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → ℝ) (ρ p p0 a b wmax Λ δs δbind δks : ℝ),
     Scope Sc Cd δs →
@@ -352,7 +352,7 @@ def H1CheckedCreditPeriod : Prop :=
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (salt : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → Fin n → ByteArray) (enc : C → ByteArray)
     (staged flat : ByteArray → Fin 144 → (ℕ → V) → Prop)
-    (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) (Fin 144) Cd.rounds n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) (Fin 144) Cd.rounds n)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n K T L U)
     (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ) (δs δbind δks : ℝ),
     Scope Sc Cd δs →

@@ -152,7 +152,7 @@ def skipStages (N : ℕ) : SplitStages Bool (Fin N) 1 :=
   .stage (fun _ _ => .whole) (fun _ _ => True) (fun _ _ => True) fun _ => .done
 
 /-- The skipping period of `n` windows: every tile live, each window's stages `skipStages`. -/
-def skipPeriod (Ω : Type) (N : ℕ) : (n : ℕ) → Period Bool Ω (Fin N) (circuit N).rounds n
+def skipPeriod (Ω : Type) (N : ℕ) : (n : ℕ) → WindowPlay Bool Ω (Fin N) (circuit N).rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) (skipStages N) fun _ => skipPeriod Ω N n
 

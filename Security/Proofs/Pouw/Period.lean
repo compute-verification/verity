@@ -54,7 +54,7 @@ theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) 
     (hKd : 0 < Kd) (p : Params) (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
-    (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (x : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n) :
     creditedLive Sc Cd Wp (checkedRun hK p ws opened rel right) x = checkedLive Sc Cd Wp p ws x := by
   classical

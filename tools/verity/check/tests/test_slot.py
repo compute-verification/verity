@@ -33,8 +33,9 @@ def any_core(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def roomy_disk(monkeypatch, tmp_path):
-    """The machine's own /workspace never blocks a slot in these tests."""
+    """The machine's own /workspace and check cache never block a slot in these tests."""
     monkeypatch.setattr(SLOT, "DISK", tmp_path / "no-disk")
+    monkeypatch.setattr(SLOT, "cache_disk", lambda: tmp_path / "no-disk")
 
 
 def test_a_disk_short_of_inodes_or_bytes_blocks_every_slot(monkeypatch, tmp_path):

@@ -66,7 +66,7 @@ from verity.ml.circuits.program import Program, input_id, is_input
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 
-from test_challenger_difftest import DRAW_MUTATIONS, Drawn, _mutated, lms_verify
+from test_challenger_difftest import DRAW_MUTATIONS, Drawn, _flip, _mutated, lms_verify
 
 PACKAGE = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -1912,24 +1912,66 @@ def _sha(b: bytes) -> str:
     return hashlib.sha512(b).hexdigest()
 
 
+#: `OneStageZk.NO_CHALLENGER`
+NO_CHALLENGER = ("the parameters name no challenger: the draw's coins are the auditor's challenger's signed release "
+                 "(challenger, with window_root), never the prover's record")
+
+
+def decode_params_v2(j) -> dict:
+    """`OneStageZk.paramsOfJson`'s refusals of v1's part of the parameters: v1's (`decode_params`), then parameters
+    naming no challenger (`NO_CHALLENGER`)."""
+    rest = {k: v for k, v in j.items() if k != "proofs"}
+    p = decode_params(rest)
+    if "challenger" not in rest:
+        raise D.Reject(NO_CHALLENGER)
+    return p
+
+
+def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict) -> tuple[Drawn, dict, dict]:
+    """A draw under `law` from the coins of a challenger session its ledger opens withheld, released after `rec`'s
+    digest and read as `draw_first` reads them: the session, the draw, and the evidence's `coins` (the session's
+    record without the key, which the verifier's parameters name)."""
+    mine = DR.derive(s.program, s.query, law, None)
+
+    def reads(coins) -> bytes:
+        got = bytearray()
+
+        def source(k: int) -> bytes:
+            b = coins(k)
+            got.extend(b)
+            return b
+        draw_first(OwnRandomness(source), mine, s.population)
+        return bytes(got)
+    d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads)
+    at = [0]
+
+    def source(k: int) -> bytes:
+        at[0] += k
+        return d.read[at[0] - k:at[0]]
+    coins = {k: v for k, v in d.evidence(d.segment.to_json()).items() if k != "key"}
+    return d, draw_first(OwnRandomness(source), mine, s.population), coins
+
+
 def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     """v2 (`SampledProofs.OneStageZk`, `one_stage.proofs.check_v2`) is v1 with the verdicts its own run of the verifier
-    on the proofs. An audit v1 accepts on the verdict its evidence hands in is, in v2: refused for naming verdicts;
-    rejected with them replaced by proofs naming no session (no session proved the units the evidence claims), and by
-    the session's own verdict when its files are not a statement's; refused when a file it names is in no blob, or its
-    sessions are not the evidence's. `test_proofs.py` holds the verdicts to `verify`'s on a real session."""
+    on the proofs. An audit v1 accepts on the verdict its evidence hands in and its challenger's coins is, in v2: refused
+    for naming verdicts; rejected with them replaced by proofs naming no session (no session proved the units the
+    evidence claims), and by the session's own verdict when its files are not a statement's; refused when a file it
+    names is in no blob, or its sessions are not the evidence's. `test_proofs.py` holds the verdicts to `verify`'s on a
+    real session."""
     s = SETUPS[3]
     law = {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
-    d = {**DR.derive(s.program, s.query, law, None), "population": s.population, "units": [0, 3]}
+    ch, d, coins = _challenger_draw(random.Random("v2-verdicts"), s, law, rec)
     proved = DR.proved(d)
-    evidence = {"draw": d, "instances": len(proved), "proved_units": proved,
+    evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
                 "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
                 "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
-    params = {"anchors": [], "delta": "1/20", "law": law, "leaf_layer": LEAF, "log": [],
-              "partition": P.partition(s.program, s.query), "ports": s.ports, "program": s.desc, "query": s.query,
-              "registered": None, "scheme": SCHEME, "work_table": None}
+    params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20", "law": law,
+              "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query), "ports": s.ports,
+              "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+              "window_root": ch.ledger.window["root"], "work_table": None}
     v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
     assert D.replay(ONE_STAGE, v1, server)[0] == "accept"
     circuit, public, record = b"not a circuit file", b"not a public file", b"{}"
@@ -1959,6 +2001,98 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         "reject", "evidence: proofs: the sessions are not the evidence's sessions, in order")
     got = run(base | {"proofs": proofs([])}, p={k: v for k, v in p2.items() if k != "proofs"})
     assert got[0] == "reject" and got[1].startswith("params: the parameters name no proofs"), got
+
+
+def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
+    """v2 reads its draw's coins as v1 does (`OneStageZk.coinsOf`, v1's `coinsOf`), and only from the auditor's
+    challenger: parameters naming none, or one without a window, are refused (`NO_CHALLENGER`), and evidence whose coins
+    are not the challenger's signed release is rejected: none, the record carrying its own key, coins under another key,
+    on another window, of another family or released after another digest, a session record or close whose signature
+    was forged, each mutation of the segment, or a session the ledger doesn't open withheld. On the challenger's coins
+    it goes on to its own verdicts, and a draw other than theirs is rejected after them (`checkBlobsAt`, v1's
+    `checkAt`). Each step Lean rejects at is the Python reference's: `decode_params_v2`, `_coins_of`, then v1's `check`
+    with the session's verdict the reject its blobs give."""
+    s, law = SETUPS[3], {"k": 3, "law": "stratified"}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    after = bytes.fromhex(R.digest(rec))
+    circuit, public, record = b"not a circuit file", b"not a public file", b"{}"
+    proofs = {"public": _sha(public), "sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
+    failed = {"flock-verify/s": {"accepted": False, "of_record": True}}
+
+    def audit_of(d: Drawn, draw: dict, coins, **params) -> dict:
+        proved = DR.proved(draw)
+        evidence = {"draw": draw, "instances": len(proved), "proved_units": proved, "proofs": proofs,
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                    "sessions": ["s"], "statement": {}}
+        if coins is not None:
+            evidence["coins"] = coins
+        p = {"anchors": [], "challenger": {"key": d.s.key.to_json(), "label": "draw"}, "delta": "1/20", "law": law,
+             "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query), "ports": s.ports,
+             "program": s.desc, "proofs": {"circuit": _sha(circuit), "registered": None}, "query": s.query,
+             "registered": None, "scheme": SCHEME, "window_root": d.ledger.window["root"], "work_table": None}
+        return {"evidence": evidence, "params": {k: v for k, v in (p | params).items() if k not in params or v is not None}}
+
+    def python(a: dict) -> str:
+        try:
+            p = decode_params_v2(a["params"])
+        except D.Reject:
+            return "params"
+        e = {k: v for k, v in a["evidence"].items() if k != "proofs"} | {"verdicts": failed}
+        try:
+            _coins_of(p, (rec, after), e)
+        except CoinError:
+            return "coins"
+        step = check(p, (rec, after), e)[1]
+        return "draw" if step == "coins" else step
+
+    def lean(a: dict) -> str:
+        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
+                "evidence": _hex(a["evidence"]), "params": a["params"]}
+        out = server_v2.exchange(_json(case))
+        assert out["verdict"] == "reject", out
+        step = next(step for prefix, step in (("params: ", "params"), ("coins: ", "coins"), ("draw: coins: ", "draw"),
+                                              ("verdict flock-verify/s ", "verdict"), ("", out["reason"]))
+                    if out["reason"].startswith(prefix))
+        if step == "params" and "challenger" not in a["params"]:
+            assert out["reason"] == f"params: {NO_CHALLENGER}", out
+        return step
+
+    def signed(coins: dict, part: str) -> dict:
+        f = coins["session"][part]
+        return {**coins, "session": {**coins["session"], part: {**f, "signature": _flip(f["signature"], 9)}}}
+
+    for seed in range(3):
+        rng = random.Random(f"one-stage-v2-coins/{seed}")
+        d, draw, coins = _challenger_draw(rng, s, law, rec)
+        honest = audit_of(d, draw, coins)
+        assert (python(honest), lean(honest)) == ("verdict", "verdict")
+        other = next(x for x in (_challenger_draw(rng, s, law, rec)[1] for _ in range(64)) if x["units"] != draw["units"])
+        stranger = next(x for x in (_challenger_draw(rng, s, law, rec)[0] for _ in range(16)) if x.s.key != d.s.key)
+        elsewhere = Drawn(rng, reads=lambda c: c(COIN_BYTES))
+        bare = Drawn(rng, before=True, after=after, reads=lambda c: c(COIN_BYTES), withheld=False)
+        cases = {
+            "no challenger": ("params", audit_of(d, draw, coins, challenger=None)),
+            "no challenger, no coins": ("params", audit_of(d, draw, None, challenger=None)),
+            "no window": ("params", audit_of(d, draw, coins, window_root=None)),
+            "other draw": ("draw", audit_of(d, other, coins)),
+            "no coins": ("coins", audit_of(d, draw, None)),
+            "the record's own key": ("coins", audit_of(d, draw, d.evidence(d.segment.to_json()))),
+            "another key": ("coins", audit_of(d, draw, coins, challenger={"key": stranger.s.key.to_json(),
+                                                                             "label": "draw"})),
+            "another window": ("coins", audit_of(d, draw, coins, window_root=d.other_window(rng))),
+            "another family": ("coins", audit_of(d, draw, coins, challenger={"key": d.s.key.to_json(),
+                                                                                "label": "other"})),
+            "forged record": ("coins", audit_of(d, draw, signed(coins, "record"))),
+            "forged close": ("coins", audit_of(d, draw, signed(coins, "close"))),
+            "released after another digest": ("coins", audit_of(
+                elsewhere, draw, {k: v for k, v in elsewhere.evidence(elsewhere.segment.to_json()).items() if k != "key"})),
+            "not withheld": ("coins", audit_of(
+                bare, draw, {k: v for k, v in bare.evidence(bare.segment.to_json()).items() if k != "key"})),
+        } | {name: ("coins", audit_of(d, draw, {**coins, "segment": _mutated(rng, d, name)[0]}))
+             for name in DRAW_MUTATIONS if name not in ("unread", "read-tampered", "other-after")}
+        for name, (want, a) in cases.items():
+            assert (python(a), lean(a)) == (want, want), (seed, name)
 
 
 def committed_bits(j):

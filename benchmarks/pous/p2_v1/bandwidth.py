@@ -6,7 +6,8 @@
     bandwidth.py session --store ENC --layout F --lib DIR --node NODE --out DIR
                  (--verifier CMD | --connect HOST:PORT | --party CMD --party-host HOST)
                  [--windows 2] [--passes 2] [--samples 1024] [--window-s 1] [--deadline-s 1]
-                 [--skip-layer L] [--expect accept|reject] [--device cuda] [--ref-decode]
+                 [--skip-layer L | --cache] [--expect accept|reject] [--device cuda] [--ref-decode]
+                 [--case-dir DIR [--case-exe EXE]]
 
 **The plan.** A pass reads the units of the registration's plan (`p2_party.plan_of`), which the verifier holds and sends
 with it: `tensor_plan`, the units holding a tensor's block, so not the store's padding past the last tensor (it is
@@ -31,8 +32,17 @@ whose stdout says the port, reached at `--party-host`, and then the verifier's o
 the one the session ended with), sends the request and answers each pass,
 each window's openings (each unit's four blocks from the segment files with their PoUS vk paths, `VkPaths`, from the
 store's row digests) and returns the verifier's answer, written to `OUT/session.json` with each step's timings, and
-the line `BW VERDICT ...`. `--skip-layer L` is the cheat: it neither reads nor decodes layer L's tensors, and the
-receipts of the units they hold are from what was read, so a draw that lands there is rejected (`receipt`).
+the line `BW VERDICT ...`. `--skip-layer L` is a cheat: it neither reads nor decodes layer L's tensors, and the
+receipts of the units they hold are from what was read, so a draw that lands there is rejected (`receipt`). `--cache`
+is another: every pass after the session's first reads nothing of the store and replays the first pass's σ from its
+cache under the pass's seed, so a draw of a later pass is rejected (`receipt`).
+
+**The case.** The verifier sends the session's core case before its answer (`p2_party`'s `{"case": ...}`, `p2_case`):
+`--case-dir DIR` writes it with its answer, `case.json` and `answer.json`, into DIR (0700, each file 0600), the
+answer `RemoteAudit.P2Protocol`'s with `--case-exe` (`remote-audit-p2-protocol`), else `p2_case.answer`'s. The case
+holds the store's opened blocks and the verifier's coins, so DIR is private and never under OUT: `session.json` says
+only where it went, its commitment's digest, its store and its verdict. A session the verifier refused, or one that
+ended in the prover's error, writes none.
 
 `--ref-decode` swaps the library for P2's reference decode on the CPU (`RefDecode`), for the toy.
 """
@@ -67,7 +77,7 @@ sys.path.insert(0, str(STAGE))
 from verity.core.protocols.pous import verifier as V
 from verity.core.protocols.pous.labels import salt_value, tag
 from verity.core.protocols.pous.schemes.p2 import P2Params
-from verity.core.protocols.remote_bandwidth import coins, p2, p2_party, receipts
+from verity.core.protocols.remote_bandwidth import coins, p2, p2_case, p2_party, receipts
 from verity.ml.commitments.merkle import merkle_depth
 
 BLOCK, UNIT = p2.BLOCK_BYTES, p2.UNIT_BLOCKS
@@ -530,13 +540,18 @@ class Prover:
     """The prover's side of `p2_party.prove` over an encoded store served by `Engine`."""
 
     def __init__(self, engine: Engine, vk: VkPaths, pool: ProcessPoolExecutor | None, log=print,
-                 spot: int = 16) -> None:
+                 spot: int = 16, cache: bool = False) -> None:
         self.engine, self.vk, self.pool, self.log, self.spot = engine, vk, pool, log, spot
         self.registration = engine.registration
+        self.cache, self.cached = cache, None
         self.passes: dict[tuple[int, int], tuple[np.ndarray, bytes, ReceiptTree]] = {}
         self.steps: list[dict] = []
         self.opened: list[dict] = []
         self.received: dict[int, coins.Released] = {}
+        self.kept: dict | None = None
+
+    def case(self, doc: dict) -> None:
+        self.kept = doc
 
     def hold(self, registration: dict) -> None:
         if p2_party.registration_of(registration) != self.registration:
@@ -548,9 +563,9 @@ class Prover:
         if why is not None:
             raise ValueError(f"the session's coins are not the ones this prover was sent: {why}")
 
-    def _spot(self, seed: bytes, sigma: Any, ys: np.ndarray) -> int:
-        """A few positions' σ held to `p2.Sketcher` on their unit's bytes from the store and their y to hashlib: the
-        plan's first, its last and `spot` drawn from the seed."""
+    def _spot(self, seed: bytes, sigma: Any, ys: np.ndarray, cheat: bool) -> int:
+        """A few positions' σ held to `p2.Sketcher` on their unit's bytes from the store (not on a pass that `cheat`s)
+        and their y to hashlib: the plan's first, its last and `spot` drawn from the seed."""
         plan, rows = self.engine.plan, self.registration.rows
         rng = np.random.default_rng(int.from_bytes(seed[:8], "big"))
         positions = sorted({0, plan.length - 1, *rng.integers(0, plan.length, self.spot).tolist()})
@@ -559,7 +574,7 @@ class Prover:
         for p in positions:
             g = plan.block(p)
             got = bytes(sigma[g].cpu().numpy().astype("<i4").tobytes())
-            if self.engine.skip_layer is None and got != sk.sketch(self.engine.unit_bytes(g)):
+            if not cheat and got != sk.sketch(self.engine.unit_bytes(g)):
                 bad += 1
             if bytes(ys[p]) != sk.receipt(g, got):
                 bad += 1
@@ -573,13 +588,19 @@ class Prover:
         seed = receipts.seed(coins.coin(challenge), i, previous)
         plan = self.engine.plan
         t0 = time.perf_counter()
-        sigma, times = self.engine.step(seed)
+        cached = self.cached is not None
+        if cached:
+            sigma, times = self.cached, {"cached": True, "step_s": 0.0}
+        else:
+            sigma, times = self.engine.step(seed)
+            if self.cache:
+                self.cached = sigma
         a = time.perf_counter()
         parts = [receipts_of(self.engine.torch, seed, sigma[f:f + c], first=f) for f, c in plan.runs]
         ys = parts[0] if len(parts) == 1 else np.concatenate(parts)
         del parts
         b = time.perf_counter()
-        spotted = self._spot(seed, sigma, ys)
+        spotted = self._spot(seed, sigma, ys, cheat=cached or self.engine.skip_layer is not None)
         del sigma
         c = time.perf_counter()
         salts = os.urandom(SALT * receipts.leaves(plan.length))
@@ -681,10 +702,21 @@ def verdict_line(answer: dict, expect: str | None, record: dict | None = None) -
 def _party(a: argparse.Namespace, out: Path, prover: Prover, request: dict) -> tuple[dict, dict | None, int]:
     """A session with a party the auditor's gate starts (`--party CMD`, `p2_party --listen` on the gate's host): its
     `{"listening": port}` read from CMD's stdout, the session over TCP to `--party-host` at that port, and then its own
-    record of the answer from the rest of CMD's stdout."""
+    record of the answer from the rest of CMD's stdout. The gate kills a party once its session's minutes run out
+    (`bw_party --minutes M`) and says so on that stdout, `{"killed": why}`: a session cut off so fails naming it."""
     with open(out / "verifier.err", "ab") as err:
         proc = subprocess.Popen(a.party, shell=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=err)
-        record = None
+        record = killed = None
+
+        def rest() -> None:
+            nonlocal record, killed
+            for line in proc.stdout:
+                doc = json.loads(line)
+                if isinstance(doc, dict) and "answer" in doc:
+                    record = doc["answer"]
+                elif isinstance(doc, dict) and "killed" in doc:
+                    killed = doc["killed"]
+
         try:
             port = None
             for line in proc.stdout:
@@ -694,13 +726,16 @@ def _party(a: argparse.Namespace, out: Path, prover: Prover, request: dict) -> t
                     break
             if port is None:
                 raise ConnectionError("the party ended without listening")
-            with (socket.create_connection((a.party_host, port)) as conn, conn.makefile("rb") as r,
-                  conn.makefile("wb") as w):
-                answer = p2_party.prove(r, w, prover, request)
-            for line in proc.stdout:
-                doc = json.loads(line)
-                if isinstance(doc, dict) and "answer" in doc:
-                    record = doc["answer"]
+            try:
+                with (socket.create_connection((a.party_host, port)) as conn, conn.makefile("rb") as r,
+                      conn.makefile("wb") as w):
+                    answer = p2_party.prove(r, w, prover, request)
+            except (OSError, ValueError) as e:
+                rest()
+                if killed is not None:
+                    raise ConnectionError(f"the auditor's gate killed the party: {killed}") from e
+                raise
+            rest()
         finally:
             rc = proc.wait()
     return answer, record, rc
@@ -726,13 +761,13 @@ def session(a: argparse.Namespace) -> int:
         vk = VkPaths(a.store, reg.params, reg.salt, reg.root, pool)
         engine = Engine(a.store, a.layout, a.lib, reg, device=a.device, chunk=a.chunk, readers=a.readers,
                         skip_layer=a.skip_layer, ref_decode=a.ref_decode)
-        prover = Prover(engine, vk, pool, log)
+        prover = Prover(engine, vk, pool, log, cache=a.cache)
         setup_s = time.perf_counter() - t0
         request = p2_party.request_of(node, windows=a.windows, passes=a.passes, samples=a.samples,
                                       window_ns=int(a.window_s * 1e9), deadline_ns=int(a.deadline_s * 1e9))
         log(json.dumps({"start": {"node": a.node, "units": reg.blocks, "registration": reg.digest.hex(),
                                   "request": request, "setup_s": round(setup_s, 3), "host": socket.gethostname(),
-                                  "skip_layer": a.skip_layer}}))
+                                  "skip_layer": a.skip_layer, "cache": a.cache}}))
         rc = record = None
         t1 = time.perf_counter()
         try:
@@ -756,6 +791,14 @@ def session(a: argparse.Namespace) -> int:
             log(json.dumps({"prover_error": traceback.format_exc()}))
             answer = {"verdict": "prover-error", "reason": f"{type(e).__name__}: {e}"}
         wall = time.perf_counter() - t1
+        case = None
+        if a.case_dir is not None and prover.kept is not None and answer.get("verdict") in ("accept", "reject",
+                                                                                           "undecided"):
+            judged = p2_case.judged(prover.kept, answer, a.case_exe)
+            p2_case.write(a.case_dir, prover.kept, judged)
+            case = {"dir": str(a.case_dir), "commitment": judged["commitment"], "store_root": prover.kept["store_root"],
+                    "verdict": judged["verdict"], "judge": "lean" if a.case_exe else "python"}
+            log(json.dumps({"case": case}))
     if pool is not None:
         pool.shutdown()
     if a.party is not None and record is None and answer.get("verdict") != "prover-error":
@@ -766,7 +809,8 @@ def session(a: argparse.Namespace) -> int:
            "steps": prover.steps,
            "opened": prover.opened, "setup_s": round(setup_s, 3), "session_wall_s": round(wall, 3),
            "verifier_rc": rc, "verifier": verifier, "verifier_record": record, "prover_host": socket.gethostname(),
-           "skip_layer": a.skip_layer, "store": str(a.store), "device": a.device, "verdict_line": line}
+           "skip_layer": a.skip_layer, "cache": a.cache, "store": str(a.store), "device": a.device, "verdict_line": line,
+           "case": case}
     (out / "session.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     print(line, flush=True)
     return 0 if line.endswith("PASS") else 1
@@ -799,14 +843,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--samples", type=int, default=1024)
     s.add_argument("--window-s", type=float, default=1.0)
     s.add_argument("--deadline-s", type=float, default=1.0)
-    s.add_argument("--skip-layer", type=int)
+    cheat = s.add_mutually_exclusive_group()
+    cheat.add_argument("--skip-layer", type=int, help="the cheat that neither reads nor decodes layer L's tensors")
+    cheat.add_argument("--cache", action="store_true", help="the cheat that replays the first pass's σ every later pass")
     s.add_argument("--expect", choices=("accept", "reject"))
     s.add_argument("--device", default="cuda")
     s.add_argument("--ref-decode", action="store_true")
     s.add_argument("--chunk", type=int, default=1 << 16)
     s.add_argument("--readers", type=int, default=6)
     s.add_argument("--workers", type=int, default=max(1, min(12, (os.cpu_count() or 2) - 2)))
+    s.add_argument("--case-dir", type=Path, help="the private directory the session's core case and its answer go to")
+    s.add_argument("--case-exe", help="remote-audit-p2-protocol, which answers the case (else p2_case.answer)")
     a = ap.parse_args(argv)
+    if a.command == "session" and a.case_dir is not None and a.case_dir.resolve().is_relative_to(a.out.resolve()):
+        raise SystemExit("--case-dir is private: it can't be under --out")
     if a.command == "toy":
         reg = toy(a.out)
         print(json.dumps({"registration": reg.digest.hex(), "units": reg.blocks, "out": str(a.out)}))

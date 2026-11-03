@@ -44,10 +44,13 @@ TICK=/root/drive-tick.lock
 # A train's checkout (~430 MB) is on the container disk ($TRAIN_TREES): on the volume, uv and Python's imports from it left
 # check.py in NFS waits for minutes, and launches registered no run. `prune_trees` removes one an hour after its last
 # change once no process runs in it, so a few an hour stay a few GB.
+# RESEARCH_EXECUTOR_ENQUEUE is the task executor's enqueue command (infra/executor, on this pod), which `research executor
+# enqueue` runs with drive's --graph, --priority and --check (research imports nothing from infra/).
 HELPER='!/data/infra/gh_app_token.sh git'
 export PATH=$DIR/ghw:$DIR/bin:/root/.local/bin:$PATH GH_CONFIG_DIR=$DIR/gh-config GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 \
   RESEARCH_LANE=ci RESEARCH_NOTES=/data/steward/research-notes RESEARCH_STORE=/root/drive-store TMPDIR=$DIR/tmp \
-  TRAIN_TREES=$FAST/trains
+  TRAIN_TREES=$FAST/trains \
+  RESEARCH_EXECUTOR_ENQUEUE="python3.12 /root/executor/infra/executor.py --db /root/executor/queue.db enqueue"
 mkdir -p "$TMPDIR" "$DIR/ghw" "$TRAIN_TREES"
 printf '#!/bin/sh\nGH_TOKEN=$(/data/infra/gh_app_token.sh --cached) || exit 1\nexport GH_TOKEN\nexec %s/bin/gh "$@"\n' "$DIR" \
   > "$DIR/ghw/gh.new" && chmod 755 "$DIR/ghw/gh.new" && mv "$DIR/ghw/gh.new" "$DIR/ghw/gh"
@@ -106,7 +109,9 @@ locked() {
   checkout "$1" || exit 1
   cd "$REPO" && RESEARCH_DRIVE=1 PYTHONPATH=$REPO/tools/research/src exec python3.12 -m research "$@"
 }
-tick() { locked queue drive --config tools/verity/check/drive.toml $(grep -v '^#' $DIR/args 2>/dev/null) "$@"; }
+# Each preflight merges a PR onto `next` in a worktree under --preflight-root and `uv sync`s it there: on the container disk,
+# beside uv's cache, which it hardlinks from, that takes ~13 s; under TMPDIR on the volume it outran the 120 s budget.
+tick() { locked queue drive --config tools/verity/check/drive.toml --preflight-root "$FAST/preflight" $(grep -v '^#' $DIR/args 2>/dev/null) "$@"; }
 case ${1:-} in
   start) (exec 8> "$TICK"; flock 8; fast_clones) \
           || { echo "drive: not started: seeding $REPO and the queue's clone from $DIR on the volume failed" >&2; exit 1; }

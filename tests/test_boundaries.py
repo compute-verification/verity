@@ -48,6 +48,8 @@ ALLOWED = {
     "ml.circuits": set(),
     "ml.randomness": set(),
     "ml.crypto": set(),
+    # the card files, one TOML a SKU, and their loader: the one source of each card's numbers
+    "hardware": set(),
     "ml.commitments": {"ml.circuits", "ml.crypto"},
     # the catalog and the kernels, distributions of their own before the platform layout
     "ml.circuits.silicon": {"ml.circuits"},
@@ -62,8 +64,6 @@ ALLOWED = {
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
     "core.claims": set(),
-    # the card files, one TOML a SKU, and their loader: the one source of each card's numbers
-    "hardware": set(),
     # An auditor party's signed period roots and liveness records,
     # stdlib only (its frame-v3-sha512 tree held to `ml.commitments.merkle` by its test), the signer injected.
     "core.attest": set(),
@@ -139,7 +139,9 @@ ML_IMPORTS_CORE = {
                                              "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "
                                              "use only verity.ml; the follow-up to T2 moves them into ml "
                                              "(`verity/ml/circuits/population.py`, `verity/ml/commitments/registered.py`), "
-                                             "core imports them from there, and this entry goes",
+                                             "core imports them from there, and this entry then covers only rec_live's coin "
+                                             "server, which takes the inner session's coin tree from the challenger's device "
+                                             "through sampled proofs' `remote.RemoteChallenger` (`--tree-from`)",
     "ml/flock/pod/rec_inner.py": "stages the inner statement over sampled proofs' `one_stage.partition`, as V*'s builders "
                                   "do (the rec_* entry), and moves with them in the follow-up to T2",
     "ml/flock/pod/rec_reprice.py": "builds the inner statement's population program and partition with sampled proofs' "
@@ -724,7 +726,7 @@ def test_a_benchmarks_import_is_found() -> None:
     found; a path into another directory, a mere mention of ``benchmarks/``, and ``benchmarks/``'s own files are not."""
     texts = {
         "x/names.py": ("import verity_bench.vllm\nfrom benchmarks.tc_probe import tool\nimport importlib\n"
-                       "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.pouw.tool:POUW_VLLM'\n"),
+                       "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.commitments.tool:COMMIT_COST'\n"),
         "x/syspath.py": ("import sys\nfrom pathlib import Path\nPPL = Path(__file__).parents[2] / 'benchmarks' / 'ppl'\n"
                          "sys.path.insert(0, str(PPL))\nsys.path[:0] = ['../../benchmarks/rho']\n"),
         "x/config.py": "from pathlib import Path\nSESSION = Path('/r') / 'benchmarks' / 'remote_session'\n",
@@ -738,7 +740,7 @@ def test_a_benchmarks_import_is_found() -> None:
     }
     found = _benchmarks_importers(texts, {"benchmarks", "verity_bench", "datacenter"})
     assert found == {
-        "x/names.py": ["1: verity_bench.vllm", "2: benchmarks.tc_probe", "4: datacenter.graph", "5: benchmarks.pouw.tool"],
+        "x/names.py": ["1: verity_bench.vllm", "2: benchmarks.tc_probe", "4: datacenter.graph", "5: benchmarks.commitments.tool"],
         "x/syspath.py": ["4: sys.path.insert(0, str(PPL))", "5: sys.path[:0] = ['../../benchmarks/rho']"],
         "x/loader.py": ["6: importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')"],
         "x/caller.py": ["2: loader.load('paged', config.SESSION.parent / 'vllm_encoded')"],
