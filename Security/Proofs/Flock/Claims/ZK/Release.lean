@@ -29,6 +29,10 @@ at the draws on the server's tape (`LeanRelease.draws`):
   server's own `Hello` at the tape's nonce, then `Hello`'s answer, then each opening at the transport's request
   (`LeanRelease.req`), as `coin_tree::Checked` asks it. Where it refuses, the release is the stop
   (`LeanRelease.answered`, `refusesCoins_of_not_opens`);
+* a coin stop is for good, as the session loop answers every request after a refusal with it
+  (`Session.State.refuse`): the coins after a round reach the frame only where the frame took every earlier round's
+  (`LeanRelease.tookEarlier`), so once the release refuses the coins it refuses them at every later round
+  (`LeanRelease.refusesCoins_of_take`);
 * a value carries whether it is the firewall's stand-in (`Val := Msg × Bool`), and the frame of a stopped rep releases the
   algebraic phase's values as their pads alone (`Masker.stopped`). The firewall's scheduled round is a stand-in. The
   worker's values are not, and the check refuses a worker value that says it is;
@@ -261,10 +265,10 @@ def coinHello (hb : Msg) : Except String _root_.Flock.Firewall.Coins.Hello :=
   | none => .error "a Hello that is not UTF-8"
 
 /-- **The coin check's verdict** on a session: its reading of the `Hello`, `hl`, then `Hello`'s answer `a`
-(`Session.start`), then the openings `os` in order (`Session.openAll`). -/
+(`Release.start`), then the openings `os` in order (`Release.openAll`). -/
 def coinVerdict (hl : Except String _root_.Flock.Firewall.Coins.Hello) (a : Msg) (os : List (String × ℕ × Msg)) :
-    Except String _root_.Flock.Firewall.Coins.Session :=
-  hl.bind fun hl => (_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S => S.openAll os
+    Except String _root_.Flock.Firewall.Coins.Release :=
+  hl.bind fun hl => (_root_.Flock.Firewall.Coins.Release.start hl a).bind fun S => S.openAll os
 
 /-- The openings `ms` as `flock-firewall coins` takes them, from the `j`-th on: each with the stream and coin count of
 its request (`req`). -/
@@ -382,7 +386,7 @@ def cfgAt {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (j : ℕ) : Cfg 
   Cfg.ofDraws (L.lay x (L.rep x j)) (L.drawsAt x ρ (L.rep x j)) (L.slot x (L.rep x j))
 
 /-- **Who takes the coins of round `n - 1`**, as the session loop routes them (`Session.relay`): `Hello`'s and the
-`Commit`'s go to the session, not to a frame (`Registry.link`), so round `n` starts at its rep's first-round state
+`Commit`'s go to the session, not to a frame (`Sessions.link`), so round `n` starts at its rep's first-round state
 `fresh`; else the frame of the rep that released round `n - 1`, at its state `prog` and configuration `cP`
 (`Frames.coins`), whose refusal stops the session. Where round `n` is that rep's (`same`), it is checked at the state
 the coins leave, at its configuration `cN`; else it is the first round of its rep, which takes no coins, at `fresh`. -/
@@ -402,33 +406,171 @@ def frameAnswer {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List 
 /-- The transport's stop where its coin check refuses. -/
 def coinRefused : String := _root_.Flock.Firewall.Coins.STOP ++ "the coin check refused an opening"
 
+/-- **Whether the frame took the coins after every earlier round** of `h`, the rounds of each proper prefix
+(`frameAnswer`). -/
+def tookEarlier {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Bool :=
+  (List.range h.length).all fun j => (L.frameAnswer x ρ (h.take j)).isOk
+
 /-- **The coins the frame is handed and takes** after `h`: where the transport's coin check passes the history
-(`opens`), the frame's taking of the stream's last coins (`frameAnswer`); else the transport's stop, as the transport
-hands the frame no coins past the check's refusal. -/
+(`opens`) and the frame took the coins after every earlier round (`tookEarlier`), the frame's taking of the stream's last
+coins (`frameAnswer`); else the transport's stop. The transport hands the frame no coins past the check's refusal, and a
+refusal stops the session for good: the session loop answers every request after it with it (`Session.State.refuse`),
+so the coins after a round reach a frame only where every earlier round's were taken (`refusesCoins_of_take`). -/
 def answered {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Except String Masker :=
-  if L.opens x ρ h then L.frameAnswer x ρ h else .error coinRefused
+  if L.opens x ρ h && L.tookEarlier x ρ h then L.frameAnswer x ρ h else .error coinRefused
 
 theorem answered_of_opens {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg))
-    (ho : L.opens x ρ h = true) : L.answered x ρ h = L.frameAnswer x ρ h := by
+    (ho : L.opens x ρ h = true) (ht : L.tookEarlier x ρ h = true) : L.answered x ρ h = L.frameAnswer x ρ h := by
   unfold answered
-  exact if_pos ho
+  rw [ho, ht]
+  rfl
 
 theorem answered_of_not_opens {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg))
     (ho : L.opens x ρ h = false) : L.answered x ρ h = .error coinRefused := by
   unfold answered
-  exact if_neg (by rw [ho]; exact Bool.false_ne_true)
+  rw [ho]
+  rfl
+
+theorem answered_of_not_tookEarlier {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg))
+    (ht : L.tookEarlier x ρ h = false) : L.answered x ρ h = .error coinRefused := by
+  unfold answered
+  rw [ht, Bool.and_false]
+  rfl
+
+/-- **Where the frame takes the coins after `h`**, the check passed `h`, the frame took every earlier round's coins
+and its own taking of the last is the answer. -/
+theorem answered_ok {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ : R} {h : List (Msg × Msg)} {m : Masker}
+    (hA : L.answered x ρ h = .ok m) :
+    L.opens x ρ h = true ∧ L.tookEarlier x ρ h = true ∧ L.frameAnswer x ρ h = .ok m := by
+  unfold answered at hA
+  split at hA
+  · rename_i hc
+    exact ⟨((Bool.and_eq_true _ _).mp hc).1, ((Bool.and_eq_true _ _).mp hc).2, hA⟩
+  · cases hA
+
+theorem frameAnswer_of_answered {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ : R} {h : List (Msg × Msg)}
+    {m : Masker} (hA : L.answered x ρ h = .ok m) : L.frameAnswer x ρ h = .ok m :=
+  (answered_ok hA).2.2
+
+theorem frameAnswer_nil {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) :
+    L.frameAnswer x ρ [] = pure (L.prog x []) :=
+  rfl
+
+/-- After one round the frame took every earlier round's coins: there are none. -/
+theorem tookEarlier_single {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (e : Msg × Msg) :
+    L.tookEarlier x ρ [e] = true :=
+  rfl
+
+/-- **One round more**: the frame took the coins after every round of `h` but its last, and after its last. -/
+theorem tookEarlier_append {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg))
+    (e : Msg × Msg) :
+    L.tookEarlier x ρ (h ++ [e]) = (L.tookEarlier x ρ h && (L.frameAnswer x ρ h).isOk) := by
+  unfold tookEarlier
+  rw [List.length_append, List.length_singleton, List.range_succ, List.all_append, List.all_cons, List.all_nil,
+    Bool.and_true, List.take_left' rfl]
+  congr 1
+  refine Bool.eq_iff_iff.mpr ?_
+  simp only [List.all_eq_true, List.mem_range]
+  refine forall_congr' fun j => imp_congr_right fun hj => ?_
+  rw [List.take_append_of_le_length (by omega)]
+
+/-- **Where the frame took the coins after `h`, it took every round's of `h ++ [e]` but the last.** -/
+theorem tookEarlier_of_answered {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ : R} {h : List (Msg × Msg)}
+    {m : Masker} (hA : L.answered x ρ h = .ok m) (e : Msg × Msg) : L.tookEarlier x ρ (h ++ [e]) = true := by
+  obtain ⟨-, ht, hf⟩ := answered_ok hA
+  rw [L.tookEarlier_append x ρ h e, ht, hf]
+  rfl
+
+/-- **The next round's coins**: where the frame took the coins after `h` and the check passes `h ++ [e]`, the frame's
+own taking of the coins after `e` is the answer. -/
+theorem answered_append {W R : Type} {L : LeanRelease W R} {x : Msg} {ρ : R} {h : List (Msg × Msg)} {m : Masker}
+    (hA : L.answered x ρ h = .ok m) (e : Msg × Msg) (ho : L.opens x ρ (h ++ [e]) = true) :
+    L.answered x ρ (h ++ [e]) = L.frameAnswer x ρ (h ++ [e]) :=
+  L.answered_of_opens x ρ _ ho (tookEarlier_of_answered hA e)
+
+/-- After one round, the coins the frame takes are its own: the check reads no opening yet. -/
+theorem answered_single {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (e : Msg × Msg) :
+    L.answered x ρ [e] = L.frameAnswer x ρ [e] :=
+  L.answered_of_opens x ρ [e] rfl (L.tookEarlier_single x ρ e)
 
 /-- Past `Hello`'s answer and one opening, where the coin check reads the session's `Hello` as `hl`, the check is
-`Session.start` at the answer, then `Session.openAll` over the openings. -/
+`Release.start` at the answer, then `Release.openAll` over the openings. -/
 theorem opens_of_hello {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (m₀ a : Msg) (o : Msg × Msg)
     (ops : List (Msg × Msg)) {hl : _root_.Flock.Firewall.Coins.Hello} (hp : L.helloChk x ρ = .ok hl) :
     L.opens x ρ ((m₀, a) :: o :: ops) =
-      ((_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S =>
+      ((_root_.Flock.Firewall.Coins.Release.start hl a).bind fun S =>
         S.openAll (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk := by
   show (coinVerdict (L.helloChk x ρ) a (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk = _
   unfold coinVerdict
   rw [hp]
   try rfl
+
+theorem reqsFrom_take (req : ℕ → String × ℕ) :
+    ∀ (j : ℕ) (ms : List Msg) (k : ℕ), reqsFrom req j (ms.take k) = (reqsFrom req j ms).take k
+  | _, [], _ => by simp only [List.take_nil, reqsFrom]
+  | _, _ :: _, 0 => rfl
+  | j, m :: ms, k + 1 => by
+    show ((req j).1, (req j).2, m) :: reqsFrom req (j + 1) (ms.take k) =
+      ((req j).1, (req j).2, m) :: (reqsFrom req (j + 1) ms).take k
+    rw [reqsFrom_take req (j + 1) ms k]
+
+/-- The coin check's openings stop at the first refusal (`Release.openAll`), so where it passes them all it passes each
+prefix. -/
+theorem openAll_take (S : _root_.Flock.Firewall.Coins.Release) :
+    ∀ (os : List (String × ℕ × Msg)) (k : ℕ), (S.openAll os).isOk = true → (S.openAll (os.take k)).isOk = true
+  | [], k, h => by rw [List.take_nil]; exact h
+  | _ :: _, 0, _ => rfl
+  | (st, n, m) :: os, k + 1, h => by
+    rw [List.take_succ_cons]
+    unfold _root_.Flock.Firewall.Coins.Release.openAll at h ⊢
+    cases hop : S.open st n m with
+    | error e => simp [hop, Except.isOk, Except.toBool] at h
+    | ok p =>
+      obtain ⟨S', c⟩ := p
+      simp only [hop] at h
+      exact openAll_take S' os k h
+
+theorem coinVerdict_take (hl : Except String _root_.Flock.Firewall.Coins.Hello) (a : Msg)
+    (os : List (String × ℕ × Msg)) (k : ℕ) (h : (coinVerdict hl a os).isOk = true) :
+    (coinVerdict hl a (os.take k)).isOk = true := by
+  unfold coinVerdict at h ⊢
+  cases hl with
+  | error e => exact h
+  | ok hl =>
+    cases hS : _root_.Flock.Firewall.Coins.Release.start hl a with
+    | error e =>
+      change (((_root_.Flock.Firewall.Coins.Release.start hl a).bind fun S => S.openAll os)).isOk = true at h
+      simp [Except.bind, hS, Except.isOk, Except.toBool] at h
+    | ok S =>
+      change (((_root_.Flock.Firewall.Coins.Release.start hl a).bind fun S => S.openAll os)).isOk = true at h
+      show (((_root_.Flock.Firewall.Coins.Release.start hl a).bind fun S => S.openAll (os.take k))).isOk = true
+      rw [hS] at h ⊢
+      exact openAll_take S os k h
+
+/-- A history of at most one round has no opening, so the check passes it. -/
+theorem opens_short {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) :
+    ∀ (h : List (Msg × Msg)), h.length ≤ 1 → L.opens x ρ h = true
+  | [], _ => rfl
+  | [_], _ => rfl
+  | _ :: _ :: _, hl => by simp only [List.length_cons] at hl; omega
+
+/-- **Where the transport's coin check passes a history, it passes each prefix**: it checks the openings in order and
+stops at the first refusal. -/
+theorem opens_take {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (i : ℕ)
+    (ho : L.opens x ρ h = true) : L.opens x ρ (h.take i) = true := by
+  rcases Nat.lt_or_ge i 2 with hi | hi
+  · exact L.opens_short x ρ _ (by rw [List.length_take]; omega)
+  obtain ⟨i, rfl⟩ : ∃ k, i = k + 2 := ⟨i - 2, by omega⟩
+  match h, ho with
+  | [], _ => exact L.opens_short x ρ _ (by rw [List.length_take]; simp only [List.length_nil]; omega)
+  | [_], _ => exact L.opens_short x ρ _ (by rw [List.length_take]; simp only [List.length_cons, List.length_nil]; omega)
+  | (_, a) :: o :: ops, ho =>
+    show (coinVerdict (L.helloChk x ρ) a (reqsFrom (L.req x) 0 ((o :: ops.take i).map Prod.snd))).isOk = true
+    have e : (o :: ops.take i).map Prod.snd = ((o :: ops).map Prod.snd).take (i + 1) := by
+      show o.2 :: (ops.take i).map Prod.snd = o.2 :: (ops.map Prod.snd).take i
+      rw [List.map_take]
+    rw [e, reqsFrom_take]
+    exact coinVerdict_take _ a _ (i + 1) ho
 
 /-- **The frame's step** after `h` on the device round `v`, of a stopped rep (`st`) or not: at the rep's configuration,
 it takes the stream's coins for the last round (`answered`), then the round (`Frame.round`), in the order
@@ -445,9 +587,10 @@ def release {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg
   | .ok (out, _) => 0 :: out.data.toList
   | .error _ => L.stop
 
-/-- **Whether the frame refuses the stream's coins** for the last round of `h`: the transport's coin check refuses the
-history (`opens`), or the frame refuses the coins (`Masker.answer`: a zerocheck outer coin `1`, level 0's `ρ_0, ρ_1`
-dependent over F128, the inner proof's `β = 0`, or coins for no round or of another count). -/
+/-- **Whether the frame refuses the stream's coins** for the last round of `h`, the session stopped: the transport's
+coin check refuses the history (`opens`), or the frame refuses the coins of the last round or of an earlier one
+(`Masker.answer`: a zerocheck outer coin `1`, level 0's `ρ_0, ρ_1` dependent over F128, the inner proof's `β = 0`, or
+coins for no round or of another count). Once true it stays true (`refusesCoins_of_take`). -/
 def refusesCoins {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) : Bool :=
   match L.answered x ρ h with
   | .ok _ => false
@@ -461,6 +604,50 @@ theorem refusesCoins_of_not_opens {W R : Type} (L : LeanRelease W R) (x : Msg) (
   cases hb : L.answered x ρ h with
   | ok m => rw [ha] at hb; cases hb
   | error e => rfl
+
+/-- **The release takes the coins after `h`** exactly where the transport's coin check passes `h` and the frame took
+the coins after each of its prefixes, `h` included. -/
+theorem refusesCoins_eq_false {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) :
+    L.refusesCoins x ρ h = false ↔
+      L.opens x ρ h = true ∧ ∀ j, j ≤ h.length → (L.frameAnswer x ρ (h.take j)).isOk = true := by
+  constructor
+  · intro hr
+    unfold refusesCoins at hr
+    cases hA : L.answered x ρ h with
+    | error e => rw [hA] at hr; cases hr
+    | ok m =>
+      obtain ⟨ho, ht, hf⟩ := answered_ok hA
+      refine ⟨ho, fun j hj => ?_⟩
+      rcases Nat.lt_or_ge j h.length with hlt | hge
+      · exact List.all_eq_true.1 ht j (List.mem_range.2 hlt)
+      · rw [List.take_of_length_le hge, hf]
+        rfl
+  · rintro ⟨ho, hall⟩
+    have ht : L.tookEarlier x ρ h = true :=
+      List.all_eq_true.2 fun j hj => hall j (Nat.le_of_lt (List.mem_range.1 hj))
+    have hf := hall h.length (le_refl _)
+    rw [List.take_length] at hf
+    unfold refusesCoins
+    rw [L.answered_of_opens x ρ h ho ht]
+    cases hF : L.frameAnswer x ρ h with
+    | error e => rw [hF] at hf; simp [Except.isOk, Except.toBool] at hf
+    | ok m => rfl
+
+/-- **A refusal stops the session for good**: where the release refuses the coins after a prefix of `h`, it refuses
+them after `h`, as the session loop answers every request after a refusal with it (`Session.State.refuse`). -/
+theorem refusesCoins_of_take {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg)) (i : ℕ)
+    (hr : L.refusesCoins x ρ (h.take i) = true) : L.refusesCoins x ρ h = true := by
+  cases hb : L.refusesCoins x ρ h with
+  | true => rfl
+  | false =>
+    obtain ⟨ho, hall⟩ := (L.refusesCoins_eq_false x ρ h).1 hb
+    have hi : L.refusesCoins x ρ (h.take i) = false := by
+      refine (L.refusesCoins_eq_false x ρ (h.take i)).2 ⟨L.opens_take x ρ h i ho, fun j hj => ?_⟩
+      rw [List.length_take] at hj
+      rw [List.take_take]
+      exact hall (min j i) (by omega)
+    rw [hi] at hr
+    cases hr
 
 /-- **Where the frame refuses the coins, the release is the stop**, whatever the round and whether the rep is stopped:
 the coin stops are the frame's, from the coins alone. -/
