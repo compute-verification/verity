@@ -23,6 +23,9 @@
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
   forms, with every ``--cross-check``-th tile id replayed on the scalar reference too).  `tests/test_pearl_c_vllm_verify.py` holds this to `audit`'s
   own verdict.
+- **The served y**, where a call commits it (`served_y`, the manifest's ``y``): an accepted tile's rows of y open against
+  its root, and each of the tile's words must be the unscale of the tile's checked U (`pearl_c_u.y`, the kernels'
+  epilogue), so the y that leaves the linear is the one the credited rows computed.
 
 `verify_passes` is a served run's verdict over all its passes (`served_passes.py verify`): one source of the verifier's
 coins, drawn once every pass's roots are read, keys t draws over all the passes' tickets together, and an accept credits
@@ -49,11 +52,12 @@ from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
-from verity.ml.commitments import Commitment, Opening
+from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
 from verity.core.protocols.pouw.audit import (
     HM96,
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
+    ROW_SCHEMA,
     Epoch,
     hm96_salt,
     opened_value,
@@ -61,10 +65,13 @@ from verity.core.protocols.pouw.audit import (
 from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw.coins import CoinCommitment
 from verity.core.protocols.pouw.credit import passes_distinct
-from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile, tagged
+from verity.core.protocols.pouw.protocol import Matmul, Shape, Tile, tagged
+from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+from verity.errors import ProtocolError
 from verity.ml.randomness import derive
 from verity_vllm.protocols.pouw import pearl_c as PD
+from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 from verity_config.settings import of
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -81,6 +88,7 @@ RUN_TAG = "verity/pouw/pearl-plus/run/v1"
 RUN_DRAW_DOMAIN = "verity/pouw/pearl-plus-run-draw/v1"
 ASSUMPTION = "Pearl's Assumption 1 (pearl_kw)"
 DELTA = Fraction(1, 100)
+LIMITS = VerificationLimits()
 
 
 def pow2(n: int) -> int:
@@ -149,6 +157,14 @@ class Opened:
                                  for j in ref.tile.cols),
                            opening(self.files(self.man["tree_t"]), c["count"], tile_id,
                                    sv(bytes(leaves[nb * tile_id:nb * tile_id + nb]), HM96_TRANSCRIPT, tile_id), nb))
+
+    def open_y(self, epoch: Epoch, tile_id: int) -> tuple[Opening, ...]:
+        """The tile's rows of its call's committed y (`served_y`)."""
+        ref = self.refs[tile_id]
+        u, y = epoch.workload.matmuls[ref.matmul], self.man["matmuls"][ref.matmul]["y"]
+        rows, tree = self.files(y["rows"]), self.files(y["tree"])
+        return tuple(opening(tree, u.shape.m, i, self._salted(f32_row(rows, u.shape.n, i), SY.HM96_Y + u.index, i), self.nb)
+                     for i in ref.tile.rows)
 
 
 class Refused(ValueError):
@@ -246,12 +262,39 @@ def _check(pick: tuple[int, int, int]) -> tuple[int, int, bool, str | None]:
     v = p.verifier.check_tile(transcript, opened)
     if not v.ok:
         return i, tid, False, v.reason
-    u = epoch.workload.matmuls[pos]
-    ctx = Context(epoch.salt, u, transcript.activation_roots[pos], epoch.weight_roots[u.weight])
     h = scheme.commitment_hash
     a, b = [opened_value(h, o.value) for o in opened.a], [opened_value(h, o.value) for o in opened.b]
-    reason = CW.check_opened(scheme, p.records[pos], ref.tile, a, b, scheme.encode(ctx, scheme.noise(ctx), a, b, ref.tile))
+    reason = CW.check_opened(scheme, p.records[pos], ref.tile, a, b, v.ops)
+    if reason is None and "y" in p.man["matmuls"][pos]:
+        try:
+            reason = check_y(p, pos, ref.tile, v, p.prover.open_y(epoch, tid))
+        except (OSError, ValueError) as ex:
+            reason = f"the prover's files don't open its y: {type(ex).__name__}: {ex}"
     return i, tid, reason is None, reason
+
+
+def check_y(p: Pass, pos: int, tile: Tile, v, opened: tuple[Opening, ...]) -> str | None:
+    """The served y on an accepted tile: its rows open against the call's y root, and each of the tile's words is the unscale
+    of the tile's checked U at its row's and column's α (`pearl_c_u.y`, the kernels' epilogue)."""
+    if p.scheme.commitment_hash != HM96 or p.scheme.forming != "v1":
+        return f"y is checked under {HM96} and forming v1, not {p.scheme.name}"
+    u, root = p.epoch.workload.matmuls[pos], bytes.fromhex(p.man["matmuls"][pos]["y"]["root"])
+    d, c = SY.y_domain(p.epoch.salt, u.index, u.shape.m), Commitment(root, u.shape.m)
+    try:
+        if not all(verify_opening(d, c, o, ROW_SCHEMA, LIMITS) for o in opened):
+            return "y opening"
+    except ProtocolError:
+        return "y opening"
+    for x, (o, urow) in enumerate(zip(opened, v.checked.u, strict=True)):
+        words = np.frombuffer(opened_value(HM96, o.value), "<u4")
+        for z, j in enumerate(tile.cols):
+            try:
+                want = PCU.y(urow[z], v.ops.a.alpha[x], v.ops.b.alpha[z]) << 16
+            except PCU.NonFinite:
+                return f"y[{tile.rows[x]}, {j}]: the unscale of U leaves the finite range"
+            if int(words[j]) != want:
+                return f"y[{tile.rows[x]}, {j}] is not the unscale of the tile's U"
+    return None
 
 
 def replay(passes: list[Pass], todo: list[tuple[int, int, int]], jobs: int, fast: bool = False, cross_check: int = 0
@@ -320,10 +363,16 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
     return out
 
 
+def y_roots(p: Pass) -> list[str | None]:
+    """Each call's committed y root (`served_y`), None where the pass commits none."""
+    return [u["y"]["root"] if "y" in u else None for u in p.man["matmuls"]]
+
+
 def run_commitment(passes: list[Pass]) -> bytes:
-    """What the run committed before its draw: each pass's transcript root, records root and salt, in order."""
+    """What the run committed before its draw: each pass's transcript root, records root, salt and its calls' y roots (empty
+    where none), in order."""
     return tagged(RUN_TAG, *(x for p in passes for x in (p.transcript.commitment.root, bytes.fromhex(p.man["records_root"]),
-                                                         p.epoch.salt)))
+                                                         p.epoch.salt, *(bytes.fromhex(r or "") for r in y_roots(p)))))
 
 
 def epsilon(t: int, delta: Fraction) -> Fraction:
@@ -406,13 +455,15 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
         return reject("; ".join(bad))
     public = {"work": credit, "unit": "MAC", "assumption": ASSUMPTION, "scheme": scheme.name,
               "passes": [{"transcript": p.man["commitment"]["root"], "records": p.man["records_root"], "salt": p.epoch.salt.hex(),
-                          "activations": [u["root_a"] for u in p.man["matmuls"]]} for p in passes]}
+                          "activations": [u["root_a"] for u in p.man["matmuls"]], "y": y_roots(p)} for p in passes]}
     profile = {"delta": str(delta), "draws": draws, "draw": "work-weighted, with replacement", "source": source.hex(),
                "exclusion_tiles": excluded, "tiles": [[i, t] for i, t, *_ in verdicts]}
+    ys = [r for p in passes for r in y_roots(p)]
     out.update(answer={"protocol": PROTOCOL, "verdict": "accept", "reason": None, "commitment": root.hex(), "public": public,
                        "profile": profile},
                line=(f"ACCEPT {PROTOCOL} {scheme.name}: {len(todo) - excluded} drawn and {excluded} exclusion tiles over "
-                     f"{len(passes)} passes; {credit['credited']:,} of {credit['macs']:,} MACs credited at ε {float(Fraction(credit['epsilon'])):.4g}, "
+                     f"{len(passes)} passes, y committed and checked on {sum(r is not None for r in ys)} of {len(ys)} calls; "
+                     f"{credit['credited']:,} of {credit['macs']:,} MACs credited at ε {float(Fraction(credit['epsilon'])):.4g}, "
                      f"δ {delta} (Pearl's Assumption 1); run {root.hex()[:16]}, source {source.hex()[:16]}; verifier {commit}"))
     return out
 
