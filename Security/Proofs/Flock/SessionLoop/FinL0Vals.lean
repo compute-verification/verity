@@ -60,7 +60,7 @@ theorem words_slot {x : Msg} {ops : List (Msg × Msg)} (hl : ops.length = refK x
     (wordsAt x (ops.map fun q => ZKMal.CoinLayer.rd q.2) p)[e]! = Masked.slotAt (finCoins x ops) p e := by
   have hs := wordsAt_size x ops hp le_rfl
   rw [List.take_length] at hs
-  have h := wordsAt_slot Masked.dataE x ops hl hp le_rfl (e := e)
+  have h := wordsAt_slot Masked.dataE x ops hl.le hp le_rfl (e := e)
     (by rw [List.take_length, hs]; exact Nat.lt_min.mpr ⟨he, hc⟩)
   rw [List.take_length] at h
   exact h

@@ -167,11 +167,11 @@ def StrataDrawIsCoin {C : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : 
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileDraw σ k hk s ((coinAt x w).2 s), unitOf b = u
 
 open Classical in
-/-- **Stratum `s`'s live words over the accepted prefix**: the words of the stratum's live tiles (`Period.liveAt` of its
+/-- **Stratum `s`'s live words over the accepted prefix**: the words of the stratum's live tiles (`WindowPlay.liveAt` of its
 period, on its view) in each window before the first window `Credit.window` refuses. -/
 noncomputable def stratumLive {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
     (σ : Fin nB → Fin mB) (s : Fin mB)
-    (Wp : Period C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
+    (Wp : WindowPlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
     (ws : CreditWindows (StrataCoin C m σ) n) (x : Paths (StrataCoin C m σ) n) : ℝ :=
   ∑ w : Fin n, if ws.AcceptedUpTo x w then
     ∑ t : Fin (tileCount σ s), (liveWords Sc Cd (tileCount σ s) (Wp.liveAt (pathsAt C hM σ s n x) w) t : ℝ) else 0
@@ -195,7 +195,7 @@ def H1J10RCheckedCreditPeriodStrata : Prop :=
     (ws : CreditWindows (StrataCoin C 1 σ) n) (opened : Paths (StrataCoin C 1 σ) n → Fin n → ℕ → ℕ → V)
     (enc : C → ByteArray) (place : (s : Fin mB) → Paths (StrataCoin C 1 σ) n → Fin n → Fin (tileCount σ s) → Place)
     (tile : (s : Fin mB) → Noise → List (List ℕ) → Fin (tileCount σ s) → (ℕ → V) → Prop)
-    (Wp : (s : Fin mB) → Period C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
+    (Wp : (s : Fin mB) → WindowPlay C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
     (Pl : (s : Fin mB) → Play (Coin C (Rest σ s) (Cd s).rounds σ s) n K T L U)
     (folded : (s : Fin mB) → Paths (Coin C (Rest σ s) (Cd s).rounds σ s) n → ℝ) (ρ δs δbind δks : Fin mB → ℝ),
     RegisteredBeforeDraw ws → StrataDrawIsCoin σ k hk S unitOf ws →

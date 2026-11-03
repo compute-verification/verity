@@ -84,7 +84,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
                     "verity/core/protocols/certifier/certificate.py::Certificate"),
     "Challenger": ("verity/core/protocols/sampled_proofs/parties.py::Challenger",),
     "Circuit": (f"{CORE}Circuit.lean::Verity.Circuit", f"{FLOCK}Circuit.lean::Flock.Circuit"),
-    "CoinTree": (),
+    "CoinTree": ("verity/ml/commitments/coin_tree.py::CoinTree",),
     "Coins": (f"{CORE}Draw.lean::Verity.Coins", f"{FLOCK}Statement.lean::Flock.Coins"),
     "Collision": ("Security/Definitions/Core/Hash.lean::Hash.Collision",),
     "Commitment": ("verity/ml/commitments/merkle.py::Commitment",),
@@ -279,12 +279,9 @@ def lean_definitions(text: str) -> tuple[list[tuple[str, Hit]], list[tuple[str, 
 
 def _python_code(text: str) -> str:
     """`text` with its string literals and comments blanked to spaces, newlines and offsets kept, so prose that wraps to
-    begin a line with `class X` isn't read as a header; `text` itself when it doesn't tokenize."""
+    begin a line with `class X` isn't read as a header.  Every tracked file compiles, so one that doesn't tokenize raises."""
     lines = text.splitlines(keepends=True)
-    try:
-        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
-    except (tokenize.TokenError, SyntaxError):
-        return text
+    tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
     prose = {tokenize.STRING, tokenize.COMMENT, getattr(tokenize, "FSTRING_MIDDLE", tokenize.STRING)}
     chars = [list(line) for line in lines]
     for t in tokens:

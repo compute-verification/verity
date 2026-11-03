@@ -62,7 +62,7 @@ theorem coins_taken_of_answered {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ
           unfold cfg cfgAt
           rw [hs]
         rw [hc]
-        exact ⟨m, ha⟩
+        exact ⟨m, (bind_rankStop_ok ha).1⟩
       · rw [if_neg (fun e => hs (of_decide_eq_true e))] at ha
         cases hp : (L.prog x h).answer (L.cfgAt x ρ (h.length - 1)) (L.coinsOf x h) with
         | error e =>
