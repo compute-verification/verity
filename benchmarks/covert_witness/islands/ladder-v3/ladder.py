@@ -26,7 +26,8 @@ for choosing hyperparameters.
 C0 of a branch is its steps times one step's MACs as `count` measures them: the single-process step (the global batch's
 micro-batches, accumulated, then the optimizers' step), eager, under te_core's Counter. A rank's redundant Muon work and the
 evaluation passes are not training and are not in it. `--yield-free K` ends a phase early, checkpointed, once K GPUs of
-the node stay free (`gpu-lease status`), so a wider phase can take them (ladder.sh's caller chains the phases).
+the node stay free (`gpu-lease status`), so a wider phase can take them (ladder.sh's caller chains the phases); inside a
+cooldown branch, the branch's steps so far are dropped and the wider phase runs it from its fork.
 """
 from __future__ import annotations
 
@@ -514,22 +515,47 @@ def train(a) -> int:
         if world > 1:
             dist.barrier()
 
-    def branch_run(b: dict) -> None:
-        """The cooldown branch `b` from the current state (its fork), then back to that state."""
+    free = {"at": time.perf_counter(), "seen": 0}
+
+    def yield_now() -> bool:
+        """Whether this phase ends here: --yield-free of the node's GPUs free on two checks a minute apart (rank 0's)."""
+        if not a.yield_free:
+            return False
+        flag = torch.zeros((), device=dev)
+        if rank == 0 and time.perf_counter() - free["at"] > 60:
+            free["at"] = time.perf_counter()
+            free["seen"] = free["seen"] + 1 if free_gpus() >= a.yield_free else 0
+            flag.fill_(float(free["seen"] >= 2))
+        if world > 1:
+            dist.broadcast(flag, 0)
+        return bool(flag.item())
+
+    def branch_run(b: dict) -> bool:
+        """The cooldown branch `b` from the current state (its fork), then back to that state. False when the phase yields
+        inside it: its steps so far are dropped, and the wider phase runs it from the fork."""
         saved_m = {k: v.detach().clone() for k, v in model.state_dict().items()}
         saved_o = [_clone_state(o.state_dict()) for o in opts]
+
+        def restore() -> None:
+            model.load_state_dict(saved_m)
+            for o, s in zip(opts, saved_o):
+                o.load_state_dict(s)
+
         t0 = time.perf_counter()
         for k in range(b["fork"], b["steps"]):
             one_step(k, lr_mult(k, a.warmup, b["fork"], b["steps"]))
+            if (k + 1 - b["fork"]) % 50 == 0 and yield_now():
+                log(yielded_in=name_of(a.size, b["tpp"]), branch_step=k + 1, free_at_least=a.yield_free)
+                restore()
+                return False
         resync()
         if a.eval != "none":
             evaluate({"phase": "annealed", "branch": name_of(a.size, b["tpp"]), "registered": b["registered"],
                       "step": b["steps"], "lineage_steps": b["steps"]})
         register(b)
         log(branch_done=name_of(a.size, b["tpp"]), s=round(time.perf_counter() - t0, 1))
-        model.load_state_dict(saved_m)
-        for o, s in zip(opts, saved_o):
-            o.load_state_dict(s)
+        restore()
+        return True
 
     grid = eval_grid(top["steps"], n_ne, pl["tokens_per_step"])
     forks: dict[int, list[dict]] = {}
@@ -542,36 +568,35 @@ def train(a) -> int:
         raise SystemExit(f"ladder: the stream has {stream.windows:,} windows, the top branch reads {top['steps'] * a.batch:,}")
     if step == 0 and a.eval != "none":
         evaluate({"phase": "init", "step": 0, "lineage_steps": 0})
-    t0 = last = ck_at = free_at = time.perf_counter()
+    t0 = last = ck_at = time.perf_counter()
     stop = min(a.stop_at or top["steps"], top["steps"])
-    seen_free = 0
     while step < stop:
+        yielding = False
         for b in forks.get(step, []):
             if name_of(a.size, b["tpp"]) not in done:
                 save(step)
-                branch_run(b)
+                if not branch_run(b):
+                    yielding = True
+                    break
                 done.add(name_of(a.size, b["tpp"]))
                 save(step)
+        if yielding:
+            break
         loss = one_step(step, lr_mult(step, a.warmup, top["fork"], top["steps"]))
         step += 1
         if step % 200 == 0:
             resync()
-        yielding = False
         if step % 50 == 0:
             torch.cuda.synchronize()
             now = time.perf_counter()
             log(step=step, loss=round(float(loss), 4), lr=round(lr_mult(step - 1, a.warmup, top["fork"], top["steps"]), 4),
                 tok_s=round(50 * pl["tokens_per_step"] / (now - last)), s=round(now - t0, 1))
             last = now
-            flags = torch.tensor([float(now - ck_at > a.ckpt_min * 60), 0.0], device=dev)
-            if a.yield_free and rank == 0 and now - free_at > 60:
-                free_at = now
-                seen_free = seen_free + 1 if free_gpus() >= a.yield_free else 0
-                flags[1] = float(seen_free >= 2)
+            yielding = yield_now() and step < top["steps"]
+            ckpt = torch.tensor(float(now - ck_at > a.ckpt_min * 60), device=dev)
             if world > 1:
-                dist.broadcast(flags, 0)
-            yielding = bool(flags[1].item()) and step < top["steps"]
-            if flags[0].item() and step < top["steps"] and not yielding:
+                dist.broadcast(ckpt, 0)
+            if ckpt.item() and step < top["steps"] and not yielding:
                 save(step)
                 ck_at = last = time.perf_counter()
         if step in grid and a.eval != "none" and step < top["steps"]:
@@ -634,7 +659,7 @@ def main(argv=None) -> int:
     ap.add_argument("--eval", choices=("search", "pilot", "none"), default="search")
     ap.add_argument("--ckpt-min", type=float, default=30.0)
     ap.add_argument("--stop-at", type=int, default=0, help="stop after this many main-run steps, checkpointed (a throughput check, or a phase on fewer GPUs: the checkpoint resumes on any number of ranks)")
-    ap.add_argument("--yield-free", type=int, default=0, help="end this phase, checkpointed, once this many of the node's GPUs are free on two checks a minute apart (gpu-lease status), for a wider phase to take")
+    ap.add_argument("--yield-free", type=int, default=0, help="end this phase, checkpointed, once this many of the node's GPUs are free on two checks a minute apart (gpu-lease status), for a wider phase to take (inside a cooldown branch too: the wider phase reruns it from its fork)")
     ap.add_argument("--no-compile", action="store_true")
     a = ap.parse_args(argv)
     if a.cmd == "count":
