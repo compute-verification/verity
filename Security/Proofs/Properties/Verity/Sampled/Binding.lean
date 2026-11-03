@@ -3,7 +3,7 @@ import Proofs.Properties.Challenger
 import Proofs.Core.Game.Tape
 import Proofs.Properties.Challenger.Break
 import Proofs.Properties.Challenger.Drawn
-import Proofs.Properties.Challenger.Printer
+import Proofs.Properties.Challenger.CanonLine
 
 /-!
 # The log the sampled check read is the device's, or a break: the read finder and the forger
