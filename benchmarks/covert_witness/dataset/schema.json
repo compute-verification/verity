@@ -1,0 +1,2425 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "te-dataset/v0",
+ "title": "The training-efficiency search's dataset",
+ "description": "One JSON Lines file per table (`tables`), each line one row of its $defs entry, and manifest.json ($defs/manifest). README.md is this schema in prose; dataset/export.py writes it and checks every row against it first.",
+ "type": "object",
+ "required": [
+  "tables",
+  "manifest"
+ ],
+ "properties": {
+  "tables": {
+   "type": "object",
+   "required": [
+    "checkpoints",
+    "left_out",
+    "earlier",
+    "runs",
+    "board",
+    "methods",
+    "directions",
+    "lessons",
+    "starts",
+    "branch_points",
+    "curves"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "checkpoints": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/checkpoints"
+     }
+    },
+    "left_out": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/left_out"
+     }
+    },
+    "earlier": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/earlier"
+     }
+    },
+    "runs": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/runs"
+     }
+    },
+    "board": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/board"
+     }
+    },
+    "methods": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/methods"
+     }
+    },
+    "directions": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/directions"
+     }
+    },
+    "lessons": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/lessons"
+     }
+    },
+    "starts": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/starts"
+     }
+    },
+    "branch_points": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/branch_points"
+     }
+    },
+    "curves": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/curves"
+     }
+    }
+   }
+  },
+  "manifest": {
+   "$ref": "#/$defs/manifest"
+  }
+ },
+ "$defs": {
+  "num": {
+   "type": [
+    "number",
+    "null"
+   ]
+  },
+  "str": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "int": {
+   "type": [
+    "integer",
+    "null"
+   ]
+  },
+  "bool": {
+   "type": [
+    "boolean",
+    "null"
+   ]
+  },
+  "strings": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  },
+  "art": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "pattern": "^art:[0-9a-f]{64}$",
+   "description": "an evidence-store id (`research data fetch ART`)"
+  },
+  "commit": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "pattern": "^[0-9a-f]{40}$"
+  },
+  "run_id": {
+   "type": "string",
+   "pattern": "^r\\d{8}-\\d{6}-[0-9a-f]{4}$"
+  },
+  "time": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+   "description": "UTC, to the second"
+  },
+  "night": {
+   "enum": [
+    1,
+    2,
+    null
+   ],
+   "description": "the search night a run belongs to by its launch time (manifest `nights`)"
+  },
+  "basis": {
+   "enum": [
+    "measured",
+    "upper-bound",
+    "estimated",
+    "unmeasured"
+   ],
+   "description": "measured: counted by the pinned harness, or derived from counted values only; upper-bound: a bound the witness proves (safe for the claim side); estimated: a stub, an assumption or a value derived from one; unmeasured: no value"
+  },
+  "reason": {
+   "enum": [
+    "re-ingested",
+    "duplicate-e",
+    "invalid",
+    "read-out-leak",
+    "tied-lookup",
+    "unscored",
+    "other-version",
+    "re-ingest",
+    "no-shape",
+    "unmeasured"
+   ],
+   "description": "why a ledger row is not a checkpoint (te_core.frontier.status, then te_core.frontier.formalism_rows)"
+  },
+  "family": {
+   "enum": [
+    "full",
+    "adapter",
+    "partial",
+    "update-code",
+    "state-compressed",
+    "activation-code",
+    "seed",
+    "data",
+    null
+   ],
+   "description": "how a record's update is carried (analysis/rescore_v1.py's `family`)"
+  },
+  "c_tokens_per_block": {
+   "enum": [
+    1,
+    10,
+    100,
+    1000,
+    4096
+   ],
+   "description": "the dial's c, in tokens of the start's forward per block"
+  },
+  "k_bytes": {
+   "enum": [
+    10000,
+    100000,
+    1000000,
+    10000000,
+    100000000
+   ],
+   "description": "the dial's k, in bytes (k_bits = 8 k_bytes)"
+  },
+  "quantity": {
+   "type": "object",
+   "required": [
+    "value",
+    "basis",
+    "source"
+   ],
+   "additionalProperties": false,
+   "description": "one input of formalism v2 with where it comes from",
+   "properties": {
+    "value": {
+     "description": "a number; for a profile a list of [x, bits] points; for the context charge its kv_bits, positions, kv_layer and free_share; null when unmeasured"
+    },
+    "basis": {
+     "$ref": "#/$defs/basis"
+    },
+    "source": {
+     "$ref": "#/$defs/str",
+     "description": "te_core's label for the value, or the formula that derives it"
+    }
+   }
+  },
+  "final": {
+   "type": [
+    "object",
+    "null"
+   ],
+   "allOf": [
+    {
+     "$ref": "#/$defs/final_fields"
+    }
+   ],
+   "unevaluatedProperties": false,
+   "description": "the sealed final reruns' value at this checkpoint: the rerun row at the nearest MACs within 2%"
+  },
+  "run_final": {
+   "type": "object",
+   "allOf": [
+    {
+     "$ref": "#/$defs/final_fields"
+    }
+   ],
+   "unevaluatedProperties": false,
+   "required": [
+    "id",
+    "checkpoint"
+   ],
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "the checkpoint (a ledger id)"
+    },
+    "checkpoint": {
+     "$ref": "#/$defs/int"
+    }
+   }
+  },
+  "final_fields": {
+   "required": [
+    "set",
+    "entry",
+    "rerun",
+    "mean_bpb",
+    "min_bpb",
+    "max_bpb",
+    "seeds",
+    "final_l0",
+    "drop",
+    "macs"
+   ],
+   "properties": {
+    "set": {
+     "type": "string",
+     "description": "the scorer's final directory (`final`, `final-n2`, ...)"
+    },
+    "entry": {
+     "$ref": "#/$defs/art",
+     "description": "the sealed entry's launch record"
+    },
+    "rerun": {
+     "$ref": "#/$defs/str"
+    },
+    "mean_bpb": {
+     "type": "number",
+     "description": "held-out bits per byte on the final shard, the seeds' mean"
+    },
+    "min_bpb": {
+     "$ref": "#/$defs/num"
+    },
+    "max_bpb": {
+     "$ref": "#/$defs/num"
+    },
+    "seeds": {
+     "type": [
+      "array",
+      "null"
+     ],
+     "items": {
+      "type": "integer"
+     }
+    },
+    "final_l0": {
+     "$ref": "#/$defs/num",
+     "description": "the start's loss on the final shard"
+    },
+    "drop": {
+     "$ref": "#/$defs/num",
+     "description": "1 - mean_bpb / final_l0"
+    },
+    "macs": {
+     "type": "number"
+    }
+   }
+  },
+  "best": {
+   "type": [
+    "object",
+    "null"
+   ],
+   "additionalProperties": false,
+   "required": [
+    "id",
+    "checkpoint",
+    "search_bpb",
+    "drop",
+    "gates"
+   ],
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "the checkpoint (a ledger id)"
+    },
+    "run": {
+     "$ref": "#/$defs/str"
+    },
+    "checkpoint": {
+     "$ref": "#/$defs/int"
+    },
+    "search_bpb": {
+     "type": "number"
+    },
+    "drop": {
+     "$ref": "#/$defs/num"
+    },
+    "gates": {
+     "type": "number"
+    }
+   }
+  },
+  "setter": {
+   "type": [
+    "object",
+    "null"
+   ],
+   "additionalProperties": false,
+   "required": [
+    "id",
+    "run",
+    "checkpoint",
+    "method",
+    "bound"
+   ],
+   "description": "the checkpoint that sets an envelope's value",
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "run": {
+     "$ref": "#/$defs/str"
+    },
+    "checkpoint": {
+     "$ref": "#/$defs/int"
+    },
+    "method": {
+     "type": "string",
+     "description": "direction/mechanism"
+    },
+    "bound": {
+     "enum": [
+      "complete schedule",
+      "upper bound (checkpoint)"
+     ],
+     "description": "a checkpoint before its schedule's end bounds the compute a schedule ending there would need from above"
+    }
+   }
+  },
+  "dial_cell": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "c_tokens_per_block",
+    "k_bytes",
+    "c_gates",
+    "k_bits",
+    "rho",
+    "basis",
+    "rho_fit",
+    "slowdown",
+    "x0",
+    "s_star",
+    "x0_known",
+    "s_star_known",
+    "delta_counted",
+    "fit_parts"
+   ],
+   "description": "te_core.formalism.at(m, c, k) at one cell of the dial",
+   "properties": {
+    "c_tokens_per_block": {
+     "$ref": "#/$defs/c_tokens_per_block"
+    },
+    "k_bytes": {
+     "$ref": "#/$defs/k_bytes"
+    },
+    "c_gates": {
+     "type": "number",
+     "description": "c = c_tokens_per_block x w_fwd"
+    },
+    "k_bits": {
+     "type": "integer"
+    },
+    "rho": {
+     "$ref": "#/$defs/num",
+     "description": "the slowdown the throttled learner pays; null where it is infinite"
+    },
+    "basis": {
+     "enum": [
+      "fit",
+      "target"
+     ],
+     "description": "fit: every part's blocks fit k, rho = c / (c - d); target: rho is Slowdown's target"
+    },
+    "rho_fit": {
+     "$ref": "#/$defs/num"
+    },
+    "slowdown": {
+     "$ref": "#/$defs/num"
+    },
+    "x0": {
+     "$ref": "#/$defs/num"
+    },
+    "s_star": {
+     "$ref": "#/$defs/num"
+    },
+    "x0_known": {
+     "$ref": "#/$defs/num",
+     "description": "the attack side's best-known x0 (the frozen tail)"
+    },
+    "s_star_known": {
+     "$ref": "#/$defs/num"
+    },
+    "delta_counted": {
+     "type": "boolean",
+     "description": "whether Delta counts in Fit (d < c)"
+    },
+    "fit_parts": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+       "compute"
+      ],
+      "properties": {
+       "compute": {
+        "type": "boolean"
+       },
+       "reduction": {
+        "type": "boolean"
+       },
+       "update": {
+        "type": "boolean"
+       }
+      },
+      "description": "each part's Fit by its kinds of block: compute always; reduction and update where the part has token blocks or a Delta_grad"
+     }
+    },
+    "s_star_a1": {
+     "$ref": "#/$defs/num",
+     "description": "only with --charge-context: A1's s* without the charge (s_star is then the charged one)"
+    }
+   }
+  },
+  "envelope_cell": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "c_tokens_per_block",
+    "k_bytes",
+    "c_gates",
+    "S",
+    "W_star_gates",
+    "rho",
+    "basis",
+    "setter",
+    "x0",
+    "s_star",
+    "x0_known",
+    "s_star_known"
+   ],
+   "description": "one (c, k) of a branch point: the red envelope W* against the blue H",
+   "properties": {
+    "c_tokens_per_block": {
+     "$ref": "#/$defs/c_tokens_per_block"
+    },
+    "k_bytes": {
+     "$ref": "#/$defs/k_bytes"
+    },
+    "c_gates": {
+     "$ref": "#/$defs/num"
+    },
+    "S": {
+     "$ref": "#/$defs/num",
+     "description": "W* / H, at least 1; null where no checkpoint reaches l*"
+    },
+    "W_star_gates": {
+     "$ref": "#/$defs/num",
+     "description": "the least compute times rho over the checkpoints reaching l*"
+    },
+    "rho": {
+     "$ref": "#/$defs/num"
+    },
+    "basis": {
+     "enum": [
+      "fit",
+      "target",
+      null
+     ]
+    },
+    "setter": {
+     "$ref": "#/$defs/setter"
+    },
+    "x0": {
+     "$ref": "#/$defs/num"
+    },
+    "s_star": {
+     "$ref": "#/$defs/num"
+    },
+    "x0_known": {
+     "$ref": "#/$defs/num"
+    },
+    "s_star_known": {
+     "$ref": "#/$defs/num"
+    }
+   }
+  },
+  "checkpoints": {
+   "type": "object",
+   "additionalProperties": false,
+   "description": "one row per checkpoint of every valid record at the pin",
+   "required": [
+    "id",
+    "run",
+    "checkpoint",
+    "fraction",
+    "schedule_end",
+    "night",
+    "launched",
+    "agent",
+    "direction",
+    "mechanism",
+    "family",
+    "start",
+    "method",
+    "config",
+    "seed",
+    "harness",
+    "compute",
+    "loss",
+    "quantities",
+    "rho_inputs",
+    "dial",
+    "fit_k",
+    "validity",
+    "in_panel",
+    "arts",
+    "caveats"
+   ],
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "the ledger id (`<agent>-<number>`)"
+    },
+    "run": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/run_id"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "checkpoint": {
+     "$ref": "#/$defs/int",
+     "description": "the training step"
+    },
+    "fraction": {
+     "$ref": "#/$defs/num",
+     "description": "(step + 1) / planned steps"
+    },
+    "schedule_end": {
+     "type": "boolean",
+     "description": "whether the checkpoint ends its schedule"
+    },
+    "night": {
+     "$ref": "#/$defs/night"
+    },
+    "launched": {
+     "$ref": "#/$defs/time"
+    },
+    "agent": {
+     "$ref": "#/$defs/str"
+    },
+    "direction": {
+     "$ref": "#/$defs/str"
+    },
+    "mechanism": {
+     "$ref": "#/$defs/str"
+    },
+    "family": {
+     "$ref": "#/$defs/family"
+    },
+    "start": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "id",
+      "label",
+      "parameters",
+      "tokens",
+      "tokens_per_param",
+      "l0",
+      "c0_gates",
+      "c0_basis"
+     ],
+     "properties": {
+      "id": {
+       "type": "string"
+      },
+      "label": {
+       "type": "string"
+      },
+      "parameters": {
+       "$ref": "#/$defs/int"
+      },
+      "tokens": {
+       "$ref": "#/$defs/int",
+       "description": "the start's pretraining tokens"
+      },
+      "tokens_per_param": {
+       "$ref": "#/$defs/num"
+      },
+      "l0": {
+       "$ref": "#/$defs/num",
+       "description": "the start's held-out bits per byte on the search slice"
+      },
+      "c0_gates": {
+       "$ref": "#/$defs/num",
+       "description": "the start's training compute"
+      },
+      "c0_basis": {
+       "$ref": "#/$defs/basis"
+      }
+     }
+    },
+    "method": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "key",
+      "label"
+     ],
+     "properties": {
+      "key": {
+       "type": "string",
+       "description": "direction/mechanism, the methods table's key"
+      },
+      "label": {
+       "$ref": "#/$defs/str"
+      }
+     }
+    },
+    "config": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "optimizer",
+      "optimizer_state_bits",
+      "code",
+      "trainable",
+      "full_theta",
+      "lowest_updated_layer"
+     ],
+     "properties": {
+      "optimizer": {
+       "$ref": "#/$defs/str"
+      },
+      "optimizer_state_bits": {
+       "$ref": "#/$defs/num",
+       "description": "the gradient and optimizer state at the run's widths (Delta_grad)"
+      },
+      "code": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "format",
+        "bytes"
+       ],
+       "properties": {
+        "format": {
+         "$ref": "#/$defs/str"
+        },
+        "bytes": {
+         "$ref": "#/$defs/int",
+         "description": "|E|, the submitted update code"
+        }
+       }
+      },
+      "trainable": {
+       "type": [
+        "object",
+        "null"
+       ],
+       "additionalProperties": false,
+       "properties": {
+        "tensors": {
+         "$ref": "#/$defs/int"
+        },
+        "adapters": {
+         "$ref": "#/$defs/int"
+        },
+        "parameters": {
+         "$ref": "#/$defs/int"
+        }
+       }
+      },
+      "full_theta": {
+       "$ref": "#/$defs/bool"
+      },
+      "lowest_updated_layer": {
+       "$ref": "#/$defs/int"
+      }
+     }
+    },
+    "seed": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "run",
+      "data"
+     ],
+     "properties": {
+      "run": {
+       "$ref": "#/$defs/int"
+      },
+      "data": {
+       "$ref": "#/$defs/int"
+      }
+     }
+    },
+    "harness": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "version",
+      "measurement_commit",
+      "run_te_core",
+      "te_core",
+      "witness",
+      "commit",
+      "program",
+      "program_sha256",
+      "island",
+      "island_tree",
+      "node",
+      "hardware"
+     ],
+     "properties": {
+      "version": {
+       "$ref": "#/$defs/str",
+       "description": "the harness version (2.0 ... 2.3)"
+      },
+      "measurement_commit": {
+       "$ref": "#/$defs/commit"
+      },
+      "run_te_core": {
+       "$ref": "#/$defs/str"
+      },
+      "te_core": {
+       "$ref": "#/$defs/str"
+      },
+      "witness": {
+       "$ref": "#/$defs/str"
+      },
+      "commit": {
+       "$ref": "#/$defs/str"
+      },
+      "program": {
+       "$ref": "#/$defs/str"
+      },
+      "program_sha256": {
+       "$ref": "#/$defs/str"
+      },
+      "island": {
+       "type": [
+        "object",
+        "null"
+       ],
+       "description": "the island the run was sent with (its name, commit, tree and digests)"
+      },
+      "island_tree": {
+       "$ref": "#/$defs/str"
+      },
+      "node": {
+       "$ref": "#/$defs/str"
+      },
+      "hardware": {
+       "$ref": "#/$defs/str"
+      }
+     }
+    },
+    "compute": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "gates",
+      "macs",
+      "flops",
+      "basis"
+     ],
+     "properties": {
+      "gates": {
+       "type": "number",
+       "description": "|C| in Boolean gates"
+      },
+      "macs": {
+       "type": [
+        "number",
+        "null"
+       ]
+      },
+      "flops": {
+       "type": [
+        "number",
+        "null"
+       ],
+       "description": "2 x MACs"
+      },
+      "basis": {
+       "$ref": "#/$defs/basis"
+      }
+     }
+    },
+    "loss": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "search_bpb",
+      "start_bpb",
+      "drop",
+      "final"
+     ],
+     "properties": {
+      "search_bpb": {
+       "type": "number",
+       "description": "held-out bits per byte on the search slice"
+      },
+      "start_bpb": {
+       "$ref": "#/$defs/num"
+      },
+      "drop": {
+       "$ref": "#/$defs/num",
+       "description": "1 - search_bpb / start_bpb"
+      },
+      "final": {
+       "$ref": "#/$defs/final"
+      }
+     }
+    },
+    "quantities": {
+     "enum": [
+      "measured",
+      "analysis",
+      "stubs"
+     ],
+     "description": "where the rho inputs come from: measured on the record's traced step (te_core 4.0's ingest), analysis/rescore_v1.py, or te_core.formalism's stubs on the row's own fields"
+    },
+    "rho_inputs": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "C_gates",
+      "tokens",
+      "token_gates",
+      "affected_gates",
+      "tau_bits",
+      "a_bits",
+      "delta_bits",
+      "u1_bits",
+      "u_points",
+      "u_in_points",
+      "tail_share",
+      "d_gates",
+      "delta_grad_bits",
+      "w_fwd_gates",
+      "sigma",
+      "w_gates",
+      "alpha_max",
+      "alpha_mean",
+      "parts"
+     ],
+     "properties": {
+      "C_gates": {
+       "$ref": "#/$defs/quantity"
+      },
+      "tokens": {
+       "$ref": "#/$defs/quantity"
+      },
+      "token_gates": {
+       "$ref": "#/$defs/quantity"
+      },
+      "affected_gates": {
+       "$ref": "#/$defs/quantity"
+      },
+      "tau_bits": {
+       "$ref": "#/$defs/quantity"
+      },
+      "a_bits": {
+       "$ref": "#/$defs/quantity"
+      },
+      "delta_bits": {
+       "$ref": "#/$defs/quantity"
+      },
+      "u1_bits": {
+       "$ref": "#/$defs/quantity"
+      },
+      "u_points": {
+       "$ref": "#/$defs/quantity"
+      },
+      "u_in_points": {
+       "$ref": "#/$defs/quantity"
+      },
+      "tail_share": {
+       "$ref": "#/$defs/quantity"
+      },
+      "d_gates": {
+       "$ref": "#/$defs/quantity"
+      },
+      "delta_grad_bits": {
+       "$ref": "#/$defs/quantity"
+      },
+      "w_fwd_gates": {
+       "$ref": "#/$defs/quantity"
+      },
+      "sigma": {
+       "$ref": "#/$defs/quantity"
+      },
+      "w_gates": {
+       "$ref": "#/$defs/quantity"
+      },
+      "alpha_max": {
+       "$ref": "#/$defs/quantity"
+      },
+      "alpha_mean": {
+       "$ref": "#/$defs/quantity"
+      },
+      "parts": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+         "gates",
+         "tokens",
+         "token_gates",
+         "affected_gates",
+         "steps",
+         "delta_grad_bits"
+        ],
+        "properties": {
+         "gates": {
+          "type": "number"
+         },
+         "tokens": {
+          "type": "number"
+         },
+         "token_gates": {
+          "type": "number"
+         },
+         "affected_gates": {
+          "type": "number"
+         },
+         "steps": {
+          "type": "integer"
+         },
+         "delta_grad_bits": {
+          "$ref": "#/$defs/num"
+         }
+        }
+       }
+      },
+      "context": {
+       "$ref": "#/$defs/quantity",
+       "description": "only with --charge-context: te_core.formalism.context's quantities (kappa = kv_bits and L = positions exact, h = free_share an upper bound); null where the run's changed tensors are not in --facts"
+      }
+     }
+    },
+    "dial": {
+     "type": "array",
+     "minItems": 25,
+     "maxItems": 25,
+     "items": {
+      "$ref": "#/$defs/dial_cell"
+     }
+    },
+    "fit_k": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "c_gates",
+      "k_run_bits",
+      "k_train_bits"
+     ],
+     "description": "the least k at which inference (k_run) and training (k_train) fit, at the dial's default c",
+     "properties": {
+      "c_gates": {
+       "type": "number"
+      },
+      "k_run_bits": {
+       "$ref": "#/$defs/num"
+      },
+      "k_train_bits": {
+       "$ref": "#/$defs/num"
+      }
+     }
+    },
+    "validity": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "status",
+      "flags",
+      "invalid",
+      "failed_checks",
+      "launch_valid",
+      "cancelled",
+      "process_tree"
+     ],
+     "properties": {
+      "status": {
+       "const": "valid"
+      },
+      "flags": {
+       "$ref": "#/$defs/strings"
+      },
+      "invalid": {
+       "type": "array"
+      },
+      "failed_checks": {
+       "type": [
+        "array",
+        "null"
+       ],
+       "items": {
+        "type": "string"
+       }
+      },
+      "launch_valid": {
+       "$ref": "#/$defs/bool"
+      },
+      "cancelled": {
+       "$ref": "#/$defs/bool"
+      },
+      "process_tree": {
+       "type": [
+        "object",
+        "null"
+       ],
+       "description": "the island's process-tree accounting (CPU and GPU time, foreign GPU apps)"
+      }
+     }
+    },
+    "in_panel": {
+     "type": "boolean",
+     "description": "whether training/frontier-branches plots it (analysed rows only)"
+    },
+    "arts": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "record",
+      "launch",
+      "run_record"
+     ],
+     "properties": {
+      "record": {
+       "$ref": "#/$defs/art"
+      },
+      "launch": {
+       "$ref": "#/$defs/art"
+      },
+      "run_record": {
+       "$ref": "#/$defs/art"
+      }
+     }
+    },
+    "caveats": {
+     "$ref": "#/$defs/strings"
+    }
+   }
+  },
+  "left_out": {
+   "type": "object",
+   "additionalProperties": false,
+   "description": "every ledger row that is not a checkpoint, with its reason",
+   "required": [
+    "id",
+    "run",
+    "checkpoint",
+    "night",
+    "agent",
+    "direction",
+    "mechanism",
+    "start",
+    "measurement_commit",
+    "harness",
+    "macs",
+    "val_bpb",
+    "reason",
+    "art"
+   ],
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "run": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/run_id"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "checkpoint": {
+     "$ref": "#/$defs/int"
+    },
+    "night": {
+     "$ref": "#/$defs/night"
+    },
+    "agent": {
+     "$ref": "#/$defs/str"
+    },
+    "direction": {
+     "$ref": "#/$defs/str"
+    },
+    "mechanism": {
+     "$ref": "#/$defs/str"
+    },
+    "start": {
+     "$ref": "#/$defs/str"
+    },
+    "measurement_commit": {
+     "$ref": "#/$defs/commit"
+    },
+    "harness": {
+     "$ref": "#/$defs/str"
+    },
+    "macs": {
+     "$ref": "#/$defs/num"
+    },
+    "val_bpb": {
+     "$ref": "#/$defs/num"
+    },
+    "reason": {
+     "$ref": "#/$defs/reason"
+    },
+    "art": {
+     "$ref": "#/$defs/art"
+    }
+   }
+  },
+  "earlier": {
+   "type": "object",
+   "additionalProperties": false,
+   "description": "every scorer submission of a regime before the pin's (harness 2.0 to 2.2), apart from the checkpoints",
+   "required": [
+    "id",
+    "entry",
+    "cp",
+    "run",
+    "start",
+    "regime",
+    "harness",
+    "direction",
+    "mechanism",
+    "agent",
+    "macs",
+    "gates",
+    "val_bpb",
+    "E_bytes",
+    "counted",
+    "schedule_end",
+    "ledger_id",
+    "ledger_status",
+    "night"
+   ],
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "entry@cp"
+    },
+    "entry": {
+     "$ref": "#/$defs/art"
+    },
+    "cp": {
+     "$ref": "#/$defs/num",
+     "description": "the checkpoint's share of the schedule"
+    },
+    "run": {
+     "$ref": "#/$defs/str"
+    },
+    "start": {
+     "$ref": "#/$defs/str"
+    },
+    "regime": {
+     "enum": [
+      "earlier",
+      "paired",
+      "pin 2.2"
+     ],
+     "description": "earlier: before paired slices; paired: scored on a slice paired with the start (harness 2.1); pin 2.2: measured at the 2.2 pin"
+    },
+    "harness": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "version",
+      "witness",
+      "te_core",
+      "measurement_commit",
+      "commit"
+     ],
+     "properties": {
+      "version": {
+       "$ref": "#/$defs/str"
+      },
+      "witness": {
+       "$ref": "#/$defs/str"
+      },
+      "te_core": {
+       "$ref": "#/$defs/str"
+      },
+      "measurement_commit": {
+       "$ref": "#/$defs/commit"
+      },
+      "commit": {
+       "$ref": "#/$defs/str"
+      }
+     }
+    },
+    "direction": {
+     "$ref": "#/$defs/str"
+    },
+    "mechanism": {
+     "$ref": "#/$defs/str"
+    },
+    "agent": {
+     "$ref": "#/$defs/str"
+    },
+    "macs": {
+     "$ref": "#/$defs/num"
+    },
+    "gates": {
+     "$ref": "#/$defs/quantity",
+     "description": "the ledger's counted ops where a row joins by run and MACs (measured), else every MAC at the bf16 GEMM price (estimated)"
+    },
+    "val_bpb": {
+     "$ref": "#/$defs/num"
+    },
+    "E_bytes": {
+     "$ref": "#/$defs/int"
+    },
+    "counted": {
+     "$ref": "#/$defs/bool",
+     "description": "whether the harness counted its compute"
+    },
+    "schedule_end": {
+     "$ref": "#/$defs/bool"
+    },
+    "ledger_id": {
+     "$ref": "#/$defs/str"
+    },
+    "ledger_status": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/reason"
+      },
+      {
+       "const": "valid"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "night": {
+     "$ref": "#/$defs/night"
+    }
+   }
+  },
+  "runs": {
+   "type": "object",
+   "additionalProperties": false,
+   "description": "one row per run any source names: its hypothesis, configuration and outcome",
+   "required": [
+    "run",
+    "night",
+    "launched",
+    "kind",
+    "agent",
+    "direction",
+    "mechanism",
+    "class",
+    "start",
+    "island",
+    "node",
+    "state",
+    "rc",
+    "cancelled",
+    "regime",
+    "harness",
+    "hypothesis",
+    "config",
+    "seed",
+    "outcome",
+    "rerun_of",
+    "board",
+    "findings",
+    "negatives",
+    "arts"
+   ],
+   "properties": {
+    "run": {
+     "$ref": "#/$defs/run_id"
+    },
+    "night": {
+     "$ref": "#/$defs/night"
+    },
+    "launched": {
+     "$ref": "#/$defs/time"
+    },
+    "kind": {
+     "enum": [
+      "search",
+      "final-rerun",
+      "unrecorded"
+     ],
+     "description": "search: a launch record or ledger rows; final-rerun: a sealed entry's rerun at a final seed (its launch record's `final`); unrecorded: only the scorer's run list names it (cancelled, failed or a smoke run)"
+    },
+    "agent": {
+     "$ref": "#/$defs/str"
+    },
+    "direction": {
+     "$ref": "#/$defs/str"
+    },
+    "mechanism": {
+     "$ref": "#/$defs/str"
+    },
+    "class": {
+     "$ref": "#/$defs/str"
+    },
+    "start": {
+     "$ref": "#/$defs/str"
+    },
+    "island": {
+     "$ref": "#/$defs/str"
+    },
+    "node": {
+     "$ref": "#/$defs/str"
+    },
+    "state": {
+     "$ref": "#/$defs/str"
+    },
+    "rc": {
+     "$ref": "#/$defs/int"
+    },
+    "cancelled": {
+     "$ref": "#/$defs/bool"
+    },
+    "regime": {
+     "$ref": "#/$defs/str"
+    },
+    "harness": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "version",
+      "measurement_commit",
+      "witness",
+      "te_core",
+      "commit",
+      "program",
+      "island_tree"
+     ],
+     "properties": {
+      "version": {
+       "$ref": "#/$defs/str"
+      },
+      "measurement_commit": {
+       "$ref": "#/$defs/commit"
+      },
+      "witness": {
+       "$ref": "#/$defs/str"
+      },
+      "te_core": {
+       "$ref": "#/$defs/str"
+      },
+      "commit": {
+       "$ref": "#/$defs/str"
+      },
+      "program": {
+       "$ref": "#/$defs/str"
+      },
+      "island_tree": {
+       "$ref": "#/$defs/str"
+      }
+     }
+    },
+    "hypothesis": {
+     "$ref": "#/$defs/str",
+     "description": "the launch record's note"
+    },
+    "config": {
+     "type": [
+      "object",
+      "null"
+     ],
+     "additionalProperties": false,
+     "required": [
+      "trainable",
+      "counts",
+      "args",
+      "train_args",
+      "E_format",
+      "E_bytes",
+      "steps",
+      "tokens",
+      "full_theta",
+      "lowest_updated_layer",
+      "optimizer",
+      "optimizer_state_bits",
+      "family"
+     ],
+     "description": "the launch record's plain configuration",
+     "properties": {
+      "trainable": {
+       "description": "the trainable set: full tensors and adapters with their ranks"
+      },
+      "counts": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "tensors",
+        "adapters",
+        "parameters"
+       ],
+       "properties": {
+        "tensors": {
+         "$ref": "#/$defs/int"
+        },
+        "adapters": {
+         "$ref": "#/$defs/int"
+        },
+        "parameters": {
+         "$ref": "#/$defs/int"
+        }
+       }
+      },
+      "args": {
+       "$ref": "#/$defs/str"
+      },
+      "train_args": {
+       "description": "the training program's resolved arguments"
+      },
+      "E_format": {
+       "$ref": "#/$defs/str"
+      },
+      "E_bytes": {
+       "$ref": "#/$defs/int"
+      },
+      "steps": {
+       "$ref": "#/$defs/int"
+      },
+      "tokens": {
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "full_theta": {
+       "$ref": "#/$defs/bool"
+      },
+      "lowest_updated_layer": {
+       "$ref": "#/$defs/int"
+      },
+      "optimizer": {
+       "$ref": "#/$defs/str"
+      },
+      "optimizer_state_bits": {
+       "$ref": "#/$defs/num"
+      },
+      "family": {
+       "$ref": "#/$defs/family"
+      }
+     }
+    },
+    "seed": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "run",
+      "data"
+     ],
+     "properties": {
+      "run": {
+       "$ref": "#/$defs/int"
+      },
+      "data": {
+       "$ref": "#/$defs/int"
+      }
+     }
+    },
+    "outcome": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "checkpoints",
+      "left_out",
+      "in_panel",
+      "best",
+      "targets",
+      "launch_valid",
+      "failed_checks",
+      "final"
+     ],
+     "properties": {
+      "checkpoints": {
+       "type": "integer"
+      },
+      "left_out": {
+       "type": "object",
+       "propertyNames": {
+        "$ref": "#/$defs/reason"
+       },
+       "additionalProperties": {
+        "type": "integer"
+       }
+      },
+      "in_panel": {
+       "type": "integer"
+      },
+      "best": {
+       "$ref": "#/$defs/best"
+      },
+      "targets": {
+       "type": "array",
+       "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+         "drop",
+         "id",
+         "checkpoint",
+         "gates"
+        ],
+        "properties": {
+         "drop": {
+          "type": "number"
+         },
+         "id": {
+          "type": "string"
+         },
+         "checkpoint": {
+          "$ref": "#/$defs/int"
+         },
+         "gates": {
+          "type": "number"
+         }
+        }
+       },
+       "description": "per target drop the run reaches, its least-compute checkpoint"
+      },
+      "launch_valid": {
+       "$ref": "#/$defs/bool"
+      },
+      "failed_checks": {
+       "type": [
+        "array",
+        "null"
+       ],
+       "items": {
+        "type": "string"
+       }
+      },
+      "final": {
+       "type": "array",
+       "items": {
+        "$ref": "#/$defs/run_final"
+       }
+      }
+     }
+    },
+    "rerun_of": {
+     "$ref": "#/$defs/str",
+     "description": "for a final rerun, the search run whose entry it reruns"
+    },
+    "board": {
+     "$ref": "#/$defs/strings"
+    },
+    "findings": {
+     "$ref": "#/$defs/strings"
+    },
+    "negatives": {
+     "$ref": "#/$defs/strings"
+    },
+    "arts": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "launch",
+      "run_record"
+     ],
+     "properties": {
+      "launch": {
+       "$ref": "#/$defs/art"
+      },
+      "run_record": {
+       "$ref": "#/$defs/art"
+      }
+     }
+    }
+   }
+  },
+  "board": {
+   "type": "object",
+   "additionalProperties": false,
+   "description": "every line of the board, with the ids it names resolved",
+   "required": [
+    "id",
+    "at",
+    "night",
+    "agent",
+    "tag",
+    "text",
+    "runs",
+    "checkpoints",
+    "arts",
+    "unresolved",
+    "copies"
+   ],
+   "properties": {
+    "id": {
+     "type": "string",
+     "pattern": "^\\d{8}T\\d{4}Z-.+-[0-9a-f]{6}$"
+    },
+    "at": {
+     "$ref": "#/$defs/time"
+    },
+    "night": {
+     "$ref": "#/$defs/night"
+    },
+    "agent": {
+     "type": "string"
+    },
+    "tag": {
+     "type": [
+      "string",
+      "null"
+     ],
+     "pattern": "^[A-Z]+$"
+    },
+    "text": {
+     "type": "string"
+    },
+    "runs": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/run_id"
+     }
+    },
+    "checkpoints": {
+     "$ref": "#/$defs/strings"
+    },
+    "arts": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/art"
+     }
+    },
+    "unresolved": {
+     "$ref": "#/$defs/strings",
+     "description": "run ids and art: ids the line names that no source holds"
+    },
+    "copies": {
+     "type": "integer",
+     "minimum": 1
+    }
+   }
+  },
+  "methods": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "key",
+    "direction",
+    "mechanism",
+    "label",
+    "description",
+    "description_source",
+    "learned",
+    "open",
+    "family",
+    "runs",
+    "checkpoints",
+    "left_out",
+    "starts",
+    "nights",
+    "best",
+    "findings",
+    "negatives"
+   ],
+   "properties": {
+    "key": {
+     "type": "string"
+    },
+    "direction": {
+     "type": "string"
+    },
+    "mechanism": {
+     "type": "string"
+    },
+    "label": {
+     "$ref": "#/$defs/str"
+    },
+    "description": {
+     "$ref": "#/$defs/str"
+    },
+    "description_source": {
+     "$ref": "#/$defs/str",
+     "description": "curation, the methods panel (by key, or by mechanism alone), or the most common launch note"
+    },
+    "learned": {
+     "$ref": "#/$defs/strings"
+    },
+    "open": {
+     "$ref": "#/$defs/strings"
+    },
+    "family": {
+     "$ref": "#/$defs/family"
+    },
+    "runs": {
+     "type": "integer"
+    },
+    "checkpoints": {
+     "type": "integer"
+    },
+    "left_out": {
+     "type": "integer"
+    },
+    "starts": {
+     "$ref": "#/$defs/strings"
+    },
+    "nights": {
+     "type": "array",
+     "items": {
+      "enum": [
+       1,
+       2
+      ]
+     }
+    },
+    "best": {
+     "type": "object",
+     "additionalProperties": {
+      "$ref": "#/$defs/best"
+     },
+     "description": "per start, its least-loss checkpoint"
+    },
+    "findings": {
+     "$ref": "#/$defs/strings"
+    },
+    "negatives": {
+     "$ref": "#/$defs/strings"
+    }
+   }
+  },
+  "idea": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "idea",
+    "verdict",
+    "outcome",
+    "evidence"
+   ],
+   "properties": {
+    "idea": {
+     "type": "string"
+    },
+    "verdict": {
+     "enum": [
+      "gain",
+      "no-gain",
+      "mixed",
+      "untested",
+      "loophole"
+     ],
+     "description": "gain: beats its baseline at equal compute; no-gain: does not; mixed: depends on the start or budget; untested: never ran validly; loophole: a gain the measurement should not credit, since closed"
+    },
+    "outcome": {
+     "type": "string"
+    },
+    "evidence": {
+     "$ref": "#/$defs/strings"
+    }
+   }
+  },
+  "directions": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "direction",
+    "what",
+    "ideas",
+    "learned",
+    "open",
+    "evidence",
+    "runs",
+    "checkpoints",
+    "mechanisms",
+    "starts",
+    "nights",
+    "findings",
+    "negatives"
+   ],
+   "properties": {
+    "direction": {
+     "type": "string"
+    },
+    "what": {
+     "type": "string"
+    },
+    "ideas": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/idea"
+     }
+    },
+    "learned": {
+     "$ref": "#/$defs/strings"
+    },
+    "open": {
+     "$ref": "#/$defs/strings"
+    },
+    "evidence": {
+     "$ref": "#/$defs/strings"
+    },
+    "runs": {
+     "type": "integer"
+    },
+    "checkpoints": {
+     "type": "integer"
+    },
+    "mechanisms": {
+     "$ref": "#/$defs/strings"
+    },
+    "starts": {
+     "$ref": "#/$defs/strings"
+    },
+    "nights": {
+     "type": "array",
+     "items": {
+      "enum": [
+       1,
+       2
+      ]
+     }
+    },
+    "findings": {
+     "type": "integer"
+    },
+    "negatives": {
+     "type": "integer"
+    }
+   }
+  },
+  "lessons": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "id",
+    "kind",
+    "lesson",
+    "fix",
+    "status",
+    "rank",
+    "evidence"
+   ],
+   "properties": {
+    "id": {
+     "type": "string",
+     "pattern": "^[a-z0-9-]+$"
+    },
+    "kind": {
+     "enum": [
+      "loophole",
+      "measurement",
+      "method",
+      "process"
+     ],
+     "description": "loophole: a way to get credit the measurement should not give; measurement: how compute or rho is priced; method: what the training methods taught; process: how the search is run"
+    },
+    "lesson": {
+     "type": "string"
+    },
+    "fix": {
+     "$ref": "#/$defs/str"
+    },
+    "status": {
+     "enum": [
+      "fixed",
+      "rule",
+      "standing",
+      "open"
+     ],
+     "description": "fixed: closed in the harness or the scorer; rule: a process rule in force; standing: a finding that survives formalism v2; open: not yet closed"
+    },
+    "rank": {
+     "type": [
+      "integer",
+      "null"
+     ],
+     "minimum": 1,
+     "description": "1 to 5 for the five most important"
+    },
+    "evidence": {
+     "$ref": "#/$defs/strings"
+    }
+   }
+  },
+  "starts": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "id",
+    "label",
+    "shape",
+    "w_fwd_gates",
+    "l0",
+    "l0_final",
+    "c0_gates",
+    "c0_basis",
+    "c0_source",
+    "on_frontier",
+    "checkpoints",
+    "in_panel",
+    "runs"
+   ],
+   "properties": {
+    "id": {
+     "type": "string"
+    },
+    "label": {
+     "type": "string"
+    },
+    "shape": {
+     "type": "object",
+     "description": "starts_store.json's shape"
+    },
+    "w_fwd_gates": {
+     "type": "number",
+     "description": "one token's forward in gates"
+    },
+    "l0": {
+     "$ref": "#/$defs/num",
+     "description": "the start's loss on the search slice"
+    },
+    "l0_final": {
+     "$ref": "#/$defs/num",
+     "description": "the start's loss on the final shard"
+    },
+    "c0_gates": {
+     "$ref": "#/$defs/num"
+    },
+    "c0_basis": {
+     "$ref": "#/$defs/basis"
+    },
+    "c0_source": {
+     "type": "string"
+    },
+    "on_frontier": {
+     "$ref": "#/$defs/bool"
+    },
+    "checkpoints": {
+     "type": "integer"
+    },
+    "in_panel": {
+     "type": "integer"
+    },
+    "runs": {
+     "type": "integer"
+    }
+   }
+  },
+  "branch_points": {
+   "type": "object",
+   "additionalProperties": false,
+   "description": "per start and target drop: the blue envelope H and, per dial cell, the red envelope W*",
+   "required": [
+    "id",
+    "start",
+    "label",
+    "c0_gates",
+    "l0",
+    "drop",
+    "l_star",
+    "reached",
+    "H",
+    "cells"
+   ],
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "start@drop"
+    },
+    "start": {
+     "type": "string"
+    },
+    "label": {
+     "type": "string"
+    },
+    "c0_gates": {
+     "type": "number"
+    },
+    "l0": {
+     "type": "number"
+    },
+    "drop": {
+     "type": "number"
+    },
+    "l_star": {
+     "type": "number",
+     "description": "l0 (1 - drop)"
+    },
+    "reached": {
+     "type": "boolean"
+    },
+    "H": {
+     "type": "object",
+     "additionalProperties": false,
+     "required": [
+      "gates",
+      "total_gates",
+      "setter"
+     ],
+     "properties": {
+      "gates": {
+       "$ref": "#/$defs/num",
+       "description": "the least compute after the start over every checkpoint reaching l*"
+      },
+      "total_gates": {
+       "$ref": "#/$defs/num",
+       "description": "C0 + H"
+      },
+      "setter": {
+       "$ref": "#/$defs/setter"
+      }
+     }
+    },
+    "cells": {
+     "type": "array",
+     "minItems": 25,
+     "maxItems": 25,
+     "items": {
+      "$ref": "#/$defs/envelope_cell"
+     }
+    }
+   }
+  },
+  "curves": {
+   "type": "object",
+   "additionalProperties": false,
+   "description": "training/frontier-branches' rows, uncut, with the start's and checkpoint's ids",
+   "required": [
+    "curve",
+    "start",
+    "start_compute_gates",
+    "start_loss",
+    "on_frontier",
+    "c_tokens_per_block",
+    "k_bits",
+    "compute_total_gates",
+    "compute_after_gates",
+    "loss",
+    "S",
+    "run",
+    "method",
+    "delta_bits",
+    "basis",
+    "start_id",
+    "ledger_id",
+    "checkpoint"
+   ],
+   "properties": {
+    "curve": {
+     "enum": [
+      "frontier",
+      "honest",
+      "throttled"
+     ]
+    },
+    "start": {
+     "$ref": "#/$defs/str",
+     "description": "the start's label"
+    },
+    "start_compute_gates": {
+     "$ref": "#/$defs/num"
+    },
+    "start_loss": {
+     "$ref": "#/$defs/num"
+    },
+    "on_frontier": {
+     "$ref": "#/$defs/bool"
+    },
+    "c_tokens_per_block": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/c_tokens_per_block"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "k_bits": {
+     "$ref": "#/$defs/int"
+    },
+    "compute_total_gates": {
+     "type": "number"
+    },
+    "compute_after_gates": {
+     "$ref": "#/$defs/num"
+    },
+    "loss": {
+     "type": "number"
+    },
+    "S": {
+     "$ref": "#/$defs/num"
+    },
+    "run": {
+     "type": "string",
+     "description": "id@checkpoint"
+    },
+    "method": {
+     "type": "string"
+    },
+    "delta_bits": {
+     "$ref": "#/$defs/num"
+    },
+    "basis": {
+     "enum": [
+      "fit",
+      "target",
+      null
+     ]
+    },
+    "start_id": {
+     "$ref": "#/$defs/str"
+    },
+    "ledger_id": {
+     "$ref": "#/$defs/str"
+    },
+    "checkpoint": {
+     "$ref": "#/$defs/int"
+    }
+   }
+  },
+  "manifest": {
+   "type": "object",
+   "description": "what went in, the counts and what each rests on",
+   "required": [
+    "dataset",
+    "te_core",
+    "checkout",
+    "pin",
+    "stamp",
+    "tables",
+    "sources",
+    "nights",
+    "counts",
+    "checkpoints_by",
+    "left_out_by_reason",
+    "earlier_by_regime",
+    "earlier_by_harness",
+    "runs_by_kind",
+    "runs_by_night",
+    "board_by_tag",
+    "board_linked",
+    "rho_input_basis",
+    "dial_basis",
+    "labels",
+    "c0",
+    "uncurated_directions",
+    "top_lessons",
+    "deviations",
+    "caveats",
+    "non_finite"
+   ],
+   "properties": {
+    "dataset": {
+     "const": "te-dataset/v0"
+    },
+    "te_core": {
+     "type": "string"
+    },
+    "checkout": {
+     "type": "string",
+     "description": "the commit the exporter ran from"
+    },
+    "pin": {
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/commit"
+     },
+     "minItems": 1
+    },
+    "stamp": {
+     "$ref": "#/$defs/time",
+     "description": "the newest ledger row's written_at"
+    },
+    "tables": {
+     "$ref": "#/$defs/strings"
+    },
+    "sources": {
+     "type": "object",
+     "required": [
+      "ledger",
+      "scorer",
+      "quantities",
+      "board",
+      "methods",
+      "curation",
+      "pretraining"
+     ],
+     "properties": {
+      "ledger": {
+       "type": "object",
+       "required": [
+        "path",
+        "rows"
+       ]
+      },
+      "scorer": {
+       "type": "object",
+       "required": [
+        "path",
+        "collected_at",
+        "launch_records",
+        "runs",
+        "submissions",
+        "finals"
+       ]
+      },
+      "quantities": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "mode",
+        "how",
+        "word"
+       ],
+       "description": "te_core.rescore.load's quantities: its mode (--quantities), how they were got and its word for them",
+       "properties": {
+        "mode": {
+         "enum": [
+          "measured",
+          "analysis",
+          "stubs"
+         ]
+        },
+        "how": {
+         "type": "string"
+        },
+        "word": {
+         "type": "string"
+        }
+       }
+      },
+      "board": {
+       "type": "object",
+       "required": [
+        "path",
+        "sha256",
+        "entries",
+        "days"
+       ]
+      },
+      "methods": {
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "curation": {
+       "type": [
+        "object",
+        "null"
+       ]
+      },
+      "pretraining": {
+       "type": "object",
+       "required": [
+        "art",
+        "path"
+       ]
+      }
+     }
+    },
+    "nights": {
+     "type": "array"
+    },
+    "counts": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "integer"
+     }
+    },
+    "checkpoints_by": {
+     "type": "object"
+    },
+    "left_out_by_reason": {
+     "type": "object"
+    },
+    "earlier_by_regime": {
+     "type": "object"
+    },
+    "earlier_by_harness": {
+     "type": "object"
+    },
+    "runs_by_kind": {
+     "type": "object"
+    },
+    "runs_by_night": {
+     "type": "object"
+    },
+    "board_by_tag": {
+     "type": "object"
+    },
+    "board_linked": {
+     "type": "integer"
+    },
+    "rho_input_basis": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "propertyNames": {
+       "$ref": "#/$defs/basis"
+      }
+     }
+    },
+    "dial_basis": {
+     "type": "object"
+    },
+    "labels": {
+     "type": "object"
+    },
+    "c0": {
+     "type": "object"
+    },
+    "uncurated_directions": {
+     "$ref": "#/$defs/strings"
+    },
+    "top_lessons": {
+     "$ref": "#/$defs/strings"
+    },
+    "deviations": {
+     "$ref": "#/$defs/strings"
+    },
+    "caveats": {
+     "$ref": "#/$defs/strings"
+    },
+    "non_finite": {
+     "type": "integer",
+     "description": "non-finite values written null"
+    }
+   }
+  }
+ }
+}
