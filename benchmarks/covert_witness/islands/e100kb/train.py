@@ -45,7 +45,10 @@ the adapters' MACs are updated). Knobs, each a mechanism of the direction:
   Zhang and Pilanci 2024), `--opt muon` (A and B by Muon at `--lr`: Nesterov momentum, one fp32 buffer per value,
   orthogonalized by 5 Newton–Schulz steps, its matmuls counted as extra FLOPs; gains and magnitudes stay on AdamW),
   `--opt sign` (signSGD, Bernstein et al. 2018: each factor value, or VeRA's d and b, moves by `--lr` against its
-  gradient's sign, no optimizer state; with `--msg vote` it is signSGD with majority vote), `--beta2`, `--wd`;
+  gradient's sign, no optimizer state; with `--msg vote` it is signSGD with majority vote), `--opt factored`
+  (Adafactor's update at β1 = 0, Shazeer and Stern 2018: an absolute `--lr`, the gradient over the root of a factored
+  second moment, one fp32 value a row and a column of each factor, at `--beta2`, the update's RMS clipped to 1),
+  `--beta2`, `--wd`;
 - schedule: `--schedule` linear (warmup, linear decay to 0), wsd (`--cooldown` fraction), cosine; `--batch`;
 - data: `--fresh` skips the windows the start trained on (its seed-0 order's prefix).
 
@@ -484,16 +487,17 @@ def ranks_for(theta, targets: list[str], rank: int, rank_map: dict[str, int]) ->
 
 
 def delta_grad(adam: list[torch.Tensor], muon: list[torch.Tensor], latent: int, msg: Message | None = None,
-               sign: list[torch.Tensor] = ()) -> dict:
+               sign: list[torch.Tensor] = (), fact: list[torch.Tensor] = ()) -> dict:
     """Δ_grad: each trained value's gradient as a token block passes it (fp32, or `msg`'s coded width) and its
-    optimizer's fp32 state (AdamW's m and v, Muon's one buffer, none for signSGD), plus the `latent` fp32 masters the
-    update rule reads and writes beside what E stores."""
+    optimizer's fp32 state (AdamW's m and v, Muon's one buffer, Factored's one value a row and a column, none for
+    signSGD), plus the `latent` fp32 masters the update rule reads and writes beside what E stores."""
     na, nm = sum(p.numel() for p in adam), sum(p.numel() for p in muon)
-    n = na + nm + sum(p.numel() for p in sign)
-    grad = sum(msg.width(p.numel()) for p in [*adam, *muon, *sign]) if msg else 32 * n
-    bits = grad + 64 * na + 32 * nm + 32 * latent
-    return {"trainable": n, "grad_bits": grad, "adam_bits": 64 * na, "muon_bits": 32 * nm, "latent_bits": 32 * latent,
-            "bits": bits, "bytes": bits // 8}
+    nf = sum(p.shape[0] + p.shape[1] for p in fact)
+    n = na + nm + sum(p.numel() for p in [*sign, *fact])
+    grad = sum(msg.width(p.numel()) for p in [*adam, *muon, *sign, *fact]) if msg else 32 * n
+    bits = grad + 64 * na + 32 * nm + 32 * nf + 32 * latent
+    return {"trainable": n, "grad_bits": grad, "adam_bits": 64 * na, "muon_bits": 32 * nm, "factored_bits": 32 * nf,
+            "latent_bits": 32 * latent, "bits": bits, "bytes": bits // 8}
 
 
 def lr_factor(step: int, n_steps: int, a) -> float:
@@ -621,6 +625,36 @@ class Sign(torch.optim.Optimizer):
                 p.add_(torch.sign(p.grad), alpha=-g["lr"])
 
 
+class Factored(torch.optim.Optimizer):
+    """Adafactor's update (Shazeer and Stern 2018) at β1 = 0 with an absolute step: p ← p (1 − lr·wd) − lr·u, u =
+    ∇p / sqrt(V), V = R C / mean(R) from the EMAs (beta2, bias-corrected) of ∇p²'s row means R and column means C, u's
+    RMS clipped to 1. State: R and C, one fp32 value a row and a column of each matrix."""
+
+    def __init__(self, params, lr: float, beta2: float = 0.95, weight_decay: float = 0.0):
+        super().__init__(params, {"lr": lr, "beta2": beta2, "weight_decay": weight_decay})
+        self.t = 0
+
+    @torch.no_grad()
+    def step(self):
+        self.t += 1
+        for g in self.param_groups:
+            bc = 1 - g["beta2"] ** self.t
+            for p in g["params"]:
+                if p.grad is None:
+                    continue
+                st = self.state.setdefault(p, {"r": torch.zeros(p.shape[0], 1, device=p.device),
+                                               "c": torch.zeros(1, p.shape[1], device=p.device)})
+                g2 = p.grad.square().add_(1e-30)
+                st["r"].lerp_(g2.mean(1, keepdim=True), 1 - g["beta2"])
+                st["c"].lerp_(g2.mean(0, keepdim=True), 1 - g["beta2"])
+                # R / mean(R) before the product: a zero gradient leaves R and C near 5e-32, whose product is 0 in fp32
+                u = p.grad / (st["r"] / st["r"].mean() * st["c"] / bc).sqrt()
+                u.div_(u.square().mean().sqrt().clamp_min(1.0))
+                if g["weight_decay"]:
+                    p.mul_(1 - g["lr"] * g["weight_decay"])
+                p.add_(u, alpha=-g["lr"])
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--start", required=True)
@@ -652,7 +686,7 @@ def main() -> int:
     ap.add_argument("--init", default="gauss", choices=("gauss", "orth", "grad"))
     ap.add_argument("--init-batches", type=int, default=4)
     ap.add_argument("--scale", default="rs", choices=("rs", "one"), help="rs: s = sqrt(d_in / r); one: s = 1")
-    ap.add_argument("--opt", default="adamw", choices=("adamw", "riemann", "muon", "sign"))
+    ap.add_argument("--opt", default="adamw", choices=("adamw", "riemann", "muon", "sign", "factored"))
     ap.add_argument("--riemann-delta", type=float, default=1e-2)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--b-lr-mult", type=float, default=1.0)
@@ -774,8 +808,10 @@ def main() -> int:
             {"params": [params[n] for n in norms], "lr": a.norm_lr, "weight_decay": 0.0}]
     muon = [grp for grp in factors if grp["params"]] if a.opt == "muon" else []
     sign = [grp for grp in factors if grp["params"]] if a.opt == "sign" else []
-    adam = [grp for grp in (rest if a.opt in ("muon", "sign") else factors + rest) if grp["params"]]
+    fact = [grp for grp in factors if grp["params"]] if a.opt == "factored" else []
+    adam = [grp for grp in (rest if a.opt in ("muon", "sign", "factored") else factors + rest) if grp["params"]]
     opts = ([Muon(muon, lr=a.lr)] if muon else []) + ([Sign(sign, lr=a.lr)] if sign else []) + (
+        [Factored(fact, lr=a.lr, beta2=a.beta2)] if fact else []) + (
         [torch.optim.AdamW(adam, betas=(0.9, a.beta2), fused=prepare.DEVICE.startswith("cuda"))] if adam else [])
     extra = sum(ns_flops(tuple(p.shape)) for grp in muon for p in grp["params"])
     msg_extra = 0
@@ -793,10 +829,10 @@ def main() -> int:
     # mid-share, so a rounded step never puts two encodes in one harness window and none in the next
     marks = {round(n_steps * (k + 0.5) / (a.snaps + 1)) for k in range(a.snaps + 1)}
     hooks.plan(n_steps)
-    trained = [p for grp in muon + sign + adam for p in grp["params"]]
+    trained = [p for grp in muon + sign + fact + adam for p in grp["params"]]
     dgrad = delta_grad([p for grp in adam for p in grp["params"]], [p for grp in muon for p in grp["params"]],
                        sum(ad.latents() for ad in ads.values()) + sum(params[n].numel() for n in norms),
-                       msg, [p for grp in sign for p in grp["params"]])
+                       msg, [p for grp in sign for p in grp["params"]], [p for grp in fact for p in grp["params"]])
     messages = {"code": a.msg, "leaf_sequences": a.leaf, "leaf_tokens": a.leaf * prepare.EVAL_CTX,
                 "blocks_per_step": a.batch // a.leaf, "max_group": MSG_GROUP,
                 "entry_bits": dgrad["grad_bits"] / max(dgrad["trainable"], 1),
