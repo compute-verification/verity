@@ -2,6 +2,7 @@ import Proofs.Properties.Verity.Sampled.Moves
 import Proofs.Properties.Verity.Sampled.Project
 import Proofs.Flock.Recursive.Witness
 import Proofs.Flock.Soundness.Refine.Walk
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
 # Sampled proofs' acceptance: v2's verdict is flock-verify `--zk`'s on the session's files
@@ -128,14 +129,11 @@ theorem setupAt_setupOfP {W : Flock.Witness.Inputs} {rd : _root_.SampledProofs.O
 
 /-! ## What v2 verified is accepted -/
 
-/-- **`Zk.verify` accepts only a record that decodes** at the session's spec. -/
+/-- **`Zk.verify` accepts only a record that decodes** at the session's spec (`ZkExec.zk_verify_ok`). -/
 theorem zkVerify_decode {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {record : String}
     {proofs : Array ByteArray} (h : Flock.Zk.verify spec tabs record proofs = .ok ()) :
     ∃ sess, Flock.Record.decode spec record = .ok sess := by
-  unfold Flock.Zk.verify at h
-  obtain ⟨_, -, h⟩ := ebind_ok h
-  obtain ⟨_, -, h⟩ := ebind_ok h
-  obtain ⟨sess, hs, -⟩ := ebind_ok h
+  obtain ⟨-, sess, -, hs, -⟩ := ZkExec.zk_verify_ok spec tabs record proofs h
   exact ⟨sess, hs⟩
 
 /-- **What v2's check verified is a transcript flock-verify `--zk` accepts** at v2's inputs: the record and the proof
