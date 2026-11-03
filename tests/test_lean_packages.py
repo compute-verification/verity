@@ -57,7 +57,7 @@ def test_one_mathlib():
 #: once `Facts.lean`'s `chain` recorded the bound it ends at, and the five that merges on `next` brought in scope beside
 #: those: C-Flock's `LoopInnerRound0Own`, which reads a claim, the `nontrivial` halves of NCI's `HeldBudget` and
 #: `StatHeldBudget`, whose witnesses negate the bound alone, and those two witnesses, in scope once they witness nothing
-UNWITNESSED = {"Security": 628, "Security/Properties": 237, "verity/core/service/flock": 8}
+UNWITNESSED = {"Security": 628, "Security/Properties": 235, "verity/core/service/flock": 8}
 
 
 def test_the_unwitnessed_list_only_shrinks():

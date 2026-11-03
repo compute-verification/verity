@@ -43,6 +43,9 @@ top's hourly audit rings the owner of a goal past its due, unchanged for 12 hour
   that do pieces of it are @handle in its plan; a check the remote demo runs is the demo lead's goal even when proofs
   writes it in Lean.
 - **A due date** (`--due 2026-11-05`, the end of that day, or `2026-11-05T10:00-08:00` when the hour matters).
+- **A next step** (`--next TEXT --next-due WHEN`), dated within a day, for every open goal due within a week. The
+  page shows it on the goal's row, red once its date passes; from Thu 10 AM PST the site refuses a write to such a goal
+  that names none. `--no-next` clears it.
 - **A status:** `on-track`, `off-track` or `done`, your forecast of whether it will be true by its date.
   - Off track says why: link what it waits on, or say what's wrong in `--blockers`. The site refuses an off-track goal
     with neither.
