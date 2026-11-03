@@ -21,7 +21,7 @@ Daniel's training formalism v2, the one statement of the training slowdown, in L
 The assumptions A1 and A2 are `Nci.Formalism.Assumptions` (`Definitions.Nci.Assumptions.Formalism`), the theorems of §5
 are `Nci.Formalism.Guarantees` (`Definitions.Nci.Guarantees.Formalism`), and their proofs `Nci.Formalism.SecurityProofs`;
 the reconstruction lemma and the split of a block's inputs are proved beside them (`Nci.Formalism.reconstruction`,
-`Nci.Formalism.reads_split`). Units: `|C|`, `c`, `d`, `|B_K|` and `cap_K` count gates; `k`, `τ`, `a`, `u`, `Δ` and
-`Δ_grad` count values, which are bits; `s` is tokens and `r` gates a bit. The instances the theorems' witnesses are
+`Nci.Formalism.reads_split`). Units: `|C|`, `c`, `d`, `|B_K|` and `cap_K` count gates; `k`, `τ`, `a`, `u`, `Δ`, `Δ_t`
+and `Δ_grad` count values, which are bits; `s` is tokens and `r` gates a bit. The instances the theorems' witnesses are
 stated at are `Definitions.Nci.Formalism.Instances`.
 -/

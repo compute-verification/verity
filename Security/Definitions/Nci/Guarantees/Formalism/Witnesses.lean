@@ -111,14 +111,14 @@ def FitServing_nontrivial : Prop :=
     ¬ slowdown Honest.d 1 1 ≤ ((1 : ℕ) : ℝ≥0∞) / ((1 - 0 : ℕ) : ℝ≥0∞)
 
 /-- **Fit's training premises hold** at `Honest`: it is Boolean, and its two blocks of one gate are compute blocks that
-fit at `k = 2`, with `Δ = Δ_grad = s = τ = 1` and no decoder. -/
+fit at `k = 2`, with `Δ = Δ_t = Δ_grad = s = τ = 1` and no decoder. -/
 def FitTraining_honest : Prop :=
-  Honest.d.D.Boolean ∧ TrainingBlocks Honest.d Honest.P 1 0 1 1 1 1 ∧ TrainingFits 1 1 1 1 2
+  Honest.d.D.Boolean ∧ TrainingBlocks Honest.d Honest.P 1 0 1 1 1 1 1 ∧ TrainingFits 1 1 1 1 1 2
 
 /-- **Fit is false for training blocks that don't fit**: at `Honest`, at `k = 1` the blocks don't fit, no partition into
 inference blocks exists, and `ρ = ⊤`, above `c / (c - d) = 1`. -/
 def FitTraining_nontrivial : Prop :=
-  Honest.d.D.Boolean ∧ TrainingBlocks Honest.d Honest.P 1 0 1 1 1 1 ∧ ¬ TrainingFits 1 1 1 1 1 ∧
+  Honest.d.D.Boolean ∧ TrainingBlocks Honest.d Honest.P 1 0 1 1 1 1 1 ∧ ¬ TrainingFits 1 1 1 1 1 1 ∧
     ¬ slowdown Honest.d 1 1 ≤ ((1 : ℕ) : ℝ≥0∞) / ((1 - 0 : ℕ) : ℝ≥0∞)
 
 end Nci.Formalism.Guarantees

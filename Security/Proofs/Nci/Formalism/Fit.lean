@@ -83,18 +83,18 @@ theorem compute_reads_le {d : Declaration} {I : Finset (Fin d.D.N)} {Δ s τ : �
     _ ≤ Δ + s * τ := Nat.add_le_add hdesc (card_biUnion_le_mul data hdata)
 
 /-- A training block that fits reads at most `k` values beyond `θ`. -/
-theorem training_reads_le {d : Declaration} {I : Finset (Fin d.D.N)} {Δ Δgrad s τ k : ℕ}
-    (h : ComputeBlock d I Δ s τ ∨ ReductionBlock d I Δgrad ∨ UpdateBlock d I Δ Δgrad)
-    (hfit : TrainingFits Δ Δgrad s τ k) : (d.unregistered I).card ≤ k := by
+theorem training_reads_le {d : Declaration} {I : Finset (Fin d.D.N)} {Δ Δt Δgrad s τ k : ℕ}
+    (h : ComputeBlock d I Δ s τ ∨ ReductionBlock d I Δgrad ∨ UpdateBlock d I Δt Δgrad)
+    (hfit : TrainingFits Δ Δt Δgrad s τ k) : (d.unregistered I).card ≤ k := by
   obtain ⟨h1, h2, h3⟩ := hfit
-  rcases h with h | ⟨state, hstate, hsub⟩ | ⟨desc, state, hdesc, hstate, hsub⟩
+  rcases h with h | ⟨state, hstate, hsub⟩ | ⟨weights, state, hweights, hstate, hsub⟩
   · exact (compute_reads_le h).trans h1
   · calc (d.unregistered I).card ≤ (univ.biUnion state).card := card_le_card hsub
       _ ≤ 2 * Δgrad := card_biUnion_le_mul state hstate
       _ ≤ k := h2
-  · calc (d.unregistered I).card ≤ (desc ∪ state).card := card_le_card hsub
-      _ ≤ desc.card + state.card := card_union_le _ _
-      _ ≤ Δ + Δgrad := Nat.add_le_add hdesc hstate
+  · calc (d.unregistered I).card ≤ (weights ∪ state).card := card_le_card hsub
+      _ ≤ weights.card + state.card := card_union_le _ _
+      _ ≤ Δt + Δgrad := Nat.add_le_add hweights hstate
       _ ≤ k := h3
 
 namespace SecurityProofs
@@ -111,7 +111,7 @@ theorem FitHonestServing : Guarantees.FitHonestServing := by
     (fun u => (compute_reads_le (hP u).2.2).trans hfit) hB hc
 
 theorem FitTraining : Guarantees.FitTraining := by
-  intro d B P c k dg Δ Δgrad s τ hb hP hfit
+  intro d B P c k dg Δ Δt Δgrad s τ hb hP hfit
   exact (slowdown_le_partitionSlowdown (k := k)
     ⟨hb, fun u => (hP u).2.1, fun u => training_reads_le (hP u).2.2 hfit⟩).trans
     (partitionSlowdown_le P fun u => (hP u).1)

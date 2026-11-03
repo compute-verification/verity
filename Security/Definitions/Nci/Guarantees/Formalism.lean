@@ -32,7 +32,7 @@ of work, its factors explicit, and it reads the upper bounds A1 gives, never bes
 * **Fit**: a partition whose every block holds at least `c - d` gates and reads within `k` gives `ρ ≤ c / (c - d)`.
   Running `θ'` (`FitServing`), session blocks with `Δ + s τ ≤ k`; honest serving, `Δ = 0` and no decoder, has exactly
   `ρ = 1`, one block per session (`FitHonestServing`). Training (`FitTraining`), compute blocks with `Δ + s τ ≤ k`,
-  reduction blocks with `2 Δ_grad ≤ k` and update application blocks with `Δ + Δ_grad ≤ k`. Fit counts the blocks'
+  reduction blocks with `2 Δ_grad ≤ k` and update application blocks with `Δ_t + Δ_grad ≤ k`. Fit counts the blocks'
   gates in `C`: `c / (c - d)` is `ρ` against a circuit whose blocks each leave `d` of their `c` gates to a decoder;
 * **Security** (`Security`), under A1 and A2: a run of the methods considered that reaches `ℓ*` through a partition
   into inference blocks that fit in `N` periods of `n` blocks has `N n c ≥ ρ̲ p H(ℓ*)`, `ρ̲` Slowdown's bound for it and
@@ -99,8 +99,8 @@ def FitHonestServing : Prop :=
 /-- **Fit, training**: compute, reduction and update application blocks of at least `c - d` gates that each read
 within `k` give `ρ ≤ c / (c - d)`. -/
 def FitTraining : Prop :=
-  ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B) (c k dg Δ Δgrad s τ : ℕ), d.D.Boolean →
-    TrainingBlocks d P c dg Δ Δgrad s τ → TrainingFits Δ Δgrad s τ k →
+  ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B) (c k dg Δ Δt Δgrad s τ : ℕ), d.D.Boolean →
+    TrainingBlocks d P c dg Δ Δt Δgrad s τ → TrainingFits Δ Δt Δgrad s τ k →
     slowdown d c k ≤ (c : ℝ≥0∞) / ((c - dg : ℕ) : ℝ≥0∞)
 
 /-- **Security**: under A1 and A2, a run of `methods` whose update stays within `D` bits and that reaches `ℓ*` through a

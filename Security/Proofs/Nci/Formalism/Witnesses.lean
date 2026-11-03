@@ -269,7 +269,7 @@ theorem computeBlock (u : Fin 2) : ComputeBlock d (P.gates u) 1 1 1 :=
 theorem sessionBlocks : SessionBlocks d P 1 0 1 1 1 := fun u =>
   ⟨by revert u; decide, by revert u; decide, computeBlock u⟩
 
-theorem trainingBlocks : TrainingBlocks d P 1 0 1 1 1 1 := fun u =>
+theorem trainingBlocks : TrainingBlocks d P 1 0 1 1 1 1 1 := fun u =>
   ⟨(sessionBlocks u).1, (sessionBlocks u).2.1, Or.inl (computeBlock u)⟩
 
 /-- No partition into inference blocks at `(c, k) = (1, 1)`: gate `3`'s block is gate `3`, which reads two values. -/
@@ -376,11 +376,11 @@ example (h3 : ServingFits 1 1 1 1) : False := by
 
 example : slowdown Honest.d 1 2 ≤ ((1 : ℕ) : ℝ≥0∞) / ((1 - 0 : ℕ) : ℝ≥0∞) := by
   obtain ⟨h1, h2, h3⟩ := FitTraining_honest
-  exact FitTraining Honest.d 2 Honest.P 1 2 0 1 1 1 1 h1 h2 h3
+  exact FitTraining Honest.d 2 Honest.P 1 2 0 1 1 1 1 1 h1 h2 h3
 
-example (h3 : TrainingFits 1 1 1 1 1) : False := by
+example (h3 : TrainingFits 1 1 1 1 1 1) : False := by
   obtain ⟨h1, h2, -, hlt⟩ := FitTraining_nontrivial
-  exact hlt (FitTraining Honest.d 2 Honest.P 1 1 0 1 1 1 1 h1 h2 h3)
+  exact hlt (FitTraining Honest.d 2 Honest.P 1 1 0 1 1 1 1 1 h1 h2 h3)
 
 end SecurityProofs
 
