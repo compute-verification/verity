@@ -10,7 +10,7 @@ from research import goals
 from research.slack import RouteError
 
 GOAL = {"id": "demos/both", "title": "Both demos pass on one served H200 run", "status": "off-track",
-        "due": "2026-11-05T10:00-08:00", "tags": ["demos"], "owner": "vllm", "headline": True,
+        "due": "2026-11-05T10:00-08:00", "tags": ["remote-demo"], "owner": "vllm", "headline": True,
         "description": "The verdicts come back.", "waitingOn": [{"goal": "demos/pouw"}]}
 
 
@@ -41,13 +41,17 @@ def test_set_changes_only_the_fields_given_and_drops_what_the_store_added(capsys
     assert "Thu 5 Nov, 10:00 AM" in capsys.readouterr().out
 
 
-def test_wait_replaces_the_links_and_step_takes_it_off_the_page():
+def test_wait_replaces_the_links_tier_overrides_the_derived_one_and_blockers_say_why():
     fake = Fake([GOAL])
     assert goals.main(["set", "demos/both", "--wait", "goal:vllm/partition", "--wait",
-                       "ask:dbd7c37c-12c8-4a1f-b279-1c99cb922c39", "--step", "--owner", "proofs"], fake) == 0
+                       "ask:dbd7c37c-12c8-4a1f-b279-1c99cb922c39", "--tier", "2", "--owner", "proofs",
+                       "--blockers", "Main isn't moving."], fake) == 0
     sent = fake.posted[-1]["set"]
     assert sent["waitingOn"] == [{"goal": "vllm/partition"}, {"ask": "dbd7c37c-12c8-4a1f-b279-1c99cb922c39"}]
-    assert sent["headline"] is False and sent["owner"] == "proofs"
+    assert sent["tier"] == 2 and sent["owner"] == "proofs" and sent["blockers"] == "Main isn't moving."
+    fake = Fake([GOAL | {"tier": 2, "blockers": "x"}])
+    assert goals.main(["set", "demos/both", "--no-tier", "--no-blockers"], fake) == 0
+    assert "tier" not in fake.posted[-1]["set"] and "blockers" not in fake.posted[-1]["set"]
     assert goals.main(["set", "demos/both", "--wait", "partition"], fake) == 1
 
 
@@ -81,16 +85,15 @@ def test_replace_sends_exactly_the_files_goals(tmp_path):
     assert goals.main(["replace", str(path)], fake) == 1
 
 
-def test_show_lists_headline_goals_by_due_date_with_links_and_moves(capsys):
-    step = {"id": "vllm/partition", "title": "Partition on main", "status": "on-track", "due": "2026-11-02",
-            "tags": ["demos"], "headline": False}
-    fake = Fake([GOAL | {"wasDue": "2026-11-03"}, step])
+def test_show_lists_every_goal_by_due_date_with_links_moves_and_tier_overrides(capsys):
+    subgoal = {"id": "vllm/partition", "title": "Partition on main", "status": "on-track", "due": "2026-11-02",
+               "tags": ["remote-demo"], "tier": 2}
+    fake = Fake([GOAL | {"wasDue": "2026-11-03"}, subgoal])
     assert goals.main(["show"], fake) == 0
     out = capsys.readouterr().out
     assert "Thu 5 Nov, 10:00 AM" in out and "off-track" in out and "waits on demos/pouw" in out
-    assert "(was Tue 3 Nov, end of day)" in out and "demos/both" in out and "Partition on main" not in out
-    assert goals.main(["show", "--steps"], fake) == 0
-    assert "Partition on main  demos  (step)" in capsys.readouterr().out
+    assert "(was Tue 3 Nov, end of day)" in out and "demos/both" in out
+    assert "Partition on main  remote-demo  (tier 2)" in out
 
 
 def test_a_refusal_is_one_line_naming_the_field(capsys):
@@ -101,7 +104,7 @@ def test_a_refusal_is_one_line_naming_the_field(capsys):
 
 
 @pytest.mark.parametrize("argv", [["set", "x", "--status", "maybe"], ["set", "x", "--wait", "goal:a", "--no-wait"],
-                                  ["set", "x", "--step", "--headline"]])
+                                  ["set", "x", "--tier", "2", "--no-tier"], ["set", "x", "--tier", "12"]])
 def test_the_command_line_refuses_what_the_site_would(argv):
     with pytest.raises(SystemExit):
         goals.main(argv, Fake())
