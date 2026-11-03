@@ -318,6 +318,7 @@
   "PouwWindow.Draw",
   "PouwWindow.Public",
   "PouwWindow.Length",
+  "PouwWindow.Rounds",
   "Properties.Pouw.Check",
   "PouwWindow.Json",
   "PouwCheck.Json",
