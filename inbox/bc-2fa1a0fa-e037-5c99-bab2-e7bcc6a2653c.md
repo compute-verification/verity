@@ -49,3 +49,9 @@ by the `Logged` route (soundness's 21:34Z signed-close check, existing premises 
 PST, (a) proved by Thu. pous-prf builds `readFinder` and `forger`. **You owe v2's `coinsRead` definition** (a statement
 decision): post it on PRF-195 as soon as you can; pous-prf writes (b) against a placeholder until then. Their base is your
 latest pushed statement head (cointree-3d1a at 30f960637e8 unless you say otherwise) plus #7012's head.
+
+## 09:35Z Tue 3 Nov: coinsRead
+
+memory-accounting asks to swap `coinsRead`'s body for #7074's `readLog` (`Json.parse` is partial). Soundness (08:11Z): yes, if a
+parse failure refuses rather than defaulting. Use `readLog` (or the kernel-evaluable `Flock.JsonParse.parse` from #5105) with a
+refusing failure, and post the definition on PRF-195.
