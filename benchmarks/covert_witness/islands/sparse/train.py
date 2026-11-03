@@ -19,7 +19,11 @@ decoder can carry) or with a list index, and single entries with an entropy-code
   (d_in + d_out) · bits / 8 bytes; the forward reads the codes, the factors train through them (straight-through);
 - `signrows`: whole rows of the block matrices as `--bits`-bit codes of a delta (1 bit: a sign times the row's f16 scale),
   rows chosen by the selection energy per byte; E is a CWQUAN1 delta over each touched matrix whose other rows have
-  scale 0, which the entropy coder all but drops, so the mask costs next to nothing.
+  scale 0, which the entropy coder all but drops, so the mask costs next to nothing;
+- `entries`: single entries of the candidate matrices and of the gains `--norms` names, the ones with the most selection
+  energy (each tensor's scaled by its learning rate squared, so a sign step's first-order gain ranks them), as many as
+  CWSPAR1 (varint index gaps, `--entry-dtype` values) holds in `--cap` bytes and at most `--values`; a matrix's entries
+  are added to its weight in its forward (no extra matmul), a gain's train under a gradient mask.
 
 The gains (`--norms`) can ride along with every mechanism: in bf16 with the CWLORA1 ones, as `--norm-bits` deltas with
 the CWQUAN1 ones (θ is fp32, so a gain carried in full would cost 4 bytes). `--layers top:N` keeps every touched tensor
@@ -29,15 +33,17 @@ both the lookup and the head), its (vocab + d) · R entries taken before the blo
 byte bin below the class's cap (the 10 kB bin, or Fit's ~1.8 kB at the reference policy); the reference class has no
 cap, so there `--cap` is the planner's budget and is required.
 
-The record's notes give `delta_grad`: the trainable values N and the gradient plus AdamW's m and v passed between token
-blocks, 3N fp32 values (a straight-through code trains fp32 latents, so codes shrink E and not this), in the lowrank
-island's keys too (`bits`/`bytes` that state; `latent_bits`, apart from it, the fp32 latents a straight-through code
-trains: the update application's Δ_t).
+`--opt` is AdamW, `sign` (sign descent) or `sgd` (no momentum); the last two keep no state. The record's notes give
+`delta_grad`: the trained values N and what passes between token blocks, the gradient of every tensor the step trains
+(a masked gain's whole tensor) in fp32 plus AdamW's m and v where AdamW trains (a straight-through code trains fp32
+latents, so codes shrink E and not this), in the lowrank island's keys too (`bits`/`bytes` that state; `latent_bits`,
+apart from it, the fp32 latents a straight-through code trains: the update application's Δ_t).
 
 E is encoded at the end of every 5% of the harness's steps (the probe's batches included, `hooks.plan`), so each of the
 harness's checkpoints scores the most training its 5% holds.
 
     python launch.py START --island sparse --note "MECHANISM: ..." -- --cap BYTES --mech qlora [--embed-rank R] [--lr 1e-3]
+    python launch.py START --island sparse --note "entries: ..." -- --cap BYTES --mech entries [--values N] [--opt sign]
 """
 from __future__ import annotations
 
@@ -462,6 +468,45 @@ def plan_rows(cands: list[str], energy: dict, theta: dict, budget: float, bits: 
     return {n: sorted(r) for n, r in plan.items()}
 
 
+def entries_size(theta: dict, plan: dict[str, torch.Tensor], dtype: str) -> int:
+    return len(prepare.encode_sparse(theta, {n: (i, torch.zeros(len(i))) for n, i in plan.items()}, dtype))
+
+
+def plan_entries(pool: list[str], energy: dict, theta: dict, cap: int, max_values: int,
+                 dtype: str) -> dict[str, torch.Tensor]:
+    """{tensor: sorted flat indices}: the entries of `pool` with the most energy, as many as CWSPAR1 holds in `cap` bytes
+    and at most `max_values` (0: no count cap)."""
+    flat = torch.cat([energy[n].reshape(-1) for n in pool])
+    ends = torch.tensor([theta[n].numel() for n in pool]).cumsum(0)
+    most = min(flat.numel(), cap // 3, max_values or flat.numel())
+    top = torch.topk(flat, most).indices
+
+    def take(k: int) -> dict[str, torch.Tensor]:
+        sel = top[:k]
+        which = torch.bucketize(sel, ends, right=True)
+        return {pool[j]: torch.sort(sel[which == j] - (ends[j - 1] if j else 0)).values for j in which.unique().tolist()}
+
+    lo, hi = 0, most
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        lo, hi = (mid, hi) if entries_size(theta, take(mid), dtype) <= cap else (lo, mid - 1)
+    return take(lo)
+
+
+class Sign(torch.optim.Optimizer):
+    """Sign descent with no state: a step moves each value by its group's lr against its gradient's sign."""
+
+    def __init__(self, params, lr: float = 1e-3, weight_decay: float = 0.0):
+        super().__init__(params, {"lr": lr, "weight_decay": weight_decay})
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        for grp in self.param_groups:
+            for p in grp["params"]:
+                if p.grad is not None:
+                    p.add_(p.grad.sign(), alpha=-grp["lr"])
+
+
 def tie_lora(lm, A, B, s: float) -> None:
     """`embed` + s · B @ A in the `lf` model's lookup and its tied head, never formed: the lookup adds s · B[idx] @ A and
     the head s · (x Aᵀ) Bᵀ, so the frozen head's matmul stays as it was. Mirrors `model.LM.hidden` and `LM.top`. A and B
@@ -497,7 +542,7 @@ def main() -> int:
     ap.add_argument("--klass", required=bool(classes), choices=("reference", "e1mb", "e100kb") if classes else None)
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--mech", required=True, choices=("norms", "lines", "lora", "qlora", "signrows"))
+    ap.add_argument("--mech", required=True, choices=("norms", "lines", "lora", "qlora", "signrows", "entries"))
     ap.add_argument("--cap", type=int, default=0,
                     help="E's byte bin, at most the class's cap (0: the class's); required on a pin without classes")
     ap.add_argument("--bits", type=int, default=1, help="qlora: the factors' bits; signrows: the rows' code bits")
@@ -521,6 +566,10 @@ def main() -> int:
     ap.add_argument("--embed-rank", type=int, default=0,
                     help="lora: the tied embedding's LoRA rank, placed before the block matrices' allocation; -1: the "
                          "embedding joins the gradient's allocation as one more candidate")
+    ap.add_argument("--values", type=int, default=0, help="entries: at most this many entries (0: as many as fit --cap)")
+    ap.add_argument("--entry-dtype", default="f16", choices=("f16", "bf16"), help="entries: CWSPAR1's value dtype")
+    ap.add_argument("--opt", default="adamw", choices=("adamw", "sign", "sgd"),
+                    help="AdamW, sign descent or SGD without momentum (the last two keep no state)")
     ap.add_argument("--probe", type=int, default=4, help="probe batches at θ (0: no probe, no analysis)")
     ap.add_argument("--analyse", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--lr", type=float, default=3e-4)
@@ -560,7 +609,10 @@ def main() -> int:
                    "script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
 
     G = G2 = None
-    need_g = a.mech in ("lora", "qlora") or a.mech in ("lines", "signrows") and a.select in ("grad", "fisher", "adam")
+    entries = a.mech == "entries"
+    if entries and a.embed_rank:
+        raise SystemExit("sparse: --mech entries takes no --embed-rank")
+    need_g = a.mech in ("lora", "qlora") or a.mech in ("lines", "signrows", "entries") and a.select in ("grad", "fisher", "adam")
     if need_g and not a.probe:
         raise SystemExit("sparse: --mech lora|qlora and a gradient selection need --probe > 0")
     if a.probe and (need_g or a.analyse):
@@ -573,6 +625,8 @@ def main() -> int:
 
     norms = norm_names(theta, a.norms, a.layers, L)
     cands = matrices(theta, a.targets, a.layers, L) if a.mech != "norms" else []
+    if entries:
+        cands, norms = cands + norms, []
     if quant and any(theta[n].numel() % a.norm_group for n in norms):
         raise SystemExit(f"sparse: --norm-group {a.norm_group} doesn't divide every gain")
     sizer = torch.Generator().manual_seed(1)
@@ -580,13 +634,15 @@ def main() -> int:
     def size_of(plan) -> int:
         if quant:
             return quant_size(random_entries(theta, a.mech, plan, norms, a.bits, a.norm_bits, a.norm_group, sizer), theta)
+        if entries:
+            return entries_size(theta, plan or {}, a.entry_dtype)
         return e_bytes(a.mech, theta, norms, plan)
 
     norm_bytes = size_of({}) if quant else e_bytes("norms", theta, norms, None)
     avail = cap - norm_bytes - HEADER_SLACK
     trim = max(64, cap // 50)
     plan = None
-    if a.mech in ("lines", "signrows"):
+    if a.mech in ("lines", "signrows", "entries"):
         if a.select == "grad":
             energy = {n: G[n].pow(2) for n in cands}
         elif a.select == "fisher":
@@ -599,12 +655,16 @@ def main() -> int:
             gen = torch.Generator().manual_seed(a.seed)
             energy = {n: torch.rand(theta[n].shape, generator=gen) for n in cands}
         energy = {n: e.float().cpu() for n, e in energy.items()}
-        replan = (lambda: plan_lines(cands, energy, theta, avail, a.orient)) if a.mech == "lines" else \
-            (lambda: plan_rows(cands, energy, theta, avail, a.bits))
-        plan = replan()
-        while plan and size_of(plan) > cap:
-            avail -= trim
+        if entries:
+            energy = {n: e * (a.lr if theta[n].ndim == 2 else a.norm_lr) ** 2 for n, e in energy.items()}
+            plan = plan_entries(cands, energy, theta, cap, a.values, a.entry_dtype)
+        else:
+            replan = (lambda: plan_lines(cands, energy, theta, avail, a.orient)) if a.mech == "lines" else \
+                (lambda: plan_rows(cands, energy, theta, avail, a.bits))
             plan = replan()
+            while plan and size_of(plan) > cap:
+                avail -= trim
+                plan = replan()
         energy = None
     elif a.mech == "qlora":
         if a.regrow < 1 or a.alloc != "grad":
@@ -687,6 +747,24 @@ def main() -> int:
             mod = net.inner.get_submodule(n.removesuffix(".weight"))
             mod.register_forward_hook(lambda m, inp, out, Vq=Vq, ri=ri: out.index_add(
                 -1, ri, F.linear(inp[0], Vq).to(out.dtype)))
+    gain_entries: dict = {}
+    if entries:
+        for n, idx in plan.items():
+            ii = idx.to(dev)
+            if theta[n].ndim == 2:
+                V = torch.nn.Parameter(torch.zeros(len(idx), device=dev))
+                train_vals[n] = (ii, V)
+                hooks_params.append(V)
+                mod = net.inner.get_submodule(n.removesuffix(".weight"))
+                mod.forward = lambda x, w=mod.weight, V=V, ii=ii: F.linear(
+                    x, w.reshape(-1).index_add(0, ii, V.to(w.dtype)).view_as(w))
+            else:
+                p = params[n]
+                p.data = p.data.float()
+                p.requires_grad_(True)
+                mask = torch.zeros(p.numel(), device=dev).index_fill_(0, ii, 1.0).view_as(p)
+                p.register_hook(lambda grad, mask=mask: grad * mask)
+                gain_entries[n] = (ii, p, p.detach().clone())
     g = torch.Generator(device=dev).manual_seed(a.seed)
 
     def add_lora(n: str, r: int) -> list[torch.nn.Parameter]:
@@ -713,6 +791,14 @@ def main() -> int:
     if norms:
         groups.append({"params": list(gain_latent.values()) if quant else [params[n] for n in norms],
                        "lr": a.norm_lr if a.mech != "norms" else a.lr, "weight_decay": 0.0})
+    if gain_entries:
+        groups.append({"params": [p for _, p, _ in gain_entries.values()], "lr": a.norm_lr, "weight_decay": 0.0})
+
+    def encode_e() -> bytes:
+        deltas = {n: (ii.cpu(), V.detach().float().cpu()) for n, (ii, V) in train_vals.items()}
+        deltas |= {n: (ii.cpu(), (p.detach() - p0).reshape(-1)[ii].float().cpu())
+                   for n, (ii, p, p0) in gain_entries.items()}
+        return prepare.encode_sparse(theta, deltas, a.entry_dtype)
 
     def encode_q() -> bytes:
         entries = {n: delta_entry(gain_latent[n].detach() - gain0[n], a.norm_bits, a.norm_group) for n in norms}
@@ -724,8 +810,13 @@ def main() -> int:
                 ri, V = v
                 entries[n] = rows_entry(tuple(theta[n].shape), ri, V.detach(), a.bits)
         return prepare.encode_quant(entries, theta)
-    opt = torch.optim.AdamW(groups, betas=(0.9, 0.95), fused=dev.startswith("cuda"))
-    trainable = {"full": norms, "adapters": adapters}
+    if a.opt == "adamw":
+        opt = torch.optim.AdamW(groups, betas=(0.9, 0.95), fused=dev.startswith("cuda"))
+    elif a.opt == "sign":
+        opt = Sign(groups, lr=a.lr)
+    else:
+        opt = torch.optim.SGD(groups, lr=a.lr, momentum=0.0)
+    trainable = {"full": sorted(plan), "adapters": {}} if entries else {"full": norms, "adapters": adapters}
     tokens = a.batch * prepare.EVAL_CTX
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     spent = prepare.train_flops(rec, trainable, steps)["flops"]
@@ -751,6 +842,10 @@ def main() -> int:
         summary["rows"] = sum(len(r) for r in plan.values())
         notes["plan"] = {n: len(r) for n, r in plan.items()}
         notes["mask"] = plan
+    elif entries:
+        summary["entries"] = sum(len(i) for i in plan.values())
+        summary["gain_entries"] = sum(len(i) for n, i in plan.items() if theta[n].ndim == 1)
+        notes["plan"] = {n: len(i) for n, i in plan.items()}
     notes["summary"] = summary
     print(json.dumps(summary), flush=True)
     fwd = torch.compile(net) if dev.startswith("cuda") else net
@@ -808,15 +903,19 @@ def main() -> int:
             print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
         if calls in marks:
-            encode_q() if quant else encode(a.mech, theta, params, norms, plan, train_vals)
-    blob = encode_q() if quant else encode(a.mech, theta, params, norms, plan, train_vals)
+            encode_q() if quant else encode_e() if entries else encode(a.mech, theta, params, norms, plan, train_vals)
+    blob = encode_q() if quant else encode_e() if entries else encode(a.mech, theta, params, norms, plan, train_vals)
     model = prepare.decode(theta, blob)
-    changed = sorted(set(norms) | set(adapters))
-    n_train = sum(p.numel() for grp in opt.param_groups for p in grp["params"])
-    notes["delta_grad"] = {"values": n_train, "fp32_bytes": 12 * n_train,
-                           "what": "the gradient and AdamW's m and v of every trained value (fp32 latents for codes)",
-                           "trainable": n_train, "grad_bits": 32 * n_train, "adam_bits": 64 * n_train, "muon_bits": 0,
-                           "latent_bits": 32 * n_train if quant else 0, "bits": 96 * n_train, "bytes": 12 * n_train}
+    changed = sorted(plan) if entries else sorted(set(norms) | set(adapters))
+    grads = sum(p.numel() for grp in opt.param_groups for p in grp["params"])
+    n_train = summary["entries"] if entries else grads
+    state = 64 * grads if a.opt == "adamw" else 0
+    notes["delta_grad"] = {"values": n_train, "fp32_bytes": (32 * grads + state) // 8, "optimizer": a.opt,
+                           "what": "the fp32 gradient of every trained tensor (a masked gain's whole) and AdamW's m and v "
+                                   "where AdamW trains (fp32 latents for codes apart)",
+                           "trainable": n_train, "grad_bits": 32 * grads, "adam_bits": state, "muon_bits": 0,
+                           "latent_bits": 32 * grads if quant else 0, "bits": 32 * grads + state,
+                           "bytes": (32 * grads + state) // 8}
     notes["E_bytes"] = {"planned": size, "encoded": len(blob), "format": prepare.format_of(blob)}
     notes["E_bytes"]["over_cap"] = len(blob) > cap
     print(json.dumps({"delta_grad": notes["delta_grad"], "E_bytes": notes["E_bytes"]}), flush=True)

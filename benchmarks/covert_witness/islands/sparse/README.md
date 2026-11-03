@@ -3,7 +3,10 @@
 The direction's question (night 2, formalism v1): on the fully trained starts, the least compute to each target with Δ in
 each bin (≤ 1.8 kB, Fit's at the reference policy c = 4096 w, k = 10 kB; ≤ 10 kB; ≤ 100 kB; ≤ 1 MB), by any mechanism,
 with Δ_grad for each. Night 1's: within E ≤ 1 MB and ≤ 100 kB, which parameters to touch for the most loss per training
-FLOP, and how a mask's own encoding cost trades against its values.
+FLOP, and how a mask's own encoding cost trades against its values. Since 03:00Z on night 2 (TRN-40), the plot is ρ at
+the page's policy against p = C/H for each gain size. Under te_core 4.1 a record whose Δ = 8|E| is at most k scores ρ = 1
+(8,192 B at the console default's k = 65,536 bits), and ρ climbs toward the slowdown floor as Δ passes k, so the bins
+are multiples of k.
 
 `train.py` is the one script. At v3's pin: `launch.py START --island sparse --node NODE --note "MECHANISM: ..." -- --cap
 BYTES --mech ...`, with `--cap` E's byte bin (required, since v3 has no classes). v2.3's records (the pilot) took the class
@@ -16,11 +19,14 @@ too, `--klass reference|e1mb|e100kb`, with `--cap` a bin below its cap.
 | `lora` | each candidate matrix's rank, greedily by the probe gradient's σ² per byte; with `--regrow F`, F of the bytes at θ and the rest after `--regrow-at` of the steps from a fresh probe, past each matrix's held rank (a learned mask) | LoRA factors, bf16 (a grown matrix's pieces as one pair at scale 1) |
 | `qlora` | `lora`'s ranks at (d_in + d_out) · `--bits` / 8 bytes a rank | CWQUAN1 lora entries: `--bits`-bit midrise codes, A one f16 scale per row, B one per 64 rows |
 | `signrows` | whole rows of block matrices by `--select` energy per byte (d_in · `--bits` / 8 + 2 bytes a row) | a CWQUAN1 delta over each touched matrix: the rows' codes (1 bit: a sign times the row's scale, mean \|V\|), every other row scale 0, which xz all but drops |
+| `entries` | single entries of the candidate matrices and of the gains `--norms` names, by `--select` energy times the tensor's learning rate squared, as many as fit `--cap` bytes and at most `--values` | CWSPAR1: varint index gaps and `--entry-dtype` (f16 or bf16) values, sized exactly |
 
 `qlora` and `signrows` train fp32 latents straight-through (the forward reads their codes, exactly what CWQUAN1 decodes),
 and carry the gains (`--norms`) as `--norm-bits` deltas with one f16 scale per `--norm-group` entries, since θ is fp32
 and a gain in full would cost 4 bytes. They size a plan by packing random codes as `prepare.encode_quant` would
-(`quant_size`), because every encode during the steps is a checkpoint candidate; trained codes compress at least as well.
+(`quant_size`), because every encode during the steps is a checkpoint candidate. Trained codes can come out larger than
+that plan (a CPU smoke's 2-bit factors: 30,532 B against 29,704 B), so leave room below a bin's edge. `entries` adds a
+matrix's values to its weight in the forward (no extra matmul) and trains a gain's chosen entries under a gradient mask.
 
 `--targets` picks the candidate matrices (`all`, `out`, `mlp`, `attn`, leaf names) and `--layers top:N` keeps every
 touched tensor in the top N blocks, so the backward stops there. `--embed-rank R` (with `lora` or `qlora`) gives the tied
@@ -31,5 +37,8 @@ in factored form to the lookup and the head (`tie_lora`), so the frozen head's m
 (`extra`). With `--analyse`, a record's `notes.first_order` holds, for budgets of 10 kB, 100 kB and 1 MB, the share of
 ‖G‖² each encoding captures.
 
-Every record's `notes.delta_grad` gives N, the values the optimizer trains, and 12N bytes: the gradient and AdamW's m and
-v in fp32, what passes between token blocks. A code shrinks E and not Δ_grad, since its latents train in fp32.
+`--opt` is `adamw` (the default), `sign` (sign descent) or `sgd` (no momentum); the last two keep no state, so only the
+gradient passes between token blocks and Fit's reduction bound, 2Δ_grad ≤ k, holds up to k/64 trained values. Every
+record's `notes.delta_grad` gives N, the values trained, and what passes between token blocks: the fp32 gradient of every
+trained tensor (a masked gain's whole tensor), plus AdamW's m and v under AdamW (12 bytes a value in all). A code shrinks
+E and not Δ_grad, since its latents train in fp32 (`latent_bits`, apart).
