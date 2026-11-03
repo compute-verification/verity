@@ -169,6 +169,7 @@
         "benchmarks/tc_probe_fp4/",
         "benchmarks/load_time/",
         "benchmarks/bool_build_cost/",
+        "benchmarks/unit_block/",
         "verity/ml/circuits/ops/",
         "integrations/vllm/verity_vllm/program/",
         "integrations/vllm/verity_vllm/query/",

@@ -7,8 +7,9 @@ from typing import Any
 
 def _boolean_gather_roots() -> list[Any]:
     """The Boolean embedding (`verity.ml.definitions.registry.boolean_gather`) over gathers traced whole (V = 64), and a gather
-    that is a tree of Calls with a partial last chunk (V = 1100), bf16 and i32; the bf16 widening
-    (`verity.ml.circuits.ops.boolean.cast`) is static-free."""
+    that is a tree of Calls with a partial last chunk (V = 1100), bf16 and i32; the f32 gather over the training step's
+    vocabulary (V = 50304), 49 whole chunks and a partial one; the bf16 widening (`verity.ml.circuits.ops.boolean.cast`) is
+    static-free."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_gather as BGA
 
@@ -16,4 +17,5 @@ def _boolean_gather_roots() -> list[Any]:
         bind(BGA.Embedding, V=64, H=16),
         bind(BGA.gather_bf16(1100)),
         bind(BGA.gather_i32(1100)),
+        bind(BGA.gather_f32(50304)),
     ]
