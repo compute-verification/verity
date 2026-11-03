@@ -1,4 +1,7 @@
-import Proofs.Flock.SessionLoop.RoundPiop
+import Proofs.Flock.SessionLoop.RoundOff
+import Proofs.Flock.SessionLoop.RoundSwitch
+import Proofs.Flock.SessionLoop.RoundLig
+import Proofs.Flock.SessionLoop.SchedSlot
 
 /-!
 # `LiveSched` for any worker, at its own histories
@@ -18,10 +21,14 @@ equation is asked there only, as `FinalRoundEq` asks its own:
 * **`LeanRelease.liveSchedAt_ofLoopLink`**: `LiveSched`'s equation after one history (`LeanRelease.LiveSchedAt`;
   `LiveSched` is it after every history, `LeanRelease.liveSched_iff`), from `TakesValsAt` at that history alone, at
   `SessionLoopZKDeployed`'s premises on the session, the statement and the loop's inputs, where the rows hold at `vs`
-  (`Loop.RowsOK`).
+  (`Loop.RowsOK`). The history stands at a round of some rep `2j + r` before its inner proof's (`sched_slot`), which is
+  its first (`release_sched_zcBind`), in its PIOP (`roundFrames_piop`), in the ring switch from its rank check's
+  (`release_sched_switch`), the opening's binding (`release_sched_openBind`), level 0's (`release_sched_l0`,
+  `release_sched_close`) or Ligerito's past it (`release_sched_lig`).
 * **`LeanRelease.liveSchedOwn_ofLoopLink`**: for every worker `wk` and every `vs` it takes at its own histories
-  (`TakesValsOwn`), `LiveSchedOwn` holds: `liveSchedAt_ofLoopLink` at each. `LeanRelease.liveSchedOwn_honestVals`: its
-  premises on the worker hold at the honest worker and values.
+  (`TakesValsOwn`), `LiveSchedOwn` holds: `liveSchedAt_ofLoopLink` at each. A worker that takes no such `vs`'s values
+  is outside it. `LeanRelease.liveSchedOwn_honestVals`: its premises on the worker hold at the honest worker and values;
+  `LeanRelease.liveSched_honestVals`: there `LiveSched` holds after every history.
 -/
 
 namespace Claims.ZKServer
@@ -177,7 +184,62 @@ theorem liveSchedAt_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     (κ : (ofLoopLink L₀ src real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg))
     (hTV : Loop.TakesValsAt vs (ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops) :
     LiveSchedAt vs L₀ src real wk x w ν t κ m₀ ρ₀ ops := by
-  sorry
+  intro v b hpos hlt hl hok href hv hsc
+  have hx : Masked.Live x := Masked.live_of hSc hR
+  obtain ⟨j, r, h1, h2⟩ := sched_slot (withFiles (withLink L₀ src) src) real wk hx hSv (ν, t) κ m₀ ρ₀ ops
+    (fun _ _ _ hs => by rw [hreal]; exact Loop.realTabs_of src x w (ν, t) hs) hpos hlt hl hsc
+  have hj := Masked.lt_of_jOf j
+  obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
+  obtain ⟨-, -, -, htabs⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
+  have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+      .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
+    rw [hst]
+    exact (Masked.zkTab x j).hz
+  have hm25 : 25 ≤ (Masked.stAt x j).m := (htabs j.val hj).1
+  have hk6 : 6 ≤ (Masked.stAt x j).c.kLog := (Masked.zkTab x j).wf.1.hk6
+  -- the rep's rounds: its first, the PIOP, the ring switch from the rank check's, then past the PIOP
+  have eS : ∀ f : _root_.Flock.Schedule → ℕ, Masked.repSlot x (2 * j.val + r.val) f =
+      Masked.repBase x (2 * j.val + r.val) + FlockComplete.piopRoundsZk spec (Masked.stAt x j) +
+        f (Masked.zkTab x j).sch := by
+    intro f
+    rw [Masked.repSlot_eq hsx hz, ← Masked.repBase_eq hsx, hst]
+  have eR : Masked.rankSlot x j.val r.val =
+      Masked.repBase x (2 * j.val + r.val) + ((Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6) := by
+    unfold Masked.rankSlot
+    rw [getElem!_pos (Masked.stsOf x) j.val hj]
+    try rfl
+  have eP : FlockComplete.piopRoundsZk spec (Masked.stAt x j) =
+      ((Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6) +
+        (2 + spec.points * (Masked.stAt x j).regions.size + 1) := rfl
+  simp only [eS, Masked.innerOff] at h2
+  rcases Nat.lt_or_ge ops.length (Masked.rankSlot x j.val r.val) with hA | hA
+  · rcases Nat.eq_or_lt_of_le h1 with h0 | h0
+    · exact release_sched_zcBind vs L₀ src real hreal wk hR hSv hSc hS hTab hTape hRows ν t κ m₀ ρ₀ ops hTV hpos
+        hlt hl hok href hv j r h0.symm
+    · exact release_of_roundFrames _ x (ν, t) _ false v _ (roundFrames_piop vs L₀ src real hreal wk hR hSv hSc hS ν t
+        κ m₀ ρ₀ ops hTV hpos hlt hl hok href hv j r (jj := ops.length - Masked.repBase x (2 * j.val + r.val))
+        (by omega) (by omega) (by rw [eR] at hA; unfold piopNR; omega))
+  · rcases Nat.lt_or_ge ops.length (Masked.repSlot x (2 * j.val + r.val) fun _ => 0) with hB | hB
+    · exact release_sched_switch vs L₀ src real hreal wk hR hSv hSc hS ν t κ m₀ ρ₀ ops hTV hpos hlt hl hok href hv j r
+        (k := ops.length - Masked.rankSlot x j.val r.val) (by omega) hB
+    · simp only [eS] at hB
+      obtain ⟨i, hi⟩ : ∃ i, ops.length = Masked.repSlot x (2 * j.val + r.val) fun _ => i :=
+        ⟨ops.length - (Masked.repBase x (2 * j.val + r.val) + FlockComplete.piopRoundsZk spec (Masked.stAt x j)),
+          by simp only [eS]; omega⟩
+      have hi' := hi
+      simp only [eS] at hi'
+      by_cases hl0 : i ≤ (Masked.zkTab x j).sch.k0 + 3
+      · rcases Nat.eq_zero_or_pos i with rfl | hi0
+        · exact release_sched_openBind vs L₀ src real hreal wk hR hSv hSc hS ν t κ m₀ ρ₀ ops hTV hpos hlt hl hok href
+            hv j r hi
+        · exact release_sched_l0 vs L₀ src real hreal wk hR hSv hSc hS ν t κ m₀ ρ₀ ops hTV hpos hlt hl hok href hv j r
+            hi hi0 hl0
+      · by_cases hc : i = (Masked.zkTab x j).sch.k0 + 4
+        · exact release_sched_close vs L₀ src real hreal wk hR hSv hSc hS ν t κ m₀ ρ₀ ops hTV hpos hlt hl hok href hv
+            j r (by simp only [eS]; omega)
+        · exact release_sched_lig vs L₀ src real hreal wk hR hSv hSc hS ν t κ m₀ ρ₀ ops hTV hpos hlt hl hok href hv j r
+            hi (by omega) (by omega)
 
 /-- **`LiveSched` for any worker, at its own histories**: at `SessionLoopZKDeployed`'s release (`ofLoopLink` at the
 loop's own tables, `real = Loop.realOf src`), at its premises on the session (`Tables`, `TapeOK`), the statement (in the
@@ -224,6 +286,27 @@ theorem liveSchedOwn_honestVals
       (Loop.valsWk (CoinLayer.session Loop.loopNr Masked.dataE).honestVals (ofLoopLink L₀ src real)) x w :=
   liveSchedOwn_ofLoopLink _ L₀ src real hreal _ hTab hTape hR hSv hSc hS (Loop.rowsOK_honestVals hR)
     (Loop.takesValsOwn_honestVals L₀ src real x w)
+
+/-- **`LiveSched` at the honest worker and values**: `liveSchedAt_ofLoopLink` after every history, at which the honest
+worker takes the honest values (`Loop.takes_honestVals_ofLoopLink`), where the rows hold (`Loop.rowsOK_honestVals`). -/
+theorem liveSched_honestVals
+    (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    (hreal : real = Loop.realOf src) {x : Msg} {w : Flock.Wit}
+    (hTab : (CoinLayer.session Loop.loopNr Masked.dataE).Tables)
+    (hTape : (CoinLayer.session Loop.loopNr Masked.dataE).TapeOK)
+    (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
+    (hSc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) (hS : Loop.Src L₀ src x w) :
+    LiveSched (CoinLayer.session Loop.loopNr Masked.dataE).honestVals L₀ src real
+      (Loop.valsWk (CoinLayer.session Loop.loopNr Masked.dataE).honestVals (ofLoopLink L₀ src real)) x w :=
+  fun ν t κ m₀ ρ₀ ops => liveSchedAt_ofLoopLink _ L₀ src real hreal _ hTab hTape hR hSv hSc hS
+    (Loop.rowsOK_honestVals hR) ν t κ m₀ ρ₀ ops ((Loop.takes_honestVals_ofLoopLink L₀ src real).1 ν t κ m₀ ρ₀ ops)
 
 end LeanRelease
 
