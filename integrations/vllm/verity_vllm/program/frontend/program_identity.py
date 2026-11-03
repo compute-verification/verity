@@ -28,7 +28,13 @@ def check_identity(program: Program, *, registry=REGISTRY, check_registry: bool 
     """§8.1: within a program a fully qualified specialisation (`Name_vN{statics}`) resolves to exactly one
     body. Two reachable definition objects with the same id must encode the same body; with `check_registry`
     an authored definition whose id a *registered* definition also carries must agree with it as well —
-    conflicts are `E_IDENTITY`, never first-wins. Returns the reachable definitions by id."""
+    conflicts are `E_IDENTITY`, never first-wins. Returns the reachable definitions by id.
+
+    A survey's program (`annotations["survey_holes"]`, `rules.training_survey`) is `E_SURVEY_HOLES`: its holes are values no gate
+    checks, which a prover would choose, so it identifies no statement."""
+    if holes := program.annotations.get("survey_holes"):
+        raise FrontendError("E_SURVEY_HOLES", f"{len(holes)} refused nodes are fields of the `run` input that no gate checks "
+                                              f"({', '.join(h['node'] for h in holes[:4])}{', ...' if len(holes) > 4 else ''})")
     seen: dict[str, Any] = {}
 
     def visit(fn) -> None:

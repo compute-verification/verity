@@ -33,7 +33,7 @@ from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.rules.base import OpRule, RuleSet
 from verity_vllm.program.frontend.rules.training_views import (_PARTS, BoxPermute, StaticFloat, StaticFloats, _info, _view_expand,
                                                                _view_permute)
-from verity_vllm.program.frontend.strided_views import _EXPLICIT_LIMIT, _tensor_type
+from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
 
 aten = torch.ops.aten
@@ -294,7 +294,7 @@ class Unary(_TrainRule):
     """`neg`, `sqrt`, `rsqrt`, `reciprocal`, `exp`, `sigmoid`, `pow.Tensor_Scalar` of an f32 value, as torch's CPU kernels compute
     them: `rsqrt` = 1 / sqrt, `sigmoid` = 1 / (1 + exp(-x)), `pow` 2 / 3 products, 0.5 sqrt, -0.5 rsqrt, -1 and -2 reciprocals,
     1 the operand, 0 one; `exp` is `F32ExpRn_v1` (correctly rounded, where torch's vectorized exp is not). `sqrt` is IEEE's
-    (`F32Sqrt_v1`, as CUDA's `sqrt.rn`); torch CPU's (and its `pow` 0.5) is MKL's, one ulp off it on some CPUs (AMD EPYC Genoa)."""
+    (`F32Sqrt_v1`, as CUDA's `sqrt.rn`); torch CPU's (and its `pow` 0.5) is MKL's, which is not IEEE's on some CPUs."""
     info = _info("Unary", "aten neg/sqrt/rsqrt/reciprocal/exp/sigmoid/pow.Tensor_Scalar of f32", "the operand is an f32 value",
                  "pow's exponent is one torch special-cases (0, 0.5, 1, 2, 3, -0.5, -1, -2)", "one batch per step over the elements")
 
@@ -402,17 +402,21 @@ class Addcmul(_TrainRule):
 
 
 class Reduce(_TrainRule):
-    """`sum.dim_IntList` / `mean.dim` of an f32 value -> the reduced axes moved last by reference, one batch of `DotRef_v1{N}`
-    against ones (a sequential sum from +0) per kept element; `mean` divides the sum by f32(N) (`F32Div_v1`), as torch does."""
-    info = _info("Reduce", "aten.sum.dim_IntList / aten.mean.dim of f32", "the operand is an f32 value", "no dtype argument")
+    """`sum` / `mean` of an f32 value over `dim` (every axis when `dim` is None or `[]`, as torch reduces them, and for `.default`)
+    -> the reduced axes moved last by reference, one batch of `DotRef_v1{N}` against ones (a sequential sum from +0) per kept
+    element; `mean` divides the sum by f32(N) (`F32Div_v1`), as torch does."""
+    info = _info("Reduce", "aten.sum.dim_IntList / aten.mean.dim / aten.sum.default / aten.mean.default of f32",
+                 "the operand is an f32 value of at least one axis", "no dtype argument")
 
     def targets(self):
-        return {aten.sum.dim_IntList, aten.mean.dim}
+        return {aten.sum.dim_IntList, aten.mean.dim, aten.sum.default, aten.mean.default}
 
     def applies(self, node, ctx):
         why = _operand_ok(ctx, node.args[0])
         if why or not isinstance(ctx.val(node.args[0]), Coll):
             return why or "the operand is not a value"
+        if not _shape(ctx, node.args[0]):
+            return "a 0-d operand (no axis to reduce)"
         if node.kwargs.get("dtype") is not None or (len(node.args) > 3 and node.args[3] is not None):
             return "numerics_unregistered: a dtype argument"
         return True
@@ -421,13 +425,14 @@ class Reduce(_TrainRule):
         x = ctx.coll(node.args[0])
         S = shape_of(x.type)[0]
         r = len(S)
-        dims = sorted({d % r for d in (node.args[1] if node.args[1] is not None else range(r))}) if r else []
+        given = node.args[1] if len(node.args) > 1 else None
+        dims = sorted({d % r for d in given}) if given else list(range(r))
         keep = [a for a in range(r) if a not in dims]
         perm = tuple(keep + dims)
         xp = _view_permute(x, perm, node.name) if perm != tuple(range(r)) else x
         Rn, N = math.prod(S[a] for a in keep), math.prod(S[a] for a in dims)
         s = _batch(ctx, node, bind(R.DotRef, K=N), xp.reshape(Array(Rn, Array(N, F32))), _ones(ctx, node, N), axes=(0, None))
-        if node.target is aten.mean.dim:
+        if node.target in (aten.mean.dim, aten.mean.default):
             s = _batch(ctx, node, P.F32Div, s, _const(ctx, node, _bits(float(N))), axes=(0, None))
         ctx.define(node, s.reshape(_tensor_type(ctx.shape_of_node(node), 32)))
         ctx.record(self, node, {"dims": dims, "rows": Rn, "N": N}, emitted=f"DotRef_v1{{K={N}}} x{Rn}")
@@ -604,7 +609,8 @@ def _one_hot(ctx, node, t: Coll, M: int, V: int) -> Coll:
 
 class NllLossBackward(_TrainRule):
     """`nll_loss_backward(go, logp[M,V], target, None, mean, ignore_index, total_weight)` = `-(go / total_weight)` at each row's target,
-    +0 elsewhere and on ignored rows (`F32Div_v1`, `F32Neg_v1`, a one-hot of `I32Eq_v1`, `SelectF32_v1`)."""
+    +0 elsewhere and on the rows whose target is `ignore_index` (`F32Div_v1`, `F32Neg_v1`; per row the gradient or +0 by
+    `I32Eq_v1` against `ignore_index`, as `NllLossForward` masks its rows; a one-hot of `I32Eq_v1`; `SelectF32_v1`)."""
     info = _info("NllLossBackward", "aten.nll_loss_backward, mean reduction, no weights", "go and total_weight are 0-d f32",
                  "an out-of-range target selects nothing (torch raises)")
 
@@ -621,10 +627,13 @@ class NllLossBackward(_TrainRule):
         M, V = _shape(ctx, logp)
         g = _call(ctx, node, SC.F32Neg, _call(ctx, node, P.F32Div, _operand(ctx, node, go, ())[0], _operand(ctx, node, tw, ())[0]))
         t = _tokens(ctx, node, target)
+        zero = _const(ctx, node, 0)
+        ign = _batch(ctx, node, SC.I32Eq, t, _const(ctx, node, ignore & 0xFFFFFFFF), axes=(0, None))
+        row = _batch(ctx, node, SC.SelectF32, ign, zero, g, axes=(0, None, None))
         hot = _one_hot(ctx, node, t, M, V)
-        out = _batch(ctx, node, SC.SelectF32, hot, g, _const(ctx, node, 0), axes=(0, None, None))
+        out = _batch(ctx, node, SC.SelectF32, hot, _per_row(row, M, V), zero, axes=(0, 0, None))
         ctx.define(node, out.reshape(_tensor_type([M, V], 32)))
-        ctx.record(self, node, {"M": M, "V": V, "ignore_index": ignore}, emitted=f"I32Eq_v1 + SelectF32_v1 x{M * V}")
+        ctx.record(self, node, {"M": M, "V": V, "ignore_index": ignore}, emitted=f"I32Eq_v1 + SelectF32_v1 x{M * (V + 1)}")
 
 
 class EmbeddingDenseBackward(_TrainRule):
@@ -670,9 +679,11 @@ class EmbeddingDenseBackward(_TrainRule):
         ctx.record(self, node, {"tokens": M, "V": V, "H": H}, emitted=f"(SelectF32_v1 + F32Add_v1) x{M * V * H}")
 
 
-def training_rules(min_view_leaves: int = _EXPLICIT_LIMIT) -> RuleSet:
+def training_rules(min_view_leaves: int = 0) -> RuleSet:
     """The default rules with the training rules: views of static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
-    that are not one run) and `Matmul` before them, the element-wise, reduction, softmax, loss and embedding rules after."""
+    that are not one run) and `Matmul` before them, the element-wise, reduction, softmax, loss and embedding rules after.
+    `min_view_leaves` is 0 by default: the default views write a permuted view of fewer leaves than their limit as a list of its
+    leaves, which the root's replay then substitutes as one reference part per leaf."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
 
     first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul()]
