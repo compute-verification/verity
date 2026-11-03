@@ -11,10 +11,8 @@ the run's release log shows them, released after `after` (`stream_ok`). So when 
 run's (`s.commitment`, `releasedRootsOf`), the stream is `Run.released`, the run's own coins at those indices
 (`stream_released`), or the fixed finder outputs a break. `drawCoins` reads the stream under the commitment and roots
 of the session the ledger opens (`drawCoins_ok`), and that commitment is its record's (`trustedSession_record`), so the
-coins a draw reads are any such run's released coins, or a break (`drawn_released`).
-
-`drawn_released` takes the segment's label as a hypothesis: `drawCoins` compares it with `==` on `Json`, a `partial def`
-the kernel can't unfold, so its check says nothing a proof can read.
+coins a draw reads are any such run's released coins, or a break (`drawn_released`). `drawCoins` compares the segment's
+label by `jsonStrIs`, a match the kernel reduces, so its check gives the label (`jsonStrIs_eq`).
 
 Each opening `liveReason` accepts climbs its path to the commitment's root (`Coin.reason_ok`). The run's root is
 `Flock.FV3.root` over its leaves, the top of `FrameV3Sha512`'s tree (`Tree.lev`) over them under the run's domain
@@ -34,6 +32,7 @@ open Lean (Json)
 open SampledProofs SampledProofs.Challenger
 open MemoryChallenger.Properties.SecurityProofs.Tree (CF next base lev le_depth lev_size hash_size)
 open MemoryChallenger.Attest.Properties.SecurityProofs (climbRec climb_bind)
+open Properties.Pouw.LiveSalt (jsonStrIs_eq)
 open Properties.Pouw.LiveSalt.Coin (leafMsg coin_eq reason_ok)
 
 local instance lawfulBEqByteArrayCoins : LawfulBEq ByteArray where
@@ -598,11 +597,12 @@ theorem trustedSession_record {ledger window pins main session : Json} {res : Li
   obtain ⟨a, -, ha⟩ := bind_ok.1 h
   exact sessionNamed_record ha
 
-/-- What `drawCoins` reads when it accepts: the session the ledger opens on `window` under `key`, and the stream of the
-segment's openings under that session's commitment and its family `label`'s roots. -/
+/-- What `drawCoins` reads when it accepts: the session the ledger opens on `window` under `key`, a segment of family
+`label`, and the stream of its openings under that session's commitment and `label`'s roots. -/
 theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : drawCoins key window label after coins = .ok ξ) :
     ∃ c roots, trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
         (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
+      getD (getD coins "segment") "label" = Json.str label ∧
       challengerStream c (getD coins "segment") after
         (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ := by
   unfold drawCoins at h
@@ -613,7 +613,8 @@ theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : drawCoins key
     · rename_i v hv
       split at h
       · split at h
-        · exact ⟨v.1, v.2, hv, h⟩
+        · rename_i hl
+          exact ⟨v.1, v.2, hv, jsonStrIs_eq hl, h⟩
         · cases h
       · cases h
   · cases h
@@ -621,13 +622,12 @@ theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : drawCoins key
 /-- **The coins a draw reads are the ones its session released**: when `drawCoins` reads `ξ` from a segment of family
 `label`, `ξ` is the coins of `label` released after `after` by any run of the key's device whose commitment and roots
 are the session's, or the fixed finder outputs a break. -/
-theorem drawn_released {window : String} {after ξ : ByteArray} (h : drawCoins key window label after coins = .ok ξ)
-    (hl : getD (getD coins "segment") "label" = Json.str label) :
+theorem drawn_released {window : String} {after ξ : ByteArray} (h : drawCoins key window label after coins = .ok ξ) :
     ∃ c roots, trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
         (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
       ∀ s ∈ dev.runs key.pub, s.commitment = some c → releasedRootsOf c s.log = .ok roots →
         ξ = s.released label after ∨ Break dev key label coins := by
-  obtain ⟨c, roots, hts, hst⟩ := drawCoins_ok h
+  obtain ⟨c, roots, hts, hl, hst⟩ := drawCoins_ok h
   obtain ⟨r, hr, hrc⟩ := trustedSession_record hts
   exact ⟨c, roots, hts, fun s hs hsc hroots => stream_released hs hsc hroots hr hrc hl hst⟩
 
