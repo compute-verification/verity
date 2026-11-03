@@ -576,8 +576,8 @@ def _caveats(records: Sequence[Mapping[str, Any]], values: Mapping[str, V], extr
     r = records[0]
     if (k := values.get("DRAWN_UNITS")) is not None and k.value != HANDFUL:
         lines.append(f"This block drew k = {_fmt(k.value)}, not M3's handful of {HANDFUL}.")
-    lines.append("The challenger and the network certifier run on the prover's node for the demo, not on a machine the "
-                 "prover doesn't control: the demo assumes the prover leaves them alone.")
+    lines.append("The challenger and the network certifier run on the developer's node for the demo, not on a machine the "
+                 "developer doesn't control: the demo assumes the developer leaves them alone.")
     for p in DEMO_A:
         lg = r["legs"].get(p)
         if lg is None or lg["server"] != r["server"]:

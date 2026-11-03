@@ -26,7 +26,7 @@
 #     bash benchmarks/remote_session/run.sh
 #
 # On two machines, two runs with the same PORT and SESSIONS: ROLE=verifier on the verifier's machine (no GPU), which
-# opens `ssh -R PORT` to PEER (the prover's machine, a name in /etc/vy/peers) and listens behind it, so the prover's
+# opens `ssh -R PORT` to PEER (the developer's machine, a name in /etc/vy/peers) and listens behind it, so the prover's
 # connections to its own 127.0.0.1:PORT cross the network; then ROLE=prover on PEER, which connects there, and which
 # takes its lease only once that tunnel listens (up to TUNNEL_WAIT_S, default 7200).
 #
@@ -38,7 +38,7 @@
 #   ROLE=verifier PEER=PROVER_NODE PORT=7791 SESSIONS=2 taskset -c 96-127 bash benchmarks/remote_session/run.sh
 #   ROLE=prover PORT=7791 PLAN=honest,skip:0.0625 taskset -c 48-95 bash benchmarks/remote_session/run.sh
 #
-# ROLE has no default: the verifier runs on a machine the prover doesn't control (AGENTS.md's auditor-trusted
+# ROLE has no default: the verifier runs on a machine the developer doesn't control (AGENTS.md's auditor-trusted
 # devices), never on PEER, so a run says which side it is. ROLE=both runs the verifier beside the prover on this
 # machine, a test of these scripts that audits nothing.
 # ROLE=verifier is the audit's verifier as a service. It keeps the registrations in REGISTRY (default
@@ -92,7 +92,7 @@ export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 case ${ROLE:-} in
   verifier | prover | both) export ROLE ;;
   *) echo "ROLE is verifier or prover (both only to test these scripts on one machine), not '${ROLE:-}': the verifier" \
-       "runs on a machine the prover doesn't control, so there is no default"; exit 3 ;;
+       "runs on a machine the developer doesn't control, so there is no default"; exit 3 ;;
 esac
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}
 export PY=${PY:-$ENV_DIR/gpu312-torch2.14.0-cu130/bin/python}

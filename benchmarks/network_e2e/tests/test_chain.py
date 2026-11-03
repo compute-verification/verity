@@ -696,7 +696,7 @@ def test_on_the_advice_profile_the_rehearsals_check_is_the_verdict_and_the_advic
             f"({tie_why})") in md
     assert any(x.startswith("N2 on the advice profile") for x in r["stubbed"])
     at = e2e.where({"honest": {"dir": runs / "honest", "gate": None}}, "vy-nebius-1:18080")
-    assert at["where"].startswith("off the prover's node: better than the loopback, though not yet the auditor host")
+    assert at["where"].startswith("off the developer's node: better than the loopback, though not yet the auditor host")
     assert any(x.startswith("Auditor host: the certifier ran on another node") for x in chain.stubs(at, True))
     (tmp_path / "peers").write_text("# machine: ssh\nvy-nebius-2 -i k research@10.0.0.2\n")
     with pytest.raises(SystemExit, match="no vy-nebius-1 in"):

@@ -13,7 +13,7 @@ from typing import Literal
 
 Kind = Literal["gpu", "cpu", "dram", "nic", "dpu", "bmc", "switch", "certifier", "challenger", "outside"]
 
-#: the kinds of device the auditor trusts: its own hardware, on machines the prover doesn't control
+#: the kinds of device the auditor trusts: its own hardware, on machines the developer doesn't control
 TRUSTED: frozenset[str] = frozenset({"certifier", "challenger"})
 
 

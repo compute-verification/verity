@@ -544,7 +544,7 @@ def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
     night = Plan(EPOCH, wipes=wipes("b.gpu"))
     honest = account(audit(run(p, INPUTS, night), p.public(night)), p.public(night))
     assert honest.sound and {(x.unit, x.resource, x.grade) for x in honest.credits} == {
-        ("dc0", "compute:mac", None), ("dc0", "compute:cuda", None), ("b.gpu", "held", None)}   # the prover system's
+        ("dc0", "compute:mac", None), ("dc0", "compute:cuda", None), ("b.gpu", "held", None)}   # the whole datacenter's
     closed = account(audit(run(p, INPUTS, night), p.public(night)), p.public(night), assume=(FLEET_CLOSED,))
     assert {(x.unit, x.grade) for x in closed.credits if x.resource.startswith("compute")} == {
         ("a", "fleet-closed"), ("b", "fleet-closed")}
