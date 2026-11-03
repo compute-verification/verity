@@ -431,19 +431,24 @@ def spectrum_add(acc: dict, delta: torch.Tensor, h: torch.Tensor):
     λ) (bits per coordinate a fixed basis with bits allocated by variance saves over a flat code at high rate) and the
     same over the coordinates' own variances (`channel_gain_bits`, the gain without a basis; `centered_gain_bits` with
     each coordinate's session mean taken out), the share of a session's
-    energy in its largest token, the share of a token's energy in its largest k coordinates, and |δ|² against |h|²."""
+    energy in its largest token, the share of a token's energy in its largest k coordinates, and |δ|² against |h|².
+    Every sum is a device tensor, and a δ with no energy (an unmoved code) adds only its energies, by a 0/1 factor the
+    graph computes: te_core's capture lists a Python decision on a read-back value, and refuses the run's trace for it."""
     d = delta.shape[-1]
     e = delta.float().pow(2)
     tok = e.sum(-1)
-    acc["delta_sq"] = acc.get("delta_sq", 0.0) + float(tok.sum())
-    acc["h_sq"] = acc.get("h_sq", 0.0) + float(h.float().pow(2).sum())
-    if not float(tok.sum()):
-        return
+    live = (tok.sum() > 0).float()
+
+    def add(key: str, v: torch.Tensor):
+        acc[key] = acc[key] + v if key in acc else v
+
+    add("delta_sq", tok.sum())
+    add("h_sq", h.float().pow(2).sum())
     top = e.topk(min(max(COORDS), d), dim=-1).values.cumsum(-1) / tok.unsqueeze(-1).clamp_min(1e-30)
-    acc["tokens"] = acc.get("tokens", 0) + tok.numel()
+    add("tokens", live * tok.numel())
     for k in COORDS:
         if k <= d:
-            acc[f"coord_top{k}"] = acc.get(f"coord_top{k}", 0.0) + float(top[..., k - 1].sum())
+            add(f"coord_top{k}", live * top[..., k - 1].sum())
     per = min(max(1, SESSION // delta.shape[1]), delta.shape[0])
     n = delta.shape[0] // per * per
     x = delta[:n].float().reshape(n // per, -1, d)
@@ -452,26 +457,27 @@ def spectrum_add(acc: dict, delta: torch.Tensor, h: torch.Tensor):
     share = ev.cumsum(-1) / ev.sum(-1, keepdim=True).clamp_min(1e-30)
     lam = (ev / ev.mean(-1, keepdim=True).clamp_min(1e-30)).clamp_min(1e-9)
     peak = x.pow(2).sum(-1)
-    acc["sessions"] = acc.get("sessions", 0) + share.shape[0]
-    acc["gain_bits"] = acc.get("gain_bits", 0.0) + float((-0.5 * torch.log2(lam).mean(-1)).sum())
+    add("sessions", live * share.shape[0])
+    add("gain_bits", live * (-0.5 * torch.log2(lam).mean(-1)).sum())
     for key, var in (("channel_gain_bits", x.pow(2).mean(1)), ("centered_gain_bits", x.var(1))):
         var = (var / var.mean(-1, keepdim=True).clamp_min(1e-30)).clamp_min(1e-9)
-        acc[key] = acc.get(key, 0.0) + float((-0.5 * torch.log2(var).mean(-1)).sum())
-    acc["token_peak"] = acc.get("token_peak", 0.0) + float((peak.amax(-1) / peak.sum(-1).clamp_min(1e-30)).sum())
+        add(key, live * (-0.5 * torch.log2(var).mean(-1)).sum())
+    add("token_peak", live * (peak.amax(-1) / peak.sum(-1).clamp_min(1e-30)).sum())
     for r in RANKS:
         if r <= d:
-            acc[f"top{r}"] = acc.get(f"top{r}", 0.0) + float(share[:, r - 1].sum())
+            add(f"top{r}", live * share[:, r - 1].sum())
 
 
 def spectrum_report(spec: dict) -> dict:
+    """`spectrum_add`'s means, read back once with no decision on a value (a boundary whose δ never moved reads 0)."""
     out = {}
     for b, acc in sorted(spec.items()):
-        s, t = acc.get("sessions", 0), acc.get("tokens", 0)
-        out[str(b)] = {"of": acc.get("of"), "sessions": s,
-                       "delta_rms_over_h_rms": (acc["delta_sq"] / max(acc["h_sq"], 1e-30)) ** 0.5,
-                       **{k: v / s for k, v in acc.items()
-                          if s and (k.startswith("top") or k.endswith("gain_bits") or k == "token_peak")},
-                       **{k: v / t for k, v in acc.items() if t and k.startswith("coord_top")}}
+        s, t = acc["sessions"].clamp_min(1), acc["tokens"].clamp_min(1)
+        out[str(b)] = {"of": acc["of"], "sessions": float(acc["sessions"]),
+                       "delta_rms_over_h_rms": float((acc["delta_sq"] / acc["h_sq"].clamp_min(1e-30)).sqrt()),
+                       **{k: float(v / s) for k, v in acc.items()
+                          if k.startswith("top") or k.endswith("gain_bits") or k == "token_peak"},
+                       **{k: float(v / t) for k, v in acc.items() if k.startswith("coord_top")}}
     return out
 
 
