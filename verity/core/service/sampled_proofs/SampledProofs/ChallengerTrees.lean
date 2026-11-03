@@ -93,7 +93,7 @@ private def isStream (j : Json) : Bool :=
 /-- `tree_spec_reason`'s domain: `{block, rounds_log, scheme, streams}`, `TREE_SCHEME`, 1 to `MAX_BLOCK` coins a round,
 at most `2^MAX_ROUNDS_LOG` rounds a stream, and its streams distinct names (`isStream`). -/
 def isTreeSpec (spec : Json) : Bool :=
-  keys? spec == some #["block", "rounds_log", "scheme", "streams"] && getD spec "scheme" == Json.str TREE_SCHEME &&
+  keys? spec == some #["block", "rounds_log", "scheme", "streams"] && jsonStrIs (getD spec "scheme") TREE_SCHEME &&
     (match nat? (getD spec "block") with | some b => 1 ≤ b && b ≤ MAX_BLOCK | none => false) &&
     (match nat? (getD spec "rounds_log") with | some r => r ≤ MAX_ROUNDS_LOG | none => false) &&
     (match getD spec "streams" with
@@ -107,7 +107,7 @@ def coinTreesOf (log : List String) : V (Array LoggedTree) := do
   for line in log do
     unless treeLine line do continue
     let d ← event line
-    if getD d "event" == Json.str TREE_EVENT then
+    if jsonStrIs (getD d "event") TREE_EVENT then
       unless keys? d == some #["event", "key", "nonce", "root", "spec"] && isHexN (getD d "key") 512 &&
           isHexN (getD d "nonce") 64 && isHexN (getD d "root") 128 && isTreeSpec (getD d "spec") do
         throw LOG_MALFORMED
@@ -123,7 +123,7 @@ def coinTreesOf (log : List String) : V (Array LoggedTree) := do
       let .str s := getD d "stream" | throw LOG_MALFORMED
       let (some k, some n) := (nat? (getD d "round"), nat? (getD d "n")) | throw LOG_MALFORMED
       let streams := match getD t.spec "streams" with | .arr ss => ss | _ => #[]
-      unless streams.contains (Json.str s) && k == (t.opened.filter (·.stream == s)).size &&
+      unless streams.any (jsonStrIs · s) && k == (t.opened.filter (·.stream == s)).size &&
           k >>> (nat? (getD t.spec "rounds_log")).getD 0 == 0 && n ≤ (nat? (getD t.spec "block")).getD 0 &&
           isHexN (getD d "after") 128 && isHexN (getD d "coins") 128 do
         throw LOG_MALFORMED
@@ -148,7 +148,7 @@ def recordCoins? (cs : Json) : Option ByteArray :=
 the release log shows the challenger released (`trees`, `coinTreesOf`'s); `none` when it does. -/
 def sessionTreeReason (trees : Array LoggedTree) (record : Json) : Option String := Id.run do
   let ct := getD record "coin_tree"
-  let some t := trees.find? (fun (t : LoggedTree) => getD ct "root" == Json.str t.root) | return some NO_TREE
+  let some t := trees.find? (fun (t : LoggedTree) => jsonStrIs (getD ct "root") t.root) | return some NO_TREE
   unless jeq ct t.record do
     return some "its coin tree is not the one the challenger's release log shows it sampled under that root"
   let link := getD record "link"
@@ -174,7 +174,7 @@ def sessionTreeReason (trees : Array LoggedTree) (record : Json) : Option String
       let (some coins, some n) := (recordCoins? (getD r "coins"), nat? (getD r "n")) | return some TREE_RECORD_FORM
       unless isHexN (getD r "msg_sha512") 128 do return some TREE_RECORD_FORM
       let ok := match t.opening name k with
-        | some o => o.n == n && Json.str o.after == getD r "msg_sha512" && o.coins == sha512Hex coins
+        | some o => o.n == n && jsonStrIs (getD r "msg_sha512") o.after && o.coins == sha512Hex coins
         | none => false
       unless ok do
         return some s!"its {name} round {k} is not coins the challenger opened under its tree after that round's message"

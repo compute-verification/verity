@@ -23846,7 +23846,7 @@
    ]
   },
   "SampledProofs.ChallengerSession": {
-   "digest": "0ef88661dabbdf229283f0c0bdef5e53d6fb17fe8121848cb80bc0db4073c1f5",
+   "digest": "6d7eb960b00c2ff6e324d54903bb2c8ffc16ff783c57acf5e53692480ed68978",
    "definitions": {
     "SampledProofs.Challenger.Audited": "159b77cf065dee90e23af320bf78c6c962956fb8dafae7711c47bf9b416a91e0",
     "SampledProofs.Challenger.Audited.circuit": "322482c0ce5792be8e392fd5470dd756d5e44c3af242df1d9f634e383c868c95",
@@ -23966,7 +23966,7 @@
     "SampledProofs.Challenger.sessionNamed": "8d51af66aadbeb45e5e0a727a2f6218fe0a9269cde9149b810092e25cb2d22a3",
     "SampledProofs.Challenger.sessionOf": "d1ef2639d2ed7131fb69e54208c3f3d1a2f6b04e9be1421f1b19db9b9b112249",
     "SampledProofs.Challenger.sessionOf._sparseCasesOn_7": "08acc862549ea1df070ea969d8be299ba1ce6ddbfae9b8d95f5014e54e50eff4",
-    "SampledProofs.Challenger.treeLine": "7e2164957ca8a89918bf6d29cb122fcd4be58be4e4062c3cb96f74be491fee50",
+    "SampledProofs.Challenger.treeLine": "01201a2e6e7f4a02ea261b767dc1432bc7d70ec6bfb8be74e8d7c67a7e4e5264",
     "SampledProofs.Challenger.trustedSessionOf": "061ca5db8347e0b12d4a8260ee07f5c8d4ce78e16f8e3d55e115366be9d86b9f",
     "SampledProofs.Challenger.verifyLedger": "8ad6d343c0d585d91b4ef5bc07d3278928096d1234688a04bf066ab834b27740",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.daysIn": "f0bcae0f0bbe94665da1d282ba3c726220f54de0907083f1ead3417b065f7ad1",
