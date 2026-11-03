@@ -40,7 +40,8 @@ verity-exact-kit = { workspace = true }
 # served_h1's producer loads dither's j10r_ws.py, which sizes a J10-R call's workspace from the loaded build.
 # test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
-# before and after vllm's layout move.
+# before and after vllm's layout move. Pearl-C's bench arm reserves its live salt session through the pipeline's
+# challenger gate (commit_coins.py).
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",
@@ -53,6 +54,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "tools/config/verity_config",
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
           "integrations/vllm/verity_vllm/commit/__init__.py", "verity/ml/windows/hiding.py",
+          "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/commit_coins.py",
           "verity/ml/windows/rows.py", "integrations/vllm/verity_vllm/errors.py",
           "integrations/vllm/verity_vllm/engine", "integrations/vllm/verity_vllm/protocols/linear",
           "integrations/vllm/verity_vllm/protocols/__init__.py",

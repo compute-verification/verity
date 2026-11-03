@@ -1723,10 +1723,10 @@ def test_live_coins_reserve_a_salt_only_session_whose_settings_the_install_takes
     name, the PoUW settings drop their in-process coins and take a salt-only session the gate reserves under the lane once
     its ledger shows the lane's open period (``reserve --peer P --scheme S --families [["pouw/salt",1]] --epoch N``): the
     challenger on this node, the reserve answer, the gate's open and that period, which `pouw.Settings` reads and the
-    challenger's settings refuse nothing of.  Neither given leaves the settings, and their coins in-process, untouched;
-    one alone is refused, and a reserve while the lane's open period is H1's is refused before it is asked."""
+    adapter's refusals (`pouw.refusals`) refuse nothing of.  Neither given leaves the settings, and their coins
+    in-process, untouched; one alone is refused, and a reserve while the lane's open period is H1's is refused before it
+    is asked."""
     from verity_vllm.protocols import pouw
-    from verity_vllm.protocols.pouw.h1 import settings as PHS
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", KERNEL.parent / "pearl_c_vllm" / "bench_arm.py")
@@ -1753,7 +1753,9 @@ def test_live_coins_reserve_a_salt_only_session_whose_settings_the_install_takes
                                   json.dumps([list(f) for f in Wd.SALT_FAMILIES], separators=(",", ":")), "--epoch", "5"]]
     settings = pouw.Settings.of(got)
     assert (settings.coins, settings.challenger, settings.session, settings.period) == (None, "127.0.0.1:0", reserved, None)
-    assert PHS.refusals(SCHEME, settings, "serve") == []
+    serving = types.SimpleNamespace(stage="serve", world=1, enforce_eager=True, settings_of=lambda name: got,
+                                    filled_of=lambda name: ())
+    assert pouw.refusals(SCHEME, serving) == ()
     for one in ((gate, None), (None, "vy-dc-h200")):
         with pytest.raises(ValueError, match="together"):
             BA.live_coins(base, *one, 5, "vllm", run)
