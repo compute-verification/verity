@@ -78,7 +78,7 @@ its measured 1.49e14 FLOP/s, times `HARNESS_FLOP_SLACK` for the elementwise and 
 out) and train.py's steps' wall seconds under the harness ≤ 3000 (`GPU_SECONDS_CAP`; the harness runs eager and counted,
 about 2.4x a compiled run). The budget bounds a run's node time; it is not a class. The long tier (`prepare.budget(start,
 "long")`, `launch.py --long 'HH:MMZ who'`, valid only for a run the board assigns it with that line): up to `LONG_C0` = 100
-times the start's C0 in FLOPs and `LONG_GPU_SECONDS`, 30 GPU-hours, of steps.
+times the start's C0 in FLOPs and `LONG_GPU_SECONDS`, 16 GPU-hours, of steps.
 
 The seed islands (`islands/<name>/train.py`), each a program to start from:
 
@@ -133,8 +133,8 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
   `starts_store.json`. Each node installs them into one fixed directory, `/workspace/research/te/starts` (`CW_STARTS`,
   `prepare.STARTS`), with `python3 starts_store.py install --keep`, which checks every file against the manifest; no run
   reads another run's directory. Each start's manifest entry has its `shape` (`starts_store.shape`), which the policy
-  grid reads. These four are GPT-2 starts on v2.2's data, the pilot's. v3's starts are the v3 ladder
-  (`islands/ref-optim/ladder.py`, dense lf models at vocabulary 32,000 on bpe32k's stream, at several tokens per
+  grid reads. These four are GPT-2 starts on v2.2's data, the pilot's. v3's starts are the v3 starts ladder's
+  (`islands/ladder-v3/ladder.py`, dense lf models at vocabulary 32,000 on bpe32k's stream, at several tokens per
   parameter with C0 counted), which join the store with tokenizer `bpe32k` in their `shape` when it publishes, each
   batch in a commit that changes only `starts_store.json` on the pin, pinned with it as `same_version`. At v3 a branch
   starts only from v3's starts: launch.py refuses a pilot start, and scoring leaves out a v3 record from one
@@ -144,8 +144,8 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
   architecture with θ's vocabulary, context and tying (`prepare.model_config`), grown, pruned or distilled, every tensor
   θ doesn't give it in E. Nothing in the harness caps its cost: the evaluation job records each model's parameters and
   forward MACs and gates per token (`te_core.cw.forward_cost`), and scoring admits a checkpoint only within the cap
-  (`te_core.policy.eligible`: at most the greater of the start's forward and the compute-optimal model's at its loss
-  under the v3 ladder's fit, and twice the start's forward until that fit exists).
+  (`te_core.policy.eligible`: at most the greater of twice the start's forward and the compute-optimal model's at its
+  loss under the v3 ladder's fit, and twice the start's forward until that fit exists).
 - **Training job** (`candidate.sh`, `sandbox.py`, the harness `te_core/` and its README): the island's program runs as
   `python -m te_core.run --script islands/<island>/train.py`, which counts every multiply-accumulate it computes through
   torch, times its steps (a step is one `TrainData.next` to the next), writes the first E in each 5% of the run to its

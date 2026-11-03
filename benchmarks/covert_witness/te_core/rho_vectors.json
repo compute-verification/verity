@@ -1,5 +1,5 @@
 {
- "about": "The one bound's test vectors (te_core.formalism's `bound`, and `at` with a reading), which the console's rho.ts runs.\nJSON has no infinity: null is \u221e (a term no block bounds, or \u03c1 there).",
+ "about": "The one bound's test vectors (te_core.formalism's `bound`, and `at` under reading A), which the console's rho.ts\nruns. null is unmeasured (a term, the max, or \u03c1 where no kind is measured); JSON has no infinity, so \u221e is \"inf\".",
  "cases": {
   "adapter": {
    "circuit": "wildcard_adapter.npz",
@@ -27,19 +27,10 @@
   }
  },
  "kinds": [
+  "fresh_products",
   "token",
-  "reduction",
-  "update",
   "decoding"
  ],
- "labels": {
-  "decoding/A": "assumption (D, reading A): the default packer's blocks, a block reading the update code at c - d gates (the whole decoder)",
-  "decoding/B": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d affected gates; any other block at most alpha_max (x0 s + s*) on the uncapped profiles",
-  "reduction/any": "assumption (R): each block holding a step's token work passes one partial gradient at its passed width (partial_cut_bits), and the step's token work fills at least ceil(N w / c) blocks; blocks split by layers or tensors rather than tokens break it (one holding only frozen layers passes no partial)",
-  "token/A": "assumption (A1, reading A): the default packer's blocks (formalism.packer), a block reading the update code at c gates",
-  "token/B": "assumption (A1, reading B): the token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code",
-  "update/any": "assumption (U): where two or more blocks hold a step's token work, the block applying the update to a coordinate reads its share of the gradient's cut (grad_cut_bits); the weights are read once, theta free; blocks split by tensors break it (a tensor's gradient made and applied in one block)"
- },
  "measured": {
   "adapter": {
    "a_bits": 32.0,
@@ -543,12 +534,707 @@
     "decoder_gates": "none: E stores the grown block's tensors (the model format)",
     "delta_bits": "the trace's update cut, theta' as the step reads it (the grown block's four tensors)",
     "entries": "assumption (A1, reading A), from the trace: one token's path in segments, what a run of them reads (its frontier, token positions, update cut and context per other position), the least any of the default packer's blocks reads",
+    "ops": "counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's gates (te_core.tiles.of_graph)",
     "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
     "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, and its other inputs",
     "u": "assumption (A1), from the trace: 0 up to t, then u_in",
     "u1_bits": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order",
     "u_in": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order"
    },
+   "ops": [
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       32,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       32,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       32,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 9759124094976.0,
+     "macs": 6593445888,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       50304
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 9759124094976.0,
+     "macs": 6593445888,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       50304,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       192,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       192,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "rest",
+     "gates": 58566223446.0,
+     "macs": null,
+     "op": "rest",
+     "phase": "fwd",
+     "products": [],
+     "widths": null
+    },
+    {
+     "class": "rest",
+     "gates": 15242049885.0,
+     "macs": null,
+     "op": "rest",
+     "phase": "bwd",
+     "products": [],
+     "widths": null
+    },
+    {
+     "class": "rest",
+     "gates": 3733273088.0,
+     "macs": null,
+     "op": "rest",
+     "phase": "other",
+     "products": [],
+     "widths": null
+    }
+   ],
    "parts": [
     {
      "affected_gates": 19875688378368.0,
@@ -561,6 +1247,7 @@
      "tokens": 2048
     }
    ],
+   "products": null,
    "tail_share": 0.9886722037463094,
    "tau_bits": 16.046875,
    "u": [
@@ -1122,12 +1809,707 @@
     "decoder_gates": "none: the dead entries are zero",
     "delta_bits": "stated: an E of the live entries alone (w_gate's and w_up's 8 live rows and w_down's 8 live columns at bf16, mlp_norm at fp32; wildcard's 05:46Z LOOPHOLE)",
     "entries": "assumption (A1, reading A), from the trace: one token's path in segments, what a run of them reads (its frontier, token positions, update cut and context per other position), the least any of the default packer's blocks reads",
+    "ops": "counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's gates (te_core.tiles.of_graph)",
     "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
     "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, and its other inputs",
     "u": "assumption (A1), from the trace: 0 up to t, then u_in",
     "u1_bits": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order",
     "u_in": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order"
    },
+   "ops": [
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       32,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       32,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       32,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 9759124094976.0,
+     "macs": 6593445888,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       50304
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 9759124094976.0,
+     "macs": 6593445888,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       50304,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       192,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       192,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "rest",
+     "gates": 58566223446.0,
+     "macs": null,
+     "op": "rest",
+     "phase": "fwd",
+     "products": [],
+     "widths": null
+    },
+    {
+     "class": "rest",
+     "gates": 15242049885.0,
+     "macs": null,
+     "op": "rest",
+     "phase": "bwd",
+     "products": [],
+     "widths": null
+    },
+    {
+     "class": "rest",
+     "gates": 3733273088.0,
+     "macs": null,
+     "op": "rest",
+     "phase": "other",
+     "products": [],
+     "widths": null
+    }
+   ],
    "parts": [
     {
      "affected_gates": 19875688378368.0,
@@ -1140,6 +2522,7 @@
      "tokens": 2048
     }
    ],
+   "products": null,
    "tail_share": 0.9886722037463094,
    "tau_bits": 16.046875,
    "u": [
@@ -2011,12 +3394,1106 @@
     "decoder_gates": "none: E stores the tensors (the full format)",
     "delta_bits": "the trace's update cut, theta' as the step reads it (every block tensor)",
     "entries": "assumption (A1, reading A), from the trace: one token's path in segments, what a run of them reads (its frontier, token positions, update cut and context per other position), the least any of the default packer's blocks reads",
+    "ops": "counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's gates (te_core.tiles.of_graph)",
     "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
     "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, and its other inputs",
     "u": "assumption (A1), from the trace: 0 up to t, then u_in",
     "u1_bits": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order",
     "u_in": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order"
    },
+   "ops": [
+    {
+     "class": "updated",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       32,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       32,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 9759124094976.0,
+     "macs": 6593445888,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       50304
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 9759124094976.0,
+     "macs": 6593445888,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       50304,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       192,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       192,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       1024,
+       32,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       32,
+       1024,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      32
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       192,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       192,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       1024,
+       32,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       32,
+       1024,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      32
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "rest",
+     "gates": 40892948410.0,
+     "macs": null,
+     "op": "rest",
+     "phase": "fwd",
+     "products": [],
+     "widths": null
+    },
+    {
+     "class": "rest",
+     "gates": 72669426013.0,
+     "macs": null,
+     "op": "rest",
+     "phase": "bwd",
+     "products": [],
+     "widths": null
+    },
+    {
+     "class": "rest",
+     "gates": 10792200192.0,
+     "macs": null,
+     "op": "rest",
+     "phase": "other",
+     "products": [],
+     "widths": null
+    }
+   ],
    "parts": [
     {
      "affected_gates": 40950580985856.0,
@@ -2029,6 +4506,7 @@
      "tokens": 2048
     }
    ],
+   "products": null,
    "tail_share": 0.9839505013150606,
    "tau_bits": 16.015625,
    "u": [
@@ -3012,12 +5490,2436 @@
     "decoder_gates": "W + B A for the 14 matrices, 425984 fp32 multiply-adds at F32Fma_v4's gates each",
     "delta_bits": "the trace's update cut, the factors and gains as the step reads them",
     "entries": "assumption (A1, reading A), from the trace: one token's path in segments, what a run of them reads (its frontier, token positions, update cut and context per other position), the least any of the default packer's blocks reads",
+    "ops": "counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's gates (te_core.tiles.of_graph)",
     "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
     "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, and its other inputs",
     "u": "assumption (A1), from the trace: 0 up to t, then u_in",
     "u1_bits": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order",
     "u_in": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order"
    },
+   "ops": [
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       32,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       32,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "activation",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "fwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "updated",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "registered",
+     "gates": 9759124094976.0,
+     "macs": 6593445888,
+     "op": "mm",
+     "phase": "fwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       50304
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 9759124094976.0,
+     "macs": 6593445888,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       50304,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       4,
+       2048,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       192,
+       2048,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       4,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       192,
+       2048,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       4,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       4,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       1024,
+       32,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       32,
+       1024,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      32
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       4,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       4,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       4,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       4,
+       2048,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       192
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       192,
+       2048,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       4,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       192,
+       2048,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 2328035328.0,
+     "macs": 1572864,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       4,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 37248565248.0,
+     "macs": 25165824,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       192,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       4,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       1024,
+       32,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       32,
+       1024,
+       1024
+      ]
+     ],
+     "widths": [
+      16,
+      32
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 1696109428736.0,
+     "macs": 134217728,
+     "op": "bmm",
+     "phase": "bwd",
+     "products": [
+      [
+       4,
+       1024,
+       1024,
+       32
+      ]
+     ],
+     "widths": [
+      32,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       4,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       4,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       64,
+       2048,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       4
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       4,
+       2048,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 776011776.0,
+     "macs": 524288,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       4,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "grad",
+     "gates": 12416188416.0,
+     "macs": 8388608,
+     "op": "mm",
+     "phase": "bwd",
+     "products": [
+      [
+       1,
+       2048,
+       64,
+       64
+      ]
+     ],
+     "widths": [
+      16,
+      16
+     ]
+    },
+    {
+     "class": "rest",
+     "gates": 51058067386.0,
+     "macs": null,
+     "op": "rest",
+     "phase": "fwd",
+     "products": [],
+     "widths": null
+    },
+    {
+     "class": "rest",
+     "gates": 84050932061.0,
+     "macs": null,
+     "op": "rest",
+     "phase": "bwd",
+     "products": [],
+     "widths": null
+    },
+    {
+     "class": "rest",
+     "gates": 1061103616.0,
+     "macs": null,
+     "op": "rest",
+     "phase": "other",
+     "products": [],
+     "widths": null
+    }
+   ],
    "parts": [
     {
      "affected_gates": 40743644512256.0,
@@ -3030,6 +7932,7 @@
      "tokens": 2048
     }
    ],
+   "products": null,
    "tail_share": 0.9981917317164438,
    "tau_bits": 16.015625,
    "u": [
@@ -3315,8 +8218,608 @@
   }
  },
  "program": "islands/wildcard/train.py at 9460fcd228 on the tiny start, --batch 2 --micro 2 --warmup 1, traced at step 1 (te_core.capture.script)",
- "rule": "rho = rho_fit where Fit holds, else max(1, max over kinds of the terms)",
- "schema": "te-core/rho-vectors/v1",
+ "rests_on": {
+  "decoding": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d gates; with A1 (reading A) and the token kind's witness family",
+  "fresh_products": "theorem for this circuit: te_core.io_bound's Loomis-Whitney cap on a block's MACs of products of two fresh operands, amortized over the partition, each operand and partial sum at its passed width, at the chain constant (its premise P-chain; products summed in a tree, or in an order the trace doesn't give, take the tree constant, which io_bound doesn't have yet), given its premises P-cell, P-width (a reference circuit's) and P-share and the standard algorithm",
+  "token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them (te_core.tiles); a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates"
+ },
+ "rule": "rho = rho_fit where Fit holds, else max(1, the max over the kinds' measured terms); null where no kind is measured. Sensitivities are never in the max.",
+ "schema": "te-core/rho-vectors/v3",
+ "sensitivities": {
+  "decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, alpha_max (x0 s + s*))) affected gates, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
+  "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate at the best witness that holds it (per_gate); a block holding one gate of a product beside another product's tile or the best run holds more, for a few bits of that gate's own operands",
+  "reduction": "sensitivity, assumption (R): each block holding a step's token work passes one partial gradient at its passed width (partial_cut_bits), and the step's token work fills at least ceil(N w / c) blocks; it holds only for partitions split by tokens (a block holding only frozen layers passes no partial)",
+  "token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
+  "update": "sensitivity, assumption (U): where two or more blocks hold a step's token work, the block applying the update to a coordinate reads its share of the gradient's cut (grad_cut_bits), the weights read once and theta free; it holds only for partitions split by tokens (a tensor's gradient made and applied in one block breaks it)"
+ },
+ "sessions": {
+  "about": "te_core.policy.session: one session of the reference model, each of its tokens a forward, every product of two operands at the served precision's GEMM price; the elementwise ops left out",
+  "console": {
+   "c": 536681984163840.0,
+   "in_tokens": 4096,
+   "k": 65536.0,
+   "out_tokens": 1024,
+   "params": 45029888
+  },
+  "rule": "c = (tokens\u00b7n_layer\u00b7(4\u00b7d_model\u00b2 + 3\u00b7d_model\u00b7d_ff) + tokens\u00b7d_model\u00b7vocab + 2\u00b7n_layer\u00b7d_model\u00b7attended) x gates_per_mac, tokens = in + out, attended = in\u00b2 + out\u00b7in + out\u00b7(out + 1)/2 (a prompt token over the whole prompt, the j-th output token over the prompt and the output tokens up to itself); k = in x ceil(log2 vocab)",
+  "vectors": [
+   {
+    "attended": 21496320,
+    "gates": 536681984163840.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 4096,
+    "k_bits": 65536,
+    "macs": {
+     "attention": 132073390080,
+     "lm_head": 131868917760,
+     "matrices": 98650030080
+    },
+    "out_tokens": 1024,
+    "params": 45029888,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 50304
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 15205888,
+    "gates": 479477500084224.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 2048,
+    "k_bits": 32768,
+    "macs": {
+     "attention": 93424975872,
+     "lm_head": 131868917760,
+     "matrices": 98650030080
+    },
+    "out_tokens": 3072,
+    "params": 45029888,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 50304
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 285737472,
+    "gates": 3758533883854848.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 16384,
+    "k_bits": 262144,
+    "macs": {
+     "attention": 1755571027968,
+     "lm_head": 448354320384,
+     "matrices": 335410102272
+    },
+    "out_tokens": 1024,
+    "params": 45029888,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 50304
+    },
+    "tokens": 17408
+   },
+   {
+    "attended": 1048576,
+    "gates": 77775004237824.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1024,
+    "k_bits": 16384,
+    "macs": {
+     "attention": 6442450944,
+     "lm_head": 26373783552,
+     "matrices": 19730006016
+    },
+    "out_tokens": 0,
+    "params": 45029888,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 50304
+    },
+    "tokens": 1024
+   },
+   {
+    "attended": 3,
+    "gates": 133307304192.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1,
+    "k_bits": 16,
+    "macs": {
+     "attention": 18432,
+     "lm_head": 51511296,
+     "matrices": 38535168
+    },
+    "out_tokens": 1,
+    "params": 45029888,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 50304
+    },
+    "tokens": 2
+   },
+   {
+    "attended": 21496320,
+    "gates": 1112847447490560.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 4096,
+    "k_bits": 65536,
+    "macs": {
+     "attention": 264146780160,
+     "lm_head": 197803376640,
+     "matrices": 289910292480
+    },
+    "out_tokens": 1024,
+    "params": 95269632,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 50304
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 15205888,
+    "gates": 998438479331328.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 2048,
+    "k_bits": 32768,
+    "macs": {
+     "attention": 186849951744,
+     "lm_head": 197803376640,
+     "matrices": 289910292480
+    },
+    "out_tokens": 3072,
+    "params": 95269632,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 50304
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 285737472,
+    "gates": 7651311596863488.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 16384,
+    "k_bits": 262144,
+    "macs": {
+     "attention": 3511142055936,
+     "lm_head": 672531480576,
+     "matrices": 985694994432
+    },
+    "out_tokens": 1024,
+    "params": 95269632,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 50304
+    },
+    "tokens": 17408
+   },
+   {
+    "attended": 1048576,
+    "gates": 163446704308224.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1024,
+    "k_bits": 16384,
+    "macs": {
+     "attention": 12884901888,
+     "lm_head": 39560675328,
+     "matrices": 57982058496
+    },
+    "out_tokens": 0,
+    "params": 95269632,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 50304
+    },
+    "tokens": 1024
+   },
+   {
+    "attended": 3,
+    "gates": 282037842432.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1,
+    "k_bits": 16,
+    "macs": {
+     "attention": 36864,
+     "lm_head": 77266944,
+     "matrices": 113246208
+    },
+    "out_tokens": 1,
+    "params": 95269632,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 50304
+    },
+    "tokens": 2
+   },
+   {
+    "attended": 21496320,
+    "gates": 465661386424320.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 4096,
+    "k_bits": 61440,
+    "macs": {
+     "attention": 132073390080,
+     "lm_head": 83886080000,
+     "matrices": 98650030080
+    },
+    "out_tokens": 1024,
+    "params": 35658240,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 32000
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 15205888,
+    "gates": 408456902344704.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 2048,
+    "k_bits": 30720,
+    "macs": {
+     "attention": 93424975872,
+     "lm_head": 83886080000,
+     "matrices": 98650030080
+    },
+    "out_tokens": 3072,
+    "params": 35658240,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 32000
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 285737472,
+    "gates": 3517063851540480.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 16384,
+    "k_bits": 245760,
+    "macs": {
+     "attention": 1755571027968,
+     "lm_head": 285212672000,
+     "matrices": 335410102272
+    },
+    "out_tokens": 1024,
+    "params": 35658240,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 32000
+    },
+    "tokens": 17408
+   },
+   {
+    "attended": 1048576,
+    "gates": 63570884689920.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1024,
+    "k_bits": 15360,
+    "macs": {
+     "attention": 6442450944,
+     "lm_head": 16777216000,
+     "matrices": 19730006016
+    },
+    "out_tokens": 0,
+    "params": 35658240,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 32000
+    },
+    "tokens": 1024
+   },
+   {
+    "attended": 3,
+    "gates": 105564883200.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1,
+    "k_bits": 15,
+    "macs": {
+     "attention": 18432,
+     "lm_head": 32768000,
+     "matrices": 38535168
+    },
+    "out_tokens": 1,
+    "params": 35658240,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 1408,
+     "d_model": 512,
+     "n_head": 8,
+     "n_layer": 6,
+     "vocab": 32000
+    },
+    "tokens": 2
+   },
+   {
+    "attended": 21496320,
+    "gates": 1006316550881280.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 4096,
+    "k_bits": 61440,
+    "macs": {
+     "attention": 264146780160,
+     "lm_head": 125829120000,
+     "matrices": 289910292480
+    },
+    "out_tokens": 1024,
+    "params": 81212160,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 32000
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 15205888,
+    "gates": 891907582722048.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 2048,
+    "k_bits": 30720,
+    "macs": {
+     "attention": 186849951744,
+     "lm_head": 125829120000,
+     "matrices": 289910292480
+    },
+    "out_tokens": 3072,
+    "params": 81212160,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 32000
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 285737472,
+    "gates": 7289106548391936.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 16384,
+    "k_bits": 245760,
+    "macs": {
+     "attention": 3511142055936,
+     "lm_head": 427819008000,
+     "matrices": 985694994432
+    },
+    "out_tokens": 1024,
+    "params": 81212160,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 32000
+    },
+    "tokens": 17408
+   },
+   {
+    "attended": 1048576,
+    "gates": 142140524986368.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1024,
+    "k_bits": 15360,
+    "macs": {
+     "attention": 12884901888,
+     "lm_head": 25165824000,
+     "matrices": 57982058496
+    },
+    "out_tokens": 0,
+    "params": 81212160,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 32000
+    },
+    "tokens": 1024
+   },
+   {
+    "attended": 3,
+    "gates": 240424210944.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1,
+    "k_bits": 15,
+    "macs": {
+     "attention": 36864,
+     "lm_head": 49152000,
+     "matrices": 113246208
+    },
+    "out_tokens": 1,
+    "params": 81212160,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2048,
+     "d_model": 768,
+     "n_head": 12,
+     "n_layer": 8,
+     "vocab": 32000
+    },
+    "tokens": 2
+   },
+   {
+    "attended": 21496320,
+    "gates": 2848397784514560.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 4096,
+    "k_bits": 61440,
+    "macs": {
+     "attention": 704391413760,
+     "lm_head": 167772160000,
+     "matrices": 1052266987520
+    },
+    "out_tokens": 1024,
+    "params": 238322688,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2816,
+     "d_model": 1024,
+     "n_head": 16,
+     "n_layer": 16,
+     "vocab": 32000
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 15205888,
+    "gates": 2543307202756608.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 2048,
+    "k_bits": 30720,
+    "macs": {
+     "attention": 498266537984,
+     "lm_head": 167772160000,
+     "matrices": 1052266987520
+    },
+    "out_tokens": 3072,
+    "params": 238322688,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2816,
+     "d_model": 1024,
+     "n_head": 16,
+     "n_layer": 16,
+     "vocab": 32000
+    },
+    "tokens": 5120
+   },
+   {
+    "attended": 285737472,
+    "gates": 1.999823320173773e+16,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 16384,
+    "k_bits": 245760,
+    "macs": {
+     "attention": 9363045482496,
+     "lm_head": 570425344000,
+     "matrices": 3577707757568
+    },
+    "out_tokens": 1024,
+    "params": 238322688,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2816,
+     "d_model": 1024,
+     "n_head": 16,
+     "n_layer": 16,
+     "vocab": 32000
+    },
+    "tokens": 17408
+   },
+   {
+    "attended": 1048576,
+    "gates": 412018796396544.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1024,
+    "k_bits": 15360,
+    "macs": {
+     "attention": 34359738368,
+     "lm_head": 33554432000,
+     "matrices": 210453397504
+    },
+    "out_tokens": 0,
+    "params": 238322688,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2816,
+     "d_model": 1024,
+     "n_head": 16,
+     "n_layer": 16,
+     "vocab": 32000
+    },
+    "tokens": 1024
+   },
+   {
+    "attended": 3,
+    "gates": 705540206592.0,
+    "gates_per_mac": 1480.125,
+    "in_tokens": 1,
+    "k_bits": 15,
+    "macs": {
+     "attention": 98304,
+     "lm_head": 65536000,
+     "matrices": 411041792
+    },
+    "out_tokens": 1,
+    "params": 238322688,
+    "precision": "bf16",
+    "shape": {
+     "d_ff": 2816,
+     "d_model": 1024,
+     "n_head": 16,
+     "n_layer": 16,
+     "vocab": 32000
+    },
+    "tokens": 2
+   }
+  ]
+ },
  "start": {
   "d_model": 64,
   "forward_macs_per_token": 3327488,
@@ -3327,7 +8830,7 @@
  },
  "vectors": [
   {
-   "argmax": "token",
+   "binding": "token",
    "c": 20173202128896.0,
    "case": "adapter",
    "fit": false,
@@ -3335,62 +8838,14 @@
     "decoding": {
      "decoder_gates": 0.0,
      "delta_bits": 591872.0,
+     "ops": 38,
      "positions": 1024,
      "segments": 14,
-     "share": 0.6520858971202714
+     "share": 0.6520858971202714,
+     "tiles_gates": 1188322487411.0,
+     "unplaced": 0.002421814475777709
     },
-    "reduction": {
-     "blocks": [
-      2
-     ],
-     "partial_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 591872.0,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "update": {
-     "blocks": [
-      2
-     ],
-     "grad_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 80000,
-   "label": "te_core 4.4, reading A",
-   "max": null,
-   "reading": "A",
-   "rho": null,
-   "rho_fit": 1.0,
-   "terms": {
-    "decoding": null,
-    "reduction": 9.776271345877682,
-    "token": null,
-    "update": 9.776271345877682
-   },
-   "tokens_per_block": 4096,
-   "unmeasured": []
-  },
-  {
-   "argmax": "reduction",
-   "c": 20173202128896.0,
-   "case": "adapter",
-   "fit": false,
-   "inputs": {
-    "decoding": {
+    "decoding_form": {
      "alpha_max": 9704925966.0,
      "cap": 20173202128896.0,
      "decoder_gates": 0.0,
@@ -3399,6 +8854,17 @@
      "share": 0.6520858971202714,
      "x0": 8.333582376964214e-05
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 1188322487411.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       2
@@ -3411,6 +8877,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 1188322487411.0,
+     "unplaced": 0.002421814475777709
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 1355.6490348431535,
      "s_star": 2471.6805093657736,
@@ -3430,85 +8906,44 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.4, reading B",
-   "max": 9.776271345877682,
-   "reading": "B",
-   "rho": 9.776271345877682,
+   "label": "te_core 4.6, reading A",
+   "max": 11.065531262155444,
+   "rho": 11.065531262155444,
    "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.6520858971202714,
+   "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 501.0542637591155,
     "reduction": 9.776271345877682,
-    "token": 0.5483513212839408,
+    "token_form": 0.5483513212839408,
     "update": 9.776271345877682
    },
-   "tokens_per_block": 4096,
-   "unmeasured": []
-  },
-  {
-   "argmax": "reduction",
-   "c": 20173202128896.0,
-   "case": "adapter",
-   "fit": false,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 0.0,
-     "delta_bits": 591872.0,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "reduction": {
-     "blocks": [
-      2
-     ],
-     "partial_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 591872.0,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "update": {
-     "blocks": [
-      2
-     ],
-     "grad_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 800000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.9776271345877682,
-   "reading": "A",
-   "rho": 1.0,
-   "rho_fit": 1.0,
    "terms": {
-    "decoding": 0.6520858971202714,
-    "reduction": 0.9776271345877682,
-    "token": 0.6520858971202714,
-    "update": 0.9776271345877682
+    "decoding": 11.065531262155444,
+    "fresh_products": null,
+    "token": 11.065531262155444
    },
    "tokens_per_block": 4096,
-   "unmeasured": []
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "reduction",
+   "binding": "token",
    "c": 20173202128896.0,
    "case": "adapter",
    "fit": false,
    "inputs": {
     "decoding": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 8472607790387.0,
+     "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
      "alpha_max": 9704925966.0,
      "cap": 20173202128896.0,
      "decoder_gates": 0.0,
@@ -3517,6 +8952,17 @@
      "share": 0.6520858971202714,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 8472607790387.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       2
@@ -3529,6 +8975,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 8472607790387.0,
+     "unplaced": 0.002421814475777709
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 1355.6490348431535,
      "s_star": 24716.805093657735,
@@ -3548,85 +9004,44 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.4, reading B",
-   "max": 0.9776271345877682,
-   "reading": "B",
+   "label": "te_core 4.6, reading A",
+   "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.6520858971202714,
+   "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202714,
     "reduction": 0.9776271345877682,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 0.9776271345877682
    },
-   "tokens_per_block": 4096,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 20173202128896.0,
-   "case": "adapter",
-   "fit": true,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 0.0,
-     "delta_bits": 591872.0,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "reduction": {
-     "blocks": [
-      2
-     ],
-     "partial_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 591872.0,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "update": {
-     "blocks": [
-      2
-     ],
-     "grad_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 8000000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.6520858971202714,
-   "reading": "A",
-   "rho": 1.0,
-   "rho_fit": 1.0,
    "terms": {
     "decoding": 0.6520858971202714,
-    "reduction": 0.09776271345877682,
-    "token": 0.6520858971202714,
-    "update": 0.09776271345877682
+    "fresh_products": null,
+    "token": 0.6520858971202714
    },
    "tokens_per_block": 4096,
-   "unmeasured": []
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "decoding",
+   "binding": "token",
    "c": 20173202128896.0,
    "case": "adapter",
    "fit": true,
    "inputs": {
     "decoding": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
      "alpha_max": 9704925966.0,
      "cap": 20173202128896.0,
      "decoder_gates": 0.0,
@@ -3635,6 +9050,17 @@
      "share": 0.6520858971202714,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       2
@@ -3647,6 +9073,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 1355.6490348431535,
      "s_star": 247168.05093657735,
@@ -3666,85 +9102,44 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.4, reading B",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
-   "reading": "B",
    "rho": 1.0,
    "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.6520858971202714,
+   "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202714,
     "reduction": 0.09776271345877682,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 0.09776271345877682
    },
-   "tokens_per_block": 4096,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 492509817600.0,
-   "case": "adapter",
-   "fit": true,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 0.0,
-     "delta_bits": 591872.0,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "reduction": {
-     "blocks": [
-      62
-     ],
-     "partial_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 591872.0,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "update": {
-     "blocks": [
-      62
-     ],
-     "grad_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 8000000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.6520858971202713,
-   "reading": "A",
-   "rho": 1.0,
-   "rho_fit": 1.0,
    "terms": {
-    "decoding": 0.6520858971202713,
-    "reduction": 0.14559388478968227,
-    "token": 0.6520858971202713,
-    "update": 0.0023867849965521688
+    "decoding": 0.6520858971202714,
+    "fresh_products": null,
+    "token": 0.6520858971202714
    },
-   "tokens_per_block": 100,
-   "unmeasured": []
+   "tokens_per_block": 4096,
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "decoding",
+   "binding": "token",
    "c": 492509817600.0,
    "case": "adapter",
    "fit": true,
    "inputs": {
     "decoding": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
      "alpha_max": 9704925966.0,
      "cap": 492509817600.0,
      "decoder_gates": 0.0,
@@ -3753,6 +9148,17 @@
      "share": 0.6520858971202714,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       62
@@ -3765,6 +9171,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 33.09690026472543,
      "s_star": 247168.05093657735,
@@ -3784,85 +9200,44 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.4, reading B",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
-   "reading": "B",
    "rho": 1.0,
    "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.6520858971202714,
+   "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202717,
     "reduction": 0.14559388478968227,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 0.0023867849965521688
    },
-   "tokens_per_block": 100,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 4925098176.0,
-   "case": "adapter",
-   "fit": true,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 0.0,
-     "delta_bits": 591872.0,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "reduction": {
-     "blocks": [
-      6188
-     ],
-     "partial_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 591872.0,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "update": {
-     "blocks": [
-      6188
-     ],
-     "grad_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 80000000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.6520858971202714,
-   "reading": "A",
-   "rho": 1.0,
-   "rho_fit": 1.0,
    "terms": {
     "decoding": 0.6520858971202714,
-    "reduction": 0.014767038773668266,
-    "token": 0.6520858971202714,
-    "update": 2.3867849965521684e-06
+    "fresh_products": null,
+    "token": 0.6520858971202714
    },
-   "tokens_per_block": 1,
-   "unmeasured": []
+   "tokens_per_block": 100,
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "decoding",
+   "binding": "token",
    "c": 4925098176.0,
    "case": "adapter",
    "fit": true,
    "inputs": {
     "decoding": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 30480169048499.0,
+     "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
      "alpha_max": 9704925966.0,
      "cap": 4925098176.0,
      "decoder_gates": 0.0,
@@ -3871,6 +9246,17 @@
      "share": 0.6520858971202714,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 30480169048499.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       6188
@@ -3883,6 +9269,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 591872.0,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 30480169048499.0,
+     "unplaced": 0.002421814475777709
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 0.33096900264725426,
      "s_star": 2481504.0,
@@ -3902,85 +9298,44 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.4, reading B",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
-   "reading": "B",
    "rho": 1.0,
    "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.6520858971202714,
+   "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202714,
     "reduction": 0.014767038773668266,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 2.3867849965521684e-06
    },
-   "tokens_per_block": 1,
-   "unmeasured": []
-  },
-  {
-   "argmax": "reduction",
-   "c": 20173202128896.0,
-   "case": "adapter-live",
-   "fit": false,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 0.0,
-     "delta_bits": 26624,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "reduction": {
-     "blocks": [
-      2
-     ],
-     "partial_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 26624,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "update": {
-     "blocks": [
-      2
-     ],
-     "grad_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 80000,
-   "label": "te_core 4.4, reading A",
-   "max": 9.776271345877682,
-   "reading": "A",
-   "rho": 9.776271345877682,
-   "rho_fit": 1.0,
    "terms": {
     "decoding": 0.6520858971202714,
-    "reduction": 9.776271345877682,
-    "token": 0.6520858971202714,
-    "update": 9.776271345877682
+    "fresh_products": null,
+    "token": 0.6520858971202714
    },
-   "tokens_per_block": 4096,
-   "unmeasured": []
+   "tokens_per_block": 1,
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "reduction",
+   "binding": "token",
    "c": 20173202128896.0,
    "case": "adapter-live",
    "fit": false,
    "inputs": {
     "decoding": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 1188322487411.0,
+     "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
      "alpha_max": 9704925966.0,
      "cap": 20173202128896.0,
      "decoder_gates": 0.0,
@@ -3989,6 +9344,17 @@
      "share": 0.6520858971202714,
      "x0": 8.333582376964214e-05
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 1188322487411.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       2
@@ -4001,6 +9367,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 1188322487411.0,
+     "unplaced": 0.002421814475777709
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 1355.6490348431535,
      "s_star": 2471.6805093657736,
@@ -4020,85 +9396,44 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.4, reading B",
-   "max": 9.776271345877682,
-   "reading": "B",
-   "rho": 9.776271345877682,
-   "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.6520858971202714,
-    "reduction": 9.776271345877682,
-    "token": 0.0,
-    "update": 9.776271345877682
-   },
-   "tokens_per_block": 4096,
-   "unmeasured": []
-  },
-  {
-   "argmax": "reduction",
-   "c": 20173202128896.0,
-   "case": "adapter-live",
-   "fit": false,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 0.0,
-     "delta_bits": 26624,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "reduction": {
-     "blocks": [
-      2
-     ],
-     "partial_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 26624,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "update": {
-     "blocks": [
-      2
-     ],
-     "grad_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 800000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.9776271345877682,
-   "reading": "A",
+   "label": "te_core 4.6, reading A",
+   "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
+   "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202714,
+    "reduction": 9.776271345877682,
+    "token_form": 0.0,
+    "update": 9.776271345877682
+   },
    "terms": {
     "decoding": 0.6520858971202714,
-    "reduction": 0.9776271345877682,
-    "token": 0.6520858971202714,
-    "update": 0.9776271345877682
+    "fresh_products": null,
+    "token": 0.6520858971202714
    },
    "tokens_per_block": 4096,
-   "unmeasured": []
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "reduction",
+   "binding": "token",
    "c": 20173202128896.0,
    "case": "adapter-live",
    "fit": false,
    "inputs": {
     "decoding": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 8472607790387.0,
+     "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
      "alpha_max": 9704925966.0,
      "cap": 20173202128896.0,
      "decoder_gates": 0.0,
@@ -4107,6 +9442,17 @@
      "share": 0.6520858971202714,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 8472607790387.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       2
@@ -4119,6 +9465,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 8472607790387.0,
+     "unplaced": 0.002421814475777709
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 1355.6490348431535,
      "s_star": 24716.805093657735,
@@ -4138,85 +9494,44 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.4, reading B",
-   "max": 0.9776271345877682,
-   "reading": "B",
+   "label": "te_core 4.6, reading A",
+   "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.6520858971202714,
+   "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202714,
     "reduction": 0.9776271345877682,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 0.9776271345877682
    },
-   "tokens_per_block": 4096,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 20173202128896.0,
-   "case": "adapter-live",
-   "fit": true,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 0.0,
-     "delta_bits": 26624,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "reduction": {
-     "blocks": [
-      2
-     ],
-     "partial_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 26624,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "update": {
-     "blocks": [
-      2
-     ],
-     "grad_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 8000000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.6520858971202714,
-   "reading": "A",
-   "rho": 1.0,
-   "rho_fit": 1.0,
    "terms": {
     "decoding": 0.6520858971202714,
-    "reduction": 0.09776271345877682,
-    "token": 0.6520858971202714,
-    "update": 0.09776271345877682
+    "fresh_products": null,
+    "token": 0.6520858971202714
    },
    "tokens_per_block": 4096,
-   "unmeasured": []
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "decoding",
+   "binding": "token",
    "c": 20173202128896.0,
    "case": "adapter-live",
    "fit": true,
    "inputs": {
     "decoding": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
      "alpha_max": 9704925966.0,
      "cap": 20173202128896.0,
      "decoder_gates": 0.0,
@@ -4225,6 +9540,17 @@
      "share": 0.6520858971202714,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       2
@@ -4237,6 +9563,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 1355.6490348431535,
      "s_star": 249168.0,
@@ -4256,85 +9592,44 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.4, reading B",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
-   "reading": "B",
    "rho": 1.0,
    "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.6520858971202714,
+   "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202714,
     "reduction": 0.09776271345877682,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 0.09776271345877682
    },
-   "tokens_per_block": 4096,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 492509817600.0,
-   "case": "adapter-live",
-   "fit": true,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 0.0,
-     "delta_bits": 26624,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "reduction": {
-     "blocks": [
-      62
-     ],
-     "partial_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 26624,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "update": {
-     "blocks": [
-      62
-     ],
-     "grad_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 8000000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.6520858971202713,
-   "reading": "A",
-   "rho": 1.0,
-   "rho_fit": 1.0,
    "terms": {
-    "decoding": 0.6520858971202713,
-    "reduction": 0.14559388478968227,
-    "token": 0.6520858971202713,
-    "update": 0.0023867849965521688
+    "decoding": 0.6520858971202714,
+    "fresh_products": null,
+    "token": 0.6520858971202714
    },
-   "tokens_per_block": 100,
-   "unmeasured": []
+   "tokens_per_block": 4096,
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "decoding",
+   "binding": "token",
    "c": 492509817600.0,
    "case": "adapter-live",
    "fit": true,
    "inputs": {
     "decoding": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
      "alpha_max": 9704925966.0,
      "cap": 492509817600.0,
      "decoder_gates": 0.0,
@@ -4343,6 +9638,17 @@
      "share": 0.6520858971202714,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       62
@@ -4355,6 +9661,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 22236692953523.0,
+     "unplaced": 0.002421814475777709
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 33.09690026472543,
      "s_star": 249168.0,
@@ -4374,85 +9690,44 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.4, reading B",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
-   "reading": "B",
    "rho": 1.0,
    "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.6520858971202714,
+   "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202717,
     "reduction": 0.14559388478968227,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 0.0023867849965521688
    },
-   "tokens_per_block": 100,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 4925098176.0,
-   "case": "adapter-live",
-   "fit": true,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 0.0,
-     "delta_bits": 26624,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "reduction": {
-     "blocks": [
-      6188
-     ],
-     "partial_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 26624,
-     "positions": 1024,
-     "segments": 14,
-     "share": 0.6520858971202714
-    },
-    "update": {
-     "blocks": [
-      6188
-     ],
-     "grad_bits": [
-      1181696
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 80000000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.6520858971202714,
-   "reading": "A",
-   "rho": 1.0,
-   "rho_fit": 1.0,
    "terms": {
     "decoding": 0.6520858971202714,
-    "reduction": 0.014767038773668266,
-    "token": 0.6520858971202714,
-    "update": 2.3867849965521684e-06
+    "fresh_products": null,
+    "token": 0.6520858971202714
    },
-   "tokens_per_block": 1,
-   "unmeasured": []
+   "tokens_per_block": 100,
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "decoding",
+   "binding": "token",
    "c": 4925098176.0,
    "case": "adapter-live",
    "fit": true,
    "inputs": {
     "decoding": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 30480169048499.0,
+     "unplaced": 0.002421814475777709
+    },
+    "decoding_form": {
      "alpha_max": 9704925966.0,
      "cap": 4925098176.0,
      "decoder_gates": 0.0,
@@ -4461,6 +9736,17 @@
      "share": 0.6520858971202714,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 30480169048499.0,
+     "unplaced": 0.002421814475777709
+    },
     "reduction": {
      "blocks": [
       6188
@@ -4473,6 +9759,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 26624,
+     "ops": 38,
+     "positions": 1024,
+     "segments": 14,
+     "share": 0.6520858971202714,
+     "tiles_gates": 30480169048499.0,
+     "unplaced": 0.002421814475777709
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 0.33096900264725426,
      "s_star": 2499168.0,
@@ -4492,22 +9788,29 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.4, reading B",
+   "label": "te_core 4.6, reading A",
    "max": 0.6520858971202714,
-   "reading": "B",
    "rho": 1.0,
    "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.6520858971202714,
+   "sensitivities": {
+    "decoding_form": 0.6520858971202714,
+    "per_gate": 0.6520858971202714,
     "reduction": 0.014767038773668266,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 2.3867849965521684e-06
    },
+   "terms": {
+    "decoding": 0.6520858971202714,
+    "fresh_products": null,
+    "token": 0.6520858971202714
+   },
    "tokens_per_block": 1,
-   "unmeasured": []
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "token",
+   "binding": "token",
    "c": 20173202128896.0,
    "case": "dense",
    "fit": false,
@@ -4515,62 +9818,14 @@
     "decoding": {
      "decoder_gates": 0.0,
      "delta_bits": 1712128.0,
+     "ops": 59,
      "positions": 1024,
      "segments": 19,
-     "share": 0.9996631800490919
+     "share": 0.9996631800490919,
+     "tiles_gates": 1681060789271.0,
+     "unplaced": 0.00277295310105781
     },
-    "reduction": {
-     "blocks": [
-      3
-     ],
-     "partial_bits": [
-      3416064
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 1712128.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9996631800490919
-    },
-    "update": {
-     "blocks": [
-      3
-     ],
-     "grad_bits": [
-      3416064
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 80000,
-   "label": "te_core 4.4, reading A",
-   "max": null,
-   "reading": "A",
-   "rho": null,
-   "rho_fit": 1.0,
-   "terms": {
-    "decoding": null,
-    "reduction": 42.05663060357565,
-    "token": null,
-    "update": 21.028315301787824
-   },
-   "tokens_per_block": 4096,
-   "unmeasured": []
-  },
-  {
-   "argmax": "reduction",
-   "c": 20173202128896.0,
-   "case": "dense",
-   "fit": false,
-   "inputs": {
-    "decoding": {
+    "decoding_form": {
      "alpha_max": 19995400872.0,
      "cap": 20173202128896.0,
      "decoder_gates": 0.0,
@@ -4579,6 +9834,17 @@
      "share": 0.9996631800490919,
      "x0": 0.00034364702383247125
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 1681060789271.0,
+     "unplaced": 0.00277295310105781
+    },
     "reduction": {
      "blocks": [
       3
@@ -4591,6 +9857,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 1681060789271.0,
+     "unplaced": 0.00277295310105781
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 1008.8513019258384,
      "s_star": 76.8711329152391,
@@ -4610,85 +9886,44 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.4, reading B",
-   "max": 42.05663060357565,
-   "reading": "B",
-   "rho": 42.05663060357565,
+   "label": "te_core 4.6, reading A",
+   "max": 8.35335685982954,
+   "rho": 8.35335685982954,
    "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.9996631800490918,
+   "sensitivities": {
+    "decoding_form": 0.9996631800490918,
+    "per_gate": 146.76517300380573,
     "reduction": 42.05663060357565,
-    "token": 13.115530738562539,
+    "token_form": 13.115530738562539,
     "update": 21.028315301787824
    },
-   "tokens_per_block": 4096,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 20173202128896.0,
-   "case": "dense",
-   "fit": false,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 0.0,
-     "delta_bits": 1712128.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9996631800490919
-    },
-    "reduction": {
-     "blocks": [
-      3
-     ],
-     "partial_bits": [
-      3416064
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 1712128.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9996631800490919
-    },
-    "update": {
-     "blocks": [
-      3
-     ],
-     "grad_bits": [
-      3416064
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 800000,
-   "label": "te_core 4.4, reading A",
-   "max": null,
-   "reading": "A",
-   "rho": null,
-   "rho_fit": 1.0,
    "terms": {
-    "decoding": null,
-    "reduction": 4.2056630603575655,
-    "token": null,
-    "update": 2.1028315301787828
+    "decoding": 8.35335685982954,
+    "fresh_products": null,
+    "token": 8.35335685982954
    },
    "tokens_per_block": 4096,
-   "unmeasured": []
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "reduction",
+   "binding": "token",
    "c": 20173202128896.0,
    "case": "dense",
    "fit": false,
    "inputs": {
     "decoding": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 12531690772247.0,
+     "unplaced": 0.00277295310105781
+    },
+    "decoding_form": {
      "alpha_max": 19995400872.0,
      "cap": 20173202128896.0,
      "decoder_gates": 0.0,
@@ -4697,6 +9932,17 @@
      "share": 0.9996631800490919,
      "x0": 0.08627081452593345
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 12531690772247.0,
+     "unplaced": 0.00277295310105781
+    },
     "reduction": {
      "blocks": [
       3
@@ -4709,6 +9955,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 12531690772247.0,
+     "unplaced": 0.00277295310105781
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 1008.8513019258384,
      "s_star": 768.711329152391,
@@ -4728,85 +9984,44 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.4, reading B",
-   "max": 4.2056630603575655,
-   "reading": "B",
-   "rho": 4.2056630603575655,
-   "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.9996631800490918,
-    "reduction": 4.2056630603575655,
-    "token": 1.1988162915313898,
-    "update": 2.1028315301787828
-   },
-   "tokens_per_block": 4096,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 20173202128896.0,
-   "case": "dense",
-   "fit": false,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 0.0,
-     "delta_bits": 1712128.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9996631800490919
-    },
-    "reduction": {
-     "blocks": [
-      3
-     ],
-     "partial_bits": [
-      3416064
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 1712128.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9996631800490919
-    },
-    "update": {
-     "blocks": [
-      3
-     ],
-     "grad_bits": [
-      3416064
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 8000000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.9996631800490919,
-   "reading": "A",
+   "label": "te_core 4.6, reading A",
+   "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
+   "sensitivities": {
+    "decoding_form": 0.9996631800490918,
+    "per_gate": 14.306487096221096,
+    "reduction": 4.2056630603575655,
+    "token_form": 1.1988162915313898,
+    "update": 2.1028315301787828
+   },
    "terms": {
-    "decoding": 0.9996631800490919,
-    "reduction": 0.4205663060357565,
-    "token": 0.9996631800490919,
-    "update": 0.21028315301787825
+    "decoding": 0.999663180049092,
+    "fresh_products": null,
+    "token": 0.999663180049092
    },
    "tokens_per_block": 4096,
-   "unmeasured": []
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "decoding",
+   "binding": "token",
    "c": 20173202128896.0,
    "case": "dense",
    "fit": false,
    "inputs": {
     "decoding": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 32720902510871.0,
+     "unplaced": 0.00277295310105781
+    },
+    "decoding_form": {
      "alpha_max": 19995400872.0,
      "cap": 20173202128896.0,
      "decoder_gates": 0.0,
@@ -4815,6 +10030,17 @@
      "share": 0.9996631800490919,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 32720902510871.0,
+     "unplaced": 0.00277295310105781
+    },
     "reduction": {
      "blocks": [
       3
@@ -4827,6 +10053,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 32720902510871.0,
+     "unplaced": 0.00277295310105781
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 1008.8513019258384,
      "s_star": 7687.11329152391,
@@ -4846,85 +10082,44 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.4, reading B",
-   "max": 0.9996631800490918,
-   "reading": "B",
+   "label": "te_core 4.6, reading A",
+   "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.9996631800490918,
+   "sensitivities": {
+    "decoding_form": 0.9996631800490918,
+    "per_gate": 0.999663180049092,
     "reduction": 0.4205663060357565,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 0.21028315301787825
    },
-   "tokens_per_block": 4096,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 492509817600.0,
-   "case": "dense",
-   "fit": false,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 0.0,
-     "delta_bits": 1712128.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9996631800490919
-    },
-    "reduction": {
-     "blocks": [
-      84
-     ],
-     "partial_bits": [
-      3416064
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 1712128.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9996631800490919
-    },
-    "update": {
-     "blocks": [
-      84
-     ],
-     "grad_bits": [
-      3416064
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 8000000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.9996631800490916,
-   "reading": "A",
-   "rho": 1.0,
-   "rho_fit": 1.0,
    "terms": {
-    "decoding": 0.9996631800490916,
-    "reduction": 0.42611088135947006,
-    "token": 0.9996631800490916,
-    "update": 0.005133866040475543
+    "decoding": 0.999663180049092,
+    "fresh_products": null,
+    "token": 0.999663180049092
    },
-   "tokens_per_block": 100,
-   "unmeasured": []
+   "tokens_per_block": 4096,
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "decoding",
+   "binding": "token",
    "c": 492509817600.0,
    "case": "dense",
    "fit": false,
    "inputs": {
     "decoding": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 32720902510871.0,
+     "unplaced": 0.00277295310105781
+    },
+    "decoding_form": {
      "alpha_max": 19995400872.0,
      "cap": 492509817600.0,
      "decoder_gates": 0.0,
@@ -4933,6 +10128,17 @@
      "share": 0.9996631800490919,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 32720902510871.0,
+     "unplaced": 0.00277295310105781
+    },
     "reduction": {
      "blocks": [
       84
@@ -4945,6 +10151,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 32720902510871.0,
+     "unplaced": 0.00277295310105781
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 24.630158738423788,
      "s_star": 7687.11329152391,
@@ -4964,85 +10180,44 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.4, reading B",
+   "label": "te_core 4.6, reading A",
    "max": 0.9996631800490919,
-   "reading": "B",
    "rho": 1.0,
    "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.9996631800490919,
+   "sensitivities": {
+    "decoding_form": 0.9996631800490919,
+    "per_gate": 0.9996631800490918,
     "reduction": 0.42611088135947006,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 0.005133866040475543
    },
-   "tokens_per_block": 100,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 4925098176.0,
-   "case": "dense",
-   "fit": true,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 0.0,
-     "delta_bits": 1712128.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9996631800490919
-    },
-    "reduction": {
-     "blocks": [
-      8316
-     ],
-     "partial_bits": [
-      3416064
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 0.0,
-     "delta_bits": 1712128.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9996631800490919
-    },
-    "update": {
-     "blocks": [
-      8316
-     ],
-     "grad_bits": [
-      3416064
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 80000000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.9996631800490919,
-   "reading": "A",
-   "rho": 1.0,
-   "rho_fit": 1.0,
    "terms": {
     "decoding": 0.9996631800490919,
-    "reduction": 0.042688096126554144,
-    "token": 0.9996631800490919,
-    "update": 5.1338660404755435e-06
+    "fresh_products": null,
+    "token": 0.9996631800490919
    },
-   "tokens_per_block": 1,
-   "unmeasured": []
+   "tokens_per_block": 100,
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "decoding",
+   "binding": "token",
    "c": 4925098176.0,
    "case": "dense",
    "fit": true,
    "inputs": {
     "decoding": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 40964378605847.0,
+     "unplaced": 0.00277295310105781
+    },
+    "decoding_form": {
      "alpha_max": 19995400872.0,
      "cap": 4925098176.0,
      "decoder_gates": 0.0,
@@ -5051,6 +10226,17 @@
      "share": 0.9996631800490919,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 40964378605847.0,
+     "unplaced": 0.00277295310105781
+    },
     "reduction": {
      "blocks": [
       8316
@@ -5063,6 +10249,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 0.0,
+     "delta_bits": 1712128.0,
+     "ops": 59,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9996631800490919,
+     "tiles_gates": 40964378605847.0,
+     "unplaced": 0.00277295310105781
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 0.24630158738423788,
      "s_star": 76871.13291523911,
@@ -5082,85 +10278,44 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.4, reading B",
-   "max": 0.9996631800490918,
-   "reading": "B",
+   "label": "te_core 4.6, reading A",
+   "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
-   "terms": {
-    "decoding": 0.9996631800490918,
+   "sensitivities": {
+    "decoding_form": 0.9996631800490918,
+    "per_gate": 0.999663180049092,
     "reduction": 0.042688096126554144,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 5.1338660404755435e-06
    },
-   "tokens_per_block": 1,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 20173202128896.0,
-   "case": "lora",
-   "fit": false,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 5383159808.0,
-     "delta_bits": 172032.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9999300519868621
-    },
-    "reduction": {
-     "blocks": [
-      3
-     ],
-     "partial_bits": [
-      335872
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 5383159808.0,
-     "delta_bits": 172032.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9999300519868621
-    },
-    "update": {
-     "blocks": [
-      3
-     ],
-     "grad_bits": [
-      335872
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 80000,
-   "label": "te_core 4.4, reading A",
-   "max": null,
-   "reading": "A",
-   "rho": null,
-   "rho_fit": 1.000266918292764,
    "terms": {
-    "decoding": null,
-    "reduction": 4.15717585271444,
-    "token": null,
-    "update": 2.07858792635722
+    "decoding": 0.999663180049092,
+    "fresh_products": null,
+    "token": 0.999663180049092
    },
-   "tokens_per_block": 4096,
-   "unmeasured": []
+   "tokens_per_block": 1,
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "token",
+   "binding": "token",
    "c": 20173202128896.0,
    "case": "lora",
    "fit": false,
    "inputs": {
     "decoding": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 1761588219799.0,
+     "unplaced": 0.0033159298525524223
+    },
+    "decoding_form": {
      "alpha_max": 19894357672.0,
      "cap": 20167818969088.0,
      "decoder_gates": 5383159808.0,
@@ -5169,6 +10324,17 @@
      "share": 0.9999300519868621,
      "x0": 0.08805491470908546
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 1761588219799.0,
+     "unplaced": 0.0033159298525524223
+    },
     "reduction": {
      "blocks": [
       3
@@ -5181,6 +10347,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 1761588219799.0,
+     "unplaced": 0.0033159298525524223
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 1013.97503708926,
      "s_star": 77.98372904034717,
@@ -5200,85 +10376,44 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.4, reading B",
-   "max": 11.857120347569653,
-   "reading": "B",
-   "rho": 11.857120347569653,
+   "label": "te_core 4.6, reading A",
+   "max": 2.7344655410785834,
+   "rho": 2.7344655410785834,
    "rho_fit": 1.000266918292764,
-   "terms": {
-    "decoding": 1.000196951609222,
+   "sensitivities": {
+    "decoding_form": 1.000196951609222,
+    "per_gate": 134.7778543633552,
     "reduction": 4.15717585271444,
-    "token": 11.857120347569653,
+    "token_form": 11.857120347569653,
     "update": 2.07858792635722
    },
-   "tokens_per_block": 4096,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 20173202128896.0,
-   "case": "lora",
-   "fit": false,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 5383159808.0,
-     "delta_bits": 172032.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9999300519868621
-    },
-    "reduction": {
-     "blocks": [
-      3
-     ],
-     "partial_bits": [
-      335872
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 5383159808.0,
-     "delta_bits": 172032.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9999300519868621
-    },
-    "update": {
-     "blocks": [
-      3
-     ],
-     "grad_bits": [
-      335872
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 800000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.9999300519868619,
-   "reading": "A",
-   "rho": 1.0,
-   "rho_fit": 1.000266918292764,
    "terms": {
-    "decoding": 0.9999300519868619,
-    "reduction": 0.41571758527144403,
-    "token": 0.9999300519868619,
-    "update": 0.20785879263572202
+    "decoding": 2.7344655410785834,
+    "fresh_products": null,
+    "token": 2.7344655410785834
    },
    "tokens_per_block": 4096,
-   "unmeasured": []
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "decoding",
+   "binding": "token",
    "c": 20173202128896.0,
    "case": "lora",
    "fit": false,
    "inputs": {
     "decoding": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 12513481313815.0,
+     "unplaced": 0.0033159298525524223
+    },
+    "decoding_form": {
      "alpha_max": 19894357672.0,
      "cap": 20173202128896.0,
      "decoder_gates": 5383159808.0,
@@ -5287,6 +10422,17 @@
      "share": 0.9999300519868621,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 12513481313815.0,
+     "unplaced": 0.0033159298525524223
+    },
     "reduction": {
      "blocks": [
       3
@@ -5299,6 +10445,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 12513481313815.0,
+     "unplaced": 0.0033159298525524223
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 1013.97503708926,
      "s_star": 779.8372904034717,
@@ -5318,85 +10474,44 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.4, reading B",
+   "label": "te_core 4.6, reading A",
    "max": 0.9999300519868622,
-   "reading": "B",
    "rho": 1.0,
    "rho_fit": 1.000266918292764,
-   "terms": {
-    "decoding": 0.9999300519868622,
+   "sensitivities": {
+    "decoding_form": 0.9999300519868622,
+    "per_gate": 0.9999300519868621,
     "reduction": 0.41571758527144403,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 0.20785879263572202
    },
-   "tokens_per_block": 4096,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 20173202128896.0,
-   "case": "lora",
-   "fit": true,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 5383159808.0,
-     "delta_bits": 172032.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9999300519868621
-    },
-    "reduction": {
-     "blocks": [
-      3
-     ],
-     "partial_bits": [
-      335872
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 5383159808.0,
-     "delta_bits": 172032.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9999300519868621
-    },
-    "update": {
-     "blocks": [
-      3
-     ],
-     "grad_bits": [
-      335872
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 8000000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.9999300519868619,
-   "reading": "A",
-   "rho": 1.000266918292764,
-   "rho_fit": 1.000266918292764,
    "terms": {
-    "decoding": 0.9999300519868619,
-    "reduction": 0.041571758527144405,
-    "token": 0.9999300519868619,
-    "update": 0.020785879263572202
+    "decoding": 0.9999300519868622,
+    "fresh_products": null,
+    "token": 0.9999300519868622
    },
    "tokens_per_block": 4096,
-   "unmeasured": []
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "decoding",
+   "binding": "token",
    "c": 20173202128896.0,
    "case": "lora",
    "fit": true,
    "inputs": {
     "decoding": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 32503018553623.0,
+     "unplaced": 0.0033159298525524223
+    },
+    "decoding_form": {
      "alpha_max": 19894357672.0,
      "cap": 20173202128896.0,
      "decoder_gates": 5383159808.0,
@@ -5405,6 +10520,17 @@
      "share": 0.9999300519868621,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 32503018553623.0,
+     "unplaced": 0.0033159298525524223
+    },
     "reduction": {
      "blocks": [
       3
@@ -5417,6 +10543,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 32503018553623.0,
+     "unplaced": 0.0033159298525524223
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 1013.97503708926,
      "s_star": 7798.372904034717,
@@ -5436,85 +10572,44 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.4, reading B",
+   "label": "te_core 4.6, reading A",
    "max": 0.9999300519868622,
-   "reading": "B",
    "rho": 1.000266918292764,
    "rho_fit": 1.000266918292764,
-   "terms": {
-    "decoding": 0.9999300519868622,
+   "sensitivities": {
+    "decoding_form": 0.9999300519868622,
+    "per_gate": 0.9999300519868621,
     "reduction": 0.041571758527144405,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 0.020785879263572202
    },
-   "tokens_per_block": 4096,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 492509817600.0,
-   "case": "lora",
-   "fit": true,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 5383159808.0,
-     "delta_bits": 172032.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9999300519868621
-    },
-    "reduction": {
-     "blocks": [
-      83
-     ],
-     "partial_bits": [
-      335872
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 5383159808.0,
-     "delta_bits": 172032.0,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9999300519868621
-    },
-    "update": {
-     "blocks": [
-      83
-     ],
-     "grad_bits": [
-      335872
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 8000000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.9999300519868621,
-   "reading": "A",
-   "rho": 1.0110508421616675,
-   "rho_fit": 1.0110508421616675,
    "terms": {
-    "decoding": 0.9999300519868621,
-    "reduction": 0.041612355947581066,
-    "token": 0.9999300519868621,
-    "update": 0.0005074677554583057
+    "decoding": 0.9999300519868622,
+    "fresh_products": null,
+    "token": 0.9999300519868622
    },
-   "tokens_per_block": 100,
-   "unmeasured": []
+   "tokens_per_block": 4096,
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "decoding",
+   "binding": "token",
    "c": 492509817600.0,
    "case": "lora",
    "fit": true,
    "inputs": {
     "decoding": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 32503018553623.0,
+     "unplaced": 0.0033159298525524223
+    },
+    "decoding_form": {
      "alpha_max": 19894357672.0,
      "cap": 492509817600.0,
      "decoder_gates": 5383159808.0,
@@ -5523,6 +10618,17 @@
      "share": 0.9999300519868621,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 32503018553623.0,
+     "unplaced": 0.0033159298525524223
+    },
     "reduction": {
      "blocks": [
       83
@@ -5535,6 +10641,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": 172032.0,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 32503018553623.0,
+     "unplaced": 0.0033159298525524223
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 24.755249928937012,
      "s_star": 7798.372904034717,
@@ -5554,85 +10670,44 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.4, reading B",
-   "max": 0.9999300519868621,
-   "reading": "B",
+   "label": "te_core 4.6, reading A",
+   "max": 0.9999300519868622,
    "rho": 1.0110508421616675,
    "rho_fit": 1.0110508421616675,
-   "terms": {
-    "decoding": 0.9999300519868621,
+   "sensitivities": {
+    "decoding_form": 0.9999300519868621,
+    "per_gate": 0.9999300519868621,
     "reduction": 0.041612355947581066,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 0.0005074677554583057
    },
-   "tokens_per_block": 100,
-   "unmeasured": []
-  },
-  {
-   "argmax": "token",
-   "c": 4925098176.0,
-   "case": "lora",
-   "fit": false,
-   "inputs": {
-    "decoding": {
-     "decoder_gates": 5383159808.0,
-     "delta_bits": null,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9999300519868621
-    },
-    "reduction": {
-     "blocks": [
-      8273
-     ],
-     "partial_bits": [
-      335872
-     ],
-     "steps": [
-      1
-     ]
-    },
-    "token": {
-     "decoder_gates": 5383159808.0,
-     "delta_bits": null,
-     "positions": 1024,
-     "segments": 19,
-     "share": 0.9999300519868621
-    },
-    "update": {
-     "blocks": [
-      8273
-     ],
-     "grad_bits": [
-      335872
-     ],
-     "steps": [
-      1
-     ]
-    }
-   },
-   "k": 80000000,
-   "label": "te_core 4.4, reading A",
-   "max": 0.9999300519868619,
-   "reading": "A",
-   "rho": 1.0,
-   "rho_fit": null,
    "terms": {
-    "decoding": 0.9999300519868619,
-    "reduction": 0.004197773273151105,
-    "token": 0.9999300519868619,
-    "update": 5.074677554583057e-07
+    "decoding": 0.9999300519868622,
+    "fresh_products": null,
+    "token": 0.9999300519868622
    },
-   "tokens_per_block": 1,
-   "unmeasured": []
+   "tokens_per_block": 100,
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   },
   {
-   "argmax": "decoding",
+   "binding": "token",
    "c": 4925098176.0,
    "case": "lora",
    "fit": false,
    "inputs": {
     "decoding": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": null,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 40746494648599.0,
+     "unplaced": 0.0033159298525524223
+    },
+    "decoding_form": {
      "alpha_max": 19894357672.0,
      "cap": 4925098176.0,
      "decoder_gates": 5383159808.0,
@@ -5641,6 +10716,17 @@
      "share": 0.9999300519868621,
      "x0": 1.0
     },
+    "fresh_products": {},
+    "per_gate": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": null,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 40746494648599.0,
+     "unplaced": 0.0033159298525524223
+    },
     "reduction": {
      "blocks": [
       8273
@@ -5653,6 +10739,16 @@
      ]
     },
     "token": {
+     "decoder_gates": 5383159808.0,
+     "delta_bits": null,
+     "ops": 129,
+     "positions": 1024,
+     "segments": 19,
+     "share": 0.9999300519868621,
+     "tiles_gates": 40746494648599.0,
+     "unplaced": 0.0033159298525524223
+    },
+    "token_form": {
      "alpha_ratio": 1.0,
      "s": 0.24755249928937012,
      "s_star": 77983.72904034717,
@@ -5672,21 +10768,28 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.4, reading B",
+   "label": "te_core 4.6, reading A",
    "max": 0.9999300519868622,
-   "reading": "B",
    "rho": 1.0,
-   "rho_fit": null,
-   "terms": {
-    "decoding": 0.9999300519868622,
+   "rho_fit": "inf",
+   "sensitivities": {
+    "decoding_form": 0.9999300519868622,
+    "per_gate": 0.9999300519868621,
     "reduction": 0.004197773273151105,
-    "token": 0.0,
+    "token_form": 0.0,
     "update": 5.074677554583057e-07
    },
+   "terms": {
+    "decoding": 0.9999300519868622,
+    "fresh_products": null,
+    "token": 0.9999300519868622
+   },
    "tokens_per_block": 1,
-   "unmeasured": []
+   "unmeasured": {
+    "fresh_products": "unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, and a recorded program's has none)"
+   }
   }
  ],
- "version": "4.4",
+ "version": "4.6",
  "w_fwd_gates": 4925098176.0
 }
