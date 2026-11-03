@@ -14,9 +14,9 @@ it prints the play's log after its release log's head (`prints_dev`).
   `LiveChallenger.open_tree` in `verity/core/protocols/sampled_proofs/challenger.py`), each line its value's
   `Flock.canon` text (`lineOf`). Each value holds its keys in order and prints, so its line is its text
   (`canon_lineOf`), and it has the fields v2 reads (`root_value`, `release_plain`, `hello_value`, `open_value`).
-* **The printer** (`printLog`, `prints_printLog`): a log's lines, from what the device holds between releases (its trees,
-  each family's count of coins, each stream's count of rounds and the next line's place: `PrintState`); the lines it
-  prints print the log (`Lines.Prints`).
+* **The printer** (`printLog`, `prints_printLog`): a log's lines, from what the device holds between releases (its
+  trees, each family's count of coins, each stream's count of rounds and the next line's place: `PrintState`); the lines
+  it prints print the log (`Lines.Prints`).
 * **Every play prints** (`printable_releases`, `printable_play`): the device releases only what the printer prints: a
   family's coin of `8 * COIN_BYTES` bits, a tree's root and key of whole bytes, and a round's coins of whole bytes, of a
   tree it sampled and a stream of that tree's spec.
@@ -33,12 +33,12 @@ namespace Verity.Sampled.Device
 open Lean (Json)
 open SampledProofs SampledProofs.Challenger
 open Properties.Challenger (History Run OpensOn)
-open Verity.Sampled.Lines (Canon PlainValue RootValue SpecValue HelloValue OpenValue Prints coinBytes)
+open Verity.Sampled.Lines (Canon PlainValue RootValue SpecValue HelloValue OpenValue Prints)
 
 /-! ## The lines the device writes -/
 
-/-- **A root's line**, as the deployed challenger writes a family's root on its receipt (`LiveRecord._root`): coin `i` of
-family `label`, received at `t`, after the bytes `b`. -/
+/-- **A root's line**, as the deployed challenger writes a family's root on its receipt (`LiveRecord._root`): coin `i`
+of family `label`, received at `t`, after the bytes `b`. -/
 def rootValue (label : String) (i t : ℕ) (b : ByteArray) : Json :=
   Json.mkObj [("event", .str "root"), ("index", Lean.toJson i), ("label", .str label), ("received_at", Lean.toJson t),
     ("root", .str (Flock.hexOf b))]
@@ -206,8 +206,9 @@ def printLog (time : ℕ → ℕ) : PrintState → List Release → Option (List
     else none
   | st, ⟨.hello spec, ν, cs⟩ :: log =>
     if cs.length % 8 = 0 then
-      (printLog time (st.tree ((coinBytes cs).extract 0 64) spec) log).map
-        (lineOf (helloValue spec ν ((coinBytes cs).extract 0 64) ((coinBytes cs).extract 64 (coinBytes cs).size)) :: ·)
+      (printLog time (st.tree ((Lines.coinBytes cs).extract 0 64) spec) log).map
+        (lineOf (helloValue spec ν ((Lines.coinBytes cs).extract 0 64)
+          ((Lines.coinBytes cs).extract 64 (Lines.coinBytes cs).size)) :: ·)
     else none
   | st, ⟨.opening i s n, b, cs⟩ :: log =>
     match st.trees[i]? with
@@ -218,7 +219,7 @@ def printLog (time : ℕ → ℕ) : PrintState → List Release → Option (List
       | some stream =>
         if cs.length % 8 = 0 then
           (printLog time (st.round i s) log).map
-            (lineOf (openValue root stream (st.opened i s) n b (coinBytes cs)) :: ·)
+            (lineOf (openValue root stream (st.opened i s) n b (Lines.coinBytes cs)) :: ·)
         else none
 
 /-- **What the printer prints, the device printed** (`Lines.Prints`): each line its value's text, with the fields v2
@@ -242,12 +243,14 @@ theorem prints_printLog (time : ℕ → ℕ) :
     split at h
     · rename_i hcs
       obtain ⟨ls, hls, rfl⟩ := Option.map_eq_some_iff.1 h
-      have hz : bitsOfBytes ((coinBytes cs).extract 0 64 ++ (coinBytes cs).extract 64 (coinBytes cs).size) = cs := by
+      have hz : bitsOfBytes ((Lines.coinBytes cs).extract 0 64 ++
+          (Lines.coinBytes cs).extract 64 (Lines.coinBytes cs).size) = cs := by
         rw [ByteArray.extract_append_extract, Nat.zero_min, ByteArray.extract_zero_max_size,
           Lines.bits_coinBytes hcs]
       have hp := Prints.hello
-        (canon_hello spec ν ((coinBytes cs).extract 0 64) ((coinBytes cs).extract 64 (coinBytes cs).size))
-        (hello_value ..) (prints_printLog time (st.tree ((coinBytes cs).extract 0 64) spec) log hls)
+        (canon_hello spec ν ((Lines.coinBytes cs).extract 0 64)
+          ((Lines.coinBytes cs).extract 64 (Lines.coinBytes cs).size))
+        (hello_value ..) (prints_printLog time (st.tree ((Lines.coinBytes cs).extract 0 64) spec) log hls)
       rwa [hz] at hp
     · cases h
   | st, ⟨.opening i s n, b, cs⟩ :: log, lines, h => by
@@ -261,7 +264,7 @@ theorem prints_printLog (time : ℕ → ℕ) :
         split at h
         · rename_i hcs
           obtain ⟨ls, hls, rfl⟩ := Option.map_eq_some_iff.1 h
-          have hp := Prints.opening hts hst (canon_open root stream (st.opened i s) n b (coinBytes cs))
+          have hp := Prints.opening hts hst (canon_open root stream (st.opened i s) n b (Lines.coinBytes cs))
             (open_value ..) (prints_printLog time (st.round i s) log hls)
           rwa [Lines.bits_coinBytes hcs] at hp
         · cases h
@@ -279,8 +282,9 @@ theorem opened_length {block : ℕ} (d : TreeDraw block) (n : ℕ) : (TreeDraw.o
 
 /-- **The device prints every log its releases can end with**: at most `k` frames more under the families `fs`, with
 the trees `ts` open, from a state whose trees' specs are theirs. -/
-theorem printable_releases (time : ℕ → ℕ) : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (st : PrintState)
-    (log : List Release), st.trees.map (·.2) = ts.map (·.spec) → Game.Reaches (releases k fs ts) log →
+theorem printable_releases (time : ℕ → ℕ) :
+    ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (st : PrintState) (log : List Release),
+      st.trees.map (·.2) = ts.map (·.spec) → Game.Reaches (releases k fs ts) log →
       ∃ lines, printLog time st log = some lines
   | 0, _, _, st, log, _, h => by
     cases h
@@ -314,7 +318,7 @@ theorem printable_releases (time : ℕ → ℕ) : ∀ (k : ℕ) (fs : List (Stri
           rw [Lines.bitsOfBytes_length]
           omega
         obtain ⟨ls, hls⟩ := printable_releases time k fs (ts ++ [⟨b, spec, t, fun _ => 0⟩])
-          (st.tree ((coinBytes (bitsOfBytes (treeRoot b spec t ++ treeKey t.1))).extract 0 64) spec) log'
+          (st.tree ((Lines.coinBytes (bitsOfBytes (treeRoot b spec t ++ treeKey t.1))).extract 0 64) spec) log'
           (by
             show (st.trees ++ _).map (·.2) = _
             simp only [List.map_append, List.map_cons, List.map_nil, hst]) h'
@@ -352,7 +356,8 @@ theorem printable_releases (time : ℕ → ℕ) : ∀ (k : ℕ) (fs : List (Stri
                 show st.trees.map (·.2) = (ts.set i (T.bump s')).map (·.spec)
                 rw [List.map_set, hst]
                 exact (set_self (by rw [List.getElem?_map, hT]; rfl)).symm) h'
-            exact ⟨_, by simp only [printLog, hts, Array.getElem?_eq_getElem hs, ite_eq_left (opened_length d.1 n), hls]; rfl⟩
+            exact ⟨_, by
+              simp only [printLog, hts, Array.getElem?_eq_getElem hs, ite_eq_left (opened_length d.1 n), hls]; rfl⟩
       · cases hm
         exact ⟨[], rfl⟩
 
@@ -401,7 +406,7 @@ def coinAt (S : RunSetup) (log : List Release) (p : ℕ) : ByteArray :=
   match placeOf S.families p with
   | some (l, i) =>
     match (coinsOf l log)[i]? with
-    | some cs => coinBytes cs
+    | some cs => Lines.coinBytes cs
     | none => S.coins p
   | none => S.coins p
 
