@@ -451,7 +451,7 @@ tables' public statements alone, and runs in expected polynomial time. The simul
 
 **Expected assumptions** (to be confirmed against M1's spec):
 
-- **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. In production the
+- **Uniform prover randomness.** The masks, padding and leaf salts are uniform and independent. When proving, the
   leaf salts are the operating system's bytes, 192 a leaf (`getrandom`), which A3 makes
   uniform (`Discharge/ZkView/OsSalts.lean`), and the masks and padding are ChaCha20 output under a seed from the
   operating system. Treating that output as uniform is the one caveat to the lemma's statistical zero knowledge, and

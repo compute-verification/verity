@@ -7,7 +7,7 @@ docstring) and sizes:
 
 - **Σ_sync:**
   - δ from 0 up to the p99.99 first-frame latency, in 16 steps;
-  - ρ geometrically from the p0.01 production rate up to the p50 rate, in 8 values, each rounded down to a fraction
+  - ρ geometrically from the p0.01 serving rate up to the p50 rate, in 8 values, each rounded down to a fraction
     with denominator at most 1024 (rounding down keeps a value lenient). Both rates are taken per configuration first:
     the low end is the p0.01 of the configurations' p0.01 rates, and the high end the median of their medians over
     windows. A configuration's windows are the windows its egress frames span, 1 + its largest anchor // T, and the

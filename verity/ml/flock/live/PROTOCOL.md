@@ -447,7 +447,7 @@ degenerate coins as they open (the Claim above).
 **The parameter `t` grows with the security parameter:** `t = Θ(λ)`, so that `p̃ ∈ [p/2, 2p]` except with probability
 `2^-Ω(λ)`, and then all `4t/p̃ ≥ 2t/p` rewinds fail with probability at most `e^-2t`. A fixed `t` would leave a failure
 probability that is noticeable against some V*. The tests run at `t = 4` (`zkrewind --gk-t`); that
-is a test's λ, not a bound for any production claim.
+is a test's λ, not a bound for any served claim.
 
 Against the theorem's statement (ASSUMPTIONS.md §6): one extraction run of the honest prover on a dummy witness (step 1,
 with the estimation's fresh repeats of it); rewinding only to just after the coin commitment (step 4, the one rewind point,
