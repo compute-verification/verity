@@ -160,7 +160,7 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
-from . import tiles
+from . import policy, tiles
 from .gates import gates, of_log, per_mac
 
 ACT_BITS = 16
@@ -728,12 +728,17 @@ CELL_SENSITIVITIES = ("reduction", "update")
 READING_A = True
 
 
-def published(m: Measured, c: float, k: float, reading: str | None = None) -> dict:
-    """The published ρ at (c, k) (coordinator 08:26Z), `at`'s: under reading A (`reading`, else where `READING_A` and
+def published(m: Measured, c: float | None = None, k: float | None = None, reading: str | None = None) -> dict:
+    """The published ρ at (c, k), by default the console's policy (te_core.policy's `CONSOLE`, one full session of the
+    reference model) (coordinator 08:26Z), `at`'s: under reading A (`reading`, else where `READING_A` and
     the row's token kind is measured), Fit's c/(c − d) where it holds, else max(1, the one bound's max over `KINDS`; 1
     where none is measured); under reading B Slowdown's token form, a target. Beside it the binding kind (fit, a kind,
     target, or none), what it rests on (`RESTS_ON_CELL`), the terms its max takes (None: unmeasured; under reading B
     the token form) and the bound's `CELL_SENSITIVITIES`."""
+    if (c is None) != (k is None):
+        raise ValueError("published: give both c and k, or neither for the console's policy")
+    if c is None:
+        c, k = policy.CONSOLE
     if reading is None:
         reading = "A" if READING_A and m.entries is not None and m.ops is not None else "B"
     if reading not in ("A", "B"):

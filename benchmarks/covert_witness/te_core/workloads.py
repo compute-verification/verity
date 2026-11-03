@@ -10,7 +10,7 @@ operands (`Fresh`), w_fwd, and the most update bits one of its ops reads (`op_up
 gives every kind's term at a policy (c, k), their max and the binding kind; `columns` gives the token kind's inputs as
 the console's columns (te_core.algorithm_policy's `INPUTS`, with `w_fit_gates`, `alpha_ratio` and `C_gates`), on which
 `algorithm_policy.page_rho` gives the token form's ρ, and `menu` the other kinds' inputs. `reference` evaluates each
-workload's reference points (`Workload.points`) at the three `POLICIES`, and its `Check`s, measured records beside the
+workload's reference points (`Workload.points`) at the console's policy (`POLICIES`), and its `Check`s, measured records beside the
 model (the 45M pilot's, and the standard-workloads island's rows in `RECORDS`), each made a model of its own
 (`recorded`) so that every kind's term is on both; `input_status` gives each input's source, "measured: " and the
 record where one at the point's dials measures the model's value, else "assumed: " and why. `workloads.json` is its
@@ -52,11 +52,10 @@ A DiLoCo sync has no tokens, so these kinds price its workers' pseudo-gradients 
 
 The conventions every workload shares:
 
-- **Policies** (`POLICIES`): `default` is the console default as the console defines it (the dashboard's 05:34Z
-  contract): one served session of the 45M reference, 4,096 tokens in and 1,024 out, c = 5,120 x 2 x 45e6 x 740 gates
-  (2N FLOPs a token, attention left out) and k = 65,536 bits. `default_full` is its c corrected to the session's full
-  cost, attention at te_core.flops' count (`ATTENTION`, 1.57 c). `served` is the registered serving policy, the served
-  demo's measured block (te_core.panels.SERVED; its c is a lower bound, the linear layers still to be counted).
+- **Policy** (`POLICIES`): the console's only, at which the dashboard reports rows: `default`, te_core.policy's
+  `CONSOLE`, one full session of the 45M reference a block, 4,096 tokens in and 1,024 out, attention and the LM head
+  included (`policy.session_gates`, 5.36682e14 gates, 1.5739 times the 5,120 x 2 x 45e6 x 740 that left attention
+  out), and k = 65,536 bits.
 - **Shapes** (`dense`): a dense decoder of N parameters with the reference model's d/L and SwiGLU width, d solved from N
   and the vocabulary (`vocab`: the 45M reference's 50,304, s-t20's 32,000), τ its ⌈log2 V⌉ bits an id.
 - **Work**: a token's MACs at te_core.gates' prices, its weight GEMMs at the workload's precision and its attention in
@@ -85,7 +84,7 @@ import sys
 from dataclasses import astuple, dataclass, field, fields, replace
 from pathlib import Path
 
-from . import VERSION, algorithm_policy, formalism, panels, policy
+from . import VERSION, algorithm_policy, formalism, policy
 from .gates import gates, per_mac
 from .opnames import FUSED_OPTIMIZER_MACS
 
@@ -93,7 +92,7 @@ NOTE = "note:training-20261103T0600Z-draft-workload-models"
 REFERENCE = Path(__file__).with_name("workloads.json")
 VOCAB = 50_304
 #: the console's served model: the 45M dense starts' parameters (starts_store.json's s50 and s100)
-REFERENCE_PARAMS = 45_029_888
+REFERENCE_PARAMS = policy.REFERENCE_PARAMS
 ACT_BITS = policy.ACT_BITS
 #: the reference model's d_model / n_layer (512 / 6) and SwiGLU hidden width over d_model (1,408 / 512)
 ASPECT, MLP = 512 / 6, 1408 / 512
@@ -240,20 +239,11 @@ def decode_span(prompt: float, generated: float) -> float:
     return (prompt * prompt + generated * prompt + generated * generated / 2) / (prompt + generated)
 
 
-#: the console's c over the session's full cost: a session token's attention at te_core.flops' count beside its N MACs
-ATTENTION = 1 + dense(REFERENCE_PARAMS).attention(decode_span(4096, 1024)) / REFERENCE_PARAMS
-#: the console default as the console defines it (the dashboard's 05:34Z contract), (c gates, k bits)
-CONSOLE = (5120 * 2 * 45e6 * 740, 65_536.0)
-POLICIES = {"default": CONSOLE, "default_full": (CONSOLE[0] * ATTENTION, CONSOLE[1]),
-            "served": (float(panels.SERVED[0]), float(panels.SERVED[1]))}
+#: the policy the rows are reported at, the console's only (the dashboard's ruling): te_core.policy's `CONSOLE`
+POLICIES = {"default": policy.CONSOLE}
 POLICY_NOTES = {
-    "default": "the console default as the console defines it (dashboard, 05:34Z): one 4,096-in, 1,024-out session of "
-               "the 45M reference a block, c = 5,120 x 2 x 45e6 x 740 gates (attention left out), k = 65,536 bits",
-    "default_full": f"the console default with c the session's full cost, attention at te_core.flops' count "
-                    f"({ATTENTION:.4f} c)",
-    "served": "the registered serving policy: the served demo's measured block (te_core.panels.SERVED, one slot's 35-step "
-              "session of Llama-3.2-1B int8 under vLLM): c a lower bound, its linear layers still to be counted and "
-              "its 133 BitAtx32_v1 activations a block unpriced; k its fresh bits",
+    "default": "the console's policy (te_core.policy.CONSOLE): one full session of the 45M reference a block, 4,096 "
+               "tokens in and 1,024 out, attention and the LM head included (policy.session_gates), k = 65,536 bits",
 }
 
 
@@ -637,10 +627,10 @@ def diloco(n_params: float = REFERENCE_PARAMS, precision: str = "bf16", seq_len:
     gradient cut every worker's gradient, one block's partial a worker's. Wherever a step's token work fills two
     blocks the decoder fits none (d = H·B·w ≥ B·w > c), so the reduction and update kinds read the uncompressed
     gradients. te_core's reduction kind sums a step's b partials into one gradient, where each of the M workers sums
-    its own, M·(⌈b/M⌉ − 1) partials: b − 1 at the console default (b = 45 at 45M, 37 at s-t20), up to M − 1 fewer
-    elsewhere (20 against 23 at default_full on s-t20). A sync has no tokens, and te_core's kinds don't price its M
-    pseudo-gradients: (M − 1)/(H·(b − 1)) of the inner steps' reduction, 0.014% at the default's H = 500 and 0.14% at
-    the island's 50 (b = 45)."""
+    its own, M·(⌈b/M⌉ − 1) partials: b − 1 at the console's policy at 45M (b = 29), up to M − 1 fewer elsewhere (20
+    against 23 on s-t20, b = 24). A sync has no tokens, and te_core's kinds don't price its M pseudo-gradients:
+    (M − 1)/(H·(b − 1)) of the inner steps' reduction, 0.021% at the default's H = 500 and 0.21% at the island's 50
+    (b = 29)."""
     sh = dense(n_params, vocab=vocab)
     tok = training(sh, precision, seq_len)
     phase = inner_steps * batch_tokens
@@ -1148,7 +1138,7 @@ WORKLOADS = {w.name: w for w in (
                    "M, the workers each inner step's tokens split over and each sync sums (the island's 4)"),
               COMMON["vocab"]),
              (("default", {}), ("1-bit syncs", {"sync_bits": REFERENCE_PARAMS}),
-              ("Fit's corner", {"inner_steps": 2, "batch_tokens": 256, "syncs": 32, "sync_bits": 1024})),
+              ("Fit's corner", {"inner_steps": 2, "batch_tokens": 256, "syncs": 16, "sync_bits": 1024})),
              island_checks("diloco")),
     Workload("rl", "RL rollouts on the policy being trained",
              "Rollouts of the current policy in FP4 and a learner training on them, every token affected.",
