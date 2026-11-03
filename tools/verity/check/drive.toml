@@ -65,7 +65,9 @@ verdict_first = true
 # the after-landing run checks them, and a red one reverts its culprit. A landing off `next` rebuilds it, and each Lean check
 # of `next` that runs or passed moves to the same member's new commit when the trees differ in nothing `lowrisk_excludes`
 # names; the lane waits only while one can't move, and even then lands a marked fix of a red on `checked`, without rebuilding
-# `next` (the check's verdict moves with its prefix at the next sync). false: drive lands only on review
+# `next` (the check's verdict moves with its prefix at the next sync). Above the prefix such a check holds, it also lands a
+# member with a land verdict that changes no Lean and touches nothing a Lean check reads, whatever `lowrisk_excludes` say, and
+# the check moves across it. false: drive lands only on review
 lowrisk_lane = true
 lowrisk_per_tick = 20
 # what keeps a change off the low-risk lane: a directory from the root (ending in `/`), or a file name glob (any directory).
