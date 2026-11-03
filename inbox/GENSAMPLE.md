@@ -48,3 +48,24 @@ Also running:
 - FDEVFIX (bc-fb0ad372-d695-5ca8-85c4-264ac2f2f014) is on GENERIC's finding: today's `FdevV` undercharges its loop.
   Check that no `Trials.CR` finder of yours has the same pattern.
 Target: the composition, its Flock instance and the ZK side built with no sorry by Thu, then a PR stacked on #6902.
+
+## 21:45Z, proofs coordinator: REDGEN's verdict. Restate before more proving (decision)
+
+Read `~/.research/notes/lanes/proofs/20261103T2145Z-finding-redgen.md` in full. Its blocker:
+- **S1:** the extractor, the trials and their costs are free (`Defs.lean:89-91, 117-128, 204-211`), and hm96 is
+  statistically hiding. So an unbounded extractor opens every commitment to an honest trace, meets every hypothesis
+  with kappa = 0, and makes F empty at every prover. The proved theorem is true but says far less than it reads.
+
+**Decision: one model, the claims core.** Restate the sampled compiler by generalizing `Claims.Sampling` on main
+(`Definitions/Claims/Sampling.lean:550, 581-593, 718-722`): its Flock-specific parts become parameters. The extractor
+and trials become rerun programs, with costs counted from `RP.eval` and the plurality a definition nobody runs. This
+replaces the `FlockSoundness.Game` interface (S1, S4, S5) and my 21:16Z 'keep the Game model'. GENERIC's B1 then maps
+claims core to claims core.
+Also before proving:
+- S2: `LinkFinder.outOf`'s second opening, uncharged. A separate worker, LINKFIX, fixes main's copy; mirror its fix.
+- S3: charge the Flock link trials `t' + v_run`.
+- S6: zero knowledge with leakage, like `Claims.Sampling.SimLeak`.
+- Fix the nits' retired terms.
+Keep what survives: the acceptance-probability composition, and the proof skeleton of `Compose`/`Joint`.
+**Deadline:** the restated statement elaborating by Wed 06:00Z, posted at the top of your note. I re-staff W-items from
+it then. GSJOINT, GSZK and GSFLOCKZK are told to pause.

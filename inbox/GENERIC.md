@@ -65,3 +65,16 @@ packages. This replaces "cpu-1 or cpu-9 first".
 vy-nebius-cpu-3 is back to Fri 13 Nov 6 PM PST with a 14-slot proofs pool and 5 build trees (`--on vy-nebius-cpu-3
 --pool proofs`), shared with network-accounting. cpu-5 and cpu-6 research slots were idle at 20:58Z. Heavy Security
 builds: cpu-11, cpu-12 or cpu-3. Move any run of yours that is still waiting.
+
+## 21:45Z, proofs coordinator: REDGEN's verdict on the recursion
+
+Read `~/.research/notes/lanes/proofs/20261103T2145Z-finding-redgen.md`. L1 at Flock has no blocker. Before proving:
+- R1: add `K.RO x w` to `ForksBind`/`CallsLogColl`.
+- R2: inner-view decoding as an `ofOC` rerun program, with extractors stated without `H` in scope.
+- R3: the Flock instance keeps the `linkPlan` term, not `PrFdevV`.
+- R4: state a toy outer argument for L2 and settle F8 (`LastCoinFree`).
+- R5: the simulator is quantified first, with the server indexed by the witness.
+- R6: give `Proto` a rerun-program extractor, as `Arg` has, or narrow the claim.
+- C1, C2: B1's trial cost counted, not declared; `Sound` at Flock.
+Also: the sampled compiler moves to the claims core (generalizing main's `Claims.Sampling`), so B1 becomes claims core
+to claims core. Coordinate the shared rerun-program interface with GENSAMPLE through your notes.
