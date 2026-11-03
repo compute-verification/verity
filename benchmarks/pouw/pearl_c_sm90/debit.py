@@ -1,5 +1,5 @@
 """The words' debit counts of a Pearl-C call on the H100 or H200: `fast_tile.word_debits` on every word of A′'s rows by B̃'s,
-from debit_sm90.cubin (debit_sm90.cu; build.sh builds it beside pearl_c_sm90.cubin) through the driver API (run.py's `Dev`).
+from debit_sm90.cubin (debit_sm90.cu; build.sh builds it into its tree's debit/) through the driver API (run.py's `Dev`).
 
   Debit(cubin_bytes).words(a, b) -> (atoms, zeros, bad)
   python benchmarks/pouw/pearl_c_sm90/debit.py --cubin debit_sm90.cubin [--shape R:N:K ...] [--timed R:N:K ...] [--out F]
