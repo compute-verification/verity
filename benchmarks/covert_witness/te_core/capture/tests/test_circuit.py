@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from te_core.capture import script
-from te_core.capture.circuit import StepCircuit, measure, vertex_cut
+from te_core.capture.circuit import StepCircuit, check, measure, path, run_ops, vertex_cut
 from te_core.formalism import READ_BACKS
 
 PROGRAM = Path(__file__).parent / "recorded" / "islands" / "toy" / "train.py"
@@ -68,6 +68,73 @@ def test_a_coded_gradient_passes_at_its_code(starts, update, per_value, micro):
     assert f["grad_cut_bits"] == micro * per_value * VALUES and f["delta_grad_bits"] == f["grad_cut_bits"]
     assert f["state_bits"] == 0 and f["u1_bits"] == 32 * VALUES and f["a_bits"] == 32 * H
     assert f["gates"] > plain["gates"] and f["sigma"] < plain["sigma"]
+
+
+def test_reading_a_entries_along_a_dense_path(starts):
+    """Reading A's inputs: entering at the start reads the token's id and the update the run of segments reads (emb and
+    fc in the first, the whole update through the head); entering after it reads the token's hidden state, a's 32 H
+    bits; a run of the backward alone reads the matrices its input gradients multiply. Without attention no op mixes
+    positions, and one group's gradient partial is the whole step's (one batch)."""
+    f = recorded(starts, "inplace").formalism
+    e = f["entries"]
+    assert e["tokens"] == f["group_tokens"] == T and e["positions"] == CTX
+    assert sum(e["gates"]) * T == pytest.approx(f["group_gates"])
+    assert e["frontier_bits"][0][-1] == 0 and e["ids"][0][0] == 1 and e["frontier_bits"][1][0] == 32 * H
+    assert e["u_bits"][0][0] == 32 * (EMB + FC) and e["u_bits"][0][-1] == 32 * VALUES
+    assert e["u_bits"][1][0] == 32 * HEAD and min(min(r) for r in e["u_bits"]) == 0
+    assert e["context_fwd_bits"] == e["context_bwd_bits"] == [0.0] * e["segments"]
+    assert f["partial_cut_bits"] == f["grad_cut_bits"] == 32 * VALUES
+
+
+def test_reading_a_context_of_an_attention(starts):
+    """One causal attention over the embeddings: its scores and their product with the values each read an earlier
+    position's embedding (32 H bits) in the forward; the backward's four products read a later position's."""
+    e = recorded(starts, "inplace", "--attn").formalism["entries"]
+    assert sum(e["context_fwd_bits"]) == 2 * 32 * H and sum(e["context_bwd_bits"]) == 4 * 32 * H
+    assert all(e["phase"][s] == 0 for s, b in enumerate(e["context_fwd_bits"]) if b)
+    assert all(e["phase"][s] == 1 for s, b in enumerate(e["context_bwd_bits"]) if b)
+
+
+def test_reading_a_enters_an_adapter_at_its_code():
+    """wildcard's grown adapter on the tiny start (`fixtures/wildcard_adapter.npz`: islands/wildcard/train.py at
+    9460fcd228, --grow 1 --adapter 8 --adapter-z 2 --set 'blocks\\.2\\.(mlp_norm|w_gate\\.weight|w_up\\.weight|w_down\\.weight)'
+    --batch 2 --micro 2 --warmup 1, step 1). The frozen layers are θ's function of the tokens, so entering at the grown
+    block reads no computed state, and its matrices; segments start inside the code (its 2-bit words and scale), where
+    a block reaching the head reads at most 48 bits a token, but w_down's whole bf16 cast too (the program multiplies
+    every column, the dead ones zero), and the dead units' slice that only a zeros_like reads is never charged."""
+    f = measure(StepCircuit.load(Path(__file__).parent / "fixtures" / "wildcard_adapter.npz"))
+    e = f["entries"]
+    assert f["a_bits"] == 32 and f["tail_share"] == pytest.approx(0.989, abs=0.001)
+    head = max(range(e["segments"]), key=lambda s: e["gates"][s] if e["phase"][s] == 0 else -1)
+    assert e["frontier_bits"][0][head] == 0 and e["u_bits"][0][head] == 32 * 64 + 16 * 3 * 192 * 64
+    best = min(range(1, head + 1), key=lambda i: e["frontier_bits"][i][head - i])
+    assert e["frontier_bits"][best][head - best] <= 48 and e["u_bits"][best][head - best] == 16 * 64 * 192
+    assert all(e["u_bits"][i][head - i] >= 16 * 64 * 192 for i in range(head + 1))
+    assert max(e["frontier_bits"][i][0] for i in range(1, head)) < 16 * 192
+
+
+def test_the_checker_counts_each_run_of_segments_as_the_entries_do():
+    """Reading A's checker counts any set of the trace's ops on its own; on each run of the adapter's segments (the
+    default packer's blocks, `run_ops`) its gates and reads are the entries'. A block of the grown block's w_down alone
+    reads its whole cast."""
+    c = StepCircuit.load(Path(__file__).parent / "fixtures" / "wildcard_adapter.npz")
+    e, preds = measure(c)["entries"], c.preds()
+    order, tokens = path(c, preds)
+    assert tokens == e["tokens"] and len(e["first_ops"]) == e["segments"]
+    for i in range(e["segments"]):
+        for j in range(i, e["segments"]):
+            got = check(c, run_ops(order, e, i, j), tokens, preds)
+            assert got["gates"] == pytest.approx(sum(e["gates"][i:j + 1]))
+            assert [got[k] for k in ("frontier_bits", "ids", "u_bits")] == pytest.approx(
+                [e["frontier_bits"][i][j - i], e["ids"][i][j - i], e["u_bits"][i][j - i]])
+    down = [o for o in order if check(c, [o], tokens, preds)["u_bits"] == 16 * 64 * 192]
+    assert down and check(c, down, tokens, preds)["gates"] > 0
+
+
+def test_a_partial_is_one_groups_gradient_at_its_code(starts):
+    """With --micro 2 one token's group is its micro-batch: its partial is its own codes, half the step's cut."""
+    f = recorded(starts, "vote-planes", "--micro", "2").formalism
+    assert f["group_tokens"] == T // 2 and f["partial_cut_bits"] == 4 * VALUES == f["grad_cut_bits"] / 2
 
 
 def test_frozen_layers_above_the_update_are_its_tail(starts):

@@ -5,6 +5,7 @@ import Definitions.Core.Guarantees.NaiveStrassen
 import Definitions.Core.Guarantees.PrivatePartition
 import Definitions.Core.Guarantees.TC
 import Definitions.Core.Guarantees.Formalism
+import Definitions.Core.Guarantees.Formalism.Witnesses
 import Definitions.Core.Guarantees.Expand
 
 /-!

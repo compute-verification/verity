@@ -6,6 +6,7 @@ from dataclasses import replace
 
 import pytest
 
+from te_core import VERSION as F_VERSION
 from te_core import formalism as F
 from te_core import frontier, policy
 from te_core.gates import per_mac
@@ -451,3 +452,65 @@ def test_honest_is_the_least_gates_of_any_checkpoint_and_s_is_at_least_one():
     assert all(set(frontier.TERMS) <= set(v) for v in t["cells"].values())
     assert set(out["marks"]) == set(policy.MARKS)
     assert len(out["targets"]) == len(frontier.TARGETS)
+
+
+def test_a_span_block_holds_the_most_tokens_its_reads_and_gates_allow():
+    """No context: (k − U)/A tokens, at most C0, none where U > k. With context (kf a position before p, read once a
+    block), a block serving p either reads the earlier positions' context or computes them at A each: at k = 14 with
+    A = 4, kf = 10, L = 4, positions 0-2 hold 3.5 tokens and position 3 none (30 bits of context, or 16 of states)."""
+    assert F._span_tokens(16, 1000, 0, 0, None, 500, 17000).tolist() == [500]
+    assert F._span_tokens(16, 1000, 0, 0, None, 2000, 17000).tolist() == [1000]
+    assert F._span_tokens(16, 20000, 0, 0, None, 2000, 17000).tolist() == [0]
+    assert F._span_tokens(4, 0, 10, 0, 4, math.inf, 14).tolist() == [3.5, 3.5, 3.5, 0]
+    assert F._span_tokens(4, 0, 10, 0, 4, math.inf, 40).tolist() == [10, 10, 10, 10]
+    assert F._span_tokens(4, 0, 0, 10, 4, math.inf, 14).tolist() == [0, 3.5, 3.5, 3.5]
+
+
+def one_segment(U=2000.0, delta=None, decoder=0.0) -> F.Measured:
+    """One part of 1e12 gates, 1e3 tokens of 1e9 gates each, half of them affected, and reading A's entries of one
+    segment that reads a token's id (16 bits) and U update bits."""
+    part = F.Part(gates=1e12, tokens=1e3, token_gates=1e12, affected_gates=5e11)
+    entries = {"segments": 1, "gates": [1e9], "frontier_bits": [[0.0]], "ids": [[1.0]], "id_bits": 16,
+               "u_bits": [[U]], "positions": None, "context_fwd_bits": None, "context_bwd_bits": None}
+    return F.Measured((part,), tau_bits=16, a_bits=16, u=F.even(U), u_in=F.even(U), delta_bits=delta,
+                      decoder_gates=decoder, entries=entries)
+
+
+def test_the_default_packer_is_the_counting_lemma_at_its_blocks_cap():
+    """c = 1e11 gates holds 100 tokens: the cap is min((k − U)/16, 100) tokens of 1e9 gates, the term c·share/cap.
+    A block reading the update code (Δ = 500 < U) reads less but has c − d gates under decoding, c under token."""
+    m, c = one_segment(), 1e11
+    assert F.packer(m, c, 3600) == pytest.approx(0.5) and F.packer(m, c, 10 ** 4) == pytest.approx(0.5)
+    assert F.packer(m, c, 2800) == pytest.approx(1.0) and F.packer(m, c, 1000) == math.inf
+    coded = one_segment(delta=500.0, decoder=5e10)
+    assert F.packer(coded, c, 2800, decoder=False) == pytest.approx(0.5)
+    assert F.packer(coded, c, 2800, decoder=True) == pytest.approx(1.0)
+    b = F.bound(coded, c, 2800, "A")
+    assert (b["terms"]["token"], b["terms"]["decoding"], b["argmax"]) == (pytest.approx(0.5), pytest.approx(1.0),
+                                                                          "decoding")
+    assert F.packer(coded, c, 1000, decoder=False) == pytest.approx(1e11 * 0.5 / (1e9 * 500 / 16))
+
+
+def test_the_one_bound_is_the_max_over_kinds_with_reading_b_the_token_form():
+    """Reading B's token term is Slowdown's; the reduction and update kinds count where the step's token work fills
+    two or more blocks (b = 8 at c = 1e11), unmeasured without the cuts; `kinds` restricts the max, and reading A needs
+    entries."""
+    m, c, k = measured(u1=1e9), 1e11, 1e5
+    b = F.bound(m, c, k, "B")
+    assert b["terms"]["token"] == F.at(m, c, k)["slowdown"] and b["label"] == f"te_core {F_VERSION}, reading B"
+    assert b["unmeasured"] == ["reduction", "update"] and b["terms"]["reduction"] == 0
+    cut = replace(m, parts=(replace(m.parts[0], partial_bits=1e6, grad_bits=2e6),))
+    b = F.bound(cut, c, k, "B")
+    assert b["inputs"]["reduction"]["blocks"] == [8] and not b["unmeasured"]
+    assert b["terms"]["reduction"] == pytest.approx(c * 7 * 1e6 / (k * 1e12))
+    assert b["terms"]["update"] == pytest.approx(c * 2e6 / (k * 1e12))
+    assert b["max"] == max(b["terms"].values())
+    only = F.bound(cut, c, k, "B", kinds=("token", "decoding"))
+    assert only["terms"] == b["terms"] and only["max"] == max(b["terms"]["token"], b["terms"]["decoding"])
+    r = F.at(cut, c, k, "B")
+    assert r["bound"]["max"] == b["max"] and r["rho"] == max(1.0, b["max"]) and not r["fit"]
+    assert F.at(cut, c, k)["rho"] == max(1.0, b["terms"]["token"])
+    with pytest.raises(F.Refused, match="reading A: no entries"):
+        F.bound(m, c, k, "A")
+    with pytest.raises(ValueError):
+        F.bound(m, c, k, "B", kinds=("tokens",))

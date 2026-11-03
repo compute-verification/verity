@@ -90,6 +90,7 @@ def args(tmp_path, monkeypatch, runs=RUNS, index=None) -> list[str]:
     rows = ledger_rows(runs) if index is None else index
     monkeypatch.setattr(rescore, "Ledger", lambda root: type("L", (), {"index": staticmethod(lambda: rows),
                                                                       "root": tmp_path})())
+    monkeypatch.setattr(FF, "LADDER", None)
     return ["--out", str(tmp_path / "out"), "--pin", "pin", "--manifest", str(man), "--stubs",
             "--pretraining", str(pretraining(tmp_path / "lf"))]
 
@@ -158,6 +159,13 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
     assert code == 0 and (got["out"] / f"{AP.NAME}.png").stat().st_size > 10_000
     p, f = got["panel"], fitted(got["fit"])
     assert (p["id"], p["kind"], p["columns"]) == (AP.PANEL, "table", AP.COLUMNS) and p["source"] and p["updated_at"]
+    cell = {c: [r[AP.COLUMNS.index(c)] for r in p["rows"]]
+            for c in ("reading", "te_core", "rho_console", "binding_kind", "rests_on", "kinds")}
+    assert set(cell["reading"]) == {"B"} and set(cell["te_core"]) == {AP.VERSION} and p["rows"]
+    assert all(v == "inf" or v >= 1 for v in cell["rho_console"])
+    assert set(cell["binding_kind"]) <= {"fit", "target"}
+    assert all(formalism.RESTS_ON[b] == r for b, r in zip(cell["binding_kind"], cell["rests_on"]))
+    assert all(set(json.loads(x)) == {"bound", "sensitivity"} for x in cell["kinds"])
     ds, rows = plots.frame(p), ledger_rows()
     assert {d["data"] for d in ds} == {"v2.3-pilot"} and {d["gain_target"] for d in ds} == set(AP.GAINS)
     for start, shape in (("s1", SHAPE), ("s2", SHAPE2)):
@@ -181,13 +189,14 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
                 assert d["p"] == (h and pytest.approx(d["C_gates"] / h))
                 assert d["family"] == next(x[3] for x in RUNS if x[1] == run_id)
                 assert d["method_key"] == next(x[2] for x in RUNS if x[1] == run_id)
-                assert d["w_fwd_gates"] == pytest.approx(policy.w_fwd(shape))
+                assert panels.page_inputs(d)["w_fwd_gates"] == pytest.approx(policy.w_fwd(shape))
     s1 = {(d["record"], d["gain_target"]): (d["reached"], d["p"]) for d in ds if d["start"] == plots.start_label(SHAPE)}
     assert s1[("lora@1", 1.1)] == ("yes", 1) and s1[("qat@1", 1.1)] == ("yes", 2) and s1[("ref@3", 2)] == ("yes", 1)
     assert s1[("mezo@2", 1.1)][0] == s1[("lora@2", 2)][0] == s1[("ref@3", 11)][0] == "no"
     assert s1[("ref@3", 11)][1] is None and s1[("mezo@2", 2)][1] == pytest.approx(1.2 / 1.5)
     q = got["console"]
-    assert q["rows"] == [AP.rounded(r) for r in p["rows"]] and not console.refused(q)
+    assert q["columns"] == AP.CONSOLE_COLUMNS and {"reading", "te_core", "rho_console", "rho_default"} <= set(q["columns"])
+    assert q["rows"] == AP.console_rows(p["rows"]) and not console.refused(q)
     assert len(console.body(q)) <= console.BODY_MAX and len(q["note"]) <= console.NOTE_MAX
     assert all(not isinstance(v, bool) for r in q["rows"] for v in r)
 
@@ -201,15 +210,18 @@ def test_the_dial_formula_on_a_rows_columns_is_te_cores_at_every_cell(tmp_path, 
     ds = plots.frame(got["console"])
     for d in ds:
         page = panels.page_inputs(d)
-        rho, basis = dial(page, *AP.default(d["w_fwd_gates"]))
+        assert not set(AP.SPLIT) & set(d) and set(AP.SPLIT) <= set(page)
+        rho, basis = dial(page, *AP.default(page["w_fwd_gates"]))
         assert basis == d["basis_default"] and rho == pytest.approx(d["rho_default"], rel=1e-3)
         r = by[d["record"].replace("@", "-")]
         m = formalism.measure(r, {"s1": SHAPE, "s2": SHAPE2}[r["start"]])
-        assert panels.mismatches(d | {"run": d["record"]}, panels.dial(m, d["w_fwd_gates"]), d["w_fwd_gates"]) == []
+        w = page["w_fwd_gates"]
+        assert panels.mismatches(d | {"run": d["record"]}, panels.dial(m, w), w) == []
     at = {d["record"]: d for d in ds if d["gain_target"] == 1.1}
     assert (at["mezo@2"]["basis_default"], at["mezo@2"]["rho_default"], at["qat@1"]["basis_default"]) == ("fit", 1,
                                                                                                          "target")
-    assert json.loads(at["qat@1"]["rho_inputs"])["delta_t_bits"] == 6e4 and at["mezo@2"]["delta_bits"] == 1e3
+    assert json.loads(at["qat@1"]["rho_inputs"])["delta_t_bits"] == 6e4
+    assert json.loads(at["mezo@2"]["rho_inputs"])["delta_bits"] == 1e3
     assert json.loads(at["mezo@2"]["rho_inputs"])["delta_t_bits"] == 1e3
 
 
@@ -339,16 +351,17 @@ def test_kept_is_the_coverage_rows_and_each_groups_p_rho_front_and_best_failed_a
 def test_the_cut_is_the_table_when_it_fits_else_the_first_tier_that_does(monkeypatch):
     p = AP.build(info(runs=RUNS + DOMINATED), "test")
     art = "art:" + "a" * 64
-    assert AP.cut(p, art)["rows"] == [AP.rounded(r) for r in p["rows"]] and AP.cut(p, art)["note"] == AP.note(art)
+    assert AP.cut(p, art)["rows"] == AP.console_rows(p["rows"]) and AP.cut(p, art)["note"] == AP.note(art)
     cov = {c["row"] for c in AP.coverage(p) if c["row"] is not None}
-    size = {t: len(console.body(AP.checked(p | {"rows": [AP.rounded(r) for r in AP.kept(p["rows"], t, cov)],
-                                                "note": AP.note(art, t)}))) for t in AP.TIERS}
+    size = {t: len(console.body(AP.checked(p | {"columns": AP.CONSOLE_COLUMNS, "note": AP.note(art, t),
+                                                "rows": AP.console_rows(AP.kept(p["rows"], t, cov))}))) for t in AP.TIERS}
     assert len(console.body(AP.cut(p, art))) > size["family"] > size["start"] > size["coverage"]
     for t in AP.TIERS:
         monkeypatch.setattr(console, "BODY_MAX", size[t])
         q = AP.cut(p, art)
         assert q["note"] == AP.note(art, t) and len(q["note"]) <= console.NOTE_MAX and not console.refused(q)
-        assert {p["rows"][i][AP.COLUMNS.index("record")] for i in cov} <= {r[AP.COLUMNS.index("record")] for r in q["rows"]}
+        assert {p["rows"][i][AP.COLUMNS.index("record")] for i in cov} <= {r[AP.CONSOLE_COLUMNS.index("record")]
+                                                                          for r in q["rows"]}
     monkeypatch.setattr(console, "BODY_MAX", size["coverage"] - 1)
     with pytest.raises(ValueError, match="the coverage's rows alone"):
         AP.cut(p, art)
@@ -360,6 +373,7 @@ def test_publish_stores_the_tables_and_puts_both_panels_the_cut_naming_their_art
     command."""
     sent, stored = [], []
     monkeypatch.setattr(console, "put", lambda q: sent.append(q) or "200")
+    monkeypatch.setattr(console, "served", lambda: {})
     monkeypatch.setattr(AP, "store", lambda path, meta: stored.append(sorted(f.name for f in path.iterdir()))
                         or "art:" + "a" * 64)
     runs = RUNS + DOMINATED
@@ -375,7 +389,7 @@ def test_publish_stores_the_tables_and_puts_both_panels_the_cut_naming_their_art
     monkeypatch.setattr(console, "BODY_MAX", len(console.body(sent[1])) - 1)
     code, got = run(tmp_path / "cut", monkeypatch, "--publish", runs=runs)
     assert code == 0 and len(got["console"]["rows"]) < len(got["panel"]["rows"])
-    assert " Cut: coverage rows + per start, g, family: " in got["console"]["note"]
+    assert " Cut: coverage + per start, g, family: " in got["console"]["note"]
     monkeypatch.setattr(console, "put", lambda q: "403 forbidden")
     assert run(tmp_path / "refused", monkeypatch, "--publish", runs=runs)[0] == 1
 
@@ -401,6 +415,125 @@ def test_v3_rows_come_with_v3s_fit_from_the_ladder_and_lead_the_figure(tmp_path,
     assert {d["start"] for d in ds} == {plots.start_label(V3_SHAPE)} and {d["start_loss"] for d in ds} == {1.5}
     assert {(d["record"], d["gain_target"]) for d in ds if d["reached"] == "yes"} >= {("v3-qat@1", 1.1)}
     assert any(c["state"] != "empty" for c in got["coverage"] if c["data"] == "v3")
+    assert not any("gain:provisional" in d["estimated"] for d in plots.frame(got["panel"]))
+
+
+def served_as(p: dict, version: str | None, rows: list | None = None, source: str = "") -> dict:
+    """`p` (uncut, or a console copy) as the route would serve it, its rows (or `rows`) priced at te_core `version`;
+    with None, from before the te_core cell (its version in `source` alone)."""
+    te = p["columns"].index("te_core")
+    rows = p["rows"] if rows is None else rows
+    if version is None:
+        return p | {"columns": p["columns"][:te] + p["columns"][te + 1:], "rows": [r[:te] + r[te + 1:] for r in rows],
+                    "source": source}
+    return p | {"rows": [r[:te] + [version] + r[te + 1:] for r in rows]}
+
+
+def test_a_version_switch_never_empties_a_populated_panel():
+    """A data's served rows stay where they are at a newer te_core, or at an older one whose coverage cells there this
+    build fills fewer of (coordinator 07:58Z); the same te_core's are replaced, and a data with no served rows takes
+    this build's. A panel from before the te_core cell is at the version its source names."""
+    p = AP.build(info(runs=RUNS + DOMINATED), "test")
+    mine = tuple(map(int, AP.VERSION.split(".")))
+    newer, older = f"{mine[0] + 1}.0", f"{mine[0] - 1}.9"
+    one = [r for r in p["rows"] if r[AP.COLUMNS.index("record")] == "never@1"][:1]
+    assert one and AP.filled(p, "v2.3-pilot") > AP.filled({"columns": AP.COLUMNS, "rows": one}, "v2.3-pilot") > 0
+    sparse = p | {"rows": one}
+    assert AP.kept_data(p, None) == AP.kept_data(p, served_as(p, AP.VERSION)) == []
+    assert AP.kept_data(sparse, served_as(p, AP.VERSION)) == []
+    assert AP.kept_data(p, served_as(sparse, newer)) == ["v2.3-pilot"]
+    assert AP.kept_data(sparse, served_as(p, older)) == ["v2.3-pilot"]
+    assert AP.kept_data(p, served_as(sparse, older)) == AP.kept_data(p, served_as(p, older)) == []
+    legacy = served_as(p, None, source=f"python -m te_core.algorithm_policy (te_core {older}; pin x)")
+    assert AP.version_of(legacy, "v2.3-pilot") == tuple(map(int, older.split("."))) and not AP.version_of(legacy, "v3")
+    assert AP.kept_data(sparse, legacy) == ["v2.3-pilot"]
+    fp = {"id": FF.PANEL, "columns": ["row", "data", "E_bpb"], "rows": [["fit", "v3", 1.0], ["fit", "v2.3-pilot", 0.9]]}
+    fit = fp | {"rows": [["fit", "v2.3-pilot", 0.8]]}
+    served = {AP.PANEL: served_as(sparse, newer), FF.PANEL: fit}
+    v3 = [r[:AP.COLUMNS.index("data")] + ["v3"] + r[AP.COLUMNS.index("data") + 1:] for r in p["rows"][:2]]
+    pub, fpub, held = AP.guarded(p | {"rows": v3 + p["rows"]}, fp, served)
+    assert held == f"v2.3-pilot (te_core {newer})"
+    assert pub["rows"][:2] == v3 and pub["rows"][2:] == [[d.get(c) for c in AP.COLUMNS]
+                                                         for d in plots.frame(served_as(sparse, newer))]
+    assert fpub["rows"] == [["fit", "v3", 1.0], ["fit", "v2.3-pilot", 0.8]]
+    assert AP.guarded(p, fp, {AP.PANEL: served_as(p, AP.VERSION)}) == (p, fp, "")
+    assert AP.cut(pub, "art:x", held)["note"].endswith(f" Kept as served: v2.3-pilot (te_core {newer}). Tables art:x.")
+
+
+def test_publish_puts_nothing_without_the_routes_panels_and_keeps_what_a_newer_te_core_serves(tmp_path, monkeypatch,
+                                                                                             capsys):
+    """--publish GETs the route's panels first: when that fails it stores and PUTs nothing, and when the route serves
+    the pilot at a newer te_core (its console copy, without CONSOLE_DROP's columns) both PUTs keep its rows there,
+    which the note and the board line name."""
+    sent, stored = [], []
+    monkeypatch.setattr(console, "put", lambda q: sent.append(q) or "200")
+    monkeypatch.setattr(AP, "store", lambda path, meta: stored.append(path) or "art:" + "a" * 64)
+
+    def down():
+        raise OSError("the route is down")
+
+    monkeypatch.setattr(console, "served", down)
+    assert AP.main(args(tmp_path / "down", monkeypatch) + ["--publish"]) == 1 and not sent and not stored
+    assert "not PUT: GET " in capsys.readouterr().err
+    _, dry = run(tmp_path / "dry", monkeypatch)
+    capsys.readouterr()
+    mine = tuple(map(int, AP.VERSION.split(".")))
+    newer = f"{mine[0] + 1}.0"
+    ap = served_as(dry["console"], newer, dry["console"]["rows"][:3])
+    monkeypatch.setattr(console, "served", lambda: {AP.PANEL: ap, FF.PANEL: dry["fit"]})
+    code, got = run(tmp_path / "kept", monkeypatch, "--publish")
+    assert code == 0 and [q["id"] for q in sent] == [FF.PANEL, AP.PANEL] and len(stored) == 1
+    assert sent[1]["rows"] == ap["rows"] and got["console"] == json.loads(console.body(sent[1]))
+    assert f" Kept as served: v2.3-pilot (te_core {newer}). Tables art:" in sent[1]["note"]
+    assert len(got["panel"]["rows"]) == len(dry["panel"]["rows"])
+    board = next(x for x in capsys.readouterr().out.splitlines() if x.startswith("board: "))
+    assert board.endswith(f" Kept as served: v2.3-pilot (te_core {newer}).")
+
+
+def test_without_ladder_points_v3_reads_the_manifests_and_a_fit_on_four_from_scratch_is_provisional(tmp_path,
+                                                                                                   monkeypatch):
+    """With no --ladder-points v3 reads te_core.frontier_fit's LADDER, the ladder's starts built from its manifest:
+    t1's start and three of them on v3's frontier are four from scratch, under five, so v3's fit is provisional, its
+    status, the fit panel's note (its points with their residuals, the ladder's runs it doesn't read with theirs, and
+    where the points come from), every v3 row's `estimated` and the console copy's note say so; the pilot's fit, on
+    its many, isn't."""
+    v3_law = LAW | {"E": 1.2}
+    tree = tmp_path / "ladder"
+    tree.mkdir()
+    near = 16 * (1 - 1e-4)
+    assert math.floor(FF.PER_DECADE * math.log10(near * C0)) == math.floor(FF.PER_DECADE * math.log10(16 * C0))
+    annealed = [{"branch": f"x{f:g}", "macs": f * C0 / per_mac("gemm/bf16"), "bpb": law(f * C0, v3_law)}
+                for f in (2, 4, 16)]
+    annealed += [{"branch": "over", "macs": 8 * C0 / per_mac("gemm/bf16"), "bpb": law(4 * C0, v3_law) + 0.01},
+                 {"branch": "binned", "macs": near * C0 / per_mac("gemm/bf16"), "bpb": law(16 * C0, v3_law) + 0.01}]
+    (tree / FF.LADDER_FILE).write_text(json.dumps({"schema": "te-ladder/F/v1", "annealed": annealed}))
+    v3 = [r | {"id": f"v3-{r['id']}", "run_id": f"v3-{r['run_id']}", "data": "v3", "start": "t1", "start_bpb": 1.5,
+               "val_bpb": 1.5 + 0.001 * r["checkpoint_step"]} for r in ledger_rows() if r["start"] == "s1"]
+    a = args(tmp_path, monkeypatch, index=ledger_rows() + v3)
+    monkeypatch.setattr(FF, "LADDER", "art:" + "b" * 64)
+    monkeypatch.setattr(panels, "fetch", lambda art: {FF.LADDER: tree}[art])
+    assert AP.main(a) == 0
+    tables = tmp_path / "out" / "tables"
+    fp, p = (json.loads((tables / f"{name}.json").read_text()) for name in (FF.NAME, AP.NAME))
+    fits = {d["data"]: d for d in plots.frame(fp) if d["row"] == "fit"}
+    assert fits["v3"]["status"].startswith("provisional fit: 4 of its points from scratch, under 5; ")
+    assert fits["v2.3-pilot"]["status"].startswith("fit; ")
+    assert fp["source"].endswith(f"; 5 ladder points ({FF.LADDER[:16]}))")
+    assert p["source"] == fp["source"].replace("te_core.frontier_fit", "te_core.algorithm_policy", 1)
+    assert fp["note"].startswith(FF.note() + " ") and len(fp["note"]) <= console.NOTE_MAX
+    f, gates = fitted(fp, "v3"), per_mac("gemm/bf16")
+    assert f["E"] == pytest.approx(1.2, abs=1e-3)
+    off = {p["branch"]: f"{round(100 * (p['bpb'] / FF.loss_at(f, p['macs'] * gates) - 1), 2):+.2f}%"
+           for p in annealed[3:]}
+    assert fp["note"][len(FF.note()) + 1:] == (
+        "v3 provisional (4 from scratch, 5 the target): t1 +0.00%, x2 +0.00%, x4 +0.00%, x16 +0.00%; off it over "
+        f"{off['over']}, binned {off['binned']}. Ladder points built from its manifest.")
+    assert float(off["over"][:-1]) > 3 and float(off["binned"][:-1]) > 0.5
+    ds = plots.frame(p)
+    assert {d["data"] for d in ds} == {"v3", "v2.3-pilot"}
+    assert all(("gain:provisional" in d["estimated"]) == (d["data"] == "v3") for d in ds)
+    q = json.loads((tmp_path / "out" / "console" / f"{AP.NAME}.json").read_text())
+    assert " v3: provisional fit." in q["note"] and len(q["note"]) <= console.NOTE_MAX
 
 
 def test_the_rows_te_core_refuses_are_listed_and_counted_never_scored(tmp_path, monkeypatch, capsys):
@@ -421,8 +554,7 @@ def test_the_rows_te_core_refuses_are_listed_and_counted_never_scored(tmp_path, 
     kinds = "2 data-dependent, 1 read-backs unchecked"
     assert f"3 valid checkpoints are refused by te_core.formalism, never scored, so in no cell ({kinds}; " in \
         (got["out"] / "tables" / "coverage.md").read_text()
-    assert "; 3 refused (te_core.formalism.refusal); " in got["panel"]["source"] and \
-        "; 3 refused (te_core.formalism.refusal); " in got["fit"]["source"]
+    assert "; 3 refused; " in got["panel"]["source"] and "; 3 refused; " in got["fit"]["source"]
     out = capsys.readouterr().out
     assert f"3 valid checkpoints refused, never scored: {kinds}" in out
     assert f" 3 valid checkpoints refused by te_core.formalism, never scored ({kinds})." in \
