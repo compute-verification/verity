@@ -9,7 +9,7 @@
 #   custody  each gate run's files against its end.json (chain_record.py custody)
 #   certs    the client's kept certificates.jsonl (or certified.jsonl) and clocks.jsonl, verified, and the run's
 #            certified records held by the Lean's audit, network-records (chain_record.py certs)
-#   endpoint with CR_ENDPOINT, off the warden path: the endpoint's own advice bound to the run and the I/O tie on it,
+#   endpoint with CR_ENDPOINT, off the active-warden path: the endpoint's own advice bound to the run and the I/O tie on it,
 #            both in the clear (network-e2e's e2e.py --no-prove: chain.served_advice and chain.tie)
 #   n2       N2's units proved by Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
 #            (a sampled draw on signed clocks); else n2_zk.py prove, and on the advice profile, whose egress counts no
@@ -20,7 +20,7 @@
 #   guard    on every exit, before custody publishes the run dir, the record's leak guard (leak_guard.py): each file in it
 #            or in the hold holding a gate run's witness moved to the quarantine, the run refused by name (exit 3;
 #            $OUT/leak-guard.json), and the rest of the hold released to $OUT
-# CR_PATH=warden is the warden path: every step reads the active warden's own run (CR_WARDEN_RUN, or the one gate run
+# CR_PATH=warden is the active-warden path: every step reads the active warden's own run (CR_WARDEN_RUN, or the one gate run
 # holding a certified.jsonl) and nothing of a certifier rehearsal's, which in CR_GATES is refused by name: certs
 # --warden-run, n2_zk.py prove --warden-run and the scan; the report requires every one (chain_record.WARDEN). It opens
 # no endpoint records or advice, so CR_ENDPOINT is refused there: the window's compute audit is V3c's class window,
@@ -31,7 +31,7 @@
 #      own client/, else its honest directory, never a file of another gate run)  CR_DEPLOYED=1 (certs refuses a key that
 #      isn't LMS at lms.DEPLOYED, H = 20)
 #      CR_ENDPOINT (the endpoint's records, network_e2e chain.ENDPOINT's four files: a tarball's name under inputs/,
-#      an art: id, or a directory; refused on the warden path)
+#      an art: id, or a directory; refused on the active-warden path)
 #      CR_N2_ROUNDS (n2_zk.py's --rounds)
 #      CR_N2_CMD (replaces the above; run with HONEST, CLIENT, BIN, LEAN, E2E and N2OUT set, writing N2OUT/summary.json)
 #      CR_WARDEN_RUN (the network certifier rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more
@@ -133,15 +133,15 @@ for g in ${CR_GATES:?CR_GATES: the gate tarballs, art: ids or directories}; do
 done
 if [ "${CR_PATH:-}" = warden ]; then
   PROXY=$(find "$G" \( -name plan.json -o -name calibration.json -o -name proxy.json.gz \) -print -quit)
-  [ -z "$PROXY" ] || { log "chain: the warden path reads no certifier rehearsal's run (its records through" \
+  [ -z "$PROXY" ] || { log "chain: the active-warden path reads no certifier rehearsal's run (its records through" \
     "active.Proxy), and ${PROXY#$G/} is one's"; exit 3; }
   if [ -n "${CR_WARDEN_RUN:-}" ]; then WARDEN=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
   else WARDEN=$(find "$G" -name certified.jsonl -printf '%h\n' -quit); WARDEN=${WARDEN%/witness}; fi
-  [ -n "$WARDEN" ] || { log "chain: the warden path: no warden run (a certified.jsonl) in $CR_GATES"; exit 3; }
-  [ -z "${CR_ENDPOINT:-}" ] || { log "chain: the warden path opens no endpoint records or advice (V3c's class" \
+  [ -n "$WARDEN" ] || { log "chain: the active-warden path: no warden run (a certified.jsonl) in $CR_GATES"; exit 3; }
+  [ -z "${CR_ENDPOINT:-}" ] || { log "chain: the active-warden path opens no endpoint records or advice (V3c's class" \
     "window reads the advice under its hiding root), and CR_ENDPOINT names $CR_ENDPOINT: unset it"; exit 3; }
   HONEST= CLIENT= PROFILE=
-  log "chain: the warden path, warden run ${WARDEN#$G/}"
+  log "chain: the active-warden path, warden run ${WARDEN#$G/}"
 else
   HONEST=$(find "$G" -path '*/out/honest/plan.json' -print -quit); HONEST=${HONEST%/plan.json}
   [ -n "$HONEST" ] || { log "chain: no certifier rehearsal (out/honest/plan.json) in $CR_GATES"; exit 3; }
