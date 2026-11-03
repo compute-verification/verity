@@ -37,12 +37,12 @@ theorem answer_l0 {cfg : Cfg} {s m : Masker} {cs : Array F128} (hi : s.inner = n
     by_cases hp : (s.pos != cfg.order.size) = true
     · simp only [hp, ↓reduceIte, pure, Except.pure, Except.ok.injEq] at h
       subst h
-      exact ⟨rfl, hl, hi, rfl, rfl⟩
+      exact ⟨rfl, rfl, rfl, rfl, rfl⟩
     · simp only [hp, Bool.false_eq_true, ↓reduceIte] at h
       obtain ⟨r, -, h⟩ := bindV_ok h
       simp only [pure, Except.pure, Except.ok.injEq] at h
       subst h
-      exact ⟨rfl, hl, hi, rfl, rfl⟩
+      exact ⟨rfl, rfl, rfl, rfl, rfl⟩
 
 /-- **The loop's state at a rep's round inside level 0**: where the loop's state at a rep's round from level 0's first
 body to `ρ₀`'s takes the round's coins, the frame is in level 0's masked phase, outside the inner proof, owing nothing,
