@@ -62,7 +62,7 @@ theorem linkPoints_slot {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {s
       (by rw [List.take_length]; exact hlt)
     rw [List.take_length] at hw
     simp only [Array.getElem_extract, Array.getElem_map, Array.getElem_range]
-    exact (getElem!_pos _ _ hlt).symm.trans hw
+    exact (getElem!_pos (wordsAt x (ops.map fun e => CoinLayer.rd e.2) 0) (p * spec.mPts + i) hlt).symm.trans hw
 
 /-- **The switch's body `k` reads its switched vector `k` alone.** -/
 theorem rsBody_congr {sv sv' : ℕ → Array F128} {N : ℕ} (P : List UInt8) {k : ℕ} (h : k < N → sv k = sv' k) :
