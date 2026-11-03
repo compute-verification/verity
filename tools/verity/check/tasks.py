@@ -2,7 +2,7 @@
 
     uv run tools/verity/check/tasks.py list --json [--kind after-landing|preflight] [--changed BASE] [--circuit-shards M]
                                                [--gather | --costs FILE] [--split-s S]
-    uv run tools/verity/check/tasks.py run ID [--out FILE] [--work DIR] [--circuit-shards M] [--timings FILE]
+    uv run tools/verity/check/tasks.py run ID [--out FILE] [--work DIR] [--graph art:ID|FILE | [--circuit-shards M] [--timings FILE]]
 
 `verity tasks ...` runs these.  The schema and what each field means is the "Tasks" section of this directory's README.md.
 
@@ -17,9 +17,13 @@ BASE's merge-base with HEAD to this tree touches (a suite by `suites.touched`, a
 those depend on.
 
 `run ID` runs that task here as `check.py` runs that part in a shard of its own (`check.run` with ``only = [ID]``, without the
-preflight), its deps beside it, and writes {verdict, outputs, seconds, key} as JSON to stdout or --out.  A part of a suite split
-by file is of the partition `--timings` gives (the listing's "splits" timings, `{suite: timings}`), so it runs the listed files
-under the listed key; without it, of this machine's record.  The steps' progress goes to stderr.  Exit 0 when the verdict is passed or skipped, 1 when failed, 2 on a usage error.
+preflight), its deps beside it, and writes {verdict, outputs, seconds, key} as JSON to stdout or --out.  `--graph` names the
+graph ID was listed in (`list --json`'s document: an `art:` id of the executor's `tasks-graph/v1` artifact, fetched from the
+evidence store, or a file), which must be of this tree's HEAD and list ID: the run takes the graph's splits (each suite's M,
+partition and timings) and circuit-check shards rather than this machine's, so any id it lists, whole or split, runs as listed
+under the listed key.  Without it, a part of a suite split by file is of the partition `--timings` gives (the listing's
+"splits" timings, `{suite: timings}`), and the rest of this machine's record.  The steps' progress goes to stderr.  Exit 0
+when the verdict is passed or skipped, 1 when failed, 2 on a usage error or a refused graph.
 """
 from __future__ import annotations
 
@@ -40,6 +44,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 SCHEMA = "tasks/v1"
 GRAPHS = ("after-landing", "preflight")
+#: the evidence store's kind for a graph the executor listed on a worker (`research.executor.TASKS_GRAPH_KIND`)
+GRAPH_KIND = "tasks-graph/v1"
 #: whether a task's audit regenerates lock records: never, so a lock record difference fails it, as it fails drive's
 #: after-landing run (`check.py --no-regenerate`), whose verdicts a graph's stand beside and replace
 REGENERATE = False
@@ -323,9 +329,7 @@ def graph(kind: str = "after-landing", circuit_shards: int | None = None, base: 
     facts = Facts(splits)
     prices = priced(names, costs, splits, given)
     tasks = [record(p, facts, names, prices) for p in names]
-    doc = {"schema": SCHEMA, "commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
-                                                      text=True).stdout.strip() or None,
-           "tree": facts.tree, "kind": kind,
+    doc = {"schema": SCHEMA, "commit": head(), "tree": facts.tree, "kind": kind,
            "circuit_shards": circuit_shards or next(j for j in C.JOBS if j.name == "circuit-check").shards,
            "split_s": split_s,
            "splits": {k: {f: v[f] for f in ("m", "seconds", "digest", "shares", "files", "timings")} for k, v in splits.items()},
@@ -348,22 +352,64 @@ def split_for(name: str, m: int, splits: dict[str, dict], timings: dict[str, dic
     return {**splits, name: {"m": m, "digest": S.partition_digest(S.partition(files, mine, m)), "timings": mine}}
 
 
+def head() -> str | None:
+    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip() or None
+
+
+def listed(ref: str) -> dict:
+    """The `tasks/v1` graph ``ref`` names, `list --json`'s document: an `art:` id of a `GRAPH_KIND` artifact, fetched from the
+    evidence store as `--gather` reads it, or a file.  Refused (ValueError) unless it is a graph of this tree's HEAD."""
+    if ref.startswith("art:"):
+        from research.store.local import LocalStore, StoreError
+
+        try:
+            store = LocalStore()
+            if (kind := store.get_manifest(ref).kind) != GRAPH_KIND:
+                raise ValueError(f"--graph {ref}: a {kind} artifact, not a {GRAPH_KIND}")
+            path = Path(store.fetch(ref))
+        except StoreError as e:
+            raise ValueError(f"--graph {ref}: {e}") from None
+    else:
+        path = Path(ref)
+    try:
+        doc = json.loads(path.read_text())
+    except json.JSONDecodeError as e:
+        raise ValueError(f"--graph {ref}: not JSON ({e})") from None
+    if not isinstance(doc, dict) or doc.get("schema") != SCHEMA or not isinstance(doc.get("tasks"), list):
+        raise ValueError(f"--graph {ref}: not a {SCHEMA} graph (`tasks.py list --json` writes one)")
+    if doc.get("commit") != (h := head()):
+        raise ValueError(f"--graph {ref} is a graph of commit {doc.get('commit')}, not of this tree's HEAD {h}: run a task of "
+                         "the graph listed for the commit checked out")
+    return doc
+
+
 def run(part: str, work: Path | None = None, circuit_shards: int | None = None, split_s: float = C.SHARDS.SPLIT_S,
-        timings: dict[str, dict[str, float]] | None = None) -> dict:
+        timings: dict[str, dict[str, float]] | None = None, graph: dict | None = None) -> dict:
     """``part`` run here as `check.run` runs it in a shard of its own (its deps beside it, no preflight), in ``work`` (default:
-    a new temporary directory).  A part of a suite split by file (`JOB:SUITE:K/M`, any K/M of a listed suite) is of the
-    partition ``timings`` gives (`list`'s "splits" timings, so its files and key are the listed task's), else of this
-    machine's record."""
-    _costs, splits, _notes = measured(False, None, split_s)
-    names = parts("after-landing", circuit_shards, splits)
-    job, name, spec = C.SHARDS.suite_part(part)
-    if spec and int(spec.partition("/")[0]) <= (m := int(spec.partition("/")[2])) and any(
-            C.SHARDS.suite_part(p)[:2] == (job, name) for p in names):
-        splits = split_for(name, m, splits, timings)
-        names = [p for p in names if C.SHARDS.suite_part(p)[:2] != (job, name)] + [part]
+    a new temporary directory).  With ``graph`` (`listed`'s), ``part`` is one of the tasks it lists, and runs as listed: of
+    its splits (each suite's M, partition digest and timings) and its circuit-check shards, so a split suite's part runs the
+    listed files under the listed key, and a suite listed whole runs whole, whatever this machine's record would split.
+    Without it, the tasks are this machine's: a part of a suite split by file (`JOB:SUITE:K/M`, any K/M of a listed suite) is
+    of the partition ``timings`` gives (`list`'s "splits" timings), else of this machine's record."""
+    if graph is not None:
+        if part not in {t.get("id") for t in graph["tasks"]}:
+            raise ValueError(f"no task {part} in the graph given (of commit {graph['commit']}): its tasks are the ids it lists")
+        splits = {k: {f: v[f] for f in ("m", "digest", "timings")} for k, v in (graph.get("splits") or {}).items()}
+        names = parts(graph.get("kind", "after-landing"), graph.get("circuit_shards"), splits)
+    else:
+        _costs, splits, _notes = measured(False, None, split_s)
+        names = parts("after-landing", circuit_shards, splits)
+        job, name, spec = C.SHARDS.suite_part(part)
+        if spec and int(spec.partition("/")[0]) <= (m := int(spec.partition("/")[2])) and any(
+                C.SHARDS.suite_part(p)[:2] == (job, name) for p in names):
+            splits = split_for(name, m, splits, timings)
+            names = [p for p in names if C.SHARDS.suite_part(p)[:2] != (job, name)] + [part]
     if part not in names:
         raise ValueError(f"no task {part} on this tree: `tasks.py list --json` lists them")
     rec = record(part, Facts(splits), names, {})
+    if graph is not None and (want := next(t.get("key") for t in graph["tasks"] if t.get("id") == part)) != rec["key"]:
+        print(f"tasks: {part}'s key here differs from the graph's ({str(want)[:16]}, here {str(rec['key'])[:16]}): this "
+              "worker's tree or environment is not the lister's", file=sys.stderr)
     work = work or Path(tempfile.mkdtemp(prefix="verity-task-"))
     work.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
@@ -400,11 +446,16 @@ def main(argv: list[str] | None = None) -> int:
     rn.add_argument("--work", type=Path, help="the steps' output directory (default: a new temporary one)")
     rn.add_argument("--timings", type=Path, metavar="FILE",
                     help="JSON {suite: {test file: seconds}} (list's splits' timings) a split suite's part is partitioned by")
+    rn.add_argument("--graph", metavar="art:ID|FILE",
+                    help=f"the {SCHEMA} graph ID was listed in (a {GRAPH_KIND} artifact or a file), of this HEAD: run ID as it "
+                         "lists it (its splits, circuit-check shards and so its key)")
     for p in (ls, rn):
         p.add_argument("--circuit-shards", type=int, metavar="M", help="circuit-check in M tasks (default: ci.toml's shards)")
     a = ap.parse_args(argv)
     if a.circuit_shards is not None and a.circuit_shards < 1:
         ap.error("--circuit-shards: at least 1")
+    if a.cmd == "run" and a.graph and (a.timings or a.circuit_shards is not None):
+        ap.error("--graph: the graph gives the splits' timings and the circuit-check shards, so no --timings or --circuit-shards")
     try:
         if a.cmd == "list":
             given = json.loads(a.costs.read_text()) if a.costs else None
@@ -413,7 +464,8 @@ def main(argv: list[str] | None = None) -> int:
                 f"{t['id']:60} {t['kind']:13} {'unkeyed' if t['key'] is None else t['key'][:16]}"
                 + (f"  {t['cost_s']:.0f} s" if t["cost_s"] is not None else "") for t in doc["tasks"]))
             return 0
-        res = run(a.id, a.work, a.circuit_shards, timings=json.loads(a.timings.read_text()) if a.timings else None)
+        res = run(a.id, a.work, a.circuit_shards, timings=json.loads(a.timings.read_text()) if a.timings else None,
+                  graph=listed(a.graph) if a.graph else None)
     except (ValueError, C.DECLARATION.DeclarationError, S.Unresolved, OSError) as e:
         print(f"tasks: {e}", file=sys.stderr)
         return 2

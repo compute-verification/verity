@@ -69,7 +69,7 @@ commands:
 ~~~sh
 verity tasks list --json [--kind after-landing|preflight] [--changed BASE] [--circuit-shards M] [--gather | --costs FILE]
                          [--split-s S]
-verity tasks run ID [--out FILE] [--work DIR] [--circuit-shards M] [--timings FILE]
+verity tasks run ID [--out FILE] [--work DIR] [--graph art:ID|FILE | [--circuit-shards M] [--timings FILE]]
 ~~~
 
 `list` prints the graph of the checked-out tree, uncommitted files included. `--kind after-landing` (the default) is every job
@@ -111,14 +111,19 @@ run builds), and the jobs that keep no verdict (`lean-unit-cut`, `lean-changed`,
 worker's `uv sync --locked` refuses a lock that isn't current, each suite fetches the fixtures it reads, and the repository's
 suite holds the lints.
 
-A split suite's part runs (`run`) on the partition `--timings` gives (`{suite: the listing's splits timings}`), so it runs the
-listed files under the listed key; without it, on this machine's timing record. A suite's verdict is the join of its parts'
-(`suites.combine_parts`).
-
 `run ID` runs that task here as `check.py` runs that part in a shard of its own (`check.run` with only that part, without the
 preflight), its `deps` beside it until artifacts are shared, and writes `{"schema", "id", "verdict": passed|failed|skipped,
 "key", "seconds", "outputs": {"dir", "files", "artifacts"}, "steps": [check's step records]}` to stdout or `--out`; the steps'
-progress goes to stderr. It exits 0 for passed or skipped, 1 for failed.
+progress goes to stderr. It exits 0 for passed or skipped, 1 for failed, 2 on a usage error or a refused graph.
+
+`--graph art:ID|FILE` names the graph ID was listed in: the executor's `tasks-graph/v1` artifact, fetched from the evidence
+store, or a file holding `list --json`'s document. The run takes the graph's `splits` (each suite's M, partition digest and
+timings) and `circuit_shards` instead of deciding them from this machine's record, so any id the graph lists, a suite listed
+whole or a part `SUITE:K/M`, runs the listed files under the listed key on any worker; a key that still differs (another
+tree or environment) is named on stderr. It refuses a graph whose `commit` isn't this tree's HEAD or that doesn't list ID.
+Without `--graph`, the tasks are this machine's: a split suite's part runs on the partition `--timings` gives (`{suite: the
+listing's splits timings}`), else on this machine's timing record. A suite's verdict is the join of its parts'
+(`suites.combine_parts`).
 
 A recorded check publishes its live record (`live.py`) on the store's remote as each step ends and every few minutes, so
 it can be followed from any machine with the store's key, without its node: `verity ci ls` lists the recent checks, running
