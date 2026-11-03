@@ -31,7 +31,8 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    lock against the landing branch unless a records run or Lean check passed
                                                    that package, of the head or of a commit whose files of the package and the
                                                    packages it requires (tests and docs aside), lean-toolchain and the Lean
-                                                   checker (tools/verity/lean) are the head's, naming the run to start; then,
+                                                   checker's files a records run reads (`records_read`) are the head's,
+                                                   naming the run to start; then,
                                                    in about a minute, the preflight (`Preflight`) refuses, with
                                                    the fix, a head that conflicts with a
                                                    fresh `next` outside the pins (naming the paths), contains an
@@ -4115,8 +4116,8 @@ RECORDS_LOOKBACK_S = 3 * 86400
 RECORDS_CHECK_RE, RECORDS_RUN_RE = re.compile(r"(?:^|[/\s])check\.py\b"), re.compile(r"lean_changed\.py\b.*?\s--records[=\s]+(\S+)")
 #: the repository's paths besides the packages' own that decide a records run's verdict: the toolchain they may share, and the
 #: checker `RECORDS_COMMAND` runs: the files of `tools/verity/lean/` a records run reads (`records_read`), and the `common.py`
-#: the audit loads (`lean_slot.py` and `slot.py` only take a slot)
-RECORDS_SHARED = ("lean-toolchain", "tools/verity/lean", "tools/verity/check/common.py")
+#: and the task graph's contract the audit loads (`lean_slot.py` and `slot.py` only take a slot)
+RECORDS_SHARED = ("lean-toolchain", "tools/verity/lean", "tools/verity/check/common.py", "tools/verity/graph/verity_graph/contract.py")
 #: the most commits with runs in the window that may vouch for a package, the newest first, that `RecordsGate` reads in its search for a run on the same inputs
 #: (a safety bound, above the ~2,500 that 3 days held for `Security/Proofs`, whose inputs span most packages): those this clone
 #: lacks are fetched by sha, `RECORDS_FETCH_CHUNK` a `git fetch`, a chunk that fails split in halves until the commits the remote
@@ -4226,12 +4227,12 @@ class RecordsGate:
     the package's directory, lock included, and of each in-repo Lake package it requires by path (its `lake-manifest.json`'s and
     `lakefile.toml`'s, transitively) or its lock names under `proved_in`, less those a records run doesn't read (in a `tests/` or
     `test/` directory, Markdown, READMEs: `RECORDS_UNREAD_DIRS`), the same blob there as at the head; and `RECORDS_SHARED` (the
-    root `lean-toolchain` and the checker: `tools/verity/check/common.py` and each file of `tools/verity/lean/` a records
-    run reads, `records_read`) the same, so a pass
-    under another checker vouches for nothing.  A PR that carries another PR's Lean change needs no run of its own for the
-    packages that change passed in.  The candidates are the commits of the attempts in the window read that may hold a pass of
-    the package (`RECORDS_CHECK_RE`, `RECORDS_RUN_RE`: a Lean check, or a records run of a package among its inputs), the newest
-    first (`RECORDS_FETCH` of them, fetched by sha when this clone lacks them); a commit that can't be read vouches for nothing.
+    root `lean-toolchain` and the checker: `tools/verity/check/common.py`, the task graph's contract and each file of
+    `tools/verity/lean/` a records run reads, `records_read`) the same, so a pass under another checker vouches for nothing.
+    A PR that carries another PR's Lean change needs no run of its own for the packages that change passed in.  The candidates
+    are the commits of the attempts in the window read that may hold a pass of the package (`RECORDS_CHECK_RE`,
+    `RECORDS_RUN_RE`: a Lean check, or a records run of a package among its inputs), the newest first (`RECORDS_FETCH` of
+    them, fetched by sha when this clone lacks them); a commit that can't be read vouches for nothing.
 
     The store is read from its remote (`refresh(attempts_only=True, since=...)`, the attempts of the last `RECORDS_LOOKBACK_S`,
     however many commits the head has gained since); a store with no usable remote, or one that can't be listed, refuses: the
@@ -4410,8 +4411,8 @@ class RecordsGate:
 
     def _differs(self, head: str, commits: list[str], inputs: list[str]) -> set[str]:
         """The ``commits`` whose ``inputs`` aren't the head's, by one `git diff-tree --stdin`: a file of `RECORDS_SHARED` that
-        differs, or one of a package that a records run reads (`RECORDS_UNREAD_DIRS` aside, never Lean), Markdown and READMEs
-        aside in both."""
+        differs and a records run reads (`records_read`), or one of a package that a records run reads (`RECORDS_UNREAD_DIRS`
+        aside, never Lean), Markdown and READMEs aside in both."""
         if not commits:
             return set()
         r = subprocess.run(["git", "diff-tree", "--stdin", "--always", "-r", "-z", "--name-only", "--no-renames", "--", *inputs],
@@ -5308,7 +5309,9 @@ def main(argv: list[str]) -> int:
                          "one no node can build refuses the mark, one not "
                          "built in time is a skipped check); the records gate (a changed Lean lock needs a records "
                          "run that passed it, of the head or of a commit whose files of its package and the packages it requires "
-                         "(tests and docs aside), lean-toolchain and the Lean checker (tools/verity/lean) are the head's) still runs")
+                         "(tests and docs aside), lean-toolchain and the Lean checker's files a records run reads "
+                         "(tools/verity/lean but its tests, docs and unread files; common.py; the task graph's contract) are "
+                         "the head's) still runs")
     ap.add_argument("--regenerate-locks", action=argparse.BooleanOptionalAction,
                     help="drive: land a commit whose Lean check passed by regenerating lock records with those locks committed "
                          "on top (`Regenerated:`), which `research merge`'s gate accepts on that check (CI-64)")

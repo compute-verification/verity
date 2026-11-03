@@ -3253,11 +3253,13 @@ def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_f
 def test_a_change_to_checker_files_no_records_run_reads_leaves_a_same_input_pass_standing(world, capsys):
     """A test or a doc of `tools/verity/lean/` made every records run at another commit vouch for nothing, as the whole
     directory was one input.  Its tests, its Markdown and `RECORDS_TOOL_UNREAD` are no records input; a file of it a run
-    reads (`merge.py`, which merges a lock across a merge of `main`) still is, and so is a new one until it is listed."""
+    reads (`merge.py`, which merges a lock across a merge of `main`) still is, and so is a new one until it is listed, and
+    so is the task graph's contract, which the audit loads."""
+    contract = "tools/verity/graph/verity_graph/contract.py"
     world.with_store_remote()
     _move_main(world, {"tools/verity/lean/check.py": "# the checker\n", "tools/verity/lean/merge.py": "# the lock driver\n",
                        "tools/verity/lean/tool.py": "# the scheduled runs\n", "tools/verity/lean/README.md": "the checker\n",
-                       "tools/verity/lean/tests/test_check.py": "x = 1\n"})
+                       "tools/verity/lean/tests/test_check.py": "x = 1\n", contract: "# the graph's keys\n"})
     c = world.change({LOCK: _lock(A="2")})
     rid = _published(world, c, files={"lean-audit/audit.json": _audit()})
     for n, files in ((1, {"tools/verity/lean/tests/test_check.py": "x = 2\n", "tools/verity/lean/tests/fixtures/T.lean": "def t := 1\n"}),
@@ -3267,7 +3269,7 @@ def test_a_change_to_checker_files_no_records_run_reads_leaves_a_same_input_pass
         assert f"a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
 
     for n, files in ((4, {"tools/verity/lean/merge.py": "# the lock driver, changed\n"}),
-                     (5, {"tools/verity/lean/new.py": "x = 1\n"})):
+                     (5, {"tools/verity/lean/new.py": "x = 1\n"}), (6, {contract: "# the graph's keys, changed\n"})):
         capsys.readouterr()
         assert _mark(world, n, world.change({LOCK: _lock(A="2"), **files})) == 1
         assert "nor at a commit whose inputs for it are the head's" in capsys.readouterr().err
