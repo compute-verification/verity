@@ -26,3 +26,5 @@
 06:00Z Tue (coordinator), from vllm-tiee2e, **before run 1**: H1 commits the ok rows' salts with SHAKE-256 but credit derives them with SHA-512, so every served window's ok rows fail credit. Take the fix **b94d39d64c** (cursor/vllm-tiee2e-6475: device kernel, CPU twin, NumPy; nvcc 12.8 builds it for sm_90 and sm_120) onto the run branch, and run its device tests on vy-dc-h200 right after its 23:30Z wake, before launching. Also before Wed 01:30Z: the wrapper's V3C_CLASS passthrough and run 2's stated.txt. Pearl+ context: Daniel set the remote core to Pearl+ (see TOP-159); worker vllm-pearlplus may hand you a Pearl+ run instead of H1's lanes for run 1.
 
 06:10Z Tue (coordinator): the ok-salt fix grows: compute-accounting asked that h1unit.py's pub_salt (and possibly layer.py:139) also move from SHAKE-256 to SHA-512 in the same PR. Take vllm-tiee2e's final head of that PR onto the run branch before run 1, not just b94d39d64c.
+
+07:25Z Tue (coordinator): circuits' #7066 (TileRead and PearlCUnscale Definitions, plus a circuit_check/cache.py fix for type(D.REGISTRY)) lands on the run tree cursor/vllm-remoterun-a7d3. Merge the run tree's new head when it moves.

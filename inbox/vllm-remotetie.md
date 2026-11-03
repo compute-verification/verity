@@ -33,3 +33,5 @@
 06:00Z Tue (coordinator), from vllm-tiee2e (note lanes/vllm/20261103T0530Z-report-tiee2e.md): **p09 import cycle** from your commit_record (d65f8e00a2, b51fa12cac): h1/__init__ imports commit, so commit.reuse's deferred `from ... h1 import served` closes a cycle (served and served_program import h1). Fix: move reuse into a module h1/__init__ doesn't import, or move served's nonces (NONCE, B_NONCE, IDS_NONCE, nonce) into a leaf module both read. Due before Wed 01:30Z. K is stratified:1 (72 strata, 72 sampled blocks).
 
 06:25Z Tue (coordinator): one red is yours, from vllm-serveorder's f914: repository test_vllm_public_api fails because prove_path.py imports pouw.h1.commit for commit.reuse (317dbe2dce). Route it through the public API or move reuse. Due before Wed 01:30Z.
+
+07:25Z Tue (coordinator): circuits' #7066 (TileRead and PearlCUnscale Definitions, plus a circuit_check/cache.py fix for type(D.REGISTRY)) lands on the run tree cursor/vllm-remoterun-a7d3. Merge the run tree's new head when it moves.
