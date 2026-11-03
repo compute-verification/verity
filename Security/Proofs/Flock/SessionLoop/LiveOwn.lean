@@ -99,3 +99,28 @@ theorem liveRoundEqOwn_honestVals (L₁ : LeanRelease Flock.Wit Loop.Tp)
 end LeanRelease
 
 end Claims.ZKServer
+
+open Lean Elab Command in
+elab "#sorry_sources_probe " id:ident : command => do
+  let env ← getEnv
+  let n ← liftCoreM <| realizeGlobalConstNoOverloadWithInfo id
+  let mut visited : NameSet := {}
+  let mut stack : Array Name := #[n]
+  let mut srcs : Array Name := #[]
+  while _h : stack.size > 0 do
+    let c := stack.back
+    stack := stack.pop
+    if visited.contains c then continue
+    visited := visited.insert c
+    if let some ci := env.find? c then
+      let used := ci.getUsedConstantsAsSet
+      if used.contains ``sorryAx then srcs := srcs.push c
+      for d in used do
+        unless visited.contains d do stack := stack.push d
+  logInfo m!"sorryAx sources of {n} ({visited.size} constants walked): {srcs.qsort Name.lt}"
+
+#print axioms Claims.ZKServer.LeanRelease.liveRoundEqOwn_withInner
+#print axioms Claims.ZKServer.LeanRelease.liveRoundEqOwn_honestVals
+#print axioms Claims.ZKServer.LeanRelease.liveInnerOwn_withInner
+#sorry_sources_probe Claims.ZKServer.LeanRelease.liveRoundEqOwn_withInner
+#sorry_sources_probe Claims.ZKServer.LeanRelease.liveRoundEqOwn_honestVals
