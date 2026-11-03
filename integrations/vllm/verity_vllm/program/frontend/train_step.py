@@ -1,0 +1,195 @@
+"""One training step as a Program: the forward, the backward and the optimizer of an ordinary `nn.Module`, derived through the same
+front door as a served model (`derive.derive_report`), with the training rules (`rules/training.py`) added to the default ones.
+
+    step_program(model, loss_fn, optimizer, example_batch, mode="reference") -> Program | Unsupported
+
+The step is one function of everything a step reads,
+
+    (params, exp_avg, exp_avg_sq, decay, neg_step_size, bc2_sqrt, buffers, batch) -> (loss, params', exp_avg', exp_avg_sq')
+
+built with `torch.func.functional_call` and `grad_and_value`, the optimizer a function (`AdamW.update`), and traced as one joint ATen
+graph on fake tensors (`make_fx` of the functionalized step, SDPA's math backend), which `torch.export` hands to the derivation. No
+value is read: the parameters, the optimizer state, the step's three host scalars (`AdamW.scalars`), the module's buffers and the
+batch are the Program's inputs, in that order, each tensor one parameter named after it (`param_<fqn>`, `exp_avg_<fqn>`, ...).
+
+A node no rule lowers is `Unsupported`, as for any derivation. `step_report(..., survey=True)` instead lowers every node it can and
+takes each refused one's output as a field of the Program's `run` input (a hole), recording the refusal: the list of what is
+missing, and a Program whose census counts everything else (`rules.training.HOLES`).
+"""
+
+from __future__ import annotations
+
+import keyword
+import re
+from dataclasses import dataclass
+from typing import Any, Callable
+
+import torch
+from torch.func import functional_call, grad_and_value
+
+from verity.ml.circuits.program import Program
+from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.program.frontend.outcomes import Unsupported
+from verity_vllm.program.frontend.report import DeriveReport
+
+
+@dataclass(frozen=True)
+class AdamW:
+    """`torch.optim.AdamW(foreach=False)`'s step on CPU (`_single_tensor_adam`: not capturable, not fused, no amsgrad, no maximize)
+    as a function of (param, grad, exp_avg, exp_avg_sq) and the step's host scalars, each line one ATen op:
+
+        p1 = p * decay                          `param.mul_(1 - lr * weight_decay)` (skipped at weight decay 0, as torch does)
+        m1 = m.lerp(g, 1 - beta1)               `exp_avg.lerp_(grad, 1 - beta1)`
+        v1 = (v * beta2).addcmul(g, g, 1 - beta2)
+        denom = v1.sqrt() / bc2_sqrt + eps
+        p2 = p1 + neg_step_size * m1 / denom    `param.addcdiv_(exp_avg, denom, value=-step_size)`: self + (value * t1) / t2
+
+    The host scalars are the Python floats torch computes once a step from the step count t (`scalars`), which its kernels read
+    as f32 words; they are inputs of the step, so one Program serves every step."""
+    lr: float = 1e-3
+    betas: tuple[float, float] = (0.9, 0.999)
+    eps: float = 1e-8
+    weight_decay: float = 1e-2
+
+    SCALARS = ("decay", "neg_step_size", "bc2_sqrt")
+
+    @classmethod
+    def from_torch(cls, opt: torch.optim.Optimizer) -> "AdamW":
+        """The hyperparameters of a `torch.optim.AdamW` with one parameter group and the defaults this function computes."""
+        if not isinstance(opt, torch.optim.AdamW) or len(opt.param_groups) != 1:
+            raise ValueError("a torch.optim.AdamW with one parameter group")
+        g = opt.param_groups[0]
+        for k in ("amsgrad", "maximize", "capturable", "differentiable"):
+            if g.get(k):
+                raise ValueError(f"AdamW with {k}=True is not this function")
+        return cls(lr=float(g["lr"]), betas=(float(g["betas"][0]), float(g["betas"][1])), eps=float(g["eps"]),
+                   weight_decay=float(g["weight_decay"]))
+
+    def scalars(self, step: int) -> dict[str, float]:
+        """The host's Python floats at step `step` (1 for the first): `1 - lr * weight_decay`, `-(lr / (1 - beta1 ** t))` and
+        `(1 - beta2 ** t) ** 0.5`; f32 inputs of the step, rounded as torch's kernels round them (`Scalar::to<float>`)."""
+        b1, b2 = self.betas
+        return {"decay": 1 - self.lr * self.weight_decay, "neg_step_size": -(self.lr / (1 - b1 ** step)),
+                "bc2_sqrt": (1 - b2 ** step) ** 0.5}
+
+    def update(self, p: torch.Tensor, g: torch.Tensor, m: torch.Tensor, v: torch.Tensor, decay: torch.Tensor,
+               neg_step_size: torch.Tensor, bc2_sqrt: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        b1, b2 = self.betas
+        if self.weight_decay != 0:
+            p = p * decay
+        m = m.lerp(g, 1 - b1)
+        v = (v * b2).addcmul(g, g, value=1 - b2)
+        denom = v.sqrt() / bc2_sqrt + self.eps
+        return p + neg_step_size * m / denom, m, v
+
+
+class _Loss(torch.nn.Module):
+    def __init__(self, model: torch.nn.Module, loss_fn: Callable) -> None:
+        super().__init__()
+        self.model, self.loss_fn = model, loss_fn
+
+    def forward(self, batch: torch.Tensor) -> torch.Tensor:
+        return self.loss_fn(self.model, batch)
+
+
+@dataclass
+class StepLayout:
+    """Which Program input and output is which: the parameters' and buffers' fqns in order, the host scalars, the batch."""
+    params: list[str]
+    buffers: list[str]
+    scalars: tuple[str, ...]
+    inputs: list[str]
+    outputs: list[str]
+
+    def to_json(self) -> dict:
+        return {"params": self.params, "buffers": self.buffers, "scalars": list(self.scalars), "inputs": self.inputs,
+                "outputs": self.outputs}
+
+
+def _ident(s: str) -> str:
+    s = re.sub(r"\W", "_", s)
+    return s + "_" if keyword.iskeyword(s) else s
+
+
+def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor):
+    """The step's joint ATen graph as a `torch.export.ExportedProgram` over meta tensors, and its `StepLayout`."""
+    from torch.fx.experimental.proxy_tensor import make_fx
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+
+    if isinstance(optimizer, torch.optim.Optimizer):
+        optimizer = AdamW.from_torch(optimizer)
+    wrap = _Loss(model, loss_fn)
+    pnames = [n for n, _ in wrap.named_parameters()]
+    bnames = [n for n, _ in wrap.named_buffers()]
+    P, NB = len(pnames), len(bnames)
+    scalars = AdamW.SCALARS
+
+    def step(*flat):
+        params = dict(zip(pnames, flat[:P]))
+        ms, vs = flat[P:2 * P], flat[2 * P:3 * P]
+        decay, neg_step_size, bc2_sqrt = flat[3 * P:3 * P + 3]
+        bufs = dict(zip(bnames, flat[3 * P + 3:3 * P + 3 + NB]))
+        batch = flat[-1]
+        grads, loss = grad_and_value(lambda p: functional_call(wrap, (p, bufs), (batch,)))(params)
+        new_p, new_m, new_v = [], [], []
+        for i, n in enumerate(pnames):
+            p2, m2, v2 = optimizer.update(params[n], grads[n], ms[i], vs[i], decay, neg_step_size, bc2_sqrt)
+            new_p.append(p2)
+            new_m.append(m2)
+            new_v.append(v2)
+        return (loss, *new_p, *new_m, *new_v)
+
+    def meta(t: torch.Tensor) -> torch.Tensor:
+        return torch.empty(t.shape, dtype=t.dtype, device="meta")
+
+    tensors = dict(wrap.named_parameters())
+    btensors = dict(wrap.named_buffers())
+    # one distinct tensor per input: make_fx binds a tensor object passed twice to its last placeholder
+    metas = ([meta(tensors[n]) for _ in range(3) for n in pnames] + [torch.empty((), dtype=torch.float32, device="meta") for _ in scalars]
+             + [meta(btensors[n]) for n in bnames] + [meta(example_batch)])
+    short = [n.removeprefix("model.") for n in pnames]
+    bshort = [n.removeprefix("model.") for n in bnames]
+    inputs = ([_ident(f"param_{n}") for n in short] + [_ident(f"exp_avg_{n}") for n in short] + [_ident(f"exp_avg_sq_{n}") for n in short]
+              + list(scalars) + [_ident(f"buf_{n}") for n in bshort] + ["batch"])
+    outputs = ["loss"] + [f"param:{n}" for n in short] + [f"exp_avg:{n}" for n in short] + [f"exp_avg_sq:{n}" for n in short]
+    with sdpa_kernel(SDPBackend.MATH):
+        gm = make_fx(torch.func.functionalize(step, remove="mutations"), tracing_mode="fake")(*metas)
+    ns: dict[str, Any] = {"gm": gm}
+    exec(f"def forward(self, {', '.join(inputs)}):\n    return gm({', '.join(inputs)})\n", ns)
+    holder = type("TrainStep", (torch.nn.Module,), {"forward": ns["forward"]})()
+    with torch.no_grad(), torch.device("meta"):
+        ep = torch.export.export(holder, tuple(metas), strict=False)
+    return ep, metas, StepLayout(short, bshort, scalars, inputs, outputs)
+
+
+def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor, *, mode: str = "reference",
+                survey: bool = False, name: str = "TrainStep", exported=None) -> DeriveReport:
+    """`step_program`'s derivation report. `survey`: every node a rule refuses becomes a hole (`rules.training.HOLES`), recorded in
+    the provenance's `holes`, so the report lists every refusal at once and its Program counts everything else."""
+    from verity_vllm.program.frontend.rules.training import training_rules
+
+    ep, metas, layout = exported if exported is not None else export_step(model, loss_fn, optimizer, example_batch)
+
+    def train_step(*inputs):
+        raise RuntimeError("derived from its exported graph only")
+
+    rep = derive_report(train_step, metas, mode=mode, rules=training_rules(survey=survey), exported=ep, name=name)
+    rep.provenance["train_step"] = layout.to_json()
+    if rep.program is not None:
+        rep.program.annotations["train_step"] = layout.to_json()
+    return rep
+
+
+def step_program(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer, example_batch: torch.Tensor, *,
+                 mode: str = "reference") -> Program | Unsupported:
+    """One training step of `model` as a `Program`, or the `Unsupported` that says which op of the step no rule lowers.
+
+    `loss_fn(model, batch)` returns the scalar loss; `optimizer` is an `AdamW` (or a `torch.optim.AdamW` with one parameter group);
+    `example_batch` gives the batch's shape and dtype (its values are never read, nor are the model's). The Program's inputs are the
+    parameters (tied ones once), the optimizer state, the step's host scalars (`AdamW.scalars`), the buffers and the batch; its
+    outputs are the loss and the new parameters and state, in `annotations["train_step"]`'s order. `mode` is the derivation mode:
+    "reference" lowers every op to the reference vocabulary's exact f32 arithmetic (`rules.training`)."""
+    return step_report(model, loss_fn, optimizer, example_batch, mode=mode).result
+
+
+__all__ = ["AdamW", "StepLayout", "export_step", "step_report", "step_program"]
