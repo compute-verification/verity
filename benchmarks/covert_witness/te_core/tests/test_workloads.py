@@ -1,19 +1,21 @@
 """te_core.workloads models each covert workload from its dials to the one bound's kinds and rho at the console's policy,
 te_core.policy's CONSOLE, one full session of the 45M reference (the dashboard's 10:23Z ruling): workloads.json (the
 console's tests read it) is the module's output; rho takes only the kinds valid on their own (te_core 4.5's
-formalism.KINDS: the fresh products, the token kind under reading A and decoding), Fit where it holds, max(1, the
-measured terms) with its binding kind and partial where a kind is unmeasured, and null, never 1, where no kind is
-measured (the coordinator's 09:46Z and 11:18Z rulings); reduction, update, reading B's forms and io_bound's chain
-figures are sensitivities beside it, never in its max, and the target is formalism.published at reading B (page_rho on
-the columns); the fresh-products kind is te_core.formalism.fresh_products on the model's products, which match
-io_bound's count on its captured steps, at the tree constant a model's untraced order takes, so it is unmeasured until
-io_bound has that constant, with io_bound's chain figure without P-cell, the term's, beside it; the token and decoding
-kinds need a trace's entries and op log, so they are unmeasured on every model and record here; the shapes, u(1),
-Delta, Delta_grad, a and a training token's gates are what the 45M pilot's traces and the standard-workloads island's
-rows (s-t20 and m-t20) measure; on every record each kind's figure and sensitivity is near the model's at its dials;
-and the readings the spec quotes hold: DiLoCo is standard training's bound until a phase fits a block, a teacher
-lowers rho by the student's share and leaves the blocks, RL's counting bounds exceed the target, and a LoRA whose
-update fits k has its products escape."""
+formalism.KINDS: the fresh products, the token kind under reading A and decoding), Fit where it holds, else the
+measured terms' max where it exceeds 1, with its binding kind and partial where a valid kind is unmeasured, else null,
+never 1, where a valid kind is unmeasured, else 1, binding none (the coordinator's 09:46Z and 12:20Z rulings);
+reduction, update, reading B's forms and the fresh products' figure under P-cell are sensitivities beside it, never in
+its max, and the target is formalism.published at reading B (page_rho on the columns); the fresh-products kind is
+te_core.formalism.fresh_products on the model's products, which match io_bound's count on its captured steps, summed
+in a chain as the standard algorithm's are, so it is measured on every point and binds wherever Fit fails and its
+term exceeds 1: its term io_bound's figure without P-cell, resting on P-width and P-chain (coordinator 12:09Z); the
+token and decoding kinds need a trace's entries and op log, so they are unmeasured on every model and record here,
+and a point whose fresh-products term is at most 1 publishes null; the shapes, u(1), Delta, Delta_grad, a and a
+training token's gates are what the 45M pilot's traces and the standard-workloads island's rows (s-t20 and m-t20)
+measure; on every record each kind's figure and sensitivity is near the model's at its dials; and the readings the
+spec quotes hold: DiLoCo is standard training's bound until a phase fits a block, a teacher lowers rho by the
+student's share and leaves the blocks, RL's counting bounds exceed the target, and a LoRA whose update fits k has its
+products escape."""
 import inspect
 import json
 import math
@@ -86,65 +88,96 @@ def test_reference_json_is_current(ref):
 
 
 def test_rho_takes_only_the_kinds_valid_on_their_own(ref):
-    """Coordinator 08:26Z, 10:21Z and 11:18Z, as te_core.formalism.at gives it: Fit's c/(c - d) where Fit holds, else
-    max(1, the valid kinds' measured terms), its binding kind the largest where it exceeds 1 and none where none does,
-    partial where a kind is unmeasured beside it, and null only where no kind is measured."""
+    """Coordinator 08:26Z, 10:21Z and 12:20Z: Fit's c/(c - d) where Fit holds; else the valid kinds' measured max
+    where it exceeds 1, binding that kind, partial where a valid kind is unmeasured; else null where a valid kind is
+    unmeasured; else 1, binding none, every valid kind measured and none above 1."""
     assert ref["valid"] == list(W.VALID) == list(formalism.KINDS) == ["fresh_products", "token", "decoding"]
     assert ref["reading"] == "A" and set(ref["rests_on"]) == {*W.VALID, "fit", "none", "unmeasured"}
-    assert list(ref["sensitivities"]) == [*formalism.SENSITIVITIES, "fresh_chain", "fresh_cell"]
+    assert ref["rests_on"]["fresh_products"].startswith("P-width and P-chain, reference circuit; no A1")
+    assert list(ref["sensitivities"]) == list(dict.fromkeys([*formalism.SENSITIVITIES, "fresh_cell"]))
     assert not set(ref["sensitivities"]) & set(ref["valid"])
     for at, r in every_rho(ref):
         assert list(r["terms"]) == ref["valid"] and list(r["sensitivities"]) == list(ref["sensitivities"]), at
         priced = {kind: x for kind, x in r["terms"].items() if x is not None}
-        top = max([1.0, *priced.values()]) if priced else None
-        binding = max(priced, key=priced.get) if priced and top > 1 else None
+        top = max(priced, key=priced.get) if priced else None
+        binding = top if top is not None and priced[top] > 1 else None
+        whole = len(priced) == len(r["terms"])
         assert r["binding_kind"] == binding, at
         if r["basis"] == "fit":
-            assert not r["fit_fails"] and (top is None or top <= r["rho"] * (1 + 1e-9)), at
+            assert not r["fit_fails"] and (binding is None or priced[binding] <= r["rho"] * (1 + 1e-9)), at
         elif binding:
-            assert r["basis"] == binding and math.isclose(r["rho"], top), at
-        elif priced:
-            assert r["basis"] == "none" and r["rho"] == 1.0, at
+            assert r["basis"] == binding and r["rho"] == priced[binding] > 1, at
+        elif whole:
+            assert r["basis"] == "none" and r["rho"] == 1, at
         else:
             assert r["basis"] == "unmeasured" and r["rho"] is None, at
-        assert r["partial"] == (r["basis"] != "fit" and bool(priced) and len(priced) < len(r["terms"])), at
+        assert r["partial"] == (r["basis"] != "fit" and binding is not None and not whole), at
         assert r["rho"] != 1.0 or r["basis"] in ("fit", "none"), at
 
 
-def test_a_row_with_no_measured_kind_is_null_never_one(ref):
-    """Coordinator 09:46Z and 11:18Z: only a row with no measured kind publishes null, its basis unmeasured, never
-    max(1, nothing). A model's products have no summation order, so the fresh-products kind takes the tree constant,
-    which io_bound doesn't have yet, and every point but the one where Fit holds is null today."""
-    null = {(name, pname) for name, pname, p in points(ref) if p["rho"]["default"]["rho"] is None}
-    assert null == {(name, pname) for name, pname, _ in points(ref)} - {("diloco", "Fit's corner")}
-    for name, pname in null:
-        r = rhos(ref, name, pname)
-        assert r["fit_fails"] and r["bound"] is None and r["binding_kind"] is None and not r["partial"], (name, pname)
-        assert set(r["why"]) == set(W.VALID) <= set(r["unmeasured"]), (name, pname)
-        assert "tree constant" in r["why"]["fresh_products"], (name, pname)
-    assert ref["rests_on"]["unmeasured"].startswith("unmeasured")
+def test_rho_is_one_only_where_every_valid_kind_is_measured(monkeypatch):
+    """Coordinator 12:20Z: with Fit failing, rho is 1 (basis none) only where every valid kind is measured and none
+    exceeds 1, and a ρ the measured kinds give is partial only while one is unmeasured. A model has no trace, so here
+    the token and decoding kinds are given terms of 0.5: rank 1 on W_q in one layer, whose fresh products count
+    nothing, then reads 1, and standard training binds on its fresh products, not partial."""
+    real = formalism.bound
 
+    def traced(m, c, k, kinds=formalism.KINDS):
+        b = real(m, c, k, kinds)
+        return b | {"terms": b["terms"] | {"token": 0.5, "decoding": 0.5},
+                    "unmeasured": {n: why for n, why in b["unmeasured"].items() if n not in ("token", "decoding")}}
 
-def test_a_measured_kind_publishes_its_max_with_one_beneath_it(monkeypatch):
-    """Coordinator 11:18Z, where a kind is measured: rho is max(1, the measured terms), labelled with its binding kind
-    (none where no measured term exceeds 1), and partial where another kind is unmeasured. With the products summed in
-    a chain, the order whose constant io_bound has, formalism measures the fresh-products kind on the model, and the
-    term is io_bound's figure without P-cell, formalism's own (with P-cell) beside it."""
-    monkeypatch.setattr(W, "ORDER", "chain")
+    monkeypatch.setattr(formalism, "bound", traced)
     c, k = policy.CONSOLE
-    for workload, point, basis in (("standard", "default", "fresh_products"), ("lora", "rank 1 on W_q", "none"),
-                                   ("lora", "rank 1 on W_q, one layer", "none"), ("diloco", "Fit's corner", "fit")):
-        m = W.model(workload, **settings(workload, point))
-        r = W.rho(m, c, k)
-        me = replace(m.measured, products={"k": k, "order": "chain", "products": W.products(m, c, k)})
-        term, why, got = formalism.fresh_products(me, c, k)
-        assert why is None and term == got["io_bound"]["proved"]["rho"] == r["sensitivities"]["fresh_cell"]
-        assert r["terms"]["fresh_products"] == got["io_bound"]["proved"]["rho_no_cell"] == r["sensitivities"]["fresh_chain"]
-        assert r["basis"] == basis and r["partial"] == (basis != "fit"), (workload, point)
-        if basis == "none":
-            assert r["rho"] == 1.0 and r["terms"]["fresh_products"] <= 1 and r["binding_kind"] is None
-        elif basis == "fresh_products":
-            assert r["rho"] == r["terms"]["fresh_products"] > 1 and r["binding_kind"] == basis
+    one = W.rho(W.model("lora", **settings("lora", "rank 1 on W_q, one layer")), c, k)
+    assert one["rho"] == one["bound"] == 1 and one["basis"] == "none" and one["binding_kind"] is None
+    assert not one["partial"] and not one["why"] and one["terms"]["fresh_products"] == 0
+    std = W.rho(W.model("standard", **settings("standard", "default")), c, k)
+    assert std["basis"] == std["binding_kind"] == "fresh_products" and not std["partial"] and std["rho"] > 1
+    assert W.RESTS_ON["none"].startswith("no kind exceeds 1")
+
+
+def test_a_row_with_no_measured_kind_is_null_never_one(monkeypatch):
+    """Coordinator 09:46Z and 12:20Z: a row whose valid kinds are all unmeasured publishes null, its basis
+    unmeasured. A model's products are summed in a chain (12:09Z), so every point measures the fresh-products kind;
+    for a circuit that declares them summed in a tree, formalism leaves it unmeasured (te_core.io_bound has the chain
+    constant only), and with the token and decoding kinds needing a trace the point publishes null."""
+    monkeypatch.setattr(W, "ORDER", "tree")
+    c, k = policy.CONSOLE
+    for workload, point in (("standard", "default"), ("lora", "rank 1 on W_q, one layer")):
+        r = W.rho(W.model(workload, **settings(workload, point)), c, k)
+        assert r["rho"] is None and r["basis"] == "unmeasured" and r["bound"] is None, (workload, point)
+        assert r["binding_kind"] is None and not r["partial"] and r["fit_fails"], (workload, point)
+        assert set(r["why"]) == set(W.VALID) <= set(r["unmeasured"]), (workload, point)
+        assert "summed in a tree" in r["why"]["fresh_products"], (workload, point)
+    assert W.RESTS_ON["unmeasured"].startswith("unmeasured")
+
+
+def test_the_fresh_products_bind_where_they_exceed_one_and_the_rest_are_null(ref):
+    """Coordinator 12:09Z and 12:20Z: a model's products are summed in a chain, so the fresh-products kind is measured
+    on every point; where Fit fails and its term exceeds 1, rho is that term, binding fresh_products, partial, the
+    token and decoding kinds unmeasured; where its term is at most 1, rho is null, never 1, since the unmeasured kinds
+    might exceed it; where Fit holds, Fit's c/(c - d). Standard dense at the console default reads about 2.66e5, with
+    5.0e6 under P-cell beside it (12:09Z); rank 1 on W_q stays below 1 and in one layer counts no product, as RL's
+    LoRA in one layer does, so those three publish null."""
+    at = {(name, pname): p["rho"]["default"] for name, pname, p in points(ref)}
+    null = set()
+    for where, r in at.items():
+        term = r["terms"]["fresh_products"]
+        assert term is not None, where
+        if where == ("diloco", "Fit's corner"):
+            assert r["basis"] == "fit" and not r["partial"] and r["rho"] == r["rho_fit"] > 1 and term == 0, where
+        elif term > 1:
+            assert r["basis"] == r["binding_kind"] == "fresh_products" and r["partial"] and r["rho"] == term, where
+        else:
+            assert r["rho"] is None and r["basis"] == "unmeasured" and r["binding_kind"] is None, where
+            assert not r["partial"] and set(r["why"]) == {"token", "decoding"}, where
+            null.add(where)
+    assert null == {("lora", "rank 1 on W_q"), ("lora", "rank 1 on W_q, one layer"), ("rl", "LoRA in one layer")}
+    standard = at[("standard", "default")]
+    assert 2.6e5 < standard["rho"] < 2.7e5 and 4.9e6 < standard["sensitivities"]["fresh_cell"] < 5.1e6
+    assert 0 < at[("lora", "rank 1 on W_q")]["terms"]["fresh_products"] < 1
+    assert at[("lora", "rank 1 on W_q, one layer")]["terms"]["fresh_products"] == 0
 
 
 def test_the_token_and_decoding_kinds_need_a_trace(ref):
@@ -172,7 +205,8 @@ def test_the_sensitivities_and_the_target_are_te_cores(ref):
         for pname, s in w.points:
             m = W.model(w.name, **s)
             p = ref["workloads"][w.name]["points"][pname]
-            r, b = p["rho"]["default"], formalism.bound(m.measured, c, k)
+            me = replace(m.measured, products={"k": k, "order": W.ORDER, "products": W.products(m, c, k)})
+            r, b = p["rho"]["default"], formalism.bound(me, c, k)
             for name in formalism.SENSITIVITIES:
                 assert close(r["sensitivities"][name], finite(b["sensitivities"][name]), 1e-6), (w.name, pname)
             pub = formalism.published(m.measured, c, k, "B")
@@ -185,20 +219,23 @@ def test_the_sensitivities_and_the_target_are_te_cores(ref):
 
 def test_the_fresh_kind_is_formalisms_on_the_models_products(ref):
     """The fresh-products kind is te_core.formalism.fresh_products on the model's products as `Measured.products`, at
-    the console's k and in no order (`ORDER`): the tree constant applies, so it is unmeasured with formalism's reason,
-    and io_bound's chain figures are beside it, without P-cell (the term's figure, which needs no premise on the
-    partition: coordinator 06:57Z, obligation 1) and with it, never below."""
-    assert ref["io_bound"] == W.IO_BOUND and W.ORDER is None and (W.FRESH_FIGURE, W.FRESH_CELL) == ("rho_no_cell", "rho")
+    the console's k and summed in a chain (`ORDER`, the standard algorithm's: coordinator 12:09Z), where formalism
+    measures it; the term is io_bound's figure without P-cell (`FRESH_FIGURE`, which needs no premise on the
+    partition: coordinator 06:57Z obligation 1 and 12:09Z), formalism's term too (`formalism.P_CELL` off), and the
+    figure under P-cell is beside it as fresh_cell, formalism's, never below."""
+    assert ref["io_bound"] == W.IO_BOUND and W.ORDER == "chain"
+    assert (W.FRESH_FIGURE, W.FRESH_CELL) == ("rho_no_cell", "rho")
     c, k = policy.CONSOLE
     for w in W.WORKLOADS.values():
         for pname, s in w.points:
             m = W.model(w.name, **s)
             r = rhos(ref, w.name, pname)
-            me = replace(m.measured, products={"k": k, "order": None, "products": W.products(m, c, k)})
+            me = replace(m.measured, products={"k": k, "order": "chain", "products": W.products(m, c, k)})
             term, why, got = formalism.fresh_products(me, c, k)
-            assert term is None and r["terms"]["fresh_products"] is None and r["why"]["fresh_products"] == why
             b = got["io_bound"]["proved"]
-            assert close(r["sensitivities"]["fresh_chain"], b["rho_no_cell"], 1e-6), (w.name, pname)
+            assert why is None and "fresh_products" not in r["why"] and term == b["rho_no_cell"], (w.name, pname)
+            assert got["fresh_cell"] == b["rho"], (w.name, pname)
+            assert close(r["terms"]["fresh_products"], b["rho_no_cell"], 1e-6), (w.name, pname)
             assert close(r["sensitivities"]["fresh_cell"], b["rho"], 1e-6), (w.name, pname)
             assert b["rho"] >= b["rho_no_cell"], (w.name, pname)
             direct = io_bound.bound(W.products(m, c, k), c, k, m.measured.gates)["proved"]
@@ -209,8 +246,9 @@ def test_the_fresh_kind_is_formalisms_on_the_models_products(ref):
 def test_the_model_is_io_bounds_captured_steps():
     """The model's fresh products against te_core.io_bound's count on its captured s-shape steps (s-t20's shape, d 512,
     6 layers, V = 32,000, 256 sequences of 1,024 tokens) at the console's policy: dense Muon training's and the
-    rank-16 LoRA's counted gates the capture's to 0.1%, and io_bound's chain figures within 1.2% and 2.6%, all of the
-    gap |C|'s (the model's on the capture's |C| within 0.2%). It captures two steps of model.py (about 35 s): no
+    rank-16 LoRA's counted gates the capture's to 0.1%, and io_bound's chain figures within 1.2% and 2.6% (1.1% and
+    2.4% at io_bound's 3c2afa62aa: 4.87e6 and 5.89e4 under P-cell on the captures), all of the gap |C|'s (the model's
+    on the capture's |C| within 0.2%). It captures two steps of model.py (about 35 s): no
     cheaper test ties the model's products to a captured step's."""
     pytest.importorskip("torch")
     n, tokens = 35_658_240, 256 * 1024
@@ -237,8 +275,8 @@ def test_the_policy_is_the_consoles(ref):
     """The rows are reported at the console's policy only (the dashboard's 10:23Z ruling), te_core.policy's CONSOLE:
     one full session of the 45M reference, attention and the LM head included, 1.5739 times the attention-free c the
     console used before. A block holds 2,294 of the model's 45M training tokens, where the old c held 1,457.5 (the
-    pilot's records: 1,458 to 1,471) and TRN-40's 1,250 takes a training token as 4.1 session tokens' 2N FLOPs, 17%
-    above the counted 3.5. Only Fit's Δ threshold, k − s·τ, and the target read s: 28.8 kbit."""
+    pilot's records: 1,458 to 1,471), and an estimate of 1,250 takes a training token as 4.1 session tokens' 2N FLOPs,
+    17% above the counted 3.5. Only Fit's Δ threshold, k − s·τ, and the target read s: 28.8 kbit."""
     assert W.POLICIES == {"default": policy.CONSOLE}
     assert policy.CONSOLE == (policy.session_gates(W.REFERENCE_PARAMS, 4096, 1024), 65_536.0)
     assert ref["policies"]["default"]["c"] == policy.CONSOLE[0] and round(policy.CONSOLE[0] / OLD_C, 4) == 1.5739
@@ -286,6 +324,10 @@ def test_shape_and_traced_quantities():
     assert 2.319e11 * 0.99 < w < 2.341e11 * 1.01
     # a served sequence: the forward at the prompt and every generated token but the last, the head at the sampled
     assert W.served(256, 512) == (767, 512 / 767)
+    # a forward's weight reads are its weight GEMMs alone, also at bf16, where attention's MACs share their price
+    for precision in ("bf16", "fp4"):
+        tok = W.forward(sh, precision, 1024)
+        assert math.isclose(1 - tok.t, sh.params * W.per_mac(f"gemm/{precision}") / tok.alpha), precision
 
 
 def island(workload: str | None = None) -> list:
@@ -356,9 +398,10 @@ def test_the_island_rows_are_its_panels(ref):
 
 
 def test_checks_are_near_their_records(ref):
-    """Each kind's figure and sensitivity on each record beside the model's at its dials: io_bound's chain figure within
-    2.5% (the RL LoRA's w is 3% above its record's), update within 2% and reduction by the main part's blocks a step
-    within 2%. The target, reading B's token form, goes as 1/t on the traced dense rows (the model's t, the 45M
+    """Each kind's figure and sensitivity on each record beside the model's at its dials: the fresh-products term, which
+    gives both rows' rho, and its figure under P-cell within 2.5% (the RL LoRA's w is 3% above its record's), update
+    within 2% and reduction by the main part's blocks a step within 2%. The target, reading B's token form, goes as
+    1/t on the traced dense rows (the model's t, the 45M
     trace's, against each trace's) and within 2% on the island's LoRAs; the 4.1 LoRA pilot's is its a, te_core 4.1's
     residual stream (64 times the model's 128 bits), and up to 20% more by its front-loaded u_in; a generation row's is
     te_core's untraced stub's, so it isn't compared."""
@@ -367,9 +410,11 @@ def test_checks_are_near_their_records(ref):
         for cname, ck in w["checks"].items():
             x = ck["rho"]["default"]
             rec, mod = x["record"], x["model"]
-            assert rec["basis"] == mod["basis"] == "unmeasured" and rec["rho"] is mod["rho"] is None, cname
+            assert rec["basis"] == mod["basis"] == "fresh_products" and rec["partial"] and mod["partial"], cname
+            assert math.isclose(rec["rho"], mod["rho"], rel_tol=0.025), cname
+            assert math.isclose(rec["terms"]["fresh_products"], mod["terms"]["fresh_products"], rel_tol=0.025), cname
             s, t = rec["sensitivities"], mod["sensitivities"]
-            assert math.isclose(s["fresh_chain"], t["fresh_chain"], rel_tol=0.025), cname
+            assert math.isclose(s["fresh_cell"], t["fresh_cell"], rel_tol=0.025), cname
             assert math.isclose(s["update"], t["update"], rel_tol=0.02, abs_tol=1e-12), cname
             blocks = (max(rec["b"]) - 1) / (max(mod["b"]) - 1)
             assert math.isclose(s["reduction"], blocks * t["reduction"], rel_tol=0.02, abs_tol=1e-12), cname
@@ -441,14 +486,15 @@ def test_a_forward_escapes_where_its_layers_update_and_ids_fit(ref):
     ub = W.update_bits(m.measured, policy.CONSOLE[0])
     assert ub + 16 * 1024 <= k and all(f.counted(ub, k)[0] == 0 for f in m.fresh)
     assert not W.products(m, *policy.CONSOLE)
-    assert rhos(ref, "lora", "rank 1 on W_q, one layer")["sensitivities"]["fresh_chain"] == 0
+    assert rhos(ref, "lora", "rank 1 on W_q, one layer")["terms"]["fresh_products"] == 0
 
 
 def test_diloco_is_standard_training_until_a_phase_fits_a_block(ref):
     standard = rhos(ref, "standard", "default")
     for point in ("default", "1-bit syncs"):
         r = rhos(ref, "diloco", point)
-        assert math.isclose(r["sensitivities"]["fresh_chain"], standard["sensitivities"]["fresh_chain"], rel_tol=2e-3)
+        assert math.isclose(r["terms"]["fresh_products"], standard["terms"]["fresh_products"], rel_tol=2e-3)
+        assert math.isclose(r["rho"], standard["rho"], rel_tol=2e-3)
         assert math.isclose(r["target"]["rho"], standard["target"]["rho"], rel_tol=2e-3)
     # at 16 syncs of 1,024 bits a phase's code fits a block beside its tokens' ids: Fit holds, every product escapes
     corner = rhos(ref, "diloco", "Fit's corner")
@@ -457,14 +503,14 @@ def test_diloco_is_standard_training_until_a_phase_fits_a_block(ref):
     d = m.measured.decoder_gates
     assert corner["basis"] == "fit" and not corner["fit_fails"] and d < c
     assert math.isclose(corner["rho"], c / (c - d)) and 1.28 < corner["rho"] < 1.29
-    assert corner["sensitivities"]["fresh_chain"] == 0 and not corner["partial"]
+    assert corner["terms"]["fresh_products"] == corner["sensitivities"]["fresh_cell"] == 0 and not corner["partial"]
 
 
 def test_a_teacher_lowers_rho_by_the_students_share_and_not_the_blocks(ref):
     pts = ref["workloads"]["distill"]["points"]
     with_teacher, alone = pts["default"], pts["no teacher"]
     share = with_teacher["derived"]["student_share"]
-    fresh = [p["rho"]["default"]["sensitivities"]["fresh_chain"] for p in (with_teacher, alone)]
+    fresh = [p["rho"]["default"]["terms"]["fresh_products"] for p in (with_teacher, alone)]
     assert math.isclose(fresh[0] / fresh[1], share, rel_tol=1e-3)
     assert math.isclose(*(x * p["inputs"]["C_gates"] for x, p in zip(fresh, (with_teacher, alone))), rel_tol=1e-9)
 
