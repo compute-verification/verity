@@ -56,8 +56,10 @@ every subprotocol, remote's sampled proofs and PoUW alone. A piece the product d
 and prints a ``DROPPED`` line naming it.
 
 ``gate``: before serving with H1's coins from infra's gate (``--gate``, default ``H1_GATE``): refused while the key's lane
-(``--lane``) has a period open, which a reserve would join; prints one ``GATE`` line with the gate's latest pin and,
-with ``--main``, whether that pin is on the verifier's first-parent line of main (a session pinned off it is refused).
+(``--lane``) has a period open, which a reserve would join, and with ``--root`` (a window's run root a session of the run
+opens on, V3c's audit's) once an open in the ledger names that root, since the gate opens a root once, ever; prints one
+``GATE`` line with the gate's latest pin and, with ``--main``, whether that pin is on the verifier's first-parent line of
+main (a session pinned off it is refused).
 
 ``period open``: the period the served windows join, opened once serve-openai listens and before its first window
 reserves (a window opens at its first engine step): its circuit is the Program digest serve-openai declared and wrote
@@ -590,20 +592,27 @@ def _gate_out(gate: str, *words: str) -> bytes:
     return p.stdout
 
 
-def gate_ready(gate: str, lane: str, main: Path | None = None) -> tuple[bool, str]:
-    """Whether this run may reserve its windows' sessions at `gate` (the ``gate`` subcommand), and its ``GATE`` line."""
+def gate_ready(gate: str, lane: str, main: Path | None = None, root: str | None = None) -> tuple[bool, str]:
+    """Whether this run may reserve its windows' sessions at `gate` (the ``gate`` subcommand), and its ``GATE`` line; with
+    `root`, the run root a session of this run opens on, also refused once an open in the ledger names it: the gate opens
+    a root once, ever."""
+    from verity.core.protocols.sampled_proofs import challenger as CH
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
     ledger = _gate_out(gate, "ledger").decode().splitlines()
     pins = [json.loads(x) for x in _gate_out(gate, "pins").decode().splitlines() if x.strip()]
     pin, period = (pins[-1] if pins else {}), PHW.open_period(ledger, lane)
+    held = None if root is None else next((e["session"] for e in map(json.loads, filter(str.strip, ledger))
+                                           if e["kind"] == "open" and CH.root_of(e) == root.lower()), None)
     on = None if main is None else pin.get("commit") in main.read_text().split()
     where = "" if on is None else f", {'on' if on else 'NOT on'} the verifier's first-parent line of main"
-    line = (f"GATE {'refused' if period else 'ready'}: lane {lane}'s open period "
-            f"{period and period.get('period')}{' (a reserve would join it)' if period else ''}; the ledger's "
+    rooted = "" if root is None else (f"; root {root[:16]}… " + (f"already has its session {held} (one session a root, ever)"
+                                                                  if held else "has no session yet"))
+    line = (f"GATE {'refused' if period or held else 'ready'}: lane {lane}'s open period "
+            f"{period and period.get('period')}{' (a reserve would join it)' if period else ''}{rooted}; the ledger's "
             f"{len(ledger)} entries; pinned {str(pin.get('commit'))[:12]} (main {str(pin.get('main'))[:12]}, "
             f"{pin.get('pinned_utc')}){where}")
-    return period is None, line
+    return period is None and held is None, line
 
 
 def program(out: Path, model: str, rows: int, steps: int, like: Path | None = None,
@@ -1324,6 +1333,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--gate", default=os.environ.get("H1_GATE"))
     g.add_argument("--lane", default="vllm")
     g.add_argument("--main", type=Path, default=os.environ.get("MAIN_FILE") or None)
+    g.add_argument("--root", help="a window's run root (128 hex digits) a session of this run opens on")
     pe = sub.add_parser("period")
     pe.add_argument("verb", choices=("open", "served", "close"))
     pe.add_argument("serve_dir", type=Path)
@@ -1439,7 +1449,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("GATE refused: no gate command (--gate, H1_GATE)", flush=True)
             return 1
         try:
-            ok, line = gate_ready(a.gate, a.lane, a.main)
+            ok, line = gate_ready(a.gate, a.lane, a.main, a.root)
         except (OSError, RuntimeError, ValueError) as e:
             ok, line = False, f"GATE refused: {type(e).__name__}: {e}"[:800]
         print(line, flush=True)

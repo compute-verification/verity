@@ -1287,6 +1287,22 @@ def test_the_gate_is_refused_while_the_lane_has_a_period_open(tmp_path, monkeypa
     assert ok and line.startswith("GATE ready: lane vllm's open period None;") and "NOT on the verifier's" in line
 
 
+def test_the_gate_refuses_a_root_an_open_in_its_ledger_names(monkeypatch):
+    """``gate --root``: the gate opens a root once, ever, so a run root an open in the ledger names (v2's window root) is
+    refused before a session of the run reserves, and another root is ready; the lane's open period still refuses."""
+    opened = {"kind": "open", "session": "s1", "schema": "verity/challenger-auditor/v2", "body": {"window": {"root": "ab" * 64}}}
+    answers = {"ledger": [{"kind": "reserve", "session": "s1", "body": {"by": "vllm"}}, opened], "pins": []}
+    monkeypatch.setattr(S, "_gate_out", lambda gate, verb: "".join(json.dumps(e) + "\n" for e in answers[verb]).encode())
+    ok, line = S.gate_ready(GATE, "vllm", root="AB" * 64)
+    assert not ok and line.startswith("GATE refused: lane vllm's open period None; root ABABABABABABABAB… already has its "
+                                      "session s1 (one session a root, ever);")
+    ok, line = S.gate_ready(GATE, "vllm", root="cd" * 64)
+    assert ok and "; root cdcdcdcdcdcdcdcd… has no session yet;" in line
+    answers["ledger"].append({"kind": "period-open", "session": None, "body": {"period": "p1", "lane": "vllm"}})
+    ok, line = S.gate_ready(GATE, "vllm", root="cd" * 64)
+    assert not ok and line.startswith("GATE refused: lane vllm's open period p1 (a reserve would join it); root cdcd")
+
+
 FAKE_PROVE_PATH = '''import json, sys
 a = sys.argv[1:]
 assert a[0] == "window-circuit"
