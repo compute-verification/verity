@@ -64,9 +64,8 @@ theorem blobs_get_ok {bs : Array ByteArray} {dg w : String} {b : ByteArray}
     ∃ d, Flock.hexOf d = dg ∧ bs.find? (fun f => Flock.Sha512.hash f == d) = some b := by
   have hd : ∀ {x : ByteArray}, ¬((x.size != 64 || Flock.hexOf x != dg) = true) → Flock.hexOf x = dg := by
     intro x hx
-    first
-    | (simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not] at hx; exact hx.2)
-    | (simp at hx; exact hx.2)
+    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not] at hx
+    exact hx.2
   have hb : ∀ {x k b' : ByteArray},
       (bs.map fun f => ((Flock.Sha512.hash f, f) : ByteArray × ByteArray)).find? (fun e => e.1 == x) =
         some (k, b') → bs.find? (fun f => Flock.Sha512.hash f == x) = some b' := by
@@ -176,9 +175,8 @@ theorem publicHeld_ok {rec : Json} {b : ByteArray}
   dsimp only at h
   by_contra hc
   rw [Bool.not_eq_true] at hc
-  first
-  | (simp only [hc, Bool.not_false, ↓reduceIte] at h; exact absurd h (throw_ne_ok _ _))
-  | (simp [hc] at h <;> exact absurd h (throw_ne_ok _ _))
+  simp only [hc, Bool.not_false, ↓reduceIte] at h
+  exact absurd h (throw_ne_ok _ _)
 
 /-- **The header v2 reads**: `Flock.norm` of the parse of its header line. -/
 theorem headerOf_ok {b : ByteArray} {H : Json} (h : headerOf b = .ok H) :
@@ -217,7 +215,7 @@ theorem headerLine_of_findByte {b : ByteArray} {nl : ℕ} (h : Flock.findByte b 
       have h' : some i = some nl := h
       cases h'
       rfl
-    · simp only [List.forIn_cons, hi, ↓reduceIte, pure_bind] at h ⊢
+    · simp only [List.forIn_cons, hi] at h ⊢
       exact ih h
 
 private theorem getNat_ok {j : Json} {n : ℕ} (h : j.getNat? = .ok n) : j = .num ⟨Int.ofNat n, 0⟩ := by
@@ -379,12 +377,9 @@ theorem run_exchange (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c 
       ¬ ((CoinTape.run (V.game θ F c) σ y).params = θ ∧ (CoinTape.run (V.game θ F c) σ y).files = F) := by
     unfold Claims.Pr
     apply div_pos
-    · first
-      | (rw [Nat.cast_pos, Finset.card_pos]; exact ⟨x, by convert hmem⟩)
-      | exact Nat.cast_pos.2 (Finset.card_pos.2 ⟨x, by convert hmem⟩)
-    · first
-      | exact_mod_cast Fintype.card_pos
-      | exact_mod_cast Fintype.card_pos_iff.2 ⟨x⟩
+    · rw [Nat.cast_pos, Finset.card_pos]
+      exact ⟨x, by convert hmem⟩
+    · exact_mod_cast Fintype.card_pos
   exact absurd (ENNReal.ofReal_eq_zero.1 h0) (not_le.2 hpos)
 
 /-- `population_eq` on the tapes of the period's game. -/
