@@ -13,8 +13,10 @@ Sampled proofs is a subprotocol of both composite protocols. The remote protocol
 and the inference-only policy, and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols.
 In each, the composite's verifier runs `VStar.Recursive.Sampled`'s Lean check as a component, in the form its params
 name: the one-stage audit (`verity/sampled-proofs/one-stage/v1`) or the recursive audit
-(`verity/sampled-proofs/recursive/v1`, V*'s compiled check, which ends in the one-stage audit's live check on its
-verdict of record). The composite accepts only when every
+(`verity/sampled-proofs/recursive/v1`: the recursive session's inner coins held to the challenger's release log, every
+round its coin server recorded opened after what it recorded and every logged opening read
+(`VStar.Recursive.innerCoinsHeld`, `SampledProofs/ChallengerInnerTrees.lean`), then V*'s compiled check, which ends in
+the one-stage audit's live check on its verdict of record). The composite accepts only when every
 component accepts.
 
 ## Guarantee and assumptions
