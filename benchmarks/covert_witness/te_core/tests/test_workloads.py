@@ -1,16 +1,16 @@
 """te_core.workloads models each covert workload from its dials to the one bound's kinds and rho at the console's three
 policies: workloads.json (the console's tests read it) is the module's output; every row carries each kind's term,
-their max, the binding kind and what it rests on, and each input's source; the console's dial formula on a point's
-columns alone gives formalism.at's rho (the token kind with Fit) at every policy; the shapes, u(1), Delta, Delta_grad
-and a training token's gates are what the 45M pilot's traces and the standard-workloads island's distillation measure;
-the full-training records are within 1% of the model, the LoRA record above it by under 30% (the model's even u_in is
-A1''s conservative form; the trace's front-loads) and the island's student below it by its measured t, every other
-kind within 2% on each record; the fresh-products kind
-is the amortized Loomis-Whitney cap with its entry term, over exactly the products of two fresh operands; the
-reduction kind is a maximum, not 1 plus; and the readings the spec quotes hold: DiLoCo is standard training's bound
-until a phase and every sync fit a block, a teacher lowers rho by the student's share and leaves the blocks, RL's
-per-kind token bound is the largest, and a rank-1 LoRA whose update fits k but not Fit's reduction clause is bound by
-the reduction kind."""
+their max, the binding kind and its basis (what it rests on is the reference's `rests_on`), and each input's source;
+the token, reduction, update and decoding terms are te_core.formalism.bound's at reading B, and the console's dial
+formula on a point's columns alone gives its token kind (or Fit) at every policy; reading A holds no full-weight GEMM
+in a block; the shapes, u(1), Delta, Delta_grad, a and a training token's gates are what the 45M pilot's traces and
+the standard-workloads island's rows measure; on every record the fresh-products, reduction and update kinds are
+within 2% of the model's, and the token kind within 1% on the full-training records but for t (the island's dense
+rows) and a (the 4.1 LoRA pilot), within 2% on the island's LoRAs; the fresh-products kind is the amortized
+Loomis-Whitney cap with its entry term, over exactly the products of two fresh operands; the reduction kind is a
+maximum, not 1 plus; and the readings the spec quotes hold: DiLoCo is standard training's bound until a phase and every
+sync fit a block, a teacher lowers rho by the student's share and leaves the blocks, RL's per-kind token bound is the
+largest, and a rank-1 LoRA whose update fits k but not Fit's reduction clause is bound by the reduction kind."""
 import inspect
 import json
 import math
@@ -20,7 +20,7 @@ import pytest
 pytest.importorskip("matplotlib")
 
 from te_core import algorithm_policy as AP
-from te_core import panels
+from te_core import formalism, panels
 from te_core import workloads as W
 from te_core.gates import per_mac
 
@@ -56,40 +56,75 @@ def test_reference_json_is_current(ref):
     pinned = json.loads(W.REFERENCE.read_text())
     assert close(pinned, ref, 1e-9), ("te_core/workloads.json is stale: from benchmarks/covert_witness run "
                                       "python -m te_core.workloads --json te_core/workloads.json")
+    assert W.dumps(ref) + "\n" == W.REFERENCE.read_text()
 
 
 def test_every_row_carries_its_kinds_their_max_and_the_binding_kind(ref):
+    assert ref["kinds"] == list(W.KINDS) == ["fresh_products", *formalism.KINDS]
     for name, pname, p in points(ref):
         for q in POLICIES:
             r = p["rho"][q]
-            assert set(r["terms"]) <= set(W.KINDS) and "token" in r["terms"], (name, pname, q)
+            assert list(r["terms"]) == ref["kinds"], (name, pname, q)
             terms = {kind: math.inf if x is None else x for kind, x in r["terms"].items()}
             bound = max(1.0, *terms.values())
             assert (r["bound"] is None and math.isinf(bound)) or math.isclose(r["bound"], bound), (name, pname, q)
             binding = max(terms, key=terms.get) if bound > 1 else None
             assert r["binding_kind"] == binding, (name, pname, q)
+            assert r["basis"] in ref["rests_on"]
             if r["basis"] == "fit":
-                assert r["fit"] and not r["fit_fails"] and r["rests_on"] == W.FIT and bound <= r["rho"] * (1 + 1e-9)
+                assert r["fit"] and not r["fit_fails"] and bound <= r["rho"] * (1 + 1e-9)
             else:
                 assert r["rho"] == r["bound"] and r["basis"] == (binding or "none"), (name, pname, q)
-                if binding:
-                    assert r["rests_on"] == W.KINDS[binding]
-                else:
-                    assert "Fit fails" in r["rests_on"] and r["fit_fails"], (name, pname, q)
+                assert binding or r["fit_fails"], (name, pname, q)
 
 
-def test_page_rho_on_the_columns_is_at(ref):
+def test_the_kinds_are_te_cores(ref):
+    """One calculator: the token, reduction, update and decoding terms and te_core's rho are formalism.at's at reading
+    B on the model's inputs; only the fresh products' term is this module's."""
+    for w in W.WORKLOADS.values():
+        for pname, settings in w.points:
+            me = W.model(w.name, **settings).measured
+            for q, (c, k) in W.POLICIES.items():
+                v, r = formalism.at(me, c, k, "B"), rhos(ref, w.name, pname)[q]
+                for kind in formalism.KINDS:
+                    want = v["bound"]["terms"][kind]
+                    assert close(r["terms"][kind], None if math.isinf(want) else want, 1e-9), (w.name, pname, q, kind)
+                assert close(r["te_core"]["rho"], None if math.isinf(v["rho"]) else v["rho"], 1e-9)
+                assert r["unmeasured"] == v["bound"]["unmeasured"] == []
+
+
+def test_page_rho_on_the_columns_is_the_token_kind_or_fit(ref):
     for name, pname, p in points(ref):
         for q in POLICIES:
             c, k = W.POLICIES[q]
             rho, basis = AP.page_rho(p["inputs"], c, k)
-            want = p["rho"][q]["te_core"]
-            assert basis == want["basis"], (name, pname, q)
-            assert (math.isinf(rho) and want["rho"] is None) or math.isclose(rho, want["rho"], rel_tol=1e-5), \
-                (name, pname, q, rho, want["rho"])
-            token = p["rho"][q]["terms"]["token"]
-            if want["basis"] == "target" and token is not None:
-                assert math.isclose(max(1.0, token), want["rho"], rel_tol=1e-9), (name, pname, q)
+            r = p["rho"][q]
+            assert (basis == "fit") == (r["te_core"]["basis"] == "fit"), (name, pname, q)
+            want = r["te_core"]["rho"] if basis == "fit" else r["terms"]["token"]
+            assert (math.isinf(rho) and want is None) or math.isclose(rho, max(1.0, want), rel_tol=1e-5), \
+                (name, pname, q, rho, want)
+
+
+def test_reading_a_holds_no_full_weight_gemm(ref):
+    """Reading A's default packer holds whole traced ops: one reading k or more update bits leaves its term infinite,
+    which every full-weight workload's weight GEMMs do at every policy; a rank-1 LoRA's factors fit, and its term needs
+    a 4.4 trace; a record traced before 4.4 is refused."""
+    full = ({("standard", p) for p, _ in W.WORKLOADS["standard"].points}
+            | {("diloco", "default"), ("rl", "default"), ("inference", "bf16"), ("distill", "default")})
+    for name, pname, p in points(ref):
+        for q, (c, k) in W.POLICIES.items():
+            got = p["rho"][q]["token_A"]
+            assert got["verdict"] == ("infinite" if got["op_update_bits"] >= k else "unmodelled"), (name, pname, q)
+            if (name, pname) in full:
+                assert got["verdict"] == "infinite" and got["op_update_bits"] > 100 * k, (name, pname, q)
+    # the head's GEMM over the tied fp32 embedding, then an MLP matrix: 824 Mbit and 11.5 Mbit at the 45M reference
+    assert math.isclose(W.model("standard").op_update_bits, 32 * W.VOCAB * 512) and W.MLP * 16 * 512 ** 2 > 100 * 65_536
+    assert math.isclose(W.model("lora", rank=1, targets="q").op_update_bits, 16 * 512)
+    assert {v["token_A"]["verdict"] for v in rhos(ref, "lora", "rank 1 on W_q").values()} == {"unmodelled"}
+    for w in ref["workloads"].values():
+        for ck in w["checks"].values():
+            assert all(ck["rho"][q]["record"]["token_A"] == {"verdict": "refused"} for q in POLICIES)
+    assert set(ref["reading_a"]["verdicts"]) == {"infinite", "unmodelled", "refused"}
 
 
 def test_every_model_input_is_tagged_an_estimate(ref):
@@ -123,61 +158,98 @@ def test_dials_are_the_functions_parameters():
             assert set(settings) <= set(params), w.name
 
 
+def tail(points: str) -> float:
+    """A u profile's free share, where it leaves 0."""
+    return next(x for x, v in AP.profile(points) if v > 0)
+
+
 def test_checks_are_near_their_records(ref):
-    island = W.island_checks("distill")[0].name
+    """Every kind's term on each record beside the model's at its dials: the fresh products, reduction (by the main
+    part's blocks a step, b's ceiling) and update within 2%; the token kind within 1% on the pilot's full-training
+    records, by t on the island's dense rows (the model's, the 45M trace's, against each trace's: the token form goes
+    as 1/t), within 2% on the island's LoRAs (a measured), and on the 4.1 LoRA pilot by its a, te_core 4.1's
+    residual stream (64 times the model's 128 bits) and up to 20% more by its front-loaded u_in."""
+    checks = {ck.name: ck for w in W.WORKLOADS.values() for ck in w.checks}
+    assert len(checks) == 8
     for name, w in ref["workloads"].items():
         for cname, ck in w["checks"].items():
+            t = tail(checks[cname].columns["u_points"])
             for q in POLICIES:
-                record, model = ck["rho"][q]["record"], ck["rho"][q]["model"]
-                if name == "standard":
-                    assert math.isclose(model, record, rel_tol=0.01), (cname, q)
-                elif cname == island:
-                    # the model's t, the 45M trace's, against the student's measured 0.781: the token form goes as 1/t
-                    assert math.isclose(model / record, 0.780834 / W.T_DENSE, rel_tol=2e-3), (cname, q)
+                rec, mod = ck["rho"][q]["record"], ck["rho"][q]["model"]
+                assert rec["binding_kind"] == mod["binding_kind"] == "fresh_products", (cname, q)
+                for kind in ("fresh_products", "update"):
+                    assert math.isclose(rec["terms"][kind], mod["terms"][kind], rel_tol=0.02), (cname, q, kind)
+                blocks = (max(rec["b"]) - 1) / (max(mod["b"]) - 1)
+                assert math.isclose(rec["terms"]["reduction"], blocks * mod["terms"]["reduction"], rel_tol=0.02)
+                ratio = mod["terms"]["token"] / rec["terms"]["token"]
+                if cname.startswith("45M ref-optim"):
+                    assert math.isclose(ratio, 1, rel_tol=0.01), (cname, q)
+                elif name in ("standard", "diloco", "distill"):
+                    assert t > W.T_DENSE and math.isclose(ratio, t / W.T_DENSE, rel_tol=0.01), (cname, q)
+                elif "standard-workloads" in cname:
+                    assert math.isclose(ratio, 1, rel_tol=0.02), (cname, q)
                 else:
-                    assert 0.7 * record < model <= record, (cname, q)
-                kinds = ck["rho"][q]["kinds"]
-                assert kinds["record"]["binding_kind"] == kinds["model"]["binding_kind"] == "fresh_products"
-                for kind in ("fresh_products", "reduction", "update"):
-                    assert math.isclose(*(kinds[side]["terms"][kind] for side in ("record", "model")), rel_tol=0.02), \
-                        (cname, q, kind)
+                    assert 64 <= 1 / ratio <= 64 * 1.2, (cname, q)
 
 
 def test_the_model_is_calibrated_on_the_records():
-    pilot, student = W.dense(W.REFERENCE_PARAMS), W.dense(13_012_224, vocab=32_000, d_model=256)
+    pilot, st20 = W.dense(W.REFERENCE_PARAMS), W.dense(35_658_240, vocab=32_000)
+    student = W.dense(13_012_224, vocab=32_000, d_model=256)
     assert student.n_layer == 6 and student.tau == 15
-    # u(1): the matrices in bf16, the embedding and norms in fp32, exactly the pilot's and the island's student's
+    # u(1): the matrices in bf16, the embedding and norms in fp32, exactly the pilot's and the island's
     assert math.isclose(pilot.weight_bits("bf16"), 1_132_675_072, rel_tol=1e-12)
-    assert student.weight_bits("bf16") == 339_320_832
+    assert round(st20.weight_bits("bf16")) == 832_782_336 and student.weight_bits("bf16") == 339_320_832
     # Delta: theta' in fp32, the records' code less its header (1,440,996,608 and 416,431,792 bits)
     for sh, code in ((pilot, 1_440_996_608), (student, 416_431_792)):
         assert 0 < code - W.model("standard", n_params=sh.params, vocab=sh.vocab).measured.delta_bits < 50_000
-    # Delta_grad: the island's trace, 96 N_s, and its partial gradient 32 N_s (the gradient cut less the state)
+    # Delta_grad: the island's traces, 96 N for AdamW (the student), Muon's state on s-t20, every worker's in DiLoCo
     assert W.delta_grad(student, "adamw") == 1_249_173_504
-    (ck,) = W.island_checks("distill")
-    assert ck.menu["delta_g_bits"] == 32 * 13_012_224 == W.model("distill", **ck.dials).steps[0].delta_g
+    assert round(W.delta_grad(st20, "muon")) == 2_806_628_352 == 1_141_063_680 + 1_665_564_672
+    (dl,) = W.island_checks("diloco")
+    assert dl.dials["workers"] == 4 and round(W.model("diloco", **dl.dials).measured.parts[0].delta_grad_bits) \
+        == 13_692_764_160 == 4 * 96 * 35_658_240
+    # the gradient cut: each trace's Delta_grad less its state, 32 bits a trained value (every worker's in DiLoCo)
+    for w in ("standard", "diloco", "lora", "distill"):
+        for ck in W.island_checks(w):
+            (part,) = W.model(w, **ck.dials).measured.parts
+            assert math.isclose(ck.menu["grad_bits"], part.grad_bits, rel_tol=1e-9), ck.name
+            assert ck.menu["partial_bits"] == ck.menu["grad_bits"] / ck.dials.get("workers", 1)
+            assert math.isclose(ck.menu["partial_bits"], part.partial_bits, rel_tol=1e-9), ck.name
+    # a LoRA's a: its lowest adapted layer's q, k and v rank outputs in bf16, 768 bits at rank 16 (both island rows)
+    for ck in W.island_checks("lora"):
+        assert ck.columns["a_bits"] == 768 == W.model("lora", **ck.dials).measured.a_bits, ck.name
 
 
-def test_the_island_row_is_its_panels(ref):
-    (ck,) = W.island_checks("distill")
-    row = json.loads(W.RECORDS.read_text())["rows"][0]
-    # page_rho on the row's columns gives the island's own rho at the console default, our default policy
-    assert math.isclose(AP.page_rho(ck.columns, *W.CONSOLE)[0], row["rho_console"], rel_tol=1e-5)
-    assert ck.dials["vocab"] == 32_000 and ck.dials["student_d_model"] == 256
-    assert set(ck.dials) - {"vocab", "student_d_model"} == set(row["dials"])
-    got = ref["workloads"]["distill"]["checks"][ck.name]
-    assert all(v == "measured" for v in got["record_status"].values())
+def test_the_island_rows_are_its_panels(ref):
+    rows = {r["run"]: r for r in json.loads(W.RECORDS.read_text())["rows"]}
+    checks = [ck for w in ("standard", "diloco", "lora", "distill") for ck in W.island_checks(w)]
+    assert {ck.record.split("@")[0] for ck in checks} == set(rows) == {
+        W.ISLAND_STANDARD, W.ISLAND_DILOCO, W.ISLAND_LORA_ATTN, W.ISLAND_LORA_ALL, W.ISLAND_DISTILL}
+    for ck in checks:
+        row = rows[ck.record.split("@")[0]]
+        # page_rho on the row's columns gives the island's own rho at the console default, our default policy
+        assert math.isclose(AP.page_rho(ck.columns, *W.CONSOLE)[0], row["rho_console"], rel_tol=1e-5), ck.name
+        assert ck.dials["vocab"] == 32_000 and set(ck.dials) - {"vocab", "student_d_model", "workers"} == set(row["dials"])
+        assert ck.differs and ck.record == f"{row['run']}@{row['checkpoint']}"
+        got = next(c for w in ref["workloads"].values() for name, c in w["checks"].items() if name == ck.name)
+        assert got["record_status"]["grad_bits"].startswith("measured: ")
+        assert got["record_status"]["partial_bits"].startswith("assumed: ")
+        measured = {key for key, v in got["model_status"].items() if v.startswith("measured: ")}
+        assert {"tau_bits", "a_bits", "delta_bits", "delta_t_bits", "d_gates"} <= measured, ck.name
+        assert all(got["model_status"][key].startswith("measured: " + ck.record) for key in measured)
+    distill = next(ck for ck in checks if ck.record.startswith(W.ISLAND_DISTILL))
+    assert distill.dials["student_d_model"] == 256
+    got = ref["workloads"]["distill"]["checks"][distill.name]
     measured = {key for key, v in got["model_status"].items() if v.startswith("measured: ")}
     assert measured == {"C_gates", "w_gates", "tau_bits", "a_bits", "delta_bits", "delta_t_bits", "d_gates",
                         "delta_grad_bits", "w_fit_gates", "alpha_ratio"}
-    assert all(got["model_status"][key].startswith("measured: " + ck.record) for key in measured)
 
 
 def test_every_input_says_where_it_comes_from(ref):
     for name, pname, p in points(ref):
         assert set(p["input_status"]) == set(W.KEYS), (name, pname)
         assert all(v.startswith(("measured: ", "assumed: ")) for v in p["input_status"].values()), (name, pname)
-    assert set(ref["menu_status"]) == {"fresh", "widths", "steps", "delta_g_bits"}
+    assert set(ref["menu_status"]) == {"fresh", "widths", "parts", "grad_bits", "partial_bits", "op_update_bits"}
     # the default dense point is the 45M pilot's AdamW record wherever the record measures the model's value
     st = ref["workloads"]["standard"]["points"]["default"]["input_status"]
     measured = {key for key, v in st.items() if v.startswith("measured: ")}
@@ -216,7 +288,8 @@ def test_dense_training_is_fresh_bound_at_its_charged_share(ref):
     for q in POLICIES:
         c, k = W.POLICIES[q]
         r = rhos(ref, "standard", "default")[q]
-        assert r["binding_kind"] == "fresh_products" and r["rests_on"] == W.KINDS["fresh_products"]
+        assert r["binding_kind"] == r["basis"] == "fresh_products"
+        assert ref["rests_on"]["fresh_products"].startswith("no A1: the amortized Loomis-Whitney cap")
         unit = c / (W.fresh_cap(k, W.WIDTHS["gemm/bf16"]) * per_mac("gemm/bf16"))
         assert math.isclose(r["terms"]["fresh_products"], unit * r["fresh_charged_share"], rel_tol=1e-9)
         assert 0.9 < r["fresh_charged_share"] < r["fresh_share"] < 0.99
@@ -258,13 +331,19 @@ def test_a_forward_escapes_where_its_layers_update_and_ids_fit():
 
 
 def test_the_reduction_kind_is_a_maximum(ref):
+    """te_core 4.4's reduction and update kinds: (c/|C|)·steps·(b − 1)·partial/k and (c/|C|)·steps·γ/k, b a step's
+    token blocks; a dense step's partial and cut are 32 N (the update kind no longer counts Δ_t)."""
     m = W.model("standard")
     c, k = W.CONSOLE
-    (step,) = m.steps
-    b = step.b(c)
-    want = c / m.measured.gates * step.count * (b - 1) * step.delta_g / k
-    assert math.isclose(rhos(ref, "standard", "default")["default"]["terms"]["reduction"], want, rel_tol=1e-12)
-    assert math.isclose(b, step.tokens * m.derived["w_gates"] / c)
+    (part,) = m.measured.parts
+    b = math.ceil(part.token_gates / part.steps / c)
+    assert b == 45 and math.isclose(b, 65_536 * m.derived["w_gates"] / c, rel_tol=0.01)
+    assert part.partial_bits == part.grad_bits == 32 * W.REFERENCE_PARAMS
+    terms = rhos(ref, "standard", "default")["default"]["terms"]
+    assert math.isclose(terms["reduction"], c / m.measured.gates * part.steps * (b - 1) * part.partial_bits / k,
+                        rel_tol=1e-12)
+    assert math.isclose(terms["update"], c / m.measured.gates * part.steps * part.grad_bits / k, rel_tol=1e-12)
+    assert math.isclose(terms["reduction"] / terms["update"], b - 1)
 
 
 def test_diloco_is_standard_training_until_a_phase_fits_a_block(ref):
@@ -296,17 +375,18 @@ def test_rl_bounds_that_count_each_kind_exceed_te_cores(ref):
     p = ref["workloads"]["rl"]["points"]["default"]
     for q in POLICIES:
         s = p["sensitivity"][q]
-        assert p["rho"][q]["te_core"]["rho"] < s["tokens_worth"] < s["per_kind"]
+        assert p["rho"][q]["terms"]["token"] < s["tokens_worth"] < s["per_kind"]
 
 
 def test_a_lora_whose_update_fits_k_but_not_fits_reduction_clause_is_reduction_bound(ref):
     served = rhos(ref, "lora", "rank 1 on W_q")["served"]
     m = W.model("lora", rank=1, targets="q")
     c, k = W.POLICIES["served"]
-    assert m.measured.delta_bits + 16 * 1024 <= k < 2 * m.measured.parts[0].delta_grad_bits
-    assert "fresh_products" not in served["terms"] and served["fit_fails"] == ["reduction", "update"]
-    (step,) = m.steps
-    want = c / m.measured.gates * step.count * (step.b(c) - 1) * step.delta_g / k
+    (part,) = m.measured.parts
+    assert m.measured.delta_bits + 16 * 1024 <= k < 2 * part.delta_grad_bits
+    assert served["terms"]["fresh_products"] == 0 and served["fit_fails"] == ["reduction", "update"]
+    b = math.ceil(part.token_gates / part.steps / c)
+    want = c / m.measured.gates * part.steps * (b - 1) * part.partial_bits / k
     assert served["binding_kind"] == "reduction" and math.isclose(served["rho"], want, rel_tol=1e-12) and want > 1
     assert rhos(ref, "lora", "rank 1 on W_q")["default"]["binding_kind"] == "fresh_products"
     one = rhos(ref, "lora", "rank 1 on W_q, one layer")["default"]
