@@ -81,15 +81,16 @@ def test_every_rho_is_rho_fit_where_fit_holds_else_the_max_over_measured_kinds_n
 
 def test_a_dense_step_and_a_lora_step_have_a_finite_token_term_at_the_console_default(built):
     """Every block tensor changes, so a run block serving a token at a late position reads the earlier positions' K/V
-    or computes their state, and at the default k = 80,000 bits no run block holds it; a tile of the step's products
-    still does, so the token term is finite (4.4's runs alone gave ∞, the full-token-state overclaim), above 1, and
-    binds: ρ is it. With k = 8 Mbit (dense) or 800 kbit (LoRA, whose update is 10 times smaller) every gate is in some
-    block at gates' cap: the term is the affected share. Fresh products are unmeasured, and nearly every token gate
-    is in a tile."""
+    or computes their state, and at the default k = 80,000 bits no run block holds it; a block's best union of runs
+    and tiles still holds a few percent of c, so the token term is finite (4.4's runs alone gave ∞, the
+    full-token-state overclaim), above 1, and binds: ρ is it, below the per-gate sensitivity, which isn't closed under
+    unions. With k = 8 Mbit (dense) or 800 kbit (LoRA, whose update is 10 times smaller) a block holds c: the term is
+    the affected share. Fresh products are unmeasured, and nearly every token gate is in a tile."""
     default = rho_vectors.CELLS[0]
     for case, k in (("dense", 8_000_000), ("lora", 800_000)):
         a = by(built, case, *default)
         assert 1 < a["terms"]["token"] < math.inf and a["binding"] == "token" and a["rho"] == a["terms"]["token"]
+        assert a["terms"]["token"] < a["sensitivities"]["per_gate"]
         assert a["terms"]["fresh_products"] is None and "fresh_products" in a["unmeasured"]
         assert a["inputs"]["token"]["unplaced"] < 0.01
         at = by(built, case, default[0], k)
@@ -98,8 +99,8 @@ def test_a_dense_step_and_a_lora_step_have_a_finite_token_term_at_the_console_de
 
 def test_the_grown_adapter_is_bounded_by_its_tiles_and_by_gates_with_its_live_update_code(built):
     """wildcard's grown adapter (a = 32 only with w_down's live update bits read): its work at the grown block reads
-    w_down's whole bf16 cast, 196,608 bits > k, so with Δ the trace's cut no run block holds it, and its tiles bound
-    it, above 1. An E of the live entries alone (26,624 bits) lets a block read the code instead, and the token kind
+    w_down's whole bf16 cast, 196,608 bits > k, so with Δ the trace's cut no run block holds it, and a block's tiles
+    bound it, above 1. An E of the live entries alone (26,624 bits) lets a block read the code instead, and the token kind
     is then the affected share (gates bind), so ρ is 1: the reduction sensitivity (2,048 tokens fill two blocks, one
     1.18 Mbit partial read at k a block) is above 9 but holds only for partitions split by tokens, so it isn't the
     bound."""
