@@ -23,8 +23,8 @@ The sampled audit (`Proofs.Flock.SampledGeneric`) runs a proof system's session 
   Its cost is a declared budget `t` of SHA-512 calls per trial, as Flock's sampled instance declares `t'` per run: the
   collision premise at the trials' finders (`Trials.CR`) is read at that budget.
 * `Flock.Guarantees.GenericSampledKSClaims` (**B1**): a claims verifier that is knowledge sound at every sampled
-  statement, `Pr[run = acc ∧ ¬R(x, E(x))] ≤ err(x, P)` on every prover `P`, and whose witnesses open the registration
-  and make their proof blocks correct (`JointExtractor.Sound`), gives the sampled audit's bound
+  statement, `Pr[run = acc ∧ ¬R(x, E(x))] ≤ err(x, P)` on every prover `P`, and whose witnesses open the
+  registration and make their proof blocks correct (`JointExtractor.Sound`), gives the sampled audit's bound
   `Pr[accept] ≤ P_a(F) + E_S max_{u ∈ S} err + ε_bind`, by `GenericSampledKSJoint`.
 * `Flock.Guarantees.RecursiveSampledKS`: the recursive audit, B1 at a compiled verifier with `err = Comp.err` where
   L1's hypotheses hold at every sampled statement.
@@ -70,8 +70,8 @@ noncomputable def jointOf (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W) (E 
   Rel S R _ w := Rl (stmt S R) w
   reads := reads
   opens := opens
-  G S R := .send (Prover Unit) fun P => .coin (Fin (V.k (stmt S R)) → Coin) fun r₀ => .coin (E.C (stmt S R)) fun c =>
-    .ret (decide ((run H P V (stmt S R) () r₀).out = .acc),
+  G S R := .send (Prover Unit) fun P => .coin (Fin (V.k (stmt S R)) → Coin) fun r₀ =>
+    .coin (E.C (stmt S R)) fun c => .ret (decide ((run H P V (stmt S R) () r₀).out = .acc),
       fun u => if u ∈ S then (E.eval H P (stmt S R) () r₀ c).1 else none)
   strat _ _ τ := ⟨proverOf τ, fun _ _ => PUnit.unit⟩
   cost S R _ := t S R
@@ -89,13 +89,15 @@ relation `Rl` and extractor `E` whose error at each sampled statement is at most
 statements `stmt` and witnesses' openings (`reads`, `opens`) that are sound for the proof blocks
 (`JointExtractor.Sound`), and nonnegative budget `t`: at every audit prover `σ` whose link finders meet ecr/sha-512
 (`Trials.CR`),
-$$\Pr[\text{accept}] \le P_a(F) + \mathbb E_S \max_{u \in S} \mathrm{err}(\mathrm{stmt}(S, R), P_S) + \varepsilon_{\rm bind},$$
+$$\Pr[\text{accept}] \le P_a(F) + \mathbb E_S \max_{u \in S} \mathrm{err}(\mathrm{stmt}(S, R), P_S)
++ \varepsilon_{\rm bind},$$
 with `R` the registration, `P_S` the claims prover `σ` plays on the sample `S`, `F` the incorrect set of the plurality
 of the trials and `ε_bind` their binding term. -/
 def GenericSampledKSClaims : Prop :=
-  ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W)
-    (E : Claims.Extractor Coin W V) (err : Msg → Prover Unit → ℝ) (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh)
-    (L : Law n) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop) (stmt : Finset (Fin n) → Reg → Msg)
+  ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg)
+    (V : Verifier Coin) (Rl : Rel W) (E : Claims.Extractor Coin W V) (err : Claims.Msg → Prover Unit → ℝ) (n : ℕ) (Reg Dh : Type)
+    (Hc : List UInt8 → Dh) (L : Law n) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
+    (stmt : Finset (Fin n) → Reg → Claims.Msg)
     (reads : Fin n → Finset B.Pos) (opens : Finset (Fin n) → Reg → Fin n → W → B.Pos → B.Opening)
     (t : Finset (Fin n) → Reg → ℝ) (M : ℕ),
     (∀ S R (P : Prover Unit), PrBad H V Rl E (stmt S R) P ≤ err (stmt S R) P) →
@@ -116,9 +118,10 @@ $$\Pr[\text{accept}] \le P_a(F) + \mathbb E_S \max_{u \in S} \mathrm{Comp.err}(\
 \varepsilon_{\rm bind},$$
 at the inner loop bounds `mI` and the link's `Mo`. It follows from L1 (`GenericRecursiveKS`) and B1. -/
 def RecursiveSampledKS : Prop :=
-  ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) (I : Proto Coin W) (Sv : Server)
-    (K : Claims.RecGeneric.Comp Coin) (mI : Fin I.nT → ℕ) (Mo : ℕ) (n : ℕ) (Reg Dh : Type) (Hc : List UInt8 → Dh)
-    (L : Law n) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop) (stmt : Finset (Fin n) → Reg → Msg)
+  ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (I : Proto Coin W)
+    (Sv : Server) (K : Claims.RecGeneric.Comp Coin) (mI : Fin I.nT → ℕ) (Mo : ℕ) (n : ℕ) (Reg Dh : Type)
+    (Hc : List UInt8 → Dh) (L : Law n) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
+    (stmt : Finset (Fin n) → Reg → Claims.Msg)
     (reads : Fin n → Finset B.Pos) (opens : Finset (Fin n) → Reg → Fin n → W → B.Pos → B.Opening)
     (t : Finset (Fin n) → Reg → ℝ) (M : ℕ),
     I.WF → I.KSAbortLin H → I.LastCoinFree H →

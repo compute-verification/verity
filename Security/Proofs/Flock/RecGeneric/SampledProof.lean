@@ -8,8 +8,8 @@ public import Proofs.Flock.Claims.Bridge.Transport
 # B1's proof
 
 `jointOf` is judged (`jointOf_judged`: its verdict is the judged run's, and `E`'s coins are unread there) and knowledge
-sound at `err` (`jointOf_knowledgeSound`: acceptance with a failed extraction is `PrBad`'s event at the claims prover the
-strategy plays). With these, `GenericSampledKSJoint` gives B1 (`Flock.SecurityProofs.GenericSampledKSClaims`). The
+sound at `err` (`jointOf_knowledgeSound`: acceptance with a failed extraction is `PrBad`'s event at the claims prover
+the strategy plays). With these, `GenericSampledKSJoint` gives B1 (`Flock.SecurityProofs.GenericSampledKSClaims`). The
 recursive audit is B1 at `Comp.err` once L1 holds (`recursiveSampledKS_of_L1`).
 -/
 
