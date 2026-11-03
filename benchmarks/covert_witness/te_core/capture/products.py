@@ -6,8 +6,11 @@ width each operand is passed at (`io_bound._passed_width`), the bits a block pay
 `io_bound._Rates` states), the shortest chain that makes an operand entry whole by itself (`io_bound._chain_ks`'s
 rule), whether both operands are one array, its partial sums' width (`io_bound.ACC_BITS`), its price, and what the
 step's whole-making system (`io_bound.chain_classes`) reads of it: the classes whose outputs reach its operands (`fed`)
-and their paid factor (`P`, `_reach`). The block's `p_match` lists the ops that break P-match. Identical rows of the
-step (a layer's GEMMs repeated over the layers) are one row with their count.
+and their paid factor (`P`, `_reach`), and whether each operand reads a gather's rows (an embedding's, the same for
+every token that shares an id) before any op makes them token-specific (`gathered`, `_gathered`), which the bound drops
+(te_core.formalism). The block's `p_match` lists the ops that break P-match. Identical rows of the step (a layer's GEMMs
+repeated over the layers) are one row with their count, so `gathered` puts layer 0's products of the embedding's rows in
+rows of their own.
 
 A recorded program reads θ′ through storage versions: a weight's view in the measured step reads the version the
 previous step's optimizer wrote, not the attribute's entry value. So the rates and chains here are keyed by the
@@ -28,7 +31,7 @@ from te_core.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _F
 
 #: the capture's version of these rows (te_core's VERSION when they were last changed), so a trace that has them is
 #: distinguishable from one traced before them
-CAPTURE = "4.12"
+CAPTURE = "4.12.1"
 ORDER = "unknown"
 
 
@@ -268,6 +271,74 @@ def _reach(vs: _Values, made: dict, made_by: dict, rate: dict) -> tuple[dict, di
     return reach, paid, broken
 
 
+#: ops that take a token-indexed value's entries from a table that isn't token-indexed (a positional table's rows, as
+#: RoPE's cos and sin are sliced to the context), that number positions, or that mask by them
+_TAKE = {"slice", "select", "narrow", "index", "index_select", "take", "gather", "embedding", "as_strided"}
+_POSITIONAL = {"arange", "tril", "triu", "tril_", "triu_"}
+
+
+def _gathered(vs: _Values, made: dict) -> set:
+    """The token-indexed values that carry a gather's rows (an embedding's), the same for every token that shares an
+    index, before any op makes them token-specific. A gather by token data (an index that doesn't depend on θ′) of a
+    table that isn't token-indexed starts them, keyed by its index, and so does the index itself; an op carries its
+    arguments' rows on where its token-indexed arguments are of one key, or the same for every token (a broadcast, a
+    constant, a value that isn't token-indexed). Its output is token-specific where one is already, where two keys
+    meet (a token's id and its position), where it takes rows of a table that isn't token-indexed by anything but a
+    gathered index (RoPE's cos and sin sliced to the context), numbers or masks positions (`_POSITIONAL`, the causal
+    mask's tril), or is random (a dropout mask). Any other op carries the rows on, so a product is never kept for want
+    of a reason to drop it."""
+    from te_core.capture.structure import _RANDOM
+
+    flow = vs.flow
+    tok = flow.tok
+    key: dict = {}
+    state: dict = {}
+    for n in vs.nodes:
+        if n.op == "call_function" and vs.measured(n) and _pk(n.target) in _GATHERS and len(n.args) > 1 and \
+                hasattr(n.args[1], "op") and not vs.reads_affected(n, n.args[1]) and \
+                not any(tok[x] for x in _reads(vs, n, n.args[0])) and any(tok[v] for v in made.get(n, [])):
+            key[n] = ("g", frozenset(_reads(vs, n, n.args[1])))
+            state.update(dict.fromkeys(key[n][1], key[n]))
+    made_by = {v: n for n, xs in made.items() for v in xs}
+    for v in range(len(flow.preds)):
+        if v not in state and _carried(vs, v, made_by):
+            state[v] = "x" if tok[v] else "u"
+    for n in vs.nodes:
+        if n.op != "call_function" or not vs.measured(n) or n.target is operator.getitem:
+            continue
+        outs = [v for v in made.get(n, []) if v not in state]
+        if not outs:
+            continue
+        name = _pk(n.target)
+        args = io_bound._tensor_args(n)
+        table = name in _TAKE and bool(args) and args[0] is n.args[0] and \
+            not any(tok[x] for x in _reads(vs, n, n.args[0]))
+        got = {state.get(x, "u") for a in (args[1:] if table else args) for x in _reads(vs, n, a) if tok[x]} - {"u"}
+        if n in key:
+            out = key[n]
+        elif name in _RANDOM or name in _POSITIONAL or "x" in got or len(got) > 1 or table and not got:
+            out = "x"
+        else:
+            out = next(iter(got), "u")
+        for v in outs:
+            state[v] = out if tok[v] else "u"
+    return {v for v, s in state.items() if isinstance(s, tuple) and tok[v]}
+
+
+def gathered_gemms(graph) -> set[tuple[str, str]]:
+    """The (node, part) of each GEMM of the measured step with an operand that reads a gather's rows (`_gathered`)."""
+    vs = _Values(graph)
+    gathered = _gathered(vs, _made(vs))
+    by_name = {n.name: n for n in vs.nodes}
+    out = set()
+    for m in graph.matmuls:
+        n = by_name[m.node]
+        g = next(x for x in _gemms(n) if x.part == m.part)
+        if any(x in gathered for a in (g.operands[0], g.operands[1]) for x in _reads(vs, n, a)):
+            out.add((m.node, m.part))
+    return out
+
+
 def _gemm_rate(vs: _Values, n, g, R, k: float) -> float:
     """io_bound's `_Rates._gemm` with each operand's rate as the node read it."""
     A, B = g.operands[0], g.operands[1]
@@ -293,14 +364,17 @@ def rows(graph, k: float = io_bound.CONSOLE[1], gemm_dtype: str | None = "bfloat
     """The measured step's products (module docstring) at policy k: {"capture", "k", "order", "tokens", "gates",
     "rows", "p_match"}, each row
     {"count", "phase", "op", "dims", "token_dims", "macs", "outputs", "affected", "widths", "rates", "paid", "self",
-    "b_c", "k_whole", "gates_per_mac", "cell_gates", "fed", "P"} (MACs and outputs over its count; `k_whole` None: no
-    chain makes an operand entry whole by itself; `fed` the [K, A] pairs of the classes reaching its operands), `gates`
+    "b_c", "k_whole", "gates_per_mac", "cell_gates", "fed", "P", "gathered"} (MACs and outputs over its count;
+    `k_whole` None: no chain makes an operand entry whole by itself; `fed` the [K, A] pairs of the classes reaching its
+    operands; `gathered` whether each operand reads a gather's rows before any op makes them token-specific), `gates`
     the step's |C| at io_bound's prices (`io_bound.step_gates`) for a step captured by capture_step or capture_fn, else
     None (the circuit's count is the trace's), and `p_match` [{"op", "fan_out", "count"}] the ops that break P-match
     (`_reach`)."""
     vs = _Values(graph)
     rate, chain, made_by = _rates_and_chains(vs, k)
-    reach, paid, broken = _reach(vs, _made(vs), made_by, rate)
+    made = _made(vs)
+    reach, paid, broken = _reach(vs, made, made_by, rate)
+    gathered = _gathered(vs, made)
     by_name = {n.name: n for n in vs.nodes}
     merged: dict = {}
     for m in graph.matmuls:
@@ -330,7 +404,8 @@ def rows(graph, k: float = io_bound.CONSOLE[1], gemm_dtype: str | None = "bfloat
                "paid": [io_bound.is_paid(r, w) for r, w in zip(rates, widths)],
                "self": io_bound._root(A, scale=True) is io_bound._root(B, scale=True), "b_c": io_bound.ACC_BITS,
                "k_whole": whole if math.isfinite(whole) else None, "gates_per_mac": gpm, "cell_gates": cell,
-               "fed": [[K, round(w, 9)] for K, w in sorted(fed.items())], "P": round(P, 9)}
+               "fed": [[K, round(w, 9)] for K, w in sorted(fed.items())], "P": round(P, 9),
+               "gathered": [any(x in gathered for x in _reads(vs, n, a)) for a in (A, B)]}
         key = repr(sorted(row.items()))
         if key in merged:
             merged[key]["count"] += 1

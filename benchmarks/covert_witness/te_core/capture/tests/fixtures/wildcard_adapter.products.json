@@ -1,5 +1,5 @@
 {
- "capture": "4.12",
+ "capture": "4.12.1",
  "gates": 30480169048499.0,
  "k": 65536.0,
  "order": "unknown",
@@ -13,7 +13,7 @@
    ],
    "b_c": 32,
    "cell_gates": 23682.0,
-   "count": 12,
+   "count": 3,
    "dims": {
     "batch": 1,
     "k": 64,
@@ -22,6 +22,10 @@
    },
    "fed": [],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    true,
+    false
+   ],
    "k_whole": null,
    "macs": 8388608,
    "op": "mm",
@@ -61,6 +65,10 @@
    },
    "fed": [],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 134217728,
    "op": "bmm",
@@ -92,7 +100,7 @@
    ],
    "b_c": 32,
    "cell_gates": 23682.0,
-   "count": 3,
+   "count": 1,
    "dims": {
     "batch": 4,
     "k": 1024,
@@ -101,6 +109,10 @@
    },
    "fed": [],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    true
+   ],
    "k_whole": null,
    "macs": 134217728,
    "op": "bmm",
@@ -132,6 +144,49 @@
    ],
    "b_c": 32,
    "cell_gates": 23682.0,
+   "count": 9,
+   "dims": {
+    "batch": 1,
+    "k": 64,
+    "m": 2048,
+    "n": 64
+   },
+   "fed": [],
+   "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
+   "k_whole": null,
+   "macs": 8388608,
+   "op": "mm",
+   "outputs": 131072,
+   "paid": [
+    false,
+    false
+   ],
+   "phase": "forward",
+   "rates": [
+    0.0,
+    0.0
+   ],
+   "self": false,
+   "token_dims": [
+    "m"
+   ],
+   "widths": [
+    16,
+    16
+   ]
+  },
+  {
+   "P": 1.0,
+   "affected": [
+    false,
+    false
+   ],
+   "b_c": 32,
+   "cell_gates": 23682.0,
    "count": 4,
    "dims": {
     "batch": 1,
@@ -141,6 +196,10 @@
    },
    "fed": [],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 25165824,
    "op": "mm",
@@ -180,6 +239,10 @@
    },
    "fed": [],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 25165824,
    "op": "mm",
@@ -205,6 +268,50 @@
   {
    "P": 1.0,
    "affected": [
+    false,
+    false
+   ],
+   "b_c": 32,
+   "cell_gates": 23682.0,
+   "count": 2,
+   "dims": {
+    "batch": 4,
+    "k": 1024,
+    "m": 1024,
+    "n": 32
+   },
+   "fed": [],
+   "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
+   "k_whole": null,
+   "macs": 134217728,
+   "op": "bmm",
+   "outputs": 131072,
+   "paid": [
+    false,
+    false
+   ],
+   "phase": "forward",
+   "rates": [
+    0.0,
+    0.0
+   ],
+   "self": false,
+   "token_dims": [
+    "k",
+    "m"
+   ],
+   "widths": [
+    32,
+    32
+   ]
+  },
+  {
+   "P": 1.0,
+   "affected": [
     true,
     true
    ],
@@ -219,6 +326,10 @@
    },
    "fed": [],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 25165824,
    "op": "mm",
@@ -258,6 +369,10 @@
    },
    "fed": [],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 25165824,
    "op": "mm",
@@ -302,6 +417,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 192.0,
    "macs": 6593445888,
    "op": "mm",
@@ -346,6 +465,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 6593445888,
    "op": "mm",
@@ -390,6 +513,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 25165824,
    "op": "mm",
@@ -434,6 +561,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": null,
    "macs": 25165824,
    "op": "mm",
@@ -478,6 +609,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 25165824,
    "op": "mm",
@@ -522,6 +657,10 @@
     ]
    ],
    "gates_per_mac": 1480.125,
+   "gathered": [
+    false,
+    false
+   ],
    "k_whole": 64.0,
    "macs": 25165824,
    "op": "mm",

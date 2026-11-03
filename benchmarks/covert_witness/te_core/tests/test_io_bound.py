@@ -505,7 +505,8 @@ def test_the_45m_steps_whole_making_system():
     """The 45M dense step (the fixture's products, batch 2 at ctx 256): attention's 64-long chains sit below every
     counted operand, so its system's least fixed point gives whole_chain 1.0887 (the one-class rule at its least k_whole,
     256, gave 1.033) and 163,708 without P-cell, 2,870,251 with it. Its LoRA r16 step has no fixed point: void. P-match
-    fails only at the embedding's gather, whose rows the system prices at their width."""
+    holds on both, as te_core.capture.products' check has it: the embedding's gather reads a table no chain reaches, so
+    it hands on no entry made whole, and its rows' repeats are the bound's to drop (`gathered`)."""
     from te_core import formalism
 
     rows = json.loads(FIXTURE_45M.read_text())
@@ -517,7 +518,7 @@ def test_the_45m_steps_whole_making_system():
                                             "b_c": 32, "gates_per_mac": 1.0, "cell_gates": 1.0}], 1.0)
     assert w["mu"] is None and math.isinf(w["whole_chain"]) and p["rho"] is None and p["rho_no_cell"] is None
     c, k = policy.CONSOLE
-    assert iob.p_match(iob.capture("dense", "s", 32000, 2, 256, 1), k) == ["embedding"]
+    assert iob.p_match(iob.capture("dense", "s", 32000, 2, 256, 1), k) == []
     assert iob.p_match(iob.capture("lora", "s", 32000, 2, 256, 1), k) == []
 
 
