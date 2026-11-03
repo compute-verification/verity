@@ -53,7 +53,7 @@ other quantity bits.
   token's inference block to the start's server block, and its reference shapes at their exact (c, k): the inference
   block, the reference policy (c = 4096 w, k = 10 kB) and the server block.
 - **Fit** (checked): for training, three kinds of block, compute Δ + sτ ≤ k, reduction 2Δ_grad ≤ k and update
-  application Δ_t + Δ_grad ≤ k (a part with no token blocks has only the compute kind) and d < c; where every part fits,
+  application Δ_t + Δ_grad ≤ k (a part with no token blocks has only the compute kind), and d < c; where all hold,
   ρ = c/(c − d).
 - **Slowdown** (the counting lemma at A \ R, a target until Lean proves it): its token form ρ ≥ σ(1 − x₀)·s/s\*
   (with the largest per-token affected count where token blocks vary), at the assumptions' upper bounds

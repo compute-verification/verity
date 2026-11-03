@@ -207,7 +207,7 @@ def formalism_rows(rows: list[dict], shapes: dict[str, dict], ladder=None) -> tu
     `cells`: the grid's and the reference shapes'), whether Fit holds there for the training (`fit`) and Slowdown's terms
     there (`terms`: x0, s* and the attack side's); and each row left out, with why (`no-shape`; `pilot-start`, a record
     on data v3 from a start whose shape has another tokenizer, as the pilot's FineWeb-Edu starts do, since v3's branch
-    points are v3's starts; `over-cap`; `unmeasured`; or `refused: ` and te_core.formalism's reason,
+    points are v3's starts; `over-cap`, `unmeasured`, or `refused: ` and te_core.formalism's reason,
     `formalism.refusal`)."""
     out, skipped, cells = [], {}, {}
     for r in rows:

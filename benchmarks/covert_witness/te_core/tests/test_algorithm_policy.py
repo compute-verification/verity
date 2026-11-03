@@ -29,13 +29,12 @@ L0 = {"s1": 1.2, "s2": 1.3}
 
 
 def block(gates, delta, dgrad, delta_t=None, tail=0.0, sigma=0.8) -> dict:
-    """One part whose token blocks are `W` gates each, labelled as te_core.rescore labels the analysis's blocks, with a
-    measured decoder of 0 gates (E stores θ' directly)."""
+    """One part whose token blocks are `W` gates each, labelled as te_core.rescore labels the analysis's blocks."""
     u, u_in = formalism.tail(delta, tail)
     return {"parts": [{"gates": gates, "tokens": sigma * gates / W, "token_gates": sigma * gates,
                        "affected_gates": 0.5 * sigma * gates, "steps": 1, "delta_grad_bits": dgrad}],
             "tau_bits": 16, "a_bits": 8192, "delta_bits": delta, "delta_t_bits": delta_t, "u1_bits": delta,
-            "u": [list(x) for x in u], "u_in": [list(x) for x in u_in], "tail_share": tail, "decoder_gates": 0.0,
+            "u": [list(x) for x in u], "u_in": [list(x) for x in u_in], "tail_share": tail,
             "labels": rescore.LABELS | (rescore.TAIL if tail else rescore.EVEN)}
 
 
@@ -46,7 +45,7 @@ def ledger_rows(runs=RUNS) -> list[dict]:
         for step, gates, bpb in cps:
             out.append({"id": f"{run}-{step}", "run_id": run, "checkpoint_step": step, "start": start,
                         "start_bpb": L0[start], "val_bpb": bpb, "direction": direction, "mechanism": mechanism,
-                        "family": family, "measurement_commit": "pin", "output": {"e_bytes": delta / 8},
+                        "family": family, "measurement_commit": "pin", "output": {"e_bytes": delta / 8, "rebuild_macs": 0},
                         "written_ts": len(out), "formalism": block(gates, delta, dgrad, delta_t, tail)})
     return out
 
@@ -65,30 +64,19 @@ def run(tmp_path, monkeypatch, runs=RUNS, *extra, index=None) -> tuple[int, dict
                   "console": json.loads((out / "console" / f"{AP.NAME}.json").read_text())}
 
 
-def cap(points: list, top: float) -> list:
-    """A piecewise-linear profile at most `top`, with the points where it crosses `top`."""
-    out = []
-    for (xa, ua), (xb, ub) in zip(points, points[1:]):
-        out.append((xa, min(ua, top)))
-        if (ua - top) * (ub - top) < 0:
-            out.append((xa + (xb - xa) * (top - ua) / (ub - ua), top))
-    return out + [(points[-1][0], min(points[-1][1], top))]
-
-
 def dial(d: dict, c: float, k: float) -> tuple[float, str]:
     """The training notes' draft formula for ρ on a row's columns alone, with te_core 4.x's per-part Fit (w_fit_gates)
-    and ᾱ/α_max (alpha_ratio) where the row has them, written apart from te_core.formalism: Fit for the training where
-    the decoder is measured and smaller than c, else Slowdown's bound from u and u_in's points (capped at Δ where Δ
-    counts)."""
+    and ᾱ/α_max (alpha_ratio) where the row has them, written apart from te_core.formalism: Fit for the training, else
+    Slowdown's bound from u and u_in's points."""
     s, dg = c / d["w_gates"], d["delta_grad_bits"]
     s_fit = c / d.get("w_fit_gates", d["w_gates"])
-    counts = d["d_gates"] is not None and d["d_gates"] < c and d["delta_bits"] is not None
+    counts = d["d_gates"] is not None and d["d_gates"] < c
     if counts and d["delta_bits"] + s_fit * d["tau_bits"] <= k and dg is not None and 2 * dg <= k \
             and d["delta_t_bits"] + dg <= k:
         return c / (c - d["d_gates"]), "fit"
     u, u_in = AP.profile(d["u_points"]), AP.profile(d["u_in_points"])
     if counts:
-        u, u_in = cap(u, d["delta_bits"]), cap(u_in, d["delta_bits"])
+        u, u_in = formalism.capped(u, d["delta_bits"]), formalism.capped(u_in, d["delta_bits"])
     x0 = 0.0
     for (xa, ua), (xb, ub) in zip(u_in, u_in[1:]):
         if ub <= k:
@@ -154,12 +142,12 @@ def test_the_dial_formula_on_a_rows_columns_is_te_cores(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("u1, dgrad, delta_t, tail, decoder", [
     (1e9, 3e9, None, 0.0, 0.0), (1e9, 3e9, None, 0.3, 0.0), (1e3, 3e4, None, 0.0, 0.0), (1e3, 3e4, 6e4, 0.0, 0.0),
-    (2e4, 1e4, 3e4, 0.05, 1e9), (5e5, None, None, 0.2, 0.0), (5e4, 2e4, None, 0.0, 0.0), (1e3, 3e4, None, 0.0, None),
-    (5e4, 2e4, None, 0.3, None), (5e4, 2e4, None, 0.3, 1e13), (1e3, 3e4, None, 0.0, 1e13)])
+    (2e4, 1e4, 3e4, 0.05, 1e9), (5e5, None, None, 0.2, 0.0), (5e4, 2e4, None, 0.0, 0.0), (1e3, 3e4, None, 0.3, None),
+    (2e4, 1e4, None, 0.3, 1e13)])
 def test_te_core_at_is_the_dial_formula(u1, dgrad, delta_t, tail, decoder):
     """Over decades of c and k, te_core.formalism.at's rho and basis are the draft note's formula on the inputs this
-    panel publishes for the record (te_core's ρ is the score; the dial reruns it in the page): with d measured, d
-    unmeasured (None: no Fit, Δ never counts) and d at least c at the smaller c (Δ counts only beyond it)."""
+    panel publishes for the record (te_core's ρ is the score; the dial reruns it in the page), with d = 0, d below
+    some c and above others, and d unmeasured (None: no block fits)."""
     m = formalism.from_json(block(1e15, u1, dgrad, delta_t, tail) | {"decoder_gates": decoder, "labels": {}})
     d = dict(zip(AP.INPUTS, AP.inputs(m, policy.w_fwd(SHAPE))))
     for c in (1e10, 1e12, 1e14, 1e16):

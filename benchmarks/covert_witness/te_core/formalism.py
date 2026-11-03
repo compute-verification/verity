@@ -81,7 +81,7 @@ carried state, θ' in full. A run record may also give its own block, {"parts": 
 "u_in", "u1_bits", "tail_share", "delta_bits", "delta_t_bits", "decoder_gates", "labels"}, which `of_record` passes
 through field by field.
 
-**The decoder** (`decoder`; seed-mezo's 04:15Z finding): d is the block's `decoder_gates` where it gives one,
+**The decoder** (`decoder`; seed-mezo's 04:15Z finding of 3 Nov): d is the block's `decoder_gates` where it gives one,
 else the gates the record's program reports for the checkpoint's E (`output.decoder_gates`, ingest's from the
 submission's `notes.decoder`), else the witness's: the harness's decoder for E, `prepare.rebuild_macs(θ, E)` fp32
 multiply-adds (`output.rebuild_macs`) at F32Fma_v4's gates each. d is 0 only where no decoder exists (E stores θ'

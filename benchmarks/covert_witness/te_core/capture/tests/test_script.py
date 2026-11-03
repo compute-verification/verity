@@ -60,12 +60,14 @@ def test_a_sign_update_with_error_feedback_cuts_at_its_bits(starts):
     assert g.cut_bits == VALUES + 3 * 32 and sorted(b for _, b in g.cut) == [32] * 3 + [H * H, V * H, V * H]
 
 
-def test_a_mezo_update_depends_on_its_losses_through_a_float(starts):
+@pytest.mark.parametrize("update", ["mezo", "mezo-quant"])
+def test_a_mezo_update_depends_on_its_losses_through_a_float(starts, update):
     """The update is z · lr · float(L₊ − L₋): every forward GEMM of both perturbed passes is updated, and the cut is the
-    one fp32 difference."""
-    g = recorded(starts, "--update", "mezo")
+    one fp32 difference; so it is with the coefficient quantized through a tensor (``mezo-quant``, as the seed
+    island's `prepare.quantize_coefficient` does), which decides nothing and cuts at the fp16 value."""
+    g = recorded(starts, "--update", update)
     assert fwd_roles(g) == ["updated"] * 4 and g.updated_macs() == 2 * T * FWD
-    assert g.cut_bits == 32
+    assert g.cut_bits == (16 if update == "mezo-quant" else 32)
     assert g.formalism["data_dependent"] == [] and g.formalism["carried_scalars"] == []
 
 

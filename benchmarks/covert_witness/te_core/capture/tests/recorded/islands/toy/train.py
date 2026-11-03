@@ -7,8 +7,8 @@ warmup that ends by halving ``fc``, a plan read off EVAL_CTX. ``--freeze NAME`` 
 ``--micro N`` accumulates AdamW's gradient over N slices of the batch; ``--sampled-head`` scores only the head's rows
 of the batch's distinct targets (a sampled softmax over ``unique(y)``). The MeZO variants read the estimate back as a
 Python float and clip it with min/max (``mezo-clip``), branch on a loss comparison (``mezo-branch``), clip it as a tensor
-(``mezo-clamp``), or scale it by an EMA of its square kept as a Python float (``mezo-ema``) or a 0-dim tensor
-(``mezo-ema-tensor``). ``--session`` plans the run and prints each step's `current_step()` and `progress_bucket()`."""
+(``mezo-clamp``), scale it by an EMA of its square kept as a Python float (``mezo-ema``) or a 0-dim tensor
+(``mezo-ema-tensor``), or round it to fp16 through a tensor (``mezo-quant``). ``--session`` plans the run and prints each step's `current_step()` and `progress_bucket()`."""
 from __future__ import annotations
 
 import argparse
@@ -24,7 +24,7 @@ import prepare
 from te_core import hooks
 
 LR, EPS, CLIP = 1e-3, 1e-3, 1e-4
-MEZO = ["mezo", "mezo-clip", "mezo-branch", "mezo-clamp", "mezo-ema", "mezo-ema-tensor"]
+MEZO = ["mezo", "mezo-clip", "mezo-branch", "mezo-clamp", "mezo-ema", "mezo-ema-tensor", "mezo-quant"]
 
 
 def main() -> int:
@@ -101,6 +101,8 @@ def main() -> int:
                     elif a.update == "mezo-ema":
                         ema_float[0] = 0.9 * ema_float[0] + 0.1 * c * c
                         c = c / math.sqrt(ema_float[0] + 1)
+                    elif a.update == "mezo-quant":
+                        c = float(torch.tensor(c, dtype=torch.float16).float())
                 for n, p in P.items():
                     p.sub_(z[n] * (LR * c))
             return P
