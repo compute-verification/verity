@@ -517,17 +517,14 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
           "uniform draws the tape models", "Firewall OS source", "standard"),
     # the training formalism v2's assumptions (Security/Definitions/Nci/Assumptions/Formalism.lean): A1 is
-    # `Nci.Formalism.Assumptions.CutCost`, A1′ `Nci.Formalism.Assumptions.InputCost`, A2
-    # `Nci.Formalism.Assumptions.EfficiencyFloor`
+    # `Nci.Formalism.Assumptions.CutCost`, A2 `Nci.Formalism.Assumptions.EfficiencyFloor`
     Entry("training-cut-cost", "assumption",
           "A1, cut cost: every inference block I of the trained circuit (at most c gates, at most k bits beyond θ) reads "
-          "at least u(max_T x_T(I)) + a·m(I) computed bits |in(I) \\ in(C)|, u the update profile and a the cut cost; "
-          "refuted by exhibiting an inference block that violates it", "A1 cut cost", "conjectured"),
-    Entry("training-input-cost", "assumption",
-          "A1′, update cost from the inputs: every inference block I that computes a token T from its inputs, doing the "
-          "share x_T(I) of T's affected work, reads at least u_in(x_T(I)) bits |in(I) \\ θ|, u_in the update profile "
-          "from the inputs; refuted by exhibiting an inference block that violates it", "A1′ update cost from the inputs",
-          "conjectured"),
+          "at least u_I + Σ_T a_T(e_T(I)) bits |in(I) \\ θ|, e_T(I) where I's work on token T begins, a_T(e) the bits "
+          "of T's computed state there (the earlier tokens' keys and values that the work reads and doesn't compute "
+          "among them) and u_I the update bits I's work reads, counted once; its values are set only by checked witness "
+          "blocks, and it says no block beats the best witness; refuted by exhibiting an inference block that violates "
+          "it", "A1 cut cost", "conjectured"),
     Entry("training-efficiency-floor", "assumption",
           "A2, efficiency floor: no run of the methods considered whose total update stays within a given bin of Δ "
           "reaches the target loss ℓ* for less than p·H(ℓ*), H(ℓ*) the least compute of any of them to reach it; "

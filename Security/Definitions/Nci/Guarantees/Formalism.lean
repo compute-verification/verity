@@ -8,36 +8,32 @@ The theorems of Daniel's training formalism v2 (`Definitions.Nci.Formalism`), §
 `Nci.Formalism.reconstruction` and `Nci.Formalism.reads_split` in `Security/Proofs/Nci/Formalism/Reconstruction.lean`.
 
 A lower bound on `ρ` is stated, as each is proved, for every partition `𝓘` of `C` into inference blocks:
-`X ≤ |𝓘| c / |C|` for each is `X ≤ ρ` (`Nci.Formalism.le_slowdown_iff`). Every `≈` and `≳` of v2 is an exact bound
-here, its factors explicit, and the claim reads the upper bounds A1 and A1′ give, never best-known values:
+`X ≤ |𝓘| c / |C|` for each is `X ≤ ρ` (`Nci.Formalism.le_slowdown_iff`). The slowdown is one counting bound over kinds
+of work, its factors explicit, and it reads the upper bounds A1 gives, never best-known values:
 
-* **The counting lemma** (`Counting`, no assumptions): for any set of gates `S`,
-  `ρ ≥ (|S| / |C|) / (max_I |I ∩ S| / c)`. **Slowdown** (`Slowdown`) is it at `S = A \ R`;
-* **the token form** (`TokenForm`), identical token blocks: `ρ ≥ σ (1 - x₀) s / s*`, `x₀` any bound on the reachable
-  shares. Identical is what the bound reads of them, the same `α > 0` affected gates each. Varying token blocks
-  (`TokenFormVarying`): `ρ ≥ (1 - x₀) |A ∩ ⋃ 𝒯| c / (|C| α_max s*)`, the largest affected count `α_max` in place of a
-  common one; at identical disjoint token blocks `|A ∩ ⋃ 𝒯| / α_max` is their number, and `σ s ≤ |𝒯| c / |C|`;
-* **from A1** (`CapacityBound`): `a s* ≤ M` for any `M ≥ max_x x (k - u(x))`, v2's `s* ≤ max_x x (k - u(x)) / a` with
-  no division by `a = 0`;
-* **from A1′** (`ReachableShareBound`): every reachable share is at most `D_T(ξ)`, for any `ξ ≥ max {x : u_in(x) ≤ k}`,
-  `D_T` the token's dependency profile. v2's `x₀ ≤ max {x : u_in(x) ≤ k}` is its case `D_T(ξ) ≤ ξ`, which holds when a
-  token's affected gates are a chain, and fails for a token of two independent halves: a block computes each half from
-  its inputs, and `R` holds the first share `ξ` of both;
-* **the claim** (`SlowdownClaim`), under A1 and A1′, identical token blocks: `ρ ≥ σ (1 - x₀) s a / M`, for any
-  `x₀ ≥ D_T(ξ)`. Evenly spread, `u = u_in = x u(1)` with `u(1) > 0` (`SlowdownEven`):
-  `ρ ≥ 4 σ (1 - x₀) s a u(1) / k²`, for any `x₀ ≥ D_T(k / u(1))`, v2's `4 σ s a u(1) / k²` with the factor `1 - x₀`,
-  near `1` when `u(1) ≫ k`. Frozen layers above changed ones (`SlowdownFrozen`), `u` above `k` beyond the frozen share
-  `t`: `ρ ≥ σ (1 - x₀) s a / (t k)`, v2's `σ s a / (t k)` with the factor `1 - x₀`, near `1` when `u_in` jumps at once;
+* **The counting lemma over kinds** (`Counting`, no assumption): for kinds `K` of work `B_K ⊆ C`, each with a cap `cap_K`
+  on the gates of `B_K` an inference block holds (`Caps`), `ρ ≥ max_K (|B_K| / |C|) / (cap_K / c)`. It reads nothing of
+  the circuit beyond the caps. te_core's kinds are the unreachable token work, gradient reductions, update application
+  and decoding; the token kind's cap is a theorem here, and the others' caps are premises. The bound is a maximum: kinds
+  whose work shares blocks are not added, which would need a joint cap, `Σ_K |I ∩ B_K| / cap_K ≤ 1` for every block;
+* **the token kind's cap from A1** (`TokenCap`): under A1, an inference block holds at most `cap` gates of a set `X` of
+  token gates, for any `cap` that bounds the token work within A1's budget (`TokenCapAt`): a block with update reads `u`
+  whose work on the tokens begins at the entries `e_T` holds at most the token work reachable from them, and
+  `u + Σ_T a_T(e_T) ≤ k`. Its clean form (`TokenCapClean`): with at most `r(ν)` gates of token work a bit of state,
+  `cap = max_ν (k - ν) r(ν)`, the bound `(k - u) max (W / a)`;
+* **Slowdown** (`Slowdown`), the one bound: under A1,
+  `ρ ≥ max((|X| / |C|) / (cap_X / c), max_K (|B_K| / |C|) / (cap_K / c))`, the counting lemma over the kinds with the
+  token kind's cap from A1;
 * **Fit**: a partition whose every block holds at least `c - d` gates and reads within `k` gives `ρ ≤ c / (c - d)`.
   Running `θ'` (`FitServing`), session blocks with `Δ + s τ ≤ k`; honest serving, `Δ = 0` and no decoder, has exactly
   `ρ = 1`, one block per session (`FitHonestServing`). Training (`FitTraining`), compute blocks with `Δ + s τ ≤ k`,
   reduction blocks with `2 Δ_grad ≤ k` and update application blocks with `Δ + Δ_grad ≤ k`. Fit counts the blocks'
   gates in `C`: `c / (c - d)` is `ρ` against a circuit whose blocks each leave `d` of their `c` gates to a decoder;
-* **Security** (`Security`), under A1, A1′ and A2: a run of the methods considered that reaches `ℓ*` through a partition
-  into inference blocks that fit in `N` periods of `n` blocks has `N n c ≥ ρ̲ p H(ℓ*)`, `ρ̲` the claim's bound for it
-  and `p` A2's floor: reaching `ℓ*` covertly costs at least `ρ̲ p H(ℓ*)`, with at most `n c` available per period.
+* **Security** (`Security`), under A1 and A2: a run of the methods considered that reaches `ℓ*` through a partition
+  into inference blocks that fit in `N` periods of `n` blocks has `N n c ≥ ρ̲ p H(ℓ*)`, `ρ̲` Slowdown's bound for it and
+  `p` A2's floor: reaching `ℓ*` covertly costs at least `ρ̲ p H(ℓ*)`, with at most `n c` available per period.
 
-The bounds on `ρ`, the claim's cases, Fit's bounds and Security each have an honest and a nontrivial lemma
+The counting lemma, Slowdown, Fit's bounds and Security each have an honest and a nontrivial lemma
 (`Definitions.Nci.Guarantees.Formalism.Witnesses`).
 -/
 
@@ -48,73 +44,38 @@ open Verity (Declaration Partition)
 open Nci.Formalism Nci.Formalism.Assumptions
 open scoped NNReal ENNReal
 
-/-- **The counting lemma**: for any set of gates `S`, every partition `𝓘` into inference blocks has
-`|𝓘| c / |C| ≥ (|S| / |C|) / (max_I |I ∩ S| / c)`. -/
+/-- **The counting lemma over kinds**: for kinds `K` of work `B_K ⊆ C`, each with a cap `cap_K` on the gates of `B_K`
+an inference block holds, every partition `𝓘` into inference blocks has
+`|𝓘| c / |C| ≥ max_K (|B_K| / |C|) / (cap_K / c)`. -/
 def Counting : Prop :=
-  ∀ (d : Declaration) (c k : ℕ) (S : Finset (Fin d.D.N)) (B : ℕ) (P : Partition d.D B), GateSet d.D S →
-    P.IsCK d c k →
-    ((S.card : ℝ≥0∞) / (d.D.computed.card : ℝ≥0∞)) / ((maxInBlock d c k S : ℝ≥0∞) / (c : ℝ≥0∞)) ≤
-      partitionSlowdown d B c
+  ∀ (d : Declaration) (c k : ℕ) (κ : Type) (B : κ → Finset (Fin d.D.N)) (cap : κ → ℝ≥0) (m : ℕ) (P : Partition d.D m),
+    Caps d c k B cap → P.IsCK d c k → (⨆ K, kindBound d c (B K) (cap K)) ≤ partitionSlowdown d m c
 
-/-- **Slowdown**: the counting lemma at `S = A \ R`, the affected gates no inference block reaches from its inputs. -/
+/-- **The token kind's cap from A1**: under A1, every inference block holds at most `cap` gates of `X`, for any `cap`
+that bounds the token work within A1's budget. -/
+def TokenCap : Prop :=
+  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
+    (e : Finset (Fin d.D.N) → L → E) (a : L → E → ℝ≥0) (u : Finset (Fin d.D.N) → ℝ≥0) (X : Finset (Fin d.D.N))
+    (cap : ℝ≥0),
+    CutCost d c k e a u → A.TokenCapAt c k e a u X cap → ∀ I, InferenceBlock d c k I → ((I ∩ X).card : ℝ≥0) ≤ cap
+
+/-- **The token cap's clean form**: with at most `r(ν)` gates of token work a bit of state, `max_ν (k - ν) r(ν)` bounds
+the token work within A1's budget, the bound `(k - u) max (W / a)`. -/
+def TokenCapClean : Prop :=
+  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
+    (e : Finset (Fin d.D.N) → L → E) (a : L → E → ℝ≥0) (u : Finset (Fin d.D.N) → ℝ≥0) (X : Finset (Fin d.D.N))
+    (r : ℝ≥0 → ℝ≥0) (M : ℝ≥0),
+    A.WorkPerBit c k e a u X r → PeakAtMost k r M → A.TokenCapAt c k e a u X M
+
+/-- **Slowdown**, the one bound: under A1, for kinds `K` of work with caps `cap_K` and a set `X` of token gates with a
+cap `cap_X` within A1's budget, every partition `𝓘` into inference blocks has
+`|𝓘| c / |C| ≥ max((|X| / |C|) / (cap_X / c), max_K (|B_K| / |C|) / (cap_K / c))`. -/
 def Slowdown : Prop :=
-  ∀ (d : Declaration) (L : Type) (A : Annotation d L) (c k B : ℕ) (P : Partition d.D B), P.IsCK d c k →
-    (((A.affected \ A.reachable c k).card : ℝ≥0∞) / (d.D.computed.card : ℝ≥0∞)) /
-      ((maxInBlock d c k (A.affected \ A.reachable c k) : ℝ≥0∞) / (c : ℝ≥0∞)) ≤ partitionSlowdown d B c
-
-/-- **The token form**, identical token blocks: `ρ ≥ σ (1 - x₀) s / s*`, for any `x₀` at least every reachable share. -/
-def TokenForm : Prop :=
-  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k α : ℕ) (x₀ : ℝ≥0) (B : ℕ)
-    (P : Partition d.D B), A.Identical α → A.ReachableAtMost c k x₀ → P.IsCK d c k →
-    ((A.tokenShare * (1 - x₀) * A.tokensPerBlock c : ℝ≥0) : ℝ≥0∞) / (A.unreachableCapacity c k : ℝ≥0∞) ≤
-      partitionSlowdown d B c
-
-/-- **The token form, varying token blocks**: `ρ ≥ (1 - x₀) |A ∩ ⋃ 𝒯| c / (|C| α_max s*)`, `α_max = max_T |T ∩ A|`. -/
-def TokenFormVarying : Prop :=
-  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (x₀ : ℝ≥0) (B : ℕ) (P : Partition d.D B),
-    A.ReachableAtMost c k x₀ → P.IsCK d c k →
-    (((1 - x₀) * (A.affected ∩ A.tokenGates).card * c : ℝ≥0) : ℝ≥0∞) /
-      ((d.D.computed.card * A.maxAffected * A.unreachableCapacity c k : ℝ≥0) : ℝ≥0∞) ≤ partitionSlowdown d B c
-
-/-- **`s*` from A1**: `a s* ≤ M`, for any `M ≥ max_x x (k - u(x))`. -/
-def CapacityBound : Prop :=
-  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (u : ℝ≥0 → ℝ≥0) (a M : ℝ≥0),
-    CutCost d A c k u a → PeakBound u k M → a * A.unreachableCapacity c k ≤ M
-
-/-- **The reachable share from A1′**: every token's reachable share is at most its dependency profile at `ξ`, for any
-`ξ ≥ max {x : u_in(x) ≤ k}`. -/
-def ReachableShareBound : Prop :=
-  ∀ (d : Declaration) (L : Type) (A : Annotation d L) (c k : ℕ) (u_in : ℝ≥0 → ℝ≥0) (ξ : ℝ≥0),
-    A.Valid → InputCost d A c k u_in → ReachLimit u_in k ξ → ∀ T, A.reachableShare c k T ≤ A.dependencyProfile T ξ
-
-/-- **The claim**: under A1 and A1′, identical token blocks, `ρ ≥ σ (1 - x₀) s a / M`, for any
-`M ≥ max_x x (k - u(x))`, `ξ ≥ max {x : u_in(x) ≤ k}` and `x₀` at least every token's dependency profile at `ξ`. -/
-def SlowdownClaim : Prop :=
-  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k α : ℕ) (u u_in : ℝ≥0 → ℝ≥0) (a M ξ x₀ : ℝ≥0)
-    (B : ℕ) (P : Partition d.D B),
-    A.Valid → A.Identical α → CutCost d A c k u a → PeakBound u k M → InputCost d A c k u_in → ReachLimit u_in k ξ →
-    A.ProfileAtMost ξ x₀ → P.IsCK d c k →
-    ((A.tokenShare * (1 - x₀) * A.tokensPerBlock c * a : ℝ≥0) : ℝ≥0∞) / (M : ℝ≥0∞) ≤ partitionSlowdown d B c
-
-/-- **The claim, evenly spread update** `u = u_in = x u(1)`, `u(1) > 0`: `ρ ≥ 4 σ (1 - x₀) s a u(1) / k²`, for any `x₀`
-at least every token's dependency profile at `k / u(1)`. -/
-def SlowdownEven : Prop :=
-  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k α : ℕ) (u₁ a x₀ : ℝ≥0) (B : ℕ)
-    (P : Partition d.D B),
-    A.Valid → A.Identical α → CutCost d A c k (fun x => x * u₁) a → InputCost d A c k (fun x => x * u₁) → 0 < u₁ →
-    A.ProfileAtMost ((k : ℝ≥0) / u₁) x₀ → P.IsCK d c k →
-    ((4 * A.tokenShare * (1 - x₀) * A.tokensPerBlock c * a * u₁ : ℝ≥0) : ℝ≥0∞) / (((k : ℝ≥0) ^ 2 : ℝ≥0) : ℝ≥0∞) ≤
-      partitionSlowdown d B c
-
-/-- **The claim, frozen layers above changed ones**, `u` above `k` beyond the frozen share `t`:
-`ρ ≥ σ (1 - x₀) s a / (t k)`. -/
-def SlowdownFrozen : Prop :=
-  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k α : ℕ) (u u_in : ℝ≥0 → ℝ≥0) (a t ξ x₀ : ℝ≥0)
-    (B : ℕ) (P : Partition d.D B),
-    A.Valid → A.Identical α → CutCost d A c k u a → FrozenShare u k t → InputCost d A c k u_in →
-    ReachLimit u_in k ξ → A.ProfileAtMost ξ x₀ → P.IsCK d c k →
-    ((A.tokenShare * (1 - x₀) * A.tokensPerBlock c * a : ℝ≥0) : ℝ≥0∞) / ((t * k : ℝ≥0) : ℝ≥0∞) ≤
-      partitionSlowdown d B c
+  ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
+    (e : Finset (Fin d.D.N) → L → E) (a : L → E → ℝ≥0) (u : Finset (Fin d.D.N) → ℝ≥0) (X : Finset (Fin d.D.N))
+    (capX : ℝ≥0) (κ : Type) (B : κ → Finset (Fin d.D.N)) (cap : κ → ℝ≥0) (m : ℕ) (P : Partition d.D m),
+    A.Valid → CutCost d c k e a u → A.TokenCapAt c k e a u X capX → Caps d c k B cap → P.IsCK d c k →
+    max (kindBound d c X capX) (⨆ K, kindBound d c (B K) (cap K)) ≤ partitionSlowdown d m c
 
 /-- **Fit, running `θ'`**: session blocks of at least `c - d` gates that read within `k`, `Δ + s τ ≤ k`, give
 `ρ ≤ c / (c - d)`. -/
@@ -135,16 +96,17 @@ def FitTraining : Prop :=
     TrainingBlocks d P c dg Δ Δgrad s τ → TrainingFits Δ Δgrad s τ k →
     slowdown d c k ≤ (c : ℝ≥0∞) / ((c - dg : ℕ) : ℝ≥0∞)
 
-/-- **Security**: under A1, A1′ and A2, a run of `methods` whose update stays within `D` bits and that reaches `ℓ*`
-through a partition into inference blocks that fit in `N` periods of `n` blocks has `N n c ≥ ρ̲ p H(ℓ*)`, `ρ̲` the
-claim's bound. -/
+/-- **Security**: under A1 and A2, a run of `methods` whose update stays within `D` bits and that reaches `ℓ*` through a
+partition into inference blocks that fit in `N` periods of `n` blocks has `N n c ≥ ρ̲ p H(ℓ*)`, `ρ̲` Slowdown's bound. -/
 def Security : Prop :=
   ∀ (methods : Set Run) (dec : Verity.Decoder (List Bool)) (ℓ : List Bool → ℝ) (ℓstar : ℝ) (D : ℕ∞) (p : ℝ) (r : Run)
-    (c k n N α : ℕ) (u u_in : ℝ≥0 → ℝ≥0) (a M ξ x₀ : ℝ≥0) (B : ℕ) (P : Partition r.d.D B),
+    (c k n N : ℕ) (E : Type) (e : Finset (Fin r.d.D.N) → Fin r.numTokens → E) (a : Fin r.numTokens → E → ℝ≥0)
+    (u : Finset (Fin r.d.D.N) → ℝ≥0) (X : Finset (Fin r.d.D.N)) (capX : ℝ≥0) (κ : Type)
+    (B : κ → Finset (Fin r.d.D.N)) (cap : κ → ℝ≥0) (m : ℕ) (P : Partition r.d.D m),
     EfficiencyFloor methods dec c ℓ ℓstar D p → r.Among methods → r.A.Valid → r.Within dec c D → r.Reaches ℓ ℓstar →
-    r.A.Identical α → CutCost r.d r.A c k u a → PeakBound u k M → InputCost r.d r.A c k u_in → ReachLimit u_in k ξ →
-    r.A.ProfileAtMost ξ x₀ → P.IsCK r.d c k → InPeriods B N n →
-    ((r.A.tokenShare * (1 - x₀) * r.A.tokensPerBlock c * a : ℝ≥0) : ℝ≥0∞) / (M : ℝ≥0∞) * ENNReal.ofReal p *
+    CutCost r.d c k e a u → r.A.TokenCapAt c k e a u X capX → Caps r.d c k B cap → P.IsCK r.d c k →
+    InPeriods m N n →
+    max (kindBound r.d c X capX) (⨆ K, kindBound r.d c (B K) (cap K)) * ENNReal.ofReal p *
       honestCost methods ℓ ℓstar ≤ ((N * n * c : ℕ) : ℝ≥0∞)
 
 end Nci.Formalism.Guarantees

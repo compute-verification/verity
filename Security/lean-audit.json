@@ -1408,19 +1408,19 @@
   },
   "Nci.Formalism.Assumptions.CutCost": {
    "owner": "@training",
-   "digest": "455f5b3daaa55025c16ab1b6d30fea692f9f5540d41baae52bffc4227d97c4b0"
+   "digest": "a0eccc92cae6a392661f74944c6c67511d3a801454fa51ee115ae94f9fea091a"
   },
   "Nci.Formalism.Assumptions.EfficiencyFloor": {
    "owner": "@training",
    "digest": "bd5eea2adbee733740c70a5ab6a7fc532e1f330183420e4bf1553b1d386c940d"
   },
+  "Nci.Formalism.GateSet": {
+   "owner": "@training",
+   "digest": "01e7c2e54429c917e1d5410ec3c77cb1bfb221feb7a6c259b841c7817b87e26e"
+  },
   "Nci.Formalism.InPeriods": {
    "owner": "@training",
    "digest": "2e9c8f7af1c83a77da3bc7a6cb8c309403d4e72509733fdede069044836a1e79"
-  },
-  "Nci.Formalism.PeakBound": {
-   "owner": "@training",
-   "digest": "2f381efb7adae7c01b0836ab87bb62a726c0becce3af52ba41fcc74f89e5a87c"
   },
   "Nci.Formalism.Run.Among": {
    "owner": "@training",
@@ -1441,6 +1441,14 @@
   "Nci.Formalism.SessionBlocks": {
    "owner": "@training",
    "digest": "34bcb8ec9972cc06cb477dc919bab4e382f0b55caf1c3a13a463fc952dba78f3"
+  },
+  "Nci.Formalism.TrainingBlocks": {
+   "owner": "@training",
+   "digest": "d55519b827232daa6848f5070a05eeda6d280b9778e81514f62158e01c2005ac"
+  },
+  "Nci.Formalism.TrainingFits": {
+   "owner": "@training",
+   "digest": "31766e6632c3503b0abed8bad0f5091dfc85f5a9e9e44f0e3fad85478f050a60"
   },
   "Nci.Ldl.Assumptions.ActivationRate": {
    "owner": "@training",
@@ -2194,41 +2202,25 @@
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
   },
-  "Nci.Formalism.Annotation.Identical": {
+  "Nci.Formalism.Annotation.TokenCapAt": {
    "owner": "@training",
-   "digest": "d636f4cb7a89a4b0902503282d2d758d2acd4c40c676ed04536cc0e7bf3aaf06"
+   "digest": "bc4b4e8b6033247789def8ca4eeb24e1c030c3fdb10b53468122bfd07233c939"
   },
-  "Nci.Formalism.Annotation.ProfileAtMost": {
+  "Nci.Formalism.Annotation.WorkPerBit": {
    "owner": "@training",
-   "digest": "1f1937d4697ed02f90be5ec8a4b6d03d70bc96850451f696719d91ebdc5f821b"
+   "digest": "d95775a3bfb434cf97de9610108ed8b511adb50775c11f093671866e51b822c8"
   },
-  "Nci.Formalism.Annotation.ReachableAtMost": {
+  "Nci.Formalism.Caps": {
    "owner": "@training",
-   "digest": "1406546020e27691e7538ad3978ec24ee95cad8b9f58f8750ce05e2f8f5f2339"
+   "digest": "46e4b37e04ca1e7219b2dd46e6bdeb60499f5c618d2c3667c88edf8eeafbc350"
   },
-  "Nci.Formalism.Assumptions.InputCost": {
+  "Nci.Formalism.InferenceBlock": {
    "owner": "@training",
-   "digest": "67549dad1ea58a50787a3303b0e1a78e7ceb9880c80f9e2315c90a17edc7b74c"
+   "digest": "f4c513ca7a5316a39db0af97dadc2728462cdcef93f0ab5ecdb53ba9e99ffd4e"
   },
-  "Nci.Formalism.FrozenShare": {
+  "Nci.Formalism.PeakAtMost": {
    "owner": "@training",
-   "digest": "c30991424d10c653456174911ca697182c759d28d99a48ba4981edcbbd8e3e90"
-  },
-  "Nci.Formalism.GateSet": {
-   "owner": "@training",
-   "digest": "01e7c2e54429c917e1d5410ec3c77cb1bfb221feb7a6c259b841c7817b87e26e"
-  },
-  "Nci.Formalism.ReachLimit": {
-   "owner": "@training",
-   "digest": "ecf2d1fae4a5e57e7ec817351f39c27baad3baf3144088f22cbd48a841ed02cc"
-  },
-  "Nci.Formalism.TrainingBlocks": {
-   "owner": "@training",
-   "digest": "d55519b827232daa6848f5070a05eeda6d280b9778e81514f62158e01c2005ac"
-  },
-  "Nci.Formalism.TrainingFits": {
-   "owner": "@training",
-   "digest": "31766e6632c3503b0abed8bad0f5091dfc85f5a9e9e44f0e3fad85478f050a60"
+   "digest": "551f9186a5d5cc423e2018bdabba52b1a5fb84b1771d707656f2b025d4c6e66a"
   }
  },
  "meaning": [
@@ -2650,31 +2642,6 @@
   "Nci.Formalism.SecurityProofs.Slowdown": {
    "honest": ["Nci.Formalism.SecurityProofs.Slowdown_honest"],
    "nontrivial": "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.Formalism.SecurityProofs.TokenForm": {
-   "honest": ["Nci.Formalism.SecurityProofs.TokenForm_honest"],
-   "nontrivial": "Nci.Formalism.SecurityProofs.TokenForm_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.Formalism.SecurityProofs.TokenFormVarying": {
-   "honest": ["Nci.Formalism.SecurityProofs.TokenFormVarying_honest"],
-   "nontrivial": "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.Formalism.SecurityProofs.SlowdownClaim": {
-   "honest": ["Nci.Formalism.SecurityProofs.SlowdownClaim_honest"],
-   "nontrivial": "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.Formalism.SecurityProofs.SlowdownEven": {
-   "honest": ["Nci.Formalism.SecurityProofs.SlowdownEven_honest"],
-   "nontrivial": "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.Formalism.SecurityProofs.SlowdownFrozen": {
-   "honest": ["Nci.Formalism.SecurityProofs.SlowdownFrozen_honest"],
-   "nontrivial": "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
    "kind": "exclusion"
   },
   "Nci.Formalism.SecurityProofs.Security": {
@@ -9022,12 +8989,6 @@
    "assumptions": [],
    "type_hash": "8cde8a03744aead7d37650a220d532f712e5bda0a694ddcc01fc4a95f6f2e08e"
   },
-  "Nci.Formalism.SecurityProofs.CapacityBound": {
-   "owner": "@training",
-   "signature": ["Nci.Formalism.SecurityProofs.CapacityBound : Nci.Formalism.Guarantees.CapacityBound"],
-   "assumptions": [],
-   "type_hash": "660c60e5ca63e3897699d792cab40a3dc8b086605fa89c6f653bd25778fa1d9c"
-  },
   "Nci.Formalism.SecurityProofs.Counting": {
    "owner": "@training",
    "signature": ["Nci.Formalism.SecurityProofs.Counting : Nci.Formalism.Guarantees.Counting"],
@@ -9088,12 +9049,6 @@
    "assumptions": [],
    "type_hash": "a2e416e64a3c7e18867956a05e3d0c38262e210d1dac1b439fa94770011e7bb7"
   },
-  "Nci.Formalism.SecurityProofs.ReachableShareBound": {
-   "owner": "@training",
-   "signature": ["Nci.Formalism.SecurityProofs.ReachableShareBound : Nci.Formalism.Guarantees.ReachableShareBound"],
-   "assumptions": [],
-   "type_hash": "3fcc3573196ca9cd1c96d540386e5fc1e085b1f922939cac23f089b4c15f989b"
-  },
   "Nci.Formalism.SecurityProofs.Security": {
    "owner": "@training",
    "signature": ["Nci.Formalism.SecurityProofs.Security : Nci.Formalism.Guarantees.Security"],
@@ -9118,66 +9073,6 @@
    "assumptions": [],
    "type_hash": "ba14aa73d3305b0ebe3f9f179382ced038d2bb3cb762a14e3edaaadaad14e0cd"
   },
-  "Nci.Formalism.SecurityProofs.SlowdownClaim": {
-   "owner": "@training",
-   "signature": ["Nci.Formalism.SecurityProofs.SlowdownClaim : Nci.Formalism.Guarantees.SlowdownClaim"],
-   "assumptions": [],
-   "type_hash": "cfab3854dd756b9d3c53952d563eae955fd02dfccfc9f91d86f12795793fe28b"
-  },
-  "Nci.Formalism.SecurityProofs.SlowdownClaim_honest": {
-   "owner": "@training",
-   "signature": ["Nci.Formalism.SecurityProofs.SlowdownClaim_honest : Nci.Formalism.Guarantees.SlowdownClaim_honest"],
-   "assumptions": [],
-   "type_hash": "6e19e665237a855716552d69c5acb9865eacd7865cc4770492dbbdf3c5989b8a"
-  },
-  "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial": {
-   "owner": "@training",
-   "signature": [
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial : Nci.Formalism.Guarantees.SlowdownClaim_nontrivial"
-   ],
-   "assumptions": [],
-   "type_hash": "a47e495d45f086a99561741aca2bac694414a93e87e41bc836c948f1ec836d86"
-  },
-  "Nci.Formalism.SecurityProofs.SlowdownEven": {
-   "owner": "@training",
-   "signature": ["Nci.Formalism.SecurityProofs.SlowdownEven : Nci.Formalism.Guarantees.SlowdownEven"],
-   "assumptions": [],
-   "type_hash": "aa688f77c72c3282c128e857c26342a36af27415a1fca9508a7ff5b1ec89bbce"
-  },
-  "Nci.Formalism.SecurityProofs.SlowdownEven_honest": {
-   "owner": "@training",
-   "signature": ["Nci.Formalism.SecurityProofs.SlowdownEven_honest : Nci.Formalism.Guarantees.SlowdownEven_honest"],
-   "assumptions": [],
-   "type_hash": "8712ed08ef8f52869bcb5e8c444069da8be9cd0b59059e7d36482402b48742f5"
-  },
-  "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial": {
-   "owner": "@training",
-   "signature": [
-    "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial : Nci.Formalism.Guarantees.SlowdownEven_nontrivial"
-   ],
-   "assumptions": [],
-   "type_hash": "05e94ad923a68fc114b71c347af763756157f6014446422370618105b0451208"
-  },
-  "Nci.Formalism.SecurityProofs.SlowdownFrozen": {
-   "owner": "@training",
-   "signature": ["Nci.Formalism.SecurityProofs.SlowdownFrozen : Nci.Formalism.Guarantees.SlowdownFrozen"],
-   "assumptions": [],
-   "type_hash": "5349b884651d68726714bab433a375840588014ccceb18ee6ecfb1b0737cae85"
-  },
-  "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest": {
-   "owner": "@training",
-   "signature": ["Nci.Formalism.SecurityProofs.SlowdownFrozen_honest : Nci.Formalism.Guarantees.SlowdownFrozen_honest"],
-   "assumptions": [],
-   "type_hash": "b2ca2948b2c2bc9c117cef092591bee691c121e97b108b8ae2beee6177e6933d"
-  },
-  "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial": {
-   "owner": "@training",
-   "signature": [
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial : Nci.Formalism.Guarantees.SlowdownFrozen_nontrivial"
-   ],
-   "assumptions": [],
-   "type_hash": "6ebba903146289a24b8a54376eeb569db8d471dbadb32167e9aa234432057f80"
-  },
   "Nci.Formalism.SecurityProofs.Slowdown_honest": {
    "owner": "@training",
    "signature": ["Nci.Formalism.SecurityProofs.Slowdown_honest : Nci.Formalism.Guarantees.Slowdown_honest"],
@@ -9190,45 +9085,17 @@
    "assumptions": [],
    "type_hash": "8c096d237b91c06c539129c94179a07a86ccb30f0a957146abf518d2e0991320"
   },
-  "Nci.Formalism.SecurityProofs.TokenForm": {
+  "Nci.Formalism.SecurityProofs.TokenCap": {
    "owner": "@training",
-   "signature": ["Nci.Formalism.SecurityProofs.TokenForm : Nci.Formalism.Guarantees.TokenForm"],
+   "signature": ["Nci.Formalism.SecurityProofs.TokenCap : Nci.Formalism.Guarantees.TokenCap"],
    "assumptions": [],
-   "type_hash": "7959740b5dc2a5b1290ee6297f4be52321160b9e2bcc47504dc9be8500a8bab6"
+   "type_hash": "38ba091a0645f4ca040d35881517e921b79544f0ed75743d4374d1ac71a4d0e3"
   },
-  "Nci.Formalism.SecurityProofs.TokenFormVarying": {
+  "Nci.Formalism.SecurityProofs.TokenCapClean": {
    "owner": "@training",
-   "signature": ["Nci.Formalism.SecurityProofs.TokenFormVarying : Nci.Formalism.Guarantees.TokenFormVarying"],
+   "signature": ["Nci.Formalism.SecurityProofs.TokenCapClean : Nci.Formalism.Guarantees.TokenCapClean"],
    "assumptions": [],
-   "type_hash": "7ebcfa7aa7707d1cd26455e3698f2a28b0179f2312285fefab94c9863a3593c8"
-  },
-  "Nci.Formalism.SecurityProofs.TokenFormVarying_honest": {
-   "owner": "@training",
-   "signature": [
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest : Nci.Formalism.Guarantees.TokenFormVarying_honest"
-   ],
-   "assumptions": [],
-   "type_hash": "21bfdc2b8cb79f7d54d6fbc660f90934623c51ee5c49985a37f20745c0c979b9"
-  },
-  "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial": {
-   "owner": "@training",
-   "signature": [
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial : Nci.Formalism.Guarantees.TokenFormVarying_nontrivial"
-   ],
-   "assumptions": [],
-   "type_hash": "d904f6931f8294a3211437f84932d1aa4a09391262d9dbfe9711cf127b295b39"
-  },
-  "Nci.Formalism.SecurityProofs.TokenForm_honest": {
-   "owner": "@training",
-   "signature": ["Nci.Formalism.SecurityProofs.TokenForm_honest : Nci.Formalism.Guarantees.TokenForm_honest"],
-   "assumptions": [],
-   "type_hash": "1f4be96d963940cda576cbb7d305ab4a3a890fcc141874ae4ce92fb89e41a4a0"
-  },
-  "Nci.Formalism.SecurityProofs.TokenForm_nontrivial": {
-   "owner": "@training",
-   "signature": ["Nci.Formalism.SecurityProofs.TokenForm_nontrivial : Nci.Formalism.Guarantees.TokenForm_nontrivial"],
-   "assumptions": [],
-   "type_hash": "27d6a8b9067912fd84cbd628cc8df6f77d871e6b7ed41e5a804daed252c1cc83"
+   "type_hash": "cdddad07cca1322a3635d718e77a334309334d7770dac3b8afa5d3855986251e"
   },
   "Nci.Ldl.SecurityProofs.BlockDescription": {
    "owner": "@training",
@@ -13834,35 +13701,20 @@
    "Pous.SecurityProofs.ObligationWide320_nontrivial": "frozen (no-function): ObligationWide320's nontrivial witness: at 2^19 blocks and 320 reads the sure event, which a verifier that accepts everything passes, has probability 1, above 2^-20; it is about no function of the PoUS code and rests on no named assumption.",
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Nci.Formalism.SecurityProofs.Counting": "frozen (no-function): The counting lemma: it is about an arbitrary declaration, a set of its gates and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.Slowdown": "frozen (no-function): The counting lemma at A \\ R, beside it: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.TokenForm": "frozen (no-function): Slowdown's token form for identical token blocks, beside it: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.TokenFormVarying": "frozen (no-function): Slowdown's token form for varying token blocks, beside it: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.CapacityBound": "frozen (no-function): A1's bound on s*: it is about an arbitrary declaration and an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), reading no partition, under the named CutCost (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.ReachableShareBound": "frozen (no-function): A1′'s bound on the reachable share: it is about an arbitrary declaration and a valid annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), reading no partition, under the named InputCost (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.SlowdownClaim": "frozen (no-function): The claim, from A1 and A1′: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost and InputCost (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.SlowdownEven": "frozen (no-function): The claim's case of an evenly spread update, beside it: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost and InputCost (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.SlowdownFrozen": "frozen (no-function): The claim's case of frozen layers above changed ones, beside it: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost and InputCost (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.Counting": "frozen (no-function): The counting lemma over kinds: it is about an arbitrary declaration, kinds of its work with caps on the gates of each that an inference block holds (Nci.Formalism.Caps, Security/Definitions/Nci/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.TokenCap": "frozen (no-function): The token kind's cap from A1: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), A1's values and a set of its token gates, reading no partition, under the named CutCost (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.TokenCapClean": "frozen (no-function): The token cap's clean form, beside it: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), A1's values and a set of its token gates, reading no partition, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.Slowdown": "frozen (no-function): Slowdown, the one bound: the counting lemma over kinds with the token kind's cap from A1: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), A1's values, a set of its token gates, kinds of its work with caps on the gates of each that an inference block holds (Nci.Formalism.Caps, Security/Definitions/Nci/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.FitServing": "frozen (no-function): Fit's construction for running θ': it is about an arbitrary Boolean declaration and a Verity.Partition of it into session blocks (Nci.Formalism.SessionBlocks, Security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.FitHonestServing": "frozen (no-function): FitServing at Δ = 0 with no decoder, beside it: it is about an arbitrary Boolean declaration and a Verity.Partition of it into session blocks (Nci.Formalism.SessionBlocks, Security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.FitTraining": "frozen (no-function): Fit's construction for training: it is about an arbitrary Boolean declaration and a Verity.Partition of it into training blocks (Nci.Formalism.TrainingBlocks, Security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.Security": "frozen (no-function): Security: it is about an arbitrary run of a class of methods (Nci.Formalism.Run, Security/Definitions/Nci/Formalism/Runs.lean) and a partition of its declaration into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost, InputCost and EfficiencyFloor (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.Counting_honest": "completeness: The counting lemma's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), the gates {3, 4} are a set of gates and its four gates, each a block of its own, are a partition into inference blocks at (c, k) = (1, 1). It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation and partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.Counting_nontrivial": "lemma: The counting lemma's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at S = {3, 4} and (c, k) = (1, 1), whole, one block of its four gates, is no partition into inference blocks, and the bound (|S| / |C|) / (max_I |I ∩ S| / c) = 1/2 is above whole's price 1/4. A counterexample at an instance, not a property of a Lean function.",
-   "Nci.Formalism.SecurityProofs.Slowdown_honest": "completeness: Slowdown's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its four gates, each a block of its own, are a partition into inference blocks at (c, k) = (1, 1). It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation and partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.Slowdown_nontrivial": "lemma: Slowdown's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), where only gate 2's block computes the token from its inputs, so A \\ R = {3, 4}, whole, one block of its four gates, is no partition into inference blocks at (c, k) = (1, 1), and the bound 1/2 is above its price 1/4. A counterexample at an instance, not a property of a Lean function.",
-   "Nci.Formalism.SecurityProofs.TokenForm_honest": "completeness: The token form's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its premises hold together at (c, k) = (1, 1): its one token block has 3 affected gates, every reachable share is at most x₀ = 1/3, and its four blocks of one gate are a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation and partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.TokenForm_nontrivial": "lemma: The token form's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), every premise but the partition holds at (c, k) = (1, 1) and x₀ = 1/3, whole is no partition into inference blocks, and the bound σ (1 - x₀) s / s* = (3/4)(2/3)(1/3) / (1/3) = 1/2 is above its price 1/4. A counterexample at an instance, not a property of a Lean function.",
-   "Nci.Formalism.SecurityProofs.TokenFormVarying_honest": "completeness: The varying token form's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), every reachable share is at most x₀ = 1/3 and its four blocks of one gate are a partition into inference blocks at (c, k) = (1, 1). It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation and partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial": "lemma: The varying token form's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), every reachable share is at most x₀ = 1/3, whole is no partition into inference blocks at (c, k) = (1, 1), and the bound (1 - x₀) |A ∩ ⋃𝒯| c / (|C| α_max s*) = 2 / (4 · 3 · 1/3) = 1/2 is above its price 1/4. A counterexample at an instance, not a property of a Lean function.",
-   "Nci.Formalism.SecurityProofs.SlowdownClaim_honest": "completeness: The claim's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its premises hold together, A1 and A1′ among them, at (c, k) = (1, 1): its valid annotation's one token block has 3 affected gates, u = 0 with a = 1 and M = 1, u_in(x) = 3x with ξ = 1/3, x₀ = 1/3 bounds the dependency profile at ξ, and its four blocks of one gate are a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation and partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial": "lemma: The claim's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at a = 12 and the rest as in its honest lemma, every premise but A1 holds, A1 fails at the block of gate 3, which does a third of the token's work, cuts it and reads one computed value, and the bound σ (1 - x₀) s a / M = 2 is above the blocks' price 1. A counterexample at an instance, not a property of a Lean function.",
-   "Nci.Formalism.SecurityProofs.SlowdownEven_honest": "completeness: The evenly spread case's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its premises hold together, A1 and A1′ among them, at (c, k) = (1, 1), u(x) = u_in(x) = 3x, a = 0 and x₀ = 1/3, which bounds the dependency profile at k / u(1) = 1/3. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation and partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial": "lemma: The evenly spread case's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at a = 1 and the rest as in its honest lemma, every premise but A1 holds, A1 fails at the block of gate 3, which does a third of the token's work, cuts it and reads one computed value, and the bound 4 σ (1 - x₀) s a u(1) / k² = 2 is above the blocks' price 1. A counterexample at an instance, not a property of a Lean function.",
-   "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest": "completeness: The frozen case's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its premises hold together, A1 and A1′ among them, at (c, k) = (1, 1): u(x) = u_in(x) = 3x with a = 0, above k beyond the frozen share t = 1/3, ξ = 1/3 and x₀ = 1/3. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation and partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial": "lemma: The frozen case's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at a = 3 and the rest as in its honest lemma, every premise but A1 holds, A1 fails at the block of gate 3, which does a third of the token's work, cuts it and reads one computed value, and the bound σ (1 - x₀) s a / (t k) = 3/2 is above the blocks' price 1. A counterexample at an instance, not a property of a Lean function.",
-   "Nci.Formalism.SecurityProofs.Security_honest": "completeness: Security's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its run the one method, with a decoder that outputs nothing, D = ⊤, the loss 0 and ℓ* = 0, its premises hold together, A1, A1′ and A2 among them, at p = 1, (c, k) = (1, 1), its four blocks in one period of four, and the claim's premises as in the claim's honest lemma. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation and partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.Security_nontrivial": "lemma: Security's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at a = 12 and the rest as in its honest lemma, every premise but A1 holds, A2 among them, A1 fails at the block of gate 3, which does a third of the token's work, cuts it and reads one computed value, and ρ̲ p H(ℓ*) = 2 · 1 · 4 = 8 is above N n c = 4. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Formalism.SecurityProofs.Security": "frozen (no-function): Security: it is about an arbitrary run of a class of methods (Nci.Formalism.Run, Security/Definitions/Nci/Formalism/Runs.lean) and a partition of its declaration into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost and EfficiencyFloor (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.Counting_honest": "completeness: The counting lemma's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), the kind of the token's gates {3, 4} has the cap 1, every inference block at (c, k) = (1, 1) holding at most one of its gates, and its four gates, each a block of its own, are a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Formalism.SecurityProofs.Counting_nontrivial": "lemma: The counting lemma's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at the kind {3, 4} with the cap 1 and (c, k) = (1, 1), whole, one block of its four gates, is no partition into inference blocks, and the bound (|B_K| / |C|) / (cap_K / c) = 1/2 is above whole's price 1/4. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Formalism.SecurityProofs.Slowdown_honest": "completeness: Slowdown's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its premises hold together at (c, k) = (1, 1): its valid annotation, A1 with a block's entry on the token the token's gates it holds, the state there the token's values that work reads, and the block's update bits the new weight when it reads it, the cap 1 on the token gates {3, 4} within A1's budget, the cap 1 on the kind of the new weight {1}, and its four gates, each a block of its own, a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Formalism.SecurityProofs.Slowdown_nontrivial": "lemma: Slowdown's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at twice the state and the rest as in its honest lemma, every premise but A1 holds, the token kind's cap 0 within A1's budget among them, A1 fails at the block of gate 3, which reads one value of the token's state and no update bit, below twice that state, and the bound, ⊤ at the cap 0, is above the blocks' price 1. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Formalism.SecurityProofs.Security_honest": "completeness: Security's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its run the one method, with a decoder that outputs nothing, D = ⊤, the loss 0 and ℓ* = 0, its premises hold together, A1 and A2 among them, at p = 1, (c, k) = (1, 1), its four blocks in one period of four, and Slowdown's premises as in Slowdown's honest lemma. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Formalism.SecurityProofs.Security_nontrivial": "lemma: Security's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at twice the state and the rest as in its honest lemma, every premise but A1 holds, A2 among them, A1 fails at the block of gate 3, which reads one value of the token's state and no update bit, below twice that state, and ρ̲ p H(ℓ*), ⊤ at the token kind's cap 0, is above N n c = 4. A counterexample at an instance, not a property of a Lean function.",
    "Nci.Formalism.SecurityProofs.FitServing_honest": "completeness: Fit's honest lemma for running θ': at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), its two blocks of one gate are session blocks, each reading a description of one value and one token's one data bit, and Δ + s τ = 2 fits k = 2, with no decoder. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a served model's partition into session blocks, which no check reads yet, would supply the deployed premises.",
    "Nci.Formalism.SecurityProofs.FitServing_nontrivial": "lemma: Fit's nontrivial lemma for running θ': at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), at k = 1 its session blocks' Δ + s τ = 2 does not fit, and the token's gate reads two values beyond the weight, so no partition into inference blocks exists and ρ = ⊤, above c / (c - d) = 1. A counterexample at an instance, not a property of a Lean function.",
    "Nci.Formalism.SecurityProofs.FitTraining_honest": "completeness: Fit's honest lemma for training: at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), its two blocks of one gate are compute blocks that fit at k = 2, with Δ = Δ_grad = s = τ = 1 and no decoder. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's partition into training blocks, which no check reads yet, would supply the deployed premises.",
@@ -22341,28 +22193,14 @@
     "Verity.Annotation.holds": "6299df41fb09a80c810eccf8a70f5706742de18792a3711272d7795252fb5fa9"
    },
    "guarantees": [
-    "Nci.Formalism.SecurityProofs.CapacityBound",
-    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownEven",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
+    "Nci.Formalism.SecurityProofs.Slowdown_honest",
     "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm_honest",
-    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial"
+    "Nci.Formalism.SecurityProofs.TokenCap",
+    "Nci.Formalism.SecurityProofs.TokenCapClean"
    ]
   },
   "Definitions.Core.Assumptions": {
@@ -22738,7 +22576,6 @@
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
-    "Nci.Formalism.SecurityProofs.CapacityBound",
     "Nci.Formalism.SecurityProofs.Counting",
     "Nci.Formalism.SecurityProofs.Counting_honest",
     "Nci.Formalism.SecurityProofs.Counting_nontrivial",
@@ -22749,28 +22586,14 @@
     "Nci.Formalism.SecurityProofs.FitTraining",
     "Nci.Formalism.SecurityProofs.FitTraining_honest",
     "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
-    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownEven",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown_honest",
     "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm_honest",
-    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenCap",
+    "Nci.Formalism.SecurityProofs.TokenCapClean",
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.Counting",
     "Nci.Ldl.SecurityProofs.FanOutBound",
@@ -22905,7 +22728,6 @@
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
     "Nci.Cover.SecurityProofs.CoveringBoundAdditive",
-    "Nci.Formalism.SecurityProofs.CapacityBound",
     "Nci.Formalism.SecurityProofs.Counting",
     "Nci.Formalism.SecurityProofs.Counting_honest",
     "Nci.Formalism.SecurityProofs.Counting_nontrivial",
@@ -22916,28 +22738,14 @@
     "Nci.Formalism.SecurityProofs.FitTraining",
     "Nci.Formalism.SecurityProofs.FitTraining_honest",
     "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
-    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownEven",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown_honest",
     "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm_honest",
-    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenCap",
+    "Nci.Formalism.SecurityProofs.TokenCapClean",
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.SecurityProofs.ActivationsBoundOn",
@@ -23173,7 +22981,6 @@
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote_nontrivial",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_honest",
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial",
-    "Nci.Formalism.SecurityProofs.CapacityBound",
     "Nci.Formalism.SecurityProofs.Counting",
     "Nci.Formalism.SecurityProofs.Counting_honest",
     "Nci.Formalism.SecurityProofs.Counting_nontrivial",
@@ -23184,28 +22991,14 @@
     "Nci.Formalism.SecurityProofs.FitTraining",
     "Nci.Formalism.SecurityProofs.FitTraining_honest",
     "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
-    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownEven",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown_honest",
     "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm_honest",
-    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenCap",
+    "Nci.Formalism.SecurityProofs.TokenCapClean",
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.FanOutBound",
     "Nci.SecurityProofs.CompliesCK",
@@ -24096,23 +23889,8 @@
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownEven",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown_honest",
     "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm_honest",
-    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial",
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.Counting",
     "Nci.Ldl.SecurityProofs.FanOutBound",
@@ -27193,27 +26971,19 @@
    ]
   },
   "Definitions.Nci.Assumptions.Formalism": {
-   "digest": "4e2b0ef9295d77b6fb1e06f371ccd355b0f578fb421de275e2c37b366e7bc29c",
+   "digest": "8563243b9431050d66738774b77e7124b9d61b0b011cf012675de0e521b30c29",
    "definitions": {
-    "Nci.Formalism.Assumptions.CutCost": "455f5b3daaa55025c16ab1b6d30fea692f9f5540d41baae52bffc4227d97c4b0",
-    "Nci.Formalism.Assumptions.EfficiencyFloor": "bd5eea2adbee733740c70a5ab6a7fc532e1f330183420e4bf1553b1d386c940d",
-    "Nci.Formalism.Assumptions.InputCost": "67549dad1ea58a50787a3303b0e1a78e7ceb9880c80f9e2315c90a17edc7b74c"
+    "Nci.Formalism.Assumptions.CutCost": "a0eccc92cae6a392661f74944c6c67511d3a801454fa51ee115ae94f9fea091a",
+    "Nci.Formalism.Assumptions.EfficiencyFloor": "bd5eea2adbee733740c70a5ab6a7fc532e1f330183420e4bf1553b1d386c940d"
    },
    "guarantees": [
-    "Nci.Formalism.SecurityProofs.CapacityBound",
-    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownEven",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial"
+    "Nci.Formalism.SecurityProofs.Slowdown",
+    "Nci.Formalism.SecurityProofs.Slowdown_honest",
+    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
+    "Nci.Formalism.SecurityProofs.TokenCap"
    ]
   },
   "Definitions.Nci.Assumptions.Info": {
@@ -27586,46 +27356,28 @@
    ]
   },
   "Definitions.Nci.Formalism.Circuits": {
-   "digest": "5e9558cd6a2cdd7030291e8233bd63d0f57c05c50a786426cc8ae459bf92ae9a",
+   "digest": "ddaa8fe4ddcd18061b098c958a2a3887f837181a392af9f07a9d855ce133dabb",
    "definitions": {
-    "Nci.Formalism.DependsOn": "9f9a8c6eba758cdc1ffc21938e27f058a9ed0a182caa5145bff6b1f71893525b",
-    "Nci.Formalism.FeedsWithin": "5f5473466b77ac0c95736c7996f7639b98a71d8a1aa698e83a9fcd40499bf9ab",
-    "Nci.Formalism.FeedsWithin.refl": "fd4984844deec75c4b1386f439fe422c1ecabc41425d0797808f2851c8c1c669",
-    "Nci.Formalism.FeedsWithin.step": "e07c86d9bb818e0d451808464698383bd6310098871d069aa97bdf466c62f795",
-    "Nci.Formalism.GateSet": "01e7c2e54429c917e1d5410ec3c77cb1bfb221feb7a6c259b841c7817b87e26e",
-    "Nci.Formalism.inputs": "c7dd1d423b8d22a4489da5b95f135d0c5dea9e8bd11df3e241008234a00977ea"
+    "Nci.Formalism.GateSet": "01e7c2e54429c917e1d5410ec3c77cb1bfb221feb7a6c259b841c7817b87e26e"
    },
    "guarantees": [
-    "Nci.Formalism.SecurityProofs.CapacityBound",
     "Nci.Formalism.SecurityProofs.Counting",
     "Nci.Formalism.SecurityProofs.Counting_honest",
     "Nci.Formalism.SecurityProofs.Counting_nontrivial",
-    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownEven",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
+    "Nci.Formalism.SecurityProofs.Slowdown_honest",
     "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm_honest",
-    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial"
+    "Nci.Formalism.SecurityProofs.TokenCap",
+    "Nci.Formalism.SecurityProofs.TokenCapClean"
    ]
   },
   "Definitions.Nci.Formalism.Inference": {
-   "digest": "b4fce6dce80f0cbab4e953285b8ed5668fed4e815d9e6295569a7146c982735a",
+   "digest": "8f6e5967fbcbe4aba047fb3a9b68149d6f618c8e0e11e02f90d7b50343194d8a",
    "definitions": {
+    "Nci.Formalism.Caps": "46e4b37e04ca1e7219b2dd46e6bdeb60499f5c618d2c3667c88edf8eeafbc350",
     "Nci.Formalism.ComputeBlock": "20430193e391548f59aa189aece4770e01054a04a63297d5203ee51b01e9c8e4",
     "Nci.Formalism.InferenceBlock": "f4c513ca7a5316a39db0af97dadc2728462cdcef93f0ab5ecdb53ba9e99ffd4e",
     "Nci.Formalism.ReductionBlock": "ba84dfa80db087c760a034a2f6bcf2a33ea7cd4e62f4275e497f5137476e81cd",
@@ -27634,15 +27386,14 @@
     "Nci.Formalism.TrainingBlocks": "d55519b827232daa6848f5070a05eeda6d280b9778e81514f62158e01c2005ac",
     "Nci.Formalism.TrainingFits": "31766e6632c3503b0abed8bad0f5091dfc85f5a9e9e44f0e3fad85478f050a60",
     "Nci.Formalism.UpdateBlock": "419565e4999e8ddb6db862c44d026b77902b73c2ebc940a5dd82704b03be65b5",
-    "Nci.Formalism.computedReads": "bb6dc1fee0bd4d49951110feb8bfedb8e9405c074a1f03fb613f2f57ce878f71",
     "Nci.Formalism.instDecidablePredFinsetFinNDInferenceBlock": "b1a684d61a116754566a4f1e118710a26a69888327a42525b1bd0d30120bc745",
-    "Nci.Formalism.maxInBlock": "dc6336056cf0bb8ab2a332e8d6491be1da98be90e53a8ff889af83b16b474cc7",
+    "Nci.Formalism.kindBound": "1b3577f5a223546d3fe30b2668847483f6286ea1dbc9352bac59b6b8f168bb5d",
     "Nci.Formalism.partitionSlowdown": "008125ed66bbcb214bb43ff5d4b48752a3e0f51da9572356b08c0545defb445e",
     "Nci.Formalism.slowdown": "749ca592199752f3b1ad1fde2b9702787dcf494c9f3064107edd476e3824518f"
    },
    "guarantees": [
-    "Nci.Formalism.SecurityProofs.CapacityBound",
     "Nci.Formalism.SecurityProofs.Counting",
+    "Nci.Formalism.SecurityProofs.Counting_honest",
     "Nci.Formalism.SecurityProofs.Counting_nontrivial",
     "Nci.Formalism.SecurityProofs.FitHonestServing",
     "Nci.Formalism.SecurityProofs.FitServing",
@@ -27651,38 +27402,28 @@
     "Nci.Formalism.SecurityProofs.FitTraining",
     "Nci.Formalism.SecurityProofs.FitTraining_honest",
     "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
-    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownEven",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
+    "Nci.Formalism.SecurityProofs.Slowdown_honest",
     "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm_honest",
-    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial"
+    "Nci.Formalism.SecurityProofs.TokenCap",
+    "Nci.Formalism.SecurityProofs.TokenCapClean"
    ]
   },
   "Definitions.Nci.Formalism.Instances": {
-   "digest": "323b4c7cf7b64d9b6aec5422e552abe77d3124caf39716a3291086065de5e055",
+   "digest": "e58c32dc7592dcdb5659b9143d96bbbc0efaadcd941b1956de54be37fabe6d87",
    "definitions": {
     "Nci.Formalism.Chain.A": "13b0728b5f3dbeddc47226dbf857555e1dd2c30b879c8e988df590c8cd2cf003",
     "Nci.Formalism.Chain.C": "de302dab8410acf20b177abc2f195e2930cb7d9d9b8767930318056b9630c180",
     "Nci.Formalism.Chain.blocks": "ccfada045435c7ae61a85175510087a2bbc33f781058077accda8468c58169a9",
     "Nci.Formalism.Chain.d": "255d959b0373594ea08f71912cc1e7c778eb30f7e7ed5c78e72ead31c9a8c755",
+    "Nci.Formalism.Chain.entry": "d9e1399d67ba1b892ab597a024f233ae8454895e8d3875f3af963977172f2ed4",
     "Nci.Formalism.Chain.methods": "6444268784cda082f21ed780d6cf9113be72d5e8402d8cf60b8135bca216e023",
     "Nci.Formalism.Chain.r": "7e3c457ab40de47620cdd0c45a2dc78e1ccc117436ebda212fe02b47211318f8",
+    "Nci.Formalism.Chain.state": "b11a4fbf204cba9424672e666b2356b3a9b7479637ebf9cb2301c5ca99bef74c",
+    "Nci.Formalism.Chain.update": "d404ccdf3aeb535d735c8c08d42a11a9309067cfdab95eb1ec94e78e084df836",
     "Nci.Formalism.Chain.whole": "a329fbbc6aa79c612debdc4b3ae8631ccfb71d482ef0196c119413959daee465",
     "Nci.Formalism.Honest.C": "4a518890c3e4db1028630a61a6f0f885abaa7a9968cb711e5c46e9ff44c6454a",
     "Nci.Formalism.Honest.P": "413195c1d171fee28a870db259bf198cae3627a1bd0d419ecc00a429778155c5",
@@ -27698,18 +27439,8 @@
     "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown_honest",
-    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm_honest",
-    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial"
+    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial"
    ]
   },
   "Definitions.Nci.Formalism.Runs": {
@@ -27734,61 +27465,28 @@
    ]
   },
   "Definitions.Nci.Formalism.Training": {
-   "digest": "ecf906a2f40d04826388641e558953d7bceb1a30ccc33ce02a197be8baf96590",
+   "digest": "a179e1ccd015906ef8a1535dac94a2d0bd954d7a37fe6b9f7e88635193da5913",
    "definitions": {
     "Nci.Formalism.Annotation": "413c74d61b9251d9879712b9e07bfd9186289901b61c3a4950a853895d5f58f2",
-    "Nci.Formalism.Annotation.FromInputs": "5953af36aedf208677cddfd2771acbcad71c5d011b2cf01c6efbb9926edc0584",
-    "Nci.Formalism.Annotation.Identical": "d636f4cb7a89a4b0902503282d2d758d2acd4c40c676ed04536cc0e7bf3aaf06",
-    "Nci.Formalism.Annotation.ProfileAtMost": "1f1937d4697ed02f90be5ec8a4b6d03d70bc96850451f696719d91ebdc5f821b",
-    "Nci.Formalism.Annotation.ReachableAtMost": "1406546020e27691e7538ad3978ec24ee95cad8b9f58f8750ce05e2f8f5f2339",
+    "Nci.Formalism.Annotation.TokenCapAt": "bc4b4e8b6033247789def8ca4eeb24e1c030c3fdb10b53468122bfd07233c939",
     "Nci.Formalism.Annotation.Valid": "246e1e97b20a35f0482768b887e35db751f75d91eefa28de51d10c469bc0025b",
-    "Nci.Formalism.Annotation.affected": "83644e2007a4500179e22ef7c2e4c9f4eab02873b916b2b6640fec60880b27e3",
-    "Nci.Formalism.Annotation.cuts": "9c07280f9dad5eacc20247016e2ce106a8985e5aa35bfa8e476954640bb495aa",
-    "Nci.Formalism.Annotation.dependencies": "3aef539a22cd9a70fcad2bf3ea4185e2dc1d4b9e0dcfe329a642e8c7f0f4b517",
-    "Nci.Formalism.Annotation.dependencyProfile": "e7d27ed7d4f219dcbcbef4b38418799b56db6a28aa2472aca58acdb61248860f",
-    "Nci.Formalism.Annotation.dependencyShare": "28b59c0fbecf5324f51440c4b22c82876ed3b88496a52f29ab0f64f5c7b7b96e",
-    "Nci.Formalism.Annotation.maxAffected": "55404a862e885a42ec7d594dfd7d9737361c46717a61b94fdd4c12046d31b60f",
-    "Nci.Formalism.Annotation.maxShare": "a9e50872e978dd87738e479f37976bd1e4f945cb24861a2b49f90ab17fe413aa",
-    "Nci.Formalism.Annotation.reachable": "7cc7c2cd5c8a232b04a799a99069654639ba61b77c140a66d8469bd6c8dac712",
-    "Nci.Formalism.Annotation.reachableShare": "8770192f49fbea1c7fd7ac4af9731c38ef0bf77d5544868ac8ae34320e99ce12",
-    "Nci.Formalism.Annotation.share": "fd5440576db70d6b541b1eae8403f98e6e086d4c79f210f19fa0d1523418bf14",
-    "Nci.Formalism.Annotation.tokenAffected": "01c7bf374f6c57ab1e57c1c708a078ef58c12008f9200b11db3bc16414ef9366",
+    "Nci.Formalism.Annotation.WorkPerBit": "d95775a3bfb434cf97de9610108ed8b511adb50775c11f093671866e51b822c8",
+    "Nci.Formalism.Annotation.entryWork": "92874dbe51cded7ace2e6c0f1744322dd808ffe3d544e0db3a72ea5bb05193aa",
     "Nci.Formalism.Annotation.tokenGates": "062342d7a6d25499cd7ec04883e976d4ff53484c5bd10bba094541cf9a2b6564",
-    "Nci.Formalism.Annotation.tokenShare": "c6d4d41f905c639c5a076bc4116c6d9260aa59ba9690799ca83b378847e3e683",
     "Nci.Formalism.Annotation.tokens": "5d45b499998b10099781ad5cbb87f5c491502db1631c6698c8fdca07e34c0f23",
-    "Nci.Formalism.Annotation.tokensPerBlock": "0991a8fba49f76396f03cddb35bfaae23cfe8e62bc6796307594227be7a313eb",
     "Nci.Formalism.Annotation.totalUpdate": "c1f388b2f958cc3dad57fa00206f16e63c3976096bb098c73f3adb49eb3072eb",
-    "Nci.Formalism.Annotation.unreachableCapacity": "3c9da5036d60b2388d291d08c6a6cab1ef4b7c851f78cf4459fc8bd6cc481a05",
-    "Nci.Formalism.Annotation.unreachableWork": "e6d7b2197e16e5dddb0a7e13c6ff150c772ba2701804777032ec3ba43a00eb57",
-    "Nci.Formalism.Annotation.work": "82e98306cb330d77c68642728558d77779b1b373d3280e49d03674d7b4b98c44",
     "Nci.Formalism.Annotation.θ'": "c36bb29467369ba299bc1f820857190375b35ce280264dc04de6ff3752a7ece7",
-    "Nci.Formalism.FrozenShare": "c30991424d10c653456174911ca697182c759d28d99a48ba4981edcbbd8e3e90",
-    "Nci.Formalism.PeakBound": "2f381efb7adae7c01b0836ab87bb62a726c0becce3af52ba41fcc74f89e5a87c",
-    "Nci.Formalism.ReachLimit": "ecf2d1fae4a5e57e7ec817351f39c27baad3baf3144088f22cbd48a841ed02cc"
+    "Nci.Formalism.PeakAtMost": "551f9186a5d5cc423e2018bdabba52b1a5fb84b1771d707656f2b025d4c6e66a"
    },
    "guarantees": [
-    "Nci.Formalism.SecurityProofs.CapacityBound",
-    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownEven",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
+    "Nci.Formalism.SecurityProofs.Slowdown_honest",
     "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm_honest",
-    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial"
+    "Nci.Formalism.SecurityProofs.TokenCap",
+    "Nci.Formalism.SecurityProofs.TokenCapClean"
    ]
   },
   "Definitions.Nci.Guarantees": {
@@ -27996,61 +27694,41 @@
    ]
   },
   "Definitions.Nci.Guarantees.Formalism": {
-   "digest": "c61eaab8451e5ae8d9c87cc4c290a4b4d868e7dcd8cf774e93cde3bd16b5f517",
+   "digest": "461579adce3611fec2eae504c4a1818898c5630e0bd2b47fb97cc56b58ec5bfb",
    "definitions": {
-    "Nci.Formalism.Guarantees.CapacityBound": "74870949b4b1666660bf3c366fb4f6d493aca90dfbda5d86336e1892a323f3c8",
-    "Nci.Formalism.Guarantees.Counting": "6998db00f9cbfdeca10e42d8bc465432181984e87ba5ae97a2e1ec471e887852",
+    "Nci.Formalism.Guarantees.Counting": "2969a919c81838f3332d1db6527e7f47cee9cd407adb8a60896dd0a60c6f2db3",
     "Nci.Formalism.Guarantees.FitHonestServing": "974760070b07ba321f59e7510d0cefab6a0dfaad27777eb3684df01af4f3bdbe",
     "Nci.Formalism.Guarantees.FitServing": "087b43ca9e00a97e5777b54a75b74ebd40f617791edcf4ab7088b7af703a281d",
     "Nci.Formalism.Guarantees.FitTraining": "cbc8d17a14ef16b878b19d5be0db3b4e8524f645fa50c4ee5b77ad369f630993",
-    "Nci.Formalism.Guarantees.ReachableShareBound": "26f7318a06e8173c77649cc911777ca90eb4e75c4af4e8030a4ae256a9638149",
-    "Nci.Formalism.Guarantees.Security": "fc9bd3dee62e6c1da519d2beefb15a82ea554e43a6272d9241fe73e8357e59f9",
-    "Nci.Formalism.Guarantees.Slowdown": "f1f732b1e58818d46dbc060df4a5a6f20671ffe279967a9420c71f37cb126155",
-    "Nci.Formalism.Guarantees.SlowdownClaim": "d17d920f31c5cd0c34f236fb2b61597f48be2bb95e2c581b2ab56776648afa53",
-    "Nci.Formalism.Guarantees.SlowdownEven": "4198c707c48018ff7a6f0510c852c1fb38d2c18572f8ef184567478563eeec2a",
-    "Nci.Formalism.Guarantees.SlowdownFrozen": "14d8b00666231f19583d8fa15fd36d5cc8fb646a75601fa91bba17f3e6798f62",
-    "Nci.Formalism.Guarantees.TokenForm": "923f14d181c78525281ac98bb57e32c765f27fceb8ae04c294cfb3bd8f397e92",
-    "Nci.Formalism.Guarantees.TokenFormVarying": "e6a5bebbe477f4b1f978c3bc07de7e996d161cff157b47c90f27b8918a9275a9"
+    "Nci.Formalism.Guarantees.Security": "a10964f0ec0879aebc8d4e7513e8082a60d2f3c91c9de763618dee3f8d726145",
+    "Nci.Formalism.Guarantees.Slowdown": "f765e2f387b605a255dffa6be30bfea50720af4ad91e93818ccd329680e984f3",
+    "Nci.Formalism.Guarantees.TokenCap": "158bd1dd79511ec1ad9e5fb5fd6c6cf0a7bf863849171684bb88d1bc78b318bc",
+    "Nci.Formalism.Guarantees.TokenCapClean": "0b06c21daf4c359acd90ea874ab55fea785535df60b565205a833e110e34170e"
    },
    "guarantees": [
-    "Nci.Formalism.SecurityProofs.CapacityBound",
     "Nci.Formalism.SecurityProofs.Counting",
     "Nci.Formalism.SecurityProofs.FitHonestServing",
     "Nci.Formalism.SecurityProofs.FitServing",
     "Nci.Formalism.SecurityProofs.FitTraining",
-    "Nci.Formalism.SecurityProofs.ReachableShareBound",
     "Nci.Formalism.SecurityProofs.Security",
     "Nci.Formalism.SecurityProofs.Slowdown",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim",
-    "Nci.Formalism.SecurityProofs.SlowdownEven",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen",
-    "Nci.Formalism.SecurityProofs.TokenForm",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying"
+    "Nci.Formalism.SecurityProofs.TokenCap",
+    "Nci.Formalism.SecurityProofs.TokenCapClean"
    ]
   },
   "Definitions.Nci.Guarantees.Formalism.Witnesses": {
-   "digest": "ac6a5f39f94183958e965724d2f94564ae6655d91cca6c7fcb2bf3d6a4c9be8c",
+   "digest": "19d4424819ff4865c06a3380b265f328db4abe569c6f87b66b580bd2d646281a",
    "definitions": {
-    "Nci.Formalism.Guarantees.Counting_honest": "b7a5302b72a55eb692d106ef1d91fa452478f6e859823a96722dc5c792c83fd0",
-    "Nci.Formalism.Guarantees.Counting_nontrivial": "fbb12dd38bd8c111539819e4592affbb4f5c753b287ab6e1a36d9b8d06b091b8",
+    "Nci.Formalism.Guarantees.Counting_honest": "b6a09ffb64b70ab36920c4025360658bf12ef0de18e95c95380210d89af4095d",
+    "Nci.Formalism.Guarantees.Counting_nontrivial": "418e47047aaa6b50fa4a76eb7899f467fe3b5bca0971403a252b9ca62ed4ba58",
     "Nci.Formalism.Guarantees.FitServing_honest": "c542dbfe54ee351fc9bbeb6ab1266e8f95eafa7feaf7325a9e19a3f7a2762d6a",
     "Nci.Formalism.Guarantees.FitServing_nontrivial": "7935455fdb436211e244a377e64604640b7b74675f4744f87986c1685a63501e",
     "Nci.Formalism.Guarantees.FitTraining_honest": "08b86b85eaeb90e09e3c3660be10fcf04fcc9f56f29eb1ec33e8ecab47044ba9",
     "Nci.Formalism.Guarantees.FitTraining_nontrivial": "ca49f36e0f5dced0af098600bc423ae4356fc07f8a6ef3c5950965a11ff3e044",
-    "Nci.Formalism.Guarantees.Security_honest": "71eeb858d1e49cabc9249a7007594aa2b4979da84d8d631eb9dbdb7eb3cdbf26",
-    "Nci.Formalism.Guarantees.Security_nontrivial": "48baa68974935bac3a19cdc109082092f09c76fb7b530c2526dec7b2dd23eadb",
-    "Nci.Formalism.Guarantees.SlowdownClaim_honest": "ea8d1bebd62a75df88a5e055ada9a73ed5078277ee28ed5674355bea75b2d64f",
-    "Nci.Formalism.Guarantees.SlowdownClaim_nontrivial": "86be058c88998666101e69566a4fd18d72679470064e95469cfa88a5d91c46f7",
-    "Nci.Formalism.Guarantees.SlowdownEven_honest": "d814fd07b3848efbe6061c8679d378232c1b1e2b36c45e998162438345fcdcaf",
-    "Nci.Formalism.Guarantees.SlowdownEven_nontrivial": "337406208f5a256fbf116658e80b0b44073cfbafe86c1e3efb0b910e1bfc07e7",
-    "Nci.Formalism.Guarantees.SlowdownFrozen_honest": "44e5698566501da991a150ec29c4ba9ae25cce4c601ee4d315bbf8588257ad0d",
-    "Nci.Formalism.Guarantees.SlowdownFrozen_nontrivial": "216a227d6bf507f3c9159dd98c5ca98121589a26c0d7362836190672759a219b",
-    "Nci.Formalism.Guarantees.Slowdown_honest": "041a4cf74875cd49ede82b809db7e6591a08ccc3c013ef81656db17827f4cf94",
-    "Nci.Formalism.Guarantees.Slowdown_nontrivial": "b1b7778f813e4e8265303f9c0109d9a4fb6f7a29f9ab3b71e489b0d75758971b",
-    "Nci.Formalism.Guarantees.TokenFormVarying_honest": "b72eb83fb1da7f9dcdf342290f0bc264838d136ebd94f0a8e492898bc12d7e4d",
-    "Nci.Formalism.Guarantees.TokenFormVarying_nontrivial": "dd2de679770f9ef47fdc1dea35c96c0b095baf3950caacc5d1ca99a12c6de3e6",
-    "Nci.Formalism.Guarantees.TokenForm_honest": "ab58ca6b5882a226f73f91b7969897fe0c3eb123973312f15f29dda02c078e07",
-    "Nci.Formalism.Guarantees.TokenForm_nontrivial": "b41d26a6690ee4bec9120bb74cc083aa7a5f16942d5eef8a8b4ae987831e4a50"
+    "Nci.Formalism.Guarantees.Security_honest": "cac1ff2aa3be3d522ddc86a519a937ac5f7d2560fc3b42c2b37424440abc9d57",
+    "Nci.Formalism.Guarantees.Security_nontrivial": "d27e7660cf2070f50c24b543a924826304756ad6c6b0c8bfd5a1b3b39bd08542",
+    "Nci.Formalism.Guarantees.Slowdown_honest": "f383066ddad5f8a073e79365b7802479e51e0e52c33a719d0c9fcf47bd65d59e",
+    "Nci.Formalism.Guarantees.Slowdown_nontrivial": "0e5a07125e8aa3c6eb1ea5155889e3a44529c7ce956d8b48c22bdc751c924677"
    },
    "guarantees": [
     "Nci.Formalism.SecurityProofs.Counting_honest",
@@ -28061,18 +27739,8 @@
     "Nci.Formalism.SecurityProofs.FitTraining_nontrivial",
     "Nci.Formalism.SecurityProofs.Security_honest",
     "Nci.Formalism.SecurityProofs.Security_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownClaim_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownEven_nontrivial",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_honest",
-    "Nci.Formalism.SecurityProofs.SlowdownFrozen_nontrivial",
     "Nci.Formalism.SecurityProofs.Slowdown_honest",
-    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_honest",
-    "Nci.Formalism.SecurityProofs.TokenFormVarying_nontrivial",
-    "Nci.Formalism.SecurityProofs.TokenForm_honest",
-    "Nci.Formalism.SecurityProofs.TokenForm_nontrivial"
+    "Nci.Formalism.SecurityProofs.Slowdown_nontrivial"
    ]
   },
   "Definitions.Nci.Guarantees.Info": {
