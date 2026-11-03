@@ -90,11 +90,14 @@ class _SeatPort(D.Port):
 def seat_input(draw) -> dict:
     """`{"part", "record", "session"}`: an outer session of a scene, on a record none of whose recursive sessions has a
     release schedule (this relay refuses a scheduled session, which the Lean ZK server, keeping its times, admits); half
-    the time, on a record whose last line is whole, after a holder of the slot, of any session, that ended before its
-    outcome, whose stop the seat records."""
+    the time, on a record whose last line is whole, after a holder of the slot that ended before its outcome: of any
+    session, or of another one the record opened, whose stop the seat records (a stop only of a session opened)."""
     text, s, p, _ = draw(R.scene().filter(lambda sc: '"release": {' not in sc[0]))
     if (not text or text.endswith("\n")) and draw(st.booleans()):
-        text = R.python_op({"op": ["slot", draw(R.SESSION), draw(R.PART)], "record": text})["record"]
+        events = [json.loads(line) for line in text.splitlines() if line]
+        opened = sorted({e["session"] for e in events if e["event"] == "open"} - {s})
+        holder = draw(st.sampled_from(opened)) if opened and draw(st.booleans()) else draw(R.SESSION)
+        text = R.python_op({"op": ["slot", holder, draw(R.PART)], "record": text})["record"]
     return {"part": p, "record": text, "session": s}
 
 
