@@ -1,4 +1,5 @@
 import Proofs.Flock.SessionLoop.Statement
+import Proofs.Flock.SessionLoop.Inner
 import Proofs.Flock.SessionLoop.TakenVals
 import Proofs.Flock.Claims.ZK.FrameUnrefused
 import Proofs.Flock.SessionLoop.Link
