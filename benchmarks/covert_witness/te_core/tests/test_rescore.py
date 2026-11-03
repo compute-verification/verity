@@ -144,16 +144,18 @@ def test_stubs_score_every_valid_row(tmp_path, monkeypatch):
 
 def test_the_analysis_reads_the_pinned_versions_records_so_the_pilot_keeps_its_quantities(tmp_path):
     """The scorer's regimes (scorer.py's `regime_of`): `current` for the pin's version, `pin V` for an earlier pinned
-    version's (v2.3's, the pilot's, once v3 is pinned), `paired` and `earlier`; the analysis reads the first two."""
-    regimes = ("current", "pin 2.3", "paired", "earlier")
+    version's (v2.3's, the pilot's, once v3 is pinned), `paired` and `earlier`; the analysis reads the first two, on
+    the starts the scorer's starts.json has (the last record's start, s-t20, isn't one)."""
+    regimes = ("current", "pin 2.3", "paired", "earlier", "current")
     scorer, ledger = tmp_path / "scorer", tmp_path / "ledger"
     scorer.mkdir()
     ledger.mkdir()
     (scorer / "submissions.json").write_text(json.dumps([{"id": f"te:s{i}", "regime": g, "macs": 1}
                                                          for i, g in enumerate(regimes)]))
-    (scorer / "index.jsonl").write_text("".join(json.dumps({"source": "launch.py", "id": f"te:s{i}", "run": f"run{i}"})
+    (scorer / "index.jsonl").write_text("".join(json.dumps({"source": "launch.py", "id": f"te:s{i}", "run": f"run{i}",
+                                                            "start": "s-t20" if i == 4 else "s50"})
                                                 + "\n" for i in range(len(regimes))))
-    (scorer / "starts.json").write_text("{}")
+    (scorer / "starts.json").write_text(json.dumps({"s50": {}}))
     (ledger / "index.jsonl").write_text("".join(json.dumps({"run_id": f"run{i}", "macs": 1, "macs_log": {"ops": {}}})
                                                 + "\n" for i in range(len(regimes))))
     subs, _, _, counted = rescore.load_analysis(rescore.ANALYSIS).load(scorer, ledger)
