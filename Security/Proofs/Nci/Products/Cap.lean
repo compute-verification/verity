@@ -3,7 +3,7 @@ import Proofs.Core.Combinatorics
 import Proofs.Nci.Formalism.Slowdown
 
 /-!
-# Products of two fresh operands: the cap, its word-level form and the slowdown
+# Products of two fresh operands: the cap, its word-level form, the cap along chains and the slowdown
 
 For a partition `P` into `m` inference blocks, block `u` with gates `I_u` and reads `U_u = in(I_u) \ θ`, the four facts
 the amortized cap (`Verity.Combinatorics.sum_card_le`) reads, with `T_u` the products whose MAC lies in `I_u`:
