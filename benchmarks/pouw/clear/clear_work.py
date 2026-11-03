@@ -123,9 +123,9 @@ def cell_credit(scheme: C.PearlC, record: UnitRecord) -> Fraction:
 @dataclass(frozen=True)
 class DrawWref:
     """The `W_ref` a Lean statement's sample weighs by: `wrefDevRev1K (devAt d prices) c`, the scheme's rev1 `wref` at the
-    statement's prices plus `c` per activation element (the honest kernel's forming beyond the record's).  `GγSampled`,
+    statement's prices plus `c` per activation element (the honest kernel's forming beyond the record's).  `GGapSampled`,
     `HonestTileCapRate` and `CompleteSampled` take tickets proportional to a tile's `Wref`, over all of its rows and
-    columns, so a draw by another price record's `wref` attains the statement's γ only on a layout of one (n, k): on a
+    columns, so a draw by another price record's `wref` attains the statement's gap only on a layout of one (n, k): on a
     served step's four linears the per-linear ratios differ.  `tile_weight` counts credited cells
     only, so the tickets are the statement's on fully credited tiles; a tile with filler, excluded or voluntary rows
     gets less than its `Wref`'s ticket at the scale that fully credited tiles get theirs, so unless every tile's
@@ -138,7 +138,7 @@ class DrawWref:
     c: Fraction
 
 
-#: The statement Pearl-C v1's served γ and ε cite on sm_120 at its cap 1/1,000 (`ServedMixedRev1Gamma`, `Completeness`'s
+#: The statement Pearl-C v1's served gap and ε cite on sm_120 at its cap 1/1,000 (`ServedMixedRev1Gap`, `Completeness`'s
 #: `HonestTileCapRate`): `Prices.sm120Loop` ⟨1047/125, 2, ⟨40, 2⟩⟩ and the honest cast at 218/25 against the record's
 #: 8953/1000 (the credited cast 8 and the A-only forming's measured 1.047, rounded up to qa = 2).
 SM120_LOOP_CAST_8P72 = DrawWref("pearlCSampledSm120v1LoopCast8p72Rev1Cap1000", SM120.name, SM120.cap,

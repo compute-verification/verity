@@ -1,4 +1,4 @@
-"""γ accounting for the PoUW schemes under W1 on the RTX 4090 (the problem statement's cost model; Derived).
+"""Gap accounting for the PoUW schemes under W1 on the RTX 4090 (the problem statement's cost model; Derived).
 
     uv run python benchmarks/pouw/gamma.py [--json OUT] [--workload benchmarks/pouw/workloads.json]
 
@@ -7,10 +7,10 @@ at peak), marks each term checked or unchecked (an unchecked term is work an adv
 derives:
 
 - Ω: W_ref over the work the scheme's conjecture credits (NCP: the 3k-deep GEMM, 3·m·k·n; Pearl: its FP8 GEMM);
-- γ where the scheme names γ_0: γ = 1 − (1 − γ_0)/Ω (Lean `gammaFromTTNCP`), the conservative reduction, at a k with
-  γ_0 >= d/(3k) only (TT_NCP's premise; a shape below it is refused);
-- γ's floor from unchecked work: skippable/W_ref, whatever the conjecture;
-- hashing (free in γ, reported as overhead): hashed bytes and SHAKE256-priced units per useful MAC;
+- the gap g where the scheme names a target gap g₀: g = 1 − (1 − g₀)/Ω (Lean `gapFromTTNCP`), the conservative reduction,
+  at a k with g₀ >= d/(3k) only (TT_NCP's premise; a shape below it is refused); an adversary's advantage is g/(1 − g);
+- the gap's floor from unchecked work: skippable/W_ref, whatever the conjecture;
+- hashing (free in the gap, reported as overhead): hashed bytes and SHAKE256-priced units per useful MAC;
 - the overhead against the plain GEMM of the same datatype, in W1 units.
 
 Prices (problem statement §3.1, measured on one RTX 4090): int8 `mma` 1 per MAC; FP8 `mma` with FP32 accumulate 2 per MAC;
@@ -47,7 +47,7 @@ class Term:
 def ncp_terms(m: int, k: int, n: int) -> list[Term]:
     """Route U at β = 128, f = 24, with sub-word extraction priced:
     the schedule whose biased accumulator is ``ncp-v1``'s checked values (Lean `wrefU 24`).  The retired unbiased sums would
-    cost 36 units per position (γ = 1.08% at n = 2,048)."""
+    cost 36 units per position (a gap of 1.08% at n = 2,048)."""
     return [
         Term("GEMM m x 3k x n, int8 mma (u8 x s8)", 3 * m * k * n * MAC_INT8, True, "the credited work"),
         Term("E_1 fields from hash output, one LOP3 per 4", 4 * m * k, True),
