@@ -14,7 +14,8 @@ only the session's public schedule and salted hashes:
 * ``Hello``: the pinned schedule's (profile, reps, flavor, tables, the link's shape), without Σ (a digest of the hidden
   statement), once the prover's, Σ aside, is the same canonical JSON (`canonical`); never the prover's own text or object;
 * ``Commit``: each table's level-0 cap (``root_B``) as its salted top (`commit_top`), answered with the link points; root_F
-  (Σ) stays with the prover;
+  (Σ) stays with the prover. The tables come in the schedule's order (its ``roots``' names, sorted) and no other, so the
+  order carries nothing of the prover's;
 * each ``Round``: the salted top of each tree it commits (its ``BYTES`` frames that are caps), and ``c_k``, a hiding
   commitment to the round's free message, answered with the round's ``n`` coins.
 
@@ -1192,6 +1193,8 @@ class Proxy:
             if len({name for name, _ in roots}) != len(roots):
                 raise ValueError(refused("Commit names a table twice"))
             self._pinned("Commit's roots", {name: len(top_nodes(v)) for name, v in sorted(roots)}, self.schedule["roots"])
+            if [name for name, _ in roots] != sorted(self.schedule["roots"]):
+                raise ValueError(refused("Commit's roots: the tables are not in the pinned schedule's order"))
             self.commit = (root_f, roots, publics)
             bcs = {}
             for t, cap in roots:

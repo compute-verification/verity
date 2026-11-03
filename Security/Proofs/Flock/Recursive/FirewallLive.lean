@@ -207,6 +207,7 @@ theorem step_commit (s : Schedule) (rootF : ByteArray) (roots publics : List (St
   refine Grow.bind Grow.lift fun _ _ h => ?_
   obtain rfl := h
   refine Grow.ite Iff.rfl (fun _ => Grow.throw_bind) fun _ => ?_
+  refine Grow.ite Iff.rfl (fun _ => Grow.throw_bind) fun _ => ?_
   refine Grow.bind (Grow.mapM _ (fun e => ?_) _) fun t t' h => ?_
   · obtain ⟨n, v⟩ := e
     refine Grow.bind (Grow.saltedTop v) fun l l' h => ?_

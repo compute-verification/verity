@@ -480,6 +480,7 @@ theorem step_commit (s : Schedule) (rootF : ByteArray) (roots publics : List (St
   refine Rel.bind Rel.lift fun _ _ q q' h => ?_
   obtain ⟨-, rfl, rfl⟩ := h
   refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
+  refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
   refine Rel.bind (Rel.mapM _ (fun e => e.2) blankRoot (fun e r r' => ?_) _ _ _) fun t t' q q' h => ?_
   · obtain ⟨n, v⟩ := e
     refine Rel.bind (Rel.saltedTop v) fun l l' r₁ r₁' h => ?_
