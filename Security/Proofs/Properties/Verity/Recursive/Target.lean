@@ -438,6 +438,21 @@ theorem ex_coll_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array Byte
   exact le_trans (hbind p.1 p.2)
     (div_le_div_of_nonneg_right (ex_bindAt_cost_le q V S collOf nI dColl hn hdColl p.1 p.2) (by positivity))
 
+/-- **A drawn unit weighs at most a bit's two readings**: at a bit `i` of a wire `g` of the unit `u`, the probability
+that the run accepts, draws `u` and the extractor returns a witness in the recursive relation is at most the bit's
+weight at `true` plus its weight at `false`. -/
+theorem drawn_le_sum (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
+    {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) {u : Fin (V.units θ F)}
+    {g : Fin (V.circuitOf θ F).N} (hg : g ∈ (V.partsOf θ F).io u) (i : ℕ) :
+    Ex (fun ξ => Pr (drawEvent q V S u ξ)) ≤ q.weight V S readX g i true + q.weight V S readX g i false := by
+  rw [weight_eq, weight_eq, ← Claims.Ex_add]
+  refine Ex_mono fun ξ => le_trans (Pr_mono fun s hs => ?_) (pr_or_le _ _)
+  obtain ⟨hacc, hu, wt, hw, hR⟩ := hs
+  cases hb : (readX (S.x ξ) wt g).getLsbD i
+  · exact Or.inr ⟨hacc, ⟨u, hu, hg⟩, wt, hw, hR, hb⟩
+  · exact Or.inl ⟨hacc, ⟨u, hu, hg⟩, wt, hw, hR, hb⟩
+
 /-- **The plurality's bit weighs at least half a drawn unit**: at a bit `i` of a wire `g` of the unit `u`, the weight of
 the bit `Dep.extract` picked there is at least half the probability that the run accepts, draws `u` and the extractor
 returns a witness in the recursive relation. -/
@@ -446,14 +461,7 @@ theorem drawn_le_weight (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) {u : Fin (V.units θ F)}
     {g : Fin (V.circuitOf θ F).N} (hg : g ∈ (V.partsOf θ F).io u) {i : ℕ} (hi : i < (V.circuitOf θ F).w g) :
     Ex (fun ξ => Pr (drawEvent q V S u ξ)) ≤ 2 * q.weight V S readX g i ((q.extract V S readX g).getLsbD i) := by
-  have hsum : Ex (fun ξ => Pr (drawEvent q V S u ξ)) ≤
-      q.weight V S readX g i true + q.weight V S readX g i false := by
-    rw [weight_eq, weight_eq, ← Claims.Ex_add]
-    refine Ex_mono fun ξ => le_trans (Pr_mono fun s hs => ?_) (pr_or_le _ _)
-    obtain ⟨hacc, hu, wt, hw, hR⟩ := hs
-    cases hb : (readX (S.x ξ) wt g).getLsbD i
-    · exact Or.inr ⟨hacc, ⟨u, hu, hg⟩, wt, hw, hR, hb⟩
-    · exact Or.inl ⟨hacc, ⟨u, hu, hg⟩, wt, hw, hR, hb⟩
+  have hsum := drawn_le_sum q V S readX hg i
   have hx := extract_bit q V S readX g hi
   cases hb : (q.extract V S readX g).getLsbD i
   · have : q.weight V S readX g i true ≤ q.weight V S readX g i false :=

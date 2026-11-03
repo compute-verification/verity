@@ -34,7 +34,8 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
     session (`Assumptions.Zk.RecordCustodyZKJ`).
   - `live-verifier` is admissible here only until the component reads the session's coins through the
     coin server's signed device log. Then `LiveCoins` follows from the log's signatures, and the premise goes.
-* **The target** (`sampledProofsRecursive`, stated and proved in `Proofs.Properties.Verity.Recursive.Target`): sampled
+* **The target** (`sampledProofsRecursive`, stated and proved in `Proofs.Properties.Verity.Recursive.Chase`, from the
+  binding finder's bound in `Proofs.Properties.Verity.Recursive.Target` and the chasing finder's beside it): sampled
   proofs at the recursive configuration, in `Vocab.Target k .sampled`'s form (`Properties.Verity.Game`) with the
   recursive component's verdict (`RecVerdict`).
   - The game is causal (R5): the parameters, the registered circuit file and the commitment come first; then the
