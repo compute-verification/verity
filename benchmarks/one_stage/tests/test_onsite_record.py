@@ -1,16 +1,19 @@
 """`onsite_record.py` on toy served runs' $OUTs. A run whose network certifier, PoUW and composites are missing, as a
 rehearsal's, records each of them missing with its why, and no bound and no period figure. A run whose network
 certifier accepted in the rows form records K term by term in the notation table's symbols, each naming the public
-fields it sums, with its overcount and the connections its schedule's caps count (other caps are the connections'
-error), its run's own period proved, and each monitoring
-period's node, datacenter and world scaled from it at the execution phase its case's schedule gives, each naming its
-rule and parameters, beside its figure over one execution phase. A public whose terms don't sum to K, or in the clock
-form, is the bound's error. The served run's advice charge stays out of the record, and a test run's measurement is
-stated beside the bound as that run's. The run's `publish` leaves the record as written. The run is of record only when
-every verdict, the onsite composite's included, accepted."""
+fields it sums, with its overcount as a note, the seconds it covers, the line that published its verdict, the tree, and
+the connections its schedule's caps count (other caps are the connections' error); its run's own period proved, and
+each monitoring period's node proved where the run's period covers it and else scaled from the run, and the
+datacenter's and the world's scaled from the node's, each scaled cell naming its rule, whose sources (the census lines
+by SHA-512) the record states, beside its figure over one execution phase. A public whose terms don't sum to K, or in
+the clock form, is the bound's error. The served run's advice charge stays out of the record, the registered width
+stands as its upper bound, and a test run's measurement is stated beside the bound as that run's. The run's `publish`
+leaves the record as written. The run is of record only when every verdict, the onsite composite's included,
+accepted."""
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import math
 import sys
@@ -41,6 +44,9 @@ MEASURED = {"format": "verity/advice-charge/v1", "label": "measured on test run 
             "phases": [{"phase": 0, "bits": 480}, {"phase": 1, "bits": 2390}],
             "bits": {"count": 2, "min": 480, "median": 1435, "mean": 1435.0, "max": 2390, "total": 2870},
             "prompt_len": {"count": 5}, "output_len": {"count": 5}, "finishes": {"eos": 3, "length": 2, "abort": 0}}
+TREE = "ab12" * 10
+#: the certifier's published verdict line, after an earlier attempt's
+LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
 
 
 def answer(public: dict | None, verdict: str = "accept") -> dict:
@@ -91,10 +97,14 @@ def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list
     pouw = {"protocol": "verity/pouw/period/v1", "owner": "compute-accounting", "verdict": "accept", "reason": None}
     if caps is None:
         caps = [schedule["egress_cells"]] * (schedule["lanes"] * windows * schedule["window"])
-    return served_out(tmp_path, network=network_row(public), work=pouw,
-                      case={"commitment": "00", "evidence": "00",
-                            "params": {"windows": windows, "cells": caps, "schedule": schedule}},
-                      composites={"remote": remote_composite()})
+    out = served_out(tmp_path, network=network_row(public), work=pouw,
+                     case={"commitment": "00", "evidence": "00",
+                           "params": {"windows": windows, "cells": caps, "schedule": schedule}},
+                     composites={"remote": remote_composite()})
+    (out / "machine.txt").write_text(f"ubuntu\n{NODE}\n{TREE}\n96\nserve dir /serve/d\n")
+    (out / "verdicts.txt").write_text('THE NETWORK CERTIFIER {"rc": 1, "verdict": "error"}\nRECORD {}\n'
+                                      f"{LINE}\nCOMPOSITE CASE verity/certifier/v0 accept\n")
+    return out
 
 
 def numbers(x) -> list:
@@ -121,9 +131,10 @@ def test_a_rehearsal_records_each_missing_part_with_its_why_and_no_figure(tmp_pa
     assert rec["bound"] == {"missing": "the network certifier's verdict is missing (CERTIFIER_CMD unset: the network "
                                        "certifier in front of the serving endpoint): only its accepted answer certifies K"}
     assert rec["periods"] == {"missing": "no bound"}
-    assert rec["advice_charge"] == {"served": OR.ADVICE, "measured": {"missing": OR.NO_MEASUREMENT}}
+    assert rec["advice_charge"] == {"served": OR.ADVICE, "registered": {"missing": "no bound"},
+                                    "measured": {"missing": OR.NO_MEASUREMENT}}
     assert numbers({k: rec[k] for k in ("bound", "periods", "verdicts", "advice_charge")}) == []
-    assert "window" not in rec
+    assert "window" not in rec and rec["tree"] is None
     line = capsys.readouterr().out.strip()
     assert line.startswith("ONSITE ") and json.loads(line[7:])["K"] is None
 
@@ -131,17 +142,21 @@ def test_a_rehearsal_records_each_missing_part_with_its_why_and_no_figure(tmp_pa
 def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_connections(tmp_path):
     rec = OR.record(accepted(tmp_path))
     b = rec["bound"]
-    assert (b["K"], b["phases"], b["delta_net"], b["statement"]) == (
-        K, 1, "1/1048576", "NetTiming.Guarantees.PeriodLeakAccepted")
+    assert (b["K"], b["phases"], b["period_s"], b["delta_net"], b["statement"]) == (
+        K, 1, "63/50", "1/1048576", "NetTiming.Guarantees.PeriodLeakAccepted")
+    assert (rec["run"], rec["tree"], b["verdict_line"]) == ("toy-run", TREE, LINE)
     assert [(t["symbol"], t.get("phase"), t["bits"], t["lean"]) for t in b["terms"]] == [
         ("k_{sched}", None, 756, ["schedules"]), ("k_{fail}", None, 756, ["cells"]),
         ("\\ell_{a,i}", 0, 9088, ["scans[0].free"]),
         ("k_{skip,i}", 0, 0, ["scans[0].faulty_sets", "scans[0].faulty_bits", "scans[0].faulty_entries"]),
         ("k_i \\log_2 d_{jit}", 0, 63, ["scans[0].jitter"])]
     assert sum(t["bits"] for t in b["terms"]) == b["K"]
-    assert b["overcount"] == OR.OVERCOUNT and "k_sched" in b["overcount"] and "k_fail" in b["overcount"]
+    assert b["notes"] == [OR.OVERCOUNT] and "k_sched" in OR.OVERCOUNT and "k_fail" in OR.OVERCOUNT
     assert b["connections"] == {"count": 4 * 63, "from": OR.CONNECTIONS}
     assert rec["placement"] == {"trusted-host": "the certifier on the gate's host"}
+    assert rec["advice_charge"]["registered"] == {
+        "label": "registered width, an upper bound on the honest charge", "bits_per_phase": [9088],
+        "share": 9088 / K, "lean": "scans[i].free"}
 
 
 def test_w63k4_at_a_4_s_tick_charges_768_bits_a_link_window_for_its_128_connections_whatever_the_traffic(tmp_path):
@@ -156,7 +171,7 @@ def test_w63k4_at_a_4_s_tick_charges_768_bits_a_link_window_for_its_128_connecti
     b = rec["bound"]
     assert [t["bits"] for t in b["terms"] if t.get("phase") is None] == [1152, 1152]
     assert b["connections"] == {"count": 3 * 128, "from": OR.CONNECTIONS}
-    assert (rec["periods"]["phase_s"], rec["periods"]["run"]["seconds"]) == ("128", "384")
+    assert (rec["periods"]["phase_s"], rec["periods"]["run"]["seconds"], b["period_s"]) == ("128", "384", "384")
     assert rec["periods"]["week"]["node"]["parameters"]["connections"] == str(128 * math.ceil(7 * 86400 / 128))
 
 
@@ -170,6 +185,13 @@ def test_a_case_whose_caps_arent_its_schedules_is_the_connections_error(tmp_path
     assert rec["bound"]["K"] == K and rec["bound"]["connections"] == {"error": why} and rec["periods"] == {"error": why}
 
 
+def census_line(name: str, *fields: str) -> dict:
+    d = next(d for d in json.loads((LB.CENSUS / name).read_text()) if d["role"] == "reference")
+    digest = hashlib.sha512(json.dumps(d, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode())
+    return {"file": f"benchmarks/census/{name}", "id": d["id"], "read": {f: d[f] for f in fields},
+            "sha512": digest.hexdigest()}
+
+
 def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one_phase(tmp_path):
     p = OR.record(accepted(tmp_path))["periods"]
     phase = Fraction(63 * 20, 1000)
@@ -178,22 +200,40 @@ def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one
     assert p["phase_s"] == str(phase) and p["run"] == one | {
         "seconds": str(phase), "phases": 1, "connections": 252, "per_phase": one}
     links = {"node": 1, "datacenter": LB.datacenter_links(), "world": LB.world_links()}
-    census = {"datacenter": "dc-12500-machines-600s", "world": ["world-inference-2027", "dc-12500-machines-600s"]}
+    rules = {"node": "run-to-period", "datacenter": "datacenter", "world": "world"}
     for name, seconds in LB.PERIODS.items():
         w = math.ceil(Fraction(seconds) / phase)
         assert (p[name]["seconds"], p[name]["phases"]) == (seconds, w)
         for where, n in links.items():
             c = p[name][where]
             assert (c["bits"], c["eps"], c["how"], c["rule"]) == (K * w * n, str(Fraction(1, 2 ** 20) * w * n),
-                                                                  "scaled", where)
+                                                                  "scaled", rules[where])
             assert c["vacuous"] == (w * n >= 2 ** 20) and c["share"] == K * w * n / LB.WEIGHTS.bits
-            assert c["parameters"] == {"phases": w, "phase_s": str(phase), "connections": str(252 * w * n), "links": n,
-                                       **({"census": census[where]} if where in census else {})}
-            assert c["per_phase"] == {"bits": K * n, "share": K * n / LB.WEIGHTS.bits,
-                                      "eps": str(Fraction(n, 2 ** 20)), "vacuous": n >= 2 ** 20, "how": "scaled",
-                                      "statement": OR.STATEMENTS[where]}
-            assert c["rule"] in p["rules"]
+            assert c["parameters"] == {"phases": w, "phase_s": str(phase), "connections": str(252 * w * n), "links": n}
+            assert c["per_phase"] == (one if where == "node" else {
+                "bits": K * n, "share": K * n / LB.WEIGHTS.bits, "eps": str(Fraction(n, 2 ** 20)),
+                "vacuous": n >= 2 ** 20, "how": "scaled", "rule": where, "statement": OR.STATEMENTS[where]})
     assert p["week"]["datacenter"]["statement"] == LB.STATEMENTS["datacenter"]
+    assert {k: r["sources"] for k, r in p["rules"].items()} == {
+        "per-phase": [OR.FROM_BOUND], "run-to-period": [OR.FROM_BOUND, OR.FROM_SCHEDULE],
+        "datacenter": [census_line("deployments.json", "machines")],
+        "world": [census_line("adversary.json", "total_flop", "flop_per_s_per_h100", "monitoring_period_s"),
+                  census_line("deployments.json", "gpus_per_machine")]}
+    assert p["rules"]["datacenter"]["sources"][0]["id"] == "dc-12500-machines-600s"
+    assert {k: r["rule"] for k, r in p["rules"].items()} == OR.RULES
+
+
+def test_a_node_cell_is_proved_where_the_runs_period_covers_its_monitoring_period(tmp_path):
+    """An execution phase of 63 buckets of 10,000 s covers a week but not a month: the node's week is the run's K,
+    proved, and its datacenter scaled from that by its machines; its month is scaled from the run."""
+    p = OR.record(accepted(tmp_path, schedule=dict(SCHEDULE, bucket_ms=10_000_000)))["periods"]
+    week, month = p["week"], p["month"]
+    assert (week["node"]["bits"], week["node"]["how"], "rule" not in week["node"]) == (K, "proved", True)
+    assert week["node"]["parameters"] == {"phases": 1, "phase_s": "630000", "links": 1, "connections": "252"}
+    n = LB.datacenter_links()
+    assert (week["datacenter"]["bits"], week["datacenter"]["rule"]) == (K * n, "datacenter")
+    w = math.ceil(Fraction(LB.PERIODS["month"], 630000))
+    assert (month["node"]["bits"], month["node"]["rule"], month["phases"]) == (K * w, "run-to-period", w)
 
 
 def test_a_scaled_cell_over_several_phases_rounds_up(tmp_path):
@@ -201,7 +241,7 @@ def test_a_scaled_cell_over_several_phases_rounds_up(tmp_path):
                scans=[SCAN, dict(SCAN, faulty_sets=1)])
     p = OR.record(accepted(tmp_path, two, windows=2))["periods"]
     w = math.ceil(Fraction(LB.PERIODS["month"]) / Fraction(63, 50))
-    assert w % 2 and p["run"]["bits"] == two["K"] and p["run"]["per_phase"]["how"] == "scaled"
+    assert w % 2 and p["run"]["bits"] == two["K"] and p["run"]["per_phase"]["rule"] == "per-phase"
     assert p["month"]["node"]["bits"] == math.ceil(Fraction(two["K"], 2) * w) != Fraction(two["K"], 2) * w
     assert p["month"]["node"]["parameters"]["connections"] == str(252 * w)
     assert p["run"]["per_phase"]["bits"] == math.ceil(Fraction(two["K"], 2))
@@ -254,10 +294,11 @@ def test_a_test_runs_measured_advice_charge_is_beside_the_bound_as_that_runs(tmp
     f.write_text(json.dumps(MEASURED))
     assert OR.main([str(out), "--advice-charge", str(f)]) == 0
     rec = json.loads((out / "record" / "onsite.json").read_text())
-    assert rec["advice_charge"] == {"served": OR.ADVICE, "measured": {
+    assert rec["advice_charge"]["measured"] == {
         "label": MEASURED["label"], "run": "toy-test", "from": str(f), "bits_per_phase": MEASURED["bits"],
         "phases_measured": 2, "finishes": MEASURED["finishes"], "prompt_len": MEASURED["prompt_len"],
-        "output_len": MEASURED["output_len"]}}
+        "output_len": MEASURED["output_len"]}
+    assert (rec["advice_charge"]["served"], rec["advice_charge"]["registered"]["bits_per_phase"]) == (OR.ADVICE, [9088])
     assert json.loads(capsys.readouterr().out.strip()[7:])["advice_measured_on"] == "toy-test"
     f.write_text(json.dumps(MEASURED | {"format": "verity/other/v1"}))
     assert OR.main([str(out), "--advice-charge", str(f)]) == 1

@@ -25,29 +25,37 @@ notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields
 (``schedules``), k_fail (``cells``) and, for each execution phase i of the certification period (the code's link-window,
 the public's ``scans[i]``), ℓ_{a,i} (``free``), k_{skip,i} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
 the jitter (``jitter``). They sum to K, by which `NetTiming.Guarantees.PeriodLeakAccepted` bounds what the serving node
-sends past its committed program except with δ_net, the answer's ``eps`` (`DELTA_NET_BESIDE`). K is that statement's
-count as proved, a known overcount (`OVERCOUNT`); ``connections`` is how many connections k_sched and k_fail count,
-every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's caps aren't those. A public whose terms
-don't sum to K, or that isn't the rows form, is the bound's ``error``. Beside the bound, ``advice_charge``: the served run's realized
-advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet), and ``measured`` is
-honest serving's, measured on a test run with public inputs (`advice_charge.py`'s record, ``--advice-charge``) and
-labelled as that run's, never a figure of this one.
+sends past its committed program except with δ_net, the answer's ``eps`` (`DELTA_NET_BESIDE`), over ``period_s``
+seconds, the run's m execution phases of T buckets of τ (the certifier's case's ``schedule``). K is that statement's
+count as proved, a known overcount (``notes``, `OVERCOUNT`); ``connections`` is how many connections k_sched and k_fail
+count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's caps aren't those; and
+``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in verdicts.txt), None where it
+has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's ``error``. Beside the bound,
+``advice_charge``: the served run's realized advice charge stays out of the record (`ADVICE`, which says what hides it
+and what doesn't yet); ``registered`` is ℓ_{a,i}, the registered width each execution phase's term charges, an upper
+bound on the honest charge (`REGISTERED`), with its share of K; and ``measured`` is honest serving's, measured on a test
+run with public inputs (`advice_charge.py`'s record, ``--advice-charge``) and labelled as that run's, never a figure of
+this one. ``tree`` is the commit the run served from (machine.txt's), None where machine.txt names none.
 
-**Periods**: the run's own certification period (``run``: its m execution phases, each T buckets of τ, from the
-certifier's case's ``schedule``), marked ``proved``, and each monitoring period of `leak_bounds.PERIODS` for the serving
-node, the census's reference datacenter and the world, each marked ``scaled`` and naming its rule (`RULES`) and its
-parameters. Each cell gives K in bits (the least integer at or above a scaled one), its share of one copy of the weights
+**Periods**: the run's own certification period (``run``), proved, and each monitoring period of `leak_bounds.PERIODS`
+for the serving node, the census's reference datacenter and the world. A node's cell is proved where the run's period
+covers the monitoring period's seconds (its m execution phases), and otherwise scaled from the run to the period; a
+datacenter's and the world's are scaled from the node's. Each scaled cell names its rule, which ``rules`` states with
+its sources (`RULES`): the bound, the case's schedule, and each census line it reads with its SHA-512 (`census`). Each
+cell gives K in bits (the least integer at or above a scaled one), its share of one copy of the weights
 (`leak_bounds.WEIGHTS`), its ε, whether that ε is vacuous (at least 1) and the statement it rests on; beside that pooled
-total, ``per_phase`` is the same over one execution phase.
+total, ``per_phase`` is the same over one execution phase, proved only where m is 1.
 
 The record's counts and indices are the certification period's (m and each phase i), public in the Lean answer's
-profile; it names no Commit period.
+profile; it names no Commit window, whose count `publish` holds.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
+import re
 import sys
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
@@ -91,16 +99,25 @@ CONNECTIONS = ("the caps of the certifier's case's params (``cells``), one a con
                "connections the network certifier can carry over the period's m execution phases, so this counts the "
                "connections the schedule can carry, not those served")
 DELTA_NET_BESIDE = "the scans' knowledge and collision errors, which eps doesn't count"
+#: the run's published line of the network certifier's verdict (`served_verdicts.pieces`)
+LINE = "THE NETWORK CERTIFIER "
+REGISTERED = "registered width, an upper bound on the honest charge"
+#: each scaled cell's rule, by the name it gives; `rules` adds each one's sources
 RULES = {
-    "node": "the run's per execution phase times the period's execution phases, ⌈seconds / (T·τ)⌉, each as the run's at "
-            "its load: ℓ_{a,i}, k_{skip,i} and the jitter scale with the phases, and k_sched and k_fail, "
-            "⌈log2(cap_c + 1)⌉ each a connection, with the connections, at the schedule's lanes · T a phase",
+    "per-phase": "the run's K and ε over one of its m execution phases, K/m: their average, which no statement bounds a "
+                 "phase by where m exceeds 1",
+    "run-to-period": "the run's per execution phase times the period's execution phases, ⌈seconds / (T·τ)⌉, each as the "
+                     "run's at its load: ℓ_{a,i}, k_{skip,i} and the jitter scale with the phases, and k_sched and "
+                     "k_fail, ⌈log2(cap_c + 1)⌉ each a connection, with the connections, at the schedule's lanes · T a "
+                     "phase",
     "datacenter": "the node's times the census's reference datacenter's machines, one network certifier on each "
                   "machine's uplink",
     "world": "the node's times the world's links: the adversary resource model's compute over its monitoring period, at "
              "an H100-equivalent's FLOP/s, in machines of the reference datacenter's GPUs, rounded up, one network "
              "certifier on each",
 }
+FROM_BOUND = "bound: the run's K and delta_net over its m execution phases"
+FROM_SCHEDULE = f"{CASE} params.schedule: an execution phase's T buckets of τ"
 STATEMENTS = {"run": LB.STATEMENTS["per_period"], "node": LB.STATEMENTS["per_period"],
               "datacenter": LB.STATEMENTS["datacenter"], "world": LB.STATEMENTS["datacenter"]}
 NO_MEASUREMENT = ("no test run's measurement given (--advice-charge: `advice_charge.py`'s record of honest serving on "
@@ -181,7 +198,7 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
     if "windows" in public and int(public["windows"]) != m:
         raise ValueError(f"{m} scans for the period's {public['windows']} execution phases")
     return {"statement": LB.STATEMENTS["per_period"], "K": K, "phases": m, "delta_net": str(eps),
-            "delta_net_beside": DELTA_NET_BESIDE, "overcount": OVERCOUNT, "terms": terms}
+            "delta_net_beside": DELTA_NET_BESIDE, "notes": [OVERCOUNT], "terms": terms}
 
 
 def schedule(case: Mapping[str, Any], phases: int) -> tuple[Fraction, int]:
@@ -202,38 +219,57 @@ def schedule(case: Mapping[str, Any], phases: int) -> tuple[Fraction, int]:
     return Fraction(int(s["window"]) * int(s["bucket_ms"]), 1000), n
 
 
+def census_line(name: str, *fields: str) -> dict[str, Any]:
+    """The census's reference line in ``name``: its file, its id, the ``fields`` a rule reads, and its version, the
+    SHA-512 of its canonical JSON."""
+    d, = (d for d in json.loads((LB.CENSUS / name).read_text()) if d["role"] == "reference")
+    canonical = json.dumps(d, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    return {"file": str((LB.CENSUS / name).relative_to(HERE.parents[1])), "id": d["id"],
+            "read": {f: d[f] for f in fields}, "sha512": hashlib.sha512(canonical).hexdigest()}
+
+
 def census() -> dict[str, Any]:
-    """The census references the scaled cells read: the reference datacenter's machines and the world's links
-    (`leak_bounds.datacenter_links`, `leak_bounds.world_links`), each with its census id."""
-    dc, = (d for d in json.loads((LB.CENSUS / "deployments.json").read_text()) if d["role"] == "reference")
-    world, = (d for d in json.loads((LB.CENSUS / "adversary.json").read_text()) if d["role"] == "reference")
-    return {"datacenter": {"census": dc["id"], "links": LB.datacenter_links()},
-            "world": {"census": [world["id"], dc["id"]], "links": LB.world_links()}}
+    """The links the datacenter's and the world's cells multiply by (`leak_bounds.datacenter_links`,
+    `leak_bounds.world_links`), each with the census lines it reads."""
+    machines = census_line("deployments.json", "machines")
+    world = [census_line("adversary.json", "total_flop", "flop_per_s_per_h100", "monitoring_period_s"),
+             census_line("deployments.json", "gpus_per_machine")]
+    return {"datacenter": {"links": LB.datacenter_links(), "sources": [machines]},
+            "world": {"links": LB.world_links(), "sources": world}}
 
 
-def cell(bits: Fraction, eps: Fraction, how: str, where: str) -> dict[str, Any]:
+def cell(bits: Fraction, eps: Fraction, where: str, rule: str | None = None) -> dict[str, Any]:
+    """A cell proved, or scaled by ``rule`` (`RULES`)."""
     return {"bits": math.ceil(bits), "share": float(bits / LB.WEIGHTS.bits), "eps": str(eps), "vacuous": eps >= 1,
-            "how": how, "statement": STATEMENTS[where]}
+            "statement": STATEMENTS[where]} | ({"how": "scaled", "rule": rule} if rule else {"how": "proved"})
 
 
 def periods(K: int, eps: Fraction, m: int, phase_s: Fraction, connections: int) -> dict[str, Any]:
-    """The run's own period, proved, and each monitoring period's node, datacenter and world, scaled, each beside its
-    figure over one execution phase (module docstring)."""
+    """The run's own period, proved, and each monitoring period's node, proved where the run's period covers it and
+    else scaled, datacenter and world, scaled from the node's, each beside its figure over one execution phase (module
+    docstring)."""
     refs = census()
     links = {"node": 1, **{k: v["links"] for k, v in refs.items()}}
-    one, one_eps = Fraction(K, m), eps / m
-    run = cell(Fraction(K), eps, "proved", "run") | {
-        "seconds": str(m * phase_s), "phases": m, "connections": connections,
-        "per_phase": cell(one, one_eps, "proved" if m == 1 else "scaled", "run")}
-    out: dict[str, Any] = {"phase_s": str(phase_s), "weights": LB.WEIGHTS.label, "rules": RULES, "run": run}
+    one, one_eps, period_s = Fraction(K, m), eps / m, m * phase_s
+    per_phase = cell(one, one_eps, "run", None if m == 1 else "per-phase")
+    run = cell(Fraction(K), eps, "run") | {"seconds": str(period_s), "phases": m, "connections": connections,
+                                           "per_phase": per_phase}
+    sources = {"per-phase": [FROM_BOUND], "run-to-period": [FROM_BOUND, FROM_SCHEDULE],
+               **{k: v["sources"] for k, v in refs.items()}}
+    out: dict[str, Any] = {"phase_s": str(phase_s), "weights": LB.WEIGHTS.label, "run": run,
+                           "rules": {k: {"rule": text, "sources": sources[k]} for k, text in RULES.items()}}
     for name, seconds in LB.PERIODS.items():
         w = math.ceil(Fraction(seconds) / phase_s)
+        covered = period_s >= seconds
+        node = m if covered else w
         out[name] = {"seconds": seconds, "phases": w}
         for where, n in links.items():
-            params = {"phases": w, "phase_s": str(phase_s), "connections": str(Fraction(connections, m) * w * n),
-                      "links": n, **({"census": refs[where]["census"]} if where in refs else {})}
-            out[name][where] = cell(one * w * n, one_eps * w * n, "scaled", where) | {
-                "rule": where, "parameters": params, "per_phase": cell(one * n, one_eps * n, "scaled", where)}
+            rule = where if where != "node" else None if covered else "run-to-period"
+            params = {"phases": node, "phase_s": str(phase_s), "links": n,
+                      "connections": str(Fraction(connections, m) * node * n)}
+            out[name][where] = cell(one * node * n, one_eps * node * n, where, rule) | {
+                "parameters": params,
+                "per_phase": per_phase if where == "node" else cell(one * n, one_eps * n, where, where)}
     return out
 
 
@@ -249,12 +285,26 @@ def measured(path: Path | None) -> dict[str, Any]:
             "output_len": doc["output_len"]}
 
 
+def lines(out: Path, name: str) -> list[str]:
+    try:
+        return (out / name).read_text().splitlines()
+    except FileNotFoundError:
+        return []
+
+
+def registered(b: Mapping[str, Any]) -> dict[str, Any]:
+    """ℓ_{a,i}, each execution phase's registered width, and their share of K."""
+    free = [t["bits"] for t in b["terms"] if t["symbol"] == "\\ell_{a,i}"]
+    return {"label": REGISTERED, "bits_per_phase": free, "share": float(Fraction(sum(free), b["K"])),
+            "lean": "scans[i].free"}
+
+
 def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     """OUT's onsite record (module docstring); FileNotFoundError where `served_verdicts.py record` wrote no report."""
     report = json.loads((out / "record" / "verdicts.json").read_text())
     if report.get("format") != EXTENDS:
         raise ValueError(f"record/verdicts.json is {report.get('format')!r}, not {EXTENDS}")
-    advice = {"served": ADVICE, "measured": measured(advice_charge)}
+    advice = {"served": ADVICE, "registered": {"missing": "no bound"}, "measured": measured(advice_charge)}
     rows = report.get("protocols") or {}
     found = composites(out)
     v = {name: row_verdict(rows, ROWS[name]) for name in ("sampled proofs", "PoUW")}
@@ -267,8 +317,10 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     net = rows.get(ROWS["the network certifier"]) or {}
     answer = net.get("answer") if isinstance(net.get("answer"), Mapping) else {}
     profile = answer.get("profile") if isinstance(answer.get("profile"), Mapping) else {}
+    tree = next((x for x in lines(out, "machine.txt") if re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", x)), None)
     rec: dict[str, Any] = {
-        "format": FORMAT, "extends": EXTENDS, "run": report.get("run"), "node": report.get("node"), "verdicts": v,
+        "format": FORMAT, "extends": EXTENDS, "run": report.get("run"), "tree": tree, "node": report.get("node"),
+        "verdicts": v,
         "of_record": {"holds": all(x["verdict"] == "accept" for x in v.values()),
                       "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
                       "not_accepting": [k for k, x in v.items() if x["verdict"] not in ("accept", "missing")]},
@@ -285,6 +337,9 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
         b = rec["bound"] = bound(answer.get("public"))
     except ValueError as e:
         return rec | {"bound": {"error": str(e)}, "periods": {"missing": "no bound"}}
+    b["verdict_line"] = next((x for x in reversed(lines(out, "verdicts.txt")) if x.startswith(LINE)), None)
+    advice["registered"] = registered(b)
+    b["period_s"] = None
     try:
         phase_s, connections = schedule(json.loads((out / CASE).read_text()), b["phases"])
     except FileNotFoundError:
@@ -294,6 +349,7 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
         b["connections"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
         return rec | {"periods": {"error": f"{CASE}: {type(e).__name__}: {e}"}}
     b["connections"] = {"count": connections, "from": CONNECTIONS}
+    b["period_s"] = str(b["phases"] * phase_s)
     return rec | {"periods": periods(b["K"], Fraction(b["delta_net"]), b["phases"], phase_s, connections)}
 
 
