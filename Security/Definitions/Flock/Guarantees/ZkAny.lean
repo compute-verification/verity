@@ -9,10 +9,11 @@ public import Definitions.Flock.ZK.AnyValues
 What the ZK server releases is simulated per outcome (`FlockSoundness.ZK.PerOutcome`) for any worker and any trace,
 valid or not, at any values carrying the statement's public region data, which the ZK server's splice of the public
 regions makes true of every worker. The simulator reads the public inputs, the auditor's coins and samples, a dummy
-carrying the public region data, and the release's public outcome (each verdict and where the release stopped). It reads nothing of the
-worker's values: `Table.sim` reads none of the table's `vals`, `nu` or `sReg`, so at the table whose witnesses carry a
-worker's clear values it is one simulator at every value (`FlockSoundness.ZK.Table.sim_onVals`). An outcome that
-correlates with the values costs a factor of the number of outcomes `|St|`, `log₂ |St|` bits.
+carrying the public region data, and the release's public outcome (each verdict and where the release stopped). It
+reads nothing of the worker's values: `Table.sim` reads none of the table's `vals`, `nu` or `sReg`, so at the table
+whose witnesses carry a worker's clear values it is one simulator at every value
+(`FlockSoundness.ZK.Table.sim_onVals`). An outcome that correlates with the values costs a factor of the number of
+outcomes `|St|`, `log₂ |St|` bits.
 
 Scope:
 
