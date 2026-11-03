@@ -47,6 +47,8 @@ its checkpoint pin, and that every spec and sweep here has its line below.
 - `llama31-8b-1gpu-pouw-protocol-served-b32`: the same at batch 32 alone, with 6 reps.
 - `llama31-8b-1gpu-pearl-c-whole-served`: Pearl-C's whole-step graph arm beside the protocol arm and both stocks.
 - `llama31-8b-1gpu-pearl-c-whole-served-h200`: the whole-step arm on one H200, against compiled stock FP8.
+- `llama32-1b-1gpu-pouw-protocol-served-h200`: Pearl+ (`pouw:pearl-c-h100-v1-h3`, `pearl_c_sm90`'s kernel from its setup)
+  on Llama-3.2-1B's BF16 checkpoint on one H200, against eager and compiled stock FP8 at batch 32.
 
 ## PoUS's bandwidth audit
 
