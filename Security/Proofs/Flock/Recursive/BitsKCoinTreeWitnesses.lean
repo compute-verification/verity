@@ -234,6 +234,8 @@ theorem recursiveBitsKDeployed_nontrivial (h : RecDeploy.KSFixture) :
     (fun x => RecDeploy.DenseAt x ∧
       RecDeploy.SizesAt { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest } x)
     (2 ^ 32) (2 ^ 32) (2 ^ (-(167.7 : ℝ))) (2 ^ (-(174.95 : ℝ))) x
-    ⟨denseAt_of_parses hP, plainIn_one_of_parses hP, hO, hn, hS⟩ hP.2.1 RecDeploy.bitsK_ae_lt_one
+    -- `SizesAt` states the parts' count, or, where the verifier refuses past 16 parts, only the inner setup's calls
+    ⟨denseAt_of_parses hP, plainIn_one_of_parses hP, hO, by first | exact ⟨hn, hS⟩ | exact hS⟩ hP.2.1
+    RecDeploy.bitsK_ae_lt_one
 
 end Flock.Guarantees
