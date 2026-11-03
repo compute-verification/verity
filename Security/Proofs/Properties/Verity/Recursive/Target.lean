@@ -313,14 +313,14 @@ theorem minority_le_majority (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : 
 
 /-- **The event the binding term counts at the unit `u`**: at the draw `ξ` and a run with the extractor's seed `s`, the
 run accepts, `ξ` draws `u`, and the extractor returns a witness in the recursive relation whose reading differs from
-`X` at a bit of a wire of `u`. -/
+`Xt` at a bit of a wire of `u`. -/
 def offEvent (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
     {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) (X : (V.circuitOf θ F).Transcript)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) (Xt : (V.circuitOf θ F).Transcript)
     (u : Fin (V.units θ F)) (ξ : S.Ξ) (s : q.Sample V S ξ) : Prop :=
   (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2.1).out = .acc ∧ u ∈ S.drawOf ξ ∧
     ∃ wt, (q.E.eval FlockDeploy.sha512 (S.P ξ) (S.x ξ) s.1 s.2.1 s.2.2).1 = some wt ∧ q.R (S.x ξ) wt ∧
-      ∃ g ∈ (V.partsOf θ F).io u, ∃ i < (V.circuitOf θ F).w g, (readX (S.x ξ) wt g).getLsbD i = !(X g).getLsbD i
+      ∃ g ∈ (V.partsOf θ F).io u, ∃ i < (V.circuitOf θ F).w g, (readX (S.x ξ) wt g).getLsbD i = !(Xt g).getLsbD i
 
 /-- **A run's draw of the unit `u`**: at the draw `ξ` and a run with the extractor's seed `s`, the run accepts, `ξ`
 draws `u`, and the extractor returns a witness in the recursive relation. -/
@@ -371,9 +371,8 @@ theorem majority_le_coll (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Arra
     cases hx : (q.extract V S readX g).getLsbD i <;> simp [hx] at hb₁
   obtain ⟨m, m', hm, hcol⟩ := hcoll ξ₁ ξ₂ w₁ w₂ g hR₁ hR₂ hd₁ hd₂ hne
   refine ⟨m, m', ?_, hcol⟩
-  first
-    | (simp only [Dep.bindAt, he₁, he₂]; exact hm)
-    | simp [Dep.bindAt, he₁, he₂, hm]
+  simp only [Dep.bindAt, he₁, he₂]
+  exact hm
 
 /-- **Two independent plays collide at most `E[bindBudget] / 2^256`** under `FinderCR`'s binding premise (`hbind`):
 the binding finder at each pair of draws is the pair of plays. -/
@@ -386,9 +385,7 @@ theorem ex_coll_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array Byte
       collEvent q V S collOf dColl p.1 s.1 p.2 s.2)) ≤
       Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ) := by
   rw [← Ex_div]
-  first
-    | exact Ex_mono fun p => hbind p.1 p.2
-    | exact Ex_mono fun p => le_trans (Pr_mono fun s hs => hs) (hbind p.1 p.2)
+  exact Ex_mono fun p => hbind p.1 p.2
 
 /-- **The plurality's bit weighs at least half a drawn unit**: at a bit `i` of a wire `g` of the unit `u`, the weight of
 the bit `Dep.extract` picked there is at least half the probability that the run accepts, draws `u` and the extractor
