@@ -1,6 +1,7 @@
 import Proofs.Flock.Bridge.PortRoots
 import Proofs.Flock.Bridge.PopMatches
 import Proofs.Flock.Bridge.Targets
+import Proofs.Flock.Bridge.FilePartTarget
 import Proofs.Flock.Bridge.Lowers
 import Proofs.Flock.Bridge.Count
 import Proofs.Flock.Bridge.CircuitOf
@@ -12,10 +13,10 @@ import Proofs.Flock.Bridge.FaultyRightC
 import Proofs.Flock.Bridge.RelSGuards
 import Proofs.Flock.Bridge.Refused
 import Proofs.Flock.Bridge.KSLive
-import Proofs.Flock.Bridge.Public
 import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Bridge.Honest
 import Proofs.Flock.Bridge.V5
+import Proofs.Flock.Bridge.Public
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
