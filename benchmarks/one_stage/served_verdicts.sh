@@ -87,7 +87,7 @@
 #     nothing, but a composite that didn't run (a tree without composite.py) or whose Lean didn't answer fails the run.
 #     Under COMPOSE_OFF_NODE=1, the default, neither is of record here: the served node is the prover's, so this record
 #     says (its `deferred`) that the final record and the composite are composed off it, and in the composite's place
-#     the run writes the compose hand-off they are composed from (below, at `handoff`).
+#     the run's last step, after V3c, writes the compose hand-off they are composed from (below, at `handoff`).
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
 #     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
 #     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's.
@@ -127,7 +127,8 @@
 #     record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier before it exits.
 # Composed off the served node: with COMPOSE_OFF_NODE=1 (the default; 0 composes both on the served node, the composite
 # then a development check that claims no record, `served_composite.sh`, which refuses one there under 1) the run's
-# last step (`handoff`, after V3c where its audit precedes the composite) writes the serve dir's private/compose: the
+# last step (`handoff`, after V3c in every run, so the composite reads V3c's audit's cases where it ran, the class window
+# of record, and step 3's audit's only in a run without V3c) writes the serve dir's private/compose: the
 # record's pieces (only the files the record reads of each), the inference-only verdict, the settings the follow-on
 # composes at (compose.env: the window and its engine steps, the product, COMPOSITE, ALPHA, GAMMA, the served node,
 # COMPOSE_NODE, the tree's commit and the host V3c's audit ran on) and its every input relative to the serve dir
@@ -1318,18 +1319,19 @@ rec=${PIPESTATUS[0]}
 private_pieces
 # 6. V3c after the record, each step within its limit: it gates nothing. Under H1_TIE it comes before the composite,
 # whose one-stage and policy cases are its audit's of the record H1 bound; on a node short of the audit's memory, the
-# tie held here, the audit and the composite are deferred to a follow-on.
+# tie held here, the audit and the composite are deferred to a follow-on. Under COMPOSE_OFF_NODE=1 the compose hand-off
+# comes last, after V3c in every run, so the composite composed from it reads V3c's audit's cases.
 v3c_done=$SPLIT left=0
 if [ -n "$DEFER" ]; then v3c_commit; defer "$DEFER" || left=1; v3c_done=1
 elif [ -z "$v3c_done" ] && [ -n "${H1_TIE:-}" ]; then v3c_commit && v3c_proved; v3c_done=1; fi
 comp=0
-if [ -n "$DEFER" ]; then :
-elif [ "$COMPOSE_OFF_NODE" = 1 ]; then handoff "$OUT/pieces" "$OUT/record/inference-only.json" || left=1
-else [ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1; fi
+[ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 1 ] || [ -z "${COMPOSITE-1}" ] \
+  || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
 measure
 if [ -n "$v3c_done" ]; then :
 elif [ -n "$V3C" ]; then v3c_commit && v3c_proved
 else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi
+[ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 0 ] || handoff "$OUT/pieces" "$OUT/record/inference-only.json" || left=1
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
 [ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && [ "$left" = 0 ] \
   && grep -q '"composed": "\(pending\|accept\)"' "$OUT/verdicts.txt"
