@@ -19,6 +19,8 @@ stopped), and nothing of the values. An outcome that correlates with the values 
 * `TableReleaseAny`: `ZkAnyGate` for one table of C-Flock's ZK server, exactly: on any witness `w` carrying the public
   region data and a dummy `w₀`, with no premise that `w`'s values pass the inner constraint, the release behind a check
   that passes only where they do (`Table.Gated`) is bounded by `S_shvzk(x, e)` on `w₀` plus the dummy's pre-final view.
+* `SessionReleaseAny`: `ZkAnyOutcome` for a session of `J` tables, the outcome being where it stopped: the tables whose
+  files left show their views, each behind its check, and the others their pre-final views.
 -/
 
 @[expose] public section
@@ -82,5 +84,32 @@ def TableReleaseAny : Prop :=
       prCoin (fun ω => go ω = false ∧ E (.inr (T.preView w ω))) ≤ prCoin (fun ω => E (.inr (T.preView w₀ ω))) ∧
       prCoin (fun ω => E (T.release go w ω)) ≤
         prCoin (fun σ => E (.inl (T.sim w₀ σ))) + prCoin (fun ω => E (.inr (T.preView w₀ ω)))
+
+/-- **A session's release behind the ZK server's checks, at any values**: at coins non-degenerate for each of its `J`
+tables, for witnesses `w` and dummies `w₀` carrying the public region data, an outcome `out ω` (where the session
+stopped, a function of the server's randomness) and the tables whose files leave at each outcome (`full`), where a
+table's file leaves only if its values pass the inner constraint at its drawn pads (`Table.HoldsAt`), and with no
+premise that they pass it anywhere, the session's release (`Session.releaseAt`) is bounded at each outcome, jointly with
+it, by the simulator at that outcome (`Session.simAt`), overall by the sum over outcomes, and so by `|St|` times the
+simulator that draws the outcome uniformly. -/
+def SessionReleaseAny : Prop :=
+  ∀ {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2] [Fintype F] [DecidableEq F] [Fintype K]
+    [DecidableEq K] [Fintype Salt] [DecidableEq Salt] [Fintype Seed] [DecidableEq Seed] [Fintype Hi] [DecidableEq Hi]
+    [AddCommGroup Salt] [AddCommGroup Seed] [AddCommGroup Hi] {J : ℕ}
+    (T : Fin J → FlockSoundness.ZK.Table F K W Salt Seed D Hi VL),
+    (∀ j, (T j).Rank) → (∀ j, (T j).PadOnto) → (∀ j r, Function.Bijective fun p : F × F => (T j).Wr r p.1 p.2) →
+    (∀ j, (T j).PadsOnto) → (∀ j r, (T j).β r ≠ 0) →
+    ∀ {St : Type} [Fintype St] (out : (∀ j, (T j).Rand) → St) (full : St → Fin J → Bool) (w w₀ : Fin J → W),
+    (∀ j, (T j).sReg (w j) = (T j).pubReg) → (∀ j, (T j).sReg (w₀ j) = (T j).pubReg) →
+    (∀ ω j, full (out ω) j = true → (T j).HoldsAt (w j) (ω j)) →
+    ∀ E : (∀ j, (T j).View ⊕ (T j).PreView) → Prop,
+      (∀ s, prCoin (fun ω => out ω = s ∧ E (FlockSoundness.ZK.Session.releaseAt T full w (out ω) ω)) ≤
+        prCoin (fun σ => E (FlockSoundness.ZK.Session.simAt T full w₀ s σ))) ∧
+      prCoin (fun ω => E (FlockSoundness.ZK.Session.releaseAt T full w (out ω) ω)) ≤
+        ∑ s, prCoin (fun σ => E (FlockSoundness.ZK.Session.simAt T full w₀ s σ)) ∧
+      prCoin (fun ω => E (FlockSoundness.ZK.Session.releaseAt T full w (out ω) ω)) ≤
+        (Fintype.card St : ℝ≥0∞) *
+          prCoin (fun p : St × (∀ j, (T j).SimRand × (T j).Rand) =>
+            E (FlockSoundness.ZK.Session.simAt T full w₀ p.1 p.2))
 
 end Flock.Guarantees
