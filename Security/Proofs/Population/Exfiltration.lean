@@ -13,7 +13,7 @@ leaking what its wrong units' cones carry, and the deployment halting at the fir
 * `tail_cumPrev`, **when a caught window's egress is withheld**: at most `exp (-κ x)`, and no per-window term.
 * `ex_cumUpTo`, **the rate form**: before the `j`-th detection at most `j (ℓ + 1/κ)` leaves on average, so each failure a
   deployment tolerates costs at most `ℓ + 1/κ`.
-* `escape_le_exp`: a draw that includes the units independently, unit `u` caught with probability `a u`, lets a wrong
+* `acceptProb_le_exp`: a draw that includes the units independently, unit `u` caught with probability `a u`, lets a wrong
   set `B` escape with probability at most `exp (-Σ_{u ∈ B} a u)`; with `a u ≥ κ E(u)` that is detection pressure for the
   leak `Σ_{u ∈ B} E(u)`.
 -/
@@ -259,7 +259,7 @@ theorem ex_cumUpTo (hμ : IsDist μ) {κ ℓ : ℝ} (hκ : 0 < κ) {A : Strategy
 /-- **A draw that includes units independently**: if unit `u` is caught with probability `a u ∈ [0, 1]`, independently,
 the wrong set `B` escapes with probability `Π_{u ∈ B} (1 - a u) ≤ exp (-Σ_{u ∈ B} a u)`. With
 `a u ≥ κ E(u)` that is detection pressure `κ` for the leak `Σ_{u ∈ B} E(u)`. -/
-theorem escape_le_exp {U : Type} (B : Finset U) (a : U → ℝ) (ha : ∀ u ∈ B, 0 ≤ a u ∧ a u ≤ 1) :
+theorem acceptProb_le_exp {U : Type} (B : Finset U) (a : U → ℝ) (ha : ∀ u ∈ B, 0 ≤ a u ∧ a u ≤ 1) :
     ∏ u ∈ B, (1 - a u) ≤ Real.exp (-∑ u ∈ B, a u) := by
   rw [← sum_neg_distrib, Real.exp_sum]
   refine prod_le_prod₀ (fun u hu => by linarith [(ha u hu).2]) fun u _ => ?_
@@ -267,7 +267,7 @@ theorem escape_le_exp {U : Type} (B : Finset U) (a : U → ℝ) (ha : ∀ u ∈ 
 
 /-- **`k` independent draws**: a wrong set each draw catches with probability `d` escapes `k` draws with probability
 `(1 - d) ^ k ≤ exp (-k d)`. -/
-theorem pow_escape_le_exp {d : ℝ} (hd1 : d ≤ 1) (k : ℕ) : (1 - d) ^ k ≤ Real.exp (-(k * d)) := by
+theorem pow_acceptProb_le_exp {d : ℝ} (hd1 : d ≤ 1) (k : ℕ) : (1 - d) ^ k ≤ Real.exp (-(k * d)) := by
   rw [show -(k * d) = k * (-d) by ring, Real.exp_nat_mul]
   exact pow_le_pow_left₀ (by linarith) (by linarith [Real.add_one_le_exp (-d)]) k
 
