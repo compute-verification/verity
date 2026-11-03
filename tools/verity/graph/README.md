@@ -35,7 +35,7 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 | `verity_graph/runners/<kind>.py` | a kind's runner, `run(task: dict, work: Path) -> dict` |
 | `verity_graph/runners/__init__.py` | dispatch by kind, `call` (a command, logged and bounded by the task's timeout) and `execute` |
 | `verity_graph/local.py` | the serial reference executor |
-| `verity_graph/families/build.py`, `runners/lean_build.py`, `runners/flock_circuit_build.py`, `runners/lean_agreement.py` | the build family (below) |
+| `verity_graph/families/build.py` and its kinds' runners (`runners/lean_build.py`, `lean_unit_cut.py`, `lean_agreement.py`, `lean_suites.py`, `flock_circuit_build.py`, `flock_rust_tests.py`) | the build family (below) |
 | `tasks.toml` | `[env.<name>]` and `[family.<name>]` tables |
 | `tests/key_vectors.json` | the vectors Verity and the executor both reproduce |
 
@@ -152,16 +152,24 @@ retried; a task whose read didn't pass is cancelled. Each task's last result/v1 
 
 ## The build family
 
-The check's steps that build the Flock verifier and run what it built, as `tools/verity/check/check.py` runs them:
+The check's steps that build the Flock verifier and run what it built, and C-Flock's Rust, as `tools/verity/check/check.py`
+runs them, one task a step:
 
 | task | env | runs | inputs | outputs |
 | --- | --- | --- | --- | --- |
 | `lean-build:verity/core/service/flock` | lean | `lake build` there (`suites.LAKE_BUILD`) | the package's files but its `lean-audit.json` | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>` |
+| `lean-unit-cut:verity/ml/flock/verifier/unit_cut_agree.py` | py | `unit_cut_agree.py --lean VERIFY --out WORK/lean-unit-cut` | the script and its import closure (the test-file family's `Imports`) | `lean-unit-cut/result.json`, the cuts and how many agreed |
 | `lean-agreement:verity/ml/flock/verifier` | py | `check.py --lean-agreement WORK UPSTREAM INPUTS VERIFY` | that directory, and what `check.py` reads as it starts (`families/build.py`'s `CHECK_READS`) | `flock-agreement/ci/sets.json`, ci.py's verdicts per set |
+| `lean-suites:after-lean` | py | `suites.py SUITE... --lean-built --json ... --timeouts --jobs N --mem-gb G` on `suites.AFTER_LEAN` | the whole tree, as tasks/v1 keys a job that declares no inputs: those suites build and run Lake packages, which no tracer follows | `suites-lean.json`, suites.py's report |
 | `flock-circuit-build:verity/ml/flock/live` | rust | `verity/ml/flock/check_build.sh` | the script, its patches and the live crate (`check.rust_tests_inputs`) | none: `cargo check` builds nothing a reader runs |
+| `flock-rust-tests:verity/ml/flock/live` | rust | `check_build.sh test`, cargo's jobs and test threads at the task's cores | as flock-circuit-build's | none |
 
 `lean-build`'s outputs sit at their paths in a built tree, where the suites that run them look (the Flock suite's
-`artifacts`); `lean-agreement` reads `flock-verify` and gets its path as its var `verify`. The agreement fetches the upstream
+`artifacts`); `lean-unit-cut` and `lean-agreement` read `flock-verify` and get its path as their var `verify`, and
+`lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`). A lean-suites fail
+names each failed suite with its failed tests (`detail.failed`), which drive names, allows and blames as that suite's red. A
+run that ran nothing is no pass: ci.py skipping every set of the agreement, a partition check that compared no cut, a suite
+suites.py didn't run. Each is an error, so no result. The agreement fetches the upstream
 build and inputs `upstream.json` pins (`research data fetch`, as ci.py fetches what it pins) and holds them to the pin's
 sha256, so the store and its client are no input. Those fetches and ci.py's read the store's remote that the runner's
 environment names: a `research run` job on a node with no store config of its own gets one with `--store-read`, and without
