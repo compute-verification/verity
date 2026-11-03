@@ -158,9 +158,13 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
     assert code == 0 and (got["out"] / f"{AP.NAME}.png").stat().st_size > 10_000
     p, f = got["panel"], fitted(got["fit"])
     assert (p["id"], p["kind"], p["columns"]) == (AP.PANEL, "table", AP.COLUMNS) and p["source"] and p["updated_at"]
-    cell = {c: [r[AP.COLUMNS.index(c)] for r in p["rows"]] for c in ("reading", "te_core", "rho_console")}
-    assert set(cell["reading"]) == {AP.READING} and set(cell["te_core"]) == {AP.VERSION} and p["rows"]
+    cell = {c: [r[AP.COLUMNS.index(c)] for r in p["rows"]]
+            for c in ("reading", "te_core", "rho_console", "binding_kind", "rests_on", "kinds")}
+    assert set(cell["reading"]) == {"B"} and set(cell["te_core"]) == {AP.VERSION} and p["rows"]
     assert all(v == "inf" or v >= 1 for v in cell["rho_console"])
+    assert set(cell["binding_kind"]) <= {"fit", "target"}
+    assert all(formalism.RESTS_ON[b] == r for b, r in zip(cell["binding_kind"], cell["rests_on"]))
+    assert all(set(json.loads(x)) == {"bound", "sensitivity"} for x in cell["kinds"])
     ds, rows = plots.frame(p), ledger_rows()
     assert {d["data"] for d in ds} == {"v2.3-pilot"} and {d["gain_target"] for d in ds} == set(AP.GAINS)
     for start, shape in (("s1", SHAPE), ("s2", SHAPE2)):
@@ -184,7 +188,7 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
                 assert d["p"] == (h and pytest.approx(d["C_gates"] / h))
                 assert d["family"] == next(x[3] for x in RUNS if x[1] == run_id)
                 assert d["method_key"] == next(x[2] for x in RUNS if x[1] == run_id)
-                assert d["w_fwd_gates"] == pytest.approx(policy.w_fwd(shape))
+                assert panels.page_inputs(d)["w_fwd_gates"] == pytest.approx(policy.w_fwd(shape))
     s1 = {(d["record"], d["gain_target"]): (d["reached"], d["p"]) for d in ds if d["start"] == plots.start_label(SHAPE)}
     assert s1[("lora@1", 1.1)] == ("yes", 1) and s1[("qat@1", 1.1)] == ("yes", 2) and s1[("ref@3", 2)] == ("yes", 1)
     assert s1[("mezo@2", 1.1)][0] == s1[("lora@2", 2)][0] == s1[("ref@3", 11)][0] == "no"
@@ -205,15 +209,18 @@ def test_the_dial_formula_on_a_rows_columns_is_te_cores_at_every_cell(tmp_path, 
     ds = plots.frame(got["console"])
     for d in ds:
         page = panels.page_inputs(d)
-        rho, basis = dial(page, *AP.default(d["w_fwd_gates"]))
+        assert not set(AP.SPLIT) & set(d) and set(AP.SPLIT) <= set(page)
+        rho, basis = dial(page, *AP.default(page["w_fwd_gates"]))
         assert basis == d["basis_default"] and rho == pytest.approx(d["rho_default"], rel=1e-3)
         r = by[d["record"].replace("@", "-")]
         m = formalism.measure(r, {"s1": SHAPE, "s2": SHAPE2}[r["start"]])
-        assert panels.mismatches(d | {"run": d["record"]}, panels.dial(m, d["w_fwd_gates"]), d["w_fwd_gates"]) == []
+        w = page["w_fwd_gates"]
+        assert panels.mismatches(d | {"run": d["record"]}, panels.dial(m, w), w) == []
     at = {d["record"]: d for d in ds if d["gain_target"] == 1.1}
     assert (at["mezo@2"]["basis_default"], at["mezo@2"]["rho_default"], at["qat@1"]["basis_default"]) == ("fit", 1,
                                                                                                          "target")
-    assert json.loads(at["qat@1"]["rho_inputs"])["delta_t_bits"] == 6e4 and at["mezo@2"]["delta_bits"] == 1e3
+    assert json.loads(at["qat@1"]["rho_inputs"])["delta_t_bits"] == 6e4
+    assert json.loads(at["mezo@2"]["rho_inputs"])["delta_bits"] == 1e3
     assert json.loads(at["mezo@2"]["rho_inputs"])["delta_t_bits"] == 1e3
 
 

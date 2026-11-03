@@ -262,9 +262,10 @@ def rho_columns(m: formalism.Measured, w: float) -> dict:
 
 
 def page_inputs(d: dict) -> dict:
-    """The inputs of ρ the console's dial reads from a candidate's columns `d`, as te_core.algorithm_policy's
-    `page_rho` takes them."""
-    return json.loads(d["rho_inputs"]) | {k: d[k] for k in ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")}
+    """The inputs of ρ the console's dial reads from a candidate's columns `d` (its `rho_inputs`, and the split columns
+    where it has them: te_core.algorithm_policy's rows hold them in `rho_inputs`), as `page_rho` takes them."""
+    return json.loads(d["rho_inputs"]) | {k: d[k] for k in ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")
+                                          if k in d}
 
 
 def mismatches(d: dict, dial: dict, w: float) -> list[str]:

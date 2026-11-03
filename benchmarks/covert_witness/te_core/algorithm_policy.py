@@ -19,14 +19,15 @@ p (null without H). A target the start's own loss already meets has no rows, and
 
 Each row's ρ is te_core.formalism.at's at its checkpoint at the dial's default (te_core.panels' `DEFAULT`: c = 4,096
 tokens of the start's forward, k = 80,000 bits): c/(c − d) where Fit holds for the training (basis `fit`), else
-Slowdown's bound (`target`), null where infinite. Its columns (`COLUMNS`) carry every input the console's dial needs
-to recompute ρ at any (c, k) in te_core.panels' candidate layout, the route taking 200 characters a cell: `rho_inputs`,
-a JSON object of `panels.PACKED`, beside `delta_bits`, `w_fwd_gates`, `u_points` and `u_in_points` (`SPLIT`), u_in
-through its points at the dial's k (`panels.through`), where x0 is exact; `page_rho` is the dial's formula on them.
-`build` refuses a row whose rounded columns don't give formalism.at's ρ and basis at every cell of te_core.panels'
-dial (`panels.mismatches`). `estimated` names the inputs that are stubs, bounds, assumptions or estimates. The
-dashboard's cells: `reading`, the reading of A1 the ρ is priced under (`READING`), `te_core` the te_core VERSION that
-priced it, and `rho_console` its ρ at the console's default policy (`CONSOLE`), "inf" where infinite.
+Slowdown's bound (`target`), null where infinite. `rho_inputs`, one JSON cell, carries every input the console's dial
+needs to recompute that ρ at any (c, k): `panels.PACKED` and `SPLIT`, u_in through its points at the dial's k
+(`panels.through`), where x0 is exact; `page_rho` is the dial's formula on them. `build` refuses a row whose rounded
+columns don't give formalism.at's ρ and basis at every cell of te_core.panels' dial (`panels.mismatches`).
+`estimated` names the inputs that are stubs, bounds, assumptions or estimates. The dashboard's cells, from
+te_core.formalism's `published` at the console's default policy (`CONSOLE`; coordinator 08:26Z): `rho_console`, the
+one bound's ρ there ("inf" where infinite), `reading` (A where the row's trace has reading A's entries, else B, whose
+ρ is te_core 4.3's, a target), `te_core` the VERSION that priced it, `binding_kind` and `rests_on`, and `kinds`, a
+JSON cell of the terms its max takes and the sensitivities it leaves out.
 
 The coverage (`coverage`) is, per gain target, data and decade of ρ (`DECADES`: from 1, 10, ... and 1e5 and above,
 an infinite ρ there), the reached row with the least p, else the failed attempt with the greatest gain, else EMPTY.
@@ -69,19 +70,18 @@ DECADES = (1, 10, 100, 1_000, 10_000, 100_000)
 #: the inputs of ρ at any (c, k), each at the run's checkpoint (te_core.panels' `rho_columns` reads them)
 INPUTS = ["w_gates", "w_fwd_gates", "sigma", "tau_bits", "a_bits", "u_points", "u_in_points", "delta_bits",
           "delta_t_bits", "d_gates", "delta_grad_bits"]
-#: the inputs of ρ with columns of their own, beside `rho_inputs` (te_core.panels' candidate layout)
+#: the inputs of ρ te_core.panels' candidate layout gives columns of their own, which `rho_inputs` holds here, the one
+#: JSON cell the dashboard's dial reads (coordinator 07:57Z: 4,096-character cells)
 SPLIT = ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")
 COLUMNS = ["start", "start_compute_gates", "start_effective_gates", "start_loss", "end_loss", "gain_target", "gain",
            "reached", "C_gates", "H_gates", "p", "rho_default", "basis_default", "method_key", "family", "record", "data",
-           "estimated", "rho_inputs", *SPLIT, "reading", "te_core", "rho_console"]
+           "estimated", "rho_inputs", "reading", "te_core", "rho_console", "binding_kind", "rests_on", "kinds"]
 #: the console's default policy, at which `rho_console` is ρ (null in no row: "inf" where infinite): the 45M reference
 #: with 4,096 input and 1,024 output tokens, c = 5,120 × 2 × 45e6 × 740 gates and k = 65,536 bits
 CONSOLE = (5_120 * 2 * 45e6 * 740, 65_536)
-#: the reading of A1 the rows' ρ is priced under: B until te_core prices reading A
-READING = "B"
 #: the columns the console's copy leaves out to fit the route's `console.COLUMNS_MAX` (the stored tables keep them):
-#: H is C/p, and what ρ rests on is the same on every row of a te_core version
-CONSOLE_DROP = ("H_gates", "estimated")
+#: H is C/p
+CONSOLE_DROP = ("H_gates",)
 CONSOLE_COLUMNS = [c for c in COLUMNS if c not in CONSOLE_DROP]
 LOSSES = ("start_loss", "end_loss")
 #: significant digits of the console copy's compute and ρ inputs, so its dial reproduces ρ and its gains and p
@@ -202,6 +202,25 @@ def rounded(row: list) -> list:
     return [val(c, v) for c, v in zip(COLUMNS, row)]
 
 
+def rho_inputs(m: formalism.Measured, w_fwd: float) -> str:
+    """The dial's inputs as one JSON cell: te_core.panels' `rho_columns` (`panels.PACKED`) with SPLIT's, numbers to
+    INPUT_DIGITS significant digits."""
+    cols = panels.rho_columns(m, w_fwd)
+    nums = ",".join(f'"{k}":' + ("null" if v is None else num(v)) for k, v in (("delta_bits", m.delta_bits),
+                                                                             ("w_fwd_gates", w_fwd)))
+    return (cols["rho_inputs"][:-1] + f",{nums},\"u_points\":{json.dumps(cols['u_points'])},"
+            f"\"u_in_points\":{json.dumps(cols['u_in_points'])}}}")
+
+
+def kinds(one: dict) -> str:
+    """A published ρ's kinds as one JSON cell (te_core.formalism's `published`): `bound`, the terms its max takes, and
+    `sensitivity`, those it leaves out; null where unmeasured, "inf" where infinite."""
+    def cell(x: float | None) -> str:
+        return "null" if x is None else '"inf"' if math.isinf(x) else num(x, DIGITS)
+    part = lambda d: "{" + ",".join(f'"{k}":{cell(x)}' for k, x in d.items()) + "}"
+    return f'{{"bound":{part(one["terms"])},"sensitivity":{part(one["sensitivities"])}}}'
+
+
 def runs_of(st: frontier_fit.Start) -> dict[str, list[dict]]:
     """A start's runs (run id, else record id), each its checkpoints by step."""
     out: dict[str, list[dict]] = {}
@@ -245,10 +264,11 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
                        None if math.isinf(v["rho"]) else v["rho"], "fit" if v["fit"] else "target", plots.method(r),
                        r.get("family"), f"{run}@{r.get('checkpoint_step')}", st.data, estimated(r["measured"])]
                 if r["id"] not in consoles:
-                    consoles[r["id"]] = formalism.at(r["measured"], *CONSOLE)["rho"]
-                cols = panels.rho_columns(r["measured"], st.w) | {
-                    "delta_bits": r["measured"].delta_bits, "w_fwd_gates": st.w, "reading": READING, "te_core": VERSION,
-                    "rho_console": "inf" if math.isinf(consoles[r["id"]]) else consoles[r["id"]]}
+                    consoles[r["id"]] = formalism.published(r["measured"], *CONSOLE)
+                one = consoles[r["id"]]
+                cols = {"rho_inputs": rho_inputs(r["measured"], st.w), "reading": one["reading"], "te_core": VERSION,
+                        "rho_console": "inf" if math.isinf(one["rho"]) else one["rho"],
+                        "binding_kind": one["binding_kind"], "rests_on": one["rests_on"], "kinds": kinds(one)}
                 row += [cols[c] for c in COLUMNS[len(row):]]
                 d = dict(zip(COLUMNS, rounded(row)))
                 wrong += panels.mismatches(d | {"run": d["record"]}, dials[r["id"]], st.w)
@@ -268,7 +288,7 @@ def note(art: str | None = None, tier: str | None = None) -> str:
     out = (f"Per run, start and gain g = {', '.join(f'{g:g}' for g in GAINS)} (C_eff(loss)/C0, training/frontier-fit): "
            "yes at its first checkpoint reaching g, else no at its last. p = C/H, H the start's least C to g, a lower "
            f"bound if no. rho: te_core.formalism.at, c = {panels.DEFAULT[0]} w_fwd, k = {panels.DEFAULT[1]:,} bits. "
-           "Dial: rho_inputs + delta_bits, w_fwd_gates, u_points, u_in_points (u_in exact at the dial's k).")
+           "Dial: rho_inputs (u_in exact at the dial's k). rho_console: one bound (kinds, binding_kind).")
     if tier:
         out += " Cut: coverage rows" + ("." if tier == "coverage" else " + per start, g"
                                         + (", family" if tier == "family" else "") + ": (p, rho) front, best no.")
