@@ -51,7 +51,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from te_core import hooks
-from te_core.flops import gather_selects
 
 import prepare
 
@@ -74,6 +73,23 @@ def newton_schulz(g: torch.Tensor, steps: int = 5) -> torch.Tensor:
 def ns_flops(shape: tuple[int, int], steps: int = 5) -> int:
     m, n = min(shape), max(shape)
     return steps * (4 * m * m * n + 2 * m ** 3)
+
+
+def gather_selects(n: int, bits: int = 32, chunk_bits: int = 10) -> int:
+    """The gather circuit's multiplexers per selected word over n words, as the harness prices a token lookup: a copy
+    of te_core/flops.py's, since a program may import only te_core's hooks and codecs."""
+    def tree(m: int, k: int) -> int:
+        out = 0
+        for _ in range(k):
+            m = (m + m % 2) // 2
+            out += m
+        return out
+
+    chunk = 1 << chunk_bits
+    if n <= chunk:
+        return tree(n, bits)
+    full, r = divmod(n, chunk)
+    return full * tree(chunk, chunk_bits) + (tree(r, chunk_bits) if r else 0) + tree(full + (r > 0), bits - chunk_bits)
 
 
 class Muon(torch.optim.Optimizer):
