@@ -20,7 +20,8 @@ and holds what it reads to v2's check and to the writer.
   accepted, at the session v2 set up (`checkBlobsAt_verified`, `sent_verified`, `V2Verified`).
 * **The messages** (`linkMsg`, `roundMsg`, `linkIn`, `roundIn`): the link's message, `root_F` then the tables' `root_B`
   in lexicographic table order (S14's), and a rep round's retained bytes (S12's `msg`), each read off the record.
-  `Json.parse` is a `partial def`, so a reading refuses (`none`) wherever a parse fails, and no reading defaults.
+  Each parses the record with `Flock.JsonParse.parse`, as `Record.decode` does, and refuses (`none`) wherever a parse
+  fails, so no reading defaults.
 * **The typed moves** (`rootBOf`, `repOf`, `submitOf`, `repsOf`): `rootB` from the link's message, past `Σ`'s bytes;
   a round's submission from its stream's name (`<table>/rep<r>`) and its message; and the rounds a list of answered
   submissions leaves on each rep stream, as `Tables.liveRoundsJ` appends them.
@@ -139,7 +140,7 @@ def rootBAt (l : Json) (t : String) : Flock.V ByteArray :=
 `root_B` in lexicographic table order (S14's exchange before its points); none where the record does not parse or
 lacks one. -/
 def linkMsg (record : String) (tables : Array String) : Option Claims.Msg :=
-  (Json.parse record).toOption.bind fun j =>
+  (Flock.JsonParse.parse record).toOption.bind fun j =>
     (Flock.Record.fld j "link").toOption.bind fun l =>
       (Flock.Record.str l "root_f" >>= Flock.unhex).toOption.bind fun rootF =>
         ((tables.qsort (· < ·)).mapM (rootBAt l)).toOption.map fun rbs => (rbs.foldl (· ++ ·) rootF).data.toList
@@ -147,7 +148,7 @@ def linkMsg (record : String) (tables : Array String) : Option Claims.Msg :=
 /-- **Round `k`'s message on the stream `name`** in the record `record`: the round's retained bytes (S12's `msg`); none
 where the record does not parse, has no such round, or the round retains no bytes. -/
 def roundMsg (record name : String) (k : ℕ) : Option Claims.Msg :=
-  (Json.parse record).toOption.bind fun j =>
+  (Flock.JsonParse.parse record).toOption.bind fun j =>
     (Flock.Record.arr j "streams").toOption.bind fun ss =>
       (ss.find? fun x => (Flock.Record.str x "stream").toOption == some name).bind fun x =>
         (Flock.Record.arr x "rounds").toOption.bind fun rs =>
@@ -444,11 +445,11 @@ theorem sent_verified {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
 set_option maxHeartbeats 1000000 in
 /-- **`root_F` as `Record.decode` reads it** (S6): the record's link's `root_f`, which is `Σ`. -/
 theorem decode_rootF {spec : SessionSpec} {text : String} {sess : RunRecord} (h : Flock.Record.decode spec text = .ok sess) :
-    ∃ j l s, Json.parse text = .ok j ∧ Flock.Record.fld j "link" = .ok l ∧ Flock.Record.str l "root_f" = .ok s ∧
-      Flock.unhex s = .ok sess.rootF ∧ sess.rootF = spec.sigma := by
+    ∃ j l s, Flock.JsonParse.parse text = .ok j ∧ Flock.Record.fld j "link" = .ok l ∧
+      Flock.Record.str l "root_f" = .ok s ∧ Flock.unhex s = .ok sess.rootF ∧ sess.rootF = spec.sigma := by
   revert h
   rw [Flock.Record.decode.eq_def]
-  cases hp : Json.parse text with
+  cases hp : Flock.JsonParse.parse text with
   | error e => intro h; cases h
   | ok j =>
     intro h
