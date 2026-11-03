@@ -38,9 +38,7 @@ theorem padLeafCut_congr (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Compose
     {cut cut' : ∀ j, ((tabC P x j).T (cz j)).tab.Cut} (j : Fin (jOf x)) (r : Fin 2)
     (h : (cut j).leavesP = (cut' j).leavesP) : padLeafCut P x cz cut j r = padLeafCut P x cz cut' j r := by
   unfold padLeafCut
-  first
-  | rw [h]
-  | simp only [h]
+  rw [h]
 
 end Claims.ZKMal.Masked
 
@@ -62,10 +60,7 @@ theorem step_prior_fresh {c : Cfg} {k : ℕ} {b : ByteArray} {a : _root_.Flock.F
 
 /-- Frames none of whose bytes is a value's carry no value byte. -/
 theorem valBytes_off : ∀ fs : List Frame, (∀ f ∈ fs, ∀ i, ¬ valByte f i) → ∀ i, valBytes fs i → False
-  | [], _, i, h => by
-    first
-    | exact h
-    | simp only [valBytes] at h
+  | [], _, _, h => h
   | f :: fs, hf, i, h => by
     simp only [valBytes] at h
     rcases h with ⟨-, h⟩ | ⟨-, h⟩
@@ -111,10 +106,7 @@ theorem roundFree_zcHead_out (c : Cfg) (s : Masker) (digest cap dom : ByteArray)
     (by
       intro f hf i h
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hf
-      rcases hf with rfl | rfl | rfl | rfl | rfl <;>
-        first
-        | exact h
-        | simp [valByte] at h)
+      rcases hf with rfl | rfl | rfl | rfl | rfl <;> exact h)
   have hfr0 : fr = #[] := by
     rcases fr with ⟨_ | ⟨p, l⟩⟩
     · rfl
@@ -123,7 +115,7 @@ theorem roundFree_zcHead_out (c : Cfg) (s : Masker) (digest cap dom : ByteArray)
   refine ⟨out, _, hr, ?_⟩
   rw [ho]
   simp only [maskFrames, zcBind, encs, _root_.Flock.Firewall.Frame.LABEL_ZC, List.flatMap_cons, List.flatMap_nil,
-    List.append_nil, List.nil_append, List.append_assoc]
+    List.append_nil, List.append_assoc]
 
 /-- The PIOP's round `0` body: the pending bytes, the zerocheck's binding and `r_skip`'s squeeze. -/
 theorem piopBody_zero (P : List UInt8) (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout)
@@ -151,8 +143,8 @@ theorem swSrcE_padLeaf (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.N
     rfl
   have e1 : ((Masked.swSrcE x C w (vs x w ν C) t j.val).rep r.val).padLeaf =
       Masked.padLeafCut Masked.PE x (Masked.czExe Masked.PE x C) (Masked.swCutE x C w (vs x w ν C) t) j r := by
-    rw [Masked.swSrcE_rep]
-    exact Masked.repSrcCut_padLeaf _ _ j r
+    exact (congrArg FlockComplete.RepSrc.padLeaf (Masked.swSrcE_rep x C w (vs x w ν C) t j r)).trans
+      (Masked.repSrcCut_padLeaf _ _ j r)
   have e2 : Masked.padLeafCut Masked.PE x (Masked.czExe Masked.PE x C) (Masked.swCutE x C w (vs x w ν C) t) j r =
       Masked.padLeafCut Masked.PE x (Masked.czExe Masked.PE x C)
         (fun j => Masked.viewCut (finS.swViewsAt x C (finS.wt x w) (vs x w ν C) t j)) j r :=
