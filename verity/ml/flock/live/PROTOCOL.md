@@ -522,7 +522,7 @@ Where the boundary runs:
   checks all three. The device holds the witness, the level-0 hiding (`Level0Zk`: padding and extra lanes) and the salts of
   the trees it builds (level 0's and levels 1+'s, which the host takes from the Lean tap and hands it tree by tree), but
   never the pads tree's salts, the pads `h`, `mu` or the inner proof's randomness, which the rep's Lean frame samples. Holding
-  those salts fixes nothing it sends: every salted leaf and path that leaves is the recheck's or a recomputed tree's
+  those salts fixes nothing it sends: every hiding leaf and path that leaves is the recheck's or a recomputed tree's
   (§10.1), and the pads tree is the ZK server's own.
 
 ### 10.1 The rule, outer phase (one rep, in §1's order)

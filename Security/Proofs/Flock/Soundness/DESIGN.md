@@ -298,7 +298,7 @@ is written so that these slot in without restructuring:
 
 - the prover's randomness becomes an extra input of the reference prover;
 - masks are extra messages or extra committed columns in the existing phases;
-- salted leaves change only the Merkle layer.
+- hiding leaves change only the Merkle layer.
 
 **The reference prover:**
 
