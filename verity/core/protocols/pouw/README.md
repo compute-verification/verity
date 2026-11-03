@@ -73,7 +73,7 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
   is a checked value. It runs on the H100 and on the RTX PRO 6000 Blackwell (sm_120). The `-h3` forms hash with SHA-512
   throughout; the others keep Pearl's BLAKE3 hashing.
 - **Pearl-C4** (`pearl-c-nvfp4-v0`, `schemes/pearl_c4.py`): Pearl-C with the FP8 product replaced by sm_120's
-  block-scaled FP4, NVFP4 only.
+  FP4 with scale groups, NVFP4 only.
 - **NCP** (`ncp-v1`, `schemes/ncp.py`): noise-cancelling polarization over int7 activations.
 - **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
 
