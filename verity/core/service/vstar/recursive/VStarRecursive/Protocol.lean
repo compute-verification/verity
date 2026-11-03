@@ -41,6 +41,8 @@ module
 public import CoreProtocol.Blobs
 public import SampledProofs.OneStageZk
 public import Flock
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 meta import CoreProtocol.Blobs
 meta import SampledProofs.OneStageZk
 meta import Flock
