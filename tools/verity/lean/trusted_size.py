@@ -1,13 +1,14 @@
 """The size of a package's trusted text, per area, a number to track over time.
 
-    python tools/verity/lean/trusted_size.py [PKG] [--facts FACTS.json | --run RUN] [--unread] [--json]
+    python tools/verity/lean/trusted_size.py [PKG] [--facts FACTS.json.gz | --run RUN] [--unread] [--json]
 
 PKG (default `Security`) is a Lake package with a `lean-audit.json`; its trusted text is the modules under `--prefix`
 (default `Definitions`), grouped by their next component, the area (`Definitions.Pouw.Basic` is in `Pouw`). For each area
 it prints the files, their lines (and the lines that are neither blank nor comment nor docstring), the theorems written
 there, the definitions, how many of them a listed statement reads, and how many guarantees read the area. The
-definitions and what reads them come from a run of the Lean check on PKG: its `facts.json` (`--facts`), or that of `--run
-RUN`, a records run (`lean_changed.py --records PKG`) the evidence store holds. A definition is one of `spec_definitions`
+definitions and what reads them come from a run of the Lean check on PKG: its `facts.json.gz` (`--facts`, which also
+takes an older run's `facts.json`), or that of `--run RUN`, a records run (`lean_changed.py --records PKG`) the evidence
+store holds. A definition is one of `spec_definitions`
 (projections and constructors go with their structure), read when a listed guarantee's statement reads it, followed through
 `meaning`, so transitively: when the lock's `reads` lists it (`--lock`, default PKG's; a run's own with `--run`), or the
 lock of a package requiring PKG by path does (`check.read_by_dependents`), as the audit's `unread_spec` counts them.
@@ -71,25 +72,27 @@ def area_of(prefix: str, module: str) -> str | None:
 
 
 def fetch_run(run: str, pkg: Path) -> tuple[Path, Path]:
-    """``run``'s `facts.json` and lock for ``pkg`` from the evidence store (its `run_files` tree), in a temporary
-    directory."""
+    """``run``'s facts (its `facts.json.gz`, or an older run's `facts.json`) and lock for ``pkg`` from the evidence store
+    (its `run_files` tree), in a temporary directory."""
     shown = json.loads(subprocess.run(["research", "data", "show", run, "--json"], capture_output=True, text=True,
                                       check=True, cwd=ROOT).stdout)
     tree = shown.get("outputs", {}).get("run_files")
     if not tree:
         raise SystemExit(f"trusted_size: {run} has no run_files in the store")
-    want = [f"lean-audit/audit-{pkg.name}/{f}" for f in ("facts.json", C.POLICY)]
+    *facts, lock = [f"lean-audit/audit-{pkg.name}/{f}" for f in (C.FACTS, "facts.json", C.POLICY)]
     out = Path(tempfile.mkdtemp(prefix="trusted-size-"))
-    subprocess.run(["research", "data", "fetch", tree, "--to", str(out), *(x for w in want for x in ("--path", w))],
+    subprocess.run(["research", "data", "fetch", tree, "--to", str(out), *(x for w in (*facts, lock) for x in ("--path", w))],
                    check=True, cwd=ROOT, stdout=subprocess.DEVNULL)
-    if not all((out / w).is_file() for w in want):
-        raise SystemExit(f"trusted_size: {run}'s outputs hold no {' or '.join(want)}: was it a records run of {pkg}?")
-    return out / want[0], out / want[1]
+    found = next((out / f for f in facts if (out / f).is_file()), None)
+    if found is None or not (out / lock).is_file():
+        raise SystemExit(f"trusted_size: {run}'s outputs hold no {' or '.join(facts)} beside {lock}: "
+                         f"was it a records run of {pkg}?")
+    return found, out / lock
 
 
 def measure(pkg: Path, prefix: str, facts: dict | None = None, lock: dict | None = None) -> dict:
     """{area: its row} and {module: its unread definitions} for ``pkg``'s modules under ``prefix``: the definitions from
-    ``facts`` (a Lean check's `facts.json` for ``pkg``), else from the sources; the read ones from ``lock`` (default
+    ``facts`` (a Lean check's facts document for ``pkg``), else from the sources; the read ones from ``lock`` (default
     ``pkg``'s `lean-audit.json`) and the locks of the packages requiring ``pkg`` by path."""
     modules = {m: rel for m, rel in C.lean_modules(pkg).items() if area_of(prefix, m)}
     read_by: dict[str, set[str]] = defaultdict(set)
@@ -150,15 +153,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("pkg", nargs="?", default="Security", help="the Lake package (default Security)")
     ap.add_argument("--prefix", default="Definitions", help="the trusted modules' prefix (default Definitions)")
     src = ap.add_mutually_exclusive_group()
-    src.add_argument("--facts", type=Path, help="a Lean check's facts.json for PKG")
-    src.add_argument("--run", help="a records run of PKG whose facts.json and lock the evidence store holds")
+    src.add_argument("--facts", type=Path, help="a Lean check's facts.json.gz (or an older one's facts.json) for PKG")
+    src.add_argument("--run", help="a records run of PKG whose facts.json.gz and lock the evidence store holds")
     ap.add_argument("--lock", type=Path, help="the lock whose reads count (default PKG's lean-audit.json)")
     ap.add_argument("--unread", action="store_true", help="list the unread definitions per module")
     ap.add_argument("--json", action="store_true", help="print the measurement as JSON")
     a = ap.parse_args(argv)
     pkg = (ROOT / a.pkg) if not Path(a.pkg).is_absolute() else Path(a.pkg)
     facts, lock = fetch_run(a.run, pkg) if a.run else (a.facts, a.lock)
-    m = measure(pkg, a.prefix, json.loads(facts.read_text()) if facts else None,
+    m = measure(pkg, a.prefix, C.stored_facts(facts) if facts else None,
                 json.loads(lock.read_text()) if lock else None)
     if a.json:
         print(json.dumps(m, indent=1, sort_keys=True))
