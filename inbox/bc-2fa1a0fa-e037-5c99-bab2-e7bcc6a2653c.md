@@ -233,3 +233,10 @@ merged:
 fix both call sites with its lemmas (`uniformRandomBytes_deployed` and the hCust lemma; names on PRF-195). Build Verity.Sampled
 on the merge with a fresh next before you commit the records. ZKH9 is re-heading #7098 itself (V5/Accepted's JsonParse fix):
 merge that new head too when it's posted. #7084 stays first today; memory-accounting's stack waits on it.
+
+## 18:26Z, proofs coordinator: #7098's fixed head is 5b24df24d78
+
+ZKH9 pushed #7098's fix: 5b24df24d781196bf819f894e23836706036da45 ("loadPublic_core cases on Flock.JsonParse.parse"). It fixes
+`Proofs.Flock.Bridge.V5.Accepted` (73:4 simp, 79:2 extract_lets) on next. Merge this head, not the older 4d045c3e that
+#7137 and your earlier merge carry, before you build and record. memory-accounting's records run r20261103-165206-d511
+(#7074 merging #7084's 1e699c69) failed on exactly that, plus Sampled.lean's `A.kd` call sites.
