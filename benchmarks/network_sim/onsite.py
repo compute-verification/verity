@@ -304,7 +304,9 @@ def terms(k: dict, period: str) -> dict:
 
 
 def zone_record(zd: Path) -> dict:
-    """A zone's verdicts and K, from what its front and its piece released in ``zd``."""
+    """A zone's verdicts and K, from what its front and its piece released in ``zd``. K is `PeriodLeakAccepted`'s
+    bound at the zone's run, established only where the period check accepted (``established``); elsewhere it is the
+    bound the zone's load would have had."""
     session = _json(zd / "front" / "session.json")
     entry = {"gate": gate_outcome(session), "chain": chain_outcome(zd / "piece"), "period": period_outcome(zd / "piece")}
     entry["verdict"] = (entry["period"] or {}).get("verdict") or "not run"
@@ -314,7 +316,8 @@ def zone_record(zd: Path) -> dict:
         k = CR.leak(warden_run(zd / "front" / "bundle.tgz", Path(tmp)))
     T = k["params"]["window"]
     entry["K"] = {
-        "statement": LB.STATEMENTS["per_period"], "bound": BOUND, "reading": READING, "class": k["class"],
+        "established": entry["verdict"] == "accept", "statement": LB.STATEMENTS["per_period"], "bound": BOUND,
+        "reading": READING, "class": k["class"],
         "scan_class": scan_class(session), "params": k["params"], "run": k["run"],
         "per_request": {"k_sched": k["terms"]["schedules_per_request"], "k_fail": k["terms"]["cells_per_request"]},
         "per_window": {"ell_a": k["terms"]["free"][READING]["link_window"], "k_skip": 0, "k_i": T,
@@ -335,7 +338,8 @@ def lab_sum(zones: dict[str, dict]) -> dict | None:
     return {p: {"per_period": (per := LB.datacenter(links, p, READING)).bits, "share": per.share,
                 "delta_net": str(per.eps), "vacuous": per.eps >= 1,
                 "pooled": {f"{float(d):g}": LB.datacenter(links, p, READING, d).bits for d in LB.DELTAS}}
-            for p in LB.PERIODS} | {"links": len(links), "of": len(zones)}
+            for p in LB.PERIODS} | {"links": len(links), "of": len(zones),
+                                    "established": all(z["K"] and z["K"]["established"] for z in zones.values())}
 
 
 #: what each scope's figures rest on
@@ -351,14 +355,19 @@ BASIS = {
 
 def notes() -> list[str]:
     return [
+        "PeriodLeakAccepted bounds a zone only over a period its period check accepted: a zone whose check answered "
+        "anything else has no K established, and its figures are the bound its run's load would have had; the lab's "
+        "sum is established only where every zone's is, and the datacenter's and the world's never are, their links "
+        "being no run's",
         "k_sched and k_fail both charge each connection's cell count, log2(cap + 1) with cap its lane's egress cells: "
         "PeriodLeakAccepted's terms as proved, a known overcount (charging each bit once is NET-200's bound)",
         "ell_a is the registered width of a window's free inputs (the tied audit's slot entries, NR*T/EVERY entries), "
         "not the realized advice length |a_j|, which is private and not in this record",
         "k_skip is 0 in the per-period form, every proof block being drawn; the pooled form's k_skip at delta is "
         "F*log2(N + 1) + b*F (leak_bounds), and that form is conditional (hesc and hleak await SampledKSLive and P2)",
-        f"the jitter is charged at d_jit = {LB.JITTER_BOUND}, k_i = T steps a window: {LB.JITTER}; the brief's 0 "
-        "holds only under J at d_jit = 1",
+        f"the jitter is charged at d_jit = {LB.JITTER_BOUND}, k_i = T steps a window: J is assumed at d_jit = "
+        f"{LB.JITTER_BOUND}, and at d_jit = 1 it isn't met (the next bucket's host-state channel), so the brief's 0, "
+        "which holds only under J at d_jit = 1, isn't charged",
         "no sync term on the active-warden path",
         "delta_net is the scans' delta summed over the period's windows, m*delta_scan, beside the scans' knowledge and "
         "collision errors; where it reaches 1 the row is vacuous, a bound that holds with no probability",
@@ -379,6 +388,15 @@ def delta(eps: str) -> str:
     return f"{float(e):.3g}" + (" (vacuous)" if e >= 1 else "")
 
 
+def held(established: bool) -> str:
+    return "yes" if established else "no"
+
+
+def short(reason: str, n: int = 160) -> str:
+    """``reason`` cut at a word within ``n`` characters (record.json keeps it whole)."""
+    return reason if len(reason) <= n else reason[:n].rsplit(" ", 1)[0] + " …"
+
+
 def markdown(doc: dict) -> str:
     zones = doc["zones"]
     lines = ["# The onsite network path on the mock datacenter: SIMULATED, never served", "",
@@ -391,17 +409,22 @@ def markdown(doc: dict) -> str:
             f", {g['requests']} requests in {g['windows']} link-window(s)" if g.get("requests") is not None else "")
         chain = "not run" if c is None else c["verdict"] + " (" + ", ".join(f"{k} {s['verdict']}"
                                                                           for k, s in c["steps"].items()) + ")"
-        period = "not run" if p is None else f"{p['verdict']}: {(p.get('reason') or '')[:240]}"
+        period = "not run" if p is None else f"{p['verdict']}: {short(p.get('reason') or '')}"
         lines.append(f"| {b} | {gate} | {chain} | {period} |")
+    accepted = [b for b, z in zones.items() if z["K"] and z["K"]["established"]]
     lines += ["", "## K, the bits a zone's server can send beyond its committed program", "",
               f"`{LB.STATEMENTS['per_period']}`: {BOUND}, in the registered reading, shares of one copy of the weights "
-              f"({LB.WEIGHTS.label}).", ""]
+              f"({LB.WEIGHTS.label}). It bounds a zone only over a period its period check accepted: K is established "
+              f"for {', '.join(accepted) or 'no zone'} here. Every other zone's figures are the bound its run's load "
+              "would have had, had its period check accepted.", ""]
     for b, z in zones.items():
         if not z["K"]:
             lines.append(f"{b}: no K (the gate's check didn't accept)")
             continue
         k, w = z["K"], z["K"]["per_window"]
-        lines += [f"**{b}** at scan class {k['scan_class']}, T = {w['k_i']}, {k['run']['requests_per_link_window']:g} "
+        status = "established" if k["established"] else f"not established: the period check answered {z['verdict']}"
+        lines += [f"**{b}** ({status}) at scan class {k['scan_class']}, T = {w['k_i']}, "
+                  f"{k['run']['requests_per_link_window']:g} "
                   f"requests a link-window: a window's ell_a = {w['ell_a']:,}, k_skip = 0, k_i log2 d_jit = "
                   f"{w['jitter']} (d_jit = {w['d_jit']}), a request's k_sched = k_fail = {k['per_request']['k_sched']}; "
                   f"K a link-window = {w['K']:,.0f}.", "",
@@ -415,20 +438,22 @@ def markdown(doc: dict) -> str:
         lines.append("")
     if doc["lab"]:
         first = next(z["K"] for z in zones.values() if z["K"])
-        lines += ["## Over all compute", "", "| period | scope | links | K per period (share) | delta_net | "
-                  "K pooled, delta = 1e-6 | basis |", "|---|---|---|---|---|---|---|"]
+        lab = held(doc["lab"]["established"])
+        lines += ["## Over all compute", "", "| period | scope | links | established | K per period (share) | delta_net | "
+                  "K pooled, delta = 1e-6 | basis |", "|---|---|---|---|---|---|---|---|"]
         for p in LB.PERIODS:
             for b, z in zones.items():
                 if z["K"]:
                     t = z["K"]["periods"][p]
-                    lines.append(f"| {p} | zone {b} | 1 | {fmt(t['bound'])} ({t['share']:.3g}) | "
-                                 f"{delta(t['delta_net'])} | {fmt(t['pooled']['1e-06']['bound'])} | zone |")
+                    lines.append(f"| {p} | zone {b} | 1 | {held(z['K']['established'])} | {fmt(t['bound'])} "
+                                 f"({t['share']:.3g}) | {delta(t['delta_net'])} | "
+                                 f"{fmt(t['pooled']['1e-06']['bound'])} | zone |")
             s = doc["lab"][p]
-            lines.append(f"| {p} | the lab | {doc['lab']['links']} | {fmt(s['per_period'])} ({s['share']:.3g}) | "
-                         f"{delta(s['delta_net'])} | {fmt(s['pooled']['1e-06'])} | lab |")
+            lines.append(f"| {p} | the lab | {doc['lab']['links']} | {lab} | {fmt(s['per_period'])} "
+                         f"({s['share']:.3g}) | {delta(s['delta_net'])} | {fmt(s['pooled']['1e-06'])} | lab |")
             for r in first["scopes"]:
                 if r["period"] == p and r["scope"] in ("datacenter", "world"):
-                    lines.append(f"| {p} | {r['scope']} | {r['links']:,} | {fmt(r['per_period'])} "
+                    lines.append(f"| {p} | {r['scope']} | {r['links']:,} | no (scaled) | {fmt(r['per_period'])} "
                                  f"({r['per_period_share']:.3g}) | {delta(r['eps'])} | "
                                  f"{fmt(r['pooled']['1e-06'])} | {r['scope']} |")
         lines += ["", *(f"- **{k}**: {v}" for k, v in BASIS.items())]

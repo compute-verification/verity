@@ -104,17 +104,20 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
                "audit's slot entries"}
     zone(out, "b0", params, answer=unwired)
     zone(out, "b1", params, answer=None, refused="the chain wrote no report (exit 7)")
+    zone(out, "b2", params, answer={"protocol": "verity/certifier/v0", "verdict": "accept", "reason": None})
     out.joinpath("front.json").write_text(json.dumps({
-        "host": "lab", "declaration": "leaf-spine-2",
+        "host": "lab", "declaration": "leaf-spine-3",
         "zones": {b: {"zone": f"na-{b}", "certifier": f"na-{b}-cert", "address": a}
-                  for b, a in (("b0", "10.77.0.1"), ("b1", "10.77.0.9"))}}))
+                  for b, a in (("b0", "10.77.0.1"), ("b1", "10.77.0.9"), ("b2", "10.77.0.17"))}}))
     assert onsite.record(argparse.Namespace(out=str(out))) == 0
     doc = json.loads((out / "record.json").read_text())
     assert (doc["label"], doc["served"], doc["simulated"]) == ("simulated", False, list(onsite.SIMULATED))
-    b0, b1 = doc["zones"]["b0"], doc["zones"]["b1"]
+    b0, b1, b2 = doc["zones"]["b0"], doc["zones"]["b1"], doc["zones"]["b2"]
     assert (b0["verdict"], b0["period"]["reason"]) == ("reject", unwired["reason"])
     assert b0["chain"]["verdict"] == "accepted" and b0["chain"]["steps"]["scan"]["eps_at_delta"] == "2^-20"
     assert (b1["verdict"], b1["chain"]) == ("refused", None)
+    assert [z["K"]["established"] for z in (b0, b1, b2)] == [False, False, True]
+    assert doc["lab"]["established"] is False
 
     cls, T = SZ.W63K4.cls, params["window"]
     ell_a = cls.NR * (T // cls.EVERY) * IS.entry_bits(cls)
@@ -133,13 +136,18 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
         assert t["pooled"]["1e-06"]["k_skip"] == pytest.approx(one.bits(period, "registered", Fraction(1, 10**6))
                                                                - one.bits(period, "registered"))
     assert (k["periods"]["week"]["vacuous"], k["periods"]["year"]["vacuous"]) == (False, True)
-    assert doc["lab"]["links"] == 2 and doc["lab"]["week"]["per_period"] == pytest.approx(
-        2 * k["periods"]["week"]["bound"])
+    assert doc["lab"]["links"] == 3 and doc["lab"]["week"]["per_period"] == pytest.approx(
+        3 * k["periods"]["week"]["bound"])
     md = (out / "record.md").read_text()
     assert md.startswith("# The onsite network path on the mock datacenter: SIMULATED, never served")
     assert "| b0 | accepted, 4 requests in 1 link-window(s) | accepted (scan accepted, tie accepted) | reject: " in md
     assert "| b1 | accepted, 4 requests in 1 link-window(s) | not run | refused: the chain wrote no report" in md
-    assert "(vacuous)" in md and "known overcount" in md
+    assert "K is established for b2 here" in md
+    assert "**b0** (not established: the period check answered reject)" in md and "**b2** (established)" in md
+    assert "| week | zone b0 | 1 | no |" in md and "| week | zone b2 | 1 | yes |" in md
+    assert "| week | the lab | 3 | no |" in md and "| week | datacenter | 12,500 | no (scaled) |" in md
+    assert "(vacuous)" in md and "known overcount" in md and "D_j" not in md
+    assert onsite.short("word " * 50).endswith(" …") and len(onsite.short("word " * 50)) <= 162
 
 
 def test_a_zone_whose_gate_didnt_accept_has_no_K(onsite, tmp_path):
