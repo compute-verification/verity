@@ -27,7 +27,7 @@ inductive Hash where
   deriving BEq, Repr
 
 /-- SHA-512, the one hash; `sha256` is only ever named. -/
-instance : Inhabited Hash := ⟨.sha512⟩
+instance instInhabitedHash : Inhabited Hash := ⟨.sha512⟩
 
 namespace Hash
 
