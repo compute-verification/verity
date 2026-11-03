@@ -268,9 +268,12 @@ def kinds(one: dict, void: bool = False) -> str:
     `sensitivity`, those it leaves out; null where unmeasured, "inf" where infinite; `partial` and `why` where
     `published` sets them; `void`, the kind whose term is a void's 0 (`VOID`), where `void`; `rests_on`, what
     each `PREMISED` kind's term rests on where it is measured and not void; and `fresh_subset`, the products the
-    fresh-products term's best subset dropped, where it dropped any."""
-    def cell(x: float | None) -> str:
-        return "null" if x is None else '"inf"' if math.isinf(x) else num(x, DIGITS)
+    fresh-products term's best subset dropped, where it dropped any (with its `rule`, a string, where
+    formalism's `fresh_products` names one)."""
+    def cell(x: object) -> str:
+        if isinstance(x, bool) or not isinstance(x, (int, float)):
+            return json.dumps(x)
+        return '"inf"' if math.isinf(x) else num(x, DIGITS)
 
     def part(d: dict) -> str:
         return "{" + ",".join(f'"{k}":{cell(x)}' for k, x in d.items()) + "}"

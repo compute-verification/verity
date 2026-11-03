@@ -83,6 +83,7 @@ from te_core.capture.structure import StepGraph, _shape
 from te_core.capture.trace import CaptureRefused, Trace
 from te_core.flops import TOKEN_INDEX
 from te_core.formalism import READ_BACKS
+from te_core.opnames import gemm_like
 
 __all__ = ["Scalar", "record"]
 
@@ -909,6 +910,16 @@ def gemm_macs(g: StepGraph) -> int:
     return sum(m.macs for m in g.matmuls)
 
 
+def recorded_forward_gemm_macs(run: dict, step: int) -> int:
+    """The counter's forward GEMMs at `step`, from its structure's op log (te_core.flops), which `forward_gemm_macs`
+    counts on the trace. The counter's whole forward (`recorded_forward_macs`) holds more that |C| counts and no
+    product is: its forward elementwise work, and a trained table's lookup by token data at the gather Definition's
+    multiplexers (12% of the forward of an 18-layer model of width 768 with a trained 32,000-row embedding)."""
+    s = run["steps"][step]
+    log = ((run.get("structures") or {}).get(s.get("struct")) or {}).get("log") or []
+    return sum(r[5] for r in log if r[0] == "fwd" and gemm_like(r[2]))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--script", type=Path, required=True)
@@ -934,6 +945,7 @@ def main(argv=None) -> int:
     out = {"step": a.step, "tier": tier, "structure": g.structure(), "gemm_macs": gemm_macs(g),
            "recorded_gemm_macs": int(steps[a.step]["matmul_macs"]),
            "forward_gemm_macs": g.phase_macs().get("forward", 0),
+           "recorded_forward_gemm_macs": recorded_forward_gemm_macs(run, a.step),
            "recorded_forward_macs": sum(v for k, v in by.items() if k.startswith("fwd/")), "tokens": g.tokens, "axes": g.axes,
            "updated_macs": g.updated_macs(), "dependent": g.dependent[:40], "sinks": g.sinks[:40],
            "cut_bits": g.cut_bits, "beta": g.beta, "cut": g.cut[:12], "formalism": g.formalism,
@@ -944,8 +956,8 @@ def main(argv=None) -> int:
     if a.out:
         a.out.write_text(text + "\n")
     f = g.formalism or {}
-    print(json.dumps({k: out[k] for k in ("step", "forward_gemm_macs", "recorded_forward_macs", "updated_macs", "cut_bits",
-                                          "seconds")}
+    print(json.dumps({k: out[k] for k in ("step", "forward_gemm_macs", "recorded_forward_gemm_macs", "recorded_forward_macs",
+                                          "updated_macs", "cut_bits", "seconds")}
                      | {k: f.get(k) for k in ("affected_share", "token_factor", "a_bits", "u1_bits", "tail_share", "delta_grad_bits")}
                      | {k: [f"{e['kind']} at {e['where']}" for e in f.get(k, [])][:8] for k in READ_BACKS}))
     return 0
