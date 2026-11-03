@@ -30,7 +30,7 @@ strategy of the period's game projects to. This module states its C-Flock side.
 * **The projection** (`Constructions`): a strategy of the period's game is read as a strategy of the live audit. A
   C-Flock strategy flips no coin of its own, so the device's other releases the strategy may ask for (`Widening`:
   other families' coins, other trees' samples) widen the draw's sample (`Live.extend`), which the draw doesn't read: the
-  draw's law, A3 and the leg's δ are the session's.
+  draw's law, A3 and the leg's δ are the session's (`uniform_fst`, `Live.delta_extend`).
 * **The coupling** (`CouplingTarget`), the projection's target: the sampled verdict is at most as likely in the period's
   game as flock-verify `--zk`'s acceptance in the live audit at the projected strategy, plus the two-continuation
   finders' terms, the tree openings' hiding term, the read finder's collision and the forger's forgery.
@@ -181,6 +181,12 @@ theorem uniform_fst {Ω T : Type} [Fintype Ω] [Fintype T] [Nonempty T] {m : ℕ
     FlockSoundness.Assumptions.UniformRandomBytes Lb (fun ω : Ω × T => t ω.1) := fun E =>
   (FlockSoundness.ZK.prCoin_fst (fun ω => E (t ω))).trans (h E)
 
+/-- A mean over a sample widened by a second coin that the summand doesn't read is the mean over the sample. -/
+theorem avg_fst {Ω T : Type} [Fintype Ω] [Fintype T] [Nonempty T] (G : Ω → ℝ≥0∞) :
+    Verity.Game.avg (fun ω : Ω × T => G ω.1) = Verity.Game.avg G :=
+  (FlockSoundness.ZK.avg_prod_split _).trans
+    (congrArg Verity.Game.avg (funext fun c => FlockSoundness.Game.avg_const (G c)))
+
 namespace Live
 
 variable (A : Live)
@@ -292,6 +298,60 @@ file finders' `2²/2^513`, and `cr`. -/
 noncomputable def delta (t : ℕ) (cr : ℝ) : ℝ≥0∞ :=
   A.sessionDelta t + A.rounds * twoRun (A.qM t) + twoRun (A.qM t) + A.hidingTerm +
     2 * ENNReal.ofReal ((2 : ℝ) ^ 2 / 2 ^ (513 : ℝ)) + ENNReal.ofReal cr
+
+/-- **The tables' knowledge term at the widened sample is the session's**: the draw reads only the session's bytes. -/
+theorem ksAvg_extend (S : Widening) (k : ℕ) (qF qS : ℝ) (R : A.Reg) :
+    ksAvgStrictZ (planZHJP A.dj A.y₀) (A.extend S).L k qF qS R = ksAvgStrictZ (planZHJP A.dj A.y₀) A.L k qF qS R :=
+  avg_fst (T := S.T) fun ω : A.Ω => ⨆ j : Fin (planZHJP A.dj A.y₀ (A.L.draw ω) R).length,
+    ENNReal.ofReal (ksStrictZ (planZHJP A.dj A.y₀ (A.L.draw ω) R) j k qF qS /
+      (1 - rateZ (planZHJP A.dj A.y₀ (A.L.draw ω) R) j k))
+
+open Classical in
+/-- **The share of the widened sample whose draw reads a commit string is the session's**: a widened draw reads it
+exactly when the session's bytes' draw does, whatever the other coins. -/
+theorem ratio_extend (S : Widening) (p : A.vb.Pos) :
+    (Fintype.card (ΩcZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb (A.extend S).L p) : ℝ) /
+        Fintype.card (A.extend S).L.Ω =
+      (Fintype.card (ΩcZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb A.L p) : ℝ) /
+        Fintype.card A.L.Ω := by
+  have hc : Fintype.card (ΩcZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb (A.extend S).L p) =
+      Fintype.card (ΩcZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb A.L p) * Fintype.card S.T :=
+    (Fintype.card_congr (Equiv.prodSubtypeFstEquivSubtypeProd (β := S.T)
+      (p := fun ω => ReadsDrawZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb A.L p ω))).trans
+      (Fintype.card_prod _ _)
+  have hΩ : Fintype.card (A.extend S).L.Ω = Fintype.card A.L.Ω * Fintype.card S.T := Fintype.card_prod A.Ω S.T
+  rw [hc, hΩ]
+  simp only [Nat.cast_mul]
+  exact mul_div_mul_right _ _ (Nat.cast_ne_zero.mpr Fintype.card_ne_zero)
+
+open Classical in
+/-- **The session's error at the widened sample is the session's.** -/
+theorem sessionDelta_extend (S : Widening) (t : ℕ) : (A.extend S).sessionDelta t = A.sessionDelta t := by
+  have hks : (⨆ R : A.Reg, ksAvgStrictZ (planZHJP A.dj A.y₀) (A.extend S).L A.k (A.qF t) (A.qS t) R) =
+      ⨆ R : A.Reg, ksAvgStrictZ (planZHJP A.dj A.y₀) A.L A.k (A.qF t) (A.qS t) R :=
+    iSup_congr fun R => A.ksAvg_extend S _ _ _ R
+  have hsum : (∑ p : A.vb.Pos,
+        (Fintype.card (ΩcZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb (A.extend S).L p) : ℝ) /
+          Fintype.card (A.extend S).L.Ω) =
+      ∑ p : A.vb.Pos,
+        (Fintype.card (ΩcZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb A.L p) : ℝ) /
+          Fintype.card A.L.Ω :=
+    Finset.sum_congr rfl fun p _ => A.ratio_extend S p
+  show A.drawMiss + (⨆ R : A.Reg, ksAvgStrictZ (planZHJP A.dj A.y₀) (A.extend S).L A.k (A.qF t) (A.qS t) R) +
+      ENNReal.ofReal ((∑ p : A.vb.Pos,
+          (Fintype.card (ΩcZ execArith A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb (A.extend S).L p) : ℝ) /
+            Fintype.card (A.extend S).L.Ω) *
+        (2 * (A.tL t * (1 + A.k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * A.M) + A.k / (Real.exp 1 * A.Rw)) /
+          (1 - A.ρ)) = A.sessionDelta t
+  rw [hks, hsum]
+  rfl
+
+/-- **The leg's δ at the widened sample is the session's**: the draw, the tables' and link terms, the rounds and the
+finders' budgets read only the session's bytes and parameters. -/
+theorem delta_extend (S : Widening) (t : ℕ) (cr : ℝ) : (A.extend S).delta t cr = A.delta t cr := by
+  unfold Live.delta
+  rw [sessionDelta_extend]
+  rfl
 
 /-- **How v2 reads the committed files at the session**: the verify command's tags, the circuit file, its tables and
 the public file. -/
