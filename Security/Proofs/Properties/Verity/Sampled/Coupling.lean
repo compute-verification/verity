@@ -32,8 +32,8 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 `recordFinder`): `K`'s coins, projection, read finder and forger. -/
 noncomputable def Constructions.withMessages {V : Vocab d α} (K : Constructions V) (rd : Readings) :
     Constructions V :=
-  { K with msgFinder := msgFinder V rd, recordFinder := recordFinder V rd, msg_calls := msgFinder_calls V rd,
-           record_calls := recordFinder_calls V rd }
+  { K with msgFinder := Verity.Sampled.msgFinder V rd, recordFinder := Verity.Sampled.recordFinder V rd,
+           msg_calls := msgFinder_calls V rd, record_calls := recordFinder_calls V rd }
 
 variable (V : Vocab d α) (k : Verity.Registration.Composite)
 
