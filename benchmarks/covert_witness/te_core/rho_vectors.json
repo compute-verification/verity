@@ -1292,7 +1292,7 @@
 "c": 536681984163840.0,
 "k": 65536.0,
 "products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -3086,7 +3086,7 @@
 "products": {
 "at": {
 "145568": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -3157,7 +3157,7 @@
 "trace_order": "unknown"
 },
 "80000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -3228,7 +3228,7 @@
 "trace_order": "unknown"
 },
 "800000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -3299,7 +3299,7 @@
 "trace_order": "unknown"
 },
 "8000000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -3370,7 +3370,7 @@
 "trace_order": "unknown"
 },
 "80000000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -3441,7 +3441,7 @@
 "trace_order": "unknown"
 },
 "800000000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -3512,7 +3512,7 @@
 "trace_order": "unknown"
 }
 },
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -4860,7 +4860,7 @@
 "products": {
 "at": {
 "145568": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -4931,7 +4931,7 @@
 "trace_order": "unknown"
 },
 "80000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -5002,7 +5002,7 @@
 "trace_order": "unknown"
 },
 "800000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -5073,7 +5073,7 @@
 "trace_order": "unknown"
 },
 "8000000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -5144,7 +5144,7 @@
 "trace_order": "unknown"
 },
 "80000000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -5215,7 +5215,7 @@
 "trace_order": "unknown"
 },
 "800000000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -5286,7 +5286,7 @@
 "trace_order": "unknown"
 }
 },
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -7343,7 +7343,7 @@
 "products": {
 "at": {
 "145568": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -7452,7 +7452,7 @@
 "trace_order": "unknown"
 },
 "80000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -7561,7 +7561,7 @@
 "trace_order": "unknown"
 },
 "800000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -7670,7 +7670,7 @@
 "trace_order": "unknown"
 },
 "8000000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -7779,7 +7779,7 @@
 "trace_order": "unknown"
 },
 "80000000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -7888,7 +7888,7 @@
 "trace_order": "unknown"
 },
 "800000000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -7997,7 +7997,7 @@
 "trace_order": "unknown"
 }
 },
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -11534,7 +11534,7 @@
 "products": {
 "at": {
 "145568": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -11670,7 +11670,7 @@
 "trace_order": "unknown"
 },
 "80000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -11806,7 +11806,7 @@
 "trace_order": "unknown"
 },
 "800000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -11942,7 +11942,7 @@
 "trace_order": "unknown"
 },
 "8000000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -12078,7 +12078,7 @@
 "trace_order": "unknown"
 },
 "80000000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -12214,7 +12214,7 @@
 "trace_order": "unknown"
 },
 "800000000": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -12350,7 +12350,7 @@
 "trace_order": "unknown"
 }
 },
-"capture": "4.12.7",
+"capture": "4.12.9",
 "elementwise_products": [],
 "gathered": {
 "dropped": 0,
@@ -12777,7 +12777,7 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 80000000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "Fit's construction",
@@ -12800,7 +12800,7 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 80000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
@@ -12823,7 +12823,7 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 100000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "partial": true,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
@@ -12846,7 +12846,7 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
@@ -12869,7 +12869,7 @@
 "case": "lora",
 "fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
@@ -12892,7 +12892,7 @@
 "case": "adapter-live",
 "fresh_subset": null,
 "k": 100000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "unmeasured",
@@ -12915,7 +12915,7 @@
 "case": "adapter-live",
 "fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "no kind exceeds 1",
@@ -13572,7 +13572,7 @@
 "x0": 8.333582376964214e-05
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -13692,7 +13692,7 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 11.065531262155444,
 "rho": 11.065531262155444,
 "rho_fit": 1.0,
@@ -13738,7 +13738,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -13862,7 +13862,7 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -13908,7 +13908,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -14032,7 +14032,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14078,7 +14078,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -14202,7 +14202,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14248,7 +14248,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -14372,7 +14372,7 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14418,7 +14418,7 @@
 "x0": 8.333582376964214e-05
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -14538,7 +14538,7 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14584,7 +14584,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -14708,7 +14708,7 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14754,7 +14754,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -14878,7 +14878,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14924,7 +14924,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -15048,7 +15048,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15094,7 +15094,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -15218,7 +15218,7 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15264,7 +15264,7 @@
 "x0": 0.00034364702383247125
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -15390,7 +15390,7 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 8.35335685982954,
 "rho": 8.35335685982954,
 "rho_fit": 1.0,
@@ -15436,7 +15436,7 @@
 "x0": 0.08627081452593345
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -15562,7 +15562,7 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15608,7 +15608,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -15734,7 +15734,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15780,7 +15780,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -15906,7 +15906,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.9996631800490919,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15952,7 +15952,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -16078,7 +16078,7 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -16124,7 +16124,7 @@
 "x0": 0.08805491470908546
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -16251,7 +16251,7 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 2.7344655410785834,
 "rho": 2.7344655410785834,
 "rho_fit": 1.000266918292764,
@@ -16297,7 +16297,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -16424,7 +16424,7 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": 1.000266918292764,
@@ -16470,7 +16470,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -16597,7 +16597,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.9999300519868622,
 "rho": 1.000266918292764,
 "rho_fit": 1.000266918292764,
@@ -16643,7 +16643,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -16770,7 +16770,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0110508421616675,
 "rho_fit": 1.0110508421616675,
@@ -16816,7 +16816,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.7",
+"capture": "4.12.9",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -16943,7 +16943,7 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.8, reading A",
+"label": "training's slowdown code 4.12.9, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": "inf",
@@ -16964,6 +16964,6 @@
 "unmeasured": {}
 }
 ],
-"version": "4.12.8",
+"version": "4.12.9",
 "w_fwd_gates": 4925098176.0
 }
