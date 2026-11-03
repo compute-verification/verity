@@ -6750,19 +6750,50 @@
    "owner": "@network-accounting",
    "signature": ["Flock.SecurityProofs.RecStopsOfRun : Flock.Guarantees.RecStopsOfRun"],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "4502527c629ce447a11ecd88897be763f1bdfd8adc1c2f6013521ff167ad0430"
   },
   "Flock.SecurityProofs.RecStopsOfRun_honest": {
    "owner": "@network-accounting",
-   "signature": [],
+   "signature": [
+    "Flock.SecurityProofs.RecStopsOfRun_honest :",
+    "  And",
+    "    (Eq",
+    "      (Option.isNone",
+    "        (Flock.StopCount.recStop Flock.StopCount.Witness.one",
+    "          (Flock.StopCount.run Flock.StopCount.Witness.one Flock.StopCount.Witness.honest) \"r0000\"))",
+    "      Bool.true)",
+    "    (And (Eq ((Flock.StopCount.run Flock.StopCount.Witness.one Flock.StopCount.Witness.honest).sent \"r0000\" 0) 1)",
+    "      (And (Eq ((Flock.StopCount.run Flock.StopCount.Witness.one Flock.StopCount.Witness.honest).sent \"r0000\" 1) 1)",
+    "        (And",
+    "          (Eq",
+    "            (Flock.StopCount.unreleasedOf",
+    "              (Flock.StopCount.run Flock.StopCount.Witness.one Flock.StopCount.Witness.honest) \"r0000\")",
+    "            Bool.false)",
+    "          (And",
+    "            (Eq ((Flock.StopCount.run Flock.StopCount.Witness.one Flock.StopCount.Witness.honest).left \"r0000\" 1)",
+    "              (Core.Firewall.releaseMs",
+    "                (Flock.StopCount.schedOf",
+    "                  (Flock.StopCount.run Flock.StopCount.Witness.one Flock.StopCount.Witness.honest) \"r0000\")",
+    "                0))",
+    "            (Eq ((Flock.StopCount.run Flock.StopCount.Witness.one Flock.StopCount.Witness.honest).left \"r0000\" 1)",
+    "              (Option.some 150))))))"
+   ],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "583409ac21909e3b05ca01b06c41cb08dbe5cde584cb739df094abcce2dcf23e"
   },
   "Flock.SecurityProofs.RecStopsOfRun_nontrivial": {
    "owner": "@network-accounting",
-   "signature": [],
+   "signature": [
+    "Flock.SecurityProofs.RecStopsOfRun_nontrivial :",
+    "  Not",
+    "    (Eq ((Flock.StopCount.Witness.runAll Flock.StopCount.Witness.one Flock.StopCount.Witness.unordered).sent \"r0000\" 1)",
+    "      (Flock.StopCount.cutAt (fun p => Flock.StopCount.Witness.one \"r0000\" p.val)",
+    "        (Flock.StopCount.recStop Flock.StopCount.Witness.one",
+    "          (Flock.StopCount.Witness.runAll Flock.StopCount.Witness.one Flock.StopCount.Witness.unordered) \"r0000\")",
+    "        1))"
+   ],
    "assumptions": [],
-   "type_hash": ""
+   "type_hash": "0e7c61e7cf8c6b4569aa536ba814bf87f8d5ab897f2fa13b12e49372fa921f46"
   },
   "Flock.SecurityProofs.RecursionClaimsStated": {
    "owner": "@proofs",
@@ -35693,6 +35724,9 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecStopsOfRun",
+    "Flock.SecurityProofs.RecStopsOfRun_honest",
+    "Flock.SecurityProofs.RecStopsOfRun_nontrivial",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveCircuitIndist",
     "Flock.SecurityProofs.RecursiveCircuitPrivate",
@@ -53905,6 +53939,78 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveZK",
     "Flock.SecurityProofs.recursiveZK_os_gap"
+   ]
+  },
+  "Proofs.Flock.Recursive.StopCount": {
+   "digest": "2f9d36e73e9dd1779e6d9b90569385a13c3ebc405596bf3f3c720d18ae1803c8",
+   "definitions": {
+    "Flock.Guarantees.RecStopsOfRun": "42cfb5895b5b3889506f4c7d38fe3a0cc15142fe6e95b0e5c3f10a2b4c2679cf",
+    "Flock.StopCount.Holder": "c61158a7c5a97a3a86fdc8410d5c917e71e0fc30c9d69603962f6913a9a751f3",
+    "Flock.StopCount.Holder.admitted": "296c99e565ae2ea6552569eda4c6d9f0f693874025bf8505e8169f61d271122f",
+    "Flock.StopCount.Holder.going": "4bc0ed99a16857605a2ba17937c2f53057437f265c4927e1daeb701fa233e803",
+    "Flock.StopCount.Holder.part": "058043ffbae85de364a5720c99ca7dc75726bb6145483134fcf5a1cf248efea5",
+    "Flock.StopCount.Holder.session": "e7a6836427c7de6efa84fc5c93164a65847e121fe920f4a9fe44edfdaf0fb451",
+    "Flock.StopCount.Holder.stmt": "c9428230394df8da0c6d0b2b3c91ad0474ffcf38956910267ba1fa4e0c738e42",
+    "Flock.StopCount.St": "ef9d6d4e3e1c13d1b869fde26f7643f4f57183721b8cee7eaddddc6d66c60b1c",
+    "Flock.StopCount.St.adm": "cac338a1db31773266bbc0aca89f1b039dc0b73738fb21591603ea613ccdb423",
+    "Flock.StopCount.St.evs": "df46d3feb716b437c05963e1f0bf181bda5cdff589faf3d005ac01b2dae8d59f",
+    "Flock.StopCount.St.holder": "6e28a9f32749a44bddbd9a88ac0c16c4890e51df8da766abb31e02e1405278b2",
+    "Flock.StopCount.St.init": "3c07095fbd3165e10b57aea70c7771a90200d644fd908ce58ffb7dc585e81a16",
+    "Flock.StopCount.St.left": "78f2366d59306b5080d906231c058e962fdd833385dcf64a084393caac5fc59e",
+    "Flock.StopCount.St.sent": "d99458e77221829b4f7b59928e07f939df41790c3191c88986fb58c129be098d",
+    "Flock.StopCount.Step": "8aa4776a7cffab153b0b93058025d4392b635d415fd58dd3dcead9c73ad87767",
+    "Flock.StopCount.Step.barrier": "1ef032247e04d60a61ef1eee1ac89e38dc601cf27631f63c9d3c6d3f306e8d3e",
+    "Flock.StopCount.Step.casesOn": "53b030a1229aab1958605b18a70c2804d6b1a9087b3ea428cd4e177fc5592b60",
+    "Flock.StopCount.Step.ctorIdx": "408b7181266fa9c1b554dbb37f6e3184fdc3ceb2a7a62a1e5e42583bd767bd81",
+    "Flock.StopCount.Step.cut": "a46c91ee5a9ed8e2d51d4524d976f6822486cd3bafbf5a89ce6e08b17eb39347",
+    "Flock.StopCount.Step.die": "59c1431fd78bd389f2de4511d92fb1abb7bcd065f8e22c26969567c893b1cff2",
+    "Flock.StopCount.Step.innerFinish": "0671c550207c6cfdc03661133b580735b8102199a07ae1fc85713c99e3ff7859",
+    "Flock.StopCount.Step.innerSend": "00c4866ed3d6667cdf5e8a0333937f0bc02821d66cd23a36a6267a876e37d63d",
+    "Flock.StopCount.Step.innerStop": "4c80b0edccd1d984729ba39e983d9fae2ca09cf7e91e6867fbd234024878d582",
+    "Flock.StopCount.Step.openRec": "c5587a5365d9c049664e4a6281f5512eb965d38c5795bdc5aac05447e443c626",
+    "Flock.StopCount.Step.rec": "5905f3f865c5fd4538a5350caba049f8b94b09e2ee8d91ba50a0ed5a7c5a01b3",
+    "Flock.StopCount.Step.relay": "2f7b4e2d2170e0dfba273cf205ee1d9a78c16e2a46980612241d1f39bfbf2ddd",
+    "Flock.StopCount.Step.seat": "4299d6f0ed3899fde5ba946eb2185683c053198ca154ff0e344f917e17e35c78",
+    "Flock.StopCount.Step.verdict": "b70e2ed07e3ca6fa2c305c5f3314b1a65dd3a7a3890274b8f9c3d08406546236",
+    "Flock.StopCount.Step.wait": "3a06127e43c0520a1ad42aadd3828f7b2b5c22a23af656464d2afdc653a80403",
+    "Flock.StopCount.bump": "1f8d5bc181e3bf6a4a12b36b89718c6c90d4f91796e7fdeaeee10a2941b89be2",
+    "Flock.StopCount.cutAt": "a12e136e6bd48bac63cff45966964cf18d4ee1e67f0b7656caa6d896c0645b2b",
+    "Flock.StopCount.nOf": "352ebea6c07fd79a9fb4ec6929aa3d188e075dc47b3fb1320219eeee9ff3a1fa",
+    "Flock.StopCount.put": "db27d75daca904a6aeaf644088a14d7f0e1cfe7b7e129c19a221273960d2d442",
+    "Flock.StopCount.recStop": "322e51433cf2b87134d7c3383fa40cccd9a36dde9c993a19c7ec30939b99623f",
+    "Flock.StopCount.run": "ccf0950b821acca99315afe00e80901a9bf00a40cc4193fd3637bb120eb72321",
+    "Flock.StopCount.schedOf": "50d23ddd96ce61602d161408b780a2088ff43c5f1b405ae6b916fab5e9e7773a",
+    "Flock.StopCount.step": "8a60d58b3f23903abf7e2df670df058597ac81c9cc4d4d378ecf65b6b4527dc2",
+    "Flock.StopCount.step._sparseCasesOn_1": "c0de43f5173445210ef5cd50f9f33f4b7e01a8a5d2dad55ea0375f520846db06",
+    "Flock.StopCount.unreleasedOf": "e7e79408d4d0937e5c00bc111657f02d2cae800062a663a10efc7f9670bb9dec"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.RecStopsOfRun",
+    "Flock.SecurityProofs.RecStopsOfRun_honest",
+    "Flock.SecurityProofs.RecStopsOfRun_nontrivial"
+   ]
+  },
+  "Proofs.Flock.Recursive.StopCountProof": {
+   "digest": "146894d7d91af88a244c7a44519360ed1add94dfc563b37487a1b4aaa56cada6",
+   "definitions": {
+    "Flock.StopCount.Witness.honest": "c1948cf7adc9a46c75dabb33a2561e049a7b68281f6a5c9f8832d099de0f079b",
+    "Flock.StopCount.Witness.one": "3187b7afb2375a843c7f890a107a7aa8d2a078aad3f1150e418d6ef81618c680",
+    "Flock.StopCount.Witness.runAll": "2ee9db63d9771d26f48a6b68b17a22c4f152254f379545c21ffbae6e10979c9e",
+    "Flock.StopCount.Witness.stepAll": "7c712b524e85b016d548a085d6be598d1668c1666e1c45f93c378b43c7e6e9ad",
+    "Flock.StopCount.Witness.stepAll._sparseCasesOn_3": "b65538676ec65213e5e1019007663fe8717a7d21c594c0958722e9f06c4143f0",
+    "Flock.StopCount.Witness.unordered": "ce222455ad568863944ea84d859505a28b593b4d5c5b3c2608a50961ba1419a4"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecStopsOfRun_honest", "Flock.SecurityProofs.RecStopsOfRun_nontrivial"]
+  },
+  "Proofs.Flock.Recursive.StopLeak": {
+   "digest": "cac9deb7b7760214f290db85ab097810f05c1710c2a710ac2e8b8a84a5f1220c",
+   "definitions": {
+    "Flock.SecurityProofs.RecStops": "4a53f342f80093d29fa229e45900366d8b6beea4ce126743b112321d41608f75"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.RecStopsOfRun",
+    "Flock.SecurityProofs.RecStopsOfRun_honest",
+    "Flock.SecurityProofs.RecStopsOfRun_nontrivial"
    ]
   },
   "Proofs.Flock.Recursive.Target": {
