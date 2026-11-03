@@ -1,7 +1,7 @@
 """Launch one candidate on a node and preserve its record (fixed; run from an agent VM's checkout).
 
     python benchmarks/covert_witness/launch.py START [--island NAME] [--note TEXT] [--direction D] [--mechanism M] \\
-        [--node NODE] [--program FILE] [--reference] [-- TRAIN_ARGS...]
+        [--node NODE] [--program FILE] [--reference] [--long 'HH:MMZ who'] [-- TRAIN_ARGS...]
 
 The candidate is measured by the pinned measurement commit (`pin.py`, fetched from the integrator's branch): the run ships
 that commit (a clean checkout of it beside this one), and takes from this checkout only the island,
@@ -20,6 +20,10 @@ the witness summary are printed as one JSON line, and appended to `$CW_LEDGER` (
 D, the direction, defaults to the branch's `cursor/te-<D>-NNNN` (else `integrator`); M, the mechanism, to the note's first
 word (else the island). A candidate of a reference direction (`te_core.frontier.REF_DIRECTIONS`), or `--reference`, is
 ingested as a reference run; honest is the least |C| of every valid record either way (te_core.frontier).
+
+`--long 'HH:MMZ who'` runs the candidate at the long tier (`CW_TIER=long`, `prepare.budget`: up to LONG_C0 times the
+start's C0 and LONG_GPU_SECONDS of steps), only for a run the board assigns as long, whose line it names; the witness
+records it, and is valid at that tier only with it.
 
 `--final` (the scorer's, direction `scorer`, after the search) runs the candidate in final mode (`CW_FINAL=1`): the
 harness and the checker score the sealed final set, a sealed start (`pythia160m`) may be named, and the run is preserved
@@ -53,8 +57,10 @@ from te_core.launch import Node, nodes  # noqa: E402
 #: the harness this launcher drives (prepare.VERSION, read without importing prepare's torch)
 VERSION = re.search(r'^VERSION = "([^"]+)"', (HERE / "prepare.py").read_text(), re.M).group(1)
 DONE = {"done", "failed", "cancelled", "refused", "timeout", "lost"}
-#: candidate.sh's GPU lease (1.2x prepare.GPU_SECONDS_CAP plus 30 minutes for both jobs) and a margin
+#: candidate.sh's GPU lease (1.2x prepare.GPU_SECONDS_CAP plus 30 minutes for both jobs) and a margin; the long tier's
+#: (1.2x prepare.LONG_GPU_SECONDS plus the same)
 TIMEOUT = "110m"
+LONG_TIMEOUT = "2240m"
 
 
 def research(*args: str, check: bool = True, stdout_only: bool = False) -> str:
@@ -83,8 +89,9 @@ def git(*args: str) -> str:
 
 def island_of(name: str | None, program: str, direction: str) -> dict:
     """The island HEAD has (committed, unedited): `name`, else the direction's."""
-    has = lambda n: subprocess.run(["git", "cat-file", "-e", f"HEAD:{ISLANDS}/{n}/{program}"], cwd=REPO,
-                                   capture_output=True).returncode == 0
+    def has(n: str) -> bool:
+        return subprocess.run(["git", "cat-file", "-e", f"HEAD:{ISLANDS}/{n}/{program}"], cwd=REPO,
+                              capture_output=True).returncode == 0
     if not name and not has(direction):
         raise SystemExit(f"launch: HEAD has no {ISLANDS}/{direction}/{program}: name the island (--island NAME)")
     name = name or direction
@@ -138,7 +145,11 @@ def main() -> int:
     ap.add_argument("--island", default=None, help="the island, islands/NAME/ (default: the direction's)")
     ap.add_argument("--program", default="train.py", help="the island's program (default train.py)")
     ap.add_argument("--reference", action="store_true", help="ingest as a reference run (default: a reference direction's)")
+    ap.add_argument("--long", default=None, metavar="BOARD_LINE",
+                    help="the long tier (prepare.budget), for a run the board assigns as long: name its line ('HH:MMZ who')")
     a = ap.parse_args(argv)
+    if a.long is not None and not re.fullmatch(r"\d\d:\d\dZ [a-z0-9-]+.*", a.long):
+        raise SystemExit("launch: --long names the board line that assigns the run, as 'HH:MMZ who'")
     direction = tag(a.direction) if a.direction else branch_direction()
     reference = a.reference or direction in REF_DIRECTIONS
     if a.final and direction != "scorer":
@@ -159,9 +170,10 @@ def main() -> int:
         git("archive", "--format=tar", "-o", str(tar), f"HEAD:{ISLANDS}/{island['name']}")
         env = ["--env", f"CW_NODE={node.name}", "--env", f"CW_ISLAND={island['name']}",
                "--env", f"CW_PROGRAM={island['program']}", "--env", f"CW_ISLAND_COMMIT={island['commit']}",
-               "--env", f"CW_ISLAND_TREE={island['tree']}", *(["--env", "CW_FINAL=1"] if a.final else [])]
+               "--env", f"CW_ISLAND_TREE={island['tree']}", *(["--env", "CW_FINAL=1"] if a.final else []),
+               *(["--env", "CW_TIER=long", "--env", f"CW_TIER_BY={a.long}"] if a.long else [])]
         cmd = ["run", "--on", node.name, "--project", "verity", "--source", str(src), "--send", str(tar),
-               "--pool", node.pool, "--as", a.lane, "--pool-wait", "7200", "--timeout", TIMEOUT,
+               "--pool", node.pool, "--as", a.lane, "--pool-wait", "7200", "--timeout", LONG_TIMEOUT if a.long else TIMEOUT,
                "--declared-output", "out/*", *env, "--",
                "bash", "benchmarks/covert_witness/candidate.sh", a.start, *train_args]
         out = research(*cmd)
@@ -170,7 +182,8 @@ def main() -> int:
         raise SystemExit(f"launch: no run id in research run's output:\n{out[-2000:]}")
     run = m.group(1)
     launched = {"run": run, "node": node.name, "start": a.start, "direction": direction, "mechanism": mechanism,
-                "reference": reference, "measurement_commit": pin["commit"], "island": island}
+                "reference": reference, "measurement_commit": pin["commit"], "island": island,
+                "tier": "long" if a.long else "search", "tier_assigned_by": a.long}
     LAUNCHES.parent.mkdir(parents=True, exist_ok=True)
     with LAUNCHES.open("a") as f:
         f.write(json.dumps(launched) + "\n")
