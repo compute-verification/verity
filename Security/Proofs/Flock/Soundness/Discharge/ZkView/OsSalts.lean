@@ -107,14 +107,9 @@ noncomputable def saltEquiv : (Fin 192 → Fin 256) ≃ Salt :=
       simp only [Fintype.card_fun, Fintype.card_fin, ZMod.card]
       rw [show (256 : ℕ) = 2 ^ 8 by norm_num, ← pow_mul]⟩)
 
-theorem saltEquiv_apply (b : Fin 192 → Fin 256) : saltEquiv b = saltOfBytes b := rfl
-
 /-- **`n` salts from `n` streams of 192 bytes**, stream `i` salting leaf `i`. -/
 noncomputable def saltsEquiv (n : ℕ) : (Fin n → Fin 192 → Fin 256) ≃ (Fin n → Salt) :=
   Equiv.piCongrRight fun _ => saltEquiv
-
-theorem saltsEquiv_apply {n : ℕ} (b : Fin n → Fin 192 → Fin 256) (i : Fin n) :
-    saltsEquiv n b i = saltOfBytes (b i) := rfl
 
 /-! ## The OS's bytes as uniform values -/
 

@@ -54,10 +54,6 @@ masked prover's tape `z` with `TapeZk.mask` set to `maskOf`. -/
 noncomputable def TapePlan.atMask {C : Tabs} (x₀ : Msg) (z : Rand C x₀ → FlockComplete.TapeZk) : TapePlan C :=
   TapePlan.at x₀ fun r => { z r with mask := maskOf x₀ r }
 
-theorem TapePlan.atMask_mask {C : Tabs} (x₀ : Msg) (z : Rand C x₀ → FlockComplete.TapeZk) (r : Rand C x₀) :
-    ((TapePlan.atMask x₀ z).tapeZk r).mask = maskOf x₀ r :=
-  rfl
-
 /-- **Table `j`'s share of `honestPR`'s witness at the mask tape is the tables' `zWith`**: the share of `w` (`wtOf`)
 with the slot's word `k` set to the base's bits `k`. -/
 theorem zOf_maskOf (P : Composed.LigProver) (x₀ : Msg) (r : Rand (tabC P) x₀) (w : Claims.Flock.Wit)

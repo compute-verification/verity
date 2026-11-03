@@ -649,17 +649,6 @@ theorem tmpl_net_facts {tags : Tags} {c : Circuit} (P : ParseFactsT tags t c)
 
 /-! ## An input's message bit is a column of the block -/
 
-theorem nested_getElem! {α : Type} [Inhabited α] (xs : Array (Array α)) (p k : ℕ) :
-    (xs[p]!)[k]! = default ∨ ∃ w ∈ xs.toList, (xs[p]!)[k]! ∈ w.toList := by
-  by_cases hp : p < xs.size
-  · rw [getElem!_pos xs p hp]
-    by_cases hk : k < xs[p].size
-    · exact Or.inr ⟨xs[p], Array.getElem_mem_toList hp, by rw [getElem!_pos _ k hk]; exact Array.getElem_mem_toList hk⟩
-    · exact Or.inl (getElem!_neg _ k hk)
-  · left
-    rw [getElem!_neg xs p hp]
-    exact getElem!_neg _ k (by show ¬ k < (#[] : Array α).size; simp)
-
 /-- **The rows' circuits fit their slots and their input ports lie in their input rows**: they are the file's own text
 nets or lookup slots, past the template's (`CheckFactsT.rows_after`). -/
 theorem rows_netOK {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFactsT tags t c)

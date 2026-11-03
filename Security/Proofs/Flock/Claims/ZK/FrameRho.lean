@@ -123,10 +123,6 @@ theorem ow_pure {α : Type} {A : Got → Hist → Prop} {B : α → Got → Hist
     (h : ∀ g hs, A g hs → B a g hs) : OW A B (pure a : TMW OpenM α) :=
   fun _ got hs hA => h got hs hA
 
-theorem ow_throw {α : Type} {A : Got → Hist → Prop} {B : α → Got → Hist → Prop} (e : String) :
-    OW A B (throw e : TMW OpenM α) :=
-  fun _ _ _ _ => trivial
-
 /-- A property of the answers that more answers keep holds wherever any program ends. -/
 theorem ow_any {α : Type} (R : Hist → Prop) (hR : ∀ hs cs, R hs → R (hs ++ [cs])) (p : TMW OpenM α) :
     OW (fun _ hs => R hs) (fun _ _ hs => R hs) p :=

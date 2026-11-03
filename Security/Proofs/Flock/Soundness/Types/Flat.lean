@@ -412,9 +412,6 @@ theorem compose_complete {t : CircuitType} {inSplit outSplit : List ℕ} {d : De
 theorem nodup_map_of_inj {l : List ℕ} {f : ℕ → ℕ} (hl : l.Nodup) (h : ∀ i ∈ l, ∀ j ∈ l, f i = f j → i = j) :
     (l.map f).Nodup := List.Nodup.map_on h hl
 
-theorem disjoint_of_lt {l m : List ℕ} {B : ℕ} (hl : ∀ x ∈ l, x < B) (hm : ∀ y ∈ m, B ≤ y) : l.Disjoint m :=
-  fun x hx hx' => by have := hl x hx; have := hm x hx'; omega
-
 /-- **`order` has no repeats**: the input bits, the constant, the AND rows and the output copy rows sit at distinct
 columns. -/
 theorem order_nodup {t : CircuitType} {inSplit outSplit : List ℕ} {d : Derived}

@@ -90,12 +90,6 @@ def ExplicitLeaf.plain (enc : Val → List UInt8) (hinj : Function.Injective enc
   pair v _ v' _ := (enc v, enc v')
   pair_spec _ _ _ _ hv h := ⟨fun e => hv (hinj e), h⟩
 
-/-- hm96's leaf is the model's salted leaf `Merkle.hm96Leaf` at the executable's key, for the row encoding `enc`. -/
-theorem hm96_eq_hm96Leaf (enc : Val → List UInt8) (hinj : Function.Injective enc) (v : Val) (y : List UInt8) :
-    (ExplicitLeaf.hm96 enc hinj).leaf v y =
-      hm96Leaf (H := H512) (E := ⟨enc, enc512.dig, hinj, enc512.dig_inj, enc512.dig_len⟩) K512 v y := by
-  simp only [ExplicitLeaf.hm96, hm96Input, commitString, digBytes, hm96Leaf]
-
 /-- **hm96's leaf is the executable's**: for a row's bytes and a salt, the leaf is `Hm96.Default512.treeLeaf` of the
 commit string `Hm96.Default512.commitString (Sha512.hash row) salt`, the leaf `HmRow.checkPublic` computes from a
 public `b ‖ c`. -/

@@ -326,10 +326,6 @@ noncomputable def waitCostC (acc : β → Prop) (c : β → ℝ) : List β → �
   | [] => 0
   | b :: bs => c b + (1 - ind acc b) * waitCostC acc c bs
 
-theorem waitCostC_nonneg (acc : β → Prop) (c : β → ℝ) (hc : ∀ b, 0 ≤ c b) : ∀ bs, 0 ≤ waitCostC acc c bs
-  | [] => le_rfl
-  | b :: bs => add_nonneg (hc b) (mul_nonneg (by linarith [ind_le_one acc b]) (waitCostC_nonneg acc c hc bs))
-
 /-- **A wait costs `geom ε R` runs** in expectation. -/
 theorem expectN_waitCostC (g : Game β) (s : Strategy g) (acc : β → Prop) (c : β → ℝ) : ∀ R : ℕ,
     expectN g s R (waitCostC acc c) = geom (expect (ind acc) g s) R * expect c g s

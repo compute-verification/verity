@@ -92,7 +92,4 @@ theorem listComplete_plainDecodeD (agree : ℝ) (ha : 0 < agree) :
 noncomputable def plainReadD (M : PlainTrace) : Wit :=
   readTrace execArith M.1.m (plainLanes M.1) (plainCols M.1) M.2
 
-theorem plainReadD_hid_length (M : PlainTrace) : (plainReadD M).hid.length = 2 ^ M.1.m :=
-  readTrace_hid_length _ _ _ _ _
-
 end Claims.Flock
