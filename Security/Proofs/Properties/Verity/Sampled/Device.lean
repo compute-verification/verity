@@ -8,7 +8,8 @@ import Proofs.Core.Game.Tape
 
 `Lines.PrintsLog` is what the device's history at a play is to have for v2's read of a session to be the play's log
 (`Binding.binds_of_prints`). This file builds that history from the play (`dev`) and proves it has them
-(`printsLog_dev`), so `Binding.Binds` holds at it at every setup (`binds_dev`).
+(`printsLog_dev`), so `Binding.Binds` holds at it at every setup (`binds_dev`). At a deployment's setup it also signed
+what the play's signatures are on (`signsPlay_dev`), so `Binding.logged_le` holds at it (`logged_le_dev`).
 
 * **The lines** (`rootValue`, `releaseValue`, `helloValue`, `openValue`): the values the deployed challenger writes as
   its release log's lines (`LiveRecord._root` and `LiveRecord._release`, `LiveChallenger.sample_tree` and
@@ -33,9 +34,16 @@ import Proofs.Core.Game.Tape
   coins at the positions of the family's coins whose root is the bytes after. Each has a position its layout places as
   that coin (`position_place`), where the run holds the play's coin, `COIN_BYTES` bytes of it (`coinAt`,
   `printLog_fresh`), so the run released of each family after each root the play's coins (`Lines.Holds`).
+* **What the device signs** (`Deployment`, `Deployment.signer`, `signsPlay_dev`): a deployment fixes the run's setup
+  from what the play fixed, under the parameters' key and at their layout, with the auditor's ledger lines the device
+  signs before any coin and at the close. Its signer signs before any coin the messages of the lines the request fixes,
+  and at the close the run's record and close and the messages of the lines at the close, each what
+  `Properties.Challenger.signedBy` lists, so at a vocabulary whose signer is the deployment's, the device's history at
+  each play signed what the play's signatures are on (`Binding.SignsPlay`).
 
 What a run holds beside its releases (its id and host, its layout, the coins and salts the play didn't release, how it
-ended, its lines' times and the ledger lines it signed) is the history's parameter (`RunSetup`).
+ended, its lines' times and the ledger lines it signed) is the history's parameter (`RunSetup`), which a deployment
+fixes from what the play fixed (`Deployment.setupOf`).
 -/
 
 open private pairs from SampledProofs.ChallengerSession
@@ -995,5 +1003,145 @@ theorem binds_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α
     (k : Verity.Registration.Composite) (S : Exchange → RunSetup) (θ : ByteArray) :
     Binding.Binds V k Binding.readsV2 (dev S) θ :=
   Binding.binds_of_prints V k (dev S) θ fun o _ => printsLog_dev S o
+
+/-! ## What the device signs at a play -/
+
+/-- The messages of a play's signatures are the messages its signer signs, in order. -/
+theorem signatures_fst (D : Signer) (a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) :
+    (D.signatures a log b ρ).map Prod.fst = D.signs a log b ρ := by
+  unfold Signer.signatures
+  exact List.ext_getElem (by simp) fun i _ _ => by simp
+
+/-- **A history signs under `pk` what another signs there**, where it holds the other's runs and ledger lines under
+`pk` (`Properties.Challenger.signedBy`). -/
+theorem signedBy_mono {h h' : History} {pk m : ByteArray} (hm : m ∈ Properties.Challenger.signedBy h pk)
+    (hr : ∀ s ∈ h.runs pk, s ∈ h'.runs pk) (hl : ∀ l ∈ h.ledger pk, l ∈ h'.ledger pk) :
+    m ∈ Properties.Challenger.signedBy h' pk := by
+  unfold Properties.Challenger.signedBy at hm ⊢
+  rcases List.mem_append.1 hm with hm | hm
+  · obtain ⟨s, hs, hm⟩ := List.mem_flatMap.1 hm
+    exact List.mem_append.2 (.inl (List.mem_flatMap.2 ⟨s, hr s hs, hm⟩))
+  · obtain ⟨l, hl', hm⟩ := List.mem_filterMap.1 hm
+    exact List.mem_append.2 (.inr (List.mem_filterMap.2 ⟨l, hl l hl', hm⟩))
+
+/-- **The run of the setup `s` that released `log`**, its release log its head and the lines the printer prints of
+`log` (`printLog`); none where it prints none. -/
+def printedRun (s : RunSetup) (log : List Release) : List Run :=
+  match printLog s.time PrintState.init log with
+  | some lines => [runOf s log lines]
+  | none => []
+
+theorem printedRun_eq {s : RunSetup} {log : List Release} {lines : List String}
+    (h : printLog s.time PrintState.init log = some lines) : printedRun s log = [runOf s log lines] := by
+  simp only [printedRun, h]
+
+/-- The public key of the parameters' challenger key (`Binding.keyOf`), the empty string where they name none. -/
+def pubOf (θ : ByteArray) : ByteArray := ((Binding.keyOf θ).map (·.pub)).getD .empty
+
+/-- **A deployment of the device**, at each of the parameters `θ`, from what a play fixed: the prover's request `a`,
+the device's log, the bytes `b` the prover's close left to the device and its draw `ρ` at the close. `run` is the
+run's setup but for its key, its layout and its ledger lines, which `setupAt` sets: its session's id and host, its
+coins and salts by position where the play released none, how it ended and each line's time. `opens` are the auditor's
+ledger lines it signs before any coin, which the request fixes (the ledger's reserve and open, and the period's open),
+and `closes` the ones it signs at the close (the ledger's end and the period's close). `draws` are the bits it draws
+at the close, and `sign θ i m` its signature on `m` as its `i`-th in the play. -/
+structure Deployment where
+  run : ByteArray → ByteArray → List Release → ByteArray → List Bool → RunSetup
+  opens : ByteArray → ByteArray → List Json
+  closes : ByteArray → ByteArray → List Release → ByteArray → List Bool → List Json
+  draws : ByteArray → ℕ
+  sign : ByteArray → ℕ → Hash.Msg → Hash.Msg
+
+namespace Deployment
+
+variable (P : Deployment)
+
+/-- **The run's setup at a play**, at the layouts `fs` the parameters fix: `run`'s, under the parameters' key
+(`pubOf`), at their layout, with the ledger lines it signs before any coin and at the close. -/
+def setupAt (fs : ByteArray → Families) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) :
+    RunSetup :=
+  { P.run θ a log b ρ with key := pubOf θ, families := fs θ, ledger := P.opens θ a ++ P.closes θ a log b ρ }
+
+/-- The run's setup at the play that ended with `o`. -/
+def setupOf (fs : ByteArray → Families) (o : Exchange) : RunSetup :=
+  P.setupAt fs o.params o.request o.log o.close o.drawn
+
+/-- **The deployed device's signer at the parameters `θ`**, at the layouts `fs`: before any coin, the messages of
+its ledger lines the request fixes (`opens`); at the close, its record and its close of the run of the setup that
+released the log (`printedRun`), and the messages of its ledger lines at the close (`closes`); each what
+`Properties.Challenger.signedBy` lists of a history of those runs and lines under the parameters' key. -/
+def signer (fs : ByteArray → Families) (θ : ByteArray) : Signer where
+  first a := (Properties.Challenger.signedBy ⟨fun _ => [], fun _ => P.opens θ a⟩ (pubOf θ)).map (·.data.toList)
+  draws := P.draws θ
+  last a log b ρ :=
+    (Properties.Challenger.signedBy ⟨fun _ => printedRun (P.setupAt fs θ a log b ρ) log,
+      fun _ => P.closes θ a log b ρ⟩ (pubOf θ)).map (·.data.toList)
+  sign := P.sign θ
+
+end Deployment
+
+/-- **The deployed device's history at each play signed what the play's signatures are on** (`Binding.SignsPlay`),
+at a vocabulary whose signer at the parameters is the deployment's at the vocabulary's layouts. Each message the play's
+signer signs is one a history of the setup's ledger lines, or of the run that released the play's log, signs
+(`Deployment.signer`), and the device's history at the play holds that run (`dev_play`) and those lines under the
+parameters' key. -/
+theorem signsPlay_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (P : Deployment)
+    (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (hD : V.signer θ = P.signer V.families θ) :
+    Binding.SignsPlay V (dev (P.setupOf V.families)) θ F c := by
+  intro o ho key hk m hm
+  obtain hθ := (Binding.play_reaches ho).1
+  subst hθ
+  have hkey : (P.setupOf V.families o).key = key.pub :=
+    congrArg (fun k => (k.map (·.pub)).getD ByteArray.empty) hk
+  obtain ⟨lines, hl, hruns, -⟩ := dev_play (P.setupOf V.families) ho rfl
+  have hled : (dev (P.setupOf V.families) o).ledger (P.setupOf V.families o).key =
+      (P.setupOf V.families o).ledger :=
+    ite_eq_left rfl
+  rw [hkey] at hruns hled
+  have hm' : m.1 ∈ ((P.signer V.families o.params).signatures o.request o.log o.close o.drawn).map Prod.fst := by
+    rw [← hD, ← Binding.play_signed ho]
+    exact List.mem_map.2 ⟨m, hm, rfl⟩
+  rw [signatures_fst] at hm'
+  change m.1 ∈ (Properties.Challenger.signedBy ⟨fun _ => [], fun _ => P.opens o.params o.request⟩
+      (pubOf o.params)).map (·.data.toList) ++ (Properties.Challenger.signedBy
+      ⟨fun _ => printedRun (P.setupOf V.families o) o.log,
+        fun _ => P.closes o.params o.request o.log o.close o.drawn⟩ (pubOf o.params)).map (·.data.toList) at hm'
+  rw [← List.map_append] at hm'
+  obtain ⟨x, hx, hxm⟩ := List.mem_map.1 hm'
+  have hmx : ({ data := m.1.toArray } : ByteArray) = x :=
+    (congrArg (fun l : List UInt8 => ({ data := l.toArray } : ByteArray)) hxm).symm.trans (Binding.bytes_ofList x)
+  have hx' : x ∈ Properties.Challenger.signedBy ⟨fun _ => [], fun _ => P.opens o.params o.request⟩ key.pub ++
+      Properties.Challenger.signedBy ⟨fun _ => printedRun (P.setupOf V.families o) o.log,
+        fun _ => P.closes o.params o.request o.log o.close o.drawn⟩ key.pub := hkey ▸ hx
+  show Properties.Challenger.Signed _ _ _
+  rw [hmx]
+  rcases List.mem_append.1 hx' with hx | hx
+  · apply signedBy_mono hx
+    · intro s hs
+      exact absurd hs List.not_mem_nil
+    · intro l hl'
+      rw [hled]
+      exact List.mem_append.2 (.inl hl')
+  · apply signedBy_mono hx
+    · intro s hs
+      rw [hruns]
+      change s ∈ printedRun (P.setupOf V.families o) o.log at hs
+      rwa [printedRun_eq hl] at hs
+    · intro l hl'
+      rw [hled]
+      exact List.mem_append.2 (.inr hl')
+
+/-- **(a) at the deployed device's history**: at a vocabulary whose signer at the parameters is the deployment's, an
+accepted play whose log v2 read isn't the device's is at most as likely as the read finder's collision plus the
+forger's forgery (`Binding.logged_le`), the device's history at each play having printed the play's log (`binds_dev`)
+and signed what the play's signatures are on (`signsPlay_dev`). -/
+theorem logged_le_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
+    (k : Verity.Registration.Composite) (P : Deployment) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (V.game θ F c)) (hD : V.signer θ = P.signer V.families θ) :
+    Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Binding.Logged Binding.readsV2 o) (V.game θ F c) σ ≤
+      ENNReal.ofReal ((Binding.readFinder V (dev (P.setupOf V.families)) θ F c σ).Pr Verity.sha512Msg) +
+        ENNReal.ofReal ((Binding.forger V (dev (P.setupOf V.families)) θ F c σ).Pr Verity.lmsVerify) :=
+  Binding.logged_le V k Binding.readsV2 (dev (P.setupOf V.families)) θ F c σ
+    (binds_dev V k (P.setupOf V.families) θ) (signsPlay_dev V P θ F c hD)
 
 end Verity.Sampled.Device
