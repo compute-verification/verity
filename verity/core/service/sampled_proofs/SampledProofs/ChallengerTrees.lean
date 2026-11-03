@@ -23,7 +23,13 @@ the verifier's window (`trustedSessionOf`), the session the sample's coins come 
 The difftest's pieces: `challenger_coin_trees` (`coin_trees_of`) and `challenger_session_trees`
 (`sessions_tree_reason` over the log's trees), each `{"refused": why}` where Python refuses.
 -/
-import SampledProofs.ChallengerDraw
+module
+
+public import SampledProofs.ChallengerDraw
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 

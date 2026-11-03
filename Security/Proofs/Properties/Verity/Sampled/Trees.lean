@@ -1,4 +1,6 @@
-import Proofs.Properties.Verity.Sampled
+module
+
+public import Proofs.Properties.Verity.Sampled
 
 /-!
 # A `--zk` session's record holds the coins its tree's log shows opened
@@ -9,6 +11,8 @@ coins of is one the log shows opened of that tree, with those coins' SHA-512 (`r
 session stream's round 0, and each stream's rounds. Its loops return at their first reason, so where a loop returns
 none, each of its steps yielded (`forIn_held`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Trees
 

@@ -1,4 +1,6 @@
-import Properties.Challenger
+module
+
+public import Properties.Challenger
 
 /-!
 # v2's challenger keys and the size of what its challenger reads
@@ -14,6 +16,8 @@ takes from v2's parameters and evidence.
   `readsAt l` strings as it reads them (`readHashed_le`, counted through `readHashed_eq`'s parts). So one v2 record's
   reading costs at most a constant at `LIMITS` and `Lms.deployed` (`record_calls_le`).
 -/
+
+@[expose] public section
 
 namespace Properties.Challenger.Limits
 

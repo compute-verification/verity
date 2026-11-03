@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.LoopZK
-import Proofs.Flock.Recursive.FirewallSalted
-import Proofs.Flock.Recursive.FirewallAdaptive
+module
+
+public import Proofs.Flock.Recursive.LoopZK
+public import Proofs.Flock.Recursive.FirewallSalted
+public import Proofs.Flock.Recursive.FirewallAdaptive
 
 /-!
 # `RecursiveZKLoop` at any worker that reads its answers
@@ -30,6 +32,8 @@ inner session or of V*'s statements.
 * `LoopAny.card_loopStops`: at the deployed release the stops are `RecStops`' over every statement, the inner session
   statement `0` with the transcript's messages: `1 + Σ_p (M p + 1)`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.LoopAny
 

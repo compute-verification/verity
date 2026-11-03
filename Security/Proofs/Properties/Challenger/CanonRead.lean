@@ -1,9 +1,11 @@
-import Batteries.Data.List.Basic
-import Std.Data.TreeMap.Raw.WF
-import Proofs.Properties.Pouw.LiveSalt.Canon
-import Proofs.Properties.RemoteAudit.Sort
-import Proofs.Flock.Claims.JsonEq
-import Proofs.Core.QSort
+module
+
+public import Batteries.Data.List.Basic
+public import Std.Data.TreeMap.Raw.WF
+public import Proofs.Properties.Pouw.LiveSalt.Canon
+public import Proofs.Properties.RemoteAudit.Sort
+public import Proofs.Flock.Claims.JsonEq
+public import Proofs.Core.QSort
 
 /-!
 # Canonical JSON reads back
@@ -19,6 +21,8 @@ A field read of a sorted object is a lookup of the field in its fields' list (`g
 have equivalent fields (`getD_equiv`), every field of a sorted value is sorted (`sorted_getD`), and an entry without its
 `sig` (`Core.Record.unsigned`) is sorted and has the entry's other fields (`sorted_unsigned`, `getD_unsigned`).
 -/
+
+@[expose] public section
 
 namespace Properties.Challenger.CanonRead
 

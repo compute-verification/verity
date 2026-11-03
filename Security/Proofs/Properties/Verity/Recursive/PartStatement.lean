@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Encode
-import Proofs.Flock.Claims.Recursion.Deploy
-import Proofs.Properties.Verity.Recursive.Names
-import VStarRecursive
+module
+
+public import Proofs.Flock.Claims.Complete.Encode
+public import Proofs.Flock.Claims.Recursion.Deploy
+public import Proofs.Properties.Verity.Recursive.Names
+public import VStarRecursive
 
 /-!
 # A step of `acc_of_accepts`: V\* part `s`'s statement is the compiled part's inputs
@@ -26,6 +28,8 @@ the compiled `setupOf` and so concludes `setupO (staged st x ms s) = some _`.
   stratified, closure or public input words).
 * `vstarAt_eq_staged`: where part `s`'s staged numbers are `nums`' (`Numbers`), its V\* statement is the staged one.
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive.Part
 

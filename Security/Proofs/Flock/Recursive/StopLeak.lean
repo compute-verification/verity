@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ZK.RealLeaves
+module
+
+public import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
 # The recursive session's stop leak: the counting lemma and the stops
@@ -14,6 +16,8 @@ nowhere. Which stop comes may depend on anything, the witness included, so the s
 * `RecStops M`, `card_recStops`: a recursive session's stops, none or the first statement `p` to stop after its `k`-th
   message, `k ≤ M p`, which are `1 + Σ_p (M p + 1)`.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

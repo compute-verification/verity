@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.FirewallZK
-import Proofs.Flock.Recursive.FirewallTemplate
-import Proofs.Flock.Recursive.FirewallLive
+module
+
+public import Proofs.Flock.Recursive.FirewallZK
+public import Proofs.Flock.Recursive.FirewallTemplate
+public import Proofs.Flock.Recursive.FirewallLive
 
 /-!
 # `FirewallSends` from the firewall's code
@@ -23,6 +25,8 @@ those of the messages `msgs`, each reading the strings before it.
   read begin with `ys`, sends the transcript at the commit strings `firewallStrings ys` and finishes
   (`FirewallLive.run_live`, `FirewallLive.run_append`).
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

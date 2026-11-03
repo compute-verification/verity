@@ -1,6 +1,8 @@
-import Proofs.Flock.SessionLoop.FinHmkCut
-import Proofs.Flock.Claims.ZK.FinishLive
-import Proofs.Flock.Claims.ZK.FrameOuter
+module
+
+public import Proofs.Flock.SessionLoop.FinHmkCut
+public import Proofs.Flock.Claims.ZK.FinishLive
+public import Proofs.Flock.Claims.ZK.FrameOuter
 
 /-!
 # The algebraic phase's scheduled rounds are the PIOP's bodies at zero values
@@ -17,6 +19,8 @@ and answering it by its index (`asksCut`), and its log is the PIOP's bodies what
 * **`rounds_piop`**: where `Skeleton.rounds` returns `alg`, it holds the PIOP's `piopNR` rounds, and round `jj ≥ 1` is the
   PIOP's frames at zero values (`piopFr`) closed by its squeeze, with its coin count `piopN`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Sched
 

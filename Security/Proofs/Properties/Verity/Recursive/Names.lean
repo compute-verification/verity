@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.Recursion.PartsVStar
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.Claims.Recursion.VStarPartsSparse
-import Proofs.Flock.Claims.Recursion.CapLowerPin
-import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
-import Proofs.Flock.C3.PubRows.Check
-import Proofs.Flock.C3.Reps.AtList
-import VStarRecursive
+module
+
+public import Proofs.Flock.Claims.Recursion.PartsVStar
+public import Proofs.Flock.Claims.Recursion.OpensReads
+public import Proofs.Flock.Claims.Recursion.VStarPartsSparse
+public import Proofs.Flock.Claims.Recursion.CapLowerPin
+public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
+public import Proofs.Flock.C3.PubRows.Check
+public import Proofs.Flock.C3.Reps.AtList
+public import VStarRecursive
 
 /-!
 # The statement the recursive component's inputs name, and its reading
@@ -32,6 +34,8 @@ per part, Flock's own checks pass on the inner statement (`InnerOkAt`, which the
 `innerOk`: `RefusalsOf.innerOkAt_of_compiled`) and each part's session sets up (`PartsSetUp`, at `xrOf`, which reads no `readX`), the
 model reads `x` (`readXPre`, `readX`) at the component's inner shape, and `x` is dense (`DenseAt`).
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive
 

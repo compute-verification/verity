@@ -1,7 +1,9 @@
-import Proofs.Properties.Challenger.CanonRead
-import Proofs.Properties.Composition
-import Proofs.Flock.Claims.CanonEq
-import SampledProofs.ChallengerSession
+module
+
+public import Proofs.Properties.Challenger.CanonRead
+public import Proofs.Properties.Composition
+public import Proofs.Flock.Claims.CanonEq
+public import SampledProofs.ChallengerSession
 
 /-!
 # A release log line reads back
@@ -17,6 +19,8 @@ sorted (`event_ok`). So a line that is a sorted value's `canon` text is read as 
 (`event_equiv`), field by field (`CanonRead.getD_equiv`, `field?_equiv`): the same string, number, Boolean or null
 wherever it has one (`equiv_leaf`, `getD_str`, `int?_equiv`, `nat?_equiv`).
 -/
+
+@[expose] public section
 
 namespace Properties.Challenger.CanonLine
 

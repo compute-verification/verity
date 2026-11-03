@@ -1,6 +1,8 @@
-import Proofs.Properties.Verity.Sampled
-import SampledProofs.ChallengerSession
-import Std.Tactic.Do
+module
+
+public import Proofs.Properties.Verity.Sampled
+public import SampledProofs.ChallengerSession
+public import Std.Tactic.Do
 
 /-!
 # Reading the challenger session's release log as v2's check reads it
@@ -16,6 +18,8 @@ line v2 accepts parses. A fact about one of the verifier's monadic functions is 
 back at an `.ok` or `some` result (`of_triple`, `of_triple_opt`); the triples here hold of any `Except` or `Option`
 value, so `mvcgen` passes over a `partial` call it can't unfold.
 -/
+
+@[expose] public section
 
 set_option mvcgen.warning false
 

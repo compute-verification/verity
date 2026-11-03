@@ -1,6 +1,8 @@
-import Definitions.Core.Decisive
-import Definitions.Core.Interaction
-import Proofs.Core.Game.Prob
+module
+
+public import Definitions.Core.Decisive
+public import Definitions.Core.Interaction
+public import Proofs.Core.Game.Prob
 
 /-!
 # A play's coins as one uniform coin
@@ -12,6 +14,8 @@ So a finder or a forger built from a strategy draws one tape and reads the play 
 play that implies the finder's success is at most as likely as that success (`prob_le_ofReal_pr`). The play on a tape
 is a run of the game (`Tape.reaches_out`), so a property of every run holds of it.
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

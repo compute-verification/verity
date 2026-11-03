@@ -1,6 +1,8 @@
-import Proofs.Flock.SessionLoop.RepSrc
-import Proofs.Flock.Claims.ZK.FinishSwRep
-import Proofs.Flock.Claims.ZK.FinExe
+module
+
+public import Proofs.Flock.SessionLoop.RepSrc
+public import Proofs.Flock.Claims.ZK.FinishSwRep
+public import Proofs.Flock.Claims.ZK.FinExe
 
 /-!
 # The loop's tables at its level-0 source
@@ -16,6 +18,8 @@ on (`Loop.realOf`, `tabOfLevel0` at the level 0 it drew) holds the tape's packed
 * `Loop.realOf_src`, **`Loop.RepSrc.salt`**: the loop's levels ≥ 1 salts at rep stream `2j + r` are the source's, so,
   where `src` draws them as the tape's (`Loop.RepSrc`), they are the tape's on the schedule (`swSrcE_repCut`'s `hsalt`).
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 
