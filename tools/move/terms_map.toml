@@ -216,18 +216,24 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/lint/a
 
 [keep]
 # A domain tag or format id, a note, an artifact, a branch, a lane. Then what recorded data or another system reads: a
-# quoted lowercase token (a record key, a reason code, a role: `"draws"`, `"draw-outside-the-partition"`, `"firewall"`;
-# a capitalized one is a Lean name and follows it, a path or a dotted module follows its move), a kebab-case name or a
-# CLI flag (`--draw`, `--firewall-state`, `flock-firewall`, `core-firewall`, `verity-core-firewall`, `drawn-unit-bundle`)
-# and the attribute argparse makes of a flag (`a.draw`; not the profile's `a.draws`), environment variables
-# `FC_*FIREWALL*` and `H1*_*FIREWALL*`, the refusal `FIREWALL-REFUSED`, the stored label `C-Flock`, the audit record's
+# quoted lowercase token (a record key or a key path, a reason code, a role, a run's output file, a line of a server's
+# protocol: `"draws"`, `"public.draw.units"`, `"draw-outside-the-partition"`, `"firewall"`, `"draw.json"`, `b"draw\n"`;
+# a capitalized one is a Lean name and follows it, and so do a path, a dotted Python module, a tracked source file's
+# name and an f-string's code), a coin's label (`"pouw/draw"`), an upper-case snake-case name (an environment variable
+# or a constant: `FC_FIREWALL`, `CR_N2_DRAW`, `FLOCK_DRAW_LAW`), a run's output file after a path, the systemd slice
+# `firewall.slice`, a kebab-case name or a CLI flag (`--draw`, `--firewall-state`, `flock-firewall`, `core-firewall`,
+# `verity-core-firewall`, `drawn-unit-bundle`) and the attribute argparse makes of a flag (`a.draw`; not the profile's
+# `a.draws`), the refusal `FIREWALL-REFUSED`, the stored label `C-Flock`, the audit record's
 # `wrong_units`, `proof_unit` and the `"proof-unit"` kind, the package directory `verity/core/service/firewall`, the
 # namespace `Accounting.Remote.Draw` and the structure `Accounting.TS.DrawnLayer` (names under them are renamed here, so
 # `check.py --moved` reads each back only if the prefix is renamed in a move of its own), `law`
 # where it touches a name (GLOSSARY.md keeps `law` identifiers), the other senses of law and draw (a power law, the law
 # of large numbers, nvidia-smi's `power.draw`), the `round_digest` strings and the label `replay_set=warden/re-verify`
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
-            '(?<![\w\\])(?<!getattr\(coins, )[rbfRBF]{0,2}([\x22\x27])(?![A-Z])[^\s\x22\x27/\\.]*?(?i:draw|law|firewall|coin.server|_units?\b|faulty|δ_?link)[^\s\x22\x27/\\.]*\1',
+            '(?<![\w\\])(?<!getattr\(coins, )[rbfRBF]{0,2}([\x22\x27])(?![A-Z])(?!(?:verity|research|circuit_check|cluster|benchmarks|tools|integrations|examples|demos|tests|infra)\w*\.)[^\s\x22\x27/{]*?(?i:draw|law|firewall|coin.server|_units?\b|faulty|δ_?link)[^\s\x22\x27/{]*(?<!\.py)(?<!\.sh)(?<!\.rs)(?<!\.lean)(?<!\.md)(?<!\.toml)\1',
+            '[\x22\x27][a-z_]+/(?:draw|drawn|draws|law|firewall)[\x22\x27]',
+            '\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_(?:DRAWN|DRAWS|DRAW|LAW|FIREWALL)(?:_[A-Z0-9]+)*\b|\b(?:DRAWN|DRAWS|DRAW|LAW|FIREWALL)(?:_[A-Z0-9]+)+\b',
+            '(?<=[/.])(?:draw|drawn|draws|firewall|law)\.(?:json|jsonl|log|bin|lock|txt|npz)\b', '\bfirewall\.slice\b',
             '(?<![\w-])-{0,2}(?:\w+-)+\w*(?i:draw|law|firewall)\w*(?:-\w+)*(?![\w-])',
             '(?<![\w-])-{0,2}\w*(?i:draw|law|firewall)\w*(?:-\w+)+(?![\w-])',
             '(?<![\w-])--\w*(?i:draw|law|firewall)\w*(?![\w-])',
