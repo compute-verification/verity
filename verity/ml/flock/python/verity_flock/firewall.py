@@ -23,8 +23,9 @@ appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules ho
   anything reaches the challenger (``refused``, not a failure: the challenger sees nothing of it).
 * **This relay takes outer proofs one at a time**, stricter than AGENTS.md's independent sessions (each statement fixed
   first, one session each with its own live coins, every verdict counted). It has one slot, across streams and protocols.
-  An outer session takes it at its first request and holds it until the session is released (the challenger's verdict
-  accepts it) or fails. A second
+  An outer session takes it at its first request, its ``slot`` and its admission or refusal decided on one read of the
+  record and appended in one write (`Firewall.seat`, as the Lean ZK server's ``seat``), and holds it until the session is
+  released (the challenger's verdict accepts it) or fails. A second
   session that asks meanwhile waits (``wait``) and takes the slot after (``slot``), so each ``slot`` event is followed by its
   session's outcome before the next one. A holder that ended before its outcome (killed, say) is recorded as its session's
   stop by the next session to take the slot.
@@ -157,14 +158,14 @@ class Firewall:
             return _Scan(self._events(), ix)
         return ix
 
-    def _append(self, rec: _Index | _Scan, ev: dict) -> dict:
+    def _append(self, rec: _Index | _Scan, ev: dict, held: list[bytes] | None = None) -> dict:
+        """Append ``ev`` to the record, or with ``held`` keep its line there for the caller's one `_write` of them."""
         ev = {"seq": rec.count, **ev}
         line = (json.dumps(ev, sort_keys=True) + "\n").encode(_ENCODING)
-        with open(self._log, "ab") as f:
-            f.write(line)
-            if isinstance(rec, _Index) and rec.file is None:
-                st = os.fstat(f.fileno())
-                rec.file = [st.st_dev, st.st_ino]
+        if held is None:
+            self._write(rec, line)
+        else:
+            held.append(line)
         if isinstance(rec, _Index):
             try:
                 rec.add(ev)
@@ -175,6 +176,13 @@ class Firewall:
         else:
             rec.add(ev)
         return ev
+
+    def _write(self, rec: _Index | _Scan, data: bytes) -> None:
+        with open(self._log, "ab") as f:
+            f.write(data)
+            if isinstance(rec, _Index) and rec.file is None:
+                st = os.fstat(f.fileno())
+                rec.file = [st.st_dev, st.st_ino]
 
     def record(self) -> list[dict]:
         """Every event so far, in order."""
@@ -235,31 +243,39 @@ class Firewall:
         None. Only a ``timed`` caller (one that holds the proofs to that time: the Lean ZK server, or a test of its rules)
         is admitted to a scheduled session; this module's relay is not."""
         with self._locked((session,)) as rec:
-            why, at = None, None
-            open_ = rec.opened(session)
-            if open_ is None:
-                why = f"recursive session {session} was never opened"
-            elif (s := rec.stopped(session)) is not None:
-                why = f"recursive session {session} stopped at {s['part']}: the firewall serves nothing more of it"
-            elif (j := rec.next(open_)) is None:
-                why = f"recursive session {session} released all its statements: the firewall serves nothing more of it"
-            elif (b := rec.budget(open_["stream"])) is not None and (n := rec.failures(open_["stream"])) >= b:
-                why = f"stream {open_['stream']} stopped at its failure budget ({n} of {b})"
-            elif not rec.finished(session):
-                why = f"recursive session {session}: its inner session has not finished"
-            elif (nxt := open_["parts"][j]) != part:
-                self._append(rec, {"event": "stop", "session": session, "part": nxt, "why": f"never opened: {part} was asked in its place"})
-                why = f"recursive session {session} stopped at {nxt}: {part} is not its next statement"
-            elif (r := open_.get("release")) is not None:
-                if not timed:
-                    why = (f"recursive session {session}: its release schedule needs the Lean firewall "
-                           "(core-firewall session: flock-circuit prove --firewall-state)")
-                else:
-                    at = r["start_ms"] + sum(r["windows_ms"][:j + 1])
+            why, at = self._admit(rec, session, part, timed)
             if why is not None:
-                self._append(rec, {"event": "refused", "session": session, "part": part})
                 raise Refused(refused(why))
             return at
+
+    def _admit(self, rec: _Index | _Scan, session: str, part: str, timed: bool,
+               held: list[bytes] | None = None) -> tuple[str | None, int | None]:
+        """`admit`'s decision on ``rec``, its events appended (`_append`): why it refuses, or None and the release time."""
+        why, at = None, None
+        open_ = rec.opened(session)
+        if open_ is None:
+            why = f"recursive session {session} was never opened"
+        elif (s := rec.stopped(session)) is not None:
+            why = f"recursive session {session} stopped at {s['part']}: the firewall serves nothing more of it"
+        elif (j := rec.next(open_)) is None:
+            why = f"recursive session {session} released all its statements: the firewall serves nothing more of it"
+        elif (b := rec.budget(open_["stream"])) is not None and (n := rec.failures(open_["stream"])) >= b:
+            why = f"stream {open_['stream']} stopped at its failure budget ({n} of {b})"
+        elif not rec.finished(session):
+            why = f"recursive session {session}: its inner session has not finished"
+        elif (nxt := open_["parts"][j]) != part:
+            self._append(rec, {"event": "stop", "session": session, "part": nxt, "why": f"never opened: {part} was asked in its place"},
+                         held)
+            why = f"recursive session {session} stopped at {nxt}: {part} is not its next statement"
+        elif (r := open_.get("release")) is not None:
+            if not timed:
+                why = (f"recursive session {session}: its release schedule needs the Lean firewall "
+                       "(core-firewall session: flock-circuit prove --firewall-state)")
+            else:
+                at = r["start_ms"] + sum(r["windows_ms"][:j + 1])
+        if why is not None:
+            self._append(rec, {"event": "refused", "session": session, "part": part}, held)
+        return why, at
 
     def stopped(self, session: str) -> dict | None:
         with self._locked((session,)) as rec:
@@ -276,6 +292,34 @@ class Firewall:
         """The ZK server's one outer slot, held for the block. A session that finds it taken records ``wait``, calls
         ``waiting``, and blocks until the holder leaves it. Once it holds the slot, a ``slot`` event whose session has no
         outcome after it (its holder died) is recorded as that session's stop, and then ``slot`` is recorded."""
+        with self._slot_lock(session, part, waiting):
+            with self._locked((session,)) as rec:
+                self._take(rec, session, part)
+            yield
+
+    @contextmanager
+    def seat(self, session: str, part: str, waiting: Callable[[], None] | None = None) -> Iterator[str | None]:
+        """The relay's outer session of ``session`` at ``part`` takes the slot (`slot`) and is admitted or refused
+        (`admit`, untimed) on one read of the record, under one ``record.lock``, their events appended in one write, as
+        the Lean ZK server's ``seat`` does (`Firewall.Release`): a holder that ends before it is seated leaves the record
+        as it was, never a ``slot`` of a session it was not admitted to. The block holds the slot and is entered with the
+        refusal (`Refused`'s message), or None once admitted."""
+        with self._slot_lock(session, part, waiting):
+            with self._locked((session,)) as rec:
+                held: list[bytes] = []
+                self._take(rec, session, part, held)
+                why, _ = self._admit(rec, session, part, False, held)
+                try:
+                    self._write(rec, b"".join(held))
+                except BaseException:
+                    if isinstance(rec, _Index):
+                        rec.broken = True
+                    raise
+            yield None if why is None else refused(why)
+
+    @contextmanager
+    def _slot_lock(self, session: str, part: str, waiting: Callable[[], None] | None) -> Iterator[None]:
+        """``slot.lock`` held for the block; a session that finds it taken records ``wait`` and calls ``waiting`` first."""
         with open(self.state / "slot.lock", "a") as f:
             try:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -286,14 +330,16 @@ class Firewall:
                     waiting()
                 fcntl.flock(f, fcntl.LOCK_EX)
             try:
-                with self._locked((session,)) as rec:
-                    if (o := rec.orphan()) is not None and rec.stopped(o["session"]) is None:
-                        self._append(rec, {"event": "stop", "session": o["session"], "part": o["part"],
-                                           "why": f"the slot's holder ended before its outcome (slot {o['seq']})"})
-                    self._append(rec, {"event": "slot", "session": session, "part": part})
                 yield
             finally:
                 fcntl.flock(f, fcntl.LOCK_UN)
+
+    def _take(self, rec: _Index | _Scan, session: str, part: str, held: list[bytes] | None = None) -> None:
+        """The slot taken: the stop of a holder that ended before its outcome, then ``slot`` (`_append`)."""
+        if (o := rec.orphan()) is not None and rec.stopped(o["session"]) is None:
+            self._append(rec, {"event": "stop", "session": o["session"], "part": o["part"],
+                               "why": f"the slot's holder ended before its outcome (slot {o['seq']})"}, held)
+        self._append(rec, {"event": "slot", "session": session, "part": part}, held)
 
 
 def _stopped(ev: list[dict], session: str) -> dict | None:
@@ -740,11 +786,9 @@ def relay_session(fw: Firewall, session: str, part: str, worker_r, worker_w, con
         if req[:1] != bytes([REQ_PING]):
             break
         write_frame(worker_w, resp_ok())
-    with fw.slot(session, part, waiting):
-        try:
-            fw.admit(session, part)
-        except Refused as e:
-            out, rest = {"outcome": "refused", "why": str(e)}, (req, str(e))
+    with fw.seat(session, part, waiting) as why:
+        if why is not None:
+            out, rest = {"outcome": "refused", "why": why}, (req, why)
         else:
             out, rest = _relay_admitted(fw, session, part, req, worker_r, worker_w, connect, proofs)
     if rest is not None:
