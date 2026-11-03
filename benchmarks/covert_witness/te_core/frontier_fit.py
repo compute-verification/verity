@@ -78,9 +78,6 @@ PARAMS = 3
 #: manifest and each start's start.json, sha256-checked, as `ladder-points.json` (te-ladder/F/v1); None reads none
 LADDER = "art:b5d21639ddaa436e761f5571fb7810555a62ed80b26926b1521579c10525cd82"
 LADDER_FILE = "ladder-points.json"
-#: the schema of the scoring cap's own fit (te_core.policy's `ladder_fit`; the integrator's CAP.json, coordinator
-#: 20:11Z): a `--ladder-fit` of it caps the score and holds no from-scratch point
-CAP_SCHEMA = "te-ladder/cap/"
 #: γ's grid, refined about its best by golden section
 GAMMAS = np.linspace(0.01, 2.0, 399)
 DIGITS = 6
@@ -428,13 +425,11 @@ def arguments(ap: argparse.ArgumentParser) -> argparse.ArgumentParser:
 
 def inputs(a, scored: list[dict], shapes: dict[str, dict], d: dict, command: str = "te_core.frontier_fit"
            ) -> tuple[list[dict], list[tuple], str]:
-    """The pretraining runs, the ladder's points (`--ladder-points`, else `LADDER`'s, and `--ladder-fit`'s FIT.json,
-    not a CAP_SCHEMA one) and the source of `command`'s panels for a loaded ledger `d` (te_core.rescore's `load`): its
-    pins at 12 characters, or at 7 where those don't fit the route's `console.SOURCE_MAX`."""
+    """The pretraining runs, the ladder's points (`--ladder-points`, else `LADDER`'s, and `--ladder-fit`'s FIT.json)
+    and the source of `command`'s panels for a loaded ledger `d` (te_core.rescore's `load`): its pins at 12
+    characters, or at 7 where those don't fit the route's `console.SOURCE_MAX`."""
     runs = panels.pretraining(a.pretraining or panels.fetch(panels.PRETRAINING))
-    fit = [a.ladder_fit] if a.ladder_fit and not str(
-        json.loads(a.ladder_fit.read_text()).get("schema", "")).startswith(CAP_SCHEMA) else []
-    extra = [p for path in [*a.ladder_points, *fit] for p in ladder_points(path)]
+    extra = [p for path in [*a.ladder_points, *([a.ladder_fit] if a.ladder_fit else [])] for p in ladder_points(path)]
     built = not a.ladder_points and LADDER
     if built:
         extra += [(x, y, r | {"manifest": LADDER}) for x, y, r in ladder_points(panels.fetch(LADDER) / LADDER_FILE)]
