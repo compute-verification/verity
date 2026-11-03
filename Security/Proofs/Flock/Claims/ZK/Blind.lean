@@ -23,6 +23,9 @@ with the honest prover's simulator, and the server that runs pad-blind workers i
   `DummyReg`, `Causal`, `TapeOK`, `Tables` and `SwCausal vs`, the switched round encoding's causality.
   **`Flock.zk_deployZk_sw`**: `Claims.Flock.ZKAt` at `swP vs`'s prover with `Flock.zkAt_deployZk_ref`'s simulator, `ε_zk`
   and `γ`: one simulator for every `vs`.
+* `RefSession.SwCausalOn Ok vs`: `SwCausal vs` on one tape (each table's base, what the workers see and level 0's
+  leaves' pairs from it, `tapePairs`), at the coin vectors `Ok` admits; `SwCausal` gives it at every `Ok`
+  (`swCausalOn_of_swCausal`).
 * `RefSession.honestVals`, each table's own values: `swP_vals` (`swP` there is `refP`) and `swCausal_vals` (`Causal`
   gives `SwCausal` there), so `Flock.zkAt_deployZk_ref_of_sw` recovers `Flock.zkAt_deployZk_ref` from `zk_deployZk_sw`.
 * **`Flock.zk_server_blind`**: for every pad-blind worker and any values `vs` whose round encoding is causal, the server
@@ -364,6 +367,35 @@ def SwCausal (S : RefSession) (vs : S.SwVals) : Prop :=
         ZkView.leafH (swDigOf (S.C x) (S.cz x c) (S.wt x w) (vs x w ν c s) ω l + (p l).1, (p l).2)) =
       S.enc x c' i (swCutAt (S.C x) (S.cz x c') (S.wt x w) (vs x w ν c' s) ω fun l =>
         ZkView.leafH (swDigOf (S.C x) (S.cz x c') (S.wt x w) (vs x w ν c' s) ω l + (p l).1, (p l).2))
+
+/-- **The pre-final leaves' pairs at tape `t`**: level 0's the executable's under the tape's salts (`(M·y, c(y))`), the
+other leaves' `p1` (the ideal-leaf hybrid's). -/
+noncomputable def tapePairs (S : RefSession) (x : Msg) (t : S.Tape)
+    (p1 : Leaves1 (fun j => (S.C x j).z) → ZkView.Bits × ByteArray) :
+    ZkView.Leaves (fun j => (S.C x j).z) → ZkView.Bits × ByteArray := fun l =>
+  Sum.elim (fun l0 : Leaves0 (fun j => (S.C x j).z) =>
+      (ZkView.My ((S.eP x t).2 ((leaves01 (fun j => (S.C x j).z)).symm (.inl l0))),
+        ZkView.saltHash ((S.eP x t).2 ((leaves01 (fun j => (S.C x j).z)).symm (.inl l0)))))
+    p1 (leaves01 (fun j => (S.C x j).z) l)
+
+/-- **`SwCausal` on one tape, at the coin vectors `Ok` admits**: each table's base, what the workers see and level 0's
+leaves' pairs from one tape `t` (`tapePairs`), the other pre-final leaves' pairs `p1` arbitrary, and both coin vectors
+`Ok`'s. -/
+def SwCausalOn (S : RefSession) (Ok : (x : Msg) → (Fin (refK x) → S.Coin) → Prop) (vs : S.SwVals) : Prop :=
+  ∀ (x : Msg) (w : Flock.Wit) (ν : S.Nonce) (t : S.Tape)
+    (p1 : Leaves1 (fun j => (S.C x j).z) → ZkView.Bits × ByteArray)
+    (c c' : Fin (refK x) → S.Coin) (i : ℕ), (∀ j : Fin (refK x), j.val < i → c j = c' j) → Ok x c → Ok x c' →
+    S.enc x c i (swCutAt (S.C x) (S.cz x c) (S.wt x w) (vs x w ν c (S.seenOf x t)) (S.eP x t).1 fun l =>
+        ZkView.leafH (swDigOf (S.C x) (S.cz x c) (S.wt x w) (vs x w ν c (S.seenOf x t)) (S.eP x t).1 l +
+          (S.tapePairs x t p1 l).1, (S.tapePairs x t p1 l).2)) =
+      S.enc x c' i (swCutAt (S.C x) (S.cz x c') (S.wt x w) (vs x w ν c' (S.seenOf x t)) (S.eP x t).1 fun l =>
+        ZkView.leafH (swDigOf (S.C x) (S.cz x c') (S.wt x w) (vs x w ν c' (S.seenOf x t)) (S.eP x t).1 l +
+          (S.tapePairs x t p1 l).1, (S.tapePairs x t p1 l).2))
+
+/-- **`SwCausal` is `SwCausalOn` at every `Ok`**: the one-tape form asks for less. -/
+theorem swCausalOn_of_swCausal (S : RefSession) (vs : S.SwVals) (Ok : (x : Msg) → (Fin (refK x) → S.Coin) → Prop)
+    (h : S.SwCausal vs) : S.SwCausalOn Ok vs :=
+  fun x w ν t p1 c c' i hc _ _ => h x w ν (S.eP x t).1 (S.seenOf x t) (S.tapePairs x t p1) c c' i hc
 
 /-- `preModel` at `swP`. -/
 noncomputable def swPreModel (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (x : Msg) (ν : S.Nonce) :
