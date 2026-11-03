@@ -160,9 +160,9 @@ only an hour later; the preflight builds those modules (`LakeBuild`), from a mac
 (a lock regenerated on an older tree) fails that Lean check too; the preflight names each such entry (`lock_drops`), and the sync
 leaves such a head off `next` with the same refusal.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
 failure `next` has too refuses nothing, and what keeps a check from running is said under "checks skipped" and refuses nothing
-(the after-landing run checks it).  A conflict only in pins is merged as the sync merges it (`merged_tree`), and the checks run
-on that tree.  The merge runs the merge drivers of the commit it merges onto, as the sync's clone defines them (`base_drivers`):
-a branch's older checkout would run its own `tools/verity/lean/merge.py`, and one from before `--caps` reports a conflict in
+(the after-landing run checks it).  A conflict only in pins is merged as the sync merges it (`merged_tree`), the merged tree's
+Lean is ported as the sync ports it (`ported`), and the checks run on that tree.  The merge runs the merge drivers of the commit it
+merges onto, as the sync's clone defines them (`base_drivers`): a branch's older checkout would run its own `tools/verity/lean/merge.py`, and one from before `--caps` reports a conflict in
 `tests/test_lean_packages.py` the sync never sees.  `--no-preflight` skips it, for the lander.  `next` moves after the mark, so drive's sync runs the merged tree's
 cheap checks again on each merge it makes (`Preflight.onto`, `Queue._preflighted`): see `next`.
 
@@ -225,6 +225,13 @@ with the message, tree and parent tree of one judged under the same `main` takes
 that contains one left out waits, recorded (the state's `waiting`) and named in that one's notice; `status` shows it waiting and
 names the PR it contains and why that one is out, judging each PR after those it contains (else it shows
 'admitted' for hours while one it contains conflicts with `main`).
+
+Once the merged tree is on Lean's module system (it holds the codemod, `MODULES`, and its `PORTED_ROOTS` are modules:
+`on_modules`, since the codemod may land before the port), the sync runs that codemod over the whole merged tree, in a
+worktree of it, and what it ports goes into the merge commit, with each pin recording it (`ported`): git runs the `.lean`
+merge driver only on a file both sides changed, so a `.lean` file either side added before the port (the PR, or `checked`
+since the port's base) would stay unported, and a module importing it wouldn't build.  A codemod that fails leaves the PR
+out with why.
 
 Moves.  A layout move lands from `next` with no pause in landing.  A PR whose body has a `Move: tools/move/NAME.toml` line
 (`PR.move`) is a move PR: its marked head is only the request.  Where the sync puts it, it is regenerated on the commit below it
@@ -307,6 +314,12 @@ RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
 DRIVE_FLAGS = "tools/verity/check/drive.toml"
 #: the pins tool, whose `PINS` names the generated files a merge rebuilds (`repinned`): after the repository move, and before it
 PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
+#: the codemod that puts the in-tree Lake packages' Lean on Lean's module system, and the one reading of a Lean header it reads
+#: with: a merge into a tree on the module system runs the codemod over the merged tree (`ported`)
+MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py"
+#: the root modules of Security's `Definitions` library and C-Flock's `Flock`, which the port makes modules: a tree holding
+#: the codemod is on the module system when each is a module (`on_modules`)
+PORTED_ROOTS = ("Security/Definitions.lean", "verity/core/service/flock/Flock.lean")
 MARK_TIME_RE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 #: drive.toml's `after_landing_shards` for the shard planner's N: "auto", or "auto:MAX"
 AUTO_SHARDS_RE = re.compile(r"auto(:[1-9]\d*)?")
@@ -1754,9 +1767,11 @@ class Queue:
         without the checkout: `git merge-tree` merges, with ``tip``'s merge drivers (`merged_tree`), and `git commit-tree`
         makes the merge commit, so a candidate that conflicts costs one call (merging each candidate in the worktree, with
         many of them conflicting, takes tens of minutes).  A merge whose every conflict is in a pin is kept, each pin rebuilt
-        from the merged tree (`repinned`).  A git without `--attr-source` (before 2.40) raises: merging without it would leave
-        out every PR whose only conflict is a pin (drive refuses its tick before, `Driver._old_git`).  ``head``: the commit
-        merged in its place, its head restacked through a move (`_merge_through`), under the same message."""
+        from the merged tree (`repinned`), and the merged tree's Lean takes the Lean module system once the tree has it
+        (`ported`), which refuses the merge when it can't.  A git without `--attr-source` (before 2.40) raises: merging
+        without it would leave out every PR whose only conflict is a pin (drive refuses its tick before, `Driver._old_git`).
+        ``head``: the commit merged in its place, its head restacked through a move (`_merge_through`), under the same
+        message."""
         head = head or pr.head
         tree, files, r = merged_tree(self.workdir, tip, head, plain=False)
         if r.returncode == 129 and "attr-source" in r.stderr:
@@ -1767,6 +1782,12 @@ class Queue:
             self.log(f"research queue: #{pr.number} conflicts only in pins: {', '.join(files)} rebuilt from the merged tree")
         elif not _git(self.workdir, "merge-base", "--is-ancestor", head, tip, check=False).returncode:
             return tip, ""                                      # already merged: `merge --no-ff` makes no commit either
+        tree, files, pins, why = ported(self.workdir, tree)
+        if tree is None:
+            return None, why
+        if files:
+            self.log(f"research queue: #{pr.number}'s merged tree holds Lean made before the module system: {', '.join(files)} "
+                     f"ported by `{MODULES}`" + (f", and the pins {', '.join(pins)} rebuilt" if pins else ""))
         commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-p", head, "-m", _message(pr), env=IDENTITY).stdout.strip()
         return commit, ""
 
@@ -2523,6 +2544,88 @@ def _with_json(text: str, key: str, value: dict) -> str:
         if old == doc[key]:
             return text[:m.end()] + json.dumps(value, indent=1).replace("\n", "\n" + m.group(1)) + text[end:]
     return json.dumps({**doc, key: value}, indent=1) + "\n"
+
+
+def ported(repo: Path, tree: str) -> tuple[str | None, list[str], list[str], str]:
+    """(``tree``, a merge's tree, with its Lean on Lean's module system, the files that took the port, the pins that recorded
+    one of them, "") or (None, [], [], why not).  Git runs the `.lean` merge driver, which ports a side made before the port,
+    only on a file both sides changed, so a `.lean` file either side added before the port stays as it was written (a PR's,
+    or one `checked` added since the port's base, under the port's own merge), and a module importing it doesn't build.  Only
+    a tree on the module system (`on_modules`) is touched: that tree's `MODULES` runs over all of it, at the root of a
+    worktree of it, and leaves a ported tree as it is; each pin's record of a file it rewrote moves with it
+    (`_repinned_files`).  No cheaper test stands in for the run: a header check of every `.lean` file would read a script or a
+    test fixture, which the codemod leaves alone, as a file to port.  The codemod, or the header reader, failing is the
+    reason."""
+    on, why = on_modules(repo, tree)
+    if not on:
+        return (None if why else tree), [], [], why
+    new, files, pins, why = _codemod(repo, tree)
+    return new, list(files), list(pins), why
+
+
+#: `on_modules`' reading, run apart from the queue as the codemod is: the tree's `HEADERS` (stdin's "headers") says whether each
+#: of stdin's "roots" has a header that starts with `module`
+_ROOTS_READ = ("import json, sys, types\nd = json.load(sys.stdin)\nm = types.ModuleType('headers')\n"
+               "exec(compile(d['headers'], 'headers.py', 'exec'), m.__dict__)\n"
+               "print(json.dumps([(h := m.header(s)) is not None and h.module for s in d['roots']]))\n")
+
+
+def on_modules(repo: Path, tree: str) -> tuple[bool, str]:
+    """(whether ``tree`` is on Lean's module system, "") or (False, why it can't tell).  It is when it holds `MODULES` and
+    `HEADERS` and each of `PORTED_ROOTS` is a module as that `HEADERS` reads it (`header(src).module`, as `MODULES` reads
+    one).  The port's tooling may land before the port, so a tree holding the codemod whose roots aren't modules isn't on it,
+    and its merges are git's alone: the codemod run there would port the whole tree."""
+    specs = [f"{tree}:{p}" for p in (MODULES, HEADERS, *PORTED_ROOTS)]
+    blobs = _blobs(repo, specs)
+    if len(blobs) < len(specs):
+        return False, ""
+    doc = {"headers": blobs[specs[1]].decode(errors="replace"),
+           "roots": [blobs[s].decode(errors="replace") for s in specs[2:]]}
+    r = subprocess.run([sys.executable, "-c", _ROOTS_READ], input=json.dumps(doc), capture_output=True, text=True,
+                       env=_script_env())
+    if r.returncode:
+        return False, (f"`{HEADERS}` failed to read the headers of {', '.join(PORTED_ROOTS)} (exit {r.returncode}): "
+                       f"{_tail(r, 3)}")
+    return all(json.loads(r.stdout.splitlines()[-1])), ""
+
+
+@functools.lru_cache(maxsize=256)
+def _codemod(repo: Path, tree: str) -> tuple[str | None, tuple[str, ...], tuple[str, ...], str]:
+    """`ported`'s run of ``tree``'s `MODULES` over it, once a tree: a sync merges a member again onto an unchanged tree."""
+    commit = _git(repo, "commit-tree", tree, "-m", "ported", env=IDENTITY).stdout.strip()
+    with merged_worktree(repo, commit) as wt:
+        r = subprocess.run([sys.executable, MODULES], cwd=wt, capture_output=True, text=True, env=_script_env())
+        if r.returncode:
+            return None, (), (), (f"`{MODULES}` failed on the merged tree (exit {r.returncode}): {_tail(r, 3)}; port by hand "
+                                  "what it names")
+        _git(wt, "add", "-u")
+        diff = _git(wt, "diff", "--cached", "-z", "--no-renames", "--name-only", commit).stdout
+        if not (files := tuple(f for f in diff.split("\0") if f)):
+            return tree, (), (), ""
+        pins = _repinned_files(repo, wt, tree, files)
+        _git(wt, "add", "-u")
+        return _out(wt, "write-tree"), files, pins, ""
+
+
+def _repinned_files(repo: Path, wt: Path, tree: str, files: tuple[str, ...]) -> tuple[str, ...]:
+    """The pins (`pins_at` ``tree``) that recorded one of ``files`` at its digest in ``tree``, each rewritten in ``wt``, a
+    worktree of ``tree`` where those files changed, to record its digest there, every other byte kept."""
+    before = _blobs(repo, [f"{tree}:{f}" for f in files])
+    moved = {f: (hashlib.sha256(before[f"{tree}:{f}"]).hexdigest(), hashlib.sha256((wt / f).read_bytes()).hexdigest())
+             for f in files if f"{tree}:{f}" in before and (wt / f).is_file()}
+    out = []
+    for path, (key, under) in pins_at(repo, tree).items():
+        if not (pin := wt / path).is_file():
+            continue
+        text = new = pin.read_bytes().decode(errors="surrogateescape")
+        for f, (old, now) in moved.items():
+            rel = posixpath.relpath(f, under) if under else f
+            new = (re.sub(rf"(?m)^{old}(?=  {re.escape(rel)}$)", now, new) if key is None
+                   else re.sub(rf'({re.escape(json.dumps(rel))}\s*:\s*"){old}"', rf'\g<1>{now}"', new))
+        if new != text:
+            pin.write_bytes(new.encode(errors="surrogateescape"))
+            out.append(path)
+    return tuple(out)
 
 
 def rules_at(repo: Path, ref: str) -> Rules | None:
@@ -3656,12 +3759,20 @@ class Preflight:
         else:
             if files:
                 notes.append(Ran(f"conflicts only in pins: {', '.join(files)}, rebuilt from the merged tree"))
-            if drops := lock_drops(self.repo, base, pr.head, tree):
-                found.append(lock_drop_refusal(drops, onto.split("`")[1]))
-            try:
-                found += self._merged(pr, base, tree, onto, notes, members)
-            except QueueError as e:
-                notes.append(f"the merged tree's checks ({e})")
+            tree, files, pins, why = ported(self.repo, tree)
+            if tree is None:
+                found.append(why)
+                notes.append("the merged tree's checks: its Lean doesn't take the module system")
+            else:
+                if files:
+                    notes.append(Ran(f"Lean made before the module system: {', '.join(files)} ported by `{MODULES}`"
+                                     + (f", and the pins {', '.join(pins)} rebuilt" if pins else "")))
+                if drops := lock_drops(self.repo, base, pr.head, tree):
+                    found.append(lock_drop_refusal(drops, onto.split("`")[1]))
+                try:
+                    found += self._merged(pr, base, tree, onto, notes, members)
+                except QueueError as e:
+                    notes.append(f"the merged tree's checks ({e})")
         skipped = [n for n in notes if not isinstance(n, Ran)]
         took = "; ".join([f"{self.clock() - start:.0f} s", *(n for n in notes if isinstance(n, Ran))])
         if found:
