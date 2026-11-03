@@ -12,8 +12,11 @@ sort_keys=True)` writes it, each with its `seq`. Python's `verity_flock.firewall
    next one to take the slot.
 3. A recursive session opened with a release schedule (`start_ms`, one window a statement) releases statement `j` at
    `start_ms + windows_ms[0] + ... + windows_ms[j]` (`releaseMs`); a missed time is a stop (`Firewall.Release`).
-4. A stream opened with a failure `budget` b stops at its b-th failure (`failures`): a recursive session's stop, or a
-   refusal of a recursive session that had neither stopped nor released its last statement, on a stream not yet stopped.
+4. A stream opened with a failure `budget` b, at least `BUDGET_MIN`, stops at its b-th failure (`failures`): a recursive
+   session's stop, or a refusal of a recursive session that had neither stopped nor released its last statement, on a
+   stream not yet stopped. It opens no recursive session while its unended ones (`unended`: opened on it, neither
+   stopped nor released whole) and its failures together reach b, so at most b of its recursive sessions ever have a
+   statement not released.
 
 The functions here are pure: each takes the events read so far and returns its result and the events after it, which only
 ever extend them. `Record.read` reads the record whole and fails closed: every line must be exactly a line the firewall
@@ -130,6 +133,16 @@ def budgetOk : Option Nat → V Unit
   | some 0 => throw "a failure budget is a positive integer, not 0"
   | _ => pure ()
 
+/-- The least failure budget a stream is opened with (rule 4). -/
+def BUDGET_MIN : Nat := 3
+
+/-- A failure budget as an open is given it: at least `BUDGET_MIN`. A record holding a lesser one still reads
+(`budgetOk`). -/
+def budgetArg : Option Nat → V Unit
+  | some b =>
+    if b < BUDGET_MIN then throw s!"a failure budget is an integer of at least {BUDGET_MIN}, not {b}" else pure ()
+  | none => pure ()
+
 /-! ## Reading the record -/
 
 private def eventOf (j : Json) : V (Event × Nat) := do
@@ -238,6 +251,21 @@ def Tally.step (stream : String) (b : Option Nat) (t : Tally) : Event → Tally
 def failures (evs : Events) (stream : String) : Nat :=
   (evs.foldl (Tally.step stream (budgetOf evs stream)) {}).n
 
+/-- The recursive sessions opened, each once. -/
+def openedSessions (evs : Events) : List String :=
+  (evs.toList.filterMap fun | .opened o => some o.session | _ => none).eraseDups
+
+/-- Whether the recursive session `s` is one of `stream`'s not ended: its open is on `stream`, it has not stopped, and a
+statement of it is not released. -/
+def unendedOn (evs : Events) (stream s : String) : Bool :=
+  match openOf evs s with
+  | some o => o.stream == stream && (stopOf evs s).isNone && (nextOf evs o).isSome
+  | none => false
+
+/-- How many of `stream`'s recursive sessions are not ended (rule 4). -/
+def unended (evs : Events) (stream : String) : Nat :=
+  ((openedSessions evs).filter (unendedOn evs stream)).length
+
 /-- The last `slot` event (its position, session and part), if no outcome of its session at its part (`release`, `stop`
 or `refused`) follows it. -/
 def orphan (evs : Events) : Option (Nat × String × String) :=
@@ -261,7 +289,8 @@ private def showBudget : Option Nat → String
   | none => "None"
 
 /-- `rec_live` opens a recursive session: why it may not (its statements, budget or schedule), its id, or why the
-firewall refuses it (the stream stopped at its budget). The first check needs no record: `openArgs`. -/
+firewall refuses it (the stream stopped at its budget, or its unended recursive sessions and failures reach it). The
+first check needs no record: `openArgs`. -/
 inductive Opened where
   | ok (session : String)
   | refused (why : String)
@@ -270,7 +299,7 @@ inductive Opened where
 /-- What an open is given, checked before the record is read. -/
 def openArgs (parts : Array String) (budget : Option Nat) (release : Option Json) : V (Option Schedule) := do
   partsOk parts
-  budgetOk budget
+  budgetArg budget
   match release with
   | some r => some <$> scheduleOf r parts.size
   | none => pure none
@@ -292,7 +321,13 @@ where
     let n := failures evs stream
     match budget with
     | some b =>
-      if n ≥ b then (.refused s!"stream {stream} stopped at its failure budget ({n} of {b})", evs) else made
+      if n ≥ b then (.refused s!"stream {stream} stopped at its failure budget ({n} of {b})", evs)
+      else
+        let u := unended evs stream
+        if n + u ≥ b then
+          (.refused (s!"stream {stream}'s unended recursive sessions and failures reach its failure budget " ++
+            s!"({u} and {n} of {b})"), evs)
+        else made
     | none => made
   made : Opened × Events :=
     let s := sid (evs.filter (fun | .opened _ => true | _ => false)).size

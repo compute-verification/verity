@@ -11,9 +11,9 @@ a recursive session's, `1 + Σ_p (M p + 1)`. This file states that the firewall'
 
 **The run** (`StopCount.run`) is a list of steps, each one op on the record's events by the code's own function, in any
 order: each op holds `record.lock` while it reads the record and appends to it, and one outer session at a time holds
-`slot.lock` (`holder`). `rec_live` opens a recursive session (`openSession`, its statements checked by `partsOk`), runs
-its inner session, statement `0`, and records its `finish` once its `M s 0` messages reached the auditor, or its stop at
-`inner`. An outer session of `s` at `part` that finds the slot taken records `wait`; one that takes it records its slot
+`slot.lock` (`holder`). `rec_live` opens a recursive session (`openSession`, its statements and budget checked by
+`partsOk` and `budgetArg`), runs its inner session, statement `0`, and records its `finish` once its `M s 0` messages
+reached the auditor, or its stop at `inner`. An outer session of `s` at `part` that finds the slot taken records `wait`; one that takes it records its slot
 and is admitted or refused (`seat`: `slot`, then `admit`). Nothing of a refused session reaches the auditor; an admitted
 one's messages do, one `relay` at a time, at most statement `j`'s `M s (j + 1)`, before its `Finish` and, once
 `Decision.after` lets its proofs go, after it, from its release time on (`left`). The auditor's verdict comes after its
@@ -101,7 +101,7 @@ def Holder.stmt (h : Holder) : ℕ := h.admitted.index + 1
 leaves the state as it was. -/
 def step (M : String → ℕ → ℕ) (σ : St) : Step → St
   | .openRec stream parts budget release =>
-    match partsOk parts, budgetOk budget with
+    match partsOk parts, budgetArg budget with
     | .ok (), .ok () => { σ with evs := (openSession σ.evs stream parts budget release).2 }
     | _, _ => σ
   | .innerSend s =>

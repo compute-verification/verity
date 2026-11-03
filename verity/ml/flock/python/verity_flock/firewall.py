@@ -28,9 +28,11 @@ appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules ho
   session that asks meanwhile waits (``wait``) and takes the slot after (``slot``), so each ``slot`` event is followed by its
   session's outcome before the next one. A holder that ended before its outcome (killed, say) is recorded as its session's
   stop by the next session to take the slot.
-* **A stream stops at its failure budget.** A stream opened with ``budget`` b (the challenger's stream's ``budget``, P1)
-  refuses every outer session and every open after its b-th failure: a recursive session's stop, or a refusal of a recursive
-  session that had neither stopped nor released its last statement, on a stream that had not stopped.
+* **A stream stops at its failure budget.** A stream opened with ``budget`` b (the challenger's stream's ``budget``, P1, at
+  least `BUDGET_MIN`) refuses every outer session and every open after its b-th failure: a recursive session's stop, or a
+  refusal of a recursive session that had neither stopped nor released its last statement, on a stream that had not
+  stopped. It refuses an open while its unended recursive sessions (opened on it, neither stopped nor released whole) and
+  its failures together reach b, so at most b of its recursive sessions ever have a statement not released.
 * **Proofs leave at public times.** A recursive session opened with a ``release`` schedule (``start_ms``, and one window a
   statement, ``windows_ms``) releases statement j's proofs at ``start_ms + windows_ms[0] + ... + windows_ms[j]``: proofs
   ready early wait, and proofs not ready by then are a stop. Only the Lean ZK server keeps the times; this module's relay
@@ -44,7 +46,8 @@ session cut after some message, never why. A refused or stopped session's worker
 can't hold up another session's.
 
 What the rules read of the record is kept beside it in ``index-py/`` (`_Index`: each recursive session's open, stop,
-finish and releases, each stream's first open and failures, the last ``slot``, the counts), and a call reads only what
+finish and releases, each stream's first open, failures and unended recursive sessions, the last ``slot``, the counts),
+and a call reads only what
 was appended to the record since the index last read it, by whichever process. The Lean ZK server keeps none and reads
 the record whole. The index is rebuilt from the record's start when
 the record was replaced, cut shorter or no longer holds the last bytes the index read, when the machine has booted since
@@ -77,6 +80,8 @@ KIND = "firewall/v0"
 INNER = "inner"
 #: an outer session's proofs, one a rep (2 at K = 4096)
 PROOFS = 2
+#: the least failure budget a stream is opened with
+BUDGET_MIN = 3
 
 
 class Refused(Exception):
@@ -179,12 +184,13 @@ class Firewall:
     def open(self, stream: str, parts: list[str], budget: int | None = None, release: dict | None = None) -> str:
         """A new recursive session on ``stream``, opened by its inner session, with its V* statements in their order
         (``parts``, public: the ZK server's rule 1): its id. ``budget`` is the stream's failure budget (P1's ``budget``,
-        b), the same at every open of the stream; once the stream has ``budget`` failures, `Refused`. ``release`` is the
-        recursive session's release schedule, public and fixed here, before the session: statement ``j`` is released at the
-        end of its window, ``start_ms + sum(windows_ms[:j + 1])`` (rule 3)."""
+        b, at least `BUDGET_MIN`), the same at every open of the stream; once the stream has ``budget`` failures, or while
+        its unended recursive sessions and its failures together reach it, `Refused`. ``release`` is the recursive
+        session's release schedule, public and fixed here, before the session: statement ``j`` is released at the end of
+        its window, ``start_ms + sum(windows_ms[:j + 1])`` (rule 3)."""
         _parts_ok(parts)
-        if budget is not None and not (type(budget) is int and budget >= 1):
-            raise ValueError(f"a failure budget is a positive integer, not {budget!r}")
+        if budget is not None and not (type(budget) is int and budget >= BUDGET_MIN):
+            raise ValueError(f"a failure budget is an integer of at least {BUDGET_MIN}, not {budget!r}")
         if release is not None:
             _schedule_ok(release, len(parts))
         with self._locked(streams=(stream,)) as rec:
@@ -192,6 +198,9 @@ class Firewall:
                 raise ValueError(f"stream {stream}'s budget is {b}, not {budget}")
             if budget is not None and (n := rec.failures(stream)) >= budget:
                 raise Refused(refused(f"stream {stream} stopped at its failure budget ({n} of {budget})"))
+            if budget is not None and n + (u := rec.unended(stream)) >= budget:
+                raise Refused(refused(f"stream {stream}'s unended recursive sessions and failures reach its failure budget "
+                                      f"({u} and {n} of {budget})"))
             sid = f"r{rec.opens:04d}"
             e = {"event": "open", "session": sid, "stream": stream, "parts": list(parts)}
             if budget is not None:
@@ -319,6 +328,17 @@ def _failures(ev: list[dict], stream: str) -> int:
     return n
 
 
+def _unended(ev: list[dict], stream: str) -> int:
+    """How many of ``stream``'s recursive sessions are not ended: each one's first open is on ``stream``, it has not
+    stopped, and a statement of it is not released."""
+    seen, n = set(), 0
+    for e in ev:
+        if e["event"] == "open" and (s := e["session"]) not in seen:
+            seen.add(s)
+            n += e["stream"] == stream and _stopped(ev, s) is None and _next(ev, e) is not None
+    return n
+
+
 def _orphan(ev: list[dict]) -> dict | None:
     """The last ``slot`` event, if no outcome of its session at its part (``release``, ``stop`` or ``refused``) follows it."""
     k = next((k for k in range(len(ev) - 1, -1, -1) if ev[k]["event"] == "slot"), None)
@@ -385,6 +405,9 @@ class _Scan:
     def failures(self, stream: str) -> int:
         return _failures(self.events, stream)
 
+    def unended(self, stream: str) -> int:
+        return _unended(self.events, stream)
+
     def orphan(self) -> dict | None:
         return _orphan(self.events)
 
@@ -435,6 +458,11 @@ class _Session:
                 "member": self.member}
 
 
+def _unended_session(sess: _Session) -> bool:
+    """Whether the recursive session is one of its first open's stream's unended ones (`_unended`)."""
+    return sess.open is not None and sess.stop is None and any(p not in sess.released for p in sess.open["parts"])
+
+
 def _boot() -> str:
     """The machine's boot: an index written before it may have lost writes the page cache held."""
     try:
@@ -455,7 +483,8 @@ class _Index:
     (``file``), how much of it was read (``offset``) and its last bytes (``last``), whether every line so far is one the
     index answers for (``regular``), the counts, the last ``slot`` (its seq, session and part) and whether an outcome of
     it followed), and one for each recursive session and each opened stream (``s`` or ``t``, then `_key` of its name: a
-    `_Session`, and the stream's first open's budget and its failures so far). Each call loads the files it reads and
+    `_Session`, and the stream's first open's budget, its failures so far and its unended recursive sessions). Each call
+    loads the files it reads and
     writes back the ones that changed, under ``record.lock``: first the head marked dirty, then the files, then the head,
     each written whole and renamed into place, so a writer that ends mid-write leaves a dirty head, and the next call
     rebuilds the index from the record."""
@@ -488,7 +517,7 @@ class _Index:
                 h = json.load(f)
             h["last"] = bytes.fromhex(h["last"])
             if not (set(h) == {*_HEAD, "file", "last", "slot"} and all(type(h[k]) is t for k, t in _HEAD.items())
-                    and h["v"] == 1 and h["boot"] == boot and h["dirty"] is False and h["file"] == file
+                    and h["v"] == 2 and h["boot"] == boot and h["dirty"] is False and h["file"] == file
                     and min(h["offset"], h["count"], h["opens"]) >= 0 and len(h["last"]) <= h["offset"]
                     and (0 if at is None else at[1]) >= h["offset"]
                     and (h["slot"] is None or type(h["slot"]) is list and len(h["slot"]) == 3
@@ -515,8 +544,8 @@ class _Index:
         if t not in self._streams:
             key = _key(t)
             v = None if self.fresh or key is None else self._get(f"t{key}.json")
-            if not (v is None or type(v) is dict and set(v) == {"budget", "n"} and type(v["n"]) is int
-                    and (v["budget"] is None or type(v["budget"]) is int)):
+            if not (v is None or type(v) is dict and set(v) == {"budget", "n", "u"} and type(v["n"]) is int
+                    and type(v["u"]) is int and (v["budget"] is None or type(v["budget"]) is int)):
                 raise ValueError(f"the firewall's index: t{key}.json is not a stream")
             self._streams[t] = v
         return self._streams[t]
@@ -562,29 +591,37 @@ class _Index:
         sess, tallies = self._sessions[s], self._streams
         if kind == "open":
             self.opens += 1
+            if tallies[e["stream"]] is None:
+                tallies[e["stream"]] = {"budget": e.get("budget"), "n": 0, "u": 0}
             if sess.open is None:
                 sess.open = e
+                tallies[e["stream"]]["u"] += _unended_session(sess)
             m = next((m for m in sess.member if m["stream"] == e["stream"]), None)
             if m is None:
                 sess.member.append({"stream": e["stream"], "parts": list(e["parts"]), "released": [], "stopped": False})
             else:
                 m["parts"] = list(e["parts"])
-            if tallies[e["stream"]] is None:
-                tallies[e["stream"]] = {"budget": e.get("budget"), "n": 0}
             self._changed[1].add(e["stream"])
         elif kind == "finish":
             sess.finished = True
         elif kind == "stop":
             if sess.stop is None:
+                if _unended_session(sess):
+                    tallies[sess.open["stream"]]["u"] -= 1
+                    self._changed[1].add(sess.open["stream"])
                 sess.stop = e
             for m in sess.member:
                 m["stopped"] = True
                 tallies[m["stream"]]["n"] += 1
                 self._changed[1].add(m["stream"])
         elif kind == "release":
+            was = _unended_session(sess)
             for released in [sess.released] + [m["released"] for m in sess.member]:
                 if e["part"] not in released:
                     released.append(e["part"])
+            if was and not _unended_session(sess):
+                tallies[sess.open["stream"]]["u"] -= 1
+                self._changed[1].add(sess.open["stream"])
         else:
             for m in sess.member:
                 t = tallies[m["stream"]]
@@ -614,7 +651,7 @@ class _Index:
             pass
 
     def _head(self, dirty: bool) -> dict:
-        return {"v": 1, "boot": self.boot, "dirty": dirty, "file": self.file, "offset": self.offset,
+        return {"v": 2, "boot": self.boot, "dirty": dirty, "file": self.file, "offset": self.offset,
                 "last": self.last.hex(), "regular": self.regular, "count": self.count, "opens": self.opens,
                 "slot": self.slot, "slot_done": self.slot_done}
 
@@ -655,6 +692,10 @@ class _Index:
     def failures(self, stream: str) -> int:
         t = self.stream(stream)
         return 0 if t is None else t["n"]
+
+    def unended(self, stream: str) -> int:
+        t = self.stream(stream)
+        return 0 if t is None else t["u"]
 
     def orphan(self) -> dict | None:
         if self.slot is None or self.slot_done:

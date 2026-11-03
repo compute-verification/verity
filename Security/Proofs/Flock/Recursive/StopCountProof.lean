@@ -624,7 +624,7 @@ theorem Inv.openRec {σ : St} (hI : Inv M σ) (stream : String) (parts : Array S
   | error _ => exact hI
   | ok u =>
     cases u
-    cases hb : budgetOk budget with
+    cases hb : budgetArg budget with
     | error _ => exact hI
     | ok u =>
       cases u
