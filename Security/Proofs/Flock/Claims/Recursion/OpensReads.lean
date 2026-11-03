@@ -68,7 +68,7 @@ theorem RecRaw.ins_commits {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) :
 
 theorem commits_parse_error {sh : RecVStar.Inner} {tt : String} {e : String} {r : Except String (Option String)}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {record : String} {cs : RecVStar.InnerCommits}
-    (hp : Json.parse tt = .error e) : RecSetup.commits (some sh) (.ok tt) r bound record ≠ .ok cs := by
+    (hp : Flock.JsonParse.parse tt = .error e) : RecSetup.commits (some sh) (.ok tt) r bound record ≠ .ok cs := by
   intro h
   unfold RecSetup.commits at h
   simp only [bind, Except.bind, pure, Except.pure, hp] at h
@@ -90,7 +90,7 @@ theorem commitsOf_reads {w : RecRaw} {src : Option RecCoins.Source}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {sh : RecVStar.Inner}
     {c : Option RecVStar.InnerCommits} {t : ByteArray} (ht : w.transcript = some t)
     (h : commitsOf w src bound (some sh) = .ok c) :
-    ∃ cs tt tr record, c = some cs ∧ String.fromUTF8? t = some tt ∧ Json.parse tt = .ok tr ∧
+    ∃ cs tt tr record, c = some cs ∧ String.fromUTF8? t = some tt ∧ Flock.JsonParse.parse tt = .ok tr ∧
       src.map (·.record) = some record ∧ RecSetup.checkReads sh tt tr record cs = .ok () := by
   unfold commitsOf at h
   rw [ht] at h
@@ -113,7 +113,7 @@ theorem commitsOf_reads {w : RecRaw} {src : Option RecCoins.Source}
         exact absurd hX commits_text_error
       | some tt =>
         rw [textOf, htx] at hX
-        cases hp : Json.parse tt with
+        cases hp : Flock.JsonParse.parse tt with
         | error e => exact absurd hX (commits_parse_error hp)
         | ok tr => exact ⟨cs, tt, tr, record, rfl, rfl, hp, rfl, FlockC3.VStarList.reads_of_commits hp hX⟩
 
@@ -625,7 +625,12 @@ theorem RecIns.setup_coins {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} 
   unfold RecIns.setup at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
-  all_goals first | (cases h; done) | (cases h; assumption)
+  all_goals first | (cases h; done) | skip
+  all_goals
+    obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst h2
+    -- reducibly: at default transparency each later check's `forM` is unfolded against this one's first
+    with_reducible assumption
 
 /-- `RecCoins.check` refuses a rec-residuals, rec-sparse or rec-opening unit without the verifier's own reads. -/
 theorem registered_of_coins {st : Stmt} {own : Option (Array Registered.Port)} {f : Option RecCoins.Source}
@@ -658,6 +663,7 @@ theorem params_of_own {tags : Tags} {pre : Array (String × Net)} {c : Circuit} 
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- With an inner shape and own reads, `RecVStar.checkStmt` runs `checkCircuit` and `checkOwn` at them. -/
 theorem checkStmt_own {i : RecVStar.Inner} {tags : Tags} {tables : List (String × ByteArray)} {st : Stmt}
@@ -838,6 +844,7 @@ theorem ownPorts_row {sv : VStar.Stmt} {q : String × String × Array (Option �
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- What `heldRows` holds, with its round: a row of a statement's own port under `rec-c<k>`, at the port's index,
 held at that rep's `k`-th message round. -/
