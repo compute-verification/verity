@@ -8,7 +8,8 @@ mechanism tag; `--long` names the board line that assigns the long tier). A line
 checkout, whose island must be clean (the run ships HEAD's), once START is in the starts_store.json of the pinned
 commit launch.py ships (`pin.py`; a later start waits for it); NODE is whichever of `--nodes` holds fewer of the queue's
 runs in flight, ties going to the one launched to longer ago. An ended run is never collected (only the scorer collects:
-the coordinator's 06:57Z ruling (b)): it is fetched, its row read from `out/witness.json`, its points cached by
+the coordinator's 06:57Z ruling (b)): its files are fetched (`research fetch RUN --all`, which neither puts nor
+ingests), its row read from `out/witness.json`, its points cached by
 `curve.py`, and `research data custody RUN --publish` drops its local files of 1 MiB and more. Every launch and end
 goes to `state.jsonl` beside the queue, from which a restarted driver resumes. No launch at or after `--stop`.
 
@@ -62,9 +63,13 @@ def row(run: str, start: str, note: str) -> dict:
     try:
         w = json.loads((out / "witness.json").read_text())
     except (OSError, ValueError):
-        fail = RUNS / run / "failure.json"
+        try:
+            f = json.loads((RUNS / run / "failure.json").read_text())
+        except (OSError, ValueError):
+            f = {}
+        # the classifier writes failure.json for every ended attempt, a success's too
         return {"run": run, "start": start, "note": note, "witness": None,
-                "failure": fail.read_text()[-300:] if fail.exists() else None}
+                "failure": None if f.get("class") in (None, "SUCCESS") else f"{f['class']}: {f.get('why')}"[:300]}
     return {"run": run, "start": start, "note": note, "valid": w.get("valid"), "bpb": (w.get("score") or {}).get("bpb"),
             "start_bpb": w.get("start_bpb"), "gpu_seconds": w.get("gpu_seconds"), "e_bytes": (w.get("E") or {}).get("bytes"),
             "failed_checks": [k for k, v in (w.get("checks") or {}).items() if not v]}
@@ -114,6 +119,8 @@ def main() -> int:
             state = json.loads(st.read_text()).get("state") if st.exists() else None
             if state not in DONE:
                 continue
+            # the records alone hold no out/; --all copies every file and neither puts nor ingests (not a collect)
+            research("fetch", s["run"], "--all")
             _, start, note, *_ = parse(key)
             res = row(s["run"], start, note)
             if res.get("witness", 0) is None and res["failure"] is None and tries.get(key, 0) < 19:
