@@ -25,7 +25,8 @@ private theorem cancel_pad {a b p : _root_.Flock.F128} (h : a + p = b + p) : a =
     FlockSoundness.Discharge.Composed.ZerocheckMasked.add_add_self]
 
 /-- Word `t` of a masked lane message. -/
-private theorem mm_word {src : RepSrc} {lay : _root_.Flock.Zk.PadLayout} {h : Array _root_.Flock.F128} {i : ℕ}
+private theorem mm_word {src : _root_.FlockComplete.RepSrc} {lay : _root_.Flock.Zk.PadLayout}
+    {h : Array _root_.Flock.F128} {i : ℕ}
     {P : _root_.Flock.F256 × _root_.Flock.F256} (e : mmOf src lay i = maskMsg lay h i P) {t : ℕ} (ht : t < 4) :
     src.masked (lay.lgMsg i t) = l0Word (if t < 2 then P.1 else P.2) (t % 2) + h[lay.lgMsg i t]! := by
   obtain rfl | rfl | rfl | rfl : t = 0 ∨ t = 1 ∨ t = 2 ∨ t = 3 := by omega
@@ -35,11 +36,12 @@ private theorem mm_word {src : RepSrc} {lay : _root_.Flock.Zk.PadLayout} {h : Ar
   · exact congrArg (fun q : _root_.Flock.F256 × _root_.Flock.F256 => q.2.c1) e
 
 /-- Word `t` of a masked pair sum. -/
-private theorem e_word {src : RepSrc} {lay : _root_.Flock.Zk.PadLayout} {h : Array _root_.Flock.F128} {i : ℕ}
-    {X : _root_.Flock.F256}
+private theorem e_word {src : _root_.FlockComplete.RepSrc} {lay : _root_.Flock.Zk.PadLayout}
+    {h : Array _root_.Flock.F128} {i : ℕ}
+    {m : _root_.Flock.F256}
     (e : (⟨src.masked (lay.lgE i 0), src.masked (lay.lgE i 1)⟩ : _root_.Flock.F256) =
-      X + ⟨h[lay.lgE i 0]!, h[lay.lgE i 1]!⟩) {t : ℕ} (ht : t < 2) :
-    src.masked (lay.lgE i t) = l0Word X t + h[lay.lgE i t]! := by
+      m + ⟨h[lay.lgE i 0]!, h[lay.lgE i 1]!⟩) {t : ℕ} (ht : t < 2) :
+    src.masked (lay.lgE i t) = l0Word m t + h[lay.lgE i t]! := by
   obtain rfl | rfl : t = 0 ∨ t = 1 := by omega
   · exact congrArg _root_.Flock.F256.c0 e
   · exact congrArg _root_.Flock.F256.c1 e
