@@ -1,13 +1,13 @@
 # The inference-only policy
 
 The inference-only policy asks that the registered circuit D have an inference-block partition 𝓘: blocks with gate
-budget c (exactly c gates each) and fresh-input budget k (at most k bits of fresh input each), where fresh input is
+budget c (at most c gates each) and fresh-input budget k (at most k bits of fresh input each), where fresh input is
 every value outside the registered information θ, the models, code and data fixed before the monitoring period. It is
 a protocol with no rounds. Setup fixes θ and the registered compiler B. At the start of each verification phase, before
 any coin, B's output on the reported advice partitions that execution block into inference blocks, and the developer's
-ZK proof that B ran correctly and explains the committed trace can also show that each has c gates and reads at most k
-bits outside θ (`verity/core/protocols/remote/README.md`, "Lifecycle"). In Lean it is `Nci.Complies`, in an older form
-(below), and its check is `NciCheck`.
+ZK proof that B ran correctly and explains the committed trace can also show that each has at most c gates and reads
+at most k bits outside θ (`verity/core/protocols/remote/README.md`, "Lifecycle"). In Lean it is `Nci.Complies`, in an
+older form (below), and its check is `NciCheck`.
 
 The inference-only policy is not yet a subprotocol of the composites: neither onsite nor remote
 (`verity/core/protocols/composition`) runs its check today.
