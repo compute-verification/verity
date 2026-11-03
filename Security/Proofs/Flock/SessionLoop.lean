@@ -79,6 +79,14 @@ theorem realTabs_realOf {R : Type}
         cases h
         exact ⟨g, d, l, hl, ht⟩
 
+/-- **Every worker that reads only what the workers see is a pad-blind one** (`Loop.blind`): one that returns the same
+at two tapes alike there (`Masked.seenOf`) and two histories whose answers carry the same coins (`CoinLayer.rd`). -/
+theorem exists_blind (L : LeanRelease Flock.Wit
+    ((ZKMal.CoinLayer.session loopNr ZKMal.Masked.dataE).refP.Nonce ×
+      (ZKMal.CoinLayer.session loopNr ZKMal.Masked.dataE).refP.Rand))
+    {wk : L.toSrv.Worker} (hb : L.toSrv.Blind ZKMal.Masked.seenOf ZKMal.CoinLayer.rd wk) : ∃ bw, blind L bw = wk :=
+  hb.exists_lift ZKMal.Masked.seenOf_surjective
+
 end Claims.ZKServer.Loop
 
 namespace Flock.SecurityProofs
