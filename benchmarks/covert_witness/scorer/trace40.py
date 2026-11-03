@@ -44,6 +44,8 @@ PINS = os.environ.get("TE_V1_PINS", "11d96c1b8745d8093746ea11e3e33fe6f07f7d3b,"
 CW = "benchmarks/covert_witness"
 #: a run whose dominant update structure starts late replays every step before it (a 4-arm shallow run: 3,493 steps)
 TRACE_TIMEOUT = 5400
+#: the node step's version: a run that failed under an older one is traced again
+CODE = 2
 #: the formalism's fields in bits of the update or the gradient, which seed-subspace's d scales
 D_SCALED = ("u1_bits", "update_cut_bits", "grad_cut_bits", "state_bits", "delta_grad_bits")
 #: plan keys the trace's printed plan and the run's notes both carry but don't compare (plans.py's SKIP)
@@ -90,8 +92,9 @@ def scope() -> list[dict]:
 
 
 def done(c: Path) -> set[str]:
+    """Runs traced, or failed under this CODE."""
     traced = json.loads((c / "traced.json").read_text()) if (c / "traced.json").exists() else {}
-    return set(traced)
+    return {k for k, v in traced.items() if not v.get("error") or v.get("code") == CODE}
 
 
 def archive(rev: str, dest: Path, sub: str = "", strip: int = 0, exclude: str = "") -> None:
@@ -235,6 +238,9 @@ def head_at_largest(res: dict, run: dict, d_model: int) -> tuple[dict, dict | No
         if abs(fwd - total) <= 0.01 * total:
             return dict(res, recorded_forward_macs=total), None
     res = dict(res, recorded_forward_macs=rec)
+    if fwd < rec:
+        # no head the recorder widened: the trace's forward is short of the counter's, and its rows stay as traced
+        return res, {"unscaled": "the trace's forward GEMMs are below the counter's", "fwd_ratio": fwd / rec}
     rows = res["structure"]["updated"]
     top = max(r[0] for r in rows)
     head = sum(r[0] for r in rows if r[0] == top) * res["tokens"]
@@ -270,10 +276,10 @@ def trace(root: Path, r: dict, run_json: Path, args: list[str], step: int, k: st
     wd = workdir(root, r)
     args = list(args)
     if "--out" in args:
-        args[args.index("--out") + 1] = str(root / "out" / k)
-    (root / "out" / k).mkdir(parents=True, exist_ok=True)
-    out, log, circ = (root / "traces" / f"{k}-{step}.json", root / "logs" / f"{k}-{step}.log",
-                      root / "circuits" / f"{k}-{step}.npz")
+        args[args.index("--out") + 1] = str(root / "out" / r["run_id"])
+    (root / "out" / r["run_id"]).mkdir(parents=True, exist_ok=True)
+    name = f"{r['run_id']}-{k}-{step}"
+    out, log, circ = root / "traces" / f"{name}.json", root / "logs" / f"{name}.log", root / "circuits" / f"{name}.npz"
     for p in (out, log, circ):
         p.parent.mkdir(parents=True, exist_ok=True)
     cmd = [sys.executable, "-m", "te_core.capture.script", "--script", f"islands/{r['island']}/{r['program']}",
@@ -292,9 +298,10 @@ def trace(root: Path, r: dict, run_json: Path, args: list[str], step: int, k: st
     return json.loads(out.read_text()), log, circ
 
 
-def one(root: str, r: dict) -> dict:
-    """Trace, measure and ingest one run; its records go to root/records/RUN.jsonl.gz."""
-    root = Path(root)
+def one(root: str, r: dict, out: str) -> dict:
+    """Trace, measure and ingest one run; its records go to out/records/RUN.jsonl.gz as it ends, so a node run that
+    times out keeps the runs it finished."""
+    root, out = Path(root), Path(out)
     sys.path.insert(0, str(root / "pack" / "te"))
     from te_core.capture.circuit import StepCircuit, measure
     from te_core.ledger import Ledger, ingest
@@ -305,7 +312,7 @@ def one(root: str, r: dict) -> dict:
     with gzip.open(root / "pack" / "runs" / rid / "run.json.gz", "rb") as f, (rd / "run.json").open("wb") as g:
         shutil.copyfileobj(f, g)
     run = json.loads((rd / "run.json").read_text())
-    summary = {"island": r["island"], "agent": r["agent"]}
+    summary = {"island": r["island"], "agent": r["agent"], "code": CODE}
     try:
         tree = ((run.get("evaluation") or {}).get("island") or {}).get("tree")
         if tree and tree != r["island_tree"]:
@@ -332,8 +339,8 @@ def one(root: str, r: dict) -> dict:
         recs = ingest(rd, Ledger(root / "ledgers" / rid, r["agent"]), direction=r["direction"],
                       mechanism=r["mechanism"], parent=r["parent"], run_id=rid, reference=r["reference"],
                       structures=structures)
-        (root / "records").mkdir(exist_ok=True)
-        with gzip.open(root / "records" / f"{rid}.jsonl.gz", "wt") as f:
+        (out / "records").mkdir(parents=True, exist_ok=True)
+        with gzip.open(out / "records" / f"{rid}.jsonl.gz", "wt") as f:
             f.writelines(json.dumps(x, sort_keys=True) + "\n" for x in recs)
         f = res["formalism"]
         return summary | {"rows": len(recs), "heads": heads, "subspace": sub, "plan_differ": differ,
@@ -358,9 +365,10 @@ def node(pack_tar: Path, out: Path, workers: int) -> int:
         # the largest record first, so the long traces don't trail
         runs.sort(key=lambda r: -(root / "pack" / "runs" / r["run_id"] / "run.json.gz").stat().st_size)
         out.mkdir(parents=True, exist_ok=True)
+        (out / "manifest.json").write_text((root / "pack" / "manifest.json").read_text())
         results = {}
         with ProcessPoolExecutor(max_workers=workers) as ex:
-            futs = {ex.submit(one, str(root), r): r["run_id"] for r in runs}
+            futs = {ex.submit(one, str(root), r, str(out)): r["run_id"] for r in runs}
             for fut in as_completed(futs):
                 rid = futs[fut]
                 try:
@@ -371,13 +379,10 @@ def node(pack_tar: Path, out: Path, workers: int) -> int:
                 print(rid, x.get("island"), x.get("step"), x.get("rows"), x.get("seconds"),
                       (x.get("error") or "").strip().splitlines()[-1:] or "", flush=True)
                 (out / "traced.json").write_text(json.dumps(results, indent=1, sort_keys=True, default=str))
-        if (root / "records").exists():
-            shutil.copytree(root / "records", out / "records")
         with tarfile.open(out / "logs.tar.gz", "w:gz") as tf:
             if (root / "logs").exists():
                 tf.add(root / "logs", arcname="logs")
         bad = {k: v for k, v in results.items() if v.get("error")}
-        (out / "manifest.json").write_text((root / "pack" / "manifest.json").read_text())
         print(f"{len(results) - len(bad)} of {len(results)} runs traced and ingested; {len(bad)} not:",
               collections.Counter(v.get("island") for v in bad.values()).most_common(), flush=True)
         return 0
