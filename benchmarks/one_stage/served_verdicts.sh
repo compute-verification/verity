@@ -134,8 +134,8 @@
 # COMPOSE_NODE, the tree's commit and the host V3c's audit ran on) and its every input relative to the serve dir
 # (`handoff_inputs`: verifier-side files alone, the records audits' cases and the blobs they name, H1's log and records,
 # PoUW's period case, sampled proofs' summary and registration), listed (inputs.txt) and hashed (inputs.sha256). A list
-# holding a served run's witness (`served_verdicts.py witness`: a value file, a prover's instance or private file, the
-# advice, a key, a row dir, the requests) or a blob outside the serve dir is refused, and the run fails. Those files alone
+# holding a served run's witness (`served_verdicts.py witness`: a value file, a prover's instance, private or salts file,
+# the advice, a key, a row dir, the requests) or a blob outside the serve dir is refused, and the run fails. Those files alone
 # are copied to the same path on COMPOSE_NODE, an auditor host the prover doesn't control and where no witness goes
 # (default vy-auditor-2; never a prover node such as a deferral's follow-on), outside any run dir (`served_verdicts.sh
 # copy compose`), and there `served_verdicts.sh compose` with D alone holds the copy to its sums,

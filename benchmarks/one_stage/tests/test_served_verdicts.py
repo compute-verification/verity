@@ -2246,9 +2246,10 @@ def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_fol
 BLOBS = tuple(f"sampled-proofs-served/window/m0/{f}" for f in (
     "circuit.txt", "pub-0.bin", "tables/t0.bin", "session-m0/sessions/s0/session.json", "session-m0/sessions/s0/p0.bin"))
 #: what `_handed`'s serve dir holds that no hand-off may carry: the a5 member's prover files beside its blobs, a value
-#: file, H1's prover state, a key, a row dir, the advice and the requests
+#: file, V3c's index salts, H1's prover state, a key, a row dir, the advice and the requests
 HELD_BACK = ("sampled-proofs-served/window/m0/inst-0.bin", "sampled-proofs-served/window/m0/prover/rows.bin",
-             f"v3c-w7-{VTAG}/window/values/a.bin", "private/h1/key", "private/weights.key", "windows/w7/rows.bin",
+             f"v3c-w7-{VTAG}/window/values/a.bin", f"v3c-w7-{VTAG}/window/index-salt.bin", "private/h1/key",
+             "private/weights.key", "windows/w7/rows.bin",
              "advice/w7/private/advice.bin", "requests.jsonl")
 #: what the composite and the final record read in `_handed`'s serve dir, but for the blobs and the hand-off's own files
 HANDED_READS = ("h1/log.jsonl", "h1/w7/record.json", "h1/w7/registration.json", "private/pouw/period/answer.json",

@@ -133,7 +133,7 @@ and requests (`pick`): a compose follow-on holds no requests file. ``--off-node`
 hand-off (``composed_on``'s ``from`` `HANDED_FROM`), and is refused on the record's node itself.
 
 ``witness``: each path of stdin (relative to a serve dir) that is a served run's witness (`witness`: a committed value,
-a prover's instance or private file, the advice, a key, a sealed row dir, the requests and their traces), one ``WITNESS
+a prover's instance, private or salts file, the advice, a key, a sealed row dir, the requests and their traces), one ``WITNESS
 PATH: WHY`` line each; exit 1 when there is one. A compose hand-off lists none, and its follow-on's serve dir holds none.
 """
 from __future__ import annotations
@@ -251,7 +251,7 @@ WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input 
 WITNESS_TOPS = {"windows": "a sealed row dir (the window's rows)", "advice": "the advice and its opening"}
 #: ... by a file's name (`fnmatch`)
 WITNESS_NAMES = {"inst*.bin": "a prover's instance file (its rows)", "*-private.bin": "a private file (prover only)",
-                 "*.key": "a key", "requests.jsonl": "the requests' prompt and served ids, rows and seeds",
+                 "*salt*.bin": "a commitment's salts (prover only)", "*.key": "a key", "requests.jsonl": "the requests' prompt and served ids, rows and seeds",
                  "request_users.jsonl": "the requests' users", "step_trace.jsonl": "the step trace (each request's rows)",
                  "advice_trace*.jsonl": "the advice trace (each request's rows)", "load*.jsonl": "the load's requests",
                  "tokens*.json": "the requests' token ids", "match_stoch.json": "the sampler's rows",
