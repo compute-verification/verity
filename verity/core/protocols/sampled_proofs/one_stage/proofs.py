@@ -79,7 +79,8 @@ class Proof:
 @dataclass(frozen=True)
 class Finding:
     """One session's verdict from the verifier's own run: accepted or not and why, the program its verdict names, its
-    registered finding (port -> {value, root}) and the global proof blocks it proved (none unless accepted)."""
+    registered finding (port -> {value, root}), the global proof blocks it proved (none unless accepted) and the rows it
+    opened (its verdict's ``openings``, which `produced.shared` reads; None when it reports none)."""
 
     session: str
     accepted: bool
@@ -87,6 +88,7 @@ class Finding:
     program: str | None
     registered: dict
     units: tuple[int, ...]
+    openings: Any = None
 
 
 @functools.cache
@@ -237,7 +239,7 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
             return None, ("proof", f"session {s}'s verdict names program {v.get('program_sha512')}, not the partition "
                                    f"object's {want}")
         out.append(Finding(str(s), ok, str(v.get("why", "")), v.get("program_sha512"), v.get("registered") or {},
-                           proved_units(proof.public, s) if ok else ()))
+                           proved_units(proof.public, s) if ok else (), v.get("openings")))
     return out, None
 
 

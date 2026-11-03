@@ -58,11 +58,13 @@ import Proofs.Pouw.FpG1.H1
 import Proofs.Pouw.Game
 import Proofs.Pouw.HiddenCredit
 import Proofs.Pouw.H1Zy
+import Proofs.Pouw.Lead
 import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
 import Proofs.Pouw.MerkleExtract
-import Proofs.Pouw.Salt
 import Proofs.Pouw.OnsiteFreed
+import Proofs.Pouw.Salt
+import Proofs.Pouw.Salt.Witness
 import Proofs.Pouw.ShaRealize
 import Proofs.Pouw.ShaRealizeWitness
 import Proofs.Pouw.Milestone
@@ -200,12 +202,16 @@ import Proofs.Pouw.TileBound.WinogradStrassen
 import Proofs.Pouw.TileBound.Witness
 import Proofs.Pouw.Window
 import Proofs.Pouw.Witness
+import Proofs.Pouw.Writes
 
 /-!
 # PoUW's proofs
 
+`Writes` holds the proofs of what writing distinct words costs, one a guarantee under the guarantee's own name.
+
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
 `Game`, `NCP`, `PearlC`, `Receipt`), and the keyed leaf's as `Pouw.Salt.keyed_leaf_hides` and `Pouw.Salt.keyed_leaf_binds`
-(`Salt`); the kernel checks them, and nobody reviews them for meaning. The topics' maps are in `Definitions.Pouw`.
+(`Salt`, its witnesses in `Salt/Witness`); the kernel checks them, and nobody reviews them for meaning. The topics' maps
+are in `Definitions.Pouw`.
 -/

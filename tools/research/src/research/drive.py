@@ -329,13 +329,13 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
                  detached: bool = False, circuit_cache: bool = False, shard: str | None = None,
                  base: str | None = None, cc_records: bool = False,
                  cc_records_from: str | None = None, shard_plan: str | None = None,
-                 ratchet_base: str | None = None) -> tuple[list[str], str] | dict:
+                 ratchet_base: str | None = None, rank: int | None = None) -> tuple[list[str], str] | dict:
     """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--ratchet-base RBASE] [--shard [auto:]K/N [--shard-plan-file PLAN]]
     [--cc-records[-from ART@SHA256]]` from the queue's clone (``cc_records``, circuit-check's records step alone): (the run ids it printed,
     its output's tail); ``detached``, started in the background (`detach`) from a copy of train.sh, which reads nothing by its
     own path (``$0`` only for its usage) and finds the tree from its working directory, and returned at once as the record
     `launched` reads.  Git never prompts (the queue's clone has no credential helper, so train.sh's fetch would wait on a
-    password at the tty)."""
+    password at the tty).  ``rank`` is its check's `slot.py --rank` (CHECK_SLOT_RANK), none for an unranked one."""
     argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--cc-records"] if cc_records else [])]
     if not cc_records:
         argv += [*(["--agreement"] if agreement else []),
@@ -345,7 +345,8 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
                  *(["--shard", shard] if shard else []),
                  *(["--shard-plan-file", shard_plan] if shard_plan else []),
                  *(["--cc-records-from", cc_records_from] if cc_records_from else [])]
-    env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci"}
+    env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci",
+           "CHECK_SLOT_RANK": "" if rank is None else str(rank)}
     if detached:
         return detach(repo, argv, env, script=argv[1])
     r = subprocess.run(argv, cwd=repo, capture_output=True, text=True, stdin=subprocess.DEVNULL, env=env)
@@ -353,6 +354,9 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
     return (m[1].split() if m else []), (r.stdout + r.stderr).strip()[-600:]
 
 
+#: the check slot rank (`slot.py --rank`) of every part of the after-landing run and of its bisects: a ranked priority waiter
+#: takes the next free check slot ahead of the unranked ones, the Lean checks of `next`, so `main` never waits on a slot for them
+POSTLAND_SLOT_RANK = 0
 #: how long a sharded after-landing run waits for circuit-check's records step (`_records`, about 8 min cold) before its shards
 #: launch without it, each building the records itself, so a lost step never holds the run
 RECORDS_WAIT_S = 2400
@@ -1072,14 +1076,14 @@ class Driver:
         #: commit the locks a Lean check regenerated onto its commit as it lands
         self.regenerate_locks = regenerate_locks
         #: the after-landing run on the landing branch's tip (`postland`): `train.sh COMMIT MACHINE --deferred STEPS`, detached
-        #: (`_started`); an injected `launch` launches it too
+        #: (`_started`), its check at `POSTLAND_SLOT_RANK`; an injected `launch` launches it too
         self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
                     shard=None, base=None, cc_records=False, cc_records_from=None, shard_plan=None, ratchet_base=None:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
                           no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, shard=shard, base=base,
                           cc_records=cc_records, cc_records_from=cc_records_from, shard_plan=shard_plan,
-                          ratchet_base=ratchet_base))
+                          ratchet_base=ratchet_base, rank=POSTLAND_SLOT_RANK))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: the artifact of circuit-check's records step (`records_artifact`, `_records`) a sharded after-landing run gives its shards
         self.records_artifact: Callable[[str], str | None] = lambda rid: records_artifact(q.store, rid)
@@ -2978,7 +2982,7 @@ class Driver:
         outside drive into `checked` (`_absorb`), sync `next` (its held members moved to its top: `_park`, its reviewed ones
         above what a Lean check keeps to its bottom: `_lift`; held on its base
         while a Lean check of it runs, drive's or a hand one: `_running_lean`, kept in place up to a passed one that lands: `_landable`, and kept up to any passed one:
-        `lean_hold`), land its reviewed prefix (`land_reviewed`) once the landing branch has a baseline (`_unbaselined`),
+        `lean_hold`), judge again the Lean checks that ended while it ran (`_reread_lean`), land its reviewed prefix (`land_reviewed`) once the landing branch has a baseline (`_unbaselined`),
         stacking a Lean check above a running one (`_stack_lean`), and launch the after-landing run, or the next run of a
         bisection (`_bisect_step`); then ring what is past its bound (`_behind`, `_alarms`)."""
         q = self.q
@@ -3017,6 +3021,7 @@ class Driver:
             entries = q.sync(dry_run)[1]
             state = {**q.load_state(), "drive": drive}
             self.tell_out(drive, entries, state)
+            running = self._reread_lean(drive)
         landed, why, lane = None, self._unbaselined(drive), []
         if why is None:
             landed, why = self.land_reviewed(drive, dry_run)
@@ -3035,6 +3040,20 @@ class Driver:
             q.save_state(state)
         q.log(f"research queue drive: {'; '.join(what)}")
         return "; ".join(what)
+
+    def _reread_lean(self, drive: dict) -> set[str]:
+        """After the sync, which takes most of a tick, judge again the Lean checks that ended while it ran (`_follow_lean`), so
+        the landing and the alarms read them as they are, not as they were at the tick's start (`next` was synced, held and
+        frozen on that view): the store's attempts are refreshed, and each run read this tick as still going is read again,
+        the after-landing run's too.  `_follow_lean` holds a second time in a tick: a check it judged keeps its verdict, a
+        machine's fault is run again once (``resend``), and a launch that registered no run is rung once and dropped.  The
+        commits a Lean check runs at now (`_running_lean`)."""
+        self._refresh_attempts()
+        live = {rid for rid, (st, *_) in self._seen.items() if st in ACTIVE}
+        self._seen = {rid: s for rid, s in self._seen.items() if rid not in live}
+        self._ev = {a: d for a, d in self._ev.items() if live.isdisjoint(a.split())}
+        self._follow_lean(drive)
+        return self._running_lean(drive)
 
     def _park(self, chain: list[Member]) -> list[int]:
         """The members the sync moves to the top of `next` (`queue.Queue.park`, which takes with each the PRs that contain it):
@@ -4183,11 +4202,7 @@ class Driver:
         if why := self._old_git():
             return why
         q.fetch()
-        if q.store is not None and q.store.remote is not None:
-            try:
-                q.store.refresh(attempts_only=True)
-            except Exception as e:  # noqa: BLE001  (the local catalog still answers)
-                q.log(f"research queue drive: refreshing attempts failed ({type(e).__name__}: {e}); using the local catalog")
+        self._refresh_attempts()
         state = q.load_state()
         drive = state.setdefault("drive", {})
         drive.setdefault("told", [])
@@ -4202,6 +4217,15 @@ class Driver:
         self.follow_postland(drive)
         self._follow_shadow(drive)
         return self._review(state, drive, dry_run)
+
+    def _refresh_attempts(self) -> None:
+        """Bring the store's catalog of attempts up to date from its remote, which the runs' states and records are read from."""
+        q = self.q
+        if q.store is not None and q.store.remote is not None:
+            try:
+                q.store.refresh(attempts_only=True)
+            except Exception as e:  # noqa: BLE001  (the local catalog still answers)
+                q.log(f"research queue drive: refreshing attempts failed ({type(e).__name__}: {e}); using the local catalog")
 
     def _old_git(self) -> str | None:
         """Why the tick is refused, before any sync or push, when drive's git is older than `GIT_MIN`: `Queue._merge` needs its

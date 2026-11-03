@@ -12,7 +12,8 @@ body unbuilt, so with no gates and no calls.  Its reads (`cache.unit_reads`) are
 and ran while they made its roots, the build of every Definition they reach, the bindings that made those, those modules' import
 closures, its units by digest and what the process read outside every recording; and the units of every binding that makes no
 root (one run for what it sets, as `syn.knob`'s), whose reads every record holds.  The registered primitives and static-free
-composites are one more record, ``<registered>``.
+composites are `REGISTERED_RECORDS` more, ``<registered>:i``, each of a run of them in their order (`registered_entries`), so
+that their builds run apart from each other.
 
 A record counts only when its every read is unchanged where it was (never through a move) and the roots its binding made now
 are the ones it lists; else its binding is built as the catalog builds it and its record stored again.  The task list is then
@@ -77,6 +78,9 @@ from . import targets as TG
 
 REQUEST = "catalog-unit"
 REGISTERED = ("<registered>",)
+#: how many records the registered roots take (`registered_entries`): the longest of their builds bounds a ``--records-only``
+#: run, and one of them all took as long as the longest binding's
+REGISTERED_RECORDS = 8
 
 
 class Stale(Exception):
@@ -109,7 +113,16 @@ class Entry:
 
     @property
     def name(self) -> str:
-        return ",".join(self.units)
+        return ",".join(self.units) + (f":{self.label}" if self.units == REGISTERED else "")
+
+
+def registered_entries(roots: list[Any]) -> list[Entry]:
+    """The registered roots (`targets._registered`) as at most `REGISTERED_RECORDS` entries, each of a run of them in their order
+    (so `derive` meets them in the order `targets.reachable` does), entry i keyed and labelled by i; one entry when there are
+    none."""
+    k = max(1, -(-len(roots) // REGISTERED_RECORDS))
+    return [Entry(REGISTERED, "registered", str(i), key(REGISTERED, i), roots[j:j + k])
+            for i, j in enumerate(range(0, max(1, len(roots)), k))]
 
 
 def _kind(fn: Any) -> str | None:
@@ -400,8 +413,8 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
     stored = cache is not None and CC._dir(cache, first).is_dir()
     if not stored and apart is None:
         return None
-    registered = TG._registered()
-    entries = [Entry(REGISTERED, "registered", "", first, registered)]
+    registered = registered_entries(TG._registered())
+    entries = list(registered)
     TG.ROOT_ERRORS.clear()
     seen: Counter = Counter()
     for units, make, kind, label in TG.catalog_units():
@@ -426,11 +439,10 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
                 TG.ROOT_ERRORS.append((label, f"{type(e).__name__}: {str(e)[:200]}"))
                 continue
         entries.append(entry)
-    hit = _lookup(cache, repo, entries[0]) if stored else None
-    if hit is not None:
-        rec, entries[0].reads = hit
-        entries[0].nodes, entries[0].reused, entries[0].words, entries[0].seconds = (rec["nodes"], True, rec.get("words"),
-                                                                                     rec.get("seconds"))
+    for e in registered:
+        if (hit := _lookup(cache, repo, e) if stored else None) is not None:
+            rec, e.reads = hit
+            e.nodes, e.reused, e.words, e.seconds = rec["nodes"], True, rec.get("words"), rec.get("seconds")
     if not any(e.reused for e in entries) and apart is None:
         return None
     pinned = TG.pinned()
@@ -569,7 +581,7 @@ def made_entries() -> list[Entry]:
     """Every binding as the catalog makes it (`targets.catalog_units`, in catalog order), its roots made now and no body built,
     the registered roots first; a model that raises is named in `targets.ROOT_ERRORS`, as the catalog names it."""
     TG.load_registries()
-    entries = [Entry(REGISTERED, "registered", "", key(REGISTERED, 0), TG._registered())]
+    entries = registered_entries(TG._registered())
     TG.ROOT_ERRORS.clear()
     seen: Counter = Counter()
     for units, make, kind, label in TG.catalog_units():
@@ -869,7 +881,7 @@ def built_entries() -> list[Entry] | None:
     registered, made = TG.CATALOGS[0]
     if any([fn.id for fn in c[0]] != [fn.id for fn in registered] for c in TG.CATALOGS[1:]):
         return None
-    entries = [Entry(REGISTERED, "registered", "", key(REGISTERED, 0), registered)]
+    entries = registered_entries(registered)
     seen: Counter = Counter()
     for units, kind, label, roots in made:
         n, seen[units] = seen[units], seen[units] + 1
@@ -880,6 +892,6 @@ def built_entries() -> list[Entry] | None:
     return entries
 
 
-__all__ = ["APART_GB", "REQUEST", "Derived", "Entry", "Plan", "Stale", "built_apart", "built_entries", "built_here",
-           "call_families", "derive", "from_manifest", "key", "made_entries", "make", "manifest", "merged", "plan", "planned",
-           "store"]
+__all__ = ["APART_GB", "REGISTERED_RECORDS", "REQUEST", "Derived", "Entry", "Plan", "Stale", "built_apart", "built_entries",
+           "built_here", "call_families", "derive", "from_manifest", "key", "made_entries", "make", "manifest", "merged", "plan",
+           "planned", "registered_entries", "store"]

@@ -200,6 +200,45 @@ def test_a_reviewed_pr_waiting_on_its_running_lean_check_rings_the_lean_audits_o
     assert ring.startswith(f"@{JOBS[LEAN_STEP][0]} queue: ") and f"held by the Lean check {rid} of " in ring, ring
 
 
+def test_a_lean_check_that_passes_while_the_sync_runs_lands_its_prefix_that_tick_and_rings_no_alarm(world, monkeypatch, tmp_path):
+    """The sync takes most of a tick.  A Lean check that ends while it runs is judged again before the landing, on the store's
+    attempts refreshed then (states and records answer from them here), so its prefix lands that tick and no alarm names it
+    as still running: read as it was at the tick's start, it landed a tick late and rang lean-audit's owner as slow."""
+    world.with_store_remote()
+    _move_main(world, TREE)
+    marks: dict[int, str] = {}
+    h = Review(world, monkeypatch, land_into="checked", marked_at=lambda n, head: marks.get(n))
+    lock = json.dumps({"guarantees": {"T": "2"}, "reads": {}, "dependencies": {"M": "1"}})
+    world.gh.put(1, world.change({"pkg/lean-audit.json": lock}))
+    h.review(1)
+    assert not h.tick().startswith("landed"), world.logs
+    (rid,) = h.lean_ids()
+    state = h.q.load_state()
+    state["drive"]["step_s"] = {f"lean {LEAN_STEP}": [["r1", 600.0], ["r2", 600.0], ["r3", 600.0]]}
+    h.q.save_state(state)
+    start = h.clock
+    h.evidence = [_run_dir(tmp_path / "live", rid, start, _preflights(start))]
+    h.clock = start + 2000                                     # lean-audit has run past 1.5 times its median of 600 s
+    marks[1] = _utc(h.clock - STUCK_S)
+    remote: dict = {}
+
+    def refresh(**kw):
+        h.run_state.update(remote.pop("states", {}))
+        h.evidence = remote.pop("evidence", h.evidence)
+
+    def sync(dry_run: bool = False):
+        got = synced(dry_run)
+        remote.update(states={rid: ("done", 0, None)}, evidence=[_run_dir(tmp_path / "ended", rid, start, [
+            *_preflights(start), {"step": LEAN_STEP, "status": "passed", "seconds": 1900.0, "ended": h.clock}])])
+        return got
+
+    synced = h.q.sync
+    monkeypatch.setattr(world.store, "refresh", refresh)
+    monkeypatch.setattr(h.q, "sync", sync)
+    assert h.tick().startswith("landed #1"), world.logs
+    assert not _rings(h, "has run") and not _rings(h, "not landed"), h.posts
+
+
 def test_the_behind_alarm_names_an_older_commits_red_as_not_yet_run_at_the_tip_not_as_red(world, monkeypatch):
     from research.drive import BEHIND_S
 
