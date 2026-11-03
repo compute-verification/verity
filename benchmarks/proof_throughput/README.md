@@ -1,7 +1,7 @@
 # proof_throughput: the proof system's throughput on GLM-5.3's dot products
 
-How many verification units (VU) per second Flock proves and the Lean verifier accepts, as a function of the batch size B,
-for the dot products GLM-5.3 serves. The report is the throughput frontier over B: one row per B with VU/s, the overhead
+How many proof blocks per second Flock proves and the Lean verifier accepts, as a function of the batch size B,
+for the dot products GLM-5.3 serves. The report is the throughput frontier over B: one row per B with proof blocks per second, the overhead
 against the H200's native peak, the dominant prover phase, peak memory, proof bytes and the Lean verifier's seconds.
 
 ~~~text
@@ -51,7 +51,7 @@ and `table` and `baseline` read none of them.
 Each point's `result.json` is the campaign contract's, `benchmarks/numerical/python/verity_numerical/bench/contract.py`,
 imported as it is and checked by its `validate()` before it is written:
 
-- VU = one output coordinate, `GemmCoordinate<K>`: K MACs (2K FLOP). `vu.count` = B, `vu.per_second` = B / `t.total`.
+- A proof block is one output coordinate, `GemmCoordinate<K>`: K MACs (2K FLOP). `vu.count` = B, `vu.per_second` = B / `t.total`.
 - `t.total`: the median timed statement's prover seconds (the witness wait plus both repetitions, as the GEMM hill-climb's
   `statement_seconds`); `t.total_live` adds the waits on the live verifier. The contract's buckets are summed over the two
   repetitions: `t.witness`, `t.encoding_commitment`, `t.arithmetic` (zerocheck, lincheck, ring switch, Ligerito, each also
@@ -64,11 +64,11 @@ imported as it is and checked by its `validate()` before it is written:
   again) and `verify.session_s` (one session's checks). The rest is the proved-scope check (`ProvedScope.check`), which a
   call runs once, before its first session's clock starts.
 - `verifier.cpu_seconds_per_vu` = `verify.cpu_s` / B and `verifier.cores_per_gpu` = `verify.cpu_s` / `t.total`: the
-  verifier's CPU per VU, and the cores that keep up with one GPU proving back to back (`contract.verifier_rates`,
+  verifier's CPU per proof block, and the cores that keep up with one GPU proving back to back (`contract.verifier_rates`,
   recomputed by `validate`).
 - `fixed.setup_seconds`: staging the population, once per point. `rounds.protocol`: the live session's rounds.
 - The identity (`contract.IDENTITY_FIELDS`): proof class `NON_ZK_PROOF`, profile, K, B, the probed hardware, the security
-  target (Fast100, 2 repetitions, 2^-100), plus the workload, its VU, the configuration, the population's reference
+  target (Fast100, 2 repetitions, 2^-100), plus the workload, its proof block, the configuration, the population's reference
   (`population`) and the sample (`draw`: stratified, k = B). `instances` is null: a sample fixes no id range.
 
 `compare` and `table` refuse results that don't conform, didn't pass, or whose identities differ (`table` lets B alone
@@ -93,9 +93,9 @@ busy.
 
 ## Workloads
 
-`verity_proof_throughput/workloads.py`, one VU family each, at GLM-5.3's served K:
+`verity_proof_throughput/workloads.py`, one proof-block family each, at GLM-5.3's served K:
 
-| workload | VU | served at | cap B |
+| workload | proof block | served at | cap B |
 |---|---|---|---|
 | `bf16-k6144` | `GemmCoordinate_v2{K=6144,DOT=HopperBF16WgmmaDot16_v1}` | lm_head, indexer `wk_weights_proj`, MoE router | 1024 |
 | `fp8-coord-k6144`, `-k2048`, `-k256` | `ScaledMmFp8BlockCoordinate_v2{K,G=128}` | the FP8 GEMMs with scale groups | declared |
@@ -108,7 +108,7 @@ staging them through `benchmarks/served_units/stage.py` is the next workload's w
 ## Instances
 
 `proof-throughput/v2`, one population per workload, pinned by `instances/<workload>.json`
-(`verity_proof_throughput/instances.py`): `n_max` independent instances of the workload's VU Definition (core's
+(`verity_proof_throughput/instances.py`): `n_max` independent instances of the workload's proof block's Definition (core's
 `population_program` at v0, whose digest every lane is derived from, `verity_proof_throughput/population.py`), each
 instance one proof block of `Q_template_instance` v0, so the population is one stratum and the stratified sampling design samples B
 of its proof blocks uniformly. The lanes are those Flock's class sweep
