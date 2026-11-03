@@ -265,10 +265,10 @@ def coinHello (hb : Msg) : Except String _root_.Flock.Firewall.Coins.Hello :=
   | none => .error "a Hello that is not UTF-8"
 
 /-- **The coin check's verdict** on a session: its reading of the `Hello`, `hl`, then `Hello`'s answer `a`
-(`Session.start`), then the openings `os` in order (`Session.openAll`). -/
+(`Release.start`), then the openings `os` in order (`Release.openAll`). -/
 def coinVerdict (hl : Except String _root_.Flock.Firewall.Coins.Hello) (a : Msg) (os : List (String × ℕ × Msg)) :
-    Except String _root_.Flock.Firewall.Coins.Session :=
-  hl.bind fun hl => (_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S => S.openAll os
+    Except String _root_.Flock.Firewall.Coins.Release :=
+  hl.bind fun hl => (_root_.Flock.Firewall.Coins.Release.start hl a).bind fun S => S.openAll os
 
 /-- The openings `ms` as `flock-firewall coins` takes them, from the `j`-th on: each with the stream and coin count of
 its request (`req`). -/
@@ -386,7 +386,7 @@ def cfgAt {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (j : ℕ) : Cfg 
   Cfg.ofDraws (L.lay x (L.rep x j)) (L.drawsAt x ρ (L.rep x j)) (L.slot x (L.rep x j))
 
 /-- **Who takes the coins of round `n - 1`**, as the session loop routes them (`Session.relay`): `Hello`'s and the
-`Commit`'s go to the session, not to a frame (`Registry.link`), so round `n` starts at its rep's first-round state
+`Commit`'s go to the session, not to a frame (`Sessions.link`), so round `n` starts at its rep's first-round state
 `fresh`; else the frame of the rep that released round `n - 1`, at its state `prog` and configuration `cP`
 (`Frames.coins`), whose refusal stops the session. Where round `n` is that rep's (`same`), it is checked at the state
 the coins leave, at its configuration `cN`; else it is the first round of its rep, which takes no coins, at `fresh`. -/
@@ -494,11 +494,11 @@ theorem answered_single {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (e
   L.answered_of_opens x ρ [e] rfl (L.tookEarlier_single x ρ e)
 
 /-- Past `Hello`'s answer and one opening, where the coin check reads the session's `Hello` as `hl`, the check is
-`Session.start` at the answer, then `Session.openAll` over the openings. -/
+`Release.start` at the answer, then `Release.openAll` over the openings. -/
 theorem opens_of_hello {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (m₀ a : Msg) (o : Msg × Msg)
     (ops : List (Msg × Msg)) {hl : _root_.Flock.Firewall.Coins.Hello} (hp : L.helloChk x ρ = .ok hl) :
     L.opens x ρ ((m₀, a) :: o :: ops) =
-      ((_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S =>
+      ((_root_.Flock.Firewall.Coins.Release.start hl a).bind fun S =>
         S.openAll (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk := by
   show (coinVerdict (L.helloChk x ρ) a (reqsFrom (L.req x) 0 ((o :: ops).map Prod.snd))).isOk = _
   unfold coinVerdict
@@ -514,15 +514,15 @@ theorem reqsFrom_take (req : ℕ → String × ℕ) :
       ((req j).1, (req j).2, m) :: (reqsFrom req (j + 1) ms).take k
     rw [reqsFrom_take req (j + 1) ms k]
 
-/-- The coin check's openings stop at the first refusal (`Session.openAll`), so where it passes them all it passes each
+/-- The coin check's openings stop at the first refusal (`Release.openAll`), so where it passes them all it passes each
 prefix. -/
-theorem openAll_take (S : _root_.Flock.Firewall.Coins.Session) :
+theorem openAll_take (S : _root_.Flock.Firewall.Coins.Release) :
     ∀ (os : List (String × ℕ × Msg)) (k : ℕ), (S.openAll os).isOk = true → (S.openAll (os.take k)).isOk = true
   | [], k, h => by rw [List.take_nil]; exact h
   | _ :: _, 0, _ => rfl
   | (st, n, m) :: os, k + 1, h => by
     rw [List.take_succ_cons]
-    unfold _root_.Flock.Firewall.Coins.Session.openAll at h ⊢
+    unfold _root_.Flock.Firewall.Coins.Release.openAll at h ⊢
     cases hop : S.open st n m with
     | error e => simp [hop, Except.isOk, Except.toBool] at h
     | ok p =>
@@ -537,13 +537,13 @@ theorem coinVerdict_take (hl : Except String _root_.Flock.Firewall.Coins.Hello) 
   cases hl with
   | error e => exact h
   | ok hl =>
-    cases hS : _root_.Flock.Firewall.Coins.Session.start hl a with
+    cases hS : _root_.Flock.Firewall.Coins.Release.start hl a with
     | error e =>
-      change (((_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S => S.openAll os)).isOk = true at h
+      change (((_root_.Flock.Firewall.Coins.Release.start hl a).bind fun S => S.openAll os)).isOk = true at h
       simp [Except.bind, hS, Except.isOk, Except.toBool] at h
     | ok S =>
-      change (((_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S => S.openAll os)).isOk = true at h
-      show (((_root_.Flock.Firewall.Coins.Session.start hl a).bind fun S => S.openAll (os.take k))).isOk = true
+      change (((_root_.Flock.Firewall.Coins.Release.start hl a).bind fun S => S.openAll os)).isOk = true at h
+      show (((_root_.Flock.Firewall.Coins.Release.start hl a).bind fun S => S.openAll (os.take k))).isOk = true
       rw [hS] at h ⊢
       exact openAll_take S os k h
 

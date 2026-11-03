@@ -117,7 +117,7 @@ theorem roundOk_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (Ï
   simp only [roundOk, hcr, hp, ht, Bool.and_self]
 
 open Loop in
-/-- **The loop's frame takes the link's coins at its start**: the `Commit`'s coins are the session's (`Registry.link`),
+/-- **The loop's frame takes the link's coins at its start**: the `Commit`'s coins are the session's (`Sessions.link`),
 and no frame's. -/
 theorem ofLoop_answered_link (T : ZKMal.CoinLayer.TableData)
     (Lâ‚€ : LeanRelease Flock.Wit
