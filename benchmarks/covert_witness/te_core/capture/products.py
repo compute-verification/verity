@@ -14,7 +14,8 @@ reads from an earlier step that depends on θ′ (θ′ itself, the optimizer's 
 as io_bound takes an updated parameter or state; for a step captured by capture_step or capture_fn they are io_bound's.
 
 The summation order of a GEMM's partial sums is its kernel's, which no ATen graph shows (a GEMM is one op), so `order`
-is ``unknown`` (the tree constant applies)."""
+is ``unknown`` here; the order belongs to the circuit model, not the trace, and te_core.formalism sums the rows in the
+reference circuit's chains (`te_core.formalism.ORDER`), as te_core.gates prices a GEMM."""
 from __future__ import annotations
 
 import math
