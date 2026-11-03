@@ -129,7 +129,7 @@ def test_p_match_fails_where_one_entry_is_handed_to_several_on_the_way_into_an_o
                                                   affected_gates=got["gates"]),), tau_bits=0.0, a_bits=0.0, u=0.0,
                             u_in=0.0, delta_bits=0.0, products=p)
     term, why, _ = formalism.fresh_products(m_, *policy.CONSOLE)
-    assert (term is None and "breaks P-match" in why and "expand (fan-out 16" in why) if broken else why is None
+    assert (term is None and f"breaks the premise that {formalism.P_MATCH}" in why and "expand (fan-out 16" in why) if broken else why is None
 
 
 class Embedded(nn.Module):
