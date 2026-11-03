@@ -38,6 +38,8 @@ HERE = Path(__file__).resolve().parent
 RESCORE_WT = Path(os.environ.get("TE_RESCORE_WT", "/tmp/scorer/rescore"))
 RESCORE_PATHS = ("benchmarks/covert_witness/te_core", "benchmarks/covert_witness/analysis/rescore_v1.py")
 RESCORE_REFS = ("cursor/covert-witness-4207", "cursor/training-efficiency-4207")
+# the scorer's te_core change awaiting the integrator's merge (Delta_t, coordinator 00:47Z), used while it holds theirs
+RESCORE_AHEAD = os.environ.get("TE_RESCORE_AHEAD", "cursor/te-delta-t-516a")
 PINS = os.environ.get("TE_V1_PINS", "11d96c1b8745d8093746ea11e3e33fe6f07f7d3b,"
                                     "36aac280a62be7a04cbf510b50636b5ad875ba54").split(",")
 PANELS_DIR = Path(os.environ.get("TE_PANELS_DIR", "/opt/cursor/artifacts/te-panels"))
@@ -69,10 +71,16 @@ def git(*args: str, cwd: Path = RESCORE_WT) -> str:
 
 
 def rescore_head() -> str:
-    """Check out, detached, the newest commit touching te_core or the analysis on either branch; returns it."""
-    for ref in RESCORE_REFS:
+    """Check out, detached, the newest commit touching te_core or the analysis on either branch, or RESCORE_AHEAD's head
+    when it contains that commit; returns it."""
+    for ref in (*RESCORE_REFS, RESCORE_AHEAD):
         subprocess.run(["git", "-C", str(RESCORE_WT), "fetch", "-q", "origin", ref], check=False, capture_output=True)
     commit = git("log", "-1", "--format=%H", *(f"origin/{r}" for r in RESCORE_REFS), "--", *RESCORE_PATHS)
+    ahead = subprocess.run(["git", "-C", str(RESCORE_WT), "rev-parse", "-q", "--verify", f"origin/{RESCORE_AHEAD}"],
+                           capture_output=True, text=True, check=False).stdout.strip()
+    if ahead and subprocess.run(["git", "-C", str(RESCORE_WT), "merge-base", "--is-ancestor", commit, ahead],
+                                check=False).returncode == 0:
+        commit = ahead
     git("checkout", "-q", "--detach", commit)
     return commit
 
