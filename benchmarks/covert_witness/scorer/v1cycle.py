@@ -40,6 +40,7 @@ per-run P4 (final and search) for final.md, and posts FINAL-TABLE instead of DIG
 """
 import argparse
 import json
+import math
 import os
 import re
 import shutil
@@ -69,10 +70,11 @@ RESCORE_AHEAD = os.environ.get("TE_RESCORE_AHEAD", "cursor/te-delta-t-40-516a")
 #: te_core VERSIONs that capture alike (4.1's capture differs from 4.0's in prose only; 4.3 prices the gradient cut at
 #: coded width from 4.2's traces, coordinator 07:48Z); a VERSION outside TE40_WT's group is a new capture, whose cache
 #: traces every run again (`next_capture`)
-CAPTURES = (("4.0", "4.1"), ("4.2", "4.3"))
-#: the capture from which every later VERSION captures alike, and which traces the pilot's runs too, after v3's: the
-#: toolsmith's 08:14Z line (te_core 4.4: the capture is final for tonight, retrace every run once)
-CAPTURE_FINAL = "4.4"
+CAPTURES = (("4.0", "4.1"), ("4.2", "4.3"), ("4.4", "4.5", "4.6", "4.7"))
+#: the capture from which every later VERSION captures alike, and which traces the pilot's runs too, after v3's: te_core
+#: 4.8 saves a traced step's product rows in every trace, so every run is traced again (the toolsmith's 66162c92b1
+#: line; coordinator 12:20Z)
+CAPTURE_FINAL = "4.8"
 #: where node traces run: `auto` spreads shards of TRACE_SHARD runs over the CPU pool (coordinator 07:48Z)
 TRACE_NODE = os.environ.get("TE_TRACE_NODE", "auto")
 TRACE_SHARD = 6
@@ -98,6 +100,8 @@ VARIANTS = {"frozen": ["--tail", "frozen"], "analysis": ["--quantities", "analys
 #: the measurement commits scored: the re-score commit's pin, same_version and pilot (trace40.pins), set by `main`
 PINS: list[str] = []
 PANELS_DIR = Path(os.environ.get("TE_PANELS_DIR", "/opt/cursor/artifacts/te-panels"))
+#: where each refresh writes its directory
+OUT_ROOT = Path("/tmp/scorer/v1")
 FB = "frontier-branches"
 OLD_PANELS = ("p1-loss-vs-compute", "p2-slowdown-vs-gain", "p3-policy-plane", "p4-decomposition",
               "a2-efficiency-floor")
@@ -183,18 +187,37 @@ def same_capture(a: str, b: str) -> bool:
     return a == b or any({a, b} <= set(g) for g in CAPTURES) or (final(a) and final(b))
 
 
+def layers() -> list[Path]:
+    """The captures newer than TE40_WT's, oldest first: NEXT_WT and NEXT_WT-VERSION (`next_capture`)."""
+    have = capture_version(trace40.TE40_WT)
+    got = [p for p in (NEXT_WT, *NEXT_WT.parent.glob(NEXT_WT.name + "-*")) if p.exists()]
+    return sorted((p for p in got if version(capture_version(p)) > version(have)
+                   and not same_capture(capture_version(p), have)), key=lambda p: version(capture_version(p)))
+
+
 def next_capture(newest: str) -> Path | None:
-    """NEXT_WT when the integrator's newest te_core's capture isn't TE40_WT's (`CAPTURES`), else None: kept at the
-    first commit seen with that capture, since a later commit of it captures alike and its cache (per te_core tree)
-    would trace every run again. Tracing reads only its git objects, so it has no files."""
+    """The capture that traces when the integrator's newest te_core's capture isn't TE40_WT's (`CAPTURES`), else
+    None: kept at the first commit seen with that capture, since a later commit of it captures alike and its cache (per
+    te_core tree) would trace every run again. A newer capture than the newest layer's gets a worktree of its own
+    (NEXT_WT-VERSION), so the older layer's traces stay under it (`layers`) until it replaces TE40_WT's; a layer that
+    has traced nothing moves to it instead. Tracing reads only its git objects, so it has no files."""
     have, want = capture_version(trace40.TE40_WT), te_version(newest)
     if same_capture(have, want):
         return None
     if not NEXT_WT.exists():
         git("worktree", "add", "-q", "--no-checkout", "--detach", str(NEXT_WT), newest, cwd=trace40.REPO)
-    if not same_capture(capture_version(NEXT_WT), want):
-        git("reset", "-q", "--soft", newest, cwd=NEXT_WT)
-    return NEXT_WT
+        return NEXT_WT
+    top = (layers() or [NEXT_WT])[-1]
+    if same_capture(capture_version(top), want):
+        return top
+    c = trace40.cache(top)
+    if not trace40.done(c) and not (json.loads((c / "pending.json").read_text()) if (c / "pending.json").exists()
+                                    else {}):
+        git("reset", "-q", "--soft", newest, cwd=top)
+        return top
+    new = NEXT_WT.with_name(f"{NEXT_WT.name}-{want}")
+    git("worktree", "add", "-q", "--no-checkout", "--detach", str(new), newest, cwd=trace40.REPO)
+    return new
 
 
 def v3_scope() -> set[str]:
@@ -225,13 +248,35 @@ def replaces(new: Path) -> bool:
     return all(a >= b for a, b in zip(traced_runs(new), traced_runs(trace40.TE40_WT)))
 
 
+def retrace_order(v3: set[str]) -> dict[str, int]:
+    """v3's runs a retrace takes first (coordinator 12:20Z), from the newest algorithm-policy table a refresh wrote
+    under OUT_ROOT: 0 a run that reached a gain, 1 each family's best not-reached run (by gain; method_key where the
+    family is unnamed). The rest of v3 follows, then the pilot."""
+    for t in sorted(OUT_ROOT.glob("2026-*/algorithm-policy/tables/algorithm-policy.json"), reverse=True):
+        try:
+            p = json.loads(t.read_text())
+        except ValueError:
+            continue
+        ix = {c: i for i, c in enumerate(p["columns"])}
+        rows = [r for r in p["rows"] if r[ix["record"]].rsplit("@", 1)[0] in v3]
+        rank = {r[ix["record"]].rsplit("@", 1)[0]: 0 for r in rows if r[ix["reached"]] == "yes"}
+        best: dict[str, tuple[float, str]] = {}
+        for r in rows:
+            run, fam, gain = r[ix["record"]].rsplit("@", 1)[0], r[ix["family"]] or r[ix["method_key"]], r[ix["gain"]]
+            if run not in rank and gain is not None and gain > best.get(fam, (-math.inf, ""))[0]:
+                best[fam] = (gain, run)
+        return rank | {run: 1 for _, run in best.values() if run not in rank}
+    return {}
+
+
 def to_trace(te: Path, busy: set[str]) -> list[str]:
-    """The runs in scope with no trace in `te`'s cache and no node run tracing them, v3's first, then the pilot's
-    under CAPTURE_FINAL's capture or when TE_TRACE_PILOT is set."""
+    """The runs in scope with no trace in `te`'s cache and no node run tracing them, v3's first (`retrace_order`),
+    then the pilot's under CAPTURE_FINAL's capture or when TE_TRACE_PILOT is set."""
     v3, done = v3_scope(), trace40.done(trace40.cache(te)) | busy
     pilot = os.environ.get("TE_TRACE_PILOT") == "1" or same_capture(capture_version(te), CAPTURE_FINAL)
     runs = [r["run_id"] for r in trace40.scope() if r["run_id"] not in done and (r["run_id"] in v3 or pilot)]
-    return sorted(runs, key=lambda r: r not in v3)
+    first = retrace_order(v3)
+    return sorted(runs, key=lambda r: (r not in v3, first.get(r, 2)))
 
 
 def ledger_args(out: Path, root: Path | None = None) -> list[str]:
@@ -260,12 +305,12 @@ def trace_resources(runs: int) -> tuple[int, int]:
 
 
 def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, build: bool = True,
-                    over: Path | None = None) -> dict:
+                    over: list[Path] = ()) -> dict:
     """trace40.py's measured ledger: the scorer's ledger indexed (rescore reads the measured copy, so nothing else
     rewrites the index), the valid runs with no trace yet in `te`'s cache and no node run tracing them launched on
     TRACE_NODE, every node run (this one and earlier refreshes') waited for up to TRACE_WAIT_S and taken as it ends (one
-    still tracing is taken at a later refresh), and the copy built (`build`), with the runs `over`'s capture traced
-    taken from there (trace40.ledger)."""
+    still tracing is taken at a later refresh), and the copy built (`build`), with the runs each capture of `over`
+    (oldest first) traced taken from there (trace40.ledger)."""
     cw = [sys.executable, str(HERE / "trace40.py")]
     if build:
         subprocess.run([sys.executable, "-m", "te_core.ledger", "--root", str(trace40.LEDGER), "index"],
@@ -322,7 +367,7 @@ def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, 
         time.sleep(60)
         settle()
     pf.write_text(json.dumps(pending, indent=1))
-    built = json.loads(subprocess.run([*cw, "ledger", "--te", str(te), *(["--over", str(over)] if over else [])],
+    built = json.loads(subprocess.run([*cw, "ledger", "--te", str(te), *(x for o in over for x in ("--over", str(o)))],
                                       capture_output=True, text=True, check=True).stdout) if build else None
     traced = json.loads((cache / "traced.json").read_text()) if (cache / "traced.json").exists() else {}
     waiting = {k: sum(r not in traced or bool(traced[r].get("error")) for r in v) for k, v in pending.items()}
@@ -537,12 +582,15 @@ def main() -> int:
                          "posts FINAL-TABLE, not DIGEST")
     args = ap.parse_args()
     stamp, final = now(), args.final
-    out = args.out or Path("/tmp/scorer/v1") / f"{'final-' if final else ''}{stamp.replace(':', '')}"
+    out = args.out or OUT_ROOT / f"{'final-' if final else ''}{stamp.replace(':', '')}"
     commit, newest, chosen = rescore_head()
     os.environ["TE_PIN_REV"] = commit
     PINS[:] = trace40.pins(commit)
-    nxt, retrace = (None, None) if final else (next_capture(newest), None)
+    nxt, retrace, held = (None, None, {}) if final else (next_capture(newest), None, {})
     if nxt:
+        # an older layer launches nothing, and its node runs are taken as they end
+        held = {capture_version(h): measured_ledger(out / f"held-{capture_version(h)}", False, h, build=False)
+                for h in layers() if h != nxt}
         # a row traced under a capture before READS_SINCE's is refused under a later te_core, so over such a capture
         # the refresh scores on the last re-score until the new capture's traces replace it
         retrace = measured_ledger(out / "next-capture", not args.no_trace, nxt, build=False)
@@ -550,7 +598,7 @@ def main() -> int:
                         commit=git("rev-parse", "HEAD", cwd=nxt))
         if replaces(nxt) or not LAST.exists():
             git("checkout", "-q", "--detach", retrace["commit"], cwd=trace40.TE40_WT)
-            nxt, retrace = None, None
+            nxt, retrace, held = None, None, {}
         elif version(capture_version(trace40.TE40_WT)) < version(READS_SINCE):
             commit = json.loads(LAST.read_text())["commit"]
             git("checkout", "-q", "--detach", commit)
@@ -561,8 +609,8 @@ def main() -> int:
     if not final:
         LAST.write_text(json.dumps({"commit": commit, "te_core": te_version(commit), "stamp": stamp}) + "\n")
     trace_version = capture_version(trace40.TE40_WT)
-    # the runs the new capture has traced are scored on its traces already, where the re-score's te_core reads them
-    over = nxt if nxt and same_capture(te_version(commit), capture_version(nxt)) else None
+    # the runs each newer capture has traced are scored on its traces already, where the re-score's te_core reads them
+    over = [p for p in layers() if version(capture_version(p)) <= version(te_version(commit))] if nxt else []
     rs = out / "rescore"
     traced, root = (None, None) if final else (measured_ledger(out, not args.no_trace and not nxt, over=over),
                                                trace40.MEASURED)
@@ -588,7 +636,7 @@ def main() -> int:
     for r in scored:
         by_start.setdefault(r["start"], set()).add(r["run_id"])
     meta = {"stamp": stamp, "te_core": commit, "te_core_version": te_version(commit), "te_core_chosen": chosen,
-            "capture": trace_version, "over": bool(over),
+            "capture": trace_version, "over": [capture_version(p) for p in over],
             "integrator_te_core": newest, "pins": PINS,
             "quantities": ("rescore_v1's analysis" if final else
                            f"measured on each record's traced step (te_core {trace_version}'s capture, t literal; "
@@ -613,6 +661,8 @@ def main() -> int:
             meta["algorithm_policy_cells"]["rho_console"] = "rho_console" in q["columns"]
     if retrace:
         meta["next_capture"] = retrace
+    if held:
+        meta["held"] = held
     if traced:
         meta |= {"trace": traced, "variants": {k: str(v)[:200] for k, v in variants.items()},
                  "delta_t": "delta_t_bits" in git("show", f"{commit}:benchmarks/covert_witness/te_core/formalism.py")}
@@ -786,14 +836,17 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
     refused = tr["ledger"].get("refused_runs") or []
     nx = meta.get("next_capture")
     nx_refused = len(nx.get("launch_refused") or []) if nx else 0
+    layered = [f"te_core {v}'s capture's traces of its {h['traced_runs']} traced runs"
+               for v, h in (meta.get("held") or {}).items()]
+    layered += [f"the new capture's of its {nx['traced_runs']}"] if nx else []
     nx_said = (f" (te_core {nx['te_core']} prices a row from its own capture ({nx['commit'][:11]}), which is tracing "
-               f"every run over the CPU pool, v3's first: {nx['covered']} of v3's {nx['of']} done so far, "
+               f"every run over the CPU pool, v3's runs that reached a gain first, then each family's best run that "
+               f"didn't, the rest of v3's, the pilot's last: {nx['covered']} of v3's {nx['of']} done so far, "
                f"{nx['traced']} traced"
                + (f", {nx_refused} of {len(nx.get('launch') or [])} shard launches refused, packed again at the next "
                   "refresh" if nx_refused else "") + "; "
                f"this refresh scores on te_core {meta['te_core_version']} over {meta.get('capture', '?')}'s capture"
-               + (f", with the new capture's traces of its {nx['traced_runs']} traced runs over it"
-                  if meta.get("over") else "")
+               + (", with " + " and ".join(layered) + " over it" if meta.get("over") else "")
                + " until it traces as many runs, and as many of v3's)" if nx else "")
     dt = ("; Δ_t a straight-through run's fp32 latents, else Δ (00:47Z)" if meta.get("delta_t")
           else "; Δ_t not priced (this te_core has none)")
