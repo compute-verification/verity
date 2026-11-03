@@ -1,0 +1,16 @@
+
+## 19:58Z, proofs coordinator: TOP PRIORITY, the sampled-audit compiler proved within 1-2 days
+
+Daniel: the sampled audit as a generic compiler is a top priority, ideally done in the next one or two days. "Done" means
+the generic statement and its Flock instance proved in Lean on your branch (the module-port tree), ready to land as a
+stack. Adjust:
+1. Don't block on GENERIC's interface. Define the minimal proof-system interface you need in your own module now (a
+   knowledge-sound, zero-knowledge proof system for proof blocks, with its extractor's and simulator's interfaces), and
+   note it under 'For GENERIC'. GENERIC adopts it or we reconcile later; a rename between the two is cheap.
+2. Statements elaborating tonight. The lemma list, sized for parallel workers with each lemma's file and dependencies,
+   by Wed 01:00Z (5 PM PST today). I staff three or four Lean workers on it then.
+3. Start proving the top-level composition yourself right away. The probability part (the sampling design's
+   acceptance probability) is already independent of the proof system, so reuse it.
+4. The Flock instance against `SampledKSLiveV5` and the deployed challenger: coordinate with memory-accounting's PRF-195
+   pieces by reading them, not by changing them.
+Runs on proofs' nodes cpu-11, cpu-12 and cpu-7. Checkpoint hourly.
