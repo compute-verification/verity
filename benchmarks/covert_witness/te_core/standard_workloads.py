@@ -328,15 +328,20 @@ def products(b: dict[str, dict], rounds: bool = False, left: list[str] = ()) -> 
     the dominant traced step's stand in for steps of another shape, formalism.STAND_IN, or where `left`, `untraced`'s
     steps but those that update nothing, have none, te_core counting the traced steps' alone), a void beside the
     best set of the products no diverged cycle feeds, where they have one (formalism's `converged`: its figure, the
-    kinds cell's fresh_converged, and the share of the step's counted fresh MACs it keeps); and where unmeasured
-    at the serving block, te_core's reason."""
+    kinds cell's fresh_converged, and the share of the step's counted fresh MACs it keeps), or saying why none is
+    beside it (every counted product so fed, or no such set with a proved bound); and where unmeasured at the serving
+    block, te_core's reason."""
     con = b["console"]
     if (why := con["unmeasured"].get("fresh_products")) is not None:
-        conv = con["inputs"]["fresh_products"].get("converged") or {}
-        beside = "" if conv.get("term") is None else (
+        fresh = con["inputs"]["fresh_products"]
+        conv = fresh.get("converged") or {}
+        beside = "" if not conv else (
             f"; beside it, the best set of the products no such cycle feeds gives {algorithm_policy.num(conv['term'])} "
             f"(the kinds cell's fresh_converged) on {conv['kept_macs_share']:.1%} of the step's counted fresh "
-            f"multiplications")
+            f"multiplications" if conv["term"] is not None else
+            "; every counted product is fed by such a cycle, so no set is beside it"
+            if conv["diverged_fed"] >= fresh["products"] else
+            "; no set of the products no such cycle feeds has a proved bound, so none is beside it")
         return f"assumed: {why}{beside}" + (_UNTRACED if rounds else "")
     stand = con["inputs"]["fresh_products"].get("stand_in")
     said = [f"{formalism.STAND_IN.removeprefix('approximated: ')} ({len(stand['structures'])} traced structures)"
