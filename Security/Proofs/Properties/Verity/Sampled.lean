@@ -7,11 +7,11 @@ import Proofs.Flock.Soundness.ZK.RealLeaves
 /-!
 # Sampled proofs' leg of `Verity.Soundness`: the session v2 sets up
 
-The leg is `Verity.Vocab.SampledProofsSound` at a composite whose sampled component is v2
-(`SampledProofs.OneStageZk.protocol`), from C-Flock's knowledge soundness of the live session at public inputs on the
-event that the verifiers accept the files (`SampledKSLiveV5` with its file and population-order hypotheses read off
-acceptance), applied at the session v2 sets up on the parameters and the committed files and at the strategy a
-strategy of the period's game projects to. This module states its C-Flock side.
+The leg is `Verity.Vocab.SampledProofsSound` at the one-stage form of a composite's sampled component
+(`VStar.Recursive.Sampled.protocol`), v2's audit (`SampledProofs.OneStageZk`), from C-Flock's knowledge soundness of the
+live session at public inputs on the event that the verifiers accept the files (`SampledKSLiveV5` with its file and
+population-order hypotheses read off acceptance), applied at the session v2 sets up on the parameters and the committed
+files and at the strategy a strategy of the period's game projects to. This module states its C-Flock side.
 
 * **The session** (`Live`): V5's binders, each the value v2's check derives on the parameters and the committed files,
   with three of V5's hypotheses as fields (A3 at the device's bytes, `TagsOkZHJ`, and `RecordCustodyZKJP` at the writer
@@ -34,8 +34,10 @@ strategy of the period's game projects to. This module states its C-Flock side.
 * **The coupling** (`CouplingTarget`), the projection's target: the sampled verdict is at most as likely in the period's
   game as flock-verify `--zk`'s acceptance in the live audit at the projected strategy, plus the two-continuation
   finders' terms, the tree openings' hiding term, the read finder's collision and the forger's forgery.
-* **The component** (`ReadsV2`): the composite's `.sampled` component is v2. Both composites name v1
-  (`Verity.component`), whose verdicts are the prover's, so the leg and the coupling take it as a hypothesis.
+* **The component** (`ReadsV2`): the composite's `.sampled` component is `VStar.Recursive.Sampled.protocol`, whose
+  one-stage form is v2 and which refuses v1 (whose verdicts are the prover's). Both composites name it
+  (`composite_readsV2`). The parameters fix the form before any coin; this leg covers the one-stage form, and the
+  recursive form (`VStar.Recursive`) is not this leg's (`Covers`).
 * **The session v2 sets up on the parameters and the committed files** (`SetsUp`): v2's parameters in the composite's
   (`ParamsAt`), the session's inputs as v2 hands them to flock-verify (the statement, one table, the verifier's
   partition object and program, no recomputation of public input words), the committed circuit and public files and
@@ -51,7 +53,8 @@ strategy of the period's game projects to. This module states its C-Flock side.
   parameters. Soundness's `Vocab` reads v2's log (`coinsRead`), the constructions' read finder and forger at `.sampled`,
   no loss term, and at each session the extractor at the projected strategy, openings that hold wherever the session's
   deployed commitment opens under its roots (`Live.OpensUnder`), the leg's per-finder premises in `error`'s condition,
-  and a published `δ` at least the session's. Where there is no session the sampled verdict never accepts.
+  and a published `δ` at least the session's. Where there is no session and the parameters name the one-stage form,
+  the sampled verdict never accepts.
 * **The per-finder SHA-512 premises at a strategy and a budget** (`Live.FinderCR`): `cr/sha-512` at each table's
   knowledge finders (`TableCRZ`: the fork, pads, τ and level-0 finders at `2t + 2v`, the self-clash finder at `t + v`)
   and `ecr/sha-512` at the link finders (`LinkCRZC`, at `t + w` per run), at `t` the strategy's SHA-512 calls.
@@ -472,19 +475,24 @@ def CouplingTarget (V : Vocab d α) (k : Verity.Registration.Composite) (K : Con
           ENNReal.ofReal ((K.readFinder θ F c σ).Pr Verity.sha512Msg) +
           ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))
 
-/-- **Composite `k` reads sampled proofs at v2**: its `.sampled` component is one-stage v2's audit, whose check computes
-each session's verdict from the session's files. At v1 (`SampledProofs.OneStage.protocol`) the verdicts are the
-prover's. -/
+/-- **Composite `k` reads sampled proofs at v2**: its `.sampled` component is `VStar.Recursive.Sampled.protocol`. Its
+one-stage form is one-stage v2's audit (`SampledProofs.OneStageZk.checkBlobs`), whose check computes each session's
+verdict from the session's files; one-stage v1, whose verdicts are the prover's, is refused
+(`VStar.Recursive.Sampled.V1_REFUSED`). -/
 def ReadsV2 (k : Verity.Registration.Composite) : Prop :=
-  Verity.component k .sampled = some _root_.SampledProofs.OneStageZk.protocol
+  Verity.component k .sampled = some VStar.Recursive.Sampled.protocol
+
+/-- Both composites read sampled proofs at v2. -/
+theorem composite_readsV2 (k : Verity.Registration.Composite) : ReadsV2 k := by
+  cases k <;> rfl
 
 /-- **v2's parameters in the composite's parameters `θ`**: the component parameters the composition's format decodes
-under v2's id, read by v2's decoder, as `Verity.CaseAccepts` reads a component's
+under the sampled component's id, read by its decoder in its one-stage form, as `Verity.CaseAccepts` reads a component's
 (`Properties.Composition.DecodedAccepted`). -/
 def ParamsAt (θ : ByteArray) (p : _root_.SampledProofs.OneStageZk.Params) : Prop :=
   ∃ ps, (_root_.Core.canonicalJson θ >>= _root_.Core.Composition.decodeParams) = .ok ps ∧
-    ∃ x ∈ ps, x.id = _root_.SampledProofs.OneStageZk.PROTOCOL ∧
-      (_root_.Core.canonicalJson x.params.toUTF8 >>= _root_.SampledProofs.OneStageZk.paramsOfJson) = .ok p
+    ∃ x ∈ ps, x.id = VStar.Recursive.Sampled.PROTOCOL ∧
+      (_root_.Core.canonicalJson x.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p)
 
 /-- **The C-Flock law the draw reads over `n` units** under the verifier `v`'s agreed law: the law
 `SampledProofs.Draw.deriveLaw` derives, or else the expanded rule's (`SampledProofs.Draw.flockLaw` at
@@ -517,16 +525,19 @@ structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Li
   share : (V.certOf θ).ε = A.ε
 
 /-- **v2's case in what the prover sent**: v2's parameters in the parameters sent, as `ParamsAt` reads them, and the
-registration and the evidence of the case the composition's evidence names under v2's id, each read by v2's decoder. -/
+registration and the evidence of the case the composition's evidence names under the sampled component's id, each read
+by its decoder in its one-stage form. -/
 def caseOf (s : Verity.Sent) : Flock.V (_root_.SampledProofs.OneStageZk.Params ×
     _root_.SampledProofs.OneStage.Commitment × _root_.SampledProofs.OneStageZk.Evidence) := do
   let ps ← _root_.Core.canonicalJson s.params >>= _root_.Core.Composition.decodeParams
-  let some x := ps.find? (·.id == _root_.SampledProofs.OneStageZk.PROTOCOL) | throw "the parameters name no v2"
+  let some x := ps.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) | throw "the parameters name no sampled proofs"
   let ev ← _root_.Core.Composition.decodeEvidence s.evidence
-  let some y := ev.find? (·.id == _root_.SampledProofs.OneStageZk.PROTOCOL) | throw "the evidence holds no v2 case"
-  let p ← _root_.Core.canonicalJson x.params.toUTF8 >>= _root_.SampledProofs.OneStageZk.paramsOfJson
+  let some y := ev.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) | throw "the evidence holds no sampled proofs case"
+  let .inl p ← _root_.Core.canonicalJson x.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson
+    | throw "the sampled proofs parameters' form is not one-stage"
   let c ← _root_.SampledProofs.OneStage.commitmentOf y.commitment
-  let e ← _root_.SampledProofs.OneStageZk.evidenceOf y.evidence
+  let .inl e ← VStar.Recursive.Sampled.evidenceOf y.evidence
+    | throw "the sampled proofs evidence's form is not one-stage"
   pure (p, c, e)
 
 /-- The challenger session's release log in v2's evidence, a line each, as `SampledProofs.Challenger.trustedTreesOf`
@@ -653,11 +664,12 @@ def coinsRead (s : Verity.Sent) : Option (List Verity.Release) := do
   let lines ← (linesOf e).toOption
   readLines label c.digest (← recordsOf s e) lines.tail [] none ξ
 
-/-- **The deployment's sessions `S` cover the sampled verdict at composite `k`**: where `S` holds no session, no
-strategy of the period's game makes the sampled verdict accept. -/
+/-- **The deployment's sessions `S` cover the sampled verdict's one-stage form at composite `k`**: where `S` holds no
+session and the parameters name the one-stage form (`ParamsAt`), no strategy of the period's game makes the sampled
+verdict accept. Parameters naming the recursive form (`VStar.Recursive`) are not this leg's. -/
 def Covers (V : Vocab d α) (k : Verity.Registration.Composite) (S : ByteArray → Array ByteArray → Option Live) :
     Prop :=
-  ∀ θ F, S θ F = none → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
+  ∀ θ F, S θ F = none → (∃ p, ParamsAt θ p) → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
     Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0
 
 /-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's sessions `S`**: each session
