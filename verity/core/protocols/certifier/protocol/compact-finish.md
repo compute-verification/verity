@@ -20,7 +20,7 @@ event's can.
   where the Commit's finish for the request is an abort (`aborted`), after 1 ≤ k < `max_tokens` outputs, none of them
   EOS, and refuse a marked end where the Commit's finish is an abort. The rehearsal's own `check` reads no Commit, so it
   refuses every unmarked end. The link is one connection with no per-request cancel, so the certifier observes no
-  abort, and an abort on a certified run comes from the prover's side (the shim's cut at the horizon, or an error).
+  abort, and an abort on a certified run comes from the developer's side (the shim's cut at the horizon, or an error).
   What bounds it is the advice charging each `output_len` in full, not an observation.
 - **Why a stop carries its id.** A stop that was one reserved field (all ones) with no id, accepted at any length up
   to `max_tokens`, would let a server cut a `length` response short at a stop the model never sampled; the all-ones

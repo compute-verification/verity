@@ -65,7 +65,7 @@ uniform registers (256 bytes a warp) and TLB, where a kernel can keep constants,
 across `σ`. The chip's are its copy-engine, PCIe and memory-controller buffers and its video engines. sm_120 has no
 Tensor Memory (the same reference, chapter 14).
 
-**The premises** that carry the bound to a real device are claims of `verity.core.claims`:
+**The assumptions** that carry the bound to a real device are claims of `verity.core.claims`:
 
 - **`random-oracle`** (assumption): the tag is a random oracle fresh at `σ`: for `ro-blake3/v1`, keyed BLAKE3 under a
   key derived from `σ` by SHA-512; for `ro-sha512/v1`, SHA-512 after a prefix that holds `σ`. The proof's oracle is one
@@ -104,7 +104,7 @@ Tensor Memory (the same reference, chapter 14).
     figure. A device that is neither isolated nor in a co-audited set gets none either.
 - **`trusted-host`** (assumption): "The auditor's device runs its stated code, timing included, on a host the prover
   doesn't control, with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier
-  state." The audit cites it only for the verifier's state (§5). It covers no machine the prover controls: not the GPU's
+  state." The audit cites it only for the verifier's state (§5). It covers no machine the developer controls: not the GPU's
   node, and not the device id the node reads (§2).
 
 ## 2. The parties
@@ -112,7 +112,7 @@ Tensor Memory (the same reference, chapter 14).
 No guarantee assumes trusted prover hardware.
 
 - **The verifier** is the auditor's side, run on its memory challenger: the auditor's hardware, on a machine the
-  prover doesn't control, never a process on the GPU's node (`audit.Verifier`, `Window`, `ChallengerState`). It holds
+  developer doesn't control, never a process on the GPU's node (`audit.Verifier`, `Window`, `ChallengerState`). It holds
   the secret `source`, draws each run's nonce, derives its key, sends `σ`, runs the clock, draws the samples, checks the
   openings and keeps the store's state (§5).
 - **The prover** is everything on the GPU's node: the GPU, and the code that reads its id and drives the tagger
@@ -122,7 +122,7 @@ No guarantee assumes trusted prover hardware.
   samples after the root; the deadline runs on the verifier's clock, so `RTT` includes the hop to the node; and every
   opening is checked against `vk` and the committed root.
 
-One thing rests on the prover: **the device's identity.** The node reads the GPU's UUID and SKU from its own driver
+One thing rests on the developer: **the device's identity.** The node reads the GPU's UUID and SKU from its own driver
 (§3), so an adversarial node can report another GPU's. A run's bound holds for the store the verifier salted, whichever
 chip answered, but which GPU that was is the node's word, and with it a per-GPU figure, the pairwise-distinct stores of
 a co-audited set and the device class `S` and `c` are stated for. The GPU's confidential-computing attestation, checked

@@ -6,12 +6,12 @@ execution phase, and once per execution phase signs a **network certificate** ov
 it bounds is how much a covert sender can move across the boundary through **when** frames leave, once the content and
 order of every frame are fixed by the declared Program.
 
-- **Trust.** The certifier is auditor-trusted: it runs on a host the prover doesn't control, and the auditor trusts it
+- **Trust.** The certifier is auditor-trusted: it runs on a host the developer doesn't control, and the auditor trusts it
   to run the grid and to sign what it ran. That trust, with the custody of its keys and of its LMS leaf state, is the
-  named assumption `trusted-host`. The challenger's live coins reach it on two more premises, stated with the coins'
-  path in `benchmarks/live_challenger/auditor.py` and `verity/core/protocols/sampled_proofs/README.md`:
+  named assumption `trusted-host`. The challenger's live coins reach it on two more proposed assumptions, stated with
+  the coins' path in `benchmarks/live_challenger/auditor.py` and `verity/core/protocols/sampled_proofs/README.md`:
   `CoinsConfidential` (the challenger's coins reach the certifier only inside auditor-trusted hosts, `trusted-host`, and
-  no prover-controlled host reads a coin before the certifier admits it) and `OneClock` (the challenger's release times
+  no developer-controlled host reads a coin before the certifier admits it) and `OneClock` (the challenger's release times
   and the certifier's ingress ticks are read on one clock; on two devices, within 1.03 s of each other). No Lean
   statement reads either yet.
 - **What it signs.** An LMS signature (SHA-512, n = 64) over a message binding its key, its session, the execution phase
@@ -1681,7 +1681,7 @@ them.
     never sampled; and for one whose salt it has revealed already, so a second registration naming p, by another stream
     or epoch, gets none. Nothing else publishes the salt.
   - **Asked for and answered under LMS** (`Proxy(challenger_key=…, signer=…)`, both or neither). Deployed, the
-    certifier runs on the link, off the prover's node, and the proof system's challenger, which is the
+    certifier runs on the link, off the developer's node, and the proof system's challenger, which is the
     auditor's, on an auditor host. `challenger_key` comes from the auditor's deployment record, never from the
     prover's configuration, and `trusted-host` covers that record's custody. Each proxy samples a run id at
     construction, 32 bytes of the certifier's own randomness (`Proxy.run_id`; `run_nonce`, `secrets.token_bytes` by
@@ -1982,7 +1982,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 - Every recorded run had the network certifier on the server's host, and the server gets the ingress bytes over loopback, with no
   shim on its side. `warden-rehearse` puts the network certifier and its client on the auditor's host and reaches the server
   through the gate's ssh tunnel to the peer's loopback. No run of it is recorded yet, and the tunnel's far end is still
-  loopback on the prover's host.
+  loopback on the developer's host.
 - **The cells' wiring is open to the verifier.** A proof block's read is (q, k), connection q's
   cell k of the execution phase. The verifier places it at its bucket's row and slot with the network certifier's wiring
   (`Wiring.place`), which the signed head names by a salted digest, so the reads are the network certifier's and never the

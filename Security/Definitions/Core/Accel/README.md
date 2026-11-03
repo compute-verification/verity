@@ -5,7 +5,7 @@ ACCEL is the physical model the accounting reads: a machine 𝓜 (`Accel.Machine
 are lists of the ACCEL ops (`Accel.Op`) and branches. A run fits a time `T` when its code fits the text (G1) and each
 resource's units are at most its rate times `T` (G2), on a schedule fixed before the content (`Machine.Fits`). The
 headline holds at every semantics meeting (P1), integer MMAs exact within the table's range, and (P2), every MMA dot a
-function of its accumulator and its pairs' products. The card premise says the card's own semantics is one of them.
+function of its accumulator and its pairs' products. The card assumption says the card's own semantics is one of them.
 
 ## The table (`Accel.Card`)
 
@@ -47,7 +47,7 @@ The hash oracle has no op: programs reach it only through the accelerator's pric
 `Pouw.Dither.CallsAtPub`). The model fixes semantics only where an honest kernel needs them: a move copies its words,
 and an integer MMA is exact within the range (P1).
 
-## The card premise (`Assumptions.CardWithinAccel`)
+## The card assumption (`Assumptions.CardWithinAccel`)
 
 The card does no more than 𝓜 at its numbers: for some semantics meeting (P1) and (P2), whatever the card computes in
 `T` seconds, some program of 𝓜 computes on a schedule fixed before the content, within `T` (`Machine.Fits`). It rests on
@@ -60,11 +60,11 @@ and firmware.
 
 - `WorkSoundAt`, `WorkSoundOnCard` and their instances on both tables (`WorkSoundH200`, `WorkSoundSm120`,
   `WorkSoundOnCardH200`, `WorkSoundOnCardSm120`) follow from Dither's `WorkSound`, with no premise beyond its own
-  and the card premise (`Proofs/Pouw/DitherInstance.lean`).
-- The premise holds at the honest instance (`gemm_cardWithinAccel`, `Proofs/Core/Accel/Witness.lean`). The deployed
+  and the card assumption (`Proofs/Pouw/DitherInstance.lean`).
+- The assumption holds at the honest instance (`gemm_cardWithinAccel`, `Proofs/Core/Accel/Witness.lean`). The deployed
   `s8` GEMM, at every `n` with 256 ∣ n ≤ 2048, fits the H200's table in its seconds (`kernel_fits`) and leaves
   C = A·B in device memory (`kernel_computes`).
-- The premise refuses a card that changes memory in no time (`cardWithinAccel_fails`), and one that changes more words
+- The assumption refuses a card that changes memory in no time (`cardWithinAccel_fails`), and one that changes more words
   of shared memory, L2 or device memory in `T` seconds than the table's rate times `T` (`cardWithinAccel_fails_rate`)
   (`Proofs/Core/Accel/Model.lean`).
 - The exact `s8` semantics (`s8Open`) meets (P1) and (P2) on both cards, so the headline's hypotheses on the semantics
@@ -72,7 +72,7 @@ and firmware.
 
 ## Open
 
-- **Instructions not yet dominated**, outside the premise's claim until an op covers them or an argument does:
+- **Instructions not yet dominated**, outside the assumption's claim until an op covers them or an argument does:
   - MATCH, which compares a word across 32 lanes in one instruction, and REDUX, which shares its unit;
   - VOTE, which spends 16 `alu` lanes;
   - MMAs with f16 accumulators;
@@ -81,7 +81,7 @@ and firmware.
   - IADD3 at sm_120's 128 lanes a SM-clock, twice `alu`'s 64;
   - the uniform datapath's 4 results a SM-clock beside `alu`'s lanes;
   - BAR.RED, which folds a predicate across the CTA.
-- **Exclusions.** The premise excludes the video and JPEG engines, sm_120's RT cores, the texture path's filtering, the
+- **Exclusions.** The assumption excludes the video and JPEG engines, sm_120's RT cores, the texture path's filtering, the
   copy engines and compute data compression. An exclusion is a second adversary class until it has a rate row or a
   proof that the model dominates it. The RT cores (at most 58 integer products a SM-clock, 6% of sm_120's `s8` rate)
   and the texture path (at most 64, 6% on sm_120 and 1.6% on the H200) exceed the headline's served margins, 3.9% on
@@ -91,5 +91,5 @@ and firmware.
 - **CUDA-core matmul routes.** With every register word an `alu` lane, the four-Russians table method pays at least an
   `alu` lane a MAC: at most 6.25% of the `s8` tensor rate on sm_120 and 1.6% on the H200 through registers, and 12.5% on
   the H200 through L2 at its placeholder row. IDP.4A on `imad` does 4 MACs a lane. None of these is a public route, so
-  `SAKMatmul` as written fails at a dual price that leaves their pipes cheap. The algorithmic premise that would carry
-  them, `SAKResidual`, is not yet adopted.
+  `SAKMatmul` as written fails at a dual price that leaves their pipes cheap. The proposed algorithmic
+  assumption that would carry them, `SAKResidual`, is not yet adopted.

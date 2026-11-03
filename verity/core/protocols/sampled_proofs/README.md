@@ -38,8 +38,8 @@ composite's acceptance to that run, and so to `SampledKSLiveV3`, comes with one-
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
 before any coin. In the remote protocol the coins come from the auditor's challenger (or, until proofs retires it, the
-verifier's own draw), under three Lean premises, `ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`;
-onsite adds two prose premises, `CoinsConfidential` and `OneClock` ("Where things are").
+verifier's own draw), under three assumptions, `ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`;
+onsite adds two proposed assumptions, `CoinsConfidential` and `OneClock` ("Where things are").
 
 ## Outline
 
@@ -143,23 +143,23 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
   as the far end of that coin link (`benchmarks/live_challenger/coin_link.py`).
-  - **Remote's coin path in Lean** (`Security/Definitions/Core/Challenger.lean`, premises in its `Assumptions/`, in the
+  - **Remote's coin path in Lean** (`Security/Definitions/Core/Challenger.lean`, assumptions in its `Assumptions/`, in the
     lock): the challenger logs every coin it releases (`ChallengerLogsCoins`) and flips each only after what it samples
     is recorded (`FlipsAfterRecorded`), and the verifier reads coins only from its log (`VerifierReadsLog`). Under them
     a logged coin's sample misses a set fixed before it at most as the draw law allows (`SampleAfterRecorded`, proved).
     None mentions a network certifier.
 
-  Onsite, the challenger rests on two more premises about where it runs, which the network certifier's spec and
-  ACCEL's cite by name; both are prose only:
+  Onsite, the challenger rests on two more proposed assumptions about where it runs, which the network certifier's
+  spec and ACCEL's cite by name; both are prose only:
   - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor hosts
     (`trusted-host`), or the challenger and the certifier are one device at the boundary. So no machine outside the
-    boundary reads a coin before the certifier admits it, and a path across a host the prover controls is not
+    boundary reads a coin before the certifier admits it, and a path across a host the developer controls is not
     allowed: it would need an encrypted, authenticated channel, which the challenger doesn't have. Deployed, one
     auditor host runs both, and a window's coins leave it only on the peer's certifier coin link,
     which the gate refuses to open without (`auditor.coin_ports`). It is not in Lean: no `.lean` file defines it.
     ACCEL's pooled guarantee `Pouw.Guarantees.Dither.FleetSound` builds a form of it into its statement instead (each
     unit's prover is a function of the other units' coins).
-  - `OneClock`, a named premise under the trusted auditor host, with no Lean statement yet: the challenger's release times and the certifier's
+  - `OneClock`, a proposed assumption under the trusted auditor host, with no Lean statement yet: the challenger's release times and the certifier's
     ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,

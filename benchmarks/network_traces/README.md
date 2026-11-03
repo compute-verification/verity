@@ -124,7 +124,7 @@ bits. The leak guard (`--public`) moves any file the piece doesn't declare out o
 
 The run of record takes the network chain end to end on the gate's machines:
 
-1. The network certifier signs every record with its LMS key, on an auditor machine, never on the prover's node.
+1. The network certifier signs every record with its LMS key, on an auditor machine, never on the developer's node.
 2. It certifies each execution phase's records and signs each sampling period's clock sync (a clock certificate).
 3. The client receives the certificates and keeps them (`certificates.jsonl`, `clocks.jsonl`).
 4. The consistency proof blocks are proved by sampled C-Flock `--zk` and decided by the Lean verifier of record: N2's

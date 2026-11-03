@@ -129,5 +129,5 @@ The remote protocol's demo is the vLLM demo (`verity example vllm`): sampled pro
 PoUW's verdict a development run that credits nothing, while `verity example h200` runs remote's sampled-proofs half
 ([the remote protocol's demo](verity/core/protocols/remote/README.md#the-demo)).
 
-The prover's side serves and proves. The auditor's side runs the verifier, the challenger that flips the live coins,
-the network certifier and the memory challenger, and those must run on machines the prover doesn't control.
+The developer's side serves and proves. The auditor's side runs the verifier, the challenger that flips the live coins,
+the network certifier and the memory challenger, and those must run on machines the developer doesn't control.
