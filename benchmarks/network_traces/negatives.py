@@ -1,4 +1,4 @@
-"""negatives: what network accounting of arbitrary vLLM usage must refuse, beside honest traffic, each a pure function on a run's artifacts that
+"""negatives: what network certification of arbitrary vLLM usage must refuse, beside honest traffic, each a pure function on a run's artifacts that
 writes a tampered copy, and each naming the check that refuses it by its refusal code.
 
     python benchmarks/network_traces/negatives.py table [--markdown]

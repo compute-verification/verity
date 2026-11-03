@@ -1,6 +1,6 @@
 """A circuit's blocks (`verity.ml.windows.interface.Blocks`, ``verity/blocks/v1``) and output-row reads: the inference entries
 tile each template's units into (slot, step) exactly once at the class's S and T, the proof block is the record's partition,
-network accounting's keys are carried as given and its servers' unit ranges cut the members, and an output-row `Read` names
+network certification's keys are carried as given and its servers' unit ranges cut the members, and an output-row `Read` names
 the leaves a unit's output row is of a value without filling an input row. Pinned on `test_interface`'s two-request chain
 and on a class circuit (`cmp92`: S = 4 slots, NP = 8 prompt bytes, O = 24 outputs, T = 31 steps) on one server, and on its
 split across two (layer 0 | layer 1 and the head)."""
@@ -103,10 +103,10 @@ def test_the_inference_entries_tile_each_templates_units_exactly_once_at_the_cla
 
 
 def test_members_are_cut_where_a_servers_units_begin_or_end():
-    """Network accounting's keys are carried as given; the members read only the servers' unit ranges, cutting a template's
+    """Network certification's keys are carried as given; the members read only the servers' unit ranges, cutting a template's
     units where one begins or ends as at a wire's ends, so every statement's units sit on one server. A range outside its
     template's units, or servers without units, are refused; that the servers partition the units, and run each inference
-    block on one, is network accounting's check."""
+    block on one, is network certification's check."""
     net = {"server": [{"name": "a", "uplink": "l0", "units": [[GID, 0, 3]]}, {"name": "b", "uplink": "l1", "units": [[GID, 3, 5]]}],
            "server_time": [{"server": s, "steps": [0, TI.STEPS]} for s in "ab"], "transfers": []}
     plain, split = I.Window(TI.chain(), RUN, TI.LAW, 8), I.Window(blocked(chain_blocks(network=net)), RUN, TI.LAW, 8)
@@ -175,8 +175,8 @@ def cmp92(servers: int) -> I.Circuit:
     response's leaf j·O + k. With two servers, the rows crossing between them are wire transfers: layer 0's coordinates into
     layer 1 an output-row read on the writer and a read on the reader (``x1``), and the token back into the embedding a read
     of the response's leaves on the reader, the head's output row being read once, as the response; each server loads its
-    own weights. That split puts every inference block (slot, step) on both servers, the form network accounting forbids: it is the
-    negative of network accounting's check (`test_cmp92s_split_across_two_servers_is_refused`)."""
+    own weights. That split puts every inference block (slot, step) on both servers, the form network certification forbids: it is the
+    negative of network certification's check (`test_cmp92s_split_across_two_servers_is_refused`)."""
     two = servers == 2
     w0, w1 = ("weights0", "weights1") if two else ("weights", "weights")
     pos, layer = T * H, 8 * H * H
@@ -255,7 +255,7 @@ def test_cmp92s_two_server_split_cuts_every_template_at_the_server_boundary(circ
     cut where s0's units end, so no statement's units span both servers, and the verifier derives the same members from the
     descriptor record. The window's blocks are byte-identical under any run. The members are the circuits' without their
     registered reads: `members` fills tables for uncut reads of whole registered rows over whole members only, and the class
-    circuit's weight reads start mid-row and its two-server ``x1`` read is cut. The cut is the interface's alone: network accounting
+    circuit's weight reads start mid-row and its two-server ``x1`` read is cut. The cut is the interface's alone: network certification
     refuses this split (`test_cmp92s_split_across_two_servers_is_refused`)."""
     cap = 1 << 20
     with pytest.raises(ValueError, match="whole registered rows"):
