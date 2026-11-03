@@ -7,8 +7,8 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from te_core import console, formalism, plots, policy, rescore  # noqa: E402
-from test_plots import SHAPE, rows  # noqa: E402
+from te_core import console, formalism, plots, policy, rescore
+from test_plots import SHAPE, rows
 
 GATES_PER_MAC = 7000.0
 ANALYSIS = f'''

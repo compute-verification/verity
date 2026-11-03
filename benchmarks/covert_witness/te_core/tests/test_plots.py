@@ -6,7 +6,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from te_core import plots, policy  # noqa: E402
+from te_core import plots, policy
 
 SHAPE = {"d_model": 512, "n_layer": 6, "vocab": 50304, "ctx": 1024, "parameters": 45_029_888, "tokens": 154_206_208,
          "tokens_per_param": 3.42, "forward_macs_per_token": 51_342_080}
