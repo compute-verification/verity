@@ -11,7 +11,8 @@ both of `BitsLin2KOn`'s call bounds, read from a run the compiled verifier accep
 `Pr[acc ∧ ¬R] = 0`. Where one does:
 
 * the inner statement is in `PlainIn` (`plainIn_of_run_acc`), each staged V\* part in `PartIn` (`partIn_of_run_acc`),
-  so at most `2^16` parts (`nS_le_of_partIn`), and the inner setup has at most `2^56` inputs (`innerSetupIns_le_acc`);
+  so at most `RecBudget.MAX_STATEMENTS = 16` parts (`nS_le_of_partIn`), within the caps' `2^16`, and the inner setup
+  has at most `2^56` inputs (`innerSetupIns_le_acc`);
 * the inner verifier's calls are at most `nR = 2^28 + (c_B + 2^24)` on every run (`n`) and the compiled verifier's own
   at its V\* statements at most `2^55` (`v`), `lamLin2_R_ge_in`'s counts of the verifier's code;
 * at those caps and `n, v ≤ 2^55`, `κ ≤ 2^{−140.4}` and `ε ≤ 2^{−138.3}` (`kappa_eps_deployed_dep_tight`).
@@ -118,8 +119,8 @@ theorem recursiveBitsK_tight (b : Brings) (aux : Msg → ℕ → _root_.Flock.Re
       (deployedB { b with tr := recTr aux nOf hd recRest }) (DeployedR.layR OpenRows.elemR)
       (FlockDeploy.nextR DeployedR.rdR)
       (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation DeployedR.rdR).cols DeployedR.wER
-      FlockDeploy.joinR rowInDeployed DeployedR.finalR DeployedR.wR decI hin hO (nS_le_of_partIn hO)
-      (innerSetupIns_le_acc hacc') nR_le (le_refl (2 ^ 55))
+      FlockDeploy.joinR rowInDeployed DeployedR.finalR DeployedR.wR decI hin hO
+      ((nS_le_of_partIn hO).trans (by decide)) (innerSetupIns_le_acc hacc') nR_le (le_refl (2 ^ 55))
     exact (recursiveBitsK b aux nOf hd recRest decI hdecI decO hdecO x hx Ω P t ht1 hrun nR (hc []).1 (2 ^ 55)
       (fun ps => (hc ps).2.2) hSB hBI hFdev hFCI hF0I).trans
       (add_le_add hκ (mul_le_mul_of_nonneg_left hε (Nat.cast_nonneg t)))
