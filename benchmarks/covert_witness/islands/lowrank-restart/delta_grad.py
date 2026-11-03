@@ -28,6 +28,8 @@ gradient of W is formed: a block's message is its factor gradients, the factors 
 store's, and E is CWLORA2 at `--e-bits` (4 or 8). `--grow` makes the adapters grow in phases (`grow`), so one run's
 checkpoints land at several sizes of Δ: each phase from its share of the steps on raises its targets to its rank, B A
 unchanged; the meter prices every step at the last phase's ranks, and notes.grow has each phase's accounting.
+`--phase-cooldown F` anneals each phase on its own (warm-up, hold, then linear to 0 over its last F share), so each
+phase's last checkpoint measures what its Δ can hold rather than a mid-schedule state.
 `--targets gains` makes the norm gains of `--blocks` and the final norm the trained set instead (elementwise: `--opt
 sign` or `adamw`), coded, reduced and stored like the matrices, for a state small enough for Fit at the default dial
 (`gains:mlp_norm+norm --blocks 5-5`, 1,024 values on s-t20, is Fit at 8 KiB).
@@ -526,6 +528,10 @@ def main() -> int:
     ap.add_argument("--b2", type=float, default=0.95)
     ap.add_argument("--clip", type=float, default=1.0, help="the reduced gradient's norm (adamw only)")
     ap.add_argument("--warmup", type=int, default=30)
+    ap.add_argument("--phase-cooldown", type=float, default=0.0,
+                    help="0: the lr warms up over --warmup steps and falls linearly to 0 at the run's end; F in (0, 1]: "
+                         "each phase (the whole run without --grow) warms up over --warmup steps, holds, and falls "
+                         "linearly to 0 over its last F share, so each phase's last checkpoint is annealed")
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--data-seed", type=int, default=1)
     ap.add_argument("--seed", type=int, default=0)
@@ -553,6 +559,8 @@ def main() -> int:
                          "has no use")
     if a.msg_proj and (not a.mom_rank or a.vote):
         raise SystemExit("delta_grad: --msg-proj projects onto --mom-rank's basis, and takes no --vote")
+    if not 0 <= a.phase_cooldown <= 1:
+        raise SystemExit("delta_grad: --phase-cooldown is 0 (one decay over the run) or a share in (0, 1]")
     phases = [(float(f), t, int(r)) for f, t, r in (p.split(":") for p in a.grow.split(","))] if a.grow else []
     if phases and (a.lora or a.opt == "adafactor" or phases[0][0] != 0 or not phases[-1][0] < 1
                    or any(x[0] >= y[0] for x, y in zip(phases, phases[1:])) or min(r for *_, r in phases) < 1):
@@ -694,13 +702,22 @@ def main() -> int:
     n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // (per_step + mean_extra))
     # a phase grows one step after its FRAC, so the E encoded first in the next 1/CHECKPOINTS is the old phase's end
     grow_at = {math.floor(f * n_steps) + 1: r for f, r in plan[1:]}
+    firsts = [0, *sorted(grow_at), n_steps]
+
+    def lr_frac(step: int) -> float:
+        if not a.phase_cooldown:
+            return schedule(step, n_steps, a.warmup)
+        i = max(j for j in range(len(firsts) - 1) if firsts[j] <= step)
+        s, e = firsts[i], firsts[i + 1]
+        return min(1.0, (step - s + 1) / a.warmup) * min(1.0, (e - step) / (a.phase_cooldown * (e - s)))
+
     grown = [{"step": 0, "ranks": dict(plan[0][1]), **acct}] if lora else []
     hooks.plan(n_steps)
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     fwd = torch.compile(net) if a.compile else net
     print(json.dumps({"mech": "dgrad", "opt": a.opt, "msg_bits": a.msg_bits, "store": a.store,
                       "store_scale": a.store_scale, "lora": a.lora, "mom_bits": a.mom_bits, "mom_rank": a.mom_rank,
-                      "msg_proj": a.msg_proj, "rotate": a.rotate, "lr": a.lr,
+                      "msg_proj": a.msg_proj, "rotate": a.rotate, "lr": a.lr, "phase_cooldown": a.phase_cooldown,
                       "steps": n_steps, "leaves": leaves, "targets": len(targets), "norms": len(norms),
                       "flops_per_step": per_step + extra, **acct}), flush=True)
 
@@ -748,7 +765,7 @@ def main() -> int:
                 params[n].data.copy_((theta_dev[n].float() + delta(n)).to(theta_dev[n].dtype))
 
     for step in range(n_steps):
-        frac = schedule(step, n_steps, a.warmup)
+        frac = lr_frac(step)
         if step in grow_at:
             grow(grow_at[step])
             acct = accounting(a, trained, acct["n_norm_entries"], opt, tau_bits)
