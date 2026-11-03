@@ -55,6 +55,12 @@ DOC_TERMS = {
     "firewall": "ZK server",
     "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
                                                       "stays in backticks)",
+    "coin server, coin source, coin device, randomness source": "the challenger",
+    "salted leaf, salted commitment": "hiding leaf, hiding commitment",
+    "miss probability, detection probability": "acceptance probability (detection is its complement)",
+    "link window": "an execution phase's transfer blocks (`link-window` stays in backticks until a format version)",
+    "block-scaled, blockwise, scale block": "scale group",
+    "production": "serving, or proving",
     "builder, advice compiler, circuit builder": "registered compiler",
     "declared advice": "advice",
     "declared circuit": "registered circuit",
@@ -79,6 +85,9 @@ DOC_TERMS = {
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
                        rf"|legs?|(?:re)?(?:draws?|drawn|drawing|drew)|components?|firewall(?:s|ed)?|flock-verify"
+                       rf"|coin{_SPACE}(?:servers?|sources?|devices?)|randomness{_SPACE}sources?"
+                       rf"|salted{_SPACE}(?:leaf|leaves|commitments?)|(?:miss|detection){_SPACE}probabilit(?:y|ies)"
+                       rf"|link{_SPACE}windows?|block{_SPACE}scaled|blockwise|scale{_SPACE}blocks?|productions?"
                        rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
                        rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
                        rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
@@ -93,6 +102,14 @@ _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\
 
 ALLOWED: dict[str, str] = {
     "the PoUW window's keyed draw takes A4 and A5": "Flock's ASSUMPTIONS.md: a queued PR rewrites the next line; renamed after it lands",
+    "the verifier's coin server wrote": "a line of Flock's ASSUMPTIONS.md that a queued PR rewrites; renamed after it lands",
+    "the coin server reads": "a line of Flock's ASSUMPTIONS.md that a queued PR rewrites; renamed after it lands",
+    "the coin server's OS randomness": "a line of Flock's ASSUMPTIONS.md that a queued PR rewrites; renamed after it lands",
+    "as the coin server's `os` coins": "a line of Flock's ASSUMPTIONS.md that a queued PR rewrites; renamed after it lands",
+    "the client's request commitment, the randomness source": "a line of GLOSSARY.md that a queued PR rewrites; renamed "
+                                                              "after it lands",
+    "production would publish every event": "infra's Vercel deployment, another sense",
+    "Production is `verity-slack-events`": "infra's Vercel deployment, another sense",
     "N, the window's proof units": "a public item's reason in A5's Spec (`benchmarks/one_stage/a5.py`): `Spec.digest` hashes it",
     "N, the round's proof units": "a public item's reason in scan_zk's Spec (`benchmarks/network_traces/scan_zk.py`): "
                                   "`Spec.digest` hashes it",
@@ -172,6 +189,10 @@ PENDING: dict[str, str] = {
     "benchmarks/bandwidth/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/network_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/network_sim/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    "Security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md": "a queued PR on next rewrites the lines that name "
+                                                                            "the coin server; the rename follows it",
+    "Security/Proofs/Flock/C3/README.md": "a queued PR on next rewrites the lines that name the coin server; the rename "
+                                          "follows it",
     "benchmarks/network_traces/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/one_stage/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/pouw/fp_exact/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
@@ -334,6 +355,24 @@ def test_the_scan_reads_the_network_terms():
     assert offenders(list(docs), read=docs.__getitem__)[0] == [
         ("benchmarks/network_traces/b.md", 1, "faulty proof blocks"), ("benchmarks/network_traces/b.md", 1, "faulty-windows"),
         (net, 1, "faulty bits"), (net, 1, "faulty term"), (net, 2, "wrong units")]
+
+
+def test_the_doc_scan_reads_the_owners_terms():
+    """The owners' renames (`GLOSSARY.md`), on toy files: the challenger, hiding leaves, the acceptance probability,
+    transfer blocks, scale groups and serving; `link-window` in backticks, a quoted "production", a reproduction and a
+    scale group stay."""
+    docs = {
+        "a.md": "The coin server, a coin\nsource, the coin devices and a randomness source; salted leaves and a salted commitment.\n"
+                "A miss probability, the detection probabilities; the link window and a link-window.\n"
+                "Block-scaled FP8, blockwise scales, a scale block; in production, two productions.\n"
+                'The `link-window` key, a quoted "production", a reproduction and a scale group stay.\n',
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "coin server"), ("a.md", 1, "coin source"), ("a.md", 2, "coin devices"),
+        ("a.md", 2, "randomness source"), ("a.md", 2, "salted leaves"), ("a.md", 2, "salted commitment"),
+        ("a.md", 3, "miss probability"), ("a.md", 3, "detection probabilities"), ("a.md", 3, "link window"),
+        ("a.md", 3, "link-window"), ("a.md", 4, "Block-scaled"), ("a.md", 4, "blockwise"), ("a.md", 4, "scale block"),
+        ("a.md", 4, "production"), ("a.md", 4, "productions")]
 
 
 def test_the_scan_reads_the_incorrect_ands():
