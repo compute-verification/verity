@@ -472,27 +472,49 @@ def refused(c: Path) -> set[str]:
             and 0 in ((v.get("formalism") or {}).get("affected_share"), (v.get("formalism") or {}).get("u1_bits"))}
 
 
+def traced_rows(te: Path, over: list[Path] = ()) -> tuple[dict, set[str]]:
+    """Each traced (run, checkpoint)'s first record, from the newest of `te` and `over` (oldest first) whose cache
+    traced the run, and the refused runs (`refused`). A run's records file is read from that one cache only, and its
+    checkpoints share one copy of the run's trace: at 23:18Z every layer's records, each with its own copy, took the
+    build past this VM's 15 GB."""
+    newest, bad = {}, set()
+    for t in (te, *over):
+        c, runs = cache(t), set()
+        for p in sorted((c / "records").glob("*.jsonl.gz")) if (c / "records").exists() else []:
+            with gzip.open(p, "rt") as f:
+                if f.readline():
+                    runs.add(p.name.removesuffix(".jsonl.gz"))
+                    newest[p.name.removesuffix(".jsonl.gz")] = p
+        bad = (bad - runs) | (set() if "\ndef refusal(" in git("show", f"HEAD:{CW}/te_core/formalism.py", cwd=t)
+                              else refused(c))
+    traced = {}
+    for run, p in newest.items():
+        shared = []
+        with gzip.open(p, "rt") as f:
+            for line in f:
+                x = json.loads(line)
+                if x["run_id"] != run:
+                    raise SystemExit(f"{p} holds {x['run_id']}'s records, not {run}'s")
+                fm = x.get("formalism")
+                tr = fm.get("trace") if isinstance(fm, dict) else None
+                if isinstance(tr, dict):
+                    same = next((s for s in shared if s == tr), None)
+                    if same is None:
+                        shared.append(tr)
+                    else:
+                        fm["trace"] = same
+                traced.setdefault((run, x["checkpoint_step"]), x)
+    return traced, bad
+
+
 def ledger(out: Path, te: Path, over: list[Path] = ()) -> dict:
     """The scorer's ledger with each traced run's submissions replaced by the node's (on the original, so a field the
     harness wrote and the node's re-ingest lacks, such as v3's data and model, stays; under the ledger's id, agent and
     write time), a refused run's (`refused`) marked invalid with REFUSED where te_core refuses none itself (4.2's
     `formalism.refusal`), every other file linked; written to `out` whole, then swapped in. With `over`, newer
     captures' checkouts, oldest first, a run a newer one's cache traced takes every checkpoint from there, so each
-    run's rows are one capture's."""
-    traced, bad = collections.defaultdict(list), set()
-    for t in (te, *over):
-        c, rows = cache(t), collections.defaultdict(list)
-        for p in sorted((c / "records").glob("*.jsonl.gz")) if (c / "records").exists() else []:
-            with gzip.open(p, "rt") as f:
-                for line in f:
-                    x = json.loads(line)
-                    rows[(x["run_id"], x["checkpoint_step"])].append(x)
-        runs = {k[0] for k in rows}
-        for k in [k for k in traced if k[0] in runs]:
-            del traced[k]
-        traced |= rows
-        bad = (bad - runs) | (set() if "\ndef refusal(" in git("show", f"HEAD:{CW}/te_core/formalism.py", cwd=t)
-                              else refused(c))
+    run's rows are one capture's (`traced_rows`)."""
+    traced, bad = traced_rows(te, over)
     by_id = {}
     for line in (LEDGER / "index.jsonl").open():
         r = json.loads(line)
@@ -507,7 +529,7 @@ def ledger(out: Path, te: Path, over: list[Path] = ()) -> dict:
         key = by_id.get(p.stem) if p.suffix == ".json" else None
         if key in traced:
             old = json.loads(p.read_text())
-            new = old | traced[key][0] | {k: old[k] for k in ("id", "agent", "written_at", "written_ts")}
+            new = old | traced[key] | {k: old[k] for k in ("id", "agent", "written_at", "written_ts")}
             if key[0] in bad:
                 new["invalid"] = [*(new.get("invalid") or []), REFUSED]
                 n["refused"] += 1
