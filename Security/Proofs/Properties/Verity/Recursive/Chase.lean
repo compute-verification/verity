@@ -122,6 +122,12 @@ theorem pr_ne_none {Xp Yv : Type} [Fintype Xp] [Fintype Yv] (g : Xp → Option Y
   rw [← h, ← ex_ind]
   exact ex_congr fun x => by cases g x <;> simp
 
+/-- An optional sum's cast is the optional sum of the casts. Stated at a variable count `m`, so a caller's count
+(`Dep.chaseM`, a ceiling of reals) is never reduced to match `Fin 0` or `Fin (n + 1)`. -/
+theorem cast_elim_sum {Yv : Type} (o : Option Yv) (m : Yv → ℕ) (f : (y : Yv) → Fin (m y) → ℕ) :
+    ((o.elim 0 fun y => ∑ j, f y j : ℕ) : ℝ) = o.elim 0 fun y => ∑ j, (f y j : ℝ) := by
+  cases o <;> simp
+
 theorem pr_pos_witness {β : Type} [Fintype β] {p : β → Prop} (h : Pr p ≠ 0) : ∃ a, p a := by
   by_contra hne
   exact h ((Pr_congr (q := fun _ => False) fun a => ⟨fun ha => hne ⟨a, ha⟩, False.elim⟩).trans Pr_false)
@@ -466,16 +472,39 @@ theorem chase_coll (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array Byte
   rw [hpair]
   exact hm
 
-open Classical in
-/-- **The chasing finder's expected calls are at most its budget** (`Dep.chaseBudget`): each play's are at most its
-budget (`Dep.ex_playCost_le`), the further plays number at most `2 + β n` plays in all in expectation
-(`chase_cost`), and `collOf`'s calls are at most `dColl` (`hdColl`). -/
-theorem ex_chaseAt_cost_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
+/-- **A chasing play's calls**: its first play's, its further plays' at the bit `chaseSel` picks, and at most `dColl`
+for `collOf` (`hdColl`). -/
+theorem chaseAt_cost_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) (collOf : CollOf) (nI : Msg → ℕ) (dColl : ℕ)
-    (hn : ∀ x, q.RunAccepts x → ∀ cs ws, (q.D.innerCalls FlockDeploy.sha512 x cs ws).length ≤ nI x)
-    (hdColl : ∀ x₁ w₁ x₂ w₂, ((collOf x₁ w₁ x₂ w₂).eval FlockDeploy.sha512).2.length ≤ dColl) :
-    Ex (fun s => ((q.chaseAt V S readX collOf).cost s : ℝ)) ≤ q.chaseBudget V S nI dColl := by
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) (collOf : CollOf) (dColl : ℕ)
+    (hdColl : ∀ x₁ w₁ x₂ w₂, ((collOf x₁ w₁ x₂ w₂).eval FlockDeploy.sha512).2.length ≤ dColl)
+    (p : q.Play V S × q.ChasePlays V S readX) :
+    ((q.chaseAt V S readX collOf).cost p : ℝ) ≤
+      ((q.playCost V S p.1.1 (p.1.2 p.1.1) : ℝ) + (q.chaseSel V S readX p.1.1 (p.1.2 p.1.1)).elim 0
+        (fun ub => ∑ j : Fin (q.chaseM V S readX ub.2),
+          (q.playCost V S (p.2 ub.2 j).1 ((p.2 ub.2 j).2 (p.2 ub.2 j).1) : ℝ))) + dColl := by
+  have h : (q.chaseAt V S readX collOf).cost p ≤ q.playCost V S p.1.1 (p.1.2 p.1.1) +
+      ((q.chaseSel V S readX p.1.1 (p.1.2 p.1.1)).elim 0 fun ub =>
+        ∑ j : Fin (q.chaseM V S readX ub.2), q.playCost V S (p.2 ub.2 j).1 ((p.2 ub.2 j).2 (p.2 ub.2 j).1)) +
+      dColl :=
+    Nat.add_le_add_left (collRun_calls_le collOf dColl hdColl (q.chasePair V S readX p)) _
+  have hr : ((q.chaseAt V S readX collOf).cost p : ℝ) ≤ _ := Nat.cast_le.2 h
+  rw [Nat.cast_add, Nat.cast_add, cast_elim_sum] at hr
+  exact hr
+
+open Classical in
+/-- **The chasing finder's plays in expectation**: its first play's calls and its further plays' at the bit
+`chaseSel` picks are at most `2 + β n` plays' in expectation (`chase_cost`): a pick at the unit `u` and the bit `b`
+draws `u` (`chaseSel_drawn`), `u` weighs at most `b`'s two readings (`drawn_le_sum`), and `chaseM b ≤ β / q_b + 1`. -/
+theorem ex_chasePlays_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
+    {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) :
+    Ex (fun p : q.Play V S × q.ChasePlays V S readX =>
+        (q.playCost V S p.1.1 (p.1.2 p.1.1) : ℝ) + (q.chaseSel V S readX p.1.1 (p.1.2 p.1.1)).elim 0
+          (fun ub => ∑ j : Fin (q.chaseM V S readX ub.2),
+            (q.playCost V S (p.2 ub.2 j).1 ((p.2 ub.2 j).2 (p.2 ub.2 j).1) : ℝ))) ≤
+      (2 + Dep.chaseBeta (V.units θ F) * V.units θ F) *
+        Ex (fun x : q.Play V S => (q.playCost V S x.1 (x.2 x.1) : ℝ)) := by
   have hβ0 : 0 ≤ Dep.chaseBeta (V.units θ F) := Real.sqrt_nonneg _
   have hw0 : ∀ b : Σ g : Fin (V.circuitOf θ F).N, Fin ((V.circuitOf θ F).w g),
       0 ≤ q.weight V S readX b.1 b.2 true + q.weight V S readX b.1 b.2 false := fun b => by
@@ -491,22 +520,19 @@ theorem ex_chaseAt_cost_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Ar
       exact drawn_le_sum q V S readX hg b.2))
     (fun b => (Nat.ceil_lt_add_one (div_nonneg hβ0 (hw0 b))).le)
   rw [Fintype.card_fin] at hc
-  have hpt : ∀ p : q.Play V S × q.ChasePlays V S readX, ((q.chaseAt V S readX collOf).cost p : ℝ) ≤
-      ((q.playCost V S p.1.1 (p.1.2 p.1.1) : ℝ) + (q.chaseSel V S readX p.1.1 (p.1.2 p.1.1)).elim 0
-        (fun ub => ∑ j : Fin (q.chaseM V S readX ub.2),
-          (q.playCost V S (p.2 ub.2 j).1 ((p.2 ub.2 j).2 (p.2 ub.2 j).1) : ℝ))) + dColl := by
-    intro p
-    have h := collRun_calls_le collOf dColl hdColl (q.chasePair V S readX p)
-    have he : ((((q.chaseSel V S readX p.1.1 (p.1.2 p.1.1)).elim 0 fun b =>
-        ∑ j : Fin (q.chaseM V S readX b.2), q.playCost V S (p.2 b.2 j).1 ((p.2 b.2 j).2 (p.2 b.2 j).1)) : ℕ) : ℝ) =
-        (q.chaseSel V S readX p.1.1 (p.1.2 p.1.1)).elim 0 (fun ub => ∑ j : Fin (q.chaseM V S readX ub.2),
-          (q.playCost V S (p.2 ub.2 j).1 ((p.2 ub.2 j).2 (p.2 ub.2 j).1) : ℝ)) := by
-      cases q.chaseSel V S readX p.1.1 (p.1.2 p.1.1) <;> simp
-    show ((q.playCost V S p.1.1 (p.1.2 p.1.1) + ((q.chaseSel V S readX p.1.1 (p.1.2 p.1.1)).elim 0 fun b =>
-        ∑ j : Fin (q.chaseM V S readX b.2), q.playCost V S (p.2 b.2 j).1 ((p.2 b.2 j).2 (p.2 b.2 j).1)) +
-        (collRun collOf (q.chasePair V S readX p)).2 : ℕ) : ℝ) ≤ _
-    rw [Nat.cast_add, Nat.cast_add, he]
-    exact add_le_add le_rfl (by exact_mod_cast h)
+  exact hc
+
+open Classical in
+/-- **The chasing finder's expected calls are at most its budget** (`Dep.chaseBudget`): each play's are at most its
+budget (`Dep.ex_playCost_le`), the further plays number at most `2 + β n` plays in all in expectation
+(`ex_chasePlays_le`), and `collOf`'s calls are at most `dColl` (`chaseAt_cost_le`). -/
+theorem ex_chaseAt_cost_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
+    {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) (collOf : CollOf) (nI : Msg → ℕ) (dColl : ℕ)
+    (hn : ∀ x, q.RunAccepts x → ∀ cs ws, (q.D.innerCalls FlockDeploy.sha512 x cs ws).length ≤ nI x)
+    (hdColl : ∀ x₁ w₁ x₂ w₂, ((collOf x₁ w₁ x₂ w₂).eval FlockDeploy.sha512).2.length ≤ dColl) :
+    Ex (fun s => ((q.chaseAt V S readX collOf).cost s : ℝ)) ≤ q.chaseBudget V S nI dColl := by
+  have hβ0 : 0 ≤ Dep.chaseBeta (V.units θ F) := Real.sqrt_nonneg _
   have hE : Ex (fun x : q.Play V S => (q.playCost V S x.1 (x.2 x.1) : ℝ)) ≤
       Ex (fun ξ : S.Ξ => (q.playBudget V S nI ξ : ℝ)) :=
     (ex_table (Smp := q.Sample V S) fun ξ s => (q.playCost V S ξ s : ℝ)).trans_le
@@ -518,17 +544,20 @@ theorem ex_chaseAt_cost_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Ar
           ((q.playCost V S p.1.1 (p.1.2 p.1.1) : ℝ) + (q.chaseSel V S readX p.1.1 (p.1.2 p.1.1)).elim 0
             (fun ub => ∑ j : Fin (q.chaseM V S readX ub.2),
               (q.playCost V S (p.2 ub.2 j).1 ((p.2 ub.2 j).2 (p.2 ub.2 j).1) : ℝ))) + (dColl : ℝ)) :=
-        Ex_mono hpt
+        Ex_mono (chaseAt_cost_le q V S readX collOf dColl hdColl)
     _ = Ex (fun p : q.Play V S × q.ChasePlays V S readX =>
           (q.playCost V S p.1.1 (p.1.2 p.1.1) : ℝ) + (q.chaseSel V S readX p.1.1 (p.1.2 p.1.1)).elim 0
             (fun ub => ∑ j : Fin (q.chaseM V S readX ub.2),
               (q.playCost V S (p.2 ub.2 j).1 ((p.2 ub.2 j).2 (p.2 ub.2 j).1) : ℝ))) + dColl :=
         ex_add_const _ _
     _ ≤ (2 + Dep.chaseBeta (V.units θ F) * V.units θ F) *
-          Ex (fun x : q.Play V S => (q.playCost V S x.1 (x.2 x.1) : ℝ)) + dColl := add_le_add hc le_rfl
+          Ex (fun x : q.Play V S => (q.playCost V S x.1 (x.2 x.1) : ℝ)) + dColl :=
+        add_le_add (ex_chasePlays_le q V S readX) le_rfl
     _ ≤ (2 + Dep.chaseBeta (V.units θ F) * V.units θ F) * Ex (fun ξ : S.Ξ => (q.playBudget V S nI ξ : ℝ)) + dColl :=
         add_le_add (mul_le_mul_of_nonneg_left hE hb2) le_rfl
-    _ = q.chaseBudget V S nI dColl := rfl
+    _ = q.chaseBudget V S nI dColl := by
+        unfold Dep.chaseBudget
+        rfl
 
 open Classical in
 /-- **The binding term at the chasing finder**: averaged over the draws, the probability that the run accepts while
