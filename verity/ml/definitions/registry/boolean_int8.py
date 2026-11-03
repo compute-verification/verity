@@ -15,9 +15,9 @@ row builds Boolean-first (`verity.ml.definitions.boolean`).
                         version of its Definition; word views: their _v1 at the same statics
     Int8RowQuant_v4{K,R}
                         σ of `Int8RowQuant_v3{K,R}` likewise, x as R rows of K/R values; word view: Int8RowQuant_v3
-    Int8RowQuant_v6{K,R}
-                        σ of `Int8RowQuant_v5{K,R}` likewise: v4 and the row as one leaf, no gate beyond v4's; word view:
-                        Int8RowQuant_v5
+    Int8RowQuant_v6{K,R,ROUND}
+                        σ of `Int8RowQuant_v5{K,R,ROUND}` likewise: v4 and the row as one leaf, no gate beyond v4's; word
+                        view: Int8RowQuant_v5
 
 `Int8LutSoftmax_v2` and `Int8LutAttentionRow_v2`, the forms that read `exp2_lut127` as an operand, have no Boolean version here;
 `_v3` of each is σ of `_v1`, whose LUT is the Definition's own.  The callees beyond this module's leaves are core's
