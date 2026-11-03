@@ -17,14 +17,15 @@ path):
   whose answer is the zone's verdict. WINDOW is the endpoint's Commit window holding the front's requests (`window`).
 
 `front` runs every zone at once on a lab that is up in its shape and idle (`mockdc.py up`), and writes OUT/front.json.
-`piece` runs each zone's piece in turn; it needs no namespace, but its chain needs hidden_zk's builds
-(`chain_record.sh`), so it runs from a clone in the network slots. `record` reads only what the front and the piece
+`piece` copies the front's outcome from ``--front`` (the front's OUT) into its own OUT, runs each zone's piece in turn
+and writes the record; it needs no namespace, but its chain needs hidden_zk's builds (`chain_record.sh`), so it runs
+from a clone in the network slots. `record` reads only what the front and the piece
 released, and writes OUT/record.json and OUT/record.md: each zone's verdicts and its bound's terms in
 `PeriodLeakAccepted`'s symbols (`TERMS`), per monitoring period, for each zone, the lab's zones summed, the census's
 datacenter and the world, labelled simulated with the premises the lab leaves unmet (`SIMULATED`).
 
     python onsite.py front --out DIR --keep DIR [--blocks 4 ...]
-    python onsite.py piece --out DIR --keep DIR [--zone b0 ...] [--lean EXE] [CR_K=V ...]
+    python onsite.py piece --out DIR --keep DIR [--front DIR] [--zone b0 ...] [--lean EXE] [CR_K=V ...]
     python onsite.py record --out DIR
 """
 from __future__ import annotations
@@ -33,6 +34,7 @@ import argparse
 import json
 import math
 import shlex
+import shutil
 import signal
 import socket
 import subprocess
@@ -220,6 +222,13 @@ def scan_class(session: dict | None) -> str:
 
 def piece(args) -> int:
     out, keep = dirs(args)
+    given = Path(args.front).resolve() if args.front else out
+    if (given / "front.json").is_file() and given != out:
+        shutil.copyfile(given / "front.json", out / "front.json")
+        for d in given.glob("*/front"):
+            shutil.copytree(d, out / d.parent.name / "front", dirs_exist_ok=True)
+    if not (out / "front.json").is_file():
+        raise SystemExit(f"no front.json in {given}: give --front the front's --out")
     zones = args.zone or sorted(p.name for p in keep.iterdir() if (p / "serve").is_dir())
     if not zones:
         raise SystemExit(f"no zone's serve dir under {keep}: run `onsite.py front` with this --keep first")
@@ -236,6 +245,7 @@ def piece(args) -> int:
             codes[b] = subprocess.run(argv, cwd=mockdc.ROOT, stdout=log, stderr=subprocess.STDOUT).returncode
         print(f"{b}: piece exit {codes[b]}, {json.dumps(period_outcome(d))[:600]}", flush=True)
     (out / "piece.json").write_text(json.dumps({"exit": codes}, indent=1) + "\n")
+    record(args)
     return 0 if all(c == 0 for c in codes.values()) else 1
 
 
@@ -465,6 +475,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("piece")
     p.add_argument("--out", required=True)
     p.add_argument("--keep", required=True)
+    p.add_argument("--front", help="the front's --out, whose front.json and zones' front/ it copies to --out (default: "
+                   "--out itself)")
     p.add_argument("--zone", action="append", default=[], help="a zone to run (default: every zone kept)")
     p.add_argument("--lean", help="network-period, built (else the piece builds it)")
     p.add_argument("set", nargs="*", help="CR_K=V, to each piece's chain")

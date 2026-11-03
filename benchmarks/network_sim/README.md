@@ -192,13 +192,14 @@ the chain's, the period check's) and its K in `PeriodLeakAccepted`'s terms (k_sc
 jitter, over m windows), with δ_net, per week, month and year, for each zone, the lab's zones summed, the census's
 datacenter and the world, each marked with what it rests on (`onsite.BASIS`).
 
-As three recorded runs on the lab host, the front with the lab up and idle (it needs sudo), the piece from a clone in the
-network slots (its chain needs hidden_zk's builds), and the record on the published outputs:
+As two recorded runs on the lab host: the front with the lab up and idle (it needs sudo), then the piece from a clone in
+the network slots (its chain needs hidden_zk's builds), given the front's published outputs (`--front`, the front run's
+`out/`), which ends by writing the record. `record` alone rewrites it from a directory holding both runs' outputs.
 
 ~~~sh
 M=benchmarks/network_sim; python3 -B $M/mockdc.py down && python3 -B $M/mockdc.py up \
   && uv run --no-sync python -B $M/onsite.py front --out "$OUT" --keep KEEP
-uv run --no-sync python -B benchmarks/network_sim/onsite.py piece --out "$OUT" --keep KEEP
+uv run --no-sync python -B benchmarks/network_sim/onsite.py piece --out "$OUT" --keep KEEP --front FRONT_RUN/out
 uv run --no-sync python -B benchmarks/network_sim/onsite.py record --out DIR
 ~~~
 

@@ -149,6 +149,19 @@ def test_a_zone_whose_gate_didnt_accept_has_no_K(onsite, tmp_path):
     assert (got["verdict"], got["K"], got["gate"]["accepted"]) == ("not run", None, False)
 
 
+def test_the_piece_takes_the_fronts_outcome_from_its_out(onsite, tmp_path):
+    front, out, keep = tmp_path / "front", tmp_path / "out", tmp_path / "keep"
+    (front / "b0" / "front").mkdir(parents=True)
+    (front / "front.json").write_text("{}")
+    (front / "b0" / "front" / "session.json").write_text("{}")
+    args = argparse.Namespace(out=str(out), keep=str(keep), front=str(front), zone=[], lean=None, set=[])
+    with pytest.raises(SystemExit, match="no zone's serve dir under"):
+        onsite.piece(args)
+    assert (out / "front.json").is_file() and (out / "b0" / "front" / "session.json").is_file()
+    with pytest.raises(SystemExit, match="no front.json in"):
+        onsite.piece(argparse.Namespace(**vars(args) | {"out": str(tmp_path / "other"), "front": None}))
+
+
 def test_keep_is_refused_inside_out(onsite, tmp_path):
     with pytest.raises(SystemExit, match="inside --out, which the run publishes"):
         onsite.dirs(argparse.Namespace(out=str(tmp_path), keep=str(tmp_path / "keep")))
