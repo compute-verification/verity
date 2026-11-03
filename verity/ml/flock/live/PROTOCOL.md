@@ -1135,20 +1135,28 @@ served. `85-rec-reprice.sh` runs neither ZK server: it proves each V* statement 
 the third row's.
 
 **A stream stops at its failure budget.** `rec_live --firewall DIR --budget b` opens each recursive session on its stream
-with the failure budget b, the same at every open of the stream (`firewall.open` refuses another). A failure is a recursive
+with the failure budget b, at least 3 (`firewall.open` and Lean's `openSession` refuse a lesser one, and `rec_live` refuses
+it before it listens), the same at every open of the stream (`firewall.open` refuses another). A failure is a recursive
 session's stop (a missed time and a statement never opened included), or a refusal of a recursive session that had
 neither stopped nor released its last statement, on a stream that had not stopped; at the b-th, the ZK server refuses every
 outer session of the stream and every open, and `rec_live` closes the next connection before anything is served. A
-recursive session the worker abandons, asking for no statement after some release, ends where it stands for the
-challenger (its next proof never comes, `late`), but the ZK server records no stop until a request comes, so its own count
-misses it; the challenger's stream counts it. b is the challenger's stream's `budget` (`Stream(budget=...)`,
+recursive session is unended while it has neither stopped nor released its last statement, and the ZK server refuses an
+open while the stream's unended recursive sessions and its failures together reach b, so at most b of a stream's recursive
+sessions ever have a statement not released: each is unended, or stopped and so a failure. A recursive session the worker
+abandons, asking for no statement after some release, ends where it stands for the challenger (its next proof never
+comes, `late`); the ZK server records no stop until a request comes, but the session stays unended and holds one of the
+b. b is the challenger's stream's `budget` (`Stream(budget=...)`,
 `verity/core/protocols/sampled_proofs/service.py`, bound into the stream's digest), and the two must agree in three
 places: the same b, the same stream (one ZK server stream a challenger stream), and one recursive session a proof session
 of the challenger's: one registration's, or the consecutive registrations one `Stream.session` covers (at most the stream's
 `rounds`, at most 4). So each ZK server failure is a `reject` or `late` there for each round the session
 covers: the challenger's count is never below the ZK server's, and it holds at most `budget` minus its failures
-registrations open, so neither ends past b. A stop shows the challenger a cut or a missing proof, which is `late` or
-`reject`; a session the ZK server refuses after its stop sends nothing, and is no further failure on either side.
+registrations open, so neither ends past b. An honest stream is never refused an open: each of its unended recursive
+sessions covers a registration still open, since the relay releases a session's last statement before the ZK server
+delivers the session and the challenger closes its rounds, so at an open fewer than min(`rounds`, b) are unended
+(`test_an_honest_stream_is_never_refused_an_open`, in Lean and Python). A stop shows the challenger a cut or a missing
+proof, which is `late` or `reject`; a session the ZK server refuses after its stop sends nothing, and is no further failure
+on either side.
 
 **Proofs leave at public times.** `rec_live --parts L0,...,alg --release-windows-ms w0,...,w7` gives each recursive
 session a release schedule, recorded at its open: `start_ms`, the time its connection was accepted, and one public window
@@ -1202,5 +1210,5 @@ stopped recursive session. The Python relay reports such a fault as its connecti
 **Retries.** Every stop is recorded and counted, in both phases, so the auditor knows how many times a recursive session was
 run, and each run it allows reveals its own ending: `r` stopped runs before an accepted one reveal at most `r + 1` times the
 row's bound. The stream's budget bounds them: a stream has at most b failed recursive sessions before it stops, whoever
-asks for the next run, so the bound over the stream counts every retry. The auditor chooses b. With b = 1, a stream whose
-ZK server stops once runs nothing more.
+asks for the next run, so the bound over the stream counts every retry. The auditor chooses b, at least 3. With b = 3, a
+stream whose ZK server stops three times runs nothing more.

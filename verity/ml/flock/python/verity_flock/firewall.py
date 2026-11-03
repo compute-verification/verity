@@ -189,8 +189,7 @@ class Firewall:
         session's release schedule, public and fixed here, before the session: statement ``j`` is released at the end of
         its window, ``start_ms + sum(windows_ms[:j + 1])`` (rule 3)."""
         _parts_ok(parts)
-        if budget is not None and not (type(budget) is int and budget >= BUDGET_MIN):
-            raise ValueError(f"a failure budget is an integer of at least {BUDGET_MIN}, not {budget!r}")
+        budget_ok(budget)
         if release is not None:
             _schedule_ok(release, len(parts))
         with self._locked(streams=(stream,)) as rec:
@@ -709,6 +708,13 @@ def _parts_ok(parts) -> None:
             and len(set(parts)) == len(parts)):
         raise ValueError(f"a recursive session's statements are distinct names, at least one, none of them {INNER}, "
                          f"not {json.dumps(parts, sort_keys=True, default=repr)}")
+
+
+def budget_ok(budget) -> None:
+    """Raise `ValueError` unless ``budget`` is a stream's failure budget as an open is given it: none, or an integer of at
+    least `BUDGET_MIN` (Lean's `budgetArg`)."""
+    if budget is not None and not (type(budget) is int and budget >= BUDGET_MIN):
+        raise ValueError(f"a failure budget is an integer of at least {BUDGET_MIN}, not {budget!r}")
 
 
 def _schedule_ok(r: dict, n: int) -> None:

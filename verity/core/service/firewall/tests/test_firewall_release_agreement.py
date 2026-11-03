@@ -15,9 +15,11 @@ null `budget`, a `stop` with a `why`, a `finish` of part `inner`; so the record 
 
 from __future__ import annotations
 
+import copy
 import gzip
 import hashlib
 import json
+import random
 import re
 import shutil
 from collections import Counter
@@ -26,6 +28,8 @@ import pytest
 
 import _release as R
 import verity_difftest as D
+from verity.core.protocols.sampled_proofs import service as S
+from verity_flock import firewall as FW
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -42,7 +46,7 @@ lean = D.server_fixture(port("op", R.python_op, R.op_input()))
 
 def _vectors() -> list[dict]:
     v = json.loads(R.VECTORS.read_text())
-    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "schedule", "escapes"}
+    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes"}
     return v["cases"]
 
 
@@ -70,6 +74,97 @@ def test_the_lean_replays_the_shared_vectors(lean):
     for case in _vectors():
         assert _replay(_lean_op(lean), case) == (case["results"], case["record"]), case["name"]
         assert _replay(R.python_op, case) == (case["results"], case["record"]), case["name"]
+
+
+def _honest(rounds: int, budget: int, n: int, rng: random.Random | None) -> tuple[list[list], list, int]:
+    """An honest stream's firewall ops and their results, over `n` registrations of a challenger's stream at `rounds` and
+    `budget` (`service._step`, its rules), and the most recursive sessions unended at once. Each step is one the honest
+    flow allows next, `rng`'s choice (the first allowed without one): a registration once `ready` allows it, drawn at once;
+    a proof session (`session`) over the 1 to `rounds` earliest drawn rounds no session covers (one round without `rng`);
+    its recursive session opened after it (`rec_live` opens one when the session's inner session starts) and finished;
+    each statement admitted, then released (the relay releases it on the challenger's verdict); the session delivered once
+    its last statement is released (the ZK server delivers the records of sessions it saw end); each round's outcome
+    accepted, which closes its registration."""
+    params = {"budget": budget, "rounds": rounds, "proof_deadline": 1e9, "registration_deadline": None, "stream": "h"}
+    state = copy.deepcopy(S._EMPTY)
+
+    def step(op: dict):
+        nonlocal state
+        d, state = S._step(params, state, op)
+        return d
+
+    ops, results, uncovered, sessions, opened, most = [], [], [], [], 0, 0
+
+    def fw(op: list, result) -> None:
+        ops.append(op)
+        results.append(result)
+
+    while state["size"] < n or uncovered or any(s["stage"] != "done" for s in sessions):
+        moves = []
+        if state["size"] < n and step({"op": "ready"}) == {"ok": None}:
+            moves.append(("register", None))
+        if uncovered:
+            moves.append(("cover", None))
+        moves += [(s["stage"], s) for s in sessions if s["stage"] != "done"]
+        move, s = moves[0] if rng is None else rng.choice(moves)
+        if move == "register":
+            k = state["size"]
+            assert step({"op": "register", "checks": None, "registration": f"g{k}"}) == {"ok": k}
+            assert step({"op": "select", "order": k, "registration": f"g{k}", "checks": None, "draw": f"d{k}", "proved": 0,
+                         "at": 0.0}) == {"ok": None}
+            uncovered.append([k, f"g{k}", f"d{k}"])
+        elif move == "cover":
+            m = 1 if rng is None else rng.randint(1, min(rounds, len(uncovered)))
+            draws, uncovered[:m] = uncovered[:m], []
+            assert step({"op": "session", "draws": draws}) == {"ok": [d[0] for d in draws]}
+            sessions.append({"draws": draws, "stage": "open", "sid": None, "next": 0})
+        elif move == "open":
+            s["sid"], opened = f"r{opened:04d}", opened + 1
+            fw(["open", "h", list(R.NAMES), budget, None], s["sid"])
+            s["stage"] = "finish"
+            most = max(most, sum(t["stage"] in ("finish", "admit", "release") for t in sessions))
+        elif move == "finish":
+            fw(["finish", s["sid"]], None)
+            s["stage"] = "admit"
+        elif move == "admit":
+            fw(["admit", s["sid"], R.NAMES[s["next"]]], {"release_ms": None})
+            s["stage"] = "release"
+        elif move == "release":
+            fw(["release", s["sid"], R.NAMES[s["next"]]], None)
+            s["next"] += 1
+            s["stage"] = "admit" if s["next"] < len(R.NAMES) else "deliver"
+        elif move == "deliver":
+            assert step({"op": "deliver_session", "stream": "h", "draws": s["draws"], "sessions": ["0" * 128], "now": 0.0}) == {"ok": None}
+            s["stage"] = "outcome"
+        else:
+            for o, g, d in s["draws"]:
+                assert step({"op": "outcome", "order": o, "registration": g, "draw": d, "verdicts": None, "accepted": True,
+                             "now": 0.0}) == {"ok": S.ACCEPT}
+            s["stage"] = "done"
+    assert state["failures"] == 0 and state["opened"] == []
+    fw(["failures", "h"], 0)
+    return ops, results, most
+
+
+@pytest.mark.parametrize("rounds", range(1, S.ROUNDS + 1))
+def test_an_honest_stream_is_never_refused_an_open(lean, rounds):
+    """Completeness of the budget's open rule: an honest stream at each `rounds` R (1 to `ROUNDS`) and budget b (from
+    `BUDGET_MIN`), under the challenger's stream's rules, is refused nothing by the Lean and Python ZK servers alike, which
+    give the same results and record at every op. The challenger holds at most min(R, b − failures) registrations open,
+    each unended recursive session covers one of them, and a session is released whole before its rounds' outcomes close
+    them; so at an open its stream has fewer than min(R, b) unended. Without `rng` each session covers one round and is
+    opened as soon as it can be, so min(R, b) recursive sessions are unended at once: the most, which the rule allows."""
+    for budget in (FW.BUDGET_MIN, FW.BUDGET_MIN + 1):
+        most = 0
+        for rng in (None, *(random.Random(seed) for seed in range(3))):
+            ops, results, m = _honest(rounds, budget, 3 * rounds + 2, rng)
+            text = ""
+            for op, want in zip(ops, results):
+                got = _lean_op(lean)({"op": op, "record": text})
+                assert got == R.python_op({"op": op, "record": text}) and got["result"] == want, (rounds, budget, op, got)
+                text = got["record"]
+            most = max(most, m)
+        assert most == min(rounds, budget), (rounds, budget, most)
 
 
 def _result(out: dict) -> str:
@@ -125,15 +220,23 @@ def _apply(text: str, edit: list) -> str:
 #: one such line Rust's `foreign` damage writes
 FOREIGN = re.compile(r"the record's line (\d+) is not (an event of firewall/v0|the firewall's own)")
 FOREIGN_LINE = '{"event": "note", "seq": 7}\n'
+#: the refusal of an open whose stream's unended recursive sessions and failures reach its budget, a rule Rust's lacked
+UNENDED = re.compile(r"(?s)stream .*'s unended recursive sessions and failures reach its failure budget \(\d+ and \d+ of \d+\)")
+
+
+def _unended(result) -> bool:
+    return isinstance(result, dict) and UNENDED.fullmatch(str(result.get("refused"))) is not None
 
 
 def test_the_lean_runs_rusts_index_cases(lean):
     """Rust's index cases, op by op: its three streams (seeds 20261016 and 7, and 11 with a session id past the index's key
     limit), 1500 draws each, an op or damage to the record (torn, cut, halved, edited, rewritten, a line foreign to it), a
     repair or an append, which leave 3979 ops. Of those, Rust rejected 762, and the Lean rejects each; Rust answered 3217,
-    and at 2830 of them the Lean's result and the record it leaves are Rust's byte for byte. The other 387 are outside the
-    domain: their record holds a line the ZK server doesn't write (`foreign`), which Rust read past and the Lean refuses the
-    record for (`test_the_lean_reads_only_the_firewalls_lines`). A step's `edit` is the record before it as an edit `[AT, CUT, PUT]` of the one the step before left (CUT bytes
+    and at 2822 of them the Lean's result and the record it leaves are Rust's byte for byte. At 8, opens Rust made, the
+    Lean refuses the open and leaves the record as it was, as Python does: the stream's unended recursive sessions and
+    failures reach its budget, a rule Rust's lacked. The other 387 are outside the domain: their record holds a line the ZK
+    server doesn't write (`foreign`), which Rust read past and the Lean refuses the record for
+    (`test_the_lean_reads_only_the_firewalls_lines`). A step's `edit` is the record before it as an edit `[AT, CUT, PUT]` of the one the step before left (CUT bytes
     at byte AT replaced by PUT), its `out` the record it leaves as an edit of the one before it, and `after` that record's
     SHA-256."""
     tally: Counter = Counter()
@@ -156,14 +259,18 @@ def test_the_lean_runs_rusts_index_cases(lean):
         else:
             assert kind == "output", (n, step, out)
             got = json.loads(out)
+            if step["op"][0] == "open" and isinstance(step["result"], str) and _unended(got["result"]):
+                assert got["record"] == before and R.python_op({"op": step["op"], "record": before}) == got, (n, step, got)
+                tally["unended"] += 1
+                continue
             assert (got["result"], got["record"]) == (step["result"], text), (n, step, got)
         tally[f"{step['op'][0]}:{'reject' if 'reject' in step else _result({'result': step['result']})}"] += 1
     print(dict(sorted(tally.items())))
     assert dict(tally) == {
         "admit:ok": 7, "admit:refused": 925, "admit:reject": 195, "failures:ok": 202, "failures:reject": 52,
-        "finish:ok": 206, "finish:reject": 63, "open:error": 32, "open:ok": 212, "open:refused": 184, "open:reject": 126,
+        "finish:ok": 206, "finish:reject": 63, "open:error": 32, "open:ok": 204, "open:refused": 184, "open:reject": 126,
         "outside": 387, "release:ok": 434, "release:reject": 115, "slot:ok": 418, "slot:reject": 147, "stop:ok": 210,
-        "stop:reject": 64}, tally
+        "stop:reject": 64, "unended": 8}, tally
 
 
 def test_the_loops_stages_run_rusts_outer_sessions(lean):
