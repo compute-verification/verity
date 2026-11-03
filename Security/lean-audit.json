@@ -2285,6 +2285,7 @@
   "PouwCommit.Coins",
   "PouwCommit.Draws",
   "SampledProofs",
+  "Properties.SampledProofs.Draw",
   "Proofs.Pouw.OnsiteFreed"
  ],
  "claims": {
