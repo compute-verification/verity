@@ -6,5 +6,6 @@ from __future__ import annotations
 import os
 
 REMOTETIE = os.environ.get("VERITY_PROVE_PATH_REMOTETIE", "") == "1"
-"""`VERITY_PROVE_PATH_REMOTETIE=1`: test_remotetie records, commits and writes its toy's window and runs the Lean verifiers on
-it, which takes minutes and Lean's toolchain (`served_cases.build` runs ``lake build``); without it those tests skip."""
+"""`VERITY_PROVE_PATH_REMOTETIE=1`: test_remotetie and test_pearltie record, commit and write their toys' windows and run the
+Lean verifiers on them, which takes minutes and Lean's toolchain (`served_cases.build` runs ``lake build``); without it those
+tests skip."""
