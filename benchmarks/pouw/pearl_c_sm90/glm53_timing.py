@@ -4,7 +4,7 @@ in-domain linears and decode's and prefill's M (`--model`'s ``in_domain``, ``DEC
 shape is timed as one dense call, not the grouped launch.
 
   python benchmarks/pouw/pearl_c_sm90/glm53_timing.py --out DIR [--model glm53|llama32_1b] [--cubin C] [--reps 15] [--shapes N:K ...] [--m M ...] [--schedule S ...] [--graphs]
-  python benchmarks/pouw/pearl_c_sm90/glm53_timing.py --whole --out DIR [--model glm53|llama32_1b] [--cubin C] [--reps 15] [--shapes N:K ...] [--m M ...]
+  python benchmarks/pouw/pearl_c_sm90/glm53_timing.py --whole --out DIR [--model glm53|llama32_1b] [--cubin C] [--reps 15] [--shapes N:K ...] [--m M ...] [--layers L]
 
 Arms, each one linear's call on a BF16 x of M rows:
 
@@ -36,14 +36,15 @@ recorded with its error and left out there.  Each rep times every arm once, in a
 hashing pearlc arm's passes must commit what ``pearlc``'s commit (`COMMITMENT`) and serve y's bytes, and so must one pass of
 each from poisoned outputs (``agree``).  Writes ``timing.json`` in DIR, one row a point; exits non-zero when any arm differs.
 
-``--whole`` times decode's forward instead, at each M up to `GRAPH_ROWS` (default decode's): every shape's weight called once
+``--whole`` times decode's forward instead, at each M up to `GRAPH_ROWS` (default decode's): every shape's weight (default
+`--model`'s in-domain linears in the layer's order, ``--layers`` layers of them, each layer's its own weights) called once
 on its own x of M rows, in the run's slot order (`forward_of`), under the arms of `WHOLE`: the calls one at a time, each its
 own graph (``--graphs``'s ``pearlc``), and the forward captured whole as vLLM captures decode (`capture_whole`), serial,
-deferred (``whole_defer``: each call's tile hashing on a side stream beside the next call's A tree) and with hashing off;
-beside each stock arm that builds at every shape, its forward captured as one CUDA graph (`capture_stock`; run eagerly, and
-said so, when torch can't capture it).  Every hashing arm's passes must commit alike (`COMMITMENT`), and so must a pass of
-each from poisoned outputs: the deferred capture writes the bytes the calls one at a time write.  Writes ``whole.json`` in
-DIR, one row an M; exits non-zero when any commitment differs.
+deferred (``whole_defer``: each call's tile hashing on a side stream beside the next call's A tree), under the served
+arm's options (`SERVED`) and with hashing off; beside each stock arm that builds at every shape, its forward captured as
+one CUDA graph (`capture_stock`; run eagerly, and said so, when torch can't capture it).  Every hashing arm's passes must
+commit alike (`COMMITMENT`), and so must a pass of each from poisoned outputs: each capture writes the bytes the calls one
+at a time write.  Writes ``whole.json`` in DIR, one row an M; exits non-zero when any commitment differs.
 """
 
 from __future__ import annotations
@@ -66,9 +67,17 @@ ERR = 0.08
 EPOCH = 20261023
 STOCK = ("deepgemm", "cutlass", "triton", "cublaslt")
 MODELS = ("glm53", "llama32_1b")
-#: --whole's pearlc arms, (hashing, whole_defer): None for the calls made one at a time, each its own graph
-WHOLE = {"pearlc-calls": (True, None), "pearlc-whole": (True, False), "pearlc-deferred": (True, True),
-         "pearlc-whole-nohash": (False, False)}
+#: a whole capture's options (`pouw_pearl_c_lanes.whole_options`), each off unless an arm names it
+OPTIONS = ("whole_defer", "whole_defer_a", "whole_fork_stats", "whole_tree_sm", "whole_shape_joins")
+#: the options pearl_c_vllm's served arm (`bench_arm.PearlCWholeArm.run_options`) captures with on this kernel: each call's
+#: tile hashing beside the next call, its A tree beside its own forming and GEMM, which leave the tree's CTA its SM, and its
+#: A scales beside its A commitment
+SERVED = ("whole_defer", "whole_defer_a", "whole_fork_stats", "whole_tree_sm")
+#: --whole's pearlc arms, (hashing, the whole capture's options): None for the calls made one at a time, each its own graph
+WHOLE = {"pearlc-calls": (True, None), "pearlc-whole": (True, ()), "pearlc-deferred": (True, ("whole_defer",)),
+         "pearlc-served": (True, SERVED), "pearlc-whole-nohash": (False, ())}
+#: the arms whose saving over the calls one at a time and over the serial capture a row gives
+SAVING = ("pearlc-deferred", "pearlc-served")
 #: what a pass's end commits (`PearlCDeviceRun.end`), on which every hashing arm's passes must agree
 COMMITMENT = ("units", "tiles", "transcript_root", "activation_roots", "screened_rows", "failing_rows", "unsure_rows")
 
@@ -254,14 +263,21 @@ def forward_of(run, weights: dict, xs: dict):
     return forward
 
 
-def capture_whole(run, forward, hashing: bool, defer: bool):
-    """`forward` captured whole as vLLM captures decode (`pouw_pearl_c_whole`), in a fresh pass under `hashing` and `defer`
-    (``whole_defer``, set before `whole_capture_begin` makes the side stream): the pass's key, a warm-up forward outside the
-    capture, which makes each call's graph, then the capture on a stream of its own.  The pass is ended after it, its
-    calls records with no work behind them.  Returns (the graph, its calls)."""
+def set_whole(run, hashing: bool, options) -> None:
+    """The run's hashing, and each of a whole capture's `OPTIONS`, on where `options` (or None) names it."""
+    run.hashing = hashing
+    for o in OPTIONS:
+        setattr(run, o, o in (options or ()))
+
+
+def capture_whole(run, forward, hashing: bool, options):
+    """`forward` captured whole as vLLM captures decode (`pouw_pearl_c_whole`), in a fresh pass under `hashing` and the
+    whole capture's `options` (`set_whole`, before `whole_capture_begin` makes the side streams): the pass's key, a warm-up
+    forward outside the capture, which makes each call's graph, then the capture on a stream of its own.  The pass is ended
+    after it, its calls records with no work behind them.  Returns (the graph, its calls)."""
     import torch
     run.end_pass()
-    run.hashing, run.whole_defer = hashing, defer
+    set_whole(run, hashing, options)
     key = run.whole_key()
     if key is None:
         raise RuntimeError("the run replays no forward whole: graphs off, or a schedule the graph path doesn't run")
@@ -336,15 +352,16 @@ def commitment(out: dict) -> dict:
     return {k: out.get(k) for k in COMMITMENT}
 
 
-def whole(run, weights: dict, xs: dict, stock: dict, reps: int) -> dict:
-    """One --whole row (the module's docstring) at xs' M.  `stock` maps each stock arm that builds at every shape to its
-    call a weight ({w: f}).  Each pearlc sample is a fresh pass of `INNER` forwards, whose end is timed apart and, with
-    hashing, committed; then each hashing arm makes one more pass from outputs poisoned 0xA5."""
+def whole(run, weights: dict, xs: dict, stock: dict, reps: int, layers: int = 1) -> dict:
+    """One --whole row (the module's docstring) at xs' M, over `layers` layers' linears.  `stock` maps each stock arm that
+    builds at every shape to its call a weight ({w: f}).  Each pearlc sample is a fresh pass of `INNER` forwards, whose end
+    is timed apart and, with hashing, committed; then each hashing arm makes one more pass from outputs poisoned 0xA5."""
     import torch
     order = sorted(weights, key=run.order.__getitem__)
     forward = forward_of(run, weights, xs)
-    arms = {nm: (hashing, bool(defer), forward if defer is None else replay_whole(run, *capture_whole(run, forward, hashing, defer)))
-            for nm, (hashing, defer) in WHOLE.items()}
+    arms = {nm: (hashing, options,
+                 forward if options is None else replay_whole(run, *capture_whole(run, forward, hashing, options)))
+            for nm, (hashing, options) in WHOLE.items()}
     stocks, graphed, errors = {}, {}, {}
     for nm, fs in stock.items():
         f, graphed[nm], err = capture_stock(lambda fs=fs: [fs[w](xs[w]) for w in order])
@@ -359,7 +376,7 @@ def whole(run, weights: dict, xs: dict, stock: dict, reps: int) -> dict:
     def fresh(nm):
         run.repeat_at = at          # every compared pass from one call index, so their commitments can repeat
         run.end_pass()
-        run.hashing, run.whole_defer = arms[nm][0], arms[nm][1]
+        set_whole(run, arms[nm][0], arms[nm][1])
 
     def sample(nm):
         if nm not in arms:
@@ -392,19 +409,20 @@ def whole(run, weights: dict, xs: dict, stock: dict, reps: int) -> dict:
         for _ in range(INNER):
             arms[nm][2]()
         poisoned[nm] = commitment(run.end_pass())
-    run.hashing, run.whole_defer = True, False
+    set_whole(run, True, ())
     med = {nm: statistics.median(v) for nm, v in samples.items()}
     want = ends["pearlc-calls"][0]
     equal = all(c == want for v in ends.values() for c in v)
     poisoned_equal = all(c == want for c in poisoned.values())
     best = min(stocks, key=med.get) if stocks else None
     return {"m": next(iter(xs.values())).shape[0], "shapes": [list(weights[w].shape) for w in order], "calls": len(order),
-            "ms": med, "ms_per_call": {nm: v / len(order) for nm, v in med.items()}, "runs": samples,
+            "layers": layers, "ms": med, "ms_per_call": {nm: v / len(order) for nm, v in med.items()},
+            "ms_per_layer": {nm: v / layers for nm, v in med.items()}, "runs": samples,
             "pass_end_ms": {nm: statistics.median(v) for nm, v in pass_end.items()},
             "stock_graphed": graphed, "stock_errors": errors, "fastest_stock": best,
             "slowdown": {nm: med[nm] / med[best] for nm in arms} if best else None,
-            "deferred_saving": {"vs_calls": 1 - med["pearlc-deferred"] / med["pearlc-calls"],
-                                "vs_whole": 1 - med["pearlc-deferred"] / med["pearlc-whole"]},
+            "saving": {nm: {"vs_calls": 1 - med[nm] / med["pearlc-calls"], "vs_whole": 1 - med[nm] / med["pearlc-whole"]}
+                       for nm in SAVING},
             "commitment": want, "commitments_equal": equal, "poisoned_equal": poisoned_equal,
             **({} if equal and poisoned_equal else {"commitments": ends, "poisoned": poisoned})}
 
@@ -438,24 +456,34 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--schedule", nargs="+", default=["serial"],
                    help="pearlc's schedule, then each further arm's (verity.core.protocols.pouw.serving.SCHEDULES)")
     p.add_argument("--graphs", action="store_true", help="pearlc's calls of up to 256 rows replayed as CUDA graphs (a side lane's schedule: one a lane)")
-    p.add_argument("--whole", action="store_true", help="decode's forward captured whole, serial and deferred (whole.json)")
+    p.add_argument("--whole", action="store_true",
+                   help="decode's forward captured whole, serial, deferred and as served (whole.json)")
+    p.add_argument("--layers", type=int, default=1, help="--whole: the forward's layers, each its own weights of the shapes")
     a = p.parse_args(argv)
     import torch
     from verity_vllm.protocols.pouw.pearl_c.graphs import GRAPH_ROWS
+    from verity_vllm.protocols.pouw.pearl_c.lanes import whole_options
 
     out, dev, model = Path(a.out), torch.device("cuda"), importlib.import_module(a.model)
     table = model.in_domain(a.scheme)
-    shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else sorted(table)
+    shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else (list(table) if a.whole else sorted(table))
+    shapes *= a.layers
     ms = a.m or ([*model.DECODE_M] if a.whole else [*model.DECODE_M, *model.PREFILL_M])
-    if a.whole and (a.schedule != ["serial"] or max(ms) > GRAPH_ROWS or len(set(shapes)) != len(shapes)):
-        p.error(f"--whole: the serial schedule, M up to {GRAPH_ROWS} and distinct shapes (a deferred call joins at once after "
-                f"its own shape's)")
+    if a.layers < 1 or (a.layers > 1 and not a.whole):
+        p.error("--layers: at least 1, and only with --whole")
+    if a.whole and (a.schedule != ["serial"] or max(ms) > GRAPH_ROWS or any(s == t for s, t in zip(shapes, shapes[1:]))):
+        p.error(f"--whole: the serial schedule, M up to {GRAPH_ROWS} and no shape twice in a row (a deferred call joins at "
+                f"once after its own shape's)")
     out.mkdir(parents=True, exist_ok=True)
     run, weights, kernel, gen = device_run(shapes, a.scheme, a.cubin, a.schedule[0], a.graphs or a.whole)
+    if a.whole:
+        for nm, (_, options) in WHOLE.items():
+            whole_options(f"--whole {nm}", kernel, **{o: o in (options or ()) for o in OPTIONS})
 
     def join():
         run.join_sides(torch.cuda.current_stream())
-    head = {"model": a.model, "scheme": a.scheme, "schedule": a.schedule, "graphs": a.graphs or a.whole, "whole": a.whole, "epoch": EPOCH,
+    head = {"model": a.model, "scheme": a.scheme, "schedule": a.schedule, "graphs": a.graphs or a.whole, "whole": a.whole,
+            "whole_options": {nm: options for nm, (_, options) in WHOLE.items()} if a.whole else None, "epoch": EPOCH,
             "device": torch.cuda.get_device_name(dev), "cubin_sha256": kernel.cubin_sha256,
             "kernel_source_sha256": kernel.source_sha256, "torch": torch.__version__, "reps": a.reps, "inner": INNER,
             "fadd_readings": {k: str(v) for k, v in glm53.FADD_READINGS.items()}}
@@ -472,13 +500,15 @@ def main(argv: list[str] | None = None) -> int:
                                       for nm in STOCK if nm not in stock}
         for m in ms:
             xs = {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
-            r = whole(run, weights, xs, stock, a.reps)
+            r = whole(run, weights, xs, stock, a.reps, a.layers)
             rows.append(r)
-            print(f"m {m}, a forward of {r['calls']} calls: " + ", ".join(f"{nm} {v:.4f} ms" for nm, v in r["ms"].items())
-                  + f"; deferred saves {r['deferred_saving']['vs_calls']:.1%} over the calls one at a time, "
-                  f"{r['deferred_saving']['vs_whole']:.1%} over the serial capture"
-                  + (f"; slowdown deferred {r['slowdown']['pearlc-deferred']:.3f}x over {r['fastest_stock']}"
-                     + ("" if r["stock_graphed"][r["fastest_stock"]] else " (eager)") if r["fastest_stock"] else "; no stock arm")
+            print(f"m {m}, a forward of {r['calls']} calls ({a.layers} layers): "
+                  + ", ".join(f"{nm} {v:.4f} ms" for nm, v in r["ms"].items())
+                  + "".join(f"; {nm} saves {s['vs_calls']:.1%} over the calls one at a time, {s['vs_whole']:.1%} over "
+                            f"the serial capture" for nm, s in r["saving"].items())
+                  + ("; slowdown " + ", ".join(f"{nm} {r['slowdown'][nm]:.3f}x" for nm in SAVING)
+                     + f" over {r['fastest_stock']}" + ("" if r["stock_graphed"][r["fastest_stock"]] else " (eager)")
+                     if r["fastest_stock"] else "; no stock arm")
                   + f"; commitments {'equal' if r['commitments_equal'] else 'DIFFER'}, poisoned "
                   f"{'equal' if r['poisoned_equal'] else 'DIFFER'}", flush=True)
             (out / "whole.json").write_text(json.dumps({**head, "rows": rows}, indent=1) + "\n")

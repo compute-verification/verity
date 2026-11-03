@@ -194,19 +194,22 @@ def test_llama_linears_are_one_cards_and_all_in_the_domain():
 
 def test_h200_session_runs_the_tables_shapes():
     """h200.sh's run.py SHAPES are every in-domain (n, k) of its MODEL (`in_domain`, each model's list), at decode's 64 and
-    prefill's 8192; every step after the check runs at MODEL's linears; it times decode's forward whole (--whole, every
-    in-domain shape) and prefill under the h3 chain beside the default one, and checks the captured passes' outputs in full
-    after every lease."""
+    prefill's 8192; every step after the check runs at MODEL's linears; it times each linear under the serial schedule,
+    graphed and eager, and deferred-a, decode's forward whole (--whole, every in-domain shape) over llama32_1b's every layer
+    and one of glm53's, and prefill under the h3 chain beside the default one, and checks the captured passes' outputs in
+    full after every lease."""
     sh = (HERE / "h200.sh").read_text()
-    listed = dict(re.findall(r'^\s*(\w+)\) NKS="([\dx ]+)" ;;$', sh, re.M))
-    T = _timing()
+    listed = {m: (nks, int(layers)) for m, nks, layers in
+              re.findall(r'^\s*(\w+)\) NKS="([\dx ]+)"; LAYERS=\$\{LAYERS:-(\d+)\} ;;$', sh, re.M)}
+    T, llama = _timing(), _llama()
     assert set(listed) == set(T.MODELS) and "MODEL=${MODEL:-glm53}" in sh
-    for model, mod in (("glm53", G), ("llama32_1b", _llama())):
-        assert {tuple(map(int, x.split("x"))) for x in listed[model].split()} == set(mod.in_domain()), model
+    for model, mod in (("glm53", G), ("llama32_1b", llama)):
+        assert {tuple(map(int, x.split("x"))) for x in listed[model][0].split()} == set(mod.in_domain()), model
+    assert listed["llama32_1b"][1] == llama.CONFIG["L"] and listed["glm53"][1] == 1
     assert 'for nk in $NKS; do\n  SHAPES="$SHAPES 64x$nk 8192x$nk"' in sh
     assert '"$D/glm53_passes.py" capture --model "$MODEL" --out "$O/passes"' in sh
-    assert '"$D/glm53_timing.py" --model "$MODEL" --out "$O" >' in sh
-    assert '"$D/glm53_timing.py" --model "$MODEL" --whole --out "$O/whole"' in sh
+    assert '"$D/glm53_timing.py" --model "$MODEL" --out "$O" --graphs --schedule serial deferred-a >' in sh
+    assert '"$D/glm53_timing.py" --model "$MODEL" --whole --layers "$LAYERS" --out "$O/whole"' in sh
     assert 'PEARLC_CHAIN=h3 "$PY" "$D/glm53_timing.py" --model "$MODEL" --out "$O/timing-h3" --m 2048 8192' in sh
     assert sh.index('"$D/glm53_passes.py" full --out "$O/passes" --jobs "$(nproc)"') > sh.index('echo "lease rc $?"')
 
@@ -289,24 +292,28 @@ def _card(monkeypatch, torch) -> Card:
 
 class Run:
     """`PearlCDeviceRun`'s whole-capture surface over a `Card`: a call is 1 ms of GEMM and, with hashing, 0.5 ms of tile
-    hashing, which a deferred capture runs beside the next call, and 0.25 ms more when made alone (its own graph's slot and
-    launch).  A pass commits the calls its GPU work ran, in order; `leak` makes the deferred work leave a call's leaves
-    unwritten ("deferred"), or the poison in them ("poison")."""
+    hashing, which a deferred capture runs beside the next call, less 0.25 ms where it also defers A's tree
+    (``whole_defer_a``), and 0.25 ms more when made alone (its own graph's slot and launch).  A pass commits the calls its
+    GPU work ran, in order; `leak` makes the deferred work leave a call's leaves unwritten ("deferred"), or the poison in
+    them ("poison")."""
 
     def __init__(self, card: Card, order: dict):
         self.card, self.order, self.device = card, order, "cuda"
-        self.graphs, self.hashing, self.whole_defer, self.leak = True, True, False, None
+        self.graphs, self.hashing, self.whole_defer, self.whole_defer_a, self.leak = True, True, False, False, None
         self.log, self._whole, self.units, self.ran, self.poisoned = [], None, 0, [], False
         self.repeat_at = None
+
+    def options(self):
+        return tuple(sorted(k for k, v in vars(self).items() if k.startswith("whole_") and v is True))
 
     def epoch_calls(self):
         return self.units
 
     def whole_key(self):
-        return (self.hashing, self.whole_defer and self.hashing) if self.graphs else None
+        return (self.hashing, self.options() if self.hashing else ()) if self.graphs else None
 
     def whole_capture_begin(self, key):
-        self.log.append(("begin", key, self.hashing, self.whole_defer))
+        self.log.append(("begin", key, self.hashing, self.options()))
         self._whole = []
 
     def whole_capture_end(self):
@@ -322,7 +329,7 @@ class Run:
         else:
             self.log.append(("call", w, m, self._whole is not None))
             self.units += 1
-        cost = 1.0 + 0.5 * (self.hashing and not deferred) + 0.25 * (not captured)
+        cost = 1.0 + 0.5 * (self.hashing and not deferred) + 0.25 * (not captured) - 0.25 * (deferred and self.whole_defer_a)
         hashing = self.hashing
 
         def work():
@@ -371,34 +378,75 @@ def _whole_setup(monkeypatch):
     return T, run, weights, xs, {"cutlass": stock(0.25), "triton": stock(0.5, refuse=True), "deepgemm": stock(0.25, fail=True)}
 
 
-def test_whole_times_decodes_forward_captured_serial_and_deferred_beside_the_calls_one_at_a_time(monkeypatch):
-    """--whole's row: each capture sets its pass's hashing and deferral before `whole_capture_begin`, warms up outside the
-    capture and captures every weight once in slot order; each pearlc sample is a fresh pass of `INNER` replays (slots, graph,
-    records); a stock forward torch can't capture runs eagerly, one whose warm-up fails is left out; and the hashing arms'
-    passes, and one of each from poisoned outputs, commit alike."""
+def test_whole_times_decodes_forward_captured_serial_deferred_and_as_served_beside_the_calls_one_at_a_time(monkeypatch):
+    """--whole's row: each capture sets its pass's hashing and whole-capture options before `whole_capture_begin`, warms up
+    outside the capture and captures every weight once in slot order; each pearlc sample is a fresh pass of `INNER` replays
+    (slots, graph, records); a stock forward torch can't capture runs eagerly, one whose warm-up fails is left out; and the
+    hashing arms' passes, and one of each from poisoned outputs, commit alike."""
     T, run, weights, xs, stock = _whole_setup(monkeypatch)
     row = T.whole(run, weights, xs, stock, reps=3)
-    assert row["ms"] == {"pearlc-calls": 3 * 1.75, "pearlc-whole": 3 * 1.5, "pearlc-deferred": 3.0, "pearlc-whole-nohash": 3.0,
-                         "cutlass": 0.75, "triton": 1.5}
+    assert row["ms"] == {"pearlc-calls": 3 * 1.75, "pearlc-whole": 3 * 1.5, "pearlc-deferred": 3.0, "pearlc-served": 2.25,
+                         "pearlc-whole-nohash": 3.0, "cutlass": 0.75, "triton": 1.5}
     assert row["ms_per_call"]["pearlc-deferred"] == 1.0 and row["calls"] == 3 and row["m"] == 16
+    assert row["layers"] == 1 and row["ms_per_layer"] == row["ms"]
     assert row["shapes"] == [[24, 4], [8, 4], [16, 4]]
-    assert row["deferred_saving"] == {"vs_calls": 1 - 3 / 5.25, "vs_whole": 1 - 3 / 4.5}
+    assert row["saving"] == {"pearlc-deferred": {"vs_calls": 1 - 3 / 5.25, "vs_whole": 1 - 3 / 4.5},
+                             "pearlc-served": {"vs_calls": 1 - 2.25 / 5.25, "vs_whole": 1 - 2.25 / 4.5}}
     assert row["fastest_stock"] == "cutlass" and row["slowdown"]["pearlc-deferred"] == 4.0
+    assert row["slowdown"]["pearlc-served"] == 3.0
     assert row["stock_graphed"] == {"cutlass": True, "triton": False, "deepgemm": False}
     assert set(row["stock_errors"]) == {"triton", "deepgemm"} and len(row["runs"]["triton"]) == 3
-    assert row["pass_end_ms"] == {"pearlc-calls": 0.125, "pearlc-whole": 0.125, "pearlc-deferred": 0.125, "pearlc-whole-nohash": 0}
+    assert row["pass_end_ms"] == {"pearlc-calls": 0.125, "pearlc-whole": 0.125, "pearlc-deferred": 0.125,
+                                  "pearlc-served": 0.125, "pearlc-whole-nohash": 0}
     assert row["commitments_equal"] and row["poisoned_equal"] and "commitments" not in row
     assert row["commitment"]["units"] == 3 * T.INNER and row["commitment"]["screened_rows"] == 16 * 3 * T.INNER
     begins = [e for e in run.log if e[0] == "begin"]
-    assert begins == [("begin", (True, False), True, False), ("begin", (True, True), True, True),
-                      ("begin", (False, False), False, False)]
+    served = tuple(sorted(T.SERVED))
+    assert begins == [("begin", (True, ()), True, ()), ("begin", (True, ("whole_defer",)), True, ("whole_defer",)),
+                      ("begin", (True, served), True, served), ("begin", (False, ()), False, ())]
     at = run.log.index(begins[1])
     assert run.log[at - 1][0] == "end_pass" and run.log[at + 1:at + 4] == [("call", w, 16, True) for w in (7, 5, 6)]
     assert run.log[at + 4] == ("end", ((7, 16), (5, 16), (6, 16))) and run.log[at + 5][0] == "end_pass"
     poisons = [i for i, e in enumerate(run.log) if e == ("poison",)]
-    assert len(poisons) == 3 and all(run.log[i - 1][0] == "end_pass" for i in poisons)
+    assert len(poisons) == 4 and all(run.log[i - 1][0] == "end_pass" for i in poisons)
     assert run.log[poisons[1] + 1:poisons[1] + 1 + T.INNER] == [("replay", ((7, 16), (5, 16), (6, 16)))] * T.INNER
-    assert (run.hashing, run.whole_defer) == (True, False)
+    assert (run.hashing, run.options()) == (True, ())
+
+
+def test_whole_served_arm_captures_as_the_served_arm_does_on_this_kernel():
+    """--whole's ``pearlc-served`` captures with the whole-capture options pearl_c_vllm's served arm runs on pearl_c_sm90
+    (`PearlCWholeArm.run_options` less its pearl_c_sm120-only ones), and `OPTIONS` names every whole-capture option
+    `whole_options` takes but the pass end's and pearl_c_sm120's B̃ prefetch, so a new served option fails here."""
+    import inspect
+
+    from verity_vllm.protocols.pouw.pearl_c.lanes import whole_options
+    spec = importlib.util.spec_from_file_location("pearl_c_vllm_bench_arm", HERE.parent / "pearl_c_vllm" / "bench_arm.py")
+    B = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(B)
+    T, arm = _timing(), B.PearlCWholeArm
+    takes = set(inspect.signature(whole_options).parameters) - {"entry", "kernel"}
+    assert set(T.OPTIONS) == takes - {"lag_ends", "aside_ends", "whole_prefetch_b"}
+    assert {o for o in arm.run_options if o in takes - {"lag_ends", "aside_ends"} and o not in arm.RTX_ONLY} == set(T.SERVED)
+    assert T.WHOLE["pearlc-served"] == (True, T.SERVED) and set(T.SAVING) <= set(T.WHOLE)
+
+
+def test_whole_runs_layers_of_the_models_linears_in_the_layers_order(tmp_path, monkeypatch):
+    """--whole --layers L calls L layers' linears, each its own weights, in the layer's order (`in_domain`'s), and --layers
+    is refused without --whole."""
+    pytest.importorskip("torch")
+    T, got = _timing(), []
+
+    def device_run(shapes, *args):
+        got.append(shapes)
+        raise SystemExit(3)
+    monkeypatch.setattr(T, "device_run", device_run)
+    with pytest.raises(SystemExit) as e:
+        T.main(["--whole", "--model", "llama32_1b", "--layers", "16", "--out", str(tmp_path / "out")])
+    layer = list(_llama().in_domain())
+    assert e.value.code == 3 and len(layer) == 4 and got == [layer * 16]
+    with pytest.raises(SystemExit) as e:
+        T.main(["--layers", "2", "--out", str(tmp_path / "calls")])
+    assert e.value.code == 2 and not (tmp_path / "calls").exists()
 
 
 @pytest.mark.parametrize("leak", ["deferred", "poison"])
@@ -409,15 +457,17 @@ def test_whole_names_a_deferred_capture_that_commits_otherwise(monkeypatch, leak
     run.leak = leak
     row = T.whole(run, weights, xs, stock, reps=2)
     assert row["commitments_equal"] is (leak == "poison") and row["poisoned_equal"] is False
-    assert row["commitments"]["pearlc-deferred"][0] != row["commitment"] or leak == "poison"
-    assert row["poisoned"]["pearlc-whole"] == row["commitment"] != row["poisoned"]["pearlc-deferred"]
+    for nm in T.SAVING:
+        assert row["commitments"][nm][0] != row["commitment"] or leak == "poison"
+        assert row["poisoned"]["pearlc-whole"] == row["commitment"] != row["poisoned"][nm]
 
 
 @pytest.mark.parametrize("args", [["--m", "512"], ["--schedule", "deferred"], ["--shapes", "512:6144", "512:6144"],
+                                  ["--shapes", "512:6144", "--layers", "2"], ["--layers", "0"],
                                   ["--model", "llama32_1b", "--m", "8192"], ["--model", "gpt2"]])
 def test_whole_refuses_what_it_cant_capture(tmp_path, args):
-    """--whole runs the serial schedule at M up to GRAPH_ROWS over distinct shapes (a deferred call joins at once after its
-    own shape's), and refuses anything else before it touches a card."""
+    """--whole runs the serial schedule at M up to GRAPH_ROWS over shapes no two consecutive alike (a deferred call joins at
+    once after its own shape's), and refuses anything else before it touches a card."""
     pytest.importorskip("torch")
     with pytest.raises(SystemExit) as e:
         _timing().main(["--whole", "--out", str(tmp_path / "out"), *args])
