@@ -198,7 +198,7 @@ def _ast(source: str, mode: str = "exec") -> ast.Module | ast.Expression | Excep
 def _built_paths(text: str) -> Iterator[re.Match]:
     """`_BUILT_PATH.finditer(text)`, trying the expression only before each `/` a string follows: a match's head holds no
     whitespace and no `/` and only whitespace parts it from its first such `/`, so it starts in the run of non-whitespace before
-    the first one at or after where the search is, or nowhere before that `/`. Scanning from every name takes seconds."""
+    the first one at or after where the search is, or nowhere before that `/`. Trying it at every name is the slow way."""
     pos = 0
     while s := _QUOTED_SLASH.search(text, pos):
         slash = lo = s.start()

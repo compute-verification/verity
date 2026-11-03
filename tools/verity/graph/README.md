@@ -28,7 +28,7 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 
 | path | what |
 | --- | --- |
-| `verity_graph/contract.py` | schema names, `canonical`, `file_digest`, `env_digest`, `key`, `result_errors` |
+| `verity_graph/contract.py` | schema names, `canonical`, `file_digest`, `env_digest`, `key` (and `keyer`, the same keys for many tasks at once), `result_errors` |
 | `verity_graph/graph.py` | the listing: `tasks.toml`, the tree's files, each family's tasks completed and checked, digests, keys |
 | `verity_graph/families/<family>.py` | a family's lister, `tasks(root: Path, files: list[str]) -> list[dict]` |
 | `verity_graph/runners/<kind>.py` | a kind's runner, `run(task: dict, work: Path) -> dict` |
