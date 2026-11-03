@@ -508,10 +508,11 @@ def model_config(rec: dict, blob: bytes) -> dict:
 
 
 def model_record(rec: dict, config: dict, state: dict[str, torch.Tensor]) -> dict:
-    """A start record's fields `positions`, `deep_share`, `train_flops` and `eval_cost` read, for the model of `state`."""
+    """A start record's fields `positions`, `deep_share`, `train_flops` and `eval_cost` read (evaluate.py's too: the
+    tokenizer, the start's), for the model of `state`."""
     if config == rec["config"]:
         return rec
-    return {"config": config, "parameters": int(sum(v.numel() for v in state.values())),
+    return {"config": config, "tokenizer": rec["tokenizer"], "parameters": int(sum(v.numel() for v in state.values())),
             "tensors": {k: [str(v.dtype), list(v.shape)] for k, v in sorted(state.items())}}
 
 
