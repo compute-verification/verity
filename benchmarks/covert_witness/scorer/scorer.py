@@ -590,7 +590,8 @@ def collect(since: str = SINCE) -> dict:
     every = manifests(r, since)
     by_art = {art: man for art, _, man in every}
     recs = [x for x in every if x[2].get("kind") == "evidence/v1"]
-    cw = [x for x in recs if "class" in ((x[2].get("meta") or {}).get("covert_witness") or {})]
+    # a launch.py record names its run; v2.3's also named a class, which harness v3's launch.py dropped
+    cw = [x for x in recs if {"class", "run"} & set((x[2].get("meta") or {}).get("covert_witness") or {})]
     tes = [x for x in recs if str((x[2].get("meta") or {}).get("schema", "")).startswith("te-core/")]
     starts = starts_info(r, recs)
     (STATE / "starts.json").write_text(json.dumps(starts) + "\n")
