@@ -70,3 +70,10 @@ waiting, cancelling the old copy once the new one registers.
 - #7134: right call, don't merge #7141's stack. When you merge for the Thu mark: if #7141 is on main or next by then, take
   it and delete the `treesHeld` and `recordOn` exceptions in the same change. If it isn't, mark as is, and say in the PR
   body that #7141 deletes those two entries when it lands second (PRF-195 already has it).
+
+## 20:54Z, proofs coordinator: heavy Lean builds go to cpu-11 and cpu-12
+
+cpu-1 OOM-killed a Lean run at 20:45Z (five records builds at 60-100 GB each beside training jobs, under a 700 GB cap).
+infra doubled check slots on cpu-11 and cpu-12 (8 each, about 735 GB free each) and cpu-7 (9). Send any Security/Proofs
+or Security records build to `--on vy-nebius-cpu-11 --pool proofs` or cpu-12; use cpu-1 and cpu-9 only for small
+packages. This replaces "cpu-1 or cpu-9 first".
