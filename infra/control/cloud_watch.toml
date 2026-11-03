@@ -138,7 +138,9 @@ runpod_topup_below_usd = 100         # RunPod tops the account up by itself once
                                      # steward log's ACCOUNT lines show each one), so a balance under it means the top-up failed:
                                      # at the guard's balance_floor every pod in scope is terminated, and an empty balance stops
                                      # this pod and can take its /data volume
-r2_alert_usd_per_month = 100         # no budget line covers R2; this is an alert line only
+r2_alert_usd_per_month = 250         # no budget line covers R2; this is an alert line only. infra 3 Nov: 100 -> 250, the
+                                     # evidence store at 9.4 TB is ~$141/month and grows ~250 GiB/day (LEAN-164 cuts the Lean
+                                     # facts, ~120 GiB/day of it); runaway writers still page through r2 growth's own line
 
 # The keys that would close a gap no check here can cover, each said once in the digest while it is missing.
 [[spend.gap]]
