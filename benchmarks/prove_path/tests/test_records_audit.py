@@ -578,6 +578,22 @@ def test_a_tie_with_no_prefix_takes_pearls_values_by_their_own_names_in_32_bit_s
             RA.tie_of(doc, earlier, prefix)
 
 
+def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
+    """The summary's ``tie`` names W's digest and the values tied to it. Tied to Pearl+'s W (its window names a Pearl-C
+    scheme) it also says what holds W's roots to the credited ones, Pearl+'s verdict, which reads the prover's salt key and
+    opens drawn rows in the clear; tied to H1's W, whose window names none, it doesn't."""
+    entry = {"value": "pearl-a/0/0", "root": "00" * 64, "leaves": 16, "words": K, "domain": "00" * 32, REG.WIDTH_KEY: 32}
+    outputs = {"pearl-a/0/0": {"record": "", "value": "pearl-a/0/0"}}
+    pearl = {"format": R.FORMAT_V2, "window": {"kind": "served", "entry": "pouw:pearl-c-h100-v1-h3",
+                                               "scheme": "pearl-c-h100-v1-h3", "salt": "00" * 64},
+             "registered": [entry], "previous": None}
+    h1 = {**pearl, "window": {"kind": "served", "entry": "toy-window", "open_root": "00" * 64, "refused": []}}
+    got = RA.tie_row({"log": [pearl], "outputs": outputs})
+    assert got == {"record": R.digest(pearl), "values": ["pearl-a/0/0"], "credited_by": RA.PEARL_CREDIT}
+    assert "development verifier" in got["credited_by"] and "salt key" in got["credited_by"]
+    assert RA.tie_row({"log": [h1], "outputs": outputs}) == {"record": R.digest(h1), "values": ["pearl-a/0/0"]}
+
+
 @dataclass(frozen=True)
 class _Reused(REG.Registered):
     """W's table as the circuit's value (`pouw_h1_commit.Reused`): W's rows, salts and tree, by the circuit's name of it, so

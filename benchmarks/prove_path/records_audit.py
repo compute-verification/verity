@@ -59,7 +59,9 @@ window record, written at the window's close), and the window's registration, ch
 W's entry of it (one-stage's ``outputs``, `tie_of`): H1's table `credit.window_table` of it under ``--tie-prefix``, or
 Pearl+'s by the value's own name. R7 takes its domain and root from W's entry, so the proof blocks read the values at W's
 roots (each pinned at W's entry, `interface.registered_reads`) and nothing of them is registered afresh. Their readers are
-sampled like any other proof block (under ``stratified:K``, a stratum a table), never proved whole as an output class.
+sampled like any other proof block (under ``stratified:K``, a stratum a table), never proved whole as an output class. The
+summary's ``tie`` names W, and for Pearl+'s W what holds its roots to the ones its passes credited: Pearl+'s verdict, the
+prover's development verifier (`PEARL_CREDIT`).
 
 The negatives (`negatives` before the sample, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
@@ -552,6 +554,21 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None,
              "schemas": {v: IF.value_format(reg, v)[0] for v in values}}, pins)
 
 
+#: what holds the roots of Pearl+'s window record to the ones its passes credited, which an audit tied to it rests on
+PEARL_CREDIT = ("W's roots are the ones Pearl+'s verdict credits (`served_passes.py verify --tie W`), the prover's "
+                "development verifier: it reads the prover's salt key and opens drawn rows in the clear, values this audit's "
+                "proof hides")
+
+
+def tie_row(tied: Mapping[str, Any]) -> dict[str, Any]:
+    """The audit summary's ``tie`` for a5's ``tie`` (`tie_of`): W's digest and the values tied to it, and for Pearl+'s window
+    record (a W whose window names a Pearl-C scheme) what credits its roots (`PEARL_CREDIT`)."""
+    w = tied["log"][0]
+    scheme = (w.get("window") or {}).get("scheme")
+    pearl = isinstance(scheme, str) and scheme.startswith("pearl-c-")
+    return {"record": R.digest(w), "values": sorted(tied["outputs"]), **({"credited_by": PEARL_CREDIT} if pearl else {})}
+
+
 def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
     """The per-window values the registration's window commits (``activations``), each refused unless it names its value
     and a root and its domain binds the window's run root (a root committed in another window opens under none of this
@@ -855,7 +872,7 @@ def audit(a: argparse.Namespace) -> int:
     if reads:
         row["registered"] = {"pins": counted, "roots": roots, "members": len(reads)}
     if tied:
-        row["tie"] = {"record": R.digest(tied["log"][0]), "values": sorted(tied["outputs"])}
+        row["tie"] = tie_row(tied)
     acts = committed_activations(w)
     if acts is not None:
         row["activations"] = acts

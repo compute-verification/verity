@@ -140,9 +140,10 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   (`pipeline.split_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
   two of a combine's slots, and flip a wired row's string in its reader's public body.
 * **Values tied to an earlier registration** (``a.tie``, records_audit's ``--tie``): a window whose population program takes
-  values ahead of its templates' parameters (`program_values`, a served window's H1 tables) registers them as the values of
-  the earlier record that registered them first (one-stage's ``outputs``: PoUW H1's registration W of the window, which the
-  registration is chained right after), so R1-R7 run with W as the log, each value's words, W's entry of it and its row
+  values ahead of its templates' parameters (`program_values`, a served window's H1 tables or Pearl+'s committed rows)
+  registers them as the values of the earlier record that registered them first (one-stage's ``outputs``: PoUW H1's
+  registration W of the window, or Pearl+'s window record W, which the registration is chained right after), so R1-R7 run
+  with W as the log, each value's words, W's entry of it and its row
   format (`tie`), on the stream too, which takes the values and W as its log (`stream_of`). Its proof blocks read the values
   as registered reads at W's roots (``registered``).
 """
