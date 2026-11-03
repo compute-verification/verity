@@ -15,7 +15,7 @@ statement alone. So the server is a `Zk` (`FlockZk.server`), but what it meets i
 
 * `Below`, `ZKBelow`: one experiment `a`-below another at `ε` on every event; zero knowledge with a leak at the factor `a`,
   at an error that may read the statement, the witness and the verifier. `ZKBelow.of_ZK`: `Zk.ZK` is its case `a = 1`.
-* `below_coin`, `audit_below`: the two hybrids of `GenericSampledZK` in that form: the audit's view is `a`-below the
+* `Below.coin`, `Below.trans_close`, `audit_below`: the two hybrids of `GenericSampledZK` in that form: the audit's view is `a`-below the
   audit's simulator (`auditSim`) at `a·ε_hide` plus the server's error averaged over the prover's commitment coins.
 * `FlockZk.server`: the ZK server as a `Zk`: the honest view is the scheduled transcript of the deferred server
   (`ZkServer.proverD`) against a verifier of the protocol's rounds (`FlockZk.Verifier`), the simulator's is `leaky1`'s.
@@ -66,9 +66,10 @@ theorem avg_const_mul {C : Type} [Fintype C] (x : ℝ≥0∞) (f : C → ℝ≥0
   simp only [avg, Finset.mul_sum]
   exact Finset.sum_congr rfl fun _ _ => by ring
 
-/-- **One-sided closeness under a uniform coin**: if each coin's experiment is `a`-below the other's at `ε r`, so is
-the experiment that draws the coin first and relabels each view by the coin, at `ε` averaged. -/
-theorem below_coin {Rnd V W : Type} [Fintype Rnd] [Nonempty Rnd] (a b : Rnd → Exp V) (f : Rnd → V → W)
+/-- **One-sided closeness under a uniform coin**: if each coin's experiment is `α`-below the other's at `ε r`, so is
+the experiment that draws the coin first and relabels each view by the coin, at `ε` averaged (`Close.coin`'s one-sided
+form). -/
+theorem Below.coin {Rnd V W : Type} [Fintype Rnd] [Nonempty Rnd] (a b : Rnd → Exp V) (f : Rnd → V → W)
     {α : ℝ≥0∞} (ε : Rnd → ℝ≥0∞) (h : ∀ r, Below (a r) (b r) α (ε r)) :
     Below ⟨.coin Rnd fun r => (a r).g.map (f r), fun r => Strategy.map _ _ (a r).s⟩
       ⟨.coin Rnd fun r => (b r).g.map (f r), fun r => Strategy.map _ _ (b r).s⟩ α (avg ε) := by
@@ -80,11 +81,20 @@ theorem below_coin {Rnd V W : Type} [Fintype Rnd] [Nonempty Rnd] (a b : Rnd → 
   rw [key a, key b, ← avg_const_mul, ← avg_add]
   exact avg_mono fun r => h r fun v => E (f r v)
 
+/-- **`a`-below, then `ε'`-close**: `a`-below at `ε`, then the second experiment `ε'`-close to a third, is `a`-below the
+third at `a·ε' + ε`. -/
+theorem Below.trans_close {V : Type} {e f g : Exp V} {a ε ε' : ℝ≥0∞} (h₁ : Below e f a ε) (h₂ : Close f g ε') :
+    Below e g a (a * ε' + ε) := fun E =>
+  calc e.pr E ≤ a * f.pr E + ε := h₁ E
+    _ ≤ a * (g.pr E + ε') + ε := by gcongr; exact (h₂ E).1
+    _ = a * g.pr E + (a * ε' + ε) := by rw [mul_add, add_assoc]
+
 /-- **The sampled audit's zero knowledge with a leak**, `GenericSampledZK`'s two hybrids at the factor `a`: if the proof
 system is zero knowledge with a leak at the factor `a` and the error `ε` (`ZKBelow`), and the commitment is
 `ε_hide`-hiding, then against every verifier `v`, which samples after seeing the commitment, the audit's view at any trace
 `Xt` whose openings are witnesses of every sample's statement is `a`-below the simulator's at any fixed trace `X₀`
-(`auditSim`), at `a·ε_hide` plus `ε` averaged over the prover's commitment coins. -/
+(`auditSim`), at `a·ε_hide` plus `ε` averaged over the prover's commitment coins. The middle hybrid is `auditSim` at
+`Xt` (`Below.coin`), then `Hiding` moves it to `X₀` (`auditSim_eq_andThen`). -/
 theorem audit_below {n : ℕ} {Tr Rnd Com Wit VS View : Type} [Fintype Rnd] [Nonempty Rnd] (H : Hider Tr Rnd Com)
     (Zs : Zk (Com × Finset (Fin n)) Wit VS View) (Rel : Com × Finset (Fin n) → Wit → Prop) (a εh : ℝ≥0∞)
     (ε : Com × Finset (Fin n) → Wit → VS → ℝ≥0∞) (samp : VS → Com → Finset (Fin n))
@@ -92,19 +102,15 @@ theorem audit_below {n : ℕ} {Tr Rnd Com Wit VS View : Type} [Fintype Rnd] [Non
     (hX : ∀ r S, Rel (H.commit Xt r, S) (wit Xt r S)) (X₀ : Tr) (v : VS) :
     Below (auditView H Zs samp wit Xt v) (auditSim H Zs samp X₀ v) a
       (a * εh + avg fun r => ε (H.commit Xt r, samp v (H.commit Xt r)) (wit Xt r (samp v (H.commit Xt r))) v) := by
-  let F : Com → Exp (Com × Finset (Fin n) × View) := fun c =>
-    ⟨(Zs.sim (c, samp v c) v).g.map fun w => (c, samp v c, w), Strategy.map _ _ (Zs.sim (c, samp v c) v).s⟩
-  have h1 : Below (auditView H Zs samp wit Xt v) ((H.exp Xt).andThen F) a
+  have h1 : Below (auditView H Zs samp wit Xt v) (auditSim H Zs samp Xt v) a
       (avg fun r => ε (H.commit Xt r, samp v (H.commit Xt r)) (wit Xt r (samp v (H.commit Xt r))) v) :=
-    below_coin (fun r => Zs.real (H.commit Xt r, samp v (H.commit Xt r)) (wit Xt r (samp v (H.commit Xt r))) v)
-      (fun r => Zs.sim (H.commit Xt r, samp v (H.commit Xt r)) v) (fun r w => (H.commit Xt r, samp v (H.commit Xt r), w))
-      _ fun r => hZ _ _ (hX r _) v
-  have h2 : Close ((H.exp Xt).andThen F) (auditSim H Zs samp X₀ v) εh := hH _ Xt X₀ F
-  intro E
-  calc (auditView H Zs samp wit Xt v).pr E
-      ≤ a * ((H.exp Xt).andThen F).pr E + _ := h1 E
-    _ ≤ a * ((auditSim H Zs samp X₀ v).pr E + εh) + _ := by gcongr; exact (h2 E).1
-    _ = _ := by rw [mul_add, add_assoc]
+    Below.coin (fun r => Zs.real (H.commit Xt r, samp v (H.commit Xt r)) (wit Xt r (samp v (H.commit Xt r))) v)
+      (fun r => Zs.sim (H.commit Xt r, samp v (H.commit Xt r)) v)
+      (fun r w => (H.commit Xt r, samp v (H.commit Xt r), w)) _ fun r => hZ _ _ (hX r _) v
+  have h2 : Close (auditSim H Zs samp Xt v) (auditSim H Zs samp X₀ v) εh := by
+    rw [auditSim_eq_andThen, auditSim_eq_andThen]
+    exact hH _ Xt X₀ (auditSimAfter Zs samp v)
+  exact h1.trans_close h2
 
 /-- **A uniform coin's experiment, in the claims' terms**: the probability of an event of a view drawn from uniform
 coins is the claims' `Pr` of it. -/
