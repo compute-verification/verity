@@ -269,7 +269,7 @@ def memmove(dst: int, src: int, n: int, raw: int) -> None:
 
 
 def _entry(path: Path, n: int) -> dict:
-    nested = path.parent.name in ("calls", "weights")
+    nested = path.parent.name in ("calls", "weights", "y")
     return {"path": f"{path.parent.name}/{path.name}" if nested else path.name, "bytes": n}
 
 

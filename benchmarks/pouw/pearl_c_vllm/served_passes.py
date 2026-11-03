@@ -1,42 +1,46 @@
-"""One served Pearl-C run through `verity_vllm.LLM` alone, every pass it commits retained, then each replay-verified on its
-own: `pouw.install`'s pass boundary under serving (`pouw_pass`: each engine step's end, a step held to one pass's
+"""One served Pearl-C run through `verity_vllm.LLM` alone, every pass it commits retained, then the run's one verdict over
+all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each engine step's end, a step held to one pass's
 ``max_step_tokens``).
 
-  served_passes.py serve --passes DIR --out served.json [--spec SPEC] [--requests 32] [--prompt-tokens 512]
+  served_passes.py serve --passes DIR --out served.json [--spec SPEC] [--arm ARM] [--requests 32] [--prompt-tokens 512]
                          [--output-tokens 16] [--max-num-batched-tokens N] [--no-retain]
-  served_passes.py verify --passes DIR --out verify.json [--jobs J] [--fast] [--parallel P]
+  served_passes.py verify --passes DIR --out verify.json [--answer answer.json] [--draws 459] [--delta 1/100] [--jobs J] [--fast]
 
-``serve`` builds the spec's preset with its Pearl-C arm (`pearl_c_arm`; `verity_bench`'s ``engine_args`` and
-``protocols_config``, whose in-process challenger is the epoch's coins) and the pouw setting ``transcript_dir`` DIR, so each
-pass is retained in its own ``DIR/pass-NNNNN``; the challenger's coin commitment goes to ``DIR/coins.json`` before the engine
-starts.  A warm-up ``generate`` of one short request takes the first calls' one-time costs (the screen's Triton build);
-then one timed ``generate`` call serves R requests of P seeded random prompt tokens and O output tokens each (greedy, EOS
-ignored): vLLM's scheduler steps the engine, and nothing but the option ends a pass.  It writes each pass's counts,
-commitment, manifest, linear MACs (its calls' real rows × n × k) and whether the timed call made it (``timed``), the timed
-call's wall (``generate_s``) and each of its engine steps' (``step_s``), the engine steps, the caps, the install's
-``max_step_tokens`` and whether every pass is within the caps, to ``--out`` and ``DIR/served.json``, and exits non-zero
-unless the timed call's passes hold calls in at least three (two boundaries crossed) and every pass is within its caps.
-``--no-retain`` serves the same with no ``transcript_dir``: each pass is committed and none is written, so its walls are
-the option's without retention, its passes have no manifest or MACs, and ``verify`` refuses it (``retained`` false).
+``serve`` builds the spec's preset with its Pearl-C arm (`pearl_c_arm`: ``--arm``, else the spec's one; `verity_bench`'s
+``engine_args`` and ``protocols_config``, whose in-process challenger is the epoch's coins) and the pouw setting
+``transcript_dir`` DIR, so each pass is retained in its own ``DIR/pass-NNNNN``; the challenger's coin commitment goes to
+``DIR/coins.json`` before the engine starts.  A warm-up ``generate`` of one short request takes the first calls' one-time
+costs (the screen's Triton build); then one timed ``generate`` call serves R requests of P seeded random prompt tokens and
+O output tokens each (greedy, EOS ignored): vLLM's scheduler steps the engine, and nothing but the option ends a pass.  It
+writes each pass's counts, commitment, manifest, linear MACs (its calls' real rows × n × k) and whether the timed call made
+it (``timed``), the timed call's wall (``generate_s``) and each of its engine steps' (``step_s``), the engine steps, the
+caps, the install's ``max_step_tokens`` and whether every pass is within the caps, to ``--out`` and ``DIR/served.json``,
+and exits non-zero unless the timed call's passes hold calls in at least three (two boundaries crossed) and every pass is
+within its caps.  ``--no-retain`` serves the same with no ``transcript_dir``: each pass is committed and none is written,
+so its walls are the option's without retention, its passes have no manifest or MACs, and ``verify`` refuses it
+(``retained`` false).
 
-``verify`` first holds the passes together to distinct call indices of one salt (`credit.passes_distinct`: the device
-numbers calls across the epoch, and a run whose passes share an index is refused before any replay), then runs
-`verify_run.py` on each pass's manifest that ``DIR/served.json`` names, against ``DIR/coins.json``, P passes at a time in J/P
-processes each (``--parallel``, default 1: in order), each pass's work-law credit and W_ref (`clear_work.work`, from the
-``verify.json`` it writes beside the manifest) and its credited cells' MACs (`credited_macs`) in its verdict, the verdicts in
-pass order, and exits 0 only when every one is accepted.  An ACCEPT is replay-verified (development shortcut; the protocol's
-check is a ZK proof, PouwCheck).
+``verify`` is Pearl+'s PoUW verdict on the run (`verify_run.verify_passes`): the passes with calls that
+``DIR/served.json`` names, else every ``DIR/pass-NNNNN/manifest.json`` (a transcript dir a served engine retained), in
+order, each epoch re-started against ``DIR/coins.json``.  It first holds the passes together to distinct call indices of
+one salt (`credit.passes_distinct`: the device numbers calls across the epoch, and a run whose passes share an index is
+refused before any replay), then reads every pass, takes the verifier's coin, and replays ``--draws`` work-weighted tiles
+over all of them and each pass's exclusion tiles.  It writes the details to ``--out``, with, where ``served.json`` says
+which passes the timed call made, the credit over those alone (`timed_credit`), and the core answer (`answer_of`'s form,
+``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer`` (default
+``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line and exits
+0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck).
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import math
 import os
-import subprocess
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
+from fractions import Fraction
 from pathlib import Path
 
 from verity_config.settings import of
@@ -44,11 +48,16 @@ from verity_config.settings import of
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
 SPEC = HERE.parents[1] / "specs" / "llama31-8b-1gpu-pouw-protocol-served-b32.toml"
-#: the arm `serve` serves: the spec's one PoUW Pearl-C arm (``pouw:pearl-c-sm120-v1-h3`` on an RTX PRO 6000,
-#: ``pouw:pearl-c-h100-v1-h3`` on an H100 or H200)
+#: the arm `serve` serves without ``--arm``: the spec's one PoUW Pearl-C arm (``pouw:pearl-c-sm120-v1-h3`` on an RTX PRO
+#: 6000, ``pouw:pearl-c-h100-v1-h3`` on an H100 or H200)
 ARM_PREFIX = "pouw:pearl-c-"
+SCHEMA = "verity-pouw/pearl-plus-served-verify/v1"
+#: t = 459 accepted draws leave ε ≈ 1% of the tickets' weight on wrong tiles at δ = 1/100 (`verify_run.epsilon`)
+DRAWS = 459
 KEEP = ("units", "base", "tiles", "screened_rows", "failing_rows", "unsure_rows", "excluded_rows", "transcript_root",
         "activation_roots", "schedule", "manifest")
+#: why `verify` refuses a serve run with ``--no-retain``
+UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so there is nothing to replay")
 
 
 def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
@@ -64,24 +73,18 @@ def macs(manifest: str | None) -> int | None:
     return sum(u["real_rows"] * u["n"] * u["k"] for u in json.loads(Path(manifest).read_text())["matmuls"])
 
 
-def credited_macs(manifest: str) -> int:
-    """A retained pass's MACs over its credited cells: each call's real rows less its excluded A rows, times its weight's
-    columns less its excluded B rows, times its kept K (`clear_work`'s credited cells, at their depth)."""
-    man = json.loads(Path(manifest).read_text())
-    return sum((u["real_rows"] - len(u["excluded_a"])) * (u["n"] - len(man["weights"][str(u["weight"])]["excluded_b"]))
-               * u["k_kept"] for u in man["matmuls"])
-
-
-def pearl_c_arm(spec):
-    """The spec's one PoUW Pearl-C arm (`ARM_PREFIX`); SystemExit naming them when it has none or several."""
+def pearl_c_arm(spec, name: str | None = None):
+    """The spec's PoUW Pearl-C arm (`ARM_PREFIX`) ``name``, else its one; SystemExit naming them when it has none, several
+    or not ``name``."""
     from verity_bench.vllm import arms as A
 
     got = [a for a in A.resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
            if a.protocols and all(e.startswith(ARM_PREFIX) for e in a.protocols)]
-    if len(got) != 1:
-        raise SystemExit(f"served_passes.py serves a spec's one {ARM_PREFIX}* arm; {spec.id} has "
-                         f"{[a.id for a in got] or 'none'}")
-    return got[0]
+    picked = [a for a in got if name is None or a.id == name]
+    if len(picked) != 1:
+        want = name or f"a spec's one {ARM_PREFIX}* arm"
+        raise SystemExit(f"served_passes.py serves {want}; {spec.id} has {[a.id for a in got] or 'none'}")
+    return picked[0]
 
 
 def serve(args: argparse.Namespace) -> int:
@@ -91,7 +94,7 @@ def serve(args: argparse.Namespace) -> int:
     from verity_vllm.engine import env as engine_env
 
     spec = P.resolve_spec(args.spec)
-    arm = pearl_c_arm(spec)
+    arm = pearl_c_arm(spec, args.arm)
     preset = spec.preset
     engine = RN.engine_args(preset, arm.precision or preset.precision, resident=False, eager=True)
     if args.max_num_batched_tokens:
@@ -153,51 +156,51 @@ def serve(args: argparse.Namespace) -> int:
     return 0 if doc["ok"] else 1
 
 
-def verify(args: argparse.Namespace) -> int:
-    from verity.core.protocols.pouw import credit as CR
-    passes = Path(args.passes)
-    served = json.loads((passes / "served.json").read_text())
+def manifests(passes: Path) -> tuple[list[Path], str | None]:
+    """The run's passes with calls, in order, and its run id: those ``served.json`` names, else every
+    ``pass-NNNNN/manifest.json`` the install retained under the transcript dir."""
+    if (passes / "served.json").exists():
+        served = json.loads((passes / "served.json").read_text())
+        return [Path(p["manifest"]) for p in served["passes"] if p["units"]], served.get("run")
+    return sorted(passes.glob("pass-*/manifest.json")), None
+
+
+def timed_credit(served: dict, work: dict, coins) -> dict:
+    """An accepted run's credit over the passes its timed call made (``served.json``'s ``timed``; a pass without the flag
+    is timed), the work the timed call's wall bought: the run's credited MACs less the other passes' credited cells' MACs
+    at (1 − ρ), rounded up, so all of the run's deduction for ε falls on the timed passes."""
+    sys.path.insert(0, str(HERE))
+    import verify_run as VR
+
     held = [p for p in served["passes"] if p["units"]]
-    why = (("unretained", "the serve retained no pass (serve --no-retain), so there is nothing to replay")
-           if served.get("retained") is False else
-           CR.passes_distinct([json.loads(Path(p["manifest"]).read_text()) for p in held]))
-    if why is not None:
-        return _write_verify(args, {"schema": "verity-pouw/pearl-c-served-passes-verify/v1", "passes_dir": str(passes),
-                                    "served_run": served.get("run"), "verified": 0, "accepted": 0, "ok": False,
-                                    "refused": list(why), "verdicts": []})
-    parallel = max(1, min(args.parallel, len(held)))
-    jobs = max(1, args.jobs // parallel)
-
-    def replay(p):
-        cmd = [sys.executable, str(HERE / "verify_run.py"), p["manifest"], "--coins", str(passes / "coins.json"),
-               "--jobs", str(jobs), *(["--fast", "--cross-check", str(args.cross_check)] if args.fast else [])]
-        return subprocess.run(cmd, capture_output=True, text=True, check=False)
-
-    out = []
-    with ThreadPoolExecutor(parallel) as pool:
-        for p, done in zip(held, pool.map(replay, held)):
-            line = (done.stdout.strip().splitlines() or [""])[-1]
-            print(f"pass {p['pass']}: {line}", flush=True)
-            got = Path(p["manifest"]).parent / "verify.json"
-            work = json.loads(got.read_text()) if got.exists() else {}
-            out.append({"pass": p["pass"], "timed": p.get("timed"), "units": p["units"], "tiles": p["tiles"],
-                        "macs": p.get("macs"), "credited_macs": credited_macs(p["manifest"]), "rc": done.returncode,
-                        "line": line, "accepted": done.returncode == 0 and line.startswith("ACCEPT"),
-                        "credit": work.get("credit"), "w_ref": work.get("w_ref"), "stderr": done.stderr[-2000:]})
-    ok = bool(out) and all(v["accepted"] for v in out)
-    return _write_verify(args, {"schema": "verity-pouw/pearl-c-served-passes-verify/v1", "passes_dir": str(passes),
-                                "served_run": served.get("run"), "verified": len(out), "accepted": sum(v["accepted"] for v in out),
-                                "ok": ok, "verdicts": out})
+    warm = sum(VR.pass_macs(VR.load(Path(p["manifest"]), coins)) for p in held if not p.get("timed", True))
+    return {"passes": sum(1 for p in held if p.get("timed", True)), "macs": work["macs"] - warm,
+            "credited": max(0, work["credited"] - math.ceil((1 - Fraction(work["rho"])) * warm))}
 
 
-def _write_verify(args: argparse.Namespace, doc: dict) -> int:
-    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.out).write_text(json.dumps(doc, indent=1) + "\n")
-    if "refused" in doc:
-        print(f"REFUSED {doc['refused'][0]}: {doc['refused'][1]} -> FAIL")
+def verify(args: argparse.Namespace) -> int:
+    from verity.core.protocols.pouw.coins import CoinCommitment
+    sys.path.insert(0, str(HERE))
+    import verify_run as VR
+
+    passes = Path(args.passes)
+    served = json.loads((passes / "served.json").read_text()) if (passes / "served.json").exists() else None
+    doc = {"schema": SCHEMA, "passes_dir": str(passes), "served_run": (served or {}).get("run")}
+    if served is not None and served.get("retained") is False:
+        doc.update(refused=list(UNRETAINED), **VR.rejected(": ".join(UNRETAINED), args.commit))
     else:
-        print(f"{doc['accepted']} of {doc['verified']} passes accepted -> {'OK' if doc['ok'] else 'FAIL'}")
-    return 0 if doc["ok"] else 1
+        paths, _ = manifests(passes)
+        coins = CoinCommitment.from_json(json.loads((passes / "coins.json").read_text()))
+        doc.update(VR.verify_passes(paths, args.draws, args.jobs, args.commit, coins, fast=args.fast,
+                                    cross_check=args.cross_check, delta=args.delta))
+        if served is not None and doc["answer"]["verdict"] == "accept":
+            doc["timed"] = timed_credit(served, doc["answer"]["public"]["work"], coins)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(doc, indent=1) + "\n")
+    (Path(args.answer) if args.answer else out.parent / "answer.json").write_text(json.dumps(doc["answer"], indent=1) + "\n")
+    print(doc["line"], flush=True)
+    return 0 if doc["answer"]["verdict"] == "accept" else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -205,6 +208,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("serve")
     s.add_argument("--spec", type=Path, default=SPEC)
+    s.add_argument("--arm", help=f"the spec's {ARM_PREFIX}* arm to serve (default: its one)")
     s.add_argument("--passes", required=True)
     s.add_argument("--out", required=True)
     s.add_argument("--requests", type=int, default=32)
@@ -215,10 +219,13 @@ def main(argv: list[str] | None = None) -> int:
     v = sub.add_parser("verify")
     v.add_argument("--passes", required=True)
     v.add_argument("--out", required=True)
+    v.add_argument("--answer", help="where the core answer goes (default: answer.json beside --out)")
+    v.add_argument("--draws", type=int, default=DRAWS)
+    v.add_argument("--delta", type=Fraction, default=Fraction(1, 100))
+    v.add_argument("--commit", default=settings.RESEARCH_SOURCE_SHA or "unknown")
     v.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     v.add_argument("--fast", action="store_true")
     v.add_argument("--cross-check", type=int, default=256)
-    v.add_argument("--parallel", type=int, default=1)
     args = p.parse_args(argv)
     return serve(args) if args.cmd == "serve" else verify(args)
 

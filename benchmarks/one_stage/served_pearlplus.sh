@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PoUW's piece with Pearl+, `served_verdicts.sh`'s POUW_CMD under POUW=pearlplus (H1 off): Pearl+'s own served run on the
-# card after the window's serve, every pass retained and each one replayed by the reference verifier:
+# card after the window's serve, every pass retained, and Pearl+'s verdict over all of them:
 #   POUW_CMD='bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"'      (served_verdicts.sh runs it in the tree)
 #   bash benchmarks/one_stage/served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR
 # Everything but PIECE_DIR's files goes to SERVE_DIR/private/pearlplus, each step's log among it:
@@ -12,14 +12,15 @@
 #      a prefill-heavy load, 8 prompts a step), each engine step one pass retained in passes/; before it, unless
 #      PEARLPLUS_UNRETAINED is set empty, the same load under its own lease with no pass retained (`serve --no-retain`,
 #      unretained/), whose wall is the option's without writing the passes;
-#   3. `served_passes.py verify` replays each pass on the CPU in PEARLPLUS_JOBS processes (default nproc), PEARLPLUS_PARALLEL
-#      passes at a time (default nproc / 8 rounded up: a pass draws a few tiles and its exclusion tiles, one process
-#      each), on fast_tile's batch forms, a pass's first replayed tile and every 256th after it on the scalar reference
+#   3. `served_passes.py verify` takes Pearl+'s verdict over every pass on the CPU in PEARLPLUS_JOBS processes (default
+#      nproc): one draw of PEARLPLUS_DRAWS work-weighted tiles (default its own, 459) over all the passes, and each pass's
+#      exclusion tiles, replayed on fast_tile's batch forms, the first and every 256th after it on the scalar reference
 #      too (a scalar replay takes minutes a tile at the 1B's K), or with PEARLPLUS_FAST set empty on the scalar reference
-#      alone;
-#   4. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, its shares (with the
-#      unretained serve's beside them) and why it credits nothing (served_verdicts.PEARLPLUS_WHY: its passes are not the
-#      window sampled proofs audited, so WINDOW names nothing here).
+#      alone. Its document goes to PIECE_DIR/verify.json and its core answer to PIECE_DIR/pearlplus-answer.json, not
+#      answer.json, which the record would compose as the window's PoUW answer;
+#   4. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, Pearl+'s verdict's credit,
+#      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.PEARLPLUS_WHY: its
+#      passes are not the window sampled proofs audited, so WINDOW names nothing here).
 # The passes hold the run's activations, so they stay in SERVE_DIR/private, under served_verdicts.sh's `research keep`.
 # env: served_verdicts.sh's (VENV, HF_HOME, CUDA_HOME), PEARLPLUS_* above. Its lines name no window. Exit 0 once step 4
 # wrote the piece.
@@ -76,16 +77,16 @@ fi
 
 if [ -s "$Q/served.json" ]; then
   t=$(date +%s)
-  "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py verify --passes "$Q/passes" --out "$Q/verify.json" \
-    --jobs "${PEARLPLUS_JOBS:-$(nproc)}" --parallel "${PEARLPLUS_PARALLEL:-$(( ($(nproc) + 7) / 8 ))}" ${FAST:+--fast} \
-    > "$Q/verify.log" 2>&1
+  "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py verify --passes "$Q/passes" --out "$P/verify.json" \
+    --answer "$P/pearlplus-answer.json" --jobs "${PEARLPLUS_JOBS:-$(nproc)}" ${PEARLPLUS_DRAWS:+--draws "$PEARLPLUS_DRAWS"} \
+    ${FAST:+--fast} > "$Q/verify.log" 2>&1
   rc=$?
-  say "replay: served_passes.py verify exit $rc after $(took "$t"): $(tail -1 "$Q/verify.log" | cut -c1-300)"
+  say "verdict: served_passes.py verify exit $rc after $(took "$t"): $(tail -1 "$Q/verify.log" | cut -c1-400)"
 fi
 
 UN=()
 [ -s "$Q/served-unretained.json" ] && UN=(--unretained "$Q/served-unretained.json")
-"$TPY" benchmarks/one_stage/served_verdicts.py pearlplus "$P" --served "$Q/served.json" --verify "$Q/verify.json" \
+"$TPY" benchmarks/one_stage/served_verdicts.py pearlplus "$P" --served "$Q/served.json" --verify "$P/verify.json" \
   ${UN[@]+"${UN[@]}"} > "$Q/pearlplus.log" 2>&1
 rc=$?
 grep '^POUW-DEV ' "$Q/pearlplus.log"
