@@ -4,7 +4,8 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
 
   served_passes.py serve --passes DIR --out served.json [--spec SPEC] [--arm ARM] [--requests 32] [--prompt-tokens 512]
                          [--output-tokens 16] [--max-num-batched-tokens N]
-  served_passes.py verify --passes DIR --out verify.json [--answer answer.json] [--draws 459] [--delta 1/100] [--jobs J] [--fast]
+  served_passes.py verify --passes DIR [--manifest M ...] --out verify.json [--answer answer.json] [--draws 459]
+                          [--delta 1/100] [--jobs J] [--fast]
 
 ``serve`` builds the spec's preset with its Pearl-C arm (`verity_bench`'s ``engine_args`` and ``protocols_config``, whose
 in-process challenger is the epoch's coins) and the pouw setting ``transcript_dir`` DIR, so each pass is retained in its
@@ -15,9 +16,10 @@ manifest, the engine steps, the caps, the install's ``max_step_tokens`` and whet
 and ``DIR/served.json``, and exits non-zero unless at least three passes hold calls (two boundaries crossed) and every pass
 is within its caps.
 
-``verify`` is Pearl+'s PoUW verdict on the run (`verify_run.verify_passes`): the passes with calls that
-``DIR/served.json`` names, else every ``DIR/pass-NNNNN/manifest.json`` (a transcript dir a served engine retained), in
-order, each epoch re-started against ``DIR/coins.json``.  It first holds the passes together to distinct call indices of
+``verify`` is Pearl+'s PoUW verdict on the run (`verify_run.verify_passes`): the passes ``--manifest`` names (a capture's
+``prefill/`` and ``decode/`` beside its ``coins.json``), else those with calls that ``DIR/served.json`` names, else every
+``DIR/pass-NNNNN/manifest.json`` (a transcript dir a served engine retained), in order, each epoch re-started against
+``DIR/coins.json``.  It first holds the passes together to distinct call indices of
 one salt (`credit.passes_distinct`: the device numbers calls across the epoch, and a run whose passes share an index is
 refused before any replay), then reads every pass, takes the verifier's coin, and replays ``--draws`` work-weighted tiles
 over all of them and each pass's exclusion tiles.  It writes the details to ``--out`` and the core answer (`answer_of`'s
@@ -122,7 +124,7 @@ def verify(args: argparse.Namespace) -> int:
     import verify_run as VR
 
     passes = Path(args.passes)
-    paths, run = manifests(passes)
+    paths, run = (args.manifest, None) if args.manifest else manifests(passes)
     coins = CoinCommitment.from_json(json.loads((passes / "coins.json").read_text()))
     doc = {"schema": SCHEMA, "passes_dir": str(passes), "served_run": run,
            **VR.verify_passes(paths, args.draws, args.jobs, args.commit, coins, fast=args.fast, cross_check=args.cross_check,
@@ -149,6 +151,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--max-num-batched-tokens", type=int)
     v = sub.add_parser("verify")
     v.add_argument("--passes", required=True)
+    v.add_argument("--manifest", action="append", type=Path,
+                   help="a pass's manifest, in order, repeated (default: those DIR/served.json names, else DIR/pass-*/)")
     v.add_argument("--out", required=True)
     v.add_argument("--answer", help="where the core answer goes (default: answer.json beside --out)")
     v.add_argument("--draws", type=int, default=DRAWS)

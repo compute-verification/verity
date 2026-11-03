@@ -1055,12 +1055,15 @@ def _serve_dir(tmp_path: Path, passes: list[Path]) -> Path:
 
 def test_served_passes_verify_refuses_two_passes_of_one_salt_sharing_a_call_index(tmp_path):
     """Two honest passes of one epoch whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
-    both, so the run is refused (``repeated-call``) before any pass is replayed."""
+    both, so the run is refused (``repeated-call``) before any pass is replayed, whether served.json or ``--manifest``
+    names them."""
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (1, 2))))
     assert json.loads(a.read_text())["salt"] == json.loads(b.read_text())["salt"]
-    rc, doc, answer = served_verify(_serve_dir(tmp_path, [a, b]), tmp_path / "verify.json")
-    assert rc == 1 and answer["verdict"] == "reject" and "verdicts" not in doc and doc["refused"][0] == "repeated-call"
-    assert "passes 0 and 1 both hold call index 1" in doc["refused"][1]
+    for d, more in ((_serve_dir(tmp_path, [a, b]), ()), (a.parent, ("--manifest", str(a), "--manifest", str(b)))):
+        rc, doc, answer = served_verify(d, tmp_path / d.name / "verify.json", *more)
+        assert rc == 1 and answer["verdict"] == "reject" and "verdicts" not in doc and doc["refused"][0] == "repeated-call"
+        assert "passes 0 and 1 both hold call index 1" in doc["refused"][1]
+        assert [x.split(" sha256:")[0].split(":", 1)[1] for x in doc["passes"]] == [str(a), str(b)]
 
 
 @pytest.mark.slow
