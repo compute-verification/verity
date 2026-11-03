@@ -334,9 +334,9 @@ theorem crt_run_bind {Q : α → Prop} {R : β → Prop} {p p' : LP PS α} {st :
 
 /-! ## The opening -/
 
+set_option maxHeartbeats 4000000 in
 /-- **Ligerito's opening under two coin functions**: with the schedule's sizes below the headers' range, equal from
 any history whose log after it is `Good`. -/
-set_option maxHeartbeats 4000000 in
 theorem ligeritoPZk_coin (coin coin' : ℕ → ℕ → F128) (N : ℕ) (H : ByteArray → ByteArray) (ms : MerkleScheme)
     (sch : Schedule) (T : F128) (cm0 : Commit) (t b : Array F128) (lay : Zk.PadLayout) (h : Array F128)
     (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64)
