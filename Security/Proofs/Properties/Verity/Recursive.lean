@@ -43,11 +43,12 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
     the value most often read off the witnesses `RecursiveKSAt`'s extractor returns, over the draws and the accepted
     runs that draw the gate's unit. The circuit is the committed file's (R6, `Vocab.Registered`).
   - The per-prover form: the bound holds at every strategy, with no hypothesis on it but `live-verifier`. It is
-    the shared `condError FinderCR δ` at the strategy's session (`Dep.errAt`, the shape of `Vocab.error`): where the
-    finders built from the strategy meet their named SHA-512 premises (`Dep.FinderCR`: C-Flock's at each session
-    prover, `ecr/sha-512` at each binding finder `Dep.bindAt` at its budget), the draw's miss plus `t' · 2^{-λ}` plus
-    the binding term (`Dep.delta`); elsewhere `⊤`. Every budget is a defined function of the strategy's cost `t'`
-    (`Vocab.cost`), with no call model.
+    the smaller of two shared `condError P δ` terms at the strategy's session (`Dep.errAt`, the shape of
+    `Vocab.error`, in `Proofs.Properties.Verity.Recursive.Finders`): where the finders built from the strategy meet
+    their named SHA-512 premises (C-Flock's at each session prover, and `ecr/sha-512` at the binding finders
+    `Dep.bindAt`, `Dep.FinderCR`, or at the chasing finder `Dep.chaseAt`, `Dep.ChaseCR`), the draw's miss plus
+    `t' · 2^{-λ}` plus that finder's binding term (`Dep.delta`, `Dep.deltaChase`); elsewhere `⊤`. Every budget is a
+    defined function of the strategy's cost `t'` (`Vocab.cost`) and public counts, with no call model.
   - Beside it, `sampledProofsRecursive_nontrivial` (an accept-everything verifier breaks the bound) and
     `sampledProofsRecursive_honest` (the hypotheses that are the deployment's choices hold at the honest one).
 
@@ -655,26 +656,6 @@ noncomputable def extract (S : SessionIn V q k θ F c σ) (readX : Msg → Claim
   BitVec.ofNat ((V.circuitOf θ F).w g) (∑ i ∈ Finset.range ((V.circuitOf θ F).w g),
     if q.weight V S readX g i false < q.weight V S readX g i true then 2 ^ i else 0)
 
-/-- **The binding finder at the draws `ξ₁` and `ξ₂`**: it plays the session twice, at `ξ₁` and at `ξ₂`, with
-independent tapes, coins and seeds, runs the extractor on both, and outputs `collOf`'s pair from the two witnesses.
-Its cost is the two runs' SHA-512 calls, the two extractions' and `collOf`'s `dColl`. -/
-noncomputable def bindAt (Se : SessionIn V q k θ F c σ)
-    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ) (ξ₁ ξ₂ : Se.Ξ) :
-    Claims.Finder where
-  S := q.Sample V Se ξ₁ × q.Sample V Se ξ₂
-  out s :=
-    match (q.E.eval FlockDeploy.sha512 (Se.P ξ₁) (Se.x ξ₁) s.1.1 s.1.2.1 s.1.2.2).1,
-      (q.E.eval FlockDeploy.sha512 (Se.P ξ₂) (Se.x ξ₂) s.2.1 s.2.2.1 s.2.2.2).1 with
-    | some w₁, some w₂ => collOf (Se.x ξ₁) w₁ (Se.x ξ₂) w₂
-    | _, _ => none
-  cost s :=
-    runCalls (Claims.run FlockDeploy.sha512 (Se.P ξ₁) q.D.V (Se.x ξ₁) s.1.1 s.1.2.1) +
-      runCalls (Claims.run FlockDeploy.sha512 (Se.P ξ₂) q.D.V (Se.x ξ₂) s.2.1 s.2.2.1) +
-      (q.E.eval FlockDeploy.sha512 (Se.P ξ₁) (Se.x ξ₁) s.1.1 s.1.2.1 s.1.2.2).2.1 +
-      (q.E.eval FlockDeploy.sha512 (Se.P ξ₁) (Se.x ξ₁) s.1.1 s.1.2.1 s.1.2.2).2.2 +
-      (q.E.eval FlockDeploy.sha512 (Se.P ξ₂) (Se.x ξ₂) s.2.1 s.2.2.1 s.2.2.2).2.1 +
-      (q.E.eval FlockDeploy.sha512 (Se.P ξ₂) (Se.x ξ₂) s.2.1 s.2.2.1 s.2.2.2).2.2 + dColl
-
 /-- **C-Flock's SHA-512 premises at one session's prover**, asked only of the finders `BitsLin2On` builds from it, at
 the inner and setup call bounds `n` and `v`: `StrictBirthday` at `B`, and `ExpectedCR` at the inner, device,
 forked-coin and first-coin finders at their charged costs. -/
@@ -697,64 +678,10 @@ def SessionCR (n v : ℕ) (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : 
           (Claims.Recursion.setupLen q.D x + (q.I.k (Claims.Recursion.xI q.D x) + 1) * (n + v))))
 
 /-- **The strategy's cost parameter `t'`**: its SHA-512 calls in one run (`Vocab.cost`), at least one.
-Every finder budget below is a defined function of it and of public counts. -/
+Every finder budget (`Proofs.Properties.Verity.Recursive.Finders`) is a defined function of it and of public counts. -/
 def tCost (_ : SessionIn V q k θ F c σ) : ℕ := max 1 (V.cost θ F c σ)
 
-/-- **The binding finder's budget at the draws `ξ₁`, `ξ₂`**, a defined function of the strategy's cost `t'`: two runs,
-and two extractions of `runs` reruns each in expectation (every rerun a run of the session, so at most `t'` calls),
-plus each extraction's rerun count and `collOf`'s `dColl`: `(2 + r₁ + r₂) · t' + r₁ + r₂ + dColl`, the expected calls
-`ecr/sha-512` reads. -/
-noncomputable def bindBudget (S : SessionIn V q k θ F c σ) (dColl : ℕ) (ξ₁ ξ₂ : S.Ξ) : ℕ :=
-  (2 + q.runs (S.x ξ₁) + q.runs (S.x ξ₂)) * q.tCost V S + q.runs (S.x ξ₁) + q.runs (S.x ξ₂) + dColl
-
-/-- **`FinderCR`: the named SHA-512 premises at the strategy, asked only of the finders built from it.** Each session
-prover's finders meet C-Flock's premises (`SessionCR`, at the inner and setup call bounds `nI` and `vS`; `B`'s runs are
-the session's, at most `t'` calls each). Each binding finder (`bindAt`) outputs a SHA-512 collision with probability at
-most its budget over `2^256`: `ecr/sha-512` (`Claims.ExpectedCR`) asked at `bindBudget`, a defined function of the
-strategy's cost parameter `t' = tCost` (`Vocab.cost`), as `qF` and `qS` are of `t' τ`. Quantitative, so `⊤` is the
-error only where a finder built from the strategy beats its budget. -/
-def FinderCR (S : SessionIn V q k θ F c σ)
-    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
-    (nI vS : Msg → ℕ) : Prop :=
-  (∀ ξ, q.SessionCR (nI (S.x ξ)) (vS (S.x ξ)) (S.x ξ) S.Ω (S.P ξ)) ∧
-    ∀ ξ₁ ξ₂, (q.bindAt V S collOf dColl ξ₁ ξ₂).Pr FlockDeploy.sha512 ≤
-      (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ)
-
-/-- **The error's number at the strategy**, from `t'` and public parameters: the draw's miss `δs`, plus `BitsLin2On`'s
-`t' · 2^{-λ}`, plus the binding term `√(min(W, 2n) · E[bindBudget] / 2^256)`, with `W` the file's wire bits, `n` its
-units and the budget averaged over pairs of draws. -/
-noncomputable def delta (S : SessionIn V q k θ F c σ) (dColl : ℕ) (δs lam : ℝ) : ℝ≥0∞ :=
-  ENNReal.ofReal (δs + q.tCost V S * (2 : ℝ) ^ (-lam) +
-    Real.sqrt (min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) *
-      (Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))))
-
-open Classical in
-/-- **The error at the strategy's session `S`**, the shared `condError FinderCR δ := if FinderCR then δ else ⊤`
-(the shape of `Vocab.error`): `delta` where the finders built from the strategy meet `FinderCR`, and `⊤` elsewhere. -/
-noncomputable def errAt (S : SessionIn V q k θ F c σ)
-    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
-    (nI vS : Msg → ℕ) (δs lam : ℝ) : ℝ≥0∞ :=
-  if q.FinderCR V S collOf dColl nI vS then q.delta V S dColl δs lam else ⊤
-
 end Dep
-
-/-- **Its conclusion fails for a verifier that accepts everything**: at a strategy whose extracted transcript fails
-the claim, where the finders built from it meet `FinderCR` and the error's number (`Dep.delta`) is below one. -/
-theorem sampledProofsRecursive_nontrivial (q : Dep) (V : Vocab d α) (k : Verity.Registration.Composite)
-    (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Game.Strategy (V.game θ F c)) (S : SessionIn V q k θ F c σ)
-    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
-    (nI vS : Msg → ℕ) (δs lam : ℝ)
-    (hbad : ¬ V.Holds k θ F c σ .sampled ⟨θ, F, c, [], ByteArray.empty, #[]⟩)
-    (hcr : q.FinderCR V S collOf dColl nI vS) (hlt : q.delta V S dColl δs lam < 1) :
-    ¬ Game.prob (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ ≤
-      q.errAt V S collOf dColl nI vS δs lam := by
-  intro h
-  have h1 : Game.prob (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ = 1 :=
-    prob_play_eq_one (V.rounds θ) θ F c (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o)
-      (fun _ _ => ⟨trivial, hbad⟩) σ
-  rw [Dep.errAt, if_pos hcr] at h
-  exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le h).trans_lt hlt)
 
 /-- **Its hypotheses hold at the honest deployment where they are choices of the deployment**: `K₀ = ⌊ε n⌋ + 1` covers
 the claim's `ε` share (`hK₀`) wherever `ε n ≥ 0`; and where the extracted transcript is correct on every unit and the
