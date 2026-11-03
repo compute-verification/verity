@@ -21,6 +21,7 @@ from typing import ClassVar
 import numpy as np
 import pytest
 from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
+from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity_vllm.protocols.pouw.pearl_c import host as PH
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
@@ -57,7 +58,6 @@ from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.serving import SchemeId
 from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity_vllm.protocols.pouw import pearl_c as PPD
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
