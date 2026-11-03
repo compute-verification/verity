@@ -22,7 +22,7 @@
 #      max_child_rss_gb is the largest of every session's so far)
 #      SC_PORT (`prove --port`, the sessions' first loopback port: by default 7811 + 16 × the lowest core the slot
 #      pins the job to, so that runs in two slots of one machine never share a session's port)
-#      SC_TIE=1 (the egress tie of record instead, `scan_tie.py prove`: link-window 0 through `scan_service.EgressTie`,
+#      SC_TIE=1 (the egress tie instead, `scan_tie.py prove`: execution phase 0 through `scan_service.EgressTie`,
 #      its honest and tampered rounds; SC_CLASS, SC_WARDEN_RUN, SC_DRY and SC_PORT as above, the others unread)
 # Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
 # nor a circuit (its pin is kept), nor a session's archive, nor a signer's state (the deployment's or the tamper's). A

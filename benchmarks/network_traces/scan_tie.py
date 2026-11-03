@@ -1,28 +1,27 @@
-"""scan-tie: the egress tie of record (`scan_service.EgressTie`) on C-Flock's prover. A link-window of the network
-certifier's run (scan_zk's `link`: the synthetic run or a warden_serve run's, at a setup's class) is one registration of
-the egress tie's stream; every proof block is drawn, each of its three statements (``first``, ``ingress`` with the
-phase's T − 1 `IngressScanBucket` units, ``egress``) is staged on the verifier's own registered reads, proved by Flock
-`prove --zk` behind the firewall, delivered, and decided by `EgressTie.verify` (C-Flock's Lean verifier with the
-verifier's registered reads, and the ingress statement's commitment chain); `EgressTie.tie` reads the verdict off the
-stream's outcomes of record.
+"""scan-tie: the egress tie (`scan_service.EgressTie`) on C-Flock's prover. An execution phase of a network certifier
+link (scan_zk's `link`: the synthetic run or a warden_serve run's, at a setup's class) is one registration of the egress
+tie's stream; every proof block is sampled, each of its four statements (``first``, ``ingress`` with the phase's
+`IngressScanBucket` blocks but the last, ``last``, ``egress``) is staged on the verifier's own registered reads, proved
+by Flock `prove --zk` behind the ZK server, delivered, and decided by `EgressTie.verify` (C-Flock's Lean verifier with
+the verifier's registered reads); `EgressTie.tie` reads the verdict off the stream's outcomes.
 
     python benchmarks/network_traces/scan_tie.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
         [--class w63|w63k4|test] [--warden-run RUN] [--port P] [--proof-deadline S]
 
 * **The rounds** (`ROUNDS`): ``honest``, the network certifier's rows as it signed them, accepted; ``tampered``, the
-  window's egress with one token's id changed in one `DATA` cell and the window re-signed (scan_zk's `_tamper`: a
+  phase's egress with one token's id changed in one `DATA` cell and the phase re-signed (scan_zk's `_tamper`: a
   network certifier that saw one token the trace doesn't render), refused at the egress statement, whose ``o1`` opens
   no row of the signed root. Each round is a stream of its own on the verifier's OS coins.
 * **The trace** is a stand-in for the compute audit's registration (`COMPUTE`): this driver commits the scan's
   `SCAN_STATE` and each lane's slot entries itself, as `G.Registered` rows of the trace's chain under fresh salts. What
   it shows is the tie to a trace so registered, not that the compute audit registered it.
-* **The prover's trees**: ``scan/view`` under fresh salts, and ``scan/next`` with row t − 1 under the trace's state leaf
-  t + 1's salt, so the ingress statement's S_t chain (`scan_service.chained`) holds.
+* **The prover's trees**: ``scan/view`` and ``scan/last`` (S_{T−1}), each under fresh salts.
 * **What the verifier receives** (`verifier_dir`) is scanned as scan_zk scans its rounds (`scan_zk.received`) for
-  every unit's input and output rows but the public ``o0`` and every salt but ``o0``'s, less what is public anyway
-  (`scan_zk.known`), the prover's instance files the control: a round is as expected only when none is found there.
-* ``--dry`` stages every statement and checks it on the host (each unit's outputs the references', every o0 1, the chain
-  on the staged public file), registers and draws, and proves nothing.
+  every proof block's input and output rows but the public ``o0`` and every salt but ``o0``'s, less what is public
+  anyway (`scan_zk.known`), the prover's instance files the control: a round is as expected only when none is found
+  there.
+* ``--dry`` stages every statement and checks it on the host (each block's outputs the references', every o0 1),
+  registers and samples, and proves nothing.
 """
 from __future__ import annotations
 
@@ -40,7 +39,6 @@ sys.path.insert(0, str(HERE))
 
 import scan_zk as SZ  # noqa: E402
 import warden_zk as WZ  # noqa: E402
-from verity.ml.commitments import hm96  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
 from verity.core.protocols.certifier import ingress_scan as IS, scan_service as SC, warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
@@ -49,7 +47,7 @@ from verity.core.protocols.sampled_proofs.one_stage import proofs as PF, registe
 #: the stand-in compute audit's Program, whose registration names the trace's trees (this driver commits them)
 COMPUTE = hashlib.sha512(b"scan_tie.py: the stand-in compute audit's program").hexdigest()
 CHALLENGER = "scan_tie.py on the verifier's OS coins"
-#: each round's expected verdict of record: accepted, or refused naming exactly these statements
+#: each round's expected verdict: accepted, or refused naming exactly these statements
 ROUNDS = {"honest": (True, ()), "tampered": (False, ("egress",))}
 
 
@@ -75,7 +73,7 @@ def one_link(at: SimpleNamespace, out: Path) -> SimpleNamespace:
         cells = WR.Cells.commit(link, d, c.window, c.rows, c.wiring, c.params, c.session)
         cert = issuer.sign(link, d, c.window, cells.head.digest())
         if cert is None:
-            raise SystemExit("the driver's signer refused a link-window")
+            raise SystemExit("the driver's signer refused an execution phase")
         registration = WR.registration(cells.head, cert, c.params)
         head, dom = WR.check_registration(registration, signer.public_key(), c.session, c.params, link, d, c.window)
         sides[side] = [SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom)]
@@ -98,17 +96,16 @@ def trace(tie: SC.EgressTie, ch) -> SimpleNamespace:
                            trace=SC.Trace(SC.Tree.of(state), tuple(SC.Tree.of(p) for p in progs)))
 
 
-def prover_trees(tie: SC.EgressTie, heads: SC.Heads, ch, state: G.Registered) -> tuple[G.Registered, G.Registered]:
-    """The prover's ``scan/view`` (fresh salts) and ``scan/next`` (row t − 1 under state leaf t + 1's salt, the last
-    under a fresh one), registered before any coin."""
+def prover_trees(tie: SC.EgressTie, heads: SC.Heads, ch) -> tuple[G.Registered, G.Registered]:
+    """The prover's ``scan/view`` and ``scan/last`` (S_{T−1}, the chain's state after bucket T − 1), under fresh
+    salts, registered before any coin."""
     T = tie.T
-    return (tie.view_tree(heads, ch.views[:T]),
-            tie.next_tree(heads, ch.states[2:T + 1], list(state.salts[2:]) + [hm96.SHA512.fresh_salt()]))
+    return tie.view_tree(heads, ch.views[:T]), tie.last_tree(heads, ch.states[T])
 
 
 def stagers(M, tie: SC.EgressTie, out: Path) -> dict[str, SimpleNamespace]:
-    """Each template's stager, bound to the egress tie's partition and Program, every output its own row; the
-    partition's ranges held to the tie's members."""
+    """Each template's stager, bound to the egress tie's partition and Program, every output its own row; each
+    template's range in the partition held to its members' proof blocks."""
     part = tie.partition
     out.mkdir(parents=True, exist_ok=True)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
@@ -117,9 +114,10 @@ def stagers(M, tie: SC.EgressTie, out: Path) -> dict[str, SimpleNamespace]:
     ranges = M.P.ranges(tie._program, tie.query)
     got = {}
     for tp, (tid, base, cnt) in zip(SC.TEMPLATES, ranges, strict=True):
-        m = next(m for m in tie.members if m.template == tp)
-        if (tid, base, cnt) != (M.P.template_id(tie.templates[tp]), m.base, len(m.units)):
-            raise SystemExit(f"the partition's range of {tp} is ({base}, {cnt}), not member {m.name}'s")
+        units = sorted(u for m in tie.members if m.template == tp for u in m.units)
+        if (tid, base, cnt) != (M.P.template_id(tie.templates[tp]), units[0], len(units)) or \
+                units != list(range(base, base + cnt)):
+            raise SystemExit(f"the partition's range of {tp} is ({base}, {cnt}), not its members' proof blocks")
         ins, outs = SZ.ports_of(tie.cls)[tp]
         sdir = out / tp
         sdir.mkdir(exist_ok=True)
@@ -133,7 +131,7 @@ def stagers(M, tie: SC.EgressTie, out: Path) -> dict[str, SimpleNamespace]:
 
 
 def stage(M, tie: SC.EgressTie, sg: SimpleNamespace, member: SC.Member, heads: SC.Heads, cells: SimpleNamespace,
-          tr: SimpleNamespace, view: G.Registered, next_: G.Registered, out: Path) -> dict:
+          tr: SimpleNamespace, view: G.Registered, last: G.Registered, out: Path) -> dict:
     """Member `member`'s statement: each input port's rows the registered rows its read opens (a slot-entries port one
     table row a boundary, `registered.table`), every row, input or output, under the salts and paths of the registered
     row the verifier's read of it opens (`scan_service`'s statement), and the verifier's own `--registered` file
@@ -163,8 +161,8 @@ def stage(M, tie: SC.EgressTie, sg: SimpleNamespace, member: SC.Member, heads: S
             read("sin", tr.state, bs)
         for j, p in enumerate(tr.progs):
             read(f"prog{j}", p, [b // every for b in bs])
-        if member.template == "ingress":
-            made("o1", next_, [b - 1 for b in bs])
+        if member.name == "last":
+            made("o1", last, [0])
         else:
             made("o1", tr.state, [b + 1 for b in bs])
         made("o2", view, bs)
@@ -184,20 +182,18 @@ def stage(M, tie: SC.EgressTie, sg: SimpleNamespace, member: SC.Member, heads: S
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
-    reads = tie.registered(member, heads, tr.trace, view.root, next_.root)
+    reads = tie.registered(member, heads, tr.trace, view.root, last.root)
     (out / "registered.json").write_text(json.dumps(reads, sort_keys=True))
-    proof = PF.Proof(out / "circuit.txt", out / f"pub-{n}.bin", ())
     return {"name": member.name, "template": member.template, "dir": out, "n": n, "base": member.base, "pin": st.pin,
             "ports": st.ports, "blobs": blobs, "partition_file": sg.partition_file, "program_file": sg.program_file,
             "registered_file": out / "registered.json", "ands": got["ands"], "k_log": st.meta["k_log"],
             "off": {p: [member.base + k for k in ks] for p, ks in off.items() if ks},
-            "chain": SC.chained(proof) if member.template == "ingress" else None,
             "stage_s": round(time.time() - t0, 1)}
 
 
 def host_read(name: str, staged: dict[str, dict]) -> list[str]:
     """Where a round's staged statements aren't what its expected verdict needs: every output the tree's row it is read
-    as and the chain whole, but the egress o1 of the tampered round, which must differ at one unit or more."""
+    as, but the egress o1 of the tampered round, which must differ at one proof block or more."""
     bad = []
     for k, m in staged.items():
         off = dict(m["off"])
@@ -206,16 +202,15 @@ def host_read(name: str, staged: dict[str, dict]) -> list[str]:
                 bad.append(f"{k}: the tampered round's egress o1 is the signed rows'")
         if off:
             bad.append(f"{k}: outputs {off} aren't the rows their reads open")
-        if m["chain"] is not None:
-            bad.append(f"{k}: {m['chain']}")
     return bad
 
 
 def tie_of(out: Path, setup, warden_run: Path | None = None, proof_deadline: float = 6 * 3600.0) -> SimpleNamespace:
-    """The link-window (`one_link` of scan_zk's `link`), its egress tie and the stand-in trace."""
+    """The execution phase (`one_link` of scan_zk's `link`), its egress tie and the stand-in trace."""
     at = one_link(SZ.link(out / "warden", warden_run, setup, 1), out / "warden")
     if at.void or at.tampered is None:
-        raise SystemExit(f"the run's link-window is void (FAIL buckets {at.void}): the egress tie proves a served one")
+        raise SystemExit(f"the run's execution phase is void (FAIL buckets {at.void}): the egress tie proves a served "
+                         "one")
     tie = SC.EgressTie(at.sides["ingress"][0].head.link, at.params, at.session, setup.cls,
                        proof_deadline=proof_deadline)
     return SimpleNamespace(at=at, tie=tie, tr=trace(tie, at.chain))
@@ -224,27 +219,28 @@ def tie_of(out: Path, setup, warden_run: Path | None = None, proof_deadline: flo
 def stage_round(M, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespace, sgs: dict, name: str, out: Path,
                 delta: float) -> SimpleNamespace:
     """Round `name` on a stream of its own, registered (the network certifier's heads, the trace's roots and the
-    prover's ``scan/view`` and ``scan/next``), every proof block drawn and each statement staged and read on the host."""
+    prover's ``scan/view`` and ``scan/last``), every proof block sampled and each statement staged and read on the
+    host."""
     egress = at.tampered if name == "tampered" else at.sides["egress"][0]
     cells = SimpleNamespace(ingress=at.sides["ingress"][0].cells, egress=egress.cells)
     heads = SC.Heads(at.sides["ingress"][0].head, egress.head)
-    view, next_ = prover_trees(tie, heads, at.chain, tr.state)
+    view, last = prover_trees(tie, heads, at.chain)
     stream = tie.stream(budget=1, delta=delta, challenger=CHALLENGER)
-    record = tie.registration(heads, tr.trace, view.root, next_.root)
+    record = tie.registration(heads, tr.trace, view.root, last.root)
     reg = tie.register(stream, record, heads, tr.trace)
     draw = stream.select(reg)
     if draw.units != list(range(tie.N)):
-        raise SystemExit(f"{name}: the stream drew {len(draw.units)} of {tie.N} proof blocks, not every one")
-    staged = {m.name: stage(M, tie, sgs[m.template], m, heads, cells, tr, view, next_, out / f"stage-{m.name}")
+        raise SystemExit(f"{name}: the stream sampled {len(draw.units)} of {tie.N} proof blocks, not every one")
+    staged = {m.name: stage(M, tie, sgs[m.template], m, heads, cells, tr, view, last, out / f"stage-{m.name}")
               for m in tie.members}
-    res = {"registration": reg.digest, "drawn": len(draw.units),
-           "staged": {k: {x: m[x] for x in ("n", "base", "ands", "k_log", "off", "chain", "stage_s")}
+    res = {"registration": reg.digest, "sampled": len(draw.units),
+           "staged": {k: {x: m[x] for x in ("n", "base", "ands", "k_log", "off", "stage_s")}
                       for k, m in staged.items()}}
     bad = host_read(name, staged)
     if bad:
         raise SystemExit(f"{name}: the host's read of the staged statements isn't the round's: {bad}")
-    log(f"{name}: registered {reg.digest[:16]}, every one of {tie.N} proof blocks drawn; staged "
-        + "; ".join(f"{k} {m['n']} units of {m['ands']} ANDs" for k, m in staged.items()))
+    log(f"{name}: registered {reg.digest[:16]}, every one of {tie.N} proof blocks sampled; staged "
+        + "; ".join(f"{k} {m['n']} proof blocks of {m['ands']} ANDs" for k, m in staged.items()))
     return SimpleNamespace(stream=stream, draw=draw, heads=heads, staged=staged, res=res, record=record,
                            registrations={"ingress": at.sides["ingress"][0].registration,
                                           "egress": egress.registration},
@@ -253,7 +249,7 @@ def stage_round(M, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespace, 
 
 def verifier_dir(sr: SimpleNamespace, sgs: dict, out: Path) -> Path:
     """What the verifier received in round `sr`: the registration, the network certifier's signed registrations of
-    the link-window, the partition and Program, and each statement's circuit, public file, registered reads and
+    the execution phase, the partition and Program, and each statement's circuit, public file, registered reads and
     session files."""
     vdir = out / "verifier"
     vdir.mkdir(exist_ok=True)
@@ -274,8 +270,8 @@ def verifier_dir(sr: SimpleNamespace, sgs: dict, out: Path) -> Path:
 
 def prove_round(M, a, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespace, sgs: dict, name: str,
                 out: Path, port: int) -> dict:
-    """Round `name` staged (`stage_round`) and, unless ``--dry``, each statement proved by one firewalled session,
-    delivered, and decided by the verifier of record (`EgressTie.outcome`)."""
+    """Round `name` staged (`stage_round`) and, unless ``--dry``, each statement proved by one session behind the ZK
+    server, delivered, and decided by the verifier (`EgressTie.outcome`)."""
     sr = stage_round(M, tie, at, tr, sgs, name, out, a.delta)
     stream, draw, heads, staged, res = sr.stream, sr.draw, sr.heads, sr.staged, sr.res
     if a.dry:
@@ -313,7 +309,7 @@ def prove_round(M, a, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespac
                 "expected": outcome.accepted is want_ok and tied.accepted == (want_ok,)
                 and tuple(sorted(verdict.get("refused") or {})) == want_refused and SZ.unseen(rec)})
     whole = rec.get("whole_rows") or {"rows": 0, "verifier_found": []}
-    log(f"{name}: verdict of record {'accepted' if outcome.accepted else 'refused'} {verdict.get('refused') or ''}, "
+    log(f"{name}: verdict {'accepted' if outcome.accepted else 'refused'} {verdict.get('refused') or ''}, "
         f"tie {tied.accepted}; the verifier received {rec['verifier_bytes']} bytes, witness pieces found there: "
         f"{rec['verifier_found'] or 'none'} (of {rec['blobs']}; {rec['public_pieces']} public, {rec['sparse_pieces']} "
         f"sparse left out), rows shorter than a piece found whole there: {whole['verifier_found'] or 'none'} (of "
@@ -360,8 +356,8 @@ def prove(a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="scan_tie.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    p = sub.add_parser("prove", help="a link-window's egress tie, every proof block proved --zk and decided by "
-                                     "EgressTie.verify")
+    p = sub.add_parser("prove", help="an execution phase's egress tie, every proof block proved --zk and decided "
+                                     "by EgressTie.verify")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
