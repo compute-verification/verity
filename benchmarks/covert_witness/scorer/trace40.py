@@ -466,19 +466,27 @@ def refused(c: Path) -> set[str]:
             and 0 in ((v.get("formalism") or {}).get("affected_share"), (v.get("formalism") or {}).get("u1_bits"))}
 
 
-def ledger(out: Path, te: Path) -> dict:
+def ledger(out: Path, te: Path, over: Path | None = None) -> dict:
     """The scorer's ledger with each traced run's submissions replaced by the node's (on the original, so a field the
     harness wrote and the node's re-ingest lacks, such as v3's data and model, stays; under the ledger's id, agent and
     write time), a refused run's (`refused`) marked invalid with REFUSED where te_core refuses none itself (4.2's
-    `formalism.refusal`), every other file linked; written to `out` whole, then swapped in."""
-    c = cache(te)
-    bad = set() if "\ndef refusal(" in git("show", f"HEAD:{CW}/te_core/formalism.py", cwd=te) else refused(c)
-    traced = collections.defaultdict(list)
-    for p in sorted((c / "records").glob("*.jsonl.gz")) if (c / "records").exists() else []:
-        with gzip.open(p, "rt") as f:
-            for line in f:
-                x = json.loads(line)
-                traced[(x["run_id"], x["checkpoint_step"])].append(x)
+    `formalism.refusal`), every other file linked; written to `out` whole, then swapped in. With `over`, a newer
+    capture's checkout, a run its cache traced takes every checkpoint from there, so each run's rows are one
+    capture's."""
+    traced, bad = collections.defaultdict(list), set()
+    for t in (te, *([over] if over else [])):
+        c, rows = cache(t), collections.defaultdict(list)
+        for p in sorted((c / "records").glob("*.jsonl.gz")) if (c / "records").exists() else []:
+            with gzip.open(p, "rt") as f:
+                for line in f:
+                    x = json.loads(line)
+                    rows[(x["run_id"], x["checkpoint_step"])].append(x)
+        runs = {k[0] for k in rows}
+        for k in [k for k in traced if k[0] in runs]:
+            del traced[k]
+        traced |= rows
+        bad = (bad - runs) | (set() if "\ndef refusal(" in git("show", f"HEAD:{CW}/te_core/formalism.py", cwd=t)
+                              else refused(c))
     by_id = {}
     for line in (LEDGER / "index.jsonl").open():
         r = json.loads(line)
@@ -533,6 +541,7 @@ def main() -> int:
     led = sub.add_parser("ledger")
     led.add_argument("--out", type=Path, default=MEASURED)
     led.add_argument("--te", type=Path, default=TE40_WT)
+    led.add_argument("--over", type=Path, help="a newer capture's checkout, whose traced runs replace --te's")
     a = ap.parse_args()
     if a.cmd == "pack":
         runs = pack(a.out, a.te, a.all, {x for x in a.only.split(",") if x} or None, {x for x in a.skip.split(",") if x})
@@ -544,7 +553,7 @@ def main() -> int:
         new = take(a.run, a.te)
         print(json.dumps({"runs": len(new), "errors": sum(bool(v.get("error")) for v in new.values())}))
     else:
-        print(json.dumps(ledger(a.out, a.te)))
+        print(json.dumps(ledger(a.out, a.te, a.over)))
     return 0
 
 

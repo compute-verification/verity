@@ -250,11 +250,13 @@ def trace_resources(runs: int) -> tuple[int, int]:
     return workers, min(200, 12 + 4 * workers)
 
 
-def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, build: bool = True) -> dict:
+def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, build: bool = True,
+                    over: Path | None = None) -> dict:
     """trace40.py's measured ledger: the scorer's ledger indexed (rescore reads the measured copy, so nothing else
     rewrites the index), the valid runs with no trace yet in `te`'s cache and no node run tracing them launched on
     TRACE_NODE, every node run (this one and earlier refreshes') waited for up to TRACE_WAIT_S and taken as it ends (one
-    still tracing is taken at a later refresh), and the copy built (`build`)."""
+    still tracing is taken at a later refresh), and the copy built (`build`), with the runs `over`'s capture traced
+    taken from there (trace40.ledger)."""
     cw = [sys.executable, str(HERE / "trace40.py")]
     if build:
         subprocess.run([sys.executable, "-m", "te_core.ledger", "--root", str(trace40.LEDGER), "index"],
@@ -311,8 +313,8 @@ def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, 
         time.sleep(60)
         settle()
     pf.write_text(json.dumps(pending, indent=1))
-    built = json.loads(subprocess.run([*cw, "ledger", "--te", str(te)], capture_output=True, text=True,
-                                      check=True).stdout) if build else None
+    built = json.loads(subprocess.run([*cw, "ledger", "--te", str(te), *(["--over", str(over)] if over else [])],
+                                      capture_output=True, text=True, check=True).stdout) if build else None
     traced = json.loads((cache / "traced.json").read_text()) if (cache / "traced.json").exists() else {}
     waiting = {k: sum(r not in traced or bool(traced[r].get("error")) for r in v) for k, v in pending.items()}
     return {"te_tree": cache.name, "took": took, "tracing": waiting,
@@ -514,8 +516,10 @@ def main() -> int:
     if not nxt and not final:
         LAST.write_text(json.dumps({"commit": commit, "te_core": te_version(commit), "stamp": stamp}) + "\n")
     trace_version = capture_version(trace40.TE40_WT)
+    # the runs the new capture has traced are scored on its traces already, where the re-score's te_core reads them
+    over = nxt if nxt and same_capture(te_version(commit), capture_version(nxt)) else None
     rs = out / "rescore"
-    traced, root = (None, None) if final else (measured_ledger(out, not args.no_trace and not nxt),
+    traced, root = (None, None) if final else (measured_ledger(out, not args.no_trace and not nxt, over=over),
                                                trace40.MEASURED)
     last = rescore(rs, args.gates, final, root)
     policy = {} if final else policy_panels(out, commit, not args.no_put, root)
@@ -539,7 +543,7 @@ def main() -> int:
     for r in scored:
         by_start.setdefault(r["start"], set()).add(r["run_id"])
     meta = {"stamp": stamp, "te_core": commit, "te_core_version": te_version(commit), "te_core_chosen": chosen,
-            "capture": trace_version,
+            "capture": trace_version, "over": bool(over),
             "integrator_te_core": newest, "pins": PINS,
             "quantities": ("rescore_v1's analysis" if final else
                            f"measured on each record's traced step (te_core {trace_version}'s capture, t literal; "
@@ -731,8 +735,10 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
                f"{nx['traced']} traced"
                + (f", {nx_refused} of {len(nx.get('launch') or [])} shard launches refused, packed again at the next "
                   "refresh" if nx_refused else "") + "; "
-               f"this refresh scores on te_core {meta['te_core_version']} over {meta.get('capture', '?')}'s capture "
-               "until it traces as many runs, and as many of v3's)" if nx else "")
+               f"this refresh scores on te_core {meta['te_core_version']} over {meta.get('capture', '?')}'s capture"
+               + (f", with the new capture's traces of its {nx['traced_runs']} traced runs over it (their rows reading "
+                  "A)" if meta.get("over") else "")
+               + " until it traces as many runs, and as many of v3's)" if nx else "")
     dt = ("; Δ_t a straight-through run's fp32 latents, else Δ (00:47Z)" if meta.get("delta_t")
           else "; Δ_t not priced (this te_core has none)")
     v3_said = ", ".join(f"{s} {x['records']} ({x['checkpoints']} checkpoints)" for s, x in meta["v3"].items()
