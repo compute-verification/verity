@@ -1,23 +1,13 @@
 {
  "id": "te_core.workloads",
- "te_core": "4.5",
+ "te_core": "4.6",
  "reading": "B",
  "spec": "note:training-20261103T0600Z-draft-workload-models",
  "policies": {
   "default": {
-   "c": 340992000000000.0,
+   "c": 536681984163840.0,
    "k": 65536.0,
-   "what": "the console default as the console defines it (dashboard, 05:34Z): one 4,096-in, 1,024-out session of the 45M reference a block, c = 5,120 x 2 x 45e6 x 740 gates (attention left out), k = 65,536 bits"
-  },
-  "default_full": {
-   "c": 536326224989482.56,
-   "k": 65536.0,
-   "what": "the console default with c the session's full cost, attention at te_core.flops' count (1.5728 c)"
-  },
-  "served": {
-   "c": 30087822237972.0,
-   "k": 145568.0,
-   "what": "the registered serving policy: the served demo's measured block (te_core.panels.SERVED, one slot's 35-step session of Llama-3.2-1B int8 under vLLM): c a lower bound, its linear layers still to be counted and its 133 BitAtx32_v1 activations a block unpriced; k its fresh bits"
+   "what": "the console's policy (te_core.policy.CONSOLE): one full session of the 45M reference a block, 4,096 tokens in and 1,024 out, attention and the LM head included (policy.session_gates), k = 65,536 bits"
   }
  },
  "kinds": ["fresh_products", "token", "reduction", "update", "decoding"],
@@ -192,85 +182,31 @@
      },
      "rho": {
       "default": {
-       "rho": 4682839.142792734,
+       "rho": 7370247.403675454,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 4682839.142792734,
+       "bound": 7370247.403675454,
        "terms": {
-        "fresh_products": 4682839.142792734,
-        "token": 262.9309374894009,
-        "reduction": 21508.533931699985,
-        "update": 488.8303166295451,
-        "decoding": 0.9997031897773525
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 21508.533931699985, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 1457.4613894064646,
-       "x0": 5.785948823282658e-05,
-       "s_star": 5.541168,
-       "b": [45],
-       "fresh_share": 0.9736105866652403,
-       "fresh_charged_share": 0.9419511412400156,
-       "fit_delta_bits": 42216.617769496566,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 7365361.767100143,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 7365361.767100143,
-       "terms": {
-        "fresh_products": 7365361.767100143,
-        "token": 413.5485792529913,
-        "reduction": 21527.867265488483,
-        "update": 768.8524023388743,
+        "fresh_products": 7370247.403675454,
+        "token": 413.82289681244794,
+        "reduction": 21542.147261370086,
+        "update": 769.3624021917888,
         "decoding": 0.9997031897773526
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
-       "te_core": {"rho": 21527.867265488483, "basis": "reduction"},
+       "te_core": {"rho": 21542.147261370086, "basis": "reduction"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
-       "s": 2292.355143370799,
+       "s": 2293.875722330285,
        "x0": 5.785948823282658e-05,
        "s_star": 5.541168,
        "b": [29],
        "fresh_share": 0.9736105866652403,
        "fresh_charged_share": 0.9419511412400156,
-       "fit_delta_bits": 28858.317706067217,
+       "fit_delta_bits": 28833.98844271544,
        "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 122760.70741115791,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 122760.70741115791,
-       "terms": {
-        "fresh_products": 122760.70741115791,
-        "token": 10.444113451032537,
-        "reduction": 9884.08552674309,
-        "update": 19.418635612461866,
-        "decoding": 0.9997031897773526
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 9884.08552674309, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 128.60078595148684,
-       "x0": 0.0001285169980327774,
-       "s_star": 12.3079947421875,
-       "b": [510],
-       "fresh_share": 0.9736105866652403,
-       "fresh_charged_share": 0.926426419333659,
-       "fit_delta_bits": 143510.3874247762,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -354,85 +290,31 @@
      },
      "rho": {
       "default": {
-       "rho": 3982459.067087055,
+       "rho": 6267930.139051814,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 3982459.067087055,
+       "bound": 6267930.139051814,
        "terms": {
-        "fresh_products": 3982459.067087055,
-        "token": 409.1133750904918,
-        "reduction": 21297.18043788996,
-        "update": 760.6135870674987,
-        "decoding": 0.9995381671708033
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 21297.18043788996, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 2268.1652927230225,
-       "x0": 6.697362913352868e-05,
-       "s_star": 5.541168,
-       "b": [29],
-       "fresh_share": 0.959020599639083,
-       "fresh_charged_share": 0.9057298849369351,
-       "fit_delta_bits": 29245.35531643164,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 6263775.213570807,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 6263775.213570807,
-       "terms": {
-        "fresh_products": 6263775.213570807,
-        "token": 643.4703220456481,
-        "reduction": 21533.837300866802,
-        "update": 1196.3242944926,
+        "fresh_products": 6267930.139051814,
+        "token": 643.8971526942873,
+        "reduction": 21548.121256828592,
+        "update": 1197.1178476015884,
         "decoding": 0.9995381671708032
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
-       "te_core": {"rho": 21533.837300866802, "basis": "reduction"},
+       "te_core": {"rho": 21548.121256828592, "basis": "reduction"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
-       "s": 3567.463544887573,
+       "s": 3569.8299365092103,
        "x0": 6.697362913352868e-05,
        "s_star": 5.541168,
        "b": [19],
        "fresh_share": 0.959020599639083,
        "fresh_charged_share": 0.9057298849369351,
-       "fit_delta_bits": 8456.583281798834,
+       "fit_delta_bits": 8418.721015852636,
        "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 102948.78842761835,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 102948.78842761835,
-       "terms": {
-        "fresh_products": 102948.78842761835,
-        "token": 16.25057506830091,
-        "reduction": 9880.351874355405,
-        "update": 30.215143346652617,
-        "decoding": 0.9995381671708032
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 9880.351874355405, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 200.13417949332543,
-       "x0": 0.00014876124947676853,
-       "s_star": 12.3079947421875,
-       "b": [328],
-       "fresh_share": 0.959020599639083,
-       "fresh_charged_share": 0.879597919742034,
-       "fit_delta_bits": 142365.8531281068,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -549,85 +431,31 @@
      },
      "rho": {
       "default": {
-       "rho": 4797339.417500298,
+       "rho": 7550457.598100427,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 4797339.417500298,
+       "bound": 7550457.598100427,
        "terms": {
-        "fresh_products": 4797339.417500298,
-        "token": 13.048296174083124,
-        "reduction": 3416380.195710868,
-        "update": 533.1429768587498,
+        "fresh_products": 7550457.598100427,
+        "token": 20.536509597481384,
+        "reduction": 3416837.213958266,
+        "update": 839.1054061783561,
         "decoding": 0.9996762844791867
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 5829377758.397496},
        "unmeasured": [],
-       "te_core": {"rho": 3416380.195710868, "basis": "reduction"},
+       "te_core": {"rho": 3416837.213958266, "basis": "reduction"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
-       "s": 10.22577520712463,
+       "s": 16.094187921631736,
        "x0": 5.702766381850536e-07,
        "s_star": 0.7834324879633638,
-       "b": [6409],
+       "b": [4073],
        "fresh_share": 0.9736692697141801,
        "fresh_charged_share": 0.9649828237608812,
-       "fit_delta_bits": 65372.38759668601,
+       "fit_delta_bits": 65278.492993253894,
        "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 7545452.502642813,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 7545452.502642813,
-       "terms": {
-        "fresh_products": 7545452.502642813,
-        "token": 20.522896225104134,
-        "reduction": 3416249.3374769734,
-        "update": 838.5491746384323,
-        "decoding": 0.9996762844791867
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 5829377758.397496},
-       "unmeasured": [],
-       "te_core": {"rho": 3416249.3374769734, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 16.08351930376137,
-       "x0": 5.702766381850536e-07,
-       "s_star": 0.7834324879633638,
-       "b": [4075],
-       "fresh_share": 0.9736692697141801,
-       "fresh_charged_share": 0.9649828237608812,
-       "fit_delta_bits": 65278.66369113982,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 1538290.1348831414,
-       "basis": "reduction",
-       "binding_kind": "reduction",
-       "bound": 1538290.1348831414,
-       "terms": {
-        "fresh_products": 127305.3828594681,
-        "token": 0.5183392348836736,
-        "reduction": 1538290.1348831414,
-        "update": 21.178942558935216,
-        "decoding": 0.9996762844791868
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 5829377758.397496},
-       "unmeasured": [],
-       "te_core": {"rho": 1538290.1348831414, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 0.9022830643458708,
-       "x0": 1.2666935679217818e-06,
-       "s_star": 1.7401535096412806,
-       "b": [72634],
-       "fresh_share": 0.9736692697141801,
-       "fresh_charged_share": 0.9607232842784835,
-       "fit_delta_bits": 145553.56347097046,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -718,116 +546,40 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 4724900.707455938,
+        "rho": 7436447.443501854,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 4724900.707455938,
+        "bound": 7436447.443501854,
         "terms": {
-         "fresh_products": 4724900.707455938,
-         "token": 264.0434930985836,
-         "reduction": 21701.724977386722,
-         "update": 493.2210222133346,
+         "fresh_products": 7436447.443501854,
+         "token": 415.57393071303443,
+         "reduction": 21735.64022416231,
+         "update": 776.272865148654,
          "decoding": 0.999823
         },
-        "te_core": {"rho": 21701.724977386722, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": [],
-        "b": [45]
-       },
-       "model": {
-        "rho": 4682839.142792734,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 4682839.142792734,
-        "terms": {
-         "fresh_products": 4682839.142792734,
-         "token": 262.9309374894009,
-         "reduction": 21508.533931699985,
-         "update": 488.8303166295451,
-         "decoding": 0.9997031897773525
-        },
-        "te_core": {"rho": 21508.533931699985, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-        "unmeasured": [],
-        "b": [45]
-       }
-      },
-      "default_full": {
-       "record": {
-        "rho": 7431517.923822198,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 7431517.923822198,
-        "terms": {
-         "fresh_products": 7431517.923822198,
-         "token": 415.29845241706505,
-         "reduction": 21721.23196443225,
-         "update": 775.7582844440088,
-         "decoding": 0.999823
-        },
-        "te_core": {"rho": 21721.23196443225, "basis": "reduction"},
+        "te_core": {"rho": 21735.64022416231, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "refused"},
         "unmeasured": [],
         "b": [29]
        },
        "model": {
-        "rho": 7365361.767100143,
+        "rho": 7370247.403675454,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 7365361.767100143,
+        "bound": 7370247.403675454,
         "terms": {
-         "fresh_products": 7365361.767100143,
-         "token": 413.5485792529913,
-         "reduction": 21527.867265488483,
-         "update": 768.8524023388743,
+         "fresh_products": 7370247.403675454,
+         "token": 413.82289681244794,
+         "reduction": 21542.147261370086,
+         "update": 769.3624021917888,
          "decoding": 0.9997031897773526
         },
-        "te_core": {"rho": 21527.867265488483, "basis": "reduction"},
+        "te_core": {"rho": 21542.147261370086, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
         "unmeasured": [],
         "b": [29]
-       }
-      },
-      "served": {
-       "record": {
-        "rho": 123863.35204092746,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 123863.35204092746,
-        "terms": {
-         "fresh_products": 123863.35204092746,
-         "token": 10.489047434037735,
-         "reduction": 9894.492803282184,
-         "update": 19.593055056004324,
-         "decoding": 0.999823
-        },
-        "te_core": {"rho": 9894.492803282184, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": [],
-        "b": [506]
-       },
-       "model": {
-        "rho": 122760.70741115791,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 122760.70741115791,
-        "terms": {
-         "fresh_products": 122760.70741115791,
-         "token": 10.444113451032537,
-         "reduction": 9884.08552674309,
-         "update": 19.418635612461866,
-         "decoding": 0.9997031897773526
-        },
-        "te_core": {"rho": 9884.08552674309, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-        "unmeasured": [],
-        "b": [510]
        }
       }
      }
@@ -909,116 +661,40 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 4738655.295215567,
+        "rho": 7458095.5743969865,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 4738655.295215567,
+        "bound": 7458095.5743969865,
         "terms": {
-         "fresh_products": 4738655.295215567,
-         "token": 260.70703931412754,
-         "reduction": 21495.862172197936,
-         "update": 488.5423220954076,
+         "fresh_products": 7458095.5743969865,
+         "token": 410.3227382008558,
+         "reduction": 21529.455698564332,
+         "update": 768.9091320915833,
          "decoding": 0.993392
         },
-        "te_core": {"rho": 21495.862172197936, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": [],
-        "b": [45]
-       },
-       "model": {
-        "rho": 4684702.566846378,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 4684702.566846378,
-        "terms": {
-         "fresh_products": 4684702.566846378,
-         "token": 259.7841525204514,
-         "reduction": 21251.117547281014,
-         "update": 482.97994425638666,
-         "decoding": 0.9877386374084287
-        },
-        "te_core": {"rho": 21251.117547281014, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-        "unmeasured": [],
-        "b": [45]
-       }
-      },
-      "default_full": {
-       "record": {
-        "rho": 7453151.704466342,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 7453151.704466342,
-        "terms": {
-         "fresh_products": 7453151.704466342,
-         "token": 410.0507408488487,
-         "reduction": 21515.184115746775,
-         "update": 768.3994327052419,
-         "decoding": 0.993392
-        },
-        "te_core": {"rho": 21515.184115746775, "basis": "reduction"},
+        "te_core": {"rho": 21529.455698564332, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "refused"},
         "unmeasured": [],
         "b": [29]
        },
        "model": {
-        "rho": 7368292.636998102,
+        "rho": 7373180.217695865,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 7368292.636998102,
+        "bound": 7373180.217695865,
         "terms": {
-         "fresh_products": 7368292.636998102,
-         "token": 408.59918658908623,
-         "reduction": 21270.219497707985,
-         "update": 759.6506963467136,
+         "fresh_products": 7373180.217695865,
+         "token": 408.87022108729093,
+         "reduction": 21284.328589104836,
+         "update": 760.1545924680298,
          "decoding": 0.9877386374084287
         },
-        "te_core": {"rho": 21270.219497707985, "basis": "reduction"},
+        "te_core": {"rho": 21284.328589104836, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
         "unmeasured": [],
         "b": [29]
-       }
-      },
-      "served": {
-       "record": {
-        "rho": 124220.38699759397,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 124220.38699759397,
-        "terms": {
-         "fresh_products": 124220.38699759397,
-         "token": 10.356507822491361,
-         "reduction": 9820.040729307815,
-         "update": 19.407195117209124,
-         "decoding": 0.9933920000000002
-        },
-        "te_core": {"rho": 9820.040729307815, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": [],
-        "b": [507]
-       },
-       "model": {
-        "rho": 122806.05563562225,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 122806.05563562225,
-        "terms": {
-         "fresh_products": 122806.05563562225,
-         "token": 10.319117208538112,
-         "reduction": 9765.791757039326,
-         "update": 19.186231349782567,
-         "decoding": 0.9877386374084287
-        },
-        "te_core": {"rho": 9765.791757039326, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-        "unmeasured": [],
-        "b": [510]
        }
       }
      }
@@ -1108,116 +784,40 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 4651292.628295361,
+        "rho": 7320596.837111125,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 4651292.628295361,
+        "bound": 7320596.837111125,
         "terms": {
-         "fresh_products": 4651292.628295361,
-         "token": 301.02615718785216,
-         "reduction": 17319.177441037886,
-         "update": 234.0429383924039,
+         "fresh_products": 7320596.837111125,
+         "token": 473.7803682338368,
+         "reduction": 17312.75672781362,
+         "update": 368.3565261236941,
          "decoding": 0.9955694826201458
         },
-        "te_core": {"rho": 17319.177441037886, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": ["reduction", "update"],
-        "b": [74, 75, 13]
-       },
-       "model": {
-        "rho": 4665823.444245148,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 4665823.444245148,
-        "terms": {
-         "fresh_products": 4665823.444245148,
-         "token": 319.34619532563465,
-         "reduction": 17160.853029128502,
-         "update": 235.08017848121236,
-         "decoding": 0.9925010629497353
-        },
-        "te_core": {"rho": 17160.853029128502, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 524287999.9999999},
-        "unmeasured": [],
-        "b": [74]
-       }
-      },
-      "default_full": {
-       "record": {
-        "rho": 7315744.11321984,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 7315744.11321984,
-        "terms": {
-         "fresh_products": 7315744.11321984,
-         "token": 473.4663056835684,
-         "reduction": 17301.28033728612,
-         "update": 368.1123476018323,
-         "decoding": 0.9955694826201458
-        },
-        "te_core": {"rho": 17301.28033728612, "basis": "reduction"},
+        "te_core": {"rho": 17312.75672781362, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "refused"},
         "unmeasured": ["reduction", "update"],
         "b": [47, 48, 8]
        },
        "model": {
-        "rho": 7338598.777447641,
+        "rho": 7343466.661433841,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 7338598.777447641,
+        "bound": 7343466.661433841,
         "terms": {
-         "fresh_products": 7338598.777447641,
-         "token": 502.28081422365227,
-         "reduction": 17008.213025394703,
-         "update": 369.7437614216241,
+         "fresh_products": 7343466.661433841,
+         "token": 502.61399018902154,
+         "reduction": 17019.495016729976,
+         "update": 369.9890221028255,
          "decoding": 0.9925010629497352
         },
-        "te_core": {"rho": 17008.213025394703, "basis": "reduction"},
+        "te_core": {"rho": 17019.495016729976, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "unmodelled", "op_update_bits": 524287999.9999999},
         "unmeasured": [],
         "b": [47]
-       }
-      },
-      "served": {
-       "record": {
-        "rho": 121679.21595149612,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 121679.21595149612,
-        "terms": {
-         "fresh_products": 121679.21595149612,
-         "token": 11.958172513838852,
-         "reduction": 7800.42171675173,
-         "update": 9.297284525329834,
-         "decoding": 0.9955694826201458
-        },
-        "te_core": {"rho": 7800.42171675173, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": ["reduction", "update"],
-        "b": [833, 840, 138]
-       },
-       "model": {
-        "rho": 122059.3464728806,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 122059.3464728806,
-        "terms": {
-         "fresh_products": 122059.3464728806,
-         "token": 12.684711216897181,
-         "reduction": 7778.960980726519,
-         "update": 9.338488572300744,
-         "decoding": 0.9925010629497352
-        },
-        "te_core": {"rho": 7778.960980726519, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 524287999.9999999},
-        "unmeasured": [],
-        "b": [834]
        }
       }
      }
@@ -1382,85 +982,31 @@
      },
      "rho": {
       "default": {
-       "rho": 4677207.44220644,
+       "rho": 7361383.758062451,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 4677207.44220644,
+       "bound": 7361383.758062451,
        "terms": {
-        "fresh_products": 4677207.44220644,
-        "token": 262.6969850519593,
-        "reduction": 21489.44479336473,
-        "update": 1953.5858903058847,
+        "fresh_products": 7361383.758062451,
+        "token": 413.45468272435767,
+        "reduction": 21523.028290713297,
+        "update": 3074.7183272447564,
         "decoding": 0.9988136672274399
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
-       "te_core": {"rho": 21489.44479336473, "basis": "reduction"},
+       "te_core": {"rho": 21523.028290713297, "basis": "reduction"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
-       "s": 1457.4613894064646,
-       "x0": 5.785948823282658e-05,
-       "s_star": 5.541168,
-       "b": [45],
-       "fresh_share": 0.9727442809651801,
-       "fresh_charged_share": 0.9408183270150069,
-       "fit_delta_bits": 42216.617769496566,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 7356503.997077038,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 7356503.997077038,
-       "terms": {
-        "fresh_products": 7356503.997077038,
-        "token": 413.1806092490026,
-        "reduction": 21508.760968536822,
-        "update": 3072.680138362403,
-        "decoding": 0.9988136672274399
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 21508.760968536822, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 2292.355143370799,
+       "s": 2293.875722330285,
        "x0": 5.785948823282658e-05,
        "s_star": 5.541168,
        "b": [29],
        "fresh_share": 0.9727442809651801,
        "fresh_charged_share": 0.9408183270150069,
-       "fit_delta_bits": 28858.317706067217,
+       "fit_delta_bits": 28833.98844271544,
        "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 122593.28097230905,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 122593.28097230905,
-       "terms": {
-        "fresh_products": 122593.28097230905,
-        "token": 10.434820418336894,
-        "reduction": 9875.313256325373,
-        "update": 77.60560515776325,
-        "decoding": 0.9988136672274399
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 9875.313256325373, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 128.60078595148684,
-       "x0": 0.0001285169980327774,
-       "s_star": 12.3079947421875,
-       "b": [510],
-       "fresh_share": 0.9727442809651801,
-       "fresh_charged_share": 0.9251629183363482,
-       "fit_delta_bits": 143510.3874247762,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -1549,85 +1095,31 @@
      },
      "rho": {
       "default": {
-       "rho": 4677207.44220644,
+       "rho": 7361383.758062451,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 4677207.44220644,
+       "bound": 7361383.758062451,
        "terms": {
-        "fresh_products": 4677207.44220644,
-        "token": 262.6969850519593,
-        "reduction": 21489.44479336473,
-        "update": 1953.5858903058847,
+        "fresh_products": 7361383.758062451,
+        "token": 413.45468272435767,
+        "reduction": 21523.028290713297,
+        "update": 3074.7183272447564,
         "decoding": 0.9988136672274399
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
-       "te_core": {"rho": 21489.44479336473, "basis": "reduction"},
+       "te_core": {"rho": 21523.028290713297, "basis": "reduction"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
-       "s": 1457.4613894064646,
-       "x0": 5.785948823282658e-05,
-       "s_star": 5.541168,
-       "b": [45],
-       "fresh_share": 0.9727442809651801,
-       "fresh_charged_share": 0.9408183270150069,
-       "fit_delta_bits": 42216.617769496566,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 7356503.997077038,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 7356503.997077038,
-       "terms": {
-        "fresh_products": 7356503.997077038,
-        "token": 413.1806092490026,
-        "reduction": 21508.760968536822,
-        "update": 3072.680138362403,
-        "decoding": 0.9988136672274399
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 21508.760968536822, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 2292.355143370799,
+       "s": 2293.875722330285,
        "x0": 5.785948823282658e-05,
        "s_star": 5.541168,
        "b": [29],
        "fresh_share": 0.9727442809651801,
        "fresh_charged_share": 0.9408183270150069,
-       "fit_delta_bits": 28858.317706067217,
+       "fit_delta_bits": 28833.98844271544,
        "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 122593.28097230905,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 122593.28097230905,
-       "terms": {
-        "fresh_products": 122593.28097230905,
-        "token": 10.434820418336894,
-        "reduction": 9875.313256325373,
-        "update": 77.60560515776325,
-        "decoding": 0.9988136672274399
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 9875.313256325373, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 128.60078595148684,
-       "x0": 0.0001285169980327774,
-       "s_star": 12.3079947421875,
-       "b": [510],
-       "fresh_share": 0.9727442809651801,
-       "fresh_charged_share": 0.9251629183363482,
-       "fit_delta_bits": 143510.3874247762,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -1650,13 +1142,13 @@
       "optimizer": "adamw",
       "t": null,
       "inner_steps": 2,
-      "syncs": 32,
+      "syncs": 16,
       "sync_bits": 1024,
       "workers": 4,
       "vocab": 50304
      },
      "inputs": {
-      "C_gates": 5035067524137616.0,
+      "C_gates": 2517533762068808.0,
       "w_gates": 233962973207.04,
       "w_fwd_gates": 75962004288.0,
       "sigma": 0.7613104163246918,
@@ -1664,8 +1156,8 @@
       "a_bits": 8192.0,
       "u_points": "0:0;0.692646:0;0.692646:7.84543e8;1:1.13268e9",
       "u_in_points": "0:0;1:1.13268e9",
-      "delta_bits": 40960.0,
-      "delta_t_bits": 40960.0,
+      "delta_bits": 24576.0,
+      "delta_t_bits": 24576.0,
       "d_gates": 119789042282004.48,
       "delta_grad_bits": 1024.0,
       "w_fit_gates": 233962973207.04,
@@ -1690,24 +1182,24 @@
      },
      "menu": {
       "u1_bits": 1132675072.0,
-      "delta_bits": 40960.0,
+      "delta_bits": 24576.0,
       "decoder_gates": 119789042282004.48,
       "fresh": [
-       ["gemm/bf16", 19267584.0, 32256.0, 1.0, 16384, 1024, 1024, 16.0, 1.0, false],
-       ["gemm/bf16", 25755648.0, 50304.0, 1.0, 16384, 1024, 1024, 16.0, 1.0, false],
-       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 16384, 1024, 1024, 16.0, 1.0, false],
-       ["gemm/bf16", 3145728.0, 3072.0, 1.0, 16384, 1024, 1024, 16.0, 1.0, false],
-       ["gemm/bf16", 45023232.0, 27392.0, 1.0, 16384, 1024, 1024, 16.0, 1.0, true],
-       ["gemm/bf16", 45023232.0, 703488.0, 1.0, 16384, 1024, 1024, 16.0, 1.0, true],
-       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 16384, 1024, 1024, 16.0, 1.0, true],
-       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 16384, 1024, 1024, 16.0, 1.0, true]
+       ["gemm/bf16", 19267584.0, 32256.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 25755648.0, 50304.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 3145728.0, 3072.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 45023232.0, 27392.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 45023232.0, 703488.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, true]
       ],
       "fresh_share": 0.7414399480282954,
       "parts": [
        {
-        "steps": 64,
-        "tokens": 16384,
-        "token_gates": 3833249353024143.5,
+        "steps": 32,
+        "tokens": 8192,
+        "token_gates": 1916624676512071.8,
         "partial_bits": 1440956416,
         "grad_bits": 5763825664
        }
@@ -1716,81 +1208,33 @@
      },
      "rho": {
       "default": {
-       "rho": 1.5415345414807684,
+       "rho": 1.2873376597389303,
        "basis": "fit",
-       "binding_kind": "decoding",
-       "bound": 1.1735863035536165,
-       "terms": {"fresh_products": 0.0, "token": 0.0, "reduction": 0.0, "update": 0.0, "decoding": 1.1735863035536165},
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 1.5415345414807684, "basis": "fit"},
-       "fit": true,
-       "fit_fails": [],
-       "rho_fit": 1.5415345414807684,
-       "s": 1457.4613894064646,
-       "x0": 1.0,
-       "s_star": 5.541168,
-       "b": [1],
-       "fresh_share": 0.0,
-       "fresh_charged_share": 0.0,
-       "fit_delta_bits": 42216.617769496566,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 1.0,
-       "basis": "none",
        "binding_kind": null,
        "bound": 1.0,
-       "terms": {"fresh_products": 0.0, "token": 0.0, "reduction": 0.0, "update": 0.0, "decoding": 0.9802504040061605},
+       "terms": {"fresh_products": 0.0, "token": 0.0, "reduction": 0.0, "update": 0.0, "decoding": 0.9800635696862995},
        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
-       "te_core": {"rho": 1.0, "basis": "decoding"},
-       "fit": false,
-       "fit_fails": ["compute"],
-       "rho_fit": 1.2875830712239893,
-       "s": 2292.355143370799,
+       "te_core": {"rho": 1.2873376597389303, "basis": "fit"},
+       "fit": true,
+       "fit_fails": [],
+       "rho_fit": 1.2873376597389303,
+       "s": 2293.875722330285,
        "x0": 1.0,
        "s_star": 5.541168,
        "b": [1],
        "fresh_share": 0.0,
        "fresh_charged_share": 0.0,
-       "fit_delta_bits": 28858.317706067217,
+       "fit_delta_bits": 28833.98844271544,
        "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 78360.83206272579,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 78360.83206272579,
-       "terms": {
-        "fresh_products": 78360.83206272579,
-        "token": 7.953573061339072,
-        "reduction": 3785.7362996348556,
-        "update": 15142.945198539423,
-        "decoding": 7.943928118795126
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 15142.945198539423, "basis": "update"},
-       "fit": false,
-       "fit_fails": ["compute", "update"],
-       "rho_fit": null,
-       "s": 128.60078595148684,
-       "x0": 0.0001285169980327774,
-       "s_star": 12.3079947421875,
-       "b": [2],
-       "fresh_share": 0.7414399480282954,
-       "fresh_charged_share": 0.5913581519267044,
-       "fit_delta_bits": 143510.3874247762,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
       "d_model": 512.0,
       "n_layer": 6.0,
       "w_gates": 233962973207.04,
-      "tokens": 16384,
-      "code_bits": 40960.0,
+      "tokens": 8192,
+      "code_bits": 24576.0,
       "compressed": true,
       "phase_tokens": 512,
       "phase_gates": 119789042282004.48
@@ -1886,116 +1330,40 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 4641341.540008876,
+        "rho": 7304934.974644614,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 4641341.540008876,
+        "bound": 7304934.974644614,
         "terms": {
-         "fresh_products": 4641341.540008876,
-         "token": 302.4372272305873,
-         "reduction": 16930.039009427568,
-         "update": 1881.1154454919522,
-         "decoding": 0.9968910777128493
-        },
-        "te_core": {"rho": 16930.039009427568, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": ["reduction", "update"],
-        "b": [0, 37, 37, 0]
-       },
-       "model": {
-        "rho": 4658190.584701084,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 4658190.584701084,
-        "terms": {
-         "fresh_products": 4658190.584701084,
-         "token": 321.3888181248604,
-         "reduction": 17034.0838166851,
-         "update": 1892.6759796316778,
-         "decoding": 0.9988493624726703
-        },
-        "te_core": {"rho": 17034.0838166851, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 524287999.9999999},
-        "unmeasured": [],
-        "b": [37]
-       }
-      },
-      "default_full": {
-       "record": {
-        "rho": 7300092.632788545,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 7300092.632788545,
-        "terms": {
-         "fresh_products": 7300092.632788545,
-         "token": 475.68569461121444,
-         "reduction": 17012.4999633074,
-         "update": 2958.695645792591,
+         "fresh_products": 7304934.974644614,
+         "token": 476.0012293400482,
+         "reduction": 17023.78479828041,
+         "update": 2960.658225787897,
          "decoding": 0.9968910777128495
         },
-        "te_core": {"rho": 17012.4999633074, "basis": "reduction"},
+        "te_core": {"rho": 17023.78479828041, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "refused"},
         "unmeasured": ["reduction", "update"],
         "b": [0, 24, 24, 0]
        },
        "model": {
-        "rho": 7326593.502411443,
+        "rho": 7331453.4229855705,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 7326593.502411443,
+        "bound": 7331453.4229855705,
         "terms": {
-         "fresh_products": 7326593.502411443,
-         "token": 505.49353526985317,
-         "reduction": 17117.05154045766,
-         "update": 2976.8785287752453,
+         "fresh_products": 7331453.4229855705,
+         "token": 505.8288423168919,
+         "reduction": 17128.405727218877,
+         "update": 2978.8531699511086,
          "decoding": 0.9988493624726703
         },
-        "te_core": {"rho": 17117.05154045766, "basis": "reduction"},
+        "te_core": {"rho": 17128.405727218877, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "unmodelled", "op_update_bits": 524287999.9999999},
         "unmeasured": [],
         "b": [24]
-       }
-      },
-      "served": {
-       "record": {
-        "rho": 121396.71926901897,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 121396.71926901897,
-        "terms": {
-         "fresh_products": 121396.71926901897,
-         "token": 12.014226842000133,
-         "reduction": 7808.944203036182,
-         "update": 74.72673878503524,
-         "decoding": 0.9968910777128495
-        },
-        "te_core": {"rho": 7808.944203036182, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": ["reduction", "update"],
-        "b": [0, 417, 419, 0]
-       },
-       "model": {
-        "rho": 121837.41485903737,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 121837.41485903737,
-        "terms": {
-         "fresh_products": 121837.41485903737,
-         "token": 12.765845987602084,
-         "reduction": 7819.341658617104,
-         "update": 75.18597748670294,
-         "decoding": 0.9988493624726703
-        },
-        "te_core": {"rho": 7819.341658617104, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 524287999.9999999},
-        "unmeasured": [],
-        "b": [417]
        }
       }
      }
@@ -2183,85 +1551,31 @@
      },
      "rho": {
       "default": {
-       "rho": 4668985.970498238,
+       "rho": 7348444.112120303,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 4668985.970498238,
+       "bound": 7348444.112120303,
        "terms": {
-        "fresh_products": 4668985.970498238,
-        "token": 262.8677969055444,
-        "reduction": 19667.08395202269,
-        "update": 446.9791807277885,
+        "fresh_products": 7348444.112120303,
+        "token": 413.723520833465,
+        "reduction": 19697.819481400387,
+        "update": 703.4935529071566,
         "decoding": 0.9997286232946845
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
-       "te_core": {"rho": 19667.08395202269, "basis": "reduction"},
+       "te_core": {"rho": 19697.819481400387, "basis": "reduction"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
-       "s": 2665.0767229736707,
+       "s": 4194.522638755086,
        "x0": 0.00032341975968395824,
        "s_star": 5.541168,
-       "b": [6433, 45],
+       "b": [4087, 29],
        "fresh_share": 0.9684041714377684,
        "fresh_charged_share": 0.9269504426143864,
-       "fit_delta_bits": 3349.7643919581096,
+       "fit_delta_bits": -32337.945177024565,
        "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 7343572.928649867,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 7343572.928649867,
-       "terms": {
-        "fresh_products": 7343572.928649867,
-        "token": 413.4492691489907,
-        "reduction": 19684.762065272913,
-        "update": 703.0272166168897,
-        "decoding": 0.9997286232946845
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 19684.762065272913, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 4191.7421468533275,
-       "x0": 0.00032341975968395824,
-       "s_star": 5.541168,
-       "b": [4090, 29],
-       "fresh_share": 0.9684041714377684,
-       "fresh_charged_share": 0.9269504426143864,
-       "fit_delta_bits": -32273.065872418258,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 121617.69414596743,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 121617.69414596743,
-       "terms": {
-        "fresh_products": 121617.69414596743,
-        "token": 10.438217645073683,
-        "reduction": 9037.860993255737,
-        "update": 17.756111971032883,
-        "decoding": 0.9997286232946845
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 9037.860993255737, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 235.15611712705507,
-       "x0": 0.0007183771908214482,
-       "s_star": 12.3079947421875,
-       "b": [72899, 510],
-       "fresh_share": 0.9684041714377684,
-       "fresh_charged_share": 0.9066229351890109,
-       "fit_delta_bits": 140080.92580874797,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -2278,11 +1592,7 @@
        {"kind": "learner", "tokens": 100000000.0, "u1_bits": 1132675072.0, "t": 0.692646}
       ]
      },
-     "sensitivity": {
-      "default": {"tokens_worth": 480.67334877230155, "per_kind": 772.9375157247812},
-      "default_full": {"tokens_worth": 756.0227882182029, "per_kind": 1215.7078757314562},
-      "served": {"tokens_worth": 19.087058550859975, "per_kind": 30.695674880186044}
-     }
+     "sensitivity": {"default": {"tokens_worth": 756.5242778534284, "per_kind": 1216.5142864754741}}
     },
     "LoRA rank 16": {
      "dials": {
@@ -2369,85 +1679,31 @@
      },
      "rho": {
       "default": {
-       "rho": 809611.558338832,
+       "rho": 1274234.9894755972,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 809611.558338832,
+       "bound": 1274234.9894755972,
        "terms": {
-        "fresh_products": 809611.558338832,
-        "token": 23.81893577449367,
-        "reduction": 398.1591589807379,
-        "update": 12.44247371814806,
-        "decoding": 1.0130125477315672
+        "fresh_products": 1274234.9894755972,
+        "token": 37.4882510795747,
+        "reduction": 391.6603018816942,
+        "update": 19.583015094084708,
+        "decoding": 1.0082259479265656
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 360448.0},
        "unmeasured": [],
-       "te_core": {"rho": 398.1591589807379, "basis": "reduction"},
+       "te_core": {"rho": 391.6603018816942, "basis": "reduction"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0130202003508553,
-       "s": 3529.7463624890675,
+       "rho_fit": 1.008233564386355,
+       "s": 5555.4126824551,
        "x0": 0.004329004329004329,
        "s_star": 83.92605046123025,
-       "b": [6854, 33],
+       "b": [4355, 21],
        "fresh_share": 0.19843406816793702,
        "fresh_charged_share": 0.16285302742292468,
-       "fit_delta_bits": 7175.449745270846,
+       "fit_delta_bits": -26316.758738039425,
        "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 1273390.3164640754,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 1273390.3164640754,
-       "terms": {
-        "fresh_products": 1273390.3164640754,
-        "token": 37.463400628757064,
-        "reduction": 391.40067560442475,
-        "update": 19.570033780221237,
-        "decoding": 1.0082314544209856
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 360448.0},
-       "unmeasured": [],
-       "te_core": {"rho": 391.40067560442475, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0082390709223725,
-       "s": 5551.7300750871555,
-       "x0": 0.004329004329004329,
-       "s_star": 83.92605046123025,
-       "b": [4358, 21],
-       "fresh_share": 0.19843406816793702,
-       "fresh_charged_share": 0.16285302742292468,
-       "fit_delta_bits": -26255.870795877534,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 19983.29532393343,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 19983.29532393343,
-       "terms": {
-        "fresh_products": 19983.29532393343,
-        "token": 0.9411761021313765,
-        "reduction": 182.38691526766647,
-        "update": 0.4942734831102072,
-        "decoding": 0.9999924457387074
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 360448.0},
-       "unmeasured": [],
-       "te_core": {"rho": 182.38691526766647, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.1705000145988655,
-       "s": 311.451239617643,
-       "x0": 0.009615547213203464,
-       "s_star": 186.41582204498846,
-       "b": [77678, 370],
-       "fresh_share": 0.19843406816793702,
-       "fresh_charged_share": 0.15080601215039935,
-       "fit_delta_bits": 140418.48956639884,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -2464,11 +1720,7 @@
        {"kind": "learner", "tokens": 100000000.0, "u1_bits": 15138816.0, "t": 0.9835084038425419}
       ]
      },
-     "sensitivity": {
-      "default": {"tokens_worth": 41.875430890603255, "per_kind": 42.8427241094777},
-      "default_full": {"tokens_worth": 65.86339787844058, "per_kind": 67.38479638789785},
-      "served": {"tokens_worth": 1.6546564126048835, "per_kind": 1.6928778205627166}
-     }
+     "sensitivity": {"default": {"tokens_worth": 65.90708678820828, "per_kind": 67.42949448098042}}
     },
     "LoRA in one layer": {
      "dials": {
@@ -2562,8 +1814,8 @@
        "terms": {
         "fresh_products": 0.0,
         "token": 0.0,
-        "reduction": 0.42439670748165687,
-        "update": 0.017683196145069035,
+        "reduction": 0.41746959430840097,
+        "update": 0.02783130628722673,
         "decoding": 0.7104068016735854
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 8192.0},
@@ -2571,69 +1823,15 @@
        "te_core": {"rho": 1.0, "basis": "decoding"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0000291456422365,
-       "s": 4635.175972455407,
+       "rho_fit": 1.0000185180898793,
+       "s": 7295.2310841483795,
        "x0": 1.0,
        "s_star": 4095.8662494945443,
-       "b": [6433, 25],
+       "b": [4088, 16],
        "fresh_share": 0.0,
        "fresh_charged_share": 0.0,
-       "fit_delta_bits": 3354.1758419184043,
+       "fit_delta_bits": -32331.00206481744,
        "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 1.0,
-       "basis": "none",
-       "binding_kind": null,
-       "bound": 1.0,
-       "terms": {
-        "fresh_products": 0.0,
-        "token": 0.0,
-        "reduction": 0.4171928594028649,
-        "update": 0.027812857293524323,
-        "decoding": 0.7104068016735854
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 8192.0},
-       "unmeasured": [],
-       "te_core": {"rho": 1.0, "basis": "decoding"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.000018530373639,
-       "s": 7290.395174869093,
-       "x0": 1.0,
-       "s_star": 4095.8662494945443,
-       "b": [4090, 16],
-       "fresh_share": 0.0,
-       "fresh_charged_share": 0.0,
-       "fit_delta_bits": -32266.127362705607,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 1.0,
-       "basis": "none",
-       "binding_kind": null,
-       "bound": 1.0,
-       "terms": {
-        "fresh_products": 0.0,
-        "token": 0.0,
-        "reduction": 0.19106900770412777,
-        "update": 0.0007024595871475286,
-        "decoding": 0.7104068016735854
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 8192.0},
-       "unmeasured": [],
-       "te_core": {"rho": 1.0, "basis": "decoding"},
-       "fit": false,
-       "fit_fails": ["reduction"],
-       "rho_fit": 1.0003304135740407,
-       "s": 408.99009566487564,
-       "x0": 1.0,
-       "s_star": 9097.7029145267,
-       "b": [72904, 273],
-       "fresh_share": 0.0,
-       "fresh_charged_share": 0.0,
-       "fit_delta_bits": 140081.31505812102,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -2650,11 +1848,7 @@
        {"kind": "learner", "tokens": 100000000.0, "u1_bits": 16384.0, "t": 0.999967346068004}
       ]
      },
-     "sensitivity": {
-      "default": {"tokens_worth": 1.0, "per_kind": 1.0},
-      "default_full": {"tokens_worth": 1.0, "per_kind": 1.0},
-      "served": {"tokens_worth": 1.0, "per_kind": 1.0}
-     }
+     "sensitivity": {"default": {"tokens_worth": 1.0, "per_kind": 1.0}}
     }
    },
    "checks": {}
@@ -2773,85 +1967,31 @@
      },
      "rho": {
       "default": {
-       "rho": 4195592.689817776,
+       "rho": 6603377.819757374,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 4195592.689817776,
+       "bound": 6603377.819757374,
        "terms": {
-        "fresh_products": 4195592.689817776,
-        "token": 1039.9016134329136,
+        "fresh_products": 6603377.819757374,
+        "token": 1636.6849111778415,
         "reduction": 0.0,
         "update": 0.0,
         "decoding": 1.0
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 115900416.0},
        "unmeasured": [],
-       "te_core": {"rho": 1039.9016134329136, "basis": "token"},
+       "te_core": {"rho": 1636.6849111778415, "basis": "token"},
        "fit": false,
        "fit_fails": ["compute", "update"],
        "rho_fit": 1.0,
-       "s": 6083.438603973913,
+       "s": 9574.629025078653,
        "x0": 0.00032341975968395824,
        "s_star": 5.848121611857556,
-       "b": [164381],
+       "b": [104443],
        "fresh_share": 0.950088126801239,
        "fresh_charged_share": 0.7881653649191078,
-       "fit_delta_bits": -12332.014130866082,
+       "fit_delta_bits": -57019.251521006765,
        "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 6599000.530579712,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 6599000.530579712,
-       "terms": {
-        "fresh_products": 6599000.530579712,
-        "token": 1635.5999750520443,
-        "reduction": 0.0,
-        "update": 0.0,
-        "decoding": 1.0
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 115900416.0},
-       "unmeasured": [],
-       "te_core": {"rho": 1635.5999750520443, "basis": "token"},
-       "fit": false,
-       "fit_fails": ["compute", "update"],
-       "rho_fit": 1.0,
-       "s": 9568.282133963894,
-       "x0": 0.00032341975968395824,
-       "s_star": 5.848121611857556,
-       "b": [104512],
-       "fresh_share": 0.950088126801239,
-       "fresh_charged_share": 0.7881653649191078,
-       "fit_delta_bits": -56938.01131473784,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 100681.97155738794,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 100681.97155738794,
-       "terms": {
-        "fresh_products": 100681.97155738794,
-        "token": 41.29345434570835,
-        "reduction": 0.0,
-        "update": 0.0,
-        "decoding": 1.0
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 115900416.0},
-       "unmeasured": [],
-       "te_core": {"rho": 41.29345434570835, "basis": "token"},
-       "fit": false,
-       "fit_fails": ["compute", "update"],
-       "rho_fit": 1.0,
-       "s": 536.7792186091863,
-       "x0": 0.0007183771908214482,
-       "s_star": 12.989797466962901,
-       "b": [1862964],
-       "fresh_share": 0.950088126801239,
-       "fresh_charged_share": 0.7087639156907389,
-       "fit_delta_bits": 138697.22600180242,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {"d_model": 512.0, "n_layer": 6.0, "span": 4198.4, "t_counted": 0.7310152014821945}
@@ -2915,79 +2055,31 @@
      },
      "rho": {
       "default": {
-       "rho": 4397601.997289,
+       "rho": 6921317.114383699,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 4397601.997289,
-       "terms": {"fresh_products": 4397601.997289, "token": 1040.143425039189, "reduction": 0.0, "update": 0.0, "decoding": 1.0},
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 412090368.0},
-       "unmeasured": [],
-       "te_core": {"rho": 1040.143425039189, "basis": "token"},
-       "fit": false,
-       "fit_fails": ["compute", "update"],
-       "rho_fit": 1.0,
-       "s": 3168.3315660819826,
-       "x0": 9.096180741111325e-05,
-       "s_star": 3.0457755081198474,
-       "b": [315624],
-       "fresh_share": 0.9739344367168596,
-       "fresh_charged_share": 0.8845758083407838,
-       "fit_delta_bits": 24981.35595415062,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 6916729.067579939,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 6916729.067579939,
+       "bound": 6921317.114383699,
        "terms": {
-        "fresh_products": 6916729.067579939,
-        "token": 1635.9803062796168,
+        "fresh_products": 6921317.114383699,
+        "token": 1637.0654946890375,
         "reduction": 0.0,
         "update": 0.0,
         "decoding": 1.0
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 412090368.0},
        "unmeasured": [],
-       "te_core": {"rho": 1635.9803062796168, "basis": "token"},
+       "te_core": {"rho": 1637.0654946890375, "basis": "token"},
        "fit": false,
        "fit_fails": ["compute", "update"],
        "rho_fit": 1.0,
-       "s": 4983.282036973786,
+       "s": 4986.587577930875,
        "x0": 9.096180741111325e-05,
        "s_star": 3.0457755081198474,
-       "b": [200671],
+       "b": [200538],
        "fresh_share": 0.9739344367168596,
        "fresh_charged_share": 0.8845758083407838,
-       "fit_delta_bits": 1749.9899267355431,
+       "fit_delta_bits": 1707.6790024847942,
        "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 111408.70532657288,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 111408.70532657288,
-       "terms": {
-        "fresh_products": 111408.70532657288,
-        "token": 41.31479087156435,
-        "reduction": 0.0,
-        "update": 0.0,
-        "decoding": 1.0
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 412090368.0},
-       "unmeasured": [],
-       "te_core": {"rho": 41.31479087156435, "basis": "token"},
-       "fit": false,
-       "fit_fails": ["compute", "update"],
-       "rho_fit": 1.0,
-       "s": 279.56138839395095,
-       "x0": 0.00020204358491853234,
-       "s_star": 6.765250384002532,
-       "b": [3577032],
-       "fresh_share": 0.9739344367168596,
-       "fresh_charged_share": 0.8407573574222866,
-       "fit_delta_bits": 141989.61422855742,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {"d_model": 512.0, "n_layer": 6.0, "span": 4198.4, "t_counted": 0.38072193851498093}
@@ -3075,85 +2167,31 @@
      },
      "rho": {
       "default": {
-       "rho": 4802486.022514204,
+       "rho": 7558557.759366879,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 4802486.022514204,
+       "bound": 7558557.759366879,
        "terms": {
-        "fresh_products": 4802486.022514204,
-        "token": 134.754759579678,
+        "fresh_products": 7558557.759366879,
+        "token": 212.08841188867424,
         "reduction": 0.0,
         "update": 0.0,
         "decoding": 1.0
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 819756247.274648},
        "unmeasured": [],
-       "te_core": {"rho": 134.754759579678, "basis": "token"},
+       "te_core": {"rho": 212.08841188867424, "basis": "token"},
        "fit": false,
        "fit_fails": ["compute", "update"],
        "rho_fit": 1.0,
-       "s": 74.43585559158831,
+       "s": 117.15343078965687,
        "x0": 2.0805079365079367e-06,
        "s_star": 0.5523790102804312,
-       "b": [13434386],
+       "b": [8535815],
        "fresh_share": 0.9285470175866124,
        "fresh_charged_share": 0.8439340186637652,
-       "fit_delta_bits": 64583.22104842767,
+       "fit_delta_bits": 64036.43608589239,
        "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 7553547.294422737,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 7553547.294422737,
-       "terms": {
-        "fresh_products": 7553547.294422737,
-        "token": 211.94782137039581,
-        "reduction": 0.0,
-        "update": 0.0,
-        "decoding": 1.0
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 819756247.274648},
-       "unmeasured": [],
-       "te_core": {"rho": 211.94782137039581, "basis": "token"},
-       "fit": false,
-       "fit_fails": ["compute", "update"],
-       "rho_fit": 1.0,
-       "s": 117.07577137674438,
-       "x0": 2.0805079365079367e-06,
-       "s_star": 0.5523790102804312,
-       "b": [8541477],
-       "fresh_share": 0.9285470175866124,
-       "fresh_charged_share": 0.8439340186637652,
-       "fit_delta_bits": 64037.43012637767,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 122354.30165498353,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 122354.30165498353,
-       "terms": {
-        "fresh_products": 122354.30165498353,
-        "token": 5.353078227572909,
-        "reduction": 0.0,
-        "update": 0.0,
-        "decoding": 1.0
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 819756247.274648},
-       "unmeasured": [],
-       "te_core": {"rho": 5.353078227572909, "basis": "token"},
-       "fit": false,
-       "fit_fails": ["compute", "update"],
-       "rho_fit": 1.0,
-       "s": 6.567933532666641,
-       "x0": 4.621206349206349e-06,
-       "s_star": 1.2269395106277743,
-       "b": [152254891],
-       "fresh_share": 0.9285470175866124,
-       "fresh_charged_share": 0.8024426640207224,
-       "fit_delta_bits": 145483.93045078186,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {"d_model": 3621.343331542656, "n_layer": 42.4376171665155, "span": 4198.4, "t_counted": 0.4883676868562431}
@@ -3315,85 +2353,31 @@
      },
      "rho": {
       "default": {
-       "rho": 758226.8716575073,
+       "rho": 1193361.4334866866,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 758226.8716575073,
+       "bound": 1193361.4334866866,
        "terms": {
-        "fresh_products": 758226.8716575073,
-        "token": 11.911654325087769,
-        "reduction": 229.38836266683674,
-        "update": 7.168386333338648,
-        "decoding": 1.0071874438133503
+        "fresh_products": 1193361.4334866866,
+        "token": 18.74756674016367,
+        "reduction": 225.64422629440807,
+        "update": 11.282211314720403,
+        "decoding": 1.0045531527906086
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
        "unmeasured": [],
-       "te_core": {"rho": 229.38836266683674, "basis": "reduction"},
+       "te_core": {"rho": 225.64422629440807, "basis": "reduction"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0071918272917078,
-       "s": 2033.5590122067335,
-       "x0": 0.008658008658008658,
-       "s_star": 169.24128352534865,
-       "b": [33],
-       "fresh_share": 0.17880483070902717,
-       "fresh_charged_share": 0.15251701911987867,
-       "fit_delta_bits": 32999.05580469227,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 1192570.3704534292,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 1192570.3704534292,
-       "terms": {
-        "fresh_products": 1192570.3704534292,
-        "token": 18.73513923363001,
-        "reduction": 225.49464981147452,
-        "update": 11.274732490573726,
-        "decoding": 1.0045561896896191
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
-       "unmeasured": [],
-       "te_core": {"rho": 225.49464981147452, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0045605617162399,
-       "s": 3198.4651496521283,
+       "rho_fit": 1.0045575248040122,
+       "s": 3200.586775013397,
        "x0": 0.008658008658008658,
        "s_star": 169.24128352534865,
        "b": [21],
        "fresh_share": 0.17880483070902717,
        "fresh_charged_share": 0.15251701911987867,
-       "fit_delta_bits": 14360.557605565948,
+       "fit_delta_bits": 14326.611599785647,
        "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 18766.176926911237,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 18766.176926911237,
-       "terms": {
-        "fresh_products": 18766.176926911237,
-        "token": 0.46814010440552084,
-        "reduction": 103.93811768902701,
-        "update": 0.2847619662713069,
-        "decoding": 0.9999956478217568
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
-       "unmeasured": [],
-       "te_core": {"rho": 103.93811768902701, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0880499966796744,
-       "s": 179.4334238624429,
-       "x0": 0.019231094426406928,
-       "s_star": 375.9172845492241,
-       "b": [366],
-       "fresh_share": 0.17880483070902717,
-       "fresh_charged_share": 0.1416209018472967,
-       "fit_delta_bits": 142697.0652182009,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -3481,85 +2465,31 @@
      },
      "rho": {
       "default": {
-       "rho": 167598.22721118943,
+       "rho": 263780.2327387247,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 167598.22721118943,
+       "bound": 263780.2327387247,
        "terms": {
-        "fresh_products": 167598.22721118943,
-        "token": 15.12491935467012,
-        "reduction": 38.29543147466156,
-        "update": 1.5956429781108985,
-        "decoding": 0.7430925669423701
+        "fresh_products": 263780.2327387247,
+        "token": 23.80487439465567,
+        "reduction": 37.67036350602019,
+        "update": 2.5113575670680124,
+        "decoding": 0.7427698670528476
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
        "unmeasured": [],
-       "te_core": {"rho": 38.29543147466156, "basis": "reduction"},
+       "te_core": {"rho": 37.67036350602019, "basis": "reduction"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0011914970146614,
-       "s": 2715.9444501788266,
-       "x0": 0.05194805194805195,
-       "s_star": 170.23918422099953,
-       "b": [25],
-       "fresh_share": 0.03943880591154657,
-       "fresh_charged_share": 0.03371231352978607,
-       "fit_delta_bits": 22080.888797138774,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 263605.3764167687,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 263605.3764167687,
-       "terms": {
-        "fresh_products": 263605.3764167687,
-        "token": 23.789094467789816,
-        "reduction": 37.64539233535657,
-        "update": 2.5096928223571044,
-        "decoding": 0.7427702398847456
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
-       "unmeasured": [],
-       "te_core": {"rho": 37.64539233535657, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.000757215844713,
-       "s": 4271.748997764012,
+       "rho_fit": 1.0007567135168167,
+       "s": 4274.582560296846,
        "x0": 0.05194805194805195,
        "s_star": 170.23918422099953,
        "b": [16],
        "fresh_share": 0.03943880591154657,
        "fresh_charged_share": 0.03371231352978607,
-       "fit_delta_bits": -2811.983964224186,
+       "fit_delta_bits": -2857.3209647495387,
        "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 4146.105001039585,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 4146.105001039585,
-       "terms": {
-        "fresh_products": 4146.105001039585,
-        "token": 0.5606283335739112,
-        "reduction": 17.304495899666595,
-        "update": 0.0633864318669106,
-        "decoding": 0.7422082280543864
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
-       "unmeasured": [],
-       "te_core": {"rho": 17.304495899666595, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0136718290294087,
-       "s": 239.64448968065858,
-       "x0": 0.11538656655844155,
-       "s_star": 378.13381299869474,
-       "b": [274],
-       "fresh_share": 0.03943880591154657,
-       "fresh_charged_share": 0.031289011698423616,
-       "fit_delta_bits": 141733.68816510946,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -3647,85 +2577,31 @@
      },
      "rho": {
       "default": {
-       "rho": 4395.276530867283,
+       "rho": 6917.65709909503,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 4395.276530867283,
+       "bound": 6917.65709909503,
        "terms": {
-        "fresh_products": 4395.276530867283,
-        "token": 9.691840764464606,
-        "reduction": 22.40711605669736,
-        "update": 0.9336298356957233,
-        "decoding": 0.7424965375878386
+        "fresh_products": 6917.65709909503,
+        "token": 15.253836839787596,
+        "reduction": 22.041381294681727,
+        "update": 1.4694254196454484,
+        "decoding": 0.742279437051881
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
        "unmeasured": [],
-       "te_core": {"rho": 22.40711605669736, "basis": "reduction"},
+       "te_core": {"rho": 22.041381294681727, "basis": "reduction"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0008021246901437,
-       "s": 2719.1797434517366,
-       "x0": 0.08888888888888889,
-       "s_star": 255.62465719831144,
-       "b": [25],
-       "fresh_share": 0.0013415745454678244,
-       "fresh_charged_share": 0.0008841080417395704,
-       "fit_delta_bits": 22029.124104772214,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 6913.071478465532,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 6913.071478465532,
-       "terms": {
-        "fresh_products": 6913.071478465532,
-        "token": 15.243725279198582,
-        "reduction": 22.02677036336211,
-        "update": 1.468451357557474,
-        "decoding": 0.7422796879149358
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
-       "unmeasured": [],
-       "te_core": {"rho": 22.02677036336211, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0005098356323596,
-       "s": 4276.837599924161,
+       "rho_fit": 1.0005094974970747,
+       "s": 4279.674537859537,
        "x0": 0.08888888888888889,
        "s_star": 255.62465719831144,
        "b": [16],
        "fresh_share": 0.0013415745454678244,
        "fresh_charged_share": 0.0008841080417395704,
-       "fit_delta_bits": -2893.4015987865714,
+       "fit_delta_bits": -2938.792605752591,
        "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 116.48544955685429,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 116.48544955685429,
-       "terms": {
-        "fresh_products": 116.48544955685429,
-        "token": 0.33913563878006203,
-        "reduction": 10.125068004078408,
-        "update": 0.0370881611871004,
-        "decoding": 0.7419014401250611
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
-       "unmeasured": [],
-       "te_core": {"rho": 10.125068004078408, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0091666359814668,
-       "s": 239.92995951245234,
-       "x0": 0.1974392361111111,
-       "s_star": 567.7912917944916,
-       "b": [274],
-       "fresh_share": 0.0013415745454678244,
-       "fresh_charged_share": 0.0008790695346516021,
-       "fit_delta_bits": 141729.12064780077,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -3813,85 +2689,31 @@
      },
      "rho": {
       "default": {
-       "rho": 531142.6013103381,
+       "rho": 835957.0463388456,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 531142.6013103381,
+       "bound": 835957.0463388456,
        "terms": {
-        "fresh_products": 531142.6013103381,
-        "token": 0.16763776049483126,
-        "reduction": 2.9230942651783454,
-        "update": 0.09429336339284985,
+        "fresh_products": 835957.0463388456,
+        "token": 0.263842453556531,
+        "reduction": 2.968137044807893,
+        "update": 0.14840685224039465,
         "decoding": 0.9999999427511987
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 8192.0},
        "unmeasured": [],
-       "te_core": {"rho": 2.9230942651783454, "basis": "reduction"},
+       "te_core": {"rho": 2.968137044807893, "basis": "reduction"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0001748993411872,
-       "s": 2059.706614046138,
-       "x0": 0.6666666666666666,
-       "s_star": 4095.5500122219582,
-       "b": [32],
-       "fresh_share": 0.12199985324894258,
-       "fresh_charged_share": 0.10683911281374706,
-       "fit_delta_bits": 32580.694175261793,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 835402.9018037592,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 835402.9018037592,
-       "terms": {
-        "fresh_products": 835402.9018037592,
-        "token": 0.26366755598924274,
-        "reduction": 2.9661695072053673,
-        "update": 0.14830847536026837,
-        "decoding": 0.9999999427511987
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 8192.0},
-       "unmeasured": [],
-       "te_core": {"rho": 2.9661695072053673, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0001111925440311,
-       "s": 3239.5911719255414,
+       "rho_fit": 1.0001111188278184,
+       "s": 3241.740077250099,
        "x0": 0.6666666666666666,
        "s_star": 4095.5500122219582,
        "b": [21],
        "fresh_share": 0.12199985324894258,
        "fresh_charged_share": 0.10683911281374706,
-       "fit_delta_bits": 13702.541249191338,
+       "fit_delta_bits": 13668.158763998414,
        "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 1.348479062691325,
-       "basis": "reduction",
-       "binding_kind": "reduction",
-       "bound": 1.348479062691325,
-       "terms": {
-        "fresh_products": 0.0,
-        "token": 0.0,
-        "reduction": 1.348479062691325,
-        "update": 0.0037457751741425695,
-        "decoding": 0.9999999427511987
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 8192.0},
-       "unmeasured": [],
-       "te_core": {"rho": 1.348479062691325, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["reduction", "update"],
-       "rho_fit": 1.0019857620579378,
-       "s": 181.74058765541537,
-       "x0": 1.0,
-       "s_star": 9097.000491014496,
-       "b": [361],
-       "fresh_share": 0.0,
-       "fresh_charged_share": 0.0,
-       "fit_delta_bits": 142660.15059751336,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -3986,35 +2808,8 @@
        "terms": {
         "fresh_products": 0.0,
         "token": 0.0,
-        "reduction": 0.49875311127110644,
-        "update": 0.020781379636296102,
-        "decoding": 0.7414784109286913
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 8192.0},
-       "unmeasured": [],
-       "te_core": {"rho": 1.0, "basis": "decoding"},
-       "fit": false,
-       "fit_fails": ["reduction", "update"],
-       "rho_fit": 1.0000291456422365,
-       "s": 2723.640877915716,
-       "x0": 1.0,
-       "s_star": 4095.8662494945443,
-       "b": [25],
-       "fresh_share": 0.0,
-       "fresh_charged_share": 0.0,
-       "fit_delta_bits": 21957.745953348545,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 1.0,
-       "basis": "none",
-       "binding_kind": null,
-       "bound": 1.0,
-       "terms": {
-        "fresh_products": 0.0,
-        "token": 0.0,
-        "reduction": 0.49028711335198455,
-        "update": 0.032685807556798965,
+        "reduction": 0.4906123335827268,
+        "update": 0.03270748890551512,
         "decoding": 0.7414784109286913
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 8192.0},
@@ -4022,42 +2817,15 @@
        "te_core": {"rho": 1.0, "basis": "decoding"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.000018530373639,
-       "s": 4283.85425546516,
+       "rho_fit": 1.0000185180898793,
+       "s": 4286.695847731176,
        "x0": 1.0,
        "s_star": 4095.8662494945443,
        "b": [16],
        "fresh_share": 0.0,
        "fresh_charged_share": 0.0,
-       "fit_delta_bits": -3005.6680874425656,
+       "fit_delta_bits": -3051.1335636988224,
        "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 1.0,
-       "basis": "none",
-       "binding_kind": null,
-       "bound": 1.0,
-       "terms": {
-        "fresh_products": 0.0,
-        "token": 0.0,
-        "reduction": 0.22454524358918498,
-        "update": 0.0008255339837837685,
-        "decoding": 0.7414784109286913
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 8192.0},
-       "unmeasured": [],
-       "te_core": {"rho": 1.0, "basis": "decoding"},
-       "fit": false,
-       "fit_fails": ["reduction"],
-       "rho_fit": 1.0003304135740407,
-       "s": 240.32359285497037,
-       "x0": 1.0,
-       "s_star": 9097.7029145267,
-       "b": [273],
-       "fresh_share": 0.0,
-       "fresh_charged_share": 0.0,
-       "fit_delta_bits": 141722.82251432046,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -4150,116 +2918,40 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 666068.624261822,
+        "rho": 1048315.0069741046,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 666068.624261822,
+        "bound": 1048315.0069741046,
         "terms": {
-         "fresh_products": 666068.624261822,
-         "token": 254.6760575858092,
-         "reduction": 23.963236823778324,
-         "update": 0.7488511507430726,
+         "fresh_products": 1048315.0069741046,
+         "token": 400.8306702332502,
+         "reduction": 23.57210265485214,
+         "update": 1.178605132742607,
          "decoding": 0.999972
         },
-        "te_core": {"rho": 254.6760575858092, "basis": "token"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": [],
-        "b": [33]
-       },
-       "model": {
-        "rho": 670162.9081435036,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 670162.9081435036,
-        "terms": {
-         "fresh_products": 670162.9081435036,
-         "token": 3.6864981875385663,
-         "reduction": 23.357083109338586,
-         "update": 0.7534542938496317,
-         "decoding": 1.0006995068661377
-        },
-        "te_core": {"rho": 23.357083109338586, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 32768.0},
-        "unmeasured": [],
-        "b": [32]
-       }
-      },
-      "default_full": {
-       "record": {
-        "rho": 1047620.0932405483,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 1047620.0932405483,
-        "terms": {
-         "fresh_products": 1047620.0932405483,
-         "token": 400.56496504375804,
-         "reduction": 23.556477029200806,
-         "update": 1.1778238514600405,
-         "decoding": 0.999972
-        },
-        "te_core": {"rho": 400.56496504375804, "basis": "token"},
+        "te_core": {"rho": 400.8306702332502, "basis": "token"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "refused"},
         "unmeasured": [],
         "b": [21]
        },
        "model": {
-        "rho": 1054059.7511160925,
+        "rho": 1054758.9364426872,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 1054059.7511160925,
+        "bound": 1054758.9364426872,
         "terms": {
-         "fresh_products": 1054059.7511160925,
-         "token": 5.798275784631689,
-         "reduction": 23.70127728055141,
-         "update": 1.1850638640275706,
-         "decoding": 1.000444460939014
+         "fresh_products": 1054758.9364426872,
+         "token": 5.802121932199576,
+         "reduction": 23.716998955986377,
+         "update": 1.1858499477993187,
+         "decoding": 1.0004441658775445
         },
-        "te_core": {"rho": 23.70127728055141, "basis": "reduction"},
+        "te_core": {"rho": 23.716998955986377, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "unmodelled", "op_update_bits": 32768.0},
         "unmeasured": [],
         "b": [21]
-       }
-      },
-      "served": {
-       "record": {
-        "rho": 15915.957190286204,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 15915.957190286204,
-        "terms": {
-         "fresh_products": 15915.957190286204,
-         "token": 9.716709329833996,
-         "reduction": 10.798481943590254,
-         "update": 0.029747884142121907,
-         "decoding": 0.999972
-        },
-        "te_core": {"rho": 10.798481943590254, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": [],
-        "b": [364]
-       },
-       "model": {
-        "rho": 15999.730123872585,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 15999.730123872585,
-        "terms": {
-         "fresh_products": 15999.730123872585,
-         "token": 0.1301870736339511,
-         "reduction": 10.804998079187364,
-         "update": 0.029930742601627047,
-         "decoding": 0.9999995425515266
-        },
-        "te_core": {"rho": 10.804998079187364, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 32768.0},
-        "unmeasured": [],
-        "b": [362]
        }
       }
      }
@@ -4352,116 +3044,40 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 904985.5970592055,
+        "rho": 1424342.6997390902,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 904985.5970592055,
+        "bound": 1424342.6997390902,
         "terms": {
-         "fresh_products": 904985.5970592055,
-         "token": 28.844941984520844,
-         "reduction": 186.8782641369983,
-         "update": 7.187625543730704,
-         "decoding": 1.0006628799820134
+         "fresh_products": 1424342.6997390902,
+         "token": 45.3986037717703,
+         "reduction": 180.99986572053743,
+         "update": 11.31249160753359,
+         "decoding": 0.9991274792503113
         },
-        "te_core": {"rho": 186.8782641369983, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": ["reduction", "update"],
-        "b": [0, 27, 27]
-       },
-       "model": {
-        "rho": 905917.8556731235,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 905917.8556731235,
-        "terms": {
-         "fresh_products": 905917.8556731235,
-         "token": 28.723031853802958,
-         "reduction": 187.08317781981393,
-         "update": 7.1955068392236115,
-         "decoding": 1.0042101505424015
-        },
-        "te_core": {"rho": 187.08317781981393, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 131071.99999999997},
-        "unmeasured": [],
-        "b": [27]
-       }
-      },
-      "default_full": {
-       "record": {
-        "rho": 1423398.5223718346,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 1423398.5223718346,
-        "terms": {
-         "fresh_products": 1423398.5223718346,
-         "token": 45.36850965594119,
-         "reduction": 180.8798833758946,
-         "update": 11.304992710993412,
-         "decoding": 0.9991292512281847
-        },
-        "te_core": {"rho": 180.8798833758946, "basis": "reduction"},
+        "te_core": {"rho": 180.99986572053743, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "refused"},
         "unmeasured": ["reduction", "update"],
         "b": [0, 17, 17]
        },
        "model": {
-        "rho": 1424864.8170154528,
+        "rho": 1425809.9670141914,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 1424864.8170154528,
+        "bound": 1425809.9670141914,
         "terms": {
-         "fresh_products": 1424864.8170154528,
-         "token": 45.17676439448081,
-         "reduction": 181.07821978072462,
-         "update": 11.317388736295289,
-         "decoding": 1.0026710826832153
+         "fresh_products": 1425809.9670141914,
+         "token": 45.20673132067659,
+         "reduction": 181.1983336870781,
+         "update": 11.324895855442382,
+         "decoding": 1.0026693044209216
         },
-        "te_core": {"rho": 181.07821978072462, "basis": "reduction"},
+        "te_core": {"rho": 181.1983336870781, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "unmodelled", "op_update_bits": 131071.99999999997},
         "unmeasured": [],
         "b": [17]
-       }
-      },
-      "served": {
-       "record": {
-        "rho": 22378.703779658146,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 22378.703779658146,
-        "terms": {
-         "fresh_products": 22378.703779658146,
-         "token": 1.1458162404365284,
-         "reduction": 86.22892389141214,
-         "update": 0.28552623805103355,
-         "decoding": 1.0462256835020238
-        },
-        "te_core": {"rho": 86.22892389141214, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": ["reduction", "update"],
-        "b": [0, 303, 303]
-       },
-       "model": {
-        "rho": 22401.756897226755,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 22401.756897226755,
-        "terms": {
-         "fresh_products": 22401.756897226755,
-         "token": 1.1263463743984246,
-         "reduction": 86.3234746752682,
-         "update": 0.28583932011678215,
-         "decoding": 1.0499345487673988
-        },
-        "te_core": {"rho": 86.3234746752682, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 131071.99999999997},
-        "unmeasured": [],
-        "b": [303]
        }
       }
      }
@@ -4554,116 +3170,40 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 945050.2498097039,
+        "rho": 1487399.8310881327,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 945050.2498097039,
+        "bound": 1487399.8310881327,
         "terms": {
-         "fresh_products": 945050.2498097039,
-         "token": 28.446076269306214,
-         "reduction": 458.3485800450127,
-         "update": 16.97587333500047,
-         "decoding": 1.0094577758447967
+         "fresh_products": 1487399.8310881327,
+         "token": 44.77083525093603,
+         "reduction": 454.2070533438183,
+         "update": 26.718061961401077,
+         "decoding": 1.0046879730299672
         },
-        "te_core": {"rho": 458.3485800450127, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": ["reduction", "update"],
-        "b": [0, 28, 28]
-       },
-       "model": {
-        "rho": 946625.6343719099,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 946625.6343719099,
-        "terms": {
-         "fresh_products": 946625.6343719099,
-         "token": 28.7151899793346,
-         "reduction": 459.08158974247783,
-         "update": 17.00302184231399,
-         "decoding": 1.0130097405672231
-        },
-        "te_core": {"rho": 459.08158974247783, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 360447.99999999994},
-        "unmeasured": [],
-        "b": [28]
-       }
-      },
-      "default_full": {
-       "record": {
-        "rho": 1486413.854007736,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 1486413.854007736,
-        "terms": {
-         "fresh_products": 1486413.854007736,
-         "token": 44.74115727430527,
-         "reduction": 453.90596567728016,
-         "update": 26.70035092219295,
-         "decoding": 1.0046934602011661
-        },
-        "te_core": {"rho": 453.90596567728016, "basis": "reduction"},
+        "te_core": {"rho": 454.2070533438183, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "refused"},
         "unmeasured": ["reduction", "update"],
         "b": [0, 18, 18]
        },
        "model": {
-        "rho": 1488891.6835613758,
+        "rho": 1489879.3042507458,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 1488891.6835613758,
+        "bound": 1489879.3042507458,
         "terms": {
-         "fresh_products": 1488891.6835613758,
-         "token": 45.1644303721857,
-         "reduction": 454.63187056509736,
-         "update": 26.743051209711606,
-         "decoding": 1.0082286605055542
+         "fresh_products": 1489879.3042507458,
+         "token": 45.19438911690278,
+         "reduction": 454.9334397432817,
+         "update": 26.76079057313422,
+         "decoding": 1.0082231540263935
         },
-        "te_core": {"rho": 454.63187056509736, "basis": "reduction"},
+        "te_core": {"rho": 454.9334397432817, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "unmodelled", "op_update_bits": 360447.99999999994},
         "unmeasured": [],
         "b": [18]
-       }
-      },
-      "served": {
-       "record": {
-        "rho": 23469.65273526727,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 23469.65273526727,
-        "terms": {
-         "fresh_products": 23469.65273526727,
-         "token": 1.1300117257182605,
-         "reduction": 207.70331234102798,
-         "update": 0.6743614037046364,
-         "decoding": 1.1300101098695619
-        },
-        "te_core": {"rho": 207.70331234102798, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": ["reduction", "update"],
-        "b": [0, 309, 309]
-       },
-       "model": {
-        "rho": 23508.776293625066,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 23508.776293625066,
-        "terms": {
-         "fresh_products": 23508.776293625066,
-         "token": 1.134645595948613,
-         "reduction": 207.3600400587911,
-         "update": 0.6754398698983423,
-         "decoding": 1.133178352382085
-        },
-        "te_core": {"rho": 207.3600400587911, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 360447.99999999994},
-        "unmeasured": [],
-        "b": [308]
        }
       }
      }
@@ -4828,85 +3368,31 @@
      },
      "rho": {
       "default": {
-       "rho": 1109056.8239280295,
+       "rho": 1745527.2171081475,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 1109056.8239280295,
+       "bound": 1745527.2171081475,
        "terms": {
-        "fresh_products": 1109056.8239280295,
-        "token": 62.27105855071239,
-        "reduction": 21880.865426580072,
-        "update": 115.7717747438099,
-        "decoding": 0.2367639824296787
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 21880.865426580072, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 345.09862144387046,
-       "x0": 5.785948823282658e-05,
-       "s_star": 5.541168,
-       "b": [190],
-       "fresh_share": 0.23058435962967883,
-       "fresh_charged_share": 0.22308631775380894,
-       "fit_delta_bits": 60014.422056898075,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 1744370.1309008577,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 1744370.1309008577,
-       "terms": {
-        "fresh_products": 1744370.1309008577,
-        "token": 97.94247888103712,
-        "reduction": 21850.872363696613,
-        "update": 182.09060303080508,
+        "fresh_products": 1745527.2171081475,
+        "token": 98.00744668197194,
+        "reduction": 21865.366617284995,
+        "update": 182.21138847737492,
         "decoding": 0.23676398242967872
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
-       "te_core": {"rho": 21850.872363696613, "basis": "reduction"},
+       "te_core": {"rho": 21865.366617284995, "basis": "reduction"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
-       "s": 542.7852878896441,
+       "s": 543.145331528899,
        "x0": 5.785948823282658e-05,
        "s_star": 5.541168,
        "b": [121],
        "fresh_share": 0.23058435962967883,
        "fresh_charged_share": 0.22308631775380894,
-       "fit_delta_bits": 56851.43539376569,
+       "fit_delta_bits": 56845.674695537615,
        "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 29073.943416168913,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 29073.943416168913,
-       "terms": {
-        "fresh_products": 29073.943416168913,
-        "token": 2.4735240608410605,
-        "reduction": 9897.044838141972,
-        "update": 4.598998530735117,
-        "decoding": 0.23676398242967872
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 9897.044838141972, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 30.45017471545481,
-       "x0": 0.0001285169980327774,
-       "s_star": 12.3079947421875,
-       "b": [2153],
-       "fresh_share": 0.23058435962967883,
-       "fresh_charged_share": 0.21940953146138864,
-       "fit_delta_bits": 145080.7972045527,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -4992,85 +3478,31 @@
      },
      "rho": {
       "default": {
-       "rho": 4682839.142792734,
+       "rho": 7370247.403675454,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 4682839.142792734,
+       "bound": 7370247.403675454,
        "terms": {
-        "fresh_products": 4682839.142792734,
-        "token": 262.9309374894009,
-        "reduction": 21508.533931699985,
-        "update": 488.8303166295451,
-        "decoding": 0.9997031897773525
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 21508.533931699985, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 1457.4613894064646,
-       "x0": 5.785948823282658e-05,
-       "s_star": 5.541168,
-       "b": [45],
-       "fresh_share": 0.9736105866652403,
-       "fresh_charged_share": 0.9419511412400156,
-       "fit_delta_bits": 42216.617769496566,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 7365361.767100143,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 7365361.767100143,
-       "terms": {
-        "fresh_products": 7365361.767100143,
-        "token": 413.5485792529913,
-        "reduction": 21527.867265488483,
-        "update": 768.8524023388743,
+        "fresh_products": 7370247.403675454,
+        "token": 413.82289681244794,
+        "reduction": 21542.147261370086,
+        "update": 769.3624021917888,
         "decoding": 0.9997031897773526
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
-       "te_core": {"rho": 21527.867265488483, "basis": "reduction"},
+       "te_core": {"rho": 21542.147261370086, "basis": "reduction"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
-       "s": 2292.355143370799,
+       "s": 2293.875722330285,
        "x0": 5.785948823282658e-05,
        "s_star": 5.541168,
        "b": [29],
        "fresh_share": 0.9736105866652403,
        "fresh_charged_share": 0.9419511412400156,
-       "fit_delta_bits": 28858.317706067217,
+       "fit_delta_bits": 28833.98844271544,
        "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 122760.70741115791,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 122760.70741115791,
-       "terms": {
-        "fresh_products": 122760.70741115791,
-        "token": 10.444113451032537,
-        "reduction": 9884.08552674309,
-        "update": 19.418635612461866,
-        "decoding": 0.9997031897773526
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 9884.08552674309, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 128.60078595148684,
-       "x0": 0.0001285169980327774,
-       "s_star": 12.3079947421875,
-       "b": [510],
-       "fresh_share": 0.9736105866652403,
-       "fresh_charged_share": 0.926426419333659,
-       "fit_delta_bits": 143510.3874247762,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -5156,85 +3588,31 @@
      },
      "rho": {
       "default": {
-       "rho": 147481.48098248523,
+       "rho": 232118.79997507803,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
-       "bound": 147481.48098248523,
+       "bound": 232118.79997507803,
        "terms": {
-        "fresh_products": 147481.48098248523,
-        "token": 8.280755087804305,
-        "reduction": 21984.3986218603,
-        "update": 15.39523713015427,
+        "fresh_products": 232118.79997507803,
+        "token": 13.03295112758548,
+        "reduction": 21976.903251640513,
+        "update": 24.230323320441578,
         "decoding": 0.03148468321791427
        },
        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
-       "te_core": {"rho": 21984.3986218603, "basis": "reduction"},
+       "te_core": {"rho": 21976.903251640513, "basis": "reduction"},
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
-       "s": 45.888139098671765,
+       "s": 72.22262557790637,
        "x0": 5.785948823282658e-05,
        "s_star": 5.541168,
-       "b": [1429],
+       "b": [908],
        "fresh_share": 0.030662921967458935,
        "fresh_charged_share": 0.029665838412799034,
-       "fit_delta_bits": 64801.78977442125,
+       "fit_delta_bits": 64380.4379907535,
        "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": 231964.93158547554,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 231964.93158547554,
-       "terms": {
-        "fresh_products": 231964.93158547554,
-        "token": 13.024311761872813,
-        "reduction": 21986.549323306317,
-        "update": 24.214261369280084,
-        "decoding": 0.03148468321791427
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 21986.549323306317, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 72.17475018353188,
-       "x0": 5.785948823282658e-05,
-       "s_star": 5.541168,
-       "b": [909],
-       "fresh_share": 0.030662921967458935,
-       "fresh_charged_share": 0.029665838412799034,
-       "fit_delta_bits": 64381.20399706349,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "served": {
-       "rho": 9898.278437041008,
-       "basis": "reduction",
-       "binding_kind": "reduction",
-       "bound": 9898.278437041008,
-       "terms": {
-        "fresh_products": 3866.229520892269,
-        "token": 0.3289272324628188,
-        "reduction": 9898.278437041008,
-        "update": 0.611571111340192,
-        "decoding": 0.03148468321791427
-       },
-       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
-       "unmeasured": [],
-       "te_core": {"rho": 9898.278437041008, "basis": "reduction"},
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 4.048992856231726,
-       "x0": 0.0001285169980327774,
-       "s_star": 12.3079947421875,
-       "b": [16186],
-       "fresh_share": 0.030662921967458935,
-       "fresh_charged_share": 0.02917690234030665,
-       "fit_delta_bits": 145503.2161143003,
-       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -5335,116 +3713,40 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 2452939.3218125068,
+        "rho": 3860642.8956217156,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 2452939.3218125068,
+        "bound": 3860642.8956217156,
         "terms": {
-         "fresh_products": 2452939.3218125068,
-         "token": 198.6385932360038,
-         "reduction": 6255.414128261775,
-         "update": 481.1857021739827,
+         "fresh_products": 3860642.8956217156,
+         "token": 312.63418012566996,
+         "reduction": 6058.645302974934,
+         "update": 757.3306628718667,
          "decoding": 0.5736186295162633
         },
-        "te_core": {"rho": 6255.414128261775, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": [],
-        "b": [0, 14]
-       },
-       "model": {
-        "rho": 2452187.3024854134,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 2452187.3024854134,
-        "terms": {
-         "fresh_products": 2452187.3024854134,
-         "token": 223.81681147966864,
-         "reduction": 6253.5314240820535,
-         "update": 481.0408787755426,
-         "decoding": 0.535918980918188
-        },
-        "te_core": {"rho": 6253.5314240820535, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 262144000.0},
-        "unmeasured": [],
-        "b": [14]
-       }
-      },
-      "default_full": {
-       "record": {
-        "rho": 3858083.728052163,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 3858083.728052163,
-        "terms": {
-         "fresh_products": 3858083.728052163,
-         "token": 312.4269391876856,
-         "reduction": 6054.629109560004,
-         "update": 756.8286386950004,
-         "decoding": 0.5736186295162633
-        },
-        "te_core": {"rho": 6054.629109560004, "basis": "reduction"},
+        "te_core": {"rho": 6058.645302974934, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "refused"},
         "unmeasured": [],
         "b": [0, 9]
        },
        "model": {
-        "rho": 3856900.921162796,
+        "rho": 3859459.3041456873,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
-        "bound": 3856900.921162796,
+        "bound": 3859459.3041456873,
         "terms": {
-         "fresh_products": 3856900.921162796,
-         "token": 352.02827512103914,
-         "reduction": 6052.806836038618,
-         "update": 756.6008545048272,
+         "fresh_products": 3859459.3041456873,
+         "token": 352.26178465809375,
+         "reduction": 6056.82182069199,
+         "update": 757.1027275864988,
          "decoding": 0.535918980918188
         },
-        "te_core": {"rho": 6052.806836038618, "basis": "reduction"},
+        "te_core": {"rho": 6056.82182069199, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": {"verdict": "unmodelled", "op_update_bits": 262144000.0},
         "unmeasured": [],
         "b": [9]
-       }
-      },
-      "served": {
-       "record": {
-        "rho": 63520.19714826732,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 63520.19714826732,
-        "terms": {
-         "fresh_products": 63520.19714826732,
-         "token": 7.8908576849688234,
-         "reduction": 2848.1283887086224,
-         "update": 19.114955628916928,
-         "decoding": 0.5736186295162633
-        },
-        "te_core": {"rho": 2848.1283887086224, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "refused"},
-        "unmeasured": [],
-        "b": [0, 150]
-       },
-       "model": {
-        "rho": 63500.723198996966,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "bound": 63500.723198996966,
-        "terms": {
-         "fresh_products": 63500.723198996966,
-         "token": 8.888957301061284,
-         "reduction": 2847.2711819575006,
-         "update": 19.10920256347316,
-         "decoding": 0.535918980918188
-        },
-        "te_core": {"rho": 2847.2711819575006, "basis": "reduction"},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "unmodelled", "op_update_bits": 262144000.0},
-        "unmeasured": [],
-        "b": [150]
        }
       }
      }

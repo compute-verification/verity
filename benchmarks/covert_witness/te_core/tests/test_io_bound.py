@@ -13,7 +13,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from te_core import io_bound as iob
+from te_core import io_bound as iob, policy
 from te_core.capture import capture_step
 
 #: the tiny model's steps: d 64, d_ff 192, 256 tokens a micro-step, head dim 32, and a vocabulary no other dim equals
@@ -83,13 +83,15 @@ def test_each_vectors_term_solves_its_cap():
 # -- the closed forms ---------------------------------------------------------------------------------------------------
 
 def test_the_cap_at_the_consoles_policy():
-    # k = 65,536: bf16 operands into 32-bit sums, 2/2/8 and one bit; c = 3.41e14 gates is 2.304e11 bf16 MACs
+    # k = 65,536: bf16 operands into 32-bit sums, 2/2/8 and one bit; c, te_core.policy's session of the 45M reference,
+    # is 3.626e11 bf16 MACs
+    assert iob.CONSOLE is policy.CONSOLE
     assert iob.alpha(65536, 16, 16, 32) == pytest.approx(35673.28, rel=1e-6)
     assert iob.alpha(65536, 2, 2, 8) == pytest.approx(570772.5, rel=1e-6)
     assert iob.alpha(65536, 1, 1, 1) == pytest.approx(3228776.7, rel=1e-6)
     assert iob.beta(65536, 16, 16) == 2048
     assert iob.mu(65536, 16, 16, 32) == pytest.approx(0.918559, rel=1e-6)
-    assert 3.41e14 / (23682 / 16) / iob.alpha(65536, 16, 16, 32) == pytest.approx(6.458e6, rel=1e-3)
+    assert iob.CONSOLE[0] / (23682 / 16) / iob.alpha(65536, 16, 16, 32) == pytest.approx(1.0164e7, rel=1e-4)
 
 
 def test_lambdas_factors():

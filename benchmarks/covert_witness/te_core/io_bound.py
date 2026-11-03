@@ -81,12 +81,13 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from .policy import CONSOLE, REFERENCE_K_BITS as PANEL_K, SESSION_TOKENS as PANEL_TOKENS
+
 ACC_BITS = 32
 SHARE = 2 / math.sqrt(3)
 KINDS = ("fresh", "theta", "expansion", "attention", "self", "unaffected")
-#: the console's default policy (c gates, k bits) and the panels' (c = `PANEL_TOKENS` forward-token gates of the start)
-CONSOLE = (3.41e14, 65536)
-PANEL_TOKENS, PANEL_K = 4096, 80000
+#: the console's policy (c gates, k bits) is te_core.policy's `CONSOLE`; the panels' c is `PANEL_TOKENS` forward-token
+#: gates of the start, at k = `PANEL_K`
 VECTORS = Path(__file__).resolve().parent / "tests" / "io_bound_vectors.json"
 
 
