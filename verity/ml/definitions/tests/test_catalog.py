@@ -88,6 +88,8 @@ COUNT += 3  # `torch_train`'s RmsNormTorch_v1 with its In and Out parts
 COUNT += 5  # `torch_step`'s TrainStep_v1 with its TrainStepConstants_v1, and F.linear's three GEMMs, LinearTorch_v1,
 # LinearTorchDx_v1 and LinearTorchDw_v1
 
+COUNT += 1  # `boolean_transcendental`'s F32ExpRn_v2, a line of its own so it merges with any other change to the count
+
 
 def test_the_catalog_loads_every_definition_and_no_other():
     got = fresh()
