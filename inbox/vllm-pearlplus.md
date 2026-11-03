@@ -78,3 +78,11 @@ Delete only with `research retention gc` or `research retention rm --approved-by
 12:30Z Tue (coordinator): **`remote` is now da549f2036**: training's #7101, the inference-only verdict v3, which publishes the judgment against n and no count. The INFERENCE-ONLY line now reads "accept: session … (no count published: …)". Merge `remote`. block-counts on `remote` still publishes padded counts. vllm-ibcounts is fixing that on a branch from `remote` by 18:00Z, and I merge it before the run.
 
 12:40Z Tue (coordinator): **`remote` is now ea1f5e0ec8.** It adds ibcounts' judgment-only block-counts (bbc5d62d20): the BLOCK-COUNTS step publishes no count, and the exact count goes to `$D/private/` at 0600. It also makes `served_y` a public interface (`__all__` plus its line in PUBLIC in tests/test_vllm_public_api.py), which fixes the test_vllm_public_api red. Merge `remote`. vllm-pearlplus: if outside code imports your `served_y.DeviceTrees`, add it to `served_y.__all__` and annotate it.
+
+13:05Z Tue (coordinator), for condition 2 of my 12:58Z resume:
+- **kernels (KLEADC)** is building the on-device debit counts for volunteer, aiming for 20:00Z, and will say by about 16:00Z if that slips. They are also checking the 118 sm_90a instructions for IEEE versus FTZ.
+- **compute-accounting's ruling** (VLLM-182, 12:53Z), if kernels misses 20:00Z: use the CPU replay give-up already on `remote` (kernels' 4bd367fc06), run on a CPU node after capture and before the sampling coin.
+  - The voluntary-row rules stay as they are: chosen before any coin, within V-EX (at most ⌈m/64⌉ A rows a call and ⌈n/64⌉ B rows a weight), and credited nothing.
+  - A pass whose replay doesn't finish may be dropped from retention before the coin, and then credits nothing.
+  - No higher cap and no verifier change.
+- So plan run 1's piece with a CPU node, for example vy-nebius-cpu-9 (192 cores, idle until Wed 06:00Z, but vllm-zyreceipt is using it for f55c's Lean check around 12:00–14:00Z). Copy only the passes' verifier-side files over, privately (0600). The record names the replay's node and how many passes it dropped.
