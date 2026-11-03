@@ -10,7 +10,8 @@ arm priced by its compute.
 - `depth`: `--depth N` blocks, block j a copy of θ's block ⌊jL/N⌋; a repeated copy has its output projections (wo,
   w_down) zeroed, so the grown model computes θ's function at step 0 (`--zero 0` stacks the copies unchanged instead);
 - `mlp`: every MLP widened to `--mlp-mult` x d_ff, the new neurons copies of random old ones (their gate and up rows,
-  plus `--noise` x each row's rms of Gaussian noise) with zeroed w_down columns, so θ's function again;
+  plus `--noise` x each row's rms of Gaussian noise) with zeroed w_down columns, so θ's function again; with `--depth N`
+  past θ's blocks, also deepened as `depth` is;
 - `moe`: every MLP upcycled into `--experts` copies of itself behind a router (Gaussian, `--router-init`/sqrt(d)); a
   token goes to its top `--topk` experts, weighted by the router's softmax renormalized over them, so identical experts
   compute θ's function; Switch's load-balancing loss at `--aux`; dropless;
@@ -189,7 +190,8 @@ def build(theta: dict[str, torch.Tensor], cfg: dict, aa: argparse.Namespace, dev
         dd, LL, HH, FF = (int(x) for x in aa.size.split("x"))
         with torch.device(dev):
             return LM(Size("scratch", dd, LL, HH, FF), vocab=V)
-    src = [j * L // aa.depth for j in range(aa.depth)] if aa.grow == "depth" else list(range(L))
+    deepen = aa.grow == "depth" or (aa.grow == "mlp" and aa.depth > L)
+    src = [j * L // aa.depth for j in range(aa.depth)] if deepen else list(range(L))
     ff2 = round(ff * aa.mlp_mult) if aa.grow == "mlp" else ff
     with torch.device(dev):
         lm = LM(Size("grown", d, len(src), H, ff2), vocab=V)
