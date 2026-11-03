@@ -1,5 +1,6 @@
 import Proofs.Flock.SessionLoop.RoundPiop
 import Proofs.Flock.SessionLoop.FinRepPads
+import Proofs.Flock.SessionLoop.L0Fixed
 
 /-!
 # A rep's scheduled rounds outside its masked phase
@@ -20,7 +21,8 @@ round's place in the rep given by the coins before it:
 * **`LeanRelease.release_sched_openBind`**: the opening's binding after the algebraic phase
   (`LeanRelease.release_openBind`), at `Masked.repSlot` `0`.
 * **`LeanRelease.release_sched_l0`**: level 0's rounds `1` to `k0 + 3` (`LeanRelease.L0Sent.release`, and at `k0 + 3`
-  `ρ_1`'s squeeze alone, `LeanRelease.release_on` at no frames), at `Masked.repSlot` `i`.
+  `ρ_1`'s squeeze alone, `LeanRelease.release_on` at no frames), at `Masked.repSlot` `i`, where `vs`'s level-0 values
+  are the firewall's (`Loop.L0Fixed`).
 * **`LeanRelease.release_sched_close`**: level 0's closing round (`LeanRelease.release_close`), at `Masked.repSlot`
   `k0 + 4`.
 -/
@@ -623,15 +625,15 @@ theorem release_sched_openBind (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock
   sorry
 
 /-- **Level 0's rounds**: at rep stream `2j + r`'s level-0 round `i`, `1 ≤ i ≤ k0 + 3` (`Masked.repSlot` `i`; at
-`k0 + 3`, `ρ_1`'s squeeze alone), the release of the worker's round is the switched session's message without its
-leading domain frame. -/
+`k0 + 3`, `ρ_1`'s squeeze alone), where `vs`'s level-0 values are the firewall's (`Loop.L0Fixed`), the release of the
+worker's round is the switched session's message without its leading domain frame. -/
 theorem release_sched_l0 (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)
     (wk : (ofLoopLink L₀ src real).toSrv.Worker) {x : Msg} {w : Flock.Wit}
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
     (hSc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) (hS : Loop.Src L₀ src x w)
-    (ν : Loop.finS.Nonce) (t : Loop.finS.Tape) (κ : (ofLoopLink L₀ src real).toSrv.Chk) (m₀ ρ₀ : Msg)
+    (hL0 : Loop.L0Fixed vs x w) (ν : Loop.finS.Nonce) (t : Loop.finS.Tape) (κ : (ofLoopLink L₀ src real).toSrv.Chk) (m₀ ρ₀ : Msg)
     (ops : List (Msg × Msg)) (hTV : Loop.TakesValsAt vs (ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops) {v : Msg}
     (hpos : 0 < ops.length) (hlt : ops.length < refK x)
     (hl : (ofLoopLink L₀ src real).toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true)
