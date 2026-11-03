@@ -135,6 +135,12 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
     assert rec["placement"] == {"trusted-host": "the certifier on the gate's host"}
 
 
+def test_a_case_with_no_caps_says_k_sched_and_k_fail_count_no_connection(tmp_path):
+    none = dict(PUBLIC, K=9088 + 63, cells=0, schedules=0)
+    b = OR.record(accepted(tmp_path, none, caps=()))["bound"]
+    assert b["K"] == 9151 and b["connections"] == {"count": 0, "from": OR.CONNECTIONS, "none": OR.NO_CONNECTIONS}
+
+
 def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one_phase(tmp_path):
     p = OR.record(accepted(tmp_path))["periods"]
     phase = Fraction(63 * 20, 1000)

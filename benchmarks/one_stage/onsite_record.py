@@ -27,7 +27,7 @@ the public's ``scans[i]``), ℓ_{a,i} (``free``), k_{skip,i} (``faulty_sets``, `
 the jitter (``jitter``). They sum to K, by which `NetTiming.Guarantees.PeriodLeakAccepted` bounds what the serving node
 sends past its committed program except with δ_net, the answer's ``eps`` (`DELTA_NET_BESIDE`). K is that statement's
 count as proved, a known overcount (`OVERCOUNT`); ``connections`` is how many connections k_sched and k_fail count
-(`CONNECTIONS`). A public whose terms don't sum to K, or that isn't the rows form, is the bound's ``error``. Beside the
+(`CONNECTIONS`), saying so when a case's caps name none (`NO_CONNECTIONS`). A public whose terms don't sum to K, or that isn't the rows form, is the bound's ``error``. Beside the
 bound, ``advice_charge``: the served run's realized advice charge is private (`ADVICE`), and ``measured`` is honest
 serving's, measured on a test run with public inputs (`advice_charge.py`'s record, ``--advice-charge``) and labelled as
 that run's, never a figure of this one.
@@ -84,6 +84,8 @@ OVERCOUNT = ("a known overcount, proved and larger than necessary: each connecti
              "run coincide; K is PeriodLeakAccepted's count as it states it")
 CONNECTIONS = ("the caps of the certifier's case's params (``cells``), one a connection: the network certifier holds each "
                "lane to its schedule's egress_cells, and the period's check reads the caps as given")
+NO_CONNECTIONS = ("the case's params give no caps, so k_sched and k_fail are 0: K counts no connection's schedule or "
+                  "fail cell")
 DELTA_NET_BESIDE = "the scans' knowledge and collision errors, which eps doesn't count"
 RULES = {
     "node": "the run's per execution phase times the period's execution phases, ⌈seconds / (T·τ)⌉, each as the run's at "
@@ -281,7 +283,7 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     except (KeyError, TypeError, ValueError) as e:
         b["connections"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
         return rec | {"periods": {"error": f"{CASE}: {type(e).__name__}: {e}"}}
-    b["connections"] = {"count": connections, "from": CONNECTIONS}
+    b["connections"] = {"count": connections, "from": CONNECTIONS} | ({} if connections else {"none": NO_CONNECTIONS})
     return rec | {"periods": periods(b["K"], Fraction(b["delta_net"]), b["phases"], phase_s, connections)}
 
 
