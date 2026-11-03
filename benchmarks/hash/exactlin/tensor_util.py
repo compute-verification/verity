@@ -60,7 +60,7 @@ CLASSES = [
                                     r"matmul_kernel_persistent"),
     ("Commit hashing", None, r"rows_leaf|rows_level|chunk_leaves|tree_level|pos_leaves|sha512|hm96"),
     ("Commit gather", None, r"gather_copy|native_collect"),
-    ("H1", None, r"\bkf?_(midstates|leaves|level|pads|public_salts|shake_salts|top|rows|segments|step|trees|tiles|strips|"
+    ("H1", None, r"\bkf?_(midstates|leaves|level|pads|public_salts|ok_salts|top|rows|segments|step|trees|tiles|strips|"
                  r"tree_key|units_level|form_leaves|node_leaves|key_leaf|dequant|x|y|ceiling|f1|fill|hash|row_digests|"
                  r"tile_leaves)\b"),
     ("quantize", None, r"exactlin_quant_rows|scaled_int8_quant|int8_quant|kv_quant"),
