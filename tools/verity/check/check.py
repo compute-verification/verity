@@ -1374,12 +1374,16 @@ def cc_records_in(spec: str, cache: Path, fetch=fetch_records) -> str | None:
     """`--cc-records-from ART@SHA256`: the records step's tarball (`cc_records`), from the run record ART, unpacked into
     circuit-check's cache ``cache`` once its bytes have that sha256 and the tree it was built from is this one; else why it is
     refused, and nothing unpacked.  Each record goes in by rename, so a circuit-check reading the cache meanwhile sees it whole
-    or not at all, and one counts only while its own reads still match (`circuit_check.units`)."""
+    or not at all, and one counts only while its own reads still match (`circuit_check.units`).  The tarball is fetched and
+    unpacked in a hidden directory inside the cache as its path resolves, so no rename crosses a filesystem when that path is a
+    link or mount onto another disk; circuit-check lists records only in their key's directory and `verdicts` walks no hidden
+    directory, so neither reads it."""
     art, _, sha = spec.partition("@")
     if not art.startswith("art:") or not re.fullmatch(r"[0-9a-f]{64}", sha):
         return f"{spec} is not ART@SHA256"
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    d = Path(tempfile.mkdtemp(prefix="cc-records-", dir=cache.parent))
+    cache.mkdir(parents=True, exist_ok=True)
+    root = cache.resolve()
+    d = Path(tempfile.mkdtemp(prefix=".cc-records-", dir=root))
     try:
         try:
             tar = fetch(art, d)
@@ -1397,7 +1401,7 @@ def cc_records_in(spec: str, cache: Path, fetch=fetch_records) -> str | None:
             t.extractall(d / "x", filter="data")
         n = 0
         for p in sorted((d / "x" / "cache").rglob("*.json")):
-            (to := cache / p.relative_to(d / "x" / "cache")).parent.mkdir(parents=True, exist_ok=True)
+            (to := root / p.relative_to(d / "x" / "cache")).parent.mkdir(parents=True, exist_ok=True)
             os.replace(p, to)
             n += 1
         print(f"check: circuit-check: {n} binding record(s) from {art} ({sha[:12]}) into {cache}", flush=True)
