@@ -43,8 +43,11 @@ is a flag.
 """
 from __future__ import annotations
 
+import collections
 import hashlib
 import importlib.util
+import json
+import math
 import os
 import re
 import resource
@@ -56,7 +59,8 @@ from pathlib import Path
 
 import torch
 
-from .flops import plain
+from .flops import forward_macs_per_token, plain
+from .gates import per_mac
 from .run import theta_sha256
 
 ENCODERS = ("encode_full", "encode_lora", "encode_lora2", "encode_seedlog", "encode_sparse", "encode_quant")
@@ -253,18 +257,119 @@ class CWPlan:
         return sum(self.p.rebuild_macs(self.theta, b) for b in [*([base] if base else []), *suffixes])
 
 
+HEAD_GEMMS = ("mm", "addmm", "bmm", "matmul", "linear", "baddbmm")
+
+
+def narrowed_head(ops: dict, head: tuple[int, int], weights, tokens: dict) -> dict:
+    """The analytic head work a narrowed head doesn't do, read op by op from a count (`ops`, `ledger._macs_log`'s: "phase
+    class op shapes" -> [calls, MACs]), for the coordinator's 13:42Z floor rule: a record under the floor is scored when
+    the counted op table accounts for the gap. `head` is the head's weight (rows, d); `weights` every other weight's shape;
+    `tokens` the meter's ({"train": n, "forward": n}).
+
+    A forward GEMM row [R, d] x [d, n] is the head on n of its rows when d < n < rows and (d, n) is no other weight's
+    shape, and a backward row [R, n] x [n, d] is its input gradient when such a forward row has the same R and n: the
+    whole head would add (rows - n)/n of either's MACs at the same token rows. Shapes can't tell such a slice from an
+    n-wide matrix the program adds, so every row credited is listed, and the credit is at most the analytic head's own
+    forward and input-gradient work."""
+    rows, d = head
+    other = {s for w in weights for s in (tuple(w), tuple(w)[::-1])}
+    gemms = []
+    for key, (calls, macs) in ops.items():
+        phase, _, op, shapes = key.split(" ", 3)
+        try:
+            (a, b), (b2, c) = [tuple(s[-2:]) for s in json.loads(shapes)[-2:]]
+        except (ValueError, TypeError):
+            continue
+        if op in HEAD_GEMMS and b == b2:
+            gemms.append((phase, a, b, c, key, calls, macs))
+    fwd = {(a, c) for phase, a, b, c, *_ in gemms if phase == "fwd" and b == d and d < c < rows and (d, c) not in other}
+    saved, credited = {"fwd": 0, "bwd": 0}, []
+    for phase, a, b, c, key, calls, macs in gemms:
+        n = c if phase == "fwd" and b == d else b if phase == "bwd" and c == d else None
+        if n and (a, n) in fwd:
+            s = macs * (rows - n) // n
+            saved[phase] += s
+            credited.append({"op": key, "calls": calls, "macs": macs, "head_rows": n, "saved_macs": s})
+    cap = {"fwd": (tokens.get("train", 0) + tokens.get("forward", 0)) * rows * d, "bwd": tokens.get("train", 0) * rows * d}
+    total = sum(min(saved[k], cap[k]) for k in saved)
+    return {"saved_macs": total, "saved_by_phase": saved, "cap_macs": cap, "credited": credited}
+
+
+def consumed_tokens(log: list, shapes: dict) -> int:
+    """The tokens a step's counted forward GEMMs consumed, from its structure's op log (`[phase, class, op, shapes,
+    calls, MACs]` rows): a forward GEMM with one operand of a weight's shape (`shapes`: name -> shape, either way round)
+    consumed its other operand's rows times its calls, over the number of weights of that shape; the step consumed the
+    most any such GEMM shows. A zero-MAC lookup consumes nothing, and a GEMM with a weight's slice isn't read."""
+    per = collections.Counter(tuple(sorted(s)) for s in shapes.values() if len(s) == 2)
+    best = 0
+    for phase, _, op, sig, calls, _ in log:
+        if phase != "fwd" or op not in HEAD_GEMMS:
+            continue
+        mats = [tuple(s) for s in json.loads(sig) if len(s) >= 2]
+        held = [i for i, s in enumerate(mats) if len(s) == 2 and tuple(sorted(s)) in per]
+        if len(mats) != 2 or len(held) != 1:
+            continue
+        i = 1 - held[0]
+        rows = math.prod(mats[i]) // mats[i][-1 if i == 0 else -2]
+        best = max(best, rows * calls // per[tuple(sorted(mats[held[0]]))])
+    return best
+
+
+def readout_leaks(record: dict, tensors: dict) -> list[dict]:
+    """The coordinator's 14:22Z rule for ref-data's 14:06Z LOOPHOLE, at ingest: before te_core 3.11 the counter keyed a
+    program-made token tensor by its address, so zero-MAC lookups of distinct index tensors could raise a step's tokens,
+    which bound its read-outs. Each step's read-outs (`exited`) are judged here against the tokens its counted forward
+    GEMMs consumed (`consumed_tokens`, over θ's weights, `tensors`: the start's name -> [dtype, shape], and the step's
+    own updated ones). A step whose read-outs reach a value per consumed token but stayed under its counted tokens is
+    listed: its allowance came from index reads no counted work consumed, and the record is invalid."""
+    shapes = {k: v[1] for k, v in tensors.items()}
+    out = []
+    for s in [record.get("setup", {}), *record["steps"], record.get("tail", {})]:
+        exited, tokens = s.get("exited", 0), s.get("tokens", 0)
+        if exited < 2 or exited >= max(tokens, 2):
+            continue
+        used = shapes | {k: v[1] for k, v in s.get("shapes", {}).items()}
+        consumed = consumed_tokens(record["structures"][s["struct"]]["log"], used)
+        if exited >= max(consumed, 2):
+            out.append({"step": s["step"], "tokens": tokens, "consumed": consumed, "exited": exited})
+    return out
+
+
+def accounted_over(counted_flops: float, analytic_flops: float, saved_macs: int) -> float | None:
+    """The harness's count over the run's own steps once a narrowed head's saving is taken out of the estimate."""
+    rest = analytic_flops - 2 * saved_macs
+    return counted_flops / rest if rest > 0 else None
+
+
+def forward_cost(net, ctx: int, vocab: int) -> dict:
+    """A model's own forward per token at `ctx`, as the counter sees it (`flops.forward_macs_per_token`: what runs, so an
+    MoE's active experts), in MACs and in gates at the bf16 GEMM price (as the policy prices a forward)."""
+    macs = forward_macs_per_token(net, ctx, vocab)
+    return {"forward_macs_per_token": macs, "forward_gates_per_token": macs * per_mac("gemm/bf16")}
+
+
 def score_run(prepare, rec: dict, run_dir: Path, theta: dict[str, torch.Tensor], start: dict,
               device: str) -> dict:
     """The evaluation job's side of a training job's record: θ's whole-set score, then each checkpoint's E, read from
-    `run_dir` and checked against the digest the harness recorded, decoded from θ with the fixed decoder, hashed, and
-    scored and sealed through `prepare.Scorer`. Returns the record with the start's `val_bpb` and each checkpoint's
-    `output_sha256`, `val_bpb` and `score`; a checkpoint whose E isn't the recorded one is left unscored and named in
-    `scored.problems`."""
+    `run_dir` and checked against the digest the harness recorded, decoded from θ with the fixed decoder (in θ's
+    architecture or its own, `prepare.model_config`), hashed, and scored and sealed through `prepare.Scorer`. Returns the
+    record with the start's `val_bpb` and each checkpoint's `output_sha256`, `val_bpb`, `score` and its model's forward
+    MACs and gates per token (`forward_cost`); a checkpoint whose E isn't the recorded one is left unscored and named in
+    `scored.problems`. Nothing caps the model's cost: scoring reads it."""
     if rec["start"].get("digest") != start["digest"]:
         raise SystemExit(f"te_core: the run's start digest is not {start['name']}'s registered one")
     scorer = prepare.Scorer(start, theta, device)
+    costs: dict[str, dict] = {}
+
+    def cost(net, config: dict) -> dict:
+        key = json.dumps(config, sort_keys=True)
+        if key not in costs:
+            costs[key] = forward_cost(net, int(config.get("ctx", prepare.EVAL_CTX)), int(config.get("vocab", 50304)))
+        return costs[key]
+
     rec["start"] |= {"val_bpb": float(scorer.start_bpb),
-                     "val_bpb_source": f"θ on the whole {scorer.split} set, measured by the evaluation job"}
+                     "val_bpb_source": f"θ on the whole {scorer.split} set, measured by the evaluation job",
+                     **cost(scorer.base, start["config"])}
     problems = []
     for cp in rec["checkpoints"]:
         path = Path(run_dir) / cp.get("path", "")
@@ -272,13 +377,17 @@ def score_run(prepare, rec: dict, run_dir: Path, theta: dict[str, torch.Tensor],
         if blob is None or blob_sha256(blob) != cp["e_sha256"]:
             problems.append(f"step {cp['step']}: its E file is missing or not the recorded {cp['e_sha256'][:12]}")
             continue
+        config = prepare.model_config(start, blob) if hasattr(prepare, "model_config") else start["config"]
         state = {k: v for k, v in prepare.decode(theta, blob, device=device).items() if not k.startswith("buffer/")}
         digest = theta_sha256(state)
-        score = scorer.search(state, digest)
-        scorer.seal(digest, state, score)
+        score = scorer.search(state, digest, config)
+        scorer.seal(digest, state, score, config)
         cp |= {"output_sha256": digest, "val_bpb": float(score["bpb"]),
                "score": {k: v for k, v in score.items() if k != "rule"},
-               "rebuild_macs": prepare.rebuild_macs(theta, blob) if hasattr(prepare, "rebuild_macs") else None}
+               "rebuild_macs": prepare.rebuild_macs(theta, blob) if hasattr(prepare, "rebuild_macs") else None,
+               "parameters": int(sum(v.numel() for v in state.values())),
+               "config": None if config == start["config"] else config,
+               **cost(scorer.model(state, config), config)}
     rec["scored"] = {"split": scorer.split, "final_mode": bool(getattr(prepare, "FINAL_MODE", False)),
                      "problems": problems}
     return rec
@@ -328,9 +437,9 @@ class Adapter:
             self.s.boundary()
             return self.s.batch(nxt(data, *args, **kwargs))
 
-        def submit_(out, start, klass, blob, model, *args, **kwargs):
+        def submit_(out, start, blob, model, *args, **kwargs):
             blob, model = plain(blob), plain(model)
-            submit(out, start, klass, blob, model, *args, **kwargs)
+            submit(out, start, blob, model, *args, **kwargs)
             self.submit(blob, model)
 
         p.load_start, p.TrainData.next, p.submit = load_start_, next_, submit_

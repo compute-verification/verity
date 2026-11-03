@@ -36,7 +36,8 @@ check on it is that one isolation block; and its weights are bound per run (`Inp
 wires: rank 0's with its weights bound at registration (θ), one isolation block per rank; and the eight ranks' requests joined into
 one Definition the node's root calls once, each collective reading the other ranks' partials where it read its
 `peers_*` inputs, one isolation block per node session. The node's session is checked at the demo's policy, Γ = 2^44 gates and
-α = 2^-25 bits per gate (`GAMMA`, `ALPHA`), and at its four neighbours. Finer divisions of a whole session (per step,
+α = 2^-25 bits per gate (`GAMMA`, `ALPHA`; the check's older form of the policy, here c = 2^44 and k = αΓ = 2^19 bits), and at
+its four neighbours. Finer divisions of a whole session (per step,
 per layer, per Call) are out of `NciCheck.Desc`'s reach at this size: it holds each root node's reads as pieces of
 gates, about one per leaf on GLM-5.3, so only a Call's internal reads stay small. Three of rank 0's Definitions (the
 router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in all through `--policy`,

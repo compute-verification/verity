@@ -1,13 +1,12 @@
-"""Islands `e1mb` and `e100kb` (direction `lowrank`): a low-rank update to the blocks' matrices, sized to the class's byte
-cap or to a smaller byte target (`--e-bytes`, for the A2 curve over Delta); E is the factors and any norm gains, and the
-evaluated model merges them. The same file runs in both islands and for any class: `--class` (default this file's
-directory's name) must be the class the run is launched as, a bin of Delta.
+"""Islands `e1mb` and `e100kb` (direction `lowrank`): a low-rank update to the blocks' matrices, sized to the island's
+own size (E_BYTES: 1,000,000 bytes in e1mb, 100,000 in e100kb; nothing caps it) or to `--e-bytes` (for the A2 curve over
+Delta); E is the factors and any norm gains, and the evaluated model merges them. The same file runs in both islands.
 
 The base stays frozen and the forward adds s · B(A x) to each target's output (a hook, so the base matmuls read θ and only
 the adapters' MACs are updated). Knobs, each a mechanism of the direction:
 
 - placement: `--targets` (all, out, attn, mlp, qkv, qv, none, or leaf names), `--layers` (all, top:N, A-B, or a list);
-- size: `--rank` (0: the largest uniform rank that fits `--e-bytes`, default the cap less 512, or 2048 for quant),
+- size: `--rank` (0: the largest uniform rank that fits `--e-bytes`, default E_BYTES less 512, or 2048 for quant),
   `--rank-map leaf=R,...`, or `--alloc grad`: each target's rank by its full gradient over `--init-batches` batches, rank
   units taken in decreasing σ² per byte of E (σ the gradient's singular values) until E fills `--e-bytes` (|E| from an
   affine model of the ranks fitted to exact encodes before the probe: an E encoded after compute is a checkpoint);
@@ -38,7 +37,7 @@ The run plans its steps for the harness (`hooks.plan`) and encodes E in the midd
 trainable values and the bits of their gradient, of the optimizer's state (AdamW's m and v, or Muon's buffer, fp32) and of
 the fp32 latent factors and magnitudes that a straight-through run keeps beside the stored codes.
 
-    python launch.py CLASS START --island e1mb --node NODE --note TEXT -- --class CLASS [--targets all] [--rank 0] ...
+    python launch.py START --island e1mb --node NODE --note TEXT -- [--targets all] [--rank 0] ...
 """
 from __future__ import annotations
 
@@ -58,6 +57,8 @@ import prepare
 from te_core import hooks
 
 KLASS = Path(__file__).resolve().parent.name
+#: the island's update size, its own choice (nothing caps it); `--e-bytes` sets another
+E_BYTES = {"e1mb": 1_000_000, "e100kb": 100_000}.get(KLASS, 1_000_000)
 LF_MATS = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
 HF_OF = {"wq": "q_proj", "wk": "k_proj", "wv": "v_proj", "wo": "o_proj", "w_gate": "gate_proj", "w_up": "up_proj",
          "w_down": "down_proj"}
@@ -308,12 +309,12 @@ def lr_factor(step: int, n_steps: int, a) -> float:
 
 def fresh_order(data: prepare.TrainData, rec: dict) -> None:
     """Drop from the stream's order the windows the start trained on: the prefix of numpy default_rng(0)'s permutation of
-    the corpus's windows that its provenance's token count covers (starts.py's data order)."""
+    the corpus's windows that its provenance's token count covers (starts.py's data order; the GPT-2 stream only)."""
     prov = rec.get("provenance", {})
     seen_windows = int(prov.get("tokens", 0)) // data.ctx
-    if not seen_windows or prov.get("data_seed", 0) != 0:
+    if not seen_windows or prov.get("data_seed", 0) != 0 or rec["tokenizer"] != "gpt2":
         return
-    n = (len(data.tokens) - 1) // data.ctx
+    n = int(data.starts[-1])
     seen = np.zeros(n, dtype=bool)
     seen[np.random.default_rng(0).permutation(n)[:seen_windows]] = True
     data.order = data.order[~seen[data.order]]
@@ -406,14 +407,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--class", dest="klass", default=KLASS, choices=sorted(prepare.CLASSES))
     ap.add_argument("--targets", default="all")
     ap.add_argument("--layers", default="all")
     ap.add_argument("--rank", type=int, default=0, help="0: the largest uniform rank that fits --e-bytes")
     ap.add_argument("--rank-map", default="", help="leaf=R,... overriding --rank per leaf (0 drops the leaf)")
     ap.add_argument("--alloc", default="uniform", choices=("uniform", "grad"))
-    ap.add_argument("--e-bytes", type=int, default=0, help="the byte target the ranks fit (default: the class's cap less "
-                                                             "512, or 2048 for quant)")
+    ap.add_argument("--e-bytes", type=int, default=0, help="the byte target the ranks fit (default: E_BYTES less 512, or "
+                                                             "2048 for quant)")
     ap.add_argument("--norms", default="all")
     ap.add_argument("--format", default="", choices=("", *FORMATS),
                     help="default: lora for --bits 0, lora2 for 4 or 8, else quant")
@@ -454,10 +454,8 @@ def main() -> int:
     torch.backends.cuda.matmul.allow_tf32 = True
     net, rec, theta = prepare.load_start(a.start)
     params = net.params()
-    cap = prepare.CLASSES[a.klass]["max_e_bytes"]
-    if not (a.e_bytes or cap):
-        raise SystemExit(f"{a.klass}: an uncapped class needs --e-bytes")
-    target_bytes = a.e_bytes or (cap - (2048 if a.format == "quant" else 512))
+    want = a.e_bytes or E_BYTES
+    target_bytes = a.e_bytes or (E_BYTES - (2048 if a.format == "quant" else 512))
     layers = layers_of(a.layers, rec["config"]["n_layer"])
     targets = targets_of(params, a.targets, layers)
     norms = norms_of(params, a.norms, layers)
@@ -494,9 +492,9 @@ def main() -> int:
 
         ranks = ranks_at(fit_prefix(lambda p: model(ranks_at(p)), len(order), target_bytes))
         rank, size = 0, model(ranks)
-    if cap is not None and size > cap:
-        raise SystemExit(f"{a.klass}: ranks {sorted(set(ranks.values()))} on {len(ranks)} weights and {len(norms)} norms "
-                         f"is {size} bytes, over the cap of {cap}")
+    if size > want:
+        raise SystemExit(f"{KLASS}: ranks {sorted(set(ranks.values()))} on {len(ranks)} weights and {len(norms)} norms "
+                         f"is {size} bytes, over {want}")
     for n in norms:
         params[n].data = params[n].data.float()
         params[n].requires_grad_(True)
@@ -531,14 +529,14 @@ def main() -> int:
     trainable = {"full": norms, "adapters": ranks}
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
     spent = prepare.train_flops(rec, trainable, steps)["flops"]
-    n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - spent) // per_step)
+    n_steps = int((a.budget_fraction * prepare.budget(a.start)["train_flops"] - spent) // per_step)
     # mid-share, so a rounded step never puts two encodes in one harness window and none in the next
     marks = {round(n_steps * (k + 0.5) / (a.snaps + 1)) for k in range(a.snaps + 1)}
     hooks.plan(n_steps)
     trained = [p for grp in muon + adam for p in grp["params"]]
     dgrad = delta_grad([p for grp in adam for p in grp["params"]], [p for grp in muon for p in grp["params"]],
                        sum(ad.latents() for ad in ads.values()))
-    print(json.dumps({"class": a.klass, "format": a.format, "opt": a.opt, "steps": n_steps, "rank": rank,
+    print(json.dumps({"island": KLASS, "format": a.format, "opt": a.opt, "steps": n_steps, "rank": rank,
                       "ranks": sorted(set(ranks.values())), "rank_sum": sum(ranks.values()), "targets": len(ranks),
                       "norms": len(norms), "E_bytes": size, "delta_grad": dgrad, "flops_per_step": per_step,
                       "extra_per_step": extra, "init_flops": spent, "windows": len(data.order)}), flush=True)
@@ -578,7 +576,7 @@ def main() -> int:
             snaps.append((encode(ads, params, norms, theta, a), len(steps)))
     blob = encode(ads, params, norms, theta, a)
     model = prepare.decode(theta, blob)
-    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=list(ranks) + norms,
+    prepare.submit(Path(a.out), a.start, blob, model, trainable, steps, changed=list(ranks) + norms,
                    notes={"method": "lora", "direction": "lowrank", "format": a.format, "rank": rank, "ranks": ranks,
                           "bits": {n: list(bits[n]) for n in ranks}, "args": vars(a), "steps": n_steps,
                           "final_train_ema": ema, "E_bytes": len(blob), "delta_grad": dgrad}, snapshots=snaps)

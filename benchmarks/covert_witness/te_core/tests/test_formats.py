@@ -1,5 +1,6 @@
-"""covert_witness's E formats (`prepare.py`): the sparse, lora2 and quant formats' round trips, layouts and refusals, and
-every format's rebuild cost, which is at least what te_core's counter sees the decode compute."""
+"""covert_witness's E formats (`prepare.py`): the sparse, lora2, quant and model formats' round trips, layouts and
+refusals, every format's rebuild cost, which is at least what te_core's counter sees the decode compute, and data v3's
+training windows across its parts."""
 import importlib.util
 import json
 import lzma
@@ -335,3 +336,84 @@ def test_rebuild_macs_per_format_bound_what_the_counter_sees():
         assert prepare.format_of(blob) == fmt
         assert prepare.rebuild_macs(th, blob) == prepare.rebuild_macs(meta, blob) == macs
         assert counted(lambda blob=blob: prepare.decode(th, blob, device="cpu")) <= macs, fmt
+
+
+def lf(n_layer: int, vocab: int = 32000) -> dict:
+    from model import Size
+
+    return Size("t", 32, n_layer, 2, 64).config(vocab=vocab)
+
+
+def lf_theta(config: dict) -> dict[str, torch.Tensor]:
+    g = torch.Generator().manual_seed(1)
+    return {k: torch.randn(s, generator=g).to(torch.bfloat16) for k, s in prepare.architecture(config).items()}
+
+
+def test_a_model_format_is_its_own_architecture_with_thetas_tensors_where_e_gives_none(monkeypatch):
+    import evaluate
+
+    small, big = lf(1), lf(2)
+    th = lf_theta(small)
+    rec = {"config": small, "tokenizer": prepare.data_v3.TOKENIZER}
+    new = {k: torch.ones(s, dtype=torch.bfloat16) for k, s in prepare.architecture(big).items() if k not in th}
+    assert new
+    blob = prepare.encode_model(big, new)
+    assert prepare.format_of(blob) == "model" and prepare.rebuild_macs(th, blob) == 0
+    assert prepare.model_config(rec, blob) == big and prepare.model_config(rec, prepare.encode_full({})) == small
+    out = prepare.decode(th, blob, device="cpu")
+    assert {k: tuple(v.shape) for k, v in out.items()} == prepare.architecture(big)
+    assert all(prepare.same_bits(out[k], new[k] if k in new else th[k]) for k in out)
+    m = prepare.model_record(rec, big, out)
+    assert m["config"] == big and m["parameters"] == sum(v.numel() for v in out.values())
+    assert prepare.model_record(rec, small, th) is rec
+    # the evaluation job's cost record reads the grown model's record, scored in the start's tokens
+    monkeypatch.setattr(prepare, "held_out", lambda split, tok: (np.zeros(2049, dtype=np.uint16), {"bytes": 8000}))
+    monkeypatch.setattr(evaluate, "prepare", prepare)
+    cost = evaluate.eval_cost(prepare.SEARCH_POOL, m)
+    assert cost["parameters"] == m["parameters"] and cost["set"] == prepare.SEARCH_POOL
+    with torch.device("cpu"):
+        net = prepare.Net(big).load(out)
+    assert net.logits(torch.zeros(1, 4, dtype=torch.long)).shape == (1, 4, 32000)
+
+
+def test_a_model_format_keeps_thetas_vocabulary_context_and_tying_and_only_its_architectures_tensors():
+    small, big = lf(1), lf(2)
+    th, rec = lf_theta(small), {"config": small}
+    for config in (lf(2, vocab=50304), {**big, "ctx": 2048}, {**big, "tied": False}, {**big, "family": "hf-neox"}, None):
+        with pytest.raises(ValueError, match="θ's family, vocab, ctx, tied"):
+            prepare.model_config(rec, prepare.encode_model(config, {}))
+    shapes = prepare.architecture(big)
+    new = {k: torch.ones(s, dtype=torch.bfloat16) for k, s in shapes.items() if k not in th}
+    one = sorted(new)[0]
+    for given, why in ((new | {"stray": torch.ones(2)}, "not its architecture's tensors"),
+                       ({k: v for k, v in new.items() if k != one}, f"{one} is neither E's nor θ's"),
+                       (new | {one: torch.ones(3)}, f"{one} is neither E's nor θ's"),
+                       (new | {one: torch.ones(shapes[one], dtype=torch.int32)}, f"{one} is neither E's nor θ's")):
+        with pytest.raises(ValueError, match=why):
+            prepare.decode(th, prepare.encode_model(big, given), device="cpu")
+
+
+def test_bpe32k_training_windows_cover_every_parts_windows_and_none_crosses_a_part(tmp_path, monkeypatch):
+    lengths = (41, 9, 2, 25)
+    (tmp_path / "parts").mkdir()
+    for i, n in enumerate(lengths):
+        (1000 * i + np.arange(n, dtype=np.uint16)).tofile(tmp_path / "parts" / f"{i:03d}.bin")
+    monkeypatch.setattr(prepare.data_v3, "TRAIN", tmp_path)
+    c, tok = 4, prepare.data_v3.TOKENIZER
+
+    def windows(n_parts: int) -> list[tuple[int, ...]]:
+        return sorted(tuple(range(1000 * i + j * c, 1000 * i + j * c + c + 1)) for i, n in enumerate(lengths[:n_parts])
+                      for j in range((n - 1) // c))
+
+    def rows(data) -> list[tuple[int, ...]]:
+        return sorted(map(tuple, data.next(len(data.order), device="cpu").tolist()))
+
+    # while it is installed: the parts whose records are in place from 000 on (002's isn't yet)
+    for i in (0, 1, 3):
+        (tmp_path / "parts" / f"{i:03d}.json").write_text("{}")
+    assert rows(prepare.TrainData(tok, ctx=c)) == windows(2)
+    assert rows(prepare.TrainData(tok, ctx=c, parts=1)) == windows(1)
+    with pytest.raises(SystemExit, match="2 training parts here, not 3"):
+        prepare.TrainData(tok, ctx=c, parts=3)
+    (tmp_path / "manifest.json").write_text(json.dumps({"parts": [{"index": i} for i in range(len(lengths))]}))
+    assert rows(prepare.TrainData(tok, ctx=c)) == windows(4)
