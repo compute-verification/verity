@@ -1,6 +1,6 @@
 {
  "id": "te_core.workloads",
- "te_core": "4.12.9",
+ "te_core": "4.12.11",
  "reading": "A",
  "spec": "note:training-20261103T0600Z-draft-workload-models",
  "io_bound": "cursor/te-io-bound-4207 at 3c2afa62aa",
@@ -24,10 +24,18 @@
     "partial": true,
     "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
     "target": {"rho": 10.44411, "basis": "target"},
-    "sensitivities": {"reduction": 9884.086, "update": 19.41864, "token_form": 10.44411, "decoding_form": 0.9997032, "per_gate": null, "fresh_cell": 82236.97},
+    "sensitivities": {
+     "reduction": 9884.086,
+     "update": 19.41864,
+     "token_form": 10.44411,
+     "decoding_form": 0.9997032,
+     "per_gate": null,
+     "fresh_cell": 82236.97,
+     "fresh_converged": null
+    },
     "fit_fails": ["compute", "reduction", "update"],
     "token_A": "unmodelled",
-    "unmeasured": ["token", "decoding", "per_gate"],
+    "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
     "b": [510]
    },
    "diloco": {
@@ -38,10 +46,18 @@
     "partial": true,
     "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
     "target": {"rho": 10.43482, "basis": "target"},
-    "sensitivities": {"reduction": 9875.313, "update": 77.60561, "token_form": 10.43482, "decoding_form": 0.9988137, "per_gate": null, "fresh_cell": 82067.31},
+    "sensitivities": {
+     "reduction": 9875.313,
+     "update": 77.60561,
+     "token_form": 10.43482,
+     "decoding_form": 0.9988137,
+     "per_gate": null,
+     "fresh_cell": 82067.31,
+     "fresh_converged": null
+    },
     "fit_fails": ["compute", "reduction", "update"],
     "token_A": "unmodelled",
-    "unmeasured": ["token", "decoding", "per_gate"],
+    "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
     "b": [510]
    },
    "rl": {
@@ -52,10 +68,18 @@
     "partial": true,
     "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
     "target": {"rho": 10.43819, "basis": "target"},
-    "sensitivities": {"reduction": 9123.512, "update": 17.92439, "token_form": 10.43819, "decoding_form": 0.9997261, "per_gate": null, "fresh_cell": 74605.79},
+    "sensitivities": {
+     "reduction": 9123.512,
+     "update": 17.92439,
+     "token_form": 10.43819,
+     "decoding_form": 0.9997261,
+     "per_gate": null,
+     "fresh_cell": 74605.79,
+     "fresh_converged": null
+    },
     "fit_fails": ["compute", "reduction", "update"],
     "token_A": "unmodelled",
-    "unmeasured": ["token", "decoding", "per_gate"],
+    "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
     "b": [64912, 510]
    },
    "inference": {
@@ -66,10 +90,10 @@
     "partial": true,
     "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
     "target": {"rho": 42.12958, "basis": "target"},
-    "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 42.12958, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 16915.17},
+    "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 42.12958, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 16915.17, "fresh_converged": null},
     "fit_fails": ["compute", "update"],
     "token_A": "unmodelled",
-    "unmeasured": ["token", "decoding", "per_gate"],
+    "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
     "b": [1606652]
    },
    "lora": {
@@ -80,10 +104,18 @@
     "partial": false,
     "whole_making": "void under the traced class system (te_core 4.12)",
     "target": {"rho": 1.0, "basis": "target"},
-    "sensitivities": {"reduction": 103.9381, "update": 0.284762, "token_form": 0.4681401, "decoding_form": 0.9999956, "per_gate": null, "fresh_cell": null},
+    "sensitivities": {
+     "reduction": 103.9381,
+     "update": 0.284762,
+     "token_form": 0.4681401,
+     "decoding_form": 0.9999956,
+     "per_gate": null,
+     "fresh_cell": null,
+     "fresh_converged": null
+    },
     "fit_fails": ["compute", "reduction", "update"],
     "token_A": "unmodelled",
-    "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+    "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
     "b": [366]
    },
    "distill": {
@@ -94,10 +126,18 @@
     "partial": true,
     "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
     "target": {"rho": 2.473524, "basis": "target"},
-    "sensitivities": {"reduction": 9897.045, "update": 4.598999, "token_form": 2.473524, "decoding_form": 0.236764, "per_gate": null, "fresh_cell": 19476.53},
+    "sensitivities": {
+     "reduction": 9897.045,
+     "update": 4.598999,
+     "token_form": 2.473524,
+     "decoding_form": 0.236764,
+     "per_gate": null,
+     "fresh_cell": 19476.53,
+     "fresh_converged": null
+    },
     "fit_fails": ["compute", "reduction", "update"],
     "token_A": "unmodelled",
-    "unmeasured": ["token", "decoding", "per_gate"],
+    "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
     "b": [2153]
    }
   }
@@ -109,7 +149,8 @@
   "token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* the largest x(k - u(x))/a over x and x0 from the input profile, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
   "decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, \u03b1 (x0 s + s*))) affected gates, \u03b1 the most affected gates a token has in any part, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
   "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate at the best witness that holds it; a block holding one gate of a product beside another product's tile or the best run holds more, for a few bits of that gate's own operands",
-  "fresh_cell": "sensitivity, assuming that blocks hold whole multiply cells (P-cell): the fresh-products term's figure where every block does, a premise on the partition, which the attacker chooses; the term is the figure without it"
+  "fresh_cell": "sensitivity, assuming that blocks hold whole multiply cells (P-cell): the fresh-products term's figure where every block does, a premise on the partition, which the attacker chooses; the term is the figure without it",
+  "fresh_converged": "sensitivity, where the fresh-products term is void because a counted product is fed by a cycle of the step's whole-making system with no fixed point: the term's figure on the best set of the products no such cycle feeds, with the share of the step's counted fresh multiplications that set keeps; still a lower bound, published beside the void term and never in the max, since a product so fed is never dropped to escape the void"
  },
  "target": "target: A1 at reading B, not a bound: te_core.formalism.published at reading B, Fit's c/(c - d) where it holds, else Slowdown's token form (sensitivity, assumption (A1, reading B): Slowdown's token form, s* the largest x(k - u(x))/a over x and x0 from the input profile, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading)",
  "rests_on": {
@@ -273,9 +314,17 @@
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.645903, "share": 0.8442932, "numerical": 273125.4, "attention_share": 0.1193699},
        "target": {"rho": 413.8229, "basis": "target"},
-       "sensitivities": {"reduction": 21542.15, "update": 769.3624, "token_form": 413.8229, "decoding_form": 0.9997032, "per_gate": null, "fresh_cell": 5007794.0},
+       "sensitivities": {
+        "reduction": 21542.15,
+        "update": 769.3624,
+        "token_form": 413.8229,
+        "decoding_form": 0.9997032,
+        "per_gate": null,
+        "fresh_cell": 5007794.0,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -366,9 +415,17 @@
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.354669, "share": 0.7642779, "numerical": 206428.0, "attention_share": 0.185738},
        "target": {"rho": 643.8972, "basis": "target"},
-       "sensitivities": {"reduction": 21548.12, "update": 1197.118, "token_form": 643.8972, "decoding_form": 0.9995382, "per_gate": null, "fresh_cell": 4607728.0},
+       "sensitivities": {
+        "reduction": 21548.12,
+        "update": 1197.118,
+        "token_form": 643.8972,
+        "decoding_form": 0.9995382,
+        "per_gate": null,
+        "fresh_cell": 4607728.0,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -459,9 +516,17 @@
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.633248, "share": 0.928281, "numerical": 307304.5, "attention_share": 0.04189688},
        "target": {"rho": 20.53651, "basis": "target"},
-       "sensitivities": {"reduction": 3416837.0, "update": 839.1054, "token_form": 20.53651, "decoding_form": 0.9996763, "per_gate": null, "fresh_cell": 5735809.0},
+       "sensitivities": {
+        "reduction": 3416837.0,
+        "update": 839.1054,
+        "token_form": 20.53651,
+        "decoding_form": 0.9996763,
+        "per_gate": null,
+        "fresh_cell": 5735809.0,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -553,10 +618,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 415.5739, "basis": "target"},
-        "sensitivities": {"reduction": 21735.64, "update": 776.2729, "token_form": 417.564, "decoding_form": 0.999823, "per_gate": null, "fresh_cell": 5052774.0},
+        "sensitivities": {
+         "reduction": 21735.64,
+         "update": 776.2729,
+         "token_form": 417.564,
+         "decoding_form": 0.999823,
+         "per_gate": null,
+         "fresh_cell": 5052774.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [29]
        },
        "model": {
@@ -567,10 +640,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 413.8229, "basis": "target"},
-        "sensitivities": {"reduction": 21542.15, "update": 769.3624, "token_form": 413.8229, "decoding_form": 0.9997032, "per_gate": null, "fresh_cell": 5007794.0},
+        "sensitivities": {
+         "reduction": 21542.15,
+         "update": 769.3624,
+         "token_form": 413.8229,
+         "decoding_form": 0.9997032,
+         "per_gate": null,
+         "fresh_cell": 5007794.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [29]
        }
       }
@@ -645,10 +726,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 410.3227, "basis": "target"},
-        "sensitivities": {"reduction": 21529.46, "update": 768.9091, "token_form": 413.603, "decoding_form": 0.993392, "per_gate": null, "fresh_cell": 5031446.0},
+        "sensitivities": {
+         "reduction": 21529.46,
+         "update": 768.9091,
+         "token_form": 413.603,
+         "decoding_form": 0.993392,
+         "per_gate": null,
+         "fresh_cell": 5031446.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [29]
        },
        "model": {
@@ -659,10 +748,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 408.8702, "basis": "target"},
-        "sensitivities": {"reduction": 21284.33, "update": 760.1546, "token_form": 408.8702, "decoding_form": 0.9877386, "per_gate": null, "fresh_cell": 4974159.0},
+        "sensitivities": {
+         "reduction": 21284.33,
+         "update": 760.1546,
+         "token_form": 408.8702,
+         "decoding_form": 0.9877386,
+         "per_gate": null,
+         "fresh_cell": 4974159.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [29]
        }
       }
@@ -745,10 +842,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 473.9488, "basis": "target"},
-        "sensitivities": {"reduction": 17312.76, "update": 368.3565, "token_form": 473.9495, "decoding_form": 0.9959238, "per_gate": null, "fresh_cell": 4792840.0},
+        "sensitivities": {
+         "reduction": 17312.76,
+         "update": 368.3565,
+         "token_form": 473.9495,
+         "decoding_form": 0.9959238,
+         "per_gate": null,
+         "fresh_cell": 4792840.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [47, 48, 8]
        },
        "model": {
@@ -759,10 +864,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 502.614, "basis": "target"},
-        "sensitivities": {"reduction": 17023.24, "update": 370.0704, "token_form": 502.614, "decoding_form": 0.9925011, "per_gate": null, "fresh_cell": 4807813.0},
+        "sensitivities": {
+         "reduction": 17023.24,
+         "update": 370.0704,
+         "token_form": 502.614,
+         "decoding_form": 0.9925011,
+         "per_gate": null,
+         "fresh_cell": 4807813.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [47]
        }
       }
@@ -856,10 +969,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 318.6908, "basis": "target"},
-        "sensitivities": {"reduction": 38051.4, "update": 731.7576, "token_form": 318.6909, "decoding_form": 0.977225, "per_gate": null, "fresh_cell": 4903159.0},
+        "sensitivities": {
+         "reduction": 38051.4,
+         "update": 731.7576,
+         "token_form": 318.6909,
+         "decoding_form": 0.977225,
+         "per_gate": null,
+         "fresh_cell": 4903159.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [53, 53]
        },
        "model": {
@@ -870,10 +991,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 330.8567, "basis": "target"},
-        "sensitivities": {"reduction": 38457.36, "update": 739.5646, "token_form": 330.8567, "decoding_form": 0.9711549, "per_gate": null, "fresh_cell": 4935748.0},
+        "sensitivities": {
+         "reduction": 38457.36,
+         "update": 739.5646,
+         "token_form": 330.8567,
+         "decoding_form": 0.9711549,
+         "per_gate": null,
+         "fresh_cell": 4935748.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [53]
        }
       }
@@ -1044,9 +1173,17 @@
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.645903, "share": 0.843542, "numerical": 272737.9, "attention_share": 0.1192637},
        "target": {"rho": 413.4547, "basis": "target"},
-       "sensitivities": {"reduction": 21523.03, "update": 3074.718, "token_form": 413.4547, "decoding_form": 0.9988137, "per_gate": null, "fresh_cell": 4999515.0},
+       "sensitivities": {
+        "reduction": 21523.03,
+        "update": 3074.718,
+        "token_form": 413.4547,
+        "decoding_form": 0.9988137,
+        "per_gate": null,
+        "fresh_cell": 4999515.0,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -1149,9 +1286,17 @@
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.645903, "share": 0.843542, "numerical": 272737.9, "attention_share": 0.1192637},
        "target": {"rho": 413.4547, "basis": "target"},
-       "sensitivities": {"reduction": 21523.03, "update": 3074.718, "token_form": 413.4547, "decoding_form": 0.9988137, "per_gate": null, "fresh_cell": 4999515.0},
+       "sensitivities": {
+        "reduction": 21523.03,
+        "update": 3074.718,
+        "token_form": 413.4547,
+        "decoding_form": 0.9988137,
+        "per_gate": null,
+        "fresh_cell": 4999515.0,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -1254,9 +1399,9 @@
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.09090451},
        "target": {"rho": 1.287338, "basis": "fit"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 0.0, "decoding_form": 0.9800636, "per_gate": null, "fresh_cell": 0.0},
+       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 0.0, "decoding_form": 0.9800636, "per_gate": null, "fresh_cell": 0.0, "fresh_converged": null},
        "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": true,
        "fit_fails": [],
        "rho_fit": 1.287338,
@@ -1361,10 +1506,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 475.9997, "basis": "target"},
-        "sensitivities": {"reduction": 17023.78, "update": 2960.658, "token_form": 476.0006, "decoding_form": 0.9968911, "per_gate": null, "fresh_cell": 4800569.0},
+        "sensitivities": {
+         "reduction": 17023.78,
+         "update": 2960.658,
+         "token_form": 476.0006,
+         "decoding_form": 0.9968911,
+         "per_gate": null,
+         "fresh_cell": 4800569.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [0, 24, 24, 0]
        },
        "model": {
@@ -1375,10 +1528,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 505.8288, "basis": "target"},
-        "sensitivities": {"reduction": 17128.41, "update": 2978.853, "token_form": 505.8288, "decoding_form": 0.9988494, "per_gate": null, "fresh_cell": 4817996.0},
+        "sensitivities": {
+         "reduction": 17128.41,
+         "update": 2978.853,
+         "token_form": 505.8288,
+         "decoding_form": 0.9988494,
+         "per_gate": null,
+         "fresh_cell": 4817996.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [24]
        }
       }
@@ -1475,10 +1636,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 329.6702, "basis": "target"},
-        "sensitivities": {"reduction": 39362.34, "update": 3027.872, "token_form": 329.6704, "decoding_form": 0.996838, "per_gate": null, "fresh_cell": 4994063.0},
+        "sensitivities": {
+         "reduction": 39362.34,
+         "update": 3027.872,
+         "token_form": 329.6704,
+         "decoding_form": 0.996838,
+         "per_gate": null,
+         "fresh_cell": 4994063.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [0, 53, 53, 0]
        },
        "model": {
@@ -1489,10 +1658,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 340.2834, "basis": "target"},
-        "sensitivities": {"reduction": 39553.24, "update": 3042.557, "token_form": 340.2834, "decoding_form": 0.9988248, "per_gate": null, "fresh_cell": 5005738.0},
+        "sensitivities": {
+         "reduction": 39553.24,
+         "update": 3042.557,
+         "token_form": 340.2834,
+         "decoding_form": 0.9988248,
+         "per_gate": null,
+         "fresh_cell": 5005738.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [53]
        }
       }
@@ -1678,9 +1855,17 @@
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.680342, "share": 0.8291986, "numerical": 265072.0, "attention_share": 0.1296857},
        "target": {"rho": 413.7225, "basis": "target"},
-       "sensitivities": {"reduction": 19884.49, "update": 710.1605, "token_form": 413.7225, "decoding_form": 0.9997261, "per_gate": null, "fresh_cell": 4729436.0},
+       "sensitivities": {
+        "reduction": 19884.49,
+        "update": 710.1605,
+        "token_form": 413.7225,
+        "decoding_form": 0.9997261,
+        "per_gate": null,
+        "fresh_cell": 4729436.0,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -1808,9 +1993,17 @@
        "whole_making": "void under the traced class system (te_core 4.12)",
        "fresh": {"order": "chain", "lam": null, "share": 0.02011237, "numerical": null, "attention_share": 0.1723373},
        "target": {"rho": 37.48825, "basis": "target"},
-       "sensitivities": {"reduction": 396.5928, "update": 19.82964, "token_form": 37.48825, "decoding_form": 1.008226, "per_gate": null, "fresh_cell": null},
+       "sensitivities": {
+        "reduction": 396.5928,
+        "update": 19.82964,
+        "token_form": 37.48825,
+        "decoding_form": 1.008226,
+        "per_gate": null,
+        "fresh_cell": null,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.008234,
@@ -1929,9 +2122,17 @@
        "whole_making": "void under the traced class system (te_core 4.12)",
        "fresh": {"order": "chain", "lam": null, "share": 0.0, "numerical": null, "attention_share": 0.03786783},
        "target": {"rho": 1.0, "basis": "target"},
-       "sensitivities": {"reduction": 0.424401, "update": 0.0282934, "token_form": 0.0, "decoding_form": 0.7055986, "per_gate": null, "fresh_cell": null},
+       "sensitivities": {
+        "reduction": 0.424401,
+        "update": 0.0282934,
+        "token_form": 0.0,
+        "decoding_form": 0.7055986,
+        "per_gate": null,
+        "fresh_cell": null,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.000019,
@@ -2045,10 +2246,10 @@
         "partial": false,
         "whole_making": "void under the traced class system (te_core 4.12)",
         "target": {"rho": 3779135.0, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 3779145.0, "decoding_form": 0.08645909, "per_gate": null, "fresh_cell": null},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 3779145.0, "decoding_form": 0.08645909, "per_gate": null, "fresh_cell": null, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
         "b": [2]
        },
        "model": {
@@ -2059,10 +2260,10 @@
         "partial": false,
         "whole_making": "void under the traced class system (te_core 4.12)",
         "target": {"rho": 408.5118, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 408.5118, "decoding_form": 1.008234, "per_gate": null, "fresh_cell": null},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 408.5118, "decoding_form": 1.008234, "per_gate": null, "fresh_cell": null, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
         "b": [5]
        }
       }
@@ -2163,10 +2364,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 42669640.0, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 42669630.0, "decoding_form": 0.6872964, "per_gate": null, "fresh_cell": 4810990.0},
+        "sensitivities": {
+         "reduction": 0.0,
+         "update": 0.0,
+         "token_form": 42669630.0,
+         "decoding_form": 0.6872964,
+         "per_gate": null,
+         "fresh_cell": 4810990.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "update"],
         "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [2]
        },
        "model": {
@@ -2177,10 +2386,10 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 12955.63, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 12955.63, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 4844829.0},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 12955.63, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 4844829.0, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [5]
        }
       }
@@ -2281,10 +2490,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 71327920.0, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 71327820.0, "decoding_form": 0.7560941, "per_gate": null, "fresh_cell": 6077956.0},
+        "sensitivities": {
+         "reduction": 0.0,
+         "update": 0.0,
+         "token_form": 71327820.0,
+         "decoding_form": 0.7560941,
+         "per_gate": null,
+         "fresh_cell": 6077956.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "update"],
         "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [2]
        },
        "model": {
@@ -2295,10 +2512,10 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 11733.26, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 11733.26, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 6042478.0},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 11733.26, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 6042478.0, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [6]
        }
       }
@@ -2399,10 +2616,10 @@
         "partial": false,
         "whole_making": "void under the traced class system (te_core 4.12)",
         "target": {"rho": 5462653.0, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 5462648.0, "decoding_form": 0.08448638, "per_gate": null, "fresh_cell": null},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 5462648.0, "decoding_form": 0.08448638, "per_gate": null, "fresh_cell": null, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
         "b": [3]
        },
        "model": {
@@ -2413,10 +2630,10 @@
         "partial": false,
         "whole_making": "void under the traced class system (te_core 4.12)",
         "target": {"rho": 197.75, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 197.75, "decoding_form": 1.024589, "per_gate": null, "fresh_cell": null},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 197.75, "decoding_form": 1.024589, "per_gate": null, "fresh_cell": null, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
         "b": [7]
        }
       }
@@ -2539,9 +2756,9 @@
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.281715, "share": 0.1636943, "numerical": 51125.62, "attention_share": 0.7898069},
        "target": {"rho": 1669.825, "basis": "target"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 1669.825, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 1240864.0},
+       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 1669.825, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 1240864.0, "fresh_converged": null},
        "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "update"],
        "rho_fit": 1.0,
@@ -2627,9 +2844,9 @@
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.645903, "share": 0.4583596, "numerical": 143575.0, "attention_share": 0.5002847},
        "target": {"rho": 1670.214, "basis": "target"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 1670.214, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 2594280.0},
+       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 1670.214, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 2594280.0, "fresh_converged": null},
        "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "update"],
        "rho_fit": 1.0,
@@ -2715,9 +2932,9 @@
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.246291, "share": 0.5040848, "numerical": 180820.5, "attention_share": 0.4219617},
        "target": {"rho": 212.6351, "basis": "target"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 212.6351, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 4953704.0},
+       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 212.6351, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 4953704.0, "fresh_converged": null},
        "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "update"],
        "rho_fit": 1.0,
@@ -2800,10 +3017,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 40983030.0, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 40983160.0, "decoding_form": 0.5001703, "per_gate": null, "fresh_cell": 3456759.0},
+        "sensitivities": {
+         "reduction": 0.0,
+         "update": 0.0,
+         "token_form": 40983160.0,
+         "decoding_form": 0.5001703,
+         "per_gate": null,
+         "fresh_cell": 3456759.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "update"],
         "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [2]
        },
        "model": {
@@ -2814,10 +3039,10 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 8138.254, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 8138.254, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 3509522.0},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 8138.254, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 3509522.0, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [6]
        }
       }
@@ -2901,10 +3126,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 60155300.0, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 60155390.0, "decoding_form": 0.5713246, "per_gate": null, "fresh_cell": 4575552.0},
+        "sensitivities": {
+         "reduction": 0.0,
+         "update": 0.0,
+         "token_form": 60155390.0,
+         "decoding_form": 0.5713246,
+         "per_gate": null,
+         "fresh_cell": 4575552.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "update"],
         "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [5]
        },
        "model": {
@@ -2915,10 +3148,10 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 5978.385, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 5978.385, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 4561112.0},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 5978.385, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 4561112.0, "fresh_converged": null},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [13]
        }
       }
@@ -3073,9 +3306,17 @@
        "whole_making": "void under the traced class system (te_core 4.12)",
        "fresh": {"order": "chain", "lam": null, "share": 0.00775526, "numerical": null, "attention_share": 0.1666025},
        "target": {"rho": 18.74757, "basis": "target"},
-       "sensitivities": {"reduction": 225.6442, "update": 11.28221, "token_form": 18.74757, "decoding_form": 1.004553, "per_gate": null, "fresh_cell": null},
+       "sensitivities": {
+        "reduction": 225.6442,
+        "update": 11.28221,
+        "token_form": 18.74757,
+        "decoding_form": 1.004553,
+        "per_gate": null,
+        "fresh_cell": null,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.004558,
@@ -3177,9 +3418,17 @@
        "whole_making": "void under the traced class system (te_core 4.12)",
        "fresh": {"order": "chain", "lam": null, "share": 0.0007846717, "numerical": null, "attention_share": 0.03708479},
        "target": {"rho": 23.80487, "basis": "target"},
-       "sensitivities": {"reduction": 37.67036, "update": 2.511358, "token_form": 23.80487, "decoding_form": 0.7427699, "per_gate": null, "fresh_cell": null},
+       "sensitivities": {
+        "reduction": 37.67036,
+        "update": 2.511358,
+        "token_form": 23.80487,
+        "decoding_form": 0.7427699,
+        "per_gate": null,
+        "fresh_cell": null,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.000757,
@@ -3279,9 +3528,17 @@
        "whole_making": "void under the traced class system (te_core 4.12)",
        "fresh": {"order": "chain", "lam": null, "share": 0.0004471915, "numerical": null, "attention_share": 0.03712898},
        "target": {"rho": 15.25384, "basis": "target"},
-       "sensitivities": {"reduction": 22.04138, "update": 1.469425, "token_form": 15.25384, "decoding_form": 0.7422794, "per_gate": null, "fresh_cell": null},
+       "sensitivities": {
+        "reduction": 22.04138,
+        "update": 1.469425,
+        "token_form": 15.25384,
+        "decoding_form": 0.7422794,
+        "per_gate": null,
+        "fresh_cell": null,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.000509,
@@ -3376,9 +3633,17 @@
        "whole_making": "void under the traced class system (te_core 4.12)",
        "fresh": {"order": "chain", "lam": null, "share": 3.66201e-05, "numerical": null, "attention_share": 0.1687454},
        "target": {"rho": 1.0, "basis": "target"},
-       "sensitivities": {"reduction": 2.968137, "update": 0.1484069, "token_form": 0.2638425, "decoding_form": 0.9999999, "per_gate": null, "fresh_cell": null},
+       "sensitivities": {
+        "reduction": 2.968137,
+        "update": 0.1484069,
+        "token_form": 0.2638425,
+        "decoding_form": 0.9999999,
+        "per_gate": null,
+        "fresh_cell": null,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.000111,
@@ -3473,9 +3738,17 @@
        "whole_making": "void under the traced class system (te_core 4.12)",
        "fresh": {"order": "chain", "lam": null, "share": 0.0, "numerical": null, "attention_share": 0.03718992},
        "target": {"rho": 1.0, "basis": "target"},
-       "sensitivities": {"reduction": 0.4906123, "update": 0.03270749, "token_form": 0.0, "decoding_form": 0.7414784, "per_gate": null, "fresh_cell": null},
+       "sensitivities": {
+        "reduction": 0.4906123,
+        "update": 0.03270749,
+        "token_form": 0.0,
+        "decoding_form": 0.7414784,
+        "per_gate": null,
+        "fresh_cell": null,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+       "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.000019,
@@ -3563,10 +3836,18 @@
         "partial": false,
         "whole_making": "void under the traced class system (te_core 4.12)",
         "target": {"rho": 400.8307, "basis": "target"},
-        "sensitivities": {"reduction": 23.5721, "update": 1.178605, "token_form": 401.303, "decoding_form": 0.999972, "per_gate": null, "fresh_cell": null},
+        "sensitivities": {
+         "reduction": 23.5721,
+         "update": 1.178605,
+         "token_form": 401.303,
+         "decoding_form": 0.999972,
+         "per_gate": null,
+         "fresh_cell": null,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
         "b": [21]
        },
        "model": {
@@ -3577,10 +3858,18 @@
         "partial": false,
         "whole_making": "void under the traced class system (te_core 4.12)",
         "target": {"rho": 5.802122, "basis": "target"},
-        "sensitivities": {"reduction": 23.717, "update": 1.18585, "token_form": 5.802122, "decoding_form": 1.000444, "per_gate": null, "fresh_cell": null},
+        "sensitivities": {
+         "reduction": 23.717,
+         "update": 1.18585,
+         "token_form": 5.802122,
+         "decoding_form": 1.000444,
+         "per_gate": null,
+         "fresh_cell": null,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
         "b": [21]
        }
       }
@@ -3666,10 +3955,18 @@
         "partial": false,
         "whole_making": "void under the traced class system (te_core 4.12)",
         "target": {"rho": 45.3986, "basis": "target"},
-        "sensitivities": {"reduction": 180.9999, "update": 11.31249, "token_form": 45.39846, "decoding_form": 0.9991275, "per_gate": null, "fresh_cell": null},
+        "sensitivities": {
+         "reduction": 180.9999,
+         "update": 11.31249,
+         "token_form": 45.39846,
+         "decoding_form": 0.9991275,
+         "per_gate": null,
+         "fresh_cell": null,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
         "b": [0, 17, 17]
        },
        "model": {
@@ -3680,10 +3977,18 @@
         "partial": false,
         "whole_making": "void under the traced class system (te_core 4.12)",
         "target": {"rho": 45.20673, "basis": "target"},
-        "sensitivities": {"reduction": 181.2103, "update": 11.32565, "token_form": 45.20673, "decoding_form": 1.002669, "per_gate": null, "fresh_cell": null},
+        "sensitivities": {
+         "reduction": 181.2103,
+         "update": 11.32565,
+         "token_form": 45.20673,
+         "decoding_form": 1.002669,
+         "per_gate": null,
+         "fresh_cell": null,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
         "b": [17]
        }
       }
@@ -3780,10 +4085,18 @@
         "partial": false,
         "whole_making": "void under the traced class system (te_core 4.12)",
         "target": {"rho": 44.77084, "basis": "target"},
-        "sensitivities": {"reduction": 454.2071, "update": 26.71806, "token_form": 44.77077, "decoding_form": 1.004688, "per_gate": null, "fresh_cell": null},
+        "sensitivities": {
+         "reduction": 454.2071,
+         "update": 26.71806,
+         "token_form": 44.77077,
+         "decoding_form": 1.004688,
+         "per_gate": null,
+         "fresh_cell": null,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
         "b": [0, 18, 18]
        },
        "model": {
@@ -3794,10 +4107,18 @@
         "partial": false,
         "whole_making": "void under the traced class system (te_core 4.12)",
         "target": {"rho": 45.19439, "basis": "target"},
-        "sensitivities": {"reduction": 454.9642, "update": 26.7626, "token_form": 45.19439, "decoding_form": 1.008223, "per_gate": null, "fresh_cell": null},
+        "sensitivities": {
+         "reduction": 454.9642,
+         "update": 26.7626,
+         "token_form": 45.19439,
+         "decoding_form": 1.008223,
+         "per_gate": null,
+         "fresh_cell": null,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
         "b": [18]
        }
       }
@@ -3894,10 +4215,18 @@
         "partial": false,
         "whole_making": "void under the traced class system (te_core 4.12)",
         "target": {"rho": 20.44363, "basis": "target"},
-        "sensitivities": {"reduction": 377.0092, "update": 10.18944, "token_form": 20.4436, "decoding_form": 0.9989723, "per_gate": null, "fresh_cell": null},
+        "sensitivities": {
+         "reduction": 377.0092,
+         "update": 10.18944,
+         "token_form": 20.4436,
+         "decoding_form": 0.9989723,
+         "per_gate": null,
+         "fresh_cell": null,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
         "b": [0, 38, 38]
        },
        "model": {
@@ -3908,10 +4237,18 @@
         "partial": false,
         "whole_making": "void under the traced class system (te_core 4.12)",
         "target": {"rho": 20.5631, "basis": "target"},
-        "sensitivities": {"reduction": 372.862, "update": 10.07735, "token_form": 20.5631, "decoding_form": 1.007894, "per_gate": null, "fresh_cell": null},
+        "sensitivities": {
+         "reduction": 372.862,
+         "update": 10.07735,
+         "token_form": 20.5631,
+         "decoding_form": 1.007894,
+         "per_gate": null,
+         "fresh_cell": null,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
         "b": [38]
        }
       }
@@ -4008,10 +4345,18 @@
         "partial": false,
         "whole_making": "void under the traced class system (te_core 4.12)",
         "target": {"rho": 20.19619, "basis": "target"},
-        "sensitivities": {"reduction": 904.4564, "update": 23.80148, "token_form": 20.19622, "decoding_form": 1.015281, "per_gate": null, "fresh_cell": null},
+        "sensitivities": {
+         "reduction": 904.4564,
+         "update": 23.80148,
+         "token_form": 20.19622,
+         "decoding_form": 1.015281,
+         "per_gate": null,
+         "fresh_cell": null,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
         "b": [0, 39, 39]
        },
        "model": {
@@ -4022,10 +4367,18 @@
         "partial": false,
         "whole_making": "void under the traced class system (te_core 4.12)",
         "target": {"rho": 20.51047, "basis": "target"},
-        "sensitivities": {"reduction": 901.9155, "update": 23.73462, "token_form": 20.51047, "decoding_form": 1.02458, "per_gate": null, "fresh_cell": null},
+        "sensitivities": {
+         "reduction": 901.9155,
+         "update": 23.73462,
+         "token_form": 20.51047,
+         "decoding_form": 1.02458,
+         "per_gate": null,
+         "fresh_cell": null,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell"],
+        "unmeasured": ["fresh_products", "token", "decoding", "per_gate", "fresh_cell", "fresh_converged"],
         "b": [39]
        }
       }
@@ -4178,9 +4531,17 @@
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.645903, "share": 0.1999576, "numerical": 64685.46, "attention_share": 0.02827088},
        "target": {"rho": 98.00745, "basis": "target"},
-       "sensitivities": {"reduction": 21865.37, "update": 182.2114, "token_form": 98.00745, "decoding_form": 0.236764, "per_gate": null, "fresh_cell": 1186017.0},
+       "sensitivities": {
+        "reduction": 21865.37,
+        "update": 182.2114,
+        "token_form": 98.00745,
+        "decoding_form": 0.236764,
+        "per_gate": null,
+        "fresh_cell": 1186017.0,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -4274,9 +4635,17 @@
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.645903, "share": 0.8442932, "numerical": 273125.4, "attention_share": 0.1193699},
        "target": {"rho": 413.8229, "basis": "target"},
-       "sensitivities": {"reduction": 21542.15, "update": 769.3624, "token_form": 413.8229, "decoding_form": 0.9997032, "per_gate": null, "fresh_cell": 5007794.0},
+       "sensitivities": {
+        "reduction": 21542.15,
+        "update": 769.3624,
+        "token_form": 413.8229,
+        "decoding_form": 0.9997032,
+        "per_gate": null,
+        "fresh_cell": 5007794.0,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -4370,9 +4739,17 @@
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.645903, "share": 0.0265902, "numerical": 8601.82, "attention_share": 0.003759439},
        "target": {"rho": 13.03295, "basis": "target"},
-       "sensitivities": {"reduction": 21976.9, "update": 24.23032, "token_form": 13.03295, "decoding_form": 0.03148468, "per_gate": null, "fresh_cell": 157715.6},
+       "sensitivities": {
+        "reduction": 21976.9,
+        "update": 24.23032,
+        "token_form": 13.03295,
+        "decoding_form": 0.03148468,
+        "per_gate": null,
+        "fresh_cell": 157715.6,
+        "fresh_converged": null
+       },
        "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -4468,10 +4845,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 312.6342, "basis": "target"},
-        "sensitivities": {"reduction": 6058.645, "update": 757.3307, "token_form": 312.6333, "decoding_form": 0.5736186, "per_gate": null, "fresh_cell": 2310280.0},
+        "sensitivities": {
+         "reduction": 6058.645,
+         "update": 757.3307,
+         "token_form": 312.6333,
+         "decoding_form": 0.5736186,
+         "per_gate": null,
+         "fresh_cell": 2310280.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [0, 9]
        },
        "model": {
@@ -4482,10 +4867,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 352.2618, "basis": "target"},
-        "sensitivities": {"reduction": 6056.822, "update": 757.1027, "token_form": 352.2618, "decoding_form": 0.535919, "per_gate": null, "fresh_cell": 2309572.0},
+        "sensitivities": {
+         "reduction": 6056.822,
+         "update": 757.1027,
+         "token_form": 352.2618,
+         "decoding_form": 0.535919,
+         "per_gate": null,
+         "fresh_cell": 2309572.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [9]
        }
       }
@@ -4582,10 +4975,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 222.4367, "basis": "target"},
-        "sensitivities": {"reduction": 12377.86, "update": 728.1092, "token_form": 222.4365, "decoding_form": 0.561411, "per_gate": null, "fresh_cell": 2315959.0},
+        "sensitivities": {
+         "reduction": 12377.86,
+         "update": 728.1092,
+         "token_form": 222.4365,
+         "decoding_form": 0.561411,
+         "per_gate": null,
+         "fresh_cell": 2315959.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [0, 18]
        },
        "model": {
@@ -4596,10 +4997,18 @@
         "partial": true,
         "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
         "target": {"rho": 249.6824, "basis": "target"},
-        "sensitivities": {"reduction": 12361.57, "update": 727.1512, "token_form": 249.6824, "decoding_form": 0.5110959, "per_gate": null, "fresh_cell": 2312911.0},
+        "sensitivities": {
+         "reduction": 12361.57,
+         "update": 727.1512,
+         "token_form": 249.6824,
+         "decoding_form": 0.5110959,
+         "per_gate": null,
+         "fresh_cell": 2312911.0,
+         "fresh_converged": null
+        },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate", "fresh_converged"],
         "b": [18]
        }
       }
