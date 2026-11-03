@@ -2,8 +2,13 @@
 
 A search agent writes ordinary PyTorch training code. `capture_step` traces one whole training step of it (forward,
 autograd's backward and the optimizer's update) into an ATen graph with shapes and dtypes and no values, and reads from
-that graph what te_core scores: every multiplication's MACs, the role of each GEMM, its token dims, and the updated MACs
-upstream of it. A run's circuit C is the sum of its distinct step graphs (`capture_run`), so the size of C is exact in
+that graph what te_core scores: every multiplication's MACs, the role of each GEMM, its token dims, the updated MACs
+upstream of it, and the training formalism's quantities measured on the step as a circuit of values and gates
+(`circuit.py`: σ and the affected share, the tokens consumed, τ, a, the profiles u_in(x) and u(x) with the no-update
+share t, and Δ_grad).
+Updated means update-dependent: computed, through any path, from a value the run produced and
+carries across steps (the trained weights, optimizer state, any buffer it writes from them), so a model scores the same
+however its circuit is written (LoRA merged or not, a tied lookup, a cache of θ). A run's circuit C is the sum of its distinct step graphs (`capture_run`), so the size of C is exact in
 MACs without building a gate. The trace is `make_fx(tracing_mode="fake")` under `FakeTensorMode`, on a fake copy of the
 model and a fresh optimizer of the same class and groups, so the caller's objects are never touched and nothing runs.
 
@@ -13,26 +18,37 @@ from te_core.capture.lower import lower
 
 g = capture_step(model, torch.optim.AdamW(model.parameters()), loss_fn, (ids, labels), updated={"blocks.1.mlp.up.weight"})
 g.macs, g.c_macs              # the GEMMs' MACs; the step's share of the size of C as te_core.flops counts it
-g.role_macs("using")          # using / producing / neither (structure.py's docstring has the definitions)
-g.phi(D)                      # the share of the step's MACs in using GEMMs with at least D updated MACs per token upstream
+g.role_macs("updated")        # updated / producing / neither (structure.py's docstring has the definitions)
+g.phi(D)                      # the share of the step's |C| in updated MACs with at least D updated MACs per token upstream
+g.cut_bits                    # the narrowest cut in bits between the gradient side and the values carried to the next step
+g.formalism                   # a recorded program's measured step: te_core.capture.circuit.measure's quantities
 run = capture_run([(1, g0), (999, g1)])       # (steps, StepGraph or a thunk that captures it)
 annotate(run.record())        # te_core.annotate reads a captured run as it reads a counted one
 lower(g)                      # optional: gates per Definition and the share of MACs lowered
 ~~~
 
 `capture_fn(step_fn, model, batch, optimizers=...)` traces any step function (MeZO's two forward passes, a hand-written
-update); `phase("name")` labels a stretch of it. `updated` is the harness's set of parameters that differ from θ when the
-step reads them (default: the ones the step trains); `schedule_updated` gives it for each step of a schedule, and
-`StepGraph.with_updated` reclassifies a graph without tracing it again.
+update); `phase("name")` labels a stretch of it. `updated` names the parameters that differ from θ when the step reads
+them (default: the ones the step writes, and every buffer written from them); `schedule_updated` gives it for each step
+of a schedule, and `StepGraph.with_updated` reclassifies a graph without tracing it again.
 
 ## Against te_core.flops
 
 `RunGraph.record()` is in `te_core.flops.Counter.record()`'s form, and both count the op sets `te_core.flops` names
-(`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`). On the toolsmith's tiny tied-head model and the tests'
-two-layer decoder (full training, top layer only, LoRA with its adapters in θ or new), the capture's record and the
-Counter's runtime record of the same three steps agree on every step's tokens, GEMM and elementwise MACs, updated MACs,
-updated MACs per token, depth D, depth profile, bits and φ. A capture has no values, so the records' weight digests,
-which counterexample checks read, come from the Counter alone.
+(`ELEMENTWISE_NAMES`, `SCALED_NAMES`, `FUSED_OPTIMIZER_MACS`, `LINALG_NAMES`). On the tests' two-layer decoder (full
+training, top layer only, LoRA with its adapters in θ or new), the capture's record and the Counter's runtime record of
+the same three steps agree on every step's tokens, GEMM and elementwise MACs. The structure te_core 4.0 scores (updated
+MACs, depth, the formalism's quantities) is the capture's: the Counter's rows keep the weight-operand rule it had before
+4.0. A capture has no values, so the records' weight digests, which counterexample checks read, come from the Counter
+alone.
+
+## The measured circuit
+
+`te_core.capture.script` traces a recorded program's measured step and builds it as a `StepCircuit`: one vertex per
+value of the step (and every value it carries from the step before), its gates priced by `te_core.gates`, its phase,
+whether it depends on θ' (the carried values) and on the step's tokens, and the positions of each token input it
+reads. `circuit.measure` reads the formalism's quantities from it, each defined in the module's docstring; `script
+--circuit F.npz` saves it, and `python -m te_core.capture.circuit F.npz` measures a saved one again.
 
 ## Refusals
 
@@ -49,8 +65,12 @@ which counterexample checks read, come from the Counter alone.
 
 ## Limits
 
-- Upstream counts are per GEMM node: exact where a norm, softmax or contraction mixes a token's row between two using
-  GEMMs, an upper bound otherwise (an up projection feeding its own layer's down projection).
+- Upstream counts are per MAC node: exact where a norm, softmax or contraction mixes a token's row between two updated
+  nodes, an upper bound otherwise (an up projection feeding its own layer's down projection).
+- Dependence follows the graph's dataflow: a value computed from θ, constants and token data alone is a cache, even
+  when the program carries it from step to step. A Python scalar read from a tensor carries its tensor's dependence only
+  in a recorded program (`te_core.capture.script`).
+- The cut prices a value at its dtype's width: a sign kept as a float costs 32 bits per element, as a bool one.
 - The traced optimizer step is its first, with its state created in the graph; later steps run the same ops.
 - Attention is traced on SDPA's math backend, so its scalings show as elementwise multiplications, which a flash kernel
   doesn't run.

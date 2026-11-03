@@ -1,6 +1,7 @@
-"""te_core.rescore scores ledger rows with an analysis's formalism blocks, joined by run and MACs, by the formalism v2
-(a frozen tail always charged), cuts the console's panels, and leaves out the valid rows the analysis has no block
-for; with --stubs every valid row is scored on te_core.formalism's stubs."""
+"""te_core.rescore scores the ledger rows whose formalism block was measured on a traced step, by the formalism v2 (a
+frozen tail always charged), beside an analysis's blocks for the same checkpoints, and cuts the console's panels; with
+--quantities analysis it scores the analysis's blocks, joined by run and MACs, and leaves out the valid rows the
+analysis has no block for; with --stubs every valid row is scored on te_core.formalism's stubs."""
 import json
 
 import pytest
@@ -42,8 +43,21 @@ def build(subs, launch, starts, counted, g):
 '''
 
 
+TRACE = {"tau_ids": 1.125, "tau_other_bits": 0.0, "a_bits": 512 * 16.0, "u1_bits": 4e8, "tail_share": 0.3,
+         "u_in": [[0.0, 0.0], [0.0, 1e8], [0.5, 4e8], [1.0, 4e8]], "frozen_tail_share": 0.1, "update_cut_bits": 4e8}
+
+
 def ledger_rows():
-    return [r | {"macs": m} for r, m in zip(rows(), (4e14, 1e15, 6e14, 2e15))]
+    """r0 to r3 at their MACs; r0 and r1 measured on a traced step (σ 0.92, affected share 0.85, the step's tokens,
+    Δ_grad 2e9)."""
+    out = [r | {"macs": m} for r, m in zip(rows(), (4e14, 1e15, 6e14, 2e15))]
+    for r in out[:2]:
+        f = formalism.of_trace(TRACE)
+        r["te_core"] = "4.0"
+        g = GATES_PER_MAC * r["macs"]
+        r["formalism"] = f | {"parts": [{"gates": g, "tokens": 1e6, "steps": 10, "token_gates": 0.92 * g,
+                                         "affected_gates": 0.85 * g, "delta_grad_bits": 2e9}]}
+    return out
 
 
 def run(tmp_path, monkeypatch, *extra):
@@ -55,7 +69,7 @@ def run(tmp_path, monkeypatch, *extra):
                                                                       "root": tmp_path})())
     out = tmp_path / "out"
     assert rescore.main(["--out", str(out), "--pin", "pin", "--manifest", str(man), "--analysis", str(fake),
-                         "--scorer", str(tmp_path), *extra]) == 0
+                         "--scorer", str(tmp_path), *(extra or ("--quantities", "analysis"))]) == 0
     return out, fake
 
 
@@ -101,7 +115,7 @@ def test_an_attached_block_is_what_the_formalism_measures(tmp_path, monkeypatch)
                                                     records[c["id"]]["family"]) for c in cps}
     got, source = rescore.attach(ledger_rows(), blocks)
     assert source == {"r0": "analysis", "r1": "analysis", "r2": "analysis", "r3": "stubs"}
-    assert got[0]["family"] == "full" and "family" not in got[3]
+    assert got[0]["family"] == "full" and "family" not in got[3] and "trace" not in got[0]["formalism"]
     m = formalism.measure(got[0], SHAPE)
     assert m.gates == pytest.approx(GATES_PER_MAC * 4e14) and m.tail_share == 0.5 and m.sigma == pytest.approx(0.9)
     assert m.delta_bits == m.u1_bits == 8 * 9e7 and m.tau_bits == 16
@@ -120,7 +134,60 @@ def test_the_cut_panels_are_written_and_never_put(tmp_path, monkeypatch):
 def test_stubs_score_every_valid_row(tmp_path, monkeypatch):
     out, _ = run(tmp_path, monkeypatch, "--stubs")
     fr = json.loads((out / "frontier.json").read_text())
-    assert fr["quantities"] == "stubs: --stubs" and fr["not_analysed"] == []
+    assert fr["quantities"] == "stubs: --stubs" and fr["not_analysed"] == [] == fr["not_measured"]
     kept = [json.loads(line) for line in (out / "formalism.jsonl").read_text().splitlines()]
     assert [k["id"] for k in kept] == ["r0", "r1", "r2", "r3"] and {k["source"] for k in kept} == {"stubs"}
     assert not (out / "analysis-gates.json").exists()
+
+
+def test_charge_context_charges_each_run_its_facts_place(tmp_path, monkeypatch):
+    """--charge-context: r0's run changes the embedding, so its K/V are affected from layer 0 and, with a = d_model·16
+    at the reference policy's k, ρ is infinite there; r1's run has no changed tensors in the facts, so it keeps v2's ρ,
+    labelled. The default scores the same rows uncharged; the option without --facts is refused."""
+    facts = tmp_path / "facts.json"
+    facts.write_text(json.dumps({"run0": {"changed": ["embed"]}}))
+    base, _ = run(tmp_path, monkeypatch, "--facts", str(facts))
+    plain = [json.loads(line) for line in (base / "formalism.jsonl").read_text().splitlines()]
+    assert all("context" not in k["formalism"] for k in plain)
+    out, _ = run(tmp_path, monkeypatch, "--facts", str(facts), "--charge-context")
+    assert json.loads((out / "frontier.json").read_text())["quantities"] == "measured (trace; t literal); context charged"
+    k0, k1 = (json.loads(line) for line in (out / "formalism.jsonl").read_text().splitlines())
+    assert k0["formalism"]["context"] == formalism.context(["embed"], SHAPE)
+    assert "context" not in k1["formalism"] and k1["formalism"]["labels"]["context"] == rescore.UNCHARGED
+    c, k = policy.cells(SHAPE)["reference"]
+    m0, m1 = formalism.measure(k0, SHAPE), formalism.measure(k1, SHAPE)
+    assert m0.labels["context"] == formalism.CONTEXT and formalism.at(m0, c, k)["rho"] == float("inf")
+    assert formalism.at(m1, c, k)["rho"] == formalism.at(formalism.measure(plain[1], SHAPE), c, k)["rho"]
+    with pytest.raises(SystemExit, match="--facts"):
+        run(tmp_path, monkeypatch, "--charge-context")
+
+
+@pytest.mark.parametrize("tail", ["literal", "frozen"])
+def test_measured_rows_are_scored_beside_the_analysis(tmp_path, monkeypatch, tail):
+    """The default scores r0 and r1, the rows measured on a traced step, and leaves out r2 and r3; τ is the traced
+    positions at ⌈log2 V⌉ bits; u is 0 up to t, then u_in; compare.json puts each beside the analysis's block for its
+    checkpoint. --tail frozen reads t as the trace's contiguous frozen tail and rebuilds u on it."""
+    out, _ = run(tmp_path, monkeypatch, "--tail", tail)
+    fr = json.loads((out / "frontier.json").read_text())
+    assert fr["quantities"] == f"measured (trace; t {tail})" and fr["not_measured"] == ["r2", "r3"]
+    kept = [json.loads(line) for line in (out / "formalism.jsonl").read_text().splitlines()]
+    assert [k["id"] for k in kept] == ["r0", "r1"] and {k["source"] for k in kept} == {"measured"}
+    t = 0.3 if tail == "literal" else 0.1
+    u_in = tuple(map(tuple, TRACE["u_in"]))
+    assert {k["formalism"]["tail_share"] for k in kept} == {t}
+    assert all(k["formalism"]["u"] == [list(p) for p in formalism.with_tail(u_in, t)] for k in kept)
+    c = json.loads((out / "compare.json").read_text())
+    (r0, r1) = c["rows"]
+    assert r0["measured"]["tau_bits"] == pytest.approx(1.125 * 16) and r0["analysis"]["tau_bits"] == 16
+    assert r0["ratio"]["sigma"] == pytest.approx(0.92 / 0.9) and r0["ratio"]["affected_share"] == pytest.approx(0.85 / 0.8)
+    assert r0["ratio"]["a_bits"] == 1 and r0["measured"]["tail_share"] == t
+    assert r0["ratio"]["u1_bits"] == pytest.approx(4e8 / (8 * 9e7))
+    assert r0["update_cut_over_delta"] == pytest.approx(4e8 / (8 * 9e7))
+    assert {"rho", "fit", "x0", "s_star"} <= set(r0["cell"]) and r0["cell_analysis"]["x0"] == 0
+    f = r0["factors"]
+    assert f["sigma"] * f["reach"] * f["s"] * f["a"] * f["alpha"] / f["room"] == pytest.approx(
+        r0["cell"]["slowdown"] / r0["cell_analysis"]["slowdown"])
+    assert {(e["start"], e["drop"]) for e in c["S"]} == {("s1", d) for d in (0.005, 0.01, 0.02, 0.05)}
+    routed = [e["routes"]["measured"] for e in c["S"] if e["measured"]["id"]]
+    assert routed and all(w["id"] in {"r0", "r1"} and w["factors"] for w in routed)
+    assert "| s1 |" in (out / "compare.md").read_text()

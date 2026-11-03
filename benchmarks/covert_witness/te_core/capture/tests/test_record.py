@@ -41,7 +41,8 @@ def test_record_rows_and_step_order():
     assert [s["step"] for s in steps] == [0, 1, 2, 3]
     assert steps[0]["struct"] == steps[3]["struct"] != steps[1]["struct"] == steps[2]["struct"]
     assert rec["structures"][steps[0]["struct"]]["updated"] == []
-    # one row per forward using GEMM: [per-token MACs, updated MACs per token upstream, MACs, tokens, weight bits]
+    # one row per forward updated MAC node: [MACs per token, updated MACs per token upstream, MACs, tokens, the
+    # narrowest width of its update-dependent operands]
     assert rec["structures"][steps[1]["struct"]]["updated"] == [[FI * H, 0, N * FI * H, N, 32],
                                                                [H * O, FI * H, N * H * O, N, 32]]
     assert [(s["tokens"], s["macs"], s["matmul_macs"], s["elementwise_macs"]) for s in steps] == [(N, GEMM + PARAMS, GEMM,
@@ -68,9 +69,13 @@ def test_bf16_autocast_reads_through_the_casts():
     ids = torch.zeros(B, S, dtype=torch.long)
     g = capture_step(model, torch.optim.AdamW(model.parameters()), loss, (ids, ids))
     assert g.macs == 3 * T * Hd * V + L * (12 * T * Hd * Hd + 6 * T * Hd * I + 6 * T * S * Hd)
-    using = [m for m in g.matmuls if m.role == "using" and m.phase == "forward"]
-    assert len(using) == 6 * L + 1 and all(m.dtypes == ("bfloat16", "bfloat16") for m in using)
-    # the GEMMs at bf16; the norms, which autocast runs in fp32, read their updated gains at 32 bits, and so does the
-    # updated table's lookup
-    assert [m.node for m in g.using_elementwise[:1]] == ["embedding"] and len(g.using_elementwise) == 2 * L + 2
+    updated = [m for m in g.matmuls if m.role == "updated" and m.phase == "forward"]
+    assert len(updated) == 8 * L + 1
+    # the projections at bf16 (SDPA's math backend runs QK and PV in fp32); the norms, which autocast runs in fp32, read
+    # their gains at 32 bits
+    assert all(m.dtypes == (("float32",) if m.op == "aten.bmm.default" else ("bfloat16",)) * 2 for m in updated)
+    assert len(g.updated_elementwise) == 4 * L + 1
     assert sorted({r[4] for r in g.structure()["updated"]}) == [16, 32]
+    # the cut: the GEMMs' weights at the 16 bits the forward reads them at, the table and the gains at 32
+    gemm = L * (4 * Hd * Hd + 2 * Hd * I) + Hd * V
+    assert g.cut_bits == 16 * gemm + 32 * (V * Hd + (2 * L + 1) * 2 * Hd)
