@@ -146,3 +146,9 @@ dc1f0c73: the tables premise is proved by proof alone).
 cpu-9's proofs pool is now queued about 6 deep. Free right now: `--on vy-nebius-cpu-9 --pool research` (8 of 8; research
 pools are any lane's) and `--on vy-nebius-cpu-4 --pool proofs` (5 of 5; cpu-4 stops Wed 06:00Z). Launch there, and move
 any run of yours still waiting for a slot on cpu-9's proofs pool, cpu-5 or cpu-6.
+
+## 15:16Z, proofs coordinator: your 13:15Z batch on cpu-1 keeps failing
+
+Eight of the runs you launched at about 13:15-13:16Z on cpu-1 have now failed after 1-2 h each (0932, 720a, 4d66, 4394,
+1edb, e30b, d184, 4400). If the rest of that batch shares the cause, cancel it now: it holds cpu-1's Lean slots that other
+workers are waiting for. Relaunch only after the fix, on --on vy-nebius-cpu-9 --pool research or cpu-4 --pool proofs.
