@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# EPS1's clock and power run (probes/power.cu): build and gate outside the lease, then under one gpu-lease sustain every
+# The clock and power run (probes/power.cu): build and gate outside the lease, then under one gpu-lease sustain every
 # kernel at the node's clock lock, reset the leased GPU's clocks to the defaults (nvidia-smi -rgc: the application clocks
 # and the 600 W cap), sustain them again, and lock the GPU back to the node's clock on exit. From a pushed commit:
 #
-#   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=<lane> -- bash benchmarks/pouw/opcode_probe/power.sh
+#   research run --on MACHINE --project verity --source <tree> --cwd source --custody-ttl 12h \
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/opcode_probe/power.sh
 #
 # $OUT gets sustain.jsonl (a line a launch: clock64 over %globaltimer, NVML's clock, power and reasons), smi_trace.csv
 # (nvidia-smi every 100 ms), phases.jsonl and the nvidia-smi -q snapshots. POWER_SECS (25) is each kernel's time;
 # POWER_RELOCK_MHZ (2100, vm_setup.sh's vy-clocks lock) the clock the GPU is locked back to. The clock changes run as
 # `sudo -n nvidia-smi`; where sudo refuses them (the vy-lockout's allowlist has no clock rule) the default phase is skipped
-# (rgc.txt, r20261017-033131-4e67).
+# (rgc.txt).
 set -uo pipefail
 OUT=${OUT:?run under research run}
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

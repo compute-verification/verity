@@ -29,7 +29,7 @@ round `k + qOff sch ℓ`.
 namespace FlockVBridge.Family
 
 open Flock FlockSoundness.Refine
-open Flock.RecAlgebra (Messages LSt Coins)
+open Flock.RecAlgebra (Messages LSt CoinSource)
 open FlockComplete.Replay.Lg (qOff)
 
 /-- Ligerito's first round at a shape with `2 + n` claims: after the zerocheck's `3 + (m − 6)` rounds, the lincheck's
@@ -65,7 +65,7 @@ theorem levelsLoop_pos {sch : Flock.Schedule} {k₀ : ℕ}
     ∀ (fuel i split : ℕ) (levels : Array (Array F256)) (e : ℕ) (st : LSt F128) (k : ℕ)
       (out : Array (Array F256) × ℕ) (st' : LSt F128) (k' : ℕ), i + fuel ≤ sch.levels.size - 1 →
       k = k₀ + sch.k0 + 9 + 11 * i →
-      Flock.RecAlgebra.levelsLoop sch M (sch.levels.size - 1) fuel i split levels e st k (Coins.ofRounds w) =
+      Flock.RecAlgebra.levelsLoop sch M (sch.levels.size - 1) fuel i split levels e st k (CoinSource.ofRounds w) =
         .ok ((out, st'), k') →
       st'.conss.toList.map (·.pos) = st.conss.toList.map (·.pos) ++
           (List.range' (i + 1) fuel).map (fun l => positions (sch.levels.getD l default) w[k₀ + qOff sch l]!) ∧
@@ -133,7 +133,7 @@ of them, from its first round `k₀`, recording level `l`'s context `l`-th. -/
 theorem ligeritoRun_pos {sch : Flock.Schedule} {st₀ : LSt F128} {k₀ k' : ℕ}
     {out : Array F256 × Array (Array F256) × ℕ} {stV : LSt F128} (h0 : st₀.conss = #[]) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
-    (hrun : (Flock.RecAlgebra.ligeritoRun sch M).run st₀ k₀ (Coins.ofRounds w) = .ok ((out, stV), k')) :
+    (hrun : (Flock.RecAlgebra.ligeritoRun sch M).run st₀ k₀ (CoinSource.ofRounds w) = .ok ((out, stV), k')) :
     stV.conss.toList.map (·.pos) =
         (List.range sch.levels.size).map (fun l => positions (sch.levels.getD l default) w[k₀ + qOff sch l]!) ∧
       ∀ l < sch.levels.size, (w[k₀ + qOff sch l]!).size = (sch.levels.getD l default).q := by
@@ -183,7 +183,7 @@ end Pos
 
 /-- `ligerito` returns the contexts of its `ligeritoRun`, run from a state with none. -/
 theorem ligerito_run_conss {sch : Flock.Schedule} {M : Messages F128} {tIn : F128} {sws : Array Switched}
-    {k k' : ℕ} {src : Flock.RecAlgebra.Coins} {r : Array F128 × Flock.RecAlgebra.LgPts}
+    {k k' : ℕ} {src : Flock.RecAlgebra.CoinSource} {r : Array F128 × Flock.RecAlgebra.LgPts}
     (h : Flock.RecAlgebra.ligerito sch M tIn sws k src = .ok (r, k')) :
     ∃ (st₀ : LSt F128) (out : Array F256 × Array (Array F256) × ℕ) (st : LSt F128) (k₁ : ℕ), st₀.conss = #[] ∧
       (Flock.RecAlgebra.ligeritoRun sch M).run st₀ k src = .ok ((out, st), k₁) ∧ r.2.conss = st.conss := by

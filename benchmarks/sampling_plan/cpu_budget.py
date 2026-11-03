@@ -16,7 +16,7 @@ each template's units the budget certifies.
   memory needs. No statement is smaller than k_log `K_LOG_MIN` (m = 25), so a smaller unit costs the m = 25 point.
 * **The plan**: every template draws k = ceil(ln(S/1%)/share), rounded up to fill its last statement and at most n.
   The share is the least whose statements fit `slots` x `hours` of slot time. Each window then has fewer than
-  K0 = ln(S/delta) n/k units wrong outside delta (`IntegrityPeriodLog`, delta split over the S windows), and its
+  K0 = ln(S/delta) n/k units incorrect outside delta (`IntegrityPeriodLog`, delta split over the S windows), and its
   windows over any period fewer than that in all (`IntegrityHorizon`), as in `h200.py`.
 """
 from __future__ import annotations
@@ -142,7 +142,7 @@ def render(r: dict) -> str:
                      f"{'' if w['measured'] else '*'} | {w['slots_each']} | {w['wall_each_s']:.0f} | {w['slot_s']:.4g} | "
                      f"{w['K0']['0.01']:,} | {w['share']['0.01']:.3g} | {w['K0']['1e-06']:,} | {w['share']['1e-06']:.3g} |")
     lines += ["", f"\\* m outside the calibration ({min(CALIBRATION)} to {max(CALIBRATION)}): extrapolated.", "",
-              "Faulty proof blocks over a period, summed over the templates: pooled over all its blocks (`IntegrityHorizon`, "
+              "Incorrect proof blocks over a period, summed over the templates: pooled over all its blocks (`IntegrityHorizon`, "
               "with its share of the period's units), and in every block at once (delta split over the period's windows, "
               "with its share of a block's units).", "",
               "| period | fleet | blocks | pooled at 1% | share | pooled at 1e-6 | share | each block at 1% | at 1e-6 |",

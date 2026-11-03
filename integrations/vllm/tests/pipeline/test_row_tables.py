@@ -95,13 +95,13 @@ class Served:
         return {op: (ids, np.stack(xs), np.array(ss, dtype=np.float32)) for op, (ids, xs, ss) in out.items()}
 
 
-def window(row_tables: bool = True) -> tuple[CS.Window, Served, list]:
+def window(row_tables: bool = True) -> tuple[CS.Binding, Served, list]:
     s = Served()
     ms = SRW.members([COORD], [s.rows], [UNITS], {COORD: CAP})
     tables: tuple = ()
     if row_tables:
         ms, tables = SRW.with_row_tables(ms, [COORD], [s.rows], ARRIVALS)
-    w = CS.Window(*CS.population_program([(DEFN, UNITS)], several=True), D.parse_law("stratified:2"), RUN, tuple(ms), tables,
+    w = CS.Binding(*CS.population_program([(DEFN, UNITS)], several=True), D.parse_law("stratified:2"), RUN, tuple(ms), tables,
                   CTX.hex() if row_tables else "")
     return w, s, ms
 
@@ -373,17 +373,17 @@ def test_a_window_or_commit_whose_links_do_not_hold_is_refused(monkeypatch):
     w, s, ms = window()
     prog, query, ctx = w.program, w.query, CTX.hex()
     with pytest.raises(ValueError, match="every row some member's"):
-        CS.Window(prog, query, w.law, RUN, w.members, w.row_tables + (RTB.row_table(9, QKV, COORD, SRW.s8_words(K), [("r9", 0, 1)]),), ctx)
+        CS.Binding(prog, query, w.law, RUN, w.members, w.row_tables + (RTB.row_table(9, QKV, COORD, SRW.s8_words(K), [("r9", 0, 1)]),), ctx)
     with pytest.raises(ValueError, match="no row of"):
-        CS.Window(prog, query, w.law, RUN, w.members, w.row_tables[:3], ctx)
+        CS.Binding(prog, query, w.law, RUN, w.members, w.row_tables[:3], ctx)
     bad = replace(w.row_tables[0], words=3)
     with pytest.raises(ValueError, match="34 words"):
-        CS.Window(prog, query, w.law, RUN, w.members, (bad,) + w.row_tables[1:], ctx)
+        CS.Binding(prog, query, w.law, RUN, w.members, (bad,) + w.row_tables[1:], ctx)
     t = w.row_tables
     with pytest.raises(ValueError, match="by segment, rising"):
-        CS.Window(prog, query, w.law, RUN, w.members, t[2:] + t[:2], ctx)
+        CS.Binding(prog, query, w.law, RUN, w.members, t[2:] + t[:2], ctx)
     with pytest.raises(ValueError, match="row keys each once"):
-        CS.Window(prog, query, w.law, RUN, w.members, t[:2] + (replace(t[2], keys=(t[2].keys[0],) * 2),) + t[3:], ctx)
+        CS.Binding(prog, query, w.law, RUN, w.members, t[:2] + (replace(t[2], keys=(t[2].keys[0],) * 2),) + t[3:], ctx)
     # within a segment the order is the integration's: vLLM's is refused otherwise on its side
     RTB.check_order(t)
     with pytest.raises(ValueError, match=r"row_tables.table_key"):
@@ -392,7 +392,7 @@ def test_a_window_or_commit_whose_links_do_not_hold_is_refused(monkeypatch):
         RTB.check_order(t[:2] + (replace(t[2], keys=t[2].keys[::-1]),) + t[3:])
     for no in ("", "ab" * 32, "AB" * 64):
         with pytest.raises(ValueError, match="names its context"):
-            CS.Window(prog, query, w.law, RUN, w.members, t, no)
+            CS.Binding(prog, query, w.law, RUN, w.members, t, no)
     with pytest.raises(ValueError, match="one per row"):
         CS.Member(COORD, (("x", 34), ("w", 34)), (("o0", 1),), 2, tables=(("x", 2), ("w", 2)), links=((0, 0),))
     member = lambda links, units: CS.Member(COORD, (("x", 34), ("w", 34)), (("o0", 1),), 3,  # noqa: E731

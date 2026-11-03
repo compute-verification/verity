@@ -8,7 +8,7 @@ from typing import Any
 def _pouw_roots() -> list[Any]:
     """Pearl-C4's tile check: its unit templates at k = 64 with a one-word tile (small enough to lower whole), and its weight
     side, call side and whole check at one row a side; its hiding tiles and roots (``hidden``: the tile digest,
-    `verity.core.protocols.pouw.circuit.leaves`; their rows are C-Flock's ports) at the same shapes; and its roots with the row units cut
+    `verity.core.protocols.pouw.circuit.leaves`; their rows are Flock's ports) at the same shapes; and its roots with the row units cut
     along k (`verity.core.protocols.pouw.circuit.rowk`, ``Shape.row_k``) in two segments at k = 128, plain and hiding."""
     from dataclasses import replace
 

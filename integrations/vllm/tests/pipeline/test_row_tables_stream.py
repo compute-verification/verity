@@ -32,7 +32,7 @@ from test_service import DELTA, Clock, _refused  # noqa: E402
 TEMPLATE = P.template_id(DEFN)
 
 
-def _spec(mine: CS.Window, table: bool = True) -> S.Spec:
+def _spec(mine: CS.Binding, table: bool = True) -> S.Spec:
     ports = CS.expected_ports(mine)
     schemas = {m.port(p): m.schema(p) for m in mine.members for p in CS.port_leaves(m)}
     values = tuple(S.Value(p, S.ROOTS, "serve", over=RT.SCHEMA) if p == CS.TABLE_PORT else S.Value(p, schemas[p], "serve")
@@ -49,7 +49,7 @@ def _spec(mine: CS.Window, table: bool = True) -> S.Spec:
 @pytest.mark.slow
 def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp_path, signer, monkeypatch):
     """The window's record, at row 101 + i for case i, registers on a stream whose Spec declares the `row-table` root
-    as a tree over roots of row-seg leaves; drawn from the served challenger's coins after its digest, the honest draw's
+    as a tree over roots of row-seg leaves; sampled from the served challenger's coins after its digest, the honest draw's
     outcome is accepted by the Lean run and each of `coin_outcomes`' negatives is refused at its select (`coins`). Every
     case's tables hold against the members' strings and the live step roots. A Spec without the `row-table` Value
     refuses the record (`roots`): the tree over the step roots is one of the window's salted roots. About 70 s, the coins'
@@ -63,8 +63,9 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
     spec = _spec(mine)
     held = []
 
-    def stream(spec: S.Spec, coins) -> S.Stream:
-        return S.Stream(spec, [DEFN], budget=1, delta=DELTA, challenger="challenger-test", coins=coins, clock=Clock())
+    def stream(spec: S.Spec, coins=None, sampler=None) -> S.Stream:
+        return S.Stream(spec, [DEFN], budget=1, delta=DELTA, challenger="challenger-test", coins=coins, clock=Clock(),
+                        sampler=sampler)
 
     def register(coins, i, window_root):
         rec = CS.registration(c, {"row": 101 + i}, registrar=R)
@@ -80,7 +81,7 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
     units = audit["draw"]["units"]
     assert out.accepted and honest._entries[0].read and (audit["draw"]["population"], len(units)) == (UNITS, 2)
     assert all(m.links for m in mine.members for u in units if m.base <= u < m.base + m.n)
-    bare = stream(_spec(mine, table=False), lambda n: b"\x07" * n)
+    bare = stream(_spec(mine, table=False), sampler=lambda law, n: [0, 1])
     rec = CS.registration(c, {"row": 100}, registrar=R)
     assert "roots" in _refused(lambda: bare.register(rec, ports, leaf_layer=layer, counts={TEMPLATE: UNITS}))
     with pytest.raises(ValueError, match="over"):

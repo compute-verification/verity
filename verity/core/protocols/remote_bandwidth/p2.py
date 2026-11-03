@@ -1,4 +1,4 @@
-"""The remote bandwidth audit over PoUS's P2 store (`p2-unit4/v0`): the node's registered store is PoUS's `C*`, the
+"""PoUB over PoUS's P2 store (`p2-unit4/v0`): the node's registered store is PoUS's `C*`, the
 weights `W` encoded under P2 (`pous.schemes.p2`, `p2-16448/v4`) at PoUS's setup, and each receipt is of a unit of four
 of its 2,056-byte blocks, which a GPU sketches as it decodes them while serving.
 
@@ -8,7 +8,7 @@ unit g        blocks 4g … 4g + 3, 8,224 bytes at byte 8224·g: 257 whole 32-by
               N − 4U blocks (none in a store of whole units, as PoUS's of 2^16-block segments) are in no unit, and no
               receipt certifies them
 registration  node, P2's parameters, PoUS's commitment to W, PoUS's salt, the vk root, k_s: PoUS's setup's, the salt
-              drawn after the commitment (`setup.draw_salt`) and the root the verifier built from the C* it decoded to
+              sampled after the commitment (`setup.draw_salt`) and the root the verifier built from the C* it decoded to
               the committed W (`setup.verifier_key_from_encoding`)
 digest        SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u32be w ‖ u32be c0 ‖ u32be blocks_per_segment ‖
               u64be segments ‖ frame(expander) ‖ commitment ‖ salt ‖ root ‖ frame(layout) ‖ frame(receipt kind) ‖
@@ -141,7 +141,7 @@ class Registration:
 
 def register(source: bytes, node: bytes, commitment: bytes, vk: VerifierKey, *,
              rows: int | None = None) -> Registration:
-    """The verifier's registration of a node's P2 store from its PoUS setup: the salt it draws from its own secret
+    """The verifier's registration of a node's P2 store from its PoUS setup: the salt it samples from its own secret
     `source` after the commitment (`setup.draw_salt`), which `vk`, the key it built from the C* it decoded at setup
     (`setup.verifier_key_from_encoding`), must be under."""
     salt = setup.draw_salt(source, _bytes(commitment, DIGEST_BYTES, "PoUS's commitment to W"))
@@ -221,9 +221,8 @@ class Prover(audit.Prover):
     """The honest prover over a P2 store: each pass's receipts from its plan's units (`pass_under`), or from receipts
     the decode computed (`commit`), committed in the audit's tree."""
 
-    def __init__(self, store: Store, commitment: coins.LiveCommitment, *,
-                 entropy: Callable[[int], bytes] = os.urandom) -> None:
-        super().__init__(store, None, commitment, entropy=entropy)
+    def __init__(self, store: Store, *, entropy: Callable[[int], bytes] = os.urandom) -> None:
+        super().__init__(store, None, entropy=entropy)
 
     def pass_under(self, window: int, i: int, seed: bytes, plan: Plan | None = None) -> audit.Pass:
         plan = plan or Plan.whole(self.store.registration.blocks)
@@ -274,15 +273,15 @@ def check(registration: Registration, seed: bytes, plan: Plan, root: bytes, i: i
     return None
 
 
-class Session(audit.Session):
-    """The verifier's side of one session over a P2 store: the audit's session (`audit.Session`) with units for blocks,
+class Session(audit.AuditRun):
+    """The verifier's side of one session over a P2 store: the audit's session (`audit.AuditRun`) with units for blocks,
     its openings checked on PoUS's vk (`_check`), and no appends."""
 
     codecs = (P2Codec,)
     block_bytes = UNIT_BYTES
 
-    def __init__(self, params: audit.Params, registration: Registration, coins_: coins.Coins, *, not_before_ns: int,
-                 clock: Callable[[], int] = time.monotonic_ns) -> None:
+    def __init__(self, params: audit.Params, registration: Registration, coins_: coins.SessionCoins, *,
+                 not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
         if type(registration) is not Registration:
             raise ValueError("a P2 session is over a P2 Registration")
         super().__init__(params, registration, None, coins_, not_before_ns=not_before_ns, clock=clock)

@@ -24,12 +24,15 @@ import pytest
 
 from verity.core.protocols.sampled_proofs import challenger as C
 from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.sampled_proofs.coins import ChallengerCoins
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array, Value
+from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
+from verity.ml.commitments import coin_tree as CT
 
 from test_challenger import HOST, entropy, lms_key, lms_verify
 
@@ -153,19 +156,19 @@ class Host:
     (a new ledger in `tmp_path` unless `ledger`), whose record `open_session` signed with `sign` and wrote to
     `directory` naming the host the ledger opens it on (or `record_host`), serving one session on a loopback port;
     `reason` is how `serve` ended it, and the ledger's end says the session closed when its client closed it (or as
-    `closed` says)."""
+    `closed` says). With `withhold`, the session is a withheld one, and the ledger's open says so."""
 
     def __init__(self, tmp_path, sign, session: str = "s-1", seed: str = "host", ledger: Ledger | None = None,
                  window: dict = WINDOW, closed: bool | None = None, record_host: str | None = None,
-                 secret: bytes | None = None) -> None:
+                 secret: bytes | None = None, withhold: bool = False) -> None:
         self.secret = secret
         self.directory = tmp_path / session
         self.directory.mkdir(parents=True)
         self.ledger, self.closed = ledger or Ledger(tmp_path / "windows.jsonl", sign), closed
-        self.ledger.open(session, window)
+        self.ledger.open(session, window, **({"withheld": True} if withhold else {}))
         self.challenger = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy(seed))
         self.session = R.open_session(self.challenger, pinned_key(), record_host or f"{HOST}.{session}", sign,
-                                      self.directory, session)
+                                      self.directory, session, withhold=withhold)
         (self.directory / R.HELLOS).write_text("")
         self.listener = socket.create_server(("127.0.0.1", 0))
         self.address = "127.0.0.1:%d" % self.listener.getsockname()[1]
@@ -499,6 +502,222 @@ def test_open_many_releases_and_logs_the_coins_as_opening_them_one_at_a_time_doe
     assert C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host")).open_many(BATCH) == batched
 
 
+def test_a_withheld_session_releases_only_raw_coins_until_its_signed_close(tmp_path, signer):
+    """A withheld session (`open_session(..., withhold=True)`) answers the hello with the layout alone and each open with
+    the coin's raw bytes alone: no frame before the close carries the root, a salt or a path. Its close, once signed,
+    releases the commitment and every coin's opening, which open against it after the root each followed. The client
+    (`RemoteChallenger`, `ChallengerCoins`) reads the raw coins as it runs and settles the full openings at the close; a
+    session served without `withhold` answers the hello with the commitment, as before."""
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    session = R.open_session(ch, pinned_key(), HOST, signer, tmp_path, "s-1", withhold=True)
+    a, b = socket.socketpair()
+    t = threading.Thread(target=lambda: R.serve(a, session, itertools.count().__next__))
+    t.start()
+    b.sendall(frame({"type": "hello"}))
+    before = [reply(b)]
+    for label, index, after in BATCH:
+        b.sendall(frame({"type": "open", "label": label, "index": index, "after": after.hex()}))
+        before.append(reply(b))
+    b.sendall(frame({"type": "close"}))
+    released = reply(b)
+    b.close()
+    t.join()
+    a.close()
+    assert before[0] == {"type": "layout", "layout": {"epoch": 0, "families": [list(f) for f in FAMILIES], "scheme": SCHEME}}
+    assert [sorted(x["coin"]) for x in before[1:]] == [["after", "coin", "epoch", "index", "label"]] * len(BATCH)
+    assert not any(ch.commitment.root.hex() in json.dumps(x) for x in before)
+    assert released["type"] == "released" and released["released"]["commitment"] == ch.commitment.to_json()
+    openings = [C.LiveOpening.from_json(o) for o in released["released"]["openings"]]
+    assert [o.coin.hex() for o in openings] == [x["coin"]["coin"] for x in before[1:]]
+    assert all(C.live_reason(ch.commitment, o, label, index, after) is None
+               for o, (label, index, after) in zip(openings, BATCH))
+    assert (tmp_path / R.CLOSE).is_file()
+
+    directory = tmp_path / "client"
+    directory.mkdir()
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    session = R.open_session(ch, pinned_key(), HOST, signer, directory, "s-2", withhold=True)
+    a, b = socket.socketpair()
+    t = threading.Thread(target=lambda: R.serve(a, session, itertools.count().__next__))
+    t.start()
+    client = R.RemoteChallenger(b)
+    assert client.withheld and client.commitment is None
+    coins = ChallengerCoins(C.LiveRecord(client, "positions"))
+    coins.commit(root(7))
+    read = coins(100)
+    assert all(o.salt == b"" and o.path == () for o in coins.segments[0].openings)
+    client.close()
+    t.join()
+    a.close()
+    coins.settle()
+    assert client.commitment == ch.commitment
+    assert read == b"".join(o.coin for o in coins.segments[0].openings)[:100]
+    assert all(C.live_reason(ch.commitment, o, "positions", i, root(7)) is None
+               for i, o in enumerate(coins.segments[0].openings))
+    assert coins.record.reason() is None
+    _, got, _ = _served(tmp_path / "plain", signer, lambda c: c.commitment)
+    assert got is not None
+
+
+TREE_SPEC = {"block": 3, "rounds_log": 2, "scheme": CT.SCHEME, "streams": [CT.SESSION, "t/rep0", "t/rep1"]}
+NONCE = bytes(range(32))
+ROOT_F, ROOT_B = root(20), {"t": root(21)}
+
+
+def f128(w: int) -> str:
+    return f"{w:032x}"
+
+
+def tree_record(nonce: bytes, tree_root: bytes, key: bytes, points: list[int], rounds: dict[str, list]) -> dict:
+    """A ``--zk`` session's record on the coin tree under `tree_root`: its link points one per point and each stream's
+    rounds as ``(msg_sha512, n, coins)``."""
+    return {"coin_tree": {"key": key.hex(), "nonce": nonce.hex(), "root": tree_root.hex(), "spec": TREE_SPEC},
+            "link": {"points": [[f128(c)] for c in points], "root_b": {t: r.hex() for t, r in ROOT_B.items()},
+                     "root_f": ROOT_F.hex()},
+            "streams": [{"stream": s, "rounds": [{"coins": [f128(c) for c in coins], "k": k, "msg_sha512": m.hex(), "n": n}
+                                                 for k, (m, n, coins) in enumerate(rs)]} for s, rs in rounds.items()]}
+
+
+def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed_close(tmp_path, signer):
+    """The challenger samples a ``--zk`` session's coin tree under the prover's nonce and opens each round itself, after
+    what it follows, between the session's own coins; each line is logged before its answer, the signed close covers
+    them, the verifier's read of the session's roots reads past them, and a record on those coins is held to them
+    (`session_tree_reason`), one whose round's coins differ refused."""
+    host = Host(tmp_path, signer, withhold=True)
+    client = R.RemoteChallenger.connect(host.address)
+    positions = C.LiveRecord(client, "positions", itertools.count().__next__)
+    positions.record(root(0))
+    nonce, tree_root, key = client.tree(TREE_SPEC, NONCE)
+    assert nonce == NONCE and CT.answer_of(CT.words(tree_root) + CT.words(key)) == (tree_root, key)
+    points, ws = client.tree_open(tree_root, CT.SESSION, 0, 2, C.link_after(ROOT_F, ROOT_B))
+    assert ws[:2] == points
+    rep = [client.tree_open(tree_root, "t/rep0", k, 3 - k, root(30 + k))[0] for k in range(2)]
+    positions.record(root(1))
+    client.close()
+    assert host.ended() is None
+    commitment, roots = host.trusted()
+    assert roots == {"positions": (root(0), root(1)), "replay": ()}
+    log = R.session_files(host.directory)["log"]
+    assert [json.loads(line)["event"] for line in log] == ["commitment", "root", "release", "coin-tree", "tree-open",
+                                                           "tree-open", "tree-open", "root", "release"]
+    assert json.loads((host.directory / R.CLOSE).read_text())["lines"] == len(log)
+    trees = C.coin_trees_of(log)
+    assert list(trees) == [tree_root.hex()] and trees[tree_root.hex()].record()["key"] == key.hex()
+    record = tree_record(nonce, tree_root, key, points, {"t/rep0": [(root(30), 3, rep[0]), (root(31), 2, rep[1])]})
+    assert C.session_tree_reason(trees, record) is None
+    record["streams"][0]["rounds"][1]["coins"][0] = f128(rep[1][0] ^ 1)
+    assert C.session_tree_reason(trees, record) == ("its t/rep0 round 1 is not coins the challenger opened under its tree "
+                                                    "after that round's message")
+
+
+def _tree_frames(tree_root: str) -> dict[str, list[dict]]:
+    tree_open = {"type": "tree-open", "after": root(5).hex(), "n": 1, "round": 0, "stream": "t/rep0", "tree": tree_root}
+    return {
+        "a round ahead of its stream's next": [{**tree_open, "round": 1}],
+        "a round opened twice": [tree_open, tree_open],
+        "a round past its block": [{**tree_open, "n": 4}],
+        "a stream the tree hasn't": [{**tree_open, "stream": "u/rep0"}],
+        "a tree no one sampled": [{**tree_open, "tree": root(6).hex()}],
+        "a round after a short root": [{**tree_open, "after": root(5)[:32].hex()}],
+        "a round frame with an extra key": [{**tree_open, "retry": True}],
+        "a tree of another scheme": [{"type": "tree", "nonce": None, "spec": {**TREE_SPEC, "scheme": "coin-tree/v1"}}],
+        "a tree of a stream named twice": [{"type": "tree", "nonce": None,
+                                            "spec": {**TREE_SPEC, "streams": [CT.SESSION, CT.SESSION]}}],
+        "a tree past the coin cap": [{"type": "tree", "nonce": None, "spec": {**TREE_SPEC, "block": C.MAX_BLOCK,
+                                                                               "rounds_log": C.MAX_ROUNDS_LOG}}],
+        "a tree under a short nonce": [{"type": "tree", "nonce": NONCE[:16].hex(), "spec": TREE_SPEC}],
+    }
+
+
+@pytest.mark.parametrize("case", sorted(_tree_frames("")))
+def test_a_tree_frame_out_of_its_form_or_order_is_refused_and_ends_the_session(tmp_path, signer, case):
+    """A coin tree's frames are refused as the session's own coins are: each round of each stream once, in order, at
+    most its block, after 64 bytes, of a tree the challenger sampled from a spec it takes; the refusal ends the
+    session."""
+    host = Host(tmp_path, signer, closed=True)
+    with socket.create_connection(host.listener.getsockname()) as s:
+        s.sendall(frame({"type": "hello"}))
+        assert reply(s)["type"] == "commitment"
+        s.sendall(frame({"type": "tree", "nonce": NONCE.hex(), "spec": TREE_SPEC}))
+        sampled = reply(s)
+        assert sampled["type"] == "tree"
+        frames = _tree_frames(sampled["tree"]["root"])[case]
+        for f in frames[:-1]:
+            s.sendall(frame(f))
+            assert reply(s)["type"] == "tree-coins"
+        s.sendall(frame(frames[-1]))
+        answer = reply(s)
+        assert answer["type"] == "refused"
+    assert host.ended() == answer["reason"]
+    assert host.error is None
+    lines = R.log_lines(host.directory / R.RELEASES)
+    assert len(C.coin_trees_of(lines)[sampled["tree"]["root"]].opened) == len(frames) - 1
+
+
+def _tree_server(answer):
+    """A client over a socketpair to a server that answers its hello with a commitment, its tree frame with
+    ``answer("tree", frame)`` and its tree-open frame with ``answer("tree-open", frame)``."""
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    a, b = socket.socketpair()
+
+    def run() -> None:
+        wire = R._Wire(a)
+        with a:
+            wire.recv()
+            wire.send({"type": "commitment", "commitment": ch.commitment.to_json()})
+            for kind in ("tree", "tree-open"):
+                if not a.recv(1, socket.MSG_PEEK):
+                    return  # the client hung up on a reply it refused
+                wire.send(answer(kind, wire.recv()))
+
+    t = threading.Thread(target=run)
+    t.start()
+    return R.RemoteChallenger(b), t
+
+
+def _honest_tree(other: bool = False):
+    """The answers of a challenger that samples the asked tree (another tree when `other`, under the nonce asked for)
+    and opens its rounds."""
+    sampled: list[CT.CoinTree] = []
+
+    def answer(kind: str, head: dict) -> dict:
+        if kind == "tree":
+            ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("tree"))
+            tree, _ = ch.sample_tree(head["spec"], bytes.fromhex(head["nonce"]))
+            sampled.append(ch.sample_tree(head["spec"], bytes.fromhex(head["nonce"]))[0] if other else tree)
+            return {"type": "tree", "tree": {"key": tree.key.hex(), "nonce": tree.nonce.hex(), "root": tree.root().hex()}}
+        stream = TREE_SPEC["streams"].index(head["stream"])
+        words = sampled[0].open(stream, head["round"], head["n"])[1]
+        return {"type": "tree-coins", "tree-coins": [f128(w) for w in words]}
+    return answer
+
+
+@pytest.mark.parametrize("answer, why", [
+    (_honest_tree(other=True), "do not open its coin tree"),
+    (lambda kind, head: {"type": "tree", "tree": {"key": "00" * CT.KEY_BYTES, "nonce": "00" * CT.NONCE_BYTES,
+                                                  "root": root(1).hex()}}, "not under the nonce asked for"),
+    (lambda kind, head: {"type": "tree", "tree": {"key": "ff" * CT.KEY_BYTES, "nonce": NONCE.hex(),
+                                                  "root": root(1).hex()}}, "bit 2047 clear"),
+])
+def test_the_client_refuses_a_tree_or_round_that_isnt_the_one_asked_for(answer, why):
+    client, t = _tree_server(answer)
+    with pytest.raises(C.CoinError, match=why):
+        tree_root = client.tree(TREE_SPEC, NONCE)[1]
+        client.tree_open(tree_root, "t/rep0", 0, 2, root(5))
+    t.join()
+    with pytest.raises(C.CoinError, match="session ended"):
+        client.open("positions", 0, root(0))
+
+
+def test_the_client_takes_an_honest_round_and_its_coins():
+    client, t = _tree_server(_honest_tree())
+    tree_root = client.tree(TREE_SPEC, NONCE)[1]
+    coins, ws = client.tree_open(tree_root, "t/rep0", 0, 2, root(5))
+    assert len(coins) == 2 and ws[:2] == coins
+    client._wire.sock.close()
+    t.join()
+
+
 def _scripted(n: int, answer):
     """A client over a socketpair to a server that sends the challenger's commitment, reads `n` open frames and only
     then answers them with the frames `answer(openings)` gives, the honest openings in the order asked: so the client
@@ -781,6 +1000,26 @@ LEDGERS = {
         json.dumps({**json.loads(lines[1]), "body": {**json.loads(lines[1])["body"], "ended": "closed\u2026"}},
                    sort_keys=True, separators=(",", ":"), ensure_ascii=False)]), "ledger entry 1 is malformed"),
 }
+
+
+def test_the_verifier_reads_an_entry_whose_text_past_ascii_the_auditor_escaped(tmp_path, signer):
+    """An auditor's string past ASCII is in its line escaped (`ledger_text`), while its signature is over the entry's
+    canonical JSON in UTF-8, as the challenger signs it: such an entry reads and verifies, and is refused only unescaped
+    (`LEDGERS`)."""
+    class Escaping(Ledger):
+        def end(self, session, directory, closed, **changes):
+            super().end(session, directory, closed, ended="closed by the client \u2026", **changes)
+
+    host = Host(tmp_path, signer, ledger=Escaping(tmp_path / "windows.jsonl", signer))
+    honest(host)
+    assert '"ended":"closed by the client \\u2026"' in R.ledger_lines(host.ledger.path)[-1]
+    host.trusted()
+    entry = {"body": {"ended": "\u2026"}, "kind": "end", "prev": "0" * 128, "schema": C.LEDGER_SCHEMA, "seq": 1,
+             "session": "s"}
+    utf8 = json.dumps(entry, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    assert C.ledger_message(bytes(16), entry) == hashlib.sha512(
+        C._field(C.LEDGER_ROLE.encode()) + bytes(16)
+        + C._field(tagged_sha512(C.LEDGER_TAGS[C.LEDGER_SCHEMA], utf8))).digest()
 
 
 @pytest.mark.parametrize("case", sorted(LEDGERS))
@@ -1184,7 +1423,7 @@ def _rehearsal(tmp_path, signer, circuit: str, period: bool = True) -> Host:
 
 
 def test_a_window_counts_toward_its_period_only_when_it_proves_the_circuit_the_period_committed(tmp_path, signer):
-    """The period's open commits its circuit (the declared circuit's SHA-512), and `credited_session` counts the
+    """The period's open commits its circuit (the registered circuit's SHA-512), and `credited_session` counts the
     window only when the descriptor of the circuit its sessions prove hashes to it. The rehearsal's shape is credited;
     a window proving another circuit (another declaration, or the same one's bytes written otherwise), a descriptor that
     isn't bytes, and a window in no period count toward none, each naming the fix."""

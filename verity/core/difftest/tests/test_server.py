@@ -31,7 +31,12 @@ for line in sys.stdin:
 
 
 def test_canonical_json():
-    assert D.canonical({"b": [1, True, None], "a": "é\n\x01"}) == '{"a":"é\\n\\u0001","b":[1,true,null]}'
+    assert D.canonical({"b": [1, True, None], "a": "é\n\x01"}) == '{"a":"\\u00e9\\n\\u0001","b":[1,true,null]}'
+    for value, text in (("\x7f", '"\\u007f"'), ("Δ ≥ 1", '"\\u0394 \\u2265 1"'), ("😀", '"\\ud83d\\ude00"'),
+                        ("\U0010ffff", '"\\udbff\\udfff"'), ("\x00\x08\x0c\x1f~", '"\\u0000\\b\\f\\u001f~"'),
+                        ({"d\x7f": 1, "drawn": 2}, '{"drawn":2,"d\\u007f":1}')):
+        assert D.canonical(value) == text
+        assert D.canonical(value).isascii() and "\x7f" not in D.canonical(value)
     assert D.canonical((2**70, -1)) == "[1180591620717411303424,-1]"
     for bad, what in ((1.5, "float"), ({1: 2}, "key"), ("\ud800", "UTF-8"), (b"x", "bytes")):
         with pytest.raises(TypeError, match=what):

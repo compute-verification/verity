@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 SALT_BITS = 192
-"""The salt, drawn by the verifier after `W` is committed, and published as `pp` (`docs/p3-instantiation.md` §1: 24 B;
+"""The salt, sampled by the verifier after `W` is committed, and published as `pp` (`docs/p3-instantiation.md` §1: 24 B;
 Lean's `p3Scheme` has 128 bits)."""
 
 TAG_BITS = 256

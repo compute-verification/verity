@@ -184,7 +184,7 @@ def _apart(d: Path, w: int, adv=None) -> str:
     salts = [(hashlib.sha512(b"apart %d %d" % (w, i)).digest() * 4)[:k] for i in range(len(rows))]
     binding = hashlib.sha512(chain.canonical_json({"scheme": reg["scheme"],
                                                    "compiler": reg["binding"]["compiler"]})).digest()
-    root = chain.AC.register(rows, reg["row_bits"], binding, salts).root.hex()
+    root = chain.AC.commit(rows, reg["row_bits"], binding, salts).root.hex()
     reg["binding"]["advice"]["root"] = root
     (d / "private").mkdir(parents=True)
     (d / "registration.json").write_text(json.dumps(reg))
@@ -316,7 +316,7 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
 
 
 def test_at_serve_time_is_before_its_draw_and_no_later_than_the_next_windows_close(tmp_path):
-    """A Commit window's advice was registered at serve time when it was registered before its draw (every rank's
+    """A Commit window's advice was registered at serve time when it was registered before its sample (every rank's
     `advice_before_draw`, the verifier's receipt of the registration before any coin) and no later than the next
     window's close in the endpoint's trace; after serving when either fails, and unknown
     while either is. Its lag after its own window's close is always printed, in seconds."""
@@ -490,7 +490,7 @@ def _reregister(d: Path, data: bytes) -> None:
     salts = [(hashlib.sha512(b"lied %d" % i).digest() * 4)[:k] for i in range(len(rows))]
     binding = hashlib.sha512(chain.canonical_json({"scheme": reg["scheme"],
                                                    "compiler": reg["binding"]["compiler"]})).digest()
-    reg["binding"]["advice"]["root"] = chain.AC.register(rows, reg["row_bits"], binding, salts).root.hex()
+    reg["binding"]["advice"]["root"] = chain.AC.commit(rows, reg["row_bits"], binding, salts).root.hex()
     (d / "registration.json").write_text(json.dumps(reg))
     (d / "private" / "opening.json").write_text(json.dumps(opening | {"advice": data.hex(),
                                                                       "salts": [s.hex() for s in salts]}))
@@ -589,9 +589,10 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
     assert c["bits"]["bound"] is None and c["prove_path"]["dir"] == str(tmp_path / "pp.tgz") and c["prove_path"]["ok"]
     rows = c["negatives"]["rows"]
     assert c["negatives"]["ok"] and all(rows[k]["ok"] is True for k in ("late", "extra", "head"))
-    # the stand-in releases its first output in its request's own bucket: the advised counts' floor accepts it at δ = 0
+    # the ingress tie refuses a request the certified ingress doesn't hold, and accepts length's honest requests
     assert all(rows[k]["ran"] and rows[k]["ok"] for k in ("advice-length", "advice-missing", "advice-release"))
-    assert rows["advice-length"]["codes"] == ["NetworkAdvisedCounts_v1"] and rows["wrong-token"]["ran"] is False
+    assert rows["advice-length"]["codes"] == [] and rows["advice-missing"]["codes"] == ["IoTieRequest"]
+    assert rows["wrong-token"]["ran"] is False
     md = (out / "report.md").read_text()
     for section in ("## Advice", "## Advice bits per link-window", "## Prove path",
                     "## Negatives (the negatives registry)", "## What's still stubbed"):
@@ -682,7 +683,7 @@ def test_on_the_advice_profile_the_rehearsals_check_is_the_verdict_and_the_advic
     assert r["chain"]["tie"]["ran"] is False and r["pending"] == {}
     assert r["negatives"]["token"]["refused"] is False and r["negatives"]["token"]["by"] == []
     assert r["runs"]["honest"]["network"]["accepted"] is None and r["proofs"]["ran"] is False
-    assert "N2's advised counts" in r["proofs"]["why"] and r["chain"]["negatives"]["ran"] is False
+    assert "no N2 unit holds" in r["proofs"]["why"] and r["chain"]["negatives"]["ran"] is False
     assert sorted(r["negatives"]) == ["drop", "extra", "late", "token"]
     assert r["negatives"]["late"]["by"] == ["the rehearsal's own check (audit.status:coverage-never-established)"]
     assert r["negatives"]["drop"]["by"] == ["the rehearsal's own check (io:short of max_tokens without EOS)"]

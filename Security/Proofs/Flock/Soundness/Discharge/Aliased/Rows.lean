@@ -45,7 +45,7 @@ theorem parse_rows {lines : Array String} {net : Net} (h : Net.parse lines = .ok
   have ho : Net.ofRows ((tokens (lines.getD 0 "")).getD 1 "") useful constPos ig.1 og.1 s.1 s.2 = .ok net := by
     by_cases hL : (lines.getD (1 + useful) "").startsWith "LEAVES " = true
     · rw [ite_eq_left_of_eq_true _ _ (eq_true hL)] at h
-      rcases hj : Lean.Json.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
+      rcases hj : Flock.JsonParse.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
       · rw [hj] at h; exact absurd h throw_bind_ne
       · rw [hj] at h
         exact ite_throw_ok (ite_throw_ok h)
@@ -144,6 +144,24 @@ theorem port_self {net : Net} (h : Built net) (hlog : net.unitLog ≤ 32) {x : �
     · simp [hj, Ne.symm hj]
   rw [sparseEntry_ofRows ha, sparseEntry_ofRows hb, ofRows_row ha hw, ofRows_row hb hw, hra, hrb]
   exact ⟨hself, hself⟩
+
+/-- **A built net's input port bits' rows are `[x]`**, in `A` and in `B` (`port_self`'s rows). -/
+theorem port_row {net : Net} (h : Built net) (hlog : net.unitLog ≤ 32) {x : ℕ} (hx : x ∈ portBits net.inGroups) :
+    net.a.row x = #[x] ∧ net.b.row x = #[x] := by
+  obtain ⟨_, _, _, ig, _, ra, rb, ho⟩ := h
+  obtain ⟨-, ha, hb, -, -, hig, -⟩ := Net.ofRows_ok ho
+  have hin := (Net.ofRows_inputs ho).2
+  rw [hig, portBits_eq] at hx
+  obtain ⟨g, hg, hxr⟩ := List.mem_flatMap.1 hx
+  rw [List.mem_range'_1] at hxr
+  have hlt : x - g.col * WORD < g.bits.foldl (· + ·) 0 := by
+    rw [← Array.foldl_toList, foldl_add_eq_sum]; omega
+  obtain ⟨hra, hrb⟩ := hin g hg _ hlt
+  rw [show g.col * WORD + (x - g.col * WORD) = x by omega] at hra hrb
+  have hw : 2 ^ net.unitLog ≤ 2 ^ 32 := Nat.pow_le_pow_right (by norm_num) hlog
+  refine ⟨?_, ?_⟩
+  · rw [ofRows_row ha hw, hra]
+  · rw [ofRows_row hb hw, hrb]
 
 /-- A port bit is bit `t` of some port `p`. -/
 theorem mem_portBits {gs : Array Group} {x : ℕ} (hx : x ∈ portBits gs) :
