@@ -558,7 +558,7 @@ def main() -> int:
         if apc.exists():
             q = json.loads(apc.read_text())
             meta["algorithm_policy_cells"] = {c: sorted({str(r[q["columns"].index(c)]) for r in q["rows"]})
-                                              for c in ("reading", "te_core") if c in q["columns"]}
+                                              for c in ("reading", "te_core", "binding_kind") if c in q["columns"]}
             meta["algorithm_policy_cells"]["rho_console"] = "rho_console" in q["columns"]
     if retrace:
         meta["next_capture"] = retrace
@@ -741,7 +741,10 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
     cells_said = (f" (every row: reading {'/'.join(cells.get('reading') or ['–'])}, te_core "
                   f"{'/'.join(cells.get('te_core') or ['–'])}"
                   + (", rho_console at c = 5,120 x 2 x 45e6 x 740 gates, k = 65,536 bits" if cells.get("rho_console")
-                     else "") + ", rho_default)" if cells else "")
+                     else "")
+                  + (f", the one bound's binding kind {'/'.join(cells['binding_kind'])} with what it rests on and each "
+                     "kind's term (reduction and update as sensitivities, 08:26Z)" if cells.get("binding_kind") else "")
+                  + ", rho_default)" if cells else "")
     ladder = meta.get("ladder_points")
     ladder_said = ("" if ladder is None else f" (v3's fit with ladder-v3's points: {', '.join(ladder)})" if ladder
                    else f" (no ladder points file on {LADDER[0]} yet, so v3's fit has only its starts)")
