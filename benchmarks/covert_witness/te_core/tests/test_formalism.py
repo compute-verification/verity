@@ -1,8 +1,10 @@
 """te_core.formalism and te_core.policy: Fit and Slowdown as the formalism v2 states them (a frozen tail always
 charged), the attack side beside them, the stubs, assumptions and upper bounds labelled, the grid."""
 import dataclasses
+import json
 import math
 from dataclasses import replace
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -14,6 +16,7 @@ from te_core.gates import per_mac
 
 SHAPE = {"d_model": 512, "n_layer": 6, "vocab": 50304, "ctx": 1024, "parameters": 45_029_888, "tokens": 154_206_208,
          "forward_macs_per_token": 51_342_080}
+FIXTURES = Path(__file__).parents[1] / "capture" / "tests" / "fixtures"
 
 
 def measured(u1=1e8, sigma=0.8, delta=None, dgrad=None, decoder=0.0, tail=0.0, affected=0.5) -> F.Measured:
@@ -563,14 +566,18 @@ def test_a_union_of_witnesses_bounds_every_gate_so_per_gate_caps_are_a_sensitivi
 def test_the_one_bound_is_the_max_over_its_kinds_each_resting_on_what_it_names():
     """The max is over the token, decoding and fresh-products kinds; the token kind binds where Δ isn't counted
     (decoding then equals it, and ties bind the kind resting on less); fresh products are unmeasured on a record with
-    no product rows; reading B isn't a reading of the bound."""
+    no product rows, with what its op log leaves unknown where it has one; reading B isn't a reading of the bound."""
     c = 1e11
     coded = one_segment(delta=500.0, decoder=5e10)
     b = F.bound(coded, c, 2800)
     assert (b["terms"]["token"], b["terms"]["decoding"], b["binding"]) == (
         pytest.approx(0.5), pytest.approx(c * 0.5 / (5e10 + 1.75e8)), "decoding")
     assert b["max"] == b["terms"]["decoding"] and b["label"] == f"te_core {F_VERSION}, reading A"
-    assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"] == F.FRESH_UNMEASURED
+    assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"].startswith(
+        f"unmeasured: {F.LOG_UNKNOWN}; 100% of its products' MACs")
+    assert b["inputs"]["fresh_products"] == {"source": "op log", "order": "unknown", "rows": 1, "unknown_share": 1.0,
+                                             "macs": {"theta": 0.0, "attention": 0.0, "unknown": 1e12}}
+    assert F.bound(replace(coded, ops=None), c, 2800)["unmeasured"]["fresh_products"] == F.FRESH_UNMEASURED
     assert set(b["rests_on"]) == set(F.KINDS) and "assumption (D)" in b["rests_on"]["decoding"]
     assert "tiles" in b["rests_on"]["token"] and b["rests_on"]["fresh_products"].startswith("theorem")
     plain = F.bound(one_segment(), c, 2800)
@@ -645,6 +652,50 @@ def test_products_of_takes_io_bounds_fresh_rows_from_captured_steps():
     assert F.products_of([(1, g)], k=1024, order="chain")["k"] == 1024.0
     with pytest.raises(ValueError, match="one of"):
         F.products_of([(1, g)], order="split")
+
+
+@pytest.mark.parametrize("name", ("dense_blocks", "lora_blocks", "wildcard_adapter"))
+def test_products_of_ops_takes_a_logs_products_and_counts_none(name):
+    """`products_of_ops` on a traced step's op log (the fixtures' `.ops.json`, te_core.tiles.of_graph): a row for each
+    product the log places, its op's MACs split by the products' sizes, its output entries its MACs over K, its
+    operands' widths the log's and its partial sums' io_bound's; θ where its class is registered, else unknown (the
+    tiny start's attention is unfused bmm, whose token dims a log doesn't keep). The order is unknown and nothing is
+    counted, so the fresh-products term is unmeasured with the unknown share in its reason."""
+    from te_core import io_bound
+
+    ops = json.loads((FIXTURES / f"{name}.ops.json").read_text())
+    placed = [op for op in ops if op["products"]]
+    got = F.products_of_ops(ops)
+    assert (got["k"], got["order"], got["source"], got["products"]) == (None, "unknown", "op log", [])
+    assert len(got["rows"]) == sum(len(op["products"]) for op in placed)
+    assert sum(r["macs"] for r in got["rows"]) == pytest.approx(sum(op["macs"] for op in placed), rel=1e-12)
+    assert sum(got["macs"].values()) == pytest.approx(sum(op["macs"] for op in placed), rel=1e-12)
+    for r in got["rows"]:
+        assert r["kind"] == ("theta" if r["class"] == "registered" else "unknown") and r["b_c"] == io_bound.ACC_BITS
+        assert r["outputs"] * r["dims"][2] == pytest.approx(r["macs"]) and len(r["widths"]) == 2
+    assert got["macs"]["attention"] == 0 and 0 < got["unknown_share"] < 1
+    b = F.bound(one_segment(ops=ops), 1e11, policy.CONSOLE[1])
+    assert b["terms"]["fresh_products"] is None and b["inputs"]["fresh_products"]["rows"] == len(got["rows"])
+    assert f"; {got['unknown_share']:.0%} of its products' MACs" in b["unmeasured"]["fresh_products"]
+
+
+def test_a_ledger_rows_log_puts_theta_and_attention_products_aside_and_the_rest_unknown():
+    """On a macs_log (te_core.tiles.of_log): a product whose non-token operand is θ (its role theta) is θ's, a fused
+    attention op's products are attention's, and an updated one's, whose operands the log says only depend on the
+    run's state, is unknown; an op run twice is one row of twice its MACs."""
+    sdpa = 2 * 16 * 256 * 64 * 256
+    log = {"by": {}, "ops": {
+        "fwd theta mm [[2048, 64], [64, 192]]": [1, 2048 * 64 * 192],
+        "fwd updated mm [[2048, 64], [64, 192]] bfloat16": [2, 2 * 2048 * 64 * 192],
+        "fwd act _scaled_dot_product_flash_attention [[2, 8, 256, 64], [2, 8, 256, 64], [2, 8, 256, 64]] bfloat16":
+            [1, sdpa]}}
+    m = F.complete({}, {"macs_log": log, "output": {"e_bytes": 10}}, SHAPE)
+    got = F.products_of_ops(m.ops)
+    assert [(r["kind"], r["dims"]) for r in got["rows"]] == [
+        ("theta", [1, 2048, 64, 192]), ("unknown", [1, 2048, 64, 192]), ("attention", [16, 256, 64, 256]),
+        ("attention", [16, 256, 256, 64])]
+    assert got["macs"] == {"theta": 2048 * 64 * 192, "attention": sdpa, "unknown": 2 * 2048 * 64 * 192}
+    assert got["rows"][1]["outputs"] == 2 * 2048 * 192 and got["unknown_share"] == pytest.approx(0.24)
 
 
 def test_reduction_update_and_the_token_form_are_sensitivities_never_the_bound():
