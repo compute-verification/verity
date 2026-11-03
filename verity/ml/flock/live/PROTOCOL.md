@@ -1054,7 +1054,8 @@ verity_flock.firewall relay --state DIR --session ID --part NAME --to SERVE`, be
 and only for the recursive session's next statement not yet released, once. A request for any other statement (a later
 one, or a released one again) is the recursive session's stop at that next statement, never opened: a statement the worker
 skips ends the recursive session where it stands, and no statement is served twice. The first stop, inner or outer, is the
-recursive session's one failure (`stop`, recorded once). After it, and after the last statement's release, the relay
+recursive session's one failure (`stop`, recorded once, and only of a recursive session opened, so that each stop counts
+against its stream). After it, and after the last statement's release, the relay
 refuses every V* statement of that recursive session before anything reaches the challenger: the worker's requests are
 answered `FIREWALL-REFUSED: recursive session …`, its `Finish` with a verdict that does not accept, and the record shows
 `refused`, which is not a failure (the challenger sees nothing of it). So no outer proof of a stopped recursive session is
@@ -1083,7 +1084,7 @@ leave, and serve's verdict is its release or its stop. `verity/core/service/fire
 Python's record and to the cases frozen from the Rust release side the loop replaced (`tests/fixtures/`). Every stop the
 loop makes, and a fault of its own, cuts the challenger's connection before `Finish`, and the worker gets the loop's own
 verdict; a prover killed while its session holds the slot is that session's stop, which the loop records, or, where the
-loop ended with it, the next session to take the slot. A session cut before its first request other than
+loop ended with it, the next session to take the slot, if its recursive session was opened. A session cut before its first request other than
 `Ping` records nothing, and the statement stays next: no message of it has reached the challenger. `flock-circuit` proves
 one session (`--warm 0 --runs 1`: each statement is served once), refuses `FC_VERIFY_AHEAD` (the slot is held until each
 session's verdict), and reports the outcome the loop recorded. `verity_flock.firewall` stays as the inner side
@@ -1143,8 +1144,9 @@ neither stopped nor released its last statement, on a stream that had not stoppe
 outer session of the stream and every open, and `rec_live` closes the next connection before anything is served. A
 recursive session is unended while it has neither stopped nor released its last statement, and the ZK server refuses an
 open while the stream's unended recursive sessions and its failures together reach b, so at most b of a stream's recursive
-sessions ever have a statement not released: each is unended, or stopped and so a failure (`card_unreleased_le_budget`,
-`Proofs.Flock.Recursive.StopCountBudget`, over `StopCount.run`'s ops). A recursive session the worker
+sessions ever have a statement not released: each is unended, or stopped and so a failure, since a stop is recorded only
+of a recursive session opened (`card_unrel_le_budget`, `Proofs.Flock.Recursive.StopCountBudget`, at every order of the
+record's ops, and `card_unreleased_le_budget` at every run of `StopCount.run`). A recursive session the worker
 abandons, asking for no statement after some release, ends where it stands for the challenger (its next proof never
 comes, `late`); the ZK server records no stop until a request comes, but the session stays unended and holds one of the
 b. b is the challenger's stream's `budget` (`Stream(budget=...)`,
@@ -1156,7 +1158,9 @@ covers: the challenger's count is never below the ZK server's, and it holds at m
 registrations open, so neither ends past b. An honest stream is never refused an open: each of its unended recursive
 sessions covers a registration still open, since the relay releases a session's last statement before the ZK server
 delivers the session and the challenger closes its rounds, so at an open fewer than min(`rounds`, b) are unended
-(`test_an_honest_stream_is_never_refused_an_open`, in Lean and Python). A stop shows the challenger a cut or a missing
+(`test_an_honest_stream_is_never_refused_an_open`, in Lean and Python). That holds at every b ≥ 1, so the least b, 3, is
+the auditor's policy and not completeness's: b is how many failures stop the stream and, at min(`rounds`, b), how many of
+an honest stream's recursive sessions are unended at once. A stop shows the challenger a cut or a missing
 proof, which is `late` or `reject`; a session the ZK server refuses after its stop sends nothing, and is no further failure
 on either side.
 
