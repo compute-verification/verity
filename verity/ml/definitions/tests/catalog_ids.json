@@ -1220,6 +1220,7 @@
 "SelectBf16_v2",
 "SelectBit_v1",
 "SelectCollect_v1",
+"SelectCollect_v2",
 "SelectEntry_v1",
 "SelectF32_v1",
 "SelectF32_v2",
