@@ -12,9 +12,10 @@
 #      a prefill-heavy load, 8 prompts a step), each engine step one pass retained in passes/; before it, unless
 #      PEARLPLUS_UNRETAINED is set empty, the same load under its own lease with no pass retained (`serve --no-retain`,
 #      unretained/), whose wall is the option's without writing the passes;
-#   3. after the lease and before the verifier's coin, `served_passes.py volunteer` replays every tile of every retained
-#      pass on the CPU in PEARLPLUS_JOBS processes and gives up, in the passes' records, the rows over a debit cap (V-EX),
-#      which the serve's screen can't see; PEARLPLUS_VOLUNTEER set empty skips it, and the verdict may then draw such a tile;
+#   3. with PEARLPLUS_VOLUNTEER=1, after the lease and before the verifier's coin, `served_passes.py volunteer` replays every
+#      tile of every retained pass on the CPU in PEARLPLUS_JOBS processes and gives up, in the passes' records, the rows
+#      over a debit cap (V-EX), which the serve's screen can't see. That replay is the whole run's, not a sample's, and at
+#      the default load it runs far past POUW_TIMEOUT, so by default it is not run and the verdict may draw such a tile;
 #   4. `served_passes.py verify` takes Pearl+'s verdict over every pass on the CPU in PEARLPLUS_JOBS processes (default
 #      nproc): one draw of PEARLPLUS_DRAWS work-weighted tiles (default its own, 459) over all the passes, and each pass's
 #      exclusion tiles, replayed on fast_tile's batch forms, the first and every 256th after it on the scalar reference
@@ -78,12 +79,14 @@ if [ -n "${PEARLC_CUBIN:-}" ]; then
   say "serve: served_passes.py serve exit $rc after $(took "$t"): $(grep -m1 '^served ' "$Q/serve.log" | cut -c1-300)"
 fi
 
-if [ -s "$Q/served.json" ] && [ -n "${PEARLPLUS_VOLUNTEER-1}" ]; then
+if [ -s "$Q/served.json" ] && [ -n "${PEARLPLUS_VOLUNTEER:-}" ]; then
   t=$(date +%s)
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer --passes "$Q/passes" --out "$Q/volunteer.json" \
     --jobs "${PEARLPLUS_JOBS:-$(nproc)}" > "$Q/volunteer.log" 2>&1
   rc=$?
   say "volunteer: served_passes.py volunteer exit $rc after $(took "$t"): $(tail -1 "$Q/volunteer.log" | cut -c1-400)"
+elif [ -s "$Q/served.json" ]; then
+  say "volunteer: not run (PEARLPLUS_VOLUNTEER unset): no row over a debit cap is given up before the verifier's coin"
 fi
 
 if [ -s "$Q/served.json" ]; then
