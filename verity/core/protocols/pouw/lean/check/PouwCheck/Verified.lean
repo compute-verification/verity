@@ -1,30 +1,30 @@
 import PouwCheck.Credit
 
 /-!
-# A served window's statements verified (`credit._verified`)
+# A served execution phase's statements verified (`credit._verified`)
 
-The verifier of record of a window's statements, which `credit.window` and `credit.period_credit` take each drawn
+The verifier of record of an execution phase's statements, which `credit.window` and `credit.period_credit` take each drawn
 unit's proof outcome from (`credit._lean_verified`, through `pouw-check-difftest`'s `credit-verified`), with
 `credit._verified` the Python reference the difftest (`tests/test_verified_difftest.py`) holds to it, string for string.
 
-A window's evidence carries its statements, one a call with a drawn unit (`STATEMENT_KEYS`: the call, the paths of its
+An execution phase's evidence carries its statements, one a call with a drawn unit (`STATEMENT_KEYS`: the call, the paths of its
 circuit file and its public file, and its sessions' directories), never a verdict. The C-Flock verifier of record
 (`flock-verify verify --zk`) runs outside this process, so `verified` is asked twice:
 
 * with no answers (`runs` null), it names each verifier run (`asks`): in statement order, up to the first statement a
-  check before the verifier refuses, the statement's index, the circuit file's SHA-512 the period's open committed for
+  check before the verifier refuses, the statement's index, the circuit file's SHA-512 the credit period's open committed for
   its call's K (`CIRCUIT_FILES`, `{k<K>: SHA-512, live: SHA-512}`), the call's `--registered` file
-  (`Credit.registeredFile`, at the roots the window's entries register, its open root, its rounds and its Program salt)
-  and the partition object (`Credit.partitionOf`). The caller runs the verifier on exactly those inputs, against the window's descriptor;
+  (`Credit.registeredFile`, at the roots the execution phase's entries register, its open root, its rounds and its Program salt)
+  and the partition object (`Credit.partitionOf`). The caller runs the verifier on exactly those inputs, against the execution phase's descriptor;
 * with the answers (`runs`, one a run in that order, as far as the caller ran them), it judges them (`judge`): a
-  verifier that could not run or refused the statement refuses the window (`proof`, or the verifier's code), a session it
-  rejected refuses the window whole (`failed`: no partial credit, and no retry), a session that opened its call's public
-  table or the window's ok rows (`OK_PORT`, o1) anywhere but at the `--registered` file's value and root refuses it
+  verifier that could not run or refused the statement refuses the execution phase (`proof`, or the verifier's code), a session it
+  rejected refuses the execution phase whole (`failed`: no partial credit, and no retry), a session that opened its call's public
+  table or the execution phase's ok rows (`OK_PORT`, o1) anywhere but at the `--registered` file's value and root refuses it
   (`registration`), and so does one that proved a unit of another call (`proof`). Each unit an accepted session proved
-  is one outcome (`credit.PROOF_KEYS`), which `Credit.window` then holds to the draw and the window's registration.
+  is one outcome (`credit.PROOF_KEYS`), which `Credit.window` then holds to the draw and the execution phase's registration.
 
 Before any run: the circuit files' form (`FILES_FORM`), the statements' form (`STATEMENTS_FORM`, each call one of the
-window's), one statement a call (a retry never reproves), a statement only for a call with a drawn unit, a committed
+execution phase's), one statement a call (a retry never reproves), a statement only for a call with a drawn unit, a committed
 circuit file for its K (`noStatementFiles`), and the call's `--registered` file (its refusals, `registration`).
 Every refusal is (code, why), the first rule the input breaks, with Python's words.
 -/
@@ -37,9 +37,9 @@ open PouwCheck.Credit
 def STATEMENT_KEYS : List String := ["call", "circuit", "public", "sessions"]
 
 def STATEMENTS_FORM : String :=
-  "the window's statements are not a list of {call, circuit, public, sessions}, each a call of the " ++
-  "window, the paths of its circuit file and its public file, and its sessions' directories (at least " ++
-  "one): the window carries each call's proof files, and credit verifies them itself, never a verdict"
+  "the execution phase's statements are not a list of {call, circuit, public, sessions}, each a call of the " ++
+  "execution phase, the paths of its circuit file and its public file, and its sessions' directories (at least " ++
+  "one): the execution phase carries each call's proof files, and credit verifies them itself, never a verdict"
 
 /-- The period-open's field holding each K's template's circuit file's SHA-512 and the live Program's template's,
 `{k<K>: SHA-512, live: SHA-512}`. -/
@@ -50,7 +50,7 @@ def FILES_FORM : String :=
   s!"{CIRCUIT_FILES}, each digest 128 lowercase hex)"
 
 def noStatementFiles (k : Nat) : String :=
-  s!"the period's open commits no circuit file for K = {k}'s template ({CIRCUIT_FILES} k{k}, the SHA-512 of the " ++
+  s!"the credit period's open commits no circuit file for K = {k}'s template ({CIRCUIT_FILES} k{k}, the SHA-512 of the " ++
   "circuit file the auditor's lowering built for it), so no statement of its calls can be verified: commit " ++
   "each K's circuit file in the period-open"
 
@@ -66,7 +66,7 @@ def arrOf : Json → List Json
   | .arr a => a.toList
   | _ => []
 
-/-- `{value: [root, ...]}` over the window's entries, each in order (`credit._verified`'s `roots`). -/
+/-- `{value: [root, ...]}` over the execution phase's entries, each in order (`credit._verified`'s `roots`). -/
 def rootsOf (entries : Json) : Json := Id.run do
   let es := arrOf entries
   let mut acc : Array (String × Array Json) := #[]
@@ -90,7 +90,7 @@ structure Ask where
 
 /-- `credit._asks`: the verifier runs in statement order up to the first statement a check before the verifier refuses,
 and that refusal (none when every statement passes them), each run's partition object `partitionOf` the descriptor's.
-Over the window's circuit (its descriptor's SHA-512 `program`, and `shape` and `layout`, `shapeOf` and `layoutOf` of
+Over the execution phase's circuit (its descriptor's SHA-512 `program`, and `shape` and `layout`, `shapeOf` and `layoutOf` of
 its Program), its registered `entries`, open root `window`, drawn `units`, `steps` rounds and Program salt `salt`. -/
 def asks (statements files : Json) (program : String) (shape : Shape) (layout entries : Json) (window : String)
     (units : List Nat) (steps : Nat) (salt : String) : R (Array Ask × Option (String × String)) := do
@@ -167,7 +167,7 @@ def judge (statements files : Json) (program : String) (shape : Shape) (layout e
     j := j + 1
     match get ans "error", get ans "refused", get ans "findings" with
     | .str e, _, _ =>
-      throw ("proof", s!"call {c}'s statement could not be verified, so the window stays refused: {e}")
+      throw ("proof", s!"call {c}'s statement could not be verified, so the execution phase stays refused: {e}")
     | _, .arr #[.str code, .str why], _ => throw (code, s!"call {c}'s statement: {why}")
     | _, _, .arr fs =>
       let portOf := fun (p : String) => get (get a.registered "ports") p
@@ -181,11 +181,11 @@ def judge (statements files : Json) (program : String) (shape : Shape) (layout e
         let f ← finding fj
         unless f.accepted do
           throw ("failed", s!"call {c}'s session {f.session} was rejected by the verifier of record ({f.why}): a " ++
-            "failed drawn unit refuses the whole window, not only its call (no partial credit, and no retry)")
+            "failed drawn unit refuses the whole execution phase, not only its call (no partial credit, and no retry)")
         let opened := (finding? f.registered).getD []
         if opened.any fun (p, v, root) => (pubCall? (.str v)).isSome && (p, v, root) != (PUB_PORT, pv, pr) then
           throw ("registration", s!"call {c}'s session {f.session} opened a public table at another port, value or " ++
-            s!"root than the verifier's own {pv} at port {PUB_PORT}: a unit's public row is the window's salt, its " ++
+            s!"root than the verifier's own {pv} at port {PUB_PORT}: a unit's public row is the execution phase's salt, its " ++
             "position and its call's roots, as credit builds them")
         unless opened.filter (fun (p, v, _) => p == OK_PORT || v == ov) == [(OK_PORT, ov, orr)] do
           throw ("registration", s!"call {c}'s session {f.session} opened the ok rows at another port, value or root " ++
@@ -201,8 +201,8 @@ def judge (statements files : Json) (program : String) (shape : Shape) (layout e
   if let some why := refused then throw why
   pure out
 
-/-- `credit-verified`: on `{statements, files, descriptor, entries, window, units, steps, salt, runs}` (the window's
-statements, its period's committed circuit files, its descriptor in hex, its registered entries, its open root, its
+/-- `credit-verified`: on `{statements, files, descriptor, entries, window, units, steps, salt, runs}` (the execution phase's
+statements, its credit period's committed circuit files, its descriptor in hex, its registered entries, its open root, its
 drawn units, its rounds and its Program salt), with `runs` null, `{"run": [...]}`, the verifier runs `asks` names
 (`Ask.toJson`), or the verdict when it names none; with `runs` the answers, the verdict: `{"outcomes": [...]}` (`judge`)
 or `{"refused": [code, why]}` (as `refusal` writes it). -/
@@ -217,7 +217,7 @@ def verified (j : Json) : R Json := do
   let some units := (Json.getArr? (get j "units")).toOption.bind (·.toList.mapM nat?)
     | throw ("error", "credit-verified: the drawn units are not a list of natural numbers")
   let (some steps, some window, some salt) := (nat? (get j "steps"), str? (get j "window"), str? (get j "salt"))
-    | throw ("error", "credit-verified: the window's steps, open root or salt are malformed")
+    | throw ("error", "credit-verified: the execution phase's steps, open root or salt are malformed")
   let (statements, files, entries) := (get j "statements", get j "files", get j "entries")
   match get j "runs" with
   | .null =>

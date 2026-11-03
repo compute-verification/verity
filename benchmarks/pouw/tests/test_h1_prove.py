@@ -276,7 +276,7 @@ def test_the_windows_partition_derives_exactly_the_tiles_h1_prove_proves(tmp_pat
     for bad_entries, root, why in (
             (RN.unrooted(com)["registered"], wr, f"registered value a/{K}@0's domain is not"),
             (entries, U.open_root("v", bytes(64)), f"registered value a/{K}@0's domain is not"),
-            ([e for e in entries if e["value"] != f"b/{K}"], wr, f"against b/{K}, which the window registers not")):
+            ([e for e in entries if e["value"] != f"b/{K}"], wr, f"against b/{K}, which the execution phase registers not")):
         got = RN.credit_registration(desc, drawn, bad_entries, found, root, ok)
         assert got is not None and got[0] == "registration" and why in got[1], got
     assert RN.credit_registration(desc, [*drawn, 0], entries, found, wr, ok)[0] == "missing"
@@ -706,7 +706,7 @@ def test_v3_serves_a_bt_where_a_is_127_and_an_xa_flip_moves_only_the_record(tmp_
 
 
 def test_the_seeds_derive_from_the_window_salt():
-    """The units' salt is PoUW's window salt, SHA-512(b"verity/pouw-salt/v1" ‖ reveal ‖ u64be(p) ‖ stream ‖ prover), of the
+    """The units' salt is the execution phase's salt, SHA-512(b"verity/pouw-salt/v1" ‖ reveal ‖ u64be(p) ‖ stream ‖ prover), of the
     stand-in reveal (the salt coin's, standing in for the certifier's), and a unit's noise and receipt seeds are of that
     salt; another reveal, window, stream or prover gives another salt and other seeds."""
     import hashlib

@@ -1,4 +1,4 @@
-"""The Lean verifier of record of a served window's live@<s> statements (`PouwCheck.LiveVerified`,
+"""The Lean verifier of record of a served execution phase's live@<s> statements (`PouwCheck.LiveVerified`,
 `pouw-check-difftest`'s ``credit-live-verified``) held to its Python reference, `credit._live_asks` and
 `credit._live_verified`, on `pouw_live_verified_cases`: with `runs` null, the verifier runs the Lean names (or the
 verdict, when it names none); with the answers, the verdict, each round's outcome or the refusal, string for string.
@@ -70,7 +70,7 @@ server = D.server_fixture(LIVE_PORT)
 
 
 def test_live_verified(server):
-    """Generated windows' live statements, null and answered, then each mutation over a few seeds, so every refusal
+    """Generated execution phases' live statements, null and answered, then each mutation over a few seeds, so every refusal
     before the verifier runs and of its answers is reached whatever the sample."""
     VERIFIED.clear()
     stats = D.run(LIVE_PORT, examples=200, server=server)
@@ -80,11 +80,11 @@ def test_live_verified(server):
           f"outcome: {dict(sorted(VERIFIED.items()))}")
     assert {"run", "accept"} <= set(VERIFIED)
     for part in ("circuit: the committed circuit files are not",
-                 "circuit: the period's open commits no circuit file for the live Program's template",
-                 "live: the window's live evidence is not {descriptor, statements}",
-                 "a live statement and the window has", "two live statements and the window has",
-                 "live: the window's live circuit is not a live Program", "live: the window registers ",
-                 "rows of # words, not the T = #", "could not be verified, so the window stays refused",
+                 "circuit: the credit period's open commits no circuit file for the live Program's template",
+                 "live: the execution phase's live evidence is not {descriptor, statements}",
+                 "a live statement and the execution phase has", "two live statements and the execution phase has",
+                 "live: the execution phase's live circuit is not a live Program", "live: the execution phase registers ",
+                 "rows of # words, not the T = #", "could not be verified, so the execution phase stays refused",
                  "live@#: the statement's public file", "was rejected by the verifier of record", "not unit #"):
         assert any(part in k for k in VERIFIED), part
 
@@ -102,7 +102,7 @@ FILES_PORT = D.Port("pouw-check-difftest", "credit-committed-files", committed_f
 
 
 def test_committed_files(server):
-    """A period's open's circuit files read by the Lean of record as `credit.committed_files` reads them: honest, and
+    """A credit period's open's circuit files read by the Lean of record as `credit.committed_files` reads them: honest, and
     each form that commits none."""
     VERIFIED.clear()
     stats = D.run(FILES_PORT, examples=60, server=server)

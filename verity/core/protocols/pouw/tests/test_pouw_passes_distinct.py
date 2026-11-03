@@ -1,5 +1,5 @@
 """`credit.passes_distinct` (`Properties.Pouw.LiveSalt.PassesDistinct`): Pearl-C passes credited together hold
-each call index of their epoch (their salt) once, each below `pearl_c.CALL_RANGE`."""
+each call index of their execution phase (their salt) once, each below `pearl_c.CALL_RANGE`."""
 from __future__ import annotations
 
 from verity.core.protocols.pouw import credit as Cr
@@ -14,7 +14,7 @@ def _pass(salt: str, *indices: int) -> dict:
 
 def test_an_epochs_passes_numbered_on_are_distinct():
     assert Cr.passes_distinct([_pass(SALT, 0, 1), _pass(SALT, 2, 3), _pass(SALT, 4, 5)]) is None
-    assert Cr.passes_distinct([_pass(SALT, 0, 1), _pass(OTHER, 0, 1)]) is None      # two epochs share no seed
+    assert Cr.passes_distinct([_pass(SALT, 0, 1), _pass(OTHER, 0, 1)]) is None      # two execution phases share no seed
     assert Cr.passes_distinct([]) is None and Cr.passes_distinct([_pass(SALT)]) is None
 
 
@@ -31,7 +31,7 @@ def test_a_call_index_at_2_to_the_32_is_refused():
     assert Cr.passes_distinct([_pass(SALT, PC.CALL_RANGE - 1)]) is None
     for bad in (PC.CALL_RANGE, PC.CALL_RANGE + 7, -1, 1.0, "0", True, None):
         code, why = Cr.passes_distinct([_pass(SALT, 0), _pass(SALT, bad)])
-        assert code == Cr.CALL_RANGE_CODE == "call-range" and "end the epoch" in why, bad
+        assert code == Cr.CALL_RANGE_CODE == "call-range" and "end the execution phase" in why, bad
 
 
 def test_a_pass_that_is_no_manifest_is_refused():

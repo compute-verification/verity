@@ -1,14 +1,14 @@
-"""`credit.window` and `credit.period_credit` on a window's statements, each call's proof files: credit runs the
-verifier of record itself (`one_stage.proofs.verify`) on the circuit file the period's open committed for the call's K,
-with the partition object and the ``--registered`` file it builds from the committed descriptor and the window's entries,
+"""`credit.window` and `credit.period_credit` on an execution phase's statements, each call's proof files: credit runs the
+verifier of record itself (`one_stage.proofs.verify`) on the circuit file the credit period's open committed for the call's K,
+with the partition object and the ``--registered`` file it builds from the committed descriptor and the execution phase's entries,
 and credits nothing from a verdict the evidence carries.
 
-The verifier here is a stand-in `flock-verify` (`FAKE`), so the test runs without a Flock proof of an H1 window: it
+The verifier here is a stand-in `flock-verify` (`FAKE`), so the test runs without a Flock proof of an H1 execution phase: it
 answers as the Lean verifier does, one ``VERDICT`` line a session, and accepts a session only when its proof is the
 SHA-512 of every file it was handed (the circuit file, the public file, the program, the partition object and the
 ``--registered`` file, those two as the JSON they hold, whose key order the verifier doesn't read) and the units its
 session sampled. `prove` makes those proofs with the files a prover would hold,
-the ``--registered`` file `h1window.table_reads_file`'s form, so a window is credited only when credit handed the
+the ``--registered`` file `h1window.table_reads_file`'s form, so an execution phase is credited only when credit handed the
 verifier the files the prover proved against. `sampled_proofs/tests/test_proofs.py` holds the real verifier to
 rejecting tampered proof bytes and to the circuit file's digest; `test_pouw_credit.py` holds `credit.registered_file`
 to `h1window.table_reads_file` byte for byte."""
@@ -90,15 +90,15 @@ def _bind(base: Path, files: list[bytes], drew: list[int]) -> None:
 
 
 def _max_tokens(d: dict) -> list[int] | None:
-    """The max_tokens the window's period's open committed (`credit.committed_length`), None when it commits none."""
+    """The max_tokens the execution phase's credit period's open committed (`credit.committed_length`), None when it commits none."""
     opens = [e["body"] for e in map(json.loads, d["ledger"]) if e["kind"] == "period-open"]
     length = opens[0].get(Cr.LENGTH_FIELD) if opens else None
     return length.get("max_tokens") if isinstance(length, dict) else None
 
 
 def live_reads(d: dict, s: int, m: int | None = None) -> dict:
-    """Round s's live@<s> ``--registered`` file (`live_reads.reads_file`) at the window's tables, its session, the
-    manifest's m_s (or `m`) and the max_tokens its period's open committed."""
+    """Round s's live@<s> ``--registered`` file (`live_reads.reads_file`) at the execution phase's tables, its session, the
+    manifest's m_s (or `m`) and the max_tokens its credit period's open committed."""
     raw, live = bytes.fromhex(d["descriptor"]), Cr.live_of(bytes.fromhex(d["live"]["descriptor"]))[0]
     program, prefix, steps = hashlib.sha512(raw).hexdigest(), Cr._prefix(raw), len(d["rounds"])
     roots = {e["value"]: e["root"] for e in d["entries"]}
@@ -107,7 +107,7 @@ def live_reads(d: dict, s: int, m: int | None = None) -> dict:
 
 
 def prove_live(d: dict, to: Path, m: dict[int, int] | None = None) -> dict:
-    """The window's live evidence as an honest prover delivers it (`credit.LIVE_STATEMENTS`): its live descriptor and
+    """The execution phase's live evidence as an honest prover delivers it (`credit.LIVE_STATEMENTS`): its live descriptor and
     each round's statement, the live template's circuit file, a public file whose one instance is unit s, and one session
     sampling it, its proof bound to the files the verifier is handed (round s's ``--registered`` file at the manifest's
     m_s, or ``m[s]``)."""
@@ -142,10 +142,10 @@ def _units(d: dict, k: int) -> list[int]:
 
 
 def prove(d: dict, k: int, to: Path) -> list[dict]:
-    """The window's statements as an honest prover delivers them: for each call with a sampled proof block, its K's circuit file,
+    """The execution phase's statements as an honest prover delivers them: for each call with a sampled proof block, its K's circuit file,
     a public file whose instances are the call's sampled proof blocks, and one session sampling all of them, its proof bound to
     the files the verifier is handed (the call's ``--registered`` file as `h1window.table_reads_file` writes it, at the
-    roots the window registers)."""
+    roots the execution phase registers)."""
     raw, lay = bytes.fromhex(d["descriptor"]), _layout(d)
     program, shape = hashlib.sha512(raw).hexdigest(), Cr.shape_of(raw)
     roots = {}
@@ -178,7 +178,7 @@ def prove(d: dict, k: int, to: Path) -> list[dict]:
 
 
 def window(seed: int, tmp: Path) -> tuple[dict, list[dict]]:
-    """An honest window, its ``live`` evidence its live statements (`prove_live`), and its calls' statements."""
+    """An honest execution phase, its ``live`` evidence its live statements (`prove_live`), and its calls' statements."""
     d = cases.window_instance(random.Random(f"statements/{seed}"), "honest")
     return {**d, "live": prove_live(d, tmp)}, prove(d, d["k"], tmp)
 
@@ -213,7 +213,7 @@ def test_a_window_carrying_verdicts_and_no_proof_files_is_refused(seed, tmp_path
 @pytest.mark.parametrize("part", ["proof", "public", "drawn-units"])
 def test_tampered_proof_files_fail_the_window(seed, part, tmp_path, verifier):
     """One byte of a session's proof or of its public file changed: the verifier of record rejects the session, so the
-    window is refused whole (no partial credit, no retry)."""
+    execution phase is refused whole (no partial credit, no retry)."""
     d, statements = window(seed, tmp_path)
     s = random.Random(seed).choice(statements)
     if part == "proof":
@@ -252,7 +252,7 @@ def test_a_circuit_file_other_than_the_committed_one_is_refused_before_the_verif
 @pytest.mark.parametrize("seed", SEEDS)
 def test_statements_the_draw_did_not_ask_for_are_refused(seed, tmp_path, verifier):
     """A call proved twice (a retry), a statement of a call no sampled proof block is in, a statement whose session proved a unit
-    of another call, and a drawn call with no statement: each refuses the window."""
+    of another call, and a drawn call with no statement: each refuses the execution phase."""
     d, statements = window(seed, tmp_path)
     assert credit(d, statements + [statements[0]])[1] == (
         "outcome", f"call {statements[0]['call']} has two statements: a call's drawn units are proved in one "
@@ -338,10 +338,10 @@ def _rebind(d: dict, s: dict, reg: dict) -> None:
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_units_public_row_is_its_calls_own_salt_position_and_roots(seed, tmp_path, verifier):
     """RCPT: the public row a unit's seed and fold keys are derived from is credit's own. Call c's statement reads it at
-    row t of ``<prefix>pub@<c>``, the window's Program salt, the unit's position u0 + t and the call's roots
-    (root(a/<K>@<s>), root(b/<K>)) as the window's entries register them, at that known content; and a statement whose
+    row t of ``<prefix>pub@<c>``, the execution phase's Program salt, the unit's position u0 + t and the call's roots
+    (root(a/<K>@<s>), root(b/<K>)) as the execution phase's entries register them, at that known content; and a statement whose
     units were seeded under another call's roots or a made-up root was proved against another file, so its session is
-    rejected and the window refused whole."""
+    rejected and the execution phase refused whole."""
     d, statements = window(seed, tmp_path)
     for s in statements:
         _program, lay, _shape, reg = _files(d, s)
@@ -367,7 +367,7 @@ def test_a_units_public_row_is_its_calls_own_salt_position_and_roots(seed, tmp_p
 
 
 def window_j10r(seed: int, tmp: Path) -> tuple[dict, list[dict]]:
-    """An honest window over J10-R units, each call of at least two row tiles, so a call's units' blocks differ, and its
+    """An honest execution phase over J10-R units, each call of at least two row tiles, so a call's units' blocks differ, and its
     ``live`` evidence (`window`'s)."""
     d = cases.window_instance(random.Random(f"statements-j10r/{seed}"), "j10r")
     return {**d, "live": prove_live(d, tmp)}, prove(d, d["k"], tmp)
@@ -389,11 +389,11 @@ def _j10r_rows(d: dict, s: dict, call: int, blocks: list[tuple[int, int]]) -> di
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_j10r_units_public_row_holds_the_call_and_blocks_credit_derives(seed, tmp_path, verifier):
-    """A J10-R window's unit's public row is today's, then its ``call``, its call's first position u0 (the
+    """A J10-R execution phase's unit's public row is today's, then its ``call``, its call's first position u0 (the
     one its seed_c is drawn at), and its ``blocks``, `core_check.j10r_blocks` of its tile (I, J) = (t // (n/C),
     t % (n/C)) at the call's slot M, its K and the tile: credit derives both from the committed layout, as it builds
     the rest of the row. A statement whose units drew their noise at another unit's blocks, at another call's u0, or at
-    blocks one off was proved against another file, so its session is rejected and the window refused whole."""
+    blocks one off was proved against another file, so its session is rejected and the execution phase refused whole."""
     d, statements = window_j10r(seed, tmp_path)
     for s in statements:
         _program, lay, shape, reg = _files(d, s)
@@ -426,7 +426,7 @@ def test_a_j10r_units_public_row_holds_the_call_and_blocks_credit_derives(seed, 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_session_that_opened_another_public_table_root_is_refused(seed, tmp_path, verifier):
     """A verifier finding that a session opened its call's public table at another root than the rows credit built
-    (another call's roots, or made up) refuses the window (``registration``): no entry registers that table, so
+    (another call's roots, or made up) refuses the execution phase (``registration``): no entry registers that table, so
     `_registration` holds it only through `_verified`."""
     d, statements = window(seed, tmp_path)
     s = random.Random(seed).choice(statements)
@@ -442,12 +442,12 @@ def test_a_session_that_opened_another_public_table_root_is_refused(seed, tmp_pa
     got, refused = credit(d, statements, run=run)
     assert got is None and refused == ("registration", (
         f"call {s['call']}'s session {s['sessions'][0]} opened a public table at another port, value or root than the "
-        f"verifier's own {pub['value']} at port {Cr.PUB_PORT}: a unit's public row is the window's salt, its position "
+        f"verifier's own {pub['value']} at port {Cr.PUB_PORT}: a unit's public row is the execution phase's salt, its position "
         "and its call's roots, as credit builds them"))
 
 
 def _ok_rows(d: dict, s: dict, rows: list[list[int]]) -> dict:
-    """Statement ``s``'s ``--registered`` file with the window's ok rows the prover's `rows` (row u unit u's one word),
+    """Statement ``s``'s ``--registered`` file with the execution phase's ok rows the prover's `rows` (row u unit u's one word),
     under their public salts, in place of credit's: every other port credit's."""
     program, _lay, _shape, reg = _files(d, s)
     ok, w = reg["ports"][Cr.OK_PORT], d["window"]["root"]
@@ -459,10 +459,10 @@ def _ok_rows(d: dict, s: dict, rows: list[list[int]]) -> dict:
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_units_ok_row_is_the_verifiers_one_word_1(seed, tmp_path, verifier):
-    """OKROW in credit: a statement's output row ``ok`` (o1) reads row u of the window's ok rows ``<prefix>ok``, the one
-    word 1 under the public `core_check.ok_salt` of the window's open root and u, at that known content, one row a unit
-    of the window (h1_prove's `register_ok`). A statement whose unit computed 0, or whose units all did, was proved
-    against another file, so its session is rejected and the window refused whole."""
+    """OKROW in credit: a statement's output row ``ok`` (o1) reads row u of the execution phase's ok rows ``<prefix>ok``, the one
+    word 1 under the public `core_check.ok_salt` of the execution phase's open root and u, at that known content, one row a unit
+    of the execution phase (h1_prove's `register_ok`). A statement whose unit computed 0, or whose units all did, was proved
+    against another file, so its session is rejected and the execution phase refused whole."""
     d, statements = window(seed, tmp_path)
     w, population = d["window"]["root"], sum(n for n, _w in Cr.call_work(_layout(d)))
     for s in statements:
@@ -489,8 +489,8 @@ def test_a_units_ok_row_is_the_verifiers_one_word_1(seed, tmp_path, verifier):
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("opened", ["another root", "another value", "none"])
 def test_a_session_that_opened_another_ok_root_is_refused(seed, opened, tmp_path, verifier):
-    """A verifier finding that a session opened the window's ok rows at another root than the rows credit registered,
-    at another value, or not at all refuses the window (``registration``): no entry registers them, so `_registration`
+    """A verifier finding that a session opened the execution phase's ok rows at another root than the rows credit registered,
+    at another value, or not at all refuses the execution phase (``registration``): no entry registers them, so `_registration`
     holds them only through `_verified`."""
     d, statements = window(seed, tmp_path)
     s = random.Random(seed).choice(statements)
@@ -525,7 +525,7 @@ def test_a_verifier_that_cannot_run_leaves_the_window_refused(tmp_path, monkeypa
 
     monkeypatch.setattr(PF, "executable", broken)
     got, refused = credit(d, statements)
-    assert got is None and refused[0] == "proof" and "could not be verified, so the window stays refused" in refused[1]
+    assert got is None and refused[0] == "proof" and "could not be verified, so the execution phase stays refused" in refused[1]
 
 
 def _period(seed: int, tmp: Path, files: dict | None = "own"):
@@ -560,7 +560,7 @@ def test_a_period_committing_no_circuit_files_earns_nothing(seed, tmp_path, veri
     assert got is None and refused[0] == "circuit" and f"commits no circuit files ({Cr.CIRCUIT_FILES}" in refused[1]
     d, windows = _period(seed, tmp_path / "other", files={"k1": "ab" * 64})
     got, refused = Cr.period_credit(d["key"], d["ledger"], d["pins"], d["main"], d["name"], windows, rc.lms_verify)
-    assert got is None and refused[0] == "window" and "circuit: the period's open commits no circuit file for K = " in \
+    assert got is None and refused[0] == "window" and "circuit: the credit period's open commits no circuit file for K = " in \
         refused[1], refused
 
 
@@ -568,7 +568,7 @@ def test_a_period_committing_no_circuit_files_earns_nothing(seed, tmp_path, veri
 def test_a_live_statement_proved_at_another_m_is_rejected(seed, tmp_path, verifier):
     """Credit builds round s's live ``--registered`` file itself, its ``m@<s>`` at the manifest's m_s: a live statement
     the prover proved against an ``m@<s>`` of another m (the serving process stated m_s, the live unit counted another)
-    was proved against another file, so the verifier rejects its session and the window is refused (``live``)."""
+    was proved against another file, so the verifier rejects its session and the execution phase is refused (``live``)."""
     d, statements = window(seed, tmp_path)
     assert credit(d, statements) == (_credited(d), None)
     s = random.Random(seed).randrange(len(d["rounds"]))
@@ -582,8 +582,8 @@ def test_a_live_statement_proved_at_another_m_is_rejected(seed, tmp_path, verifi
 @pytest.mark.parametrize("seed", SEEDS)
 def test_live_evidence_carrying_outcomes_or_no_committed_file_is_refused(seed, tmp_path, verifier, monkeypatch):
     """The live evidence carries each round's proof files, never verdicts (`credit.LIVE_STATEMENTS`), on the circuit
-    file the period's open committed for the live template (``circuit_files.live``); a round proved twice or past the
-    window's rounds, or a session that proved another unit than its round's, refuses the window."""
+    file the credit period's open committed for the live template (``circuit_files.live``); a round proved twice or past the
+    execution phase's rounds, or a session that proved another unit than its round's, refuses the execution phase."""
     d, statements = window(seed, tmp_path)
     outcomes = cases.window_instance(random.Random(f"statements/{seed}"), "honest")["live"]
     assert credit({**d, "live": outcomes}, statements) == (None, ("live", Cr.LIVE_STATEMENTS_FORM))

@@ -417,7 +417,7 @@ def _offset(blocks):
 
 @pytest.mark.parametrize("lay,at,why", [
     (_rotated, "arow", "round 0's A table of K = 64 h1/a/64@0 is not the Commit's row-table/0/k64"),
-    (_offset, "a-link", f"registered A value h1/a/64@0 has {3 * ROWS} rows, not the {2 * ROWS} the window's layout gives it"),
+    (_offset, "a-link", f"registered A value h1/a/64@0 has {3 * ROWS} rows, not the {2 * ROWS} the execution phase's layout gives it"),
 ], ids=["rotated", "offset"])
 def test_a_step_table_with_a_calls_rows_shifted_by_a_call_is_refused_by_core(tmp_path, monkeypatch, lay, at, why):
     """A step's A table of K holds its calls of K's rows call after call, the j-th from row M·j, and a proof block reads
