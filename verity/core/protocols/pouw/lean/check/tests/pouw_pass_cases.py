@@ -696,10 +696,10 @@ PROVERS_KEY = 2
 
 
 def honest_live_draw(rng: random.Random, many: bool = False) -> tuple[dict, Ch.LiveChallenger]:
-    """An honest draw under a live epoch's coins (`window.live_challenger`, a certified window's), held as their signed
-    record (`signed`), under the challenger key the window's parameters pin (``key``, the record's): its ``pouw/draw``
-    coin 0 opened after the registration's digest."""
-    ch = Wd.live_challenger(rng.randrange(4), rng.choice([1, 2, 3]), rng.randbytes)
+    """An honest draw under a live window's draw session's coins (`window.draw_challenger`), held as their signed record
+    (`signed`), under the challenger key the window's parameters pin (``key``, the record's): its ``pouw/draw`` coin 0
+    opened after the registration's digest."""
+    ch = Wd.draw_challenger(rng.randrange(4), rng.randbytes)
     reg, stream = rng.randbytes(64).hex(), rng.randbytes(64).hex()
     receipt = _receipt(rng, reg)
     n = rng.choice([50, rng.randint(50, 5000), rng.randint(50, 1 << 40)] + ([] if many else [1, 2, 7]))
@@ -721,8 +721,8 @@ def _mutate_live_draw(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Ran
             bad = rng.choice([{**cj, "root": "00"}, {**cj, "families": "x"}, {**cj, "epoch": -1}, {**cj, "extra": 1}])
             d["coins"] = {**coins, "record": {**rec, "commitment": bad}}
         case "live-not-epoch":
-            layout = rng.choice([((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 1)), ((Wd.SALT, 1), (Wd.ROUND, 2)),
-                                 ((Wd.SALT, 1), (Wd.DRAW, 2), (Wd.ROUND, 1))])
+            layout = rng.choice([((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 1)), Wd.live_families(rng.choice([1, 2])),
+                                 ((Wd.SALT, 1), (Wd.DRAW, 1), (Wd.ROUND, 1)), ((Wd.DRAW, 2),)])
             d["coins"] = signed(Ch.LiveChallenger(Wd.LIVE_SCHEME, c.epoch, layout, rng.randbytes).commitment, rng)
             d["key"] = d["coins"]["key"]
         case "live-bare":
@@ -749,7 +749,7 @@ def _mutate_live_draw(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Ran
             d["key"] = rng.choice([None, {**key, "W": 3}, {**key, "public": key["public"][:64]}, {**key, "extra": 1}, 7,
                                    "key"])
         case "live-moved":
-            other = Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes).commitment.to_json()
+            other = Wd.draw_challenger(c.epoch, rng.randbytes).commitment.to_json()
             d["coins"] = {**coins, "record": {**rec, "commitment": other}}
         case "live-opening-form":
             k = rng.choice(["coin", "path", "index", "epoch", "label"])
@@ -757,11 +757,11 @@ def _mutate_live_draw(d: dict, ch: Ch.LiveChallenger, name: str, rng: random.Ran
                    "label": [5, None]}[k]
             d["opening"] = rng.choice([{**o, k: rng.choice(bad)}, {x: v for x, v in o.items() if x != "index"}])
         case "live-label":
-            d["opening"] = ch.open(Wd.SALT, 0, bytes.fromhex(d["registration"])).to_json()
+            d["opening"] = {**o, "label": Wd.SALT}
         case "live-epoch":
             d["opening"] = {**o, "epoch": o["epoch"] + 1}
         case "live-foreign":
-            other = Wd.live_challenger(c.epoch, c.family(Wd.ROUND), rng.randbytes)
+            other = Wd.draw_challenger(c.epoch, rng.randbytes)
             d["opening"] = other.open(Wd.DRAW, 0, bytes.fromhex(d["registration"])).to_json()
         case "live-tampered":
             d["opening"] = {**o, "salt": _flip(o["salt"])}
