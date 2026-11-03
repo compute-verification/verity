@@ -20,7 +20,14 @@
 #      serve once more (same/) and `served_passes.py same` holding the two to the same commitments pass by pass (each
 #      pass's transcript root, activation roots and counts), which they give only where the served path commits the same
 #      bytes for the same load (PIECE_DIR/same.json: the fields that differ, never their values); every serve with
-#      sm_90's BF16 rows off unless PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE), as each serve line says;
+#      sm_90's BF16 rows off unless PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE), as each serve line says. The
+#      retained serve's passes/ is a symlink to a 0700 `mktemp -d` directory in RAM, under PEARLPLUS_PASSES_RAM (default
+#      /dev/shm; set empty, they go to disk), which the serve, the give-up, retain and verify all read and write through,
+#      where that filesystem has room for PEARLPLUS_PASSES_GB (default 2 GB a 1,024 tokens of the load) and the node's
+#      available memory holds that beside PEARLPLUS_RAM_HEADROOM_GB (default 100: the serve's and the give-up's own),
+#      else on disk, the passes line saying which; after the piece, off the serve's clock, they are copied back to disk
+#      (`cp -a`, their modes kept, the symlink replaced once the copy is whole) and the RAM copy removed, a stopped piece
+#      leaving them in RAM, its line naming where;
 #   3. after the serve's lease and before the verifier's coin, `served_passes.py volunteer` gives up, in the passes'
 #      records, the rows over a debit cap (V-EX), which the serve's screen can't see, from every tile's words' counts
 #      over the whole run, not a sample's. With PEARLPLUS_VOLUNTEER=1 (the default) the counts are the card's, under a
@@ -98,6 +105,47 @@ serve() {  # LOG ARGS...: served_passes.py serve of the piece's load under its o
     --output-tokens "${PEARLPLUS_OUTPUT_TOKENS:-1}" --max-num-batched-tokens "${PEARLPLUS_T:-8192}" "$@" > "$Q/$log" 2>&1
 }
 
+RAM=${PEARLPLUS_PASSES_RAM-/dev/shm} R='' STOPPED=''
+NEED=${PEARLPLUS_PASSES_GB:-$(( (${PEARLPLUS_REQUESTS:-32} * (${PEARLPLUS_PROMPT_TOKENS:-1024} + ${PEARLPLUS_OUTPUT_TOKENS:-1}) * 2 + 1023) / 1024 ))}
+HEADROOM=${PEARLPLUS_RAM_HEADROOM_GB:-100}
+passes_ram() {  # the retained serve's passes/ a symlink into RAM where the node holds them beside the headroom, else on disk
+  [ -n "$RAM" ] || { say "passes: on disk (PEARLPLUS_PASSES_RAM empty)"; return; }
+  local shm mem
+  shm=$(df -B1 --output=avail "$RAM" 2>/dev/null | tail -1)
+  shm=${shm//[^0-9]/}
+  shm=$(( ${shm:-0} / 1000000000 ))
+  mem=$(awk '/^MemAvailable:/ {print int($2 * 1024 / 1e9)}' /proc/meminfo)
+  if [ "$shm" -ge "$NEED" ] && [ "${mem:-0}" -ge $(( NEED + HEADROOM )) ] && R=$(mktemp -d -p "$RAM" pearlplus-passes.XXXXXX) \
+    && ln -s "$R" "$Q/passes"; then
+    say "passes: in RAM at $R, symlinked as passes/ ($RAM has $shm GB free and the node $mem GB of memory available, for" \
+      "about $NEED GB of passes beside $HEADROOM GB of headroom); copied back to disk after the piece"
+  else
+    [ -n "$R" ] && rmdir "$R"
+    R=''
+    say "passes: on disk, not in RAM: $RAM has ${shm} GB free and the node ${mem:-no} GB of memory available, short of" \
+      "about $NEED GB of passes (PEARLPLUS_PASSES_GB) beside $HEADROOM GB of headroom (PEARLPLUS_RAM_HEADROOM_GB)"
+  fi
+}
+copy_back() {  # passes/ from RAM to disk, modes kept, the symlink replaced only once the copy is whole
+  [ -n "$R" ] && [ -L "$Q/passes" ] || return 0
+  local t
+  t=$(date +%s)
+  if [ -n "$STOPPED" ]; then
+    rm -rf "$Q/passes.disk"
+    say "passes: left in RAM at $R, symlinked as passes/: the piece was stopped before copying them back"
+  elif cp -a "$R" "$Q/passes.disk"; then
+    rm "$Q/passes" && mv "$Q/passes.disk" "$Q/passes" && rm -rf "$R"
+    say "passes: copied from RAM to disk in $(( $(date +%s) - t )) s ($(du -sh "$Q/passes" | cut -f1)), off the serve's clock"
+  else
+    rm -rf "$Q/passes.disk"
+    say "passes: copying them from RAM to disk failed, so they stay in RAM at $R, symlinked as passes/"
+  fi
+  R=''
+}
+trap copy_back EXIT
+trap 'STOPPED=1; exit 143' TERM HUP
+trap 'STOPPED=1; exit 130' INT
+
 if [ -n "${PEARLC_CUBIN:-}" ]; then
   if [ -n "${PEARLPLUS_UNRETAINED-1}" ]; then
     t=$(date +%s)
@@ -117,6 +165,7 @@ if [ -n "${PEARLC_CUBIN:-}" ]; then
         "$(took "$t"), $BF16: $(tail -1 "$Q/same.log" | cut -c1-400)"
     fi
   fi
+  passes_ram
   t=$(date +%s)
   serve serve.log --passes "$Q/passes" --out "$Q/served.json"
   rc=$?
@@ -179,6 +228,7 @@ UN=()
   ${UN[@]+"${UN[@]}"} ${PEARLC_CHALLENGER_GATE:+--gate "$PEARLC_CHALLENGER_GATE"} ${H1_KEY_SHA512:+--key-sha512 "$H1_KEY_SHA512"} \
   ${MAIN_FILE:+--main "$MAIN_FILE"} --coin "$P/coin-put.json" > "$Q/pearlplus.log" 2>&1
 rc=$?
+copy_back
 grep '^POUW-DEV ' "$Q/pearlplus.log"
 say "piece: served_verdicts.py pearlplus exit $rc"
 exit "$rc"
