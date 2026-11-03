@@ -172,16 +172,17 @@ class Stream:
         self.blocks: list[tuple[list[np.memmap], np.ndarray, np.ndarray]] = []
         self.bounds = [0]
         self.recs: dict[int, dict] = {}
+        for i, p in enumerate(self.man["parts"]):
+            rec = json.loads((root / f"parts/{i:03d}.json").read_text())
+            size = (root / f"parts/{i:03d}.bin").stat().st_size
+            if (rec["index"], rec["sha256"], rec["tokens"], size) != (i, p["sha256"], p["tokens"], 2 * p["tokens"]):
+                raise SystemExit(f"ladder: part {i} (its record: index {rec['index']}, {rec['tokens']} tokens; "
+                                 f"{size // 2} on disk) is not the manifest's ({p['tokens']} tokens)")
+            self.recs[i] = {k: rec[k] for k in ("index", "file", "file_sha256", "sha256", "tokens", "documents")} | {
+                "dropped": len(rec["dropped"])}
 
     def part(self, i: int) -> np.memmap:
-        rec = json.loads((self.root / f"parts/{i:03d}.json").read_text())
-        mm = np.memmap(self.root / f"parts/{i:03d}.bin", dtype=np.uint16, mode="r")
-        if not len(mm) == rec["tokens"] == self.man["parts"][i]["tokens"]:
-            raise SystemExit(f"ladder: part {i} has {len(mm)} tokens, its record {rec['tokens']}, the manifest "
-                             f"{self.man['parts'][i]['tokens']}")
-        self.recs[i] = {k: rec[k] for k in ("index", "file", "file_sha256", "sha256", "tokens", "documents")} | {
-            "dropped": len(rec["dropped"])}
-        return mm
+        return np.memmap(self.root / f"parts/{i:03d}.bin", dtype=np.uint16, mode="r")
 
     def parts_read(self, n: int) -> list[dict]:
         """The records of the parts in the blocks that windows [0, n) draw from."""

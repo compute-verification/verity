@@ -13,8 +13,10 @@ IFS=, read -ra gpus <<< "${CUDA_VISIBLE_DEVICES:-}"
 n=${#gpus[@]}
 [ "$n" -ge 1 ] || { echo "ladder.sh: no GPU leased (CUDA_VISIBLE_DEVICES is empty)" >&2; exit 2; }
 mkdir -p "$OUT" "$work"
-PYTHONPATH="$here/../../../../tools/research/src" python3 -m research keep "$work" --owner @training --expires never \
-  --priority keep --why "the v3 starts ladder's $size run: its checkpoint (a resume) and registered starts (islands/ladder-v3/ladder.sh)" \
+# LADDER_KEEP="DATE PRIORITY" (a smoke's: "2026-11-06 low") overrides the work dir's retention, never and keep
+read -r keep_until keep_priority <<< "${LADDER_KEEP:-never keep}"
+PYTHONPATH="$here/../../../../tools/research/src" python3 -m research keep "$work" --owner @training --expires "$keep_until" \
+  --priority "$keep_priority" --why "the v3 starts ladder's $size run: its checkpoint (a resume) and registered starts (islands/ladder-v3/ladder.sh)" \
   || echo "ladder.sh: WARNING: no retention record for $work" >&2
 nvidia-smi --query-gpu=index,name,memory.used,utilization.gpu --format=csv,noheader || true
 if [ ! -s "$work/count.json" ]; then
