@@ -357,7 +357,7 @@ def eventsOf : Nat → List Json → Except String (List Event)
 /-- **The record** `{"kind": "verity/rec-run/v1", "events": [...]}`: its events, in the order the challenger logged
 them. -/
 def runOf (text : String) : Except String (List Event) :=
-  match Json.parse text with
+  match JsonParse.parse text with
   | .error _ => .error "run record: not JSON"
   | .ok j =>
     if (j.getObjValAs? String "kind").toOption != some RUN_KIND then .error s!"run record: not a {RUN_KIND} record"
