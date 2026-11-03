@@ -126,11 +126,11 @@ noncomputable def vsOf (bx : AlgWorker L) : (CoinLayer.session loopNr Masked.dat
 
 theorem vsOf_of_serves (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} (h : Serves x)
     (hr : RowsOK (vsServed L bx) x w) : vsOf L bx x w = vsServed L bx x w :=
-  if_pos ⟨h, hr⟩
+  ite_eq_left ⟨h, hr⟩
 
 theorem vsOf_of_not (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} (h : ¬ (Serves x ∧ RowsOK (vsServed L bx) x w)) :
     vsOf L bx x w = (CoinLayer.session loopNr Masked.dataE).honestVals x w :=
-  if_neg h
+  ite_eq_right h
 
 theorem vsOf_of_not_serves (bx : AlgWorker L) {x : Msg} (h : ¬ Serves x) :
     vsOf L bx x = (CoinLayer.session loopNr Masked.dataE).honestVals x :=

@@ -828,13 +828,14 @@ theorem vsWord_vsOf_l0 (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) (
     have hne : i ≠ (layE x j).fc := by omega
     have hl : 195 + 2 * ((stAt x j).m - 6) + 2 * ((stAt x j).c.kLog - 6) ≤ i := by omega
     by_cases hE : i < (tabC PE x j).z.nE
-    · rw [vsWord_vsOf _ bx hg.1 w hg.2 ν c τ j r hE, ite_eq_right hne, vsOfWord, freeWord_ligAt L₀ src real bx hl]
-      dsimp only
+    · rw [vsWord_vsOf _ bx hg.1 w hg.2 ν c τ j r hE, ite_eq_right hne,
+        vsOfWord_of_none _ bx _ _ _ (freeWord_ligAt L₀ src real bx hl)]
       unfold vsWord
       rw [dite_eq_left hE]
       first
         | exact dif_pos hE
         | rfl
+        | exact dite_eq_left hE
     · unfold vsWord
       rw [dite_eq_right hE, dite_eq_right hE]
   · unfold vsWord

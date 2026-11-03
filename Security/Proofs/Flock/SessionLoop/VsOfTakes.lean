@@ -246,6 +246,28 @@ theorem vsOfWord_of_free (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : Coin
     rw [h] at h'
     cases h'
 
+theorem vsOfWord_of_none (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : CoinLayer.Nonce}
+    {c : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
+    {j : Fin (jOf x)} {r : Fin 2} {i : ℕ}
+    (wt : FlockSoundness.Model.Witness ((CoinLayer.session loopNr Masked.dataE).C x j).S.m)
+    (u : (((CoinLayer.session loopNr Masked.dataE).C x j).T
+      ((CoinLayer.session loopNr Masked.dataE).cz x c j)).tab.Mask)
+    (V : (((CoinLayer.session loopNr Masked.dataE).C x j).T
+      ((CoinLayer.session loopNr Masked.dataE).cz x c j)).tab.Vis)
+    (h : freeWord L bx x w ν c s j r i = none) :
+    vsOfWord L bx x w ν c s j r wt u V i =
+      if hi : i < (((CoinLayer.session loopNr Masked.dataE).C x j).T
+          ((CoinLayer.session loopNr Masked.dataE).cz x c j)).tab.nE then
+        FlockLevel3.GF128.val ((((CoinLayer.session loopNr Masked.dataE).C x j).T
+          ((CoinLayer.session loopNr Masked.dataE).cz x c j)).tab.vals r wt u V ⟨i, hi⟩)
+      else 0 := by
+  unfold vsOfWord
+  split
+  · rename_i a' h'
+    rw [h] at h'
+    cases h'
+  · rfl
+
 end Takes
 
 /-- **A live history's round `q` passes the frame's check**: at its first `q ≥ 1` openings past `Hello`, the worker's
