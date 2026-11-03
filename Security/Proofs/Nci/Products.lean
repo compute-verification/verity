@@ -3,6 +3,7 @@ import Proofs.Nci.Products.Witnesses
 import Proofs.Nci.Products.NoCell
 import Proofs.Nci.Products.NoCellWitnesses
 import Proofs.Nci.Products.Whole
+import Proofs.Nci.Products.WholeWitnesses
 
 /-!
 # Proofs of the fresh-products theorems
@@ -13,5 +14,5 @@ the cap at the bit level, its word-level form, the cap along chains and the slow
 `Definitions.Nci.Guarantees.Products.NoCell`: the cap without the word level and its slowdown
 (`Proofs.Nci.Products.NoCell`), and their honest and nontrivial lemmas (`Proofs.Nci.Products.NoCellWitnesses`); and for
 each of `Definitions.Nci.Guarantees.Products.Whole`: the class bound, the cap with operands made whole and its slowdown
-(`Proofs.Nci.Products.Whole`).
+(`Proofs.Nci.Products.Whole`), and their honest and nontrivial lemmas (`Proofs.Nci.Products.WholeWitnesses`).
 -/

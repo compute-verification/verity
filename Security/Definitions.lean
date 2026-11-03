@@ -20,6 +20,7 @@ import Definitions.Nci.Products.Instances
 import Definitions.Nci.Products.Received
 import Definitions.Nci.Products.NoCellInstances
 import Definitions.Nci.Products.System
+import Definitions.Nci.Products.WholeInstances
 import Definitions.Pous
 import Definitions.Pous.Guarantees.StreamedWipeFamily
 import Definitions.Pous.Guarantees.StreamedWipeReads

@@ -37,6 +37,7 @@ import Definitions.Nci.Guarantees.Products.Witnesses
 import Definitions.Nci.Guarantees.Products.NoCell
 import Definitions.Nci.Guarantees.Products.NoCellWitnesses
 import Definitions.Nci.Guarantees.Products.Whole
+import Definitions.Nci.Guarantees.Products.WholeWitnesses
 import Definitions.Pous.Assumptions
 import Definitions.Pous.Guarantees
 import Definitions.Pouw.Assumptions
