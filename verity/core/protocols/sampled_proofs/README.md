@@ -276,15 +276,12 @@ leaf counts and domains, the leaf layer, the anchors, the window (provenance onl
 receipt with its own clock, and only then draws, and it holds its own public file to the record (`matches_public`),
 which the Lean guarantee `FailClosed.flock_verify_public_ties` ties to the proved rows. The format, each check, the
 receipt and the window domains (`window_domain`, its tag's bytes still `served-domain`) are in `one_stage.registration`'s
-docstrings. A verifier that passes the window's day and the registration log's declarations (`day`, `declarations`)
-also holds the record's program to the one circuit the log declares for that day (R2: `R2-undeclared`,
-`R2-declared-twice`, `R2-declared`); the prover declares one circuit a day, before the day's first coin, and the log
-refuses a second (`duplicate-declaration`, `verity.core.protocols.registration`). The Lean verifier holds it the same
-way (`SampledProofs.Registration.declaredCode`, R2's `DeclaredDay` in `Properties.SampledProofs`).
+docstrings. Given the window's day and the log's declarations (`day`, `declarations`), R2 also holds the record's
+program to the day's one declared circuit (`R2-undeclared`, `R2-declared-twice`, `R2-declared`; in Lean
+`Registration.declaredCode`).
 
 Pinned by `tests/test_one_stage.py` (the registration, receipt, window, served-domain, R1 and declared-day tests) and
-`tests/test_verifier.py` (the declared day by both), and the served domain also by
-`integrations/vllm/tests/commit/test_serving_rows.py`.
+`tests/test_verifier.py`, and the served domain also by `integrations/vllm/tests/commit/test_serving_rows.py`.
 
 ### Registered values
 
