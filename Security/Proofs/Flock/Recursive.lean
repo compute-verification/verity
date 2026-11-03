@@ -33,6 +33,11 @@ import Proofs.Flock.Recursive.Firewall
 import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.OuterSessionZK
 import Proofs.Flock.Recursive.FirewallRun
+import Proofs.Flock.Recursive.FirewallTemplate
+import Proofs.Flock.Recursive.FirewallLive
+import Proofs.Flock.Recursive.FirewallAccepts
+import Proofs.Flock.Recursive.FirewallWire
+import Proofs.Flock.Recursive.FirewallJson
 import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.PublicAuditProof
 import Proofs.Flock.Recursive.HoloExec
@@ -96,9 +101,13 @@ in them, which never stops (`OuterAbort`), and V*'s outer sessions (`Sessions`) 
 and V*'s, with no zero knowledge of V*'s sessions taken (`Firewall`), its proof (`FirewallZK`), the committed-coin
 statements' `_hOuter` (`OuterSessionsZK`) at V*'s sessions on V*'s staging (`OuterSessionZK`) and at V*'s statements
 run by the session loop's switched prover (`Loop`), `RecursiveZK` there with the session released at a stop the coins
-fix, its simulator reading only V*'s public statements (`LoopZK`), `FirewallSends`'
-template half proved about the firewall's code, what it sends at every salt list fixed by one run (`FirewallRun`), the
-honest worker's half left an obligation (`FirewallFollows`), and the recursive audit at public units, the inner
+fix, its simulator reading only V*'s public statements (`LoopZK`), what the firewall's code
+sends at every salt list fixed by one run (`FirewallRun`), a finished session's sends the schedule's transcript
+(`FirewallTemplate`), `flock-firewall live`, the deployed send check, sending what the firewall's run sends
+(`FirewallLive`), and `FirewallSends` from them with the honest worker's half left an obligation (`FirewallAccepts`,
+with (ii) from it and the live send check's sends from it), the honest worker's requests and rounds read back by
+`decode`, `frames` and `split` as it meant them (`FirewallWire`), a plain value's text parsing back to its canonical
+form with no fraction or exponent (`FirewallJson`), and the recursive audit at public units, the inner
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof
 (`PublicAuditProof`), the same audit at candidate 3's table (`HoloExec`, its coins `HoloCoins`, its schedule and the
 verifier's map of its records `HoloSched` and `HoloMap`, `AuditC3`, its proof `AuditC3Proof` from the
