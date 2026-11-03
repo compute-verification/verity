@@ -72,6 +72,7 @@
   "Proofs.Properties.Verity.Sampled",
   "Proofs.Properties.Verity.Sampled.Messages",
   "Proofs.Properties.Verity.Sampled.Coupling",
+  "Proofs.Properties.Verity.Sampled.Accepts",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",

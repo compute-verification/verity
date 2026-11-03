@@ -66,6 +66,6 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol", "Proofs.Properties.Verity.Soundness", "Proofs.Properties.Verity.Sampled",
   "Proofs.Properties.Verity.Sampled.Messages", "Proofs.Properties.Verity.Sampled.Coupling",
-  "Proofs.Properties.Verity.SampledDraw",
+  "Proofs.Properties.Verity.Sampled.Accepts", "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog", "Proofs.Properties.Verity.SampledRead", "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest", "Proofs.Properties.Pous.WipeSigned", "Proofs.Properties.Challenger"]
