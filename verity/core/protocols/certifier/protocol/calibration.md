@@ -5,14 +5,14 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 `network-certifier-calibrate TRACE [--ingress-bucket-ms 100]` reads honest timing traces (the format is in the module
 docstring) and sizes:
 
-- **Σ_sync:**
+- **𝒮_sync:**
   - δ from 0 up to the p99.99 first-frame latency, in 16 steps;
   - ρ geometrically from the p0.01 production rate up to the p50 rate, in 8 values, each rounded down to a fraction
     with denominator at most 1024 (rounding down keeps a value lenient). Both rates are taken per configuration first:
     the low end is the p0.01 of the configurations' p0.01 rates, and the high end the median of their medians over
     windows. A configuration's windows are the windows its egress frames span, 1 + its largest anchor // T, and the
     high end is the least median rate t such that the configurations with a median rate at most t span at least
-    ⌈W/2⌉ of all W windows. So a run cut into more configurations, at a dropped window say, keeps its high end.
+    half of all the windows. So a run cut into more configurations, at a dropped window say, keeps its high end.
 - **The honest prover's choice:** one clock per spatial unit, so per window one value for every egress link of the
   configuration: the value met on all of them with the least total hand time over the window's frames on every link
   (their total shaping delay), with ties to the smaller δ, then the larger ρ. Taking the least δ first would pick a
@@ -35,15 +35,15 @@ docstring) and sizes:
   nothing changes it, and a choice not ready at w·T is declared as the envelope. `online.declare(lag=…)` replays the
   declarations with every choice ready, so it gives a live run's wherever its choices were ready; lag 0, the choice at
   the tick itself, is the reference replay's.
-- **What the prover's choice changes:** the bound charges log2 #Σ_sync bits per window whatever chose the value, so it
-  holds under any rule, any lag, and an unready choice: the envelope is in Σ_sync, and the audit checks a
-  declaration, as advice, only for membership in Σ_sync. What changes is who can use those bits: a sync chosen before
+- **What the prover's choice changes:** the bound charges log2|𝒮_sync| bits per window whatever chose the value, so it
+  holds under any rule, any lag, and an unready choice: the envelope is in 𝒮_sync, and the audit checks a
+  declaration, as advice, only for membership in 𝒮_sync. What changes is who can use those bits: a sync chosen before
   the run, or from the trace's model, doesn't depend on the sender, but an online prover reads the sender's timing, so
   the sender steers every declaration after its first (in the injected-clock replay, the burst, spread and bits
   senders each move the declared δ, and the wire differs from honest's in every window but the first). Live, whether
   a choice is ready by its tick depends on the proxy's load as well, which the sender can move too, and the same
   bits are charged for it. `Rule.choices` bounds how many values a sender could make a rule declare in a window:
-  about #Σ_sync for `cover`, at most 2 between a `sticky` rule's free windows.
+  about |𝒮_sync| for `cover`, at most 2 between a `sticky` rule's free windows.
 - **The honest miss rate:** a window that no value meets on every egress link is a miss, which is a violation. A
   larger δ or a smaller ρ only raises hand times, so a window misses exactly when the most lenient value misses on some
   link. A window is the configuration's, so the rate is the configurations' missed windows over their windows

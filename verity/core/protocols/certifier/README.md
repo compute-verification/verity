@@ -2,7 +2,7 @@
 
 A spec-level reference for network accounting's timing channel:
 - the constant-rate, left-packed certifier;
-- the Program's logical schedule, with its clock-sync advice (δ, ρ);
+- the Program's logical schedule, with its clock-sync advice (an offset `delta` and a rate `rho`);
 - the exact audit with record-and-reject, on raw records, records committed by hash (padding elided), or network
   certificates (`certificate`: the network certifier's signature over the record's SHA-512 digest hidden under a
   64-byte salt the certifier samples fresh for each record, with the window's frames in a fixed-depth SHA-512 tree), and
@@ -23,7 +23,7 @@ A spec-level reference for network accounting's timing channel:
   occupancy profile: N2's served proof block, `NetworkServedLinkWindow`, adds a Boolean Definition,
   `NetworkServedCounts_v1` (678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1), that holds the egress
   head's counts to the ones its ingress head's counts derive under the window's declared sync, the advice the audit
-  already charges at log2 #Σ_sync bits a window. Each window starts empty and must end idle, so nothing carries
+  already charges at log2|𝒮_sync| bits a window. Each window starts empty and must end idle, so nothing carries
   between windows, and a request whose frames or response straddle a window's end refuses the window. The claim is
   counts only and rests on no premise. That the derived counts are the Program's grid rests on four: FIXLEN (every
   response F frames), a fixed request size (every request F_in frames, every ingress frame a request's but the
@@ -150,7 +150,7 @@ A spec-level reference for network accounting's timing channel:
   `window-charge` (`protocol/charge-chain.md`, "The whole window"). It takes what `charge_chain` takes;
 - the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
   direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
-  bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
+  bucket s + Δ_nc + ⌊i/r⌋ from its admission s, Δ_nc its latency (`delay`). A miss fails the connection closed with a `FAIL` cell that carries no
   reason. It records and certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
   `PROTOCOL.md`'s "The active warden" has its leak bound, and `benchmarks/network_traces/warden_serve.py` runs it;
 - the release order on the server's side (`release`): a certifier puts `x-verity-release: N` (N is the request's
@@ -202,7 +202,7 @@ A spec-level reference for network accounting's timing channel:
   each `SlotEntry_v1`'s word-aligned row of its slot (registered reads), and computes the next state (each block to the
   slot holding its connection, a new connection to the lowest free slot, its prompt ids appended, a due, occupied
   slot's output count and ids taken from its entry at its anchor, every other entry ignored, a slot held through its
-  last egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket,
+  last egress bucket, `admitted + D + ⌊n/r⌋` with the code's `D` the latency Δ_nc) and its egress view, the state as `egress.EgressBucket` reads it (bucket,
   then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit, which is 0 at an
   occupied slot whose entry of the Programs' row isn't read (its read bit 0: a request no Program served). Unless the
   Programs' row is a compute audit's `SlotEntry_v1` template's entries, that template a pinned Definition (its closure
@@ -279,9 +279,9 @@ what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge
 
 The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
 `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
-- the content advice `A_c`, which is the schedule. It gets a bound once the deployment declares a deterministic
-  scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or
-  `log2(N · #Σ_sync)` per window when the profile may switch at window boundaries;
+- the content advice, which is the schedule. It gets a bound once the deployment declares a deterministic scheduler,
+  admission on a step clock and a registered list of profiles: log2 of the list's length once per audit, or log2 of
+  its length times |𝒮_sync| per window when the profile may switch at window boundaries;
 - the challenger's coins (D7), an ingress link whose timing is charged on the ingress grid and whose content costs
   0 bits. The coin link (`coin_link`, run by `benchmarks/live_challenger/coin_link.py`) carries a window's session
   between the prover and the challenger: it re-cuts every frame into cells and re-clocks both directions on their own
@@ -308,6 +308,25 @@ Calibration, from a JSON trace of honest runs:
 ~~~text
 uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 ~~~
+
+## The network bound
+
+In `GLOSSARY.md`'s symbols ("The network bound"), the bound is what `NetTiming.Guarantees.PeriodLeakAccepted` proves
+and nothing tighter. On the warden path, for the zone Y behind one network certifier over a certification period of m
+execution phases, except with probability δ_net:
+
+~~~text
+k_exfil(Y) ≤ k_sched + k_fail + Σ_j (ℓ_a,j + k_skip,j + T_j·log2 d_jit)
+~~~
+
+k_sched is log2 of the number of schedules the network certifier may run, every one the server's secrets can lead it
+to, and k_fail is log2(cap + 1) summed over every connection, cap its most egress cells. On real serving each
+connection's cell count is in both, a known overcount: proved, and larger than necessary. ℓ_a,j is execution phase j's
+registered width, charged in full and carried by the record, and k_skip,j what the incorrect proof blocks its sample
+missed can let through. The realized advice length |a_j| is private and no term of the bound. The jitter term is 0
+under J (d_jit = 1). δ_net is m·(δ + ε_ks + ε_bind + ε_tap) (`Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted`). The
+clock-sync path has no k_sched or k_fail, and charges log2|𝒮_sync| bits an execution phase instead (`PROTOCOL.md`,
+"The claim"); "The active warden" there derives the warden path's terms.
 
 ## Zero knowledge: what N2's verdict reads, and what's open
 
@@ -337,7 +356,7 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
 - the gap list is empty for plain and served links. Everything the Python checks, the Lean checks: the findings prove
   the registered Program and the sampled proof blocks with every gate pinned, the public row the verifier derives (root, served
   domain, link, window, each end's grid and profile row, both signed digests, a served link's sync words), both rows'
-  openings and the word 0b11, both certificates under the LMS key in the certifier session, and the sync in Σ_sync. Both
+  openings and the word 0b11, both certificates under the LMS key in the certifier session, and the sync in 𝒮_sync. Both
   take as inputs what the proof system and the lowering give: the findings of the verifier's own Flock Lean run, the
   sessions' SHA-512s, the registration, the sample, and the Program's and partition's digests and the gate ids. The Lean
   reads an LMS key only, and rejects any other.
@@ -351,11 +370,11 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   warden runs give 30 execution phases from r20261026-080827-2bd2 and r20261026-100351-ca6a, the latter a sample of 8 on
   the H200 warden run c20261026T092338Z-22b5. Of those, 21 are accepted and 9 refused (r20261026-104647-c07b,
   r20261026-105654-6220). Each has ten controls: nine that both reject, among them another warden's digest, and
-  `unread`, a sync off Σ_sync that changes neither verdict.
+  `unread`, a sync off 𝒮_sync that changes neither verdict.
 - the Python keeps running beside the Lean as the reference.
 - the Lean's verdict has its property in `Security/Properties/NetworkCertifier/LinkWindow.lean`
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the
-  word 0b11, certified on both ends and synced within Σ_sync (a warden link's syncs are not asked of), and its public
+  word 0b11, certified on both ends and synced within 𝒮_sync (a warden link's syncs are not asked of), and its public
   outputs are verdict 1 and deadline 1.
 
 `tie_service.IngressTie.verify`, the ingress tie's verifier, is not ported and stays Python.
@@ -366,11 +385,11 @@ A proof of the proof block is held to its circuit. Each gate names its Definitio
 which the spec and each registration bind, binds both circuits, and `LinkWindows.verify` refuses a proof that names any
 other Program, or a proof block of a size class no sidecar pins (`LinkWindows.proved`).
 
-The certificate no longer signs a hash of witness (NET-42). The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
-salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier samples fresh for each record
-(`certificate.Issuer`'s `coins`) and hands to the prover with the head, as witness only (`CertifiedRecord.salt`). D is
-a hiding commitment to R, and the LMS check (`Certificate.verify`) reads only the certificate's public fields and D.
-Each end's head check holds R to the head it opens and D to R under `salt_c`, so the certificates' check reads nothing
+The certificate signs no hash of witness. The certifier signs `d_cert = SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R)`,
+R the head's record digest and `salt_c` 64 bytes the certifier samples fresh for each record (`certificate.Issuer`'s
+`coins`) and hands to the prover with the head, as witness only (`CertifiedRecord.salt`). d_cert is a hiding
+commitment to R, and the LMS check (`Certificate.verify`) reads only the certificate's public fields and d_cert. Each
+end's head check holds R to the head it opens and d_cert to R under `salt_c`, so the certificates' check reads nothing
 of the heads; the in-the-clear check also checks that link over the opening (`CertifiedRecord.verify`).
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/certifier`.

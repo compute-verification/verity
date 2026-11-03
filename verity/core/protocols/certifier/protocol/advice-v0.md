@@ -8,9 +8,10 @@ certifies the I/O, and sampled proofs hold the committed values to the compiled 
 the interface the compiler, the encoders and the tie to the certified I/O code against; its schema id is
 `verity/advice/v0`. The module's docstring carries the same layout and its split by window.
 
-**The charge, and what is committed.** The content advice `A_c` of the accepted-runs bound, `A_c + W·log2 #Σ_sync +
-n·log2 D`, is the advice's length under the residual code's compression (`code_v1`), not v0's. v0 is the committed form, as hm96 hiding
-rows, and the form the compiler reads. The advice is private: a compile slice's proof block, always proved in zero
+**The charge, and what is committed.** The advice's realized length |a_j|, private like every value, is its length
+under the residual code's compression (`code_v1`), not v0's; the network bound (`GLOSSARY.md`, "The network bound")
+charges the registered width ℓ_a,j instead. v0 is the committed form, as hm96 hiding rows, and the form the
+compiler reads. The advice is private: a compile slice's proof block, always proved in zero
 knowledge, states that the committed Programs are compile(advice) under the advice's hiding root, with the compiler's
 digest registered. The advice's root is registered before the live sample, and the compiler refuses every ill-formed
 advice up to the public cap deterministically; v0's validity is that proof block's first part (`advice_check`, below).
@@ -60,8 +61,8 @@ so either the runner is eager or the compiler models the padding), and Mamba or 
 
 **Fields.** Each field's chooser and bit cost are below; w_req = bitlen(#requests − 1), and the widths w_len, w_rel and
 w_src are the least that hold their largest values. A **determined** field is fixed by the certified I/O, the
-committed values or the rest of the advice, and the encoders (ENC-*) remove it. The **free** fields are the real
-`A_c`: what the serving engine, which is the prover, chooses.
+committed values or the rest of the advice, and the encoders (ENC-*) remove it. The **free** fields are what the
+charge really counts: what the serving engine, which is the prover, chooses.
 
 | Field | Chosen by | Bits | Determined? |
 |---|---|---|---|
@@ -85,8 +86,8 @@ committed values or the rest of the advice, and the encoders (ENC-*) remove it. 
 
 What's left free are the step count, which requests each step runs and in what order, the chunk sizes, the
 preemptions, the cache hits and their sources, and whether the row past an EOS ran. `release` is determined, and the
-timing term `W·log2 #Σ_sync + n·log2 D` charges it. The advice carries it only so that the compiler and the tie to the
-certified egress know which output each frame is.
+timing terms charge it: m·log2|𝒮_sync| and the jitter on the clock-sync path, k_sched and k_fail on the warden path.
+The advice carries it only so that the compiler and the tie to the certified egress know which output each frame is.
 
 **Validity.** `Advice` replays the schedule, keeping for each request the positions computed (`num_computed_tokens`),
 the known tokens and the kept outputs, and refuses:

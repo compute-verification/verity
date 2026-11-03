@@ -15,7 +15,7 @@ advice input is exactly ℓ_w gates wide, so the charge is ℓ_w.
   - ``pub``'s book: the registered book's public tables (`charge_chain.book_fields(D)`);
   - ``cin`` and ``cout``, the window's carry-in and carry-out: its reads of `replay-charge` rows 0 and 1;
   - ``adv``'s D decision bits, with en_i = i < ``count``.
-- Its ok is the verdict's ``code`` bit, and its bits are held to the declared charge c (``charge``).
+- Its ok is the verdict's ``code`` bit, and its bits are held to the cap ℓ_a,j, ``pub``'s ``c`` (``charge``).
 - A window charges the decisions it commits, in commit order (advice v1). `ReplayLoad` appends them after the decisions
   the last window left unread, and `ReplayAdvance` reads the window row's in turn. So the scan reads them in commit
   order and only consumes them, and `ReplayClose` refuses a session that leaves one unread.

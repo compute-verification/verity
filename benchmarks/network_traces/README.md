@@ -219,16 +219,16 @@ A run's figures are its published Attempt's. The report's `d1` lists, per sampli
 and the scan accepted.
 
 The terms, in the generator reading of the scan's statement (each proof block's registered rows its boundary values):
-- The schedules and the fail cells, ⌈log2(cap_c + 1)⌉ each a connection (`capsTerm`, charged twice, as
-  `#S_s ≤ ∏_c (cap_c + 1)`; the record's `terms.cap_per_request`). Here cap_c bounds `WardenSchedule.cells c`, the
-  egress cells of connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network
-  certifier's schedule: it enters the compute audit's terms, which go into JointPeriodLive.
+- k_sched and k_fail, ⌈log2(cap + 1)⌉ each a connection (`capsTerm`, charged twice, as k_fail and as k_sched read as
+  `Ss.encard ≤ ∏ c, (cap c + 1)`, a known overcount; the record's `terms.cap_per_request`). Here cap bounds
+  `WardenSchedule.cells c`, the egress cells of the connection's lane, which is egress_cells. The endpoint's slot count
+  isn't a term of the network certifier's schedule: it enters the compute audit's terms, which go into JointPeriodLive.
 - The free inputs (`terms.free`): as registered, the tied audit's slot entries, NR·T / EVERY entries of NE bits
   (`ingress_scan.entry_bits`) a sampling block; or an entry's 33 + KO·IDB bits a request if `prog` is an input only at
   its anchored entries.
-- No faulty term with every proof block drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
-  not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more than an idle one. The
-  warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
+- k_skip is 0 with every proof block drawn, and d_jit = 1, so the jitter term is 0: assumed (J),
+  `NetTiming.JitterBounded`, not met at d_jit = 1 until a run shows the warden's written buckets tell a receiver no more
+  than an idle one. The warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
   (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
 Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
@@ -250,8 +250,8 @@ K charges to the sampling block's term (`tiedAudits`). The egress tie moves the 
 tied audit's inputs; K is unchanged in what it bounds, and the registered reading's free term is those slot entries.
 
 The two forms:
-- The pooled form (`PooledLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ incorrect proof blocks of b = NS + NV bits, and
-  Fmax·log2(N + 1) (the record's `terms.fmax` and `terms.b`). The form is conditional: `hesc` and `hleak` await
+- The pooled form (`PooledLeakAccepted`) adds its k_skip: Fmax = ⌈ln(1/δ)⌉ incorrect proof blocks of `b` = NS + NV bits,
+  and Fmax·log2(`N` + 1) (the record's `terms.fmax` and `terms.b`). The form is conditional: `hesc` and `hleak` await
   `SampledKSLive` and P2.
 - The per-period form (`PeriodLeakAccepted`) has no δ term with every proof block drawn.
 - Both are proved: `NetTiming.SecurityProofs.PeriodLeakAccepted` and `NetTiming.SecurityProofs.PooledLeakAccepted`.
@@ -280,7 +280,7 @@ K also rests on these conditions:
   `NetworkCheck.Period` doesn't check.
 - The scan proves sampling block 0. A monitoring period's figures scale its per-sampling-block and per-request terms at
   the run's rate.
-- The jitter term is 0 at D_j = 1, assumed (J), not met until a run shows the paced warden's written buckets tell a
+- The jitter term is 0 at d_jit = 1, assumed (J), not met until a run shows the paced warden's written buckets tell a
   receiver no more than an idle one.
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
   audit's (the `SlotEntry_v1` stand-in's) are the sampling block's free inputs above.

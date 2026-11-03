@@ -103,19 +103,20 @@ Pr[B_ext] are the chances of finding a SHA-512 collision in the run, not an assu
 **The leak bound.** `NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted`
 (`NetTiming.sampledLeak_reg`) composes the property with the count `EncardAccSeqsSampledLe`, over any deployment. Given
 `SampledAuditAccepted` and `Claims.Sampling.KS` at the deployment, except with probability δ + ε_ks + ε_bind, an accepted
-audit's carried sequences, cut at the horizon, number at most 2^c · #faultySets(δ) · 2^β · D^n, at whatever values the
-statement's registered inputs `reg` hold (`AsReg`). So the audit leaks at most c + λ_δ + β_δ + n·log2 D bits:
-- c = #(`freeInputs` \ `reg`): the free inputs are the circuit's input gates that no step before the horizon lists as
-  ingress, and the registered inputs, the weights among them, don't count;
-- λ_δ, which units are incorrect;
-- β_δ, the incorrect proof blocks' committed bits;
-- n·log2 D, the timing (J's D classes over n steps).
+audit's carried sequences, cut at the horizon, number at most 2^ℓ_a,j · #`faultySets`(δ) · 2^β · d_jit^T_j, at
+whatever values the statement's registered inputs `reg` hold (`AsReg`). So the audit leaks at most ℓ_a,j + k_skip,j +
+T_j·log2 d_jit bits in execution phase j (`GLOSSARY.md`, "The network bound"):
+- ℓ_a,j = #(`freeInputs` \ `reg`): the free inputs are the circuit's input gates that no step before the horizon lists
+  as ingress, and the registered inputs, the weights among them, don't count;
+- k_skip,j, log2 of the number of possible incorrect sets (which units are incorrect) plus β, the incorrect proof
+  blocks' committed bits;
+- T_j·log2 d_jit, the timing (J's d_jit classes over the execution phase's T_j steps).
 
-At δ ≥ miss(1) no unit is incorrect, and the bound is c + n·log2 D. `SampledLeakRegistered` states the same count at the
-registered inputs' registration values rather than the trace's, a disagreement being a SHA-512 collision. The bound is
-meaningful only once the advice is the circuit's one free input outside the registration: while a window's circuit is a
-stand-in partition rather than the whole window, its free inputs are its units' inputs, far more bits than the advice
-declares, and `records_audit` labels the bound `vacuous` whenever they exceed the declared charge.
+At δ ≥ miss(1) no unit is incorrect, and the bound is ℓ_a,j + T_j·log2 d_jit. `SampledLeakRegistered` states the same
+count at the registered inputs' registration values rather than the trace's, a disagreement being a SHA-512 collision.
+The bound is meaningful only once the advice is the circuit's one free input outside the registration: while a window's
+circuit is a stand-in partition rather than the whole window, its free inputs are its units' inputs, far more bits than
+the advice declares, and `records_audit` labels the bound `vacuous` whenever they exceed the declared charge.
 
 Over a monitoring period, `NetTiming.SecurityProofs.PooledLeakAccepted` composes the windows. It takes each window's
 conditional escape and its leak relation as hypotheses, which `SampledKSLive` and `SampledLeakAccepted` at the window's
@@ -123,17 +124,19 @@ history would discharge, and doesn't discharge them yet.
 
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`; each rank's `ranks.<r>.charge` holds
 `advice_bits`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and `exfiltration_bound`):
-- c, which the run doesn't print. Once the advice is the only free input outside the registration, c is `advice.bits`,
-  the registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as `bits`. Over
-  several windows, c is their sum.
+- ℓ_a,j, which the run doesn't print. Once the advice is the only free input outside the registration, ℓ_a,j is
+  `advice.bits`, the registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as
+  `bits`. Over several windows, the bound sums them.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
   `wrong_units` function in `verity/core/protocols/sampled_proofs/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
   `stratum_bounds`).
-- β_δ is `harm_bound`: the profile's `harm_bound`, each template's units weighted by its committed bits (`_template_bits`
-  in `verity/core/protocols/sampled_proofs/one_stage/partition.py`). λ_δ is `location_bits` (`consumers.location_bits`):
-  log2 of the at most Σ_{j ≤ bound} C(n, j) incorrect sets. `exfiltration_bound` is β_δ + λ_δ.
-- The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or n·log2 D, which is the certifier's term.
+- k_skip,j is `exfiltration_bound`, its two parts `harm_bound` and `location_bits`. β is `harm_bound`: the profile's
+  `harm_bound`, each template's units weighted by its committed bits (`_template_bits` in
+  `verity/core/protocols/sampled_proofs/one_stage/partition.py`). The incorrect sets' term is `location_bits`
+  (`consumers.location_bits`): log2 of the at most Σ_{i ≤ bound} C(`of`, i) incorrect sets.
+- The run doesn't print ε_ks or ε_bind (the profile's `epsilon_log2` is null), or T_j·log2 d_jit, which is the
+  network certifier's term.
 
 **A plain audit** (`--plain`, `PP_PLAIN=1`) is one table under a stratified sample, each window one member with no registered
 reads or shared rows (`a5.PLAIN_SCOPE`). `flock_verify_sound`'s plain part covers each session at one table (`SoundExec`,
