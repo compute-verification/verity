@@ -11,7 +11,7 @@ of a deployment and essentially never changes). One registration log is one depl
 record registers (compute-accounting, 21 Oct): the first run's θ cites its own record, which opens the log, and every
 later run's cites that same record, so new public data takes a new log, a new deployment the auditor sees as such.
 `evaluate` checks it: the policy check (`NciCheck.Desc.evaluate`) first, unchanged, then each θ entry's provenance
-against what the proof service holds.
+against what the proof system holds.
 
 ## The instance and the trusted input
 
