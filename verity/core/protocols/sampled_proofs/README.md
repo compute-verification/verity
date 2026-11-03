@@ -73,13 +73,8 @@ without replacement of `k_s = max(1, ⌊(2 K n_s + N) / (2N)⌋)` proof blocks, 
 than one, so every subcircuit is exercised in every audit. `work:K` keeps those strata and that sampler
 but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s w_s n_s`, stratum `s` draws
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`, where `w_s` and the floor `f_s ≥ 1` come from the verifier's own work table.
-A work draw may add a closure, proof blocks proved with the drawn ones. Each verifier derives the strata from its own program and
-query, never from the prover.
-
-**What the stream runs.** A `Stream` and the Lean verifier refuse what the sampled audit's soundness statement doesn't
-cover: a `bernoulli` sampling design at `0 < p < 1` at `register` (`shapes`), whose drawn count varies, and a closure map
-at `select` (`closure`), before any coin is read. The one-stage audit refuses such a law in its parameters and a draw
-that carries a closure in its evidence. `All`, which draws every proof block whatever the coins, stays covered.
+Each verifier derives the strata from its own program and query, never from the prover. Both verifiers refuse what the
+soundness statement doesn't cover: `bernoulli` at `0 < p < 1` (`shapes`) and a closure map (`closure`).
 
 **What an accepted audit establishes.** Under a stratified draw, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)` (the probability that the draw misses all of them), `m_s` being its proof blocks in
