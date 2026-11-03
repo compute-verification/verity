@@ -168,7 +168,7 @@ theorem runCut_l0Body {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Ta
   rw [Nat.add_sub_cancel_left] at e
   refine ⟨_, _, _, ?_, e⟩
   by_contra hge
-  rw [getElem!_neg _ _ hge] at e
+  rw [getElem!_neg (runCut x c (ligP0 x j r + i) spec src).2 (ligP0 x j r + i) hge] at e
   exact FlockComplete.LigLock.l0BodyAt_ne_nil i e.symm
 
 end Masked
