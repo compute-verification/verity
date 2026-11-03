@@ -2,6 +2,7 @@ import Proofs.Flock.Bridge.PortRoots
 import Proofs.Flock.Bridge.PopMatches
 import Proofs.Flock.Bridge.Targets
 import Proofs.Flock.Bridge.FilePartTarget
+import Proofs.Flock.Bridge.FilePart
 import Proofs.Flock.Bridge.Lowers
 import Proofs.Flock.Bridge.Count
 import Proofs.Flock.Bridge.CircuitOf
@@ -23,7 +24,7 @@ the sampled statement at `RowsOk` circuit files (row/v1, row/v2 and row-seg/v1 p
 `canonAt`, proved (`Flock.Bridge.assemblyTargetC` with every target it takes), and
 `Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`, V2 with its file preconditions read off the
 verifiers' acceptance (`Refused`). `Lowers`: the claims program `progOf C κ` lowers every unit of every circuit
-(`Flock.Bridge.lowers`).
+(`Flock.Bridge.lowers`). `FilePart`: `FilePartTarget`'s equation at `unitLog ≤ 32` (`Flock.Bridge.filePart_of_log`).
 `FaultyRightC`: a unit right on its shaped openings is not faulty (`Flock.Bridge.faultyRightC`). `Public`:
 `Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub`, `SampledKSLiveV2` with its error
 `Flock.Bridge.deltaPub`, a function of the public parameters. `PublicDeployed`:
