@@ -7,7 +7,8 @@
   reference composites (`LinearRef`, `DotRef`, ...) have no Boolean version of their own; primitives with none are listed;
 - te_core's count of the same step: `te_core.flops.Counter`'s MAC rules applied to the step's graph (matmuls m·k·n, one MAC per
   output element of mul, div, addcmul, addcdiv, lerp and a scaled add, and an embedding lookup at its gather's multiplexers per
-  word, `gather_selects`), priced as `te_core.gates` prices an f32 op (F32Fma_v4, 12,637 gates).
+  word, `gather_selects`), priced as `te_core.gates` prices them: an f32 op's MAC at F32Fma_v4 (12,637 gates), a gather's at one
+  word multiplexer (3 gates a bit, one of them an AND: 96 gates for an f32 word).
 
     python tools/train_step_census.py --size s --batch 2 --out OUT    # from integrations/vllm
 """
@@ -37,6 +38,8 @@ ELEMENTWISE = {"mul", "div", "addcmul", "addcdiv", "lerp"}
 SCALED = {"add", "sub"}
 #: te_core.gates's price of an f32 MAC (F32Fma_v4: AND, XOR, NOT)
 F32FMA_V4 = (4485, 7863, 289)
+#: te_core.gates's price of a gather's MAC, one word multiplexer y ⊕ (b ∧ (x ⊕ y)): gates and ANDs per bit, of an f32 word
+MUX_GATES_PER_BIT, MUX_ANDS_PER_BIT, WORD_BITS = 3, 1, 32
 #: te_core.flops's gather: a 32-bit token, chunks of 1024 words by its low 10 bits
 GATHER_INDEX_BITS, GATHER_CHUNK_BITS = 32, 10
 
@@ -135,7 +138,7 @@ def priced(cen: dict, prices: dict) -> dict:
 
 
 def te_core_count(gm) -> dict:
-    """te_core.flops.Counter's MACs for the step's graph by its shape rules, by op, and their gates at te_core.gates's f32 price."""
+    """te_core.flops.Counter's MACs for the step's graph by its shape rules, by op, and their gates at te_core.gates's prices."""
     from torch.utils import flop_counter
 
     by = collections.Counter()
@@ -162,12 +165,14 @@ def te_core_count(gm) -> dict:
             by["gather embedding"] += gather_selects(args[0].shape[0]) * out.numel()
         elif name in ELEMENTWISE or (name in SCALED and n.kwargs.get("alpha", 1) != 1):
             by["elementwise " + name] += out.numel()
-    per = sum(F32FMA_V4)
     macs = sum(by.values())
-    return {"macs": macs, "by_op": dict(sorted(by.items())), "gates_per_mac": per, "gates": macs * per,
-            "ands": macs * F32FMA_V4[0],
+    gather = sum(n for k, n in by.items() if k.startswith("gather "))
+    per = {"f32": sum(F32FMA_V4), "gather": MUX_GATES_PER_BIT * WORD_BITS}
+    return {"macs": macs, "by_op": dict(sorted(by.items())), "gates_per_mac": per,
+            "gates": (macs - gather) * per["f32"] + gather * per["gather"],
+            "ands": (macs - gather) * F32FMA_V4[0] + gather * MUX_ANDS_PER_BIT * WORD_BITS,
             "rule": "te_core.flops.Counter's MAC rules on the step's ATen graph; every op f32, priced at F32Fma_v4 "
-                    "(te_core.gates's gemm/f32 and elementwise/f32)"}
+                    "(te_core.gates's gemm/f32 and elementwise/f32), a gather's MAC at one f32 word multiplexer (its gather)"}
 
 
 def main(argv=None) -> int:
