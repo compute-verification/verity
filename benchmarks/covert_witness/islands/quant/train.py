@@ -94,7 +94,8 @@ class Schedule:
 
 #: what an arm may set (`--arms`); the rest is the run's
 ARM_KEYS = {"qat", "qat_group", "qat_mult", "qat_keep", "qat_block", "qat_norm_bits", "muon_lr", "adam_lr", "opt", "warmup",
-            "data_seed", "targets", "rank", "qbits", "pow2", "norms", "lr", "norm_lr", "seed", "vote_step", "vote_rate"}
+            "data_seed", "targets", "rank", "qbits", "pow2", "norms", "lr", "norm_lr", "seed", "vote_step", "vote_rate",
+            "vote_margin"}
 
 
 def parse_arms(a) -> list[argparse.Namespace]:
@@ -276,11 +277,12 @@ class VoteSGD(torch.optim.Optimizer):
     """`--opt vote` on float tensors: every partial gradient passes as 1-bit signs (`pack_signs`) and is summed as votes
     inside the backward (`add_votes`): with `hooks`, each backward's gradient on a trained tensor is one partial (a
     post-accumulate hook, which clears the gradient); without, a caller passes each sequence's gradient (`SampleVotes`).
-    step() moves each value by -lr · sign(votes). No state but the votes, which each step clears."""
+    step() moves each value by -lr · sign(votes) where |votes| reaches `margin` (1: any majority). No state but the
+    votes, which each step clears."""
 
-    def __init__(self, params, lr: float, hooks: bool = True):
+    def __init__(self, params, lr: float, hooks: bool = True, margin: int = 1):
         super().__init__(params, {"lr": lr})
-        self.handles, self.word = [], None
+        self.handles, self.word, self.margin = [], None, margin
         for grp in self.param_groups:
             for p in grp["params"]:
                 self.state[p] = self.init_state(p)
@@ -301,8 +303,13 @@ class VoteSGD(torch.optim.Optimizer):
         self.add_votes(p, p.grad.reshape(1, -1))
         p.grad = None
 
+    def push(self, st: dict) -> torch.Tensor:
+        """The move each value's votes ask for: -1, 0 or 1 (int16), 0 below the margin."""
+        v = st["votes"]
+        return torch.sign(v) * (v.abs() >= self.margin) if self.margin > 1 else torch.sign(v)
+
     def move(self, p: torch.Tensor, grp: dict, st: dict) -> None:
-        p.add_(torch.sign(st["votes"]).to(p.dtype), alpha=-grp["lr"])
+        p.add_(self.push(st).to(p.dtype), alpha=-grp["lr"])
 
     @torch.no_grad()
     def step(self) -> None:
@@ -320,12 +327,14 @@ class VoteCodes(VoteSGD):
     """`--opt vote` on qat's codes: each coded tensor's `bits`-bit code (state "code", int8) on a fixed support, every
     `strides[p]`-th entry of the flattened tensor from its first (every entry, by default), voted on as VoteSGD's tensors
     are with the votes taken on the support alone; step() moves each code by -sign(votes) where a uniform draw falls
-    under the group's lr (--vote-rate times the schedule's fraction), within the code's range. The weights are rebuilt
-    from the codes after each step (`full_code`, `vote_code`). A strided support is a view, so no index is carried."""
+    under the group's lr (--vote-rate times the schedule's fraction) and |votes| reaches the margin, within the code's
+    range. The weights are rebuilt from the codes after each step (`full_code`, `vote_code`). A strided support is a
+    view, so no index is carried."""
 
-    def __init__(self, params, bits: int, gen: torch.Generator, strides: dict | None = None, hooks: bool = True):
+    def __init__(self, params, bits: int, gen: torch.Generator, strides: dict | None = None, hooks: bool = True,
+                 margin: int = 1):
         self.qmax, self.gen, self.strides = 2 ** (bits - 1) - 1, gen, strides or {}
-        super().__init__(params, 1.0, hooks)
+        super().__init__(params, 1.0, hooks, margin)
 
     def stride(self, p: torch.Tensor) -> int:
         return self.strides.get(p, 1)
@@ -341,7 +350,7 @@ class VoteCodes(VoteSGD):
 
     def move(self, p: torch.Tensor, grp: dict, st: dict) -> None:
         draw = torch.rand(st["code"].shape, generator=self.gen, device=p.device) < grp["lr"]
-        st["code"] = torch.clamp(st["code"] - torch.sign(st["votes"]) * draw, -self.qmax, self.qmax).to(torch.int8)
+        st["code"] = torch.clamp(st["code"] - self.push(st) * draw, -self.qmax, self.qmax).to(torch.int8)
 
     def full_code(self, p: torch.Tensor) -> torch.Tensor:
         """p's code at p's shape, zero off the support."""
@@ -686,7 +695,8 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
             factors[n] = (A, B, math.sqrt(w.shape[1] / x.rank))
         groups = [{"params": [p for A, B, _ in factors.values() for p in (A, B)], "lr": x.lr},
                   {"params": [params[n] for n in norms], "lr": x.norm_lr}]
-        opt = (SignSGD(groups, x.lr) if x.opt == "sign" else VoteSGD(groups, x.lr, hooks=False) if sample else
+        opt = (SignSGD(groups, x.lr) if x.opt == "sign" else
+               VoteSGD(groups, x.lr, hooks=False, margin=x.vote_margin) if sample else
                torch.optim.AdamW([grp | {"weight_decay": 0.0} for grp in groups], betas=(0.9, 0.95),
                                  fused=dev.startswith("cuda")))
 
@@ -835,6 +845,9 @@ def main() -> int:
     ap.add_argument("--vote-step", type=float, default=2e-3, help="--opt vote: a code's f16 scale, one vote step's move")
     ap.add_argument("--vote-rate", type=float, default=1.0,
                     help="qat --opt vote: the chance a voted code moves at the schedule's peak")
+    ap.add_argument("--vote-margin", type=int, default=1,
+                    help="--opt vote: move a value only where its summed votes reach this size in absolute value (of the "
+                         "step's partials; 1: any majority)")
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--micro", type=int, default=32)
@@ -931,7 +944,8 @@ def main() -> int:
         for n in mats:
             params[n].requires_grad_(not sample)
         voter = (VoteCodes([params[n] for n in quantized], vbits, torch.Generator(device=dev).manual_seed(x.seed),
-                           {params[n]: vote_stride(params[n].shape, x.qat_keep) for n in mats}, hooks=not sample)
+                           {params[n]: vote_stride(params[n].shape, x.qat_keep) for n in mats}, hooks=not sample,
+                           margin=x.vote_margin)
                  if vote else None)
         sampler, l0 = None, lowest_block(mats) if sample else 0
         if sample:
