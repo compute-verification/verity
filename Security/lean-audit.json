@@ -2098,6 +2098,18 @@
    "owner": "@lean",
    "digest": "a78011b108a9369070c518c56ec7264ee084cb9aab661d2ab5ba77a6b4c26cd2"
   },
+  "Verity.Rec.Compiled.ByShape": {
+   "owner": "@lean",
+   "digest": "9058b27233b113ee4da0797648e143426d27e2ca7351624f269317f23b21eeca"
+  },
+  "Verity.Rec.Compiled.Commits": {
+   "owner": "@lean",
+   "digest": "dec783db9eeb84e400318887e8ec8b62611cf21f887502ef8c6ce9668e3618bd"
+  },
+  "Verity.Rec.Compiled.WitnessIn": {
+   "owner": "@lean",
+   "digest": "bd59936e8a7d2ff64bdd5dd376cada99e5c95eb7a7c6679b8b240ab613cd6205"
+  },
   "Verity.Sound": {
    "owner": "@proofs",
    "digest": "8ce08e78994d35e34dd4fb619f6366bee293379b3c7442a8007d53d80d5a5bd7"
@@ -2126,21 +2138,13 @@
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
   },
-  "Verity.Rec.Compiled.ByShape": {
-   "owner": "@lean",
-   "digest": "9058b27233b113ee4da0797648e143426d27e2ca7351624f269317f23b21eeca"
-  },
-  "Verity.Rec.Compiled.Commits": {
-   "owner": "@lean",
-   "digest": "dec783db9eeb84e400318887e8ec8b62611cf21f887502ef8c6ce9668e3618bd"
-  },
-  "Verity.Rec.Compiled.WitnessIn": {
-   "owner": "@lean",
-   "digest": "bd59936e8a7d2ff64bdd5dd376cada99e5c95eb7a7c6679b8b240ab613cd6205"
-  },
   "Verity.ZkSystem.ZK": {
    "owner": "@lean",
    "digest": "930ff1b2c507f083a7872be8f15f4e78eaa15f4a1cc287304b1376da022be53c"
+  },
+  "Verity.Rec.Compiled.GoesOnAt": {
+   "owner": "@lean",
+   "digest": "413cb03ac88414ce3a6ccda013172152dabe620cdf8be85b3c3c0c207cc5aef4"
   }
  },
  "meaning": [
@@ -23017,9 +23021,9 @@
    ]
   },
   "Definitions.Core.Guarantees.Rec": {
-   "digest": "80cdfb790f97fe428e38457938a2658e5c0f9f7b9747cb8dc1470c685c6206a6",
+   "digest": "cde619c4067c8c6883003f8fdec29371d9cdb0f7fa04ebc34a6653f7e99d576e",
    "definitions": {
-    "Verity.Guarantees.RecZK": "7e03c2b42329e98d517d38ecce355d64ef9513693355786dc60518ce8602af93"
+    "Verity.Guarantees.RecZK": "bef38b5790cda868f25dff5a05dbec39b00ab5f502309ecdc6b23697f08aa063"
    },
    "guarantees": ["Verity.SecurityProofs.RecZK"]
   },
@@ -23257,7 +23261,7 @@
    ]
   },
   "Definitions.Core.Interaction": {
-   "digest": "1b5549f651940924b1b59b67d761f95cc12868a93cca9697cf1887f7bc589624",
+   "digest": "615502661df2f4427fd423353d1625cab5da0e00e52e7ecc0bcaf22d3bcf144b",
    "definitions": {
     "Claims.B": "fb3801991ccf043f813b846a36059903571dff8141ca0f402abb8a11582fa105",
     "Claims.BCoins": "dfd5aa495abff4c66b0bfe023034e60f7c9119d9087c0c2f068e5fc89defd0e3",
@@ -23372,6 +23376,7 @@
     "Claims.histOf": "d471abfd61c46a90bf5d890c539a63db567c10122ebbecd9d540dfa41f103aa6",
     "Claims.instDecidableEqOut": "b8ae985c0f1e8d241ec448f0823a4319b2d05aa05ece92cfed7b65b0528df2c4",
     "Claims.instDecidableEqOut.decEq": "9b18b6d0018c4f4f8398a14a05c04514e0bb7bbd4750adc8a5810d005181d158",
+    "Claims.interact": "5cabe200af03d4869d4cd5acced6bf6fd53a01bc94af4d233ba8be2e0823b709",
     "Claims.lamOf": "6d231318a2db5bdb2e6dbfaa182b023fea0c62bf6f25be1081103063ad84ff82",
     "Claims.msgOf": "048b96fb9c8f6d3b4baf2b3c4d03f7b69036da99481a948bee4dbf67401597a5",
     "Claims.msgOf._sparseCasesOn_1": "d992ac8922f25e29659b5de8a95e6b34d4520930aacbb193c2dd7f6843036abb",
@@ -23706,12 +23711,13 @@
    ]
   },
   "Definitions.Core.Rec": {
-   "digest": "9c2ddb95cc54e48197a30a87d03cf84cf7617c3c1b73e1a298fe298b3cf42296",
+   "digest": "7485b7c704bf3ffb1e881974d36454e5b9800238f2e88e66fc3dd0b91429e092",
    "definitions": {
     "Verity.Rec.Compiled": "8b91932891a8ceaedca12ff14ff87f682c37522000d6e36f812be160251910f7",
     "Verity.Rec.Compiled.ByShape": "9058b27233b113ee4da0797648e143426d27e2ca7351624f269317f23b21eeca",
     "Verity.Rec.Compiled.CS": "38490adedd10738bb6782e42521d5d75b51ee1ec218d3285688fcb9aa54d6307",
     "Verity.Rec.Compiled.Commits": "dec783db9eeb84e400318887e8ec8b62611cf21f887502ef8c6ce9668e3618bd",
+    "Verity.Rec.Compiled.GoesOnAt": "413cb03ac88414ce3a6ccda013172152dabe620cdf8be85b3c3c0c207cc5aef4",
     "Verity.Rec.Compiled.NB": "a135eb73db68589f93c17de5b7e18dd64a81520f192074ca2f1e82f00c801318",
     "Verity.Rec.Compiled.P₀": "df611c2064acde1566ac7931073e0e2a52dcb611e3239a32bfd39e57d74f6677",
     "Verity.Rec.Compiled.R": "0c74e62c2d902041d29a0d5ec9018e83ae5acb39db71d06bacb0e08006c70d9b",
@@ -23742,10 +23748,10 @@
     "Verity.Rec.Compiled.εS": "d1a90b8fd803766ad7b45fb36f366ecffed0933ffe797c0673154b33f0880416",
     "Verity.Rec.prover": "5485b743616d4ca5f90a1ed7a6e56ab4fe1568f037c794bb17a4ed0d7ab03f6b",
     "Verity.Rec.queries": "756b906a5731f6cc930887097f35954c0e6e84926ac6f0c1359b7881826364a0",
-    "Verity.Rec.sim": "586db97060b78f5f5d949e0227f251a09fea460e38713b0268509c75d3cd8a17",
-    "Verity.Rec.simAt": "e88e00814b094099a837aea893707afc27c01b9f71af562a6887a04b1497f2ef",
+    "Verity.Rec.sim": "9e143df89b5b080687a8331e9b8f3fe4555e005d651f68b66b0fa8bc334dfd0b",
+    "Verity.Rec.simAt": "9714a1d77f36ca8f775972db8be6de2c154be03989e6933bb915ca21605b2af3",
     "Verity.Rec.slotP": "3bdc5459e732e1ad436320e0415b4a43360b6bd8ce4597410a6370a6cece7dd5",
-    "Verity.Rec.system": "efb9e716a5eb3d31ded936d4e4a319dfa63eb30ec4d4c5f7b0a49db708e615d9",
+    "Verity.Rec.system": "9107663023c5a2271f0678724d134fae95367c42c3b3d0ef8659efc846775f87",
     "Verity.ZkSystem": "e3da888b9acf398c4bf5ca5242b1d6bf2f6f0971cd2ea8bb03c510cb5f4f6064",
     "Verity.ZkSystem.P": "075dd358a7605ce8ef38be542b47ba3d8972da3feb40638208d80a43df622f40",
     "Verity.ZkSystem.R": "2d2c4ca99f9f3f9065a84cb82e809e04a055a1f5485a51917e9735608f251b5f",
