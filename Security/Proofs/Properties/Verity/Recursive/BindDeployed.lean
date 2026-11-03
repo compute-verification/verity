@@ -4,7 +4,7 @@ import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
 /-!
 # The binding term at the deployment's sizes
 
-`Dep.delta`'s third term is the binding term `W·√(E[bindBudget]/2^256)`, with
+`Dep.delta`'s third term is the binding term `√(min(W, 2n)·E[bindBudget]/2^256)`, with
 `bindBudget = (2 + r₁ + r₂)·t' + r₁ + r₂ + dColl` and `r = Dep.runs x = N_I·(1 + Σ_s waits_s·k_s)` the extractor's
 expected reruns at a draw's statement. This module evaluates `r`, and with it the term, at the deployment's sizes
 (`Dep.Sized`: `RecDeploy.SizesAt` at the brings the recursive record stages from). There the inner session and every
@@ -17,7 +17,8 @@ part wait `210` times, each wait reruns `k = ⌈4·N₀/e⌉` times with `2^10 �
 * At a session each of whose draws names a statement at those sizes that stages a part, `E[bindBudget]` is between
   `(2 + 2·316471²)·t' + 2·316471² + dColl` and `(2 + 2R)·t' + 2R + dColl` (`Dep.ex_bindBudget_mem`), and `Dep.delta` is
   between the error with each in place of `E[bindBudget]` (`Dep.delta_deployed`). The term still reads the registered
-  circuit's wire bits `W` and the strategy's calls `t'`, which are the deployment's and the strategy's, not fixed here.
+  circuit's wire bits `W` and units `n` and the strategy's calls `t'`, which are the deployment's and the strategy's,
+  not fixed here.
 -/
 
 namespace Verity.Recursive
@@ -85,13 +86,13 @@ theorem runs_ge {x : Msg} (h : q.Sized x) : 316471 ≤ q.runs x ∧ (0 < q.D.nS 
     omega
   unfold Dep.runs
   refine ⟨(Nat.mul_one 316471).symm.le.trans (Nat.mul_le_mul hNI (Nat.le_add_right 1 _)), fun hn => ?_⟩
-  have h0 : 210 * 1507 ≤ (q.D.nums x ⟨0, hn⟩).waits * (q.D.nums x ⟨0, hn⟩).k := by
-    show 210 * 1507 ≤ 210 * (q.D.nums x ⟨0, hn⟩).k
+  have h0 : 210 * 1507 ≤ (q.D.nums x 0).waits * (q.D.nums x 0).k := by
+    show 210 * 1507 ≤ 210 * (q.D.nums x 0).k
     exact Nat.mul_le_mul_left 210 (hP ⟨0, hn⟩).1
-  have hs : (q.D.nums x ⟨0, hn⟩).waits * (q.D.nums x ⟨0, hn⟩).k ≤
+  have hs : (q.D.nums x 0).waits * (q.D.nums x 0).k ≤
       ∑ j : Fin (q.D.nS x), (q.D.nums x j).waits * (q.D.nums x j).k :=
     Finset.single_le_sum (f := fun j : Fin (q.D.nS x) => (q.D.nums x j).waits * (q.D.nums x j).k)
-      (fun _ _ => Nat.zero_le _) (Finset.mem_univ _)
+      (fun _ _ => Nat.zero_le _) (Finset.mem_univ (⟨0, hn⟩ : Fin (q.D.nS x)))
   rw [pow_two]
   exact Nat.mul_le_mul hNI (by omega)
 
@@ -125,28 +126,31 @@ theorem ex_bindBudget_mem (S : SessionIn V q k θ F c σ) (dColl r₀ r₁ : ℕ
     omega
 
 /-- **`Dep.delta` at the deployment's sizes**: at a session each of whose draws names a statement at the deployment's
-sizes that stages a part, the error's number is between `δs + t'·2^{-λ} + W·√(B₀/2^256)` and
-`δs + t'·2^{-λ} + W·√(B₁/2^256)`, with `B₀ = (2 + 2·316471²)·t' + 2·316471² + dColl` and
+sizes that stages a part, the error's number is between `δs + t'·2^{-λ} + √(min(W, 2n)·B₀/2^256)` and
+`δs + t'·2^{-λ} + √(min(W, 2n)·B₁/2^256)`, with `B₀ = (2 + 2·316471²)·t' + 2·316471² + dColl` and
 `B₁ = (2 + 2R)·t' + 2R + dColl` at `R = 2592237061 · 41475792961`: `2 + 2·316471²` is about `2^{37.54}` and `2 + 2R`
 about `2^{67.54}`. -/
 theorem delta_deployed (S : SessionIn V q k θ F c σ) (dColl : ℕ) (δs lam : ℝ) (hS : ∀ ξ, q.Sized (S.x ξ))
     (hparts : ∀ ξ, 0 < q.D.nS (S.x ξ)) :
-    ENNReal.ofReal (δs + q.tCost V S * (2 : ℝ) ^ (-lam) + (∑ g, (V.circuitOf θ F).w g : ℕ) *
-        Real.sqrt ((((2 + 2 * 316471 ^ 2) * q.tCost V S + 2 * 316471 ^ 2 + dColl : ℕ) : ℝ) / 2 ^ (256 : ℝ))) ≤
+    ENNReal.ofReal (δs + q.tCost V S * (2 : ℝ) ^ (-lam) +
+        Real.sqrt (min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) *
+          ((((2 + 2 * 316471 ^ 2) * q.tCost V S + 2 * 316471 ^ 2 + dColl : ℕ) : ℝ) / 2 ^ (256 : ℝ)))) ≤
         q.delta V S dColl δs lam ∧
       q.delta V S dColl δs lam ≤
-        ENNReal.ofReal (δs + q.tCost V S * (2 : ℝ) ^ (-lam) + (∑ g, (V.circuitOf θ F).w g : ℕ) *
-          Real.sqrt ((((2 + 2 * (2592237061 * 41475792961)) * q.tCost V S + 2 * (2592237061 * 41475792961) +
-            dColl : ℕ) : ℝ) / 2 ^ (256 : ℝ))) := by
+        ENNReal.ofReal (δs + q.tCost V S * (2 : ℝ) ^ (-lam) +
+          Real.sqrt (min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) *
+            ((((2 + 2 * (2592237061 * 41475792961)) * q.tCost V S + 2 * (2592237061 * 41475792961) +
+              dColl : ℕ) : ℝ) / 2 ^ (256 : ℝ)))) := by
   obtain ⟨h₀, h₁⟩ := q.ex_bindBudget_mem V S dColl (316471 ^ 2) (2592237061 * 41475792961)
     fun ξ => ⟨(q.runs_ge (hS ξ)).2 (hparts ξ), q.runs_le (hS ξ)⟩
   have h2 : (0 : ℝ) ≤ 2 ^ (256 : ℝ) := by positivity
-  have hW : (0 : ℝ) ≤ ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) := Nat.cast_nonneg _
+  have hm : (0 : ℝ) ≤ min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) :=
+    le_min (Nat.cast_nonneg _) (by positivity)
   unfold delta
-  exact ⟨ENNReal.ofReal_le_ofReal (add_le_add le_rfl (mul_le_mul_of_nonneg_left
-      (Real.sqrt_le_sqrt (div_le_div_of_nonneg_right h₀ h2)) hW)),
-    ENNReal.ofReal_le_ofReal (add_le_add le_rfl (mul_le_mul_of_nonneg_left
-      (Real.sqrt_le_sqrt (div_le_div_of_nonneg_right h₁ h2)) hW))⟩
+  exact ⟨ENNReal.ofReal_le_ofReal (add_le_add le_rfl (Real.sqrt_le_sqrt
+      (mul_le_mul_of_nonneg_left (div_le_div_of_nonneg_right h₀ h2) hm))),
+    ENNReal.ofReal_le_ofReal (add_le_add le_rfl (Real.sqrt_le_sqrt
+      (mul_le_mul_of_nonneg_left (div_le_div_of_nonneg_right h₁ h2) hm)))⟩
 
 end Dep
 
