@@ -20,7 +20,8 @@ released after the registration's digest.
   (`Vocab.coinsRead .sampled`). Wherever v2 accepts at `ξ` under the challenger `dr`, the log it reads holds `ξ`'s bits
   at the start of the coins of `dr`'s family released after `dr`'s digest (`ShowsDraw`, `freshCoins`). Under `Logged`
   that log is the play's (`shows_of_logged`). The draw reads `coinsRead` through `DrawRead` alone, so it holds at any
-  definition of `coinsRead` that meets it.
+  definition of `coinsRead` that meets it, and a log shows the draws of any log whose coins of the draw's family after
+  its digest start its own (`ShowsDraw.mono`).
 * **The bytes** (`append_of_bitsOf_prefix`, `fresh_prefix_coinBytes`): bytes whose bits start another's bits are its
   prefix, and coins at the start of a sample's coins have their bits at the start of the sample's bytes (`coinBytes`).
 * **A draw reads a prefix of its bytes** (`drawUnits_append`): a draw that ends on some bytes ends the same, having read
@@ -214,7 +215,6 @@ theorem append_of_bitsOf_prefix {ξ ζ : ByteArray} (h : bitsOf ξ <+: bitsOf ζ
   obtain ⟨u, hu⟩ := prefix_of_flatMap_byteBits h
   refine ⟨⟨u.toArray⟩, ByteArray.ext (Array.toList_inj.1 ?_)⟩
   rw [ByteArray.toList_data_append, ← hu]
-  rfl
 
 /-- **Coins at the start of a sample's coins have their bits at the start of the sample's bytes** (`coinBytes`). -/
 theorem fresh_prefix_coinBytes {k B : ℕ} {cs : List (List Bool)} {κ : Fin k → Fin (8 * B) → Bool}
@@ -275,6 +275,11 @@ theorem drawnFrom_ok {v : _root_.SampledProofs.Registration.Verifier} {law : Lea
       rw [hd, hf] at h
       exact ⟨derived, fl, rfl, rfl, h⟩
 
+theorem eq_of_bne_ite {a b : Array ℕ} {s : String} {rest : Option String}
+    (h : (if (a != b) = true then some s else rest) = none) : a = b := by
+  by_contra hab
+  simp [hab] at h
+
 theorem coinsReason_none {v : _root_.SampledProofs.Registration.Verifier} {law rec_ draw : Lean.Json}
     {src : ByteArray} (h : _root_.SampledProofs.OneStage.coinsReason v law rec_ draw src = none) :
     ∃ n read, _root_.SampledProofs.nat? (_root_.SampledProofs.getD rec_ "population") = some n ∧
@@ -288,16 +293,13 @@ theorem coinsReason_none {v : _root_.SampledProofs.Registration.Verifier} {law r
     | ok ur =>
       obtain ⟨units, read⟩ := ur
       simp only [hn, hdf] at h
-      split at h
-      · cases h
-      · rename_i hne
-        refine ⟨n, read, rfl, ?_⟩
-        have hx : units = drawnUnits draw := by
-          revert hne
-          unfold drawnUnits
-          generalize _root_.SampledProofs.getD draw "units" = j
-          cases j <;> simp
-        rw [hdf, hx]
+      refine ⟨n, read, rfl, ?_⟩
+      have hx : units = drawnUnits draw := by
+        rw [eq_of_bne_ite h]
+        unfold drawnUnits
+        generalize _root_.SampledProofs.getD draw "units" = j
+        cases j <;> rfl
+      rw [hdf, hx]
 
 /-- **v1's check at the coins `ξ` accepts only where `ξ` draws the evidence's units**: under the verifier's law as
 derived and the record's population, `OneStage.drawnFrom` on `ξ` gives them. -/
@@ -340,11 +342,7 @@ theorem checkBlobsAt_checkAt {p : _root_.SampledProofs.OneStageZk.Params}
   split at h
   · cases h
   · split at h
-    all_goals first
-      | exact ⟨_, _, _, by assumption⟩
-      | exact ⟨_, _, _, h⟩
-      | (subst_vars; exact ⟨_, _, _, by assumption⟩)
-      | (subst_vars; exact ⟨_, _, _, h⟩)
+    all_goals exact ⟨_, _, _, by assumption⟩
 
 /-- **v2's case in what the prover sent composite `k`**: the three byte strings decode, and one of the components'
 cases, at its parameters `a`, its commitment `b` and its evidence `e`, is v2's on the blobs sent (`CaseAccepts`' case
@@ -415,6 +413,14 @@ released after `dr`'s digest there. -/
 def ShowsDraw (log : List Verity.Release) (dr : Draws) (ξ : ByteArray) : Prop :=
   bitsOf ξ <+: (freshCoins dr.label dr.after log).flatten
 
+/-- A log shows every draw a log shows whose coins of the draw's family after its digest start the log's. -/
+theorem ShowsDraw.mono {log log' : List Verity.Release} {dr : Draws} {ξ : ByteArray}
+    (h : freshCoins dr.label dr.after log <+: freshCoins dr.label dr.after log') (hs : ShowsDraw log dr ξ) :
+    ShowsDraw log' dr ξ := by
+  obtain ⟨t, ht⟩ := h
+  refine List.IsPrefix.trans hs ⟨t.flatten, ?_⟩
+  rw [← ht, List.flatten_append]
+
 /-- **What the draw asks of the sampled check's read of the device's log** (`read`, `Vocab.coinsRead .sampled`):
 wherever v2's case accepts in what the prover sent composite `k` at the coins `ξ` it read under the challenger `dr`,
 the read returns a log that shows the draw there (`ShowsDraw`). -/
@@ -462,13 +468,11 @@ theorem draw_eq (A : Live) (ω : A.Ω) {units : Array ℕ} {read : ℕ}
     (h : _root_.SampledProofs.Draw.drawUnits A.law A.n (_root_.Properties.SampledProofs.bytesOf (A.src ω 0)) =
       .ok (units, read)) :
     A.L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
-  first
-    | (show (match _root_.SampledProofs.Draw.drawUnits A.law A.n
-          (_root_.Properties.SampledProofs.bytesOf (A.src ω 0)) with
-        | .ok (d, _) => Finset.univ.filter fun u => u.val ∈ d
-        | .error _ => Finset.univ) = _
-       rw [h])
-    | (unfold Live.L; dsimp only; rw [h])
+  show (match _root_.SampledProofs.Draw.drawUnits A.law A.n
+      (_root_.Properties.SampledProofs.bytesOf (A.src ω 0)) with
+    | .ok (d, _) => Finset.univ.filter fun u => u.val ∈ d
+    | .error _ => Finset.univ) = _
+  rw [h]
 
 /-- The session widened by a projection's coins draws as the session does at the sample's first part. -/
 theorem extend_draw (A : Live) (S : Coins) (ω : A.Ω × S.T) : (A.extend S).L.draw ω = A.L.draw ω.1 := rfl
