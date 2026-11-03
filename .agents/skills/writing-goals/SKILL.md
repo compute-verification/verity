@@ -26,9 +26,10 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
     with neither.
   - Done needs evidence named in the description: a run, a lock change or a landed commit.
 - **Tags** (`--tag`, repeated) come from one fixed list of projects, in Daniel's words: `remote-demo`, `onsite-demo`,
-  `proofs`, `vllm`, `compute-accounting`, `network-accounting`, `memory-accounting`, `accounting` (only for work across
-  all three), `training`, `ci`, `infra`, `security`, `cleanup`. The site refuses any other tag. Nothing from your own
-  bookkeeping goes in a tag.
+  `proofs`, `lean`, `vllm`, `compute-accounting`, `network-accounting`, `memory-accounting`, `accounting` (only for
+  work across all three), `training`, `ci`, `infra`, `security`, `cleanup`. `proofs` is what the theorems say; `lean`
+  is Lean's code and build (the module system, the Lean check, toolchain bumps). The site refuses any other tag.
+  Nothing from your own bookkeeping goes in a tag.
 - **Its tier is derived.** A goal nothing waits on is tier 1, an outcome; a subgoal is one tier deeper than the
   shallowest goal that needs it. Set `--tier N` only when that's wrong, for example an outcome that something else
   also happens to wait on; `--no-tier` goes back to the derived one.
