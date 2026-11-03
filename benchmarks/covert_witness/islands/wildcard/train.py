@@ -1,11 +1,8 @@
-"""Island `wildcard` (any class): updates whose structure the theorem prices at ρ = 1, trained as cheaply as possible.
+"""Island `wildcard`: training shaped against formalism v2's Slowdown, through its cut cost a and update profile u.
 
-The theorem charges an update only through deep use: updated multiplications with at least k/β updated multiplications
-upstream. An update confined to one (layer, stage) position, such as block i's w_gate and w_up (both read the same
-normalized input) or its wq, wk and wv, has no updated multiplication upstream of another: D = 0 and φ = 0, so ρ = 1 at
-every (k, r) whatever E's size. Norm gains are 0-FLOP nodes in the witness, so gains downstream of the stage, or every
-gain alone, keep φ = 0. `--set` names what trains; the run refuses a set whose witnessed φ is above 0 unless
-`--allow-deep`.
+`--set` names what trains: one updated layer under a frozen tail (u(x) = 0 for the tail's share t of a token's affected
+work), the top blocks, or every tensor. `--cut` trains through activation codes at block boundaries, each a witness for
+the a its bits per token measure.
 
 Methods:
 - `adamw` / `muon`: train the set in full from θ for the budget; E is the trained tensors in full (`encode_full`).
@@ -16,7 +13,7 @@ Methods:
 - `scale`: every tensor of the set times one line-searched scalar.
 - `--extrapolate`: after training, θ + αΔ with α line-searched (ExPO); `--suite`: several configs in one run.
 
-Codes (witnesses for formalism v1's cut cost a, `adamw` / `muon`):
+Codes (witnesses for the cut cost a, `adamw` / `muon`):
 - `--cut B:q4,...`: the residual stream at block boundary B is handed on as a code (`Coded`): a randomized DCT, rebuilt
   in every step, then each group's coordinates on a 2^q-level grid with a bf16 scale; the gradient crosses back in the
   same code with stochastic rounding (`q2b4`: 2 bits forward, 4 back; `g64`: a scale per 64 coordinates; `q4o4`: each
@@ -33,10 +30,10 @@ Codes (witnesses for formalism v1's cut cost a, `adamw` / `muon`):
   on a token is r coefficients z = A·h, handed on (and their gradient back) at q bits each. `--lora-fix A` trains only
   B over a frozen random A.
 
-`--class` must be the class launch.py runs it under (the submission names it); its source rides in the submission's
-notes. Every method marks explicit harness steps (`hooks.step`), so it runs in the harness's script mode:
+Its source rides in the submission's notes. Every method marks explicit harness steps (`hooks.step`), so it runs in the
+harness's script mode:
 
-    python benchmarks/covert_witness/launch.py shallow s50 --note "cachedhead ..." -- --class shallow --set mlp-in:-1 --method cached
+    python benchmarks/covert_witness/launch.py s50 --island wildcard --note "cachedhead ..." -- --set mlp-in:-1 --method cached
 """
 from __future__ import annotations
 
@@ -61,7 +58,7 @@ try:
 except ImportError:
     hooks = None
 
-KLASS = "reference"
+MAX_E_BYTES = 0
 LF_LEAVES = {"qkv": ("wq", "wk", "wv"), "o": ("wo",), "mlp-in": ("w_gate", "w_up"), "down": ("w_down",)}
 
 
@@ -618,14 +615,14 @@ def lora_bytes(theta: dict, mats: list[str], gains: list[str], rank: int) -> int
 def add_adapters(net, theta: dict, params: dict, mats: list[str], gains: list[str], rank: int, fix: str = "",
                  zbits: int = 0) -> tuple[dict, int]:
     """Rank-r adapters W + s·B·A on `mats` (A ~ N(0, 1/d_in), B = 0, s = sqrt(d_in / r)); rank -1 is the largest whose E
-    fits the class's cap. `fix` "A" freezes that random A (only B trains). `fix` "B" makes B r seeded orthonormal
+    fits --max-e-bytes. `fix` "A" freezes that random A (only B trains). `fix` "B" makes B r seeded orthonormal
     columns (rows of a randomized DCT), frozen, with A = 0 trained and s = sqrt(d_out / r), so the update's whole effect
     on a token is its r coefficients z = A·h; `zbits` hands z on coded at that many bits per coefficient (one bf16 scale
     per token), and its gradient back the same way."""
     if rank < 0:
-        cap = prepare.CLASSES[KLASS]["max_e_bytes"]
-        if cap is None or fix:
-            raise SystemExit(f"wildcard: --lora-rank -1 needs a class with an E cap and no --lora-fix, not {KLASS}")
+        cap = MAX_E_BYTES
+        if not cap or fix:
+            raise SystemExit("wildcard: --lora-rank -1 needs --max-e-bytes and no --lora-fix")
         rank = 1
         while lora_bytes(theta, mats, gains, rank + 1) <= cap - 512:
             rank += 1
@@ -1169,16 +1166,16 @@ def rms(x: torch.Tensor, gain: torch.Tensor) -> torch.Tensor:
 
 
 def main() -> int:
-    global KLASS
+    global MAX_E_BYTES
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--mechanism", default="", help="the --note's mechanism name, kept in the notes")
     ap.add_argument("--set", dest="tset", default="mlp-in:-1")
-    ap.add_argument("--allow-deep", action="store_true")
     ap.add_argument("--method", default="adamw", choices=("adamw", "muon", "kfac", "cached", "scale"))
     ap.add_argument("--lora-rank", type=int, default=0,
-                    help="train the set's matrices through rank-r adapters (E `encode_lora`); -1 fits the class's cap")
+                    help="train the set's matrices through rank-r adapters (E `encode_lora`); -1 fits --max-e-bytes")
+    ap.add_argument("--max-e-bytes", type=int, default=0, help="the E size --lora-rank -1 fits")
     ap.add_argument("--lora-fix", default="", choices=("", "A", "B"),
                     help="freeze the adapters' A (random) or B (seeded orthonormal, A = 0 trained)")
     ap.add_argument("--z-bits", type=int, default=0, help="with --lora-fix B: hand z = A·h on at this many bits per coefficient")
@@ -1216,10 +1213,8 @@ def main() -> int:
     ap.add_argument("--suite", default="", help="a JSON list of argument overrides run one after another in this run; "
                     "each is scored on the same probe windows and the least probe loss is submitted (no snapshots)")
     ap.add_argument("--probe-rows", type=int, default=256, help="windows at the end of the training order kept as a probe")
-    ap.add_argument("--class", dest="klass", default=KLASS, choices=tuple(prepare.CLASSES),
-                    help="the class launch.py names, which the submission must name too")
     a = ap.parse_args()
-    KLASS = a.klass
+    MAX_E_BYTES = a.max_e_bytes
     torch.backends.cuda.matmul.allow_tf32 = True
     configs = json.loads(a.suite) if a.suite else [{}]
     if a.suite and a.lora_rank:
@@ -1228,10 +1223,7 @@ def main() -> int:
     params = net.params()
     tuned = resolve_set(a.tset, rec, params)
     shape = prepare.deep_share(rec, set(tuned))
-    print(json.dumps({"class": KLASS, "set": tuned, "phi": shape["phi"], "lowest_updated_layer": shape["lowest_updated_layer"]}),
-          flush=True)
-    if shape["phi"] > 0 and not a.allow_deep:
-        raise SystemExit(f"wildcard: --set {a.tset!r} has witnessed φ = {shape['phi']:.4f} > 0 (use --allow-deep)")
+    print(json.dumps({"set": tuned, "lowest_updated_layer": shape["lowest_updated_layer"]}), flush=True)
     for n, p in params.items():
         p.requires_grad_(n in tuned)
         if n in tuned:
@@ -1279,17 +1271,15 @@ def main() -> int:
     notes = {"direction": "wildcard", "mechanism": a.mechanism, "method": c.method, "set": tuned,
              "args": {k: v for k, v in vars(c).items() if k != "probe"}, "info": info, "E_bytes": len(blob),
              "suite": results if a.suite else None, "source": Path(__file__).read_text()}
-    prepare.submit(Path(a.out), a.start, KLASS, blob, model, trainable, all_steps, changed=changed, notes=notes,
+    prepare.submit(Path(a.out), a.start, blob, model, trainable, all_steps, changed=changed, notes=notes,
                    snapshots=snaps if not a.suite else [])
     return 0
 
 def probe_rows(rec: dict, a) -> torch.Tensor:
     """The last `--probe-rows` windows of the training order, which a run reaches only after reading all the others."""
     d = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
-    c = d.ctx
-    idx = np.sort(d.order[-a.probe_rows:])
-    rows = np.stack([d.tokens[i * c: i * c + c + 1] for i in idx]).astype(np.int64)
-    return torch.from_numpy(rows).to(prepare.DEVICE)
+    d.at = len(d.order) - a.probe_rows
+    return d.next(a.probe_rows)
 
 
 @torch.no_grad()
