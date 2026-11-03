@@ -50,14 +50,16 @@ files and at the strategy a strategy of the period's game projects to. This modu
   the vocabulary's reading of them, the law the draw reads over the population (`lawAt`), the statement's descriptor
   and the registration's query the verifier's program and query, and the claim's share.
 * **The device's log as v2's check reads it** (`coinsRead`): the releases the signed log in v2's evidence shows, in
-  order, each with the bits v2 reads of it. A line `SampledProofs.Challenger.treeLine` passes is a coin tree's, its own
-  release, decided as `SampledProofs.Challenger.coinTreesOf` decides it (`treeRelease`), the log's head included, which
-  `coinTreesOf` passes through `treeLine` as it does every line: a tree sampled, with its root and key, or a round
-  opened, with its coins as a session's record gives them. The other lines after the head go in pairs, a root's line
-  and its coin's release, as `SampledProofs.Challenger.releasedRootsOf` reads them: the draw family's coins after the
-  registration's digest are the bytes the draw reads, and v2's evidence opens no other family's coin, so another
-  release has none. Where a line or a record doesn't parse as it is read, or the log has no head, the read shows no
-  log.
+  order, each with the bits v2 reads of it, read with v2's own tests. A line `SampledProofs.Challenger.treeLine` passes
+  is a coin tree's, its own release, told apart and its tree and stream found by the tests
+  `SampledProofs.Challenger.coinTreesOf` makes (`treeStep`), over the whole log, its head included (`readLog`): a tree
+  sampled, with its root and key, or a round opened, with its coins as a session's record gives them, each record read
+  as `SampledProofs.OneStageZk.treesHeld` reads it (`recordsOn`). The other lines after the head go in pairs, a root's
+  line and its coin's release, as `SampledProofs.Challenger.releasedRootsOf` reads them (`readTail`): the draw family's
+  coins after the registration's digest are the bytes the draw reads, and v2's evidence opens no other family's coin,
+  so another release has none. Where a line doesn't read as it is read, or the log ends on a root without its release,
+  the read shows no log; a record that doesn't parse reads as `null`, as `treesHeld` reads it, and v2 refuses its
+  session.
 * **The vocabulary's sampled fields at the deployment's sessions** (`Deployed`, `Covers`): at most one session at each
   parameters and committed files, each one v2 sets up, with the deployment's device bytes and bound parameters. Soundness's `Vocab` reads the files at the digests v2's parameters name and the lookup tables off the committed
   files as v2 does (`DigestsAt`), v2's log (`coinsRead`), the constructions' read finder and forger at `.sampled`,
@@ -632,92 +634,106 @@ def rootOf (l : String) : Option (String × ByteArray) := do
   let .str root := _root_.SampledProofs.getD r "root" | none
   pure (label, ← (Flock.unhex root).toOption)
 
-/-- **A coin tree's line's release**, after the trees `ts` sampled so far (their roots and the specs their lines name),
-at a line `SampledProofs.Challenger.treeLine` passes, decided as `SampledProofs.Challenger.coinTreesOf` decides it, by
-v2's own tests: a tree's line (its `event` the tree event) is its hello after its nonce, with its root's and key's bits;
-any other is a round opened, of the `i`-th tree sampled, the first whose root the line names, and the `s`-th stream of
-its spec, the first the line names, after the bytes it answers, with its coins' bits where a record of that tree gives
-them, else none. `none` where the line doesn't parse as it is read. -/
-def treeRelease (records : List Lean.Json) (ts : List (String × Lean.Json)) (j : Lean.Json) :
+/-- The streams a coin tree's spec names, as `SampledProofs.Challenger.coinTreesOf` reads them: none where it names no
+list. -/
+def specStreams (spec : Lean.Json) : Array Lean.Json :=
+  match _root_.SampledProofs.getD spec "streams" with | .arr ss => ss | _ => #[]
+
+/-- **A coin tree's line's release, read with the tests `SampledProofs.Challenger.coinTreesOf` makes**, after the trees
+`ts` read so far, each its root and its spec as its line gives them: where the line's `event` is `TREE_EVENT` by
+`coinTreesOf`'s comparison, its hello after its nonce, with its root's and key's bits; else a round opened, of the
+`i`-th tree read and the `s`-th of its spec's streams, the first one equal to the line's by the comparison
+`coinTreesOf`'s `contains` makes, after the bytes it answers, with its coins' bits where a record of that tree gives
+them, else none; `none` where the line doesn't read as either. -/
+def treeStep (records : List Lean.Json) (ts : List (String × Lean.Json)) (d : Lean.Json) :
     Option (Verity.Release × List (String × Lean.Json)) :=
-  if _root_.SampledProofs.jsonStrIs (_root_.SampledProofs.getD j "event")
-      _root_.SampledProofs.Challenger.TREE_EVENT then do
-    let .str key := _root_.SampledProofs.getD j "key" | none
-    let .str nonce := _root_.SampledProofs.getD j "nonce" | none
-    let .str root := _root_.SampledProofs.getD j "root" | none
-    let spec ← specOf (_root_.SampledProofs.getD j "spec")
+  if _root_.SampledProofs.getD d "event" == Lean.Json.str _root_.SampledProofs.Challenger.TREE_EVENT then do
+    let .str key := _root_.SampledProofs.getD d "key" | none
+    let .str nonce := _root_.SampledProofs.getD d "nonce" | none
+    let .str root := _root_.SampledProofs.getD d "root" | none
+    let spec ← specOf (_root_.SampledProofs.getD d "spec")
     let ν ← (Flock.unhex nonce).toOption
     let r ← (Flock.unhex root).toOption
     let κ ← (Flock.unhex key).toOption
-    pure (⟨.hello spec, ν, Verity.bitsOfBytes (r ++ κ)⟩, ts ++ [(root, _root_.SampledProofs.getD j "spec")])
+    pure (⟨.hello spec, ν, Verity.bitsOfBytes (r ++ κ)⟩, ts ++ [(root, _root_.SampledProofs.getD d "spec")])
   else do
-    let .str root := _root_.SampledProofs.getD j "tree" | none
-    let .str stream := _root_.SampledProofs.getD j "stream" | none
-    let .str aft := _root_.SampledProofs.getD j "after" | none
-    let k ← _root_.SampledProofs.nat? (_root_.SampledProofs.getD j "round")
-    let n ← _root_.SampledProofs.nat? (_root_.SampledProofs.getD j "n")
+    let .str root := _root_.SampledProofs.getD d "tree" | none
+    let .str stream := _root_.SampledProofs.getD d "stream" | none
+    let .str aft := _root_.SampledProofs.getD d "after" | none
+    let k ← _root_.SampledProofs.nat? (_root_.SampledProofs.getD d "round")
+    let n ← _root_.SampledProofs.nat? (_root_.SampledProofs.getD d "n")
     let i ← ts.findIdx? (·.1 == root)
     let (_, spec) ← ts[i]?
-    let streams := match _root_.SampledProofs.getD spec "streams" with | .arr ss => ss | _ => #[]
-    let s ← streams.findIdx? (_root_.SampledProofs.jsonStrIs · stream)
+    let s ← (specStreams spec).findIdx? (Lean.Json.str stream == ·)
     let b ← (Flock.unhex aft).toOption
     let coins := match records.find? (recordTree · == root) with
       | some rec => ((recordRound rec stream k).map Verity.bitsOfBytes).getD []
       | none => []
     pure (⟨.opening i s n, b, coins⟩, ts)
 
-/-- **The releases the log's lines show**, after the release log's head, for the draw of family `label` after the
-registration's digest `after`, with the draw's coins `ξ` still to place, the trees `ts` sampled so far and the
-sessions' records: a coin tree's line (`SampledProofs.Challenger.treeLine`) its release (`treeRelease`), and the other
-lines in pairs, as `SampledProofs.Challenger.releasedRootsOf` reads them, a root's line `pending` and its coin's
-release, of the family and after the root the root's line shows (`rootOf`), with the next coin of `ξ` where it is the
-draw's (`label`'s, after `after`), else none. `none` where a line doesn't parse as it is read or the log ends on a root
-without its release, as v2 refuses that log. -/
-def readLines (label : String) (after : ByteArray) (records : List Lean.Json) :
+/-- **The releases the lines after the release log's head show**, for the draw of family `label` after the
+registration's digest `after`, with the draw's coins `ξ` still to place, the trees `ts` read so far and the sessions'
+records: a coin tree's line (`SampledProofs.Challenger.treeLine`) its release (`treeStep`), and the other lines in
+pairs, as `SampledProofs.Challenger.releasedRootsOf` reads them, a root's line `pending` and its coin's release, of the
+family and after the root the root's line shows (`rootOf`), with the next coin of `ξ` where it is the draw's
+(`label`'s, after `after`), else none. `none` where a line doesn't read as it is read or the log ends on a root without
+its release, as v2 refuses that log. -/
+def readTail (label : String) (after : ByteArray) (records : List Lean.Json) :
     List String → List (String × Lean.Json) → Option String → ByteArray → Option (List Verity.Release)
   | [], _, none, _ => some []
   | [], _, some _, _ => none
   | l :: ls, ts, pending, ξ =>
     if _root_.SampledProofs.Challenger.treeLine l then do
-      let (r, ts') ← (_root_.SampledProofs.Challenger.event l).toOption.bind (treeRelease records ts)
-      pure (r :: (← readLines label after records ls ts' pending ξ))
+      let (r, ts') ← (_root_.SampledProofs.Challenger.event l).toOption.bind (treeStep records ts)
+      pure (r :: (← readTail label after records ls ts' pending ξ))
     else
       match pending with
-      | none => readLines label after records ls ts (some l) ξ
+      | none => readTail label after records ls ts (some l) ξ
       | some a => do
         let (lab, root) ← rootOf a
         if lab = label ∧ root = after then
           let m := _root_.SampledProofs.Challenger.COIN_BYTES
           pure (⟨.fresh label, after, Verity.bitsOfBytes (ξ.extract 0 m)⟩ ::
-            (← readLines label after records ls ts none (ξ.extract m ξ.size)))
-        else pure (⟨.fresh lab, root, []⟩ :: (← readLines label after records ls ts none ξ))
+            (← readTail label after records ls ts none (ξ.extract m ξ.size)))
+        else pure (⟨.fresh lab, root, []⟩ :: (← readTail label after records ls ts none ξ))
 
-/-- The records of the sessions v2's evidence `e` names, on the blobs sent; `none` where one is missing or doesn't
-parse. -/
-def recordsOf (s : Verity.Sent) (e : _root_.SampledProofs.OneStageZk.Evidence) : Option (List Lean.Json) :=
-  e.sessions.toList.mapM fun r => do
-    let b ← ((_root_.Core.Blobs.ofArray s.blobs).get r.record "record").toOption
-    (Lean.Json.parse (← String.fromUTF8? b)).toOption
+/-- **The releases the release log's lines show, read with v2's own tests**: its head's coin tree where the head is a
+coin tree's line (`SampledProofs.Challenger.coinTreesOf` reads the head's line too), then the lines after it
+(`readTail`); the head in no pair, as `SampledProofs.Challenger.releasedRootsOf` reads it. -/
+def readLog (label : String) (after : ByteArray) (records : List Lean.Json) (ξ : ByteArray) :
+    List String → Option (List Verity.Release)
+  | [] => some []
+  | l :: ls =>
+    if _root_.SampledProofs.Challenger.treeLine l then do
+      let (r, ts) ← (_root_.SampledProofs.Challenger.event l).toOption.bind (treeStep records [])
+      pure (r :: (← readTail label after records ls ts none ξ))
+    else readTail label after records ls [] none ξ
 
-/-- **The device's log as v2's check reads it** from what the prover sent: the releases the challenger session's log in
-v2's evidence shows, at the parameters' challenger family and the registration's digest, with the coins v2's draw
-reads (`SampledProofs.OneStageZk.coinsOf`) and the records of the evidence's sessions on the blobs sent (`recordsOf`).
-The log's head is read through `SampledProofs.Challenger.treeLine` as `SampledProofs.Challenger.coinTreesOf` reads it,
-a coin tree's release where it passes, and the lines after it as `readLines` reads them, the head in no pair, as
-`SampledProofs.Challenger.releasedRootsOf` reads it. A release whose coins v2 doesn't open has none; where a line or a
-record doesn't parse as it is read, or the log has no head, the read shows no log, never a default. -/
+/-- A session's record on the blobs `bs`, as `SampledProofs.OneStageZk.treesHeld` reads it: one that doesn't parse is
+`null`, whose coin tree `SampledProofs.Challenger.sessionTreeReason` finds among no trees, so v2 refuses its session;
+`none` where no blob holds it or it isn't UTF-8. -/
+def recordOn (bs : _root_.Core.Blobs) (r : _root_.SampledProofs.OneStageZk.RunFiles) : Option Lean.Json := do
+  let b ← (bs.get r.record s!"session {r.name}'s record").toOption
+  let t ← String.fromUTF8? b
+  pure ((Lean.Json.parse t).toOption.getD Lean.Json.null)
+
+/-- The records of the sessions v2's evidence `e` names, on the blobs `bs`, as `SampledProofs.OneStageZk.treesHeld`
+reads them (`recordOn`). -/
+def recordsOn (bs : _root_.Core.Blobs) (e : _root_.SampledProofs.OneStageZk.Evidence) : Option (List Lean.Json) :=
+  e.sessions.toList.mapM (recordOn bs)
+
+/-- **The device's log as v2's check reads it, with v2's own tests**, from what the prover sent: the releases the
+challenger session's log in v2's evidence shows, at the parameters' challenger family and the registration's digest,
+with the coins v2's draw reads (`SampledProofs.OneStageZk.coinsOf`): each coin tree's line read by the tests
+`SampledProofs.Challenger.coinTreesOf` makes, the head's line included (`readLog`), and the sessions' records as
+`SampledProofs.OneStageZk.treesHeld` reads them (`recordsOn`). A release whose coins v2 doesn't open has none; where a
+line doesn't read as it is read, or the log ends on a root without its release, the read shows no log. -/
 def coinsRead (s : Verity.Sent) : Option (List Verity.Release) := do
   let (p, c, e) ← (caseOf s).toOption
   let (_, label) ← p.base.challenger
   let ξ ← (_root_.SampledProofs.OneStageZk.coinsOf p c e).toOption
-  let records ← recordsOf s e
-  match ← (linesOf e).toOption with
-  | [] => none
-  | l :: ls =>
-    if _root_.SampledProofs.Challenger.treeLine l then do
-      let (r, ts) ← (_root_.SampledProofs.Challenger.event l).toOption.bind (treeRelease records [])
-      pure (r :: (← readLines label c.digest records ls ts none ξ))
-    else readLines label c.digest records ls [] none ξ
+  let lines ← (linesOf e).toOption
+  readLog label c.digest (← recordsOn (_root_.Core.Blobs.ofArray s.blobs) e) ξ lines
 
 /-- **The deployment's sessions `S` cover the sampled verdict's one-stage form at composite `k`**: where `S` holds no
 session and the parameters name the one-stage form (`ParamsAt`), no strategy of the period's game makes the sampled
