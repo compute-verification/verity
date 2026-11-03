@@ -2,6 +2,7 @@ import Proofs.Flock.Recursive.KSStatement
 import Proofs.Flock.Claims.Recursion.DeployedBrings
 import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
 import Proofs.Flock.Claims.Recursion.RecRecord
+import Proofs.Flock.Claims.Recursion.KappaEpsCap
 import Proofs.Flock.Bridge.CircuitOf
 import VStarRecursive
 import Properties.Verity.Game
@@ -45,16 +46,17 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
   - The per-prover form: the bound holds at every strategy, with no hypothesis on it but `live-verifier`. It is
     the shared `condError FinderCR δ` at the strategy's session (`Dep.errAt`, the shape of `Vocab.error`): where the
     finders built from the strategy meet their named SHA-512 premises (`Dep.FinderCR`: C-Flock's at each session
-    prover, `ecr/sha-512` at each binding finder `Dep.bindAt` at its budget), the draw's miss plus `t' · 2^{-λ}` plus
-    the binding term (`Dep.delta`); elsewhere `⊤`. Every budget is a defined function of the strategy's cost `t'`
-    (`Vocab.cost`), with no call model.
+    prover, `ecr/sha-512` at each binding finder `Dep.bindAt` at its budget), the draw's miss plus the
+    knowledge-soundness term (`Dep.ksAt`: `min(2^{-167.7} + t' · 2^{-166.95}, t' · 2^{-λ})` at a statement at the
+    deployment's tables, `t' · 2^{-λ}` elsewhere) plus the binding term (`Dep.delta`); elsewhere `⊤`. Every budget is a
+    defined function of the strategy's cost `t'` (`Vocab.cost`), with no call model.
   - Beside it, `sampledProofsRecursive_nontrivial` (an accept-everything verifier breaks the bound) and
     `sampledProofsRecursive_honest` (the hypotheses that are the deployment's choices hold at the honest one).
 
   It takes as hypotheses `RecursiveKSAt` at the deployed brings, the coupling at the strategy (`SessionIn`, the
   session's projection) with the draw's miss, the deployment's reading of a witness (`hread`) and its collision from
   two (`hcoll`), and `live-verifier`. At the deployment `RecursiveKS` reads, `Proofs.Properties.Verity.Recursive.Audit`
-  states it with `RecursiveKS` and `λ₂ ≥ 135.7` discharged (`SampledProofsRecursive`).
+  states it with `RecursiveKS`, the call bounds and `λ₂ ≥ 135.7` discharged (`SampledProofsRecursive`).
 
 The model this reads (`RecDeploy`, `Flock.Guarantees.RecursiveKSAt`) is still in the proofs tree, so the property sits
 here rather than in `Properties` until C-Flock's spec is extracted.
@@ -580,6 +582,11 @@ past one at every circuit. -/
 noncomputable def runs (x : Msg) : ℕ :=
   Claims.Recursion.NI q.D q.I x * (1 + ∑ s : Fin (q.D.nS x), (q.D.nums x s).waits * (q.D.nums x s).k)
 
+/-- **The deployment's tables at `x`**: `RecDeploy.OneTableAt` at the brings `recordAt` stages from,
+`{ deployedB q.b with tr := recTr … }`. -/
+def OneTable (x : Msg) : Prop :=
+  RecDeploy.OneTableAt { deployedB q.b with tr := recTr q.aux q.nOf q.hd q.recRest } x
+
 end Dep
 
 /-- The SHA-512 calls of one run: the prover's and the verifier's. -/
@@ -720,11 +727,21 @@ def FinderCR (S : SessionIn V q k θ F c σ)
     ∀ ξ₁ ξ₂, (q.bindAt V S collOf dColl ξ₁ ξ₂).Pr FlockDeploy.sha512 ≤
       (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ)
 
-/-- **The error's number at the strategy**, from `t'` and public parameters: the draw's miss `δs`, plus `BitsLin2On`'s
-`t' · 2^{-λ}`, plus the binding term `√(min(W, 2n) · E[bindBudget] / 2^256)`, with `W` the file's wire bits, `n` its
-units and the budget averaged over pairs of draws. -/
+open Classical in
+/-- **The knowledge-soundness term at a draw's statement `x`**, from `t'`: `BitsLin2On`'s `t' · 2^{-λ}`, and where `x`
+is at the deployment's tables (`OneTable`) the least of it and route 2C's split bound `κ + t' · ε` (`BitsLin2KOn`), with
+`κ = 2^{-167.7}` once a session and `ε = 2^{-166.95}` once per SHA-512 call (`RecDeploy.kappa_eps_oneTable_cap`, at the
+call caps every accepted statement meets). -/
+noncomputable def ksAt (S : SessionIn V q k θ F c σ) (lam : ℝ) (x : Msg) : ℝ :=
+  if q.OneTable x then min (2 ^ (-(167.7 : ℝ)) + q.tCost V S * 2 ^ (-(166.95 : ℝ))) (q.tCost V S * 2 ^ (-lam))
+  else q.tCost V S * 2 ^ (-lam)
+
+/-- **The error's number at the strategy**, from `t'` and public parameters: the draw's miss `δs`, plus the
+knowledge-soundness term averaged over the draws (`ksAt`), plus the binding term
+`√(min(W, 2n) · E[bindBudget] / 2^256)`, with `W` the file's wire bits, `n` its units and the budget averaged over
+pairs of draws. -/
 noncomputable def delta (S : SessionIn V q k θ F c σ) (dColl : ℕ) (δs lam : ℝ) : ℝ≥0∞ :=
-  ENNReal.ofReal (δs + q.tCost V S * (2 : ℝ) ^ (-lam) +
+  ENNReal.ofReal (δs + Claims.Ex (fun ξ => q.ksAt V S lam (S.x ξ)) +
     Real.sqrt (min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) *
       (Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))))
 

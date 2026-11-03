@@ -16,7 +16,9 @@ commit phase's check (elsewhere no play is accepted) and sampled proofs' claim f
 * each accepted play shows, through the coupling (`SessionIn.names_shows`) and G, an accepted run of the recursive
   verifier at a dense statement (`verdict_run`);
 * at each draw `ξ` such a play has, the draw misses `U`, or the run accepts while the extractor returns no witness in
-  the recursive relation (`PrBad`, at most `t' · 2^{-λ}` by `RecursiveKSAt` through `bitsLin2On_of_ksLin2On`), or the
+  the recursive relation (`PrBad`, at most `Dep.ksAt`: `t' · 2^{-λ}` by `RecursiveKSAt` through
+  `bitsLin2On_of_ksLin2On`, and at a statement at the deployment's tables also `2^{-167.7} + t' · 2^{-166.95}` through
+  `bitsLin2KOn_of_ksLin2On` and `Dep.kappa_eps_oneTable`), or the
   extractor's witness, correct and opened on every drawn unit (`hread`), differs from `X` at some bit of a wire of a drawn
   unit of `U` (`unbound_drawn`), the bit `X`'s plurality didn't pick (`offEvent`, `pr_verdict_le`);
 * averaged over the draws, the miss is at most `δs` (`hdraw`), and the last event is at most `√(min(W, 2n) · K)`,
@@ -67,9 +69,9 @@ theorem pr_exists_finset_le {β I : Type} [Fintype β] (s : Finset I) (E : I →
       · exact Or.inl he
       · exact Or.inr ⟨i, hi, he⟩
 
-theorem ex_add3 {β : Type} [Fintype β] [Nonempty β] (f g : β → ℝ) (c : ℝ) :
-    Ex (fun x => f x + c + g x) = Ex f + c + Ex g := by
-  rw [Ex_add (fun x => f x + c) g, Ex_add f (fun _ => c), Ex_const]
+theorem ex_add3 {β : Type} [Fintype β] (f h g : β → ℝ) :
+    Ex (fun x => f x + h x + g x) = Ex f + Ex h + Ex g := by
+  rw [Ex_add (fun x => f x + h x) g, Ex_add f h]
 
 theorem ex_sum {β I : Type} [Fintype β] (s : Finset I) (f : I → β → ℝ) :
     Ex (fun x => ∑ i ∈ s, f i x) = ∑ i ∈ s, Ex (f i) := by
@@ -238,6 +240,18 @@ call bounds and the level are read at. -/
 def Dep.RunAccepts (q : Dep) (x : Msg) : Prop :=
   ∃ (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (q.D.V.k x) → Coin),
     (Claims.run FlockDeploy.sha512 P q.D.V x ω r).out = .acc
+
+/-- **`κ ≤ 2^{-167.7}` and `ε ≤ 2^{-166.95}` at a statement at the deployment's tables**, at an inner setup of at most
+`2^43` calls and call bounds `n ≤ 2^43` and `v ≤ 16 · 17716871168`: `RecDeploy.kappa_eps_oneTable_cap` at the deployed
+recursive record. -/
+theorem Dep.kappa_eps_oneTable (q : Dep) {x : Msg} (h : q.OneTable x) (hS : (innerSetupIns (xIOf x)).length ≤ 2 ^ 43)
+    {n v : ℕ} (hn : n ≤ 2 ^ 43) (hv : v ≤ 16 * 17716871168) :
+    Claims.Recursion.κ q.D q.I x ≤ 2 ^ (-(167.7 : ℝ)) ∧
+      Claims.Recursion.epsLin2 q.D q.I FlockDeploy.KS.CpDep x n v ≤ 2 ^ (-(166.95 : ℝ)) :=
+  kappa_eps_oneTable_cap _root_.Flock.Readable.relation { deployedB q.b with tr := recTr q.aux q.nOf q.hd q.recRest }
+    (DeployedR.layR OpenRows.elemR) (FlockDeploy.nextR DeployedR.rdR)
+    (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation DeployedR.rdR).cols q.wE FlockDeploy.joinR
+    rowInDeployed DeployedR.finalR q.w q.decI h hS hn hv
 
 open Accounting (Device)
 
@@ -507,8 +521,9 @@ theorem unbound_drawn (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} 
 
 /-- **One draw's share**: at the draw `ξ`, the probability over the session's tape and coins that the recursive
 configuration's verdict holds is at most the draw's miss of the unbound units (one where `ξ` misses them), plus
-`t' · 2^{-λ}` (`RecursiveKSAt`'s `BitsLin2On`), plus the probability that the run accepts while the extractor's witness
-differs from the plurality at a bit of a wire of a drawn unit (`offEvent`). -/
+the knowledge-soundness term at its statement (`Dep.ksAt`: `RecursiveKSAt`'s `BitsLin2On`, and at the deployment's
+tables the least of it and its `BitsLin2KOn` with `Dep.kappa_eps_oneTable`), plus the probability that the run accepts
+while the extractor's witness differs from the plurality at a bit of a wire of a drawn unit (`offEvent`). -/
 theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
     (hKS : Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR q.wE q.w (deployedB q.b)
       q.aux q.nOf q.hd q.recRest)
@@ -519,6 +534,8 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
     (hv : ∀ x, q.RunAccepts x → ∀ ps,
       (Claims.Recursion.setupCalls FlockDeploy.sha512 q.D (q.D.vstar x ps)).length ≤ vS x)
     (hlam : ∀ x, q.RunAccepts x → lam ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI x) (vS x))
+    (hcap : ∀ x, q.RunAccepts x → q.OneTable x →
+      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI x ≤ 2 ^ 43 ∧ vS x ≤ 16 * 17716871168)
     (V : Vocab d α) (k : Verity.Registration.Composite) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
@@ -531,13 +548,17 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
     (ξ : S.Ξ) :
     Pr (fun s : S.Ω × (Fin (q.D.V.k (S.x ξ)) → Coin) => RecVerdict V k (S.out ξ s)) ≤
       (if Disjoint (S.drawOf ξ) (Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (q.extract V S readX)) then 1
-        else 0) + q.tCost V S * (2 : ℝ) ^ (-lam) +
+        else 0) + q.ksAt V S lam (S.x ξ) +
       Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s) := by
   classical
   set Xe := q.extract V S readX with hXdef
   set U := Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) Xe with hUdef
   have hsum0 : 0 ≤ Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX Xe u ξ s) := Pr_nonneg _
-  have hc0 : 0 ≤ (q.tCost V S : ℝ) * (2 : ℝ) ^ (-lam) := by positivity
+  have hc0 : 0 ≤ q.ksAt V S lam (S.x ξ) := by
+    unfold Dep.ksAt
+    split_ifs
+    · exact le_min (by positivity) (by positivity)
+    · positivity
   by_cases hex : ∃ s, RecVerdict V k (S.out ξ s)
   swap
   · push_neg at hex
@@ -554,19 +575,35 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
     have := Pr_le_one (fun s : S.Ω × (Fin (q.D.V.k (S.x ξ)) → Coin) => RecVerdict V k (S.out ξ s))
     linarith
   rw [if_neg hD, zero_add]
-  -- `RecursiveKSAt` at the session's prover: `PrBad ≤ t' · 2^{-λ}`
-  have hB := Claims.Recursion.bitsLin2On_of_ksLin2On ?hS hKS
-  case hS => exact RecDeploy.sessionAccepts _ _ _
+  -- `RecursiveKSAt` at the session's prover: `PrBad ≤ t' · 2^{-λ}`, and `≤ κ + t' · ε` at the deployment's tables
   have hcrξ := hcr ξ
-  have hbad : Pr (fun s : q.Sample V S ξ =>
+  have hlamB : Pr (fun s : q.Sample V S ξ =>
       (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2.1).out = .acc ∧
         ¬ q.R.ext (S.x ξ) (q.E.eval FlockDeploy.sha512 (S.P ξ) (S.x ξ) s.1 s.2.1 s.2.2).1) ≤
       q.tCost V S * (2 : ℝ) ^ (-lam) := by
+    have hB := Claims.Recursion.bitsLin2On_of_ksLin2On ?hS hKS
+    case hS => exact RecDeploy.sessionAccepts _ _ _
     have h1 := hB q.decI hdecI q.decO hdecO (S.x ξ) hdense S.Ω (S.P ξ) (q.tCost V S) (le_max_left _ _)
       (fun ω r => le_trans (S.calls_le ξ ω r) (le_max_right _ _)) (nI (S.x ξ)) (hn _ hrun) (vS (S.x ξ))
       (hv _ hrun) hcrξ.1 hcrξ.2.1 hcrξ.2.2.1 hcrξ.2.2.2.1 hcrξ.2.2.2.2
     refine le_trans h1 (mul_le_mul_of_nonneg_left ?_ (Nat.cast_nonneg _))
     exact Real.rpow_le_rpow_of_exponent_le (by norm_num) (neg_le_neg (hlam _ hrun))
+  have hbad : Pr (fun s : q.Sample V S ξ =>
+      (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2.1).out = .acc ∧
+        ¬ q.R.ext (S.x ξ) (q.E.eval FlockDeploy.sha512 (S.P ξ) (S.x ξ) s.1 s.2.1 s.2.2).1) ≤
+      q.ksAt V S lam (S.x ξ) := by
+    unfold Dep.ksAt
+    split_ifs with h1t
+    · refine le_min ?_ hlamB
+      have hB := Claims.Recursion.bitsLin2KOn_of_ksLin2On ?hS hKS
+      case hS => exact RecDeploy.sessionAccepts _ _ _
+      have h1 := hB q.decI hdecI q.decO hdecO (S.x ξ) hdense S.Ω (S.P ξ) (q.tCost V S) (le_max_left _ _)
+        (fun ω r => le_trans (S.calls_le ξ ω r) (le_max_right _ _)) (nI (S.x ξ)) (hn _ hrun) (vS (S.x ξ))
+        (hv _ hrun) hcrξ.1 hcrξ.2.1 hcrξ.2.2.1 hcrξ.2.2.2.1 hcrξ.2.2.2.2
+      obtain ⟨hSc, hnc, hvc⟩ := hcap _ hrun h1t
+      obtain ⟨hκ, hε⟩ := q.kappa_eps_oneTable h1t hSc hnc hvc
+      exact le_trans h1 (add_le_add hκ (mul_le_mul_of_nonneg_left hε (Nat.cast_nonneg _)))
+    · exact hlamB
   -- the verdict's event, over the run and the extractor's seed
   have hlift : Pr (fun s : S.Ω × (Fin (q.D.V.k (S.x ξ)) → Coin) => RecVerdict V k (S.out ξ s)) =
       Pr (fun s : q.Sample V S ξ => RecVerdict V k (S.out ξ (s.1, s.2.1))) :=
@@ -594,12 +631,13 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
           (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2.1).out = .acc ∧
             ¬ q.R.ext (S.x ξ) (q.E.eval FlockDeploy.sha512 (S.P ξ) (S.x ξ) s.1 s.2.1 s.2.2).1) +
         Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX Xe u ξ s) := pr_or_le _ _
-    _ ≤ q.tCost V S * (2 : ℝ) ^ (-lam) + Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX Xe u ξ s) :=
+    _ ≤ q.ksAt V S lam (S.x ξ) + Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX Xe u ξ s) :=
         add_le_add hbad le_rfl
 
 /-- **The bound at one coupling**: averaged over the draws, the probability that the recursive configuration's verdict
-holds is at most the draw's miss `δs`, plus `t' · 2^{-λ}`, plus `√(min(W, 2n) · E[bindBudget] / 2^256)`, with `W` the
-file's wire bits and `n` its units (`ex_off_le_bits`, `ex_off_le_units`). -/
+holds is at most the draw's miss `δs`, plus the knowledge-soundness term averaged over the draws (`Dep.ksAt`), plus
+`√(min(W, 2n) · E[bindBudget] / 2^256)`, with `W` the file's wire bits and `n` its units (`ex_off_le_bits`,
+`ex_off_le_units`). -/
 theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
     (hKS : Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR q.wE q.w (deployedB q.b)
       q.aux q.nOf q.hd q.recRest)
@@ -610,6 +648,8 @@ theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
     (hv : ∀ x, q.RunAccepts x → ∀ ps,
       (Claims.Recursion.setupCalls FlockDeploy.sha512 q.D (q.D.vstar x ps)).length ≤ vS x)
     (hlam : ∀ x, q.RunAccepts x → lam ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI x) (vS x))
+    (hcap : ∀ x, q.RunAccepts x → q.OneTable x →
+      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI x ≤ 2 ^ 43 ∧ vS x ≤ 16 * 17716871168)
     (V : Vocab d α) (k : Verity.Registration.Composite) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
@@ -627,11 +667,11 @@ theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
     (hlive : ∀ ξ ω r, LiveCoins q.Bd.IVStar q.st (S.x ξ)
       (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) ω r).seen) :
     Ex (fun ξ => Pr fun s : S.Ω × (Fin (q.D.V.k (S.x ξ)) → Coin) => RecVerdict V k (S.out ξ s)) ≤
-      δs + q.tCost V S * (2 : ℝ) ^ (-lam) +
+      δs + Ex (fun ξ => q.ksAt V S lam (S.x ξ)) +
         Real.sqrt (min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) *
           (Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))) := by
   classical
-  refine le_trans (Ex_mono fun ξ => pr_verdict_le q hG hKS hdecI hdecO nI vS lam hn hv hlam V k S readX hcr.1
+  refine le_trans (Ex_mono fun ξ => pr_verdict_le q hG hKS hdecI hdecO nI vS lam hn hv hlam hcap V k S readX hcr.1
     hread hlive ξ) ?_
   rw [ex_add3, ex_ind]
   refine add_le_add (add_le_add hdraw le_rfl) ?_
@@ -646,15 +686,17 @@ R5, R6), with the recursive configuration's verdict (`RecVerdict`). At composite
 committed files `F`, the commitment `c` and a strategy `σ`, with `S` its recursive session (`SessionIn`), the
 probability that the recursive component accepts while sampled proofs' claim fails on the extractor's transcript
 (`¬ Holds k .sampled`) is at most `Dep.errAt` at `S`, the shared `condError FinderCR δ`: where `FinderCR` holds at
-the finders built from `σ`, `δs + t'(σ) · 2^{-λ} + √(min(bits, 2n) · E[bindBudget(σ)] / 2^256)` with `n` the units,
-and `⊤` elsewhere, with `t'(σ)` the strategy's SHA-512 calls in one run (`Vocab.cost`) and every finder's budget defined
-from it. There is no hypothesis on the strategy but `live-verifier`.
+the finders built from `σ`, `δs + E_ξ[ksAt] + √(min(bits, 2n) · E[bindBudget(σ)] / 2^256)` with `n` the units,
+and `⊤` elsewhere, where `ksAt` is `t'(σ) · 2^{-λ}`, and at a draw whose statement is at the deployment's tables the
+least of it and `2^{-167.7} + t'(σ) · 2^{-166.95}` (`Dep.ksAt`), with `t'(σ)` the strategy's SHA-512 calls in one run
+(`Vocab.cost`) and every finder's budget defined from it. There is no hypothesis on the strategy but `live-verifier`.
 
 It takes these hypotheses:
 * `RecursiveKSAt` at the deployed brings (`hKS`);
 * the decoders meet the list-decoding spec (`hdecI`, `hdecO`);
-* the inner and setup call bounds `nI`, `vS` and the level `λ` (`hn`, `hv`, `hlam`), at the statements some run of the
-  deployed recursive verifier accepts (`Dep.RunAccepts`);
+* the inner and setup call bounds `nI`, `vS` and the level `λ` (`hn`, `hv`, `hlam`), and at the deployment's tables
+  the inner setup's calls and `nI` at most `2^43` and `vS` at most `16 · 17716871168` (`hcap`), at the statements some
+  run of the deployed recursive verifier accepts (`Dep.RunAccepts`);
 * `K₀` covers the claim's `ε` share (`hK₀`), and the session's draw misses any `K₀` units with probability at most `δs`
   (`hdraw`);
 * the vocabulary's extractor is the recursive configuration's (`hX`, `Dep.extract` at `S`);
@@ -677,6 +719,8 @@ theorem sampledProofsRecursive (q : Dep)
     (hv : ∀ x, q.RunAccepts x → ∀ ps,
       (Claims.Recursion.setupCalls FlockDeploy.sha512 q.D (q.D.vstar x ps)).length ≤ vS x)
     (hlam : ∀ x, q.RunAccepts x → lam ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI x) (vS x))
+    (hcap : ∀ x, q.RunAccepts x → q.OneTable x →
+      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI x ≤ 2 ^ 43 ∧ vS x ≤ 16 * 17716871168)
     (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c)) (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
@@ -726,7 +770,7 @@ theorem sampledProofsRecursive (q : Dep)
     _ ≤ q.delta V S dColl δs lam := by
         unfold Dep.delta
         refine ENNReal.ofReal_le_ofReal ?_
-        exact ex_verdict_le q (accOfAccepts q) hKS hdecI hdecO nI vS lam hn hv hlam V k S readX collOf dColl hcr
+        exact ex_verdict_le q (accOfAccepts q) hKS hdecI hdecO nI vS lam hn hv hlam hcap V k S readX collOf dColl hcr
           δs (hdraw _ hU) (fun ξ wt hR u hu => hread ξ wt hreg hR u hu) hcoll hlive
 
 end Verity.Recursive
