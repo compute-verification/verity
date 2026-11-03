@@ -94,7 +94,8 @@
 #     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), draws the
 #     registration's members (V3C_LAW, default subset:1) and proves them; then `records_audit.py period` writes the audit
 #     as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json, and a copy in $OUT/v3c-audit: the
-#     registration, the Program, its answer and its free inputs), and V3c fails where it writes none.
+#     registration, the Program, its answer and its free inputs), and V3c fails where it writes none. Under H1_TIE (below)
+#     the window commit is the one made at H1's close, its registration held to the record H1 bound, and none is made here.
 #     `served_verdicts.sh v3c` runs only that step on an
 #     existing serve dir (D and its window K set), the build first, its limits 120m and 180m. V3C_CLASS set empty leaves
 #     V3c out of the run, for a `served_verdicts.sh v3c` started once the window's advice is written.
@@ -136,6 +137,15 @@
 # H1_LIVE_EVIDENCE (files) go to PoUW's piece as its --statements and --live-evidence, the evidence core's credit reads.
 # POUW_CMD='bash benchmarks/one_stage/served_pouw.sh "$1" "$2" "$3"' makes both on the node (the window's live rounds and
 # drawn units proved) and writes the period's case beside the piece, the one remote's composite reads.
+# With H1_TIE set too (and H1_CIRCUITS, V3C_CLASS not empty), V3c's window commit moves into the serve's close: at each H1
+# window's close, once it is sealed and before its sample coin, serve-openai's `--h1-window-commit` runs
+# `served_verdicts.sh tie` on the served node, under the serve's lease (LEASE_MIN then defaults to 150 and LEASE_MEM_GB to
+# 256): the window's advice, the one step 3 then reads, and `prove_path.py window-commit --window-registration W --h1-key
+# PROVER/key --law V3C_LAW` within V3C_TIMEOUT (then default 60m, at most 90m), whose registration R, chained right after
+# H1's W, H1 names as the window's Commit record (`serve_tie`). Its output stays in the serve dir's h1/w<k>/. H1's sessions
+# are reserved for the gate's default 120 minutes, the window's sample session at the serve's start, and the sample coin
+# waits for R. Step 6 then audits that commit and makes none of its own: a window H1 bound no R for has no V3c. The
+# preflight refuses H1_TIE on a tree whose window-commit takes no --window-registration.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 6h -- \
@@ -239,27 +249,57 @@ V3C=${V3C_CLASS-4,32,4} v3c_ok=0
 [ "${1:-}" = v3c ] && V3C=${V3C:-4,32,4}
 vtag=${V3C//,/-}
 if [ "${1:-}" = v3c ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-120m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-180m}
+elif [ -n "${H1_TIE:-}" ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-60m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}
 else V3C_TIMEOUT=${V3C_TIMEOUT:-15m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}; fi
-v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its circuit held to the verifier's window-circuit record
-  VW=$D/v3c-w$K-$vtag
-  [ -f "$D/window-circuit-w$K-$vtag.json" ] || { say "WINDOW-COMMIT class $V3C: no window-circuit record at it (CLASSES '$CLASSES')"; return 1; }
-  [ -f "$WREG" ] || { say "WINDOW-COMMIT class $V3C: $NO_WEIGHTS"; return 1; }
-  # off the GPU (it isn't leased here): the weights hashed by h1.registered's NumPy path, the reference
+window_commit() {  # window K of $D committed as V3C's class circuit's units in $VW/window, its answer in $1 and its errors
+  # in $2, the rest window-commit's further arguments: 0, else why on stdout
+  local json=$1 err=$2 rc
+  shift 2
+  # off the GPU, which none leases here or the engine holds under the tie: the weights hashed by h1.registered's NumPy
+  # path, the reference
   (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "$V3C_TIMEOUT" "$PY" benchmarks/prove_path/prove_path.py window-commit --serve-run "$D" \
     --window "$K" --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --class "$V3C" \
-    --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --out "$VW/window") \
-    > "$D/window-commit-$vtag.json" 2> "$OUT/window-commit-$vtag.err"
-  local rc=$?
-  if   [ "$rc" = 124 ] || [ "$rc" = 137 ]; then
-    say "WINDOW-COMMIT class $V3C timed out after V3C_TIMEOUT=$V3C_TIMEOUT (exit $rc)"
-    return 1
-  elif [ "$rc" != 0 ]; then
-    say "WINDOW-COMMIT class $V3C refused (exit $rc): $(grep -v '^ ' "$OUT/window-commit-$vtag.err" | tail -2 | cut -c1-800)"
-    return 1
+    --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --out "$VW/window" "$@") > "$json" 2> "$err"
+  rc=$?
+  if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then echo "timed out after V3C_TIMEOUT=$V3C_TIMEOUT (exit $rc)"
+  elif [ "$rc" != 0 ]; then echo "refused (exit $rc): $(grep -v '^ ' "$err" | tail -2 | cut -c1-800)"; fi
+  return "$rc"
+}
+tied() {  # under H1_TIE: 0 iff H1 bound window K's R at its close (the serve dir's h1/log.jsonl) and R is $VW's registration
+  "$PY" - "$D/h1/log.jsonl" "$K" "$VW/window/registration.json" <<'EOF' 2>&1
+import json, sys
+from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+log, k, mine = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+try:
+    bound = [x["digest"] for x in (json.loads(s) for s in open(log) if s.strip()) if x["window"] == k and x["kind"] == "record"]
+except OSError:
+    bound = []
+if not bound:
+    sys.exit("H1 bound no record R at the window's close, so V3c has no commit of it (the serve dir's h1/w<k>/window-commit.log)")
+try:
+    r = REG.digest(json.load(open(mine)))
+except (OSError, ValueError):
+    sys.exit("H1 bound a record R, and window-commit left no registration beside it")
+if r != bound[-1]:
+    sys.exit("H1 bound a record R other than window-commit's registration")
+print(f"R {r[:16]}…")
+EOF
+}
+v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its circuit held to the verifier's window-circuit record
+  VW=$D/v3c-w$K-$vtag
+  local json=$D/window-commit-$vtag.json why at=
+  [ -f "$D/window-circuit-w$K-$vtag.json" ] || { say "WINDOW-COMMIT class $V3C: no window-circuit record at it (CLASSES '$CLASSES')"; return 1; }
+  [ -f "$WREG" ] || { say "WINDOW-COMMIT class $V3C: $NO_WEIGHTS"; return 1; }
+  if [ -n "${H1_TIE:-}" ]; then  # committed at H1's close (`tie`) and never again: the window's one commit, the one H1 bound
+    json=$D/h1/w$K/window-commit.json
+    why=$(tied) || { say "WINDOW-COMMIT class $V3C: $why"; return 1; }
+    at=" at H1's close, its registration the Commit record H1 bound before the sample coin ($why)"
+  else
+    why=$(window_commit "$json" "$OUT/window-commit-$vtag.err") || { say "WINDOW-COMMIT class $V3C $why"; return 1; }
   fi
   # the commit's population and sources count the window's own values: they stay in the serve dir
-  say "WINDOW-COMMIT class $V3C: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1])); print(json.dumps({k: c[k] for k in ("run", "circuit", "registration") if k in c}, sort_keys=True))' \
-    "$D/window-commit-$vtag.json" 2>&1 | cut -c1-1500)"
+  say "WINDOW-COMMIT class $V3C$at: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1])); print(json.dumps({k: c[k] for k in ("run", "circuit", "registration") if k in c}, sort_keys=True))' \
+    "$json" 2>&1 | cut -c1-1500)"
   "$PY" - "$D/window-circuit-w$K-$vtag.json" "$VW/window/circuit.json" "$V3C" <<'EOF' 2>&1 | publish_lines
 import json, sys
 from verity.ml.windows import interface as IF
@@ -322,6 +362,41 @@ v3c_proved() {  # V3c's window committed, the build done: the certifier's chain 
   elif [ -n "${CERTIFIER_PERIOD_CMD:-}" ]; then say "CERTIFIER-PERIOD: not run: V3c wrote no period.json"; fi
   return $((rc ? rc : prc))
 }
+compiler_args() {  # the prove path's registered compiler, as verity-vllm advice takes it
+  (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP") \
+    | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])"
+}
+advice_of() {  # window $1's advice under the compiler $2 in $D/advice/w$1, unless it is there already (the tie wrote it):
+  # verity-vllm advice's exit, 3 while the window waits on a Commit record the running server hasn't written
+  [ -f "$D/advice/w$1/registration.json" ] && return 0
+  local wa=() rc
+  [ -f "$WREG" ] && wa=(--weights-of-record "$WREG")
+  # shellcheck disable=SC2086
+  (cd "$TREE/integrations/vllm" && vv advice "$D" --window "$1" --cap "$CAP" $2 "${wa[@]}" --out "$D/advice/.w$1") \
+    >> "$D/advice.log" 2>&1
+  rc=$?
+  [ -d "$D/advice/.w$1/w$1" ] && mv "$D/advice/.w$1/w$1" "$D/advice/w$1"
+  return "$rc"
+}
+tie() {  # serve-openai's --h1-window-commit (`serve_tie`) at window $2's close, before its sample coin: $1 the serve dir, $3
+  # the window's registration W, $4 where its record R goes, $5 its H1 prover dir. It says nothing in $OUT, whose lines
+  # name no window: what it says goes to the serve dir's h1/w<k>/window-commit.log, and step 6 says the picked window's
+  K=$2 VW=$D/v3c-w$2-$vtag
+  local ca rc why
+  [ "$1" -ef "$D" ] || { echo "TIE: serve-openai's serve dir $1 isn't D, $D"; return 3; }
+  [ -n "$V3C" ] && [ -n "$5" ] || { echo "TIE: V3C_CLASS is empty or the window has no H1 prover dir"; return 3; }
+  [ -f "$WREG" ] || { echo "TIE: $NO_WEIGHTS"; return 13; }
+  ca=$(compiler_args) && [ -n "$ca" ] || { echo "TIE: no registered compiler (prove_path.py compiler)"; return 13; }
+  advice_of "$K" "$ca"; rc=$?
+  if [ "$rc" = 3 ]; then
+    echo "TIE: the window's advice is pending: a request of it runs on past its close, with no Commit record yet"; return 14
+  fi
+  [ -f "$D/advice/w$K/private/advice.bin" ] || { echo "TIE: no advice (verity-vllm advice exit $rc; the serve dir's advice.log)"; return 14; }
+  why=$(window_commit "$D/h1/w$K/window-commit.json" "$D/h1/w$K/window-commit.err" --window-registration "$3" \
+    --h1-key "$5/key" --law "${V3C_LAW:-subset:1}") || { echo "TIE: window-commit class $V3C $why"; return 16; }
+  cp "$VW/window/registration.json" "$4" || { echo "TIE: window-commit class $V3C wrote no registration"; return 16; }
+  echo "TIE: window-commit class $V3C: its registration is the window's record R"
+}
 
 serve() {  # under the lease: the endpoint, the requests, every closed window sealed, the endpoint stopped
   export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
@@ -332,6 +407,11 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   [ -n "$H1_GATE" ] && h1=(--protocols pouw:eps1-sm120-h1fx1 --challenger-gate "$H1_GATE"
                            --challenger-peer "$H1_PEER" "${pc[@]}")
   [ -n "$H1_GATE" ] && [ -n "${H1_CIRCUITS:-}" ] && h1+=(--h1-prover "$D/private/h1")
+  local polls=450
+  if [ -n "${H1_TIE:-}" ]; then  # a window's line waits for its release, which waits for its window commit
+    h1+=(--h1-window-commit "cd $(printf %q "$TREE") && bash benchmarks/one_stage/served_verdicts.sh tie \"\$@\"")
+    polls=$((polls + 30 * (${V3C_TIMEOUT%m} + 5)))
+  fi
   if [ -n "${WIPE_CMD:-}" ]; then  # the wipe of this card, before its engine loads
     mkdir -p "$OUT/pieces/wipe"
     (cd "$TREE" && timeout -k 1m "${WIPE_TIMEOUT:-20m}" bash -c "$WIPE_CMD" _ "$D" all "$OUT/pieces/wipe") \
@@ -404,7 +484,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
   # a front that failed before a window closed sent the run's only requests, so none will
   if [ "$LOAD" != front ] || [ "$rc" = 0 ] || [ "$c" -gt 0 ]; then
-    for _ in $(seq 1 450); do     # every closed window's seal line
+    for _ in $(seq 1 "$polls"); do     # every closed window's seal line
       c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
       [ "$c" -gt 0 ] && [ "$s" -ge "$c" ] && break
       sleep 2
@@ -488,6 +568,7 @@ private_pieces() {
 }
 
 if [ "${1:-}" = serve ]; then serve; exit $?; fi
+if [ "${1:-}" = tie ]; then shift; tie "$@"; exit $?; fi
 if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; rc=$?; measure; exit "$rc"; fi
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
 if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
@@ -508,6 +589,16 @@ if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split
   [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"; exit 3; }
   [ -n "$V3C" ] || { say "PREFLIGHT: the split certifier's period check reads V3c's period.json, and V3C_CLASS is empty"; exit 3; }
   SPLIT=1
+fi
+if [ -n "${H1_TIE:-}" ] && [ "${1:-}" != v3c ]; then  # V3c's window commit at each H1 window's close, before its sample coin
+  [ -n "$H1_GATE" ] && [ -n "${H1_CIRCUITS:-}" ] \
+    || { say "PREFLIGHT: H1_TIE ties H1's windows, and H1_GATE or H1_CIRCUITS (whose prover state window-commit reads) is unset"; exit 3; }
+  [ -n "$V3C" ] || { say "PREFLIGHT: H1_TIE commits each H1 window at V3C_CLASS, and it is empty"; exit 3; }
+  grep -q -- '"--window-registration"' "$TREE/benchmarks/prove_path/prove_path.py" \
+    || { say "PREFLIGHT: H1_TIE needs window-commit's --window-registration, its registration chained right after H1's, which this tree's prove_path.py doesn't take"; exit 3; }
+  [[ $V3C_TIMEOUT =~ ^[0-9]+m$ ]] && [ "${V3C_TIMEOUT%m}" -le 90 ] \
+    || { say "PREFLIGHT: under H1_TIE the window's sample coin waits for window-commit, and its session's reserve lasts the gate's 120 minutes from the serve's start: V3C_TIMEOUT is at most 90m, not $V3C_TIMEOUT"; exit 3; }
+  LEASE_MIN=${LEASE_MIN:-150} LEASE_MEM_GB=${LEASE_MEM_GB:-256}
 fi
 mkdir -p "$D" "$ROOT/cache" "$FW"
 (umask 077; mkdir -p "$D/private")
@@ -685,16 +776,13 @@ if [ -n "${CERTIFIER_CMD:-}" ]; then  # the certifier's chain is the longest pie
   CERT=$!
 fi
 cd "$TREE/integrations/vllm" || exit 9
-CA=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP" \
-  | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])")
+CA=$(compiler_args)
 [ -n "$CA" ] || stop compiler 13
 echo "registered compiler: $CA" > "$OUT/compiler.txt"
 WA=()
 [ -f "$WREG" ] && WA=(--weights-of-record "$WREG")
 for k in $("$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl"); do
-  # shellcheck disable=SC2086
-  vv advice "$D" --window "$k" --cap "$CAP" $CA "${WA[@]}" --out "$D/advice/.w$k" >> "$D/advice.log" 2>&1
-  [ -d "$D/advice/.w$k/w$k" ] && mv "$D/advice/.w$k/w$k" "$D/advice/w$k"
+  advice_of "$k" "$CA"
   [ "$k" = "$K" ] && break
 done
 # the advice and compile logs name the request Programs by their prompt lengths and count the window's requests, which
