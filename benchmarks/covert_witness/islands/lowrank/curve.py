@@ -5,8 +5,9 @@ target drop (-0.5, -1, -2, -5% of the start's bpb), the least training FLOPs (2 
 
     python curve.py [--state ~/.research/lowrank/night2/state.jsonl ...] [--json]
 
-Reads each run's fetched `out/` under ~/.research/runs (launch.py --collect puts it there). A tool of the agent VM, never
-run by the harness.
+Reads each run's fetched `out/` under ~/.research/runs (launch.py --collect puts it there), and keeps the fields it reads
+in ~/.research/lowrank/cache/RUN.json, so a run whose big local files `research data custody RUN --publish` removed
+still has its point. A tool of the agent VM, never run by the harness.
 """
 from __future__ import annotations
 
@@ -15,16 +16,37 @@ import json
 from pathlib import Path
 
 RUNS = Path.home() / ".research" / "runs"
+CACHE = Path.home() / ".research" / "lowrank" / "cache"
 TARGETS = (0.5, 1.0, 2.0, 5.0)
 
 
-def point(run: str, note: str) -> dict | None:
-    out = RUNS / run / "out"
+def load(run: str) -> tuple[dict, dict] | None:
+    out, cached = RUNS / run / "out", CACHE / f"{run}.json"
     try:
         rj = json.loads((out / "run" / "run.json").read_text())
         meta = json.loads((out / "meta.json").read_text())
     except (OSError, ValueError):
+        if not cached.exists():
+            return None
+        c = json.loads(cached.read_text())
+        return c["run"], c["meta"]
+    keep = ("step", "macs", "val_bpb", "e_bytes")
+    rj = {"invalid": rj.get("invalid"),
+          "checkpoints": [{**{k: c.get(k) for k in keep}, "score": {"start_bpb": (c.get("score") or {}).get("start_bpb")}}
+                          for c in rj.get("checkpoints", [])]}
+    meta = {"start": meta["start"], "class": meta["class"],
+            "notes": {"delta_grad": meta.get("notes", {}).get("delta_grad", {})}}
+    if not cached.exists():
+        CACHE.mkdir(parents=True, exist_ok=True)
+        cached.write_text(json.dumps({"run": rj, "meta": meta}))
+    return rj, meta
+
+
+def point(run: str, note: str) -> dict | None:
+    got = load(run)
+    if got is None:
         return None
+    rj, meta = got
     cks = [c for c in rj.get("checkpoints", []) if c.get("val_bpb") is not None]
     if not cks or rj.get("invalid"):
         return None
