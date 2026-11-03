@@ -118,17 +118,11 @@ noncomputable def opOfVZC (c : vb.Pos) (e : TrialOutZC F L D Sl) (v : vb.Val) : 
   Classical.epsilon fun o => accωZC planZ R e.1 e.2.1 ∧
     ∃ bs, firsts (accωZC planZ R e.1) e.2.2 = some bs ∧ OpensAtZC A Hs P planZ tab vb R τ e.1 bs c v o
 
-open Classical in
-/-- **The finder's output**: a collision from two openings of `c` with different values, the first
-from its first trial, the second from that trial or from the first further trial that reads `c`. -/
+/-- **The finder's output**: a collision from two openings of `c` with different values (`LinkFinder.outOf`), from
+the trials its cost charges. -/
 noncomputable def outCZC (c : vb.Pos) (x : TrialOutZC F L D Sl × List (TrialOutZC F L D Sl)) :
     Option (List UInt8 × List UInt8) :=
-  if h : ∃ p : TrialOutZC F L D Sl × vb.Val × vb.Val, p.2.1 ≠ p.2.2 ∧
-      p.2.1 ∈ rdTZC A Hs P planZ tab vb R τ c x.1 ∧ p.2.2 ∈ rdTZC A Hs P planZ tab vb R τ c p.1 ∧
-      (p.1 = x.1 ∨ nextRead (rdTZC A Hs P planZ tab vb R τ c) x.2 = some p.1) then
-    some (vb.collide (opOfVZC A Hs P planZ tab vb R τ c x.1 (Classical.choose h).2.1)
-      (opOfVZC A Hs P planZ tab vb R τ c (Classical.choose h).1 (Classical.choose h).2.2))
-  else none
+  outOf (rdTZC A Hs P planZ tab vb R τ c) (opOfVZC A Hs P planZ tab vb R τ c) vb.collide x
 
 open Classical in
 /-- **The plurality value at `c`**: the value the trial reads alone most often. -/

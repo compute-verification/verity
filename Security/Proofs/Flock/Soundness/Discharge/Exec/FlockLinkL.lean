@@ -127,17 +127,11 @@ noncomputable def opOfVL (c : vb.Pos) (e : TrialOutL L D Sl) (v : vb.Val) : vb.O
   Classical.epsilon fun o => accωL plan R e.1 e.2.1 ∧
     ∃ bs, firsts (accωL plan R e.1) e.2.2 = some bs ∧ OpensAtL P H E Lf plan tab vb R τ e.1 bs c v o
 
-open Classical in
-/-- **The finder's output**: a collision from two openings of `c` with different values, the first
-from its first trial, the second from that trial or from the first further trial that reads `c`. -/
+/-- **The finder's output**: a collision from two openings of `c` with different values (`LinkFinder.outOf`), from
+the trials its cost charges. -/
 noncomputable def outCL (c : vb.Pos) (x : TrialOutL L D Sl × List (TrialOutL L D Sl)) :
     Option (List UInt8 × List UInt8) :=
-  if h : ∃ p : TrialOutL L D Sl × vb.Val × vb.Val, p.2.1 ≠ p.2.2 ∧
-      p.2.1 ∈ rdTL P H E Lf plan tab vb R τ c x.1 ∧ p.2.2 ∈ rdTL P H E Lf plan tab vb R τ c p.1 ∧
-      (p.1 = x.1 ∨ nextRead (rdTL P H E Lf plan tab vb R τ c) x.2 = some p.1) then
-    some (vb.collide (opOfVL P H E Lf plan tab vb R τ c x.1 (Classical.choose h).2.1)
-      (opOfVL P H E Lf plan tab vb R τ c (Classical.choose h).1 (Classical.choose h).2.2))
-  else none
+  outOf (rdTL P H E Lf plan tab vb R τ c) (opOfVL P H E Lf plan tab vb R τ c) vb.collide x
 
 open Classical in
 /-- **The plurality value at `c`**: the value the trial reads alone most often. -/
