@@ -44,6 +44,32 @@ At (c, k), with s = c/w, w = token_gates / tokens (each part's for Fit; the reco
 Where Fit holds, Δ + sτ ≤ k bounds u_in by k through the cap, so x0's bound is 1 and Slowdown's bound 0: the two never
 disagree.
 
+**The context charge** (`Measured.context`, te_core.rescore's `--charge-context`; a sensitivity for A1, off by default,
+the coordinator's 3 Nov 01:30Z ask). A1 charges a block a per token it serves. The charge adds, for each token whose
+affected work a block does without computing the token from its inputs, at each layer the block works on for it, the
+keys and values of every earlier token of the sequence at that layer that the block doesn't compute itself:
+κ = 2·d_kv·16 bits per earlier token per layer, each counted once per block. Only K/V that depend on θ' are charged,
+at the layers ℓ ≥ ℓ_kv (`context`). A block whose tokens are the span [q, q + m) of a sequence, doing a share x of each
+one's affected work and some of it at such a layer, reads u(x) + a·m + κ·n·q ≤ k (n ≥ 1 such layers). With a ≤ κ a
+cut token is cheaper than one earlier token's K/V at one layer, so its best span starts at the sequence start and
+every token p it serves has a(p + 1) ≤ k − u(x). With L = ctx positions, h the share of a token's affected work at no
+such layer (`free_share`) and h' = min(h, 1 − x0), Slowdown's bound becomes
+
+    ρ ≥ σ·s·(ᾱ/α_max)·(1/L)·Σ_{p<L} [h'/max(S0, S1(p)) + (1 − x0 − h')/S1(p)],
+    S1(p) = max{x(k − u(x))/a : u(x) + a(p + 1) ≤ k},   S0 = max{x(k − u(x))/a : x ≤ h},
+
+which is the token form with s* the harmonic mean (1 − x0)/((1/L)·Σ_{p<L}[...]) (`s_star`; v2's A1 value is
+`s_star_a1`). S1(p) is v2's s* while p + 1 ≤ (k − u(x*))/a at v2's optimum x*, so a record whose optimal block holds
+L tokens keeps v2's ρ. S1(p) is 0 once a(p + 1) > k, so a charged share left there makes ρ infinite (s* 0). The
+choices favourable to the block:
+- its span starts at the sequence start;
+- a token in its span counts as computed by it at every layer (its K/V are never charged), and K/V that depend on θ
+  alone are free;
+- u(x) and the charge are minimised separately;
+- h is an upper bound (`context`) and lies outside x0;
+- tokens are fractional, as in v2's room.
+A block that computes a token from its inputs (x0) is not charged, and the attack side is v2's.
+
 Where the quantities come from (`measure`): a row's `formalism` block, which ingest writes from the run record
 (`of_record`) or a re-score attaches (te_core.rescore), else the stubs below from a v2.3 row's own fields. te_core
 4.0 measures them on the record's traced step (te_core.capture.circuit, `TRACED` its labels): each traced structure's
@@ -58,6 +84,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass, field
+
+import numpy as np
 
 from .gates import of_log, per_mac
 
@@ -85,6 +113,7 @@ class Measured:
     decoder_gates: float | None = None
     labels: dict = field(default_factory=dict)
     tail_share: float = 0.0
+    context: dict | None = None
 
     @property
     def gates(self) -> float:
@@ -134,7 +163,7 @@ class Measured:
 def from_json(d: dict) -> Measured:
     return Measured(tuple(Part(**p) for p in d["parts"]), d["tau_bits"], d["a_bits"], tuple(map(tuple, d["u"])),
                     tuple(map(tuple, d["u_in"])), d.get("delta_bits"), d.get("decoder_gates"), d.get("labels", {}),
-                    d.get("tail_share", 0.0))
+                    d.get("tail_share", 0.0), d.get("context"))
 
 
 # ---- the update profiles -----------------------------------------------------------------------------------------------
@@ -190,19 +219,70 @@ def bottom_share(u, k: float) -> float:
     return 0.0
 
 
-def room(u, k: float) -> float:
-    """max over x in (0, 1] of x·(k − u(x)), A1's a·s*: on each linear piece a concave quadratic, so its ends and its
-    vertex."""
+def room(u, k: float, upto: float = 1.0) -> float:
+    """max over x in (0, upto] of x·(k − u(x)), A1's a·s* (`upto` 1): on each linear piece a concave quadratic, so its
+    ends and its vertex."""
     best = 0.0
     for (x0, u0), (x1, u1) in zip(u, u[1:]):
-        xs = [x0, x1]
+        if x0 > upto:
+            break
+        end = min(x1, upto)
+        xs = [x0, end]
+        if x1 > x0 and u1 > u0:
+            m = (u1 - u0) / (x1 - x0)
+            v = (k - u0 + m * x0) / (2 * m)
+            if x0 < v < end:
+                xs.append(v)
+        best = max((best, *(x * (k - u_at(u, x)) for x in xs if x > 0)))
+    return best
+
+
+def context_rooms(u, k: float, a: float, positions: int) -> np.ndarray:
+    """S1(p) for p = 0, ..., positions − 1 (the context charge, module docstring): the most of a token's affected work a
+    block can do, in tokens, when its span runs from the sequence start through p, max x(k − u(x))/a over the x with
+    u(x) + a(p + 1) ≤ k; 0 where none has. The max is at a point of u or a piece's vertex whose u fits, or where a
+    piece crosses the limit."""
+    lim = k - a * np.arange(1, positions + 1, dtype=float)
+    pts = [(b, x * (k - b)) for x, b in u]
+    for (x0, u0), (x1, u1) in zip(u, u[1:]):
         if x1 > x0 and u1 > u0:
             m = (u1 - u0) / (x1 - x0)
             v = (k - u0 + m * x0) / (2 * m)
             if x0 < v < x1:
-                xs.append(v)
-        best = max((best, *(x * (k - u_at(u, x)) for x in xs if x > 0)))
-    return best
+                pts.append((u0 + m * (v - x0), v * (k - u0 - m * (v - x0))))
+    pts.sort()
+    need = np.array([b for b, _ in pts])
+    best = np.maximum.accumulate(np.array([w for _, w in pts]))
+    i = np.searchsorted(need, lim, side="right")
+    out = np.where(i > 0, best[np.maximum(i - 1, 0)], 0.0)
+    for (x0, u0), (x1, u1) in zip(u, u[1:]):
+        if x1 > x0 and u1 > u0:
+            cross = (lim > u0) & (lim < u1)
+            x = x0 + (lim[cross] - u0) * (x1 - x0) / (u1 - u0)
+            out[cross] = np.maximum(out[cross], x * (k - lim[cross]))
+    return np.where(lim >= 0, np.maximum(out, 0.0), 0.0) / a
+
+
+def context_s_star(ctx: dict, u, k: float, a: float, x0: float, s_star: float) -> float:
+    """s* under A1 and the context charge `ctx` (`context`): the harmonic mean over the L positions of S1(p) for the
+    charged share 1 − x0 − h' and of max(S0, S1(p)) for the context-free share h' = min(h, 1 − x0) (module
+    docstring); v2's `s_star` where nothing is left to charge."""
+    rest = 1 - x0
+    if rest <= 0:
+        return s_star
+    if a > ctx["kv_bits"]:
+        raise ValueError(f"a = {a} bits exceeds one earlier token's K/V at one layer ({ctx['kv_bits']} bits): the "
+                         "context charge's best span is no longer the sequence start, which context_s_star assumes")
+    free = min(ctx["free_share"], rest)
+    s1 = context_rooms(u, k, a, ctx["positions"])
+    with np.errstate(divide="ignore"):
+        per = np.zeros_like(s1)
+        if free > 0:
+            per += free / np.maximum(room(u, k, ctx["free_share"]) / a, s1)
+        if rest - free > 0:
+            per += (rest - free) / s1
+    mean = float(per.mean())
+    return rest / mean if mean > 0 else s_star
 
 
 # ---- the theorems at (c, k) --------------------------------------------------------------------------------------------
@@ -216,7 +296,7 @@ def _token_form(sigma: float, x0: float, s: float, s_star: float, ratio: float) 
 
 def at(m: Measured, c: float, k: float) -> dict:
     """ρ at (c, k), with each part's s, w and Fit, Slowdown's bound and its terms, and the attack side (module
-    docstring)."""
+    docstring); with `m.context`, s* is the context charge's (`context_s_star`) and v2's is `s_star_a1`."""
     d = m.decoder_gates or 0.0
     delta = m.delta_bits if d < c else None
     u, u_in = (m.u, m.u_in) if delta is None else (capped(m.u, delta), capped(m.u_in, delta))
@@ -235,6 +315,10 @@ def at(m: Measured, c: float, k: float) -> dict:
     sigma, s = m.sigma, c / m.w
     ratio = m.alpha_mean / m.alpha_max if m.alpha_max else 0.0
     x0, s_star = bottom_share(u_in, k), room(u, k) / m.a_bits
+    charged = {}
+    if m.context is not None:
+        charged = {"s_star_a1": s_star}
+        s_star = context_s_star(m.context, u, k, m.a_bits, x0, s_star)
     bound = _token_form(sigma, x0, s, s_star, ratio)
     fit = all(fits)
     x0_known = 1.0 if all(p["fit"]["compute"] for p in parts) else 0.0
@@ -244,7 +328,7 @@ def at(m: Measured, c: float, k: float) -> dict:
     s_star_known = t * tail_tokens if x0_known < 1 else 0.0
     return {"c": c, "k": k, "sigma": sigma, "w": m.w, "s": s, "x0": x0, "s_star": s_star, "alpha_ratio": ratio,
             "slowdown": bound, "delta_counted": delta is not None, "parts": parts, "fit": fit, "rho_fit": rho_fit,
-            "rho": rho_fit if fit else max(1.0, bound), "x0_known": x0_known, "s_star_known": s_star_known}
+            "rho": rho_fit if fit else max(1.0, bound), "x0_known": x0_known, "s_star_known": s_star_known} | charged
 
 
 def rhos(m: Measured, cells: dict[str, tuple[float, float]]) -> tuple[dict[str, float], dict[str, bool], dict]:
@@ -313,6 +397,43 @@ TRACED = {
     "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
 }
 TRACED_STRUCTURE = ("sigma", "affected_share", "token_factor", "delta_grad_bits")
+CONTEXT = ("charged (--charge-context): every earlier token's keys and values at each layer from l_kv up, "
+           "2 d_model x 16 bits; h an upper bound from the start's shape and the run's changed tensors "
+           "(formalism.context)")
+#: a layer's tensors its own keys and values read
+KV_READS = ("attn_norm", "wk", "wv")
+
+
+def context(changed, shape: dict) -> dict:
+    """The context charge's quantities (module docstring) for a run whose θ' changes the tensors `changed` (the facts'
+    `changed`), at its start's `shape`. κ (`kv_bits`) is 2·d_model·16: the model has no grouped K/V heads, so d_kv is
+    d_model. L (`positions`) is ctx. ℓ_kv (`kv_layer`, None: no layer) is the lowest layer whose keys and values
+    depend on θ': the embedding gives 0, a layer's attn_norm, wk or wv that layer, any other of its tensors the next
+    one, and the final norm none. h (`free_share`) is an upper bound on the context-free share of a token's affected
+    work, from forward weight MACs per token (a layer's (P − V·d − d)/n_layer, the tied head's V·d):
+    - the context-free side is the layers from the lowest changed one up to ℓ_kv, all counted affected, and the head,
+      at 3 times their forward (a backward is at most twice it);
+    - the charged side is the layers from ℓ_kv up at twice their forward (a backward is at least their input
+      gradients), less ℓ_kv's Q, K and V projections where its input depends on θ alone;
+    - attention and the loss's elementwise ops are left out, which raises h at every position."""
+    n, d, v = shape["n_layer"], shape["d_model"], shape["vocab"]
+    low = kv = below = n
+    for name in changed:
+        part = name.split(".")
+        if part[0] == "embed":
+            low = kv = below = 0
+        elif part[0] == "blocks":
+            i = int(part[1])
+            low, below, kv = min(low, i), min(below, i + 1), min(kv, i if part[2] in KV_READS else i + 1)
+        elif part[0] != "norm":
+            raise ValueError(f"changed tensor {name!r}: formalism.context places only embed, blocks.* and norm")
+    layer, head = (shape["parameters"] - v * d - d) / n, v * d
+    h = 1.0
+    if kv < n:
+        free = (kv - low) * layer + head
+        h = 3 * free / (3 * free + 2 * ((n - kv) * layer - (3 * d * d if below > kv else 0)))
+    return {"kv_bits": 2 * d * ACT_BITS, "positions": shape["ctx"], "kv_layer": kv if kv < n else None,
+            "free_share": h}
 
 
 def of_trace(f: dict) -> dict:
@@ -395,8 +516,10 @@ def complete(f: dict, row: dict, shape: dict) -> Measured:
         labels.setdefault("u1_bits", STUBS["u1_bits"] if not f.get("u") else labels["u"])
     if any(p.delta_grad_bits is None and p.tokens for p in parts):
         labels.setdefault("delta_grad_bits", STUBS["delta_grad_bits"])
+    if f.get("context"):
+        labels.setdefault("context", CONTEXT)
     return Measured(parts, out["tau_bits"], out["a_bits"], out["u"], out["u_in"], out["delta_bits"],
-                    out["decoder_gates"], labels, t)
+                    out["decoder_gates"], labels, t, f.get("context"))
 
 
 def measure(row: dict, shape: dict) -> Measured:

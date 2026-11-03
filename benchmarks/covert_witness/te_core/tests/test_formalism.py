@@ -1,6 +1,7 @@
 """te_core.formalism and te_core.policy: Fit and Slowdown as the formalism v2 states them (a frozen tail always
 charged), the attack side beside them, the stubs, assumptions and upper bounds labelled, the grid."""
 import math
+from dataclasses import replace
 
 import pytest
 
@@ -134,6 +135,73 @@ def test_the_attack_side_is_reported_beside_the_bounds():
     assert F.at(measured(u1=1e9), c, k)["s_star_known"] == 0
     fits = F.at(measured(u1=1e3, tail=0.05), c, 1e6)
     assert (fits["x0_known"], fits["s_star_known"]) == (1, 0)
+
+
+def charged(m: F.Measured, h: float, positions: int = 1024, kv: float = 2 * 512 * 16) -> F.Measured:
+    return replace(m, context={"kv_bits": kv, "positions": positions, "kv_layer": 0, "free_share": h})
+
+
+def test_the_context_charge_is_its_formula_on_a_toy_profile():
+    """u(x) = 8000x, k = 5000, a = 1000, L = 4: x(k − u(x)) peaks at x* = 5/16 with u(x*) = 2500, so S1(p) is v2's
+    s* = 0.78125 while a(p + 1) ≤ 2500 and then the limit's x(k − u(x)), 750 and 500 over a; S0 at h = 0.2 is
+    0.2 (5000 − 1600)/1000. u_in jumps, so x0 = 0, and ρ is σ s times the positions' mean of
+    h/max(S0, S1(p)) + (1 − h)/S1(p)."""
+    part = F.Part(gates=1e12, tokens=1e3, token_gates=0.8e12, affected_gates=0.4e12)
+    m = F.Measured((part,), tau_bits=32, a_bits=1000, u=F.even(8000), u_in=((0, 0), (0, 8000), (1, 8000)),
+                   delta_bits=8000)
+    s1, s0 = [0.78125, 0.78125, 0.75, 0.5], 0.2 * 3400 / 1000
+    assert F.context_rooms(m.u, 5000, 1000, 4) == pytest.approx(s1)
+    assert F.room(m.u, 5000, 0.2) / 1000 == pytest.approx(s0)
+    mean = sum(0.2 / max(s0, s) + 0.8 / s for s in s1) / 4
+    r = F.at(charged(m, 0.2, positions=4, kv=2000), 1e12, 5000)
+    assert r["x0"] == 0 and r["s_star_a1"] == pytest.approx(0.78125) and r["s_star"] == pytest.approx(1 / mean)
+    assert r["slowdown"] == pytest.approx(0.8 * 1250 * mean) and r["rho"] == r["slowdown"]
+    v2 = F.at(m, 1e12, 5000)["slowdown"]
+    assert v2 == pytest.approx(0.8 * 1250 / 0.78125) and v2 < r["slowdown"]
+    with pytest.raises(ValueError, match="best span"):
+        F.at(charged(m, 0.2, positions=4, kv=999), 1e12, 5000)
+
+
+def test_a_narrow_cut_whose_best_block_holds_the_sequence_keeps_v2s_rho():
+    """a = 32 and a frozen tail: v2's best block holds k/a = 2500 tokens, more than L = 1024, so every position's
+    S1(p) is s* and the charge changes nothing."""
+    m = replace(measured(u1=1e9, tail=0.3), a_bits=32)
+    v2, r = F.at(m, 1e13, 8e4), F.at(charged(m, 0.6), 1e13, 8e4)
+    assert r["s_star"] == pytest.approx(v2["s_star"]) == r["s_star_a1"] and r["rho"] == pytest.approx(v2["rho"])
+
+
+def test_a_dense_cut_is_unbounded_where_k_holds_few_tokens():
+    """a = d_model·16 at k = 80,000 bits: a block doing a token's charged work must hold every earlier token, so none
+    serves a position past k/a − 1 ≈ 8.8, and the charged share 1 − h left there makes ρ infinite (s* 0). At k = 10^8
+    the block holds the sequence and ρ is v2's. With no affected K/V (h = 1) nothing is charged."""
+    m = measured(u1=1e9, tail=0.3)
+    r = F.at(charged(m, 0.6), 1e13, 8e4)
+    assert r["s_star"] == 0 and r["rho"] == math.inf and r["s_star_a1"] == pytest.approx(0.3 * 8e4 / 8192)
+    assert F.at(charged(m, 0.6), 1e13, 1e8)["rho"] == pytest.approx(F.at(m, 1e13, 1e8)["rho"])
+    assert F.at(charged(m, 1.0), 1e13, 8e4)["rho"] == pytest.approx(F.at(m, 1e13, 8e4)["rho"])
+    assert F.at(charged(replace(m, u_in=F.even(1e3)), 0.6), 1e13, 8e4)["slowdown"] == 0
+
+
+def test_the_context_quantities_from_the_changed_tensors():
+    """ℓ_kv: the embedding 0, a layer's wk (its own K/V) that layer, its wq the next; the top layer's MLP and the final
+    norm none (h 1). h's upper bound: three times the context-free forward over that plus twice the charged forward,
+    less ℓ_kv's Q, K and V projections where its input depends on θ alone."""
+    layer, head, d = (SHAPE["parameters"] - 50304 * 512 - 512) / 6, 50304 * 512, 512
+    emb = F.context(["embed", "blocks.3.wq.weight"], SHAPE)
+    assert emb == {"kv_bits": 2 * 512 * 16, "positions": 1024, "kv_layer": 0,
+                   "free_share": pytest.approx(3 * head / (3 * head + 2 * 6 * layer))}
+    wq = F.context(["blocks.2.wq.weight", "blocks.4.wk.weight"], SHAPE)
+    assert wq["kv_layer"] == 3 and wq["free_share"] == pytest.approx(
+        3 * (layer + head) / (3 * (layer + head) + 2 * 3 * layer))
+    wk = F.context(["blocks.2.wk.weight"], SHAPE)
+    assert wk["kv_layer"] == 2 and wk["free_share"] == pytest.approx(
+        3 * head / (3 * head + 2 * (4 * layer - 3 * d * d)))
+    for top in (["blocks.5.w_down.weight", "norm"], []):
+        assert F.context(top, SHAPE)["kv_layer"] is None and F.context(top, SHAPE)["free_share"] == 1
+    with pytest.raises(ValueError, match="lm_head"):
+        F.context(["lm_head.weight"], SHAPE)
+    m = F.complete({"context": emb}, {"output": {"e_bytes": 10}, "macs_log": {"by": {}, "ops": {}}}, SHAPE)
+    assert m.context == emb and m.labels["context"] == F.CONTEXT and F.from_json(m.to_json()).context == emb
 
 
 def test_fit_reads_delta_and_slowdown_reads_u1_as_separate_fields():

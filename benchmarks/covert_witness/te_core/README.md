@@ -56,6 +56,11 @@ d are Boolean gates (`gates`: each counted op at its circuit Definition's price,
   s\* ≤ max_x x(k − u(x))/a (A1) and x₀ ≤ max{x : u_in(x) ≤ k} (A1′), so a frozen tail is always charged. The attack
   side's best-known x₀ and s\* from exhibited blocks sit beside them (`x0_known`, `s_star_known`: tightness, never the
   claim). Where Fit holds, Δ ≤ k bounds u_in, so x₀'s bound is 1 and Slowdown's bound 0.
+- **The context charge** (`rescore --charge-context`, a sensitivity for A1, off by default): a block also reads
+  every earlier token's affected keys and values, 2·d_kv·16 bits per earlier token per layer, at each layer it works
+  on for a token it doesn't compute from its inputs. Its best span then starts at the sequence start, so a block
+  serving position p holds p + 1 cuts; s\* becomes the harmonic mean over positions of the most such a block can do
+  (`formalism.context_s_star`, the formula and the choices favourable to the block in `formalism`'s docstring).
 - **ρ (slowdown)**: c/(c − d) where Fit holds for the training, else max(1, Slowdown's).
 - **Where the quantities come from**: each is measured on the record's traced step (`capture.circuit`, read through
   `ledger ingest --structures`; `frontier.measured` says whether a row's were), a, u_in, u, t and Δ_grad as upper
