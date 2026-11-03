@@ -20,6 +20,25 @@ The grid is every decade of c and of k from the least to the greatest of those s
 `c1e<i>/k1e<j>` (`key`). A start is scored at the grid's cells and at the three shapes exactly, keyed by name
 (`cells`). P1, P2 and P4 read the reference policy (`REFERENCE`); P3 marks all three.
 
+The console's policy (`CONSOLE`, the dashboard's ruling: one full session of the reference model a block, attention
+included) is `session_gates` at the 45M reference (`REFERENCE_PARAMS`) with 4,096 input and 1,024 output tokens
+(`CONSOLE_SESSION`), and k the session's input ids, 4,096·16 = 65,536 bits. `session` is the one count every producer
+reads: a session's in + out tokens each run the reference model's forward at the shape `SHAPES` states for its size
+(the lf family, model.py's dense decoder: d_model, layers, heads, d_ff, vocab), and it counts every product of two
+operands:
+
+- each layer's matrices, attention's four (4·d²) and the SwiGLU MLP's three (3·d·d_ff), at every token;
+- the LM head over the tied embedding (d·V), at every token: the model's forward computes logits at each position;
+- attention's score and value products (QKᵀ and AV, d each per position attended, every layer): a prompt token
+  attends over the whole prompt, as te_core.flops counts the causal SDPA (torch's formula, the full score matrix,
+  which every counted |C| uses), and the j-th output token over the prompt and the output tokens up to itself, its
+  KV cache;
+
+each MAC at the served precision's GEMM price (`SERVED_PRECISION`, bf16: te_core.gates' 1,480.125 gates). The
+elementwise ops (RoPE, the norms' gains, SwiGLU's product) are left out: under 0.1% of a token's counted MACs, and
+their count moves with te_core.flops' version (the starts' `forward_macs_per_token` exceed the products by 27,392
+at s50 and 40,192 at s-t20).
+
 The scoring cap (`eligible`): a checkpoint is scored only when its own forward gates per token are at most the greater
 of its start's and the compute-optimal model's at the checkpoint's held-out loss under the ladder's fit (`ladder_fit`),
 and at most twice its start's (`CAP_FALLBACK`) where the fit gives no value there. Nothing caps what the harness
@@ -48,10 +67,63 @@ MANIFEST = Path(__file__).resolve().parents[1] / "starts_store.json"
 CAP_FALLBACK = 2.0
 #: data v3's tokenizer (covert_witness's data_v3.TOKENIZER), which a start on v3's data has in its shape
 V3_TOKENIZER = "bpe32k"
+#: the reference model's shape at each size the starts have, by parameter count: the lf family's s, m and l16 (model.py,
+#: islands/ladder-v3's `SIZES`) at the GPT-2 vocabulary padded to 50,304 or bpe32k's 32,000
+SHAPES = {
+    45_029_888: {"d_model": 512, "n_layer": 6, "n_head": 8, "d_ff": 1408, "vocab": 50_304},
+    95_269_632: {"d_model": 768, "n_layer": 8, "n_head": 12, "d_ff": 2048, "vocab": 50_304},
+    35_658_240: {"d_model": 512, "n_layer": 6, "n_head": 8, "d_ff": 1408, "vocab": 32_000},
+    81_212_160: {"d_model": 768, "n_layer": 8, "n_head": 12, "d_ff": 2048, "vocab": 32_000},
+    238_322_688: {"d_model": 1024, "n_layer": 16, "n_head": 16, "d_ff": 2816, "vocab": 32_000},
+}
+#: the console's reference model: the 45M dense starts (s50 and s100)
+REFERENCE_PARAMS = 45_029_888
+#: the console's session, (input tokens, output tokens)
+CONSOLE_SESSION = (4096, 1024)
+SERVED_PRECISION = "bf16"
 
 
 def id_bits(vocab: int) -> int:
     return math.ceil(math.log2(vocab))
+
+
+def parameters(shape: dict) -> int:
+    """An lf model's parameters: each layer's matrices and two norms, the tied embedding and the final norm."""
+    d, n, f, v = shape["d_model"], shape["n_layer"], shape["d_ff"], shape["vocab"]
+    return n * (4 * d * d + 3 * d * f + 2 * d) + (v + 1) * d
+
+
+def session(params: int, in_tokens: int, out_tokens: int, shape: dict | None = None) -> dict:
+    """One session of the reference model of `params` parameters, `in_tokens` in and `out_tokens` out (module
+    docstring): its shape (`SHAPES`', unless `shape` gives one, whose parameters must be `params`), the tokens that run
+    a forward, the positions their attention covers, the MACs of each product, the gates a MAC, the gates (c) and
+    the session's input ids in bits (k)."""
+    shape = SHAPES.get(params) if shape is None else shape
+    if shape is None:
+        raise ValueError(f"te_core.policy: no stated shape for {params:,} parameters (SHAPES: "
+                         f"{', '.join(f'{p:,}' for p in SHAPES)}); pass its shape")
+    if parameters(shape) != params:
+        raise ValueError(f"te_core.policy: the shape {shape} has {parameters(shape):,} parameters, not {params:,}")
+    if in_tokens < 1 or out_tokens < 0:
+        raise ValueError(f"te_core.policy: a session has at least one input token, not {in_tokens} in, {out_tokens} out")
+    d, n, f, v = shape["d_model"], shape["n_layer"], shape["d_ff"], shape["vocab"]
+    tokens = in_tokens + out_tokens
+    attended = in_tokens * in_tokens + out_tokens * in_tokens + out_tokens * (out_tokens + 1) // 2
+    macs = {"matrices": tokens * n * (4 * d * d + 3 * d * f), "lm_head": tokens * d * v, "attention": 2 * n * d * attended}
+    per = per_mac(f"gemm/{SERVED_PRECISION}")
+    return {"params": params, "in_tokens": in_tokens, "out_tokens": out_tokens, "shape": dict(shape),
+            "precision": SERVED_PRECISION, "tokens": tokens, "attended": attended, "macs": macs,
+            "gates_per_mac": per, "gates": sum(macs.values()) * per, "k_bits": in_tokens * id_bits(v)}
+
+
+def session_gates(params: int, in_tokens: int, out_tokens: int, shape: dict | None = None) -> float:
+    """c of one session of the reference model (`session`)."""
+    return session(params, in_tokens, out_tokens, shape)["gates"]
+
+
+#: the console's policy, (c gates, k bits): one session of the 45M reference, 4,096 tokens in and 1,024 out
+CONSOLE = (session_gates(REFERENCE_PARAMS, *CONSOLE_SESSION),
+           float(CONSOLE_SESSION[0] * id_bits(SHAPES[REFERENCE_PARAMS]["vocab"])))
 
 
 def c0(shape: dict) -> tuple[float, str]:
