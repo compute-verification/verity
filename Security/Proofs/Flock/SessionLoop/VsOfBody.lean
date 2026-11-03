@@ -1,9 +1,11 @@
 import Proofs.Flock.SessionLoop.VsOfTakes
-import Proofs.Flock.SessionLoop.RoundPiop
+import Proofs.Flock.SessionLoop.SchedAt
 
 /-!
 # A pad is freed no later than the PIOP round that absorbs it
 
+* `piopV_length_eq`: the values the PIOP's first `a ≤ piopNR` rounds carry number `piopLen m kLog a`, whatever the
+  binding, layout and masked values.
 * `LeanRelease.piop_pos`: where the frame takes the coins after a history whose next round is rep stream `2j + r`'s
   PIOP round `jj`, `1 ≤ jj ≤ piopNR`, that round is located there, and the frame's state is at the values before it
   (`piopV … jj`), whatever the worker sends.
@@ -19,6 +21,63 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, 
 namespace Claims.ZKServer
 
 open _root_.Flock (V F128)
+
+section PiopLen
+
+/-- **The values the PIOP's first `a` rounds carry, counted**: none through `r_outer`'s round, `round1`'s 128, two each
+residual round and `final_a`/`final_b`'s, none at `β`'s round, two each lincheck round, and `z_partial`'s 64. -/
+def piopLen (m kLog a : ℕ) : ℕ :=
+  if a ≤ 2 then 0
+  else if a ≤ 3 + (m - 6) then 128 + 2 * (a - 3)
+  else if a ≤ 5 + (m - 6) then 128 + 2 * (m - 6) + 2
+  else if a ≤ 5 + (m - 6) + (kLog - 6) then 128 + 2 * (m - 6) + 2 + 2 * (a - 5 - (m - 6))
+  else 128 + 2 * (m - 6) + 2 + 2 * (kLog - 6) + 64
+
+/-- The values the PIOP's round `jj` carries, counted. -/
+def piopFrLen (m kLog jj : ℕ) : ℕ :=
+  if jj = 0 then 0 else if jj = 1 then 0 else if jj = 2 then 128 else if jj < 3 + (m - 6) then 2
+  else if jj = 3 + (m - 6) then 2 else if jj = 4 + (m - 6) then 0
+  else if jj < 5 + (m - 6) + (kLog - 6) then 2 else 64
+
+theorem fvals_piopFr_len (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout)
+    (mk : ℕ → F128) (jj : ℕ) : (fvals (piopFr m kLog digest cap root lay mk jj)).length = piopFrLen m kLog jj := by
+  unfold piopFr piopFrLen
+  split_ifs <;> simp [fvals]
+
+theorem piopLen_succ (m kLog a : ℕ) (h : a < piopNR m kLog) :
+    piopLen m kLog (a + 1) = piopLen m kLog a + piopFrLen m kLog a := by
+  unfold piopNR at h
+  unfold piopFrLen
+  split_ifs with h0 h1 h2
+  · subst h0; rfl
+  · subst h1; rfl
+  · subst h2; unfold piopLen; split_ifs <;> omega
+  all_goals unfold piopLen; split_ifs <;> omega
+
+theorem piopLen_mono (m kLog : ℕ) {a b : ℕ} (h : a ≤ b) : piopLen m kLog a ≤ piopLen m kLog b := by
+  unfold piopLen
+  split_ifs <;> omega
+
+theorem piopLen_full (m kLog : ℕ) :
+    piopLen m kLog (piopNR m kLog) = 128 + 2 * (m - 6) + 2 + (2 * (kLog - 6) + 64) := by
+  unfold piopLen piopNR
+  split_ifs <;> omega
+
+/-- Through `z_partial`'s round, the PIOP's values are at most the absorbed order's before the Ligerito values. -/
+theorem piopLen_le (m kLog : ℕ) {a : ℕ} (h : a ≤ piopNR m kLog) :
+    piopLen m kLog a ≤ 128 + 2 * (m - 6) + 2 + (2 * (kLog - 6) + 64) :=
+  le_trans (piopLen_mono m kLog h) (piopLen_full m kLog).le
+
+/-- **The values the PIOP's first `a ≤ piopNR` rounds carry number `piopLen m kLog a`**, at any binding, layout and
+masked values. -/
+theorem piopV_length_eq (m kLog : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout)
+    (mk : ℕ → F128) : ∀ a, a ≤ piopNR m kLog → (piopV m kLog digest cap root lay mk a).length = piopLen m kLog a
+  | 0, _ => by simp [piopV, piopLen]
+  | a + 1, h => by
+    rw [piopV_succ, List.length_append, piopV_length_eq m kLog digest cap root lay mk a (by omega),
+      fvals_piopFr_len, piopLen_succ m kLog a h]
+
+end PiopLen
 
 section PiopPos
 
@@ -73,6 +132,10 @@ theorem piop_pos (L₁ : LeanRelease Flock.Wit Loop.Tp)
         (Masked.stAt x j).m + ((Masked.stAt x j).c.kLog - 6) := by
       unfold piopNR
       omega
+    refine Nat.lt_of_le_of_lt hA0 ?_
+    show _ < (Masked.stAt x j).m + ((Masked.stAt x j).c.kLog - 6) +
+      (2 + spec.points * (Masked.stAt x j).regions.size + 1) +
+      ((Masked.zkTab x j).sch.k0 + 7 + 11 * ((Masked.zkTab x j).sch.levels.size - 1)) + 4
     omega
   obtain ⟨a, rfl⟩ : ∃ a, jj = a + 1 := ⟨jj - 1, by omega⟩
   have hbase : Masked.repBase x (2 * j.val + r.val) =
@@ -127,8 +190,10 @@ theorem piop_pos (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hjjT' : a < piopNR tb.st.m tb.st.fold.kLog := by omega
   have hb : (piopV tb.st.m tb.st.fold.kLog tb.st.digest (_root_.Flock.Firewall.Finish.flat tb.cm0.cap) Sched.root0
       (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0) (fun _ => 0) (a + 1)).length ≤ c'.order.size := by
-    rw [hc', Loop.ofDraws_order, absorbed_size]
-    exact le_trans (piopV_length_le lay (by omega) (by omega) hnM hnL hjjT) (by omega)
+    rw [hc', Loop.ofDraws_order, absorbed_size, piopV_length_eq _ _ _ _ _ _ _ _ hjjT]
+    have e := piopLen_le tb.st.m tb.st.fold.kLog hjjT
+    simp only [_root_.Flock.Zk.PadLayout.fa]
+    omega
   have hdg : tb.st.digest.size < 2 ^ 64 := by
     rw [hts']
     simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]
@@ -140,8 +205,7 @@ theorem piop_pos (L₁ : LeanRelease Flock.Wit Loop.Tp)
   refine ⟨?_, ?_⟩
   · rw [show ops.length - 1 = i + 1 by omega]
     exact hloc
-  · rw [hpos, htm, htk']
-    exact piopV_length_congr _ _ _ _ _
+  · rw [hpos, htm, htk', piopV_length_eq _ _ _ _ _ _ _ _ hjj, piopV_length_eq _ _ _ _ _ _ _ _ hjj]
 
 end LeanRelease
 
@@ -184,7 +248,9 @@ theorem freedAt_le_body
       (fun _ => 0) (jj + 1)).length) :
     cs.length ≤ repBase x (2 * j.val + r.val) + jj := by
   obtain ⟨t, κ, m₀, ρ₀, ops, v, m, out, s', fr, k, -, hd, hpos, hlt, hl, -, -, ha, hf, hrep, hk, hi, -⟩ := hF
-  have hcl : cs.length = ops.length := by rw [← hd, List.length_map]
+  have hcl : cs.length = ops.length := by
+    subst hd
+    exact List.length_map ..
   rw [hcl]
   by_contra hgt
   have hj := Masked.lt_of_jOf j
