@@ -56,11 +56,11 @@ def StepZ.said : StepZ → Msg
 witness encoding (`Reference.refP`'s); the router by slot (`step`); and the parts' rounds: `k₀ x` before the sessions,
 `n x j` in session `j`. -/
 structure Framing where
-  parse : Msg → Option Stmt
-  partition : Stmt → Option Partition
-  commit : Commitment Bool
-  reads : Stmt → Msg → List ℕ
-  wit : Stmt → Msg → List (Opening Bool) → Claims.Flock.Wit
+  parse : Msg → Option AuditStatement
+  partition : AuditStatement → Option Partition
+  commit : CommitmentScheme Bool
+  reads : AuditStatement → Msg → List ℕ
+  wit : AuditStatement → Msg → List (Opening Bool) → Claims.Flock.Wit
   step : Msg → List (Msg × Msg) → StepZ
   k₀ : Msg → ℕ
   n : Msg → ℕ → ℕ
@@ -152,7 +152,7 @@ def Shaped (kF : Msg → ℕ) (SF : Simulator) (εF γF : Msg → ℝ) (CB : ℕ
 
 /-- **The prover sends the composed prover's messages**, and makes at least its calls, at every history within `M`
 sessions, on the flat tape: the first part's prover, then session `j` at the history before it. -/
-theorem prover_flat (H : Msg → Msg) {TS : Type} (PS : Claims.Flock.Wit → Prover TS) (M : ℕ) {x : Msg} {s : Stmt}
+theorem prover_flat (H : Msg → Msg) {TS : Type} (PS : Claims.Flock.Wit → Prover TS) (M : ℕ) {x : Msg} {s : AuditStatement}
     (hs : F.parse x = some s) (hr : F.Routed M x) (w : Wit) (hist : List (Msg × Msg))
     (ω : (Unit × Unit) × (ℕ → TS)) (hh : hist.length < F.parts.start x M) :
     (((F.prover PS w).next x hist ω.2).eval H).1 = ((((F.lay H).prover F.sayP PS M w).next x hist ω).eval H).1 ∧
@@ -173,7 +173,7 @@ theorem prover_flat (H : Msg → Msg) {TS : Type} (PS : Claims.Flock.Wit → Pro
 /-- **`HonestSeq`**: the prover on the flat tape `flatten` reads sends the nested composed prover's messages
 (`iterProver` at the parts, the composition `zkmalAt_iterG` reads), and makes at least its calls. -/
 theorem honestSeq (H : Msg → Msg) {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (PS : Claims.Flock.Wit → Prover (NB × ΩB)) (M : ℕ) {x : Msg} {s : Stmt} (hs : F.parse x = some s)
+    (PS : Claims.Flock.Wit → Prover (NB × ΩB)) (M : ℕ) {x : Msg} {s : AuditStatement} (hs : F.parse x = some s)
     (hr : F.Routed M x) (w : Wit) (hist : List (Msg × Msg)) (t : unitTape.at 0 NB ΩB M)
     (hh : hist.length < F.parts.start x M) :
     (((F.prover PS w).next x hist (Layout.flatten unitTape 0 NB ΩB M t).2).eval H).1 =
@@ -320,7 +320,7 @@ part, the record's reference prover on the masked tape sends the composed prover
 calls, at every history within its rounds. -/
 theorem deployZ_honestSeq (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (c : Code) (step : Msg → List (Msg × Msg) → StepZ) (k₀ : Msg → ℕ) (n : Msg → ℕ → ℕ) (M : ℕ)
-    {CoinF ColF TF : Type} (DF : Claims.Flock.ZkDeploy CoinF ColF TF) {x : Msg} {s : Stmt}
+    {CoinF ColF TF : Type} (DF : Claims.Flock.ZkDeploy CoinF ColF TF) {x : Msg} {s : AuditStatement}
     (hs : c.parse x = some s) (hV : c.V.k x = (framing c step k₀ n).parts.start x M)
     (hr : (framing c step k₀ n).Routed M x) (w : Wit) (hist : List (Msg × Msg))
     (t : unitTape.at 0 DF.Nonce DF.Rest M) (hh : hist.length < (deployZ rel c step k₀ n DF).V.k x) :

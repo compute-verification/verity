@@ -15,7 +15,7 @@ register   the payload tree over the plain weights as served, salted under the v
            their arena's first block, check that decoding gives back their plain bytes and probe (`engine.py`), and
            serve again, decoding each weight as it is used; their checks join the gates
 phases     ctl.json names what the node is doing, and each engine tags its steps with it: decode-only (--decode-s of
-           serving with no pass), calibrate (`Device.calibrate`, under serving), session-K-MODE (each session, from
+           serving with no pass), calibrate (`GpuBackend.calibrate`, under serving), session-K-MODE (each session, from
            its arming to its end), after; then stop, and each engine's summary goes to node.json beside the prover's
 ~~~
 
@@ -150,9 +150,9 @@ def key_json(key) -> dict:
             "mask": word(key.mask) if key.codec.masked else None}
 
 
-class ServingNode(device.Device):
-    """`device.Device` over the engines' arenas (`open_arena`, one a GPU in GPU order), pausing them for the encode
-    and handing them the key (`encode`), and naming each phase to them."""
+class ServingNode(device.GpuBackend):
+    """`device.GpuBackend` over the engines' arenas (`open_arena`, one a GPU in GPU order), pausing them for the
+    encode and handing them the key (`encode`), and naming each phase to them."""
 
     def __init__(self, torch, engines: Engines, exports: list[dict], arenas: list, *, decode_s: float,
                  wait_s: float, **kw) -> None:

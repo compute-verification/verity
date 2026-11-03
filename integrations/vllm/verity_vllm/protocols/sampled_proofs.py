@@ -14,7 +14,7 @@ the required-value manifest's digest.
 """
 from __future__ import annotations
 
-from verity_vllm.commit import challenge, step_rows
+from verity_vllm.commit import step_rows
 from verity_vllm.commit import scheme as recorded_scheme
 from verity_vllm.protocols.interface import Context, Option, Target
 
@@ -49,4 +49,4 @@ def install(scheme: str, target: Target) -> Option:
     entry = f"{NAME}:{scheme}"
     return Option(name=entry, hooks=target.hooks(entry),
                   details={"commitment_scheme": scheme, "law": LAW,
-                           "challenge": "legacy (the run root)" if challenge.LEGACY else "verity.ml.randomness.derive from an auditor key"})
+                           "challenge": "verity.ml.randomness.derive from an auditor key"})

@@ -21,8 +21,8 @@ constexpr int FLIN_BN = 128;
 // FLIN_FIT: tiles whose GEMM-only CTA (FW = 0) fits beside one pump block on its SM, so a co-scheduled pump never holds a
 // linear off (flin_cfg): ≤ 41 KB of shared memory, and registers by SMSP, since each SMSP's file is 16 K and the pump's
 // two warps there hold 8 K. A 5-warp CTA puts two warps on one SMSP, so ≤ 128 a thread (launch bounds of 4 blocks: 102).
-// M 128 at BN 128 would need 9 warps, three on one SMSP at ≤ 85, which its accumulators (64 a thread) don't leave
-// (r20261017-083215-99e0), so it runs BN 64 tiles on 2 x 2 consumer warps, each warp the M 64 tile's 32 x 64 (the same
+// M 128 at BN 128 would need 9 warps, three on one SMSP at ≤ 85, which its accumulators (64 a thread) don't leave,
+// so it runs BN 64 tiles on 2 x 2 consumer warps, each warp the M 64 tile's 32 x 64 (the same
 // tiled W: a 64-row tile is half of a 128-row one). FLIN_FIT=2 takes M 32 in four half stages. M > 128 keeps its tile.
 #ifdef FLIN_FIT
 #define FLIN_MINB(CW) ((CW) <= 4 ? 4 : 2)
@@ -152,7 +152,6 @@ __device__ __noinline__ void dfill_k_put(unsigned long long* rec, int* cnt, uint
   *cnt = steps;
 }
 static uint64_t pw_step_ref(uint64_t c0, uint64_t c1, uint64_t tile, uint64_t step) {
-  pf_host_k();
   uint32_t R[32][16];
   uint64_t st[8];
   for (int l = 0; l < 32; l++) {

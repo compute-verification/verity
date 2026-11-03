@@ -17,7 +17,7 @@ import pytest
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
 #: test_lean_zk.py's: RoPE d64 with hidden outputs and the live build's --zk sessions, under the statement it was staged for; a
-#: fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs: `art:b9cc903c`
+#: fetched fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "zk-sessions"
 STATEMENT = "verity/flock-circuit+seed-injection"
 NONCE = re.compile(r'"nonce":"([0-9a-f]{64})"')
