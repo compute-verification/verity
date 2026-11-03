@@ -76,10 +76,12 @@ def _int7_linear(x, w, bias=None):
 
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
-def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_and_h1_are_executed():
+def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_h1_and_the_lead_are_executed():
     from verity.core.protocols.pouw import circuit
     from verity_vllm.protocols.pouw import h1 as pouw_h1
-    assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES, pouw_h1.SCHEME})) and "ncp-v1" in pouw.schemes()
+    from verity_vllm.protocols.pouw import lead as pouw_lead
+    assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES, pouw_h1.SCHEME, pouw_lead.SCHEME}))
+    assert "ncp-v1" in pouw.schemes()
     assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
     assert PO.refusals(_serve("pouw:ncp-v1")) == ()                           # through the selector, real adapter
     assert "executor runs" in pouw.refusals("pearl-fp8-v4", _serve("pouw:pearl-fp8-v4"))[0]
