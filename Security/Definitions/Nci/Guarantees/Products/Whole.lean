@@ -27,7 +27,8 @@ inference block reads beyond `θ`, `b` an operand's width, `μ` a post-fixed poi
   `ρ ≥ max_{q ∈ G} chainBlocks N_q (α'_q + w_q k) (β'_q √O_q) c / |C|` (`wholeBound`), a partition-level bound
   (`Nci.Formalism.PartitionBound`). It holds on any subset, so the counted set may leave out any product, the products
   that read a gather's rows before any token-mixing step among them. It bounds by one product at a time: the sum over
-  products, several in one block (io_bound's `Λ`, `SHARE`), is the next lemma.
+  products, several in one block (io_bound's `Λ`, `SHARE`), is `Nci.Products.Guarantees.SumBound`
+  (`Definitions.Nci.Guarantees.Products.Sum`).
 
 The class bound counts at the MACs, `K_j` long chains of `b`-bit operands, whatever cells compute them: a cell of `w`
 MACs enters only the split allowance, so a GEMM gadget's dot product of 16 MACs costs the cap `16 k` and leaves the

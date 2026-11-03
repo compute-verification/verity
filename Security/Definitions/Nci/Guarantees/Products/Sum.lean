@@ -5,7 +5,7 @@ import Definitions.Nci.Products.Sum
 # Products made whole through chains, several in a block: the cap and its bound on `ρ` summed over a set
 
 The theorems about a set `G` of a whole-making system's products (`Definitions.Nci.Products.Sum`), proved in
-`Nci.Products.SecurityProofs`: the sum over products, several of them in one block (the note's `Λ`, `SHARE`), where the
+`Nci.Products.SecurityProofs`: the sum over products, several of them in one block (io_bound's `Λ`, `SHARE`), where the
 cap with operands made whole (`Nci.Products.Guarantees.WholeCap`) bounds one product at a time. `k` is the bits an
 inference block reads beyond `θ`, `b` an operand's width, `b_C` a partial sum's, `μ` a post-fixed point of the system,
 `E = Σ_j e_j` the whole-making factors (`wholeFactor`) of `G`'s classes summed, and `h = √c_G k (1 + E) / b`.
