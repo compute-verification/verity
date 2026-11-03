@@ -8,6 +8,7 @@ recorded of a session before it is opened. The worker and the challenger are `te
 the clock is never read."""
 from __future__ import annotations
 
+import json
 import random
 from collections import Counter
 
@@ -163,6 +164,23 @@ def test_a_relay_that_ends_while_it_is_seated_leaves_the_record_as_it_was(tmp_pa
     with pytest.raises(FW.Refused, match=r"stream s's unended recursive sessions and failures reach its failure budget "
                                          r"\(3 and 0 of 3\)"):
         fw.open("s", list(NAMES), budget=FW.BUDGET_MIN)
+
+
+def test_a_seat_on_a_record_whose_last_line_has_no_newline_writes_nothing(tmp_path):
+    """The slot's line would join a last line without its newline, so the Lean ZK server's ``seat`` fails at its
+    admission's read and writes nothing; `Firewall.seat` does the same, and holds no slot after."""
+    fw = FW.Firewall(tmp_path / "fw")
+    fw.finish(fw.open("s", list(NAMES), budget=FW.BUDGET_MIN))
+    record = tmp_path / "fw" / "record.jsonl"
+    record.write_bytes(record.read_bytes()[:-1])
+    before = record.read_bytes()
+    with pytest.raises(json.JSONDecodeError, match="the record's last line has no newline"):
+        with fw.seat("r0000", "L0"):
+            pass
+    assert record.read_bytes() == before
+    record.write_bytes(before + b"\n")
+    with fw.seat("r0000", "L0") as why:
+        assert why is None
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError,

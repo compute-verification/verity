@@ -302,10 +302,15 @@ class Firewall:
         """The relay's outer session of ``session`` at ``part`` takes the slot (`slot`) and is admitted or refused
         (`admit`, untimed) on one read of the record, under one ``record.lock``, their events appended in one write, as
         the Lean ZK server's ``seat`` does (`Firewall.Release`): a holder that ends before it is seated leaves the record
-        as it was, never a ``slot`` of a session it was not admitted to. The block holds the slot and is entered with the
-        refusal (`Refused`'s message), or None once admitted."""
+        as it was, never a ``slot`` without its admission or refusal after it. On a record whose last line has no newline
+        yet, it writes nothing and fails as the Lean's does, whose admission reads the record its ``slot`` line joined
+        (`json.JSONDecodeError`). The block holds the slot and is entered with the refusal (`Refused`'s message), or None
+        once admitted."""
         with self._slot_lock(session, part, waiting):
             with self._locked((session,)) as rec:
+                if (line := self._open_line()) is not None:
+                    raise json.JSONDecodeError("the record's last line has no newline, so the slot's would join it", line,
+                                               len(line))
                 held: list[bytes] = []
                 try:
                     self._take(rec, session, part, held)
@@ -316,6 +321,19 @@ class Firewall:
                         rec.broken = True
                     raise
             yield None if why is None else refused(why)
+
+    def _open_line(self) -> str | None:
+        """The record's last line, if it has no newline yet (a writer ended inside its append): a line appended joins it."""
+        try:
+            with open(self._log, "rb") as f:
+                end = f.seek(0, os.SEEK_END)
+                if end == 0 or (f.seek(end - 1), f.read(1))[1] == b"\n":
+                    return None
+                f.seek(0)
+                data = f.read()
+        except FileNotFoundError:
+            return None
+        return data[data.rfind(b"\n") + 1:].decode(_ENCODING, "replace")
 
     @contextmanager
     def _slot_lock(self, session: str, part: str, waiting: Callable[[], None] | None) -> Iterator[None]:
