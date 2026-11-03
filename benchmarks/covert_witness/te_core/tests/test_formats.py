@@ -428,6 +428,49 @@ def test_an_extended_model_at_its_initialisation_computes_thetas_function_exactl
     assert not torch.equal(start.logits(idx), moved.logits(idx))
 
 
+def test_a_bias_extension_at_zero_biases_reproduces_thetas_function_exactly(monkeypatch):
+    """BitFit's extension: `bias` adds a zero vector to each named matrix of every block, so θ's logits come back bit
+    for bit (fp32 and under bf16 autocast), its forward costs θ's MACs, every bias has its matrix's position, and other
+    leaves are refused."""
+    from model import LINEARS
+    from te_core.flops import forward_macs_per_token
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+
+    small = lf(2)
+    th = {k: v.float() for k, v in lf_theta(small).items()}
+    rec = {"config": small, "tokenizer": prepare.data_v3.TOKENIZER}
+    forward = [{"op": "forward", "tokens": 1}]
+    theta_forward = prepare.train_flops(rec | {"tensors": {k: [str(v.dtype), list(v.shape)] for k, v in th.items()}},
+                                        {"full": []}, forward)["flops"]
+    x = torch.randint(0, 32000, (2, 16), generator=torch.Generator().manual_seed(2))
+    # On CPU, oneDNN's bf16 matmul and the flash attention kernel aren't run-to-run deterministic (torch 2.14: about one
+    # call in 30 differs on identical inputs), so the comparisons run on kernels that are.
+    monkeypatch.setattr(torch.backends.mkldnn, "enabled", False)
+    for leaves in (["wq", "wv", "w_up", "w_down"], list(LINEARS)):
+        biased = {**small, "bias": leaves}
+        shapes = prepare.architecture(biased)
+        new = {k: torch.zeros(s) for k, s in shapes.items() if k not in th}
+        assert sorted(new) == sorted(f"blocks.{i}.{n}.bias" for i in range(2) for n in leaves)
+        blob = prepare.encode_model(biased, new)
+        assert prepare.model_config(rec, blob) == biased
+        out = prepare.decode(th, blob, device="cpu")
+        plain, ext = prepare.Net(small).load(th), prepare.Net(biased).load(out)
+        assert torch.equal(plain.logits(x), ext.logits(x))
+        with sdpa_kernel(SDPBackend.MATH):
+            with torch.autocast("cpu", dtype=torch.bfloat16):
+                assert torch.equal(plain.logits(x), ext.logits(x))
+            assert forward_macs_per_token(ext, 16, 32000, "cpu") == forward_macs_per_token(plain, 16, 32000, "cpu")
+        biased_rec = prepare.model_record(rec, biased, out)
+        nodes = {n["param"]: n for n in prepare.positions(biased_rec)}
+        for k in new:
+            w = nodes[k.removesuffix(".bias") + ".weight"]
+            assert (nodes[k]["layer"], nodes[k]["stage"], nodes[k]["flops"]) == (w["layer"], w["stage"], 0)
+        assert prepare.train_flops(biased_rec, {"full": sorted(new)}, forward)["flops"] == theta_forward
+    for bad in (["embed"], ["wq", "norm"], "wq", 3):
+        with pytest.raises(ValueError, match="bias must be a list"):
+            prepare.decode(th, prepare.encode_model({**small, "bias": bad}, {}), device="cpu")
+
+
 def test_bpe32k_training_windows_cover_every_parts_windows_and_none_crosses_a_part(tmp_path, monkeypatch):
     lengths = (41, 9, 2, 25)
     (tmp_path / "parts").mkdir()
