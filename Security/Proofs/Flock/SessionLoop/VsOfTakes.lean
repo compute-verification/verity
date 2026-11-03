@@ -566,7 +566,7 @@ theorem takesVals_vsOf
         (LeanRelease.withFiles (LeanRelease.withLink (LeanRelease.withInner Masked.dataE L₁ real fin) src) src) real
         hP bx h (Nat.le_of_lt (Nat.lt_of_lt_of_eq hn List.length_ofFn.symm)) hF hc).symm
   rw [hord.1]
-  refine Eq.symm ((vsWord_vsOf _ bx x w ν _ t j r hiE).trans ?_)
+  refine Eq.symm ((vsWord_vsOf _ bx hSv w ν _ t j r hiE).trans ?_)
   rw [ite_eq_right hab.2]
   exact vsOfWord_of_free _ bx _ _ _ hfw
 

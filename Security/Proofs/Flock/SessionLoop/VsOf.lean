@@ -16,11 +16,13 @@ what `RefSession.SwVals` reads, once each pad index has one round that frees it.
   word `a`.
 * `Loop.freeWord L bx`: the word `bx`, as a pad-blind worker (`blind (bwOf bx)`), frees at pad `i`, at the history
   whose answers open the coins' first `n` (`FreedAt`), where there is one.
-* **`Loop.vsOf L bx`**: at each pad index, `freeWord`'s word where the frame frees one there; at `final_c`'s index the
-  c_eval of the round-1c values at the coins' zerocheck point (`zcE`), as the firewall's finish computes it; at every
-  other index the table's own value (`Table.vals`).
+* **`Loop.vsOf L bx`**: at a statement the loop serves (`Loop.Serves`), `Loop.vsServed L bx`: at each pad index,
+  `freeWord`'s word where the frame frees one there; at `final_c`'s index the c_eval of the round-1c values at the
+  coins' zerocheck point (`zcE`), as the firewall's finish computes it; at every other index the table's own value
+  (`Table.vals`). At a statement whose `Hello` the loop refuses, the tables' own values (`honestVals`).
 * **`Loop.finalCFixed_vsOf`**: `vsOf bx`'s `final_c` is its round-1c values' c_eval (`Loop.FinalCFixed`), at every
-  coins, by construction: no round frees `final_c`'s pad.
+  coins: by construction where the loop serves the statement (no round frees `final_c`'s pad), and as the honest
+  values' elsewhere.
 
 `Loop.takesVals_vsOf` (`SessionLoop/VsOfTakes`) proves that `phased bx post` meets `TakesVals` at `vsOf bx`: `bwOf`
 hands `bx` the answers after `Hello`'s (`List.tail?`), the coins `TakesVals` reads `vs` at, and never `Hello`'s answer.
@@ -97,20 +99,34 @@ noncomputable def vsOfWord (bx : AlgWorker L) (x : Msg) (w : Flock.Wit) (ν : Co
         ((CoinLayer.session loopNr Masked.dataE).cz x c j)).tab.vals r wt u V ⟨i, hi⟩)
     else 0
 
-/-- **The values a pad-blind worker of the algebraic phase supplies**: at each pad index the frame frees, the word `bx`
-frees there at the history whose answers open the coins' prefix (`freeWord`); at `final_c`'s index the c_eval
-`Σ_i λ_i(z)·r1c_i` of the round-1c values at the rep's zerocheck point (`zcE`), as the firewall's finish computes it
-(`Flock.dot`, `Flock.lagrange`); at every other index the table's own value (`vsOfWord`). -/
-noncomputable def vsOf (bx : AlgWorker L) : (CoinLayer.session loopNr Masked.dataE).SwVals :=
+/-- **The values a pad-blind worker of the algebraic phase supplies where the loop serves the statement**: at each pad
+index the frame frees, the word `bx` frees there at the history whose answers open the coins' prefix (`freeWord`); at
+`final_c`'s index the c_eval `Σ_i λ_i(z)·r1c_i` of the round-1c values at the rep's zerocheck point (`zcE`), as the
+firewall's finish computes it (`Flock.dot`, `Flock.lagrange`); at every other index the table's own value
+(`vsOfWord`). -/
+noncomputable def vsServed (bx : AlgWorker L) : (CoinLayer.session loopNr Masked.dataE).SwVals :=
   fun x w ν c s j r wt u V i =>
     if i.val = (layE x j).fc then
       (_root_.Flock.dot (_root_.Flock.lagrange _root_.Flock.nodesL _root_.Flock.den6Inv (zcE c j r).z)
         ((Array.range 64).map fun k => vsOfWord L bx x w ν c s j r wt u V ((layE x j).r1c k)) : FlockLevel3.GF128)
     else (vsOfWord L bx x w ν c s j r wt u V i.val : FlockLevel3.GF128)
 
-/-- **`vsOf`'s word below `n_E`**: the c_eval of its round-1c words at `final_c`'s index, `vsOfWord` elsewhere, at the
-tape's base and what the workers see of the tape. -/
-theorem vsWord_vsOf (bx : AlgWorker L) (x : Msg) (w : Flock.Wit) (ν : CoinLayer.Nonce)
+open Classical in
+/-- **The values a pad-blind worker of the algebraic phase supplies**: `vsServed`'s at a statement the loop serves
+(`Serves`), and the tables' own (`honestVals`) at one whose `Hello` it refuses, where no round frees a pad. -/
+noncomputable def vsOf (bx : AlgWorker L) : (CoinLayer.session loopNr Masked.dataE).SwVals :=
+  fun x => if Serves x then vsServed L bx x else (CoinLayer.session loopNr Masked.dataE).honestVals x
+
+theorem vsOf_of_serves (bx : AlgWorker L) {x : Msg} (h : Serves x) : vsOf L bx x = vsServed L bx x :=
+  if_pos h
+
+theorem vsOf_of_not_serves (bx : AlgWorker L) {x : Msg} (h : ¬ Serves x) :
+    vsOf L bx x = (CoinLayer.session loopNr Masked.dataE).honestVals x :=
+  if_neg h
+
+/-- **`vsOf`'s word below `n_E`** at a statement the loop serves: the c_eval of its round-1c words at `final_c`'s
+index, `vsOfWord` elsewhere, at the tape's base and what the workers see of the tape. -/
+theorem vsWord_vsOf (bx : AlgWorker L) {x : Msg} (hSv : Serves x) (w : Flock.Wit) (ν : CoinLayer.Nonce)
     (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) {i : ℕ}
     (hi : i < (tabC PE x j).z.nE) :
     vsWord (vsOf L bx) x w ν c τ j r i =
@@ -123,12 +139,22 @@ theorem vsWord_vsOf (bx : AlgWorker L) (x : Msg) (w : Flock.Wit) (ν : CoinLayer
         (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
         (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1 i := by
   unfold vsWord
-  rw [dite_eq_left hi]
+  rw [dite_eq_left hi, vsOf_of_serves L bx hSv]
   rfl
 
-/-- **`vsOf`'s `final_c` is its round-1c values' c_eval**, at every coins: `vsOf` sets it so, and the round-1c indices
-are below `final_c`'s. -/
+/-- **`vsOf`'s `final_c` is its round-1c values' c_eval**, at every coins: where the loop serves the statement `vsOf`
+sets it so, and the round-1c indices are below `final_c`'s; where it doesn't, `vsOf` is the honest values, whose
+`final_c` is (`finalCFixed_honestVals`). -/
 theorem finalCFixed_vsOf (bx : AlgWorker L) (x : Msg) (w : Flock.Wit) : FinalCFixed (vsOf L bx) x w := by
+  by_cases hSv : ¬ Serves x
+  · have e : ∀ ν c τ j r i, vsWord (vsOf L bx) x w ν c τ j r i =
+        vsWord (CoinLayer.session loopNr Masked.dataE).honestVals x w ν c τ j r i := fun _ _ _ _ _ _ => by
+      unfold vsWord
+      rw [vsOf_of_not_serves L bx hSv]
+    intro ν c τ j ho r
+    simp only [e]
+    exact finalCFixed_honestVals x w ν c τ j ho r
+  rw [not_not] at hSv
   intro ν c τ j _ r
   have hE : (tabC PE x j).z.nE = (layE x j).hab := by
     show (layE x j).len - 4 = (layE x j).hab
@@ -141,11 +167,11 @@ theorem finalCFixed_vsOf (bx : AlgWorker L) (x : Msg) (w : Flock.Wit) : FinalCFi
   have hfc : (layE x j).fc < (tabC PE x j).z.nE := by rw [hE]; exact lt_hab (layE x j) le_rfl
   have hr1c : ∀ i < 64, (layE x j).r1c i < (tabC PE x j).z.nE := fun i hi => by
     rw [hE]; exact lt_hab (layE x j) (hlt i hi).le
-  rw [vsWord_vsOf L bx x w ν c τ j r hfc, ite_eq_left rfl]
+  rw [vsWord_vsOf L bx hSv w ν c τ j r hfc, ite_eq_left rfl]
   refine congrArg₂ _root_.Flock.dot rfl (Array.ext (by simp) fun i h1 _ => ?_)
   have hi : i < 64 := by simpa using h1
   simp only [Array.getElem_map, Array.getElem_range]
-  rw [vsWord_vsOf L bx x w ν c τ j r (hr1c i hi), ite_eq_right (Nat.ne_of_lt (hlt i hi))]
+  rw [vsWord_vsOf L bx hSv w ν c τ j r (hr1c i hi), ite_eq_right (Nat.ne_of_lt (hlt i hi))]
 
 end VsOf
 
