@@ -57,7 +57,7 @@ LAUNCHES = LEDGER.with_name(LEDGER.stem + "-launches.jsonl")
 sys.path.insert(0, str(HERE))
 from pin import source  # noqa: E402
 from te_core.frontier import REF_DIRECTIONS  # noqa: E402
-from te_core.launch import Node, nodes  # noqa: E402
+from te_core.nodes import Node, nodes  # noqa: E402
 #: the harness this launcher drives (prepare.VERSION, read without importing prepare's torch)
 VERSION = re.search(r'^VERSION = "([^"]+)"', (HERE / "prepare.py").read_text(), re.M).group(1)
 DONE = {"done", "failed", "cancelled", "refused", "timeout", "lost"}

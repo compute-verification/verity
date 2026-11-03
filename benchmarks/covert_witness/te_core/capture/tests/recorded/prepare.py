@@ -18,6 +18,17 @@ class Net(nn.Module):
         return dict(self.named_parameters())
 
 
+def _quant_array(q, name: str) -> tuple[dict, list[bytes]]:
+    """prepare's CWQUAN1 arrays: its checks read the codes' range and the codebook's finiteness back, and its bytes."""
+    codes = torch.as_tensor(q.codes).detach().reshape(-1).cpu().long()
+    cb = torch.as_tensor(q.codebook).detach().reshape(-1).cpu()
+    if codes.numel() and not 0 <= int(codes.min()) <= int(codes.max()) < 2 ** q.bits:
+        raise ValueError(f"{name}'s codes don't fit {q.bits} bits")
+    if not torch.isfinite(cb).all():
+        raise ValueError(f"{name}'s codebook must be finite")
+    return {"b": q.bits}, [cb.numpy().tobytes(), codes.to(torch.uint8).numpy().tobytes()]
+
+
 class TrainData:
     """The training stream (the recorder's stub replaces it)."""
 
