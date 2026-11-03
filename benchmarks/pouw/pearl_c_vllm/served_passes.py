@@ -5,8 +5,9 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
   served_passes.py serve --passes DIR --out served.json [--spec SPEC] [--arm ARM] [--requests 32] [--prompt-tokens 512]
                          [--output-tokens 16] [--max-num-batched-tokens N] [--no-retain]
   served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J]
+  served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...]
   served_passes.py verify --passes DIR [--manifest M ...] [--tie W] --out verify.json [--answer answer.json]
-                          [--draws 459] [--delta 1/100] [--jobs J] [--fast]
+                          [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R]
 
 ``serve`` builds the spec's preset with its Pearl-C arm (`pearl_c_arm`: ``--arm``, else the spec's one; `verity_bench`'s
 ``engine_args`` and ``protocols_config``, whose in-process challenger is the epoch's coins) and the pouw setting
@@ -31,21 +32,29 @@ so its walls are the option's without retention, its passes have no manifest or 
 each pass with calls, as ``verify`` reads them, it replays every tile word by word on ``--jobs`` processes and gives up, in
 the pass's records, the rows that leave a tile or one of its credited rows over its debit cap, which the serve's screen
 can't see (the debit reads the noised codes); the transcript is the serve's.  It writes each pass's outcome and seconds to
-``--out``, prints one line and exits 0 only when no pass has a tile left over a cap; it refuses a serve that retained none.
+``--out`` as each pass ends (``done`` once all have), prints one line and exits 0 only when no pass has a tile left over
+a cap; it refuses a serve that retained none, and any once the verifier's coin is drawn (``DIR/coin.json``).
+
+``retain`` is the prover's last step before the coin: it writes ``DIR/retention.json``, the rounds (places among
+``served.json``'s passes with calls) the verdict is to read, dropping each ``--drop`` round and, with ``--volunteer``, each
+pass that step didn't finish or left over a cap.  A dropped pass credits nothing and its MACs stay in what the run
+declared.  It refuses once the coin is drawn.
 
 ``verify`` is Pearl+'s PoUW verdict on the run (`verify_run.verify_passes`): the passes ``--manifest`` names (a capture's
-``prefill/`` and ``decode/`` beside its ``coins.json``), else those with calls that ``DIR/served.json`` names, else every
+``prefill/`` and ``decode/`` beside its ``coins.json``), else those with calls that ``DIR/served.json`` names, each at its
+round, less the rounds ``DIR/retention.json`` drops, with the verifier's coin recorded in ``DIR/coin.json``
+(``--coin-record``; a verdict over other passes or records after it is refused, ``after-coin``), else every
 ``DIR/pass-NNNNN/manifest.json`` (a transcript dir a served engine retained), in order, each epoch re-started against
 ``DIR/coins.json``.  It first holds the passes together to distinct call indices of
 one salt (`credit.passes_distinct`: the device numbers calls across the epoch, and a run whose passes share an index is
 refused before any replay), then reads every pass, holds the window record ``--tie W`` to them where one is named
 (`verify_run.tie`: each call's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>`` entry its root and its domain recomputed from
-the salt and the call's index), takes the verifier's coin, and replays ``--draws`` work-weighted tiles over all of them
-and each pass's exclusion tiles.  It writes the details to ``--out``, with, where ``served.json`` names the passes and says
-which of them the timed call made, the credit over those alone (`timed_credit`), and the core answer (`answer_of`'s form,
-``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer`` (default
-``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as PoUW's piece, ``POUW_CMD``), prints one line and
-exits 0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
+the salt and the call's index), takes the verifier's coin, and replays ``--draws`` work-weighted tiles over all of them and
+each pass's exclusion tiles.  It writes the details to ``--out``, with, where ``served.json`` says which passes the timed
+call made and no ``--manifest`` names others, the credit over those retained alone (`timed_credit`), and the core answer
+(`answer_of`'s form, ``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer``
+(default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line
+and exits 0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
 PouwCheck).
 """
 from __future__ import annotations
@@ -77,6 +86,10 @@ KEEP = ("units", "base", "tiles", "screened_rows", "failing_rows", "unsure_rows"
 VOLUNTEER_KEEP = ("manifest", "ok", "line", "tiles", "over", "voluntary_a", "voluntary_b", "left", "records_root", "credit_kept")
 #: why `verify` and `volunteer` refuse a serve run with ``--no-retain``
 UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so there is nothing to replay")
+#: the verifier's record of its coin (`verify_run.verify_passes`' ``record``) and the prover's retention, in DIR
+COIN, RETENTION = "coin.json", "retention.json"
+#: why `retain` and `volunteer` refuse once the verifier's coin is drawn
+DRAWN = "the verifier's coin is drawn (DIR/coin.json), so the passes and their records are fixed"
 
 
 def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
@@ -198,14 +211,30 @@ def manifests(passes: Path) -> tuple[list[Path], str | None]:
     return sorted(passes.glob("pass-*/manifest.json")), None
 
 
-def timed_credit(served: dict, work: dict, coins) -> dict:
+def retention(passes: Path, served: dict) -> tuple[list[Path], list[int], tuple[int, ...]]:
+    """The passes the verdict reads, their rounds (each one's place among ``served.json``'s passes with calls) and the
+    rounds dropped: ``DIR/retention.json``'s (`retain`), else every pass with calls.  ValueError on a retention whose
+    rounds are not in order, distinct, and the served run's."""
+    held = [p for p in served["passes"] if p["units"]]
+    rounds = list(range(len(held)))
+    if (passes / RETENTION).exists():
+        got = json.loads((passes / RETENTION).read_text())["rounds"]
+        if not (all(type(s) is int for s in got) and got == sorted(set(got)) and set(got) <= set(rounds)):
+            raise ValueError(f"the retention's rounds {got} are not distinct rounds of the served run's {len(held)}, in order")
+        rounds = got
+    return [Path(held[s]["manifest"]) for s in rounds], rounds, tuple(s for s in range(len(held)) if s not in rounds)
+
+
+def timed_credit(served: dict, work: dict, coins, rounds: list[int] | None = None) -> dict:
     """An accepted run's credit over the passes its timed call made (``served.json``'s ``timed``; a pass without the flag
-    is timed), the work the timed call's wall bought: the run's credited MACs less the other passes' credited cells' MACs
-    at (1 − ρ), rounded up, so all of the run's deduction for ε falls on the timed passes."""
+    is timed), the work the timed call's wall bought: the run's credited MACs less the other retained passes' (``rounds``,
+    default all) credited cells' MACs at (1 − ρ), rounded up, so all of the run's deduction for ε falls on the timed
+    passes.  A dropped pass is in neither."""
     sys.path.insert(0, str(HERE))
     import verify_run as VR
 
     held = [p for p in served["passes"] if p["units"]]
+    held = held if rounds is None else [held[s] for s in rounds]
     warm = sum(VR.pass_macs(VR.load(Path(p["manifest"]), coins)) for p in held if not p.get("timed", True))
     return {"passes": sum(1 for p in held if p.get("timed", True)), "macs": work["macs"] - warm,
             "credited": max(0, work["credited"] - math.ceil((1 - Fraction(work["rho"])) * warm))}
@@ -221,26 +250,66 @@ def volunteer(args: argparse.Namespace) -> int:
     if served is not None and served.get("retained") is False:
         print(f"volunteer FAIL: {UNRETAINED[1]}", flush=True)
         return 1
+    if (passes / COIN).exists():
+        print(f"volunteer FAIL: {DRAWN}", flush=True)
+        return 1
     paths, _ = manifests(passes)
     coins = VR.epoch_coins(passes / "coins.json")
-    got = []
+    out, got = Path(args.out), []
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    def written(done: bool) -> dict:
+        total = {k: sum(len(r[k]) for r in got) for k in ("over", "left")}
+        given = {k: sum(len(rows) for r in got for rows in r[k].values()) for k in ("voluntary_a", "voluntary_b")}
+        doc = {"schema": "verity-pouw/pearl-plus-served-volunteer/v1", "passes_dir": str(passes),
+               "served_run": (served or {}).get("run"), "jobs": args.jobs, "done": done, "of": len(paths), "passes": got,
+               "tiles": sum(r["tiles"] for r in got), **total, **given, "s": sum(r["s"] for r in got),
+               "ok": done and bool(got) and all(r["ok"] for r in got)}
+        tmp = out.with_name(out.name + ".tmp")
+        tmp.write_text(json.dumps(doc, indent=1) + "\n")
+        os.replace(tmp, out)
+        return doc
     for path in paths:
         t = time.perf_counter()
         r = VP.volunteer(path, coins, args.jobs)
         got.append({**{k: r[k] for k in VOLUNTEER_KEEP}, "s": time.perf_counter() - t})
         print(f"{path.parent.name}: {r['line']}", flush=True)
-    total = {k: sum(len(r[k]) for r in got) for k in ("over", "left")}
-    given = {k: sum(len(rows) for r in got for rows in r[k].values()) for k in ("voluntary_a", "voluntary_b")}
-    doc = {"schema": "verity-pouw/pearl-plus-served-volunteer/v1", "passes_dir": str(passes), "served_run": (served or {}).get("run"),
-           "jobs": args.jobs, "passes": got, "tiles": sum(r["tiles"] for r in got), **total, **given,
-           "s": sum(r["s"] for r in got), "ok": bool(got) and all(r["ok"] for r in got)}
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(doc, indent=1) + "\n")
+        written(False)
+    doc = written(True)
     print(f"volunteer {'PASS' if doc['ok'] else 'FAIL'}: {len(got)} passes, {doc['tiles']} tiles replayed in {doc['s']:.0f} s on "
           f"{args.jobs} processes, {doc['over']} over a cap; gave up {doc['voluntary_a']} A rows and {doc['voluntary_b']} B rows; "
           f"{doc['left']} tiles left over a cap", flush=True)
     return 0 if doc["ok"] else 1
+
+
+def retain(args: argparse.Namespace) -> int:
+    passes = Path(args.passes)
+    served = json.loads((passes / "served.json").read_text())
+    if served.get("retained") is False or (passes / COIN).exists():
+        print(f"retain FAIL: {UNRETAINED[1] if served.get('retained') is False else DRAWN}", flush=True)
+        return 1
+    held = [p for p in served["passes"] if p["units"]]
+    if bad := [s for s in args.drop if not 0 <= s < len(held)]:
+        print(f"retain FAIL: no round {bad[0]} among the served run's {len(held)} passes with calls", flush=True)
+        return 1
+    why = {s: "dropped by the prover (--drop)" for s in args.drop}
+    if args.volunteer:
+        vol = {p["manifest"]: p for p in json.loads(Path(args.volunteer).read_text())["passes"]}
+        for s, p in enumerate(held):
+            v = vol.get(p["manifest"])
+            if v is None:
+                why.setdefault(s, "its replay did not finish before the coin (served_passes.py volunteer)")
+            elif not v["ok"]:
+                why.setdefault(s, f"{len(v['left'])} tiles left over a cap after its give-up")
+    rounds = [s for s in range(len(held)) if s not in why]
+    doc = {"schema": "verity-pouw/pearl-plus-retention/v1", "served_run": served.get("run"), "volunteer": args.volunteer,
+           "rounds": rounds, "dropped": [{"round": s, "pass": held[s].get("pass"), "manifest": held[s]["manifest"],
+                                          "macs": held[s].get("macs"), "why": why[s]} for s in sorted(why)]}
+    (passes / RETENTION).write_text(json.dumps(doc, indent=1) + "\n")
+    print(f"retain {'PASS' if rounds else 'FAIL'}: {len(rounds)} of {len(held)} passes with calls retained, "
+          f"{len(why)} dropped before the coin (credit nothing, declared still)"
+          + "".join(f"; round {d['round']}: {d['why']}" for d in doc["dropped"][:8]), flush=True)
+    return 0 if rounds else 1
 
 
 def verify(args: argparse.Namespace) -> int:
@@ -248,18 +317,28 @@ def verify(args: argparse.Namespace) -> int:
     import verify_run as VR
 
     passes = Path(args.passes)
-    served = (json.loads((passes / "served.json").read_text())
-              if not args.manifest and (passes / "served.json").exists() else None)
-    doc = {"schema": SCHEMA, "passes_dir": str(passes), "served_run": (served or {}).get("run"), "tie_record": args.tie}
+    served = json.loads((passes / "served.json").read_text()) if (passes / "served.json").exists() else None
+    record = Path(args.coin_record) if args.coin_record else (passes / COIN if served is not None and not args.manifest else None)
+    doc = {"schema": SCHEMA, "passes_dir": str(passes), "served_run": (served or {}).get("run"), "tie_record": args.tie,
+           "coin_record": None if record is None else str(record)}
+    paths, rounds, dropped = None, None, ()
     if served is not None and served.get("retained") is False:
         doc.update(refused=list(UNRETAINED), **VR.rejected(": ".join(UNRETAINED), args.commit))
+    elif served is not None and not args.manifest:
+        try:
+            paths, rounds, dropped = retention(passes, served)
+        except (KeyError, TypeError, ValueError) as e:
+            doc.update(VR.rejected(f"the retention: {type(e).__name__}: {e}", args.commit))
     else:
+        paths = args.manifest or manifests(passes)[0]
+    if paths is not None:
         coins = VR.epoch_coins(passes / "coins.json")
         window = json.loads(Path(args.tie).read_text()) if args.tie else None
-        doc.update(VR.verify_passes(args.manifest or manifests(passes)[0], args.draws, args.jobs, args.commit, coins,
-                                    fast=args.fast, cross_check=args.cross_check, delta=args.delta, window=window))
-        if served is not None and doc["answer"]["verdict"] == "accept":
-            doc["timed"] = timed_credit(served, doc["answer"]["public"]["work"], coins)
+        doc.update(VR.verify_passes(paths, args.draws, args.jobs, args.commit, coins, fast=args.fast,
+                                    cross_check=args.cross_check, delta=args.delta, window=window, rounds=rounds,
+                                    dropped=dropped, record=record))
+        if served is not None and not args.manifest and doc["answer"]["verdict"] == "accept":
+            doc["timed"] = timed_credit(served, doc["answer"]["public"]["work"], coins, rounds)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(doc, indent=1) + "\n")
@@ -285,6 +364,11 @@ def main(argv: list[str] | None = None) -> int:
     o.add_argument("--passes", required=True)
     o.add_argument("--out", required=True)
     o.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
+    r = sub.add_parser("retain")
+    r.add_argument("--passes", required=True)
+    r.add_argument("--volunteer", help="volunteer's document: drop each pass it didn't finish or left over a cap")
+    r.add_argument("--drop", type=int, action="append", default=[], metavar="ROUND",
+                   help="drop this round (its place among served.json's passes with calls), repeated")
     v = sub.add_parser("verify")
     v.add_argument("--passes", required=True)
     v.add_argument("--manifest", action="append", type=Path,
@@ -299,8 +383,10 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     v.add_argument("--fast", action="store_true")
     v.add_argument("--cross-check", type=int, default=256)
+    v.add_argument("--coin-record", help=f"the verifier's coin record (default: DIR/{COIN} where served.json names the "
+                   "passes, none with --manifest)")
     args = p.parse_args(argv)
-    return {"serve": serve, "volunteer": volunteer, "verify": verify}[args.cmd](args)
+    return {"serve": serve, "volunteer": volunteer, "retain": retain, "verify": verify}[args.cmd](args)
 
 
 if __name__ == "__main__":

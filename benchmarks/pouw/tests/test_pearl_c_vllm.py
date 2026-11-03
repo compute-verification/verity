@@ -1260,25 +1260,6 @@ def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_pa
     assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
 
 
-def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_and_refuses_an_unretained_serve(tmp_path):
-    """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
-    each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
-    record's zero key) is left with none and its records' root is rewritten, so every tile then passes the verifier's check;
-    a serve that retained no pass is refused."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
-    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
-    d, out = _serve_dir(tmp_path, [path]), tmp_path / "volunteer.json"
-    before = json.loads(path.read_text())["records_root"]
-    assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 0
-    doc = json.loads(out.read_text())
-    assert doc["ok"] and [p["manifest"] for p in doc["passes"]] == [str(path)] and doc["over"] and not doc["left"]
-    assert doc["voluntary_a"] + doc["voluntary_b"] > 0
-    assert json.loads(path.read_text())["records_root"] == doc["passes"][0]["records_root"]["after"] != before
-    assert _replay_every_tile(VR.load(path, published(path))) == {}
-    (d / "served.json").write_text(json.dumps({**json.loads((d / "served.json").read_text()), "retained": False}))
-    assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 1
-
-
 def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex_or_its_published_root(tmp_path):
     """A pass whose rows over a cap are given up (`volunteer_pass`) is accepted by the run's verdict, which credits none of
     the given-up rows' cells.  More given-up rows than V-EX allows (⌈m/64⌉ of a call's A), or records changed after the
@@ -1306,18 +1287,20 @@ def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, r["line"]
 
 
-def window_record(path: Path) -> dict:
-    """Pearl+'s window record W over one pass, its round 0, as the tie writes it: a v2 record whose registered values are
-    each call's A rows (m16 rows of K FP32 words, A's domain) and y (its real rows of N, y's domain), beside a value of
-    another kind the verdict doesn't read."""
-    man = json.loads(path.read_text())
-    salt, reg = bytes.fromhex(man["salt"]), []
-    for c, u in enumerate(man["matmuls"]):
-        a = rows_domain(activation_binding(salt, u["index"]), u["index"], u["m"], HM96)
-        reg += [{"value": f"pearl-a/0/{c}", "root": u["root_a"], "leaves": u["m"], "words": u["k"], "word_bits": 32,
-                 "domain": a.domain_id.hex()},
-                {"value": f"pearl-y/0/{c}", "root": u["y"]["root"], "leaves": u["real_rows"], "words": u["n"], "word_bits": 32,
-                 "domain": SY.y_domain(salt, u["index"], u["real_rows"]).domain_id.hex()}]
+def window_record(*paths: Path) -> dict:
+    """Pearl+'s window record W over passes `paths`, pass s its round s, as the tie writes it: a v2 record whose registered
+    values are each call's A rows (m16 rows of K FP32 words, A's domain) and y (its real rows of N, y's domain), beside a
+    value of another kind the verdict doesn't read."""
+    reg = []
+    for s, path in enumerate(paths):
+        man = json.loads(path.read_text())
+        salt = bytes.fromhex(man["salt"])
+        for c, u in enumerate(man["matmuls"]):
+            a = rows_domain(activation_binding(salt, u["index"]), u["index"], u["m"], HM96)
+            reg += [{"value": f"pearl-a/{s}/{c}", "root": u["root_a"], "leaves": u["m"], "words": u["k"], "word_bits": 32,
+                     "domain": a.domain_id.hex()},
+                    {"value": f"pearl-y/{s}/{c}", "root": u["y"]["root"], "leaves": u["real_rows"], "words": u["n"],
+                     "word_bits": 32, "domain": SY.y_domain(salt, u["index"], u["real_rows"]).domain_id.hex()}]
     return {"format": REG.FORMAT_V2, "registered": [*reg, {"value": "input-ids/0", "root": "00", "leaves": 1, "words": 1,
                                                            "domain": "00"}]}
 
@@ -1353,6 +1336,96 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_root_and_
              ({**w, "format": REG.FORMAT}, f"W is no {REG.FORMAT_V2} record")]
     for bad, why in cases:
         r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=bad)
+        assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
+
+
+def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_and_refuses_an_unretained_serve(tmp_path):
+    """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
+    each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
+    record's zero key) is left with none and its records' root is rewritten, so every tile then passes the verifier's check;
+    a serve that retained no pass is refused."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    d, out = _serve_dir(tmp_path, [path]), tmp_path / "volunteer.json"
+    before = json.loads(path.read_text())["records_root"]
+    assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 0
+    doc = json.loads(out.read_text())
+    assert doc["ok"] and [p["manifest"] for p in doc["passes"]] == [str(path)] and doc["over"] and not doc["left"]
+    assert doc["voluntary_a"] + doc["voluntary_b"] > 0
+    assert json.loads(path.read_text())["records_root"] == doc["passes"][0]["records_root"]["after"] != before
+    assert _replay_every_tile(VR.load(path, published(path))) == {}
+    (d / "served.json").write_text(json.dumps({**json.loads((d / "served.json").read_text()), "retained": False}))
+    assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 1
+
+
+def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_and_refuses_a_retention_after_it(tmp_path):
+    """``retain`` drops passes before the coin (one ``--drop``, and with ``--volunteer`` each pass that step didn't finish or
+    left over a cap): ``verify`` then reads the retained passes alone, each at its round, credits only them, and records
+    its coin against their commitment (``coin.json``).  The same retention again takes the same source, never another;
+    ``retain`` and ``volunteer`` refuse once the coin is drawn, and a retention changed behind them is refused
+    (``after-coin``) before any replay, whichever way it changed."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+    d = _serve_dir(tmp_path, [a, b])
+    vol = tmp_path / "volunteer.json"
+    for passes, why in (([{"manifest": str(a), "ok": True, "left": []}], "did not finish before the coin"),
+                        ([{"manifest": str(a), "ok": True, "left": []}, {"manifest": str(b), "ok": False, "left": [7]}],
+                         "1 tiles left over a cap")):
+        vol.write_text(json.dumps({"passes": passes}))
+        assert SP.main(["retain", "--passes", str(d), "--volunteer", str(vol)]) == 0
+        got = json.loads((d / SP.RETENTION).read_text())
+        assert got["rounds"] == [0] and [x["round"] for x in got["dropped"]] == [1] and why in got["dropped"][0]["why"]
+    assert SP.main(["retain", "--passes", str(d), "--drop", "2"]) == 1
+    assert SP.main(["retain", "--passes", str(d), "--drop", "0"]) == 0
+    rc, doc, answer = served_verify(d, tmp_path / "verify.json")
+    one = VR.credit_at_assumption([VR.load(b, published(b))], 3, Fraction(1, 100))
+    work = answer["public"]["work"]
+    assert rc == 0 and (work["macs"], work["credited"]) == (one["macs"], one["credited"]), doc["line"]
+    assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["dropped"]) == ([1], [0], [0])
+    assert doc["passes"][0].split(" sha256:")[0].split(":", 1)[1] == str(b) and "1 passes dropped before the coin (rounds 0)" in doc["line"]
+    assert doc["timed"] == {"passes": 1, "macs": one["macs"], "credited": one["credited"]}
+    coin = json.loads((d / SP.COIN).read_text())
+    assert (coin["commitment"], coin["source"], coin["rounds"]) == (answer["commitment"], doc["source"], [1])
+    again = served_verify(d, tmp_path / "again.json")[1]
+    assert again["source"] == doc["source"] and again["answer"] == answer
+    before = (d / SP.RETENTION).read_text()
+    assert SP.main(["retain", "--passes", str(d)]) == 1 and (d / SP.RETENTION).read_text() == before
+    assert SP.main(["volunteer", "--passes", str(d), "--out", str(vol), "--jobs", "1"]) == 1
+    for rounds in ([0, 1], [0]):
+        (d / SP.RETENTION).write_text(json.dumps({"rounds": rounds}))
+        rc, doc, answer = served_verify(d, tmp_path / "verify.json")
+        assert rc == 1 and doc["refused"][0] == "after-coin" and "source" not in doc and "verdicts" not in doc, doc["line"]
+    (d / SP.RETENTION).write_text(json.dumps({"rounds": [1, 0]}))
+    assert "not distinct rounds of the served run's 2, in order" in served_verify(d, tmp_path / "verify.json")[2]["reason"]
+    assert json.loads((d / SP.COIN).read_text()) == coin
+
+
+def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
+    """V-EX's give-up is the prover's before the coin: a pass whose records change after the verifier recorded its coin
+    (`volunteer_pass` run past ``served_passes.py volunteer``'s refusal) is another run, and the verdict refuses it
+    (``after-coin``) rather than draw again over it."""
+    VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    coins, record = published(path), tmp_path / "coin.json"
+    first = VR.verify_passes([path], 3, 1, "test", coins, record=record)
+    assert "source" in first and json.loads(record.read_text())["commitment"] == first["commitment"]
+    assert VP.volunteer(path, coins, 1)["ok"]
+    late = VR.verify_passes([path], 3, 1, "test", coins, record=record)
+    assert late["answer"]["verdict"] == "reject" and late["refused"][0] == "after-coin" and "source" not in late, late["line"]
+    assert VR.verify_passes([path], 3, 1, "test", coins)["answer"]["verdict"] == "accept"
+
+
+def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes_over_the_dropped_rounds(tmp_path):
+    """With round 0 dropped before the coin, W over both rounds ties the retained pass at its round 1, its dropped round's
+    entries crediting nothing; without the drop those entries are a call the run doesn't hold, and the pass at round 0
+    misses its own."""
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+    coins, w = published(b), window_record(a, b)
+    r = VR.verify_passes([b], 3, 1, "test", coins, b"verifier" * 4, window=w, rounds=[1], dropped=(0,))
+    assert r["answer"]["verdict"] == "accept" and r["answer"]["public"]["tie"]["tables"] == 4, r["line"]
+    for rounds, dropped, why in (([1], (), "W registers pearl-a/0/0, no call of the run's"),
+                                 ([0], (1,), "W's pearl-a/0/0: its root")):
+        r = VR.verify_passes([b], 3, 1, "test", coins, b"verifier" * 4, window=w, rounds=rounds, dropped=dropped)
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
 
 

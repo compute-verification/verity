@@ -854,6 +854,38 @@ def test_a_pearlplus_piece_sets_the_unretained_serve_of_its_load_beside_its_shar
     assert calls == [(GATE, "ff" * 64, tmp_path / "main.txt")]
 
 
+def test_a_pearlplus_piece_sets_the_provers_replay_beside_its_shares(tmp_path, capsys, live):
+    """The prover's replay of every tile before the coin (``served_passes.py volunteer``'s seconds on its processes) is a
+    CPU term beside the GPU shares: the cores it takes to keep pace with the timed call's wall. One whose document has no
+    seconds says why, and neither decides the verdict."""
+    _calls, args = live
+    served, verified = _pearlplus_run()
+    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered={"s": 110.0, "jobs": 32, "ok": True},
+                      **args)
+    assert doc["verdict"] == "accept" and doc["shares"]["replay"] == {"s": 110.0, "cpus": 32, "core_s": 3520.0, "of_wall": 55.0,
+                                                                      "cores_to_keep_pace": 1760.0}
+    assert S.development_line(doc)["replay"] == {"s": 110.0, "cpus": 32, "cores_to_keep_pace": 1760.0}
+    assert S.development_line(S.pearlplus(tmp_path / "plain", served, verified, **args))["replay"] is None
+    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered={"jobs": 32}, **args)
+    assert doc["verdict"] == "accept" and "KeyError" in S.development_line(doc)["replay"]
+    for name, d in (("served.json", served), ("v.json", verified), ("vol.json", {"s": 110.0, "jobs": 32})):
+        (tmp_path / name).write_text(json.dumps(d))
+    assert S.main(["pearlplus", str(tmp_path / "cli"), "--served", str(tmp_path / "served.json"), "--verify",
+                   str(tmp_path / "v.json"), "--volunteer", str(tmp_path / "vol.json"), "--gate", GATE, "--key-sha512",
+                   "ff" * 64, "--main", str(tmp_path / "main.txt")]) == 0
+    assert json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))["replay"]["cores_to_keep_pace"] == 1760.0
+
+
+def test_a_pearlplus_piece_names_the_rounds_its_prover_dropped_before_the_coin(tmp_path, live):
+    """A verdict over a retention that dropped rounds before the coin (``served_passes.py retain``) names them in the
+    piece and its line: the verdict is the retained passes', and the dropped ones stay in the declared share."""
+    served, verified = _pearlplus_run()
+    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, {**verified, "rounds": [0, 1, 3], "dropped": [2]}, **live[1])
+    assert (doc["verdict"], doc["dropped"], S.development_line(doc)["dropped"]) == ("accept", [2], [2])
+    assert doc["shares"]["macs"]["declared_linears"] == 6000
+    assert S.development_line(S.pearlplus(tmp_path / "all", served, verified, **live[1]))["dropped"] is None
+
+
 @pytest.mark.parametrize("served, verified, reason", [
     (True, False, "Pearl+'s verdict rejects the run: pass 1 tile 7: B opening"),
     (True, None, "no verdict: served_passes.py verify wrote no document"),
