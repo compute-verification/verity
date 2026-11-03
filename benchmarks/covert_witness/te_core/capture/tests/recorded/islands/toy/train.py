@@ -16,7 +16,8 @@ votes packed 8 a uint8 (``vote-bytes``), or as lowrank-restart's codes (``vote-p
 scale per 8 entries, passed as torch.bool planes and the scales, its delta_grad.py `Code.pack` and `unpack` at
 cf8a20f44f, rounded to the nearest code). ``--session`` plans the run and prints each step's `current_step()` and
 `progress_bucket()`. ``--size-e`` sizes each step's E as sparse and shallow do, through `prepare._quant_array` on 4-bit
-codes of the trained matrices, with no encode."""
+codes of the trained matrices, with no encode. ``--from-budget`` plans at most the steps prepare.budget's FLOPs pay for,
+at its tier."""
 from __future__ import annotations
 
 import argparse
@@ -91,7 +92,10 @@ def main() -> int:
     ap.add_argument("--sampled-head", action="store_true")
     ap.add_argument("--attn", action="store_true")
     ap.add_argument("--size-e", action="store_true")
+    ap.add_argument("--from-budget", action="store_true")
     a = ap.parse_args()
+    if a.from_budget:
+        a.steps = min(a.steps, int(prepare.budget("toy")["train_flops"] // prepare.STEP_FLOPS))
     warm = a.warm_tokens // (a.batch * prepare.EVAL_CTX)
     net, _, _ = prepare.load_start("toy")
     P = net.params()
