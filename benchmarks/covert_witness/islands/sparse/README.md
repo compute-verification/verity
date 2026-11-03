@@ -33,8 +33,8 @@ touched tensor in the top N blocks, so the backward stops there. `--embed-rank R
 embedding a rank-R LoRA, (vocab + d) · R entries (about 102 kB a rank in bf16), placed before the block matrices'
 allocation, or with -1 lets it join that allocation; E carries it as one factor pair on `embed`, and training applies it
 in factored form to the lookup and the head (`tie_lora`), so the frozen head's matmul is unchanged. A probe (`--probe N`,
-4 batches by default) takes the mean gradient at θ, priced in the step log as a forward pass plus the full backward
-(`extra`). With `--analyse`, a record's `notes.first_order` holds, for budgets of 10 kB, 100 kB and 1 MB, the share of
+4 batches by default) takes the mean gradient at θ, priced in the step log as a forward pass plus the backward that
+takes the probed tensors' gradients (`extra`). With `--analyse`, a record's `notes.first_order` holds, for budgets of 10 kB, 100 kB and 1 MB, the share of
 ‖G‖² each encoding captures; with `--no-analyse` the probe reads only the candidate tensors (`--targets none` probes
 just the gains), and `notes.probe` gives its uncoded fp32 gradient's width, a reduction of its own.
 

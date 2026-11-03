@@ -5,8 +5,8 @@ On v2.3's pin (the pilot, with classes) it takes the class as `--klass`; v3's ha
 and `--cap` (E's byte cap) is required.
 
 A probe (`--probe N` batches) takes the mean gradient G at θ of every tensor (with `--no-analyse`, of the candidate
-tensors only, so `--targets none` probes just the gains), priced in the step log as a forward pass plus the full
-backward's FLOPs (`extra`); its uncoded fp32 gradient is in the notes (`probe`). From G the record's notes get, for each
+tensors only, so `--targets none` probes just the gains), priced in the step log as a forward pass plus the backward
+that takes the probed tensors' gradients (`extra`); its uncoded fp32 gradient is in the notes (`probe`). From G the record's notes get, for each
 budget in BUDGETS, the share of ||G||² that each
 encoding of a mask captures (`analyse`): LoRA ranks, whole rows or columns as one-hot LoRA factors (what the fixed `lora`
 decoder can carry) or with a list index, and single entries with an entropy-coded, int32-list or bitmap index at 16- or
@@ -126,7 +126,7 @@ def probe(net, rec, theta, data, n_batches: int, batch: int, micro: int,
     gsum = {n: torch.zeros_like(p, dtype=torch.float32) for n, p in params.items()}
     g2sum = {n: torch.zeros_like(p, dtype=torch.float32) for n, p in params.items()}
     tokens = batch * prepare.EVAL_CTX
-    full = prepare.train_flops(rec, {"full": sorted(theta)}, [{"op": "train", "tokens": tokens}])["flops"]
+    full = prepare.train_flops(rec, {"full": sorted(params)}, [{"op": "train", "tokens": tokens}])["flops"]
     fwd = prepare.train_flops(rec, {}, [{"op": "forward", "tokens": tokens}])["flops"]
     steps = []
     for _ in range(n_batches):
