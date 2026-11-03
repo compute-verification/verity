@@ -80,7 +80,8 @@ environment extension loaded, so none of the package's code runs), and replays t
                  tree, or an audited module of the definitions or properties tree imports one, unless a prefix of `trees`'
                  `except` lists the read module or the importing one with a reason (an entry that excepts nothing fails);
                  the record follows a statement through an excepted module's definitions as through `meaning`'s
-                 (`record_scope`), so the definitions it reads there, a premise among them, are in `reads`
+                 (`record_scope`), so the definitions it reads there, a premise among them, are in `reads`, and a claim
+                 or verifier it reads there holds it to witnesses as one under `meaning` does
     proved_in    (a spec package whose guarantees another package proves) a package `proved_in` names does not require this
                  one by path, holds guarantees in its own policy, shares a module root with a package it requires, or
                  imports modules of its own outside its roots; or a guarantee is proved by none of this package and those, or
@@ -1643,12 +1644,7 @@ def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
     (a bound on a hash, a count, a device), where neither form means anything."""
     if fns := accepted(policy, name):
         return "acceptance", f"a property of {' or '.join(fns)} accepting"
-    # what a statement reads only through `trees`' `except` (`record_scope`: the reads outside `meaning_reads`) is
-    # recorded, but brings no guarantee into scope: `unwitnessed` only shrinks, and the statements still in the proofs
-    # tree carry no witnesses
-    inner = None if pin.get("meaning_reads") is None else set(pin["meaning_reads"])
-    reads = sorted((r for r in pin.get("reads") or [] if inner is None or r.get("name") in inner),
-                   key=lambda r: r.get("name", ""))
+    reads = sorted(pin.get("reads") or [], key=lambda r: r.get("name", ""))
     for r in reads:
         m = r.get("module") or ""
         if SCOPE_COMPONENT in m.split("."):

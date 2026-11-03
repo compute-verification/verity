@@ -415,8 +415,9 @@ def test_the_reads_check_leaves_the_proofs_tree_to_the_trees_check():
 def test_the_record_follows_a_statement_through_the_modules_the_trees_except(tmp_path, monkeypatch):
     """`trees`' `except` exempts a module from the trees rule, not from the record: `Facts.lean` walks a guarantee's
     statement through `record_scope` (`meaning`, then the excepted prefixes), for a package's own guarantees and for those
-    a `proved_in` package proves, as `Security`'s are. The witnesses rule still reads only what the walk under `meaning`
-    alone reaches (`meaning_reads`), so what the record now holds brings no guarantee into its scope."""
+    a `proved_in` package proves, as `Security`'s are. The witnesses rule reads what the record holds: a claim, or a
+    verifier's acceptance, read only through an excepted module holds the guarantee to witnesses as one under `meaning`
+    does."""
     why = "C-Flock is excepted until its spec is extracted"
     pol = {"roots": ["S"], "meaning": ["S.Defs"], "trees": {"proofs": ["SP"], "except": {"SP.Loop": why, "S.Defs": why}}}
     assert A.record_scope(pol) == ["S.Defs", "SP.Loop"]
@@ -458,11 +459,12 @@ def test_the_record_follows_a_statement_through_the_modules_the_trees_except(tmp
 
     claim = {"name": "S.Claims.Holds", "module": "S.Defs.Claims", "kind": "def", "hash": "4" * 32}
     loop = {"name": "S.Guarantees.Loop", "module": "SP.Loop", "kind": "def", "hash": "5" * 32}
-    held = ("acceptance", "it reads the claim S.Claims.Holds")
-    assert A.witness_scope("S.t", pol, fact(reads=[loop, claim]) | {"meaning_reads": []}) is None, (
+    verifier = {"name": "SP.Loop.verifyRows", "module": "SP.Loop", "kind": "def", "hash": "6" * 32}
+    assert A.witness_scope("S.t", pol, fact(reads=[loop, claim])) == ("acceptance", "it reads the claim S.Claims.Holds"), (
         "a claim read only through the excepted statement")
-    assert A.witness_scope("S.t", pol, fact(reads=[loop, claim]) | {"meaning_reads": ["S.Claims.Holds"]}) == held
-    assert A.witness_scope("S.t", pol, fact(reads=[claim])) == held, "facts of a package with nothing excepted"
+    assert A.witness_scope("S.t", pol, fact(reads=[loop, verifier])) == (
+        "acceptance", "it reads SP.Loop.verifyRows, a verifier's acceptance"), "a verifier defined in the excepted module"
+    assert A.witness_scope("S.t", pol, fact(reads=[loop])) is None
 
 
 def test_a_changed_statement_or_meaning_fails_until_updated():
@@ -1631,8 +1633,40 @@ def test_a_premise_outside_meaning_changes_its_record_when_it_or_what_it_reads_c
         assert after == before, "the premise's record changed, and nothing else"
 
 
+def excepted_toy(tmp_path, module: str, source: str, proof: str, guarantee: str, defs: str = "", claims_not=None):
+    """The control package with the proofs-tree module ``module`` (``source``) under `trees`' `except` and outside
+    `meaning`, ``proof`` (a theorem of its statement, in namespace `Control`) in a module of its own, that theorem listed
+    as the guarantee ``guarantee``, and ``defs`` added to `Control.Defs`: the package, its build, its audit (``update`` or
+    not) and its lock."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    if defs:
+        d = pkg / "Control" / "Defs.lean"
+        d.write_text(d.read_text().replace("end Control", f"{defs}\nend Control"))
+    leaf = module.split(".")[-1]
+    (pkg / "Control" / f"{leaf}.lean").write_text(source)
+    (pkg / "Control" / f"{leaf}Thm.lean").write_text(f"import {module}\nnamespace Control\n{proof}end Control\n")
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + f"import {module}Thm\n")
+    pol = A.load(pkg)
+    A.dump(pkg, pol | {"meaning": ["Control.Assumptions", "Control.Defs", "Control.Thms"],
+                       "trees": pol["trees"] | {"proofs": [*pol["trees"]["proofs"], module],
+                                                "except": {module: "the statement this test records, in a proof module"}},
+                       "claims": pol["claims"] | ({"not": claims_not} if claims_not else {}),
+                       "guarantees": pol["guarantees"] | {guarantee: {"owner": "@lean"}}})
+
+    def build():
+        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+
+    def audit(update):
+        return A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None)
+
+    def lock():
+        return json.loads((pkg / A.POLICY).read_text())
+    return pkg, build, audit, lock
+
+
 LOOP = ("import Control.Assumptions\nimport Control.Defs\nnamespace Control.Guarantees\n"
-        "def Loop : Prop := ∀ n : Nat, Control.Hyp → Control.verifyDouble n\nend Control.Guarantees\n")
+        "def Loop : Prop := ∀ n : Nat, Control.Hyp → Control.twice n\nend Control.Guarantees\n")
 
 
 @pytest.mark.slow
@@ -1644,34 +1678,13 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     (`n ≠ 5`), or dropped from it while another guarantee still takes it (`Hyp`, whose assumption entry stays, and whose
     module's readers lose the guarantee), changes the record, which the audit refuses until `--update` records it, and
     the review prints `G` as it is now. A walk that stopped at `G` would record its name alone, and neither change would
-    move the lock. What `G` reads under `meaning`
-    (`verifyDouble`, a verifier's acceptance by its name) is recorded too, but holds the guarantee to no witnesses."""
-    pkg = tmp_path / "control"
-    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
-    defs = pkg / "Control" / "Defs.lean"
-    defs.write_text(defs.read_text().replace(
-        "end Control", "def verifyDouble (n : Nat) : Prop := double n = n + n\n\nend Control"))
+    move the lock. What `G` reads under `meaning` (`twice`) is recorded too."""
+    pkg, build, audit, lock = excepted_toy(
+        tmp_path, "Control.Loop", LOOP,
+        "theorem doubles : Guarantees.Loop := by\n  unfold Guarantees.Loop\n  intros\n  unfold twice double\n  omega\n",
+        "Control.doubles", defs="def twice (n : Nat) : Prop := double n = n + n\n",
+        claims_not={"Control.twice": "the toy Prop the statement reads"})
     loop = pkg / "Control" / "Loop.lean"
-    loop.write_text(LOOP)
-    (pkg / "Control" / "LoopThm.lean").write_text(
-        "import Control.Loop\nnamespace Control\ntheorem doubles : Guarantees.Loop := by\n  unfold Guarantees.Loop\n"
-        "  intros\n  unfold verifyDouble double\n  omega\nend Control\n")
-    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.LoopThm\n")
-    pol = A.load(pkg)
-    A.dump(pkg, pol | {"meaning": ["Control.Assumptions", "Control.Defs", "Control.Thms"],
-                       "trees": pol["trees"] | {"proofs": [*pol["trees"]["proofs"], "Control.Loop"],
-                                                "except": {"Control.Loop": "the statement this test records, in a proof module"}},
-                       "claims": pol["claims"] | {"not": {"Control.verifyDouble": "the toy verifier the statement reads"}},
-                       "guarantees": pol["guarantees"] | {"Control.doubles": {"owner": "@lean"}}})
-
-    def build():
-        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-
-    def audit(update):
-        return A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None)
-
-    def lock():
-        return json.loads((pkg / A.POLICY).read_text())
     build()
     assert unshaped(audit(True)) == []
     first = lock()
@@ -1679,12 +1692,12 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     assert list(first["reads"]["Control.Loop"]["definitions"]) == ["Control.Guarantees.Loop"]
     assert first["reads"]["Control.Loop"]["guarantees"] == ["Control.doubles"]
     assert "Control.doubles" in first["reads"]["Control.Defs"]["guarantees"], "and through it, what it reads under `meaning`"
-    assert "Control.verifyDouble" in first["reads"]["Control.Defs"]["definitions"]
+    assert "Control.twice" in first["reads"]["Control.Defs"]["definitions"]
     seen = {first["reads"]["Control.Loop"]["digest"]}
     for text, shows, codes, hyp_readers in (
             (LOOP.replace("Control.Hyp →", "Control.Hyp → n ≠ 5 →"), "n ≠ 5", ["guarantees.reads-changed"],
              ["Control.doubles", "Control.main_thm"]),
-            (LOOP.replace("Control.Hyp → ", ""), "∀ n : Nat, Control.verifyDouble n",
+            (LOOP.replace("Control.Hyp → ", ""), "∀ n : Nat, Control.twice n",
              ["guarantees.readers", "guarantees.reads-changed"], ["Control.main_thm"])):
         before = lock()
         loop.write_text(text)
@@ -1703,6 +1716,37 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
         for module in ("Control.Loop", "Control.Assumptions"):
             after["reads"][module] = before["reads"][module]
         assert after == before, "the statement's record changed, and nothing else"
+
+
+VERIFY = ("import Control.Defs\nnamespace Control\ndef verifyDouble (n : Nat) : Prop := double n = n + n\n"
+          "namespace Guarantees\ndef Doubled : Prop := ∀ n : Nat, Control.verifyDouble n\nend Guarantees\nend Control\n")
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_verifier_read_only_in_an_excepted_module_holds_its_statement_to_witnesses(tmp_path):
+    """On a real build: a guarantee whose statement (`Control.Guarantees.Doubled`, a `def … : Prop` of a proofs-tree module
+    under `trees`' `except`, as C-Flock's `SessionLoopZK` is) applies a verifier's acceptance (`verifyDouble`) defined in
+    that module and read nowhere under `meaning` states what an acceptance means: the witnesses rule holds it to its
+    witnesses as it would one read under `meaning`, and `--update`, which records it, lists it under no `unwitnessed`.
+    An entry there at its record's type hash exempts it, and `--update` keeps that entry. A rule that read only what the
+    walk under `meaning` reaches saw no read at all, and held the guarantee to nothing."""
+    pkg, build, audit, lock = excepted_toy(
+        tmp_path, "Control.Verify", VERIFY,
+        "theorem doubled : Guarantees.Doubled := by\n  unfold Guarantees.Doubled\n  intros\n  unfold verifyDouble double\n"
+        "  omega\n", "Control.doubled")
+    build()
+    fails = unshaped(audit(True))
+    assert [f.code for f in fails] == ["witnesses.missing"], fails
+    assert fails[0].startswith("witnesses: Control.doubled lists no witnesses") and \
+        "it reads Control.verifyDouble, a verifier's acceptance" in fails[0], fails[0]
+    rec = lock()
+    assert "Control.verifyDouble" in rec["reads"]["Control.Verify"]["definitions"]
+    assert "Control.doubled" not in rec.get("unwitnessed", {})
+    entry = {"Control.doubled": rec["guarantees"]["Control.doubled"]["type_hash"]}
+    A.dump(pkg, rec | {"unwitnessed": entry})
+    assert unshaped(audit(False)) == []
+    assert unshaped(audit(True)) == [] and lock()["unwitnessed"] == entry
 
 
 def test_a_statement_whose_premises_could_not_be_read_fails():
