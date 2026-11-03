@@ -416,11 +416,12 @@ theorem recCompiled_commits (H : Claims.Msg → Claims.Msg) : (𝔊).Commits H :
       stageMsg (𝔟).hs x (asRounds (h.take (IV.k (xIOf x)))) (List.ofFn (n := b.nC x) _)
     congr 1
     refine List.ext_getElem ?_ fun j h1 h2 => ?_
-    · simp only [List.length_map, List.length_range, List.length_ofFn]
+    · simp only [List.length_map, List.length_range]
+      exact List.length_ofFn.symm
     · have hj : j < b.nC x := by simpa using h1
       have hs : saltsOn t₀.2 j = t₀.2 ⟨j, hj⟩ := dite_eq_left hj
-      simp only [List.getElem_map, List.getElem_range, List.getElem_ofFn, hs]
-      all_goals rfl
+      simp only [List.getElem_map, List.getElem_range, hs]
+      exact (List.getElem_ofFn h2).symm
 
 /-- **Z3, each session's witness is in `O`'s relation unless the stop fired**: the live witness (`LiveWit`). -/
 theorem recCompiled_witnessIn
