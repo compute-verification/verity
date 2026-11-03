@@ -221,7 +221,7 @@ def test_a_session_pinned_behind_its_periods_open_pin_refuses_the_period():
         lane.close()
         got, why = Cr.pearl_c_period_credit(*lane.args("p-a", [lane.pass_(sid, base)]))
         if refused:
-            assert got is None and why[0] == "pin" and "pass 0 of period p-a is pinned 2 first-parent" in why[1], why
+            assert got is None and why[0] == "pin" and "pass 0 of credit period p-a is pinned 2 first-parent" in why[1], why
         else:
             assert why is None and got["epochs"] == [[w.hex(), 0]]
 

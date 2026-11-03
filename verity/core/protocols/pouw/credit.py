@@ -2314,7 +2314,7 @@ def _main_index(main: Any, commit: Any) -> int | None:
 
 
 def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | None, floor: int | None,
-                 unit: str = "window") -> tuple[str, str] | None:
+                 unit: str = "execution phase") -> tuple[str, str] | None:
     """Why execution phase `i` of credit period `name`, whose session ran commit `pinned` on main's first-parent line `main`, is too old
     for the credit period: its pin more than the credit period's freshness floor of first-parent commits behind the commit the credit period's
     open recorded (`period_pin`, `committed_pin`; `floor`, `committed_floor`, default 0 when the open pins but records no
