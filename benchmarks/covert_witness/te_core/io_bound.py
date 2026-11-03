@@ -42,10 +42,12 @@ xy + yz + zx ≤ (x + y + z)²/3). A partial sum read in and finished into the n
 splitting its b_C bits: `feed` = √(b_C/(b_C − b)) for b ≤ b_C/2, else 2√(b/b_C). Operand entries a block makes whole
 from chains it runs itself, their own operands read or made whole in turn, number at most e·k/b, e the least root of
 e = r·(1 + e)² with r = k/(3·K²·b) (LW on each source product, 4/3 for sources sharing arrays), worth `whole_chain` =
-(1 + e)^{3/2}. K is the shortest chain that makes a counted operand whole by itself (`Row.k_whole`: an operand that
-also needs a value paid at its width, such as a frozen weight's product, gains nothing); past r = 1/4 there is no root,
-and the proved bound is taken on the subset of the products whose chains are long enough (`bound`). Proved:
-Λ = SHARE·feed·whole_chain, at the kept products' widest operand and shortest whole-making chain. Each
+(1 + e)^{3/2}. That one-class rule holds only where no shorter chain is nested below a counted operand, and on a
+transformer's step attention's d_h-long chains are, so the proved factor is the step's whole-making system's
+(`chain_classes`, `whole_chain_of`): every product with both operands affected in a class by its chain K, with
+r_j = c_j·k/(K_j²·b), μ_j ≤ r_j·(P_j + Σ_i A_ij·μ_i)² at its least fixed point and e = Σ_i A_i,counted·μ_i, void
+where the system has no fixed point. Proved: Λ = SHARE·feed·whole_chain, at the kept products' widest operand and
+the step's whole-making factor, one number on every subset (`bound`). Each
 factor bounds both forms: shared arrays scale √(x·y·(t/b_C + s)) itself, a fed partial sum lowers only the read face's
 width (raising α by `feed` and μ·b_C by less), and whole-making raises k (α by (1 + e)^{3/2}, μ by less). Found by
 search over small chained triples: Λ = 2/√3 (the "numerical" figures).
@@ -62,6 +64,10 @@ search over small chained triples: Λ = 2/√3 (the "numerical" figures).
   Security's `TrainingIncompressible`, which charges a received partial sum b_a, takes the larger of the input and
   partial-sum counts rather than their sum, and whose `Chain` has no product of two activations. `rows_of` checks its
   dataflow side (`_Rates`) and counts only products whose operands both pass; the gate-level side is assumed.
+- P-width extended: every value a block reads while making operands whole costs its passed width, attention's and the
+  optimizer's included, not only a counted product's operands.
+- P-match: the elementwise steps between a product's outputs and the next products' operands map operand entries one
+  to one, so fan-out is at most fan-in (te_core.capture.products checks it on a traced step).
 - P-share: counted products share arrays only as forward/dX/dW triples. A product of an array with itself (`self`)
   can do 2α and is not counted.
 - For every method: no product is computed by a bilinear algorithm with fewer multiplications than its MACs (a
@@ -131,12 +137,15 @@ def blocks(G: float, gamma: float, B: float) -> float:
     return s * s
 
 
-def _lam_proved(ps: list[dict], k: float) -> float:
-    """Λ proved on the products `ps`: SHARE·feed·whole_chain at their widest operand and shortest whole-making chain;
-    ∞ where void."""
+def _lam_proved(ps: list[dict], k: float, whole: float | None = None) -> float:
+    """Λ proved on the products `ps`: SHARE·feed·whole_chain at their widest operand, `whole_chain` the step's
+    whole-making system's (`whole`, from `whole_chain_of`) or, without it, the one-class rule at their shortest
+    whole-making chain; ∞ where void."""
     fd = max(feed(max(p["b_a"], p["b_b"]), p["b_c"]) for p in ps)
-    whole = [p["k_whole"] for p in ps if p.get("k_whole")]
-    wc = whole_chain(k, min(whole), min(min(p["b_a"], p["b_b"]) for p in ps)) if whole else 1.0
+    if whole is not None:
+        return SHARE * fd * whole
+    ks = [p["k_whole"] for p in ps if p.get("k_whole")]
+    wc = whole_chain(k, min(ks), min(min(p["b_a"], p["b_b"]) for p in ps)) if ks else 1.0
     return SHARE * fd * wc
 
 
@@ -157,7 +166,7 @@ def _figures(ps: list[dict], lam: float, c: float, k: float, C: float) -> dict:
             "rho": n * c / C, "rho_main": G / gamma * c / C, "blocks_no_cell": n_cell, "rho_no_cell": n_cell * c / C}
 
 
-def bound(products: list[dict], c: float, k: float, C: float) -> dict:
+def bound(products: list[dict], c: float, k: float, C: float, whole: float | None = None) -> dict:
     """The bound (module docstring) at policy (c, k) on a step of |C| = `C` gates whose counted products are `products`,
     each {"macs", "outputs", "k_dim", "k_whole", "b_a", "b_b", "b_c", "gates_per_mac", "cell_gates"} (`k_whole` None:
     no chain makes an operand whole by itself): the cap's terms on them all (`whole_chain` None where void), Λ proved
@@ -170,7 +179,12 @@ def bound(products: list[dict], c: float, k: float, C: float) -> dict:
     void Λ for the whole step): `subset` (with P-cell) and `subset_no_cell` give the threshold (`k_whole_min`, None:
     only products with no whole-making chain), the products kept (`kept`, indices into the counted ones), how many are
     dropped and their share of the counted MACs, and that subset's Λ. Where every subset's Λ is void (`whole_chain`
-    past r = 1/4) the proved figures are None, never 0; with no counted product they are 0."""
+    past r = 1/4) the proved figures are None, never 0; with no counted product they are 0.
+
+    `whole` is the step's `whole_chain` from its whole-making system (`whole_chain_of(chain_classes(graph, k), k)`),
+    one factor for every subset, ∞ where the system has no fixed point (void). Without it Λ takes the one-class rule at
+    each subset's least `k_whole`, which holds only where no shorter chain is nested below a kept operand: attention's
+    d_h-long chains are, on a transformer's step."""
     ps = [p for p in products if p["macs"]]
     G = sum(p["gates_per_mac"] * p["macs"] for p in ps)
     out = {"c": c, "k": k, "C_gates": C, "G": G, "share": G / C if C else 0.0}
@@ -179,8 +193,9 @@ def bound(products: list[dict], c: float, k: float, C: float) -> dict:
     if not ps:
         return out | {"gamma0": 0.0, "Q": 0.0, "L": 0.0, "feed": 1.0, "whole_chain": 1.0,
                       "proved": zero | {"subset": None, "subset_no_cell": None}, "numerical": zero}
-    whole = [p["k_whole"] for p in ps if p.get("k_whole")]
-    wc = whole_chain(k, min(whole), min(min(p["b_a"], p["b_b"]) for p in ps)) if whole else 1.0
+    ks = [p["k_whole"] for p in ps if p.get("k_whole")]
+    wc = whole if whole is not None else \
+        whole_chain(k, min(ks), min(min(p["b_a"], p["b_b"]) for p in ps)) if ks else 1.0
     out |= {"gamma0": max(p["gates_per_mac"] * alpha(k, p["b_a"], p["b_b"], p["b_c"]) for p in ps),
             "Q": sum(p["gates_per_mac"] ** 2 * p["outputs"] / (p["b_a"] * p["b_b"]) for p in ps),
             "L": sum(p["gates_per_mac"] * mu(k, p["b_a"], p["b_b"], p["b_c"]) * p["b_c"] * p["outputs"] for p in ps),
@@ -188,12 +203,12 @@ def bound(products: list[dict], c: float, k: float, C: float) -> dict:
             "whole_chain": wc if math.isfinite(wc) else None, "numerical": _figures(ps, SHARE, c, k, C)}
     macs = sum(p["macs"] for p in ps)
     best: dict[str, dict] = {}
-    for t in [*sorted(set(whole)), math.inf]:
+    for t in [*sorted(set(ks)), math.inf]:
         kept = [i for i, p in enumerate(ps) if (p.get("k_whole") or math.inf) >= t]
         if not kept:
             continue
         sub = [ps[i] for i in kept]
-        lam = _lam_proved(sub, k)
+        lam = _lam_proved(sub, k, whole)
         if not math.isfinite(lam):
             continue
         f = _figures(sub, lam, c, k, C)
@@ -472,7 +487,7 @@ def _chain_ks(st: _Step) -> dict:
     state, a GEMM's output with an operand outside the update) is ∞, an unaffected one 0; any other op takes the largest
     over its affected arguments at least its size (each is needed; a smaller one, a broadcast gain or a row's
     statistic, is shared by many entries)."""
-    from te_core.capture.structure import _gemms
+    from te_core.capture.structure import _GATHERS, _gemms, _pk
 
     out: dict = {}
     for n in st.nodes:
@@ -485,10 +500,167 @@ def _chain_ks(st: _Step) -> dict:
         elif gs := _gemms(n):
             both = all(st.reads_affected(n, g.operands[0]) and st.reads_affected(n, g.operands[1]) for g in gs)
             out[n] = float(max(g.dims["k"] for g in gs)) if both else math.inf
+        elif _pk(n.target) in _GATHERS and len(n.args) > 1 and hasattr(n.args[1], "op") and \
+                not st.reads_affected(n, n.args[1]):
+            # a gather's rows repeat over the tokens that share an index (rate 0): read, never made whole by a chain
+            out[n] = 0.0
         else:
-            ins = [a for a in _tensor_args(n) if st.reads_affected(n, a) and _numel(a) >= _numel(n)]
+            cat = _pk(n.target) in _CONCAT
+            ins = [a for a in _tensor_args(n) if st.reads_affected(n, a) and (cat or _numel(a) >= _numel(n))]
             out[n] = max((out.get(a, math.inf) for a in ins), default=0.0)
     return out
+
+
+#: a class's c_j (`chain_classes`): products of two arrays, which under P-share form triangles at most, so
+#: Σ_edges x_i·x_j ≤ a²/3 (Motzkin–Straus at clique number 3); a product of an array with itself has at most x²/K² outputs
+C_PAIR, C_SELF = 1 / 3, 1.0
+
+
+def _whole_making(st: _Step, rates: _Rates) -> tuple[dict, dict]:
+    """For each value, the chain sources whose outputs reach it ({GEMM node with both operands affected: the largest
+    factor along a path}) and the largest factor any path into it has for paid entries (`chain_classes`)."""
+    from te_core.capture.structure import _gemms, _pk
+
+    def both(n) -> bool:
+        gs = _gemms(n)
+        return bool(gs) and all(st.reads_affected(n, x.operands[0]) and st.reads_affected(n, x.operands[1]) for x in gs)
+
+    def gk(n) -> int:
+        return max(x.dims["k"] for x in _gemms(n))
+
+    feeds: dict = {}
+    paid: dict = {}
+    for n in st.nodes:
+        res: dict = {}
+        best = 1.0
+        if not st.affected(n) or n.op != "call_function":
+            pass
+        elif both(n):
+            res = {n: 1.0}
+        elif _gemms(n):
+            for x in _gemms(n):
+                for a in (x.operands[0], x.operands[1]):
+                    if st.reads_affected(n, a):
+                        f = x.dims["n"] / x.dims["k"] if a is x.operands[0] else x.dims["m"] / x.dims["k"]
+                        for s, v in feeds.get(a, {}).items():
+                            res[s] = max(res.get(s, 0.0), v * f)
+                        best = max(best, f * paid.get(a, 1.0), f)
+        else:
+            cat = n.target is not operator.getitem and _pk(n.target) in _CONCAT
+            ins = [n.args[0]] if n.target is operator.getitem else [
+                a for a in _tensor_args(n) if st.reads_affected(n, a) and (cat or _numel(a) >= _numel(n))]
+            for a in ins:
+                best = max(best, paid.get(a, 1.0))
+            # every same-size argument's entry is needed, so one argument paid at its width bounds the output (the one
+            # fed by the least mass); a concatenation's parts, or arguments none of which is paid at its width (a
+            # gather's rows, a widening product's), take the union
+            whole = [a for a in ins if is_paid(rates.rate.get(a, 0.0), _width(a))]
+            if not cat and len(ins) > 1 and whole:
+                ins = [min(whole, key=lambda a: sum(v * v / gk(s) ** 2 for s, v in feeds.get(a, {}).items()))]
+            for a in ins:
+                for s, v in feeds.get(a, {}).items():
+                    res[s] = max(res.get(s, 0.0), v)
+        feeds[n] = res
+        paid[n] = 1.0 if both(n) else best
+    return feeds, paid
+
+
+def chain_classes(graph, k: float = CONSOLE[1], gemm_dtype: str | None = "bfloat16") -> dict:
+    """A captured step's whole-making system at policy `k` (module docstring, `whole_chain_of`): every GEMM with both
+    operands affected (counted, dropped, attention's, a product of an array with itself) in a class by its chain K,
+    each class with c (`C_PAIR`, or `C_SELF` where it holds a self product), P (the largest factor any path into its
+    operands has, for paid entries) and feeds ({K_i: A_ij}, the largest factor from class i's outputs into its
+    operands: 1 through elementwise ops, n/K through a product with one operand outside the update); `counted` is the
+    same for the counted products' operands, and `b` the least width of a class's operand."""
+    from te_core.capture.structure import _gemms
+
+    st = _Step(graph)
+    rows = {(r.node, r.part): r for r in rows_of(graph, gemm_dtype, k)}
+    feeds, paid = _whole_making(st, _Rates(st, k))
+    by_name = {n.name: n for n in st.nodes}
+    classes: dict = {}
+    counted: dict = {}
+    b = math.inf
+    for m in graph.matmuls:
+        n = by_name[m.node]
+        gs = _gemms(n)
+        x = next(y for y in gs if y.part == m.part)
+        row = rows[(n.name, x.part)]
+        ops = [a for a in (x.operands[0], x.operands[1]) if st.reads_affected(n, a)]
+        src: dict = {}
+        for a in ops:
+            for s, v in feeds.get(a, {}).items():
+                K = max(y.dims["k"] for y in _gemms(s))
+                src[K] = max(src.get(K, 0.0), v)
+        if all(st.reads_affected(n, y.operands[0]) and st.reads_affected(n, y.operands[1]) for y in gs):
+            e = classes.setdefault(x.dims["k"], {"c": C_PAIR, "P": 1.0, "feeds": {}})
+            e["c"] = max(e["c"], C_SELF if row.kind == "self" else C_PAIR)
+            e["P"] = max([e["P"], *(paid.get(a, 1.0) for a in ops)])
+            for K, v in src.items():
+                e["feeds"][K] = max(e["feeds"].get(K, 0.0), v)
+            b = min(b, *row.widths)
+        if row.kind == "fresh":
+            for K, v in src.items():
+                counted[K] = max(counted.get(K, 0.0), v)
+    return {"classes": classes, "counted": counted, "b": b if math.isfinite(b) else 16}
+
+
+def whole_chain_of(system: dict, k: float, iters: int = 100_000, tol: float = 1e-12, cap: float = 1e6) -> dict:
+    """The least fixed point of `system` (`chain_classes`) at policy `k`: each class j's output entries made whole, in
+    units of k/b, μ_j ≤ r_j·(P_j + Σ_i A_ij·μ_i)² with r_j = c_j·k/(K_j²·b), iterated from 0 (induction on nesting depth
+    bounds μ by any post-fixed point); e = Σ_i A_i,counted·μ_i and `whole_chain` = (1 + e)^{3/2}. Where the iteration
+    diverges there is no fixed point: `mu` and `e` are None and `whole_chain` is ∞ (the proved bound is void)."""
+    cls, b = system["classes"], system["b"]
+    r = {K: e["c"] * k / (K * K * b) for K, e in cls.items()}
+    mu = dict.fromkeys(cls, 0.0)
+    for _ in range(iters):
+        new = {K: r[K] * (e["P"] + sum(v * mu[i] for i, v in e["feeds"].items() if i in mu)) ** 2 for K, e in cls.items()}
+        if any(v > cap for v in new.values()):
+            break
+        done = max((abs(new[K] - mu[K]) for K in mu), default=0.0) < tol
+        mu = new
+        if done:
+            e = sum(v * mu[i] for i, v in system["counted"].items() if i in mu)
+            return {"r": r, "mu": mu, "e": e, "whole_chain": (1 + e) ** 1.5}
+    return {"r": r, "mu": None, "e": None, "whole_chain": math.inf}
+
+
+def p_match(graph, k: float = CONSOLE[1]) -> list[str]:
+    """P-match's check within one op: the nodes on the way into a class's operand (`chain_classes`) that hand one entry
+    made whole to several, a gather by token data of a table some chain's outputs reach (its rows repeat over the
+    tokens that share an index) or a repeating view of a value some chain's outputs reach whose result is carried on,
+    as te_core.capture.products' check has them. A gather of a table no chain reaches (an embedding of θ′, read at its
+    width) hands on no entry made whole: its rows' repeats are the bound's to drop, every product reading them before
+    an op makes them token-specific (te_core.capture.products' `gathered`, te_core.formalism). The system carries
+    made-whole entries through an op at factor 1 by its same-size arguments, charging a smaller one (a row's
+    statistic, a gain) nothing, which a same-size argument bounds. A value read by several ops is matched through the
+    other arguments of the ops that read it (a residual add's), by structure, and isn't checked here."""
+    from te_core.capture.structure import _GATHERS, _gemms, _pk
+
+    st = _Step(graph)
+    feeds, _ = _whole_making(st, _Rates(st, k))
+    reach: set = set()
+    for n in reversed(st.nodes):
+        if n.op != "call_function":
+            continue
+        gs = _gemms(n)
+        if gs:
+            if all(st.reads_affected(n, x.operands[0]) and st.reads_affected(n, x.operands[1]) for x in gs):
+                reach.update(a for x in gs for a in (x.operands[0], x.operands[1]))
+        elif n in reach:
+            reach.update([n.args[0]] if n.target is operator.getitem else
+                         [a for a in _tensor_args(n) if st.reads_affected(n, a)])
+    bad = []
+    for n in st.nodes:
+        if n not in reach or n.op != "call_function" or n.target is operator.getitem or not st.affected(n):
+            continue
+        name = _pk(n.target)
+        a = n.args[0] if n.args and hasattr(n.args[0], "op") else None
+        if name in _GATHERS and len(n.args) > 1 and hasattr(n.args[1], "op") and not st.reads_affected(n, n.args[1]) \
+                and a is not None and feeds.get(a) \
+                or name in _REPEATS and a is not None and _numel(n) > _numel(a) and feeds.get(n):
+            bad.append(n.name)
+    return bad
 
 
 def _gemm_price(phase: str, op: str, dtype: str | None, gemm_dtype: str | None) -> tuple[float, float]:
