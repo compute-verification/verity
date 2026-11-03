@@ -1,5 +1,5 @@
-"""Direction `lowrank-restart`, night 2 (formalism v1): training whose accumulated state Δ_grad, the gradient and optimizer
-state passed between blocks (Fit's training clause, 2 Δ_grad + sτ ≤ k), is small, run as the class `--class` names.
+"""Direction `lowrank-restart` (formalism v2): training whose state Δ_grad, the gradient and optimizer state passed
+between blocks (Fit's reduction clause, 2 Δ_grad ≤ k), is small.
 
 A step's batch is cut into token blocks of `--leaf` sequences (4 × 1024 tokens, the reference policy's s = c/w = 4096).
 Each block's message over the trainable matrices is coded at `--msg-bits` bits an entry (stochastic rounding onto a
@@ -26,11 +26,12 @@ keeps its row and column factors); E codes the scattered Δ once at `--e-bits`. 
 W + B A instead (B zero, A drawn from `--seed`): a block's message is its factor gradients Bᵀ G and G Aᵀ, computed from
 its own G, the factors are the optimizer's tensors and the store's, and E is CWLORA2 at `--e-bits` (4 or 8). The
 trainable set's norm gains train by AdamW in fp32 with fp32 messages (counted). Every
-record's notes carry the accounting: n, the message, state and store bits, Δ_grad and Δ_t in bits, and Fit's clauses at
-k = 1 MB and 10 MB with sτ = a block's tokens × 16 bits.
+record's notes carry the accounting: n, the message, state and store bits, Δ_grad and Δ_t in bits (`delta_grad`, in the
+keys the other directions use), and Fit's three clauses (compute Δ + sτ ≤ k with Δ = 8|E|, reduction 2 Δ_grad ≤ k,
+update application Δ_t + Δ_grad ≤ k) at k = 10 kB, 1 MB and 10 MB, with sτ = a block's tokens × ⌈log₂ V⌉ bits.
 
-    python benchmarks/covert_witness/launch.py shallow s100 --program delta_grad.py --note "..." -- --class shallow \\
-        --blocks 5-5 --opt adafactor --msg-bits 8 --store q8 --lr 3e-3 --budget-fraction 0.15
+    python benchmarks/covert_witness/launch.py s-t20 --island lowrank-restart --program delta_grad.py --note "dgrad ..." \\
+        -- --blocks 5-5 --opt adafactor --msg-bits 8 --store q8 --lr 3e-3 --budget-fraction 0.15
 """
 from __future__ import annotations
 
@@ -48,15 +49,14 @@ import torch.nn.functional as F
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import prepare  # noqa: E402
+from model import VOCAB  # noqa: E402
 from te_core import hooks  # noqa: E402
 from lowrank_restart import newton_schulz, ns_flops, schedule, targets_of  # noqa: E402
 
 DEV = prepare.DEVICE
 #: the harness scores the first E encoded in each 1/CHECKPOINTS of the planned steps
 CHECKPOINTS = 20
-#: τ, a token's data: one GPT-2 id
-TOKEN_BITS = 16
-KS = {"1MB": 8 * 10 ** 6, "10MB": 8 * 10 ** 7}
+KS = {"10kB": 8 * 10 ** 4, "1MB": 8 * 10 ** 6, "10MB": 8 * 10 ** 7}
 #: elementwise work an entry per coding (scale, grid search, random draw, select), for the step log
 CODE_FLOPS = 16
 #: a sticky store scale, when a value outgrows it, becomes this × its group's absmax (so it is rarely re-fit)
@@ -195,7 +195,7 @@ class Tree:
     """A step's reduction tree over its token blocks, each block's message coded by `code` (None: fp32).
 
     `heap`: node i is a block whose children are 2i+1 and 2i+2; it sends code(its gradient + its children's messages),
-    so a node reads two messages and its tokens (2 Δ_grad + sτ), and the root's sum, the optimizer's, isn't coded.
+    so a node reads two messages (2 Δ_grad) beside its tokens, and the root's sum, the optimizer's, isn't coded.
     `leaves`: the blocks are leaves of a binary tree whose inner nodes hold no tokens; every sum is coded, the root's
     too. A `Vote` code makes either a majority vote: a block's own gradient enters as its sign."""
 
@@ -378,8 +378,8 @@ class Opt:
 
 # ---- accounting -------------------------------------------------------------------------------------------------------
 
-def accounting(a, shapes: dict, n_norm: int, opt: Opt) -> dict:
-    """Formalism v1's training quantities for this run's configuration, in bits."""
+def accounting(a, shapes: dict, n_norm: int, opt: Opt, tau_bits: int) -> dict:
+    """Formalism v2's training quantities for this run's configuration, in bits (`fit` adds Δ once E exists)."""
     n = sum(math.prod(s) for s in shapes.values())
     nm = sum(a.mom_rank * (max(s) + min(s)) for s in shapes.values()) if a.msg_proj else n
     msg = 32 * nm if a.msg_bits >= 32 else nm if a.vote else nm * a.msg_bits + 16 * (nm // a.group)
@@ -387,21 +387,24 @@ def accounting(a, shapes: dict, n_norm: int, opt: Opt) -> dict:
     state = opt.state_bits() + 64 * n_norm
     store = 16 * n if a.store == "bf16" else n * int(a.store[1:]) + 16 * (n // a.group)
     store += 32 * n_norm
-    dgrad = msg + state
-    s_tau = a.leaf * prepare.EVAL_CTX * TOKEN_BITS
-    fit = {k: {"training": 2 * dgrad + s_tau <= kb, "update": store + s_tau <= kb,
-               "joint": store + 2 * dgrad + s_tau <= kb} for k, kb in KS.items()}
-    return {"n_matrix_entries": n, "n_message_entries": nm, "n_norm_entries": n_norm, "message_bits": msg, "state_bits": state,
-            "delta_grad_bits": dgrad, "delta_t_bits": store, "s_tau_bits": s_tau, "leaf_tokens": a.leaf * prepare.EVAL_CTX,
-            "tree": a.tree, "fit": fit, "fit_note": "training: 2 Delta_grad + s tau <= k (formalism v1); update: Delta_t + "
-            "s tau <= k; joint: one block holding Delta_t, two messages and its tokens"}
+    s_tau = a.leaf * prepare.EVAL_CTX * tau_bits
+    return {"n_matrix_entries": n, "n_message_entries": nm, "n_norm_entries": n_norm, "message_bits": msg,
+            "state_bits": state, "delta_grad_bits": msg + state, "delta_t_bits": store, "tau_bits": tau_bits,
+            "s_tau_bits": s_tau, "leaf_tokens": a.leaf * prepare.EVAL_CTX, "tree": a.tree}
+
+
+def fit(acct: dict, delta_bits: int) -> dict:
+    """Fit's clauses (formalism v2) at each of `KS`: compute Δ + sτ ≤ k, reduction 2 Δ_grad ≤ k, update application
+    Δ_t + Δ_grad ≤ k, with Δ_t the store as the update rule reads and writes it."""
+    dg, dt, s_tau = acct["delta_grad_bits"], acct["delta_t_bits"], acct["s_tau_bits"]
+    return {k: {"compute": delta_bits + s_tau <= kb, "reduction": 2 * dg <= kb, "update": dt + dg <= kb}
+            for k, kb in KS.items()}
 
 
 # ---- the run ----------------------------------------------------------------------------------------------------------
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--class", dest="klass", choices=tuple(prepare.CLASSES), required=True)
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--targets", default="all", help="all, out, mlp, attn, or leaf names joined by '+' (wq+wo)")
@@ -509,7 +512,8 @@ def main() -> int:
         params[n].requires_grad_(True)
     nopt = torch.optim.AdamW([params[n] for n in norms], lr=a.norm_lr, betas=(0.9, 0.95), weight_decay=0.0) \
         if norms else None
-    acct = accounting(a, trained, sum(params[n].numel() for n in norms), opt)
+    tau_bits = math.ceil(math.log2(rec["config"].get("vocab", VOCAB)))
+    acct = accounting(a, trained, sum(params[n].numel() for n in norms), opt, tau_bits)
 
     def delta(n: str) -> torch.Tensor:
         if lora:
@@ -543,8 +547,7 @@ def main() -> int:
                       "store_scale": a.store_scale, "lora": a.lora, "mom_bits": a.mom_bits, "mom_rank": a.mom_rank,
                       "msg_proj": a.msg_proj, "rotate": a.rotate, "lr": a.lr,
                       "steps": n_steps, "leaves": leaves, "targets": len(targets), "norms": len(norms),
-                      "flops_per_step": per_step + extra, **{k: v for k, v in acct.items() if k != "fit"},
-                      "fit": acct["fit"]}), flush=True)
+                      "flops_per_step": per_step + extra, **acct}), flush=True)
 
     def encode() -> bytes:
         if lora:
@@ -647,11 +650,18 @@ def main() -> int:
     changed = sorted(n for n in theta if not prepare.same_bits(model[n], theta[n]))
     tail = float(torch.stack(losses[-max(1, len(losses) // 10):]).mean())
     src = Path(__file__).read_bytes()
-    notes = {"direction": "lowrank-restart", "mech": "dgrad", "args": vars(a), "accounting": acct, "E_bytes": len(blob),
+    own, norm_adam = opt.state_bits(), 64 * acct["n_norm_entries"]
+    delta_grad = {"trainable": acct["n_matrix_entries"] + acct["n_norm_entries"], "grad_bits": acct["message_bits"],
+                  "adam_bits": norm_adam + (own if a.opt == "adamw" else 0),
+                  **({f"{a.opt}_bits": own} if a.opt != "adamw" else {}),
+                  "latent_bits": acct["delta_t_bits"] if a.store == "bf16" else 0,
+                  "bits": acct["delta_grad_bits"], "bytes": acct["delta_grad_bits"] // 8}
+    notes = {"direction": "lowrank-restart", "mech": "dgrad", "args": vars(a), "accounting": acct,
+             "fit": fit(acct, 8 * len(blob)), "delta_grad": delta_grad, "E_bytes": len(blob),
              "delta_bits_final": 8 * len(blob), "steps": n_steps, "tail_loss": round(tail, 5),
              "program": "islands/lowrank-restart/delta_grad.py", "program_sha256": hashlib.sha256(src).hexdigest(),
              "train_log": log[-40:]}
-    prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=changed, notes=notes)
+    prepare.submit(Path(a.out), a.start, blob, model, trainable, steps, changed=changed, notes=notes)
     print(json.dumps({"E_bytes": len(blob), "changed": len(changed), "tail_loss": round(tail, 5)}), flush=True)
     return 0
 

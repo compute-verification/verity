@@ -1,7 +1,8 @@
-"""Island `lowrank-restart`: runs `lowrank_restart.py` as the class `--class` names (its docstring has the mechanisms and
-their flags).
+"""Island `lowrank-restart`: runs `lowrank_restart.py` (its docstring has the mechanisms and their flags);
+`--program delta_grad.py` runs the compressed-training-state program instead.
 
-    python guard.py islands/lowrank-restart/train.py --class e1mb --start s100 --out SUB --mech relora|galore|full|subspace
+    python benchmarks/covert_witness/launch.py s-t20 --island lowrank-restart --note "galore ..." -- \\
+        --max-e-bytes 1000000 --mech relora|stack|galore|full|subspace ...
 """
 import sys
 from pathlib import Path

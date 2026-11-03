@@ -1,5 +1,5 @@
-"""Direction `lowrank-restart`: updates built from many low-rank pieces or projections, for the classes e1mb, e100kb and
-reference, run by this island's `train.py` as the class `--class` names; E always encodes the whole update from θ.
+"""Direction `lowrank-restart`: updates built from many low-rank pieces or projections, run by this island's `train.py`,
+E within `--max-e-bytes` (0: no cap); E always encodes the whole update from θ.
 
 Mechanisms (`--mech`):
 
@@ -24,7 +24,7 @@ Mechanisms (`--mech`):
   log's (`prepare.seedlog_step`), its coefficient is the backward gradient's projection on z_i, and E is only the
   coefficients (`prepare.encode_seedlog`). Each step declares the log so far.
 
-E for the piece mechanisms is the pieces concatenated (rank K·r, `prepare.encode_lora`) when they fit the class's cap,
+E for the piece mechanisms is the pieces concatenated (rank K·r, `prepare.encode_lora`) when they fit `--max-e-bytes`,
 else the truncated SVD of the whole update W − θ with ranks allocated across tensors greedily by singular value energy
 per byte (`--whiten`: of the update times each input's covariance root, so the energy is the output error it removes).
 
@@ -34,8 +34,8 @@ scores the first E encoded in each 5% of the planned steps (`hooks.plan`), so ea
 whose 5% is still free and at its end; the arm with the least final training loss is submitted. A later arm's
 checkpoints are charged every arm before it.
 
-    python benchmarks/covert_witness/launch.py e1mb s100 --note "stack r2x4 lr sweep" -- --class e1mb --mech stack \
-        --rank 2 --pieces 4 --arms lr=1e-3/lr=3e-3/lr=1e-2 --budget-fraction 0.6
+    python benchmarks/covert_witness/launch.py s-t20 --island lowrank-restart --note "stack r2x4 lr sweep" -- \
+        --max-e-bytes 1000000 --mech stack --rank 2 --pieces 4 --arms lr=1e-3/lr=3e-3/lr=1e-2 --budget-fraction 0.6
 """
 from __future__ import annotations
 
@@ -223,13 +223,13 @@ def covariance_roots(run, a) -> dict[str, torch.Tensor]:
 # ---- the run: arms, checkpoints, submission ---------------------------------------------------------------------------
 
 class Run:
-    def __init__(self, base, klass: str, arms: list[argparse.Namespace]):
-        self.base, self.klass, self.arms = base, klass, arms
+    def __init__(self, base, arms: list[argparse.Namespace]):
+        self.base, self.arms = base, arms
         self.net, self.rec, self.theta = prepare.load_start(base.start)
         self.params = self.net.params()
         for p in self.params.values():
             p.requires_grad_(False)
-        self.cap = prepare.CLASSES[klass]["max_e_bytes"]
+        self.cap = base.max_e_bytes or None
         self.theta_dev = {n: self.theta[n].to(DEV) for n in self.params}
         self.tokens = base.batch * prepare.EVAL_CTX
         self.steps, self.log, self.results = [], [], []
@@ -358,7 +358,7 @@ class Run:
                  "submitted_arm": best["row"]["arm"], "arms": [r["row"] for r in self.results], "E_bytes": len(blob),
                  "program": "islands/lowrank-restart/lowrank_restart.py",
                  "program_sha256": hashlib.sha256(src).hexdigest(), "train_log": self.log[-40:]}
-        prepare.submit(Path(self.base.out), self.base.start, self.klass, blob, model, best["trainable"], self.steps,
+        prepare.submit(Path(self.base.out), self.base.start, blob, model, best["trainable"], self.steps,
                        changed=changed, notes=notes)
         print(json.dumps({"submitted_arm": best["row"]["arm"], "E_bytes": len(blob), "changed": len(changed)}), flush=True)
         return 0
@@ -827,7 +827,7 @@ def parse_arms(base: argparse.Namespace) -> list[argparse.Namespace]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--class", dest="klass", choices=tuple(prepare.CLASSES), required=True)
+    ap.add_argument("--max-e-bytes", type=int, default=0, help="E's size cap, the island's own choice (0: none)")
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--mech", choices=("relora", "stack", "galore", "full", "subspace"), required=True)
@@ -863,7 +863,7 @@ def main() -> int:
     torch.backends.cuda.matmul.allow_tf32 = True
     CODE.update(name=base.dtype, dtype=prepare.DTYPES[base.dtype])
     arms = parse_arms(base)
-    run = Run(base, base.klass, arms)
+    run = Run(base, arms)
     mech = {"relora": run_relora, "stack": run_stack, "galore": run_galore, "full": run_full, "subspace": run_subspace}
     try:
         for a in arms:
