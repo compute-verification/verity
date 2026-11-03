@@ -14,7 +14,12 @@ gates nothing; its endpoint gets one token budget, T, with or without H1. Its pr
 front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
 step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
 certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
-written; its preflight refuses the split beside the certifier's whole piece, or without V3c. Its load, `serve_load.py
+written; its preflight refuses the split beside the certifier's whole piece, or without V3c. Under H1_TIE its serve gives
+serve-openai the tie's command, which, run as `serve_tie` runs it at an H1 window's close, writes the window's advice and
+commits it chained after H1's W, its registration the window's record R, and writes no R when the advice is pending or the
+commit refused; its V3c then audits the commit H1 bound and makes none, and has none for a window H1 bound no R for or bound
+another; its preflight refuses H1_TIE without H1's prover state, without V3c, on a tree whose window-commit takes no
+--window-registration, or past the sample session's time. Its load, `serve_load.py
 --varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
 endpoint."""
 from __future__ import annotations
@@ -40,6 +45,7 @@ from pathlib import Path
 import jsonschema
 import pytest
 from verity.core.protocols.pous import wipe_period as W
+from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -876,6 +882,9 @@ FAKE_V3C_PROVE_PATH = f'''import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
 open(os.environ["ORDER"], "a").write(a[0] + "\\n")
+if a[0] == "compiler":
+    print(json.dumps({{"inner": {{"name": "toy", "digest": "ab" * 64}}}}))
+    sys.exit(0)
 out = Path(a[a.index("--out") + 1])
 assert a[a.index("--class") + 1] == "{W63K4}"
 if a[0] == "window-circuit":
@@ -883,8 +892,15 @@ if a[0] == "window-circuit":
     print(json.dumps({{"bits": 772, "count": {{"free": 3, "inputs": 10, "registered": 7, "units": 1}}}}))
 else:
     assert a[0] == "window-commit"
+    if os.environ.get("FAIL_COMMIT"):
+        print("prove_path.py window-commit: the row dir holds no window 7", file=sys.stderr)
+        sys.exit(2)
     out.mkdir(parents=True)
     (out / "circuit.json").write_text(json.dumps({{"run": "ab"}}))
+    if "--window-registration" in a:
+        tail = a[a.index("--window-registration"):]
+        open(os.environ["ORDER"] + ".commit", "w").write("\\n".join(tail))
+        (out / "registration.json").write_text(json.dumps({{"format": "toy", "after": json.load(open(tail[1]))}}))
     print(json.dumps({{"run": "ab", "circuit": "cd", "population": 37, "sources": {{"pad": 3}}, "window": 7}}))
 '''
 FAKE_RECORDS_AUDIT = '''import json, os, sys
@@ -908,17 +924,18 @@ CHAIN = 'echo chain >> "$ORDER"; printf "%s\\n" "$@" > "$ORDER.args"; echo "chai
 PERIOD = 'echo period-check >> "$ORDER"; cp "$4/period.json" "$3/"; echo \'{"verdict": "accept"}\' > "$3/answer.json"; echo checked'
 
 
-def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
+def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = FAKE_V3C_PROVE_PATH,
+         **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
     """`served_verdicts.sh v3c` (or ``args``) on window 7 of a toy serve dir at the certifier's class, in a toy tree whose
-    prove_path.py and records_audit.py note each step they run, its builds stubbed and the split certifier's two commands
-    set (``extra`` adds to the environment, None unsetting): the exit status, the verdict lines, the steps in order and the
-    limits."""
+    prove_path.py (``prove_path``) and records_audit.py note each step they run, its builds stubbed and the split
+    certifier's two commands set (``extra`` adds to the environment, None unsetting): the exit status, the verdict lines,
+    the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
               tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True)
-    (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
+    (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)
     (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(FAKE_RECORDS_AUDIT)
     (tree / "verity" / "ml" / "flock" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
@@ -999,6 +1016,151 @@ def test_the_split_certifier_needs_v3c_and_no_whole_piece_beside_it(tmp_path, ar
     """The split's period check writes the certifier's answer from V3c's period.json, so the preflight refuses it beside
     CERTIFIER_CMD, the whole piece's command, and in a run that leaves V3c out, before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, args, **extra)
+    assert (rc, lines, order) == (3, [line], [])
+
+
+FAKE_ADVICE = '''import json, os, sys
+from pathlib import Path
+a = sys.argv[1:]
+open(os.environ["ORDER"], "a").write("advice\\n")
+k, out = a[a.index("--window") + 1], Path(a[a.index("--out") + 1])
+assert a[a.index("--compiler-name") + 1] == "toy" and "--weights-of-record" in a
+if os.environ.get("ADVICE_RC") == "3":
+    print(f"[advice] commit window {k}: pending: request r1 of window {k} has no Commit record yet")
+    sys.exit(3)
+(out / f"w{k}" / "private").mkdir(parents=True)
+(out / f"w{k}" / "registration.json").write_text("{}")
+(out / f"w{k}" / "private" / "advice.bin").write_bytes(b"\\x01")
+(out / "windows.json").write_text("{}")
+'''
+W_OF_7 = {"format": "verity/registration/v2", "window": 7, "previous": None}
+
+
+def _tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, list[str]]:
+    """The ``--h1-window-commit`` that `served_verdicts.sh serve` gives serve-openai under H1_TIE, run as `serve_tie` runs
+    it at window 7's close (``bash -c CMD _ SERVE_DIR K W_FILE R_FILE PROVER_DIR``, from elsewhere), in a toy tree whose
+    prove_path.py and advice note each step they run (``extra`` adds to the environment): the run and the steps in order."""
+    rc, argv = _serve_argv(tmp_path, {"H1_GATE": GATE, "H1_CIRCUITS": str(tmp_path / "circuits"), "H1_TIE": "1"})
+    assert rc == 10 and "--h1-prover" in argv and argv.count("--h1-window-commit") == 1, (rc, argv)
+    cmd = argv[argv.index("--h1-window-commit") + 1]
+    tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
+    (tree / "benchmarks" / "prove_path").mkdir(parents=True)
+    (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
+    (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
+    (tmp_path / "advice.py").write_text(FAKE_ADVICE)
+    _script(venv / "python", f'[ "$1 $2 $3" = "-m verity_vllm.pipeline.cli advice" ] && {{ shift 3; exec {sys.executable} '
+                             f'{tmp_path}/advice.py "$@"; }}\nunset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    for p in (d / "h1" / "w7", d / "private" / "h1" / "w7"):
+        p.mkdir(parents=True, exist_ok=True)
+    (d / "weights_registration.json").write_text("{}")
+    (d / "h1" / "w7" / "registration.json").write_text(json.dumps(W_OF_7))
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "tie-out"),
+           "ORDER": str(tmp_path / "order"), "H1_TIE": "1", "V3C_CLASS": W63K4, **extra}
+    run = subprocess.run(["bash", "-c", cmd, "_", str(d), "7", str(d / "h1" / "w7" / "registration.json"),
+                          str(d / "h1" / "w7" / "record.json"), str(d / "private" / "h1" / "w7")],
+                         cwd=tmp_path, env=env, check=False, capture_output=True, text=True)
+    return run, (tmp_path / "order").read_text().split() if (tmp_path / "order").exists() else []
+
+
+def test_under_h1_tie_each_h1_windows_close_writes_its_advice_and_commits_it_chained_after_its_w_as_its_record_r(tmp_path):
+    """serve-openai's tie command, from any directory, writes the window's advice where step 3 reads it, then runs
+    window-commit at V3C_CLASS on W, the window's H1 prover key and V3c's law, and copies the registration it wrote to R.
+    It says nothing in $OUT (its window is H1's, which no published line names); its commit's answer stays in the serve dir."""
+    run, order = _tie(tmp_path)
+    d = tmp_path / "serve"
+    assert run.returncode == 0 and order == ["compiler", "advice", "window-commit"], (run.stdout, run.stderr, order)
+    assert run.stdout.splitlines()[-1] == f"TIE: window-commit class {W63K4}: its registration is the window's record R"
+    vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
+    assert json.loads((d / "h1" / "w7" / "record.json").read_text()) == json.loads((vw / "registration.json").read_text()) \
+        == {"format": "toy", "after": W_OF_7}
+    assert (tmp_path / "order.commit").read_text().split() == [
+        "--window-registration", str(d / "h1" / "w7" / "registration.json"), "--h1-key", str(d / "private" / "h1" / "w7" / "key"),
+        "--law", "subset:1"]
+    assert (d / "advice" / "w7" / "private" / "advice.bin").exists() and (d / "advice" / ".w7" / "windows.json").exists()
+    assert json.loads((d / "h1" / "w7" / "window-commit.json").read_text())["population"] == 37
+    assert not (tmp_path / "tie-out" / "verdicts.txt").exists()
+
+
+@pytest.mark.parametrize("extra, rc, steps, said", [
+    ({"ADVICE_RC": "3"}, 14, ["compiler", "advice"],
+     "TIE: the window's advice is pending: a request of it runs on past its close, with no Commit record yet"),
+    ({"FAIL_COMMIT": "1"}, 16, ["compiler", "advice", "window-commit"],
+     f"TIE: window-commit class {W63K4} refused (exit 2): prove_path.py window-commit: the row dir holds no window 7"),
+])
+def test_a_tie_whose_advice_is_pending_or_whose_commit_is_refused_writes_no_record_r(tmp_path, extra, rc, steps, said):
+    """A request carried past the window's close has no Commit record until a later close, so its advice can't be written
+    before the window's sample coin: the tie fails at once, never polls; a refused window-commit fails it too. Either way
+    no R, so `serve_tie` refuses the window's record and H1 draws no sample coin."""
+    run, order = _tie(tmp_path, **extra)
+    assert (run.returncode, order, run.stdout.splitlines()[-1]) == (rc, steps, said), run.stderr
+    assert not (tmp_path / "serve" / "h1" / "w7" / "record.json").exists()
+
+
+def _tied_commit(tmp_path: Path, bound: str | None) -> None:
+    """Window 7's commit as the tie left it in the toy serve dir: its registration R and circuit, its answer, and H1's log
+    naming W and, unless ``bound`` is None, the record H1 bound (``same``: R; ``other``: another)."""
+    d = tmp_path / "serve"
+    vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
+    vw.mkdir(parents=True)
+    (d / "h1" / "w7").mkdir(parents=True)
+    r = {"format": "toy", "after": W_OF_7}
+    (vw / "registration.json").write_text(json.dumps(r))
+    (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
+    (d / "h1" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
+    log = [{"window": 7, "kind": "registration", "file": "w7/registration.json", "digest": "aa" * 64}]
+    if bound is not None:
+        log.append({"window": 7, "kind": "record", "file": "w7/record.json",
+                    "digest": REG.digest(r if bound == "same" else {**r, "after": None})})
+    _write(d / "h1", "log.jsonl", log)
+
+
+def test_under_h1_tie_v3c_audits_the_commit_h1_bound_and_makes_none_of_its_own(tmp_path):
+    """The window's one commit is the one its close made: V3c holds its registration to the record H1 bound (the log's
+    digest) and its circuit to the verifier's, runs no window-commit, and goes on to its audit."""
+    _tied_commit(tmp_path, "same")
+    rc, lines, order, _limits = _v3c(tmp_path, H1_TIE="1")
+    assert rc == 0 and "window-commit" not in order and order[0] == "window-circuit" and "audit" in order, (lines, order)
+    assert lines[1].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close, its registration the Commit record H1 bound "
+                               "before the sample coin (R ") and '"run": "ab"' in lines[1] and "population" not in lines[1]
+    assert lines[2] == (f"WINDOW-CIRCUIT-HELD class {W63K4}: the committed circuit.json less its run fields is the "
+                        "verifier's own window-circuit record: PASS")
+
+
+@pytest.mark.parametrize("bound, why", [
+    (None, "H1 bound no record R at the window's close, so V3c has no commit of it (the serve dir's h1/w<k>/window-commit.log)"),
+    ("other", "H1 bound a record R other than window-commit's registration"),
+])
+def test_under_h1_tie_a_window_h1_bound_no_r_for_or_another_r_has_no_v3c(tmp_path, bound, why):
+    """No retries: a window whose tie failed isn't committed again for V3c, and a commit that isn't the record H1 bound
+    isn't audited as if it were."""
+    _tied_commit(tmp_path, bound)
+    rc, lines, order, _limits = _v3c(tmp_path, H1_TIE="1")
+    assert (rc, order, lines[-1]) == (16, ["window-circuit"], f"WINDOW-COMMIT class {W63K4}: {why}"), lines
+
+
+TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
+
+
+@pytest.mark.parametrize("extra, prove_path, line", [
+    ({"H1_TIE": "1"}, FAKE_V3C_PROVE_PATH,
+     "PREFLIGHT: H1_TIE ties H1's windows, and H1_GATE or H1_CIRCUITS (whose prover state window-commit reads) is unset"),
+    ({**TIES, "V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}, FAKE_V3C_PROVE_PATH,
+     "PREFLIGHT: H1_TIE commits each H1 window at V3C_CLASS, and it is empty"),
+    (TIES, "import sys\n", "PREFLIGHT: H1_TIE needs window-commit's --window-registration, its registration chained right "
+                           "after H1's, which this tree's prove_path.py doesn't take"),
+    ({**TIES, "V3C_TIMEOUT": "120m"}, FAKE_V3C_PROVE_PATH, "PREFLIGHT: under H1_TIE the window's sample coin waits for "
+     "window-commit, and its session's reserve lasts the gate's 120 minutes from the serve's start: V3C_TIMEOUT is at most "
+     "90m, not 120m"),
+    ({**TIES, "V3C_TIMEOUT": "1h"}, FAKE_V3C_PROVE_PATH, "PREFLIGHT: under H1_TIE the window's sample coin waits for "
+     "window-commit, and its session's reserve lasts the gate's 120 minutes from the serve's start: V3C_TIMEOUT is at most "
+     "90m, not 1h"),
+])
+def test_the_preflight_refuses_h1_tie_without_h1s_prover_or_v3c_or_window_commits_tie_or_past_the_sessions_time(
+        tmp_path, extra, prove_path, line):
+    """H1_TIE reads H1's prover state and commits at V3C_CLASS with window-commit's --window-registration, the flag that
+    chains its registration after H1's W (a tree without it is refused, not run with an untied commit), and its commit runs
+    while the window's sample session's reserve, the gate's 120 minutes, runs out: each refused before anything runs."""
+    rc, lines, order, _limits = _v3c(tmp_path, (), prove_path=prove_path, **extra)
     assert (rc, lines, order) == (3, [line], [])
 
 
@@ -1459,7 +1621,7 @@ def test_the_engine_gets_one_token_budget_with_or_without_h1(tmp_path, env, budg
     rc, argv = _serve_argv(tmp_path, env)
     assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
     assert argv.count("--max-num-batched-tokens") == 1 and argv[argv.index("--max-num-batched-tokens") + 1] == budget
-    assert ("--protocols" in argv) == bool(env["H1_GATE"])
+    assert ("--protocols" in argv) == bool(env["H1_GATE"]) and "--h1-window-commit" not in argv
 
 
 class _Response:
