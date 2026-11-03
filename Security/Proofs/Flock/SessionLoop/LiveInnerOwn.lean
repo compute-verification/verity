@@ -133,7 +133,7 @@ theorem finOf_finalC_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVa
           ((ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real).cfg x (ν, t)
             ((m₀, ρ₀) :: ops)).lay.fc 0).toBytes := by
   have hH : Loop.InnerHist (Loop.relIn L₁ src real) wk real x w ν t κ m₀ ρ₀ ops j r 0 :=
-    ⟨h0, hlt, hl, hok, hr, hown, hI, hrep, hslot⟩
+    ⟨h0, hlt, hl, hok, hr, hown, ⟨v, hv⟩, hI, hrep, hslot⟩
   obtain ⟨s0, spec, sts, tr, hi, q₀, hs, hrt, hq, hlayT, hlay, hcfgh, hfin⟩ :=
     Loop.innerHist_fin L₁ src real hreal x w hR hSv hsc hSrc wk (by decide) hH
   obtain ⟨hsz, -, hpads⟩ :=
@@ -204,7 +204,7 @@ theorem finOf_tau_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
       Loop.inner2 (Loop.vsTau vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad
         (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r) := by
   have hH : Loop.InnerHist (Loop.relIn L₁ src real) wk real x w ν t κ m₀ ρ₀ ops j r 2 :=
-    ⟨h0, hlt, hl, hok, hr, hown, hI, hrep, hslot⟩
+    ⟨h0, hlt, hl, hok, hr, hown, ⟨v, hv⟩, hI, hrep, hslot⟩
   obtain ⟨s0, spec, sts, tr, hi, q₀, hs, hrt, hq, -, -, -, hfin⟩ :=
     Loop.innerHist_fin L₁ src real hreal x w hR hSv hsc hSrc wk (by decide) hH
   obtain ⟨fc', tc, hfi⟩ :=
