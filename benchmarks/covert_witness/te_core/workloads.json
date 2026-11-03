@@ -1,6 +1,6 @@
 {
  "id": "te_core.workloads",
- "te_core": "4.4",
+ "te_core": "4.5",
  "reading": "B",
  "spec": "note:training-20261103T0600Z-draft-workload-models",
  "policies": {
@@ -23,18 +23,17 @@
  "kinds": ["fresh_products", "token", "reduction", "update", "decoding"],
  "rests_on": {
   "fresh_products": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
-  "token": "assumption (A1, reading B): the token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code",
-  "reduction": "assumption (R): each block holding a step's token work passes one partial gradient at its passed width (partial_cut_bits), and the step's token work fills at least ceil(N w / c) blocks; blocks split by layers or tensors rather than tokens break it (one holding only frozen layers passes no partial)",
-  "update": "assumption (U): where two or more blocks hold a step's token work, the block applying the update to a coordinate reads its share of the gradient's cut (grad_cut_bits); the weights are read once, theta free; blocks split by tensors break it (a tensor's gradient made and applied in one block)",
-  "decoding": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d affected gates; any other block at most alpha_max (x0 s + s*) on the uncapped profiles",
+  "token": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
+  "reduction": "sensitivity, assumption (R): each block holding a step's token work passes one partial gradient at its passed width (partial_cut_bits), and the step's token work fills at least ceil(N w / c) blocks; it holds only for partitions split by tokens (a block holding only frozen layers passes no partial)",
+  "update": "sensitivity, assumption (U): where two or more blocks hold a step's token work, the block applying the update to a coordinate reads its share of the gradient's cut (grad_cut_bits), the weights read once and theta free; it holds only for partitions split by tokens (a tensor's gradient made and applied in one block breaks it)",
+  "decoding": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, alpha_max (x0 s + s*))) affected gates, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
   "fit": "Fit's construction (te_core.formalism): every block reads \u0394 and its tokens' ids, and runs the decoder",
   "none": "nothing: no kind's term exceeds 1 and Fit fails (the row's fit_fails), so rho >= 1 is all the menu gives"
  },
  "reading_a": {
-  "label": "assumption (A1, reading A): the default packer's blocks (formalism.packer), a block reading the update code at c gates",
+  "label": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them (te_core.tiles); a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates",
   "verdicts": {
-   "infinite": "one op reads at least k update bits (op_update_bits): no default-packer block holds its work",
-   "unmodelled": "every op reads under k: finite, from a te_core 4.4 trace's entries, which a model hasn't",
+   "unmodelled": "finite, from a trace's entries and its op log's tiles (te_core 4.5), which a model hasn't",
    "refused": "a record traced before te_core 4.4: no entries"
   }
  },
@@ -204,7 +203,7 @@
         "update": 488.8303166295451,
         "decoding": 0.9997031897773525
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 21508.533931699985, "basis": "reduction"},
        "fit": false,
@@ -231,7 +230,7 @@
         "update": 768.8524023388743,
         "decoding": 0.9997031897773526
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 21527.867265488483, "basis": "reduction"},
        "fit": false,
@@ -258,7 +257,7 @@
         "update": 19.418635612461866,
         "decoding": 0.9997031897773526
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 9884.08552674309, "basis": "reduction"},
        "fit": false,
@@ -366,7 +365,7 @@
         "update": 760.6135870674987,
         "decoding": 0.9995381671708033
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 21297.18043788996, "basis": "reduction"},
        "fit": false,
@@ -393,7 +392,7 @@
         "update": 1196.3242944926,
         "decoding": 0.9995381671708032
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 21533.837300866802, "basis": "reduction"},
        "fit": false,
@@ -420,7 +419,7 @@
         "update": 30.215143346652617,
         "decoding": 0.9995381671708032
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 9880.351874355405, "basis": "reduction"},
        "fit": false,
@@ -561,7 +560,7 @@
         "update": 533.1429768587498,
         "decoding": 0.9996762844791867
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 5829377758.397496},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 5829377758.397496},
        "unmeasured": [],
        "te_core": {"rho": 3416380.195710868, "basis": "reduction"},
        "fit": false,
@@ -588,7 +587,7 @@
         "update": 838.5491746384323,
         "decoding": 0.9996762844791867
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 5829377758.397496},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 5829377758.397496},
        "unmeasured": [],
        "te_core": {"rho": 3416249.3374769734, "basis": "reduction"},
        "fit": false,
@@ -615,7 +614,7 @@
         "update": 21.178942558935216,
         "decoding": 0.9996762844791868
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 5829377758.397496},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 5829377758.397496},
        "unmeasured": [],
        "te_core": {"rho": 1538290.1348831414, "basis": "reduction"},
        "fit": false,
@@ -750,7 +749,7 @@
         },
         "te_core": {"rho": 21508.533931699985, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
         "unmeasured": [],
         "b": [45]
        }
@@ -788,7 +787,7 @@
         },
         "te_core": {"rho": 21527.867265488483, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
         "unmeasured": [],
         "b": [29]
        }
@@ -826,7 +825,7 @@
         },
         "te_core": {"rho": 9884.08552674309, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
         "unmeasured": [],
         "b": [510]
        }
@@ -941,7 +940,7 @@
         },
         "te_core": {"rho": 21251.117547281014, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
         "unmeasured": [],
         "b": [45]
        }
@@ -979,7 +978,7 @@
         },
         "te_core": {"rho": 21270.219497707985, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
         "unmeasured": [],
         "b": [29]
        }
@@ -1017,7 +1016,7 @@
         },
         "te_core": {"rho": 9765.791757039326, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
         "unmeasured": [],
         "b": [510]
        }
@@ -1140,7 +1139,7 @@
         },
         "te_core": {"rho": 17160.853029128502, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 524287999.9999999},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 524287999.9999999},
         "unmeasured": [],
         "b": [74]
        }
@@ -1178,7 +1177,7 @@
         },
         "te_core": {"rho": 17008.213025394703, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 524287999.9999999},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 524287999.9999999},
         "unmeasured": [],
         "b": [47]
        }
@@ -1216,7 +1215,7 @@
         },
         "te_core": {"rho": 7778.960980726519, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 524287999.9999999},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 524287999.9999999},
         "unmeasured": [],
         "b": [834]
        }
@@ -1394,7 +1393,7 @@
         "update": 1953.5858903058847,
         "decoding": 0.9988136672274399
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 21489.44479336473, "basis": "reduction"},
        "fit": false,
@@ -1421,7 +1420,7 @@
         "update": 3072.680138362403,
         "decoding": 0.9988136672274399
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 21508.760968536822, "basis": "reduction"},
        "fit": false,
@@ -1448,7 +1447,7 @@
         "update": 77.60560515776325,
         "decoding": 0.9988136672274399
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 9875.313256325373, "basis": "reduction"},
        "fit": false,
@@ -1561,7 +1560,7 @@
         "update": 1953.5858903058847,
         "decoding": 0.9988136672274399
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 21489.44479336473, "basis": "reduction"},
        "fit": false,
@@ -1588,7 +1587,7 @@
         "update": 3072.680138362403,
         "decoding": 0.9988136672274399
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 21508.760968536822, "basis": "reduction"},
        "fit": false,
@@ -1615,7 +1614,7 @@
         "update": 77.60560515776325,
         "decoding": 0.9988136672274399
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 9875.313256325373, "basis": "reduction"},
        "fit": false,
@@ -1722,7 +1721,7 @@
        "binding_kind": "decoding",
        "bound": 1.1735863035536165,
        "terms": {"fresh_products": 0.0, "token": 0.0, "reduction": 0.0, "update": 0.0, "decoding": 1.1735863035536165},
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 1.5415345414807684, "basis": "fit"},
        "fit": true,
@@ -1743,7 +1742,7 @@
        "binding_kind": null,
        "bound": 1.0,
        "terms": {"fresh_products": 0.0, "token": 0.0, "reduction": 0.0, "update": 0.0, "decoding": 0.9802504040061605},
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 1.0, "basis": "decoding"},
        "fit": false,
@@ -1770,7 +1769,7 @@
         "update": 15142.945198539423,
         "decoding": 7.943928118795126
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 15142.945198539423, "basis": "update"},
        "fit": false,
@@ -1918,7 +1917,7 @@
         },
         "te_core": {"rho": 17034.0838166851, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 524287999.9999999},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 524287999.9999999},
         "unmeasured": [],
         "b": [37]
        }
@@ -1956,7 +1955,7 @@
         },
         "te_core": {"rho": 17117.05154045766, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 524287999.9999999},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 524287999.9999999},
         "unmeasured": [],
         "b": [24]
        }
@@ -1994,7 +1993,7 @@
         },
         "te_core": {"rho": 7819.341658617104, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 524287999.9999999},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 524287999.9999999},
         "unmeasured": [],
         "b": [417]
        }
@@ -2195,7 +2194,7 @@
         "update": 446.9791807277885,
         "decoding": 0.9997286232946845
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 19667.08395202269, "basis": "reduction"},
        "fit": false,
@@ -2222,7 +2221,7 @@
         "update": 703.0272166168897,
         "decoding": 0.9997286232946845
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 19684.762065272913, "basis": "reduction"},
        "fit": false,
@@ -2249,7 +2248,7 @@
         "update": 17.756111971032883,
         "decoding": 0.9997286232946845
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 9037.860993255737, "basis": "reduction"},
        "fit": false,
@@ -2381,7 +2380,7 @@
         "update": 12.44247371814806,
         "decoding": 1.0130125477315672
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 360448.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 360448.0},
        "unmeasured": [],
        "te_core": {"rho": 398.1591589807379, "basis": "reduction"},
        "fit": false,
@@ -2408,7 +2407,7 @@
         "update": 19.570033780221237,
         "decoding": 1.0082314544209856
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 360448.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 360448.0},
        "unmeasured": [],
        "te_core": {"rho": 391.40067560442475, "basis": "reduction"},
        "fit": false,
@@ -2435,7 +2434,7 @@
         "update": 0.4942734831102072,
         "decoding": 0.9999924457387074
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 360448.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 360448.0},
        "unmeasured": [],
        "te_core": {"rho": 182.38691526766647, "basis": "reduction"},
        "fit": false,
@@ -2785,7 +2784,7 @@
         "update": 0.0,
         "decoding": 1.0
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 115900416.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 115900416.0},
        "unmeasured": [],
        "te_core": {"rho": 1039.9016134329136, "basis": "token"},
        "fit": false,
@@ -2812,7 +2811,7 @@
         "update": 0.0,
         "decoding": 1.0
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 115900416.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 115900416.0},
        "unmeasured": [],
        "te_core": {"rho": 1635.5999750520443, "basis": "token"},
        "fit": false,
@@ -2839,7 +2838,7 @@
         "update": 0.0,
         "decoding": 1.0
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 115900416.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 115900416.0},
        "unmeasured": [],
        "te_core": {"rho": 41.29345434570835, "basis": "token"},
        "fit": false,
@@ -2921,7 +2920,7 @@
        "binding_kind": "fresh_products",
        "bound": 4397601.997289,
        "terms": {"fresh_products": 4397601.997289, "token": 1040.143425039189, "reduction": 0.0, "update": 0.0, "decoding": 1.0},
-       "token_A": {"verdict": "infinite", "op_update_bits": 412090368.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 412090368.0},
        "unmeasured": [],
        "te_core": {"rho": 1040.143425039189, "basis": "token"},
        "fit": false,
@@ -2948,7 +2947,7 @@
         "update": 0.0,
         "decoding": 1.0
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 412090368.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 412090368.0},
        "unmeasured": [],
        "te_core": {"rho": 1635.9803062796168, "basis": "token"},
        "fit": false,
@@ -2975,7 +2974,7 @@
         "update": 0.0,
         "decoding": 1.0
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 412090368.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 412090368.0},
        "unmeasured": [],
        "te_core": {"rho": 41.31479087156435, "basis": "token"},
        "fit": false,
@@ -3087,7 +3086,7 @@
         "update": 0.0,
         "decoding": 1.0
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 819756247.274648},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 819756247.274648},
        "unmeasured": [],
        "te_core": {"rho": 134.754759579678, "basis": "token"},
        "fit": false,
@@ -3114,7 +3113,7 @@
         "update": 0.0,
         "decoding": 1.0
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 819756247.274648},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 819756247.274648},
        "unmeasured": [],
        "te_core": {"rho": 211.94782137039581, "basis": "token"},
        "fit": false,
@@ -3141,7 +3140,7 @@
         "update": 0.0,
         "decoding": 1.0
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 819756247.274648},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 819756247.274648},
        "unmeasured": [],
        "te_core": {"rho": 5.353078227572909, "basis": "token"},
        "fit": false,
@@ -3327,7 +3326,7 @@
         "update": 7.168386333338648,
         "decoding": 1.0071874438133503
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 180224.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
        "unmeasured": [],
        "te_core": {"rho": 229.38836266683674, "basis": "reduction"},
        "fit": false,
@@ -3354,7 +3353,7 @@
         "update": 11.274732490573726,
         "decoding": 1.0045561896896191
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 180224.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
        "unmeasured": [],
        "te_core": {"rho": 225.49464981147452, "basis": "reduction"},
        "fit": false,
@@ -3381,7 +3380,7 @@
         "update": 0.2847619662713069,
         "decoding": 0.9999956478217568
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 180224.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
        "unmeasured": [],
        "te_core": {"rho": 103.93811768902701, "basis": "reduction"},
        "fit": false,
@@ -3493,7 +3492,7 @@
         "update": 1.5956429781108985,
         "decoding": 0.7430925669423701
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 180224.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
        "unmeasured": [],
        "te_core": {"rho": 38.29543147466156, "basis": "reduction"},
        "fit": false,
@@ -3520,7 +3519,7 @@
         "update": 2.5096928223571044,
         "decoding": 0.7427702398847456
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 180224.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
        "unmeasured": [],
        "te_core": {"rho": 37.64539233535657, "basis": "reduction"},
        "fit": false,
@@ -3547,7 +3546,7 @@
         "update": 0.0633864318669106,
         "decoding": 0.7422082280543864
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 180224.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
        "unmeasured": [],
        "te_core": {"rho": 17.304495899666595, "basis": "reduction"},
        "fit": false,
@@ -3659,7 +3658,7 @@
         "update": 0.9336298356957233,
         "decoding": 0.7424965375878386
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 180224.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
        "unmeasured": [],
        "te_core": {"rho": 22.40711605669736, "basis": "reduction"},
        "fit": false,
@@ -3686,7 +3685,7 @@
         "update": 1.468451357557474,
         "decoding": 0.7422796879149358
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 180224.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
        "unmeasured": [],
        "te_core": {"rho": 22.02677036336211, "basis": "reduction"},
        "fit": false,
@@ -3713,7 +3712,7 @@
         "update": 0.0370881611871004,
         "decoding": 0.7419014401250611
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 180224.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
        "unmeasured": [],
        "te_core": {"rho": 10.125068004078408, "basis": "reduction"},
        "fit": false,
@@ -4384,7 +4383,7 @@
         },
         "te_core": {"rho": 187.08317781981393, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 131071.99999999997},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 131071.99999999997},
         "unmeasured": [],
         "b": [27]
        }
@@ -4422,7 +4421,7 @@
         },
         "te_core": {"rho": 181.07821978072462, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 131071.99999999997},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 131071.99999999997},
         "unmeasured": [],
         "b": [17]
        }
@@ -4586,7 +4585,7 @@
         },
         "te_core": {"rho": 459.08158974247783, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 360447.99999999994},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 360447.99999999994},
         "unmeasured": [],
         "b": [28]
        }
@@ -4624,7 +4623,7 @@
         },
         "te_core": {"rho": 454.63187056509736, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 360447.99999999994},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 360447.99999999994},
         "unmeasured": [],
         "b": [18]
        }
@@ -4662,7 +4661,7 @@
         },
         "te_core": {"rho": 207.3600400587911, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 360447.99999999994},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 360447.99999999994},
         "unmeasured": [],
         "b": [308]
        }
@@ -4840,7 +4839,7 @@
         "update": 115.7717747438099,
         "decoding": 0.2367639824296787
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 21880.865426580072, "basis": "reduction"},
        "fit": false,
@@ -4867,7 +4866,7 @@
         "update": 182.09060303080508,
         "decoding": 0.23676398242967872
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 21850.872363696613, "basis": "reduction"},
        "fit": false,
@@ -4894,7 +4893,7 @@
         "update": 4.598998530735117,
         "decoding": 0.23676398242967872
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 9897.044838141972, "basis": "reduction"},
        "fit": false,
@@ -5004,7 +5003,7 @@
         "update": 488.8303166295451,
         "decoding": 0.9997031897773525
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 21508.533931699985, "basis": "reduction"},
        "fit": false,
@@ -5031,7 +5030,7 @@
         "update": 768.8524023388743,
         "decoding": 0.9997031897773526
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 21527.867265488483, "basis": "reduction"},
        "fit": false,
@@ -5058,7 +5057,7 @@
         "update": 19.418635612461866,
         "decoding": 0.9997031897773526
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 9884.08552674309, "basis": "reduction"},
        "fit": false,
@@ -5168,7 +5167,7 @@
         "update": 15.39523713015427,
         "decoding": 0.03148468321791427
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 21984.3986218603, "basis": "reduction"},
        "fit": false,
@@ -5195,7 +5194,7 @@
         "update": 24.214261369280084,
         "decoding": 0.03148468321791427
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 21986.549323306317, "basis": "reduction"},
        "fit": false,
@@ -5222,7 +5221,7 @@
         "update": 0.611571111340192,
         "decoding": 0.03148468321791427
        },
-       "token_A": {"verdict": "infinite", "op_update_bits": 824180736.0},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
        "unmeasured": [],
        "te_core": {"rho": 9898.278437041008, "basis": "reduction"},
        "fit": false,
@@ -5367,7 +5366,7 @@
         },
         "te_core": {"rho": 6253.5314240820535, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 262144000.0},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 262144000.0},
         "unmeasured": [],
         "b": [14]
        }
@@ -5405,7 +5404,7 @@
         },
         "te_core": {"rho": 6052.806836038618, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 262144000.0},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 262144000.0},
         "unmeasured": [],
         "b": [9]
        }
@@ -5443,7 +5442,7 @@
         },
         "te_core": {"rho": 2847.2711819575006, "basis": "reduction"},
         "fit_fails": ["compute", "reduction", "update"],
-        "token_A": {"verdict": "infinite", "op_update_bits": 262144000.0},
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 262144000.0},
         "unmeasured": [],
         "b": [150]
        }
