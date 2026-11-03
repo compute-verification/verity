@@ -25,7 +25,7 @@ fewer than `FIT_TARGET` points from scratch is provisional: its status and the n
 residuals, and te_core.algorithm_policy's rows that read it carry gain:provisional in `estimated`. Effective
 compute C_eff(l) = (A/(l − E))^(1/γ) is the compute at which the fit reaches loss l, and a point's gain C_eff(l)/C its
 residual in compute (1 on the fit). A start's gain from its l0 to a loss L is Daniel's C(L)/C(l0) on the fit
-(`gain_from`, TRN-40), so its target at gain g (te_core.algorithm_policy's `GAINS`) is E + (l0 − E)·g^(−γ), below l0 at
+(`gain_from`), so its target at gain g (te_core.algorithm_policy's `GAINS`) is E + (l0 − E)·g^(−γ), below l0 at
 every g (`target`), and the fit's uncertainty in effective compute at a loss is its rms in loss over the fit's slope
 there (`c_spread`).
 
@@ -219,7 +219,7 @@ def gain(f: dict, loss: float, c0: float) -> float:
 
 
 def gain_from(f: dict, l0: float, loss: float) -> float:
-    """The gain from a start's loss `l0` to `loss` on the fit, C(L1)/C(L0) (Daniel, TRN-40 7:05 PM PST): C_eff(loss)
+    """The gain from a start's loss `l0` to `loss` on the fit, Daniel's C(L1)/C(L0): C_eff(loss)
     over C_eff(l0), ((l0 − E)/(loss − E))^(1/γ), infinite at or below E. `l0` is above E (`target`)."""
     if l0 <= f["E"]:
         raise ValueError(f"frontier_fit: a start at {l0} bpb is at or below the fit's E ({f['E']}), which no compute "

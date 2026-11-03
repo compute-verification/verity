@@ -293,7 +293,7 @@ def test_profiles_are_compact_strings():
 
 
 def test_a_start_ahead_of_the_fit_has_every_target_below_its_loss_and_one_at_or_below_e_none():
-    """Gain is C(L1)/C(L0) on the fit (Daniel, TRN-40; coordinator 11:16Z): a start the fit puts ahead of the frontier
+    """Gain is Daniel's C(L1)/C(L0) on the fit (coordinator 11:16Z): a start the fit puts ahead of the frontier
     (its own gain C_eff(l0)/C0 1.5) has rows at every target, each below its l0, so a run that only holds l0 reaches
     none (ref-data's 11:09Z LOOPHOLE); a start at or below the fit's E has no rows, and a data without a fit none."""
     rich = LAW | {"A": LAW["A"] * 1.5 ** 0.3}
@@ -442,6 +442,70 @@ def test_a_rows_rho_is_published_at_the_consoles_default_and_the_serving_blocks_
     assert not any((c.get("record") or "").startswith("lora@") for c in cov)
 
 
+def test_a_partial_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_never_the_least_s(tmp_path, monkeypatch):
+    """A row `published` marks partial (a measured kind's term over 1 with a valid kind unmeasured, so ρ is only a lower
+    bound; coordinator 12:20Z) has basis_default `partial`: no decade holds it, the cut picks the partial rows among
+    themselves alone, so the others' picks are as if they weren't there, and the figure draws each with a caret but
+    never rings one as the least S. A stand-in `published` makes the adapters' rows (lora's and the dominated ones')
+    partial at ρ 1.01, which would put lora's at the least S at gain 1.1."""
+    real = formalism.published
+
+    def published(m, c=None, k=None, reading=None):
+        one = real(m, c, k, reading)
+        return one if m.delta_bits != 8e6 else one | {"reading": "A", "rho": 1.01, "binding_kind": "token",
+                                                      "rests_on": formalism.RESTS_ON_CELL["token"], "partial": True}
+
+    monkeypatch.setattr(formalism, "published", published)
+    p = AP.build(info(runs=RUNS + DOMINATED), "test")
+    ds = plots.frame(p)
+    part = [d["record"].startswith("lora") for d in ds]
+    assert any(part) and all((d["basis_default"], d["rho_default"], d["rho_console"], d["binding_kind"])
+                             == (AP.PARTIAL, 1.01, 1.01, "token") and json.loads(d["kinds"])["partial"]
+                             for d, x in zip(ds, part) if x)
+    assert all(d["basis_default"] != AP.PARTIAL for d, x in zip(ds, part) if not x)
+    cov = AP.coverage(p)
+    assert sum(c["rows"] for c in cov) == len(ds) - sum(part) == len(ds) - AP.unmeasured_rows(p, AP.PARTIAL)
+    assert not any((c.get("record") or "").startswith("lora") for c in cov)
+    rest = p | {"rows": [r for r, x in zip(p["rows"], part) if not x]}
+    rec, g = AP.COLUMNS.index("record"), AP.COLUMNS.index("gain_target")
+    for tier in AP.TIERS:
+        got, alone = ({(r[rec], r[g]) for r in AP.kept(q["rows"], tier, {c["row"] for c in AP.coverage(q)
+                                                                           if c["row"] is not None})} for q in (p, rest))
+        assert {x for x in got if not x[0].startswith("lora")} == alone
+        assert (("lora@1", 1.1) in got) == (tier != "coverage")
+    fits = {"v3": None, "v2.3-pilot": LAW}
+    assert ("2 rows are partial (basis_default partial: a valid kind unmeasured, so rho is only a lower bound), in no "
+            "decade.") in AP.coverage_md(cov, fits, "T", partial=2)
+    assert AP.board_line(cov, fits, "T", None, partial=1).endswith(" 1 row partial (rho a lower bound), in no decade.")
+    assert "(1, 1.01)" not in AP.summary(p, info(runs=RUNS + DOMINATED))
+    calls, real_plot = [], AP.plt.Axes.plot
+
+    def plot(ax, *a, **k):
+        calls.append((a[:2], k))
+        return real_plot(ax, *a, **k)
+
+    monkeypatch.setattr(AP.plt.Axes, "plot", plot)
+    AP.figure(p, tmp_path)
+    marked = {(d["p"], d["rho_default"]) for d, x in zip(ds, part) if x and d["p"] is not None}
+    assert marked and marked <= {xy for xy, k in calls if k.get("marker") == 6}
+    rings = {xy for xy, k in calls if k.get("mec") == "red"}
+    assert rings and not rings & marked
+
+
+def test_the_kinds_cell_labels_a_measured_fresh_products_term_with_its_premises_binding_or_not():
+    """The fresh-products term rests on P-width and P-chain (coordinator 12:09Z), and the row's rests_on names them only
+    where it binds, so the kinds cell carries formalism's RESTS_ON_CELL beside a measured term; an unmeasured term has
+    no label."""
+    one = {"terms": {"fresh_products": 165021.0, "token": 1.35, "decoding": 1.35},
+           "sensitivities": {"reduction": 2.0e4, "update": 705.6}, "binding_kind": "fresh_products"}
+    label = {"fresh_products": formalism.RESTS_ON_CELL["fresh_products"]}
+    assert json.loads(AP.kinds(one))["rests_on"] == label
+    token = one | {"terms": one["terms"] | {"fresh_products": 0.5, "token": 263.5}, "binding_kind": "token"}
+    assert json.loads(AP.kinds(token))["rests_on"] == label
+    got = json.loads(AP.kinds(one | {"terms": one["terms"] | {"fresh_products": None}, "partial": True}))
+    assert "rests_on" not in got and got["partial"] and got["bound"]["fresh_products"] is None
+
+
 def test_the_output_leads_with_the_coverage_table(tmp_path, monkeypatch, capsys):
     """The scorer's refresh posts the first Markdown table under the first line of the output naming coverage: that is
     tables/coverage.md's table, every gain target and data a row."""
@@ -550,7 +614,7 @@ def served_as(p: dict, version: str | None, rows: list | None = None, source: st
 def test_a_version_switch_never_empties_a_populated_panel():
     """A data's served rows stay where they are at a newer te_core, or at an older one with a run there this build has
     no row for (coordinator 07:58Z); the same te_core's are replaced, and an older one's where this build has every
-    run, though its coverage fills fewer cells (every rho 1 here, as reading A's partial rows read; coordinator 11:51Z).
+    run, though its coverage fills fewer cells (every rho 1 here; coordinator 11:51Z).
     A data with no served rows takes this build's. A panel from before the te_core cell is at the version its source
     names."""
     p = AP.build(info(runs=RUNS + DOMINATED), "test")
