@@ -17,6 +17,7 @@ import Definitions.Nci.Formalism
 import Definitions.Nci.Formalism.Instances
 import Definitions.Nci.Products
 import Definitions.Nci.Products.Instances
+import Definitions.Nci.Products.Received
 import Definitions.Pous
 import Definitions.Pous.Guarantees.StreamedWipeFamily
 import Definitions.Pous.Guarantees.StreamedWipeReads
