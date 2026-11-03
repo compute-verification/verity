@@ -11,13 +11,12 @@ import pytest
 pytest.importorskip("matplotlib")
 
 from te_core import algorithm_policy as AP
-from te_core import console, formalism, panels, plots, rescore
+from te_core import console, formalism, plots, policy, rescore
 from test_plots import SHAPE
 
 SHAPE2 = SHAPE | {"tokens": 2 * SHAPE["tokens"], "tokens_per_param": 6.84}
 #: a token block's gates: the forward and a backward of twice its cost
-W = 3 * panels.w_fwd(SHAPE)
-C_DEFAULT, K_DEFAULT = AP.default(panels.w_fwd(SHAPE))
+W = 3 * policy.w_fwd(SHAPE)
 #: (start, run, direction/mechanism, family, Δ, Δ_grad, Δ_t, tail share, [(step, gates, bpb), ...])
 RUNS = [("s1", "ref", "ref-optim/adamw", "full", 9e8, 3e9, None, 0.0, [(1, 1e15, 1.193), (2, 2e15, 1.185),
                                                                       (3, 4e15, 1.17)]),
@@ -51,11 +50,12 @@ def ledger_rows(runs=RUNS) -> list[dict]:
     return out
 
 
-def run(tmp_path, monkeypatch, runs=RUNS, *extra) -> tuple[int, dict]:
+def run(tmp_path, monkeypatch, runs=RUNS, *extra, index=None) -> tuple[int, dict]:
     tmp_path.mkdir(parents=True, exist_ok=True)
     man = tmp_path / "starts_store.json"
     man.write_text(json.dumps({"starts": {"s1": {"shape": SHAPE}, "s2": {"shape": SHAPE2}}}))
-    monkeypatch.setattr(rescore, "Ledger", lambda root: type("L", (), {"index": staticmethod(lambda: ledger_rows(runs)),
+    rows = ledger_rows(runs) if index is None else index
+    monkeypatch.setattr(rescore, "Ledger", lambda root: type("L", (), {"index": staticmethod(lambda: rows),
                                                                       "root": tmp_path})())
     out = tmp_path / "out"
     code = AP.main(["--out", str(out), "--pin", "pin", "--manifest", str(man), "--stubs", *extra])
@@ -111,7 +111,7 @@ def test_one_row_per_run_and_end_loss_at_its_first_checkpoint(tmp_path, monkeypa
         assert d["C_gates"] / d["p"] == pytest.approx(min(r["formalism"]["parts"][0]["gates"] for r in reach))
         assert d["p"] >= 1 and d["data"] == "v2.3-pilot"
         assert d["start"] == plots.start_label(SHAPE if start == "s1" else SHAPE2)
-        assert d["w_fwd_gates"] == pytest.approx(panels.w_fwd(SHAPE)) and d["w_gates"] == pytest.approx(W)
+        assert d["w_fwd_gates"] == pytest.approx(policy.w_fwd(SHAPE)) and d["w_gates"] == pytest.approx(W)
     assert [at[("lora@2", -0.5)][k] for k in ("C_gates", "p", "method", "family")] == [3e15, 3, "lowrank/lora", "adapter"]
     assert at[("ref@2", -1)]["p"] == 1 and at[("ref2@1", -1)]["C_gates"] / at[("ref2@1", -1)]["p"] == 1e14
     q = got["console"]
@@ -140,7 +140,7 @@ def test_te_core_at_is_the_dial_formula(u1, dgrad, delta_t, tail, decoder):
     """Over decades of c and k, te_core.formalism.at's rho and basis are the draft note's formula on the inputs this
     panel publishes for the record (te_core's ρ is the score; the dial reruns it in the page)."""
     m = formalism.from_json(block(1e15, u1, dgrad, delta_t, tail) | {"decoder_gates": decoder, "labels": {}})
-    d = dict(zip(AP.INPUTS, AP.inputs(m, panels.w_fwd(SHAPE))))
+    d = dict(zip(AP.INPUTS, AP.inputs(m, policy.w_fwd(SHAPE))))
     for c in (1e10, 1e12, 1e14, 1e16):
         for k in (1e3, 1e4, 8e4, 1e6, 1e8, 1e10):
             v = formalism.at(m, c, k)
@@ -175,20 +175,22 @@ def test_profiles_are_compact_strings():
     assert AP.num(1.234567e-7) == "1.23457e-7"
 
 
-def row(start, tp, family, p, rho, delta, rec) -> list:
+def row(start, tp, family, p, rho, delta, rec, data="v2.3-pilot") -> list:
     d = dict.fromkeys(AP.COLUMNS) | {"start": start, "start_loss": 1.2, "end_loss": 1.2 * (1 + tp / 100),
-                                    "family": family, "p": p, "rho_default": rho, "delta_bits": delta, "record": rec}
+                                    "family": family, "p": p, "rho_default": rho, "delta_bits": delta, "record": rec,
+                                    "data": data}
     return [d[c] for c in AP.COLUMNS]
 
 
 def test_the_cut_keeps_each_familys_front_and_its_least_p_and_least_delta():
-    """Per start, target and family: the lower-left (p, rho) front, plus the least-p and the least-delta run."""
+    """Per data, start, target and family: the lower-left (p, rho) front, plus the least-p and the least-delta run."""
     rows = [row("s", -0.5, "adapter", 1.0, 50.0, 8e6, "a"), row("s", -0.5, "adapter", 2.0, 10.0, 8e6, "b"),
             row("s", -0.5, "adapter", 3.0, 20.0, 8e6, "dominated"), row("s", -0.5, "adapter", 4.0, 60.0, 1e5, "tiny"),
             row("s", -0.5, "adapter", 5.0, 5.0, 8e6, "c"), row("s", -0.5, "full", 1.5, 90.0, 9e8, "f"),
-            row("s", -1, "adapter", 3.0, 20.0, 8e6, "dominated"), row("t", -0.5, "adapter", 3.0, 20.0, 8e6, "dominated")]
+            row("s", -1, "adapter", 3.0, 20.0, 8e6, "dominated"), row("t", -0.5, "adapter", 3.0, 20.0, 8e6, "dominated"),
+            row("s", -0.5, "adapter", 3.0, 20.0, 8e6, "v3", "v3")]
     assert [r[AP.COLUMNS.index("record")] for r in AP.kept(rows)] == ["a", "b", "tiny", "c", "f", "dominated",
-                                                                      "dominated"]
+                                                                      "dominated", "v3"]
 
 
 def test_a_cut_names_the_full_tables_art_id_and_publish_stores_it(tmp_path, monkeypatch):
@@ -209,6 +211,33 @@ def test_a_cut_names_the_full_tables_art_id_and_publish_stores_it(tmp_path, monk
     assert len(console.body(q)) <= console.BODY_MAX and len(q["note"]) <= console.NOTE_MAX
     monkeypatch.setattr(console, "put", lambda q: "403 forbidden")
     assert run(tmp_path / "refused", monkeypatch, RUNS, "--publish")[0] == 1
+
+
+def test_each_data_has_its_own_envelope_and_a_cut_too_big_for_both_keeps_the_headlines(tmp_path, monkeypatch):
+    """A loss on harness v3's data is no loss on the pilot's: a start's v3 records have their own l0 and H, and their
+    rows say v3; the figure shows v3 once it has rows; a cut whose every-data rows don't fit keeps v3's alone."""
+    extra = [("s1", f"lora{i}", "lowrank/lora", "adapter", 8e6, 2e7, None, 0.3, [(1, (4 + i) * 1e15, 1.19)])
+             for i in range(6)]
+    pilot = ledger_rows(RUNS + extra)
+    v3 = [r | {"id": f"v3-{r['id']}", "run_id": f"v3-{r['run_id']}", "data": "v3", "start_bpb": 1.5 * r["start_bpb"],
+               "val_bpb": 1.5 * r["val_bpb"]} for r in pilot if r["run_id"] == "lora"]
+    code, got = run(tmp_path, monkeypatch, index=pilot + v3)
+    p = got["panel"]
+    on = [d for d in plots.frame(p) if d["data"] == "v3"]
+    assert code == 0 and AP.headline(p) == "v3"
+    assert [(d["record"], AP.target(d["start_loss"], d["end_loss"]), d["p"]) for d in on] == [
+        ("v3-lora@2", -0.5, 1), ("v3-lora@2", -1, 1)]
+    assert all(d["start_loss"] == pytest.approx(1.8) for d in on)
+    lora = {AP.target(d["start_loss"], d["end_loss"]): d["p"] for d in plots.frame(p) if d["record"] == "lora@2"}
+    assert lora == {-0.5: 3, -1: 1.5}
+    art = "art:" + "b" * 64
+    every = AP.checked(p | {"rows": [AP.rounded(r) for r in AP.kept(p["rows"])], "note": AP.note(art, cut="every")})
+    assert len(every["rows"]) == len(p["rows"]) - 6
+    monkeypatch.setattr(console, "BODY_MAX", len(console.body(every)) - 1)
+    q = AP.cut(p, art)
+    assert [d["record"] for d in plots.frame(q)] == ["v3-lora@2", "v3-lora@2"]
+    assert " Cut to v3, per start, " in q["note"] and q["note"].endswith(f"full table {art}.")
+    assert len(q["note"]) <= console.NOTE_MAX and not console.refused(q)
 
 
 def test_a_record_its_columns_cant_reproduce_is_refused():

@@ -1,14 +1,18 @@
 """The console's second training panel, `training/algorithm-policy`: each run's efficiency loss from its algorithm
 against its efficiency loss from the policy (Daniel, 2 Nov, 5:04 PM PST).
 
-    python -m te_core.algorithm_policy --out DIR [--publish] [--data LABEL]
+    python -m te_core.algorithm_policy --out DIR [--publish] [--ladder-fit FILE]
                                        [te_core.rescore's ledger and analysis options]
 
-At an end loss l, one of te_core.frontier's targets (a start's l0 less 0.5%, 1%, 2% and 5%), H is the least compute
-after the start of any valid checkpoint from it that reaches l (the honest envelope te_core.panels draws). A run that
-reaches l does so first at a checkpoint of compute C; its algorithm inefficiency is p = C/H >= 1, its policy slowdown
-there ρ (te_core.formalism.at at the dial's (c, k): c/(c − d) where Fit holds for the training, basis `fit`, else
-Slowdown's bound, a target, basis `target`), and its constrained cost over H is S = p·ρ.
+It reads what te_core.panels' frontier-branches reads: the valid records of the pin and of the pilot (pin.py's `pilot`)
+unless `--pin` names the commits, each checkpoint on its data (`panels.data_of`: `v3`, harness v3's OLMo 2 mix, or
+`v2.3-pilot`; a loss on one is no loss on the other), scored where the scoring cap admits it (te_core.policy's
+`eligible`). At an end loss l, one of te_core.frontier's targets (a start's l0 on that data less 0.5%, 1%, 2% and 5%),
+H is the least compute after the start of any valid checkpoint from it on the same data that reaches l (the honest
+envelope te_core.panels draws). A run that reaches l does so first at a checkpoint of compute C; its algorithm
+inefficiency is p = C/H >= 1, its policy slowdown there ρ (te_core.formalism.at at the dial's (c, k): c/(c − d) where
+Fit holds for the training, basis `fit`, else Slowdown's bound, a target, basis `target`), and its constrained cost
+over H is S = p·ρ.
 
 The panel (`COLUMNS`) has one row per run (its run id) and end loss it reaches, taken at that first checkpoint: the
 start (te_core.panels' label, C0 and l0), the end loss, C and p, the inputs ρ is computed from there (`INPUTS`, as
@@ -19,12 +23,14 @@ record (run id@step) and data. The route takes at most 24 columns, so H (C/p) an
 the end loss) aren't columns of their own. `page_rho` is the formula the console's dial runs on a row's columns alone,
 and `build` refuses a row whose columns don't reproduce te_core.formalism.at's ρ and basis at the default.
 
-Its console copy (`cut`) is the whole table when it fits the panels route (te_core.console), else, per start, target
-and family, the rows on the lower-left (p, rho_default) front plus the family's least-p and least-delta rows, with the
-full table's art id in the note; the ρ inputs keep 6 significant digits so the dial reproduces rho_default. DIR gets
-`algorithm-policy.json` (uncut), `console/algorithm-policy.json` (the cut) and `algorithm-policy.png` (p against ρ at
-the default dial from the uncut rows, a panel per target, with iso-S diagonals). `--publish` puts the uncut table in
-the evidence store when the cut leaves rows out, then PUTs the cut.
+Its console copy (`cut`) is the whole table when it fits the panels route (te_core.console), else, per data, start,
+target and family, the rows on the lower-left (p, rho_default) front plus the family's least-p and least-delta rows
+(the headline data's alone when every data's don't fit), with the full table's art id in the note; the ρ inputs keep
+6 significant digits so the dial reproduces rho_default.
+DIR gets `algorithm-policy.json` (uncut), `console/algorithm-policy.json` (the cut) and `algorithm-policy.png` (p
+against ρ at the default dial from the uncut rows on the headline data, te_core.panels': v3 once it has rows, else the
+pilot; a panel per target, with iso-S diagonals). `--publish` puts the uncut table in the evidence store when the cut
+leaves rows out, then PUTs the cut.
 """
 from __future__ import annotations
 
@@ -43,7 +49,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-from . import VERSION, console, formalism, frontier, panels, plots, rescore
+from . import VERSION, console, formalism, frontier, panels, plots, policy, rescore
 
 NAME = "algorithm-policy"
 PANEL = f"training/{NAME}"
@@ -55,8 +61,6 @@ COLUMNS = ["start", "start_compute_gates", "start_loss", "end_loss", "C_gates", 
 LOSSES = ("start_loss", "end_loss")
 #: significant digits of the ρ inputs in the console's copy, and of its other numbers
 INPUT_DIGITS, DIGITS = 6, 4
-#: the records' data: v2.3's pins score fineweb-edu (data v2.2); "v3" names the OLMo-mix records
-DATA = "v2.3-pilot"
 #: each column whose value rests on a record's labelled quantities, and those quantities (te_core.formalism's names), the
 #: column's own first
 LABELLED = {"C_gates": ("gates",), "w_gates": ("tokens", "token_gates"), "sigma": ("token_gates", "gates"),
@@ -73,8 +77,9 @@ MARKERS = ("o", "s", "^", "D", "v", "P")
 
 
 def default(w_fwd: float) -> tuple[float, float]:
-    """The dial's default (c, k) for a start whose forward is `w_fwd` gates a token."""
-    return panels.DEFAULT[0] * w_fwd, 8.0 * panels.DEFAULT[1]
+    """The dial's default (c, k) for a start whose forward is `w_fwd` gates a token (te_core.panels' `DEFAULT`, tokens
+    per block and bits)."""
+    return panels.DEFAULT[0] * w_fwd, float(panels.DEFAULT[1])
 
 
 def target(start_loss: float, end_loss: float) -> float:
@@ -138,17 +143,18 @@ def page_rho(d: dict, c: float, k: float) -> tuple[float, str]:
     return max(1.0, lead / s_star if s_star > 0 else math.inf if lead else 0.0), "target"
 
 
-def build(scored: list[dict], shapes: dict[str, dict], source: str, data: str = DATA, stamp: str | None = None) -> dict:
-    """The panel, uncut: one row per run and end loss it reaches (module docstring)."""
+def build(scored: list[dict], shapes: dict[str, dict], source: str, stamp: str | None = None) -> dict:
+    """The panel, uncut: one row per run and end loss it reaches, per data and start (module docstring)."""
     rate, _ = panels.dense_rate(scored, shapes)
     rows, wrong = [], []
-    for name in sorted({r["start"] for r in scored}):
-        on = [r for r in scored if r["start"] == name]
+    for data, name in sorted({(panels.data_of(r), r["start"]) for r in scored},
+                             key=lambda dn: (panels.DATA.index(dn[0]), dn[1])):
+        on = [r for r in scored if (panels.data_of(r), r["start"]) == (data, name)]
         l0 = frontier.start_bpb(on)
         if l0 is None:
             continue
         shape = shapes[name]
-        w_fwd = panels.w_fwd(shape)
+        w_fwd = policy.w_fwd(shape)
         head = [plots.start_label(shape), panels.c0(shape, rate), l0]
         honest = plots.staircase([(r["gates"], r["val_bpb"], r) for r in on])
         runs: dict[str, list[dict]] = {}
@@ -181,15 +187,24 @@ def build(scored: list[dict], shapes: dict[str, dict], source: str, data: str = 
             "note": note(), "columns": COLUMNS, "rows": rows}
 
 
-def note(art: str | None = None, cut: bool = False) -> str:
-    out = ("Per run and end loss, its first checkpoint reaching it: p = C/H, H the least C of any valid checkpoint from "
-           "the start reaching it; rho by te_core.formalism.at (fit: c/(c-d); target: Slowdown's bound); S = p rho. "
-           "*_default: c = 4096 w_fwd, k = 80,000 bits; formula "
+def note(art: str | None = None, cut: str | None = None) -> str:
+    """The panel's note; `cut` names what a cut keeps (None: no cut; "every": every data's; else that data's)."""
+    out = ("Per run and end loss, its first checkpoint reaching it: p = C/H, H the least C of any checkpoint from the "
+           "start on its data reaching it; rho by te_core.formalism.at (fit: c/(c-d); target: Slowdown's bound); "
+           f"S = p rho. *_default: c = {panels.DEFAULT[0]} w_fwd, k = {panels.DEFAULT[1]:,} bits; formula "
            "note:training-20261102T2334Z-draft-rho-inputs-and-formula. One seed.")
     if cut:
-        out += (" Cut per start, target, family: (p, rho) front, least p, least delta; full table "
+        out += (" Cut " + ("per data, " if cut == "every" else f"to {cut}, per ")
+                + "start, target, family: (p, rho) front, least p, least delta; full table "
                 + (art or f"{NAME}.json (unpublished)") + ".")
     return out
+
+
+def headline(p: dict) -> str:
+    """The data the figure shows, and the one a cut keeps when every data's doesn't fit (te_core.panels' headline): v3
+    once the table has v3 rows, else the pilot."""
+    have = {r[COLUMNS.index("data")] for r in p["rows"]}
+    return next((d for d in panels.DATA if d in have), panels.DATA[-1])
 
 
 def rounded(row: list) -> list:
@@ -203,12 +218,12 @@ def rounded(row: list) -> list:
 
 
 def kept(rows: list[list]) -> list[list]:
-    """Per start, target and family, the rows on the lower-left (p, rho_default) front (te_core.plots' staircase) and
-    the family's least-p and least-delta rows, in the table's order."""
+    """Per data, start, target and family, the rows on the lower-left (p, rho_default) front (te_core.plots' staircase)
+    and the family's least-p and least-delta rows, in the table's order."""
     ix = {c: i for i, c in enumerate(COLUMNS)}
     groups: dict[tuple, list[int]] = {}
     for i, r in enumerate(rows):
-        key = (r[ix["start"]], target(r[ix["start_loss"]], r[ix["end_loss"]]), r[ix["family"]])
+        key = (r[ix["data"]], r[ix["start"]], target(r[ix["start_loss"]], r[ix["end_loss"]]), r[ix["family"]])
         groups.setdefault(key, []).append(i)
     keep = set()
     for g in groups.values():
@@ -238,10 +253,16 @@ def whole(p: dict) -> dict:
 
 
 def cut(p: dict, art: str | None = None) -> dict:
-    """The console's copy: `whole` when it fits, else the rows `kept` keeps with the full table's art id in the note."""
+    """The console's copy: `whole` when it fits, else the rows `kept` keeps, every data's when they fit and else the
+    headline data's, with the full table's art id in the note."""
     if q := whole(p):
         return q
-    q = checked(p | {"rows": [rounded(r) for r in kept(p["rows"])], "note": note(art, cut=True)})
+    rows = kept(p["rows"])
+    q = checked(p | {"rows": [rounded(r) for r in rows], "note": note(art, cut="every")})
+    if len(console.body(q)) > console.BODY_MAX and len({r[COLUMNS.index("data")] for r in rows}) > 1:
+        data = headline(p)
+        q = checked(p | {"rows": [rounded(r) for r in rows if r[COLUMNS.index("data")] == data],
+                         "note": note(art, cut=data)})
     if len(console.body(q)) > console.BODY_MAX:
         raise ValueError(f"{PANEL}: the cut is {len(console.body(q))} bytes, over {console.BODY_MAX}: keep fewer rows "
                          "per family (te_core.algorithm_policy.kept)")
@@ -263,9 +284,10 @@ def finite(p: dict) -> list[dict]:
 
 
 def figure(p: dict, out: Path) -> Path:
-    """p against ρ at the default dial, log-log, one panel per target, a colour per family and a marker per start,
-    with the iso-S diagonals S = p ρ at `LEVELS`."""
-    rows = finite(p)
+    """p against ρ at the default dial on the headline data, log-log, one panel per target, a colour per family and a
+    marker per start, with the iso-S diagonals S = p ρ at `LEVELS`."""
+    data = headline(p)
+    rows = [d for d in finite(p) if d["data"] == data]
     families = sorted({d["family"] or "?" for d in rows})
     starts = list(dict.fromkeys(d["start"] for d in rows))
     targets = [-100 * t for t in frontier.TARGETS]
@@ -297,7 +319,7 @@ def figure(p: dict, out: Path) -> Path:
     for ax in axes[1]:
         ax.set_xlabel("p = C/H, the algorithm's inefficiency")
     for ax in axes[:, 0]:
-        ax.set_ylabel(f"rho at c = {panels.DEFAULT[0]} w_fwd, k = {8 * panels.DEFAULT[1]:,} bits")
+        ax.set_ylabel(f"rho at c = {panels.DEFAULT[0]} w_fwd, k = {panels.DEFAULT[1]:,} bits")
     keys = [Line2D([], [], marker="o", ls="none", color=f"C{i % 10}", label=f) for i, f in enumerate(families)]
     keys += [Line2D([], [], marker=MARKERS[i % len(MARKERS)], ls="none", color="0.3", label=s)
              for i, s in enumerate(starts)]
@@ -305,7 +327,7 @@ def figure(p: dict, out: Path) -> Path:
     if any(d["basis_default"] == "fit" for d in rows):
         keys.append(Line2D([], [], marker="o", ls="none", color="0.6", mec="k", label="basis fit (black edge)"))
     fig.legend(handles=keys, loc="lower center", ncol=min(len(keys), 6), fontsize=7, bbox_to_anchor=(0.5, 0.025))
-    fig.suptitle(f"{p['title']} (grey: iso-S, S = p rho)", fontsize=10)
+    fig.suptitle(f"{p['title']}, {data} data (grey: iso-S, S = p rho)", fontsize=10)
     fig.text(0.01, 0.005, p["note"], fontsize=5.5, wrap=True, va="bottom")
     fig.tight_layout(rect=(0, 0.09, 1, 0.97))
     path = out / f"{NAME}.png"
@@ -315,18 +337,19 @@ def figure(p: dict, out: Path) -> Path:
 
 
 def summary(p: dict) -> str:
-    """Per start and end loss, the runs that reach it and the least S, and each family's least S there."""
+    """Per data, start and end loss, the runs that reach it and the least S, and each family's least S there."""
     rows = finite(p)
-    lines = ["| start | end loss | runs | least S (p, rho, basis; method) | each family's least S |", "|---|---|---|---|---|"]
-    for s in dict.fromkeys(d["start"] for d in rows):
-        for tp in dict.fromkeys(d["target_pct"] for d in rows if d["start"] == s):
-            mine = sorted((d for d in rows if d["start"] == s and d["target_pct"] == tp),
+    lines = ["| data | start | end loss | runs | least S (p, rho, basis; method) | each family's least S |",
+             "|---|---|---|---|---|---|"]
+    for ds in dict.fromkeys((d["data"], d["start"]) for d in rows):
+        for tp in dict.fromkeys(d["target_pct"] for d in rows if (d["data"], d["start"]) == ds):
+            mine = sorted((d for d in rows if (d["data"], d["start"]) == ds and d["target_pct"] == tp),
                           key=lambda d: d["p"] * d["rho_default"])
             b = mine[0]
             fam = {}
             for d in mine:
                 fam.setdefault(d["family"], d)
-            lines.append(f"| {s} | {tp:g}% | {len(mine)} | {b['p'] * b['rho_default']:.3g} ({b['p']:.3g}, "
+            lines.append(f"| {ds[0]} | {ds[1]} | {tp:g}% | {len(mine)} | {b['p'] * b['rho_default']:.3g} ({b['p']:.3g}, "
                          f"{b['rho_default']:.3g}, {b['basis_default']}; {b['method']} {b['record']}) | "
                          + ", ".join(f"{f} {d['p'] * d['rho_default']:.3g}" for f, d in fam.items()) + " |")
     return "\n".join(lines)
@@ -337,15 +360,14 @@ def main(argv=None) -> int:
     ap.add_argument("--publish", action="store_true",
                     help=f"put the uncut table in the evidence store if the cut leaves rows out, then PUT the cut to "
                          f"{console.PANELS_URL}/{PANEL}")
-    ap.add_argument("--data", default=DATA, help="the records' data (default %(default)s; v3: the OLMo-mix records)")
     a = ap.parse_args(argv)
     d = rescore.load(a)
-    pin, shapes = d["pin"], d["shapes"]
-    scored, _ = plots.load(d["rows"], pin, shapes, d["keep"])
+    pin, shapes = d["pin"] if a.pin else frontier.pinned(pilot=True), d["shapes"]
+    scored, _ = plots.load(d["rows"], pin, shapes, d["keep"], d["ladder"])
     source = a.source or (f"python -m te_core.{NAME.replace('-', '_')} (te_core {VERSION}; pin "
                           f"{' + '.join(c[:12] for c in pin)}; {len(scored)} valid checkpoints, quantities "
                           f"{'rescore_v1' if d['use'] else 'stubs'})")
-    p = build(scored, shapes, source, a.data)
+    p = build(scored, shapes, source)
     full = a.out / f"{NAME}.json"
     full.write_text(json.dumps(p, allow_nan=False) + "\n")
     art = None
