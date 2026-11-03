@@ -12,8 +12,9 @@ What vLLM hands it, from its expert-parallel dispatch:
 
 It returns y (BF16, Σ counts × n) in x's row order, plus ``bias`` when given.  Each expert's rows, in blocks of at most
 pd_commit's 256 (`grouped.units`), are each a unit: one matmul of the pass (m₁₆ rows, its expert's weight), committed with
-its own index, keys, A tree, records and tile leaves, as `PearlCDeviceRun.gemm` commits that block called alone; the indices
-follow on in unit order, and an expert with no rows has none.
+its own index, keys, A tree, records and tile leaves (and in a retained pass its real rows of y, at its rows of A), as
+`PearlCDeviceRun.gemm` commits that block called alone; the indices follow on in unit order, and an expert with no rows has
+none.
 
 The counts are read on the host, so a call's layout (its units, `_Call`) is the host's, and so is its table: each unit's
 records and keys (`grouped.Grouped.meta`), the expert map, the gathered rows' rows of A, the units' root nodes, then the
@@ -497,7 +498,7 @@ def _gemm_grouped(run: Any, ws: tuple[int, ...], x: Any, counts: tuple[int, ...]
             xa, slot_a = b["xa"][:4 * g.rows * k].view(torch.float32).view(g.rows, k), G.tree_bytes(R)
             for i, (u, mm) in enumerate(zip(us, mms, strict=True)):
                 run._retained(cur, mm, u.m, flags[u.src:u.src + u.m], xa[u.row:u.row + u.m16],
-                              b["tree_a"][slot_a * i:slot_a * i + run.nb * (2 * R.pow2(u.m16) - 1)])
+                              b["tree_a"][slot_a * i:slot_a * i + run.nb * (2 * R.pow2(u.m16) - 1)], y=c.y[u.row:u.row + u.m])
         cur.tiles += tiles
     y = c.y.index_select(0, c.idx)
     return y if bias is None else y + bias
