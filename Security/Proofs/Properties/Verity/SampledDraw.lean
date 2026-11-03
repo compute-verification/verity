@@ -431,6 +431,13 @@ def DrawRead (k : Verity.Registration.Composite) (read : Verity.Sent → Option 
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
+/-- At a deployment, the sampled check's read is v2's (`Deployed.coinsRead`), so it shows the draw where v2's does. -/
+theorem drawRead_deployed {V : Vocab d α} {K : Constructions V} {S : ByteArray → Array ByteArray → Option Live}
+    {k : Verity.Registration.Composite} (hD : Deployed V K S) (h : DrawRead k coinsRead) :
+    DrawRead k (V.coinsRead .sampled) := by
+  rw [show V.coinsRead .sampled = coinsRead from funext hD.coinsRead]
+  exact h
+
 /-- **The play's log shows the draw**: the sampled check's read shows it (`DrawRead`), and it is the play's log
 (`Logged`). -/
 theorem shows_of_logged {V : Vocab d α} {k : Verity.Registration.Composite} (hR : DrawRead k (V.coinsRead .sampled))
@@ -444,10 +451,11 @@ theorem shows_of_logged {V : Vocab d α} {k : Verity.Registration.Composite} (hR
 
 /-- **A sampled verdict that accepts at v2 is v2's case accepting.** -/
 theorem verdict_case {V : Vocab d α} {k : Verity.Registration.Composite}
-    (hk : Verity.component k .sampled = some _root_.SampledProofs.OneStageZk.protocol) {o : Verity.Exchange}
+    (hk : ReadsV2 k) {o : Verity.Exchange}
     (h : V.Verdict k .sampled o) : Verity.CaseAccepts k _root_.SampledProofs.OneStageZk.protocol o.sent := by
   obtain ⟨-, -, P, hP, hc⟩ := h
-  rw [hk] at hP
+  have hk' : Verity.component k .sampled = some _root_.SampledProofs.OneStageZk.protocol := hk
+  rw [hk'] at hP
   cases hP
   exact hc
 
@@ -474,7 +482,7 @@ theorem draw_eq (A : Live) (ω : A.Ω) {units : Array ℕ} {read : ℕ}
   rw [h]
 
 /-- The session widened by a projection's coins draws as the session does at the sample's first part. -/
-theorem extend_draw (A : Live) (S : Coins) (ω : A.Ω × S.T) : (A.extend S).L.draw ω = A.L.draw ω.1 := rfl
+theorem extend_draw (A : Live) (S : Widening) (ω : A.Ω × S.T) : (A.extend S).L.draw ω = A.L.draw ω.1 := rfl
 
 /-- **v2's units are the session's draw** at a sample whose bytes start with the coins v2 drew them from, at a session
 whose law and population are the ones v2 drew under. -/
