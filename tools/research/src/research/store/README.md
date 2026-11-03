@@ -154,8 +154,9 @@ string, `derivation` a `drv:` id, `inputs`/`outputs` values `art:` ids, the whol
 
 `research data reindex` wipes and rebuilds it from `manifests/`, `attempts/`, `labels/` (local), then, with `--remote`,
 from the remote listing too (manifests and attempts the remote has and we lack are fetched and cached first). Deleting the
-file and reindexing gives the same query results as the incremental index (tested). Tables (denormalised; add columns freely,
-the file is disposable):
+file and reindexing gives the same query results as the incremental index (tested). Tables (denormalised; the file is
+disposable, but every worktree on the machine writes it, older code included, so no shipped table gains a column; a new column
+goes in a side table keyed like its table, as `replica_checks` is for `replicas`):
 
 ~~~text
 artifacts(id, kind, bytes, payload_type, manifest_json, local INTEGER, remote INTEGER, repo_path TEXT)
