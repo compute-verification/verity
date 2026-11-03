@@ -35,18 +35,20 @@ policy's class (``--circuit``, `served_verdicts.sh`'s step 3), whose session is 
 by the table, and its fresh bits at the verifier's pins (``--pins``, the weights registration) and the window's roots
 (``--registration``), as `block_counts` counts them; and the serve dir's sealed windows, each of which the class takes
 (`class_windows`) holding the class's m blocks, since a class's circuit is the same for every window it takes. Its rows
-are `NciCheck.Count`'s (``[definition, gates, fresh, blocks]``), judged by its rule (`judge`): every class with a block
-at most c gates and k fresh bits, and the blocks at most n. Anything the rule can't decide refuses (`Undecided`): no
-policy, a serve dir that records no start, a policy written once the serve had begun (unless ``--retroactive`` says why
-it's read anyway), a record with no inference blocks, an unpriced primitive, a closed window with no seal, or a sealed
-window the class doesn't take.
+are `NciCheck.Count`'s (``[definition, gates, fresh, blocks]``) at the exact counts, judged by its rule (`judge`): every
+class with a block at most c gates and k fresh bits, and the blocks at most n. Anything the rule can't decide refuses
+(`Undecided`): no policy, a serve dir that records no start, a policy written once the serve had begun (unless
+``--retroactive`` says why it's read anyway), a record with no inference blocks, an unpriced primitive, a closed window
+with no seal, or a sealed window the class doesn't take.
 With ``--lean``, `nci-check --count` runs on one window's session Program (`lean_count`), and a block's gates that
 differ from its own refuse too. That Program's inputs are positional (`Input<w>`), so its θ is empty: every input bit,
 the weights' too, is fresh to it, and its fresh bits and its verdict there (``with_theta_empty``) are said beside the
 verdict's, not judged.
 
-``--out`` is the public verdict: the blocks padded to the grid, no window's number and no count of the windows.
-``--private`` (the serve dir's, 0600) holds it with the exact counts and each window the class doesn't take and why.
+``--out`` is the public verdict: each class's count of blocks and their total on the grid and at least `FLOOR`
+(`published`), ``counts`` saying so and that n was judged on the exact counts, and no window's number or count of the
+windows. ``--private`` (the serve dir's, 0600) holds it with the exact counts and each window the class doesn't take and
+why.
 """
 from __future__ import annotations
 
@@ -74,7 +76,12 @@ import served_shares as SS  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 
 POLICY_FORMAT = "verity-bench/inference-only-policy/v1"
-VERDICT_FORMAT = "verity-bench/inference-only-verdict/v1"
+VERDICT_FORMAT = "verity-bench/inference-only-verdict/v2"
+#: the least count of blocks the public verdict publishes: `partition_v2.grid` is exact below 2^GRID_BITS, so a count
+#: published under it would be the run's exact count and, at m blocks a window, its count of windows
+FLOOR = 16
+COUNTS = (f"each class's count of blocks and their total published as max({FLOOR}, grid(count)); n judged on the exact "
+          "count, which only the serve dir's private verdict holds")
 NCI_PACKAGE = ROOT / "verity/core/protocols/network/nci/lean"
 NCI_REFERENCE = NCI_PACKAGE / "scripts" / "nci_reference.py"
 #: `prove_path.py window-circuit`'s default ``--cap``: the units a stated member holds in the class's record
@@ -326,6 +333,13 @@ def judge(rows: Sequence[Sequence[Any]], c: int, k: int, n: int) -> dict[str, An
     return {"blocks": [list(r) for r in rows], "total": total, "complies": failure is None, "failure": failure}
 
 
+def published(count: int) -> int:
+    """A count of blocks as the public verdict publishes it: on the grid, and at least `FLOOR`."""
+    from verity.ml.circuits import partition_v2 as PV2
+
+    return max(FLOOR, PV2.grid(count))
+
+
 def _reference():
     spec = importlib.util.spec_from_file_location("nci_reference", NCI_REFERENCE)
     module = importlib.util.module_from_spec(spec)
@@ -384,8 +398,6 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
             lean: Path | None = None, scratch: Path | None = None,
             lean_timeout_s: int = 1800) -> tuple[dict[str, Any], dict[str, Any]]:
     """The run's verdict (module docstring): its public form and its private one."""
-    from verity.ml.circuits import partition_v2 as PV2
-
     base: dict[str, Any] = {"format": VERDICT_FORMAT}
     private: dict[str, Any] = {}
     try:
@@ -418,12 +430,9 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
         rows = [[row["definition"], row["gates"], row["fresh"], blocks]]
         got = judge(rows, c, k, n)
         private |= {"blocks": rows, "total": got["total"]}
-        padded = [[d, g, x, PV2.grid(b)] for d, g, x, b in rows]
-        pub = judge(padded, c, k, n)
-        if pub["complies"] != got["complies"]:
-            raise Undecided("the padded blocks and the exact ones judge differently against n, which is off the grid")
-        base |= {"blocks": pub["blocks"], "total": pub["total"], "complies": pub["complies"], "failure": pub["failure"],
-                 "positions": row["positions"], "slots": row["slots"]}
+        base |= {"blocks": [[d, g, x, published(b)] for d, g, x, b in rows], "total": published(got["total"]),
+                 "counts": COUNTS, "complies": got["complies"], "failure": got["failure"], "positions": row["positions"],
+                 "slots": row["slots"]}
         if lean is not None:
             inst = count_instance(doc, row["table"], c, k, n)
             got_lean = lean_count(lean, inst, scratch or Path(tempfile.gettempdir()), lean_timeout_s)
@@ -434,14 +443,14 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
             if "error" not in got_lean and got_lean["blocks"][0][1] != row["gates"]:
                 raise Undecided(f"nci-check --count counts {got_lean['blocks'][0][1]} gates a block, and this "
                                 f"{row['gates']}")
-        if pub["complies"]:
+        if got["complies"]:
             base |= {"verdict": "accept", "reason": None}
         else:
-            i, what = pub["failure"]
+            i, what = got["failure"]
             base |= {"verdict": "refuse", "reason": {
                 "gates": f"a block of {row['gates']} gates, more than c = {c}",
                 "fresh": f"a block of {row['fresh']} fresh bits, more than k = {k}",
-                "count": f"{pub['total']} blocks (padded), more than n = {n}"}[what]}
+                "count": f"the blocks' exact count is more than n = {n}"}[what]}
     except Undecided as e:
         base |= {"verdict": "refuse", "reason": f"undecided: {e}", "complies": False}
     except Exception as e:  # noqa: BLE001 - anything else the count can't get past is undecided too, and refuses
@@ -471,7 +480,8 @@ def line(v: Mapping[str, Any]) -> str:
     lean = v.get("lean")
     said = ("" if lean is None else f"; nci-check --count: {lean['error']}" if "error" in lean else
             f"; nci-check --count: {lean['gates']} gates a block ({'agrees' if lean['agrees_on_gates'] else 'DIFFERS'})")
-    return (f"{v['verdict']}{'' if v['reason'] is None else ': ' + v['reason']}: {b} blocks (padded) of session "
+    return (f"{v['verdict']}{'' if v['reason'] is None else ': ' + v['reason']}: {b} blocks (published as "
+            f"max({FLOOR}, grid); n is judged on the exact count, held on the node) of session "
             f"{d[:16]}… ({'the registered one' if v.get('registered_session') else 'not the registered one'}), "
             f"{g} gates and {x} fresh bits a block, against c {v['c']}, k {v['k']}, n {v['n']}{said}")
 
