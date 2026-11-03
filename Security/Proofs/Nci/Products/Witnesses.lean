@@ -97,14 +97,15 @@ theorem not_wordCap :
   rw [outBits_eq]
   norm_num
 
-theorem not_slowdown :
-    ¬ ENNReal.ofReal ((1 * 1 * 1 : ℕ) - (1 / 2 : ℝ) * registeredProduct.outBits) / (registered.D.computed.card : ℝ≥0∞) /
-      (ENNReal.ofReal (capAt 0 1 1 1 (1 / 2)) / ((1 : ℕ) : ℝ≥0∞)) ≤ partitionSlowdown registered 1 1 := by
+theorem not_bound_le : ¬ registeredProduct.bound 1 0 1 1 1 (1 / 2) ≤ partitionSlowdown registered 1 1 := by
   have hpos : ENNReal.ofReal (((1 * 1 * 1 : ℕ) : ℝ) - 1 / 2 * ((1 : ℕ) : ℝ)) / ((1 : ℕ) : ℝ≥0∞) ≠ 0 := by
     norm_num [ENNReal.ofReal_eq_zero]
-  rw [partitionSlowdown, capAt_zero, outBits_eq, computed_card, ENNReal.ofReal_zero, ENNReal.zero_div,
+  rw [Standard.bound, partitionSlowdown, capAt_zero, outBits_eq, computed_card, ENNReal.ofReal_zero, ENNReal.zero_div,
     ENNReal.div_zero hpos]
   norm_num
+
+theorem not_partitionBound : ¬ PartitionBound registered 1 0 (registeredProduct.bound 1 0 1 1 1 (1 / 2)) :=
+  fun h => not_bound_le (h 1 P (isCK_registered 0))
 
 end Single
 
@@ -122,12 +123,12 @@ theorem WordCap_nontrivial : Guarantees.WordCap_nontrivial :=
   ⟨Single.algorithm_registered, Single.not_passed_registered 1, Single.isCK_registered 1, Single.whole _ _, Nat.one_pos,
     Single.not_wordCap⟩
 
-theorem Slowdown_honest : Guarantees.Slowdown_honest :=
+theorem Bound_honest : Guarantees.Bound_honest :=
   ⟨Single.algorithm_fresh, Single.passed_fresh, Single.isCK_fresh, Nat.one_pos, by norm_num⟩
 
-theorem Slowdown_nontrivial : Guarantees.Slowdown_nontrivial :=
-  ⟨Single.algorithm_registered, Single.not_passed_registered 0, Single.isCK_registered 0, Nat.one_pos, by norm_num,
-    Single.not_slowdown⟩
+theorem Bound_nontrivial : Guarantees.Bound_nontrivial :=
+  ⟨Single.algorithm_registered, Single.not_passed_registered 0, Nat.one_pos, by norm_num,
+    Single.not_partitionBound⟩
 
 example : ((1 * 1 * 1 : ℕ) : ℝ) ≤ (1 : ℕ) * capAt 2 1 1 1 (1 / 2) + 1 / 2 * freshProduct.outBits :=
   let h := Cap_honest
@@ -147,14 +148,12 @@ example (h : registeredProduct.Passed 1 1 1 1 1) : False :=
   n.2.2.2.2.2 (WordCap _ _ _ _ _ 1 1 1 1 1 1 P n.1 h n.2.2.1 n.2.2.2.1 n.2.2.2.2.1 n.2.2.2.2.1 n.2.2.2.2.1
     n.2.2.2.2.1)
 
-example : ENNReal.ofReal ((1 * 1 * 1 : ℕ) - (1 / 2 : ℝ) * freshProduct.outBits) / (fresh.D.computed.card : ℝ≥0∞) /
-    (ENNReal.ofReal (capAt 2 1 1 1 (1 / 2)) / ((1 : ℕ) : ℝ≥0∞)) ≤ partitionSlowdown fresh 1 1 :=
-  let h := Slowdown_honest
-  Slowdown _ _ _ _ _ 1 2 1 1 1 1 P (1 / 2) h.1 h.2.1 h.2.2.1 h.2.2.2.1 h.2.2.2.1 h.2.2.2.1 h.2.2.2.2
+example : freshProduct.bound 1 2 1 1 1 (1 / 2) ≤ partitionSlowdown fresh 1 1 :=
+  let h := Bound_honest
+  Bound _ _ _ _ _ 1 2 1 1 1 (1 / 2) h.1 h.2.1 h.2.2.2.1 h.2.2.2.1 h.2.2.2.1 h.2.2.2.2 1 P h.2.2.1
 
 example (h : registeredProduct.Passed 1 0 1 1 1) : False :=
-  let n := Slowdown_nontrivial
-  n.2.2.2.2.2 (Slowdown _ _ _ _ _ 1 0 1 1 1 1 P (1 / 2) n.1 h n.2.2.1 n.2.2.2.1 n.2.2.2.1 n.2.2.2.1
-    n.2.2.2.2.1)
+  let n := Bound_nontrivial
+  n.2.2.2.2 (Bound _ _ _ _ _ 1 0 1 1 1 (1 / 2) n.1 h n.2.2.1 n.2.2.1 n.2.2.1 n.2.2.2.1)
 
 end Nci.Products.SecurityProofs

@@ -9,16 +9,17 @@ For a partition `P` into `m` inference blocks, block `u` with gates `I_u` and re
 the amortized cap (`Verity.Combinatorics.sum_card_le`) reads, with `T_u` the products whose MAC lies in `I_u`:
 
 1. **Operands** (`mul_card_le_cones`): `b_A |π₁₂ T_u| + b_B |π₂₃ T_u| ≤ |U_u ∩ cones|`. A whole MAC reads every bit of
-   its operands, so each operand it touches is held or read in full, and widths as passed charge `b_A` (or `b_B`) bits of
-   its cone; the cones are disjoint.
+   its operands, so each operand it touches is held or read in full, and widths as passed charge `b_A` (or `b_B`) bits
+   of its cone; the cones are disjoint.
 2. **Reads** (`card_add_card_le`): `|U_u ∩ cones| + |U_u ∩ macs| ≤ k`, the cones and the MACs being disjoint.
 3. **Partial sums** (`partial_sums`): `b_C Σ_u |π₁₃ T_u| ≤ E + Σ_u |U_u ∩ macs|`. A block holding a whole MAC of `C_ij`
    hands `b_C` bits of `C_ij`'s gates on or holds them as `C_ij`'s final bits; what a block hands on another reads.
 4. **Splits** (`card_le_whole_add`): `N ≤ Σ_u |T_u| + Σ_u |U_u ∩ macs|`. A MAC no block holds whole is split, and a
    read across the split is a read of a MAC's gate.
 
-`Cap` takes the cap at the weight `s = 1` on the MACs' reads, which pays for the splits; `WordCap` has no splits and takes
-it at `s = 0` and `μ*`. `Slowdown` divides `Cap` by `|C| / c`.
+`Cap` takes the cap at the weight `s = 1` on the MACs' reads, which pays for the splits; `WordCap` has no splits and
+takes it at `s = 0` and `μ*`. `Bound` divides `Cap` by `|C| / c` at each partition. The `example` at the end gives the
+one slowdown (`Nci.Formalism.Guarantees.Slowdown`) the products kind as a kind `J`, its `Λ_J` the products kind's bound.
 -/
 
 namespace Nci.Products
@@ -329,9 +330,10 @@ theorem WordCap : Guarantees.WordCap := by
     exact_mod_cast S.card_le_whole P hwhole
   exact hN.trans key
 
-theorem Slowdown : Guarantees.Slowdown := by
-  intro d ni nl nj S c k bA bB bC m P μ hS hW hP hA hB hC hμ
+theorem Bound : Guarantees.Bound := by
+  intro d ni nl nj S c k bA bB bC μ hS hW hA hB hC hμ m P hP
   have hcap := Cap d ni nl nj S c k bA bB bC m P μ hS hW hP hA hB hC hμ
+  unfold Standard.bound
   have hK0 : 0 ≤ capAt k bA bB bC μ := by
     unfold capAt
     exact le_max_of_le_right (mul_nonneg (by linarith) (Nat.cast_nonneg _))
@@ -358,6 +360,19 @@ theorem Slowdown : Guarantees.Slowdown := by
   calc ((ni * nl * nj : ℕ) : ℝ) - μ * S.outBits ≤ m * capAt k bA bB bC μ := by linarith
     _ = ((m * c : ℕ) : ℝ) * (capAt k bA bB bC μ / c) := by
         rw [Nat.cast_mul, mul_assoc, mul_div_cancel₀ _ hcR.ne']
+
+open Nci.Formalism.Assumptions in
+open scoped NNReal ENNReal in
+example (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
+    (e : Finset (Fin d.D.N) → L → E) (𝒲 : Finset (Finset (Fin d.D.N))) (X : Finset (Fin d.D.N)) (capX : ℝ≥0)
+    (κ : Type) (B : κ → Finset (Fin d.D.N)) (cap : κ → ℝ≥0) {ni nl nj : ℕ} (S : Standard d ni nl nj)
+    (bA bB bC : ℕ) (μ : ℝ) (m : ℕ) (P : Partition d.D m) (hA : A.Valid) (hcut : CutCost A c k e 𝒲)
+    (hX : A.TokenCapAt c k e 𝒲 X capX) (hcaps : Caps d c k B cap) (hS : S.Algorithm)
+    (hW : S.Passed c k bA bB bC) (h0A : 0 < bA) (h0B : 0 < bB) (h0C : 0 < bC) (hμ : 0 < μ) (hP : P.IsCK d c k) :
+    max (kindBound d c X capX) (max (⨆ K, kindBound d c (B K) (cap K)) (⨆ _ : Unit, S.bound c k bA bB bC μ)) ≤
+      partitionSlowdown d m c :=
+  Nci.Formalism.SecurityProofs.Slowdown d L A c k E e 𝒲 X capX κ B cap Unit (fun _ => S.bound c k bA bB bC μ) m P
+    hA hcut hX hcaps (fun _ => Bound d ni nl nj S c k bA bB bC μ hS hW h0A h0B h0C hμ) hP
 
 end SecurityProofs
 

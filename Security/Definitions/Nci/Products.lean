@@ -5,36 +5,37 @@ import Definitions.Nci.Formalism.Inference
 # Products of two fresh operands, a kind of training work
 
 A matrix product `C = A · B` by the standard algorithm inside a Boolean declaration `d`, `A` of `ni × nl` entries and
-`B` of `nl × nj`. Its products are the triples `(i, l, j)`; **MAC** `(i, l, j)` (`Standard.mac`) is the set of gates that
-multiplies `A_il` by `B_lj` and adds the product into `C_ij`'s partial sum. In a training step's forward pass after the
-first, both operands are fresh, the activations and the updated weights `θ'`, and each is passed at its width: `b_A`
+`B` of `nl × nj`. Its products are the triples `(i, l, j)`; **MAC** `(i, l, j)` (`Standard.mac`) is the set of gates
+that multiplies `A_il` by `B_lj` and adds the product into `C_ij`'s partial sum. In a training step's forward pass after
+the first, both operands are fresh, the activations and the updated weights `θ'`, and each is passed at its width: `b_A`
 bits an entry of `A`, `b_B` of `B`, `b_C` of `C`'s partial sums.
 
 What the guarantees (`Nci.Products.Guarantees`) read of the product (`Standard`):
 
 * `mac i l j`, the MAC's gates; `entry i j`, the gates of `C_ij`'s MACs; `out i j`, the gates of `C_ij`'s final value;
 * `opA i l` and `opB l j`, the gates of the operands' bits;
-* `coneA i l` and `coneB l j`, the operands' **cones**: the values whose reads pay for an operand, its own bits and those
-  of its computation that no other operand's computation reads (the increment an updated weight adds, the entry of an
-  earlier product an activation applies its function to).
+* `coneA i l` and `coneB l j`, the operands' **cones**: the values whose reads pay for an operand, its own bits and
+  those of its computation that no other operand's computation reads (the increment an updated weight adds, the entry of
+  an earlier product an activation applies its function to).
 
 Two premises, facts of the given circuit:
 
 * **The standard algorithm** (`Standard.Algorithm`): the MACs are nonempty, pairwise disjoint and connected sets of
-  computed gates (a set holding some of a MAC's gates but not all has a read across it); each MAC reads every bit of both
-  its operands; the cones are pairwise disjoint and disjoint from the MACs; and each entry's final value lies in its
-  MACs. A product by a fast algorithm (Strassen's) has no such MACs and stays outside.
+  computed gates (a set holding some of a MAC's gates but not all has a read across it); each MAC reads every bit of
+  both its operands; the cones are pairwise disjoint and disjoint from the MACs; and each entry's final value lies in
+  its MACs. A product by a fast algorithm (Strassen's) has no such MACs and stays outside.
 * **Widths as passed** (`Standard.Passed`), at the policy's `(c, k)`: an inference block that holds or reads every bit
-  of `A_il` reads at least `b_A` bits of `A_il`'s cone beyond `θ`, and of `B_lj`'s at least `b_B`; and an inference block
-  that holds a whole MAC of `C_ij` hands at least `b_C` bits of `C_ij`'s gates to its gates outside the block, or holds
-  that many of `C_ij`'s final bits. The first charges an operand through reads of its cone, the same whether the block
-  reads the operand or computes it itself. An operand or a partial sum passed narrower stays outside, as does an operand
-  some inference block gets for fewer reads of its cone than its width: one in `θ`, which costs nothing to read, or one
-  computed from registered values.
+  of `A_il` reads at least `b_A` bits of `A_il`'s cone beyond `θ`, and of `B_lj`'s at least `b_B`; and an inference
+  block that holds a whole MAC of `C_ij` hands at least `b_C` bits of `C_ij`'s gates to its gates outside the block, or
+  holds that many of `C_ij`'s final bits. The first charges an operand through reads of its cone, the same whether the
+  block reads the operand or computes it itself. An operand or a partial sum passed narrower stays outside, as does an
+  operand some inference block gets for fewer reads of its cone than its width: one in `θ`, which costs nothing to read,
+  or one computed from registered values.
 
 `whole I` is the set of products whose MAC lies in `I`, `outBits` the bits of `C`'s final values `Σ_ij |out_ij|`, and
 `handed C G I` the gates of `G` in `I` that a gate of `G` outside `I` reads. `capAt k b_A b_B b_C μ` is the cap a block
-at the weight `μ > 0`, `max (k² / (16 μ b_A b_B b_C)) ((μ + 1) k)` products.
+at the weight `μ > 0`, `max (k² / (16 μ b_A b_B b_C)) ((μ + 1) k)` products, and `bound` the products kind's bound on
+`ρ`, `((ni nl nj - μ Σ_ij |out_ij|) / |C|) / (capAt / c)`.
 -/
 
 namespace Nci.Products
@@ -42,6 +43,7 @@ namespace Nci.Products
 open Finset
 open Verity (Circuit Declaration)
 open Nci.Formalism
+open scoped ENNReal
 
 /-- `handed C G I`: the gates of `G` in `I` that a gate of `G` outside `I` reads, what `I` hands to the rest of `G`. -/
 def handed (C : Circuit) (G I : Finset (Fin C.N)) : Finset (Fin C.N) :=
@@ -104,8 +106,8 @@ structure Algorithm : Prop where
   out_entry : ∀ i j, S.out i j ⊆ S.entry i j
 
 /-- **Widths as passed** at the policy's `(c, k)`, a fact of the given circuit: an inference block that holds or reads
-every bit of `A_il` reads at least `b_A` bits of its cone beyond `θ`, and of `B_lj`'s at least `b_B`; and one that holds a
-whole MAC of `C_ij` hands at least `b_C` bits of `C_ij`'s gates to its gates outside the block, or holds that many of
+every bit of `A_il` reads at least `b_A` bits of its cone beyond `θ`, and of `B_lj`'s at least `b_B`; and one that holds
+a whole MAC of `C_ij` hands at least `b_C` bits of `C_ij`'s gates to its gates outside the block, or holds that many of
 `C_ij`'s final bits. -/
 structure Passed (c k bA bB bC : ℕ) : Prop where
   operandA : ∀ I, InferenceBlock d c k I → ∀ i l, S.opA i l ⊆ I ∪ d.D.into I →
@@ -121,5 +123,13 @@ end Standard
 partition into inference blocks with each split MAC charged one bit. -/
 noncomputable def capAt (k bA bB bC : ℕ) (μ : ℝ) : ℝ :=
   max ((k : ℝ) ^ 2 / (16 * μ * bA * bB * bC)) ((μ + 1) * k)
+
+/-- **The products kind's bound** at the weight `μ > 0`: `((ni nl nj - μ Σ_ij |out_ij|) / |C|) / (capAt / c)`, a
+kind's bound `(|B_K| / |C|) / (cap_K / c)` (`Nci.Formalism.kindBound`) with the cap amortized, `μ Σ_ij |out_ij|` the
+products it leaves uncharged. -/
+noncomputable def Standard.bound {d : Declaration} {ni nl nj : ℕ} (S : Standard d ni nl nj) (c k bA bB bC : ℕ)
+    (μ : ℝ) : ℝ≥0∞ :=
+  ENNReal.ofReal ((ni * nl * nj : ℕ) - μ * S.outBits) / (d.D.computed.card : ℝ≥0∞) /
+    (ENNReal.ofReal (capAt k bA bB bC μ) / (c : ℝ≥0∞))
 
 end Nci.Products
