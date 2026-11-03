@@ -24,6 +24,10 @@ position, as v2's check classifies them: `BEq Json` and `Json.parse` are `partia
   after the digest are `ξ`'s coins, one for each such root, so their bits are `ξ`'s.
 * **v2's case** (`caseOf_of`): in an accepted composition the case `caseOf` finds under v2's id is the one v2 accepted,
   since the composite's components have distinct ids (`components_nodup`).
+* **The session's law** (`law_of_setsUp`, `coupled_draw_setsUp`, `coupled_draw_coins_setsUp`): v2's parameters in the
+  parameters sent are those its case accepted (`paramsAt_case`), so at the session v2 sets up on them (`SetsUp`) the
+  draw's law is the session's wherever its population is (`lawAt_of_lawOf`), and the draw's piece of `CouplingTarget`
+  needs only the population.
 
 Each fact about one of the challenger's monadic functions is a Hoare triple proved by `mvcgen`, read back at an `.ok`
 result (`of_triple`).
@@ -679,5 +683,87 @@ theorem drawRead_of_eq (k : Verity.Registration.Composite) {read : Verity.Sent �
     (h : ∀ s, read s = readLog s) : DrawRead k read := by
   rw [show read = readLog from funext h]
   exact drawRead_readLog k
+
+/-! ## The session's law -/
+
+theorem eq_of_ids {β : Type} {f : β → String} {l : List β} {x y : β} (hnd : (l.map f).Nodup) (hx : x ∈ l)
+    (hy : y ∈ l) (h : f x = f y) : x = y := by
+  have h1 := find?_nodup hnd hx
+  have h2 := find?_nodup hnd hy
+  rw [h] at h1
+  exact Option.some.inj (h1.symm.trans h2)
+
+/-- **v2's parameters in the parameters sent are the ones its case accepted**, in a composition composite `k`
+accepted. -/
+theorem paramsAt_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
+    {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
+    {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
+    (hcase : V2Case k s a b e) (hacc : V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr)
+    {p' : _root_.SampledProofs.OneStageZk.Params} (h : ParamsAt s.params p') : p' = p := by
+  obtain ⟨ps, c₀, evs, ⟨hps, -, hevs⟩, x, hx, hx1, rfl, rfl, rfl⟩ := hcase
+  obtain ⟨hp, -⟩ := hacc
+  obtain ⟨ps', c₀', evs', ⟨hps', -, hevs'⟩, pub, prof, ⟨⟨⟨hfp, hfe, -, -⟩, -⟩, -⟩, -⟩ := hS
+  rw [Except.ok.inj (hps'.symm.trans hps)] at hfp
+  rw [Except.ok.inj (hevs'.symm.trans hevs)] at hfe
+  obtain ⟨ps'', hps'', y, hy, hyid, hyp⟩ := h
+  rw [Except.ok.inj (hps''.symm.trans hps)] at hy
+  have hid : x.1.id = _root_.SampledProofs.OneStageZk.PROTOCOL := (congrArg (·.id) hx1).trans rfl
+  have hpid : x.2.1.id = x.1.id := (ids_of_zip hfp hfe hx).1
+  have hxy : y = x.2.1 :=
+    eq_of_ids (by rw [hfp]; exact components_nodup k s) hy (List.of_mem_zip (List.of_mem_zip hx).2).1
+      (hyid.trans (hid.symm.trans hpid.symm))
+  rw [hxy] at hyp
+  exact Except.ok.inj (hyp.symm.trans hp)
+
+/-- The law `lawAt` reads at the population `LawOf` names is the law `LawOf` names. -/
+theorem lawAt_of_lawOf {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
+    {L : Flock.Draw.Law} {n : ℕ} (h : LawOf p c L n) : lawAt p.base.verifier n = .ok L := by
+  obtain ⟨law, derived, fl, hd, -, hder, hfl, rfl⟩ := h
+  simp only [lawAt, hd, hder, hfl, ok_bind]
+  rfl
+
+variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+
+/-- **The session's law is the draw's** where the session's population is: at the session `A` v2 sets up on the
+parameters `θ` (`SetsUp`), a draw v2 made in a composition composite `k` accepted, on those parameters, over `A.n`
+units, ran under `A.law`. -/
+theorem law_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
+    {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray}
+    {units : Array ℕ} (hS : Verity.SameAccepts k s) (hθ : s.params = θ) (hd : Drew k s dr L n ξ units)
+    (hn : A.n = n) : A.law = L := by
+  obtain ⟨a, b, e, p, c, ev, hcase, hacc, hL, -, -⟩ := hd
+  obtain ⟨p', hp', -, -, hlaw⟩ := hA.params
+  rw [← hθ] at hp'
+  rw [paramsAt_case hS hcase hacc hp', hn, lawAt_of_lawOf hL] at hlaw
+  exact (Except.ok.inj hlaw).symm
+
+/-- **The draw's piece of `CouplingTarget` at the session v2 sets up**: `coupled_draw`, with the session's law read
+off `SetsUp` on the play's parameters. -/
+theorem coupled_draw_setsUp {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
+    (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
+    (hA : SetsUp V θ F A) (hR : DrawRead k (V.coinsRead .sampled)) (hk : ReadsV2 k) {o : Verity.Exchange}
+    (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) :
+    ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
+      ∀ ω : A.Ω × (K.coins A θ F c σ).T, A.n = n →
+        (freshCoins dr.label dr.after o.log).flatten <+:
+          bitsOf (_root_.Properties.SampledProofs.bytesOf (A.src ω.1 0)) →
+        (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw K A θ F c σ hR hk hv hl
+  exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (law_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
+
+/-- `coupled_draw_coins` at the session v2 sets up. -/
+theorem coupled_draw_coins_setsUp {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
+    (A : Live) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
+    (hA : SetsUp V θ F A) (hR : DrawRead k (V.coinsRead .sampled)) (hk : ReadsV2 k) {o : Verity.Exchange}
+    (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) {m B : ℕ}
+    (κ : A.Ω → Fin m → Fin (8 * B) → Bool)
+    (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
+      _root_.Properties.SampledProofs.bytesOf (coinBytes m B (κ ω) 0)) :
+    ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
+      ∀ ω : A.Ω × (K.coins A θ F c σ).T, A.n = n →
+        freshCoins dr.label dr.after o.log <+: (List.ofFn fun j => List.ofFn (κ ω.1 j)) →
+        (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_coins K A θ F c σ hR hk hv hl κ hsrc
+  exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (law_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
 
 end Verity.Sampled
