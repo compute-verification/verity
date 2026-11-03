@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.ExtractAcc
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The expected-time extractor as an algorithm: waits of at most `R` runs

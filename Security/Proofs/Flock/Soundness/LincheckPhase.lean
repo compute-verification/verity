@@ -1,7 +1,6 @@
 import Proofs.Flock.Soundness.Rounds
 import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Union
-import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game
 import Mathlib.LinearAlgebra.Lagrange
 
 /-!

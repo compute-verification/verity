@@ -1,6 +1,6 @@
 import Mathlib.Data.Finset.Sort
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Flock.Statement
 import Proofs.Flock.Verifier.Registered
 import VStar.Stage

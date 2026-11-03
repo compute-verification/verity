@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.Model.Compiled
-import Proofs.Flock.Soundness.Game.Lock
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.LigeritoMid
 
 /-!

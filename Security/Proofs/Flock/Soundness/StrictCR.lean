@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.Assumptions
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.CompiledSound
 import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
 

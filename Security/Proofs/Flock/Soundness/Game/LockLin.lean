@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Game.Lock
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.LinkFinder
 
 /-!

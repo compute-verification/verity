@@ -1,5 +1,5 @@
 import Proofs.Flock.Recursive.Compose
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: several outer sessions in a row

@@ -1,5 +1,5 @@
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The coin law: a game played on `Claims`' coin sequence

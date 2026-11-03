@@ -1,6 +1,6 @@
 import Proofs.Flock.EndToEnd.Joint.MT.Drawn
 import Proofs.Flock.EndToEnd.Joint.Prod
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Proof of the joint stratified bound over sampling blocks of `J` tables, per sampling block and pooled

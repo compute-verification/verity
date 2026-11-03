@@ -1,6 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.ZkSession.Level0
 import Proofs.Flock.Soundness.OpeningPhase
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
 
 /-!
 # C-Flock ZK's masked algebraic phase (live/PROTOCOL.md §1, §2, §4)

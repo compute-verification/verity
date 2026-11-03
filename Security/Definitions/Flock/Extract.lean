@@ -1,4 +1,4 @@
-import Definitions.Flock.Game.Expect
+import Definitions.Flock.Game
 import Mathlib.Analysis.SpecialFunctions.Exp
 
 /-!

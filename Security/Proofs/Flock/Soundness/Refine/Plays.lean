@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.Refine.Run
-import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Runs compose

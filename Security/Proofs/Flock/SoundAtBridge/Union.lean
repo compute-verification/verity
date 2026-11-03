@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Definitions.Accounting.TS.ProofLayer
 
 /-!

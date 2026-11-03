@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
-import Proofs.Flock.Soundness.Game.Batch
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The compiled `--zk` table with its digests read as caps

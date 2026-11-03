@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.Refine.LiveSim
-import Proofs.Flock.Soundness.Game.Batch
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The model's moves inside a batch

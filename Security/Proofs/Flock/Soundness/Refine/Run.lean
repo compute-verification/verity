@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Flock.Transcript
 
 /-!

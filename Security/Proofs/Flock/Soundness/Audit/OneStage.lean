@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Audit.Law
 import Proofs.Flock.Soundness.Audit.Circuit
 

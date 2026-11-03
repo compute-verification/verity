@@ -1,7 +1,5 @@
 import Proofs.Flock.EndToEnd.Period.Run
-import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.Game.Interleave
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 import Mathlib.Algebra.BigOperators.Field
 
 /-!

@@ -1,9 +1,4 @@
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
-import Proofs.Flock.Soundness.Game.Poly
-import Proofs.Flock.Soundness.Game.Union
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Lock
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Model.Compiled
 import Proofs.Flock.Soundness.CompiledLock
 import Proofs.Flock.Soundness.CompiledSound
@@ -53,17 +48,14 @@ import Proofs.Flock.Soundness.LigeritoPadDecode
 import Proofs.Flock.Soundness.LigeritoPadQuery
 import Proofs.Flock.Soundness.LigeritoPadSound
 import Proofs.Flock.Soundness.SoundnessPad
-import Proofs.Flock.Soundness.Game.Runs
 import Proofs.Flock.Soundness.CompiledAlign
 import Proofs.Flock.Soundness.Extract
 import Proofs.Flock.Soundness.Knowledge
-import Proofs.Flock.Soundness.Game.Batch
 import Proofs.Flock.Soundness.Session
 import Proofs.Flock.Soundness.SessionBatch
 import Proofs.Flock.Soundness.ExtractAcc
 import Proofs.Flock.Soundness.SessionAcc
 import Proofs.Flock.Soundness.SessionBatchAcc
-import Proofs.Flock.Soundness.Game.Seq
 import Proofs.Flock.Soundness.ExtractWait
 import Proofs.Flock.Soundness.LinkFinder
 import Proofs.Flock.Soundness.LinkCarry
@@ -110,7 +102,6 @@ import Proofs.Flock.Soundness.Types.Parts
 import Proofs.Flock.Soundness.Types.Flatten
 import Proofs.Flock.Soundness.Compose
 import Proofs.Flock.Soundness.ComposeDag
-import Proofs.Flock.Soundness.Game.Prob
 import Proofs.Flock.Soundness.Audit.Law
 import Proofs.Flock.Soundness.Audit.Pooled
 import Proofs.Flock.Soundness.Audit.Circuit

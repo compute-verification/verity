@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Game.Batch
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Fork probabilities that do not read the chooser

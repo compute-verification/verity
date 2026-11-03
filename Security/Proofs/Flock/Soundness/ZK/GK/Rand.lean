@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Zero knowledge: programs on finitely many uniform coins

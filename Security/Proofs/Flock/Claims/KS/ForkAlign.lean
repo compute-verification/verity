@@ -1,6 +1,5 @@
 import Proofs.Flock.Claims.KS.ForkSim
-import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 
 /-!
 # A fork at a table node, aligned with a fork after a number of coins

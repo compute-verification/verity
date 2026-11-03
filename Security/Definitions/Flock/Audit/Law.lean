@@ -1,4 +1,4 @@
-import Definitions.Flock.Game.Prob
+import Definitions.Flock.Game
 import Definitions.Core.Draw
 import Mathlib.Data.Fintype.Powerset
 import Mathlib.Data.Nat.Choose.Basic

@@ -1,6 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.ZkHidden.View
 import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Headline
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # V*'s outer sessions: the honest prover's self-check, and the coins it refuses

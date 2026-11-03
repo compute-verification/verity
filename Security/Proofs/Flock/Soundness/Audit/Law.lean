@@ -1,5 +1,5 @@
 import Definitions.Flock.Audit.Law
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Draw laws

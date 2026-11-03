@@ -1,6 +1,5 @@
 import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Poly
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The opening phase: ring switching and batching (PROTOCOL.md §12)

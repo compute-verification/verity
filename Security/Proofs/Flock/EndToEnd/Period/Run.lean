@@ -1,4 +1,4 @@
-import Definitions.Flock.Game.Prob
+import Definitions.Flock.Game
 
 /-!
 # A period of audits, run one after another (trusted)

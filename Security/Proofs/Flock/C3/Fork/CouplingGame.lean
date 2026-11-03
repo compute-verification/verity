@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Game.Lock
+import Proofs.Flock.Soundness.Game
 
 /-!
 # a1l, step 1: games under relabelling, and a lockstep beside another

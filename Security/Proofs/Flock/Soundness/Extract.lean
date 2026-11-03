@@ -1,5 +1,5 @@
 import Definitions.Flock.Extract
-import Proofs.Flock.Soundness.Game.Runs
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Extraction by filling: the extractor's own table

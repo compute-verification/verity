@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.Assumptions
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The collision-resistance assumptions have teeth

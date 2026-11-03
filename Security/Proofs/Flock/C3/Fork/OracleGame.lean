@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Piece (a), the oracle count: two interactions, each continued on its own

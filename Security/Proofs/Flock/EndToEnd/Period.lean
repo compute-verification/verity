@@ -2,7 +2,7 @@ import Proofs.Flock.EndToEnd.Period.Statement
 import Proofs.Flock.EndToEnd.Period.Union
 import Proofs.Flock.EndToEndHidden
 import Proofs.Flock.Soundness.Audit.Pooled
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Proof of the integrity audit over a period, per sampling block and pooled

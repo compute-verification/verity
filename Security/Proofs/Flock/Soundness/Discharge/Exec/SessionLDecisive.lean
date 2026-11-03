@@ -1,6 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.Exec.SessionL
 import Proofs.Flock.Soundness.Audit.OneStage
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Decisiveness of the salted batched session

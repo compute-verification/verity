@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.Refine.LiveSim
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The static shape of a rep

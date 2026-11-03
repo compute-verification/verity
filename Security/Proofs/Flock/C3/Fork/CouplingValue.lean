@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.C3.Fork.CouplingLock
 
 /-!

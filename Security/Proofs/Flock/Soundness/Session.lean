@@ -1,5 +1,5 @@
 import Proofs.Flock.Soundness.Knowledge
-import Proofs.Flock.Soundness.Game.Batch
+import Proofs.Flock.Soundness.Game
 
 /-!
 # A table inside a batched session (README.md §1.3)

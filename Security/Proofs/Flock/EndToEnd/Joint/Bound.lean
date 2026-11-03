@@ -1,6 +1,6 @@
 import Proofs.Flock.EndToEnd.Joint.Drawn
 import Proofs.Flock.EndToEnd.Joint.Prod
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Proof of the joint stratified bound, per sampling block and pooled over a period

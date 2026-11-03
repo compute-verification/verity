@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Game.Poly
+import Proofs.Flock.Soundness.Game
 import Definitions.Flock.Piop
 import Definitions.Flock.Ligerito
 import Mathlib.Algebra.CharP.Defs

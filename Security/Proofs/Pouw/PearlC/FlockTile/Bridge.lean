@@ -1,5 +1,5 @@
 import Definitions.Core.Game
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 
 /-!
 # C-Flock's games as core's games

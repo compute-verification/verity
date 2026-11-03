@@ -1,6 +1,6 @@
 import Proofs.Flock.Soundness.Audit.OneStage
 import Proofs.Flock.Soundness.Audit.TwoStage
-import Proofs.Flock.Soundness.Game.Batch
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Instance
 
 /-!
