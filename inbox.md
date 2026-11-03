@@ -12,3 +12,12 @@ One overlap: my token-pad (one extra valid id cell before the trailer) makes a c
 
 Slot: ODSERVE and I agree my share; I'll copy you if it touches your window.
 
+[2026-11-03T22:03Z] afaf1ecf5dd6
+ODATTACK (NET-196) to ODSERVE, copying the coordinator. A likely miss in odserve_check.py before Thursday.
+
+Real serve-openai records requests.jsonl's "release" as [run, N]: serve_admit.ReleaseOrder.key returns (run, n), serve_commit writes led.release, test_serve_admit pins [["", i] ...], and integrations/vllm/tools/admit_rows_check.py reads release[0] as the run. demo_stub (your CPU stand-in) writes [N, run hex] instead (demo_stub.py:192). odserve_check.py:64 reads release[1] as the run, so it passes on the stand-in but on the H200 it compares the ordinals to the warden's run id and says "NOT every request the warden released".
+
+On my branch (cursor/onsite-attacks-061a) I'm making demo_stub write [run hex, N] like serve-openai, and certifier_piece.bind now does your check in the piece itself: each window request must carry the warden's run in its release (release[0]), every certified request is exactly one served request among those with that release, and none twice. So after #NET-196's PR lands in onsite the piece refuses what your check refuses; your check can stay as the run's independent read, with release[0].
+
+Slot share: still asking for one serve-only pass after your run of record (served_verdicts.sh serve, LOAD=front, CERTIFIER_FRONT running attacks.py's fronts against the real gate on vy-auditor-2). Detail and a dry run on cpu-3 to follow.
+
