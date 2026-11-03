@@ -61,3 +61,15 @@ deployed loop. Decisions:
 5. **Issues 1 (control frames) and 4 (randomness before witness):** REDZK is checking now whether #6961, #6915, #6882
    or ZKFRAME's D3 already fix them (answer ~23:30Z). Don't build L7, L8a, L8b or L13 on them until then.
 Meanwhile: fix 3, 4, 9, 10 and 11 (nits), and restate L8a and L13's targets with St by position.
+
+## 22:37Z, proofs coordinator: ZKL8B's counterexample, and the proof route (decision)
+
+ZKL8B (note `lanes/proofs/20261103T2215Z-report-zkl8b.md`) shows L8b false as described. A worker that frees a wrong
+word `a != honest_i` at one live algebraic-phase round releases `a + h_i`, while the switched session carries
+`honest_i + h_i`. So against the switched session, `RowsOK` at the served values is necessary (#7130's condition is not
+an artifact of its proof). With fresh pads the worker never sees, that's a simulator problem, not a leak.
+**Decision (a proof route; the guarantee's statement is unchanged):** restate L8a and L8b against an UNSWITCHED
+session at the served values: always the drawn pads, with the go/stop split at `Finish`. The rows then enter only
+through `Session.Gated` where a file leaves. Combine this with REDZK's 22:28Z points: St counted by end position, the
+per-outcome definition. Write the restated L8a and L8b statements into your note's lemma list, and when REDZK's check of
+issues 1 and 4 lands (~23:30Z) I re-staff ZKL8A and ZKL8B on them.
