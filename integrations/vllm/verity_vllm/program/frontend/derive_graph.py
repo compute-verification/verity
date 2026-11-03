@@ -11,6 +11,7 @@ inputs that are the model's weights (`Program.theta`, the root's `theta` input n
 
 from __future__ import annotations
 
+import keyword
 from types import SimpleNamespace
 from typing import Any, Sequence
 
@@ -43,6 +44,8 @@ def derive_graph(graph: torch.fx.GraphModule, example_inputs: Sequence[Any], *, 
     names = list(input_names) if input_names is not None else phs
     if len(names) != len(phs) or len(set(names)) != len(names):
         raise ValueError(f"input_names must name the graph's {len(phs)} placeholders once each, got {len(names)} names")
+    if bad := [n for n in names if not n.isidentifier() or keyword.iskeyword(n)]:
+        raise ValueError(f"input names must be Python identifiers (a derived Program's parameters are its placeholders): {bad[:4]}")
     if not set(theta) <= set(names):
         raise ValueError(f"theta names inputs the graph does not have: {sorted(set(theta) - set(names))}")
     out = next(n for n in graph.graph.nodes if n.op == "output")
@@ -51,8 +54,7 @@ def derive_graph(graph: torch.fx.GraphModule, example_inputs: Sequence[Any], *, 
     gm = graph if names == phs else _renamed(graph, names)
     got = [n.name for n in gm.graph.nodes if n.op == "placeholder"]
     if got != names:
-        bad = [(a, b) for a, b in zip(names, got) if a != b]
-        raise ValueError(f"input names that are not placeholder names (torch.fx made them {bad[:4]}): use Python identifiers")
+        raise ValueError(f"torch.fx renamed inputs: {[(a, b) for a, b in zip(names, got) if a != b][:4]}")
     sig = SimpleNamespace(user_inputs=got, inputs_to_parameters={}, inputs_to_buffers={}, inputs_to_lifted_tensor_constants={},
                           inputs_to_lifted_custom_objs={},
                           output_specs=[SimpleNamespace(kind=SimpleNamespace(name="USER_OUTPUT"), arg=None)] * len(out.args[0]))

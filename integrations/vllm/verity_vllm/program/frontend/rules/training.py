@@ -4,8 +4,8 @@ them. The default rules are unchanged; a node either kind of rule lowers is lowe
 and the training rules placed first claim only what the defaults lower per row or cannot represent at a step's sizes.
 
 Arithmetic is the reference vocabulary's (`ref_prims`): each element-wise op is the f32 operation torch's CPU kernel performs for it
-(true division, `a + b * alpha` as one fma, `pow` 2 and 3 as products, `lerp` as `fma(w, end - start, start)`, `addcmul` as
-`self + (value * t1) * t2`), and each reduction is the vocabulary's sequential one (`DotRef`, ascending from +0, where torch's kernels
+(true division, `pow` 2 and 3 as products, `rsqrt` as `1 / sqrt`, `lerp` as `fma(w, end - start, start)` or
+`fma(w - 1, end - start, end)`, `addcmul` as `fma(value * t1, t2, self)`), and each reduction is the vocabulary's sequential one (`DotRef`, ascending from +0, where torch's kernels
 sum in blocks). A training op with no Definition to lower it to is refused with the Definition it needs (`_log_softmax`: a
 correctly-rounded f32 log, `F32LogRn`).
 
@@ -376,7 +376,7 @@ class Lerp(_TrainRule):
 
 
 class Addcmul(_TrainRule):
-    """`addcmul(self, t1, t2, value)` = `self + (value * t1) * t2`, torch CPU's order (`F32Mul_v1` twice, `F32Add_v1`)."""
+    """`addcmul(self, t1, t2, value)` = `fma(value * t1, t2, self)`, as torch CPU's kernel computes it (`F32Mul_v1`, `F32Fma_v1`)."""
     info = _info("Addcmul", "aten.addcmul of f32 values", "operands are f32 values or static", "value is a Python number")
 
     def targets(self):
@@ -390,9 +390,9 @@ class Addcmul(_TrainRule):
         S = ctx.shape_of_node(node)
         s, t1, t2 = (_operand(ctx, node, a, S) for a in node.args[:3])
         v = (_const(ctx, node, _bits(node.kwargs.get("value", node.args[3] if len(node.args) > 3 else 1))), None)
-        p = _flat(_ew(ctx, node, P.F32Mul, [_flat(_ew(ctx, node, P.F32Mul, [v, t1], S), S), t2], S), S)
-        ctx.define(node, _ew(ctx, node, P.F32Add, [s, p], S))
-        ctx.record(self, node, {"shape": list(S)}, emitted=f"F32Mul_v1 x2 + F32Add_v1 x{math.prod(S)}")
+        vt1 = _flat(_ew(ctx, node, P.F32Mul, [v, t1], S), S)
+        ctx.define(node, _ew(ctx, node, P.F32Fma, [vt1, t2, s], S))
+        ctx.record(self, node, {"shape": list(S)}, emitted=f"F32Mul_v1 + F32Fma_v1 x{math.prod(S)}")
 
 
 # ---------------------------------------------------------------------------------------------------------
