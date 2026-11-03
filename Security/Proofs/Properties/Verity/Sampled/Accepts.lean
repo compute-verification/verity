@@ -2,6 +2,7 @@ import Proofs.Properties.Verity.Sampled.Moves
 import Proofs.Properties.Verity.Sampled.Project
 import Proofs.Flock.Recursive.Witness
 import Proofs.Flock.Soundness.Refine.Walk
+import Proofs.Flock.Soundness.Refine.Lookups
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 import Proofs.Properties.NetworkCertifier.Bytes
 
@@ -19,12 +20,17 @@ are one check on one pair of byte strings, and the writer carries the acceptance
 * **What v2 verified is accepted** (`v2Verified_accepts`): the record and the proof files v2's check verified
   (`V2Verified`) are a transcript `AcceptsZKP` accepts at v2's inputs, and the record decodes (`zkVerify_decode`).
 * **v2's files are `A`'s** (`FilesOn`, `zkInputs_toExec`): v2's circuit and public file, which it finds on the blobs
-  by its parameters' digests, and the lookup tables the blobs hold are `A`'s. `SetsUp` fixes the rest of v2's inputs, so
-  v2's `--zk` inputs are `A`'s.
-* **v2's circuit and public file are the vocabulary's** (`DigestsAt`, `get_named`, `filesOn_of`): the blobs sent are
+  by its parameters' digests, are `A`'s, and the lookup tables the blobs hold extend `A`'s (`TablesExtend`). `SetsUp`
+  fixes the rest of v2's inputs, so v2's `--zk` inputs are `A`'s but for the tables.
+* **More lookup tables change nothing** (`setupOfP_back`, `acceptsZKP_back`): flock-verify reads a table only by
+  `find?` at a name its circuit lists (`Refine.setupTables_back`), so where `A`'s circuit file parses with `A`'s tables,
+  the session `--zk` sets up with tables that extend them is `A`'s, and so is what it accepts.
+* **v2's files are the vocabulary's** (`DigestsAt`, `get_named`, `tablesOf_extends`, `filesOn_of`): the blobs sent are
   the committed files, then the evidence's, and `Blobs.get` returns the first whose SHA-512 is the digest, so where v2's
   parameters name the vocabulary's digests and the files are registered, v2 finds the committed files `namedFile`
-  names, `A`'s by `SetsUp`.
+  names, `A`'s by `SetsUp`; where the vocabulary reads the pinned MUFU tables off the committed files as v2 reads them
+  off the blobs, v2 finds each table the committed files hold at the first blob with its pinned digest, a committed
+  file, so v2's tables extend `A`'s. No SHA-512 collision enters: v2 and the vocabulary find a table at one blob.
 * **v2's verdict at `A`** (`accepts_sent`): the record and the proof files v2 reads in what the prover sent
   (`sentRecord`, `sentProofs`) are a transcript `AcceptsZKP A.I A.own` accepts.
 * **The writer** (`MovesOf`, `wr_accepts_of_verdict`): where the session's writer keeps an accepted transcript's view
@@ -32,9 +38,8 @@ are one check on one pair of byte strings, and the writer carries the acceptance
   (`MovesOf`), is accepted.
 * **The pointwise acceptance** (`play_ends`, `MovesReach`, `decodes_of`, `filesOn_play`, `decodes_of_digests`): a
   play of the period's game ends at its parameters and committed files, so `Decodes` holds wherever v2 reads `A`'s
-  files on the accepted plays (at the vocabulary's digests, wherever the blobs' lookup tables are `A`'s) and the
-  outcomes on the joint law's support are the writer's at moves v2's files decode to (`MovesReach`, the decoders' and the
-  coin map's).
+  files on the accepted plays (at the vocabulary's digests and tables) and the outcomes on the joint law's support are
+  the writer's at moves v2's files decode to (`MovesReach`, the decoders' and the coin map's).
 -/
 
 set_option Elab.async false
@@ -46,7 +51,7 @@ open FlockSoundness.Discharge
 open FlockSoundness.Discharge.ZkHidden (AcceptsZKP LiveAcceptsZKP)
 open FlockSoundness.Discharge.Recursion.Witness (toExec setupOf_eq)
 open FlockSoundness.Discharge.Tables (LiveOutJ)
-open FlockSoundness.Refine (ebind_ok ptsOf)
+open FlockSoundness.Refine (ebind_ok ptsOf OkLe TablesExtend setupTables_back extend_filterMap mufu_nodup)
 open Claims.Bridge.CustodyZkP (repRounds)
 
 /-! ## v2's session is `--zk`'s -/
@@ -160,17 +165,17 @@ theorem v2Verified_accepts {p : _root_.SampledProofs.OneStageZk.Params} {e : _ro
 
 /-! ## v2's files are `A`'s -/
 
-/-- **`--zk`'s inputs of v2's are `I`'s** where v2's inputs are `I`'s but the coins, and `I` has no work, stratified or
-closure input. -/
+/-- **`--zk`'s inputs of v2's are `I`'s at v2's lookup tables** where v2's inputs are `I`'s but the coins and the
+tables, and `I` has no work, stratified or closure input. -/
 theorem zkInputs_toExec {W : Flock.Witness.Inputs} {I : Exec.Inputs} (htags : W.tags = I.tags)
     (hcf : W.circuitFile = I.circuitFile) (hpf : W.publicFile = I.publicFile) (hcount : W.count = I.count)
-    (htables : W.tables = I.tables) (hpart : W.partition = I.partition) (hprog : W.program = I.program)
+    (hpart : W.partition = I.partition) (hprog : W.program = I.program)
     (hwork : I.work = none) (hstrat : I.stratified = none) (hclo : I.closure = none) :
-    ZkExec.zkInputs (toExec W) = ZkExec.zkInputs I := by
+    ZkExec.zkInputs (toExec W) = ZkExec.zkInputs { I with tables := W.tables } := by
   obtain ⟨tags, cf, pf, count, tables, partition, program⟩ := W
   obtain ⟨tags', cf', pf', coins', count', tables', partition', program', work', strat', clo'⟩ := I
-  dsimp only at htags hcf hpf hcount htables hpart hprog hwork hstrat hclo
-  subst htags hcf hpf hcount htables hpart hprog hwork hstrat hclo
+  dsimp only at htags hcf hpf hcount hpart hprog hwork hstrat hclo
+  subst htags hcf hpf hcount hpart hprog hwork hstrat hclo
   rfl
 
 /-- `AcceptsZKP` reads the inputs only through `--zk`'s. -/
@@ -179,27 +184,50 @@ theorem acceptsZKP_congr {I I' : Exec.Inputs} (h : ZkExec.zkInputs I = ZkExec.zk
   unfold AcceptsZKP
   rw [h]
 
+/-- **More lookup tables set up `I`'s session** (`Refine.setupTables_back`): where `T'` finds by name whatever `I`'s
+tables find, `I`'s statement is untyped with at most one table and its circuit file parses at `--zk`'s tags, the
+session `Exec.setupOfP` sets up at `--zk`'s inputs with the tables `T'` is the one it sets up with `I`'s. -/
+theorem setupOfP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hext : TablesExtend I.tables T')
+    (hcount : I.count ≤ 1) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hp : Flock.HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) (own : Option ByteArray)
+    (record : String) :
+    OkLe (Exec.setupOfP (ZkExec.zkInputs { I with tables := T' }) own record)
+      (Exec.setupOfP (ZkExec.zkInputs I) own record) :=
+  setupTables_back hext hcount ((ZkExec.zkTags_typed I).trans ht) hp _ _ _ _ _ _ _ _ _
+
+/-- **What flock-verify `--zk` accepts with more lookup tables it accepts with `I`'s**, under `setupOfP_back`'s
+premises. -/
+theorem acceptsZKP_back {I : Exec.Inputs} {T' : List (String × ByteArray)} (hext : TablesExtend I.tables T')
+    (hcount : I.count ≤ 1) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hp : Flock.HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables = .ok c) {own : Option ByteArray}
+    {t : Exec.Transcript} (h : AcceptsZKP { I with tables := T' } own t) : AcceptsZKP I own t := by
+  obtain ⟨spec, sts, hs, hshape, hv⟩ := h
+  exact ⟨spec, sts, setupOfP_back hext hcount ht hp own t.record _ hs, hshape, hv⟩
+
 /-- **v2 reads `A`'s files on the blobs sent**: under v2's parameters in what the prover sent (`ParamsAt`), the circuit
-and the public file v2 finds on the blobs by its parameters' digests are `A`'s, and so are the lookup tables the blobs
-hold (`SampledProofs.OneStageZk.tablesOf`). -/
+and the public file v2 finds on the blobs by its parameters' digests are `A`'s, and the lookup tables the blobs hold
+(`SampledProofs.OneStageZk.tablesOf`) find by name whatever `A`'s find (`TablesExtend`). -/
 structure FilesOn (A : Live) (s : Verity.Sent) : Prop where
   circuit : ∀ p, ParamsAt s.params p → ∀ b,
     (_root_.Core.Blobs.ofArray s.blobs).get p.own.circuit "circuit" = .ok b → b = A.I.circuitFile
   publicFile : ∀ p, ParamsAt s.params p → ∀ b,
     (_root_.Core.Blobs.ofArray s.blobs).get p.own.pub "public file" = .ok b → b = A.I.publicFile
-  tables : _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs) = A.I.tables
+  tables : TablesExtend A.I.tables (_root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs))
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-! ## v2's circuit and public file are the vocabulary's -/
+/-! ## v2's files are the vocabulary's -/
 
-/-- **v2's parameters name the vocabulary's digests**: under v2's parameters in `θ`, the bytes v2's hex digests of the
-circuit file and the public file decode to are the vocabulary's `programDigest θ` and `publicDigest θ`. -/
+/-- **v2's parameters name the vocabulary's digests, and the vocabulary reads the lookup tables as v2 does**: under
+v2's parameters in `θ`, the bytes v2's hex digests of the circuit file and the public file decode to are the
+vocabulary's `programDigest θ` and `publicDigest θ`, and the vocabulary reads the pinned MUFU tables off the committed
+files as v2 reads them off the blobs (`SampledProofs.OneStageZk.tablesOf`). -/
 structure DigestsAt (V : Vocab d α) (θ : ByteArray) : Prop where
   circuit : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.circuit = .ok dg →
     V.programDigest θ = some fun i => dg.data.getD i.val 0
   publicFile : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.pub = .ok dg →
     V.publicDigest θ = some fun i => dg.data.getD i.val 0
+  tables : ∀ F, (V.read θ F).tables = _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F)
 
 theorem getD_inj {a b : ByteArray} (ha : a.size = 64) (hb : b.size = 64)
     (h : (fun i : Fin 64 => a.data.getD i.val 0) = fun i => b.data.getD i.val 0) : a = b := by
@@ -263,13 +291,26 @@ theorem get_named {F B : Array ByteArray} {s what : String} {h : Option Hash.Dig
   · obtain ⟨f, hf, hfh⟩ := hreg
     exact ⟨f, hf, decide_eq_true hfh⟩
 
-/-- **v2 reads `A`'s circuit and public file** where its parameters name the vocabulary's digests, the committed files
-are registered, and the blobs sent are the committed files, then the evidence's. -/
+/-- **The lookup tables on the committed files, then the evidence's blobs, extend those on the committed files**:
+`tablesOf` finds each pinned MUFU table at the first blob whose SHA-512 is its pinned digest, which is a committed file
+wherever one is. -/
+theorem tablesOf_extends (F B : Array ByteArray) :
+    TablesExtend (_root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F))
+      (_root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray (F ++ B))) := by
+  refine extend_filterMap mufu_nodup (fun t x h => ?_) (fun t x h => ?_) (fun t x h => ?_)
+  · obtain ⟨_, -, rfl⟩ := Option.map_eq_some_iff.1 h
+    rfl
+  · obtain ⟨_, -, rfl⟩ := Option.map_eq_some_iff.1 h
+    rfl
+  · obtain ⟨e, he, rfl⟩ := Option.map_eq_some_iff.1 h
+    simp only [_root_.Core.Blobs.ofArray, Array.map_append, Array.find?_append] at he ⊢
+    rw [he, Option.some_or, Option.map_some]
+
+/-- **v2 reads `A`'s files** where its parameters name the vocabulary's digests, the vocabulary reads the lookup tables
+as v2 does, the committed files are registered, and the blobs sent are the committed files, then the evidence's. -/
 theorem filesOn_of {V : Vocab d α} {θ : ByteArray} {F B : Array ByteArray} {A : Live} {s : Verity.Sent}
     (hA : SetsUp V θ F A) (hD : DigestsAt V θ) (hreg : V.Registered θ F) (hθ : s.params = θ)
-    (hs : s.blobs = F ++ B)
-    (ht : _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs) = A.I.tables) :
-    FilesOn A s where
+    (hs : s.blobs = F ++ B) : FilesOn A s where
   circuit p hp b hg := by
     rw [hs] at hg
     rw [hA.circuit]
@@ -278,7 +319,11 @@ theorem filesOn_of {V : Vocab d α} {θ : ByteArray} {F B : Array ByteArray} {A 
     rw [hs] at hg
     rw [hA.publicFile]
     exact get_named (hD.publicFile p (hθ ▸ hp)) hreg.2 hg
-  tables := ht
+  tables := by
+    have h : A.I.tables = _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F) :=
+      (congrArg Verity.FileRead.tables hA.read).symm.trans (hD.tables F)
+    rw [h, hs]
+    exact tablesOf_extends F B
 
 /-! ## v2's verdict at `A` -/
 
@@ -299,14 +344,15 @@ theorem accepts_sent {V : Vocab d α} {k : Verity.Registration.Composite} {A : L
   rw [hpp] at hp' hpart hprog
   obtain ⟨record, spec, tabs, rest, proofs, -, hrec, hpr, hver⟩ := sent_verified hv.2.1 hcase hacc
   obtain ⟨tags0, circuitB, pubB, sts, ht0, hc, hpb, hs, hat⟩ := v2Verified_accepts hver
-  have hz : ZkExec.zkInputs (toExec (_root_.SampledProofs.OneStageZk.inputsOf tags0 p.own circuitB pubB
-      (_root_.Core.Blobs.ofArray o.sent.blobs))) = ZkExec.zkInputs A.I :=
-    zkInputs_toExec (Option.some.inj (ht0.symm.trans hA.tags)) (hF.circuit p hp' circuitB hc)
-      (hF.publicFile p hp' pubB hpb) hA.count.symm hF.tables hpart.symm hprog.symm hA.work hA.stratified
-      hA.closure
+  have hz := zkInputs_toExec (W := _root_.SampledProofs.OneStageZk.inputsOf tags0 p.own circuitB pubB
+      (_root_.Core.Blobs.ofArray o.sent.blobs)) (Option.some.inj (ht0.symm.trans hA.tags))
+    (hF.circuit p hp' circuitB hc) (hF.publicFile p hp' pubB hpb) hA.count.symm hpart.symm hprog.symm hA.work
+    hA.stratified hA.closure
   rw [hz] at hs
   rw [hA.own]
-  exact ⟨record, proofs, spec, sts, hrec, hpr, hs, (acceptsZKP_congr hz).1 hat⟩
+  have hp := Flock.Desc.parse_flat A.hD
+  exact ⟨record, proofs, spec, sts, hrec, hpr, setupOfP_back hF.tables hA.count.le A.ht hp none record _ hs,
+    acceptsZKP_back hF.tables hA.count.le A.ht hp ((acceptsZKP_congr hz).1 hat)⟩
 
 /-! ## The writer -/
 
@@ -399,34 +445,29 @@ theorem decodes_of {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
   rw [h1]
   exact wr_accepts_of_verdict hk hA (play_ends V θ F c σ o.2).1 hacc.1 (hF o.2 hacc.1) hW hmo
 
-/-- **v2 reads `A`'s circuit and public file on an accepted play**: the play ends at its parameters and committed
-files, the verdict holds the files registered, and the blobs sent are the committed files, then the evidence's. -/
+/-- **v2 reads `A`'s files on an accepted play**: the play ends at its parameters and committed files, the verdict
+holds the files registered, and the blobs sent are the committed files, then the evidence's. -/
 theorem filesOn_play {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} {σ : Verity.Game.Strategy (V.game θ F c)}
     (hA : SetsUp V θ F A) (hD : DigestsAt V θ) {x : Verity.Game.CoinTape (V.game θ F c) σ}
-    (hv : V.Verdict k .sampled (Verity.Game.CoinTape.run (V.game θ F c) σ x))
-    (ht : _root_.SampledProofs.OneStageZk.tablesOf
-      (_root_.Core.Blobs.ofArray (Verity.Game.CoinTape.run (V.game θ F c) σ x).sent.blobs) = A.I.tables) :
+    (hv : V.Verdict k .sampled (Verity.Game.CoinTape.run (V.game θ F c) σ x)) :
     FilesOn A (Verity.Game.CoinTape.run (V.game θ F c) σ x).sent := by
   obtain ⟨hp, hf⟩ := play_ends V θ F c σ x
   have hreg : V.Registered θ F := by
     have h := hv.1
     rwa [hp, hf] at h
   exact filesOn_of hA hD hreg hp (B := (Verity.Game.CoinTape.run (V.game θ F c) σ x).blobs)
-    (by show (Verity.Game.CoinTape.run (V.game θ F c) σ x).files ++ _ = _; rw [hf]) ht
+    (by show (Verity.Game.CoinTape.run (V.game θ F c) σ x).files ++ _ = _; rw [hf])
 
 /-- **The decoders' premise, pointwise, at the vocabulary's digests** (`decodes_of` with `filesOn_play`): where v2's
-parameters name the vocabulary's digests (`DigestsAt`) and the lookup tables on the blobs of each accepted play are
-`A`'s, `Decodes` holds wherever the writer keeps an accepted transcript's view and the outcomes on the joint law's
-support are the writer's at moves v2's files decode to. -/
+parameters name the vocabulary's digests and the vocabulary reads the lookup tables as v2 does (`DigestsAt`), `Decodes`
+holds wherever the writer keeps an accepted transcript's view and the outcomes on the joint law's support are the
+writer's at moves v2's files decode to. -/
 theorem decodes_of_digests {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {P : Verity.Exchange → Prop} {A : Live} {rd : Reading A.rounds}
     {σ : Verity.Game.Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg}
     {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hk : ReadsV2 k) (hA : SetsUp V θ F A) (hD : DigestsAt V θ)
-    (hT : ∀ x, V.Verdict k .sampled (Verity.Game.CoinTape.run (V.game θ F c) σ x) →
-      _root_.SampledProofs.OneStageZk.tablesOf
-        (_root_.Core.Blobs.ofArray (Verity.Game.CoinTape.run (V.game θ F c) σ x).sent.blobs) = A.I.tables)
     (hW : WritesView A) (hM : MovesReach V θ F c k P A rd σ D M) : Decodes V θ F c k P A rd σ D M :=
-  decodes_of hk hA (fun x hv => filesOn_play hA hD hv (hT x hv)) hW hM
+  decodes_of hk hA (fun _ hv => filesOn_play hA hD hv) hW hM
 
 end Verity.Sampled
