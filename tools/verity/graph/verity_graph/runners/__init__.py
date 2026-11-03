@@ -83,8 +83,8 @@ def execute(task: dict, graph: dict, work: Path, runner=None) -> dict:
         _deadline.append(t0 + task["timeout_s"])
         try:
             got = (runner or run)(task, work)
-        except Timeout as e:
-            got = {"status": "fail", "detail": {"timeout_s": task["timeout_s"], "error": f"{e} outlived the task's timeout"}}
+        except Timeout as e:  # a slow machine established nothing about the task: an error, never cached as its verdict
+            got = {"status": "error", "detail": {"timeout_s": task["timeout_s"], "error": f"{e} outlived the task's timeout"}}
         except Exception as e:  # noqa: BLE001 - a runner that raises established nothing about the task: an error, never a result
             got = {"status": "error", "detail": {"error": f"the runner raised {type(e).__name__}: {e}"}}
         finally:

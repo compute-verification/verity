@@ -30,7 +30,8 @@ kinds = ["lean-module"]
 env = "lean"
 about = "compile and kernel-replay {name}"
 resources = { cores = 1, mem_gb = 6, disk_gb = 1 }
-timeout_s = 900
+# Security/Proofs/Flock/VBridge/RecLink.lean's replay outlived 900 s on cpu-4 and cpu-5 (3 Nov, INF-410)
+timeout_s = 3600
 
 [family.lean-lock]
 files = ["**/lean-audit.json"]
