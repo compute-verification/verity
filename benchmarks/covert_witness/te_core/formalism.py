@@ -112,7 +112,8 @@ per consumed token at ⌈log2 V⌉ bits, plus `tau_other_bits`), a, u_in, u and 
 under `trace`). Δ stays 8 |E|, the submitted code: the trace's own encoding of θ' (`trace.update_cut_bits`) is the
 carried state, θ' in full. A run record may also give its own block, {"parts": [...], "tau_bits", "a_bits", "u",
 "u_in", "u1_bits", "tail_share", "delta_bits", "delta_t_bits", "decoder_gates", "labels"}, which `of_record` passes
-through field by field.
+through field by field. The trace's Δ_grad leaves θ' out of its carried state (a latent the step quantizes is θ' as the
+step reads it), so Δ_t + Δ_grad counts the latents once.
 
 **The decoder** (`decoder`; seed-mezo's 04:15Z finding): d is the block's `decoder_gates` where it gives one,
 else the gates the record's program reports for the checkpoint's E (`output.decoder_gates`, ingest's from the
@@ -568,6 +569,61 @@ def at(m: Measured, c: float, k: float, reading: str | None = None, kinds: tuple
     return {"c": c, "k": k, "sigma": sigma, "w": m.w, "s": s, "x0": x0, "s_star": s_star, "alpha_ratio": ratio,
             "slowdown": slow, "delta_counted": delta is not None, "parts": parts, "fit": fit, "rho_fit": rho_fit,
             "rho": rho_fit if fit else max(1.0, low), "x0_known": x0_known, "s_star_known": s_star_known} | charged | one
+
+
+#: the kinds whose terms are lower bounds on their own, the only ones the published ρ's max takes (coordinator 08:26Z):
+#: the token kind under reading A and decoding; products of two fresh operands join with io_bound.py
+VALID = ("token", "decoding")
+#: the kinds that hold only for partitions split by tokens ((R) and (U)), published beside ρ as labelled sensitivities
+SENSITIVITIES = ("reduction", "update")
+#: the menu's kinds no record measures yet, with why
+NOT_YET = {"fresh_products": "io_bound.py's term for the run's circuit (due 13:00Z)"}
+#: what a published ρ rests on, by its binding kind (a console cell on every row, so short): Fit's c/(c − d); the
+#: default packer's blocks; (D), a block reading the update code runs the whole decoder; reading B's token form, A1's
+#: target, not a bound; `none` where no kind valid on its own exceeds 1 and Fit fails, the token kind unmeasured until
+#: the packer proposes matrix-product and weight-gradient tiles and fresh products until io_bound.py
+RESTS_ON = {
+    "fit": "Fit's construction",
+    "token": "the default packer (reading A)",
+    "decoding": "assumption (D, reading A)",
+    "target": "target: A1 at reading B, not a bound",
+    "none": "nothing valid > 1 (token, fresh products unmeasured)",
+}
+
+
+#: whether a row whose trace has `entries` publishes reading A: not until the packer proposes matrix-product and
+#: weight-gradient tiles and fresh products are wired in (te_core 4.5); until then every row is reading B's, labelled
+#: a target (coordinator 09:02Z)
+READING_A = False
+
+
+def published(m: Measured, c: float, k: float, reading: str | None = None) -> dict:
+    """The published ρ at (c, k) (coordinator 08:26Z): under reading A (`reading`, else where `READING_A` and the row
+    has the trace's `entries`), Fit's c/(c − d) where it holds, else max(1, the max over VALID of the terms that are
+    measured and finite), an infinite packer term reported unmeasured, never ∞ (the full-token-state overclaim
+    corrected at 06:45Z), and the token kind unmeasured until the packer proposes matrix-product and weight-gradient
+    tiles; under reading B te_core 4.3's ρ, a target. Beside it the binding kind, what it rests on (`RESTS_ON`), each
+    kind's term (None: unmeasured) and the SENSITIVITIES."""
+    reading = reading or ("A" if READING_A and m.entries is not None else "B")
+    v = at(m, c, k, "A", VALID) if reading == "A" else at(m, c, k)
+    b = v["bound"] if reading == "A" else bound(m, c, k, "B", VALID)
+
+    def term(kind: str) -> float | None:
+        x = b["terms"][kind]
+        return None if kind in b["unmeasured"] or math.isinf(x) or (kind, reading) == ("token", "A") else x
+
+    terms = {kind: term(kind) for kind in VALID} if reading == "A" else {"token": v["slowdown"]}
+    priced = {kind: x for kind, x in terms.items() if x is not None}
+    top = max(priced, key=priced.get) if priced else None
+    if v["fit"]:
+        rho, binding = v["rho_fit"], "fit"
+    elif reading == "B":
+        rho, binding = v["rho"], "target"
+    else:
+        rho, binding = max(1.0, priced.get(top, 1.0)), top if top and priced[top] > 1 else "none"
+    return {"reading": reading, "label": b["label"], "rho": rho, "binding_kind": binding,
+            "rests_on": RESTS_ON[binding], "terms": terms | {kind: None for kind in NOT_YET},
+            "sensitivities": {kind: None if kind in b["unmeasured"] else b["terms"][kind] for kind in SENSITIVITIES}}
 
 
 def rhos(m: Measured, cells: dict[str, tuple[float, float]]) -> tuple[dict[str, float], dict[str, bool], dict]:

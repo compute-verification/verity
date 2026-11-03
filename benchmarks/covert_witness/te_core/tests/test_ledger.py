@@ -166,6 +166,21 @@ def test_a_later_ingest_of_a_run_supersedes_its_earlier_rows_and_is_not_a_duplic
     assert frontier.status(rows, PIN)["copy"] == "duplicate-e"
 
 
+def test_an_agents_copies_of_one_checkpoint_are_one_record_the_lowest_id():
+    """lowrank's 315 copies (coordinator 07:48Z): an agent's submissions of the same run's checkpoint at one te_core
+    count once, as the lowest id, whatever their order; a later ingest by another still supersedes them."""
+    def row(name, ts, agent="a", te="4.1", bpb=1.0):
+        return {"id": name, "written_ts": ts, "val_bpb": bpb, "invalid": [], "measurement_commit": PIN, "te_core": te,
+                "families": [], "run_id": "r1", "checkpoint_step": 3, "agent": agent, "output": {"e_sha256": "e1"}}
+
+    rows = [row("a-000902", 1, bpb=1.1), row("a-000881", 2), row("a-000923", 3, bpb=0.9)]
+    assert frontier.status(rows, PIN) == {"a-000902": "copy", "a-000923": "copy"}
+    assert [r["id"] for r in frontier.valid(rows, PIN)] == ["a-000881"]
+    rows.append(row("s-000001", 4, agent="scorer", te="4.3"))
+    assert frontier.status(rows, PIN) == dict.fromkeys(("a-000902", "a-000881", "a-000923"), "re-ingested")
+    assert [r["id"] for r in frontier.valid(rows, PIN)] == ["s-000001"]
+
+
 def test_the_commits_of_one_version_are_one_pin(tmp_path, monkeypatch):
     clock = Clock()
     a, b = Ledger(tmp_path, "agent-a", clock=clock), Ledger(tmp_path, "agent-b", clock=clock)
