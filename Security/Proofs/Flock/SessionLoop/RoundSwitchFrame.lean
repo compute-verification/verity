@@ -194,7 +194,7 @@ theorem check_rs {c : Cfg} {m s' : Masker} {sv : ℕ → Array F128} {N k n : �
     subst n
     obtain rfl : k = N := by omega
     rw [rsBody_last sv _] at h ⊢
-    rw [(check_offAt (hon (by omega)) (fun _ h => nomatch h) (fun _ h => nomatch h) (.inl rfl)
+    rw [(check_offAt (fs := []) (hon (by omega)) (fun _ h => nomatch h) (fun _ h => nomatch h) (.inl rfl)
       (fun h' => hN h'.1) hN' h).2]
     rfl
 
