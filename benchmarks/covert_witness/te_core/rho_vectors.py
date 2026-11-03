@@ -14,11 +14,14 @@ each kind's term and the inputs it reads, the max over the kinds and the kind it
 `products` in it.
 
 `fresh` holds the fresh-products term (te_core.formalism.fresh_products) on te_core.io_bound's hand-written product
-sets (`io_bound.vectors`) and the 45M start's dense step (`dense_45m.products.json`), each at its (c, k) and |C|: the
-term, io_bound's figure without P-cell (`formalism.P_CELL`), the whole-cell figure beside it (`fresh_cell`), the order
-its products are summed in (the reference circuit's chain, `formalism.ORDER`, where none is declared), what the best
-subset dropped (`subset`; null where it dropped none) and what the cell says it rests on; a circuit that declares a
-tree is unmeasured, and so is a set no subset of which has a proved Λ (`formalism.FRESH_VOID`). `dial` holds the term
+sets (`io_bound.vectors`), the 45M start's dense step (`dense_45m.products.json`) and two void steps of the lowrank
+worker's battery on s-t20 (`BATTERY_VOID`), each at its (c, k) and |C|: the term, io_bound's figure without P-cell
+(`formalism.P_CELL`), the whole-cell figure beside it (`fresh_cell`), the order its products are summed in (the
+reference circuit's chain, `formalism.ORDER`, where none is declared), what the best subset dropped (`subset`; null
+where it dropped none) and what the cell says it rests on; a circuit that declares a tree is unmeasured, and so is a
+set no subset of which has a proved Λ, or one with a product fed by chains with no fixed point, which no subset drops
+(`formalism.FRESH_VOID`), the best subset of the rest then beside it (`converged`: the sensitivity fresh_converged,
+`term`, and the share of the counted MACs it keeps). `dial` holds the term
 as the console's dial reads it from a row's rho_inputs, each case's and the 45M step's term over c at every k of the
 dial (`formalism.fresh_per_c`), and the term and fresh_cell at each of those k and a few c, which are c times it.
 `published` holds te_core.formalism.published under
@@ -90,6 +93,13 @@ DIAL_TOKENS = (1, 4096)
 #: the 45M start's dense step's product rows (te_core.capture.products on te_core.io_bound.capture("dense", "s", 32000,
 #: batch 2, ctx 256, one micro-step) at the console's k)
 DENSE_45M = "dense_45m.products.json"
+#: the lowrank worker's battery programs on s-t20 whose fresh-products term is void, each traced
+#: step's product rows at the console's k: DoRA rank 16 on all 42 matrices and LoRA rank 16 on every block's MLP
+BATTERY_VOID = ("battery_void.products.json", {
+    "dora-all-r16-m64": "the s-t20 start's DoRA rank-16 step on all 42 matrices (void: its two small unfed fp32 "
+                        "products beside it)",
+    "lora-mlp-r16-m32": "the s-t20 start's LoRA rank-16 step on every block's MLP (void: the one unfed product beside "
+                        "it)"})
 OPS = ("counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's "
        "gates (te_core.tiles.of_graph)")
 #: (input tokens, output tokens): the console's session, the workload note's tighter and looser ones, a prefill alone
@@ -137,6 +147,11 @@ def fresh(base: formalism.Measured) -> dict:
     rows = json.loads((FIXTURES / DENSE_45M).read_text())
     console = {x: v for x, v in formalism.products_of_trace(rows).items() if x != "at"}
     sets.append(("the 45M start's dense step, its trace's order unknown", *policy.CONSOLE, rows["gates"], console))
+    fx = json.loads((FIXTURES / BATTERY_VOID[0]).read_text())
+    for program, label in BATTERY_VOID[1].items():
+        p = fx["programs"][program]
+        block = {x: v for x, v in p.items() if x != "args"} | {"rows": [fx["rows"][i] for i in p["rows"]]}
+        sets.append((label, *policy.CONSOLE, block["gates"], formalism.products_of_trace(block)))
     name, c, k, C, square = sets[0]
     sets += [(f"{name}, no order declared", c, k, C, square | {"order": None}),
              (f"{name}, a circuit that declares a tree", c, k, C, square | {"order": "tree"})]
@@ -147,10 +162,10 @@ def fresh(base: formalism.Measured) -> dict:
         term, why, got = formalism.fresh_products(m, c, k)
         out.append({"name": name, "inputs": {"c": c, "k": k, "C_gates": C, "products": products}, "term": term,
                     "fresh_cell": got.get("fresh_cell"), "order": got["order"], "why": why, "subset": got.get("subset"),
-                    "share": got["io_bound"]["share"]})
+                    "share": got["io_bound"]["share"], "converged": got.get("converged")})
     return {"p_cell": formalism.P_CELL, "order": formalism.ORDER,
             "rests_on": formalism.RESTS_ON_CELL["fresh_products"], "fresh_cell": formalism.SENSITIVITIES["fresh_cell"],
-            "vectors": out}
+            "fresh_converged": formalism.SENSITIVITIES["fresh_converged"], "vectors": out}
 
 
 def dial(ms: dict[str, formalism.Measured]) -> dict:
