@@ -49,7 +49,7 @@ theorem post_pure {α : Type} {a : α} {P : α → Prop} (h : P a) : Post (pure 
   exact h
 
 /-- **The recursive reader's base is one `FlockDeploy.decode` reads**: its format, then its base's bytes, which
-`FlockDeploy.decode` reads, then the sixteen recursive flags. -/
+`FlockDeploy.decode` reads, then its recursive fields, however many the reader reads. -/
 theorem read_post : Post RecRaw.read (fun w => ∃ y, FlockDeploy.decode y = some w.base) := by
   unfold RecRaw.read
   refine post_bind fun _ => ?_
@@ -59,9 +59,8 @@ theorem read_post : Post RecRaw.read (fun w => ∃ y, FlockDeploy.decode y = som
   · refine post_bind fun _ => ?_
     split
     · rename_i hb
-      iterate 16 refine post_bind fun _ => ?_
-      refine post_pure ?_
-      exact ⟨_, hb⟩
+      repeat refine post_bind fun _ => ?_
+      exact post_pure ⟨_, hb⟩
     · exact post_failure
 
 theorem decodeRec_base {x : Claims.Msg} {w : RecRaw} (h : decodeRec x = some w) :
