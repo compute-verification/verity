@@ -58,8 +58,7 @@ except ImportError:
 
 T_MAIN = time.perf_counter()
 CHECKPOINTS = 20
-#: te_core.gates' prices: a bf16 GEMM MAC (HopperBF16WgmmaDot16_v2 / 16) and an fp32 FMA (F32Fma_v4), in gates
-GEMM_BF16_GATES = (7872 + 15049 + 761) / 16
+#: te_core.gates' price of an fp32 FMA (F32Fma_v4), in gates: the decoder's d. Its c is te_core's session c, never set here.
 F32_FMA_GATES = 4485 + 7863 + 289
 WIDTH = {"bf16": 2, "f16": 2, "f32": 4}
 
@@ -356,8 +355,6 @@ def first_order(a, net, rec, theta, params: dict, names: list[str]) -> int:
         l_end = tot / xc.shape[0]
     torch.backends.cuda.matmul.allow_tf32 = tf32
     macs = K * d
-    c_gates = 4096 * (prepare.STORE.get(a.start, {}).get("shape", {}).get("forward_macs_per_token")
-                      or per_tok / 2) * GEMM_BF16_GATES
     width = K if proj else d
     what = ("the batch gradient projected onto the K directions (Z g, the step's cut from its tokens to the carried "
             "coefficients); the fp32 coefficients are Delta_t, and each step rebuilds S from them" if proj else
@@ -370,8 +367,8 @@ def first_order(a, net, rec, theta, params: dict, names: list[str]) -> int:
              "delta_bits": 8 * len(blob), "delta_t_bits": 32 * width,
              "delta_grad": {"trainable": d, "grad_bits": 32 * width, "adam_bits": 0, "muon_bits": 0,
                             "latent_bits": 32 * width, "bits": 32 * width, "bytes": 4 * width, "what": what},
-             "decoder": {"macs": macs, "gates": macs * F32_FMA_GATES, "d_over_c": macs * F32_FMA_GATES / c_gates,
-                         "c_gates": c_gates, "rule": "prepare.rebuild_macs (K x |S| fp32 FMAs) at F32Fma_v4's gates"},
+             "decoder": {"macs": macs, "gates": macs * F32_FMA_GATES,
+                         "rule": "prepare.rebuild_macs (K x |S| fp32 FMAs) at F32Fma_v4's gates"},
              "checkpoints": cps}
     extra = 4 * K * d * (n_done + 1 + a.power_iters) if proj else 0
     steps = [{"op": "train", "tokens": (n_done + 1) * a.batch * a.ctx + (1 + 2 * a.power_iters) * a.curv_batch * a.ctx,
@@ -465,7 +462,6 @@ def main() -> int:
     trainable = {"full": names}
     budget = prepare.budget(a.start)
     fwd_tok = prepare.train_flops(rec, trainable, [{"op": "forward", "tokens": 1, "ctx": a.ctx}])["flops"]
-    fwd_macs = prepare.STORE.get(a.start, {}).get("shape", {}).get("forward_macs_per_token") or fwd_tok / 2
     tokens = a.batch * a.ctx
     per_step = 2 * tokens * fwd_tok
     width = WIDTH[a.coeff]
@@ -507,19 +503,15 @@ def main() -> int:
                              f"--max-z-gb is {a.max_z_gb}")
     time_budget = a.time_budget or 0.92 * budget["gpu_seconds"]
     deadline = T_MAIN + time_budget
-    c_macs = 4096 * fwd_macs
-    c_gates = c_macs * GEMM_BF16_GATES
 
     def decoder(n_entries: int) -> dict:
         macs = n_entries * d
-        gates = macs * F32_FMA_GATES
-        return {"macs": macs, "gates": gates, "d_over_c": gates / c_gates,
-                "rho_fit": c_gates / (c_gates - gates) if gates < c_gates else None}
+        return {"macs": macs, "gates": macs * F32_FMA_GATES}
 
     info = {"names": a.names, "tensors": len(names), "d": d, "rms": rms, "steps": n_steps, "warm": warm,
             "entries": entries, "header_bytes": header, "max_entries": max_entries, "flops_per_step": per_step,
             "rebuild": a.rebuild, "rebuild_flops_per_step": rebuild_flops,
-            "tier": budget["tier"], "flop_cap": flop_cap, "time_budget": time_budget, "c_macs": c_macs,
+            "tier": budget["tier"], "flop_cap": flop_cap, "time_budget": time_budget,
             "decoder_at_end": decoder(entries)}
     print(json.dumps(info), flush=True)
 
@@ -795,9 +787,7 @@ def main() -> int:
                        "latent_bits": 0, "bits": grad_bits + ema_bits, "bytes": (grad_bits + ema_bits) // 8,
                        "what": "a step's two batch halves' L+ and L- partial sums (fp32) and the lr rule's three fp32 "
                                "EMAs; no gradient tensor is formed"},
-        "decoder": decoder(n_entries) | {"c_macs": c_macs, "c_gates": c_gates,
-                                          "rule": "prepare.rebuild_macs (entries x |S| fp32 FMAs) at F32Fma_v4's gates; "
-                                                  "c = 4096 x the start's forward MACs a token at bf16 GEMM gates"},
+        "decoder": decoder(n_entries) | {"rule": "prepare.rebuild_macs (entries x |S| fp32 FMAs) at F32Fma_v4's gates"},
         "checkpoints": cps, "loop_seconds": time.perf_counter() - t_loop,
     }
     steps = [{"op": "forward", "tokens": fwd_tokens, "ctx": a.ctx}]

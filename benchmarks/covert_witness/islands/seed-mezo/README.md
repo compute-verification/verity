@@ -15,15 +15,15 @@ Each part of a run must fit a block of k bits (te_core.formalism `at`):
 - Δ = 8|E|: the header (~130-160 B) plus one 16-bit coefficient a step (`--coeff bf16`), so `--max-bits` caps the
   steps. MeZO's step reads two forwards a token, so its s = c/w is ~2,048 tokens and sτ ~31 kbit at 32k vocab: Δ ≤ ~34
   kbit at the console default (k = 65,536), against ~45 kbit for a backward step's s.
-- Δ_t = Δ: the update rule reads only the log (the fp32 masters are the decoder's, rebuilt from it; the subspace's
-  coefficients are rounded stochastically to `--coeff`, so no fp32 shadow exists).
+- Δ_t, what a step hands the next: MeZO updates S's fp32 masters in place, so 32|S|, unless `--rebuild` carries only
+  the bf16 coefficients (16 bits an entry) and rebuilds S from them each step. `--first-order K` carries its K fp32
+  coefficients (32K).
 - Δ_grad: a step's two batch halves' L₊ − L₋ sums (128 bits) and the lr rule's three fp32 EMAs. te_core.capture
   measures 512 bits on a traced step (the EMAs and the warm's lr as carried state); with `--subspace K` it adds the K
   coefficients (16 bits each) as carried state.
-- d: the decoder replays every entry over S, T·|S| fp32 FMAs at F32Fma_v4's 12,637 gates, against c = 4096 × the
-  start's forward MACs a token at the bf16 GEMM price (1,480 gates). On s (41.98M forward MACs a token), d/c ≈
-  T·|S| / 2.0e10, so at T ≈ 2,100 steps ρ_fit = c/(c − d) is ~1.1 at |S| ≈ 1M, ~1.5 at one block (3.2M), and all blocks
-  (19.3M) don't fit. te_core 4.1 still takes d as 0 (a stub), so `notes.decoder` gives d and ρ_fit for each checkpoint.
+- d: the decoder replays every entry over S, T·|S| fp32 FMAs at F32Fma_v4's 12,637 gates; `notes.decoder` gives d at
+  each checkpoint, and the scorer prices it against te_core's session c (dashboard, 10:23Z 3 Nov), which nothing here
+  sets. At s-t20's old attention-free c, d < c needed T·|S| < 2.0e10; the session c is about 1.57× that.
 
 ## What limits the gain
 
