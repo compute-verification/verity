@@ -1,5 +1,5 @@
 """The console's second training panel, `training/algorithm-policy`: each run's efficiency loss from its algorithm
-against its efficiency loss from the policy (Daniel, 2 Nov, 5:04 PM PST).
+against its efficiency loss from the policy.
 
     python -m te_core.algorithm_policy --out DIR [--publish] [--ladder-fit FILE]
                                        [te_core.rescore's ledger and analysis options]
@@ -15,9 +15,8 @@ Fit holds for the training, basis `fit`, else Slowdown's bound, a target, basis 
 over H is S = p·ρ.
 
 The panel (`COLUMNS`) has one row per run (its run id) and end loss it reaches, taken at that first checkpoint: the
-start (te_core.panels' label, C0 and l0), the end loss, C and p, the inputs ρ is computed from there (`INPUTS`, as
-note:training-20261102T2334Z-draft-rho-inputs-and-formula has them), which of those are stubs, bounds, assumptions or
-estimates rather than measured (`estimated`, from the record's labels: `KINDS`), ρ and its basis at the dial's default
+start (te_core.panels' label, C0 and l0), the end loss, C and p, the inputs ρ is computed from there (`INPUTS`), which
+of those are stubs, bounds, assumptions or estimates rather than measured (`estimated`, from the record's labels: `KINDS`), ρ and its basis at the dial's default
 (te_core.panels' `DEFAULT`: c = 4,096 tokens of the start's forward, k = 80,000 bits), and the run's method, family,
 record (run id@step) and data. The route takes at most 24 columns, so H (C/p) and the target (`target`, from l0 and
 the end loss) aren't columns of their own. `page_rho` is the formula the console's dial runs on a row's columns alone,

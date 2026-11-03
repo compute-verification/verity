@@ -64,8 +64,8 @@ def run(tmp_path, monkeypatch, runs=RUNS, *extra, index=None) -> tuple[int, dict
 
 
 def dial(d: dict, c: float, k: float) -> tuple[float, str]:
-    """The draft note's formula (note:training-20261102T2334Z-draft-rho-inputs-and-formula) on a row's columns alone,
-    written apart from te_core.formalism: Fit for the training, else Slowdown's bound from u and u_in's points."""
+    """ρ's formula on a row's columns alone, written apart from te_core.formalism: Fit for the training, else Slowdown's
+    bound from u and u_in's points."""
     s, dg = c / d["w_gates"], d["delta_grad_bits"]
     if d["delta_bits"] + s * d["tau_bits"] <= k and dg is not None and 2 * dg <= k and d["delta_t_bits"] + dg <= k:
         return c / (c - d["d_gates"]), "fit"
