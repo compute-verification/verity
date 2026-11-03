@@ -38,7 +38,7 @@ local notation "key₀" => List.replicate 64 (0 : UInt8)
 local notation "y₀" => List.replicate 192 (2 : UInt8)
 
 /-- The instance's frame-v3 domain: two leaves, at positions 0 and 1. -/
-local notation "D₀" => (⟨fun _ => 4, 2, fun r => r⟩ : Tree.Domain)
+local notation "D₀" => Tree.Domain.mk (fun _ => 4) 2 (fun r => r)
 
 /-- The instance's two values' frame leaves, at ranks 0 and 1. -/
 local notation "ℓ₀" => Tree.leafMsg D₀ 0 "row" [5]
@@ -46,7 +46,7 @@ local notation "ℓ₁" => Tree.leafMsg D₀ 1 "row" [6]
 
 /-- The instance's public digest: the keyed hash of its root node over its two leaves. -/
 local notation "root₀" =>
-  (fun _ => Keyed.digest SHA512 ks₀ salt₀ ((Keyed.Top.node 0 (SHA512 ℓ₀) (SHA512 ℓ₁)).msg D₀) :
+  (fun _ => Keyed.digest SHA512 ks₀ salt₀ (Keyed.Top.msg D₀ (Keyed.Top.node 0 (SHA512 ℓ₀) (SHA512 ℓ₁))) :
     ℕ → Digest)
 
 /-- The honest committer's openings: instance 0's two values, each with its sibling, under the window's key and the
@@ -57,7 +57,10 @@ local notation "Opens₀" => (fun pos rank v ks y sibs =>
   ℕ → ℕ → Msg → Digest → Msg → List Digest → Prop)
 
 theorem depth_two : Tree.depth 2 = 1 := by
-  simp [Tree.depth, Nat.log2]
+  have h : Nat.log2 1 = 0 := by
+    have := (Nat.log2_lt (k := 1) one_ne_zero).2 (by norm_num)
+    omega
+  simp [Tree.depth, h]
 
 /-- **`Binds`' honest witness**: the honest committer's openings meet `SubtreeLayout` and `SaltDerivation`, under the
 key leaf over the window's key, and the keyed verifier accepts the honest opening at rank 0. -/
@@ -65,12 +68,16 @@ theorem keyed_leaf_binds_honest :
     Assumptions.SubtreeLayout SHA512 salt₀ (fun _ => D₀) "row" root₀ Opens₀ ∧
       Assumptions.SaltDerivation SHA512 key₀ (Hm96.leaf SHA512 key₀ ks₀ y₀) Opens₀ ∧
       Keyed.accepts SHA512 ks₀ salt₀ D₀ (root₀ 0) 0 ℓ₀ [SHA512 ℓ₁] := by
-  refine ⟨?_, ?_, ⟨by decide, by simp [depth_two], rfl⟩⟩
+  refine ⟨?_, ?_, ?_⟩
   · rintro pos rank v ks y sibs ⟨rfl, rfl, rfl, ⟨rfl, rfl, rfl⟩ | ⟨rfl, rfl, rfl⟩⟩
-    · exact ⟨by decide, by simp [depth_two], rfl⟩
-    · exact ⟨by decide, by simp [depth_two], rfl⟩
+    · unfold Keyed.accepts
+      exact ⟨by decide, by simp [depth_two], rfl⟩
+    · unfold Keyed.accepts
+      exact ⟨by decide, by simp [depth_two], rfl⟩
   · rintro pos rank v ks y sibs ⟨-, rfl, rfl, -⟩
     rfl
+  · unfold Keyed.accepts
+    exact ⟨by decide, by simp [depth_two], rfl⟩
 
 theorem not_collisionIn {H : Msg → Digest} {xs ys : List Msg} (hs : xs ⊆ ys)
     (hn : (ys.map fun m => (H m).bytes).Nodup) : ¬ CollisionIn H xs := by
@@ -80,7 +87,7 @@ theorem not_collisionIn {H : Msg → Digest} {xs ys : List Msg} (hs : xs ⊆ ys)
 theorem mask_nil : Hm96.mask [] [] = List.replicate 64 0 := by
   have hb : ∀ t, Hm96.bit [] t = false := fun t => by simp [Hm96.bit]
   simp only [Hm96.mask, Hm96.maskBit, hb, List.filter_false, List.foldl_nil, Bool.false_eq_true, if_false]
-  rfl
+  decide +kernel
 
 /-- **`Binds`' nontrivial witness**: with every opening accepted, the values `[0]` and `[1]` opened at rank 0 of one
 instance, under one key and key-leaf salt and with no siblings, are different, and the messages those openings hashed
