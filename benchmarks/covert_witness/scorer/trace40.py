@@ -39,9 +39,10 @@ LEDGER = Path(os.environ.get("TE_LEDGER", HOME / ".research" / "te-ledger"))
 MEASURED = Path(os.environ.get("TE_LEDGER_40", HOME / ".research" / "te-ledger-40"))
 TE40_WT = Path(os.environ.get("TE40_WT", "/tmp/scorer/te40"))
 REPO = Path(os.environ.get("TE_REPO", "/workspace"))
-PINS = os.environ.get("TE_V1_PINS", "11d96c1b8745d8093746ea11e3e33fe6f07f7d3b,"
-                                    "36aac280a62be7a04cbf510b50636b5ad875ba54").split(",")
+#: the commit whose pinned.json and starts_store.json say which records are traced and from which starts
+PIN_REV = os.environ.get("TE_PIN_REV", "origin/cursor/covert-witness-4207")
 CW = "benchmarks/covert_witness"
+V3_TOKENIZER = "bpe32k"
 #: a run whose dominant update structure starts late replays every step before it (a 4-arm shallow run: 3,493 steps)
 TRACE_TIMEOUT = 5400
 #: the node step's version: a run that failed under an older one is traced again
@@ -69,9 +70,33 @@ def cache(te: Path = TE40_WT) -> Path:
 # -- here: which runs, and their inputs
 
 
+def at_pin(name: str, rev: str = PIN_REV) -> dict:
+    return json.loads(git("show", f"{rev}:{CW}/{name}"))
+
+
+def pins(rev: str = PIN_REV) -> list[str]:
+    """$TE_V1_PINS, else the commits te_core.panels reads at `rev` (`frontier.pinned(pilot=True)`): the pin's, its
+    same_version's and its pilot's."""
+    if os.environ.get("TE_V1_PINS"):
+        return os.environ["TE_V1_PINS"].split(",")
+    p = at_pin("pinned.json", rev)
+    return [p["commit"], *p.get("same_version", []), *p.get("pilot", [])]
+
+
+def pilot_start(rev: str = PIN_REV) -> tuple[set[str], set[str]]:
+    """(the pin's commits when it measures data v3, the starts on another tokenizer): te_core.frontier leaves a v3
+    record from such a start out as `pilot-start`, so it isn't traced."""
+    p = at_pin("pinned.json", rev)
+    v3 = {p["commit"], *p.get("same_version", [])} if p.get("data") == "v3" else set()
+    starts = at_pin("starts_store.json", rev)["starts"]
+    return v3, {n for n, s in starts.items() if (s.get("shape") or {}).get("tokenizer") != V3_TOKENIZER}
+
+
 def scope() -> list[dict]:
-    """Runs in the scorer's ledger whose record the scorer holds valid at a pin, each with its first ledger row's agent,
-    direction, mechanism, parent and reference (what ingest reads), oldest first."""
+    """Runs in the scorer's ledger whose record the scorer holds valid at a pin (`pins`), each with its first ledger
+    row's agent, direction, mechanism, parent and reference (what ingest reads), oldest first; a v3 record from a pilot
+    start is left out (`pilot_start`)."""
+    measured, (v3, pilot) = set(pins()), pilot_start()
     first = {}
     for line in (LEDGER / "index.jsonl").open():
         r = json.loads(line)
@@ -80,7 +105,8 @@ def scope() -> list[dict]:
     out = {}
     for line in (STATE / "index.jsonl").open():
         x = json.loads(line)
-        if not (x.get("valid") and x.get("measurement_commit") in PINS and x.get("run") in first and x.get("island_tree")):
+        if not (x.get("valid") and x.get("measurement_commit") in measured and x.get("run") in first
+                and x.get("island_tree")) or (x["measurement_commit"] in v3 and x.get("start") in pilot):
             continue
         o = first[x["run"]]
         out[x["run"]] = {"run_id": x["run"], "record": x["id"].removeprefix("art:"), "agent": o["agent"],
@@ -107,6 +133,18 @@ def archive(rev: str, dest: Path, sub: str = "", strip: int = 0, exclude: str = 
     subprocess.run(cmd, input=a, check=True)
 
 
+def starts_dir(dest: Path, names: set[str], rev: str = PIN_REV) -> None:
+    """NAME.start.json (what te_core.capture.script's --starts reads) for each start in `names`, from the evidence store
+    by its start.json's sha256 in starts_store.json at `rev`."""
+    import scorer as S
+
+    r, starts = S.store_remote(), at_pin("starts_store.json", rev)["starts"]
+    dest.mkdir(parents=True)
+    for n in sorted(names):
+        sha = starts[n]["files"]["start.json"]
+        shutil.copy(S.blob(r, sha, STATE / "starts-store" / f"{sha}.json"), dest / f"{n}.start.json")
+
+
 def pack(out: Path, te: Path, everything: bool, only: set[str] | None = None, skip: set[str] = frozenset()) -> list[dict]:
     """PACK.tar for the runs in `scope` with no trace in this te_core's cache (`only`: those runs or islands): runs.json,
     each run's run.json (gzip) and meta.json, the measurement trees (covert_witness without te_core), the island trees,
@@ -131,8 +169,7 @@ def pack(out: Path, te: Path, everything: bool, only: set[str] | None = None, sk
         for t in sorted({r["island_tree"] for r in runs}):
             archive(t, d / "islands" / t[:12])
         archive(git("rev-parse", "HEAD", cwd=te), d / "te", f"{CW}/te_core", strip=2)
-        (starts,) = [p for p in (STATE / "starts").iterdir() if p.is_dir()]
-        shutil.copytree(starts, d / "starts")
+        starts_dir(d / "starts", {r["start"] for r in runs})
         (d / "runs.json").write_text(json.dumps(runs, indent=1))
         (d / "manifest.json").write_text(json.dumps({"te_commit": git("rev-parse", "HEAD", cwd=te),
                                                      "te_tree": te_tree(te), "runs": len(runs)}))
@@ -331,7 +368,8 @@ def one(root: str, r: dict, out: str) -> dict:
             return summary | {"error": (res.get("error") or "no structure")[-2000:]}
         res = dict(res, step=step, formalism=measure(StepCircuit.load(circ)))
         res["structure"] = dict(res["structure"], formalism=res["formalism"])
-        res, heads = head_at_largest(res, run, 768 if r["start"].startswith("m") else 512)
+        cfg = json.loads((root / "pack" / "starts" / f"{r['start']}.start.json").read_text())["config"]
+        res, heads = head_at_largest(res, run, cfg["d_model"])
         differ = plan_differ(root / "pack" / "runs" / rid / "meta.json", log)
         res, sub = subspace_at_run_d(res, differ) if r["island"] == "seed-subspace" else (res, None)
         structures = {s["struct"]: res["structure"] for s in run["steps"]
