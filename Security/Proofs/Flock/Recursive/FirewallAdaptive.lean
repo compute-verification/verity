@@ -9,8 +9,7 @@ it sent the coin server for each request and the salts it drew for them, `{"sent
 request is any function of those answers, its tape, its randomness and the coin server's being its parameters, so the
 live coins it reads are too. Whatever it is, the live firewall sends the schedule's transcript filled with commit
 strings `strs dg ys`, the `i`-th that of a 64-byte digest `dg i (ys.take i)` under salt `i`, cut after one of its
-messages, or a Commit naming the schedule's tables in another order: digest `i` reads the salts before it, never salt
-`i` or a later one.
+messages: digest `i` reads the salts before it, never salt `i` or a later one.
 
 * `adaptOut`: the live loop at a worker `W`, for at most `N` requests, reading the salts from the list `ys` in turn.
 * `liveOut_prefix`, `adaptOut_prefix`: the sends on a prefix of the requests are a prefix of the sends.
@@ -378,69 +377,53 @@ open Flock.Firewall FlockSoundness.Discharge.Recursion
 open FirewallRun FirewallTemplate FirewallAny FirewallAdaptive
 
 /-- **The live firewall at any worker that reads its answers sends the schedule's transcript, filled at commit strings
-whose digests read only the salts before them, or stops at a public place, unless its Commit named the schedule's
-tables in another order.** `T` is the order of the schedule's tables that Commit is to name. For any inner worker `W`
-whose next request reads the answers so far, the sends and the salts drawn, for at most `N` requests, and any number
-`n` of salts, there are digests `dg`, `dg i pre` 64 bytes, and a stop `σ` such that at every salt list `ys` of length
-`n`, the live session (`adaptOut`, `flock-firewall live`'s loop) either sends the coin server the schedule's transcript
-with Commit naming `T` (`tmpl s T`), filled with `strs dg ys`, string `i` the commit string of `dg i (ys.take i)` under
-salt `i`, cut after its first `(σ ys).1` messages, and finishes exactly when `(σ ys).2`; or sent a Commit naming the
-schedule's tables, each once, in an order other than `T`, which `step` takes today. The stop lies in
-`Fin ((tmpl s T).length + 1) × Bool`, and a session that finishes sends the whole transcript. Digest `i` reads the
-salts before `i` alone: `W` may read every salt it was answered. -/
-theorem adaptOut_any (s : Schedule) (T : List String) (W : Worker) (N n : Nat) :
+whose digests read only the salts before them, or stops at a public place.** For any inner worker `W` whose next request
+reads the answers so far, the sends and the salts drawn, for at most `N` requests, and any number `n` of salts, there are
+digests `dg`, `dg i pre` 64 bytes, and a stop `σ` such that at every salt list `ys` of length `n`, the live session
+(`adaptOut`, `flock-firewall live`'s loop) sends the coin server the schedule's transcript (`tmpl s s.tables`, Commit
+naming the schedule's tables in its order, the only order `step` takes), filled with `strs dg ys`, string `i` the commit
+string of `dg i (ys.take i)` under salt `i`, cut after its first `(σ ys).1` messages, and finishes exactly when
+`(σ ys).2`. The stop lies in `Fin ((tmpl s s.tables).length + 1) × Bool`, and a session that finishes sends the whole
+transcript. Digest `i` reads the salts before `i` alone: `W` may read every salt it was answered. -/
+theorem adaptOut_any (s : Schedule) (W : Worker) (N n : Nat) :
     ∃ (dg : Nat → List ByteArray → ByteArray) (σ : List ByteArray → Nat × Bool),
       (∀ i pre, (dg i pre).size = 64) ∧
       ∀ ys : List ByteArray, ys.length = n →
-        (σ ys).1 ≤ (tmpl s T).length ∧ ((σ ys).2 = true → (σ ys).1 = (tmpl s T).length) ∧
-        (((adaptOut s W N { salts := [] } [] ys).1 = (fillAll (tmpl s T) (strs dg ys)).take (σ ys).1 ∧
-            adaptFinished s W N ys = (σ ys).2) ∨
-          (namesOf (adaptOut s W N { salts := [] } [] ys).1 ≠ T ∧
-            Tables s (namesOf (adaptOut s W N { salts := [] } [] ys).1))) := by
+        (σ ys).1 ≤ (tmpl s s.tables).length ∧ ((σ ys).2 = true → (σ ys).1 = (tmpl s s.tables).length) ∧
+        (adaptOut s W N { salts := [] } [] ys).1 = (fillAll (tmpl s s.tables) (strs dg ys)).take (σ ys).1 ∧
+        adaptFinished s W N ys = (σ ys).2 := by
   obtain ⟨dg, hdg⟩ := digest_fn s W N n
   have key : ∀ ys : List ByteArray, ∃ σ : Nat × Bool, ys.length = n →
-      σ.1 ≤ (tmpl s T).length ∧ (σ.2 = true → σ.1 = (tmpl s T).length) ∧
-      (((adaptOut s W N { salts := [] } [] ys).1 = (fillAll (tmpl s T) (strs dg ys)).take σ.1 ∧
-          adaptFinished s W N ys = σ.2) ∨
-        (namesOf (adaptOut s W N { salts := [] } [] ys).1 ≠ T ∧
-          Tables s (namesOf (adaptOut s W N { salts := [] } [] ys).1))) := by
+      σ.1 ≤ (tmpl s s.tables).length ∧ (σ.2 = true → σ.1 = (tmpl s s.tables).length) ∧
+      (adaptOut s W N { salts := [] } [] ys).1 = (fillAll (tmpl s s.tables) (strs dg ys)).take σ.1 ∧
+      adaptFinished s W N ys = σ.2 := by
     intro ys
     obtain ⟨D, hD⟩ := digests_exist s W N ys
     obtain ⟨L, hL⟩ := adaptOut_liveOut s W N { salts := [] } [] ys
-    obtain ⟨o, k, ho, hk, hfin, hbl⟩ := liveOut_blank s L
-    have hlen := length_tmpl s o T
-    refine ⟨(k, liveFinished s L), fun hn => ⟨hlen ▸ hk, fun h => hlen ▸ hfin h, ?_⟩⟩
-    have hpre : ((List.range ys.length).map fun i => dg i (ys.take i)).take D.length = D := by
-      apply List.ext_getElem
-      · simp only [List.length_take, List.length_map, List.length_range]
-        exact Nat.min_eq_left hD.2.1
-      · intro j _ h₂
-        simp only [List.getElem_take, List.getElem_map, List.getElem_range]
-        exact ((hdg j (ys.take j)).2 ys D hn rfl hD h₂).symm
-    have hstrs : strs dg ys = (adaptOut s W N { salts := [] } [] ys).1.flatMap holes ++
-        List.zipWith Hm96.Default512.commitString
-          (((List.range ys.length).map fun i => dg i (ys.take i)).drop D.length) (ys.drop D.length) := by
-      rw [hD.2.2, strs, ← List.take_append_drop D.length ((List.range ys.length).map fun i => dg i (ys.take i)),
-        zipWith_append_left, hpre, List.drop_left]
-    have hs : (adaptOut s W N { salts := [] } [] ys).1 = (fillAll (tmpl s o) (strs dg ys)).take k := by
+    obtain ⟨k, hk, hfin, hbl⟩ := liveOut_blank s L
+    refine ⟨(k, liveFinished s L), fun hn => ⟨hk, hfin, ?_, ?_⟩⟩
+    · have hpre : ((List.range ys.length).map fun i => dg i (ys.take i)).take D.length = D := by
+        apply List.ext_getElem
+        · simp only [List.length_take, List.length_map, List.length_range]
+          exact Nat.min_eq_left hD.2.1
+        · intro j _ h₂
+          simp only [List.getElem_take, List.getElem_map, List.getElem_range]
+          exact ((hdg j (ys.take j)).2 ys D hn rfl hD h₂).symm
+      have hstrs : strs dg ys = (adaptOut s W N { salts := [] } [] ys).1.flatMap holes ++
+          List.zipWith Hm96.Default512.commitString
+            (((List.range ys.length).map fun i => dg i (ys.take i)).drop D.length) (ys.drop D.length) := by
+        rw [hD.2.2, strs, ← List.take_append_drop D.length ((List.range ys.length).map fun i => dg i (ys.take i)),
+          zipWith_append_left, hpre, List.drop_left]
       have e3 := fillAll_blank_holes (adaptOut s W N { salts := [] } [] ys).1
         (List.zipWith Hm96.Default512.commitString
           (((List.range ys.length).map fun i => dg i (ys.take i)).drop D.length) (ys.drop D.length))
       rw [← hstrs, hL, hbl, fillAll_take] at e3
       rw [hL]
       exact e3.symm
-    have hf : adaptFinished s W N ys = liveFinished s L := by
-      unfold adaptFinished liveFinished
+    · unfold adaptFinished liveFinished
       rw [hL]
       generalize (liveOut s { salts := [] } L).2 = r
       cases r <;> rfl
-    by_cases hoT : o = T
-    · subst hoT
-      exact Or.inl ⟨hs, hf⟩
-    rcases Nat.lt_or_ge k 2 with hk2 | hk2
-    · exact Or.inl ⟨hs.trans (fill_take_lt_two s o T _ k hk2), hf⟩
-    · rw [hs, namesOf_fill_take s o _ k hk2]
-      exact Or.inr ⟨hoT, ho⟩
   exact ⟨dg, fun ys => Classical.choose (key ys), fun i pre => (hdg i pre).1,
     fun ys hn => Classical.choose_spec (key ys) hn⟩
 

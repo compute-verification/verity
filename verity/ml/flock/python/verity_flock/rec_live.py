@@ -14,7 +14,8 @@ only the session's public schedule and salted hashes:
 * ``Hello``: the pinned schedule's (profile, reps, flavor, tables, the link's shape), without Σ (a digest of the hidden
   statement), once the prover's, Σ aside, is the same canonical JSON (`canonical`); never the prover's own text or object;
 * ``Commit``: each table's level-0 cap (``root_B``) as its salted top (`commit_top`), answered with the link points; root_F
-  (Σ) stays with the prover;
+  (Σ) stays with the prover. The tables come in the schedule's order (its ``roots``' names, sorted) and no other, so the
+  order carries nothing of the prover's;
 * each ``Round``: the salted top of each tree it commits (its ``BYTES`` frames that are caps), and ``c_k``, a hiding
   commitment to the round's free message, answered with the round's ``n`` coins.
 
@@ -24,7 +25,9 @@ fresh 192-byte salt), so the coin server holds one ``b || c`` a node and V*'s op
 registered value the verifier builds from them (`verity_flock.rec_outer`). The nodes and salts are the prover's
 (``private.json``). Level 0's cap reaches the ZK server three times (``Commit``, the rep's binding round, Ligerito's first
 absorb): it is committed once, at ``Commit``, and the ZK server refuses a binding round whose cap is not ``root_B``; a later
-copy is counted (``level0``), never committed again. A table with no root in the schedule's ``Commit`` (candidate 3's
+copy is counted (``level0``), never committed again. Copies are by position, never by value: a round's first ``level0``
+caps, as the schedule's round names them, must each be its table's level-0 top, and every other cap is a fresh top,
+whatever its value. A table with no root in the schedule's ``Commit`` (the
 stacked table R) has its level-0 top committed as a salted top of its stream's binding round instead, and its later copies
 counted the same way. That top is registered with the private circuit at staging (`register_top`,
 `verity_flock.rec_session.stage_stacked`): its nodes are registered rows under salts sampled once, and the staged statement's
@@ -152,9 +155,9 @@ MASK64 = (1 << 64) - 1
 #: a flock-circuit statement's session (`schedule_for`): its one table, fast100's reps, the link's points (one ``y``
 #: element each, a table) and each point's free in-block coordinates (``circuit.rs`` ``PT_LOCAL``; ``nbl`` block ones follow)
 TABLE, REPS, LINK_POINTS, PT_LOCAL = "circuit", 2, 2, 24
-#: candidate 3's stacked table R (`stacked_rounds`)
+#: the stacked table R (`stacked_rounds`)
 STACKED = "stacked"
-#: candidate 3's sparse phase, a stream a rep (`sparse_rounds`), each its rep's child at the rep's end
+#: the sparse phase, a stream a rep (`sparse_rounds`), each its rep's child at the rep's end
 SPARSE = "sparse"
 #: the inner session's coin tree (`RecVStar.innerCoinSpec`): the session's stream, every stream a schedule may open
 #: (`schedule_for`), at ``flock-circuit``'s rounds and block; the prover names it with ``FC_COINS=tree`` and
@@ -489,7 +492,7 @@ def holo_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], i
 
 
 def stacked_rounds(m: int) -> list[tuple[int, list[int], int, int]]:
-    """The stream of the stacked table R (``2^m`` cells) that candidate 3's opening-only prover runs (``flock-circuit
+    """The stream of the stacked table R (``2^m`` cells) that the opening-only prover runs (``flock-circuit
     stacked``, its one rep): the binding round, which commits R's level-0 top (R has no root at ``Commit``; the top is the
     registered one, `register_top`) and also absorbs
     the first claim's s_hat_v and squeezes its ring switch's coins, then `rep_rounds`' second ring switch, the gammas and
@@ -588,17 +591,43 @@ def statement_of(text: str) -> dict:
     return json.loads(text)
 
 
+ROUND_KEYS = {"stream", "k", "n", "tops", "level0", "commits"}
+
+
+def _plain_str(s: str) -> bool:
+    return all(c not in '"\\' and ord(c) >= 0x20 for c in s)
+
+
+def _plain(v) -> bool:
+    """`Flock.Firewall.plain`: a value whose numbers are naturals and whose strings and keys hold no ``"``, ``\\`` or
+    control character."""
+    if v is None or type(v) is bool:
+        return True
+    if type(v) is int:
+        return v >= 0
+    if isinstance(v, str):
+        return _plain_str(v)
+    if isinstance(v, list):
+        return all(_plain(x) for x in v)
+    return isinstance(v, dict) and all(_plain_str(k) and _plain(x) for k, x in v.items())
+
+
 def check_schedule(s) -> dict:
-    """``s``, if it is a schedule a session can be held to (every field of the type `schedule_of` gives it); else ValueError."""
+    """``s``, if it is a schedule a session can be held to (every field of the type `schedule_of` gives it, a plain
+    ``Hello`` naming no ``coins``, each round just its six fields, and each stream's rounds, at least one, numbered 0, 1, …
+    in the schedule's order, as many as its ``rounds``: `Flock.Firewall.Schedule.canonical`); else ValueError. Lean's
+    firewall, which holds no registered top, also refuses a schedule with a stream or a copy of level 0's top whose
+    table has no root."""
     nat = lambda v: type(v) is int and v >= 0
     try:
         h = s["hello"]
         ok = (s["kind"] == KIND + "/schedule" and isinstance(h, dict) and isinstance(h["link"], dict) and "sigma" not in h["link"]
-              and nat(h["link"]["m"]) and nat(h["link"]["points"]) and nat(s["link"]["y"])
+              and nat(h["link"]["m"]) and nat(h["link"]["points"]) and nat(s["link"]["y"]) and _plain(h) and "coins" not in h
               and all(isinstance(t, str) and nat(v) for t, v in s["roots"].items())
-              and all(isinstance(n, str) and isinstance(v["parent"], str) and nat(v["at"]) and nat(v["rounds"]) for n, v in s["streams"].items())
-              and all(r["stream"] in s["streams"] and nat(r["k"]) and nat(r["n"]) and all(nat(c) for c in r["tops"]) and nat(r["level0"])
-                      and nat(r["commits"]) for r in s["rounds"]))
+              and all(isinstance(n, str) and isinstance(v["parent"], str) and nat(v["at"]) and nat(v["rounds"]) and v["rounds"] > 0
+                      and [r["k"] for r in s["rounds"] if r["stream"] == n] == list(range(v["rounds"])) for n, v in s["streams"].items())
+              and all(set(r) == ROUND_KEYS and r["stream"] in s["streams"] and nat(r["k"]) and nat(r["n"]) and all(nat(c) for c in r["tops"])
+                      and nat(r["level0"]) and nat(r["commits"]) for r in s["rounds"]))
     except (KeyError, TypeError, AttributeError):
         ok = False
     if not ok:
@@ -1164,6 +1193,8 @@ class Proxy:
             if len({name for name, _ in roots}) != len(roots):
                 raise ValueError(refused("Commit names a table twice"))
             self._pinned("Commit's roots", {name: len(top_nodes(v)) for name, v in sorted(roots)}, self.schedule["roots"])
+            if [name for name, _ in roots] != sorted(self.schedule["roots"]):
+                raise ValueError(refused("Commit's roots: the tables are not in the pinned schedule's order"))
             self.commit = (root_f, roots, publics)
             bcs = {}
             for t, cap in roots:
@@ -1201,11 +1232,9 @@ class Proxy:
             s = split_round(content, k == 0 and not st["parent"])
             if s.n != n:
                 raise ValueError(f"the round squeezes {s.n} coins, the prover asked for {n}")
-            level0 = {bytes.fromhex("".join(o["nodes"])) for o in self.roots.values()}
-            level0 |= {v["cap"] for v in self.streams.values() if v["cap"] is not None}
+            table = stream.rsplit("/", 1)[0]
             reg = None
             if k == 0 and not st["parent"]:
-                table = stream.rsplit("/", 1)[0]
                 root_b = self.roots.get(table)
                 if table in self.schedule["roots"]:
                     if root_b is None or s.caps[0].hex() != "".join(root_b["nodes"]):
@@ -1219,15 +1248,21 @@ class Proxy:
                         raise ValueError(refused(f"{stream}: {table} has no root at Commit and no registered top"))
                     if self.statement_digest is None or s.digest != self.statement_digest:
                         raise ValueError(refused(f"{stream}: the binding round's statement digest is not the circuit reps'"))
-                    if not s.caps or s.caps[0].hex() != "".join(reg["nodes"]) or s.caps[0] in level0:
+                    if not s.caps or s.caps[0].hex() != "".join(reg["nodes"]):
                         raise ValueError(refused(f"{stream}: the binding round's cap is not {table}'s registered top"))
                 st["cap"] = s.caps[0]
-            tops = [([bytes.fromhex(b) for b in reg["top"]], {"nodes": reg["nodes"], "salts": reg["salts"]}) if reg is not None and i == 0
-                    else self._salted(c) for i, c in enumerate(s.caps) if c not in level0]
-            rows = message_rows(s.free)
             i, sched = len(self.coins.rounds), self.schedule["rounds"]
-            self._pinned(f"round {i}", {"stream": stream, "k": k, "n": n, "tops": [len(top_nodes(c)) for c in s.caps if c not in level0],
-                                        "level0": sum(c in level0 for c in s.caps), "commits": len(rows)},
+            # copies are by position, never by value: a later cap equal to a committed top is fresh
+            copies = sched[i]["level0"] if i < len(sched) else 0
+            top0 = self.roots[table]["nodes"] if table in self.roots else (self.registered[table]["nodes"] if table in self.registered else None)
+            if len(s.caps) < copies or any(top0 is None or c.hex() != "".join(top0) for c in s.caps[:copies]):
+                raise ValueError(refused(f"round {i}: a copy of level 0's top is not {table}'s committed top"))
+            fresh = s.caps[copies:]
+            tops = [([bytes.fromhex(b) for b in reg["top"]], {"nodes": reg["nodes"], "salts": reg["salts"]}) if reg is not None and copies == j == 0
+                    else self._salted(c) for j, c in enumerate(fresh)]
+            rows = message_rows(s.free)
+            self._pinned(f"round {i}", {"stream": stream, "k": k, "n": n, "tops": [len(top_nodes(c)) for c in fresh],
+                                        "level0": copies, "commits": len(rows)},
                          sched[i] if i < len(sched) else None)
             salts = [self.fresh_salt() for _ in rows]
             bcs = commit_rows(rows, salts)
@@ -1235,7 +1270,7 @@ class Proxy:
                 raise ValueError("a coin before the link exchange")
             if k == 0:
                 self._send({"open": [stream, st["parent"], st["at"]]})
-            coins = self._send({"round": {"stream": stream, "tops": [[b.hex() for b in t] for t, _ in tops], "level0": sum(c in level0 for c in s.caps),
+            coins = self._send({"round": {"stream": stream, "tops": [[b.hex() for b in t] for t, _ in tops], "level0": copies,
                                           "commits": [b.hex() for b in bcs], "n": n}})
             st["rounds"].append({"content": content, "n": n, "coins": coins})
             self.private.append({"stream": stream, "k": k, "tops": [o for _, o in tops], "elements": [f128_hex(v) for v in s.free],
