@@ -35,7 +35,8 @@ theorem ind_congr_iff {α β : Type} {p : α → Prop} {q : β → Prop} {a : α
     FlockSoundness.Game.ind p a = FlockSoundness.Game.ind q b := by
   by_cases hp : p a
   · simp [FlockSoundness.Game.ind, hp, h.1 hp]
-  · simp [FlockSoundness.Game.ind, hp, fun hq => hp (h.2 hq)]
+  · have hq : ¬ q b := fun hq => hp (h.2 hq)
+    simp [FlockSoundness.Game.ind, hp, hq]
 
 /-- **`jointOf`'s verdict is the judged session's**: it accepts as often as the session, `E`'s coins unread. -/
 theorem jointOf_judged (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W) (E : Claims.Extractor Coin W V)
@@ -46,8 +47,11 @@ theorem jointOf_judged (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W) (E : C
   simp only [jointOf, proofSystemOf, sessionOf, prob, proverOf]
   refine Finset.sum_congr rfl fun r₀ _ => ?_
   congr 1
-  simp only [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, ← mul_assoc]
-  rw [ENNReal.mul_inv_cancel (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _), one_mul]
+  by_cases h : (run H τ.1 V (stmt S R) () r₀).out = .acc
+  · simp only [h, eq_self_iff_true, decide_true, ↓reduceIte, mul_one, Finset.sum_const, Finset.card_univ,
+      nsmul_eq_mul]
+    exact ENNReal.mul_inv_cancel (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)
+  · simp only [h, decide_false, Bool.false_eq_true, ↓reduceIte, mul_zero, Finset.sum_const_zero]
 
 /-- **`jointOf` is knowledge sound at `err`**: at a sampled proof block, acceptance with a failed extraction is
 `PrBad`'s event at the claims prover the strategy plays, so its probability is at most `err` there. -/
@@ -69,8 +73,8 @@ theorem jointOf_knowledgeSound (H : Msg → Msg) (V : Verifier Coin) (Rl : Rel W
   refine Finset.sum_congr rfl fun r₀ _ => ?_
   congr 1
   refine Finset.sum_congr rfl fun c _ => ind_congr_iff ?_
-  simp only [FlockSoundness.SampledGeneric.JointExtractor.Fails, hu, ↓reduceIte, decide_eq_true_eq, rel_ext_iff,
-    proverOf]
+  simp only [FlockSoundness.SampledGeneric.JointExtractor.Fails, hu, ↓reduceIte, rel_ext_iff, proverOf]
+  exact and_congr ⟨of_decide_eq_true, decide_eq_true⟩ Iff.rfl
 
 end Claims.RecGeneric
 
