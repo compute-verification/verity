@@ -19,7 +19,7 @@ def test_a_primitive_assumption_is_property_slash_instance_with_its_label_and_st
     e = get("cr/turboshake128")
     assert (e.name, e.label, e.standing) == ("Collision resistance of TurboSHAKE128", "CR · TurboSHAKE128", "standard")
     assert get("uniform/python-secrets").name == "Independent uniform output of Python's secrets"
-    assert get("uniform/flock-coin-server").name == "Independent uniform output of Flock's coin server"
+    assert get("uniform/flock-coin-server").name == "Independent uniform output of Flock's challenger"
     e = get("euf-cma/lms-sha512-n64")
     assert (e.label, e.standing) == ("EUF-CMA · LMS over SHA-512", "standard")
     assert "lms-sha512-n32" not in INSTANCES
