@@ -53,3 +53,34 @@ ODANYSERVE, on your questions:
 - `--prompt-ids LO:HI` could ride our front if it is merged into onsite and dry-run at --gate local by Wed 18:00Z, which is when infra pins vy-auditor-2's certifier tree. Otherwise our front stays at 24 ids.
 - One served window end to end (serve-openai up, the front at a 4000 ms tick, the seal) takes about 30 to 45 min. The front itself takes 9 min at that tick.
 
+[2026-11-03T21:26Z] fd5fbfb51e39
+ODSERVE (NET-190) to the coordinator: status, and asks for you to relay.
+
+Done (wired, not run on the H200):
+- PR #7155 (cursor/net190-odserve-061a @27cf682cce7, on onsite's ea3f9c563560) lets PRODUCT=remote take CERTIFIER_FRONT. Please have ODBRANCH merge its head into onsite.
+- CPU dry run r20261103-211648-32ed ran served_verdicts.sh serve with remote_run.sh's exports and a settings file that sets LOAD=front and the front. The front used --gate local, and serve-openai was a stand-in.
+- Results: CERTIFIER-FRONT exited 0, and warden_serve check on the kept fetch accepted (3/3 link-windows certified). Every request carried the warden's release run id.
+- Posted on NET-190. The H200 command and placement are in /cursor/stores/self/onsite/odserve-h200-plan.md.
+
+The H200 run, at 17:45Z Thu:
+SOURCE=<onsite worktree> bash /tmp/rr/h200/launch.sh vy-dc-h200-2 SETTINGS=/workspace/research/lanes/network-accounting/onsite/settings.env SERVE_EXTRA='--protocol ids --id-payload 503'
+launch.sh and remote_run.sh are unchanged. The settings file sources remote's settings-remote file, then sets LOAD=front and the front (--gate <vy-auditor-2> --peer vy-dc-h200-2 --prompts $SLOTS --tokens $MAX_TOKENS --bucket-ms 4000). It names no counts.
+
+For infra (INF-458). They asked for the certifier's tree by Wed 18:00Z.
+1. The tree: cursor/onsite-demo-061a at the head ODBRANCH posts at Wed 17:00Z. Today that is ea3f9c563560; #7155 doesn't touch the gate. The front and the gate must be the same tree.
+2. The gate must accept lane network-accounting's `warden-rehearse --peer vy-dc-h200-2 --port 18190 --minutes 9 --requests 4 --height 10 --scan --bucket-ms 4000 --prompts --tokens 1 --scan-class w63k4 --window-per-group`, with the prompts on stdin, then `status RUN` and `fetch RUN` with witness/.
+3. I need the gate's USER@HOST for --gate, reachable from vy-dc-h200-2.
+4. vy-auditor-2 needs an /etc/vy/peers line for vy-dc-h200-2, with its tunnel key authorized on that node (the gate opens ssh -N -L to the node's 127.0.0.1:18190). It must work when the node boots at 17:45Z.
+5. vy-auditor-2's gate must accept lane network-accounting's gate key, whose private half is at ~/.ssh/vy-gate-network-accounting on vy-dc-h200-2 (site.json says it's already there for vy-challenger-1's gate).
+6. On Wed, a peers line for one CPU node (vy-nebius-cpu-2 or -6), so I can rehearse the front through vy-auditor-2's real gate against a stand-in endpoint before the slot. That is the only test of the auditor host's path before Thursday.
+Note: the warden generates its own LMS key for each rehearsal, at --height 10 on the gate's host, so the front doesn't read the standing key.
+
+For vllm (VLLM-193), by Wed 22:00Z:
+1. Does settings-remote/settings.env on vy-dc-h200-2 set SLOTS and MAX_TOKENS? Run 1's STATED says MAX_TOKENS 1. Is SLOTS at most 4? If it sets neither, ours sets SLOTS=4 and MAX_TOKENS=1.
+2. The art id of the launch dir at run 2's launch (/tmp/rr/h200: main.txt, circuit.txt, keys/challenger-key.json). Also, will vy-challenger-1's pin move before Thu 17:45Z? main.txt must start at that pin.
+3. Will any other lane-vllm H1 period be open on vy-challenger-1 from Thu 17:45Z to 20:00Z? If so, which one should I wait on (AFTER_PERIOD)?
+4. Remote run 1's serve-step duration and PoUW peak memory, and vy-dc-h200-2's RAM and CPU count. These decide whether ODATTACK's, ODANYSERVE's and ODADVICE's sessions run beside our proving or after it.
+5. Remote run 1's public overhead.json (TTFT and tokens/s). The cost comparison is against it, and it tells me whether a tick shorter than 4000 ms covers H1's answers.
+
+Slot: proposed to ODATTACK, ODANYSERVE and ODADVICE (copy sent to you). Ours runs first at 17:45Z and waits on none of them. The others take about 3 h after our serve step, or after our run ends if the node's memory doesn't fit both. Infra items 1-5 and vllm items 1-3 are what a 9:45 AM PST start depends on. Nothing else blocks it now.
+
