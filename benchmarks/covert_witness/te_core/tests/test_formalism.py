@@ -755,7 +755,7 @@ def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it():
     merged, and their whole-making system is io_bound.chain_classes', so io_bound's bound is the same: at the console's
     policy about 69,676 fresh MACs a block, 0.552 of |C| and ρ 2.87e6 with P-cell. The trace's order is unknown
     and the reference circuit's chain stands, so the term is measured: the figure without P-cell, 1.637e5, with 2.87e6
-    beside it as fresh_cell. The rows are the fixture the
+    beside it as fresh_cell. The rows, with those at the console dial's other k, are the fixture the
     vectors read (`dense_45m.products.json`). The one check of the strong bound's figure on a model's own shape (about
     6 s on a CPU): the fixtures' tiny start has almost no fresh products."""
     import collections
@@ -766,7 +766,8 @@ def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it():
     g = io_bound.capture("dense", size="s", vocab=32000, batch=2, ctx=256, micro_steps=1)
     c, k = policy.CONSOLE
     block = products.rows(g, k)
-    assert block == json.loads((FIXTURES / "dense_45m.products.json").read_text())
+    assert json.loads(json.dumps(products.rows_on_dial(g))) == json.loads(
+        (FIXTURES / "dense_45m.products.json").read_text())
     got = F.products_of_trace(block)
     rows = io_bound.rows_of(g, "bfloat16", k)
     kinds = collections.Counter()
