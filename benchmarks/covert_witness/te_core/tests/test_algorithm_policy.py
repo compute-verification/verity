@@ -492,6 +492,20 @@ def test_a_partial_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_nev
     assert rings and not rings & marked
 
 
+def test_the_kinds_cell_labels_a_measured_fresh_products_term_with_its_premises_binding_or_not():
+    """The fresh-products term rests on P-width and P-chain (coordinator 12:09Z), and the row's rests_on names them only
+    where it binds, so the kinds cell carries formalism's RESTS_ON_CELL beside a measured term; an unmeasured term has
+    no label."""
+    one = {"terms": {"fresh_products": 165021.0, "token": 1.35, "decoding": 1.35},
+           "sensitivities": {"reduction": 2.0e4, "update": 705.6}, "binding_kind": "fresh_products"}
+    label = {"fresh_products": formalism.RESTS_ON_CELL["fresh_products"]}
+    assert json.loads(AP.kinds(one))["rests_on"] == label
+    token = one | {"terms": one["terms"] | {"fresh_products": 0.5, "token": 263.5}, "binding_kind": "token"}
+    assert json.loads(AP.kinds(token))["rests_on"] == label
+    got = json.loads(AP.kinds(one | {"terms": one["terms"] | {"fresh_products": None}, "partial": True}))
+    assert "rests_on" not in got and got["partial"] and got["bound"]["fresh_products"] is None
+
+
 def test_the_output_leads_with_the_coverage_table(tmp_path, monkeypatch, capsys):
     """The scorer's refresh posts the first Markdown table under the first line of the output naming coverage: that is
     tables/coverage.md's table, every gain target and data a row."""

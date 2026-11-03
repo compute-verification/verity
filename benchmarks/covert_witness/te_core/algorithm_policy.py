@@ -37,7 +37,7 @@ fit is provisional (te_core.frontier_fit's `FIT_TARGET`), which the note names. 
 leaves it unmeasured, never 1; coordinator 09:46Z and 12:20Z), `reading` (A where formalism.READING_A and the row's token kind
 is measured, its trace's entries and an op log, else B, whose ρ is Slowdown's token form, a target), `te_core` the
 VERSION that priced it, `binding_kind` and `rests_on`, and `kinds`, a JSON cell of the terms its max takes and the
-sensitivities it leaves out.
+sensitivities it leaves out, with a measured fresh-products term's premises beside it (`PREMISED`).
 
 The coverage (`coverage`) is, per gain target, data and decade of ρ (`DECADES`: from 1, 10, ... and 1e5 and above,
 an infinite ρ there, and an unmeasured one, one resting on a stub input (basis `stub`) or a partial one (basis
@@ -137,6 +137,10 @@ STUB = "stub"
 #: exceeds 1 and a valid kind is unmeasured; coordinator 12:20Z): drawn and marked, but in no decade, picked by the
 #: cut among the partial rows alone, and never the least S
 PARTIAL = "partial"
+#: the kinds whose measured term the kinds cell labels with what it rests on (te_core.formalism's `RESTS_ON_CELL`),
+#: binding or not: the fresh-products term rests on premises on the reference circuit, P-width and P-chain
+#: (coordinator 12:09Z), which `rests_on` names only where it binds
+PREMISED = ("fresh_products",)
 
 
 def finite(rho: float | None) -> float | None:
@@ -246,15 +250,17 @@ def rho_inputs(m: formalism.Measured, w_fwd: float) -> str:
 
 def kinds(one: dict) -> str:
     """A published ρ's kinds as one JSON cell (te_core.formalism's `published`): `bound`, the terms its max takes, and
-    `sensitivity`, those it leaves out; null where unmeasured, "inf" where infinite; and `partial` and `why` where
-    `published` sets them."""
+    `sensitivity`, those it leaves out; null where unmeasured, "inf" where infinite; `partial` and `why` where
+    `published` sets them; and `rests_on`, what each `PREMISED` kind's term rests on where it is measured."""
     def cell(x: float | None) -> str:
         return "null" if x is None else '"inf"' if math.isinf(x) else num(x, DIGITS)
 
     def part(d: dict) -> str:
         return "{" + ",".join(f'"{k}":{cell(x)}' for k, x in d.items()) + "}"
-    marks = (',"partial":true' if one.get("partial") else "") + (f',"why":{json.dumps(one["why"])}'
-                                                                 if one.get("why") else "")
+    rests = {k: formalism.RESTS_ON_CELL[k] for k in PREMISED if one["terms"].get(k) is not None}
+    marks = ((',"partial":true' if one.get("partial") else "") + (f',"why":{json.dumps(one["why"])}'
+                                                                  if one.get("why") else "")
+             + (f',"rests_on":{json.dumps(rests)}' if rests else ""))
     return f'{{"bound":{part(one["terms"])},"sensitivity":{part(one["sensitivities"])}{marks}}}'
 
 
