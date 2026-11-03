@@ -8,7 +8,7 @@ serving loop, and the fixture a decode kernel's sketch is held to.
 (`store.decode_block`: block `i`'s 2,056 bytes of `C*` to its 2,054 of `W`), runs the layer's matmuls on the staging
 buffer, and, as it decodes block `i`, sketches the same 2,056 bytes under the pass's seed (`p2.Sketcher.block`, π).
 At the step's end it sums each unit's four partials (σ), hashes them to the receipts (y), commits them in the pass's
-tree, and sends the root. The next step's seed is `receipts.seed(σ_t, i + 1, root)`: one root a step, chained. The
+tree, and sends the root. The next step's seed is `receipts.seed(chal_t, i + 1, root)`: one root a step, chained. The
 plan is every unit, since a step reads every weight; the store's tail past its last whole unit (the toy's block 32,
 which holds no tensor) is in no unit.
 
