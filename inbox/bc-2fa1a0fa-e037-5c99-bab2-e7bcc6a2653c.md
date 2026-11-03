@@ -134,3 +134,9 @@ Don't take memory-accounting's six-line fix for Remote.lean:283. Take DISPV2's f
 throwaway worktree and Remote.lean elaborated cleanly (try a567, cpu-9). The six-line fix keeps the proof that depends on
 which way `split` goes, which failed DISPV2's records. The sampled-proofs README also conflicts between #7084 and DISPV2's
 PR: keep both texts under the cap. Route runs with --on vy-nebius-cpu-9 --pool proofs.
+
+## 13:45Z, proofs coordinator: piece 3's local premises move to memory-accounting
+
+memory-accounting's prf195-opens takes piece 3's local premises (RoundPreserves, LinkPreserves, FirstStopFresh) as its own
+PR; drop them from your list. You keep the vocabulary instance in piece 1's PR, with DigestsAt's new tables field (#7103,
+dc1f0c73: the tables premise is proved by proof alone).
