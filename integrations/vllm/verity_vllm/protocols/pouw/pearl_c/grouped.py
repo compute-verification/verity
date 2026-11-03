@@ -12,9 +12,8 @@ What vLLM hands it, from its expert-parallel dispatch:
 
 It returns y (BF16, Σ counts × n) in x's row order, plus ``bias`` when given.  Each expert's rows, in blocks of at most
 pd_commit's 256 (`grouped.units`), are each a unit: one matmul of the pass (m₁₆ rows, its expert's weight), committed with
-its own index, keys, A tree, records and tile leaves (and in a retained pass its real rows of y, at its rows of A), as
-`PearlCDeviceRun.gemm` commits that block called alone; the indices follow on in unit order, and an expert with no rows has
-none.
+its own index, keys, A tree, records and tile leaves, as `PearlCDeviceRun.gemm` commits that block called alone; the indices
+follow on in unit order, and an expert with no rows has none.
 
 The counts are read on the host, so a call's layout (its units, `_Call`) is the host's, and so is its table: each unit's
 records and keys (`grouped.Grouped.meta`), the expert map, the gathered rows' rows of A, the units' root nodes, then the
