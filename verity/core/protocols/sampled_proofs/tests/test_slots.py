@@ -6,8 +6,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from verity.core.protocols.sampled_proofs.one_stage import slots as SL
 
 
