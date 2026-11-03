@@ -131,9 +131,8 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
     sensitivities (the console's cell has room for no more). At the
     dial's default the dense, LoRA and grown-adapter steps bind on the token kind; the adapter with its live code
     publishes 1, no kind above 1, its reduction sensitivity above 9 beside it. A row without entries or an op log
-    publishes reading B, Slowdown's token form, a target, and so does every row where `READING_A` is off; read under
-    A, such a row measures no kind, so it publishes None, binding none and resting on `unmeasured`, never 1
-    (coordinator 09:46Z)."""
+    publishes reading B, Slowdown's token form, a target; under reading A it measures no kind, so it publishes None,
+    binding none and resting on `unmeasured`, never 1 (coordinator 09:46Z)."""
     default = rho_vectors.CELLS[0]
     for case in rho_vectors.CASES:
         v = by(built, case, *default)
