@@ -1,0 +1,39 @@
+{
+ "schema": "covert-witness/starts-store/v1",
+ "art": "art:8e2ff3459bc0cd5d4568475d858d65c682993f988eeb147c3f909d4a1a86e059",
+ "path": "out/starts",
+ "starts": {
+  "s-t20": {
+   "digest": "52d764fc51ffe481872bf0ff79ee52ddea3fdd81fe7033dfa0be9cd738150abc",
+   "files": {
+    "start.json": "4c299577acd7c72368e9891d8876ef3b7c0141283f67aa36c0bc42a749d96292",
+    "theta.safetensors": "6f09e2da2a30f609060589b8ac5e893278aded3ec021b3c87952b71dff200fd9"
+   },
+   "bytes": 180132924
+  },
+  "s-t200": {
+   "digest": "a5a5b21e206b69a15ee9733b5657715a966831bf3b5a71058e00d623b09b214e",
+   "files": {
+    "start.json": "f350ee63db79b2560fb81adc63438c9fb3a8d17eb284c1aff0a6056efcb30f49",
+    "theta.safetensors": "49ac7843124e7dc08556b99fa37418dd459f6bb502ae0f0d5ef404cf8e155b8d"
+   },
+   "bytes": 180134217
+  },
+  "m-t20": {
+   "digest": "5fbf34e4ae6d958583925de0af82a7be79aa66089d7051aada2896be8ec36615",
+   "files": {
+    "start.json": "7509ddba48ae62d08ddca611800c538f39f6956aa590cadb08083cf26ff186b0",
+    "theta.safetensors": "31b5eaaabc76c67dfea6a0d2e04d9805af92c8201ea56a5d62d9669fd9b5ee19"
+   },
+   "bytes": 381095020
+  },
+  "m-t200": {
+   "digest": "94585bd024ceff13f0a946e1237a8710f3f8f5136a05b2dd56f22d20316e70a9",
+   "files": {
+    "start.json": "8541674c461896c24b6e95a70fedd359c26b4625569b66750af70e4135bbb090",
+    "theta.safetensors": "f9d531a9e2bd373810d0981888685a9244b68fd7fb4acd8cd48312a237bd8456"
+   },
+   "bytes": 381098886
+  }
+ }
+}
