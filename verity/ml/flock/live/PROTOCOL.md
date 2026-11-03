@@ -805,13 +805,17 @@ rep's frame ended not stopped; where one stopped, `Finish`
 leaves without them once the schedule's last opening has, and the prover's `Finish` is refused (`PROVER-STOPPED: the Lean
 frame stopped table I rep R`). The analysis's release is this loop
 (`Claims.ZKServer.LeanRelease.loop`, `Flock.zk_server_lean_loop`): its `Hello`, requests, last request and the coins its
-frames take are proved (`loop_coinsRead`), and its link (`LinkRoundEq`) and the frames' state (`ProgReads`: the `prior` coins and the
-rounds Rust hands them) are still assumed. So are the bytes it releases, which the theorem reads only through named
-hypotheses: the worker's passed rounds and the stand-in rounds are the session's (`LiveRoundEq`, `FillRoundEq`), and so
-are the `Finish`'s record and proof files (`FinishIs`). The frames refusing every coin fault is proved at the loop's own
-frames (`frameUnrefused_ofLoop`), and from it, `FinishIs` and the tables admitting unrefused coins, proved at the deployed
-tables, `FinalRoundEq` follows (`finalRoundEq_ofLoop`).
-None of them is proved about the live path yet, so the ZK server is not yet proved zero-knowledge.
+frames take are proved (`loop_coinsRead`). At the loop's own frames, link and `Finish` (`LeanRelease.ofLoopLink`, the
+release `Flock.SecurityProofs.SessionLoopZKDeployed` is about) the frames' state is proved (`ProgReads`, `ofLoop_progReads`:
+the `prior` coins and the rounds Rust hands them), and so, in the masked verifier's scope where the loop's inputs from its
+host are the tape's (`Loop.Src`), are its link (`LinkRoundEq`, `linkRoundEq_ofLoopLink`) and the `Finish`'s record and
+proof files (`FinishIs`, `Loop.finishIs`). The frames refusing every coin fault is proved at the loop's own frames
+(`frameUnrefused_ofLoop`), and from it, `FinishIs` and the tables admitting unrefused coins, proved at the deployed
+tables, `FinalRoundEq` follows (`finalRoundEq_ofLoop`). The other bytes it releases the theorem still reads only through
+named hypotheses: the worker's passed rounds and the stand-in rounds are the session's (`LiveRoundEq`, `FillRoundEq`) and
+the inner proof's round 0 is the firewall's own (`LoopInnerRound0`), and the tables' side (`Tables`, `Complete`,
+`DummyReg`, `Causal`, `SwCausal`, `TapeOK`) is a premise. Until those are proved, the ZK server is not yet proved
+zero-knowledge.
 
 The frame's protocol, which the loop steps on its own requests (`Frame.Req`) and `flock-firewall frame` serves on its
 standard input (`tests/test_firewall_frame.py`):
@@ -896,7 +900,9 @@ before its `Finish` (§10.1): the tampered message never leaves (a masked value 
 every stream runs its schedule, and `Finish` goes without proofs, the auditor's verdict not accepted after as many rounds
 as an honest session's. The prover's record has the refusal: `prover_stopped` the ZK server's, where its own checks caught
 it, and the verdict's `why` the loop's `PROVER-STOPPED: the Lean frame stopped table I rep R` where the rep's frame stopped
-it (both, for some). `verifier/firewall_controls.sh` runs each control through the loop and holds it to that outcome. `later-NAME` is `NAME` on every table of a several-table session but the first, and is refused
+it (both, for some). `verifier/firewall_controls.sh` runs each control through the loop and holds it to that outcome,
+after an honest session that must be accepted with no rep's frame stopped and no `prover_stopped`. `later-NAME` is `NAME`
+on every table of a several-table session but the first, and is refused
 the same way at the second table:
 
 | `FC_FIREWALL_TAMPER` | the device | refusal, at `Finish` |
