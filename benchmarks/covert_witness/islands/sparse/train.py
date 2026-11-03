@@ -27,7 +27,8 @@ the CWQUAN1 ones (θ is fp32, so a gain carried in full would cost 4 bytes). `--
 in the top N blocks (the final norm included), so the backward stops there and a step costs less. `--embed-rank R` gives
 the tied embedding a rank-R LoRA (E carries it as one factor pair on `embed`; training applies it in factored form to
 both the lookup and the head), its (vocab + d) · R entries taken before the block matrices' allocation. `--cap` sets a
-byte bin below the class's cap (the 10 kB bin, or Fit's ~1.8 kB at the reference policy).
+byte bin below the class's cap (the 10 kB bin, or Fit's ~1.8 kB at the reference policy); the reference class has no
+cap, so there `--cap` is the planner's budget and is required.
 
 The record's notes give `delta_grad`: the trainable values N and the gradient plus AdamW's m and v passed between token
 blocks, 3N fp32 values (a straight-through code trains fp32 latents, so codes shrink E and not this), in the lowrank
@@ -494,7 +495,7 @@ def tie_lora(lm, A, B, s: float) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     classes = getattr(prepare, "CLASSES", None)
-    ap.add_argument("--klass", required=bool(classes), choices=("e1mb", "e100kb") if classes else None)
+    ap.add_argument("--klass", required=bool(classes), choices=("reference", "e1mb", "e100kb") if classes else None)
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--mech", required=True, choices=("norms", "lines", "lora", "qlora", "signrows"))
@@ -540,9 +541,11 @@ def main() -> int:
     L = rec["config"]["n_layer"]
     if classes:
         cap = classes[a.klass]["max_e_bytes"]
-        if a.cap > cap:
+        if cap is not None and a.cap > cap:
             raise SystemExit(f"sparse: --cap {a.cap} is over {a.klass}'s cap of {cap}")
         cap = a.cap or cap
+        if cap is None:
+            raise SystemExit(f"sparse: {a.klass} has no E cap, so --cap N (the planner's budget) is required")
     elif a.cap > 0:
         cap = a.cap
     else:
