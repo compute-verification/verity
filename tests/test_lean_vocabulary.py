@@ -492,6 +492,8 @@ KNOWN: dict[str, str] = {
         "homonym, a hiding commitment to a partition's rows: rename (proofs)",
     "Security/Definitions/Core/Boolean.lean::FlockSoundness.Audit.Circuit":
         "duplicate of `Verity.Circuit`: becomes its Boolean case (proofs)",
+    "Security/Definitions/Core/Compose.lean::Claims.ZKMal.Layout":
+        "homonym, a run in parts (a first part, then sessions) that RecZK reads: rename (lean)",
     "Security/Definitions/Flock/Accounting/Bound.lean::FlockSoundness.Accounting.Stmt":
         "duplicate of `Flock.Stmt`: becomes a reading of its shape (lean)",
     "Security/Definitions/Flock/Circuit.lean::FlockSoundness.Audit.Partition":
@@ -569,8 +571,6 @@ KNOWN: dict[str, str] = {
     "Security/Proofs/Flock/Claims/Recursion/Inner.lean::Claims.Recursion.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (proofs)",
     "Security/Proofs/Flock/Claims/Recursion/VStar.lean::Claims.Recursion.VStar.Layout":
-        "homonym, proof-internal layout: rename (proofs)",
-    "Security/Proofs/Flock/Claims/ZK/Layout.lean::Claims.ZKMal.Layout":
         "homonym, proof-internal layout: rename (proofs)",
     "Security/Proofs/Flock/Soundness/Binding/Layout.lean::FlockSoundness.Binding.Layout":
         "homonym, proof-internal layout: rename (proofs)",
