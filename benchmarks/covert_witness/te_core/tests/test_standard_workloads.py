@@ -92,6 +92,19 @@ def test_a_row_whose_inputs_dont_give_te_cores_rho_is_refused(monkeypatch):
                                      formalism.even(1e6), 1e6), w_fwd, {})
 
 
+def test_a_row_whose_token_dials_miss_its_measured_tokens_is_refused_with_the_value_to_write(monkeypatch):
+    """A step of two micro-batches the counter counts one of: a dial read off its count is half the run's tokens."""
+    fx = json.loads(PINNED.read_text())
+    m = formalism.from_json(fx["measured"])
+    assert SW.token_dials(fx["row"]["dials"], m.tokens) == []
+    half = fx["row"] | {"dials": fx["row"]["dials"] | {"tokens_per_param": fx["row"]["dials"]["tokens_per_param"] / 2}}
+    with pytest.raises(SystemExit, match=r"its dial tokens_per_param is 0\.75547, te_core measured 1\.51095: the dial"):
+        build(m, fx | {"row": half}, monkeypatch)
+    assert SW.token_dials({"n_params": 10, "tokens": 50.0}, 100.0) == ["its dial tokens is 50, te_core measured 100: "
+                                                                        "the dial is the run's"]
+    assert SW.token_dials({"n_params": 10, "tokens_per_param": 10.04}, 100.0) == []
+
+
 def test_an_input_is_measured_where_te_core_counted_traced_or_read_it_and_assumed_where_it_stubbed_it():
     traced = formalism.TRACED | {"gates": "counted MACs in gates (te_core.gates)", "u1_bits": formalism.TRACED["u_in"],
                                  "delta_bits": formalism.STUBS["delta_bits"], "decoder_gates": formalism.DECODER["none"]}
