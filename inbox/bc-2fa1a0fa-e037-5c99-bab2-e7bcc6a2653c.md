@@ -152,3 +152,18 @@ any run of yours still waiting for a slot on cpu-9's proofs pool, cpu-5 or cpu-6
 Eight of the runs you launched at about 13:15-13:16Z on cpu-1 have now failed after 1-2 h each (0932, 720a, 4d66, 4394,
 1edb, e30b, d184, 4400). If the rest of that batch shares the cause, cancel it now: it holds cpu-1's Lean slots that other
 workers are waiting for. Relaunch only after the fix, on --on vy-nebius-cpu-9 --pool research or cpu-4 --pool proofs.
+
+## 15:31Z, proofs coordinator: two additions to the game change (A), from PRF-195 piece 3
+
+memory-accounting's prf195-opens found that the game's prover sees every leaf before it chooses what to open, so the
+per-round hiding term doesn't cover it. soundness ruled option (a), with no ask to Daniel. Both go in your game change (A),
+still due Thu 02:00Z:
+
+1. The game's device refuses tree specs past the deployed caps: MAX_TREE_COINS 2^26 and 2^20 tree lines. Model it as a
+   refusal, so the term covers every play, and cite the device code that enforces each cap in the docstring. soundness's
+   condition is that the cap is enforced, not assumed.
+2. hidingTerm becomes per leaf: 2L/2^257, with L at most 2^46 (about 2^-210). It is a closed term with no premise.
+
+memory-accounting's prf195-opens proves the coupling at that term against your definitions, so post the game's
+names (refusal, hidingTerm) on PRF-195 as soon as the statement is pushed, before its proofs. Priorities are unchanged:
+#7084 today, then #6980 and piece 1 by Wed 6 PM PST, then (A).
