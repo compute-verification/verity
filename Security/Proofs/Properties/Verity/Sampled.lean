@@ -40,11 +40,16 @@ strategy of the period's game projects to. This module states its C-Flock side.
   (`ParamsAt`), the session's inputs as v2 hands them to flock-verify (the statement, one table, the verifier's
   partition object and program, no recomputation of public input words), the committed circuit and public files and
   the vocabulary's reading of them, the law the draw reads over the population (`lawAt`), and the claim's share.
+* **The device's log as v2's check reads it** (`coinsRead`): the releases the signed log in v2's evidence shows, in
+  order, each with the bits v2 reads of it: the draw family's coins after the registration's digest, the bytes the
+  draw reads; each tree's root and key; each opening's coins, as a session's record gives them. v2's evidence opens no
+  other coin, so another release has none.
 * **The vocabulary's sampled fields at the deployment's sessions** (`Deployed`, `Covers`): at most one session at each
   parameters and committed files, each one v2 sets up, with the deployment's writer, device bytes and bound
-  parameters. Soundness's `Vocab` reads the constructions' read finder and forger at `.sampled`, no loss term, and at
-  each session the extractor at the projected strategy, the leg's per-finder premises in `error`'s condition, and a
-  published `δ` at least the session's. Where there is no session the sampled verdict never accepts.
+  parameters. Soundness's `Vocab` reads v2's log (`coinsRead`), the constructions' read finder and forger at `.sampled`,
+  no loss term, and at each session the extractor at the projected strategy, the leg's per-finder premises in
+  `error`'s condition, and a published `δ` at least the session's. Where there is no session the sampled verdict never
+  accepts.
 * **The per-finder SHA-512 premises at a strategy and a budget** (`Live.FinderCR`): `cr/sha-512` at each table's
   knowledge finders (`TableCRZ`: the fork, pads, τ and level-0 finders at `2t + 2v`, the self-clash finder at `t + v`)
   and `ecr/sha-512` at the link finders (`LinkCRZC`, at `t + w` per run), at `t` the strategy's SHA-512 calls.
@@ -434,6 +439,125 @@ structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Li
   read : V.read θ F = A.fileRead
   share : (V.certOf θ).ε = A.ε
 
+/-- **v2's case in what the prover sent**: v2's parameters in the parameters sent, as `ParamsAt` reads them, and the
+registration and the evidence of the case the composition's evidence names under v2's id, each read by v2's decoder. -/
+def caseOf (s : Verity.Sent) : Flock.V (_root_.SampledProofs.OneStageZk.Params ×
+    _root_.SampledProofs.OneStage.Commitment × _root_.SampledProofs.OneStageZk.Evidence) := do
+  let ps ← _root_.Core.canonicalJson s.params >>= _root_.Core.Composition.decodeParams
+  let some x := ps.find? (·.id == _root_.SampledProofs.OneStageZk.PROTOCOL) | throw "the parameters name no v2"
+  let ev ← _root_.Core.Composition.decodeEvidence s.evidence
+  let some y := ev.find? (·.id == _root_.SampledProofs.OneStageZk.PROTOCOL) | throw "the evidence holds no v2 case"
+  let p ← _root_.Core.canonicalJson x.params.toUTF8 >>= _root_.SampledProofs.OneStageZk.paramsOfJson
+  let c ← _root_.SampledProofs.OneStage.commitmentOf y.commitment
+  let e ← _root_.SampledProofs.OneStageZk.evidenceOf y.evidence
+  pure (p, c, e)
+
+/-- The challenger session's release log in v2's evidence, a line each, as `SampledProofs.Challenger.trustedTreesOf`
+reads it. -/
+def linesOf (e : _root_.SampledProofs.OneStageZk.Evidence) : Flock.V (List String) := do
+  let .arr ls := _root_.SampledProofs.getD (_root_.SampledProofs.getD e.base.coins "session") "log"
+    | throw "the session's log is not a list of lines"
+  ls.toList.mapM fun | .str l => pure l | _ => throw "a line of the session's log is not a string"
+
+/-- **The coins a `--zk` session's record gives round `k` of stream `stream`**, as
+`SampledProofs.Challenger.sessionTreeReason` reads them: its link points at the session stream's round 0, else that
+stream's round `k`. -/
+def recordRound (record : Lean.Json) (stream : String) (k : ℕ) : Option ByteArray :=
+  if stream == _root_.SampledProofs.Challenger.TREE_SESSION && k == 0 then
+    match _root_.SampledProofs.getD (_root_.SampledProofs.getD record "link") "points" with
+    | .arr ps => _root_.SampledProofs.Challenger.recordCoins?
+        (.arr (ps.foldl (fun acc p => match p with | .arr cs => acc ++ cs | _ => acc.push .null) #[]))
+    | _ => none
+  else
+    match _root_.SampledProofs.getD record "streams" with
+    | .arr ss =>
+      (ss.find? fun x => match _root_.SampledProofs.getD x "stream" with | .str n => n == stream | _ => false).bind
+        fun x => match _root_.SampledProofs.getD x "rounds" with
+          | .arr rs =>
+            rs[k]?.bind fun r => _root_.SampledProofs.Challenger.recordCoins? (_root_.SampledProofs.getD r "coins")
+          | _ => none
+    | _ => none
+
+/-- The root of the coin tree a session's record names. -/
+def recordTree (record : Lean.Json) : String :=
+  match _root_.SampledProofs.getD (_root_.SampledProofs.getD record "coin_tree") "root" with
+  | .str r => r
+  | _ => ""
+
+/-- A coin tree's spec as its line names it. -/
+def specOf (j : Lean.Json) : Option Flock.CoinTree.Spec := do
+  let .arr ss := _root_.SampledProofs.getD j "streams" | none
+  let streams ← ss.mapM fun | .str x => some x | _ => none
+  pure ⟨streams, ← _root_.SampledProofs.nat? (_root_.SampledProofs.getD j "rounds_log"),
+    ← _root_.SampledProofs.nat? (_root_.SampledProofs.getD j "block")⟩
+
+/-- **The releases the log's lines show**, in order, for the draw of family `label` after the registration's digest
+`after`, with the draw's coins `ξ` still to place, the trees `ts` sampled so far (their roots and specs) and the
+sessions' records. A coin's release line (`SampledProofs.Challenger.releasedRootsOf`'s) shows a family's coin after its
+root, with its bytes' bits where the draw reads it (`label`'s, after `after`), else none; a coin tree's line
+(`SampledProofs.Challenger.coinTreesOf`'s) its hello after its nonce, with its root's and key's bits; an opening's line
+a round opened, of the `i`-th tree sampled and its spec's `s`-th stream, after the bytes it answers, with its coins'
+bits where a record of that tree gives them, else none. The commitment's line and each root's line show no release. -/
+def releasesOf (label : String) (after : ByteArray) (records : List Lean.Json) :
+    List String → List (String × Flock.CoinTree.Spec) → ByteArray → Option (List Verity.Release)
+  | [], _, _ => some []
+  | l :: ls, ts, ξ => do
+    let j ← (_root_.SampledProofs.Challenger.event l).toOption
+    let ev := match _root_.SampledProofs.getD j "event" with | .str x => x | _ => ""
+    if ev == "commitment" || ev == "root" then releasesOf label after records ls ts ξ
+    else if ev == "release" then do
+      let .str lab := _root_.SampledProofs.getD j "label" | none
+      let .str root := _root_.SampledProofs.getD j "after" | none
+      let b ← (Flock.unhex root).toOption
+      if lab == label && b == after then
+        let m := _root_.SampledProofs.Challenger.COIN_BYTES
+        let rest ← releasesOf label after records ls ts (ξ.extract m ξ.size)
+        pure (⟨.fresh lab, b, Verity.bitsOfBytes (ξ.extract 0 m)⟩ :: rest)
+      else
+        let rest ← releasesOf label after records ls ts ξ
+        pure (⟨.fresh lab, b, []⟩ :: rest)
+    else if ev == _root_.SampledProofs.Challenger.TREE_EVENT then do
+      let .str key := _root_.SampledProofs.getD j "key" | none
+      let .str nonce := _root_.SampledProofs.getD j "nonce" | none
+      let .str root := _root_.SampledProofs.getD j "root" | none
+      let spec ← specOf (_root_.SampledProofs.getD j "spec")
+      let ν ← (Flock.unhex nonce).toOption
+      let r ← (Flock.unhex root).toOption
+      let κ ← (Flock.unhex key).toOption
+      let rest ← releasesOf label after records ls (ts ++ [(root, spec)]) ξ
+      pure (⟨.hello spec, ν, Verity.bitsOfBytes (r ++ κ)⟩ :: rest)
+    else if ev == _root_.SampledProofs.Challenger.OPEN_EVENT then do
+      let .str root := _root_.SampledProofs.getD j "tree" | none
+      let .str stream := _root_.SampledProofs.getD j "stream" | none
+      let .str aft := _root_.SampledProofs.getD j "after" | none
+      let k ← _root_.SampledProofs.nat? (_root_.SampledProofs.getD j "round")
+      let n ← _root_.SampledProofs.nat? (_root_.SampledProofs.getD j "n")
+      let i ← ts.findIdx? (·.1 == root)
+      let (_, spec) ← ts[i]?
+      let s ← spec.streams.findIdx? (· == stream)
+      let b ← (Flock.unhex aft).toOption
+      let coins := match records.find? (recordTree · == root) with
+        | some rec => ((recordRound rec stream k).map Verity.bitsOfBytes).getD []
+        | none => []
+      let rest ← releasesOf label after records ls ts ξ
+      pure (⟨.opening i s n, b, coins⟩ :: rest)
+    else none
+
+/-- **The device's log as v2's check reads it** from what the prover sent: the releases the challenger session's log in
+v2's evidence shows (`releasesOf`), at the parameters' challenger family and the registration's digest, with the coins
+v2's draw reads (`SampledProofs.OneStageZk.coinsOf`) and the records of the evidence's sessions on the blobs sent. A
+release whose coins v2 doesn't open has none. -/
+def coinsRead (s : Verity.Sent) : Option (List Verity.Release) := do
+  let (p, c, e) ← (caseOf s).toOption
+  let (_, label) ← p.base.challenger
+  let ξ ← (_root_.SampledProofs.OneStageZk.coinsOf p c e).toOption
+  let lines ← (linesOf e).toOption
+  let bs := _root_.Core.Blobs.ofArray s.blobs
+  let records := e.sessions.toList.filterMap fun r => do
+    let b ← (bs.get r.record "record").toOption
+    (Lean.Json.parse (← String.fromUTF8? b)).toOption
+  releasesOf label c.digest records lines [] ξ
+
 /-- **The deployment's sessions `S` cover the sampled verdict at composite `k`**: where `S` holds no session, no
 strategy of the period's game makes the sampled verdict accept. -/
 def Covers (V : Vocab d α) (k : Verity.Registration.Composite) (S : ByteArray → Array ByteArray → Option Live) :
@@ -442,12 +566,14 @@ def Covers (V : Vocab d α) (k : Verity.Registration.Composite) (S : ByteArray �
     Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0
 
 /-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's sessions `S`**: each session
-`S` holds is the one v2 sets up (`SetsUp`); the finder is `K`'s read finder and the forger `K`'s, with no loss term; and
-at each session the extractor is the session's at the projected strategy (`Live.extract`), `error`'s condition holds the
-leg's per-finder premises (`FinderCR`), and the published `δ` is at least the session's at the read finder's published
-bound (`Live.delta`). -/
-structure Deployed (V : Vocab d α) (K : Constructions V) (S : ByteArray → Array ByteArray → Option Live) : Prop where
+`S` holds is the one v2 sets up (`SetsUp`); the device's log as the sampled check reads it is v2's (`coinsRead`); the
+finder is `K`'s read finder and the forger `K`'s, with no loss term; and at each session the extractor is the
+session's at the projected strategy (`Live.extract`), `error`'s condition holds the leg's per-finder premises
+(`FinderCR`), and the published `δ` is at least the session's at the read finder's published bound (`Live.delta`). -/
+structure Deployed (V : Vocab d α) (K : Constructions V) (S : ByteArray → Array ByteArray → Option Live) :
+    Prop where
   setsUp : ∀ θ F A, S θ F = some A → SetsUp V θ F A
+  coinsRead : ∀ s, V.coinsRead .sampled s = Verity.Sampled.coinsRead s
   finder : ∀ θ F c σ, V.finder .sampled θ F c σ = K.readFinder θ F c σ
   forger : ∀ θ F c σ, V.forger .sampled θ F c σ = K.forger θ F c σ
   loss : ∀ θ x, V.loss .sampled θ x = 0
