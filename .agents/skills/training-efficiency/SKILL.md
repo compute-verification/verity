@@ -30,7 +30,7 @@ to work in a search, and the rules no code enforces yet.
   affected gates, those depending on θ' (everything downstream of the update), and R ⊆ A, the reachable ones a block can
   do while computing the token from its inputs; σ, the token blocks' share of |C|; w, gates per token; s = c/w; τ, data
   bits per token; x0 = |T ∩ R|/|T ∩ A|; s*, the most tokens' worth of unreachable work a block does; a, the cut cost;
-  u(x), the update bits a block reads to do a share x of a token's affected work (u(1) the per-token update), and
+  u(x), the update bits a block must read to do a share x of a token's affected work (u(1) the per-token update), and
   u_in(x), the same for the first share x in dependency order while computing the token from its inputs; Δ, the bits
   describing θ' given θ with a decoder of d ≤ c gates; Δ_grad, the gradient and optimizer state passed between blocks;
   t, a frozen tail's share of the affected work. Update bits are values of θ' or an encoding of it, never cut values.
@@ -39,7 +39,8 @@ to work in a search, and the rules no code enforces yet.
   counting lemma at A ∖ R, in token form ρ ≥ σ(1 − x0)·s/s* (the largest per-token affected count where token blocks
   vary), with the bounds s* ≤ max_x x(k − u(x))/a (A1, cut cost) and x0 ≤ max{x : u_in(x) ≤ k} (A1′, update cost from
   the inputs). Security, under A1, A1′ and A2 (efficiency floor): reaching ℓ* covertly costs at least H(ℓ*)·min ρp, with
-  at most nc available per period.
+  at most nc available per period. A1 leaves attention's reads of other tokens' affected keys and values uncharged: the
+  bound stays valid, only weaker.
 - **What a search measures**: H(ℓ*), the least compute of any method, and for each attack A its p_A = |C_A|/H and ρ_A,
   so S(c, k; θ, ℓ*) = min_A ρ_A·p_A = W*/H, with W* the least |C|·ρ over attacks reaching ℓ*. The inputs are the start,
   ℓ* and the policy; the red team chooses everything else (method, schedule, update form, placement, encoding). Score
@@ -89,6 +90,7 @@ to work in a search, and the rules no code enforces yet.
   x0 and s*, from blocks someone exhibits, are the attack side (`x0_known`, `s_star_known`): they say how tight the bound
   is, never what it is. Δ is Fit's quantity and u(1) Slowdown's: they agree only when every token's path reads the whole
   update, so they are separate columns.
+- **An evenly spread update** (u = u_in = x·u(1), u(1) ≫ k) has x0 ≈ 0 and s* ≤ k²/(4a·u(1)), so ρ ≳ 4σ·s·a·u(1)/k².
 - **A frozen tail is always charged.** With frozen layers above the changed ones (a share t of the
   affected work, the changed update > k), u_in jumps to the changed update at once, so x0 ≈ 0, s* ≤ t·k/a and
   ρ ≳ σ·s·a/(t·k): the tail's work is never exempt.

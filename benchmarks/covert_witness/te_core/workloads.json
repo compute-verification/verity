@@ -1,0 +1,3757 @@
+{
+ "id": "te_core.workloads",
+ "te_core": "4.6",
+ "reading": "B",
+ "spec": "note:training-20261103T0600Z-draft-workload-models",
+ "policies": {
+  "default": {
+   "c": 536681984163840.0,
+   "k": 65536.0,
+   "what": "the console's policy (te_core.policy.CONSOLE): one full session of the 45M reference a block, 4,096 tokens in and 1,024 out, attention and the LM head included (policy.session_gates), k = 65,536 bits"
+  }
+ },
+ "kinds": ["fresh_products", "token", "reduction", "update", "decoding"],
+ "rests_on": {
+  "fresh_products": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+  "token": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
+  "reduction": "sensitivity, assumption (R): each block holding a step's token work passes one partial gradient at its passed width (partial_cut_bits), and the step's token work fills at least ceil(N w / c) blocks; it holds only for partitions split by tokens (a block holding only frozen layers passes no partial)",
+  "update": "sensitivity, assumption (U): where two or more blocks hold a step's token work, the block applying the update to a coordinate reads its share of the gradient's cut (grad_cut_bits), the weights read once and theta free; it holds only for partitions split by tokens (a tensor's gradient made and applied in one block breaks it)",
+  "decoding": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, alpha_max (x0 s + s*))) affected gates, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
+  "fit": "Fit's construction (te_core.formalism): every block reads \u0394 and its tokens' ids, and runs the decoder",
+  "none": "nothing: no kind's term exceeds 1 and Fit fails (the row's fit_fails), so rho >= 1 is all the menu gives"
+ },
+ "reading_a": {
+  "label": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them (te_core.tiles); a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates",
+  "verdicts": {
+   "unmodelled": "finite, from a trace's entries and its op log's tiles (te_core 4.5), which a model hasn't",
+   "refused": "a record traced before te_core 4.4: no entries"
+  }
+ },
+ "menu_status": {
+  "fresh": "assumed: the shape's products by the standard algorithm, counted (dense_fresh, adapter_fresh, muon_fresh): no trace yet lists which products have two fresh operands",
+  "widths": "assumed: each product's operands at its GEMM's width and its partial sums in fp32, as passed (WIDTHS)",
+  "parts": "assumed: a step's tokens the dials' batch, so b = ceil(N w / c) (te_core.formalism's _blocks)",
+  "grad_bits": "assumed: the gradient at 32 bits a trained value, every worker's in a DiLoCo step (the island's traces measure exactly this as Delta_grad less the state: r20261103-053241-99bf, r20261103-064814-40d6, r20261103-053921-7400, r20261103-053912-3133, r20261103-064849-6854)",
+  "partial_bits": "assumed: one block's partial at 32 bits a trained value, a worker's in DiLoCo (te_core 4.4's dense and LoRA vectors: partial_cut_bits = grad_cut_bits; no island trace measures it yet)",
+  "op_update_bits": "assumed: the widest op's weight or factor at the width its ops read it (Shape.op_bits, Adapter.op_bits): reading A's test, no trace's entries"
+ },
+ "fresh_fields": ["kind", "macs", "entries", "layers", "count", "positions", "inputs", "tau", "lowest", "sequence"],
+ "part_fields": ["steps", "tokens", "token_gates", "partial_bits", "grad_bits"],
+ "records": "workloads_records.json",
+ "widths": {"gemm/bf16": [16.0, 16.0, 32.0], "gemm/e4m3": [8.0, 8.0, 32.0], "gemm/fp4": [4.5, 4.5, 32.0]},
+ "gates_per_mac": {
+  "gemm/bf16": 1480.125,
+  "gemm/e4m3": 861.09375,
+  "gemm/fp4": 334.828125,
+  "gemm/f32": 12637.0,
+  "elementwise/bf16": 3947.0,
+  "elementwise/f32": 12637.0
+ },
+ "workloads": {
+  "standard": {
+   "title": "Standard dense pretraining",
+   "what": "Every weight of a dense decoder trained by backpropagation, its optimizer outside the token blocks.",
+   "dials": [
+    {
+     "name": "n_params",
+     "unit": "parameters",
+     "default": 45029888,
+     "range": [10000000.0, 100000000000.0],
+     "why": "the trained model; d_model and n_layer follow at the reference model's d/L (te_core.workloads.dense)"
+    },
+    {
+     "name": "precision",
+     "unit": "GEMM format",
+     "default": "bf16",
+     "range": ["bf16", "e4m3", "fp4"],
+     "why": "the weight GEMMs' format, forward and backward; attention stays bf16"
+    },
+    {
+     "name": "seq_len",
+     "unit": "tokens",
+     "default": 1024,
+     "range": [256, 32768],
+     "why": "the training context: each token's attention span"
+    },
+    {
+     "name": "batch_tokens",
+     "unit": "tokens a step",
+     "default": 65536,
+     "range": [10000.0, 10000000.0],
+     "why": "sets the optimizer's share, 1 - sigma, and b, a step's token blocks; the pilot's 64 x 1,024"
+    },
+    {
+     "name": "optimizer",
+     "unit": "rule",
+     "default": "adamw",
+     "range": ["adamw", "muon", "sgd"],
+     "why": "sets Delta_grad (the state), the optimizer's gates and Muon's fresh Newton-Schulz products"
+    },
+    {
+     "name": "t",
+     "unit": "share of a token's affected work",
+     "default": null,
+     "range": [0.0, 0.9],
+     "why": "A1's free share, the token kind's: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread, which overcharges a block"
+    },
+    {
+     "name": "tokens_per_param",
+     "unit": "tokens / N",
+     "default": 20.0,
+     "range": [1.0, 2000.0],
+     "why": "sets |C| only (Chinchilla's 20 by default)"
+    },
+    {
+     "name": "vocab",
+     "unit": "ids",
+     "default": 50304,
+     "range": [1000, 262144],
+     "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
+    }
+   ],
+   "points": {
+    "default": {
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 20.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 2.1076908801314062e+20,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9997031897773526,
+      "tau_bits": 16.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:7.84543e8;1:1.13268e9",
+      "u_in_points": "0:0;1:1.13268e9",
+      "delta_bits": 1440956416,
+      "delta_t_bits": 1440956416,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261102-140347-a1c2@946 measures 2.32e+11",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261102-140347-a1c2@946 measures 1",
+      "tau_bits": "measured: r20261102-140347-a1c2@946",
+      "a_bits": "measured: r20261102-140347-a1c2@946",
+      "u_points": "measured: r20261102-140347-a1c2@946",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1); r20261102-140347-a1c2@946 measures u_in 8e+08 at x = 0 of u(1) 1.13e+09",
+      "delta_bits": "measured: r20261102-140347-a1c2@946",
+      "delta_t_bits": "measured: r20261102-140347-a1c2@946",
+      "d_gates": "measured: r20261102-140347-a1c2@946",
+      "delta_grad_bits": "measured: r20261102-140347-a1c2@946",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261102-140347-a1c2@946 measures 1.54e+11",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices; r20261102-140347-a1c2@946 measures 0.995"
+     },
+     "menu": {
+      "u1_bits": 1132675072.0,
+      "delta_bits": 1440956416,
+      "decoder_gates": 0.0,
+      "fresh": [
+       ["gemm/bf16", 3211264.0, 5376.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 25755648.0, 50304.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 45023232.0, 27392.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 45023232.0, 687.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.9736105866652403,
+      "parts": [
+       {
+        "steps": 13742,
+        "tokens": 900597760.0,
+        "token_gates": 2.1070652959320025e+20,
+        "partial_bits": 1440956416,
+        "grad_bits": 1440956416
+       }
+      ],
+      "op_update_bits": 824180736.0
+     },
+     "rho": {
+      "default": {
+       "rho": 7370247.403675454,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 7370247.403675454,
+       "terms": {
+        "fresh_products": 7370247.403675454,
+        "token": 413.82289681244794,
+        "reduction": 21542.147261370086,
+        "update": 769.3624021917888,
+        "decoding": 0.9997031897773526
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
+       "unmeasured": [],
+       "te_core": {"rho": 21542.147261370086, "basis": "reduction"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0,
+       "s": 2293.875722330285,
+       "x0": 5.785948823282658e-05,
+       "s_star": 5.541168,
+       "b": [29],
+       "fresh_share": 0.9736105866652403,
+       "fresh_charged_share": 0.9419511412400156,
+       "fit_delta_bits": 28833.98844271544,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "w_gates": 233962973207.04,
+      "t": 0.692646,
+      "t_counted": 0.43025289803425626,
+      "optimizer_gates_per_step": 4552341557248.0
+     }
+    },
+    "FP8 GEMMs": {
+     "dials": {
+      "n_params": 45029888,
+      "precision": "e4m3",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 20.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 1.3545684928718062e+20,
+      "w_gates": 150338249639.04,
+      "w_fwd_gates": 48087096432.0,
+      "sigma": 0.9995381671708032,
+      "tau_bits": 16.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:6.77778e8;1:9.78534e8",
+      "u_in_points": "0:0;1:9.78534e8",
+      "delta_bits": 1440956416,
+      "delta_t_bits": 1440956416,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 150338249639.04,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the input ids a token block reads, ceil(log2 V) bits each",
+      "a_bits": "assumed: upper bound (witness): d_model x 16, the bf16 residual stream (measured on both pilot starts)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "delta_t_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "d_gates": "assumed: none, E stores theta' itself",
+      "delta_grad_bits": "assumed: the gradient at 32 bits a value and adamw's state (the traces' exactly; AdamW's 96 N: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 978534400.0,
+      "delta_bits": 1440956416,
+      "decoder_gates": 0.0,
+      "fresh": [
+       ["gemm/e4m3", 3211264.0, 5376.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/e4m3", 25755648.0, 50304.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/e4m3", 45023232.0, 27392.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/e4m3", 45023232.0, 687.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.959020599639083,
+      "parts": [
+       {
+        "steps": 13742,
+        "tokens": 900597760.0,
+        "token_gates": 1.3539429086724024e+20,
+        "partial_bits": 1440956416,
+        "grad_bits": 1440956416
+       }
+      ],
+      "op_update_bits": 824180736.0
+     },
+     "rho": {
+      "default": {
+       "rho": 6267930.139051814,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 6267930.139051814,
+       "terms": {
+        "fresh_products": 6267930.139051814,
+        "token": 643.8971526942873,
+        "reduction": 21548.121256828592,
+        "update": 1197.1178476015884,
+        "decoding": 0.9995381671708032
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
+       "unmeasured": [],
+       "te_core": {"rho": 21548.121256828592, "basis": "reduction"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0,
+       "s": 3569.8299365092103,
+       "x0": 6.697362913352868e-05,
+       "s_star": 5.541168,
+       "b": [19],
+       "fresh_share": 0.959020599639083,
+       "fresh_charged_share": 0.9057298849369351,
+       "fit_delta_bits": 8418.721015852636,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "w_gates": 150338249639.04,
+      "t": 0.692646,
+      "t_counted": 0.4841638077721656,
+      "optimizer_gates_per_step": 4552341557248.0
+     }
+    },
+    "7B": {
+     "dials": {
+      "n_params": 7000000000.0,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 20.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 4.669996929659712e+24,
+      "w_gates": 33346322708367.36,
+      "w_fwd_gates": 10826728152067.324,
+      "sigma": 0.9996762844791867,
+      "tau_bits": 16.0,
+      "a_bits": 57941.493304682495,
+      "u_points": "0:0;0.692646:0;0.692646:7.95986e10;1:1.1492e11",
+      "u_in_points": "0:0;1:1.1492e11",
+      "delta_bits": 224000000000.0,
+      "delta_t_bits": 224000000000.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 672000000000.0,
+      "w_fit_gates": 33346322708367.36,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the input ids a token block reads, ceil(log2 V) bits each",
+      "a_bits": "assumed: upper bound (witness): d_model x 16, the bf16 residual stream (measured on both pilot starts)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "delta_t_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "d_gates": "assumed: none, E stores theta' itself",
+      "delta_grad_bits": "assumed: the gradient at 32 bits a value and adamw's state (the traces' exactly; AdamW's 96 N: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 114919664618.51396,
+      "delta_bits": 224000000000.0,
+      "decoder_gates": 0.0,
+      "fresh": [
+       [
+        "gemm/bf16",
+        160648062.18012866,
+        38024.10498119789,
+        42.4376171665155,
+        140000000000.0,
+        1024,
+        1024,
+        16.0,
+        1.0,
+        false
+       ],
+       ["gemm/bf16", 182168054.94992176, 50304.0, 1.0, 140000000000.0, 1024, 1024, 16.0, 1.0, false],
+       [
+        "gemm/bf16",
+        3708255.5714996797,
+        57941.493304682495,
+        42.4376171665155,
+        140000000000.0,
+        1024,
+        1024,
+        16.0,
+        1.0,
+        false
+       ],
+       [
+        "gemm/bf16",
+        3708255.5714996797,
+        3621.343331542656,
+        42.4376171665155,
+        140000000000.0,
+        1024,
+        1024,
+        16.0,
+        1.0,
+        false
+       ],
+       ["gemm/bf16", 6999689016.292799, 1348331.6852411018, 1.0, 140000000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 6999689016.292799, 106806.77820270995, 1.0, 140000000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 157369530.29890156, 2458898.910920337, 1.0, 140000000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 472108590.8967047, 461043.54579756316, 1.0, 140000000000.0, 1024, 1024, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.9736692697141801,
+      "parts": [
+       {
+        "steps": 2136230,
+        "tokens": 140000000000.0,
+        "token_gates": 4.6684851791714303e+24,
+        "partial_bits": 224000000000.0,
+        "grad_bits": 224000000000.0
+       }
+      ],
+      "op_update_bits": 5829377758.397496
+     },
+     "rho": {
+      "default": {
+       "rho": 7550457.598100427,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 7550457.598100427,
+       "terms": {
+        "fresh_products": 7550457.598100427,
+        "token": 20.536509597481384,
+        "reduction": 3416837.213958266,
+        "update": 839.1054061783561,
+        "decoding": 0.9996762844791867
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 5829377758.397496},
+       "unmeasured": [],
+       "te_core": {"rho": 3416837.213958266, "basis": "reduction"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0,
+       "s": 16.094187921631736,
+       "x0": 5.702766381850536e-07,
+       "s_star": 0.7834324879633638,
+       "b": [4073],
+       "fresh_share": 0.9736692697141801,
+       "fresh_charged_share": 0.9649828237608812,
+       "fit_delta_bits": 65278.492993253894,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 3621.343331542656,
+      "n_layer": 42.4376171665155,
+      "w_gates": 33346322708367.36,
+      "t": 0.692646,
+      "t_counted": 0.3785896519618208,
+      "optimizer_gates_per_step": 707672000000000.0
+     }
+    }
+   },
+   "checks": {
+    "45M ref-optim/adamw-rewarm-mild": {
+     "record": "r20261102-140347-a1c2@946",
+     "source": "te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal; 4.2 refuses the trace, made before its capture listed read-backs, until the run is traced again); delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k",
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 20.0,
+      "vocab": 50304
+     },
+     "differs": "w 0.9% below the model's; w_fit and alpha_ratio the rewarm's phases, where the model has one; u_in all of u(1) at x = 0, where the model's A1' is even",
+     "record_inputs": {
+      "tau_bits": 16.0156,
+      "a_bits": 8192,
+      "delta_bits": 1440996608,
+      "delta_t_bits": 1441000000.0,
+      "d_gates": 0,
+      "u_points": "0:0;0.692646:0;0.692646:1.13268e9;1:1.13268e9",
+      "u_in_points": "0:0;0:80000;0:145568;0:800000;0:8e6;0:8e7;0:8e8;1:1.13268e9",
+      "w_gates": 231908000000.0,
+      "sigma": 0.999823,
+      "w_fit_gates": 154410000000.0,
+      "alpha_ratio": 0.995234,
+      "delta_grad_bits": 4322869248
+     },
+     "record_status": {
+      "tau_bits": "measured",
+      "a_bits": "measured",
+      "delta_bits": "measured",
+      "delta_t_bits": "measured",
+      "d_gates": "measured",
+      "u_points": "measured",
+      "u_in_points": "measured",
+      "w_gates": "measured",
+      "sigma": "measured",
+      "w_fit_gates": "measured",
+      "alpha_ratio": "measured",
+      "delta_grad_bits": "measured"
+     },
+     "model_inputs": {
+      "C_gates": 2.1076908801314062e+20,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9997031897773526,
+      "tau_bits": 16.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:7.84543e8;1:1.13268e9",
+      "u_in_points": "0:0;1:1.13268e9",
+      "delta_bits": 1440956416,
+      "delta_t_bits": 1440956416,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "model_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261102-140347-a1c2@946 measures 2.32e+11",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261102-140347-a1c2@946 measures 1",
+      "tau_bits": "measured: r20261102-140347-a1c2@946",
+      "a_bits": "measured: r20261102-140347-a1c2@946",
+      "u_points": "measured: r20261102-140347-a1c2@946",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1); r20261102-140347-a1c2@946 measures u_in 8e+08 at x = 0 of u(1) 1.13e+09",
+      "delta_bits": "measured: r20261102-140347-a1c2@946",
+      "delta_t_bits": "measured: r20261102-140347-a1c2@946",
+      "d_gates": "measured: r20261102-140347-a1c2@946",
+      "delta_grad_bits": "measured: r20261102-140347-a1c2@946",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261102-140347-a1c2@946 measures 1.54e+11",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices; r20261102-140347-a1c2@946 measures 0.995"
+     },
+     "rho": {
+      "default": {
+       "record": {
+        "rho": 7436447.443501854,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 7436447.443501854,
+        "terms": {
+         "fresh_products": 7436447.443501854,
+         "token": 415.57393071303443,
+         "reduction": 21735.64022416231,
+         "update": 776.272865148654,
+         "decoding": 0.999823
+        },
+        "te_core": {"rho": 21735.64022416231, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "refused"},
+        "unmeasured": [],
+        "b": [29]
+       },
+       "model": {
+        "rho": 7370247.403675454,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 7370247.403675454,
+        "terms": {
+         "fresh_products": 7370247.403675454,
+         "token": 413.82289681244794,
+         "reduction": 21542.147261370086,
+         "update": 769.3624021917888,
+         "decoding": 0.9997031897773526
+        },
+        "te_core": {"rho": 21542.147261370086, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
+        "unmeasured": [],
+        "b": [29]
+       }
+      }
+     }
+    },
+    "45M ref-optim/cooldown-forks": {
+     "record": "r20261102-134356-ee8f@694",
+     "source": "te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal; 4.2 refuses the trace, made before its capture listed read-backs, until the run is traced again); delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k",
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "muon",
+      "t": null,
+      "tokens_per_param": 20.0,
+      "vocab": 50304
+     },
+     "differs": "as adamw-rewarm-mild; sigma the trace's 0.99339 against the model's 0.98774, five bf16 Newton-Schulz iterations on every matrix",
+     "record_inputs": {
+      "tau_bits": 16.0156,
+      "a_bits": 8192,
+      "delta_bits": 1440996608,
+      "delta_t_bits": 1441000000.0,
+      "d_gates": 0,
+      "u_points": "0:0;0.692646:0;0.692646:1.13268e9;1:1.13268e9",
+      "u_in_points": "0:0;0:80000;0:145568;0:800000;0:8e6;0:8e7;0:8e8;1:1.13268e9",
+      "w_gates": 232623000000.0,
+      "sigma": 0.993392,
+      "w_fit_gates": 103235000000.0,
+      "alpha_ratio": 0.992069,
+      "delta_grad_bits": 3706306560
+     },
+     "record_status": {
+      "tau_bits": "measured",
+      "a_bits": "measured",
+      "delta_bits": "measured",
+      "delta_t_bits": "measured",
+      "d_gates": "measured",
+      "u_points": "measured",
+      "u_in_points": "measured",
+      "w_gates": "measured",
+      "sigma": "measured",
+      "w_fit_gates": "measured",
+      "alpha_ratio": "measured",
+      "delta_grad_bits": "measured"
+     },
+     "model_inputs": {
+      "C_gates": 2.1332214982096863e+20,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9877386374084287,
+      "tau_bits": 16.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:7.84543e8;1:1.13268e9",
+      "u_in_points": "0:0;1:1.13268e9",
+      "delta_bits": 1440956416,
+      "delta_t_bits": 1440956416,
+      "d_gates": 0.0,
+      "delta_grad_bits": 3706306560.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "model_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261102-134356-ee8f@694 measures 2.33e+11",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261102-134356-ee8f@694 measures 0.993",
+      "tau_bits": "measured: r20261102-134356-ee8f@694",
+      "a_bits": "measured: r20261102-134356-ee8f@694",
+      "u_points": "measured: r20261102-134356-ee8f@694",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1); r20261102-134356-ee8f@694 measures u_in 8e+08 at x = 0 of u(1) 1.13e+09",
+      "delta_bits": "measured: r20261102-134356-ee8f@694",
+      "delta_t_bits": "measured: r20261102-134356-ee8f@694",
+      "d_gates": "measured: r20261102-134356-ee8f@694",
+      "delta_grad_bits": "measured: r20261102-134356-ee8f@694",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261102-134356-ee8f@694 measures 1.03e+11",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices; r20261102-134356-ee8f@694 measures 0.992"
+     },
+     "rho": {
+      "default": {
+       "record": {
+        "rho": 7458095.5743969865,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 7458095.5743969865,
+        "terms": {
+         "fresh_products": 7458095.5743969865,
+         "token": 410.3227382008558,
+         "reduction": 21529.455698564332,
+         "update": 768.9091320915833,
+         "decoding": 0.993392
+        },
+        "te_core": {"rho": 21529.455698564332, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "refused"},
+        "unmeasured": [],
+        "b": [29]
+       },
+       "model": {
+        "rho": 7373180.217695865,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 7373180.217695865,
+        "terms": {
+         "fresh_products": 7373180.217695865,
+         "token": 408.87022108729093,
+         "reduction": 21284.328589104836,
+         "update": 760.1545924680298,
+         "decoding": 0.9877386374084287
+        },
+        "te_core": {"rho": 21284.328589104836, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
+        "unmeasured": [],
+        "b": [29]
+       }
+      }
+     }
+    },
+    "20M standard-workloads r20261103-053241-99bf": {
+     "record": "r20261103-053241-99bf@2301",
+     "source": "the standard-workloads island's row (art:98886dbb131c581aba78ca63656a9164ebed620572592f38300e5724b7764f35; te_core 4.2, reading B; art:4204dbfc873c146aebe8825e8b27296ff9d5c9bad042a14c16846f0ae87c5a4f): the ref-optim island's record: ladder-v3 ref-optim continued from s-t20, Muon on the matrices and AdamW on the embedding and gains, WSD",
+     "dials": {
+      "n_params": 35658240,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 131072,
+      "optimizer": "muon",
+      "t": null,
+      "tokens_per_param": 4.23084,
+      "vocab": 32000
+     },
+     "differs": "|C| half the record's: the row's token dial counts half the tokens its run consumed (its trace's token_factor 2; batch_tokens counts them all), which no kind's term reads; t the trace's 0.732 against the model's 0.693 (the 45M trace's literal t), which puts the model's token kind 6% above the record's; 1 - sigma the trace's 0.0036 against the model's 0.0075, whose five Newton-Schulz iterations count twice the trace's optimizer gates; u_in front-loaded (the fp32 embedding at x = 0) where the model's A1' is even; w_fit its eval steps' forward",
+     "record_inputs": {
+      "C_gates": 5.82439e+19,
+      "w_gates": 192582000000.0,
+      "w_fwd_gates": 62140400000.0,
+      "sigma": 0.996354,
+      "tau_bits": 15.0146,
+      "a_bits": 8192,
+      "u_points": "0:0;0.731612:0;0.731612:8.32782e8;1:8.32782e8",
+      "u_in_points": "0:0;0:5.24288e8;0.00395333:5.24288e8;0.00395333:5.24304e8;0.00396951:5.24304e8;0.00396951:5.28499e8;0.00494021:5.28499e8;0.00494021:5.32693e8;0.00591091:5.32693e8;0.00591091:5.36887e8;0.0401292:5.36887e8;0.0401292:5.41082e8;0.0411161:5.41082e8;0.0411161:5.41098e8;0.0411322:5.41098e8;0.0411322:5.52632e8;0.0438017:5.52632e8;0.0438017:5.64167e8;0.046485:5.64167e8;0.046485:5.75701e8;0.0491706:5.75701e8;0.0491706:5.75717e8;0.0491868:5.75717e8;0.0491868:5.79912e8;0.0501575:5.79912e8;0.0501575:5.84106e8;0.0511282:5.84106e8;0.0511282:5.883e8;0.0853464:5.883e8;0.0853464:5.92495e8;0.0863333:5.92495e8;0.0863333:5.92511e8;0.0863495:5.92511e8;0.0863495:6.04045e8;0.0890189:6.04045e8;0.0890189:6.1558e8;0.0917022:6.1558e8;0.0917022:6.27114e8;0.0943878:6.27114e8;0.0943878:6.2713e8;0.094404:6.2713e8;0.094404:6.31325e8;0.0953747:6.31325e8;0.0953747:6.35519e8;0.0963454:6.35519e8;0.0963454:6.39713e8;0.130564:6.39713e8;0.130564:6.43908e8;0.131551:6.43908e8;0.131551:6.43924e8;0.131567:6.43924e8;0.131567:6.55458e8;0.134236:6.55458e8;0.134236:6.66993e8;0.136919:6.66993e8;0.136919:6.78527e8;0.139605:6.78527e8;0.139605:6.78543e8;0.139621:6.78543e8;0.139621:6.82738e8;0.140592:6.82738e8;0.140592:6.86932e8;0.141563:6.86932e8;0.141563:6.91126e8;0.175781:6.91126e8;0.175781:6.95321e8;0.176768:6.95321e8;0.176768:6.95337e8;0.176784:6.95337e8;0.176784:7.06871e8;0.179453:7.06871e8;0.179453:7.18406e8;0.182137:7.18406e8;0.182137:7.2994e8;0.184822:7.2994e8;0.184822:7.29956e8;0.184839:7.29956e8;0.184839:7.34151e8;0.185809:7.34151e8;0.185809:7.38345e8;0.18678:7.38345e8;0.18678:7.42539e8;0.220998:7.42539e8;0.220998:7.46734e8;0.221985:7.46734e8;0.221985:7.4675e8;0.222001:7.4675e8;0.222001:7.58284e8;0.224671:7.58284e8;0.224671:7.69819e8;0.227354:7.69819e8;0.227354:7.81353e8;0.23004:7.81353e8;0.23004:7.81369e8;0.230056:7.81369e8;0.230056:7.85564e8;0.231026:7.85564e8;0.231026:7.89758e8;0.231997:7.89758e8;0.231997:7.93952e8;0.266215:7.93952e8;0.266215:7.98147e8;0.267202:7.98147e8;0.267202:7.98163e8;0.267219:7.98163e8;0.267219:8.09697e8;0.269888:8.09697e8;0.269888:8.21232e8;0.272571:8.21232e8;0.272571:8.32766e8;0.275257:8.32766e8;0.275257:8.32782e8;1:8.32782e8",
+      "delta_bits": 1141100000.0,
+      "delta_t_bits": 1141100000.0,
+      "d_gates": 0,
+      "delta_grad_bits": null,
+      "w_fit_gates": 62975900000.0,
+      "alpha_ratio": 0.998695,
+      "grad_bits": 1141063680,
+      "partial_bits": 1141063680.0
+     },
+     "record_status": {
+      "C_gates": "measured",
+      "w_gates": "measured",
+      "w_fwd_gates": "measured",
+      "sigma": "measured",
+      "tau_bits": "measured",
+      "a_bits": "measured",
+      "u_points": "measured",
+      "u_in_points": "measured",
+      "delta_bits": "measured",
+      "delta_t_bits": "measured",
+      "d_gates": "measured",
+      "delta_grad_bits": "assumed: unmeasured, 6 of 2302 steps in structures with no traced Delta_grad, so te_core fails Fit at every k (the traced steps' largest 2.80663e9 bits)",
+      "w_fit_gates": "measured",
+      "alpha_ratio": "measured",
+      "grad_bits": "measured: the traced step's Delta_grad less its state",
+      "partial_bits": "assumed: the gradient cut, over the step's workers (te_core 4.4's dense and LoRA vectors have partial_cut_bits = grad_cut_bits; a 4.2 trace has neither)"
+     },
+     "model_inputs": {
+      "C_gates": 2.9069224998508933e+19,
+      "w_gates": 191239644879.36,
+      "w_fwd_gates": 62090793792.0,
+      "sigma": 0.9925010629497352,
+      "tau_bits": 15.0,
+      "a_bits": 8191.999999999998,
+      "u_points": "0:0;0.692646:0;0.692646:5.76823e8;1:8.32782e8",
+      "u_in_points": "0:0;1:8.32782e8",
+      "delta_bits": 1141063680,
+      "delta_t_bits": 1141063680,
+      "d_gates": 0.0,
+      "delta_grad_bits": 2806628352.0,
+      "w_fit_gates": 191239644879.36,
+      "alpha_ratio": 1.0
+     },
+     "model_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads); r20261103-053241-99bf@2301 measures 5.82e+19",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261103-053241-99bf@2301 measures 1.93e+11",
+      "w_fwd_gates": "measured: r20261103-053241-99bf@2301",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261103-053241-99bf@2301 measures 0.996",
+      "tau_bits": "measured: r20261103-053241-99bf@2301",
+      "a_bits": "measured: r20261103-053241-99bf@2301",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it; r20261103-053241-99bf@2301 measures t 0.732 and u(1) 8.33e+08",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1); r20261103-053241-99bf@2301 measures u_in 5.24e+08 at x = 0 of u(1) 8.33e+08",
+      "delta_bits": "measured: r20261103-053241-99bf@2301",
+      "delta_t_bits": "measured: r20261103-053241-99bf@2301",
+      "d_gates": "measured: r20261103-053241-99bf@2301",
+      "delta_grad_bits": "assumed: the gradient at 32 bits a value and muon's state (the traces' exactly; Muon's: r20261102-134356-ee8f, r20261103-053241-99bf); r20261103-053241-99bf@2301 measures inf",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261103-053241-99bf@2301 measures 6.3e+10",
+      "alpha_ratio": "measured: r20261103-053241-99bf@2301"
+     },
+     "rho": {
+      "default": {
+       "record": {
+        "rho": 7320596.837111125,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 7320596.837111125,
+        "terms": {
+         "fresh_products": 7320596.837111125,
+         "token": 473.7803682338368,
+         "reduction": 17312.75672781362,
+         "update": 368.3565261236941,
+         "decoding": 0.9955694826201458
+        },
+        "te_core": {"rho": 17312.75672781362, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "refused"},
+        "unmeasured": ["reduction", "update"],
+        "b": [47, 48, 8]
+       },
+       "model": {
+        "rho": 7343466.661433841,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 7343466.661433841,
+        "terms": {
+         "fresh_products": 7343466.661433841,
+         "token": 502.61399018902154,
+         "reduction": 17019.495016729976,
+         "update": 369.9890221028255,
+         "decoding": 0.9925010629497352
+        },
+        "te_core": {"rho": 17019.495016729976, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 524287999.9999999},
+        "unmeasured": [],
+        "b": [47]
+       }
+      }
+     }
+    }
+   }
+  },
+  "diloco": {
+   "title": "DiLoCo-style pretraining",
+   "what": "Standard training on workers that sync every H inner steps by an outer step on their pseudo-gradients, optionally compressed.",
+   "dials": [
+    {
+     "name": "n_params",
+     "unit": "parameters",
+     "default": 45029888,
+     "range": [10000000.0, 100000000000.0],
+     "why": "the inner model, which every worker trains; d_model and n_layer follow (te_core.workloads.dense)"
+    },
+    {
+     "name": "precision",
+     "unit": "GEMM format",
+     "default": "bf16",
+     "range": ["bf16", "e4m3", "fp4"],
+     "why": "the weight GEMMs' format, forward and backward; attention stays bf16"
+    },
+    {
+     "name": "seq_len",
+     "unit": "tokens",
+     "default": 1024,
+     "range": [256, 32768],
+     "why": "the training context: each token's attention span"
+    },
+    {
+     "name": "batch_tokens",
+     "unit": "tokens an inner step",
+     "default": 65536,
+     "range": [256, 10000000.0],
+     "why": "B, an inner step's tokens, all workers'"
+    },
+    {
+     "name": "optimizer",
+     "unit": "rule",
+     "default": "adamw",
+     "range": ["adamw", "muon", "sgd"],
+     "why": "sets Delta_grad (the state), the optimizer's gates and Muon's fresh Newton-Schulz products"
+    },
+    {
+     "name": "t",
+     "unit": "share of a token's affected work",
+     "default": null,
+     "range": [0.0, 0.9],
+     "why": "A1's free share, the token kind's: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread, which overcharges a block"
+    },
+    {
+     "name": "inner_steps",
+     "unit": "steps",
+     "default": 500,
+     "range": [1, 10000],
+     "why": "H, the inner steps between syncs"
+    },
+    {
+     "name": "syncs",
+     "unit": "syncs",
+     "default": 28,
+     "range": [1, 100000.0],
+     "why": "S, the record's outer steps so far; its tokens are S H B (28: 20 a parameter at 45M)"
+    },
+    {
+     "name": "sync_bits",
+     "unit": "bits a sync",
+     "default": null,
+     "range": [100.0, 1500000000.0],
+     "why": "b, one worker's compressed outer delta; None is 32 N, uncompressed"
+    },
+    {
+     "name": "workers",
+     "unit": "workers",
+     "default": 4,
+     "range": [1, 1024],
+     "why": "M, the workers each inner step's tokens split over and each sync sums (the island's 4)"
+    },
+    {
+     "name": "vocab",
+     "unit": "ids",
+     "default": 50304,
+     "range": [1000, 262144],
+     "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
+    }
+   ],
+   "points": {
+    "default": {
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "inner_steps": 500,
+      "syncs": 28,
+      "sync_bits": null,
+      "workers": 4,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 2.1491692676294882e+20,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9988136672274399,
+      "tau_bits": 16.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:7.84543e8;1:1.13268e9",
+      "u_in_points": "0:0;1:1.13268e9",
+      "delta_bits": 1440956416,
+      "delta_t_bits": 1440956416,
+      "d_gates": 0.0,
+      "delta_grad_bits": 17291476992.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the input ids a token block reads, ceil(log2 V) bits each",
+      "a_bits": "assumed: upper bound (witness): d_model x 16, the bf16 residual stream (measured on both pilot starts)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "delta_t_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "d_gates": "assumed: none, E stores theta' itself",
+      "delta_grad_bits": "assumed: every worker's gradient at 32 bits a value and adamw's state (M x 96 N for AdamW: r20261103-064814-40d6's traced step exactly)",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 1132675072.0,
+      "delta_bits": 1440956416,
+      "decoder_gates": 0.0,
+      "fresh": [
+       ["gemm/bf16", 3211264.0, 5376.0, 6.0, 917504000, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 25755648.0, 50304.0, 1.0, 917504000, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 917504000, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 917504000, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 45023232.0, 27392.0, 1.0, 917504000, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 45023232.0, 2748.0, 1.0, 917504000, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 917504000, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 917504000, 1024, 1024, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.9727442809651801,
+      "parts": [
+       {
+        "steps": 14000,
+        "tokens": 917504000,
+        "token_gates": 2.1466196376935203e+20,
+        "partial_bits": 1440956416,
+        "grad_bits": 5763825664
+       }
+      ],
+      "op_update_bits": 824180736.0
+     },
+     "rho": {
+      "default": {
+       "rho": 7361383.758062451,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 7361383.758062451,
+       "terms": {
+        "fresh_products": 7361383.758062451,
+        "token": 413.45468272435767,
+        "reduction": 21523.028290713297,
+        "update": 3074.7183272447564,
+        "decoding": 0.9988136672274399
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
+       "unmeasured": [],
+       "te_core": {"rho": 21523.028290713297, "basis": "reduction"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0,
+       "s": 2293.875722330285,
+       "x0": 5.785948823282658e-05,
+       "s_star": 5.541168,
+       "b": [29],
+       "fresh_share": 0.9727442809651801,
+       "fresh_charged_share": 0.9408183270150069,
+       "fit_delta_bits": 28833.98844271544,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "w_gates": 233962973207.04,
+      "tokens": 917504000,
+      "code_bits": 40871067648.0,
+      "compressed": false,
+      "phase_tokens": 32768000,
+      "phase_gates": 7.666498706048287e+18
+     }
+    },
+    "1-bit syncs": {
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "inner_steps": 500,
+      "syncs": 28,
+      "sync_bits": 45029888,
+      "workers": 4,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 2.1491692676294882e+20,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9988136672274399,
+      "tau_bits": 16.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:7.84543e8;1:1.13268e9",
+      "u_in_points": "0:0;1:1.13268e9",
+      "delta_bits": 1440956416,
+      "delta_t_bits": 1440956416,
+      "d_gates": 0.0,
+      "delta_grad_bits": 17291476992.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the input ids a token block reads, ceil(log2 V) bits each",
+      "a_bits": "assumed: upper bound (witness): d_model x 16, the bf16 residual stream (measured on both pilot starts)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "delta_t_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "d_gates": "assumed: none, E stores theta' itself",
+      "delta_grad_bits": "assumed: every worker's gradient at 32 bits a value and adamw's state (M x 96 N for AdamW: r20261103-064814-40d6's traced step exactly)",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 1132675072.0,
+      "delta_bits": 1440956416,
+      "decoder_gates": 0.0,
+      "fresh": [
+       ["gemm/bf16", 3211264.0, 5376.0, 6.0, 917504000, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 25755648.0, 50304.0, 1.0, 917504000, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 917504000, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 917504000, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 45023232.0, 27392.0, 1.0, 917504000, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 45023232.0, 2748.0, 1.0, 917504000, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 917504000, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 917504000, 1024, 1024, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.9727442809651801,
+      "parts": [
+       {
+        "steps": 14000,
+        "tokens": 917504000,
+        "token_gates": 2.1466196376935203e+20,
+        "partial_bits": 1440956416,
+        "grad_bits": 5763825664
+       }
+      ],
+      "op_update_bits": 824180736.0
+     },
+     "rho": {
+      "default": {
+       "rho": 7361383.758062451,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 7361383.758062451,
+       "terms": {
+        "fresh_products": 7361383.758062451,
+        "token": 413.45468272435767,
+        "reduction": 21523.028290713297,
+        "update": 3074.7183272447564,
+        "decoding": 0.9988136672274399
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
+       "unmeasured": [],
+       "te_core": {"rho": 21523.028290713297, "basis": "reduction"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0,
+       "s": 2293.875722330285,
+       "x0": 5.785948823282658e-05,
+       "s_star": 5.541168,
+       "b": [29],
+       "fresh_share": 0.9727442809651801,
+       "fresh_charged_share": 0.9408183270150069,
+       "fit_delta_bits": 28833.98844271544,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "w_gates": 233962973207.04,
+      "tokens": 917504000,
+      "code_bits": 1785124864.0,
+      "compressed": false,
+      "phase_tokens": 32768000,
+      "phase_gates": 7.666498706048287e+18
+     }
+    },
+    "Fit's corner": {
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 256,
+      "optimizer": "adamw",
+      "t": null,
+      "inner_steps": 2,
+      "syncs": 16,
+      "sync_bits": 1024,
+      "workers": 4,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 2517533762068808.0,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.7613104163246918,
+      "tau_bits": 16.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:7.84543e8;1:1.13268e9",
+      "u_in_points": "0:0;1:1.13268e9",
+      "delta_bits": 24576.0,
+      "delta_t_bits": 24576.0,
+      "d_gates": 119789042282004.48,
+      "delta_grad_bits": 1024.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the input ids a token block reads, ceil(log2 V) bits each",
+      "a_bits": "assumed: upper bound (witness): d_model x 16, the bf16 residual stream (measured on both pilot starts)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: S syncs of b bits and the phase's token ids, S b + H B tau",
+      "delta_t_bits": "assumed: S syncs of b bits and the phase's token ids, S b + H B tau",
+      "d_gates": "assumed: replaying the phase from the synced weights, H B w",
+      "delta_grad_bits": "assumed: the phase's compressed delta, b (its inner gradients stay in its block wherever the decoder fits one)",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 1132675072.0,
+      "delta_bits": 24576.0,
+      "decoder_gates": 119789042282004.48,
+      "fresh": [
+       ["gemm/bf16", 19267584.0, 32256.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 25755648.0, 50304.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 3145728.0, 3072.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 45023232.0, 27392.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 45023232.0, 703488.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 8192, 1024, 1024, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.7414399480282954,
+      "parts": [
+       {
+        "steps": 32,
+        "tokens": 8192,
+        "token_gates": 1916624676512071.8,
+        "partial_bits": 1440956416,
+        "grad_bits": 5763825664
+       }
+      ],
+      "op_update_bits": 824180736.0
+     },
+     "rho": {
+      "default": {
+       "rho": 1.2873376597389303,
+       "basis": "fit",
+       "binding_kind": null,
+       "bound": 1.0,
+       "terms": {"fresh_products": 0.0, "token": 0.0, "reduction": 0.0, "update": 0.0, "decoding": 0.9800635696862995},
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
+       "unmeasured": [],
+       "te_core": {"rho": 1.2873376597389303, "basis": "fit"},
+       "fit": true,
+       "fit_fails": [],
+       "rho_fit": 1.2873376597389303,
+       "s": 2293.875722330285,
+       "x0": 1.0,
+       "s_star": 5.541168,
+       "b": [1],
+       "fresh_share": 0.0,
+       "fresh_charged_share": 0.0,
+       "fit_delta_bits": 28833.98844271544,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "w_gates": 233962973207.04,
+      "tokens": 8192,
+      "code_bits": 24576.0,
+      "compressed": true,
+      "phase_tokens": 512,
+      "phase_gates": 119789042282004.48
+     }
+    }
+   },
+   "checks": {
+    "20M standard-workloads r20261103-064814-40d6": {
+     "record": "r20261103-064814-40d6@408",
+     "source": "the standard-workloads island's row (art:34893d2444f595acfe4cc4ef4419e61d9d74dfa7522f6af4fc7d57ce07941ae0; te_core 4.2, reading B; art:4204dbfc873c146aebe8825e8b27296ff9d5c9bad042a14c16846f0ae87c5a4f): M = 4 workers, 50 local AdamW steps each a phase; the outer step Nesterov SGD (lr 0.7, momentum 0.9) on the mean pseudo-gradient, passed in f32; reduction fan-in b = M = 4",
+     "dials": {
+      "n_params": 35658240,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "inner_steps": 50,
+      "syncs": 8,
+      "sync_bits": 1141063680,
+      "workers": 4,
+      "vocab": 32000
+     },
+     "differs": "t the trace's 0.732 against the model's 0.693, the model's token kind 6% above the record's; the outer step Nesterov SGD where the model's is plain, and its 8 syncs' pseudo-gradients priced by no kind on either; u_in front-loaded (the fp32 embedding at x = 0) where the model's A1' is even",
+     "record_inputs": {
+      "C_gates": 5.03723e+18,
+      "w_gates": 192035000000.0,
+      "w_fwd_gates": 62140400000.0,
+      "sigma": 0.999377,
+      "tau_bits": 15.0146,
+      "a_bits": 8192,
+      "u_points": "0:0;0.731612:0;0.731612:8.32782e8;1:8.32782e8",
+      "u_in_points": "0:0;0:5.24288e8;0.00395333:5.24288e8;0.00395333:5.24304e8;0.00396951:5.24304e8;0.00396951:5.28499e8;0.00494021:5.28499e8;0.00494021:5.32693e8;0.00591091:5.32693e8;0.00591091:5.36887e8;0.0401292:5.36887e8;0.0401292:5.41082e8;0.0411161:5.41082e8;0.0411161:5.41098e8;0.0411322:5.41098e8;0.0411322:5.52632e8;0.0438017:5.52632e8;0.0438017:5.64167e8;0.046485:5.64167e8;0.046485:5.75701e8;0.0491706:5.75701e8;0.0491706:5.75717e8;0.0491868:5.75717e8;0.0491868:5.79912e8;0.0501575:5.79912e8;0.0501575:5.84106e8;0.0511282:5.84106e8;0.0511282:5.883e8;0.0853464:5.883e8;0.0853464:5.92495e8;0.0863333:5.92495e8;0.0863333:5.92511e8;0.0863495:5.92511e8;0.0863495:6.04045e8;0.0890189:6.04045e8;0.0890189:6.1558e8;0.0917022:6.1558e8;0.0917022:6.27114e8;0.0943878:6.27114e8;0.0943878:6.2713e8;0.094404:6.2713e8;0.094404:6.31325e8;0.0953747:6.31325e8;0.0953747:6.35519e8;0.0963454:6.35519e8;0.0963454:6.39713e8;0.130564:6.39713e8;0.130564:6.43908e8;0.131551:6.43908e8;0.131551:6.43924e8;0.131567:6.43924e8;0.131567:6.55458e8;0.134236:6.55458e8;0.134236:6.66993e8;0.136919:6.66993e8;0.136919:6.78527e8;0.139605:6.78527e8;0.139605:6.78543e8;0.139621:6.78543e8;0.139621:6.82738e8;0.140592:6.82738e8;0.140592:6.86932e8;0.141563:6.86932e8;0.141563:6.91126e8;0.175781:6.91126e8;0.175781:6.95321e8;0.176768:6.95321e8;0.176768:6.95337e8;0.176784:6.95337e8;0.176784:7.06871e8;0.179453:7.06871e8;0.179453:7.18406e8;0.182137:7.18406e8;0.182137:7.2994e8;0.184822:7.2994e8;0.184822:7.29956e8;0.184839:7.29956e8;0.184839:7.34151e8;0.185809:7.34151e8;0.185809:7.38345e8;0.18678:7.38345e8;0.18678:7.42539e8;0.220998:7.42539e8;0.220998:7.46734e8;0.221985:7.46734e8;0.221985:7.4675e8;0.222001:7.4675e8;0.222001:7.58284e8;0.224671:7.58284e8;0.224671:7.69819e8;0.227354:7.69819e8;0.227354:7.81353e8;0.23004:7.81353e8;0.23004:7.81369e8;0.230056:7.81369e8;0.230056:7.85564e8;0.231026:7.85564e8;0.231026:7.89758e8;0.231997:7.89758e8;0.231997:7.93952e8;0.266215:7.93952e8;0.266215:7.98147e8;0.267202:7.98147e8;0.267202:7.98163e8;0.267219:7.98163e8;0.267219:8.09697e8;0.269888:8.09697e8;0.269888:8.21232e8;0.272571:8.21232e8;0.272571:8.32766e8;0.275257:8.32766e8;0.275257:8.32782e8;1:8.32782e8",
+      "delta_bits": 1141100000.0,
+      "delta_t_bits": 1141100000.0,
+      "d_gates": 0,
+      "delta_grad_bits": null,
+      "w_fit_gates": 191096000000.0,
+      "alpha_ratio": 0.9975,
+      "grad_bits": 4564254720,
+      "partial_bits": 1141063680.0
+     },
+     "record_status": {
+      "C_gates": "measured",
+      "w_gates": "measured",
+      "w_fwd_gates": "measured",
+      "sigma": "measured",
+      "tau_bits": "measured",
+      "a_bits": "measured",
+      "u_points": "measured",
+      "u_in_points": "measured",
+      "delta_bits": "measured",
+      "delta_t_bits": "measured",
+      "d_gates": "measured",
+      "delta_grad_bits": "assumed: unmeasured, 1 of 409 steps in structures with no traced Delta_grad, so te_core fails Fit at every k (the traced steps' largest 1.36928e10 bits)",
+      "w_fit_gates": "measured",
+      "alpha_ratio": "measured",
+      "grad_bits": "measured: the traced step's Delta_grad less its state",
+      "partial_bits": "assumed: the gradient cut, over the step's workers (te_core 4.4's dense and LoRA vectors have partial_cut_bits = grad_cut_bits; a 4.2 trace has neither)"
+     },
+     "model_inputs": {
+      "C_gates": 5.019007605226021e+18,
+      "w_gates": 191239644879.36,
+      "w_fwd_gates": 62090793792.0,
+      "sigma": 0.9988493624726703,
+      "tau_bits": 15.0,
+      "a_bits": 8191.999999999998,
+      "u_points": "0:0;0.692646:0;0.692646:5.76823e8;1:8.32782e8",
+      "u_in_points": "0:0;1:8.32782e8",
+      "delta_bits": 1141063680,
+      "delta_t_bits": 1141063680,
+      "d_gates": 0.0,
+      "delta_grad_bits": 13692764160.0,
+      "w_fit_gates": 191239644879.36,
+      "alpha_ratio": 1.0
+     },
+     "model_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads); r20261103-064814-40d6@408 measures 5.04e+18",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261103-064814-40d6@408 measures 1.92e+11",
+      "w_fwd_gates": "measured: r20261103-064814-40d6@408",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261103-064814-40d6@408 measures 0.999",
+      "tau_bits": "measured: r20261103-064814-40d6@408",
+      "a_bits": "measured: r20261103-064814-40d6@408",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it; r20261103-064814-40d6@408 measures t 0.732 and u(1) 8.33e+08",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1); r20261103-064814-40d6@408 measures u_in 5.24e+08 at x = 0 of u(1) 8.33e+08",
+      "delta_bits": "measured: r20261103-064814-40d6@408",
+      "delta_t_bits": "measured: r20261103-064814-40d6@408",
+      "d_gates": "measured: r20261103-064814-40d6@408",
+      "delta_grad_bits": "assumed: every worker's gradient at 32 bits a value and adamw's state (M x 96 N for AdamW: r20261103-064814-40d6's traced step exactly); r20261103-064814-40d6@408 measures inf",
+      "w_fit_gates": "measured: r20261103-064814-40d6@408",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices; r20261103-064814-40d6@408 measures 0.998"
+     },
+     "rho": {
+      "default": {
+       "record": {
+        "rho": 7304934.974644614,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 7304934.974644614,
+        "terms": {
+         "fresh_products": 7304934.974644614,
+         "token": 476.0012293400482,
+         "reduction": 17023.78479828041,
+         "update": 2960.658225787897,
+         "decoding": 0.9968910777128495
+        },
+        "te_core": {"rho": 17023.78479828041, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "refused"},
+        "unmeasured": ["reduction", "update"],
+        "b": [0, 24, 24, 0]
+       },
+       "model": {
+        "rho": 7331453.4229855705,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 7331453.4229855705,
+        "terms": {
+         "fresh_products": 7331453.4229855705,
+         "token": 505.8288423168919,
+         "reduction": 17128.405727218877,
+         "update": 2978.8531699511086,
+         "decoding": 0.9988493624726703
+        },
+        "te_core": {"rho": 17128.405727218877, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 524287999.9999999},
+        "unmeasured": [],
+        "b": [24]
+       }
+      }
+     }
+    }
+   }
+  },
+  "rl": {
+   "title": "RL rollouts on the policy being trained",
+   "what": "Rollouts of the current policy in FP4 and a learner training on them, every token affected.",
+   "dials": [
+    {
+     "name": "n_params",
+     "unit": "parameters",
+     "default": 45029888,
+     "range": [10000000.0, 100000000000.0],
+     "why": "the trained model; d_model and n_layer follow at the reference model's d/L (te_core.workloads.dense)"
+    },
+    {
+     "name": "update",
+     "unit": "what trains",
+     "default": "full",
+     "range": ["full", "lora"],
+     "why": "every weight, or a LoRA kept apart from the base"
+    },
+    {"name": "rank", "unit": "rank", "default": 16, "range": [1, 256], "why": "the LoRA's rank (update lora)"},
+    {
+     "name": "targets",
+     "unit": "matrices",
+     "default": "all",
+     "range": ["q", "qv", "attn", "mlp", "all"],
+     "why": "the LoRA's matrices in each adapted layer"
+    },
+    {
+     "name": "layers",
+     "unit": "layers",
+     "default": null,
+     "range": [1, 128],
+     "why": "the LoRA's adapted layers, from the top; None is all"
+    },
+    {
+     "name": "rollout_precision",
+     "unit": "GEMM format",
+     "default": "fp4",
+     "range": ["bf16", "e4m3", "fp4"],
+     "why": "the rollouts' weight GEMMs (fp4: W4A4)"
+    },
+    {
+     "name": "prompt_tokens",
+     "unit": "tokens",
+     "default": 256,
+     "range": [16, 32768],
+     "why": "a rollout's prompt, the only inputs"
+    },
+    {
+     "name": "generated_tokens",
+     "unit": "tokens",
+     "default": 768,
+     "range": [16, 32768],
+     "why": "a rollout's generated tokens"
+    },
+    {
+     "name": "samples_per_trained",
+     "unit": "sequences",
+     "default": 1.0,
+     "range": [0.01, 16.0],
+     "why": "rollouts generated for each one trained on (1: each once; 4: one in four kept; 0.01: rounds every 100 steps, as the island's)"
+    },
+    {
+     "name": "optimizer",
+     "unit": "rule",
+     "default": "adamw",
+     "range": ["adamw", "muon", "sgd"],
+     "why": "sets Delta_grad (the state), the optimizer's gates and Muon's fresh Newton-Schulz products"
+    },
+    {
+     "name": "batch_tokens",
+     "unit": "learner tokens a step",
+     "default": 65536,
+     "range": [10000.0, 10000000.0],
+     "why": "sets the optimizer's share, 1 - sigma, and b, a step's token blocks"
+    },
+    {
+     "name": "t",
+     "unit": "share of a token's affected work",
+     "default": null,
+     "range": [0.0, 0.999],
+     "why": "A1's free share, the token kind's: None is the larger of the two kinds' (the learner's te_core literal t, or a LoRA's modelled one); 0 is evenly spread"
+    },
+    {
+     "name": "tokens",
+     "unit": "learner tokens",
+     "default": 100000000.0,
+     "range": [1000000.0, 100000000000.0],
+     "why": "sets |C| only"
+    },
+    {
+     "name": "vocab",
+     "unit": "ids",
+     "default": 50304,
+     "range": [1000, 262144],
+     "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
+    }
+   ],
+   "points": {
+    "default": {
+     "dials": {
+      "n_params": 45029888,
+      "update": "full",
+      "rank": 16,
+      "targets": "all",
+      "layers": null,
+      "rollout_precision": "fp4",
+      "prompt_tokens": 256,
+      "generated_tokens": 768,
+      "samples_per_trained": 1.0,
+      "optimizer": "adamw",
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 2.5596603614788248e+19,
+      "w_gates": 127948286464.15999,
+      "w_fwd_gates": 20024348040.0,
+      "sigma": 0.9997286232946845,
+      "tau_bits": 4.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:1.40354e8;1:2.02634e8",
+      "u_in_points": "0:0;1:2.02634e8",
+      "delta_bits": 1440956416,
+      "delta_t_bits": 1440956416,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 21933599721.28,
+      "alpha_ratio": 0.5468740831521882
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the prompts' ids, ceil(log2 V) bits each over the sequence's tokens (generated ids are computed)",
+      "a_bits": "assumed: upper bound (witness): d_model x 16, the bf16 residual stream (measured on both pilot starts)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "delta_t_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "d_gates": "assumed: none, E stores theta' itself",
+      "delta_grad_bits": "assumed: the gradient at 32 bits a value and adamw's state (the traces' exactly; AdamW's 96 N: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 202634496.0,
+      "delta_bits": 1440956416,
+      "decoder_gates": 0.0,
+      "fresh": [
+       ["gemm/fp4", 3211264.0, 5376.0, 6.0, 100000000.0, 1024, 256, 16.0, 1.0, false],
+       ["gemm/fp4", 25755648.0, 50304.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, false],
+       ["gemm/bf16", 278528.0, 4352.0, 6.0, 100000000.0, 1024, 256, 16.0, 1.0, false],
+       ["gemm/bf16", 278528.0, 512.0, 6.0, 100000000.0, 1024, 256, 16.0, 1.0, false],
+       ["gemm/bf16", 3211264.0, 5376.0, 6.0, 100000000.0, 1024, 256, 16.0, 1.0, false],
+       ["gemm/bf16", 25755648.0, 50304.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 100000000.0, 1024, 256, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 100000000.0, 1024, 256, 16.0, 1.0, false],
+       ["gemm/bf16", 45023232.0, 27392.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true],
+       ["gemm/bf16", 45023232.0, 687.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.9684041714377684,
+      "parts": [
+       {"steps": 1, "tokens": 100000000.0, "token_gates": 2.193359972128e+18, "partial_bits": 0.0, "grad_bits": 0.0},
+       {
+        "steps": 1526,
+        "tokens": 100000000.0,
+        "token_gates": 2.3396297320704e+19,
+        "partial_bits": 1440956416,
+        "grad_bits": 1440956416
+       }
+      ],
+      "op_update_bits": 824180736.0
+     },
+     "rho": {
+      "default": {
+       "rho": 7348444.112120303,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 7348444.112120303,
+       "terms": {
+        "fresh_products": 7348444.112120303,
+        "token": 413.723520833465,
+        "reduction": 19697.819481400387,
+        "update": 703.4935529071566,
+        "decoding": 0.9997286232946845
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
+       "unmeasured": [],
+       "te_core": {"rho": 19697.819481400387, "basis": "reduction"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0,
+       "s": 4194.522638755086,
+       "x0": 0.00032341975968395824,
+       "s_star": 5.541168,
+       "b": [4087, 29],
+       "fresh_share": 0.9684041714377684,
+       "fresh_charged_share": 0.9269504426143864,
+       "fit_delta_bits": -32337.945177024565,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "rollout_w": 21933599721.28,
+      "learner_w": 233962973207.04,
+      "rollout_tokens": 100000000.0,
+      "learner_tokens": 100000000.0,
+      "rollout_share": 0.08571275289186421,
+      "t": 0.692646,
+      "kinds": [
+       {"kind": "rollout", "tokens": 100000000.0, "u1_bits": 202634496.0, "t": 0.31259468762111053},
+       {"kind": "learner", "tokens": 100000000.0, "u1_bits": 1132675072.0, "t": 0.692646}
+      ]
+     },
+     "sensitivity": {"default": {"tokens_worth": 756.5242778534284, "per_kind": 1216.5142864754741}}
+    },
+    "LoRA rank 16": {
+     "dials": {
+      "n_params": 45029888,
+      "update": "lora",
+      "rank": 16,
+      "targets": "all",
+      "layers": null,
+      "rollout_precision": "fp4",
+      "prompt_tokens": 256,
+      "generated_tokens": 768,
+      "samples_per_trained": 1.0,
+      "optimizer": "adamw",
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 1.9321194269701997e+19,
+      "w_gates": 96605241561.76,
+      "w_fwd_gates": 20024348040.0,
+      "sigma": 0.9999924457387074,
+      "tau_bits": 4.0,
+      "a_bits": 768.0,
+      "u_points": "0:0;0.983508:0;0.983508:1.48892e7;1:1.51388e7",
+      "u_in_points": "0:0;1:1.51388e7",
+      "delta_bits": 15138816.0,
+      "delta_t_bits": 15138816.0,
+      "d_gates": 4382720262144.0,
+      "delta_grad_bits": 90832896.0,
+      "w_fit_gates": 23371404040.0,
+      "alpha_ratio": 0.5688045535989597
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:est u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the prompts' ids, ceil(log2 V) bits each over the sequence's tokens (generated ids are computed)",
+      "a_bits": "assumed: the lowest adapted layer's first adapters' rank outputs, 16 r bits each, or the residual stream where narrower (r20261103-053921-7400 and r20261103-053912-3133 measure 3 x 16 x 16 = 768 bits at rank 16)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: the adapter at 16 bits",
+      "delta_t_bits": "assumed: the adapter at 16 bits",
+      "d_gates": "assumed: the harness's decoder for a LoRA E (prepare.rebuild_macs), r + 2 fp32 multiply-adds an adapted entry and r (d_in + d_out) to dequantize factors below 16 bits, at F32Fma_v4's gates (te_core 4.2's witness)",
+      "delta_grad_bits": "assumed: the gradient at 32 bits a value and the optimizer's state",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 15138816.0,
+      "delta_bits": 15138816.0,
+      "decoder_gates": 4382720262144.0,
+      "fresh": [
+       ["gemm/bf16", 71680.0, 112.0, 6.0, 100000000.0, 1024, 256, 16.0, 0.6571428571428571, false],
+       ["gemm/bf16", 86016.0, 5376.0, 6.0, 100000000.0, 1024, 256, 16.0, 1.0, false],
+       ["gemm/bf16", 278528.0, 4352.0, 6.0, 100000000.0, 1024, 256, 16.0, 1, false],
+       ["gemm/bf16", 278528.0, 512.0, 6.0, 100000000.0, 1024, 256, 16.0, 1, false],
+       ["gemm/bf16", 71680.0, 112.0, 6.0, 100000000.0, 1024, 256, 16.0, 0.6571428571428571, false],
+       ["gemm/bf16", 86016.0, 5376.0, 6.0, 100000000.0, 1024, 256, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 100000000.0, 1024, 256, 16.0, 1, false],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 100000000.0, 1024, 256, 16.0, 1, false],
+       ["gemm/bf16", 516096.0, 672.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true],
+       ["gemm/bf16", 516096.0, 7.875, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true],
+       ["gemm/bf16", 405504.0, 25344.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true],
+       ["gemm/bf16", 405504.0, 6.1875, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.19843406816793702,
+      "parts": [
+       {"steps": 1, "tokens": 100000000.0, "token_gates": 2.337140404e+18, "partial_bits": 0.0, "grad_bits": 0.0},
+       {
+        "steps": 1526,
+        "tokens": 100000000.0,
+        "token_gates": 1.6983907908351998e+19,
+        "partial_bits": 30277632.0,
+        "grad_bits": 30277632.0
+       }
+      ],
+      "op_update_bits": 360448.0
+     },
+     "rho": {
+      "default": {
+       "rho": 1274234.9894755972,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 1274234.9894755972,
+       "terms": {
+        "fresh_products": 1274234.9894755972,
+        "token": 37.4882510795747,
+        "reduction": 391.6603018816942,
+        "update": 19.583015094084708,
+        "decoding": 1.0082259479265656
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 360448.0},
+       "unmeasured": [],
+       "te_core": {"rho": 391.6603018816942, "basis": "reduction"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.008233564386355,
+       "s": 5555.4126824551,
+       "x0": 0.004329004329004329,
+       "s_star": 83.92605046123025,
+       "b": [4355, 21],
+       "fresh_share": 0.19843406816793702,
+       "fresh_charged_share": 0.16285302742292468,
+       "fit_delta_bits": -26316.758738039425,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "rollout_w": 23371404040.0,
+      "learner_w": 169839079083.52,
+      "rollout_tokens": 100000000.0,
+      "learner_tokens": 100000000.0,
+      "rollout_share": 0.12096343667366433,
+      "t": 0.9835084038425419,
+      "kinds": [
+       {"kind": "rollout", "tokens": 100000000.0, "u1_bits": 15138816.0, "t": 0.9400781078619357},
+       {"kind": "learner", "tokens": 100000000.0, "u1_bits": 15138816.0, "t": 0.9835084038425419}
+      ]
+     },
+     "sensitivity": {"default": {"tokens_worth": 65.90708678820828, "per_kind": 67.42949448098042}}
+    },
+    "LoRA in one layer": {
+     "dials": {
+      "n_params": 45029888,
+      "update": "lora",
+      "rank": 1,
+      "targets": "q",
+      "layers": 1,
+      "rollout_precision": "fp4",
+      "prompt_tokens": 256,
+      "generated_tokens": 768,
+      "samples_per_trained": 1.0,
+      "optimizer": "adamw",
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 1.47132279631785e+19,
+      "w_gates": 73566139026.08,
+      "w_fwd_gates": 20024348040.0,
+      "sigma": 0.9999999892639126,
+      "tau_bits": 4.0,
+      "a_bits": 16.0,
+      "u_points": "0:0;0.999967:0;0.999967:16383.5;1:16384",
+      "u_in_points": "0:0;1:16384",
+      "delta_bits": 16384.0,
+      "delta_t_bits": 16384.0,
+      "d_gates": 9938141184.0,
+      "delta_grad_bits": 98304.0,
+      "w_fit_gates": 21935155786.56,
+      "alpha_ratio": 0.5629790276600861
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:est u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the prompts' ids, ceil(log2 V) bits each over the sequence's tokens (generated ids are computed)",
+      "a_bits": "assumed: the lowest adapted layer's first adapters' rank outputs, 16 r bits each, or the residual stream where narrower (r20261103-053921-7400 and r20261103-053912-3133 measure 3 x 16 x 16 = 768 bits at rank 16)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: the adapter at 16 bits",
+      "delta_t_bits": "assumed: the adapter at 16 bits",
+      "d_gates": "assumed: the harness's decoder for a LoRA E (prepare.rebuild_macs), r + 2 fp32 multiply-adds an adapted entry and r (d_in + d_out) to dequantize factors below 16 bits, at F32Fma_v4's gates (te_core 4.2's witness)",
+      "delta_grad_bits": "assumed: the gradient at 32 bits a value and the optimizer's state",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 16384.0,
+      "delta_bits": 16384.0,
+      "decoder_gates": 9938141184.0,
+      "fresh": [
+       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1024, 256, 16.0, 0.0, false],
+       ["gemm/bf16", 512.0, 512.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, false],
+       ["gemm/bf16", 278528.0, 4352.0, 1.0, 100000000.0, 1024, 256, 16.0, 0, false],
+       ["gemm/bf16", 278528.0, 512.0, 1.0, 100000000.0, 1024, 256, 16.0, 0, false],
+       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1024, 256, 16.0, 0.0, false],
+       ["gemm/bf16", 512.0, 512.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 1.0, 100000000.0, 1024, 256, 16.0, 0, false],
+       ["gemm/bf16", 524288.0, 512.0, 1.0, 100000000.0, 1024, 256, 16.0, 0, false],
+       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true],
+       ["gemm/bf16", 512.0, 0.0078125, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true],
+       ["gemm/bf16", 0.0, 0.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true],
+       ["gemm/bf16", 0.0, 0.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true],
+       ["gemm/bf16", 0.0, 0.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true],
+       ["gemm/bf16", 0.0, 0.0, 1.0, 100000000.0, 1024, 256, 16.0, 1.0, true]
+      ],
+      "fresh_share": 2.0602521809531924e-05,
+      "parts": [
+       {"steps": 1, "tokens": 100000000.0, "token_gates": 2.1935155786560003e+18, "partial_bits": 0.0, "grad_bits": 0.0},
+       {
+        "steps": 1526,
+        "tokens": 100000000.0,
+        "token_gates": 1.251971222656e+19,
+        "partial_bits": 32768.0,
+        "grad_bits": 32768.0
+       }
+      ],
+      "op_update_bits": 8192.0
+     },
+     "rho": {
+      "default": {
+       "rho": 1.0,
+       "basis": "none",
+       "binding_kind": null,
+       "bound": 1.0,
+       "terms": {
+        "fresh_products": 0.0,
+        "token": 0.0,
+        "reduction": 0.41746959430840097,
+        "update": 0.02783130628722673,
+        "decoding": 0.7104068016735854
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 8192.0},
+       "unmeasured": [],
+       "te_core": {"rho": 1.0, "basis": "decoding"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0000185180898793,
+       "s": 7295.2310841483795,
+       "x0": 1.0,
+       "s_star": 4095.8662494945443,
+       "b": [4088, 16],
+       "fresh_share": 0.0,
+       "fresh_charged_share": 0.0,
+       "fit_delta_bits": -32331.00206481744,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "rollout_w": 21935155786.56,
+      "learner_w": 125197122265.6,
+      "rollout_tokens": 100000000.0,
+      "learner_tokens": 100000000.0,
+      "rollout_share": 0.1490845929727517,
+      "t": 0.999967346068004,
+      "kinds": [
+       {"kind": "rollout", "tokens": 100000000.0, "u1_bits": 16384.0, "t": 0.999870377754273},
+       {"kind": "learner", "tokens": 100000000.0, "u1_bits": 16384.0, "t": 0.999967346068004}
+      ]
+     },
+     "sensitivity": {"default": {"tokens_worth": 1.0, "per_kind": 1.0}}
+    }
+   },
+   "checks": {}
+  },
+  "inference": {
+   "title": "Inference on an unregistered model",
+   "what": "Serving a model whose weights are not registered, so all of them are update bits.",
+   "dials": [
+    {
+     "name": "n_params",
+     "unit": "parameters",
+     "default": 45029888,
+     "range": [10000000.0, 100000000000.0],
+     "why": "the served model"
+    },
+    {
+     "name": "precision",
+     "unit": "GEMM format",
+     "default": "fp4",
+     "range": ["bf16", "e4m3", "fp4"],
+     "why": "the served weights' format (fp4: W4A4)"
+    },
+    {
+     "name": "prompt_tokens",
+     "unit": "tokens",
+     "default": 4096,
+     "range": [16, 131072],
+     "why": "a session's prompt, the only inputs"
+    },
+    {
+     "name": "generated_tokens",
+     "unit": "tokens",
+     "default": 1024,
+     "range": [1, 32768],
+     "why": "a session's generated tokens"
+    },
+    {
+     "name": "t",
+     "unit": "share of a token's work",
+     "default": null,
+     "range": [0.0, 0.95],
+     "why": "A1's free share, the token kind's: None is attention's modelled share; 0 is evenly spread"
+    },
+    {
+     "name": "tokens",
+     "unit": "tokens served",
+     "default": 1000000000.0,
+     "range": [1000000.0, 10000000000000.0],
+     "why": "sets |C| only"
+    },
+    {
+     "name": "vocab",
+     "unit": "ids",
+     "default": 50304,
+     "range": [1000, 262144],
+     "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
+    }
+   ],
+   "points": {
+    "default": {
+     "dials": {
+      "n_params": 45029888,
+      "precision": "fp4",
+      "prompt_tokens": 4096,
+      "generated_tokens": 1024,
+      "t": null,
+      "tokens": 1000000000.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 5.6052509476672e+19,
+      "w_gates": 56052509476.672,
+      "w_fwd_gates": 53257052347.2,
+      "sigma": 1.0,
+      "tau_bits": 12.8,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.731015:0;0.731015:1.48129e8;1:2.02634e8",
+      "u_in_points": "0:0;1:2.02634e8",
+      "delta_bits": 202634496.0,
+      "delta_t_bits": 202634496.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 0.0,
+      "w_fit_gates": 56052509476.672,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the prompt's ids, ceil(log2 V) bits each over the session's tokens",
+      "a_bits": "assumed: upper bound (witness): d_model x 16, the bf16 residual stream (measured on both pilot starts)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: the served weights, N x 4.5 bits",
+      "delta_t_bits": "assumed: the served weights, N x 4.5 bits",
+      "d_gates": "assumed: none, E stores theta' itself",
+      "delta_grad_bits": "assumed: none (no training)",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 202634496.0,
+      "delta_bits": 202634496.0,
+      "decoder_gates": 0.0,
+      "fresh": [
+       ["gemm/fp4", 3211264.0, 5376.0, 6.0, 1000000000.0, 5120, 4096, 16.0, 1.0, false],
+       ["gemm/fp4", 25755648.0, 50304.0, 1.0, 1000000000.0, 5120, 4096, 16.0, 1.0, false],
+       ["gemm/bf16", 2149580.8, 33587.2, 6.0, 1000000000.0, 5120, 4096, 16.0, 1.0, false],
+       ["gemm/bf16", 2149580.8, 512.0, 6.0, 1000000000.0, 5120, 4096, 16.0, 1.0, false]
+      ],
+      "fresh_share": 0.950088126801239,
+      "parts": [{"steps": 1, "tokens": 1000000000.0, "token_gates": 5.6052509476672e+19, "partial_bits": 0.0, "grad_bits": 0.0}],
+      "op_update_bits": 115900416.0
+     },
+     "rho": {
+      "default": {
+       "rho": 6603377.819757374,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 6603377.819757374,
+       "terms": {
+        "fresh_products": 6603377.819757374,
+        "token": 1636.6849111778415,
+        "reduction": 0.0,
+        "update": 0.0,
+        "decoding": 1.0
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 115900416.0},
+       "unmeasured": [],
+       "te_core": {"rho": 1636.6849111778415, "basis": "token"},
+       "fit": false,
+       "fit_fails": ["compute", "update"],
+       "rho_fit": 1.0,
+       "s": 9574.629025078653,
+       "x0": 0.00032341975968395824,
+       "s_star": 5.848121611857556,
+       "b": [104443],
+       "fresh_share": 0.950088126801239,
+       "fresh_charged_share": 0.7881653649191078,
+       "fit_delta_bits": -57019.251521006765,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {"d_model": 512.0, "n_layer": 6.0, "span": 4198.4, "t_counted": 0.7310152014821945}
+    },
+    "bf16": {
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "prompt_tokens": 4096,
+      "generated_tokens": 1024,
+      "t": null,
+      "tokens": 1000000000.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 1.07625099484672e+20,
+      "w_gates": 107625099484.672,
+      "w_fwd_gates": 104829642355.2,
+      "sigma": 1.0,
+      "tau_bits": 12.8,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.380722:0;0.380722:2.74302e8;1:7.20478e8",
+      "u_in_points": "0:0;1:7.20478e8",
+      "delta_bits": 720478208.0,
+      "delta_t_bits": 720478208.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 0.0,
+      "w_fit_gates": 107625099484.672,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the prompt's ids, ceil(log2 V) bits each over the session's tokens",
+      "a_bits": "assumed: upper bound (witness): d_model x 16, the bf16 residual stream (measured on both pilot starts)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: the served weights, N x 16 bits",
+      "delta_t_bits": "assumed: the served weights, N x 16 bits",
+      "d_gates": "assumed: none, E stores theta' itself",
+      "delta_grad_bits": "assumed: none (no training)",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 720478208.0,
+      "delta_bits": 720478208.0,
+      "decoder_gates": 0.0,
+      "fresh": [
+       ["gemm/bf16", 3211264.0, 5376.0, 6.0, 1000000000.0, 5120, 4096, 16.0, 1.0, false],
+       ["gemm/bf16", 25755648.0, 50304.0, 1.0, 1000000000.0, 5120, 4096, 16.0, 1.0, false],
+       ["gemm/bf16", 2149580.8, 33587.2, 6.0, 1000000000.0, 5120, 4096, 16.0, 1.0, false],
+       ["gemm/bf16", 2149580.8, 512.0, 6.0, 1000000000.0, 5120, 4096, 16.0, 1.0, false]
+      ],
+      "fresh_share": 0.9739344367168596,
+      "parts": [{"steps": 1, "tokens": 1000000000.0, "token_gates": 1.07625099484672e+20, "partial_bits": 0.0, "grad_bits": 0.0}],
+      "op_update_bits": 412090368.0
+     },
+     "rho": {
+      "default": {
+       "rho": 6921317.114383699,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 6921317.114383699,
+       "terms": {
+        "fresh_products": 6921317.114383699,
+        "token": 1637.0654946890375,
+        "reduction": 0.0,
+        "update": 0.0,
+        "decoding": 1.0
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 412090368.0},
+       "unmeasured": [],
+       "te_core": {"rho": 1637.0654946890375, "basis": "token"},
+       "fit": false,
+       "fit_fails": ["compute", "update"],
+       "rho_fit": 1.0,
+       "s": 4986.587577930875,
+       "x0": 9.096180741111325e-05,
+       "s_star": 3.0457755081198474,
+       "b": [200538],
+       "fresh_share": 0.9739344367168596,
+       "fresh_charged_share": 0.8845758083407838,
+       "fit_delta_bits": 1707.6790024847942,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {"d_model": 512.0, "n_layer": 6.0, "span": 4198.4, "t_counted": 0.38072193851498093}
+    },
+    "7B": {
+     "dials": {
+      "n_params": 7000000000.0,
+      "precision": "fp4",
+      "prompt_tokens": 4096,
+      "generated_tokens": 1024,
+      "t": null,
+      "tokens": 1000000000.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 4.581018076435386e+21,
+      "w_gates": 4581018076435.386,
+      "w_fwd_gates": 4253794798476.0254,
+      "sigma": 1.0,
+      "tau_bits": 12.8,
+      "a_bits": 57941.493304682495,
+      "u_points": "0:0;0.488368:0;0.488368:1.53836e10;1:3.15e10",
+      "u_in_points": "0:0;1:3.15e10",
+      "delta_bits": 31500000000.0,
+      "delta_t_bits": 31500000000.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 0.0,
+      "w_fit_gates": 4581018076435.386,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the prompt's ids, ceil(log2 V) bits each over the session's tokens",
+      "a_bits": "assumed: upper bound (witness): d_model x 16, the bf16 residual stream (measured on both pilot starts)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: the served weights, N x 4.5 bits",
+      "delta_t_bits": "assumed: the served weights, N x 4.5 bits",
+      "d_gates": "assumed: none, E stores theta' itself",
+      "delta_grad_bits": "assumed: none (no training)",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 31500000000.0,
+      "delta_bits": 31500000000.0,
+      "decoder_gates": 0.0,
+      "fresh": [
+       ["gemm/fp4", 160648062.18012866, 38024.10498119789, 42.4376171665155, 1000000000.0, 5120, 4096, 16.0, 1.0, false],
+       ["gemm/fp4", 182168054.94992176, 50304.0, 1.0, 1000000000.0, 5120, 4096, 16.0, 1.0, false],
+       [
+        "gemm/bf16",
+        15203847.843148684,
+        237560.1225491982,
+        42.4376171665155,
+        1000000000.0,
+        5120,
+        4096,
+        16.0,
+        1.0,
+        false
+       ],
+       [
+        "gemm/bf16",
+        15203847.843148684,
+        3621.343331542656,
+        42.4376171665155,
+        1000000000.0,
+        5120,
+        4096,
+        16.0,
+        1.0,
+        false
+       ]
+      ],
+      "fresh_share": 0.9285470175866124,
+      "parts": [
+       {"steps": 1, "tokens": 1000000000.0, "token_gates": 4.581018076435386e+21, "partial_bits": 0.0, "grad_bits": 0.0}
+      ],
+      "op_update_bits": 819756247.274648
+     },
+     "rho": {
+      "default": {
+       "rho": 7558557.759366879,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 7558557.759366879,
+       "terms": {
+        "fresh_products": 7558557.759366879,
+        "token": 212.08841188867424,
+        "reduction": 0.0,
+        "update": 0.0,
+        "decoding": 1.0
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 819756247.274648},
+       "unmeasured": [],
+       "te_core": {"rho": 212.08841188867424, "basis": "token"},
+       "fit": false,
+       "fit_fails": ["compute", "update"],
+       "rho_fit": 1.0,
+       "s": 117.15343078965687,
+       "x0": 2.0805079365079367e-06,
+       "s_star": 0.5523790102804312,
+       "b": [8535815],
+       "fresh_share": 0.9285470175866124,
+       "fresh_charged_share": 0.8439340186637652,
+       "fit_delta_bits": 64036.43608589239,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {"d_model": 3621.343331542656, "n_layer": 42.4376171665155, "span": 4198.4, "t_counted": 0.4883676868562431}
+    }
+   },
+   "checks": {}
+  },
+  "lora": {
+   "title": "Fine-tuning a registered model with a LoRA",
+   "what": "A small adapter trained on a registered model; the base is frozen.",
+   "dials": [
+    {
+     "name": "n_params",
+     "unit": "parameters",
+     "default": 45029888,
+     "range": [10000000.0, 100000000000.0],
+     "why": "the trained model; d_model and n_layer follow at the reference model's d/L (te_core.workloads.dense)"
+    },
+    {"name": "rank", "unit": "rank", "default": 8, "range": [1, 256], "why": "the adapter's rank"},
+    {
+     "name": "targets",
+     "unit": "matrices",
+     "default": "all",
+     "range": ["q", "qv", "attn", "mlp", "all"],
+     "why": "the adapted matrices in each adapted layer"
+    },
+    {
+     "name": "layers",
+     "unit": "layers",
+     "default": null,
+     "range": [1, 128],
+     "why": "the adapted layers, from the top; None is all"
+    },
+    {
+     "name": "adapter_bits",
+     "unit": "bits a value",
+     "default": 16,
+     "range": [1, 32],
+     "why": "the adapter's values as submitted"
+    },
+    {
+     "name": "optimizer",
+     "unit": "rule",
+     "default": "adamw",
+     "range": ["adamw", "sgd"],
+     "why": "sets Delta_grad: 64 or 0 state bits a value"
+    },
+    {
+     "name": "seq_len",
+     "unit": "tokens",
+     "default": 1024,
+     "range": [256, 32768],
+     "why": "the training context: each token's attention span"
+    },
+    {
+     "name": "batch_tokens",
+     "unit": "tokens a step",
+     "default": 65536,
+     "range": [10000.0, 10000000.0],
+     "why": "sets the optimizer's share, 1 - sigma, and b, a step's token blocks; the pilot's 64 x 1,024"
+    },
+    {
+     "name": "t",
+     "unit": "share of a token's affected work",
+     "default": null,
+     "range": [0.0, 0.9999],
+     "why": "A1's free share, the token kind's: None is the modelled share reading no adapter value; 0 is evenly spread"
+    },
+    {
+     "name": "tokens",
+     "unit": "tokens",
+     "default": 100000000.0,
+     "range": [1000000.0, 100000000000.0],
+     "why": "sets |C| only"
+    },
+    {
+     "name": "vocab",
+     "unit": "ids",
+     "default": 50304,
+     "range": [1000, 262144],
+     "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
+    }
+   ],
+   "points": {
+    "default": {
+     "dials": {
+      "n_params": 45029888,
+      "rank": 8,
+      "targets": "all",
+      "layers": null,
+      "adapter_bits": 16,
+      "optimizer": "adamw",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 1.6768310239219e+19,
+      "w_gates": 167682372605.44,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9999956478217568,
+      "tau_bits": 16.0,
+      "a_bits": 384.0,
+      "u_points": "0:0;0.991648:0;0.991648:7.50619e6;1:7.56941e6",
+      "u_in_points": "0:0;1:7.56941e6",
+      "delta_bits": 7569408.0,
+      "delta_t_bits": 7569408.0,
+      "d_gates": 2434844590080.0,
+      "delta_grad_bits": 45416448.0,
+      "w_fit_gates": 167682372605.44,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:est u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the input ids a token block reads, ceil(log2 V) bits each",
+      "a_bits": "assumed: the lowest adapted layer's first adapters' rank outputs, 16 r bits each, or the residual stream where narrower (r20261103-053921-7400 and r20261103-053912-3133 measure 3 x 16 x 16 = 768 bits at rank 16)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: the adapter's values at 16 bits",
+      "delta_t_bits": "assumed: the adapter's values at 16 bits",
+      "d_gates": "assumed: the harness's decoder for a LoRA E (prepare.rebuild_macs), r + 2 fp32 multiply-adds an adapted entry and r (d_in + d_out) to dequantize factors below 16 bits, at F32Fma_v4's gates (te_core 4.2's witness)",
+      "delta_grad_bits": "assumed: their gradient at 32 bits and adamw's state",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 7569408.0,
+      "delta_bits": 7569408.0,
+      "decoder_gates": 2434844590080.0,
+      "fresh": [
+       ["gemm/bf16", 35840.0, 56.0, 6.0, 100000000.0, 1024, 1024, 16.0, 0.6571428571428571, false],
+       ["gemm/bf16", 43008.0, 5376.0, 6.0, 100000000.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 100000000.0, 1024, 1024, 16.0, 1, false],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 100000000.0, 1024, 1024, 16.0, 1, false],
+       ["gemm/bf16", 258048.0, 336.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 258048.0, 3.9375, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 202752.0, 25344.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 202752.0, 3.09375, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.17880483070902717,
+      "parts": [
+       {
+        "steps": 1526,
+        "tokens": 100000000.0,
+        "token_gates": 1.6768237260544e+19,
+        "partial_bits": 15138816.0,
+        "grad_bits": 15138816.0
+       }
+      ],
+      "op_update_bits": 180224.0
+     },
+     "rho": {
+      "default": {
+       "rho": 1193361.4334866866,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 1193361.4334866866,
+       "terms": {
+        "fresh_products": 1193361.4334866866,
+        "token": 18.74756674016367,
+        "reduction": 225.64422629440807,
+        "update": 11.282211314720403,
+        "decoding": 1.0045531527906086
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
+       "unmeasured": [],
+       "te_core": {"rho": 225.64422629440807, "basis": "reduction"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0045575248040122,
+       "s": 3200.586775013397,
+       "x0": 0.008658008658008658,
+       "s_star": 169.24128352534865,
+       "b": [21],
+       "fresh_share": 0.17880483070902717,
+       "fresh_charged_share": 0.15251701911987867,
+       "fit_delta_bits": 14326.611599785647,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "adapter_values": 473088.0,
+      "w_gates": 167682372605.44,
+      "t_counted": 0.9916481456563397
+     }
+    },
+    "top layer": {
+     "dials": {
+      "n_params": 45029888,
+      "rank": 8,
+      "targets": "all",
+      "layers": 1,
+      "adapter_bits": 16,
+      "optimizer": "adamw",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 1.25552026780565e+19,
+      "w_gates": 125551905149.44,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.999999031229299,
+      "tau_bits": 16.0,
+      "a_bits": 384.0,
+      "u_points": "0:0;0.997495:0;0.997495:1.25841e6;1:1.26157e6",
+      "u_in_points": "0:0;1:1.26157e6",
+      "delta_bits": 1261568.0,
+      "delta_t_bits": 1261568.0,
+      "d_gates": 405807431680.0,
+      "delta_grad_bits": 7569408.0,
+      "w_fit_gates": 125551905149.44,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:est u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the input ids a token block reads, ceil(log2 V) bits each",
+      "a_bits": "assumed: the lowest adapted layer's first adapters' rank outputs, 16 r bits each, or the residual stream where narrower (r20261103-053921-7400 and r20261103-053912-3133 measure 3 x 16 x 16 = 768 bits at rank 16)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: the adapter's values at 16 bits",
+      "delta_t_bits": "assumed: the adapter's values at 16 bits",
+      "d_gates": "assumed: the harness's decoder for a LoRA E (prepare.rebuild_macs), r + 2 fp32 multiply-adds an adapted entry and r (d_in + d_out) to dequantize factors below 16 bits, at F32Fma_v4's gates (te_core 4.2's witness)",
+      "delta_grad_bits": "assumed: their gradient at 32 bits and adamw's state",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 1261568.0,
+      "delta_bits": 1261568.0,
+      "decoder_gates": 405807431680.0,
+      "fresh": [
+       ["gemm/bf16", 35840.0, 56.0, 1.0, 100000000.0, 1024, 1024, 16.0, 0.6571428571428571, false],
+       ["gemm/bf16", 43008.0, 5376.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1, false],
+       ["gemm/bf16", 524288.0, 512.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1, false],
+       ["gemm/bf16", 43008.0, 56.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 43008.0, 0.65625, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 23552.0, 2944.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 23552.0, 0.359375, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 524288.0, 8192.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 1572864.0, 1536.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.03943880591154657,
+      "parts": [
+       {
+        "steps": 1526,
+        "tokens": 100000000.0,
+        "token_gates": 1.2555190514944e+19,
+        "partial_bits": 2523136.0,
+        "grad_bits": 2523136.0
+       }
+      ],
+      "op_update_bits": 180224.0
+     },
+     "rho": {
+      "default": {
+       "rho": 263780.2327387247,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 263780.2327387247,
+       "terms": {
+        "fresh_products": 263780.2327387247,
+        "token": 23.80487439465567,
+        "reduction": 37.67036350602019,
+        "update": 2.5113575670680124,
+        "decoding": 0.7427698670528476
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
+       "unmeasured": [],
+       "te_core": {"rho": 37.67036350602019, "basis": "reduction"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0007567135168167,
+       "s": 4274.582560296846,
+       "x0": 0.05194805194805195,
+       "s_star": 170.23918422099953,
+       "b": [16],
+       "fresh_share": 0.03943880591154657,
+       "fresh_charged_share": 0.03371231352978607,
+       "fit_delta_bits": -2857.3209647495387,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "adapter_values": 78848.0,
+      "w_gates": 125551905149.44,
+      "t_counted": 0.9974952200449191
+     }
+    },
+    "MLP, top layer": {
+     "dials": {
+      "n_params": 45029888,
+      "rank": 8,
+      "targets": "mlp",
+      "layers": 1,
+      "adapter_bits": 16,
+      "optimizer": "adamw",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 1.25402593965685e+19,
+      "w_gates": 125402522882.56,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9999994331606488,
+      "tau_bits": 16.0,
+      "a_bits": 256.0,
+      "u_points": "0:0;0.998534:0;0.998534:736199;1:737280",
+      "u_in_points": "0:0;1:737280",
+      "delta_bits": 737280.0,
+      "delta_t_bits": 737280.0,
+      "d_gates": 273298882560.0,
+      "delta_grad_bits": 4423680.0,
+      "w_fit_gates": 125402522882.56,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:est u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the input ids a token block reads, ceil(log2 V) bits each",
+      "a_bits": "assumed: the lowest adapted layer's first adapters' rank outputs, 16 r bits each, or the residual stream where narrower (r20261103-053921-7400 and r20261103-053912-3133 measure 3 x 16 x 16 = 768 bits at rank 16)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: the adapter's values at 16 bits",
+      "delta_t_bits": "assumed: the adapter's values at 16 bits",
+      "d_gates": "assumed: the harness's decoder for a LoRA E (prepare.rebuild_macs), r + 2 fp32 multiply-adds an adapted entry and r (d_in + d_out) to dequantize factors below 16 bits, at F32Fma_v4's gates (te_core 4.2's witness)",
+      "delta_grad_bits": "assumed: their gradient at 32 bits and adamw's state",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 737280.0,
+      "delta_bits": 737280.0,
+      "decoder_gates": 273298882560.0,
+      "fresh": [
+       ["gemm/bf16", 19456.0, 24.0, 1.0, 100000000.0, 1024, 1024, 16.0, 0.5789473684210527, false],
+       ["gemm/bf16", 26624.0, 3328.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 1.0, 100000000.0, 1024, 1024, 16.0, 0, false],
+       ["gemm/bf16", 524288.0, 512.0, 1.0, 100000000.0, 1024, 1024, 16.0, 0, false],
+       ["gemm/bf16", 26624.0, 24.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 26624.0, 0.40625, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 11264.0, 1408.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 11264.0, 0.171875, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 0.0, 0.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 0.0, 0.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.0013415745454678244,
+      "parts": [
+       {
+        "steps": 1526,
+        "tokens": 100000000.0,
+        "token_gates": 1.2540252288256e+19,
+        "partial_bits": 1474560.0,
+        "grad_bits": 1474560.0
+       }
+      ],
+      "op_update_bits": 180224.0
+     },
+     "rho": {
+      "default": {
+       "rho": 6917.65709909503,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 6917.65709909503,
+       "terms": {
+        "fresh_products": 6917.65709909503,
+        "token": 15.253836839787596,
+        "reduction": 22.041381294681727,
+        "update": 1.4694254196454484,
+        "decoding": 0.742279437051881
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 180224.0},
+       "unmeasured": [],
+       "te_core": {"rho": 22.041381294681727, "basis": "reduction"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0005094974970747,
+       "s": 4279.674537859537,
+       "x0": 0.08888888888888889,
+       "s_star": 255.62465719831144,
+       "b": [16],
+       "fresh_share": 0.0013415745454678244,
+       "fresh_charged_share": 0.0008841080417395704,
+       "fit_delta_bits": -2938.792605752591,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "adapter_values": 46080.0,
+      "w_gates": 125402522882.56,
+      "t_counted": 0.9985338171809041
+     }
+    },
+    "rank 1 on W_q": {
+     "dials": {
+      "n_params": 45029888,
+      "rank": 1,
+      "targets": "q",
+      "layers": null,
+      "adapter_bits": 16,
+      "optimizer": "adamw",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 1.6555368478015e+19,
+      "w_gates": 165553675302.4,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9999999427511987,
+      "tau_bits": 16.0,
+      "a_bits": 16.0,
+      "u_points": "0:0;0.99989:0;0.99989:98293.2;1:98304",
+      "u_in_points": "0:0;1:98304",
+      "delta_bits": 98304.0,
+      "delta_t_bits": 98304.0,
+      "d_gates": 59628847104.0,
+      "delta_grad_bits": 589824.0,
+      "w_fit_gates": 165553675302.4,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:est u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the input ids a token block reads, ceil(log2 V) bits each",
+      "a_bits": "assumed: the lowest adapted layer's first adapters' rank outputs, 16 r bits each, or the residual stream where narrower (r20261103-053921-7400 and r20261103-053912-3133 measure 3 x 16 x 16 = 768 bits at rank 16)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: the adapter's values at 16 bits",
+      "delta_t_bits": "assumed: the adapter's values at 16 bits",
+      "d_gates": "assumed: the harness's decoder for a LoRA E (prepare.rebuild_macs), r + 2 fp32 multiply-adds an adapted entry and r (d_in + d_out) to dequantize factors below 16 bits, at F32Fma_v4's gates (te_core 4.2's witness)",
+      "delta_grad_bits": "assumed: their gradient at 32 bits and adamw's state",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 98304.0,
+      "delta_bits": 98304.0,
+      "decoder_gates": 59628847104.0,
+      "fresh": [
+       ["gemm/bf16", 512.0, 1.0, 6.0, 100000000.0, 1024, 1024, 16.0, 0.0, false],
+       ["gemm/bf16", 512.0, 512.0, 6.0, 100000000.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 100000000.0, 1024, 1024, 16.0, 0, false],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 100000000.0, 1024, 1024, 16.0, 0, false],
+       ["gemm/bf16", 3072.0, 6.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 3072.0, 0.046875, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 2560.0, 2560.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 2560.0, 0.0390625, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 2621440.0, 40960.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 7864320.0, 7680.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.1407722304879458,
+      "parts": [
+       {
+        "steps": 1526,
+        "tokens": 100000000.0,
+        "token_gates": 1.655536753024e+19,
+        "partial_bits": 196608.0,
+        "grad_bits": 196608.0
+       }
+      ],
+      "op_update_bits": 8192.0
+     },
+     "rho": {
+      "default": {
+       "rho": 835957.0463388456,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 835957.0463388456,
+       "terms": {
+        "fresh_products": 835957.0463388456,
+        "token": 0.263842453556531,
+        "reduction": 2.968137044807893,
+        "update": 0.14840685224039465,
+        "decoding": 0.9999999427511987
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 8192.0},
+       "unmeasured": [],
+       "te_core": {"rho": 2.968137044807893, "basis": "reduction"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0001111188278184,
+       "s": 3241.740077250099,
+       "x0": 0.6666666666666666,
+       "s_star": 4095.5500122219582,
+       "b": [21],
+       "fresh_share": 0.12199985324894258,
+       "fresh_charged_share": 0.10683911281374706,
+       "fit_delta_bits": 13668.158763998414,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "adapter_values": 6144.0,
+      "w_gates": 165553675302.4,
+      "t_counted": 0.9998901397026265
+     }
+    },
+    "rank 1 on W_q, one layer": {
+     "dials": {
+      "n_params": 45029888,
+      "rank": 1,
+      "targets": "q",
+      "layers": 1,
+      "adapter_bits": 16,
+      "optimizer": "adamw",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 1.25197123845225e+19,
+      "w_gates": 125197122265.6,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9999999873828971,
+      "tau_bits": 16.0,
+      "a_bits": 16.0,
+      "u_points": "0:0;0.999967:0;0.999967:16383.5;1:16384",
+      "u_in_points": "0:0;1:16384",
+      "delta_bits": 16384.0,
+      "delta_t_bits": 16384.0,
+      "d_gates": 9938141184.0,
+      "delta_grad_bits": 98304.0,
+      "w_fit_gates": 125197122265.6,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:est u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the input ids a token block reads, ceil(log2 V) bits each",
+      "a_bits": "assumed: the lowest adapted layer's first adapters' rank outputs, 16 r bits each, or the residual stream where narrower (r20261103-053921-7400 and r20261103-053912-3133 measure 3 x 16 x 16 = 768 bits at rank 16)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: the adapter's values at 16 bits",
+      "delta_t_bits": "assumed: the adapter's values at 16 bits",
+      "d_gates": "assumed: the harness's decoder for a LoRA E (prepare.rebuild_macs), r + 2 fp32 multiply-adds an adapted entry and r (d_in + d_out) to dequantize factors below 16 bits, at F32Fma_v4's gates (te_core 4.2's witness)",
+      "delta_grad_bits": "assumed: their gradient at 32 bits and adamw's state",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 16384.0,
+      "delta_bits": 16384.0,
+      "decoder_gates": 9938141184.0,
+      "fresh": [
+       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1024, 1024, 16.0, 0.0, false],
+       ["gemm/bf16", 512.0, 512.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 1.0, 100000000.0, 1024, 1024, 16.0, 0, false],
+       ["gemm/bf16", 524288.0, 512.0, 1.0, 100000000.0, 1024, 1024, 16.0, 0, false],
+       ["gemm/bf16", 512.0, 1.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 512.0, 0.0078125, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 0.0, 0.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 0.0, 0.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 0.0, 0.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 0.0, 0.0, 1.0, 100000000.0, 1024, 1024, 16.0, 1.0, true]
+      ],
+      "fresh_share": 1.815913920523111e-05,
+      "parts": [
+       {
+        "steps": 1526,
+        "tokens": 100000000.0,
+        "token_gates": 1.251971222656e+19,
+        "partial_bits": 32768.0,
+        "grad_bits": 32768.0
+       }
+      ],
+      "op_update_bits": 8192.0
+     },
+     "rho": {
+      "default": {
+       "rho": 1.0,
+       "basis": "none",
+       "binding_kind": null,
+       "bound": 1.0,
+       "terms": {
+        "fresh_products": 0.0,
+        "token": 0.0,
+        "reduction": 0.4906123335827268,
+        "update": 0.03270748890551512,
+        "decoding": 0.7414784109286913
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 8192.0},
+       "unmeasured": [],
+       "te_core": {"rho": 1.0, "basis": "decoding"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0000185180898793,
+       "s": 4286.695847731176,
+       "x0": 1.0,
+       "s_star": 4095.8662494945443,
+       "b": [16],
+       "fresh_share": 0.0,
+       "fresh_charged_share": 0.0,
+       "fit_delta_bits": -3051.1335636988224,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "adapter_values": 1024.0,
+      "w_gates": 125197122265.6,
+      "t_counted": 0.999967346068004
+     }
+    }
+   },
+   "checks": {
+    "45M sparse/lora-alloc": {
+     "record": "r20261102-132959-286b@1720",
+     "source": "te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal; 4.2 refuses the trace, made before its capture listed read-backs, until the run is traced again); delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k",
+     "dials": {
+      "n_params": 45029888,
+      "rank": 4,
+      "targets": "qv",
+      "layers": null,
+      "adapter_bits": 16,
+      "optimizer": "adamw",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0,
+      "vocab": 50304
+     },
+     "differs": "a 8,192, te_core 4.1's cut (the residual stream), where the model's is the rank outputs, 2 x 4 x 16 = 128 bits, the cut te_core 4.2 measures on the island's rank-16 rows (768): the record's token kind about 70 times the model's; 48,512 trained values against the model's 49,152; u_in front-loaded (a token's forward reads every adapter value in dependency order before most of its work), where the model's A1' is even; d 0, te_core 4.1's stub, where the model's is the harness's decoder (2.4e11 gates, 0.07% of c)",
+     "record_inputs": {
+      "w_gates": 166764000000.0,
+      "sigma": 0.999972,
+      "tau_bits": 16.0156,
+      "a_bits": 8192,
+      "delta_bits": 788712,
+      "delta_t_bits": 788712,
+      "d_gates": 0,
+      "delta_grad_bits": 4657152,
+      "w_fit_gates": 166390000000.0,
+      "alpha_ratio": 0.998823,
+      "u_points": "0:0;0.999235:0;0.999235:788712;1:788712",
+      "u_in_points": "0:0;0.00105837:32768;0.00315535:65536;0.100031:262144;1:788712"
+     },
+     "record_status": {
+      "w_gates": "measured",
+      "sigma": "measured",
+      "tau_bits": "measured",
+      "a_bits": "measured",
+      "delta_bits": "measured",
+      "delta_t_bits": "measured",
+      "d_gates": "measured",
+      "delta_grad_bits": "measured",
+      "w_fit_gates": "measured",
+      "alpha_ratio": "measured",
+      "u_points": "measured",
+      "u_in_points": "measured"
+     },
+     "model_inputs": {
+      "C_gates": 1.6574981534968e+19,
+      "w_gates": 165749739527.68,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9999995425515266,
+      "tau_bits": 16.0,
+      "a_bits": 128.0,
+      "u_points": "0:0;0.999122:0;0.999122:785742;1:786432",
+      "u_in_points": "0:0;1:786432",
+      "delta_bits": 786432.0,
+      "delta_t_bits": 786432.0,
+      "d_gates": 238515388416.0,
+      "delta_grad_bits": 4718592.0,
+      "w_fit_gates": 165749739527.68,
+      "alpha_ratio": 1.0
+     },
+     "model_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261102-132959-286b@1720 measures 1.67e+11",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261102-132959-286b@1720 measures 1",
+      "tau_bits": "measured: r20261102-132959-286b@1720",
+      "a_bits": "assumed: the lowest adapted layer's first adapters' rank outputs, 16 r bits each, or the residual stream where narrower (r20261103-053921-7400 and r20261103-053912-3133 measure 3 x 16 x 16 = 768 bits at rank 16); r20261102-132959-286b@1720 measures 8.19e+03",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it; r20261102-132959-286b@1720 measures t 0.999 and u(1) 7.89e+05",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1); r20261102-132959-286b@1720 measures u_in 0 at x = 0 of u(1) 7.89e+05",
+      "delta_bits": "assumed: the adapter's values at 16 bits; r20261102-132959-286b@1720 measures 7.89e+05",
+      "delta_t_bits": "assumed: the adapter's values at 16 bits; r20261102-132959-286b@1720 measures 7.89e+05",
+      "d_gates": "assumed: the harness's decoder for a LoRA E (prepare.rebuild_macs), r + 2 fp32 multiply-adds an adapted entry and r (d_in + d_out) to dequantize factors below 16 bits, at F32Fma_v4's gates (te_core 4.2's witness); r20261102-132959-286b@1720 measures 0",
+      "delta_grad_bits": "assumed: their gradient at 32 bits and adamw's state; r20261102-132959-286b@1720 measures 4.66e+06",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261102-132959-286b@1720 measures 1.66e+11",
+      "alpha_ratio": "measured: r20261102-132959-286b@1720"
+     },
+     "rho": {
+      "default": {
+       "record": {
+        "rho": 1048315.0069741046,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 1048315.0069741046,
+        "terms": {
+         "fresh_products": 1048315.0069741046,
+         "token": 400.8306702332502,
+         "reduction": 23.57210265485214,
+         "update": 1.178605132742607,
+         "decoding": 0.999972
+        },
+        "te_core": {"rho": 400.8306702332502, "basis": "token"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "refused"},
+        "unmeasured": [],
+        "b": [21]
+       },
+       "model": {
+        "rho": 1054758.9364426872,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 1054758.9364426872,
+        "terms": {
+         "fresh_products": 1054758.9364426872,
+         "token": 5.802121932199576,
+         "reduction": 23.716998955986377,
+         "update": 1.1858499477993187,
+         "decoding": 1.0004441658775445
+        },
+        "te_core": {"rho": 23.716998955986377, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 32768.0},
+        "unmeasured": [],
+        "b": [21]
+       }
+      }
+     }
+    },
+    "20M standard-workloads r20261103-053921-7400": {
+     "record": "r20261103-053921-7400@7541",
+     "source": "the standard-workloads island's row (art:52437c4f0b351e5eb8773407f6e0322a048e905431709117ff0c0f0a2a3a6bfa; te_core 4.2, reading B; art:4204dbfc873c146aebe8825e8b27296ff9d5c9bad042a14c16846f0ae87c5a4f): the e1mb island's record: a rank-16 LoRA on every layer's attention matrices",
+     "dials": {
+      "n_params": 35658240,
+      "rank": 16,
+      "targets": "attn",
+      "layers": null,
+      "adapter_bits": 16,
+      "optimizer": "adamw",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 247136256,
+      "vocab": 32000
+     },
+     "differs": "|C| half the record's: the row's token dial counts half the tokens its run consumed (its trace's token_factor 2; batch_tokens counts them all), which no kind's term reads; t the trace's 0.9967 against the model's 0.9916 (its count of the affected work reading no adapter value); u_in front-loaded (131,072 bits at x = 0) where the model's A1' is even",
+     "record_inputs": {
+      "C_gates": 6.86893e+19,
+      "w_gates": 138979000000.0,
+      "w_fwd_gates": 62140400000.0,
+      "sigma": 0.999998,
+      "tau_bits": 15.0146,
+      "a_bits": 768,
+      "u_points": "0:0;0.996729:0;0.996729:6.29146e6;1:6.29146e6",
+      "u_in_points": "0:0;0:131072;3.51741e-5:131072;3.51741e-5:262144;7.62106e-5:262144;7.62106e-5:393216;0.000111385:393216;0.000111385:524288;0.000152421:524288;0.000152421:655360;0.000187595:655360;0.000187595:786432;0.0399064:786432;0.0399064:917504;0.0399416:917504;0.0399416:1.04858e6;0.0504854:1.04858e6;0.0504854:1.17965e6;0.0505205:1.17965e6;0.0505205:1.31072e6;0.0516871:1.31072e6;0.0516871:1.44179e6;0.0517223:1.44179e6;0.0517223:1.57286e6;0.0528889:1.57286e6;0.0528889:1.70394e6;0.0529241:1.70394e6;0.0529241:1.83501e6;0.0926429:1.83501e6;0.0926429:1.96608e6;0.0926781:1.96608e6;0.0926781:2.09715e6;0.103222:2.09715e6;0.103222:2.22822e6;0.103257:2.22822e6;0.103257:2.3593e6;0.104424:2.3593e6;0.104424:2.49037e6;0.104459:2.49037e6;0.104459:2.62144e6;0.105625:2.62144e6;0.105625:2.75251e6;0.105661:2.75251e6;0.105661:2.88358e6;0.145379:2.88358e6;0.145379:3.01466e6;0.145415:3.01466e6;0.145415:3.14573e6;0.155958:3.14573e6;0.155958:3.2768e6;0.155994:3.2768e6;0.155994:3.40787e6;0.15716:3.40787e6;0.15716:3.53894e6;0.157195:3.53894e6;0.157195:3.67002e6;0.158362:3.67002e6;0.158362:3.80109e6;0.158397:3.80109e6;0.158397:3.93216e6;0.198116:3.93216e6;0.198116:4.06323e6;0.198151:4.06323e6;0.198151:4.1943e6;0.208695:4.1943e6;0.208695:4.32538e6;0.20873:4.32538e6;0.20873:4.45645e6;0.209897:4.45645e6;0.209897:4.58752e6;0.209932:4.58752e6;0.209932:4.71859e6;0.211098:4.71859e6;0.211098:4.84966e6;0.211134:4.84966e6;0.211134:4.98074e6;0.250852:4.98074e6;0.250852:5.11181e6;0.250888:5.11181e6;0.250888:5.24288e6;0.261431:5.24288e6;0.261431:5.37395e6;0.261467:5.37395e6;0.261467:5.50502e6;0.262633:5.50502e6;0.262633:5.6361e6;0.262668:5.6361e6;0.262668:5.76717e6;0.263835:5.76717e6;0.263835:5.89824e6;0.26387:5.89824e6;0.26387:6.02931e6;0.303589:6.02931e6;0.303589:6.16038e6;0.303624:6.16038e6;0.303624:6.29146e6;1:6.29146e6",
+      "delta_bits": 6292780.0,
+      "delta_t_bits": 6292780.0,
+      "d_gates": 1431090000000.0,
+      "delta_grad_bits": null,
+      "w_fit_gates": 138970000000.0,
+      "alpha_ratio": 0.999934,
+      "grad_bits": 12582912,
+      "partial_bits": 12582912.0
+     },
+     "record_status": {
+      "C_gates": "measured",
+      "w_gates": "measured",
+      "w_fwd_gates": "measured",
+      "sigma": "measured",
+      "tau_bits": "measured",
+      "a_bits": "measured",
+      "u_points": "measured",
+      "u_in_points": "measured",
+      "delta_bits": "measured",
+      "delta_t_bits": "measured",
+      "d_gates": "measured",
+      "delta_grad_bits": "assumed: unmeasured, 1 of 7543 steps in structures with no traced Delta_grad, so te_core fails Fit at every k (the traced steps' largest 3.77487e7 bits)",
+      "w_fit_gates": "measured",
+      "alpha_ratio": "measured",
+      "grad_bits": "measured: the traced step's Delta_grad less its state",
+      "partial_bits": "assumed: the gradient cut, over the step's workers (te_core 4.4's dense and LoRA vectors have partial_cut_bits = grad_cut_bits; a 4.2 trace has neither)"
+     },
+     "model_inputs": {
+      "C_gates": 3.4311567657496527e+19,
+      "w_gates": 138836034444.8,
+      "w_fwd_gates": 62090793792.0,
+      "sigma": 0.9999956310092527,
+      "tau_bits": 15.0,
+      "a_bits": 768.0,
+      "u_points": "0:0;0.991616:0;0.991616:6.23871e6;1:6.29146e6",
+      "u_in_points": "0:0;1:6.29146e6",
+      "delta_bits": 6291455.999999998,
+      "delta_t_bits": 6291455.999999998,
+      "d_gates": 1431092330495.9993,
+      "delta_grad_bits": 37748735.999999985,
+      "w_fit_gates": 138836034444.8,
+      "alpha_ratio": 1.0
+     },
+     "model_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads); r20261103-053921-7400@7541 measures 6.87e+19",
+      "w_gates": "measured: r20261103-053921-7400@7541",
+      "w_fwd_gates": "measured: r20261103-053921-7400@7541",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261103-053921-7400@7541 measures 1",
+      "tau_bits": "measured: r20261103-053921-7400@7541",
+      "a_bits": "measured: r20261103-053921-7400@7541",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it; r20261103-053921-7400@7541 measures t 0.997 and u(1) 6.29e+06",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1); r20261103-053921-7400@7541 measures u_in 1.31e+05 at x = 0 of u(1) 6.29e+06",
+      "delta_bits": "measured: r20261103-053921-7400@7541",
+      "delta_t_bits": "measured: r20261103-053921-7400@7541",
+      "d_gates": "measured: r20261103-053921-7400@7541",
+      "delta_grad_bits": "assumed: their gradient at 32 bits and adamw's state; r20261103-053921-7400@7541 measures inf",
+      "w_fit_gates": "measured: r20261103-053921-7400@7541",
+      "alpha_ratio": "measured: r20261103-053921-7400@7541"
+     },
+     "rho": {
+      "default": {
+       "record": {
+        "rho": 1424342.6997390902,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 1424342.6997390902,
+        "terms": {
+         "fresh_products": 1424342.6997390902,
+         "token": 45.3986037717703,
+         "reduction": 180.99986572053743,
+         "update": 11.31249160753359,
+         "decoding": 0.9991274792503113
+        },
+        "te_core": {"rho": 180.99986572053743, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "refused"},
+        "unmeasured": ["reduction", "update"],
+        "b": [0, 17, 17]
+       },
+       "model": {
+        "rho": 1425809.9670141914,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 1425809.9670141914,
+        "terms": {
+         "fresh_products": 1425809.9670141914,
+         "token": 45.20673132067659,
+         "reduction": 181.1983336870781,
+         "update": 11.324895855442382,
+         "decoding": 1.0026693044209216
+        },
+        "te_core": {"rho": 181.1983336870781, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 131071.99999999997},
+        "unmeasured": [],
+        "b": [17]
+       }
+      }
+     }
+    },
+    "20M standard-workloads r20261103-053912-3133": {
+     "record": "r20261103-053912-3133@7392",
+     "source": "the standard-workloads island's row (art:dcb71035bad834c4910275841ec62bef7490ce80de4532798aa34465ced2a1e6; te_core 4.2, reading B; art:4204dbfc873c146aebe8825e8b27296ff9d5c9bad042a14c16846f0ae87c5a4f): the e1mb island's record: a rank-16 LoRA on every layer's matrices; invalid: 3,001.1 GPU-seconds of its 3,000; witness gpu_seconds: False",
+     "dials": {
+      "n_params": 35658240,
+      "rank": 16,
+      "targets": "all",
+      "layers": null,
+      "adapter_bits": 16,
+      "optimizer": "adamw",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 242253824,
+      "vocab": 32000
+     },
+     "differs": "|C| half the record's: the row's token dial counts half the tokens its run consumed (its trace's token_factor 2; batch_tokens counts them all), which no kind's term reads; t the trace's 0.9920 against the model's 0.9802; u_in front-loaded (262,144 bits at x = 0) where the model's A1' is even",
+     "record_inputs": {
+      "C_gates": 6.85987e+19,
+      "w_gates": 141593000000.0,
+      "w_fwd_gates": 62140400000.0,
+      "sigma": 0.999995,
+      "tau_bits": 15.0146,
+      "a_bits": 768,
+      "u_points": "0:0;0.992041:0;0.992041:1.51388e7;1:1.51388e7",
+      "u_in_points": "0:0;0:262144;7.56373e-5:262144;7.56373e-5:524288;0.000151275:524288;0.000151275:786432;0.0396062:786432;0.0396062:1.04858e6;0.0427911:1.04858e6;0.0427911:1.5401e6;0.0460101:1.5401e6;0.0460101:2.03162e6;0.049245:2.03162e6;0.049245:2.52314e6;0.0505361:2.52314e6;0.0505361:2.78528e6;0.0517289:2.78528e6;0.0517289:3.04742e6;0.0529216:3.04742e6;0.0529216:3.30957e6;0.0923765:3.30957e6;0.0923765:3.57171e6;0.0955614:3.57171e6;0.0955614:4.06323e6;0.0987804:4.06323e6;0.0987804:4.55475e6;0.102015:4.55475e6;0.102015:5.04627e6;0.103306:5.04627e6;0.103306:5.30842e6;0.104499:5.30842e6;0.104499:5.57056e6;0.105692:5.57056e6;0.105692:5.8327e6;0.145147:5.8327e6;0.145147:6.09485e6;0.148332:6.09485e6;0.148332:6.58637e6;0.151551:6.58637e6;0.151551:7.07789e6;0.154786:7.07789e6;0.154786:7.56941e6;0.156077:7.56941e6;0.156077:7.83155e6;0.157269:7.83155e6;0.157269:8.0937e6;0.158462:8.0937e6;0.158462:8.35584e6;0.197917:8.35584e6;0.197917:8.61798e6;0.201102:8.61798e6;0.201102:9.1095e6;0.204321:9.1095e6;0.204321:9.60102e6;0.207556:9.60102e6;0.207556:1.00925e7;0.208847:1.00925e7;0.208847:1.03547e7;0.21004:1.03547e7;0.21004:1.06168e7;0.211233:1.06168e7;0.211233:1.0879e7;0.250687:1.0879e7;0.250687:1.11411e7;0.253872:1.11411e7;0.253872:1.16326e7;0.257091:1.16326e7;0.257091:1.21242e7;0.260326:1.21242e7;0.260326:1.26157e7;0.261617:1.26157e7;0.261617:1.28778e7;0.26281:1.28778e7;0.26281:1.314e7;0.264003:1.314e7;0.264003:1.34021e7;0.303458:1.34021e7;0.303458:1.36643e7;0.306643:1.36643e7;0.306643:1.41558e7;0.309862:1.41558e7;0.309862:1.46473e7;0.313097:1.46473e7;0.313097:1.51388e7;1:1.51388e7",
+      "delta_bits": 15140700.0,
+      "delta_t_bits": 15140700.0,
+      "d_gates": 4382720000000.0,
+      "delta_grad_bits": null,
+      "w_fit_gates": 141584000000.0,
+      "alpha_ratio": 0.999932,
+      "grad_bits": 30277632,
+      "partial_bits": 30277632.0
+     },
+     "record_status": {
+      "C_gates": "measured",
+      "w_gates": "measured",
+      "w_fwd_gates": "measured",
+      "sigma": "measured",
+      "tau_bits": "measured",
+      "a_bits": "measured",
+      "u_points": "measured",
+      "u_in_points": "measured",
+      "delta_bits": "measured",
+      "delta_t_bits": "measured",
+      "d_gates": "measured",
+      "delta_grad_bits": "assumed: unmeasured, 1 of 7394 steps in structures with no traced Delta_grad, so te_core fails Fit at every k (the traced steps' largest 9.08329e7 bits)",
+      "w_fit_gates": "measured",
+      "alpha_ratio": "measured",
+      "grad_bits": "measured: the traced step's Delta_grad less its state",
+      "partial_bits": "assumed: the gradient cut, over the step's workers (te_core 4.4's dense and LoRA vectors have partial_cut_bits = grad_cut_bits; a 4.2 trace has neither)"
+     },
+     "model_inputs": {
+      "C_gates": 3.4244593518957572e+19,
+      "w_gates": 141356860198.39996,
+      "w_fwd_gates": 62090793792.0,
+      "sigma": 0.9999896746544359,
+      "tau_bits": 15.0,
+      "a_bits": 768.0,
+      "u_points": "0:0;0.980185:0;0.980185:1.48388e7;1:1.51388e7",
+      "u_in_points": "0:0;1:1.51388e7",
+      "delta_bits": 15138815.999999994,
+      "delta_t_bits": 15138815.999999994,
+      "d_gates": 4382720262143.9976,
+      "delta_grad_bits": 90832895.99999997,
+      "w_fit_gates": 141356860198.39996,
+      "alpha_ratio": 1.0
+     },
+     "model_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads); r20261103-053912-3133@7392 measures 6.86e+19",
+      "w_gates": "measured: r20261103-053912-3133@7392",
+      "w_fwd_gates": "measured: r20261103-053912-3133@7392",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261103-053912-3133@7392 measures 1",
+      "tau_bits": "measured: r20261103-053912-3133@7392",
+      "a_bits": "measured: r20261103-053912-3133@7392",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it; r20261103-053912-3133@7392 measures t 0.992 and u(1) 1.51e+07",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1); r20261103-053912-3133@7392 measures u_in 2.62e+05 at x = 0 of u(1) 1.51e+07",
+      "delta_bits": "measured: r20261103-053912-3133@7392",
+      "delta_t_bits": "measured: r20261103-053912-3133@7392",
+      "d_gates": "measured: r20261103-053912-3133@7392",
+      "delta_grad_bits": "assumed: their gradient at 32 bits and adamw's state; r20261103-053912-3133@7392 measures inf",
+      "w_fit_gates": "measured: r20261103-053912-3133@7392",
+      "alpha_ratio": "measured: r20261103-053912-3133@7392"
+     },
+     "rho": {
+      "default": {
+       "record": {
+        "rho": 1487399.8310881327,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 1487399.8310881327,
+        "terms": {
+         "fresh_products": 1487399.8310881327,
+         "token": 44.77083525093603,
+         "reduction": 454.2070533438183,
+         "update": 26.718061961401077,
+         "decoding": 1.0046879730299672
+        },
+        "te_core": {"rho": 454.2070533438183, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "refused"},
+        "unmeasured": ["reduction", "update"],
+        "b": [0, 18, 18]
+       },
+       "model": {
+        "rho": 1489879.3042507458,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 1489879.3042507458,
+        "terms": {
+         "fresh_products": 1489879.3042507458,
+         "token": 45.19438911690278,
+         "reduction": 454.9334397432817,
+         "update": 26.76079057313422,
+         "decoding": 1.0082231540263935
+        },
+        "te_core": {"rho": 454.9334397432817, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 360447.99999999994},
+        "unmeasured": [],
+        "b": [18]
+       }
+      }
+     }
+    }
+   }
+  },
+  "distill": {
+   "title": "Distillation from a registered teacher",
+   "what": "A student trained on a registered teacher's outputs, the teacher's forward in each token block.",
+   "dials": [
+    {
+     "name": "student_params",
+     "unit": "parameters",
+     "default": 45029888,
+     "range": [10000000.0, 100000000000.0],
+     "why": "the trained student"
+    },
+    {
+     "name": "teacher_params",
+     "unit": "parameters",
+     "default": 450298880,
+     "range": [10000000.0, 1000000000000.0],
+     "why": "the registered teacher"
+    },
+    {
+     "name": "teacher_share",
+     "unit": "share of tokens",
+     "default": 1.0,
+     "range": [0.0, 1.0],
+     "why": "the student tokens the teacher runs on"
+    },
+    {
+     "name": "teacher_precision",
+     "unit": "GEMM format",
+     "default": "bf16",
+     "range": ["bf16", "e4m3", "fp4"],
+     "why": "the teacher's weight GEMMs"
+    },
+    {
+     "name": "seq_len",
+     "unit": "tokens",
+     "default": 1024,
+     "range": [256, 32768],
+     "why": "the training context: each token's attention span"
+    },
+    {
+     "name": "batch_tokens",
+     "unit": "tokens a step",
+     "default": 65536,
+     "range": [10000.0, 10000000.0],
+     "why": "sets the optimizer's share, 1 - sigma, and b, a step's token blocks; the pilot's 64 x 1,024"
+    },
+    {
+     "name": "optimizer",
+     "unit": "rule",
+     "default": "adamw",
+     "range": ["adamw", "muon", "sgd"],
+     "why": "sets Delta_grad (the state), the optimizer's gates and Muon's fresh Newton-Schulz products"
+    },
+    {
+     "name": "t",
+     "unit": "share of a token's affected work",
+     "default": null,
+     "range": [0.0, 0.9],
+     "why": "A1's free share, the token kind's: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread, which overcharges a block"
+    },
+    {
+     "name": "tokens_per_param",
+     "unit": "tokens / N",
+     "default": 20.0,
+     "range": [1.0, 2000.0],
+     "why": "sets |C| only (Chinchilla's 20 by default)"
+    },
+    {
+     "name": "vocab",
+     "unit": "ids",
+     "default": 50304,
+     "range": [1000, 262144],
+     "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
+    },
+    {
+     "name": "student_d_model",
+     "unit": "d_model",
+     "default": null,
+     "range": [64, 8192],
+     "why": "the student's width; None is the reference model's d/L (the island's half-width student: 256)"
+    }
+   ],
+   "points": {
+    "default": {
+     "dials": {
+      "student_params": 45029888,
+      "teacher_params": 450298880,
+      "teacher_share": 1.0,
+      "teacher_precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 20.0,
+      "vocab": 50304,
+      "student_d_model": null
+     },
+     "inputs": {
+      "C_gates": 8.899433411742946e+20,
+      "w_gates": 988100151120.023,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9999297051654347,
+      "tau_bits": 16.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:7.84543e8;1:1.13268e9",
+      "u_in_points": "0:0;1:1.13268e9",
+      "delta_bits": 1440956416,
+      "delta_t_bits": 1440956416,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 988100151120.023,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the input ids a token block reads, ceil(log2 V) bits each",
+      "a_bits": "assumed: upper bound (witness): d_model x 16, the bf16 residual stream (measured on both pilot starts)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "delta_t_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "d_gates": "assumed: none, E stores theta' itself",
+      "delta_grad_bits": "assumed: the gradient at 32 bits a value and adamw's state (the traces' exactly; AdamW's 96 N: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 1132675072.0,
+      "delta_bits": 1440956416,
+      "decoder_gates": 0.0,
+      "fresh": [
+       ["gemm/bf16", 3211264.0, 5376.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 25755648.0, 50304.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 45023232.0, 27392.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 45023232.0, 687.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.23058435962967883,
+      "parts": [
+       {
+        "steps": 13742,
+        "tokens": 900597760.0,
+        "token_gates": 8.898807827543542e+20,
+        "partial_bits": 1440956416,
+        "grad_bits": 1440956416
+       }
+      ],
+      "op_update_bits": 824180736.0
+     },
+     "rho": {
+      "default": {
+       "rho": 1745527.2171081475,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 1745527.2171081475,
+       "terms": {
+        "fresh_products": 1745527.2171081475,
+        "token": 98.00744668197194,
+        "reduction": 21865.366617284995,
+        "update": 182.21138847737492,
+        "decoding": 0.23676398242967872
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
+       "unmeasured": [],
+       "te_core": {"rho": 21865.366617284995, "basis": "reduction"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0,
+       "s": 543.145331528899,
+       "x0": 5.785948823282658e-05,
+       "s_star": 5.541168,
+       "b": [121],
+       "fresh_share": 0.23058435962967883,
+       "fresh_charged_share": 0.22308631775380894,
+       "fit_delta_bits": 56845.674695537615,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "student_w": 233962973207.04,
+      "teacher_w": 754137177912.9829,
+      "student_share": 0.23678062688467386
+     }
+    },
+    "no teacher": {
+     "dials": {
+      "student_params": 45029888,
+      "teacher_params": 450298880,
+      "teacher_share": 0.0,
+      "teacher_precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 20.0,
+      "vocab": 50304,
+      "student_d_model": null
+     },
+     "inputs": {
+      "C_gates": 2.1076908801314062e+20,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9997031897773526,
+      "tau_bits": 16.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:7.84543e8;1:1.13268e9",
+      "u_in_points": "0:0;1:1.13268e9",
+      "delta_bits": 1440956416,
+      "delta_t_bits": 1440956416,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the input ids a token block reads, ceil(log2 V) bits each",
+      "a_bits": "assumed: upper bound (witness): d_model x 16, the bf16 residual stream (measured on both pilot starts)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "delta_t_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "d_gates": "assumed: none, E stores theta' itself",
+      "delta_grad_bits": "assumed: the gradient at 32 bits a value and adamw's state (the traces' exactly; AdamW's 96 N: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 1132675072.0,
+      "delta_bits": 1440956416,
+      "decoder_gates": 0.0,
+      "fresh": [
+       ["gemm/bf16", 3211264.0, 5376.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 25755648.0, 50304.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 45023232.0, 27392.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 45023232.0, 687.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.9736105866652403,
+      "parts": [
+       {
+        "steps": 13742,
+        "tokens": 900597760.0,
+        "token_gates": 2.1070652959320025e+20,
+        "partial_bits": 1440956416,
+        "grad_bits": 1440956416
+       }
+      ],
+      "op_update_bits": 824180736.0
+     },
+     "rho": {
+      "default": {
+       "rho": 7370247.403675454,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 7370247.403675454,
+       "terms": {
+        "fresh_products": 7370247.403675454,
+        "token": 413.82289681244794,
+        "reduction": 21542.147261370086,
+        "update": 769.3624021917888,
+        "decoding": 0.9997031897773526
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
+       "unmeasured": [],
+       "te_core": {"rho": 21542.147261370086, "basis": "reduction"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0,
+       "s": 2293.875722330285,
+       "x0": 5.785948823282658e-05,
+       "s_star": 5.541168,
+       "b": [29],
+       "fresh_share": 0.9736105866652403,
+       "fresh_charged_share": 0.9419511412400156,
+       "fit_delta_bits": 28833.98844271544,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "student_w": 233962973207.04,
+      "teacher_w": 754137177912.9829,
+      "student_share": 1.0
+     }
+    },
+    "100x teacher": {
+     "dials": {
+      "student_params": 45029888,
+      "teacher_params": 4502988800,
+      "teacher_share": 1.0,
+      "teacher_precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 20.0,
+      "vocab": 50304,
+      "student_d_model": null
+     },
+     "inputs": {
+      "C_gates": 6.692350313161534e+21,
+      "w_gates": 7430939817951.128,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9999906522496562,
+      "tau_bits": 16.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:7.84543e8;1:1.13268e9",
+      "u_in_points": "0:0;1:1.13268e9",
+      "delta_bits": 1440956416,
+      "delta_t_bits": 1440956416,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 7430939817951.128,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "input_status": {
+      "C_gates": "assumed: the tokens' work and the optimizer's (te_core.workloads)",
+      "w_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "tau_bits": "assumed: the input ids a token block reads, ceil(log2 V) bits each",
+      "a_bits": "assumed: upper bound (witness): d_model x 16, the bf16 residual stream (measured on both pilot starts)",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1)",
+      "delta_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "delta_t_bits": "assumed: theta' in fp32, 32 N (the records' code less its 5 KB header: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "d_gates": "assumed: none, E stores theta' itself",
+      "delta_grad_bits": "assumed: the gradient at 32 bits a value and adamw's state (the traces' exactly; AdamW's 96 N: r20261102-140347-a1c2, r20261103-064849-6854)",
+      "w_fit_gates": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+      "alpha_ratio": "assumed: each token's MACs that depend on theta', at te_core.gates' prices"
+     },
+     "menu": {
+      "u1_bits": 1132675072.0,
+      "delta_bits": 1440956416,
+      "decoder_gates": 0.0,
+      "fresh": [
+       ["gemm/bf16", 3211264.0, 5376.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 25755648.0, 50304.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 8192.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 524288.0, 512.0, 6.0, 900597760.0, 1024, 1024, 16.0, 1.0, false],
+       ["gemm/bf16", 45023232.0, 27392.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 45023232.0, 687.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 3145728.0, 49152.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true],
+       ["gemm/bf16", 9437184.0, 9216.0, 1.0, 900597760.0, 1024, 1024, 16.0, 1.0, true]
+      ],
+      "fresh_share": 0.030662921967458935,
+      "parts": [
+       {
+        "steps": 13742,
+        "tokens": 900597760.0,
+        "token_gates": 6.692287754741594e+21,
+        "partial_bits": 1440956416,
+        "grad_bits": 1440956416
+       }
+      ],
+      "op_update_bits": 824180736.0
+     },
+     "rho": {
+      "default": {
+       "rho": 232118.79997507803,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 232118.79997507803,
+       "terms": {
+        "fresh_products": 232118.79997507803,
+        "token": 13.03295112758548,
+        "reduction": 21976.903251640513,
+        "update": 24.230323320441578,
+        "decoding": 0.03148468321791427
+       },
+       "token_A": {"verdict": "unmodelled", "op_update_bits": 824180736.0},
+       "unmeasured": [],
+       "te_core": {"rho": 21976.903251640513, "basis": "reduction"},
+       "fit": false,
+       "fit_fails": ["compute", "reduction", "update"],
+       "rho_fit": 1.0,
+       "s": 72.22262557790637,
+       "x0": 5.785948823282658e-05,
+       "s_star": 5.541168,
+       "b": [908],
+       "fresh_share": 0.030662921967458935,
+       "fresh_charged_share": 0.029665838412799034,
+       "fit_delta_bits": 64380.4379907535,
+       "fit_delta_grad_bits": 32768.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "student_w": 233962973207.04,
+      "teacher_w": 7196976844744.088,
+      "student_share": 0.03148497753162381
+     }
+    }
+   },
+   "checks": {
+    "20M standard-workloads r20261103-064849-6854": {
+     "record": "r20261103-064849-6854@600",
+     "source": "the standard-workloads island's row (art:e2787bc18892ae133f6e90e154295ad7976d6044b9a2a504c0fc7f96fcff51d8; te_core 4.2, reading B; art:4204dbfc873c146aebe8825e8b27296ff9d5c9bad042a14c16846f0ae87c5a4f): a half-width student (d_model 256, 6 layers) from scratch on the teacher's logits",
+     "dials": {
+      "student_params": 13012224,
+      "teacher_params": 35658240,
+      "teacher_share": 1.0,
+      "teacher_precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 32768,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 1.51094,
+      "vocab": 32000,
+      "student_d_model": 256
+     },
+     "differs": "t the trace's 0.781 against the model's 0.693 (the 45M trace's literal t), which puts the model's token kind 13% above the record's; u_in front-loaded (the fp32 embedding at x = 0) where the model's A1' is even; w_fwd the start's (the s-t20 teacher's) forward where the model's is the student's, which no policy here reads",
+     "record_inputs": {
+      "C_gates": 2.7015e+18,
+      "w_gates": 137385000000.0,
+      "w_fwd_gates": 62140400000.0,
+      "sigma": 0.999856,
+      "tau_bits": 15,
+      "a_bits": 4096,
+      "u_points": "0:0;0.780834:0;0.780834:3.39321e8;1:3.39321e8",
+      "u_in_points": "0:0;0:2.62144e8;0.00439722:2.62144e8;0.00439722:2.62152e8;0.00441522:2.62152e8;0.00441522:2.63201e8;0.00495507:2.63201e8;0.00495507:2.64249e8;0.00549491:2.64249e8;0.00549491:2.65298e8;0.0430155:2.65298e8;0.0430155:2.66346e8;0.0435733:2.66346e8;0.0435733:2.66355e8;0.0435913:2.66355e8;0.0435913:2.69238e8;0.0450759:2.69238e8;0.0450759:2.72122e8;0.0465759:2.72122e8;0.0465759:2.75005e8;0.0480785:2.75005e8;0.0480785:2.75014e8;0.0480965:2.75014e8;0.0480965:2.76062e8;0.0486364:2.76062e8;0.0486364:2.77111e8;0.0491762:2.77111e8;0.0491762:2.78159e8;0.0866968:2.78159e8;0.0866968:2.79208e8;0.0872546:2.79208e8;0.0872546:2.79216e8;0.0872726:2.79216e8;0.0872726:2.821e8;0.0887572:2.821e8;0.0887572:2.84983e8;0.0902572:2.84983e8;0.0902572:2.87867e8;0.0917598:2.87867e8;0.0917598:2.87875e8;0.0917778:2.87875e8;0.0917778:2.88924e8;0.0923177:2.88924e8;0.0923177:2.89972e8;0.0928575:2.89972e8;0.0928575:2.91021e8;0.130378:2.91021e8;0.130378:2.92069e8;0.130936:2.92069e8;0.130936:2.92078e8;0.130954:2.92078e8;0.130954:2.94961e8;0.132438:2.94961e8;0.132438:2.97845e8;0.133939:2.97845e8;0.133939:3.00728e8;0.135441:3.00728e8;0.135441:3.00737e8;0.135459:3.00737e8;0.135459:3.01785e8;0.135999:3.01785e8;0.135999:3.02834e8;0.136539:3.02834e8;0.136539:3.03882e8;0.174059:3.03882e8;0.174059:3.04931e8;0.174617:3.04931e8;0.174617:3.04939e8;0.174635:3.04939e8;0.174635:3.07823e8;0.17612:3.07823e8;0.17612:3.10706e8;0.17762:3.10706e8;0.17762:3.1359e8;0.179122:3.1359e8;0.179122:3.13598e8;0.17914:3.13598e8;0.17914:3.14647e8;0.17968:3.14647e8;0.17968:3.15695e8;0.18022:3.15695e8;0.18022:3.16744e8;0.217741:3.16744e8;0.217741:3.17792e8;0.218299:3.17792e8;0.218299:3.178e8;0.218317:3.178e8;0.218317:3.20684e8;0.219801:3.20684e8;0.219801:3.23568e8;0.221301:3.23568e8;0.221301:3.26451e8;0.222804:3.26451e8;0.222804:3.26459e8;0.222822:3.26459e8;0.222822:3.27508e8;0.223362:3.27508e8;0.223362:3.28557e8;0.223901:3.28557e8;0.223901:3.29605e8;0.261422:3.29605e8;0.261422:3.30654e8;0.26198:3.30654e8;0.26198:3.30662e8;0.261998:3.30662e8;0.261998:3.33545e8;0.263482:3.33545e8;0.263482:3.36429e8;0.264982:3.36429e8;0.264982:3.39313e8;0.266485:3.39313e8;0.266485:3.39321e8;1:3.39321e8",
+      "delta_bits": 416432000.0,
+      "delta_t_bits": 416432000.0,
+      "d_gates": 0,
+      "delta_grad_bits": 1249170000.0,
+      "w_fit_gates": 137385000000.0,
+      "alpha_ratio": 1,
+      "grad_bits": 416391168,
+      "partial_bits": 416391168.0
+     },
+     "record_status": {
+      "C_gates": "measured",
+      "w_gates": "measured",
+      "w_fwd_gates": "measured",
+      "sigma": "measured",
+      "tau_bits": "measured",
+      "a_bits": "measured",
+      "u_points": "measured",
+      "u_in_points": "measured",
+      "delta_bits": "measured",
+      "delta_t_bits": "measured",
+      "d_gates": "measured",
+      "delta_grad_bits": "measured",
+      "w_fit_gates": "measured",
+      "alpha_ratio": "measured",
+      "grad_bits": "measured: the traced step's Delta_grad less its state",
+      "partial_bits": "assumed: the gradient cut, over the step's workers (te_core 4.4's dense and LoRA vectors have partial_cut_bits = grad_cut_bits; a 4.2 trace has neither)"
+     },
+     "model_inputs": {
+      "C_gates": 2.702309169459491e+18,
+      "w_gates": 137407177501.44,
+      "w_fwd_gates": 23915788704.0,
+      "sigma": 0.9997079217061414,
+      "tau_bits": 15.0,
+      "a_bits": 4096.0,
+      "u_points": "0:0;0.692646:0;0.692646:2.35029e8;1:3.39321e8",
+      "u_in_points": "0:0;1:3.39321e8",
+      "delta_bits": 416391168,
+      "delta_t_bits": 416391168,
+      "d_gates": 0.0,
+      "delta_grad_bits": 1249173504.0,
+      "w_fit_gates": 137407177501.44,
+      "alpha_ratio": 1.0
+     },
+     "model_status": {
+      "C_gates": "measured: r20261103-064849-6854@600",
+      "w_gates": "measured: r20261103-064849-6854@600",
+      "w_fwd_gates": "assumed: a token's forward at te_core.gates' prices, no elementwise share; r20261103-064849-6854@600 measures 6.21e+10",
+      "sigma": "assumed: each token's MACs at te_core.gates' prices (te_core.workloads.Token); r20261103-064849-6854@600 measures 1",
+      "tau_bits": "measured: r20261103-064849-6854@600",
+      "a_bits": "measured: r20261103-064849-6854@600",
+      "u_points": "assumed: assumption (A1): 0 up to the free share t, x u(1) beyond it; r20261103-064849-6854@600 measures t 0.781 and u(1) 3.39e+08",
+      "u_in_points": "assumed: assumption (A1'): evenly spread, x u(1); r20261103-064849-6854@600 measures u_in 2.62e+08 at x = 0 of u(1) 3.39e+08",
+      "delta_bits": "measured: r20261103-064849-6854@600",
+      "delta_t_bits": "measured: r20261103-064849-6854@600",
+      "d_gates": "measured: r20261103-064849-6854@600",
+      "delta_grad_bits": "measured: r20261103-064849-6854@600",
+      "w_fit_gates": "measured: r20261103-064849-6854@600",
+      "alpha_ratio": "measured: r20261103-064849-6854@600"
+     },
+     "rho": {
+      "default": {
+       "record": {
+        "rho": 3860642.8956217156,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 3860642.8956217156,
+        "terms": {
+         "fresh_products": 3860642.8956217156,
+         "token": 312.63418012566996,
+         "reduction": 6058.645302974934,
+         "update": 757.3306628718667,
+         "decoding": 0.5736186295162633
+        },
+        "te_core": {"rho": 6058.645302974934, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "refused"},
+        "unmeasured": [],
+        "b": [0, 9]
+       },
+       "model": {
+        "rho": 3859459.3041456873,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "bound": 3859459.3041456873,
+        "terms": {
+         "fresh_products": 3859459.3041456873,
+         "token": 352.26178465809375,
+         "reduction": 6056.82182069199,
+         "update": 757.1027275864988,
+         "decoding": 0.535918980918188
+        },
+        "te_core": {"rho": 6056.82182069199, "basis": "reduction"},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": {"verdict": "unmodelled", "op_update_bits": 262144000.0},
+        "unmeasured": [],
+        "b": [9]
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}
