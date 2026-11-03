@@ -911,6 +911,85 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "45m")
 
 
+FAKE_INFERENCE_ONLY = '''import json, os, sys
+open(os.environ["ORDER"], "a").write(json.dumps(sys.argv[1:]) + "\\n")
+if os.environ.get("IO_FAIL"):
+    print("inference_only.py: no torch", file=sys.stderr)
+    sys.exit(2)
+print("INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 sessions" if sys.argv[1] == "policy" else
+      "INFERENCE-ONLY accept: 16 blocks (padded) of session abab… (the registered one), 7 gates and 3 fresh bits a block, "
+      "against c 7, k 3, n 16")
+'''
+NCI_CHECK = "verity/core/protocols/network/nci/lean/.lake/build/bin/nci-check"
+
+
+def _inference_only(tmp_path: Path, *args: str, lean: bool = False, **extra: str) -> tuple[int, list[str], list[list[str]]]:
+    """`served_verdicts.sh ARGS` in a toy tree whose inference_only.py notes its arguments and says a line (or, with
+    IO_FAIL, exits 2 saying nothing), nci-check built where ``lean`` says (``extra`` adds to the environment): the exit
+    status, the verdict lines, and each call's arguments."""
+    tree, venv, d = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "serve"
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    for p in (tree / "benchmarks" / "one_stage", d):
+        p.mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage" / "inference_only.py").write_text(FAKE_INFERENCE_ONLY)
+    if lean:
+        _script(tree / NCI_CHECK, "exit 0")
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out"),
+           "ORDER": str(tmp_path / "order"), "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False).returncode
+    said, order = tmp_path / "out" / "verdicts.txt", tmp_path / "order"
+    return (rc, said.read_text().splitlines() if said.exists() else [],
+            [json.loads(x) for x in order.read_text().splitlines()] if order.exists() else [])
+
+
+@pytest.mark.parametrize("extra, cls, lease", [
+    ({}, "4,32,4", "60"),
+    ({"CLASSES": "record 8,64,4", "LEASE_MIN": "150"}, "8,64,4", "150"),
+    ({"CLASSES": "4,32,4", "IO_CLASS": "8,64,4"}, "8,64,4", "60"),
+])
+def test_the_inference_only_policy_is_written_at_the_first_class_but_record_from_the_runs_settings_alone(
+        tmp_path, extra, cls, lease):
+    """The policy reads the class (IO_CLASS, else the first of CLASSES but `record`), the model at its revision, the lease's
+    limit (LEASE_MIN, the GPU lease's own) and the tree's commit, and nothing of a serve."""
+    rc, lines, calls = _inference_only(tmp_path, "inference-policy", **extra)
+    assert rc == 0 and lines == ["INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 sessions"]
+    assert calls == [["policy", "--class", cls, "--model", "verity-int8/Llama-3.2-1B-INT8", "--revision",
+                      "15b0976d400d796ee589e7737d03a919526bf800", "--lease-min", lease, "--tree", SHA, "--out",
+                      str(tmp_path / "out" / "inference-only-policy.json")]]
+
+
+def test_with_no_class_but_record_there_is_no_inference_only_policy_or_verdict(tmp_path):
+    assert _inference_only(tmp_path / "policy", "inference-policy", CLASSES="record") == (
+        0, ["INFERENCE-ONLY POLICY: none, since CLASSES names no class but record"], [])
+    assert _inference_only(tmp_path / "verdict", "inference-only", "7", CLASSES="record") == (0, [], [])
+
+
+@pytest.mark.parametrize("lean", [False, True])
+def test_the_inference_only_verdict_judges_the_windows_record_at_the_class_with_nci_check_where_the_build_built_it(
+        tmp_path, lean):
+    """The verdict reads the policy, the serve dir, window K's circuit record at the class, its registration and the
+    weights registration's pins, and writes the public verdict into the record and the full one in the serve dir; it
+    runs `nci-check --count` only where the build built it. $OUT names no window."""
+    rc, lines, calls = _inference_only(tmp_path, "inference-only", "7", lean=lean)
+    d, out = tmp_path / "serve", tmp_path / "out"
+    assert rc == 0 and lines == ["INFERENCE-ONLY accept: 16 blocks (padded) of session abab… (the registered one), 7 gates "
+                                 "and 3 fresh bits a block, against c 7, k 3, n 16"]
+    assert calls == [["verdict", "--policy", str(out / "inference-only-policy.json"), "--serve-run", str(d), "--circuit",
+                      str(d / "window-circuit-w7-4-32-4.json"), "--registration", str(d / "advice" / "w7" / "registration.json"),
+                      "--pins", str(d / "weights_registration.json"),
+                      *(["--lean", str(tmp_path / "tree" / NCI_CHECK), "--lean-timeout", "1800"] if lean else []),
+                      "--out", str(out / "record" / "inference-only.json"), "--private", str(d / "private" / "inference-only.json")]]
+    assert not _window_data(out, 7)
+
+
+def test_an_inference_only_verdict_that_fails_says_so_and_keeps_its_log_in_the_serve_dir(tmp_path):
+    rc, lines, _calls = _inference_only(tmp_path, "inference-only", "7", IO_FAIL="1")
+    assert (rc, lines) == (2, ["INFERENCE-ONLY failed (exit 2): its log in the serve dir, on the node"])
+    assert (tmp_path / "serve" / "inference-only.err").read_text() == "inference_only.py: no torch\n"
+    rc, lines, _calls = _inference_only(tmp_path / "policy", "inference-policy", IO_FAIL="1")
+    assert (rc, lines) == (2, ["INFERENCE-ONLY POLICY failed (exit 2): inference_only.py: no torch"])
+
+
 W63K4 = "8,32,4,4,16"
 FAKE_V3C_PROVE_PATH = f'''import json, os, sys
 from pathlib import Path
@@ -1465,6 +1544,23 @@ def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_pa
     rc, lines, order, _limits = _follow(tmp_path, PREFLIGHT_ONLY="1")
     assert (rc, lines, order) == (0, [f"PREFLIGHT passed on cpu-6, 755 GB: the follow-on of vy-dc-h200's deferral. {ONLY}"],
                                   [])
+
+
+def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_follow_ons_record(tmp_path):
+    """The inference-only verdict the served node judged goes with the deferral, listed and hashed with the follow-on's
+    inputs, and into the follow-on's record as the served node wrote it, said before the record: the follow-on judges it
+    no second time."""
+    verdict = {"format": "verity-bench/inference-only-verdict/v1", "verdict": "accept", "blocks": [["ab", 7, 3, 16]]}
+    (tmp_path / "served-out" / "record").mkdir(parents=True)
+    (tmp_path / "served-out" / "record" / "inference-only.json").write_text(json.dumps(verdict))
+    assert _deferred(tmp_path).returncode == 0
+    dd = tmp_path / "serve" / "private" / "deferred"
+    assert "private/deferred/inference-only.json" in (dd / "inputs.txt").read_text().splitlines()
+    assert json.loads((dd / "inference-only.json").read_text()) == verdict
+    rc, lines, order, _limits = _follow(tmp_path)
+    assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
+    assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-AUDIT", "V3C-PERIOD", "INFERENCE-ONLY:", "RECORD", "COMPOSITE:"]
+    assert json.loads((tmp_path / "out" / "record" / "inference-only.json").read_text()) == verdict
 
 
 def _script(path: Path, body: str) -> None:
