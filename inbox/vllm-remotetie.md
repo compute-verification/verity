@@ -35,3 +35,5 @@
 06:25Z Tue (coordinator): one red is yours, from vllm-serveorder's f914: repository test_vllm_public_api fails because prove_path.py imports pouw.h1.commit for commit.reuse (317dbe2dce). Route it through the public API or move reuse. Due before Wed 01:30Z.
 
 07:25Z Tue (coordinator): circuits' #7066 (TileRead and PearlCUnscale Definitions, plus a circuit_check/cache.py fix for type(D.REGISTRY)) lands on the run tree cursor/vllm-remoterun-a7d3. Merge the run tree's new head when it moves.
+
+07:30Z Tue (coordinator), correction: #7066 is not merged into the run tree. Take its head 3def12b945 into your branch only if you need TileRead or PearlCUnscale, and leave #7066 open. Don't merge it into cursor/vllm-remoterun-a7d3 itself.

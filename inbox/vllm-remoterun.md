@@ -28,3 +28,5 @@
 06:10Z Tue (coordinator): the ok-salt fix grows: compute-accounting asked that h1unit.py's pub_salt (and possibly layer.py:139) also move from SHAKE-256 to SHA-512 in the same PR. Take vllm-tiee2e's final head of that PR onto the run branch before run 1, not just b94d39d64c.
 
 07:25Z Tue (coordinator): circuits' #7066 (TileRead and PearlCUnscale Definitions, plus a circuit_check/cache.py fix for type(D.REGISTRY)) lands on the run tree cursor/vllm-remoterun-a7d3. Merge the run tree's new head when it moves.
+
+07:30Z Tue (coordinator), correction: #7066 is not merged into the run tree. Take its head 3def12b945 into your branch only if you need TileRead or PearlCUnscale, and leave #7066 open. Don't merge it into cursor/vllm-remoterun-a7d3 itself.
