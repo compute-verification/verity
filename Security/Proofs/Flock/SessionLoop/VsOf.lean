@@ -118,11 +118,11 @@ noncomputable def vsOf (bx : AlgWorker L) : (CoinLayer.session loopNr Masked.dat
   fun x => if Serves x then vsServed L bx x else (CoinLayer.session loopNr Masked.dataE).honestVals x
 
 theorem vsOf_of_serves (bx : AlgWorker L) {x : Msg} (h : Serves x) : vsOf L bx x = vsServed L bx x :=
-  if_pos h
+  ite_eq_left h
 
 theorem vsOf_of_not_serves (bx : AlgWorker L) {x : Msg} (h : ¬ Serves x) :
     vsOf L bx x = (CoinLayer.session loopNr Masked.dataE).honestVals x :=
-  if_neg h
+  ite_eq_right h
 
 /-- **`vsOf`'s word below `n_E`** at a statement the loop serves: the c_eval of its round-1c words at `final_c`'s
 index, `vsOfWord` elsewhere, at the tape's base and what the workers see of the tape. -/
