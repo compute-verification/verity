@@ -84,10 +84,10 @@ charge really counts: what the serving engine, which is the prover, chooses.
 | `Row.sources` | engine (prefix cache's block map) | w_src + #sources·(w_req + w_len), hit rows only | free; their sum is cache_hit |
 | `release` | engine's timing, inside the sync | w_rel per output | yes: certified egress records and committed frames |
 
-What's left free are the step count, which requests each step runs and in what order, the chunk sizes, the
-preemptions, the cache hits and their sources, and whether the row past an EOS ran. `release` is determined, and the
-timing terms charge it: m·log2|𝒮_sync| and the jitter on the clock-sync path, k_sched and k_fail on the warden path.
-The advice carries it only so that the compiler and the tie to the certified egress know which output each frame is.
+What's left free are the step count, which requests each step runs and in what order, the chunk sizes, the preemptions,
+the cache hits and their sources, and whether the row past an EOS ran. `release` is determined, and the timing terms
+charge it: m·log2|𝒮_sync| and the jitter on the clock-sync path, k_sched and k_fail on the active-warden path. The
+advice carries it only so that the compiler and the tie to the certified egress know which output each frame is.
 
 **Validity.** `Advice` replays the schedule, keeping for each request the positions computed (`num_computed_tokens`),
 the known tokens and the kept outputs, and refuses:

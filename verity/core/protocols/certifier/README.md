@@ -312,8 +312,8 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 ## The network bound
 
 In `GLOSSARY.md`'s symbols (its notation table, from k_exfil on), the bound is what
-`NetTiming.Guarantees.PeriodLeakAccepted` proves and nothing tighter. On the warden path, for the zone Y behind one
-network certifier over a certification period of m execution phases, except with probability δ_net:
+`NetTiming.Guarantees.PeriodLeakAccepted` proves and nothing tighter. On the active-warden path, for the zone Y behind
+one network certifier over a certification period of m execution phases, except with probability δ_net:
 
 ~~~text
 k_exfil(Y) ≤ k_sched + k_fail + Σ_j (ℓ_a,j + k_skip,j + T_j·log2 d_jit)
@@ -330,7 +330,7 @@ its own, by δ + ε_ks + ε_bind + ε_tap, ε_tap the chance of a collision with
 over the period, δ_net = m·(δ + ε_ks + ε_bind + ε_tap), is `Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted`, on a
 run whose per-phase bound (`window_le`) is a field, not yet derived from `PeriodLeakAccepted`. The clock-sync path has
 no k_sched or k_fail, and charges log2|𝒮_sync| bits an execution phase instead (`PROTOCOL.md`, "The claim"); "The active
-warden" there derives the warden path's terms.
+warden" there derives the active-warden path's terms.
 
 ## Zero knowledge: what N2's verdict reads, and what's open
 
