@@ -2,6 +2,7 @@ module
 
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.Claims.Sampling.KS
+public import Proofs.Flock.SamplingGeneric.Split
 
 /-!
 # The compiled extractor's waits
@@ -27,7 +28,8 @@ probability is `κ(δ) + √(γ·Pr[B])` from a bound on the sessions' extractio
   `k = 2^40·(2·n_PU + 1)`.
 * `fails_tape_le`, `Pr_fails_le`: **the failure event's probability**, at one tape and over the tapes, the sessions'
   error `κ_s + √(k_V·γ_s·β)` averaging by Jensen to `κ(δ) + √(γ·Pr[B])`.
-* `KS_of_split`: **`Compiled.KS`** from the split into `Fails` or an own-call collision and the sessions' bound.
+* `KS_of_split`, `KS_of_sessionKS`: **`Compiled.KS`** from the split into `Fails` or an own-call collision and the
+  sessions' bound, which at the extraction success `UnitOk` is `SessionKS` (`SamplingGeneric/Split.lean`).
 -/
 
 @[expose] public section
@@ -407,6 +409,20 @@ theorem KS_of_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H)
     (fun x Ω _ _ P => by
       obtain ⟨β, hβ0, hβ, hκ⟩ := hsess x Ω P
       exact L.Pr_fails_le H hS hδ x Ω P (ok x Ω P) β hβ0 hβ hκ) x
+
+set_option synthInstance.maxSize 1024 in
+/-- **`Compiled.KS` from the sessions' KS and the split**: `SessionKS` is `KS_of_split`'s bound at the extraction
+success `UnitOk`, so `KSOf` at a compiled verifier needs only the split into `Fails` at `UnitOk` or an own-call
+collision. -/
+theorem KS_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) (hSK : L.SessionKS H)
+    (hsplit : ∀ δ : ℝ, 0 ≤ δ → ∀ x (Ω : Type) (P : Prover Ω) (s : Ω × (Fin (L.V.k x) → Coin) × ECoins L x),
+      (run H P L.V x s.1 s.2.1).out = .acc →
+        ¬ (Sampling.R H L.commit L.parse L.partition δ).ext x (L.E.eval H P x s.1 s.2.1 s.2.2).1 →
+        Fails L x (fun r u c => L.UnitOk H x (run H P L.V x s.1) u r c) δ (run H P L.V x s.1) s.2.2 ∨
+          OwnColl H L.E P x s.1 s.2.1 s.2.2) :
+    L.KS H :=
+  KS_of_split hS (fun x _ P ω r u c => L.UnitOk H x (run H P L.V x ω) u r c) hsplit
+    (fun x Ω _ _ P => hSK x Ω P)
 
 end Compiled
 
