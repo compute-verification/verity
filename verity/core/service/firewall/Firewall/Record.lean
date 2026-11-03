@@ -8,8 +8,9 @@ sort_keys=True)` writes it, each with its `seq`. Python's `verity_flock.firewall
 1. A recursive session's V* statements and their order are fixed when it opens (`parts`), and it ends at its first stop.
    `admit` serves only the next statement not yet released, once: a request for any other is a stop at that next
    statement, never opened. After a stop, and after the last statement's release, every outer session of it is refused.
-2. One outer slot (`slot`): a holder that ended before its session's outcome is recorded as that session's stop by the
-   next one to take the slot.
+   A stop is recorded only of a recursive session opened, so every stop follows its session's open.
+2. One outer slot (`slot`): a holder that ended before its session's outcome is recorded as that session's stop, if it
+   was opened, by the next one to take the slot.
 3. A recursive session opened with a release schedule (`start_ms`, one window a statement) releases statement `j` at
    `start_ms + windows_ms[0] + ... + windows_ms[j]` (`releaseMs`); a missed time is a stop (`Firewall.Release`).
 4. A stream opened with a failure `budget` b, at least `BUDGET_MIN`, stops at its b-th failure (`failures`): a recursive
@@ -335,19 +336,21 @@ where
 
 def finish (evs : Events) (s : String) : Events := evs.push (.finish s)
 
-/-- The recursive session stops at `part`: its one failure, recorded once (false if it had already stopped). -/
+/-- The recursive session stops at `part`: its one failure, recorded once, and only of a recursive session opened (false
+if it was never opened or had already stopped). -/
 def stop (evs : Events) (s part why : String) : Bool × Events :=
-  if (stopOf evs s).isSome then (false, evs) else (true, evs.push (.stop s part why))
+  if (openOf evs s).isNone || (stopOf evs s).isSome then (false, evs) else (true, evs.push (.stop s part why))
 
 /-- An outer proof of the recursive session was released (the challenger's verdict accepted it). -/
 def release (evs : Events) (s part : String) : Events := evs.push (.release s part)
 
 /-- The firewall's one outer slot, taken by a session that found it free: a `slot` whose session has no outcome after it
-is that session's stop, then `slot`. -/
+is that session's stop, if it was opened and has not stopped, then `slot`. -/
 def slot (evs : Events) (s part : String) : Events :=
   let evs := match orphan evs with
     | some (seq, s', p') =>
-      if (stopOf evs s').isNone then evs.push (.stop s' p' s!"the slot's holder ended before its outcome (slot {seq})")
+      if (openOf evs s').isSome && (stopOf evs s').isNone then
+        evs.push (.stop s' p' s!"the slot's holder ended before its outcome (slot {seq})")
       else evs
     | none => evs
   evs.push (.slot s part)
