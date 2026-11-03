@@ -16,8 +16,8 @@ the load. A row's 8·S·B bits are its bytes, bit 8k + i of the row bit i of byt
 its S·B/2 little-endian u16 words (`words`), which the proof block's port carries.
 
 **The wiring** (`Wiring`, read off the record by `wiring`) says which connection holds which slots. Connection q, live
-in `cells`/r rows from row `first`, holds slots ρ·r … ρ·r + r − 1 of each, ρ its rank by ordinal among the row's live
-connections; its cell k of the execution phase (k = 0 … cells − 1) is in row first + ⌊k/r⌋ at slot ρ·r + (k mod r)
+in `cells`/r rows from row `first`, holds slots ν·r … ν·r + r − 1 of each, ν its rank by ordinal among the row's live
+connections; its cell k of the execution phase (k = 0 … cells − 1) is in row first + ⌊k/r⌋ at slot ν·r + (k mod r)
 (`Wiring.place`). The warden commits it as (q, first, cells) by q under a 64-byte salt it samples for the execution
 phase:
 

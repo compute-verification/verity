@@ -6,7 +6,7 @@ commit it, under `hm96-sha512/row/v2` rows in a `frame-v3-sha512` tree.
 
 **The cells are the warden's.** An execution phase's egress is T rows, row t bucket t's R = lanes·r slots of B bytes, so
 cell i is slot i mod R of bucket ⌊i / R⌋. A bucket's live connections hold r slots each, ranked by ordinal (slots
-ρ·r … ρ·r + r − 1 for rank ρ), and a slot no connection holds is B zero bytes (`pad_cell(B)`, a `PAD` on stream 0).
+ν·r … ν·r + r − 1 for rank ν), and a slot no connection holds is B zero bytes (`pad_cell(B)`, a `PAD` on stream 0).
 Connection q, admitted at bucket s, has a `PAD` on q in each of its slots before s + D (`pad_cell(B, q)`); then its
 egress cell i is in bucket s + D + ⌊i / r⌋, its slot i mod r: its n events (`data_cell`) and its `END`
 (`end_cell`), and the rest of that bucket a `PAD` on q; it holds no slot after it. A `DATA` cell is the warden's cut
@@ -30,7 +30,7 @@ The target reads the map inside the proof under the advice's hiding root.
 batch-row order, zero past its batch) in a dense frame-v3-sha512 tree of the session's steps, whose root the Commit
 registers (`verity.ml.commitments.advice`'s registration: `hm96-sha512/row/v2` leaves under `domain`). Bucket t's
 proof block reads S rows (`Shape.S`), at the steps its bucket's outputs were sampled in (`window_map`'s steps, public
-with the map), and its entry e = σ·P + r is read row σ's r-th id. The real port is vLLM's Commit (its binding map's
+with the map), and its entry e = ψ·P + r is read row ψ's r-th id. The real port is vLLM's Commit (its binding map's
 `sampled_token_ids` under the run root), which this fake upstream stands in for.
 
 **What 1 means** (`reference`): every bucket row is row t of the warden's registered root, and every port row bucket t
@@ -287,8 +287,8 @@ def window_map(shape: Shape, outputs: Sequence[Output], release: Sequence[int], 
     request i is on stream order[i] + 1, its ingress ordinal on the wire (order[i] its arrival order from 0, advice v1's
     order permutation; None is v0's identity). Its output k must be released at admitted[i] + D + ⌊k / r⌋, and its
     `END` is its cell n_i, so it holds r slots of every bucket from admitted[i] to admitted[i] + D + ⌊n_i / r⌋, at
-    rank ρ among that bucket's live requests by stream: slot ρ·r + j is a `PAD` before admitted[i] + D, then its cell
-    (b − admitted[i] − D)·r + j: an output, with its entry σ·P + row (σ its step's place among the bucket's steps),
+    rank ν among that bucket's live requests by stream: slot ν·r + j is a `PAD` before admitted[i] + D, then its cell
+    (b − admitted[i] − D)·r + j: an output, with its entry ψ·P + row (ψ its step's place among the bucket's steps),
     the `END`, or a `PAD`. A slot past the live requests' is `UNHELD`. A bucket's steps are sorted and padded to S by
     repeating the last (step 0 for a bucket with no output)."""
     sh = shape
