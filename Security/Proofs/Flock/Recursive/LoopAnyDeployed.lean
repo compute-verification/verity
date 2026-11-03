@@ -6,8 +6,8 @@ import Proofs.Flock.SessionLoop.TablesSide
 
 `Flock.Guarantees.RecursiveZKLoopAnySumDeployed` is `RecursiveZKLoopAnySum` with the five premises it takes of the
 deployed tables proved there, as `SessionLoopZKDeployed` has them: `TablesSide`'s `tables_dataE`, `complete_dataE`,
-`dummyReg_dataE`, `causal_dataE` and `tapeOK_dataE`. `SwCausal vs` stays a premise: the workers' values `vs` are the
-statement's, and it holds at the honest ones (`swCausal_honestVals_dataE`).
+`dummyReg_dataE`, `causal_dataE` and `tapeOK_dataE`. `SwCausalOn (Loop.SwOk Masked.dataE) vs` stays a premise: the
+workers' values `vs` are the statement's, and it holds at the honest ones (`swCausalOn_honestVals_dataE`).
 
 * `Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed`: `RecursiveZKLoopAnySum` at those five theorems.
 -/
@@ -23,11 +23,12 @@ set_option synthInstance.maxHeartbeats 1000000
 
 /-- **The recursive audit at the session loop is zero knowledge at any worker, released at a stop, at the deployed
 tables.** `RecursiveZKLoopAnySum`, its premises on the deployed tables (`Tables`, `Complete`, `DummyReg`, `Causal`,
-`TapeOK` of the loop's session) discharged. It takes, each an obligation: `SwCausal` at the workers' values `vs`; the
-worker's values satisfying V*'s circuits wherever the inner session finished (`OuterZK.LoopSessions.Honest` at
-`Claims.Flock.R`); V*'s statements fixing each one's simulator randomness (`OuterZK.LoopSessions.Sized`); and the
-release reading no stop where the inner session didn't finish (`ReleaseReadsNoStop`), which the deployed release meets
-(`LoopAny.releaseReadsNoStop_loopRelease`). The bound is `RecursiveZKLoopAnySum`'s. -/
+`TapeOK` of the loop's session) discharged. It takes, each an obligation: `SwCausalOn` at the workers' values `vs`, at
+the coin vectors `Loop.SwOk` admits; the worker's values satisfying V*'s circuits wherever the inner session finished
+(`OuterZK.LoopSessions.Honest` at `Claims.Flock.R`); V*'s statements fixing each one's simulator randomness
+(`OuterZK.LoopSessions.Sized`); and the release reading no stop where the inner session didn't finish
+(`ReleaseReadsNoStop`), which the deployed release meets (`LoopAny.releaseReadsNoStop_loopRelease`). The bound is
+`RecursiveZKLoopAnySum`'s. -/
 def RecursiveZKLoopAnySumDeployed : Prop :=
   ∀ {Ωa Ωp Θ St Ωk W : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype St] [Nonempty St]
     [Fintype Ωk] [Nonempty Ωk]
@@ -41,7 +42,7 @@ def RecursiveZKLoopAnySumDeployed : Prop :=
     [∀ j, Nonempty (CB j)]
     (Vs : Claims.VStar Θ) (θ : Ωa → (Fin (fwHoles s) → ByteArray) → Θ),
     0 < t →
-    Claims.ZKServer.Loop.finS.SwCausal vs →
+    Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs →
     (OuterZK.LoopSessions.atWorker m stmt wit).Honest
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse)
       (fun u : {u : (Ωa × Ωp) × (Fin (fwHoles s + r) → Fin 192 → Fin 256) //

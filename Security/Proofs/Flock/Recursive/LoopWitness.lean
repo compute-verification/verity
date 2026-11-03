@@ -19,8 +19,9 @@ The instance:
   one kernel evaluation at the zero salt (`hon_finishes0`) and `liveFinished_chopReqs`;
 * one statement of V* (`m = 1`): the honest fixture's (`RecDeploy.BaseParses.fixture_stmt`), whose statement and
   witness are in the claims' relation at the deployed masked parser, `deployZk Readable.relation`;
-* the deployed tables, through `TablesSide`'s `_dataE` theorems, with `SwCausal` at the honest values; and the
-  deployed release, which reads no stop (`LoopAny.releaseReadsNoStop_loopRelease`).
+* the deployed tables, through `TablesSide`'s `_dataE` theorems, with `SwCausalOn (Loop.SwOk Masked.dataE)` at the
+  honest values (`swCausalOn_honestVals_dataE`); and the deployed release, which reads no stop
+  (`LoopAny.releaseReadsNoStop_loopRelease`).
 
 The nontrivial lemmas take no request and no statement of V* (`m = 0`, so the error terms are `0`), so the real view
 never finishes, and a release that reads whether the inner session finished. The bound fails where the firewall never
@@ -217,15 +218,16 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **`RecursiveZKLoop`'s premises hold at one instance**: the deployed tables (with `SwCausal` at the honest values),
-the firewall sending `sched`'s transcript on the honest worker's requests, and one statement of V*, the honest
+/-- **`RecursiveZKLoop`'s premises hold at one instance**: the deployed tables (with `SwCausalOn` at the honest
+values), the firewall sending `sched`'s transcript on the honest worker's requests, and one statement of V*, the honest
 fixture's, in the claims' relation at the deployed masked parser at every context, its simulator's coins its own. -/
 theorem RecursiveZKLoop_honest (h : RecDeploy.HonestFixture) :
     ∃ (y : Claims.Msg) (w : Claims.Flock.Wit),
       Claims.ZKServer.Loop.finS.Tables ∧
       Claims.ZKServer.Loop.finS.Complete (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) ∧
       Claims.ZKServer.Loop.finS.DummyReg ∧ Claims.ZKServer.Loop.finS.Causal ∧
-      Claims.ZKServer.Loop.finS.SwCausal Claims.ZKServer.Loop.finS.honestVals ∧
+      Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE)
+        Claims.ZKServer.Loop.finS.honestVals ∧
       Claims.ZKServer.Loop.finS.TapeOK ∧
       Flock.Guarantees.FirewallSends (Prog := Unit) (Wit := Unit) (Rr := Unit) sched
         (fun _ _ _ => fun (_ : Unit) (_ : Unit) (_ : Fin nhS → ByteArray) => Flock.Firewall.honestReqs sched hon)
@@ -245,7 +247,7 @@ theorem RecursiveZKLoop_honest (h : RecDeploy.HonestFixture) :
   obtain ⟨y, w, hR⟩ := RecDeploy.BaseParses.fixture_stmt h
   exact ⟨y, w, Claims.ZKServer.Loop.tables_dataE, Claims.ZKServer.Loop.complete_dataE,
     Claims.ZKServer.Loop.dummyReg_dataE, Claims.ZKServer.Loop.causal_dataE,
-    Claims.ZKServer.Loop.swCausal_honestVals_dataE, Claims.ZKServer.Loop.tapeOK_dataE, sends,
+    Claims.ZKServer.Loop.swCausalOn_honestVals_dataE, Claims.ZKServer.Loop.tapeOK_dataE, sends,
     fun _ _ _ => hR, fun _ _ _ _ _ _ => ⟨Equiv.refl _⟩⟩
 
 /-- **`RecursiveZKLoop`'s bound fails where the firewall never finishes**: with no request and no statement of V*, the
@@ -279,7 +281,7 @@ theorem RecursiveZKLoop_nontrivial :
   refine ENNReal.iSup_eq_zero.2 fun _ => ?_
   simp [OuterZK.LoopSessions.atWorker]
 
-/-- **`RecursiveZKLoopAnySum`'s premises hold at one instance**: the deployed tables (with `SwCausal` at the honest
+/-- **`RecursiveZKLoopAnySum`'s premises hold at one instance**: the deployed tables (with `SwCausalOn` at the honest
 values); the honest worker's requests, as a worker of the adaptive firewall, finishing at every salt, so its contexts
 are all of them; one statement of V*, the honest fixture's, in the claims' relation at the deployed masked parser at
 every context, its simulator's coins its own; and the deployed release reading no stop. -/
@@ -288,7 +290,8 @@ theorem RecursiveZKLoopAnySum_honest (h : RecDeploy.HonestFixture) :
       Claims.ZKServer.Loop.finS.Tables ∧
       Claims.ZKServer.Loop.finS.Complete (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) ∧
       Claims.ZKServer.Loop.finS.DummyReg ∧ Claims.ZKServer.Loop.finS.Causal ∧
-      Claims.ZKServer.Loop.finS.SwCausal Claims.ZKServer.Loop.finS.honestVals ∧
+      Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE)
+        Claims.ZKServer.Loop.finS.honestVals ∧
       Claims.ZKServer.Loop.finS.TapeOK ∧
       (∀ u : (Unit × Unit) × (Fin (Flock.Guarantees.fwHoles sched + 0) → Fin 192 → Fin 256),
         adaptFinished sched (wAny u.1.1 u.1.2) nA (Flock.Guarantees.saltsOf u.2) = true) ∧
@@ -311,7 +314,7 @@ theorem RecursiveZKLoopAnySum_honest (h : RecDeploy.HonestFixture) :
   obtain ⟨y, w, hR⟩ := RecDeploy.BaseParses.fixture_stmt h
   exact ⟨y, w, Claims.ZKServer.Loop.tables_dataE, Claims.ZKServer.Loop.complete_dataE,
     Claims.ZKServer.Loop.dummyReg_dataE, Claims.ZKServer.Loop.causal_dataE,
-    Claims.ZKServer.Loop.swCausal_honestVals_dataE, Claims.ZKServer.Loop.tapeOK_dataE, fun u => wAny_finishes u.2,
+    Claims.ZKServer.Loop.swCausalOn_honestVals_dataE, Claims.ZKServer.Loop.tapeOK_dataE, fun u => wAny_finishes u.2,
     fun _ _ _ => hR, fun _ _ _ _ _ _ => ⟨Equiv.refl _⟩, fun _ M => LoopAny.releaseReadsNoStop_loopRelease M⟩
 
 /-- **`RecursiveZKLoopAnySum`'s bound fails where the release reads the stop of an unfinished session**: with no
