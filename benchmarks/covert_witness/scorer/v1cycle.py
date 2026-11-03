@@ -31,6 +31,7 @@ per-run P4 (final and search) for final.md, and posts FINAL-TABLE instead of DIG
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -116,13 +117,23 @@ def ledger_args(out: Path, root: Path | None = None) -> list[str]:
     return ["--out", str(out), "--root", ledger, "--scorer", str(S.STATE), *(x for p in PINS for x in ("--pin", p))]
 
 
+#: the states `research fetch` observes a node run to have ended in
+ENDED = ("done", "failed", "cancelled", "refused", "dead", "timed_out", "exited")
+
+
 def node_state(run: str) -> str:
-    """done, failed or running, from `research fetch RUN`'s observation."""
+    """The node run's state as `research fetch RUN` observes it (`... observed T: STATE rc=...`): one of ENDED, else
+    running."""
     r = subprocess.run(["research", "fetch", run], capture_output=True, text=True, check=False)
-    seen = r.stdout + r.stderr
-    if " done rc=0" in seen:
-        return "done"
-    return "failed" if " done rc=" in seen or "failed" in seen else "running"
+    m = re.search(r" observed \S+: (\w+) rc=", r.stdout + r.stderr)
+    return m.group(1) if m and m.group(1) in ENDED else "running"
+
+
+def trace_resources(runs: int) -> tuple[int, int]:
+    """Workers and GB to ask TRACE_NODE for a pack of `runs` runs: 24 workers peaked at 70 GB PSS (88 GB RSS) on
+    r20261103-024017-a670, and a fixed 200 GB was refused at 03:34Z behind other reservations."""
+    workers = max(1, min(24, runs))
+    return workers, min(200, 24 + 6 * workers)
 
 
 def measured_ledger(out: Path, launch: bool = True) -> dict:
@@ -166,15 +177,19 @@ def measured_ledger(out: Path, launch: bool = True) -> dict:
     if packed["runs"]:
         runs = [r["run_id"] for r in json.loads(subprocess.run(["tar", "-xOf", str(pack), "./runs.json"],
                                                                capture_output=True, check=True).stdout)]
+        workers, gb = trace_resources(len(runs))
         r = subprocess.run(["research", "run", "--on", TRACE_NODE, "--project", "verity", "--source", str(HERE.parents[2]),
-                            "--cwd", "source", "--send", str(pack), "--mem-gb", "200", "--env", "WORKERS=24",
+                            "--cwd", "source", "--send", str(pack), "--mem-gb", str(gb), "--env", f"WORKERS={workers}",
                             "--timeout", "150m", "--", "bash", "benchmarks/covert_witness/scorer/job40.sh"],
                            capture_output=True, text=True, check=False, env=os.environ | {"AGENT_GUARD_LOCAL_OK": "1"})
         said = r.stdout + r.stderr
         run = next((w for w in said.split() if w.startswith("r20") and w.count("-") == 2), None)
         log["launch"] = said.strip().splitlines()[-3:]
-        if run:
+        # a refused launch traces nothing, so its runs stay out of pending and the next refresh packs them again
+        if run and not r.returncode and " refused " not in said:
             pending[run] = runs
+        else:
+            log["launch_refused"] = run
     pack.unlink(missing_ok=True)
     while launch and pending and time.monotonic() < deadline:
         time.sleep(60)
@@ -436,6 +451,8 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
             f"records measured, {meta['night2_records']} from night 2, {meta['checkpoints']} checkpoints; "
             f"{meta['not_measured']} valid checkpoints not measured yet"
             + (f" ({tracing} runs tracing on {TRACE_NODE})" if tracing else "")
+            + (f" ({tr['packed']} runs' trace refused on {TRACE_NODE}, packed again at the next refresh)"
+               if "launch_refused" in tr else "")
             + (f", {tr['untraced_runs']} runs whose trace failed (trace40-traced.json)" if tr["untraced_runs"] else "")
             + "; H and W* over every checkpoint, so S >= 1; ρ c/(c − d) where Fit holds for the training, else "
             "Slowdown's bound, a target, whose A1 charges no read of earlier tokens' keys and values "
