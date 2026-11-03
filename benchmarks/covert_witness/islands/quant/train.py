@@ -19,7 +19,8 @@ Modes:
   one bf16 scale a row (its mean |g|), and `--grad-code rtn{b}` as b-bit codes packed 8/b a byte at one bf16 scale a row
   (its absmax), decoded and summed before Muon, with no error feedback, so Δ_g is about 1 or b bits a weight;
   `--state-dtype bf16` stores qat's latents and Muon's buffer in bf16 (the buffer rounded to nearest, each latent update
-  stochastically), so Δ_t and Muon's state are 16 bits an entry;
+  stochastically), so Δ_t and Muon's state are 16 bits an entry, and `--muon-buf int8` stores the buffer as int8 codes
+  at one bf16 scale a row, stochastically rounded;
 - `qlora`: LoRA whose factors are k-bit in every forward (straight-through), E their codes.
 
 `--arms` (qat, qlora) packs settings into one candidate: each arm trains from θ on the same data order with an equal
@@ -100,7 +101,8 @@ class Schedule:
 #: what an arm may set (`--arms`); the rest is the run's
 ARM_KEYS = {"qat", "qat_group", "qat_mult", "qat_keep", "qat_block", "qat_norm_bits", "muon_lr", "adam_lr", "opt", "warmup",
             "data_seed", "targets", "rank", "qbits", "pow2", "norms", "lr", "norm_lr", "seed", "vote_step", "vote_rate",
-            "vote_margin", "vote_carry", "decay_frac", "decay_shape", "grad_code", "state_dtype"}
+            "vote_margin", "vote_carry", "decay_frac", "decay_shape", "grad_code", "state_dtype",
+            "muon_buf"}
 
 
 def parse_arms(a) -> list[argparse.Namespace]:
@@ -156,13 +158,24 @@ def sr_bf16(x: torch.Tensor, gen: torch.Generator) -> torch.Tensor:
     return ((x.contiguous().view(torch.int32) + noise) & -65536).view(torch.float32).to(torch.bfloat16)
 
 
-class Muon(torch.optim.Optimizer):
-    """Muon; with `sr` (a generator) the parameters and buffer are bf16, the buffer rounded to nearest and each
-    parameter's update stochastically rounded (`sr_bf16`)."""
+def sr_int8(x: torch.Tensor, gen: torch.Generator) -> tuple[torch.Tensor, torch.Tensor]:
+    """fp32 matrix `x` as int8 codes in -127..127 at one bf16 scale a row (its absmax over 127), stochastically
+    rounded so the codes' value is unbiased."""
+    s = (x.abs().amax(1, keepdim=True) / 127).bfloat16()
+    y = x / torch.where(s > 0, s.float(), 1.0)
+    r = torch.rand(y.shape, device=y.device, generator=gen)
+    return torch.clamp(torch.floor(y + r), -127, 127).to(torch.int8), s
 
-    def __init__(self, params, lr: float, momentum: float = 0.95, sr: torch.Generator | None = None):
+
+class Muon(torch.optim.Optimizer):
+    """Muon. With `gen` (a generator): `sr`, the parameters and buffer are bf16, the buffer rounded to nearest and each
+    parameter's update stochastically rounded (`sr_bf16`); `buf_int8`, the buffer is carried as int8 codes at one bf16
+    scale a row (`sr_int8`), decoded for the step and re-coded."""
+
+    def __init__(self, params, lr: float, momentum: float = 0.95, gen: torch.Generator | None = None, sr: bool = False,
+                 buf_int8: bool = False):
         super().__init__(params, {"lr": lr, "momentum": momentum})
-        self.sr = sr
+        self.gen, self.sr, self.buf_int8 = gen, sr, buf_int8
 
     @torch.no_grad()
     def step(self):
@@ -170,14 +183,21 @@ class Muon(torch.optim.Optimizer):
             for p in g["params"]:
                 if p.grad is None:
                     continue
-                st = self.state.setdefault(p, {"buf": torch.zeros_like(p)})
-                buf = st["buf"].mul_(g["momentum"]).add_(p.grad)
+                if self.buf_int8:
+                    st = self.state.setdefault(p, {"q": torch.zeros_like(p, dtype=torch.int8),
+                                                   "s": torch.zeros(p.shape[0], 1, dtype=torch.bfloat16,
+                                                                    device=p.device)})
+                    buf = (st["q"].float() * st["s"].float()).mul_(g["momentum"]).add_(p.grad.float())
+                    st["q"], st["s"] = sr_int8(buf, self.gen)
+                else:
+                    st = self.state.setdefault(p, {"buf": torch.zeros_like(p)})
+                    buf = st["buf"].mul_(g["momentum"]).add_(p.grad)
                 u = newton_schulz(p.grad.add(buf, alpha=g["momentum"]))
                 alpha = -g["lr"] * max(1.0, p.shape[0] / p.shape[1]) ** 0.5
-                if self.sr is None:
-                    p.add_(u, alpha=alpha)
+                if self.sr:
+                    p.copy_(sr_bf16(p.float().add_(u.float(), alpha=alpha), self.gen))
                 else:
-                    p.copy_(sr_bf16(p.float().add_(u.float(), alpha=alpha), self.sr))
+                    p.add_(u.to(p.dtype), alpha=alpha)
 
 
 # ---- variants ----------------------------------------------------------------------------------------------------------
@@ -259,19 +279,21 @@ def select(params: dict, rec: dict, spec: str) -> list[str]:
 
 
 def delta_grad(adam: int, muon: int, latent: int, stateless: int = 0, coded: int | None = None,
-               partials: int = 1, code: str = "fp32", state_bits: int = 32) -> dict:
+               partials: int = 1, code: str = "fp32", state_bits: int = 32, buf_rows: int | None = None) -> dict:
     """Δ_grad in islands/lowrank's keys: the fp32 gradient of each of the `adam` + `muon` + `stateless` trained values and
     its optimizer's fp32 state (AdamW's m and v, Muon's one buffer, none for `--opt sign`); `bits`/`bytes` are their sum.
     `latent_bits`, beside it and not in `bits`, are the fp32 latents a straight-through run reads and writes (the update
     application's Δ_t). With a `--grad-code` the Muon matrices' gradient passes as `coded` bits a partial (`partials` a
-    step) in place of 32 an entry. `state_bits` (`--state-dtype`) is Muon's buffer's and the latents' width an entry."""
+    step) in place of 32 an entry. `state_bits` (`--state-dtype`) is Muon's buffer's and the latents' width an entry;
+    with `buf_rows` (`--muon-buf int8`) the buffer is 8 bits an entry and 16 for each of its `buf_rows` rows' scales."""
     n = adam + muon + stateless
     grad = 32 * n if coded is None else 32 * (adam + stateless) + coded
-    bits = grad + 64 * adam + state_bits * muon
-    return {"trainable": n, "grad_bits": grad, "adam_bits": 64 * adam, "muon_bits": state_bits * muon,
+    buf = state_bits * muon if buf_rows is None else 8 * muon + 16 * buf_rows
+    bits = grad + 64 * adam + buf
+    return {"trainable": n, "grad_bits": grad, "adam_bits": 64 * adam, "muon_bits": buf,
             "latent_bits": state_bits * latent, "bits": bits, "bytes": bits // 8} | (
         {} if coded is None else {"grad_code": code, "partials": partials}) | (
-        {} if state_bits == 32 else {"state_dtype": "bf16"})
+        {} if state_bits == 32 else {"state_dtype": "bf16"}) | ({} if buf_rows is None else {"muon_buf": "int8"})
 
 
 GRAD_CODES = ("fp32", "sign", "rtn2", "rtn4", "rtn8")
@@ -984,6 +1006,9 @@ def main() -> int:
     ap.add_argument("--state-dtype", choices=("fp32", "bf16"), default="fp32",
                     help="qat on matrices: the latents' and Muon's buffer's dtype as stored; bf16 rounds the buffer to "
                          "nearest and each latent update stochastically (Δ_t and Muon's state at 16 bits an entry)")
+    ap.add_argument("--muon-buf", choices=("same", "int8"), default="same",
+                    help="qat on matrices: Muon's buffer as stored, at --state-dtype, or as int8 codes at one bf16 scale "
+                         "a row, stochastically rounded (8 bits an entry)")
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--decay-frac", type=float, default=1.0,
                     help="the rate is flat after the warmup and decays to 0 (--decay-shape) over this last share of an "
@@ -1082,9 +1107,9 @@ def main() -> int:
             raise SystemExit("quant: --grad-code codes the Muon matrices' gradient (not --opt vote's)")
         if x.grad_code.startswith("rtn") and any(params[n].shape[1] % (8 // int(x.grad_code[3:])) for n in mats):
             raise SystemExit(f"quant: --grad-code {x.grad_code} packs a row's codes a byte at a time")
-        bf16 = x.state_dtype == "bf16"
-        if bf16 and (not coded or vote or set(quantized) != set(mats)):
-            raise SystemExit("quant: --state-dtype bf16 stores qat's Muon matrices' latents (no --opt vote, no "
+        bf16, buf8 = x.state_dtype == "bf16", x.muon_buf == "int8"
+        if (bf16 or buf8) and (not coded or vote or set(quantized) != set(mats)):
+            raise SystemExit("quant: --state-dtype and --muon-buf store qat's Muon matrices' state (no --opt vote, no "
                              "--qat-norm-bits, no trained embedding)")
         vbits = x.qat_norm_bits if not mats else qat_bits(x.qat) if coded else 0
         # matrices vote per sequence from one backward (SampleVotes), with their weights out of autograd
@@ -1106,14 +1131,14 @@ def main() -> int:
         n_rest, n_mats, n_q = (sum(params[n].numel() for n in ns) for ns in (rest, mats, quantized))
         gcode = ({"coded": sum(code_bits(tuple(params[n].shape), x.grad_code) for n in mats),
                   "partials": -(-a.batch // a.micro), "code": x.grad_code} if x.grad_code != "fp32" else {}) | (
-            {"state_bits": 16} if bf16 else {})
+            {"state_bits": 16} if bf16 else {}) | ({"buf_rows": sum(params[n].shape[0] for n in mats)} if buf8 else {})
         dgrad = (vote_delta_grad(sum(voter.state[params[n]]["code"].numel() for n in quantized), 8,
                                  a.batch if sample else -(-a.batch // a.micro)) if vote else
                  delta_grad(0, n_mats, n_q, n_rest, **gcode) if x.opt == "sign" else
                  delta_grad(n_rest, n_mats, n_q, **gcode))
         opt_of = {n: latent.get(n, params[n]) for n in names}
-        muon = Muon([opt_of[n] for n in mats], lr=x.muon_lr,
-                    sr=torch.Generator(device=dev).manual_seed(x.seed) if bf16 else None) if mats and not vote else None
+        muon = Muon([opt_of[n] for n in mats], lr=x.muon_lr, gen=torch.Generator(device=dev).manual_seed(x.seed),
+                    sr=bf16, buf_int8=buf8) if mats and not vote else None
         adam = (SignSGD([opt_of[n] for n in rest], x.adam_lr) if x.opt == "sign" else
                 torch.optim.AdamW([opt_of[n] for n in rest], lr=x.adam_lr, betas=(0.9, 0.95), weight_decay=0.0,
                                   fused=dev.startswith("cuda"))) if rest and not vote else None
