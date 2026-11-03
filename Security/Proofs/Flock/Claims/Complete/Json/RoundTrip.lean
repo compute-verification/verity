@@ -7,6 +7,10 @@ public import Proofs.Flock.Claims.Complete.Prover.Print
 public import Std.Data.TreeMap.Raw.Lemmas
 public import Std.Data.TreeMap.Raw.WF
 public import Batteries.Tactic.OpenPrivate
+import all Init.Data.Array.QSort.Basic
+import all Init.Data.Repr
+import all Init.Data.Int.Repr
+import all Lean.Data.Json.Basic
 
 /-!
 # The verifier's parser reads back what the printers print
@@ -35,7 +39,7 @@ open Claims.Json
 
 /-! ## `Array.qsort` permutes -/
 
-theorem loop_perm {α} {n} (lt : α → α → Bool) (lo hi : Nat) (hhi : hi < n) (pivot : α) :
+private theorem loop_perm {α} {n} (lt : α → α → Bool) (lo hi : Nat) (hhi : hi < n) (pivot : α) :
     ∀ (as : Vector α n) (i k : Nat) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi),
     (Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w).2.Perm as := by
   intro as i k ilo ik w
@@ -64,7 +68,7 @@ theorem qpartition_perm {α} {n} (as : Vector α n) (lt : α → α → Bool) (l
     · exact Vector.swap_perm hi hj
   exact ((sw _ _ _ _ _ _).trans (sw _ _ _ _ _ _)).trans (sw _ _ _ _ _ _)
 
-theorem sort_perm {α} (lt : α → α → Bool) {n} :
+private theorem sort_perm {α} (lt : α → α → Bool) {n} :
     ∀ (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n),
     (Array.qsort.sort lt as lo hi w hlo hhi).Perm as := by
   intro as lo hi w hlo hhi
