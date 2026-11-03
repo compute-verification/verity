@@ -72,7 +72,10 @@ The park moves no member below the lowest held one, so no Lean check below it is
 (its prefix can't land), and no check is stacked above a held member.  A Lean check lost or failed by its
 machine (killed, out of disk or memory: `_machine_fault`) runs again once on the other machines.  A failed Lean check is run
 again on the Lean change's own commit, and only a failure there is told to its owner; nothing at or above a failed commit lands until it leaves `next`, unless a passed Lean check
-of a reviewed commit above it checked the tree that lands (`_past_failed`).  And every .py file the
+of a reviewed commit above it checked the tree that lands (`_past_failed`).  No Lean check is stacked or cut above a failed
+one that would hold every Lean change of its prefix still on `next`, though a sync that rebuilds `next` above a running
+check's prefix (a `--first` fix) took the failed commit off it, until one of its members is held, ejected or pushed, or a
+Lean check that holds them all passes (`_live_failures`).  And every .py file the
 landing leaves must compile (`py_compile`): the PR that last changed one that doesn't is ejected.  While any Lean check of a
 commit of `next` runs, drive's or a hand one of its run registry (`_running_lean`), the members up to it keep their place
 and their merges (`--first` and each PR admitted meanwhile go above them, one a member contains too: `Queue.order`); only one
@@ -2955,6 +2958,7 @@ class Driver:
     #    (`_carry`: {"from": the commit it ran on, "files" that commit's tree and
     #    this one's differ in, "ok" once `_carried_ok` judged it}) when it moved there, "state": None while it runs, else
     #    "passed" (with "run", the id that passed) or "failed" (with "why")}}, each dropped once its commit leaves `next`.
+    #    `drive["lean_failed"]`: each failed one by its members, kept past that until it is resolved (`_live_failures`).
     #    `drive["postland"]` also keeps "verified_as" ({"steps", "no_cache"} of the run that verified `verified`, or ci's
     #    `research queue baseline`), "verified_run" (the ids of the run that verified it; none for ci's baseline), "gated" and
     #    "gated_run" (the newest tip whose run passed every step on the merge gate, red off it or not: `_gate_passed`),
@@ -3646,6 +3650,8 @@ class Driver:
             hi = max((j for j, m in enumerate(chain[:bad]) if self._lean_change(m)), default=-1)
             if hi < 0 or any(hi <= pos[x] < bad for x, r in lean.items() if r.get("state") == "passed" and x in pos):
                 del lean[c]                 # every Lean change below it passed below it: what broke is the after-landing run's
+                for x in [x for x, f in (drive.get("lean_failed") or {}).items() if f["members"] == rec.get("members")]:
+                    del drive["lean_failed"][x]
                 self.refuse(drive, f"lean-dropped:{c}", f"the Lean check {_ids(rec)} of `{self.q.branch}` {c[:12]} "
                                                      f"(#{chain[bad].pr}'s merge, which changes no Lean) failed ({rec.get('why')}), "
                                                      "and each Lean change below it passed a Lean check below it: drive drops it, "
@@ -3781,8 +3787,9 @@ class Driver:
         head, a hold, an ejection); after a failed one above it, check its own commit, so a PR is blamed only on its own
         check; else launch one of the reviewed prefix's top, ``chain[k - 1]``, capped below the lowest member above ``chain[i]``
         that came onto `next` within `LEAN_SETTLE_TICKS` ticks (`_churned`), so churn above doesn't take it off `next`, and cut
-        to share the Lean changes up to it with the Lean checks still free (`lean_cut`), lowest first.  One running below
-        stays; `_stack_lean` stacks one above it for the Lean changes it doesn't hold."""
+        to share the Lean changes up to it with the Lean checks still free (`lean_cut`), lowest first, but at its own commit
+        when that cut would hold every Lean change left of a failed check not resolved (`_failure_under`), as after a failed
+        one above it.  One running below stays; `_stack_lean` stacks one above it for the Lean changes it doesn't hold."""
         q, m, lean = self.q, chain[i], drive["lean"]
         pos = {x.commit: j for j, x in enumerate(chain)}
         mine = {c: rec for c, rec in lean.items() if pos.get(c, -1) >= i and not (
@@ -3799,6 +3806,8 @@ class Driver:
         cap = next((j for j in range(i + 1, k) if self._churned(drive, chain[j])), k)
         free = self.max_lean_checks - sum(rec.get("state") is None for rec in lean.values())
         t = i if any(rec.get("state") == "failed" for rec in mine.values()) else lean_cut(chain, i, cap - 1, self._lean_change, free)
+        if t > i and self._failure_under(drive, chain, t, set(q.park or ())):
+            t = i
         self._launch_lean(drive, chain, t, f"#{m.pr}'s Lean change", dry_run)
 
     def _stack_lean(self, drive: dict, dry_run: bool) -> None:
@@ -3806,18 +3815,85 @@ class Driver:
         (`lean_stack`, at most `max_lean_checks` running), so they don't wait for it to pass and then for a check of their own.
         The lower one runs on.  An ejection from a stacked check's prefix rebuilds `next` at once (`_review`), cancelling it.
         It stops below a held member (`_park`) as below churn: that one can't land, and each PR a sync adds goes below it,
-        taking the commits from it up off `next`."""
+        taking the commits from it up off `next`.  And none is stacked while a failed Lean check isn't resolved whose Lean
+        changes left on `next` it would hold (`_failure_under`), its commit on `next` or not: it would fail as that one did."""
         base, chain = self._chain()
+        held = set(self.q.park)
+        self._live_failures(drive, chain, held)
         if not chain or base != _out(self.repo, "rev-parse", self.q.base):
             return
         self._rekey_lean(drive, chain)
         self._note_marks(drive, chain)
-        held = set(self.q.park)
         t = lean_stack(chain, drive["lean"], self._lean_change, lambda m: m.pr in held or self._churned(drive, m),
                        self.max_lean_checks)
-        if t is not None:
-            self._launch_lean(drive, chain, t, f"the Lean changes up to #{chain[t].pr}, above the running one", dry_run,
-                              stacked=True)
+        if t is None:
+            return
+        if got := self._failure_under(drive, chain, t, held):
+            f, left = got
+            self.q.log(f"research queue drive: stacks no Lean check above the running one: the Lean check {_ids(f)} of "
+                       f"{' '.join(f'#{pr}' for pr, _ in f['members'])} failed ({f.get('why')}), and a check up to "
+                       f"#{chain[t].pr} would hold its Lean changes still on `{self.q.branch}` "
+                       f"({' '.join(f'#{m.pr}' for m in left)}), one of them what broke it; it stacks again once one is held, "
+                       "ejected or pushed, or a Lean check that holds them all passes")
+            return
+        self._launch_lean(drive, chain, t, f"the Lean changes up to #{chain[t].pr}, above the running one", dry_run,
+                          stacked=True)
+
+    def _note_failed(self, drive: dict) -> None:
+        """Remember each failed Lean check of `next` by its members (`drive["lean_failed"]`: {the commit it failed on: {"members",
+        "ids", "why"}}), past its record in `drive["lean"]`, which a sync that rebuilds `next` above a running check's prefix
+        (a `--first` fix, a lift) drops with its commit, though what broke it is still on `next` (`_live_failures`)."""
+        failed = drive.setdefault("lean_failed", {})
+        seen = [f["members"] for f in failed.values()]
+        for c, rec in (drive.get("lean") or {}).items():
+            if rec.get("state") == "failed" and (members := rec.get("members")) and members not in seen:
+                failed[c] = {"members": members, "ids": rec.get("ids") or [], "why": rec.get("why")}
+                seen.append(members)
+
+    def _live_failures(self, drive: dict, chain: list[Member], held: set[int]) -> list[tuple[dict, list[Member]]]:
+        """Each failed Lean check of `next` (`_note_failed`) not yet resolved, with the Lean changes of its prefix still on
+        `next`, one of which broke it: every member it held is on `next` at that head and not held (``held``, `_park`'s), or
+        landed.  One is dropped, with why, once one of its members is held, ejected or pushed (the walk, `_lean_check`, found
+        what broke it, or its owner acted), none of its Lean changes is left on `next`, or a Lean check that passed holds them
+        all at their heads (it failed by a fault no check saw)."""
+        self._note_failed(drive)
+        failed, at = drive["lean_failed"], {(m.pr, m.head): m for m in chain}
+        heads = {m.pr: m.head for m in chain}
+        passed = [(rec, {tuple(x) for x in rec.get("members") or ()}) for rec in (drive.get("lean") or {}).values()
+                  if rec.get("state") == "passed"]
+        out = []
+        for c, f in list(failed.items()):
+            left, why = [], None
+            for pr, head in f["members"]:
+                if (m := at.get((pr, head))) is not None and pr not in held:
+                    left += [m] if self._lean_change(m) else []
+                elif m is not None:
+                    why = f"#{pr} is held"
+                elif heads.get(pr, head) != head:
+                    why = f"#{pr} was pushed to {heads[pr][:8]}"
+                elif not self._ancestor(head, self.q.base):
+                    why = f"#{pr} left `{self.q.branch}`"
+                if why:
+                    break
+            if why is None and not left:
+                why = f"none of its Lean changes is left on `{self.q.branch}`"
+            if why is None and (ok := next((rec for rec, ms in passed if {(m.pr, m.head) for m in left} <= ms), None)):
+                why = f"the Lean check {_ids(ok)} that holds its Lean changes on `{self.q.branch}` passed"
+            if why:
+                del failed[c]
+                self.q.log(f"research queue drive: the failed Lean check {_ids(f)} of "
+                           f"{' '.join(f'#{pr}' for pr, _ in f['members'])} no longer holds a Lean check back from stacking "
+                           f"above it: {why}")
+            else:
+                out.append((f, left))
+        return out
+
+    def _failure_under(self, drive: dict, chain: list[Member], t: int, held: set[int]) -> tuple[dict, list[Member]] | None:
+        """A failed Lean check not yet resolved (`_live_failures`) whose Lean changes left on `next` a Lean check of ``chain[t]``
+        would hold every one of, (it, them), or None: that check would fail as it did."""
+        below = {(m.pr, m.head) for m in chain[: t + 1]}
+        return next(((f, left) for f, left in self._live_failures(drive, chain, held)
+                     if {(m.pr, m.head) for m in left} <= below), None)
 
     def _launch_lean(self, drive: dict, chain: list[Member], t: int, what: str, dry_run: bool, stacked: bool = False,
                      by: str | None = None) -> None:
@@ -3990,6 +4066,7 @@ class Driver:
                 del lean[c]
             else:
                 rec.update(state="failed", why=", ".join(f"{rid} {st} rc={rc}" for rid, (st, rc, *_) in states.items()))
+        self._note_failed(drive)
 
     def _machine_fault(self, ids: list[str]) -> str | None:
         """What says a Lean check that failed failed by its machine rather than by the Lean it checked, or None: a step killed
