@@ -11,19 +11,12 @@ testpaths = ["tests"]
 # ANDs of verity's gather circuit, which `flops.gather_selects` prices; test_gates compiles verity's Definitions, which
 # read verity.errors and verity.ml.kernels' tc; test_pilot_start runs launch.py's pilot-start refusal, which imports
 # pin.py; test_rescore reads the scorer's state through the analysis rescore loads; test_rho_vectors measures the
-# capture's fixture circuits with te_core.capture.circuit, which reads the capture's trace, structure and run modules.
+# capture's fixture circuits with te_core.capture.circuit and reads each circuit's op log beside it, and test_io_bound
+# and test_formalism capture steps with te_core.capture, so the capture package is read whole.
 inputs = ["benchmarks/covert_witness/prepare.py", "benchmarks/covert_witness/sealed.py",
           "benchmarks/covert_witness/data_v3.py", "benchmarks/covert_witness/model.py",
           "benchmarks/covert_witness/starts_store.py", "benchmarks/covert_witness/starts_store.json",
           "benchmarks/covert_witness/evaluate.py", "benchmarks/covert_witness/launch.py",
           "benchmarks/covert_witness/pin.py", "benchmarks/covert_witness/analysis/rescore_v1.py",
-          "verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits",
-          "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py",
-          "benchmarks/covert_witness/te_core/capture/__init__.py",
-          "benchmarks/covert_witness/te_core/capture/circuit.py",
-          "benchmarks/covert_witness/te_core/capture/trace.py",
-          "benchmarks/covert_witness/te_core/capture/structure.py",
-          "benchmarks/covert_witness/te_core/capture/run.py",
-          "benchmarks/covert_witness/te_core/capture/tests/fixtures/wildcard_adapter.npz",
-          "benchmarks/covert_witness/te_core/capture/tests/fixtures/dense_blocks.npz",
-          "benchmarks/covert_witness/te_core/capture/tests/fixtures/lora_blocks.npz"]
+          "benchmarks/covert_witness/te_core/capture", "verity/__init__.py", "verity/errors.py",
+          "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py"]

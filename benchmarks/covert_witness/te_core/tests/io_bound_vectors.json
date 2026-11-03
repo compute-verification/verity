@@ -1,0 +1,433 @@
+{
+ "about": "te_core.io_bound's bound on hand-written product sets: `inputs` to `bound`, `cap` its terms, `term` the blocks and \u03c1 (python -m te_core.io_bound vectors)",
+ "vectors": [
+  {
+   "name": "one product, square, console",
+   "inputs": {
+    "c": 536681984163840.0,
+    "k": 65536.0,
+    "C_gates": 1e+18,
+    "products": [
+     {
+      "macs": 500000000000000.0,
+      "outputs": 976562500000.0,
+      "k_dim": 512,
+      "k_whole": 512,
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "gates_per_mac": 1480.125,
+      "cell_gates": 23682.0
+     }
+    ]
+   },
+   "cap": {
+    "alpha": [
+     35673.279951786295
+    ],
+    "beta": [
+     2048.0
+    ],
+    "mu": [
+     0.9185586535436917
+    ],
+    "gamma0": 52800913.48863769,
+    "Q": 8357124388217926.0,
+    "L": 4.248692584613614e+16,
+    "feed": 1.4142135623730951,
+    "whole_chain": 1.0079053348372358,
+    "lam_proved": 1.645902519586836,
+    "lam_numerical": 1.1547005383792517
+   },
+   "term": {
+    "proved_blocks_root": 4647926359.791145,
+    "proved_blocks_linear": 7711086295.950316,
+    "proved_blocks": 7711086295.950316,
+    "proved_rho": 4138401.093369211,
+    "proved_rho_main": 4570249.070185618,
+    "proved_rho_no_cell": 219441.14652435452,
+    "numerical_blocks_root": 7293250813.455334,
+    "numerical_blocks_linear": 11333629666.669708,
+    "numerical_blocks": 11333629666.669708,
+    "numerical_rho": 6082554.85728646,
+    "numerical_rho_main": 6514402.834102866,
+    "numerical_rho_no_cell": 229913.46747707107,
+    "share": 0.7400625
+   }
+  },
+  {
+   "name": "one product, square, panel",
+   "inputs": {
+    "c": 254500000000000.0,
+    "k": 80000,
+    "C_gates": 1e+18,
+    "products": [
+     {
+      "macs": 500000000000000.0,
+      "outputs": 976562500000.0,
+      "k_dim": 512,
+      "k_whole": 512,
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "gates_per_mac": 1480.125,
+      "cell_gates": 23682.0
+     }
+    ]
+   },
+   "cap": {
+    "alpha": [
+     48112.52243246882
+    ],
+    "beta": [
+     2500.0
+    ],
+    "mu": [
+     1.014873520059889
+    ],
+    "gamma0": 71212547.26535791,
+    "Q": 8357124388217926.0,
+    "L": 4.69418646524576e+16,
+    "feed": 1.4142135623730951,
+    "whole_chain": 1.0096755074310009,
+    "lam_proved": 1.6487931993277583,
+    "lam_numerical": 1.1547005383792517
+   },
+   "term": {
+    "proved_blocks_root": 3336800012.618031,
+    "proved_blocks_linear": 5643796846.883079,
+    "proved_blocks": 5643796846.883079,
+    "proved_rho": 1436346.2975317435,
+    "proved_rho_main": 1604107.5280004935,
+    "proved_rho_no_cell": 83822.25466981716,
+    "numerical_blocks_root": 5271722852.359363,
+    "numerical_blocks_linear": 8340820312.499998,
+    "numerical_blocks": 8340820312.499998,
+    "numerical_rho": 2122738.7695312495,
+    "numerical_rho_main": 2290499.9999999995,
+    "numerical_rho_no_cell": 88300.28159447796,
+    "share": 0.7400625
+   }
+  },
+  {
+   "name": "short chains, K = 16, none whole by itself",
+   "inputs": {
+    "c": 536681984163840.0,
+    "k": 65536.0,
+    "C_gates": 1e+17,
+    "products": [
+     {
+      "macs": 50000000000000.0,
+      "outputs": 3125000000000.0,
+      "k_dim": 16,
+      "k_whole": null,
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "gates_per_mac": 1480.125,
+      "cell_gates": 23682.0
+     }
+    ]
+   },
+   "cap": {
+    "alpha": [
+     35673.279951786295
+    ],
+    "beta": [
+     2048.0
+    ],
+    "mu": [
+     0.9185586535436917
+    ],
+    "gamma0": 52800913.48863769,
+    "Q": 2.6742798042297364e+16,
+    "L": 1.3595816270763566e+17,
+    "feed": 1.4142135623730951,
+    "whole_chain": 1.0,
+    "lam_proved": 1.6329931618554523,
+    "lam_numerical": 1.1547005383792517
+   },
+   "term": {
+    "proved_blocks_root": 61623661.75846265,
+    "proved_blocks_linear": 0.0,
+    "proved_blocks": 61623661.75846265,
+    "proved_rho": 330723.09063973086,
+    "proved_rho_main": 4606378.419375,
+    "proved_rho_no_cell": 111674.98646481277,
+    "numerical_blocks_root": 116837636.34990717,
+    "numerical_blocks_linear": 0.0,
+    "numerical_blocks": 116837636.34990717,
+    "numerical_rho": 627046.5450128138,
+    "numerical_rho_main": 6514402.834102864,
+    "numerical_rho_no_cell": 140789.7812593961,
+    "share": 0.7400625
+   }
+  },
+  {
+   "name": "operands made whole from K = 128 chains",
+   "inputs": {
+    "c": 536681984163840.0,
+    "k": 65536.0,
+    "C_gates": 1e+18,
+    "products": [
+     {
+      "macs": 500000000000000.0,
+      "outputs": 976562500000.0,
+      "k_dim": 512,
+      "k_whole": 128,
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "gates_per_mac": 1480.125,
+      "cell_gates": 23682.0
+     }
+    ]
+   },
+   "cap": {
+    "alpha": [
+     35673.279951786295
+    ],
+    "beta": [
+     2048.0
+    ],
+    "mu": [
+     0.9185586535436917
+    ],
+    "gamma0": 52800913.48863769,
+    "Q": 8357124388217926.0,
+    "L": 4.248692584613614e+16,
+    "feed": 1.4142135623730951,
+    "whole_chain": 1.1552955921498973,
+    "lam_proved": 1.8865898019025278,
+    "lam_numerical": 1.1547005383792517
+   },
+   "term": {
+    "proved_blocks_root": 3890610352.869883,
+    "proved_blocks_linear": 6624664392.404431,
+    "proved_blocks": 6624664392.404431,
+    "proved_rho": 3555338.03053515,
+    "proved_rho_main": 3987186.0073515563,
+    "proved_rho_no_cell": 214429.8079620056,
+    "numerical_blocks_root": 7293250813.455334,
+    "numerical_blocks_linear": 11333629666.669708,
+    "numerical_blocks": 11333629666.669708,
+    "numerical_rho": 6082554.85728646,
+    "numerical_rho_main": 6514402.834102866,
+    "numerical_rho_no_cell": 229913.46747707107,
+    "share": 0.7400625
+   }
+  },
+  {
+   "name": "operands made whole from K = 64 chains: proved bound void",
+   "inputs": {
+    "c": 536681984163840.0,
+    "k": 65536.0,
+    "C_gates": 1e+18,
+    "products": [
+     {
+      "macs": 500000000000000.0,
+      "outputs": 976562500000.0,
+      "k_dim": 512,
+      "k_whole": 64,
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "gates_per_mac": 1480.125,
+      "cell_gates": 23682.0
+     }
+    ]
+   },
+   "cap": {
+    "alpha": [
+     35673.279951786295
+    ],
+    "beta": [
+     2048.0
+    ],
+    "mu": [
+     0.9185586535436917
+    ],
+    "gamma0": 52800913.48863769,
+    "Q": 8357124388217926.0,
+    "L": 4.248692584613614e+16,
+    "feed": 1.4142135623730951,
+    "whole_chain": null,
+    "lam_proved": null,
+    "lam_numerical": 1.1547005383792517
+   },
+   "term": {
+    "proved_blocks_root": 0.0,
+    "proved_blocks_linear": 0.0,
+    "proved_blocks": 0.0,
+    "proved_rho": 0.0,
+    "proved_rho_main": 0.0,
+    "proved_rho_no_cell": 0.0,
+    "numerical_blocks_root": 7293250813.455334,
+    "numerical_blocks_linear": 11333629666.669708,
+    "numerical_blocks": 11333629666.669708,
+    "numerical_rho": 6082554.85728646,
+    "numerical_rho_main": 6514402.834102866,
+    "numerical_rho_no_cell": 229913.46747707107,
+    "share": 0.7400625
+   }
+  },
+  {
+   "name": "mixed widths",
+   "inputs": {
+    "c": 536681984163840.0,
+    "k": 65536.0,
+    "C_gates": 1e+18,
+    "products": [
+     {
+      "macs": 400000000000000.0,
+      "outputs": 781250000000.0,
+      "k_dim": 512,
+      "k_whole": 512,
+      "b_a": 16,
+      "b_b": 16,
+      "b_c": 32,
+      "gates_per_mac": 1480.125,
+      "cell_gates": 23682.0
+     },
+     {
+      "macs": 200000000000000.0,
+      "outputs": 142045454545.45456,
+      "k_dim": 1408,
+      "k_whole": 512,
+      "b_a": 8,
+      "b_b": 16,
+      "b_c": 32,
+      "gates_per_mac": 285.25,
+      "cell_gates": 9128.0
+     }
+    ]
+   },
+   "cap": {
+    "alpha": [
+     35673.279951786295,
+     50449.63632214841
+    ],
+    "beta": [
+     2048.0,
+     2896.3093757400984
+    ],
+    "mu": [
+     0.9185586535436917,
+     1.299038105676658
+    ],
+    "gamma0": 52800913.48863769,
+    "Q": 6775995544953780.0,
+    "L": 3.5673861675291948e+16,
+    "feed": 1.4142135623730951,
+    "whole_chain": 1.0160016278275286,
+    "lam_proved": 1.6591237106763623,
+    "lam_numerical": 1.1547005383792517
+   },
+   "term": {
+    "proved_blocks_root": 4127530425.025537,
+    "proved_blocks_linear": 6733913033.833214,
+    "proved_blocks": 6733913033.833214,
+    "proved_rho": 3613969.8081843527,
+    "proved_rho_main": 3976568.0588907925,
+    "proved_rho_no_cell": 193089.97127249016,
+    "numerical_blocks_root": 6521063603.090092,
+    "numerical_blocks_linear": 9970721965.529583,
+    "numerical_blocks": 9970721965.529583,
+    "numerical_rho": 5351106.848006399,
+    "numerical_rho_main": 5713705.098712839,
+    "numerical_rho_no_cell": 202265.58726250555,
+    "share": 0.6491
+   }
+  },
+  {
+   "name": "f32 operands",
+   "inputs": {
+    "c": 536681984163840.0,
+    "k": 65536.0,
+    "C_gates": 1e+18,
+    "products": [
+     {
+      "macs": 50000000000000.0,
+      "outputs": 97656250000.0,
+      "k_dim": 512,
+      "k_whole": 512,
+      "b_a": 32,
+      "b_b": 32,
+      "b_c": 32,
+      "gates_per_mac": 12637.0,
+      "cell_gates": 12637.0
+     }
+    ]
+   },
+   "cap": {
+    "alpha": [
+     17836.639975893147
+    ],
+    "beta": [
+     1024.0
+    ],
+    "mu": [
+     0.45927932677184585
+    ],
+    "gamma0": 225401619.3753617,
+    "Q": 1.522958459854126e+16,
+    "L": 1.8137227663799424e+16,
+    "feed": 2.0,
+    "whole_chain": 1.0039292972262248,
+    "lam_proved": 2.3184754000036514,
+    "lam_numerical": 1.1547005383792517
+   },
+   "term": {
+    "proved_blocks_root": 725759908.7370663,
+    "proved_blocks_linear": 1128612138.2294707,
+    "proved_blocks": 1128612138.2294707,
+    "proved_rho": 605705.8016963864,
+    "proved_rho_main": 648890.599378027,
+    "proved_rho_no_cell": 234337.0524437246,
+    "numerical_blocks_root": 1690104634.547112,
+    "numerical_blocks_linear": 2347192203.780719,
+    "numerical_blocks": 2347192203.780719,
+    "numerical_rho": 1259695.7691389325,
+    "numerical_rho_main": 1302880.566820573,
+    "numerical_rho_no_cell": 301219.9039470368,
+    "share": 0.63185
+   }
+  },
+  {
+   "name": "nothing counted",
+   "inputs": {
+    "c": 536681984163840.0,
+    "k": 65536.0,
+    "C_gates": 1e+18,
+    "products": []
+   },
+   "cap": {
+    "alpha": [],
+    "beta": [],
+    "mu": [],
+    "gamma0": 0.0,
+    "Q": 0.0,
+    "L": 0.0,
+    "feed": 1.0,
+    "whole_chain": 1.0,
+    "lam_proved": 0.0,
+    "lam_numerical": 0.0
+   },
+   "term": {
+    "proved_blocks_root": 0.0,
+    "proved_blocks_linear": 0.0,
+    "proved_blocks": 0.0,
+    "proved_rho": 0.0,
+    "proved_rho_main": 0.0,
+    "proved_rho_no_cell": 0.0,
+    "numerical_blocks_root": 0.0,
+    "numerical_blocks_linear": 0.0,
+    "numerical_blocks": 0.0,
+    "numerical_rho": 0.0,
+    "numerical_rho_main": 0.0,
+    "numerical_rho_no_cell": 0.0,
+    "share": 0.0
+   }
+  }
+ ]
+}

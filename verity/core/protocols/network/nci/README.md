@@ -17,12 +17,13 @@ The inference-only policy is not yet a subprotocol of the composites: neither on
 An inference episode (a chat session) reads little beyond θ, say 100 KB of prompt tokens, so honest serving fits blocks
 of a small k, one block a session at slowdown ρ = 1 (Fit; `Nci.Guarantees.Inference` in the older form). A training
 episode (an RL rollout) computes new weights θ′, say 1 TB of new parameters, and every gate downstream of the update
-depends on them: under A1, a block doing a share x of one token's affected work reads at least u(x) update bits, plus
-the cut cost a for each token it enters mid-path, so training through blocks of a small k is slow (Slowdown), and under
-A1, A1′ and A2 reaching a target loss covertly costs at least the honest cost H(ℓ*) times min ρp (Security). The symbols and
-statements are `GLOSSARY.md`'s (Notation, Training). [`benchmarks/rho`](../../../../../benchmarks/rho/README.md) still
-computes the earlier statement, which the training formalism replaces; its scenarios register a policy as if it were a
-subprotocol.
+is affected. Under A1, a block doing a share x of one token's affected work reads at least u(x) update bits, plus the
+cut cost a for each token whose affected work it does without computing the token from its inputs; under A1′, one
+computing a token from its inputs reaches only the first share x with u_in(x) ≤ k. So training through blocks of a
+small k is slow (Slowdown), and under A1, A1′ and A2 reaching a target loss covertly costs at least the honest cost
+H(ℓ*) times min ρp (Security). The symbols and statements are `GLOSSARY.md`'s (Notation, Training).
+[`benchmarks/rho`](../../../../../benchmarks/rho/README.md) still computes the earlier statement, which the training
+formalism replaces; its scenarios register a policy as if it were a subprotocol.
 
 ## The Lean
 
