@@ -18,6 +18,9 @@ stream's outcomes of record.
   it shows is the tie to a trace so registered, not that the compute audit registered it.
 * **The prover's trees**: ``scan/view`` under fresh salts, and ``scan/next`` with row t − 1 under the trace's state leaf
   t + 1's salt, so the ingress statement's S_t chain (`scan_service.chained`) holds.
+* **What the verifier receives** (`verifier_dir`) is scanned as scan_zk scans its rounds (`scan_zk.received`) for
+  every unit's input and output rows but the public ``o0`` and every salt but ``o0``'s, less what is public anyway
+  (`scan_zk.known`), the prover's instance files the control: a round is as expected only when none is found there.
 * ``--dry`` stages every statement and checks it on the host (each unit's outputs the references', every o0 1, the chain
   on the staged public file), registers and draws, and proves nothing.
 """
@@ -177,6 +180,10 @@ def stage(M, tie: SC.EgressTie, sg: SimpleNamespace, member: SC.Member, heads: S
                    set_name=f"unit-scan-tie-{member.name}", tables=tables, refs=refs, registered=entries)
     outs = {p: [[int(w) for w in row] for row in M.np.asarray(got["outs"][p])] for p in want}
     off = {p: [k for k, (a, b) in enumerate(zip(outs[p], want[p])) if list(a) != list(b)] for p in want}
+    rows = [*tables.items(), *((p, col) for p, col in outs.items() if p != "o0")]
+    blobs = {f"{member.name} {p} {i}": M.np.asarray(r, dtype="<u2").tobytes() for p, col in rows
+             for i, r in enumerate(col)}
+    blobs.update({f"{member.name} salt {p} {i}": s for p, ss in salts.items() if p != "o0" for i, s in enumerate(ss)})
     (out / "inst.bin").rename(out / f"inst-{n}.bin")
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
@@ -185,7 +192,7 @@ def stage(M, tie: SC.EgressTie, sg: SimpleNamespace, member: SC.Member, heads: S
     (out / "registered.json").write_text(json.dumps(reads, sort_keys=True))
     proof = PF.Proof(out / "circuit.txt", out / f"pub-{n}.bin", ())
     return {"name": member.name, "template": member.template, "dir": out, "n": n, "base": member.base, "pin": st.pin,
-            "partition_file": sg.partition_file, "program_file": sg.program_file,
+            "ports": st.ports, "blobs": blobs, "partition_file": sg.partition_file, "program_file": sg.program_file,
             "registered_file": out / "registered.json", "ands": got["ands"], "k_log": st.meta["k_log"],
             "off": {p: [member.base + k for k in ks] for p, ks in off.items() if ks},
             "chain": SC.chained(proof) if member.template == "ingress" else None,
@@ -227,7 +234,8 @@ def stage_round(M, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespace, 
     heads = SC.Heads(at.sides["ingress"][0].head, egress.head)
     view, next_ = prover_trees(tie, heads, at.chain, tr.state)
     stream = tie.stream(budget=1, delta=delta, challenger=CHALLENGER)
-    reg = tie.register(stream, tie.registration(heads, tr.trace, view.root, next_.root), heads, tr.trace)
+    record = tie.registration(heads, tr.trace, view.root, next_.root)
+    reg = tie.register(stream, record, heads, tr.trace)
     draw = stream.select(reg)
     if draw.units != list(range(tie.N)):
         raise SystemExit(f"{name}: the stream drew {len(draw.units)} of {tie.N} proof blocks, not every one")
@@ -241,7 +249,31 @@ def stage_round(M, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespace, 
         raise SystemExit(f"{name}: the host's read of the staged statements isn't the round's: {bad}")
     log(f"{name}: registered {reg.digest[:16]}, every one of {tie.N} proof blocks drawn; staged "
         + "; ".join(f"{k} {m['n']} units of {m['ands']} ANDs" for k, m in staged.items()))
-    return SimpleNamespace(stream=stream, draw=draw, heads=heads, staged=staged, res=res)
+    return SimpleNamespace(stream=stream, draw=draw, heads=heads, staged=staged, res=res, record=record,
+                           registrations={"ingress": at.sides["ingress"][0].registration,
+                                          "egress": egress.registration},
+                           public=SZ.known(list(staged.values()), at))
+
+
+def verifier_dir(sr: SimpleNamespace, sgs: dict, out: Path) -> Path:
+    """What the verifier received in round `sr`: the registration, the network certifier's signed registrations of
+    the link-window, the partition and Program, and each statement's circuit, public file, registered reads and
+    session files."""
+    vdir = out / "verifier"
+    vdir.mkdir(exist_ok=True)
+    (vdir / "registration.json").write_text(json.dumps(sr.record, indent=1, sort_keys=True))
+    for side, doc in sr.registrations.items():
+        (vdir / f"warden-registration-{side}.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
+    sg = next(iter(sgs.values()))
+    for f in (sg.partition_file, sg.program_file):
+        os.link(f, vdir / f.name)
+    for m in sr.staged.values():
+        for f in (m["dir"] / "circuit.txt", m["dir"] / f"pub-{m['n']}.bin", m["registered_file"]):
+            os.link(f, vdir / f"{m['name']}-{f.name}")
+        for f in sorted((out / f"session-{m['name']}" / "sessions").rglob("*")):
+            if f.is_file():
+                os.link(f, vdir / f"{m['name']}-session-{f.parent.name}-{f.name}")
+    return vdir
 
 
 def prove_round(M, a, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespace, sgs: dict, name: str,
@@ -270,15 +302,27 @@ def prove_round(M, a, tie: SC.EgressTie, at: SimpleNamespace, tr: SimpleNamespac
     outcome = tie.outcome(stream, draw, delivered, circuits=circuits, heads=heads, trace=tr.trace)
     verdict = stream.records[-1]["audit"]["verdicts"][SC.VERIFIER]
     tied = tie.tie(stream)
+    verify_s = round(time.time() - t, 1)
+    vdir = verifier_dir(sr, sgs, out)
+    inst = out / "instances.bin"
+    inst.write_bytes(b"".join((m["dir"] / f"inst-{m['n']}.bin").read_bytes() for m in staged.values()))
+    blobs = {k: x for m in staged.values() for k, x in m["blobs"].items()}
+    rec = SZ.received(M.a8, vdir, inst, blobs, set(blobs), sr.public)
+    inst.unlink()
     want_ok, want_refused = ROUNDS[name]
-    res.update({"late": None if late is None else str(late), "verify_s": round(time.time() - t, 1),
+    res.update({"late": None if late is None else str(late), "verify_s": verify_s,
                 "outcome": {"accepted": outcome.accepted, "public": outcome.public},
                 "verdict": {x: verdict.get(x) for x in ("accepted", "decided_by", "refused", "digest", "public")},
-                "tie": {"link": tied.link, "accepted": list(tied.accepted)}, "timing": timing,
+                "tie": {"link": tied.link, "accepted": list(tied.accepted)}, "timing": timing, "received": rec,
                 "expected": outcome.accepted is want_ok and tied.accepted == (want_ok,)
-                and tuple(sorted(verdict.get("refused") or {})) == want_refused})
+                and tuple(sorted(verdict.get("refused") or {})) == want_refused and SZ.unseen(rec)})
+    whole = rec.get("whole_rows") or {"rows": 0, "verifier_found": []}
     log(f"{name}: verdict of record {'accepted' if outcome.accepted else 'refused'} {verdict.get('refused') or ''}, "
-        f"tie {tied.accepted}; {'as expected' if res['expected'] else 'UNEXPECTED'}")
+        f"tie {tied.accepted}; the verifier received {rec['verifier_bytes']} bytes, witness pieces found there: "
+        f"{rec['verifier_found'] or 'none'} (of {rec['blobs']}; {rec['public_pieces']} public, {rec['sparse_pieces']} "
+        f"sparse left out), rows shorter than a piece found whole there: {whole['verifier_found'] or 'none'} (of "
+        f"{whole['rows']}), control holds all {rec['control']['holds_all']}; "
+        f"{'as expected' if res['expected'] else 'UNEXPECTED'}")
     return res
 
 

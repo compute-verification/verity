@@ -94,7 +94,7 @@ if [ -n "${SC_TIE:-}" ]; then
     | tee -a "$OUT/sctie.log" | cut -c1-4000
   rc=${PIPESTATUS[0]}
   mkdir -p "$OUT/sctie"
-  (cd "$W/sctie" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' \
+  (cd "$W/sctie" && find . -type f ! -name '*circuit.txt' ! -name 'inst-*' ! -path '*/archive/*' \
     ! -name '*signer-state.json*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/sctie/")
   log "sctie: done, rc $rc"
   exit "$rc"
