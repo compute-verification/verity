@@ -167,3 +167,5 @@ Read kernels' details on TOP-159 first. Coordinate with vllm-retain if `whole.py
 - **vllm-remoterun:** the launch is from `remote`, not cursor/vllm-remoterun-a7d3.
 
 Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and sampled_proofs test_service pass (127). Proofs' lock records run c1e5 is still pending, and I merge again if the locks move.
+
+21:25Z Tue (coordinator), **for run 1's and run 2's records** (VLLM-193): the sampled-proofs audit of record is V3c's class window, which the composite reads through a5's case-v2.json. Step 3's `records_audit --opening` and the chain's endpoint rebuild read the advice in the clear, so the record labels both as development checks, not of record, beside their lines.
