@@ -472,6 +472,13 @@ def closeThen {β : Type} (f : List Release → Game β) (t : Game.Strategy (f [
   | 0, _, _ => t
   | _ + 1, _, _ => ⟨none, t⟩
 
+/-- **The prover that sends the request `a` and closes the device at once**, then plays `t` from the close. -/
+-- Stated at every `fs`: there `frames fs` stops at the families' sum, where at given families the kernel would unfold
+-- `play`'s game frame by frame to check the pair against it.
+def requestThen (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray)
+    (t : Game.Strategy (finish D θ F c a [])) : Game.Strategy (play fs D θ F c) :=
+  ⟨a, closeThen (finish D θ F c a) t (frames fs) fs []⟩
+
 /-- SHA-512, the compiled one (`Flock.Sha512.hash`), as a 64-byte digest. -/
 def sha512 (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
 
