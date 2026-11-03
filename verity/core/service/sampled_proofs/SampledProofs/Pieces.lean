@@ -2,7 +2,9 @@
 The one-stage audit's pieces as JSON functions, which `sampled-proofs-difftest` serves (`Difftest.serve`) for the
 difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proofs-one-stage serve`):
 
-* `decode`: a case's three decoders run independently (`answer` stops at the first refusal);
+* `decode`: a case's three decoders run independently (`answer` stops at the first refusal), the parameters and the
+  evidence as parsed (`OneStage.paramsParsed`, `evidenceParsed`), before the protocol's refusals of what soundness
+  doesn't cover;
 * `partition`: the partition's digest, population, strata and expanded law from the verifier's parameters;
 * `committed_bits`: per Definition `Q_call` cuts, its units' committed bits read off its layout and by the walk that
   layout replaced (`Partition.committedBits`, `Partition.committedBitsRef`);
@@ -84,7 +86,7 @@ open Lean (Json)
 open Flock (V)
 
 private def params (j : Json) : V OneStage.Params := do
-  OneStage.paramsOfJson (← Core.canonicalJson (← Flock.canon j).toUTF8)
+  OneStage.paramsParsed (← Core.canonicalJson (← Flock.canon j).toUTF8)
 
 private def orNull {α} (f : α → Json) : V α → Json
   | .ok a => f a
@@ -105,7 +107,7 @@ def decode (j : Json) : V Json := do
   let e ← Flock.unhex (← Flock.J.str j "evidence" "the case")
   return Json.mkObj [("params", Json.bool (params p).toBool),
     ("commitment", orNull (fun c => Json.str (Flock.hexOf c.digest)) (OneStage.commitmentOf c)),
-    ("evidence", Json.bool (OneStage.evidenceOf e).toBool)]
+    ("evidence", Json.bool (OneStage.evidenceParsed e).toBool)]
 
 /-- `{"params"}` to `{"digest", "population", "strata", "law"}`, each null where Python raises. -/
 def partition (j : Json) : V Json := do
