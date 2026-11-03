@@ -439,8 +439,10 @@ theorem first_wf (rule : Select.Rule) (d : Program) (query : Json) (table : Opti
 /-- **The design the draw runs is well formed on the partition it runs over**
 (`Properties.SampledProofs.DesignWellFormed`). -/
 theorem designWellFormed : DesignWellFormed := by
-  intro rule d query table l D hl hD
-  obtain ⟨rs, he, pop, rfl, hlays⟩ := layout_ok d query l hl
+  intro rule cf d query table l D hl hD
+  obtain ⟨ns, hns, rfl⟩ := fileLayout_ok cf d query l hl
+  obtain ⟨S₀, hS₀, -, hsz⟩ := strataSizes_ok d query ns hns
+  obtain ⟨rs, he, rfl⟩ := strata_ok d query S₀ hS₀
   set S := Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)) with hS
   have hperm : (popUnits S).Perm (List.range' 0 (Flock.TemplateQuery.population rs)) :=
     strataOf_perm _ _ (partition_evaluate_tiles d query rs he)
@@ -449,24 +451,25 @@ theorem designWellFormed : DesignWellFormed := by
     rw [units_eq d query rs he] at hn
     rw [hperm.length_eq, List.length_range']
     exact (Except.ok.inj hn).symm
-  have hns : pop.toList.map (·.size) = S.toList.map fun p => rsSize p.2 := (laysOut_units _ _ hlays).2
   have hsum : strataSize S = n := by rw [hnU, length_popUnits]; rfl
   have hpos : ∀ m ∈ S.toList.map (fun p => rsSize p.2), 1 ≤ m := by
     intro m hm
     obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hm
     exact strataOf_pos _ (partition_covered d query rs he) p hp
   suffices h : ∀ first : OneStage, first.WellFormed (S.toList.map fun p => rsSize p.2) →
-      (⟨[first, .all]⟩ : Design).WellFormed (slotPartition { classes := #[pop, inputClass d] }) by
+      (⟨[first]⟩ : Design).WellFormed (slotPartition (Slots.layout (FileUnits.ofCircuit cf ns.toList.sum) ns)) by
     rcases hDc with ⟨-, rfl⟩ | ⟨hne, parsed, hp, rfl⟩
     · exact h .all trivial
     · exact h _ (first_wf rule d query table n named derived parsed S (strata_eq d query rs he) hne hnamed hd hp
         hsum hpos)
   intro first hf
+  obtain ⟨c, hc, hs, -⟩ := slotPartition_strata (FileUnits.ofCircuit cf ns.toList.sum) ns rfl
+  rw [hc]
   refine ⟨rfl, fun p hp => ?_⟩
-  simp only [slotPartition, List.map_cons, List.map_nil, List.zip_cons_cons, List.zip_nil_left, List.mem_cons,
-    List.not_mem_nil, or_false] at hp
-  rcases hp with rfl | rfl
-  · simpa [strataSizes, Function.comp_def, hns] using hf
-  · trivial
+  simp only [List.zip_cons_cons, List.zip_nil_left, List.mem_cons, List.not_mem_nil, or_false] at hp
+  subst hp
+  dsimp only
+  rw [hs, show ns.toList = S.toList.map (fun p => rsSize p.2) from hsz]
+  exact hf
 
 end Properties.SampledProofs.SecurityProofs

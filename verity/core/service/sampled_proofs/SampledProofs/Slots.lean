@@ -8,7 +8,8 @@ the slots of the proof blocks a draw checks.
   file's unit `u`, its positions those of `FileUnits.block`, its computed gates then each source it owns. A source no
   computed row reads is in no proof block, nor are the constant and the zero.
 * **Expansion.** The circuit file is summarized once (`FileUnits.ofCircuit`, standing in for `FilePart.ofCircuit`), and
-  `layout` writes that summary out unit by unit, the summary shifted by the unit.
+  `layout` writes that summary out unit by unit, the summary shifted by the unit; `fileLayout` is that at the
+  registration's strata, the layout `select` reads.
 * **Checked.** `checked` lists the slot of every proof block the draw proves (`Select.select`'s proved units: its units
   and a work draw's closure), in slot order. It is the claims' reading of a draw; `Run.run` doesn't call it.
 * **Registration.** `popOk` reads no file: the program's strata under the query (`Partition.strata`) are the units
@@ -69,6 +70,13 @@ def layout (f : FileUnits) (ns : Array Nat) : Layout :=
 #guard (layout { n := 3, B := 2, m := 1, srcs := #[1] } #[2, 1]).classes.map (·.map (·.map fun b => (b.unit, b.gates))) ==
   #[#[#[(some 0, #[(8, 11), (3, 4)]), (some 1, #[(11, 14), (5, 6)])], #[(some 2, #[(14, 17), (7, 8)])]]]
 
+/-- **The claims' partition of the circuit file `c`** under the program `p` and `query`: `layout` of `c`'s key program,
+summarized at the strata's sum of units, in the strata of `p` under `query` (`strataSizes`). An error where the strata
+are. -/
+def fileLayout (c : Flock.Circuit) (p : Program) (query : Json) : V Layout := do
+  let ns ← strataSizes p query
+  return layout (FileUnits.ofCircuit c (ns.foldl (· + ·) 0)) ns
+
 /-- The population's units under `query`, stratum by stratum (`Partition.strata`), each with its gates
 (`Partition.unitGates`). An error where the query doesn't apply. -/
 def popUnits (p : Program) (query : Json) : V (Array Nat) := do
@@ -93,12 +101,11 @@ def checked (l : Layout) (proved : Array Nat) : Array Nat :=
   (l.blocks.zipIdx.filter fun (b, _) => b.unit.any proved.contains).map (·.2)
 
 /-- **The challenger's draw in the claims' slots**: the layout of the circuit file `c` in the strata of the program `p`
-under `query` (`strataSizes`), and the slots of the units `Select.select`'s draw on the coins `src` proves (its units and
+under `query` (`fileLayout`), and the slots of the units `Select.select`'s draw on the coins `src` proves (its units and
 a work draw's closure). An error where either is. -/
 def select (rule : Select.Rule) (c : Flock.Circuit) (p : Program) (query : Json)
     (table : Option Json) (cm : Option (Array (Int × Array Int))) (src : ByteArray) : V (Layout × Array Nat) := do
-  let ns ← strataSizes p query
-  let l := layout (FileUnits.ofCircuit c (ns.foldl (· + ·) 0)) ns
+  let l ← fileLayout c p query
   let (_, proved, _) ← Select.select rule p query table cm src
   return (l, checked l proved)
 
