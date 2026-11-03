@@ -642,12 +642,13 @@ def specStreams (spec : Lean.Json) : Array Lean.Json :=
 /-- **A coin tree's line's release, read with the tests `SampledProofs.Challenger.coinTreesOf` makes**, after the trees
 `ts` read so far, each its root and its spec as its line gives them: where the line's `event` is `TREE_EVENT` by
 `coinTreesOf`'s comparison, its hello after its nonce, with its root's and key's bits; else a round opened, of the
-`i`-th tree read and the `s`-th of its spec's streams, the first one equal to the line's by the comparison
-`coinTreesOf`'s `contains` makes, after the bytes it answers, with its coins' bits where a record of that tree gives
-them, else none; `none` where the line doesn't read as either. -/
+`i`-th tree read and the `s`-th of its spec's streams, the first one the line's names by the test `coinTreesOf`'s
+`any` makes (`SampledProofs.jsonStrIs`), after the bytes it answers, with its coins' bits where a record of that tree
+gives them, else none; `none` where the line doesn't read as either. -/
 def treeStep (records : List Lean.Json) (ts : List (String × Lean.Json)) (d : Lean.Json) :
     Option (Verity.Release × List (String × Lean.Json)) :=
-  if _root_.SampledProofs.getD d "event" == Lean.Json.str _root_.SampledProofs.Challenger.TREE_EVENT then do
+  if _root_.SampledProofs.jsonStrIs (_root_.SampledProofs.getD d "event")
+      _root_.SampledProofs.Challenger.TREE_EVENT then do
     let .str key := _root_.SampledProofs.getD d "key" | none
     let .str nonce := _root_.SampledProofs.getD d "nonce" | none
     let .str root := _root_.SampledProofs.getD d "root" | none
@@ -664,7 +665,7 @@ def treeStep (records : List Lean.Json) (ts : List (String × Lean.Json)) (d : L
     let n ← _root_.SampledProofs.nat? (_root_.SampledProofs.getD d "n")
     let i ← ts.findIdx? (·.1 == root)
     let (_, spec) ← ts[i]?
-    let s ← (specStreams spec).findIdx? (Lean.Json.str stream == ·)
+    let s ← (specStreams spec).findIdx? (_root_.SampledProofs.jsonStrIs · stream)
     let b ← (Flock.unhex aft).toOption
     let coins := match records.find? (recordTree · == root) with
       | some rec => ((recordRound rec stream k).map Verity.bitsOfBytes).getD []
