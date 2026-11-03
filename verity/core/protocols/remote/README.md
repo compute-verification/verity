@@ -174,7 +174,7 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
   values better than μ.
 - `Accounting.Assumptions.TS.ReceiptLuckAt` and `Accounting.Assumptions.Compose.GuessLuckAt`: a skipped round passes
   its receipt, or a guessed fold state passes, only at the stated rate.
-- `Accounting.Assumptions.TS.UnitFixed`: the run's fixed and folded words are at least those of the units it didn't
+- `Accounting.Assumptions.TS.BlockFixed`: the run's fixed and folded words are at least those of the units it didn't
   skip. It stays an assumption until those words are defined from the committed values.
 - `Accounting.Assumptions.TS.AcceptedLive`, the proof layer's (`SessionSoundAt`'s), not the period credit's: an
   accepted proof's check words are `1` as `flock-verify --zk --registered` reads them. No served path meets it yet.

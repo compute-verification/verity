@@ -357,7 +357,7 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k G _ => ReceiptLuckAt (Honest.scheme.rB k) G)) ∧
     (period n).EveryWindow
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k _ G0 => GuessLuckAt (Honest.scheme.guess k) G0)) ∧
-    UnitFixed (play n) (layer n) (periodMode circuit (period n) (run n))
+    BlockFixed (play n) (layer n) (periodMode circuit (period n) (run n))
       (fun _ t => (tileWords Honest.scheme circuit 144 t : ℝ)) (fun _ => 128) ∧
     (∀ x w, Accepts prm ((windows n).reg x w) ((windows n).ev x w)) ∧
     (∀ x, (windows n).prefixLen prm x = n) ∧

@@ -120,7 +120,7 @@ theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L
     (hServ : TileServiceSound σ s unitOf (creditAt hM σ s ws) (pullAt hM σ s opened) (relAt hM σ s ws place tile)
       δks)
     (hLucks : SharedNoiseLucks Sc Cd Wp)
-    (hUF : UnitFixed Pl (layerAt Cd hr hM σ k hk s unitOf ws opened enc place tile)
+    (hUF : BlockFixed Pl (layerAt Cd hr hM σ k hk s unitOf ws opened enc place tile)
       (periodMode Cd Wp (runAt Cd hr hM σ k hk s unitOf ws opened enc place tile))
       (fun _ t => (tileWords Sc Cd (tileCount σ s) t : ℝ)) folded) :
     prob (fun x : Paths (StrataCoin C 1 σ) n => Pl.accepts (pathsAt C hM σ s n x) ∧

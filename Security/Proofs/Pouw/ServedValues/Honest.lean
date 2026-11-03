@@ -13,7 +13,7 @@ gate `t + 2` and word `t` its one bit. No other protocol credits a gate (the led
 size is `1` (`Verity.SecurityProofs.ToCircuitAnd`: C-Flock's `and a b` of two distinct gates is an AND gate).
 
 * `right_values_honest`: the honest period meets every premise of `RightValues`, `j10r_meets`' without
-  `UnitFixed`, so the guarantee's bound holds there. The premises are conditional on `Credit.window`'s verdict on the
+  `BlockFixed`, so the guarantee's bound holds there. The premises are conditional on `Credit.window`'s verdict on the
   windows' inputs, as `j10r_meets` is (`hacc`, `hsalt`, `hdraw`).
 * `right_values_nontrivial`: the conclusion fails when the verifier accepts everything. With every window credited
   (`hacc`), every block live and the play accepted, a prover that skips every block whole has no right block, while
@@ -114,7 +114,7 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
 /-- **`RightValues`'s bound at the honest J10-R period**: `j10r_meets` gives every
-premise but `UnitFixed`, which the guarantee doesn't take, at `N_p` one-word blocks, one round, `ρ = 1`, any
+premise but `BlockFixed`, which the guarantee doesn't take, at `N_p` one-word blocks, one round, `ρ = 1`, any
 `δ_s > 0` and `δ_bind = δ_ks = 0`. -/
 theorem right_values_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)

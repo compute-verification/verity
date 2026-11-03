@@ -235,7 +235,7 @@ theorem meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : �
     (HonestH1.period n).EveryWindow
       (fun live W => PerLiveTile Honest.scheme HonestH1.circuit live W
         (fun k _ G0 => GuessLuckAt (Honest.scheme.guess k) G0)) ∧
-    UnitFixed (checkedPlay n) (HonestH1.layer n) (periodMode HonestH1.circuit (HonestH1.period n) (HonestH1.run n))
+    BlockFixed (checkedPlay n) (HonestH1.layer n) (periodMode HonestH1.circuit (HonestH1.period n) (HonestH1.run n))
       (fun _ t => (tileWords Honest.scheme HonestH1.circuit 144 t : ℝ)) (fun _ => 128) ∧
     ∀ x, checkedAccepts n x := by
   obtain ⟨-, -, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hStaged, hMu, hRB, hGs,
@@ -321,7 +321,7 @@ theorem WorkOfH1CheckedCreditPeriodH200_honest :
     (HonestH1.period 1).EveryWindow
       (fun live W => PerLiveTile Honest.scheme HonestH1.circuit live W
         (fun k _ G0 => GuessLuckAt (Honest.scheme.guess k) G0)) ∧
-    UnitFixed (checkedPlay 1) (HonestH1.layer 1) (periodMode HonestH1.circuit (HonestH1.period 1) (HonestH1.run 1))
+    BlockFixed (checkedPlay 1) (HonestH1.layer 1) (periodMode HonestH1.circuit (HonestH1.period 1) (HonestH1.run 1))
       (fun _ t => (tileWords Honest.scheme HonestH1.circuit 144 t : ℝ)) (fun _ => 128) ∧
     ∀ x, checkedAccepts 1 x :=
   meets 1 Nat.one_pos (by norm_num) 0 0
