@@ -29,7 +29,9 @@ trained block, and the final norm, train in fp32 by AdamW and are full entries; 
 The notes state, per stage, the trained tensors, codes, weights, Δ_grad as the scorer counts it (gradient + momentum per
 block weight, the gains' and factors' fp32 gradient and AdamW m and v) and the update store beside it (the fp32 latent of
 each coded weight and factor entry), and the submission's Δ (|E|: `--xz min` submits the smallest of XZ_TRIES, every
-size in the notes) beside each code's order-0 entropy.
+size in the notes) beside each code's order-0 entropy. `notes.delta_grad` (the largest stage's) splits Δ_grad into
+grad_bits, adam_bits and muon_bits (`bits` is their sum) and gives the latents apart as latent_bits, which the update
+application clause reads as Δ_t.
 
     python launch.py reference s100 --island hybrid --program qat.py --note "qat: ..." -- --klass reference \
         --code all:all=rtn3 --muon-lr 0.015
@@ -568,6 +570,12 @@ def main() -> int:
         fp_w = sum(theta[n].numel() for n in names if codes[n] == "fp")
         gain_w = sum(params[n].numel() for n in gains)
         mom_b = 2 if mdt == torch.bfloat16 else 4
+        n_ad = ad.a.numel() + ad.b.numel() if ad is not None else 0
+        dg = {"trainable": coded_w + fp_w + gain_w + n_ad, "grad_bits": 32 * (coded_w + fp_w + gain_w + n_ad),
+              "adam_bits": 64 * (gain_w + n_ad), "muon_bits": 8 * mom_b * (coded_w + fp_w),
+              "latent_bits": 32 * (coded_w + n_ad)}
+        dg["bits"] = dg["grad_bits"] + dg["adam_bits"] + dg["muon_bits"]
+        dg["bytes"] = dg["bits"] // 8
         note = {"stage": j, "spec": (stage_specs * a.passes)[j], "steps": n_j, "flops_per_step": per_step[j] + ns_extra[j],
                 "matrices": len(names), "coded_weights": coded_w, "fp_weights": fp_w, "gains": len(gains),
                 "codes": sorted({codes[n] for n in names}),
@@ -576,7 +584,8 @@ def main() -> int:
                 "delta_grad_what": f"block weight: fp32 gradient + {a.momentum_dtype} Muon momentum; gain: fp32 gradient + "
                                    "AdamW fp32 m and v; embedding adapter factor: fp32 gradient + AdamW m and v",
                 "latent_bytes": coded_w * 4 + (ad.latent_bytes() if ad is not None else 0),
-                "latent_what": "the update store: fp32 latent V per coded weight and per adapter factor entry"}
+                "latent_what": "the update store: fp32 latent V per coded weight and per adapter factor entry",
+                "delta_grad": dg}
         print(json.dumps(note), flush=True)
         for step in range(n_j):
             if switch and g == switch:
@@ -653,6 +662,7 @@ def main() -> int:
              "code_entropy_bits": code_entropy(stacks),
              "delta_grad_bytes_max": max(s["delta_grad_bytes"] for s in stage_notes),
              "latent_bytes_max": max(s["latent_bytes"] for s in stage_notes),
+             "delta_grad": max((s["delta_grad"] for s in stage_notes), key=lambda d: (d["bits"], d["latent_bits"])),
              "embedding": (f"rank-{a.embed_rank} adapter, {a.embed_bits}-bit factors (CWQUAN1 lora entry)" if ad else
                            "frozen at theta (the tied head is a frozen tail)"), "fresh": fresh,
              "rebuilds_bit_for_bit": True, "grad_copies": sum(st.copies for st in stacks),
