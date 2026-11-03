@@ -135,7 +135,8 @@ theorem bitsOf_eq (b : ByteArray) : bitsOf b = b.data.toList.flatMap byteBits :=
 theorem byteBits_ofFin (a : Fin 256) :
     byteBits (UInt8.ofFin a) = List.ofFn fun j : Fin 8 => a.val.testBit j.val := by
   refine List.ext_getElem (by simp [byteBits]) fun i h1 h2 => ?_
-  simp only [byteBits, List.getElem_map, List.getElem_range, List.getElem_ofFn] <;> rfl
+  simp only [byteBits, List.getElem_map, List.getElem_range, List.getElem_ofFn]
+  rfl
 
 /-- `bitsOf` is one to one: a byte string is the only one with its bits. -/
 theorem bitsOf_injective : Function.Injective bitsOf := by
