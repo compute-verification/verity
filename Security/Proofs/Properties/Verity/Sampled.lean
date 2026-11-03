@@ -2,6 +2,7 @@ import Properties.Verity.Game
 import Properties.SampledProofs.Draw
 import Proofs.Flock.Bridge.V5.Statement
 import Proofs.Flock.Bridge.CircuitOf
+import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
 # Sampled proofs' leg of `Verity.Soundness`: the session v2 sets up
@@ -26,14 +27,18 @@ strategy of the period's game projects to. This module states its C-Flock side.
   commitment and read at the circuit's gates with its constants, on the committed files' circuit. Without public input
   ports V5's key program is the claim's (`keyProgP_empty`), and the files the session reads parse to it
   (`Live.circuit_eq`).
+* **The projection** (`Constructions`): a strategy of the period's game is read as a strategy of the live audit. A
+  C-Flock strategy flips no coin of its own, so the device's other releases the strategy may ask for (`Coins`: other
+  families' coins, other trees' samples) widen the draw's sample (`Live.extend`), which the draw doesn't read: the draw's
+  law, A3 and the leg's δ are the session's.
 * **The per-finder SHA-512 premises at a strategy and a budget** (`Live.FinderCR`): `cr/sha-512` at each table's
   knowledge finders (`TableCRZ`: the fork, pads, τ and level-0 finders at `2t + 2v`, the self-clash finder at `t + v`)
   and `ecr/sha-512` at the link finders (`LinkCRZC`, at `t + w` per run), at `t` the strategy's SHA-512 calls.
 * **The leg's δ at the session** (`Live.delta`), each finder's term its own summand:
-  * the draw's term (`drawMiss`): the law's own miss at `K₀`, the largest probability that the draw holds no proof
-    block of a set of `K₀` or more, the acceptance probability of the law's one-stage design over the population's
-    strata (`Claims.Sampling.OneStage.Pa`). The law and the strata define it, and at the subset law of `kd` units it is
-    `C(n − K₀, kd)/C(n, kd)`;
+  * the draw's term (`drawMiss`): the law's own miss at the claim's share `ε`, the largest probability that the draw
+    holds no proof block of a set of more than an `ε` share of them, the acceptance probability of the law's one-stage
+    design over the population's strata (`Claims.Sampling.OneStage.Pa`). The law and the strata define it, and at the
+    subset law of `kd` units it is `C(n − K₀, kd)/C(n, kd)` with `K₀ = ⌊εn⌋ + 1`;
   * the tables' knowledge term at the worst registration (`ksAvgStrictZ`) and the link term at `t + w` per run
     (`sessionDelta`);
   * each round the device opens after a digest of the prover's message, and the record the commitment is a digest of:
@@ -125,9 +130,8 @@ structure Live where
   ρ : ℝ
   hρ : ρ < 1
   hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ
-  /-- the wrong proof blocks the claim's share admits, plus one -/
-  K₀ : ℕ
-  hK₀ : K₀ ≤ n
+  /-- the claim's share: at most an `ε` share of the proof blocks unbound -/
+  ε : ℝ
   /-- one opening's verification, in SHA-512 calls -/
   v : ℕ
   /-- one acceptance check, in SHA-512 calls -/
@@ -141,9 +145,36 @@ structure Live where
 
 attribute [instance] Live.fΩ Live.nΩ
 
+/-- **The coins a projection reads beside the draw's sample**: a finite type of the device's other releases, those a
+strategy of the period's game may ask for that the session doesn't read (other families' coins, other trees' samples). A
+C-Flock strategy flips no coin of its own, so the projected strategy reads them off the draw's sample, widened by them
+(`Live.extend`). -/
+structure Coins where
+  T : Type
+  [fT : Fintype T]
+  [nT : Nonempty T]
+
+attribute [instance] Coins.fT Coins.nT
+
+/-- A3 at a sample widened by a second uniform coin that the bytes don't read. -/
+theorem uniform_fst {Ω T : Type} [Fintype Ω] [Fintype T] [Nonempty T] {m : ℕ} {Lb : Fin m → ℕ}
+    {t : Ω → (i : Fin m) → Fin (Lb i) → Fin 256} (h : FlockSoundness.Assumptions.UniformRandomBytes Lb t) :
+    FlockSoundness.Assumptions.UniformRandomBytes Lb (fun ω : Ω × T => t ω.1) := fun E =>
+  (FlockSoundness.ZK.prCoin_fst (fun ω => E (t ω))).trans (h E)
+
 namespace Live
 
 variable (A : Live)
+
+/-- **The session with the draw's sample widened by the coins `S`**: the draw reads only the session's bytes, so the
+draw's law is the session's and A3 holds at the widened sample (`uniform_fst`). -/
+noncomputable def extend (S : Coins) : Live where
+  __ := A
+  Ω := A.Ω × S.T
+  fΩ := inferInstance
+  nΩ := inferInstance
+  src ω := A.src ω.1
+  hA3 := uniform_fst A.hA3
 
 /-- **The draw's law**: the session's law over the population as `SampledProofs.Select.select` draws it,
 `SampledProofs.Draw.drawUnits` on the device's bytes in order; a draw that fails draws every unit. -/
@@ -208,14 +239,16 @@ structure FinderCR (τ : FlockSoundness.Game.Strategy A.game) (t : ℕ) : Prop w
   link : LinkCRZC execArith hs512 A.P (planZHJP A.dj A.y₀) (tabZHJP A.dj A.y₀) A.vb
     (FlockSoundness.Audit.reg (A.sim τ)) (FlockSoundness.Audit.cont (A.sim τ)) A.k A.Rw A.M (A.tL t)
 
-/-- **The draw's term**: the law's own miss at `K₀`, the largest probability that the draw holds no proof block of a
-set of `K₀` or more, the acceptance probability of the law's one-stage design (`Properties.SampledProofs.oneStageOf`)
-over the population's strata (`Claims.Sampling.OneStage.Pa`); at the subset law of `kd` units,
-`C(n − K₀, kd)/C(n, kd)`. -/
+/-- **The draw's term**: the law's own miss at the claim's share, the largest probability that the draw holds no proof
+block of a set of more than an `ε` share of them, the acceptance probability of the law's one-stage design
+(`Properties.SampledProofs.oneStageOf`) over the population's strata (`Claims.Sampling.OneStage.Pa`); at the subset law
+of `kd` units, `C(n − K₀, kd)/C(n, kd)` with `K₀ = ⌊εn⌋ + 1`. Those sets are exactly the unbound sets that fail the
+claim, so no count of them enters; with none (`ε ≥ 1`) the term is `0`. -/
 noncomputable def drawMiss : ℝ≥0∞ :=
-  ENNReal.ofReal (⨆ B : {B : Finset ℕ // B ⊆ Finset.range A.n ∧ A.K₀ ≤ B.card},
+  ENNReal.ofReal (⨆ B : {B : Finset ℕ // B ⊆ Finset.range A.n ∧ A.ε * A.n < B.card},
     (_root_.Properties.SampledProofs.oneStageOf A.law).Pa A.ns B.1)
 
+open Classical in
 /-- **The session's error at `t` calls**, V5's at the worst registration: the draw's term, the tables' knowledge term
 at the finders' budgets, and the link term at `t + w` per run. -/
 noncomputable def sessionDelta (t : ℕ) : ℝ≥0∞ :=
@@ -281,21 +314,19 @@ noncomputable def extract (τ : FlockSoundness.Game.Strategy A.game) : A.fileRea
 
 end Live
 
-/-- **A projection**: at the session `A`, the C-Flock live strategy a strategy of the period's game at `θ`, `F` and `c`
-is read as. -/
-abbrev Projection {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) : Type 1 :=
-  (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) →
-    FlockSoundness.Game.Strategy A.game
-
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The constructions the leg reads, applied to a strategy of the period's game**: the projection; the read finder
-(`Vocab.finder`'s: a collision among the strings v2 hashes in reading the device's log and trees and those the device
-hashes) and the forger of the device's signature (`Vocab.forger`'s); and the two-continuation finders, one per round
-the device opens after a digest of the prover's message and one for the record the commitment is a digest of, each at
-most `2t + 2h` SHA-512 calls on every coin (`Live.qM`). -/
+/-- **The constructions the leg reads, applied to a strategy of the period's game**: the projection, the device's other
+releases the strategy may ask for (`coins`) and the C-Flock live strategy it is read as at the session widened by them
+(`project`); the read finder (`Vocab.finder`'s: a collision among the strings v2 hashes in reading the device's log and
+trees and those the device hashes) and the forger of the device's signature (`Vocab.forger`'s); and the
+two-continuation finders, one per round the device opens after a digest of the prover's message and one for the record
+the commitment is a digest of, each at most `2t + 2h` SHA-512 calls on every coin (`Live.qM`). -/
 structure Constructions (V : Vocab d α) where
-  project : Projection V
+  coins : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    Verity.Game.Strategy (V.game θ F c) → Coins
+  project : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    (σ : Verity.Game.Strategy (V.game θ F c)) → FlockSoundness.Game.Strategy (A.extend (coins A θ F c σ)).game
   readFinder : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) →
     Claims.Finder
   forger : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) →
@@ -309,12 +340,17 @@ structure Constructions (V : Vocab d α) where
   record_calls : ∀ A θ F c σ (x : (recordFinder A θ F c σ).S),
     ((recordFinder A θ F c σ).cost x : ℝ) ≤ A.qM (V.cost θ F c σ)
 
+/-- **The session a strategy of the period's game is projected into**: `A` widened by the coins the projection reads. -/
+noncomputable abbrev Constructions.live {V : Vocab d α} (K : Constructions V) (A : Live) (θ : ByteArray)
+    (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : Live :=
+  A.extend (K.coins A θ F c σ)
+
 /-- **The leg's per-finder SHA-512 premises at a strategy and the session `A`**: the session's at the projected
 strategy and the strategy's calls (`Live.FinderCR`), and `cr/sha-512` as the strict birthday bound at each
 two-continuation finder and at the circuit file's and the public file's finders. -/
 structure FinderCR (V : Vocab d α) (K : Constructions V) (A : Live) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : Prop where
-  session : A.FinderCR (K.project A θ F c σ) (V.cost θ F c σ)
+  session : (K.live A θ F c σ).FinderCR (K.project A θ F c σ) (V.cost θ F c σ)
   msg : ∀ j, Claims.StrictBirthday Verity.sha512Msg (K.msgFinder A θ F c σ j)
   record : Claims.StrictBirthday Verity.sha512Msg (K.recordFinder A θ F c σ)
   file : Claims.StrictBirthday Verity.sha512Msg (V.fileFinder θ F)
