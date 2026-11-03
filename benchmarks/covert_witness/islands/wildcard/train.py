@@ -27,7 +27,9 @@ Codes (witnesses for the cut cost a, `adamw` / `muon`):
   an `e` code's length is computed, not held, so a trace sees the uncoded state there.
 - `--cut B:dq2,...`: the forward codes only the update's effect h - h_frozen at B; h_frozen, θ's residual for the same
   tokens, comes from frozen copies of the trained blocks (the receiving side recomputes it from the token's data), and
-  its products are counted and declared as the code's. `dq2p64` hands on only 64 of the 512 rotated coordinates of
+  its products are counted and declared as the code's. `dnq2` at boundary L (the final norm's input) codes
+  rms_unit(h) - rms_unit(h_frozen) instead, which the residual's growth under training can't inflate, and hands on
+  rms_unit(h_frozen) plus the code, which the scale-invariant final norm takes as it takes h. `dq2p64` hands on only 64 of the 512 rotated coordinates of
   the effect (a fixed subspace, both ways: 64·2 + 16 bits forward); `--cut-leak λ` adds λ times the share it leaves
   out to the loss, so the uncoded model the evaluator scores stays near the coded one (a statistic of the uncoded
   effect, so a trace then sees the uncoded state). `--confine` instead projects each trained wo and w_down's update
@@ -573,14 +575,22 @@ class Coded(torch.autograd.Function):
         return out.to(g.dtype), None, None, None, None, None, None, None, None, None, None, None
 
 
-CUT_RE = re.compile(r"(?P<delta>d?)q(?P<bf>\d+)(?P<mean>m?)(?P<fe>[er]?)(?:p(?P<keep>\d+))?(?:o(?P<k>\d+))?"
-                    r"(?:b(?P<bb>\d+)(?P<bs>[se]?))?(?:g(?P<group>\d+))?")
+CUT_RE = re.compile(r"(?P<delta>d?)(?P<norm>n?)q(?P<bf>\d+)(?P<mean>m?)(?P<fe>[er]?)(?:p(?P<keep>\d+))?"
+                    r"(?:o(?P<k>\d+))?(?:b(?P<bb>\d+)(?P<bs>[se]?))?(?:g(?P<group>\d+))?")
+
+
+def rms_unit(x: torch.Tensor) -> torch.Tensor:
+    """x over its RMS per token, which the final RMSNorm maps to the same output as x (it is scale-invariant)."""
+    y = x.float()
+    return (y * torch.rsqrt(y.pow(2).mean(-1, keepdim=True) + 1e-12)).to(x.dtype)
 
 
 def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
     """`B:CODE,...`: boundary B (1..L; the input of block B, L the input of the final norm; `all` every one) handed on
-    as CODE = [d]q<forward bits>[m][e|r][p<keep>][o<k>][b<backward bits>[s|e]][g<group>] in a randomized-DCT basis
-    (group d unless given). `p<keep>` (a `d` code only) hands on only the first `keep` rotated coordinates of
+    as CODE = [d][n]q<forward bits>[m][e|r][p<keep>][o<k>][b<backward bits>[s|e]][g<group>] in a randomized-DCT basis
+    (group d unless given). `n` (boundary L only) hands on the state over its RMS per token (`rms_unit`), which the
+    final RMSNorm maps to the same output, so the residual's growth under training can't inflate what is coded; with
+    `d` that is rms_unit(h) - rms_unit(h_frozen). `p<keep>` (a `d` code only) hands on only the first `keep` rotated coordinates of
     h - h_frozen, a fixed subspace, both ways, so a crossing is keep·bits + side bits; the effect outside it never
     crosses (`--cut-leak` penalizes it, since the evaluator scores the uncoded model). `o<k>` sends each token's k
     largest coordinates apart, a bf16 value and a ceil(log2 d)-bit index
@@ -599,8 +609,12 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
         m = CUT_RE.fullmatch(code)
         if not m:
             raise SystemExit(f"wildcard: --cut code {code!r} is not "
-                             f"[d]q<bits>[m][e|r][p<keep>][o<k>][b<bits>[s|e]][g<group>]")
+                             f"[d][n]q<bits>[m][e|r][p<keep>][o<k>][b<bits>[s|e]][g<group>]")
         delta = m.group("delta") == "d"
+        norm = m.group("norm") == "n"
+        if norm and (where != str(L) or m.group("mean")):
+            raise SystemExit(f"wildcard: --cut {part!r}: `n` hands on the state over its RMS, the same to the final "
+                             f"norm only, so it needs boundary L = {L} (and no `m`)")
         mean = m.group("mean") == "m"
         bf = int(m.group("bf"))
         keep = int(m.group("keep") or 0)
@@ -636,7 +650,8 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
             if delta and (low is None or not 0 <= low < b):
                 raise SystemExit(f"wildcard: --cut {b}:{code} codes h - h_frozen, which needs trained blocks only, "
                                  f"the lowest below boundary {b} (lowest trained block: {low})")
-            out.append({"boundary": b, "bits_fwd": bf, "bits_bwd": bb, "group": group, "delta": delta, "outliers": k,
+            out.append({"boundary": b, "bits_fwd": bf, "bits_bwd": bb, "group": group, "delta": delta, "norm": norm,
+                        "outliers": k,
                         "mean": mean, "grad_gauss": grad_gauss, "ecode_fwd": ecode_f, "ecode_bwd": ecode_b,
                         "rcode_fwd": rcode_f, "keep": keep, "a_fwd_bits": fwd, "a_bwd_bits": bwd})
     return sorted(out, key=lambda c: c["boundary"])
@@ -727,13 +742,18 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
                     f = state[j + 1] = frozen[j](below, inp[1], inp[2]) if j in frozen else below
             if c is None:
                 return out
+            if c["norm"]:
+                out = rms_unit(out)
+                f = rms_unit(f) if f is not None else None
             seed = 1000 + c["boundary"]
             learn = torch.is_grad_enabled() or bool(CUT.get("calibrate"))
             fkey = (c["boundary"], "f") if c["ecode_fwd"] else (c["boundary"], "r") if c["rcode_fwd"] else None
             ekeys = (fkey, (c["boundary"], "b") if c["ecode_bwd"] else None)
             if CUT.get("spectrum") is not None:
                 with torch.no_grad():
-                    acc = CUT["spectrum"].setdefault(c["boundary"], {"of": "h - h_frozen" if c["delta"] else "h"})
+                    of = ("n(h) - n(h_frozen)" if c["norm"] else "h - h_frozen") if c["delta"] else \
+                        "n(h)" if c["norm"] else "h"
+                    acc = CUT["spectrum"].setdefault(c["boundary"], {"of": of})
                     spectrum_add(acc, out - f if c["delta"] else out, out)
                     if c["keep"]:
                         acc["outside_sq"] = acc.get("outside_sq", 0.0) + float(outside(out - f, c["keep"], seed)
@@ -1529,7 +1549,7 @@ def main() -> int:
     ap.add_argument("--ia3", action="store_true",
                     help="IA3: train a scale per output channel of each --set matrix (W' = diag(l)·W; IA3 proper is "
                          "wk, wv and w_up), E = encode_lora2's magnitudes (add_ia3)")
-    ap.add_argument("--cut", default="", help="B:[d]q<bits>[m][e|r][p<keep>][o<k>][b<bits>[s|e]][g<group>],...: block "
+    ap.add_argument("--cut", default="", help="B:[d][n]q<bits>[m][e|r][p<keep>][o<k>][b<bits>[s|e]][g<group>],...: block "
                                             "boundaries handed on coded (parse_cut)")
     ap.add_argument("--grow", type=int, default=0,
                     help="train a model of θ's plus this many new top blocks (zero output matrices, so θ's function at "
