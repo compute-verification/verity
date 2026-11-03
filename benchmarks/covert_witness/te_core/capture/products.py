@@ -8,7 +8,9 @@ rule), whether both operands are one array, its partial sums' width (`io_bound.A
 step's whole-making system (`io_bound.chain_classes`) reads of it: the classes whose outputs reach its operands (`fed`)
 and their paid factor (`P`, `_reach`), and whether each operand reads a gather's rows (an embedding's, the same for
 every token that shares an id) before any op makes them token-specific (`gathered`, `_gathered`), which the bound drops
-(te_core.formalism). The block's `p_match` lists the ops that break P-match. Identical rows of the step (a layer's GEMMs
+(te_core.formalism). The block's `p_match` lists the ops that break P-match, and its `elementwise_products` the
+matrix products written with elementwise ops (a broadcast multiplication and a sum, or a gather, a multiplication and
+a sum by index), which no row is and whose classes the whole-making system would miss. Identical rows of the step (a layer's GEMMs
 repeated over the layers) are one row with their count, so `gathered` puts layer 0's products of the embedding's rows in
 rows of their own. A trace keeps the rows at each k of the console's dial too (`rows_on_dial`, `DIAL_K`), since a
 row's rates, kind and feeds move with k.
@@ -32,7 +34,7 @@ from te_core.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _F
 
 #: the capture's version of these rows (te_core's VERSION when they were last changed), so a trace that has them is
 #: distinguishable from one traced before them
-CAPTURE = "4.12.1"
+CAPTURE = "4.12.7"
 ORDER = "unknown"
 #: the console's dial's k levels in bits (te_core.panels' `K_LEVELS`, which a test holds this to): each of its block
 #: sizes, the reference's, the served demo's block and the console's default
@@ -329,6 +331,79 @@ def _gathered(vs: _Values, made: dict) -> set:
     return {v for v, s in state.items() if isinstance(s, tuple) and tok[v]}
 
 
+#: elementwise multiplications, by the positions of their two multiplicands
+_MULTIPLY = {"mul": (0, 1), "mul_": (0, 1), "div": (0, 1), "div_": (0, 1), "addcmul": (1, 2), "addcmul_": (1, 2),
+             "addcdiv": (1, 2), "addcdiv_": (1, 2)}
+#: ops whose entries are their first argument's, moved, broadcast or repeated: views, casts, repeats and gathers
+_SPREAD = _WALK | _GATHERS | {"broadcast_to", "tile", "repeat_interleave"}
+
+
+def _sums_by_index(n) -> bool:
+    """Whether node `n` adds its source's entries into its output at indices (index_add, scatter_add, an accumulating
+    index_put, a summing or averaging scatter_reduce or index_reduce)."""
+    name = _pk(n.target)
+    if name in ("index_add", "index_add_", "scatter_add", "scatter_add_"):
+        return True
+    if name in ("index_put", "index_put_", "_unsafe_index_put", "_index_put_impl_"):
+        return bool(n.args[3] if len(n.args) > 3 else n.kwargs.get("accumulate", False))
+    if name in ("scatter_reduce", "scatter_reduce_", "index_reduce", "index_reduce_"):
+        return (n.args[4] if len(n.args) > 4 else n.kwargs.get("reduce")) in ("sum", "mean")
+    return False
+
+
+def _elementwise_products(vs: _Values) -> list[dict]:
+    """The measured step's matrix products written with elementwise ops, which no row is and whose outputs the
+    whole-making system would miss: a multiplication of two values that depend on θ′ whose result has more entries
+    than either reads (each broadcast or repeated along a dim the other lacks: an outer product, a GEMM with K = 1, or
+    a matrix product once summed, as (x.unsqueeze(-1) * W).sum(-2) writes x @ W), and a sum by index
+    (`_sums_by_index`) of a multiplication of two such values one of which reads a gather's rows (a sparse product:
+    gather, mul and index_add), in the forward or the backward. A multiplication of two values of its own size (a
+    norm's, a gate's) is elementwise, and so is one with an operand that doesn't depend on θ′, whose product is θ's
+    and never counted (P-match checks its broadcast). [{"op", "count", "macs"}] by op, the multiplications' MACs."""
+    phases = _phases(vs.gm)
+    entries: dict = {}
+    gathered: set = set()
+    product: dict = {}
+    found: dict = {}
+
+    def ent(a) -> int:
+        return entries.get(a, io_bound._numel(a))
+
+    def add(name: str, macs: int) -> None:
+        c, m = found.get(name, (0, 0))
+        found[name] = (c + 1, m + macs)
+
+    for n in vs.nodes:
+        if n.op != "call_function":
+            continue
+        name = "getitem" if n.target is operator.getitem else _pk(n.target)
+        src = n.args[0] if n.args and hasattr(n.args[0], "op") else None
+        if src is not None and (name in _SPREAD or name == "getitem"):
+            entries[n] = min(io_bound._numel(n), ent(src))
+            if src in gathered or name in _GATHERS and vs.reads_affected(n, src):
+                gathered.add(n)
+            if src in product:
+                product[n] = product[src]
+            continue
+        if not vs.measured(n) or phases.get(n, "forward") not in ("forward", "backward"):
+            continue
+        if name in _MULTIPLY:
+            a, b = (n.args[i] if len(n.args) > i else None for i in _MULTIPLY[name])
+            if not (hasattr(a, "op") and hasattr(b, "op") and vs.reads_affected(n, a) and vs.reads_affected(n, b)):
+                continue
+            size = io_bound._numel(n)
+            if size > ent(a) and size > ent(b):
+                add(name, size)
+            elif a in gathered or b in gathered:
+                product[n] = size
+        elif _sums_by_index(n):
+            for a in io_bound._tensor_args(n)[1:]:
+                if a in product:
+                    add(name, product[a])
+                    break
+    return [{"op": op, "count": c, "macs": m} for op, (c, m) in sorted(found.items())]
+
+
 def gathered_gemms(graph) -> set[tuple[str, str]]:
     """The (node, part) of each GEMM of the measured step with an operand that reads a gather's rows (`_gathered`)."""
     vs = _Values(graph)
@@ -372,11 +447,12 @@ def rows(graph, k: float = io_bound.CONSOLE[1], gemm_dtype: str | None = "bfloat
     `k_whole` None: no chain makes an operand entry whole by itself; `fed` the [K, A] pairs of the classes reaching its
     operands; `gathered` whether each operand reads a gather's rows before any op makes them token-specific), `gates`
     the step's |C| at io_bound's prices (`io_bound.step_gates`) for a step captured by capture_step or capture_fn, else
-    None (the circuit's count is the trace's), and `p_match` [{"op", "fan_out", "count"}] the ops that break P-match
-    (`_reach`)."""
+    None (the circuit's count is the trace's), `p_match` [{"op", "fan_out", "count"}] the ops that break P-match
+    (`_reach`), and `elementwise_products` the matrix products the step writes with elementwise ops
+    (`_elementwise_products`), which te_core.formalism refuses to price."""
     vs = _Values(graph)
     made = _made(vs)
-    return _rows(vs, graph, k, gemm_dtype, made, _gathered(vs, made))
+    return _rows(vs, graph, k, gemm_dtype, made, _gathered(vs, made)) | {"elementwise_products": _elementwise_products(vs)}
 
 
 def rows_on_dial(graph, gemm_dtype: str | None = "bfloat16") -> dict:
@@ -389,6 +465,7 @@ def rows_on_dial(graph, gemm_dtype: str | None = "bfloat16") -> dict:
     made = _made(vs)
     gathered = _gathered(vs, made)
     out = _rows(vs, graph, io_bound.CONSOLE[1], gemm_dtype, made, gathered)
+    out["elementwise_products"] = _elementwise_products(vs)
     out["at"] = {}
     for k in DIAL_K:
         if k != io_bound.CONSOLE[1]:

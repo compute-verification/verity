@@ -1,6 +1,6 @@
 {
  "id": "te_core.workloads",
- "te_core": "4.12.2",
+ "te_core": "4.12.8",
  "reading": "A",
  "spec": "note:training-20261103T0600Z-draft-workload-models",
  "io_bound": "cursor/te-io-bound-4207 at 3c2afa62aa",
@@ -104,17 +104,17 @@
  },
  "valid": ["fresh_products", "token", "decoding"],
  "sensitivities": {
-  "reduction": "sensitivity, assumption (R): each block holding a step's token work passes one partial gradient at its passed width (partial_cut_bits), and the step's token work fills at least ceil(N w / c) blocks; it holds only for partitions split by tokens (a block holding only frozen layers passes no partial)",
-  "update": "sensitivity, assumption (U): where two or more blocks hold a step's token work, the block applying the update to a coordinate reads its share of the gradient's cut (grad_cut_bits), the weights read once and theta free; it holds only for partitions split by tokens (a tensor's gradient made and applied in one block breaks it)",
-  "token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
-  "decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, alpha_max (x0 s + s*))) affected gates, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
-  "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate at the best witness that holds it (per_gate); a block holding one gate of a product beside another product's tile or the best run holds more, for a few bits of that gate's own operands",
-  "fresh_cell": "sensitivity, premise P-cell: the fresh-products term's figure where every block holds whole dot cells (te_core.io_bound's proved rho with P-cell), a premise on the partition, which the attacker chooses; the term is the figure without it (formalism.P_CELL)"
+  "reduction": "sensitivity, assumption (R): each block holding a step's token work passes one partial gradient at its passed width (the trace's partial cut), and the step's token work fills at least ceil(N w / c) blocks; it holds only for partitions split by tokens (a block holding only frozen layers passes no partial)",
+  "update": "sensitivity, assumption (U): where two or more blocks hold a step's token work, the block applying the update to a coordinate reads its share of the gradient's cut, the weights read once and theta free; it holds only for partitions split by tokens (a tensor's gradient made and applied in one block breaks it)",
+  "token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* the largest x(k - u(x))/a over x and x0 from the input profile, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
+  "decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, \u03b1 (x0 s + s*))) affected gates, \u03b1 the most affected gates a token has in any part, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
+  "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate at the best witness that holds it; a block holding one gate of a product beside another product's tile or the best run holds more, for a few bits of that gate's own operands",
+  "fresh_cell": "sensitivity, assuming that blocks hold whole multiply cells (P-cell): the fresh-products term's figure where every block does, a premise on the partition, which the attacker chooses; the term is the figure without it"
  },
- "target": "target: A1 at reading B, not a bound: te_core.formalism.published at reading B, Fit's c/(c - d) where it holds, else Slowdown's token form (sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading)",
+ "target": "target: A1 at reading B, not a bound: te_core.formalism.published at reading B, Fit's c/(c - d) where it holds, else Slowdown's token form (sensitivity, assumption (A1, reading B): Slowdown's token form, s* the largest x(k - u(x))/a over x and x0 from the input profile, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading)",
  "rests_on": {
   "fresh_products": "P-width and P-chain, reference circuit; no A1 (coordinator 12:09Z): te_core.io_bound's Loomis-Whitney bound with \u039b proved (cursor/te-io-bound-4207 at 3c2afa62aa, by te_core.formalism.fresh_products) on the model's products of two fresh operands by the standard algorithm, under P-width (every operand entry paid at its passed width and every partial sum at 32 bits) and P-chain (each output entry accumulated along one chain from a zero word, as te_core's GEMM gadget does), premises on a reference circuit's wiring, false on a declared one, given P-share; without P-cell, so with no premise on how a partition splits a multiplier's gates (coordinator 06:57Z, obligation 1); attention's products uncounted; \u039b's whole-making factor by io_bound's one-class rule on a dense model's products (one-class rule; the traced class system lowers dense steps by under 1%), and an adapter's term unmeasured (void under the traced class system (te_core 4.12)); the figure under P-cell beside it (fresh_cell)",
-  "token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them (te_core.tiles); a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates; unmeasured: te_core 4.5's packer reads a trace's entries and op log (its runs and matrix-product tiles), which a model hasn't and the records here don't carry",
+  "token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them; a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates; unmeasured: te_core 4.5's packer reads a trace's entries and op log (its runs and matrix-product tiles), which a model hasn't and the records here don't carry",
   "decoding": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d gates; with A1 (reading A) and the token kind's witness family; unmeasured: te_core 4.5's packer reads a trace's entries and op log (its runs and matrix-product tiles), which a model hasn't and the records here don't carry",
   "fit": "Fit's construction (te_core.formalism): every block reads \u0394 and its tokens' ids, and runs the decoder",
   "none": "no kind exceeds 1: Fit fails and every valid kind is measured, none with a term above 1, so rho is 1 (coordinator 12:20Z)",
@@ -267,8 +267,8 @@
        "terms": {"fresh_products": 265541.2, "token": null, "decoding": null},
        "partial": true,
        "why": {
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.645903, "share": 0.8442932, "numerical": 273125.4, "attention_share": 0.1193699},
@@ -360,8 +360,8 @@
        "terms": {"fresh_products": 202999.7, "token": null, "decoding": null},
        "partial": true,
        "why": {
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.354669, "share": 0.7642779, "numerical": 206428.0, "attention_share": 0.185738},
@@ -453,8 +453,8 @@
        "terms": {"fresh_products": 301929.3, "token": null, "decoding": null},
        "partial": true,
        "why": {
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.633248, "share": 0.928281, "numerical": 307304.5, "attention_share": 0.04189688},
@@ -1038,8 +1038,8 @@
        "terms": {"fresh_products": 265102.2, "token": null, "decoding": null},
        "partial": true,
        "why": {
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.645903, "share": 0.843542, "numerical": 272737.9, "attention_share": 0.1192637},
@@ -1143,8 +1143,8 @@
        "terms": {"fresh_products": 265102.2, "token": null, "decoding": null},
        "partial": true,
        "why": {
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.645903, "share": 0.843542, "numerical": 272737.9, "attention_share": 0.1192637},
@@ -1248,8 +1248,8 @@
        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
        "partial": false,
        "why": {
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.09090451},
@@ -1672,8 +1672,8 @@
        "terms": {"fresh_products": 255744.8, "token": null, "decoding": null},
        "partial": true,
        "why": {
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.680342, "share": 0.8291986, "numerical": 265072.0, "attention_share": 0.1296857},
@@ -1802,8 +1802,8 @@
        "partial": false,
        "why": {
         "fresh_products": "void under the traced class system (te_core 4.12)",
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "void under the traced class system (te_core 4.12)",
        "fresh": {"order": "chain", "lam": null, "share": 0.02011237, "numerical": null, "attention_share": 0.1723373},
@@ -1923,8 +1923,8 @@
        "partial": false,
        "why": {
         "fresh_products": "void under the traced class system (te_core 4.12)",
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "void under the traced class system (te_core 4.12)",
        "fresh": {"order": "chain", "lam": null, "share": 0.0, "numerical": null, "attention_share": 0.03786783},
@@ -2533,8 +2533,8 @@
        "terms": {"fresh_products": 50026.6, "token": null, "decoding": null},
        "partial": true,
        "why": {
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.281715, "share": 0.1636943, "numerical": 51125.62, "attention_share": 0.7898069},
@@ -2621,8 +2621,8 @@
        "terms": {"fresh_products": 137563.2, "token": null, "decoding": null},
        "partial": true,
        "why": {
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.645903, "share": 0.4583596, "numerical": 143575.0, "attention_share": 0.5002847},
@@ -2709,8 +2709,8 @@
        "terms": {"fresh_products": 179917.3, "token": null, "decoding": null},
        "partial": true,
        "why": {
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.246291, "share": 0.5040848, "numerical": 180820.5, "attention_share": 0.4219617},
@@ -3067,8 +3067,8 @@
        "partial": false,
        "why": {
         "fresh_products": "void under the traced class system (te_core 4.12)",
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "void under the traced class system (te_core 4.12)",
        "fresh": {"order": "chain", "lam": null, "share": 0.00775526, "numerical": null, "attention_share": 0.1666025},
@@ -3171,8 +3171,8 @@
        "partial": false,
        "why": {
         "fresh_products": "void under the traced class system (te_core 4.12)",
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "void under the traced class system (te_core 4.12)",
        "fresh": {"order": "chain", "lam": null, "share": 0.0007846717, "numerical": null, "attention_share": 0.03708479},
@@ -3273,8 +3273,8 @@
        "partial": false,
        "why": {
         "fresh_products": "void under the traced class system (te_core 4.12)",
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "void under the traced class system (te_core 4.12)",
        "fresh": {"order": "chain", "lam": null, "share": 0.0004471915, "numerical": null, "attention_share": 0.03712898},
@@ -3370,8 +3370,8 @@
        "partial": false,
        "why": {
         "fresh_products": "void under the traced class system (te_core 4.12)",
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "void under the traced class system (te_core 4.12)",
        "fresh": {"order": "chain", "lam": null, "share": 3.66201e-05, "numerical": null, "attention_share": 0.1687454},
@@ -3467,8 +3467,8 @@
        "partial": false,
        "why": {
         "fresh_products": "void under the traced class system (te_core 4.12)",
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "void under the traced class system (te_core 4.12)",
        "fresh": {"order": "chain", "lam": null, "share": 0.0, "numerical": null, "attention_share": 0.03718992},
@@ -4172,8 +4172,8 @@
        "terms": {"fresh_products": 62889.26, "token": null, "decoding": null},
        "partial": true,
        "why": {
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.645903, "share": 0.1999576, "numerical": 64685.46, "attention_share": 0.02827088},
@@ -4268,8 +4268,8 @@
        "terms": {"fresh_products": 265541.2, "token": null, "decoding": null},
        "partial": true,
        "why": {
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.645903, "share": 0.8442932, "numerical": 273125.4, "attention_share": 0.1193699},
@@ -4364,8 +4364,8 @@
        "terms": {"fresh_products": 8362.963, "token": null, "decoding": null},
        "partial": true,
        "why": {
-        "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
-        "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
+        "token": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again",
+        "decoding": "unmeasured: no entries (the run was traced before training's slowdown code 4.4, or not traced); trace the run again"
        },
        "whole_making": "one-class rule; the traced class system lowers dense steps by under 1%",
        "fresh": {"order": "chain", "lam": 1.645903, "share": 0.0265902, "numerical": 8601.82, "attention_share": 0.003759439},

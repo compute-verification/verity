@@ -775,65 +775,65 @@
 "cells": [
 {
 "c": 536681984163840.0,
-"fresh_cell": 2870251.009582324,
+"fresh_cell": 2869160.60653161,
 "k": 65536,
-"term": 163707.77135211992,
+"term": 163340.76087159815,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 26.340120274356924,
+"fresh_cell": 26.330113711374292,
 "k": 65536,
-"term": 1.5023363367405456,
+"term": 1.4989683037125565,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 107889.13264376596,
+"fresh_cell": 107848.1457617891,
 "k": 65536,
-"term": 6153.569635289275,
+"term": 6139.7741720066315,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 2042201.2097620713,
+"fresh_cell": 2089282.287393043,
 "k": 80000,
-"term": 131294.38780855556,
+"term": 130996.04587383587,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 18.741157240250534,
+"fresh_cell": 19.173217447983582,
 "k": 80000,
-"term": 1.2048806723453307,
+"term": 1.2021428064175195,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 76763.78005606619,
+"fresh_cell": 78533.49866694075,
 "k": 80000,
-"term": 4935.1912339264745,
+"term": 4923.97693508616,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 643669.0334671999,
+"fresh_cell": 778359.9495035381,
 "k": 145568,
-"term": 64497.323533301984,
+"term": 64339.65605317526,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 5.906911870008293,
+"fresh_cell": 7.142962276894736,
 "k": 145568,
-"term": 0.5918880451812829,
+"term": 0.5904411402325421,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 24194.711019553968,
+"fresh_cell": 29257.57348616084,
 "k": 145568,
-"term": 2424.373433062535,
+"term": 2418.4469103924926,
 "why": null
 },
 {
@@ -841,98 +841,98 @@
 "fresh_cell": null,
 "k": 800000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
 "k": 800000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
 "k": 800000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": null,
 "k": 8000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
 "k": 8000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
 "k": 8000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": null,
 "k": 80000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
 "k": 80000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
 "k": 80000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": null,
 "k": 800000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
 "k": 800000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
 "k": 800000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 }
 ],
 "fresh_per_c": {
 "145568": [
-1.2017791809015156e-10,
-1.1993490604497329e-09
+1.198841361396127e-10,
+1.4503187594721232e-09
 ],
 "65536": [
-3.0503683034409944e-10,
-5.348141160456924e-09
+3.043529794019189e-10,
+5.346109411520143e-09
 ],
 "80000": [
-2.446409450712502e-10,
-3.805235260400732e-09
+2.4408504428917995e-10,
+3.89296147260874e-09
 ],
 "800000": null,
 "8000000": null,
@@ -944,10 +944,10 @@
 ]
 },
 "fresh": {
-"fresh_cell": "sensitivity, premise P-cell: the fresh-products term's figure where every block holds whole dot cells (te_core.io_bound's proved rho with P-cell), a premise on the partition, which the attacker chooses; the term is the figure without it (formalism.P_CELL)",
+"fresh_cell": "sensitivity, assuming that blocks hold whole multiply cells (P-cell): the fresh-products term's figure where every block does, a premise on the partition, which the attacker chooses; the term is the figure without it",
 "order": "chain",
 "p_cell": false,
-"rests_on": "theorem for this circuit (Loomis-Whitney) under P-width (extended), P-match and P-chain, without P-cell",
+"rests_on": "theorem for this circuit (Loomis-Whitney), given that every value a block reads costs its full width (P-width, extended to what makes operands whole), elementwise steps don't fan out (P-match) and each output is summed along one chain (P-chain), without assuming that blocks hold whole multiply cells (P-cell)",
 "vectors": [
 {
 "fresh_cell": 4138401.093369211,
@@ -1144,7 +1144,7 @@
 "share": 0.7400625,
 "subset": null,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "fresh_cell": 4138401.093369211,
@@ -1286,13 +1286,14 @@
 "why": null
 },
 {
-"fresh_cell": 2870251.009582324,
+"fresh_cell": 2869160.60653161,
 "inputs": {
 "C_gates": 277159456773655.0,
 "c": 536681984163840.0,
 "k": 65536.0,
 "products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -1315,10 +1316,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+256.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 256.0,
-"macs": 805306368.0,
+"macs": 802160640.0,
 "outputs": 1572864.0
 },
 {
@@ -1326,10 +1333,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 512.0,
-"macs": 738197504.0,
+"macs": 735313920.0,
 "outputs": 1441792.0
 },
 {
@@ -1337,10 +1350,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 1408,
 "k_whole": 512.0,
-"macs": 2214592512.0,
+"macs": 2205941760.0,
 "outputs": 1572864.0
 },
 {
@@ -1348,10 +1367,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+1408.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 1408.0,
-"macs": 2013265920.0,
+"macs": 2005401600.0,
 "outputs": 3932160.0
 },
 {
@@ -1359,10 +1384,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 1408.0,
-"macs": 3690987520.0,
+"macs": 3676569600.0,
 "outputs": 7208960.0
 },
 {
@@ -1370,10 +1401,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+1408.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 1408.0,
-"macs": 8388608000.0,
+"macs": 8355840000.0,
 "outputs": 16384000.0
 },
 {
@@ -1381,10 +1418,20 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+],
+[
+1408.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 512.0,
-"macs": 8388608000.0,
+"macs": 8355840000.0,
 "outputs": 16384000.0
 },
 {
@@ -1392,10 +1439,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 32000,
 "k_whole": 512.0,
-"macs": 8388608000.0,
+"macs": 8355840000.0,
 "outputs": 262144.0
 },
 {
@@ -1403,10 +1456,24 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+],
+[
+1408.0,
+1.0
+],
+[
+32000.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 512.0,
-"macs": 2214592512.0,
+"macs": 2205941760.0,
 "outputs": 4325376.0
 },
 {
@@ -1414,10 +1481,20 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+1408.0,
+1.0
+],
+[
+32000.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 32000.0,
-"macs": 369098752.0,
+"macs": 367656960.0,
 "outputs": 720896.0
 },
 {
@@ -1425,10 +1502,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 512.0,
-"macs": 4429185024.0,
+"macs": 4411883520.0,
 "outputs": 8650752.0
 },
 {
@@ -1436,10 +1519,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 1408,
 "k_whole": 512.0,
-"macs": 4429185024.0,
+"macs": 4411883520.0,
 "outputs": 3145728.0
 },
 {
@@ -1447,10 +1536,28 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+256.0,
+1.0
+],
+[
+512.0,
+1.0
+],
+[
+1408.0,
+1.0
+],
+[
+32000.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 256.0,
-"macs": 805306368.0,
+"macs": 802160640.0,
 "outputs": 1572864.0
 },
 {
@@ -1458,10 +1565,24 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+],
+[
+1408.0,
+1.0
+],
+[
+32000.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 32000.0,
-"macs": 805306368.0,
+"macs": 802160640.0,
 "outputs": 1572864.0
 },
 {
@@ -1469,10 +1590,20 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+256.0,
+1.0
+],
+[
+1408.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 256.0,
-"macs": 2013265920.0,
+"macs": 2005401600.0,
 "outputs": 3932160.0
 },
 {
@@ -1480,10 +1611,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+256.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 256.0,
-"macs": 2415919104.0,
+"macs": 2406481920.0,
 "outputs": 4718592.0
 },
 {
@@ -1491,10 +1628,24 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+],
+[
+1408.0,
+1.0
+],
+[
+32000.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 32000.0,
-"macs": 1845493760.0,
+"macs": 1838284800.0,
 "outputs": 3604480.0
 },
 {
@@ -1502,6 +1653,12 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 512.0,
@@ -1513,6 +1670,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+],
+[
+1408.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 512.0,
@@ -1520,6 +1687,12 @@
 "outputs": 64880640.0
 }
 ],
+"shared_prefix": {
+"kept": 0.99609375,
+"length": 1,
+"sequence": 256,
+"trimmed_macs_share": 0.002040692007797271
+},
 "system": {
 "b": 16,
 "classes": [
@@ -1619,9 +1792,9 @@
 },
 "name": "the 45M start's dense step, its trace's order unknown",
 "order": "chain",
-"share": 0.5515529347520451,
+"share": 0.5504273850862195,
 "subset": null,
-"term": 163707.77135211992,
+"term": 163340.76087159815,
 "why": null
 },
 {
@@ -1684,7 +1857,7 @@
 "share": 0.7400625,
 "subset": null,
 "term": null,
-"why": "unmeasured: the circuit declares its products summed in a tree, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound"
+"why": "unmeasured: the circuit declares its products summed in a tree, and the bound has the chain constant only (its premise that each output is summed along one chain (P-chain)); the chain figure is in the inputs, never the bound"
 }
 ]
 },
@@ -2197,10 +2370,10 @@
 "delta_bits": "the trace's update cut, theta' as the step reads it (the grown block's four tensors)",
 "entries": "assumption (A1, reading A), from the trace: one token's path in segments, what a run of them reads (its frontier, token positions, update cut and context per other position), the least any of the default packer's blocks reads",
 "ops": "counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's gates (te_core.tiles.of_graph)",
-"products": "measured (trace): the traced step's products of two fresh operands (te_core.capture.products, formalism.products_of_trace), each at its passed widths and gates a MAC, times the traced steps' tokens over the traced step's",
+"products": "measured (trace): the traced step's products of two fresh operands, each at its passed widths and gates a MAC, times the traced steps' tokens over the traced step's",
 "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
 "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, and its other inputs",
-"u": "assumption (A1), from the trace: 0 up to t, then u_in",
+"u": "assumption (A1), from the trace: 0 up to t, then the input profile",
 "u1_bits": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order",
 "u_in": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order"
 },
@@ -2913,7 +3086,8 @@
 "products": {
 "at": {
 "145568": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -2931,6 +3105,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -2977,7 +3157,8 @@
 "trace_order": "unknown"
 },
 "80000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -2995,6 +3176,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -3041,7 +3228,8 @@
 "trace_order": "unknown"
 },
 "800000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -3059,6 +3247,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -3105,7 +3299,8 @@
 "trace_order": "unknown"
 },
 "8000000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -3123,6 +3318,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -3169,7 +3370,8 @@
 "trace_order": "unknown"
 },
 "80000000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -3187,6 +3389,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -3233,7 +3441,8 @@
 "trace_order": "unknown"
 },
 "800000000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -3251,6 +3460,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -3297,7 +3512,8 @@
 "trace_order": "unknown"
 }
 },
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -3315,6 +3531,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -3922,10 +4144,10 @@
 "delta_bits": "stated: an E of the live entries alone (w_gate's and w_up's 8 live rows and w_down's 8 live columns at bf16, mlp_norm at fp32; wildcard's 05:46Z LOOPHOLE)",
 "entries": "assumption (A1, reading A), from the trace: one token's path in segments, what a run of them reads (its frontier, token positions, update cut and context per other position), the least any of the default packer's blocks reads",
 "ops": "counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's gates (te_core.tiles.of_graph)",
-"products": "measured (trace): the traced step's products of two fresh operands (te_core.capture.products, formalism.products_of_trace), each at its passed widths and gates a MAC, times the traced steps' tokens over the traced step's",
+"products": "measured (trace): the traced step's products of two fresh operands, each at its passed widths and gates a MAC, times the traced steps' tokens over the traced step's",
 "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
 "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, and its other inputs",
-"u": "assumption (A1), from the trace: 0 up to t, then u_in",
+"u": "assumption (A1), from the trace: 0 up to t, then the input profile",
 "u1_bits": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order",
 "u_in": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order"
 },
@@ -4638,7 +4860,8 @@
 "products": {
 "at": {
 "145568": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -4656,6 +4879,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -4702,7 +4931,8 @@
 "trace_order": "unknown"
 },
 "80000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -4720,6 +4950,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -4766,7 +5002,8 @@
 "trace_order": "unknown"
 },
 "800000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -4784,6 +5021,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -4830,7 +5073,8 @@
 "trace_order": "unknown"
 },
 "8000000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -4848,6 +5092,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -4894,7 +5144,8 @@
 "trace_order": "unknown"
 },
 "80000000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -4912,6 +5163,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -4958,7 +5215,8 @@
 "trace_order": "unknown"
 },
 "800000000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -4976,6 +5234,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -5022,7 +5286,8 @@
 "trace_order": "unknown"
 }
 },
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -5040,6 +5305,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -5957,10 +6228,10 @@
 "delta_bits": "the trace's update cut, theta' as the step reads it (every block tensor)",
 "entries": "assumption (A1, reading A), from the trace: one token's path in segments, what a run of them reads (its frontier, token positions, update cut and context per other position), the least any of the default packer's blocks reads",
 "ops": "counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's gates (te_core.tiles.of_graph)",
-"products": "measured (trace): the traced step's products of two fresh operands (te_core.capture.products, formalism.products_of_trace), each at its passed widths and gates a MAC, times the traced steps' tokens over the traced step's",
+"products": "measured (trace): the traced step's products of two fresh operands, each at its passed widths and gates a MAC, times the traced steps' tokens over the traced step's",
 "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
 "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, and its other inputs",
-"u": "assumption (A1), from the trace: 0 up to t, then u_in",
+"u": "assumption (A1), from the trace: 0 up to t, then the input profile",
 "u1_bits": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order",
 "u_in": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order"
 },
@@ -7072,7 +7343,8 @@
 "products": {
 "at": {
 "145568": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -7090,6 +7362,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -7174,7 +7452,8 @@
 "trace_order": "unknown"
 },
 "80000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -7192,6 +7471,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -7276,7 +7561,8 @@
 "trace_order": "unknown"
 },
 "800000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -7294,6 +7580,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -7378,7 +7670,8 @@
 "trace_order": "unknown"
 },
 "8000000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -7396,6 +7689,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -7480,7 +7779,8 @@
 "trace_order": "unknown"
 },
 "80000000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -7498,6 +7798,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -7582,7 +7888,8 @@
 "trace_order": "unknown"
 },
 "800000000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -7600,6 +7907,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -7684,7 +7997,8 @@
 "trace_order": "unknown"
 }
 },
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -7702,6 +8016,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -8769,10 +9089,10 @@
 "delta_bits": "the trace's update cut, the factors and gains as the step reads them",
 "entries": "assumption (A1, reading A), from the trace: one token's path in segments, what a run of them reads (its frontier, token positions, update cut and context per other position), the least any of the default packer's blocks reads",
 "ops": "counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's gates (te_core.tiles.of_graph)",
-"products": "measured (trace): the traced step's products of two fresh operands (te_core.capture.products, formalism.products_of_trace), each at its passed widths and gates a MAC, times the traced steps' tokens over the traced step's",
+"products": "measured (trace): the traced step's products of two fresh operands, each at its passed widths and gates a MAC, times the traced steps' tokens over the traced step's",
 "tail_share": "measured (trace): the share of a token's affected work in ops that read no update value",
 "tau_bits": "measured (trace): the token inputs' positions the step reads per consumed token at ceil(log2 V) bits, and its other inputs",
-"u": "assumption (A1), from the trace: 0 up to t, then u_in",
+"u": "assumption (A1), from the trace: 0 up to t, then the input profile",
 "u1_bits": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order",
 "u_in": "assumption (A1'), from the trace: the narrowest cut from the carried values to the update values one token's ops read so far, in program order"
 },
@@ -11214,7 +11534,8 @@
 "products": {
 "at": {
 "145568": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -11232,6 +11553,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -11343,7 +11670,8 @@
 "trace_order": "unknown"
 },
 "80000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -11361,6 +11689,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -11472,7 +11806,8 @@
 "trace_order": "unknown"
 },
 "800000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -11490,6 +11825,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -11601,7 +11942,8 @@
 "trace_order": "unknown"
 },
 "8000000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -11619,6 +11961,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -11730,7 +12078,8 @@
 "trace_order": "unknown"
 },
 "80000000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -11748,6 +12097,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -11859,7 +12214,8 @@
 "trace_order": "unknown"
 },
 "800000000": {
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -11877,6 +12233,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -11988,7 +12350,8 @@
 "trace_order": "unknown"
 }
 },
-"capture": "4.12.1",
+"capture": "4.12.7",
+"elementwise_products": [],
 "gathered": {
 "dropped": 0,
 "dropped_macs_share": 0.0,
@@ -12006,6 +12369,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -12408,7 +12777,7 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 80000000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "Fit's construction",
@@ -12431,10 +12800,10 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 80000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "partial": false,
 "reading": "A",
-"rests_on": "A1 (reading A), its family: runs and tiles",
+"rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
 "rho": 8.35335685982954,
 "sensitivities": {
 "fresh_cell": 0.0,
@@ -12454,10 +12823,10 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 100000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "partial": true,
 "reading": "A",
-"rests_on": "A1 (reading A), its family: runs and tiles",
+"rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
 "rho": 6.866429960025952,
 "sensitivities": {
 "fresh_cell": null,
@@ -12477,10 +12846,10 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 65536.0,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "partial": false,
 "reading": "A",
-"rests_on": "A1 (reading A), its family: runs and tiles",
+"rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
 "rho": 263.4961717397754,
 "sensitivities": {
 "fresh_cell": 0.0,
@@ -12500,10 +12869,10 @@
 "case": "lora",
 "fresh_subset": null,
 "k": 65536.0,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "partial": false,
 "reading": "A",
-"rests_on": "A1 (reading A), its family: runs and tiles",
+"rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
 "rho": 95.68434260057813,
 "sensitivities": {
 "fresh_cell": 0.0,
@@ -12523,7 +12892,7 @@
 "case": "adapter-live",
 "fresh_subset": null,
 "k": 100000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "unmeasured",
@@ -12546,7 +12915,7 @@
 "case": "adapter-live",
 "fresh_subset": null,
 "k": 65536.0,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "no kind exceeds 1",
@@ -12567,18 +12936,18 @@
 "published_rule": "Fit holds: rho_fit, binding fit. Else, where a measured kind's term exceeds 1: the max, binding that kind, partial where a kind is unmeasured. Else, where a kind is unmeasured: null, binding unmeasured, why naming it. Else: 1, binding none.",
 "rests_on": {
 "decoding": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d gates; with A1 (reading A) and the token kind's witness family",
-"fresh_products": "theorem for this circuit: te_core.io_bound's Loomis-Whitney cap on a block's MACs of products of two fresh operands, amortized over the partition, on the best subset of them (every product still in |C|), each operand and partial sum at its passed width, given its premises on the reference circuit, P-width extended to every value a block reads while making operands whole (attention's and the optimizer's included), P-match (elementwise steps map operand entries one to one, so fan-out is at most fan-in; checked on the traced step) and P-chain (each output entry summed along one chain of whole dot cells, as te_core.gates prices a GEMM), P-share and the standard algorithm; without P-cell, a premise on the partition (the whole-cell figure is the sensitivity fresh_cell)",
-"token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them (te_core.tiles); a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates"
+"fresh_products": "theorem for this circuit: the Loomis-Whitney cap on the multiplications a block does of products whose two operands both depend on the update (fresh operands), amortized over the partition, on the best subset of those products (every product still counted in |C|), each operand and partial sum at its passed width, given these premises on the reference circuit: every value a block reads costs its full width (P-width), extended to every value a block reads while making operands whole (attention's and the optimizer's included); elementwise steps don't fan out (P-match): an entry's fan-out is at most its fan-in, checked on the traced step; each output is summed along one chain (P-chain), a chain of whole multiply cells, as training's slowdown code prices a matrix product; products share arrays only as a layer's forward, input-gradient and weight-gradient products do (P-share); and the standard multiplication algorithm; without assuming that blocks hold whole multiply cells (P-cell), a premise on the partition, which the attacker chooses (the figure with it is published beside the term)",
+"token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them; a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates"
 },
 "rule": "rho = rho_fit where Fit holds, else max(1, the max over the kinds' measured terms); null where no kind is measured. Sensitivities are never in the max.",
 "schema": "te-core/rho-vectors/v3",
 "sensitivities": {
-"decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, alpha_max (x0 s + s*))) affected gates, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
-"fresh_cell": "sensitivity, premise P-cell: the fresh-products term's figure where every block holds whole dot cells (te_core.io_bound's proved rho with P-cell), a premise on the partition, which the attacker chooses; the term is the figure without it (formalism.P_CELL)",
-"per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate at the best witness that holds it (per_gate); a block holding one gate of a product beside another product's tile or the best run holds more, for a few bits of that gate's own operands",
-"reduction": "sensitivity, assumption (R): each block holding a step's token work passes one partial gradient at its passed width (partial_cut_bits), and the step's token work fills at least ceil(N w / c) blocks; it holds only for partitions split by tokens (a block holding only frozen layers passes no partial)",
-"token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
-"update": "sensitivity, assumption (U): where two or more blocks hold a step's token work, the block applying the update to a coordinate reads its share of the gradient's cut (grad_cut_bits), the weights read once and theta free; it holds only for partitions split by tokens (a tensor's gradient made and applied in one block breaks it)"
+"decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, \u03b1 (x0 s + s*))) affected gates, \u03b1 the most affected gates a token has in any part, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
+"fresh_cell": "sensitivity, assuming that blocks hold whole multiply cells (P-cell): the fresh-products term's figure where every block does, a premise on the partition, which the attacker chooses; the term is the figure without it",
+"per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate at the best witness that holds it; a block holding one gate of a product beside another product's tile or the best run holds more, for a few bits of that gate's own operands",
+"reduction": "sensitivity, assumption (R): each block holding a step's token work passes one partial gradient at its passed width (the trace's partial cut), and the step's token work fills at least ceil(N w / c) blocks; it holds only for partitions split by tokens (a block holding only frozen layers passes no partial)",
+"token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* the largest x(k - u(x))/a over x and x0 from the input profile, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
+"update": "sensitivity, assumption (U): where two or more blocks hold a step's token work, the block applying the update to a coordinate reads its share of the gradient's cut, the weights read once and theta free; it holds only for partitions split by tokens (a tensor's gradient made and applied in one block breaks it)"
 },
 "sessions": {
 "about": "te_core.policy.session: one session of the reference model, each of its tokens a forward, every product of two operands at the served precision's GEMM price; the elementwise ops left out",
@@ -13165,6 +13534,121 @@
 "vocab": 32000
 },
 "tokens": 2
+},
+{
+"attended": 21496320,
+"gates": 7024532317470720.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 4096,
+"k_bits": 61440,
+"macs": {
+"attention": 1386770595840,
+"lm_head": 251658240000,
+"matrices": 3107475947520
+},
+"out_tokens": 1024,
+"params": 656146944,
+"precision": "bf16",
+"shape": {
+"d_ff": 4224,
+"d_model": 1536,
+"n_head": 24,
+"n_layer": 21,
+"vocab": 32000
+},
+"tokens": 5120
+},
+{
+"attended": 15205888,
+"gates": 6423885234634752.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 2048,
+"k_bits": 30720,
+"macs": {
+"attention": 980962246656,
+"lm_head": 251658240000,
+"matrices": 3107475947520
+},
+"out_tokens": 3072,
+"params": 656146944,
+"precision": "bf16",
+"shape": {
+"d_ff": 4224,
+"d_model": 1536,
+"n_head": 24,
+"n_layer": 21,
+"vocab": 32000
+},
+"tokens": 5120
+},
+{
+"attended": 285737472,
+"gates": 4.418846882522726e+16,
+"gates_per_mac": 1480.125,
+"in_tokens": 16384,
+"k_bits": 245760,
+"macs": {
+"attention": 18433495793664,
+"lm_head": 855638016000,
+"matrices": 10565418221568
+},
+"out_tokens": 1024,
+"params": 656146944,
+"precision": "bf16",
+"shape": {
+"d_ff": 4224,
+"d_model": 1536,
+"n_head": 24,
+"n_layer": 21,
+"vocab": 32000
+},
+"tokens": 17408
+},
+{
+"attended": 1048576,
+"gates": 1094511841247232.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 1024,
+"k_bits": 15360,
+"macs": {
+"attention": 67645734912,
+"lm_head": 50331648000,
+"matrices": 621495189504
+},
+"out_tokens": 0,
+"params": 656146944,
+"precision": "bf16",
+"shape": {
+"d_ff": 4224,
+"d_model": 1536,
+"n_head": 24,
+"n_layer": 21,
+"vocab": 32000
+},
+"tokens": 1024
+},
+{
+"attended": 3,
+"gates": 1942449929856.0,
+"gates_per_mac": 1480.125,
+"in_tokens": 1,
+"k_bits": 15,
+"macs": {
+"attention": 193536,
+"lm_head": 98304000,
+"matrices": 1213857792
+},
+"out_tokens": 1,
+"params": 656146944,
+"precision": "bf16",
+"shape": {
+"d_ff": 4224,
+"d_model": 1536,
+"n_head": 24,
+"n_layer": 21,
+"vocab": 32000
+},
+"tokens": 2
 }
 ]
 },
@@ -13203,7 +13687,7 @@
 "x0": 8.333582376964214e-05
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -13259,8 +13743,15 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
+"diverged": [],
 "e": 0,
 "whole_chain": 1.0
 }
@@ -13316,7 +13807,7 @@
 }
 },
 "k": 80000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 11.065531262155444,
 "rho": 11.065531262155444,
 "rho_fit": 1.0,
@@ -13362,7 +13853,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -13418,10 +13909,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -13475,7 +13977,7 @@
 }
 },
 "k": 800000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -13521,7 +14023,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -13577,10 +14079,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -13634,7 +14147,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -13680,7 +14193,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -13736,10 +14249,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -13793,7 +14317,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -13839,7 +14363,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -13895,10 +14419,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -13952,7 +14487,7 @@
 }
 },
 "k": 80000000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -13998,7 +14533,7 @@
 "x0": 8.333582376964214e-05
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -14054,8 +14589,15 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
+"diverged": [],
 "e": 0,
 "whole_chain": 1.0
 }
@@ -14111,7 +14653,7 @@
 }
 },
 "k": 80000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14157,7 +14699,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -14213,10 +14755,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -14270,7 +14823,7 @@
 }
 },
 "k": 800000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14316,7 +14869,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -14372,10 +14925,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -14429,7 +14993,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14475,7 +15039,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -14531,10 +15095,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -14588,7 +15163,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14634,7 +15209,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -14690,10 +15265,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -14747,7 +15333,7 @@
 }
 },
 "k": 80000000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14793,7 +15379,7 @@
 "x0": 0.00034364702383247125
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -14849,10 +15435,23 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -14906,7 +15505,7 @@
 }
 },
 "k": 80000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 8.35335685982954,
 "rho": 8.35335685982954,
 "rho_fit": 1.0,
@@ -14952,7 +15551,7 @@
 "x0": 0.08627081452593345
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -15008,10 +15607,23 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -15065,7 +15677,7 @@
 }
 },
 "k": 800000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15111,7 +15723,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -15167,10 +15779,23 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -15224,7 +15849,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15270,7 +15895,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -15326,10 +15951,23 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -15383,7 +16021,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.9996631800490919,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15429,7 +16067,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -15485,10 +16123,23 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -15542,7 +16193,7 @@
 }
 },
 "k": 80000000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15588,7 +16239,7 @@
 "x0": 0.08805491470908546
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -15644,10 +16295,24 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+4,
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -15701,7 +16366,7 @@
 }
 },
 "k": 80000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 2.7344655410785834,
 "rho": 2.7344655410785834,
 "rho_fit": 1.000266918292764,
@@ -15747,7 +16412,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -15803,10 +16468,24 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+4,
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -15860,7 +16539,7 @@
 }
 },
 "k": 800000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": 1.000266918292764,
@@ -15906,7 +16585,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -15962,10 +16641,24 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+4,
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -16019,7 +16712,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.9999300519868622,
 "rho": 1.000266918292764,
 "rho_fit": 1.000266918292764,
@@ -16065,7 +16758,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -16121,10 +16814,24 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+4,
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -16178,7 +16885,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0110508421616675,
 "rho_fit": 1.0110508421616675,
@@ -16224,7 +16931,7 @@
 "x0": 1.0
 },
 "fresh_products": {
-"capture": "4.12.1",
+"capture": "4.12.7",
 "fresh_cell": 0.0,
 "gathered": {
 "dropped": 0,
@@ -16280,10 +16987,24 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+4,
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -16337,7 +17058,7 @@
 }
 },
 "k": 80000000,
-"label": "te_core 4.12.2, reading A",
+"label": "training's slowdown code 4.12.8, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": "inf",
@@ -16358,6 +17079,6 @@
 "unmeasured": {}
 }
 ],
-"version": "4.12.2",
+"version": "4.12.8",
 "w_fwd_gates": 4925098176.0
 }

@@ -45,9 +45,10 @@ e = r·(1 + e)² with r = k/(3·K²·b) (LW on each source product, 4/3 for sour
 (1 + e)^{3/2}. That one-class rule holds only where no shorter chain is nested below a counted operand, and on a
 transformer's step attention's d_h-long chains are, so the proved factor is the step's whole-making system's
 (`chain_classes`, `whole_chain_of`): every product with both operands affected in a class by its chain K, with
-r_j = c_j·k/(K_j²·b), μ_j ≤ r_j·(P_j + Σ_i A_ij·μ_i)² at its least fixed point and e = Σ_i A_i,counted·μ_i, void
-where the system has no fixed point. Proved: Λ = SHARE·feed·whole_chain, at the kept products' widest operand and
-the step's whole-making factor, one number on every subset (`bound`). Each
+r_j = c_j·k/(K_j²·b), μ_j ≤ r_j·(P_j + Σ_i A_ij·μ_i)² at its least fixed point (exact class by class in feeding
+order, a cycle iterated) and e = Σ_i A_i,counted·μ_i, void where a cycle with no fixed point feeds a counted product.
+Proved: Λ = SHARE·feed·whole_chain, at the kept products' widest operand and the whole-making factor of the classes
+that feed them, so a subset that drops the products a high-μ class feeds has its own smaller factor (`bound`). Each
 factor bounds both forms: shared arrays scale √(x·y·(t/b_C + s)) itself, a fed partial sum lowers only the read face's
 width (raising α by `feed` and μ·b_C by less), and whole-making raises k (α by (1 + e)^{3/2}, μ by less). Found by
 search over small chained triples: Λ = 2/√3 (the "numerical" figures).
@@ -166,7 +167,18 @@ def _figures(ps: list[dict], lam: float, c: float, k: float, C: float) -> dict:
             "rho": n * c / C, "rho_main": G / gamma * c / C, "blocks_no_cell": n_cell, "rho_no_cell": n_cell * c / C}
 
 
-def bound(products: list[dict], c: float, k: float, C: float, whole: float | None = None) -> dict:
+def _e_of(fed: list[dict], made_whole: dict) -> float:
+    """e on products whose operands' feeds are `fed` ({K: A}): Σ_K μ_K·max_P A_K,P over the classes in `made_whole`."""
+    top: dict = {}
+    for f in fed:
+        for K, a in f.items():
+            if a > 0 and K in made_whole:
+                top[K] = max(top.get(K, 0.0), a)
+    return sum(a * made_whole[K] for K, a in top.items())
+
+
+def bound(products: list[dict], c: float, k: float, C: float, whole: float | None = None,
+          made_whole: dict | None = None) -> dict:
     """The bound (module docstring) at policy (c, k) on a step of |C| = `C` gates whose counted products are `products`,
     each {"macs", "outputs", "k_dim", "k_whole", "b_a", "b_b", "b_c", "gates_per_mac", "cell_gates"} (`k_whole` None:
     no chain makes an operand whole by itself): the cap's terms on them all (`whole_chain` None where void), Λ proved
@@ -182,9 +194,19 @@ def bound(products: list[dict], c: float, k: float, C: float, whole: float | Non
     past r = 1/4) the proved figures are None, never 0; with no counted product they are 0.
 
     `whole` is the step's `whole_chain` from its whole-making system (`whole_chain_of(chain_classes(graph, k), k)`),
-    one factor for every subset, ∞ where the system has no fixed point (void). Without it Λ takes the one-class rule at
-    each subset's least `k_whole`, which holds only where no shorter chain is nested below a kept operand: attention's
-    d_h-long chains are, on a transformer's step."""
+    one factor for every subset, ∞ where a cycle with no fixed point feeds a counted product (void). Without it Λ takes
+    the one-class rule at each subset's least `k_whole`, which holds only where no shorter chain is nested below a kept
+    operand: attention's d_h-long chains are, on a transformer's step.
+
+    `made_whole` is the system's made-whole shares by class (`whole_chain_of`'s `mu`, ∞ where a diverged cycle reaches
+    the class), with each product's `fed` ([K, A] pairs: the largest factor from class K's outputs into its operands);
+    `whole` is then not read. Each subset's whole-making factor is its own, (1 + e_S)^{3/2} with e_S = Σ_K μ_K·max over
+    the subset's products of their A_K (a block making a kept operand whole runs only the chains that feed it), and the
+    subsets also drop the products whose own e is largest, or that are fed by the classes of largest μ, one threshold
+    for each value among them: so where a short chain's class makes e large (an adapter's rank-r class), the term is
+    never below what the products it doesn't feed give alone. Each subset's `rule` says which threshold kept it
+    (``k_whole``, ``e`` or ``mu``), with its `threshold`, its `e` and the classes only its dropped products read
+    (`dropped_fed`)."""
     ps = [p for p in products if p["macs"]]
     G = sum(p["gates_per_mac"] * p["macs"] for p in ps)
     out = {"c": c, "k": k, "C_gates": C, "G": G, "share": G / C if C else 0.0}
@@ -193,27 +215,54 @@ def bound(products: list[dict], c: float, k: float, C: float, whole: float | Non
     if not ps:
         return out | {"gamma0": 0.0, "Q": 0.0, "L": 0.0, "feed": 1.0, "whole_chain": 1.0,
                       "proved": zero | {"subset": None, "subset_no_cell": None}, "numerical": zero}
+    if made_whole is not None and not all("fed" in p for p in ps):
+        raise ValueError("bound(made_whole=...) reads each product's `fed` (te_core.capture.products' rows from te_core 4.12.1 "
+                         "on); without them pass the step's `whole`")
+    fed = [{K: a for K, a in p["fed"]} for p in ps] if made_whole is not None else None
     ks = [p["k_whole"] for p in ps if p.get("k_whole")]
-    wc = whole if whole is not None else \
-        whole_chain(k, min(ks), min(min(p["b_a"], p["b_b"]) for p in ps)) if ks else 1.0
+    if made_whole is not None:
+        e_all = _e_of(fed, made_whole)
+        wc = (1 + e_all) ** 1.5 if math.isfinite(e_all) else math.inf
+    else:
+        wc = whole if whole is not None else \
+            whole_chain(k, min(ks), min(min(p["b_a"], p["b_b"]) for p in ps)) if ks else 1.0
     out |= {"gamma0": max(p["gates_per_mac"] * alpha(k, p["b_a"], p["b_b"], p["b_c"]) for p in ps),
             "Q": sum(p["gates_per_mac"] ** 2 * p["outputs"] / (p["b_a"] * p["b_b"]) for p in ps),
             "L": sum(p["gates_per_mac"] * mu(k, p["b_a"], p["b_b"], p["b_c"]) * p["b_c"] * p["outputs"] for p in ps),
             "feed": max(feed(max(p["b_a"], p["b_b"]), p["b_c"]) for p in ps),
             "whole_chain": wc if math.isfinite(wc) else None, "numerical": _figures(ps, SHARE, c, k, C)}
     macs = sum(p["macs"] for p in ps)
-    best: dict[str, dict] = {}
+    subsets: dict[tuple, tuple[str, float | None]] = {}
     for t in [*sorted(set(ks)), math.inf]:
-        kept = [i for i, p in enumerate(ps) if (p.get("k_whole") or math.inf) >= t]
+        kept = tuple(i for i, p in enumerate(ps) if (p.get("k_whole") or math.inf) >= t)
+        subsets.setdefault(kept, ("k_whole", t if math.isfinite(t) else None))
+    if made_whole is not None:
+        own = [_e_of([f], made_whole) for f in fed]
+        top = [max((made_whole[K] for K, a in f.items() if a > 0 and K in made_whole), default=0.0) for f in fed]
+        for rule, of in (("e", own), ("mu", top)):
+            for t in sorted({x for x in of if math.isfinite(x)}):
+                subsets.setdefault(tuple(i for i, x in enumerate(of) if x <= t), (rule, t))
+    best: dict[str, dict] = {}
+    for kept, (rule, t) in subsets.items():
         if not kept:
             continue
         sub = [ps[i] for i in kept]
-        lam = _lam_proved(sub, k, whole)
+        if made_whole is None:
+            lam, e = _lam_proved(sub, k, whole), None
+        else:
+            e = _e_of([fed[i] for i in kept], made_whole)
+            lam = SHARE * max(feed(max(p["b_a"], p["b_b"]), p["b_c"]) for p in sub) * (1 + e) ** 1.5 \
+                if math.isfinite(e) else math.inf
         if not math.isfinite(lam):
             continue
         f = _figures(sub, lam, c, k, C)
-        f["subset"] = {"k_whole_min": t if math.isfinite(t) else None, "kept": kept, "dropped": len(ps) - len(kept),
+        least = [p["k_whole"] for p in sub if p.get("k_whole")]
+        f["subset"] = {"k_whole_min": min(least) if least else None, "kept": list(kept), "dropped": len(ps) - len(kept),
                        "dropped_macs_share": 1 - sum(p["macs"] for p in sub) / macs, "lam": lam}
+        if made_whole is not None:
+            reads = {K for i in kept for K, a in fed[i].items() if a > 0 and K in made_whole}
+            gone = {K for i in set(range(len(ps))) - set(kept) for K, a in fed[i].items() if a > 0 and K in made_whole}
+            f["subset"] |= {"rule": rule, "threshold": t, "e": e, "dropped_fed": sorted(gone - reads)}
         for fig in ("blocks", "blocks_no_cell"):
             if fig not in best or f[fig] > best[fig][fig]:
                 best[fig] = f
@@ -605,24 +654,93 @@ def chain_classes(graph, k: float = CONSOLE[1], gemm_dtype: str | None = "bfloat
     return {"classes": classes, "counted": counted, "b": b if math.isfinite(b) else 16}
 
 
-def whole_chain_of(system: dict, k: float, iters: int = 100_000, tol: float = 1e-12, cap: float = 1e6) -> dict:
+def _components(feeds: dict) -> list[list]:
+    """The strongly connected components of the graph whose edges are i → j for each class i in `feeds[j]` (Tarjan),
+    feeding components before the ones they feed."""
+    index: dict = {}
+    low: dict = {}
+    stack: list = []
+    on: set = set()
+    out: list = []
+
+    def visit(v):
+        index[v] = low[v] = len(index)
+        stack.append(v)
+        on.add(v)
+        for w in (j for j, f in feeds.items() if v in f):
+            if w not in index:
+                visit(w)
+                low[v] = min(low[v], low[w])
+            elif w in on:
+                low[v] = min(low[v], index[w])
+        if low[v] == index[v]:
+            comp = []
+            while True:
+                w = stack.pop()
+                on.discard(w)
+                comp.append(w)
+                if w == v:
+                    break
+            out.append(sorted(comp))
+
+    for v in sorted(feeds):
+        if v not in index:
+            visit(v)
+    return out[::-1]
+
+
+def whole_chain_of(system: dict, k: float, iters: int = 100_000, tol: float = 1e-12) -> dict:
     """The least fixed point of `system` (`chain_classes`) at policy `k`: each class j's output entries made whole, in
-    units of k/b, μ_j ≤ r_j·(P_j + Σ_i A_ij·μ_i)² with r_j = c_j·k/(K_j²·b), iterated from 0 (induction on nesting depth
-    bounds μ by any post-fixed point); e = Σ_i A_i,counted·μ_i and `whole_chain` = (1 + e)^{3/2}. Where the iteration
-    diverges there is no fixed point: `mu` and `e` are None and `whole_chain` is ∞ (the proved bound is void)."""
+    units of k/b, μ_j ≤ r_j·(P_j + Σ_i A_ij·μ_i)² with r_j = c_j·k/(K_j²·b). The classes are solved one strongly
+    connected component at a time, feeders first (`_components`). A class on no cycle is its right side exactly, from
+    the classes that feed it, however large. A cycle (`cycles`) is iterated from 0 (induction on nesting depth bounds μ
+    by any post-fixed point) to a post-fixed point, which it then is; or it diverges, which is proved once an iterate's
+    increase stops shrinking (the right side is monotone and convex, so the increases never shrink again and μ grows
+    without bound) or where no post-fixed point is reached in `iters` rounds. A diverged class, and every class it
+    feeds, has μ ∞ (`diverged`). e = Σ_i A_i,counted·μ_i and `whole_chain` = (1 + e)^{3/2}; e is None and `whole_chain`
+    ∞ (the proved bound void on the whole step) only where a diverged class feeds a counted product. `bound` with
+    `made_whole` = `mu` takes each subset's own e, so a subset that drops those products keeps a proved Λ."""
     cls, b = system["classes"], system["b"]
     r = {K: e["c"] * k / (K * K * b) for K, e in cls.items()}
-    mu = dict.fromkeys(cls, 0.0)
-    for _ in range(iters):
-        new = {K: r[K] * (e["P"] + sum(v * mu[i] for i, v in e["feeds"].items() if i in mu)) ** 2 for K, e in cls.items()}
-        if any(v > cap for v in new.values()):
-            break
-        done = max((abs(new[K] - mu[K]) for K in mu), default=0.0) < tol
-        mu = new
-        if done:
-            e = sum(v * mu[i] for i, v in system["counted"].items() if i in mu)
-            return {"r": r, "mu": mu, "e": e, "whole_chain": (1 + e) ** 1.5}
-    return {"r": r, "mu": None, "e": None, "whole_chain": math.inf}
+    feeds = {K: {i: v for i, v in e["feeds"].items() if i in cls and v > 0} for K, e in cls.items()}
+    mu: dict = {}
+    cycles = []
+
+    def rhs(K, at: dict) -> float:
+        if not r[K]:
+            return 0.0
+        x = cls[K]["P"] + sum(v * at[i] for i, v in feeds[K].items())
+        return r[K] * x * x
+
+    for comp in _components(feeds):
+        if len(comp) == 1 and comp[0] not in feeds[comp[0]]:
+            mu[comp[0]] = rhs(comp[0], mu)
+            continue
+        cycles.append(comp)
+        at = mu | dict.fromkeys(comp, 0.0)
+        last: dict | None = None
+        fixed = False
+        for _ in range(iters):
+            new = {K: rhs(K, at) for K in comp}
+            if not all(math.isfinite(v) for v in new.values()):
+                break
+            d = {K: new[K] - at[K] for K in comp}
+            if last is not None and any(last[K] > tol * max(1.0, at[K]) for K in comp) and \
+                    all(d[K] >= last[K] for K in comp):
+                break
+            last = d
+            at |= new
+            if all(d[K] <= tol * max(1.0, new[K]) for K in comp):
+                up = at | {K: new[K] * (1 + 1e-9) for K in comp}
+                if all(rhs(K, up) <= up[K] for K in comp):
+                    at, fixed = up, True
+                    break
+        mu |= {K: at[K] for K in comp} if fixed else dict.fromkeys(comp, math.inf)
+    diverged = sorted(K for K, v in mu.items() if math.isinf(v))
+    e = sum(v * mu[i] for i, v in system["counted"].items() if i in mu and v > 0)
+    if math.isinf(e):
+        return {"r": r, "mu": mu, "e": None, "whole_chain": math.inf, "diverged": diverged, "cycles": cycles}
+    return {"r": r, "mu": mu, "e": e, "whole_chain": (1 + e) ** 1.5, "diverged": diverged, "cycles": cycles}
 
 
 def p_match(graph, k: float = CONSOLE[1]) -> list[str]:

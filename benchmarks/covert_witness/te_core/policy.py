@@ -67,14 +67,15 @@ MANIFEST = Path(__file__).resolve().parents[1] / "starts_store.json"
 CAP_FALLBACK = 2.0
 #: data v3's tokenizer (covert_witness's data_v3.TOKENIZER), which a start on v3's data has in its shape
 V3_TOKENIZER = "bpe32k"
-#: the reference model's shape at each size the starts have, by parameter count: the lf family's s, m and l16 (model.py,
-#: islands/ladder-v3's `SIZES`) at the GPT-2 vocabulary padded to 50,304 or bpe32k's 32,000
+#: the reference model's shape at each size the starts have, by parameter count: the lf family's s, m, l16 and xl
+#: (model.py, islands/ladder-v3's `SIZES`) at the GPT-2 vocabulary padded to 50,304 or bpe32k's 32,000
 SHAPES = {
     45_029_888: {"d_model": 512, "n_layer": 6, "n_head": 8, "d_ff": 1408, "vocab": 50_304},
     95_269_632: {"d_model": 768, "n_layer": 8, "n_head": 12, "d_ff": 2048, "vocab": 50_304},
     35_658_240: {"d_model": 512, "n_layer": 6, "n_head": 8, "d_ff": 1408, "vocab": 32_000},
     81_212_160: {"d_model": 768, "n_layer": 8, "n_head": 12, "d_ff": 2048, "vocab": 32_000},
     238_322_688: {"d_model": 1024, "n_layer": 16, "n_head": 16, "d_ff": 2816, "vocab": 32_000},
+    656_146_944: {"d_model": 1536, "n_layer": 21, "n_head": 24, "d_ff": 4224, "vocab": 32_000},
 }
 #: the console's reference model: the 45M dense starts (s50 and s100)
 REFERENCE_PARAMS = 45_029_888
