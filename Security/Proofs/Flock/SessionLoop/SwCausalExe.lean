@@ -1,4 +1,5 @@
 import Proofs.Flock.SessionLoop.VsOfBody
+import Proofs.Flock.SessionLoop.L0Fixed
 
 /-!
 # The switched session is causal at a pad-blind worker's values
@@ -12,7 +13,8 @@ along the coins up to the round that frees it:
   a history of at most `repBase + jj` openings (`freedAt_le_body`, `piopV_length_eq`).
 * `Loop.freeWord_congr`: where every round that frees a pad does so after at most `t` openings, the word `freeWord`
   reads there is one at two coin vectors that agree below `t` (`freedAt_unique`).
-* `Loop.vsWord_vsOf_l0`: no round frees a pad from level 0's on (`freeWord_ligAt`), so there `vsOf` is the honest values.
+* `Loop.vsWord_vsOf_l0`: no round frees a pad from level 0's on (`freeWord_ligAt`), so there `vsOf` is the honest values,
+  and `Loop.L0Fixed` holds at `vsOf` where it holds at them (`l0Fixed_vsOf_of`).
 * **`Loop.swCausal_oneTape_vsOf`**: one-tape `SwCausal` at `vsOf` on `Loop.SwOk`'s coin vectors
   (`RefSession.SwCausalOn`), where `RowsOK` gives the rows at both (`swCausal_rows`, `rOuter_ne_one_of_swOk`).
 -/
@@ -834,6 +836,13 @@ theorem vsWord_vsOf_l0 (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) (
       rw [dite_eq_right hE, dite_eq_right hE]
   · unfold vsWord
     rw [vsOf_of_not_serves _ bx hSv]
+
+/-- **`vsOf`'s level 0 is the firewall's where the honest values' is**: `L0Fixed` reads `vsWord` only from `zp 64` on,
+where `vsOf` is the honest values (`vsWord_vsOf_l0`). -/
+theorem l0Fixed_vsOf_of (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) {x : Msg} {w : Flock.Wit}
+    (h : L0Fixed (CoinLayer.session loopNr Masked.dataE).honestVals x w) : L0Fixed (vsOf _ bx) x w :=
+  fun ν τ c n hR s spec hsx j r extras he k hk hk' =>
+    (vsWord_vsOf_l0 L₀ src real bx x w ν c τ j r hk).trans (h ν τ c n hR s spec hsx j r extras he k hk hk')
 
 /-- **The switched sources agree where read**, at coins agreeing below `n`, where table `j`'s rows hold at its base at
 both: each field the honest sources' (`repOk`) or the worker's values along coins that agree up to the PIOP round that
