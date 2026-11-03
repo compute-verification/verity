@@ -182,6 +182,8 @@
 # --- ε_bind, the binding error (was δ_link, the link term)
 "the link term" = "the binding error"
 "The link term" = "The binding error"
+"link terms" = "binding errors"
+"link term" = "binding error"
 "δ_link" = "ε_bind"
 "δlink" = "εbind"
 "LinkSound" = "BindSound"
@@ -238,8 +240,9 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_r
 # quoted lowercase token, escaped inside a string too (a record key or a key path, a reason code, a role, a run's output
 # file, a line of a server's protocol: `"draws"`, `"public.draw.units"`, `\"drawn\"`, `"firewall"`, `"draw.json"`,
 # `b"draw\n"`; a capitalized one is a Lean name and follows it, and so do a path, a dotted Python module, a tracked source
-# file's name, an f-string's code, pytest's argnames, an attribute set or read by name and a keyword passed as a dict,
-# which follow their Python names), a two-part id (`"pouw/draw"`, the claim `uniform/flock-coin-server`), an upper-case
+# file's name, an f-string's code, pytest's argnames, an attribute set, read or skipped by name (`_REBUILT`) and a
+# keyword passed as a dict, which follow their Python names, and a `match=` pattern and a lint allowlist's `"symbol"`,
+# which follow their message and their function), a two-part id (`"pouw/draw"`, the claim `uniform/flock-coin-server`), an upper-case
 # snake-case name (an environment variable or a constant: `FC_FIREWALL`, `CR_N2_DRAW`, `FLOCK_DRAW_LAW`), a run's output
 # file after a path, the systemd slice `firewall.slice`, a kebab-case name or a CLI flag (`--draw`, `--firewall-state`,
 # `flock-firewall`, `verity-core-firewall`, `drawn-unit-bundle`), the attribute argparse makes of a flag (`a.draw`,
@@ -249,7 +252,8 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_r
 # (`MODES=firewall`, `--modes firewall`, `(firewall)`, `dials firewall`, `listen: firewall`, `GATE_ABSENT=firewall`), a5's
 # coin family (`need 26 draw coins`), the module `verity_flock.firewall` (`python -m` runs it), the refusal
 # `FIREWALL-REFUSED`, a line tag or reply that starts a string (`FIREWALL\t` with its timing keys `t.firewall_recheck`,
-# Lean's `DRAW {…}`, which `grep '^DRAW '` reads, the served-ZK reply `DRAWN`), the stored label `C-Flock`, the audit record's `wrong_units`, `proof_unit` and the `"proof-unit"`
+# Lean's `DRAW {…}`, which `grep '^DRAW '` reads, the served-ZK reply `DRAWN`), the parties' message type `CoinsDraw`
+# (a deploy log records it), the stored label `C-Flock`, the audit record's `wrong_units`, `proof_unit` and the `"proof-unit"`
 # kind, the public items' reasons `Spec.digest` hashes (`N, the window's proof units` and three more), the package
 # directory `verity/core/service/firewall`; the structure `Accounting.TS.DrawnLayer` and its projection
 # (names under it are renamed here, so `check.py --moved` reads each back only if the prefix is renamed in a move of its
@@ -260,7 +264,7 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_r
 # `RemoteDraw`, `RemoteHeld.Draw`), `draw_salt` (PoUS's and the bandwidth audit's) and the guarantee `drawIsSubset`
 # (`--moves` renames a guarantee by its lock's path, not its file's)
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
-            '(?<![\w\\])(?<!parametrize\()(?<!r\(coins, )(?<!__\(self, )(?<!r\(OR, )(?<!r\(PHC, )(?<!r\(SVC, )(?<!r\(V\.D, )(?<!r\(plan_module, )(?<!\("coins", )[rbfRBF]{0,2}([\x22\x27])(?![A-Z])(?!drawn\1: tuple\()(?!(?:verity|research|circuit_check|cluster|benchmarks|tools|integrations|examples|demos|tests|infra)\w*\.)[^\s\x22\x27/{]*?(?i:draw|law|firewall|coin.server|_units?\b|faulty|δ_?link)[^\s\x22\x27/{]*(?<!\.py)(?<!\.sh)(?<!\.rs)(?<!\.lean)(?<!\.md)(?<!\.toml)\1',
+            '(?<![\w\\])(?<!parametrize\()(?<!match=)(?<!\x22symbol\x22: )(?<!\x22rounds\x22, )(?<!r\(coins, )(?<!__\(self, )(?<!r\(OR, )(?<!r\(PHC, )(?<!r\(SVC, )(?<!r\(V\.D, )(?<!r\(plan_module, )(?<!\("coins", )[rbfRBF]{0,2}([\x22\x27])(?![A-Z])(?!drawn\1: tuple\()(?!(?:verity|research|circuit_check|cluster|benchmarks|tools|integrations|examples|demos|tests|infra)\w*\.)[^\s\x22\x27/{]*?(?i:draw|law|firewall|coin.server|_units?\b|faulty|δ_?link)[^\s\x22\x27/{]*(?<!\.py)(?<!\.sh)(?<!\.rs)(?<!\.lean)(?<!\.md)(?<!\.toml)\1',
             '\\[\x22\x27](?![A-Z])[^\s\x22\x27\\/{]*?(?i:draw|law|firewall|coin.server|_units?\b|faulty|δ_?link)[^\s\x22\x27\\/{]*\\[\x22\x27]',
             '[\x22\x27][a-z_-]+/[\w-]*(?i:draw|law|firewall|coin.server)[\w-]*[\x22\x27]', '\buniform/flock-coin-server\b',
             '\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_(?:DRAWN|DRAWS|DRAW|LAW|FIREWALL)(?:_[A-Z0-9]+)*\b|\b(?:DRAWN|DRAWS|DRAW|LAW|FIREWALL)(?:_[A-Z0-9]+)+\b',
@@ -281,7 +285,7 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
             'N, the (?:window|round)\x27s proof units', 'one proof unit per registration: the link-window',
             'T proof units per registration, unit t the link-window\x27s bucket row t',
             '\bRemote\.Draw\b', '\bRemoteDraw\b', '\bRemote(?:Held|Audit)[./]Draw(?:Meets)?\b', '\b(?:to)?DrawnLayer\b',
-            '\bGame\.draw\b', '\bdrawVec\b',
+            '\bGame\.draw\b', '\bdrawVec\b', '\bCoinsDraw\b',
             '(?<=\.update\()(?:draw|draws|drawn|firewall)(?==)', '\b(draw|draws|drawn)(?==\w+\[\x22\1\x22\])',
             '(?<=\]\}, )draw(?==union_draw\[)', '\bdrawn(?==draws, exclusion_tiles)', '(?<=subcircuit=sub\.id, )draws(?==)',
             '(?<=rounds=len\(got\), )draws(?==)',
@@ -298,7 +302,8 @@ strings = []
 # `sampled`, with the keyword its test passes); PoUB's remote audit, whose `draws` (the coins' draws) and `samples` (a
 # window's sample cap), and `draw` (the pooled-draw term) and `sample`, are two things each, so its `draw` and `draws`
 # and their modules wait for a name of its owner's; a vector file Rust includes by name; the vLLM pouw-serve options
-# whose field is its flag's attribute; a versioned schema's file; the served-ZK reply `DRAWN`, where it is named
+# whose field is its flag's attribute; a versioned schema's file; the served-ZK reply `DRAWN`, where it is named; the
+# names a test reads out of a recorded lock fixture
 "verity/core/service/firewall/**" = ["firewall"]
 "verity/ml/flock/python/verity_flock/firewall.py" = ["firewall"]
 "benchmarks/numerical/python/verity_numerical/bench/placement.py" = ["firewall"]
@@ -322,4 +327,5 @@ strings = []
 "integrations/vllm/tests/check/test_pouw_ncp_v2_end_to_end.py" = ["draws"]
 "**/drawn-unit-bundle*" = ["drawn"]
 "benchmarks/pouw/served_zk/**" = ["DRAWN"]
+"tools/verity/lean/tests/test_merge.py" = ["Draw", "Drawn"]
 "benchmarks/pouw/tests/test_served_zk.py" = ["DRAWN"]
