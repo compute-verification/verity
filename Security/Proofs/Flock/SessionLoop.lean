@@ -13,6 +13,7 @@ import Proofs.Flock.SessionLoop.FinishParts
 import Proofs.Flock.SessionLoop.FinCommits
 import Proofs.Flock.SessionLoop.FinPoints
 import Proofs.Flock.SessionLoop.FinRounds
+import Proofs.Flock.SessionLoop.TablesSide
 import Proofs.Flock.Claims.ZK.FinishBridge
 import Proofs.Flock.Claims.ZK.FinishTrunc
 import Proofs.Flock.Claims.ZK.FinHmkLive
@@ -89,7 +90,9 @@ which admit unrefused coins (`LeanRelease.tablesAdmitUnrefused_dataE`), at the l
 whose `LinkRoundEq` holds in the masked scope where the loop draws the tape's level 0
 (`LeanRelease.linkRoundEq_ofLoopLink`, from `Loop.Src`'s level-0 half, `Loop.Level0Src.linkLevel0`), and whose `FinishIs`
 holds there at `LoopInnerRound0`, `Loop.Src`, `LiveRoundEq` (at the own histories only, `LiveRoundEqOwn`) and
-`SwCausal` (`Loop.finishIs`).
+`SwCausalOn` (`Loop.finishIs`). The switched causality is asked only at `Loop.SwOk`'s coins, and the loop's stop rule
+computes only there (`LeanRelease.stopsOk_swOk`: its frames refuse a zerocheck outer coin `1`,
+`LeanRelease.rfOf_outer`).
 
 `SessionLoopZKDeployed` is over every worker. Its premises on the worker (`LiveRoundEq`, `FillRoundEq`) read it in the
 algebraic phase only (`Proofs.Flock.SessionLoop.Phase`): a worker that, until the algebraic phase's last coins, reads
@@ -143,8 +146,9 @@ admit unrefused coins. -/
 theorem SessionLoopZK : Flock.Guarantees.SessionLoopZK := by
   intro T hA vs t ht hS hV hD hc hsc hT L₀ src real hreal wk x w hR hServe hL0 hLk hFin hE hEf Θ Vs θ hk Ev
   have h := Claims.ZKServer.Flock.zk_server_lean_ofLoop _root_.Flock.Readable.relation T vs t ht
-    (FlockSoundness.CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) ENNReal.ofReal_ne_top hS hV hD hc hsc hT L₀ real wk
-    x w hR hServe (fun ρ _ _ _ hs => hreal ▸ Claims.ZKServer.Loop.realTabs_realOf src x w ρ hs) hL0 hLk
+    (FlockSoundness.CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) ENNReal.ofReal_ne_top hS hV hD hc hsc hT L₀ real
+    (Claims.ZKServer.LeanRelease.stopsOk_swOk T L₀ real) wk x w hR hServe
+    (fun ρ _ _ _ hs => hreal ▸ Claims.ZKServer.Loop.realTabs_realOf src x w ρ hs) hL0 hLk
     (Claims.ZKServer.LeanRelease.finalRoundEq_ofLoop T vs L₀ real _ wk x w hA
       (Claims.ZKServer.LeanRelease.frameUnrefused_ofLoop T L₀ real _ wk x w hServe) hFin) hE.own hEf Vs θ hk Ev
   rwa [ENNReal.toReal_ofReal (FlockSoundness.CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash)] at h

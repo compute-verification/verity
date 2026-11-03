@@ -14,11 +14,11 @@ The tie runs through the transcript's JSON, which the recursive setup reads twic
 
 * `RecVStar.innerCommits` holds the inner session record's coin strings to the transcript JSON's, round for round on
   each rep stream (`repCoins`, which places a holo session's split z_partial round), and `Record.decode` parses those
-  same strings of the same record text (`decode_streams`, `coins_hex`), since both read `Json.parse record`;
+  same strings of the same record text (`decode_streams`, `coins_hex`), since both read `Flock.JsonParse.parse record`;
 * `RecSetup.checkReads` holds `readFull`'s rounds to the transcript JSON's, stream, round and hex-parsed coins
   (`jsonRounds`, `checkReads_rounds`).
 
-`Json.parse` is opaque to the kernel, and the proof never looks inside it: each side reads one parse of one text.
+The proof never looks inside the parser: each side reads one parse of one text.
 
 `coinTie_core` is the tie in the verifier's code: rep `r`'s round `m` has the coins of `readFull`'s round of that stream
 at round `sp m`, where `sp` is the identity or skips the split round. `staged_coinTie` takes it to a staged part, at the
@@ -263,9 +263,9 @@ def StreamOk (x : Json) (st : StreamRec) : Prop :=
 set_option maxHeartbeats 1000000 in
 theorem decode_streams {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decode spec text = .ok sess) :
-    ∃ j sj, Json.parse text = .ok j ∧ Record.arr j "streams" = .ok sj ∧ Pairs StreamOk sj.toList sess.streams.toList := by
+    ∃ j sj, Flock.JsonParse.parse text = .ok j ∧ Record.arr j "streams" = .ok sj ∧ Pairs StreamOk sj.toList sess.streams.toList := by
   unfold Record.decode at h
-  cases hp : Json.parse text with
+  cases hp : Flock.JsonParse.parse text with
   | error e => rw [hp] at h; obtain ⟨w, hw, -⟩ := tie_bind h; cases hw
   | ok j =>
   rw [hp] at h
@@ -451,7 +451,7 @@ the record's streams, both JSON, and at every stream the record names (`recNames
 theorem innerCommits_reps {tr : Json} {record : String} {reg : Option Json} {bound : Option String}
     {shape : Option StackedShape} {cs : InnerCommits}
     (h : innerCommits tr record reg bound shape = .ok cs) :
-    ∃ rounds rj streams, tr.getObjValAs? (Array Json) "rounds" = .ok rounds ∧ Json.parse record = .ok rj ∧
+    ∃ rounds rj streams, tr.getObjValAs? (Array Json) "rounds" = .ok rounds ∧ Flock.JsonParse.parse record = .ok rj ∧
       rj.getObjValAs? (Array Json) "streams" = .ok streams ∧
       ∀ s ∈ streams.toList.filterMap (fun x => (x.getObjValAs? String "stream").toOption),
         CoinsAgree s rounds streams := by
@@ -625,7 +625,7 @@ theorem coinTie_core (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x,
 
 theorem commits_inner {sh : RecVStar.Inner} {tt : String} {tr : Json} {r : Except String (Option String)}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {record : String} {cs : RecVStar.InnerCommits}
-    (htr : Json.parse tt = .ok tr) (h : RecSetup.commits (some sh) (.ok tt) r bound record = .ok cs) :
+    (htr : Flock.JsonParse.parse tt = .ok tr) (h : RecSetup.commits (some sh) (.ok tt) r bound record = .ok cs) :
     ∃ reg d shp, RecVStar.innerCommits tr record reg d shp = .ok cs := by
   unfold RecSetup.commits at h
   simp only [bind, Except.bind, pure, Except.pure, htr] at h
@@ -638,7 +638,7 @@ theorem commitsOf_tie {w : RecRaw} {src : Option RecCoins.Source}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {sh : RecVStar.Inner}
     {c : Option RecVStar.InnerCommits} {t : ByteArray} (ht : w.transcript = some t)
     (h : commitsOf w src bound (some sh) = .ok c) :
-    ∃ cs tt tr record, c = some cs ∧ String.fromUTF8? t = some tt ∧ Json.parse tt = .ok tr ∧
+    ∃ cs tt tr record, c = some cs ∧ String.fromUTF8? t = some tt ∧ Flock.JsonParse.parse tt = .ok tr ∧
       src.map (·.record) = some record ∧ RecSetup.checkReads sh tt tr record cs = .ok () ∧
       ∃ reg d shp, RecVStar.innerCommits tr record reg d shp = .ok cs := by
   unfold commitsOf at h
@@ -662,7 +662,7 @@ theorem commitsOf_tie {w : RecRaw} {src : Option RecCoins.Source}
         exact absurd hX commits_text_error
       | some tt =>
         rw [textOf, htx] at hX
-        cases hp : Json.parse tt with
+        cases hp : Flock.JsonParse.parse tt with
         | error e => exact absurd hX (commits_parse_error hp)
         | ok tr =>
           exact ⟨cs, tt, tr, record, rfl, rfl, hp, rfl, FlockC3.VStarList.reads_of_commits hp hX,
