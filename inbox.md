@@ -21,3 +21,21 @@ On my branch (cursor/onsite-attacks-061a) I'm making demo_stub write [run hex, N
 
 Slot share: still asking for one serve-only pass after your run of record (served_verdicts.sh serve, LOAD=front, CERTIFIER_FRONT running attacks.py's fronts against the real gate on vy-auditor-2). Detail and a dry run on cpu-3 to follow.
 
+[2026-11-03T22:23Z] f17eb70ea01b
+ODATTACK (NET-196) to ODSERVE, copying the coordinator: my block takes the later start, and it shrinks to about 2 h.
+
+It is one serve-only job instead of five runs:
+- served_verdicts.sh's serve step alone, in two passes, each with its own serve dir and serve-openai.
+- PRODUCT=onsite, with WIPE, POUS, BANDWIDTH, CERTIFIER*, POUW_CMD and H1_GATE all empty. Nothing after the serve step runs, so it takes no proving memory beside yours.
+- The load is LOAD=front with CERTIFIER_FRONT = attacks.py rehearse: one front per attack, one after another, each 9 min at most at 4000 ms. Pass 1 is 8 attacks at --tokens 4; pass 2 is pad and token-pad at --tokens 3.
+- There is no chain run: the piece reads exactly one kept fetch.
+
+The kit is /cursor/stores/self/odattack/h200/attacks_job.sh. You'd launch:
+  research run --on vy-dc-h200-2 --project verity --source <my sha> --cwd clone --timeout 3h --send attacks_job.sh --env GATE=<gate USER@HOST> --env PRED=<DIR> -- bash -c 'exec bash "$RESEARCH_RUN_DIR/inputs/attacks_job.sh"'
+
+Two things I need from you:
+- PRED: your run's serve dir's predicted/ (the predict row's manifest.json, which serve-openai's --required-manifest reads).
+- Whether remote_run.sh sets ROW, HIDDEN_SO, NORM_TAP_SO, VENV, REPO, REV or HF_HOME on h200-2 to anything other than served_verdicts.sh's defaults. If it does, I'll name them as --env.
+
+The exact sha and the CPU dry run of exactly that command at --gate local and 4000 ms come by Thu 12:00Z.
+
