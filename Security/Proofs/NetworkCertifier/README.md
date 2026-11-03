@@ -276,7 +276,7 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   with the units wrong at its registration fixed by the earlier windows' coins and its audit accepting while its draw
   meets one with probability at most `ε_i`: for `q ≤ k_i / n_i` in every window, every window accepts while the
   monitoring period holds at least `F` wrong units with probability at most `(1 - q)^F + Σ_i ε_i`, whatever `m` is, and
-  `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The draw's sampling design and each window's error are hypotheses, which A3 and
+  `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The sampling design and each window's error are hypotheses, which A3 and
   `Claims.Sampling.KS` discharge where the bound is applied to the sampled verifier.
 - **The leak through the network certifier over a monitoring period** (`PooledLeak.lean`): `PooledLeakAccepted` is
   the count `K_pooled`, conditional on two per-window inputs taken as plain hypotheses, at the faulty set `W_i` of the
