@@ -8,7 +8,9 @@ import Proofs.Flock.Claims.Sampling.EndToEndDraw
 `partOf P κ ns` is one class, the population's `n` proof blocks in strata of sizes `ns` (`blocks_length_partOf`), each
 unit's block holding the input rows it owns. A one-stage design `r` misses a set `B` on it with `r`'s own miss on the
 strata `ns` at `B`'s population slots (`pa_partOf_window`); `subset kd`'s is the subset miss, whatever the strata
-(`pa_partOf_subset`). From them: `PartBlocksTarget`, `PaTarget` (`P_a(B) = r.Pa ns B` for `B` of population slots), and
+(`pa_partOf_subset`), so `C(n − K₀, kd)/C(n, kd)` at the first `K₀` slots (`pa_subset_range`) and `0` under `All`'s
+`subset n` at any `B` holding a slot (`pa_all`). From them: `PartBlocksTarget`, `PaTarget` (`P_a(B) = r.Pa ns B` for `B`
+of population slots), and
 `CountTarget`: under `subset kd`, a witness outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` has at least
 `min K₀ (n − kd + 1)` faulty population slots, because `C(·, kd)` is strictly increasing from `kd` on
 (`choose_lt_of_lt`). A unit whose owned input row doesn't open is one of them.
@@ -49,6 +51,23 @@ theorem pa_partOf_subset (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ
       ((n - (Claims.Sampling.window 0 n B).card).choose kd : ℝ) / (n.choose kd : ℝ) := by
   rw [pa_partOf_window P hns]
   simp only [Claims.Sampling.OneStage.Pa, hns]
+
+/-- `subset kd`'s `P_a` on `partOf P κ ns` at the first `K₀` population slots: `C(n − K₀, kd)/C(n, kd)`. -/
+theorem pa_subset_range (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n) (kd : ℕ) {K₀ : ℕ}
+    (hK₀ : K₀ ≤ n) :
+    (designOf (.subset kd)).Pa (partOf P κ ns) (Finset.range K₀) = ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) := by
+  have hF : (Finset.range K₀).filter (· < n) = Finset.range K₀ :=
+    Finset.filter_true_of_mem fun v hv => (Finset.mem_range.1 hv).trans_le hK₀
+  rw [pa_partOf_subset P hns, window_zero_filter, hF, Finset.card_range]
+
+/-- **`All` misses no proof block**: `subset n`'s `P_a` on `partOf P κ ns`, `All`'s law over the `n` units, is `0` at any
+`B` holding a population slot. -/
+theorem pa_all (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n) {B : Finset ℕ}
+    (hB : ∃ v ∈ B, v < n) : (designOf (.subset n)).Pa (partOf P κ ns) B = 0 := by
+  obtain ⟨v, hv, hvn⟩ := hB
+  have h1 : 0 < (B.filter (· < n)).card := Finset.card_pos.2 ⟨v, Finset.mem_filter.2 ⟨hv, hvn⟩⟩
+  have hlt : n - (B.filter (· < n)).card < n := by omega
+  rw [pa_partOf_subset P hns, window_zero_filter, Nat.choose_eq_zero_of_lt hlt, Nat.cast_zero, zero_div]
 
 theorem pa_partOf (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n)
     (r : Claims.Sampling.OneStage) (B : Finset ℕ) (hB : B ⊆ Finset.range n) :
