@@ -146,14 +146,16 @@ off its frontier. `training/algorithm-policy` is `algorithm_policy`'s: per run, 
 11, a checkpoint's gain C(L1)/C(L0) on that fit, from the start's loss L0 to its own L1, so every target is below
 L0), "yes" at the run's first checkpoint reaching g, else "no" at its last, with the algorithm's inefficiency p = C/H
 (H the least |C| of any checkpoint from the start
-on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ at
-the dial's default (`rho_default`), and the inputs the console's dial recomputes ρ from at any (c, k), in one JSON
-cell (`rho_inputs`; te_core 4.x's per-part Fit and ᾱ/α_max among them, u_in exact at the dial's k), so S = pρ;
-`build` refuses a row whose cells miss `formalism.at` at a dial cell. Beside them, `formalism.published` at the
-console's default policy: `rho_console` (the one bound's ρ under reading A where the row's trace has entries and an op
-log, else reading B's, a target), its `reading`, the `te_core` that priced it, `binding_kind`, `rests_on` and `kinds`
-(the terms its max takes and the sensitivities it leaves out). Its coverage (gain
-target by data by decade of ρ) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
+on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ,
+`formalism.published` at the console's default policy (`policy.CONSOLE`, the one default: `rho_default`, a number,
+and `rho_console`; `rho_served` at the registered serving block, `panels.SERVED`), so S = pρ, and the inputs the
+console's dial recomputes ρ from at any (c, k), in one JSON cell (`rho_inputs`; te_core 4.x's per-part Fit and
+ᾱ/α_max among them, u_in exact at the dial's k and the console's); `build` refuses a row whose cells miss
+`formalism.at` at a dial cell or the console's default. Beside them: its `reading` (the one bound's ρ under reading A
+where the row's trace has entries and an op log, else reading B's, a target), the `te_core` that priced it,
+`binding_kind`, `rests_on` and `kinds` (the terms its max takes and the sensitivities it leaves out). Its coverage
+(gain target by data by decade of ρ, with the reached cells' ρ at the registered serving block beside the console's
+default) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
 refuses, which no cell holds (`tables/refused.json` gives each one's reason). `--publish` GETs what the route serves
 and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one whose coverage
 this build fills less of, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never

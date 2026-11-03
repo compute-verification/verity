@@ -19,19 +19,20 @@ a row at every target: `reached` "yes" at its first checkpoint reaching it, C th
 else "no" at its last checkpoint, C its total |C| and p = C/H a lower bound on its p (null without H). A start at or
 below its fit's E has no rows, and a data with no fit none.
 
-Each row's ρ is te_core.formalism's `published` at its checkpoint at the dial's default (te_core.panels' `DEFAULT`:
-c = 4,096 tokens of the start's forward, k = 80,000 bits), as `rho_console` is at the console's. Under reading B it is
+Each row's ρ is te_core.formalism's `published` at its checkpoint at the console's default policy (`CONSOLE`,
+te_core.policy's: one full session of the 45M reference, attention included), the one default of every ρ column
+(coordinator 08:09Z and 10:23Z: rows are reported at that c only); `rho_served` is the same at the registered serving
+block (te_core.panels' `SERVED`), the figure beside every headline. `rho_default` is it as a number: under reading B
 c/(c − d) where Fit holds for the training (basis `fit`), else Slowdown's token form (`target`), null where infinite;
 under reading A, Fit's, else the one bound's max over the kinds valid on their own (basis its binding kind, `none` at
 1), and null with basis `unmeasured` where no such kind is measured. `rho_inputs`, one JSON cell, carries every input
 the console's dial needs to recompute the token form at any (c, k), a row's ρ under reading B and a sensitivity under
-A: `panels.PACKED` and `SPLIT`, u_in through its points at the dial's k (`panels.through`), where x0 is exact;
-`page_rho` is the dial's formula on them. `build` refuses a row whose rounded columns don't give formalism.at's token
-form and basis at every cell of te_core.panels' dial (`panels.mismatches`). `estimated` names the inputs that are
-stubs, bounds, assumptions or estimates, and gain:provisional where its data's fit is provisional
-(te_core.frontier_fit's `FIT_TARGET`), which the note names. The dashboard's cells, from `published` at the console's
-default policy (`CONSOLE`, te_core.policy's: one full session of the 45M reference, attention included; coordinator
-08:26Z and the dashboard's ruling): `rho_console`, the one bound's ρ there ("inf" where infinite, null where reading A
+A: `panels.PACKED` and `SPLIT`, u_in through its points at the dial's k (`panels.through`, the console's among them),
+where x0 is exact; `page_rho` is the dial's formula on them. `build` refuses a row whose rounded columns don't give
+formalism.at's token form and basis at every cell of te_core.panels' dial and at `CONSOLE` (`panels.mismatches`).
+`estimated` names the inputs that are stubs, bounds, assumptions or estimates, and gain:provisional where its data's
+fit is provisional (te_core.frontier_fit's `FIT_TARGET`), which the note names. The dashboard's cells (coordinator
+08:26Z and the dashboard's ruling): `rho_console`, the same ρ ("inf" where infinite, null where reading A
 measures no kind, never 1; coordinator 09:46Z), `reading` (A where formalism.READING_A and the row's token kind
 is measured, its trace's entries and an op log, else B, whose ρ is Slowdown's token form, a target), `te_core` the
 VERSION that priced it, `binding_kind` and `rests_on`, and `kinds`, a JSON cell of the terms its max takes and the
@@ -47,12 +48,13 @@ columns of `CONSOLE_DROP`, which the route's 24 columns leave no room for. DIR g
 uncut tables in `tables/` (`algorithm-policy.json`, `coverage.json`, `coverage.md`, `refused.json`, each valid
 checkpoint te_core.formalism refuses with its reason, which no row holds, and te_core.frontier_fit's
 `frontier-fit.json` and `frontier-points.json`), both panels' console copies in `console/` and `algorithm-policy.png`
-(p against ρ at the default on the headline data, v3 once it has rows, else the pilot: a panel per gain target, with
-iso-S diagonals). `--publish` GETs what the route serves (`console.served`; no PUT when that fails), puts `tables/`
-in the evidence store, whose art id the cut's note names, and PUTs `training/frontier-fit`, then the cut. A version
-switch never empties a populated panel: on each data whose served rows are at a newer te_core, or at an older one
-whose coverage cells there this build fills fewer of (`kept_data`), both panels keep the served rows (`guarded`),
-which the note and the board line name.
+(p against ρ at the console's default on the headline data, v3 once it has rows, else the pilot: a panel per gain
+target, with iso-S diagonals). `--publish` GETs what the route serves (`console.served`; no PUT when that fails), puts
+`tables/` in the evidence store, whose art id the cut's note names, and PUTs `training/frontier-fit`, then the cut. A
+version switch never empties a populated panel: on each data whose served rows are at a newer te_core, or at an older
+one whose coverage cells there this build fills fewer of (`kept_data`), both panels keep the served rows (`guarded`),
+which the note and the board line name. The coverage's table and board line give the reached cells' ρ at the
+registered serving block beside the console's default (`served_text`).
 """
 from __future__ import annotations
 
@@ -88,9 +90,9 @@ INPUTS = ["w_gates", "w_fwd_gates", "sigma", "tau_bits", "a_bits", "u_points", "
 SPLIT = ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")
 COLUMNS = ["start", "start_compute_gates", "start_effective_gates", "start_loss", "end_loss", "gain_target", "gain",
            "reached", "C_gates", "H_gates", "p", "rho_default", "basis_default", "method_key", "family", "record", "data",
-           "estimated", "rho_inputs", "reading", "te_core", "rho_console", "binding_kind", "rests_on", "kinds"]
-#: the console's default policy, at which `rho_console` is ρ ("inf" where infinite, null where no kind is measured,
-#: coordinator 09:46Z): te_core.policy's
+           "estimated", "rho_inputs", "reading", "te_core", "rho_console", "binding_kind", "rests_on", "kinds",
+           "rho_served"]
+#: the console's default policy, the one default of `rho_default` and `rho_console` (coordinator 08:09Z): te_core.policy's
 #: `CONSOLE`, one full session of the 45M reference with 4,096 input and 1,024 output tokens (`policy.session_gates`)
 #: and k = 65,536 bits
 CONSOLE = policy.CONSOLE
@@ -124,10 +126,9 @@ EMPTY = "EMPTY"
 UNMEASURED = "unmeasured"
 
 
-def default(w_fwd: float) -> tuple[float, float]:
-    """The dial's default (c, k) for a start whose forward is `w_fwd` gates a token (te_core.panels' `DEFAULT`, tokens
-    per block and bits)."""
-    return panels.DEFAULT[0] * w_fwd, float(panels.DEFAULT[1])
+def finite(rho: float | None) -> float | None:
+    """A published ρ as a number column: null where infinite or unmeasured."""
+    return None if rho is None or math.isinf(rho) else rho
 
 
 def num(v: float, digits: int = INPUT_DIGITS) -> str:
@@ -259,7 +260,7 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
             return False, math.inf if x[ix["p"]] is None else x[ix["p"]], x[ix["C_gates"]]
         return True, -x[ix["gain"]], x[ix["C_gates"]]
 
-    rows, wrong, consoles, defaults = [], [], {}, {}
+    rows, wrong, rhos = [], [], {}
     for st in info["starts"]:
         f = info["fits"].get(st.data)
         if f is None or st.l0 <= f["E"]:
@@ -272,24 +273,22 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
             for run, cps in runs.items():
                 hit = next((r for r in cps if r["val_bpb"] <= target), None)
                 r = hit or cps[-1]
+                m = r["measured"]
                 if r["id"] not in dials:
-                    dials[r["id"]] = panels.dial(r["measured"], st.w)
-                    defaults[r["id"]] = formalism.published(r["measured"], *default(st.w))
-                v = defaults[r["id"]]
+                    dials[r["id"]] = panels.dial(m, st.w) | {(CONSOLE[0] / st.w, CONSOLE[1]): formalism.at(m, *CONSOLE)}
+                    rhos[r["id"]] = formalism.published(m), formalism.published(m, *panels.SERVED)
+                one, served = rhos[r["id"]]
                 gain = frontier_fit.gain_from(f, st.l0, r["val_bpb"])
                 row = [st.label, st.c0, None if math.isinf(own) else own, st.l0, r["val_bpb"], g,
                        None if math.isinf(gain) else gain,
-                       "yes" if hit else "no", r["gates"], h, r["gates"] / h if h else None,
-                       None if v["rho"] is None or math.isinf(v["rho"]) else v["rho"],
-                       UNMEASURED if v["rho"] is None else v["binding_kind"], plots.method(r),
+                       "yes" if hit else "no", r["gates"], h, r["gates"] / h if h else None, finite(one["rho"]),
+                       UNMEASURED if one["rho"] is None else one["binding_kind"], plots.method(r),
                        r.get("family"), f"{run}@{r.get('checkpoint_step')}", st.data,
-                       " ".join(filter(None, (estimated(r["measured"]), "gain:provisional" if f.get("provisional") else "")))]
-                if r["id"] not in consoles:
-                    consoles[r["id"]] = formalism.published(r["measured"])
-                one = consoles[r["id"]]
-                cols = {"rho_inputs": rho_inputs(r["measured"], st.w), "reading": one["reading"], "te_core": VERSION,
+                       " ".join(filter(None, (estimated(m), "gain:provisional" if f.get("provisional") else "")))]
+                cols = {"rho_inputs": rho_inputs(m, st.w), "reading": one["reading"], "te_core": VERSION,
                         "rho_console": None if one["rho"] is None else "inf" if math.isinf(one["rho"]) else one["rho"],
-                        "binding_kind": one["binding_kind"], "rests_on": one["rests_on"], "kinds": kinds(one)}
+                        "binding_kind": one["binding_kind"], "rests_on": one["rests_on"], "kinds": kinds(one),
+                        "rho_served": finite(served["rho"])}
                 row += [cols[c] for c in COLUMNS[len(row):]]
                 d = dict(zip(COLUMNS, rounded(row)))
                 wrong += panels.mismatches(d | {"run": d["record"]}, dials[r["id"]], st.w)
@@ -309,11 +308,10 @@ def note(art: str | None = None, tier: str | None = None, kept: str = "", provis
     served rows stay (`kept_data`) and `provisional` the data whose gains read a provisional fit. Over the route's
     `console.NOTE_MAX` it drops the kept data's versions, then the dial's sentence."""
     def text(kept: str, dial: bool) -> str:
-        out = (f"Per run, start and gain g = {', '.join(f'{g:g}' for g in GAINS)} (C(L)/C(l0), training/frontier-fit): "
-               "yes at its first checkpoint reaching g, else no at its last. p = C/H, H the start's least C to g, a "
-               f"lower bound if no. rho: published at c = {panels.DEFAULT[0]} w_fwd, k = {panels.DEFAULT[1]:,} bits."
-               + (" Dial: rho_inputs (u_in exact at the dial's k)." if dial else "")
-               + " rho_console: one bound (kinds, binding_kind).")
+        out = (f"Per run, start and g = {', '.join(f'{g:g}' for g in GAINS)} (gain C(L)/C(l0), training/frontier-fit): "
+               "yes at the first checkpoint reaching g, else no at the last. p = C/H, H the start's least C to g (a "
+               "lower bound if no). rho_default = rho_console (console default); rho_served (registered serving "
+               "block)." + (" Dial: rho_inputs (u_in exact at its k)." if dial else ""))
         if provisional:
             out += f" {', '.join(provisional)}: provisional fit."
         if tier:
@@ -366,18 +364,37 @@ def coverage(p: dict) -> list[dict]:
                             "row": None if best is None else best[0], "rows": len(on), "reached": len(yes),
                             **({} if best is None else {k: best[1].get(k) for k in (
                                 "start", "record", "method_key", "family", "p", "gain", "rho_default", "basis_default",
-                                "C_gates", "H_gates", "end_loss")})})
+                                "rho_served", "C_gates", "H_gates", "end_loss")})})
     return out
 
 
+def rho_text(rho: float | None) -> str:
+    return "inf" if rho is None else f"{rho:.3g}"
+
+
 def cell_text(c: dict, short: bool = False) -> str:
-    """A coverage cell as text: `EMPTY`, "yes p ..." or "no gain ...", with its run unless `short`."""
+    """A coverage cell as text: `EMPTY`, "yes p ..." or "no gain ...", with its ρ at the console's default and at the
+    registered serving block and its run unless `short`."""
     if c["state"] == "empty":
         return EMPTY
-    rho = "inf" if c["rho_default"] is None else f"{c['rho_default']:.3g}"
     head = (f"yes p {c['p']:.3g}" if c["state"] == "reached" else
             f"no gain {c['gain']:.3g}" + ("" if c["p"] is None else f", p >= {c['p']:.3g}"))
-    return head if short else f"{head}, rho {rho} ({c['start']}, {c['method_key']}, {c['record']})"
+    return head if short else (f"{head}, rho {rho_text(c['rho_default'])}, served {rho_text(c.get('rho_served'))} "
+                               f"({c['start']}, {c['method_key']}, {c['record']})")
+
+
+def served_text(cov: list[dict]) -> str:
+    """The reached cells' ρ per data at the console's default and at the registered serving block (te_core.panels'
+    `SERVED`), the figure beside every headline (coordinator 08:09Z), "" without a reached cell."""
+    def span(xs: list) -> str:
+        fin = [x for x in xs if x is not None]
+        return (f"{min(fin):.3g} to {max(fin):.3g}" if fin else "none finite") + (", and inf" if None in xs else "")
+
+    parts = [f"{data} {span([c['rho_default'] for c in yes])} at the console's default, "
+             f"{span([c.get('rho_served') for c in yes])} at the registered serving block"
+             for data in panels.DATA if (yes := [c for c in cov if c["data"] == data and c["state"] == "reached"])]
+    return (f"Reached cells' rho: {'; '.join(parts)} (c {panels.SERVED[0]:.3g} gates, k {panels.SERVED[1]:,} bits)."
+            if parts else "")
 
 
 def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str] | None = None,
@@ -398,6 +415,8 @@ def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str]
     n = sum(c["state"] == "empty" for c in cov)
     lines += ["", f"{n} of {len(cov)} cells {EMPTY}; {sum(c['state'] == 'failed' for c in cov)} hold only failed "
                   "attempts."]
+    if served := served_text(cov):
+        lines.append(served)
     if refused:
         lines.append(f"{len(refused)} valid checkpoints are refused by te_core.formalism, never scored, so in no cell "
                      f"({frontier_fit.refusals(refused)}; refused.json has each one's reason).")
@@ -422,6 +441,7 @@ def board_line(cov: list[dict], fits: dict, stamp: str, art: str | None, refused
     return (f"coverage at {stamp} ({art or 'unpublished'}), gain target x data x decade of rho_default (1, 10, 100, "
             f"1e3, 1e4, 1e5+): the least-p reached row, else the failed attempt with the greatest gain, else {EMPTY}. "
             + "; ".join(parts) + f". {n} of {len(cov)} cells {EMPTY}."
+            + (f" {served}" if (served := served_text(cov)) else "")
             + (f" {len(refused)} valid checkpoints refused by te_core.formalism, never scored "
                f"({frontier_fit.refusals(refused)})." if refused else "")
             + (f" {unmeasured} {'row' if unmeasured == 1 else 'rows'} unmeasured under reading A, in no decade."
@@ -554,7 +574,7 @@ def store(path: Path, meta: dict) -> str:
 
 
 def figure(p: dict, out: Path) -> Path:
-    """p against ρ at the default dial on the headline data, log-log, one panel per gain target: a colour per family,
+    """p against ρ at the console's default on the headline data, log-log, one panel per gain target: a colour per family,
     a marker per start, filled where reached and open at a failed attempt's lower bound on p, the coverage's decades
     of ρ dotted and the iso-S diagonals S = p ρ at `LEVELS`."""
     data = headline(p)
@@ -604,7 +624,7 @@ def figure(p: dict, out: Path) -> Path:
         ax.set_ylim(0.8, yhi)
         ax.grid(alpha=0.15, which="major")
         ax.set_xlabel("p = C/H (open: not reached, p a lower bound)")
-    axes[0].set_ylabel(f"rho at c = {panels.DEFAULT[0]} w_fwd, k = {panels.DEFAULT[1]:,} bits")
+    axes[0].set_ylabel(f"rho at the console's default (c = {CONSOLE[0]:.3g} gates, k = {CONSOLE[1]:,.0f} bits)")
     keys = [Line2D([], [], marker="o", ls="none", color=f"C{i % 10}", label=f) for i, f in enumerate(families)]
     keys += [Line2D([], [], marker=MARKERS[i % len(MARKERS)], ls="none", color="0.3", label=s)
              for i, s in enumerate(starts)]

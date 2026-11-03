@@ -196,24 +196,29 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
     assert s1[("mezo@2", 1.1)][0] == s1[("lora@2", 2)][0] == s1[("ref@3", 11)][0] == "no"
     assert s1[("ref@3", 11)][1] is None and s1[("mezo@2", 2)][1] == pytest.approx(1.2 / 1.5)
     q = got["console"]
-    assert q["columns"] == AP.CONSOLE_COLUMNS and {"reading", "te_core", "rho_console", "rho_default"} <= set(q["columns"])
+    assert q["columns"] == AP.CONSOLE_COLUMNS and len(q["columns"]) <= console.COLUMNS_MAX
+    assert {"reading", "te_core", "rho_console", "rho_default", "rho_served"} <= set(q["columns"])
+    assert [d["rho_default"] for d in ds] == [None if v == "inf" else v for v in cell["rho_console"]]
     assert q["rows"] == AP.console_rows(p["rows"]) and not console.refused(q)
     assert len(console.body(q)) <= console.BODY_MAX and len(q["note"]) <= console.NOTE_MAX
     assert all(not isinstance(v, bool) for r in q["rows"] for v in r)
 
 
 def test_the_dial_formula_on_a_rows_columns_is_te_cores_at_every_cell(tmp_path, monkeypatch):
-    """rho_default and basis_default are the dial's formula on the published columns, and te_core.panels' dial on them
-    gives formalism.at's ρ and basis at every cell; Fit's update application reads delta_t (qat's latents fail it where
+    """rho_default and basis_default are the dial's formula on the published columns at the console's default, and at
+    the registered serving block rho_served is, so u_in is exact at both k; te_core.panels' dial on them gives
+    formalism.at's ρ and basis at every cell; Fit's update application reads delta_t (qat's latents fail it where
     mezo, the same but for them, fits)."""
     _, got = run(tmp_path, monkeypatch)
     by = {r["id"]: r for r in ledger_rows()}
     ds = plots.frame(got["console"])
+    assert {AP.CONSOLE[1], panels.SERVED[1]} <= set(panels.K_LEVELS)
     for d in ds:
         page = panels.page_inputs(d)
         assert not set(AP.SPLIT) & set(d) and set(AP.SPLIT) <= set(page)
-        rho, basis = dial(page, *AP.default(page["w_fwd_gates"]))
+        rho, basis = dial(page, *AP.CONSOLE)
         assert basis == d["basis_default"] and rho == pytest.approx(d["rho_default"], rel=1e-3)
+        assert dial(page, *panels.SERVED)[0] == pytest.approx(d["rho_served"], rel=1e-3)
         r = by[d["record"].replace("@", "-")]
         m = formalism.measure(r, {"s1": SHAPE, "s2": SHAPE2}[r["start"]])
         w = page["w_fwd_gates"]
@@ -300,19 +305,21 @@ def test_a_start_ahead_of_the_fit_has_every_target_below_its_loss_and_one_at_or_
     assert AP.build(info(None), "test")["rows"] == []
 
 
-def row(start, g, family, reached, p, rho, gain, rec, data="v2.3-pilot", gates=1.0, basis=None) -> list:
+def row(start, g, family, reached, p, rho, gain, rec, data="v2.3-pilot", gates=1.0, basis=None, served=None) -> list:
     d = dict.fromkeys(AP.COLUMNS) | {"start": start, "gain_target": g, "family": family, "reached": reached, "p": p,
                                     "rho_default": rho, "gain": gain, "record": rec, "data": data, "C_gates": gates,
-                                    "basis_default": basis}
+                                    "basis_default": basis, "rho_served": served}
     return [d[c] for c in AP.COLUMNS]
 
 
 def test_the_coverage_is_the_least_p_reached_row_else_the_best_failed_attempt_else_empty():
     """Per gain target, data and decade of ρ (an infinite ρ in the last): the reached row with the least p, else the
-    failed attempt with the greatest gain, else EMPTY, which the table and the board line both say."""
-    rows = [row("s", 2, "adapter", "yes", 3.0, 50.0, 2.1, "a"), row("s", 2, "full", "yes", 1.0, 20.0, 2.0, "b"),
+    failed attempt with the greatest gain, else EMPTY, which the table and the board line both say, with the reached
+    cells' ρ at the registered serving block beside the console's default."""
+    rows = [row("s", 2, "adapter", "yes", 3.0, 50.0, 2.1, "a"),
+            row("s", 2, "full", "yes", 1.0, 20.0, 2.0, "b", served=1.5),
             row("s", 2, "adapter", "no", 0.5, 2.0, 1.5, "c"), row("s", 2, "adapter", "no", 0.2, 3.0, 1.7, "d"),
-            row("s", 2, "seed", "no", 0.9, None, 1.1, "e"), row("s", 2, "full", "yes", 2.0, 9.0, 2.5, "f"),
+            row("s", 2, "seed", "no", 0.9, None, 1.1, "e"), row("s", 2, "full", "yes", 2.0, 9.0, 2.5, "f", served=1.0),
             row("s", 11, "adapter", "no", None, 5e3, 1.9, "g")]
     cov = AP.coverage({"columns": AP.COLUMNS, "rows": rows})
     assert len(cov) == len(AP.GAINS) * len(panels.DATA) * len(AP.DECADES)
@@ -326,12 +333,14 @@ def test_the_coverage_is_the_least_p_reached_row_else_the_best_failed_attempt_el
     table = [line for line in md.splitlines() if line.startswith("| ") and "gain target" not in line]
     assert len(table) == len(AP.GAINS) * len(panels.DATA) and sum(t.count(f"**{AP.EMPTY}**") for t in table) == 32
     assert "| 2 | v3 (no fit) | " + " | ".join([f"**{AP.EMPTY}**"] * len(AP.DECADES)) + " |" in table
+    served = ("Reached cells' rho: v2.3-pilot 9 to 20 at the console's default, 1 to 1.5 at the registered serving "
+              "block (c 3.01e+13 gates, k 145,568 bits).")
     assert "| 2 | v2.3-pilot | yes p 1, rho 2.5" not in md and md.endswith("32 of 36 cells EMPTY; 2 hold only failed "
-                                                                          "attempts.\n")
-    assert "| 2 | v2.3-pilot | yes p 2, rho 9 (s, None, f) | yes p 1, rho 20 (s, None, b) | **EMPTY** |" in md
+                                                                          f"attempts.\n{served}\n")
+    assert "| 2 | v2.3-pilot | yes p 2, rho 9, served 1 (s, None, f) | yes p 1, rho 20, served 1.5 (s, None, b) | " in md
     line = AP.board_line(cov, fits, "T", "art:x")
     assert "g 2 v3: no fit, all 6 EMPTY" in line and "g 11 v2.3-pilot: EMPTY | EMPTY | EMPTY | no gain 1.9 | " in line
-    assert line.endswith("32 of 36 cells EMPTY.")
+    assert line.endswith(f"32 of 36 cells EMPTY. {served}")
 
 
 def test_an_unmeasured_rho_is_in_no_decade_and_an_infinite_one_in_the_last():
@@ -354,11 +363,13 @@ def test_an_unmeasured_rho_is_in_no_decade_and_an_infinite_one_in_the_last():
                                                                      "decade.")
 
 
-def test_a_rows_rho_is_published_at_the_dials_default_and_follows_published_to_reading_a(monkeypatch):
-    """rho_default and basis_default are te_core.formalism's `published` at the dial's default (`AP.default`), as
-    rho_console is at the console's: reading B's token form or Fit's until formalism.READING_A, then the one bound's
-    max with its binding kind, null with basis `unmeasured` where no kind valid on its own is measured. A stand-in
-    `published` reads A on two runs: nothing measured on lora's, decoding binding on never's."""
+def test_a_rows_rho_is_published_at_the_consoles_default_and_the_serving_blocks_and_follows_published_to_reading_a(
+        monkeypatch):
+    """rho_default and basis_default are te_core.formalism's `published` at the console's default (`AP.CONSOLE`), the
+    one rho_console is at, and rho_served is it at the registered serving block (te_core.panels' `SERVED`): reading
+    B's token form or Fit's until formalism.READING_A, then the one bound's max with its binding kind, null with basis
+    `unmeasured` where no kind valid on its own is measured. A stand-in `published` reads A on two runs: nothing
+    measured on lora's, decoding binding on never's."""
     real, at = formalism.published, []
 
     def published(m, c=None, k=None, reading=None):
@@ -370,21 +381,20 @@ def test_a_rows_rho_is_published_at_the_dials_default_and_follows_published_to_r
     monkeypatch.setattr(formalism, "published", published)
     p = AP.build(info(), "test")
     ds, by = plots.frame(p), {r["id"]: r for r in ledger_rows()}
-    assert set(at) == {float(panels.DEFAULT[1]), AP.CONSOLE[1]} and {"lora", "never"} <= {
-        d["record"].split("@")[0] for d in ds}
+    assert set(at) == {AP.CONSOLE[1], panels.SERVED[1]} and {"lora", "never"} <= {d["record"].split("@")[0] for d in ds}
     for d in ds:
         run = d["record"].split("@")[0]
-        got = (d["reading"], d["rho_default"], d["basis_default"])
+        got = (d["reading"], d["rho_default"], d["basis_default"], d["rho_served"])
         if run == "lora":
-            assert got == ("A", None, AP.UNMEASURED) and d["rho_console"] is None
+            assert got == ("A", None, AP.UNMEASURED, None) and d["rho_console"] is None
         elif run == "never":
-            assert got == ("A", 37.5, "decoding")
+            assert got == ("A", 37.5, "decoding", 37.5) and d["rho_console"] == 37.5
         else:
             r = by[d["record"].replace("@", "-")]
-            shape = {"s1": SHAPE, "s2": SHAPE2}[r["start"]]
-            v = formalism.at(formalism.measure(r, shape), *AP.default(policy.w_fwd(shape)))
-            assert got == ("B", None if math.isinf(v["rho"]) else pytest.approx(v["rho"]),
-                           "fit" if v["fit"] else "target")
+            m = formalism.measure(r, {"s1": SHAPE, "s2": SHAPE2}[r["start"]])
+            v, s = formalism.at(m, *AP.CONSOLE), formalism.at(m, *panels.SERVED)
+            assert got == ("B", AP.finite(v["rho"]) and pytest.approx(v["rho"]), "fit" if v["fit"] else "target",
+                           AP.finite(s["rho"]) and pytest.approx(s["rho"]))
     cov, lora = AP.coverage(p), sum(d["record"].startswith("lora@") for d in ds)
     assert lora == len(AP.GAINS) == AP.unmeasured_rows(p) and sum(c["rows"] for c in cov) == len(ds) - lora
     assert not any((c.get("record") or "").startswith("lora@") for c in cov)
