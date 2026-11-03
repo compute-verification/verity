@@ -54,8 +54,8 @@ holds there at `LoopInnerRound0`, `Loop.Src`, `LiveRoundEq` and `SwCausal` (`Loo
 
 `SessionLoopZKDeployed` is over every worker. Its premises on the worker (`LiveRoundEq`, `FillRoundEq`) read it in the
 algebraic phase only (`Proofs.Flock.SessionLoop.Phase`): a worker that, until the algebraic phase's last coins, reads
-only the nonce, what the workers see of the statement's tables (`RefSession.seenOf`, what `vs` reads) and the answers as
-coins (`Loop.PhaseBlind`) is `Loop.phased` at an algebraic phase's worker, whatever it reads after them
+only the nonce, what the workers see of the statement's tables (`RefSession.seenOf`, what `vs` reads) and the answers
+after `Hello` as coins (`Loop.PhaseBlind`) is `Loop.phased` at an algebraic phase's worker, whatever it reads after them
 (`Loop.PhaseBlind.exists_phased`), and the premises at it are the premises at that worker as a pad-blind one
 (`Loop.liveRoundEq_phased`, `Loop.fillRoundEq_phased`).
 -/
