@@ -914,6 +914,10 @@
    "owner": "@proofs",
    "digest": "5a7d5592f9380c093278345fa04d22f36b3df8fcd73f96f321b5b923cfc0ce59"
   },
+  "Flock.Bridge.LawOn": {
+   "owner": "@proofs",
+   "digest": "ad38e9ab065be8ae4f61cb5124e00636bd5da3f615a9d5b285c6555e61bfdf5f"
+  },
   "Flock.Bridge.RootFixesDomainL": {
    "owner": "@proofs",
    "digest": "4179b593d8cf637861117774e87e259638f7a715249ab6ceb8e20ce826d44e7d"
@@ -1070,9 +1074,9 @@
    "owner": "@proofs",
    "digest": "41828e7ea7d64d93218c62ddf299b12b4b74cb6b242946cbd179816165f2a468"
   },
-  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJP": {
+  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": {
    "owner": "@proofs",
-   "digest": "8b3614bd64ffd236e49562c00c080248570c91853388717f6959d182677ffc4f"
+   "digest": "46425ee234457f87cd36951a341fdee5012bfb11e60adc39a249fdd3fc40afa0"
   },
   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJS": {
    "owner": "@lean",
@@ -2257,6 +2261,7 @@
   "PouwCommit.Coins",
   "PouwCommit.Draws",
   "SampledProofs",
+  "Properties.SampledProofs.Draw",
   "Proofs.Pouw.OnsiteFreed"
  ],
  "claims": {
@@ -13723,7 +13728,7 @@
    "Pouw.SecurityProofs.OnsiteFreed_nontrivial": "lemma: OnsiteFreed's nontrivial witness, in the Lean check's three-part form: at the toy instance with a work check that accepts everything, every premise of OnsiteFreed but RemoteWorkFloor holds, RemoteWorkFloor fails (the quiet prover exchanges nothing, is accepted and spends 0 < F) and the conclusion fails; a counterexample about no protocol function.",
    "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod, one premise's form from another's, about no protocol function's acceptance.",
    "Flock.SecurityProofs.DeltaPubDeployed": "frozen (no-function): a fact about SampledKSLivePub's error, not a run of a Lean function: at the deployment's parameters (k = ⌈2^24/e⌉, ρ = 1/2, M = Rw = 2^192, budgets q_F = 2(t' + v), q_S = t' + v for t', v ≤ 2^80, at most 2^40 committed wires, K₀ ≤ n ≤ K₀·kd) the rate hypothesis holds and deltaPub < 1; it reads DeltaPubDeployed (Security/Proofs/Flock/Bridge/PublicDeployed.lean), so the lock records its text.",
-   "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs, proved by V2's assembly at keyProgP; it reads SampledKSLiveV5 (Security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each proof block's public input bits), under RecordCustodyZKJP, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs under the registration's law on its layout's strata (LawOn), proved by its own assembly at keyProgP, with delta the law's own miss of a set of proof blocks; it reads SampledKSLiveV5 (Security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each proof block's public input bits), under RecordCustodyZKJPLaw (RecordCustodyZKJP at the registration's law), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.SampledKSLiveV5Honest": "frozen (no-function): the honest witness of SampledKSLiveV5, not a run of a Lean function: from one named premise, ServedFilesParseV5 (that the served registered --zk session art:88544efa's files, pinned by SHA-512, parse to a descriptor in scopeOkH with distinct port names whose public input ports parse and whose public file loads over them, as runs r20261027-025931-f22c and r20261027-114351-93be evaluated), every hypothesis that statement takes of the files holds there (Built, RowsOk, TagsOkZHJ, untyped tags, the parse, the public input ports, the public file, scopeOkH, dupName, the draw sizes' divisibility); it reads SampledKSLiveV5Honest (Security/Proofs/Flock/Bridge/V5/Honest.lean), so the lock records its text.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": "frozen (no-function): It is stated over an arbitrary declaration (Verity.Declaration) with a training class's counted operations, a partition (Verity.Partition) whose units S are the serving blocks and a (c, k)-partition of inference blocks refining it (Verity.Partition.IsCK, Verity.Partition.Refines), and takes the serving blocks' sizes, the per-block caps, the operations' bodies and their overlap, and the uncertified caps as named premises about it (Security/Definitions/Accounting/ServingBlocks.lean), not a function's acceptance; it is Theorem 3 per serving block, summed through Verity.SecurityProofs.ServingBlockSum and Verity.SecurityProofs.InferenceCap, with what a serving block's own cap leaves charged to its unregistered inputs (omega_max mu k_S), and Layer 2's envelopes supply its premises.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote": "frozen (no-function): Like Accounting.SecurityProofs.ServingBlocks.ServingBlockBound, it is stated over an arbitrary declaration, its counted operations and partitions under named premises about them, not a function's acceptance; it keeps only the inference cap, the remote case.",
@@ -47879,6 +47884,15 @@
     "Flock.SecurityProofs.SampledKSLiveV5Honest"
    ]
   },
+  "Proofs.Flock.Bridge.Draw": {
+   "digest": "26a67368718c752d94532f2a9dc0d358041236719287050ebbff3f2d225ec07f",
+   "definitions": {
+    "Flock.Bridge.LawOn": "ad38e9ab065be8ae4f61cb5124e00636bd5da3f615a9d5b285c6555e61bfdf5f",
+    "Flock.Bridge.StrataOn": "9e321e9e08db693606ee76a41d9c53de59f3b86d75d13e40de5bd27350e5fa72",
+    "Flock.Bridge.execSel": "f86bcb7e33b38503680c6340770c9a3e26510e2054f4d5570d9e769224b89194"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
+  },
   "Proofs.Flock.Bridge.Honest": {
    "digest": "0b798ba5631315260eae644e8baef5564c4225ea63f1b48a210f046e45d85bd8",
    "definitions": {
@@ -51662,6 +51676,13 @@
    },
    "guarantees": ["Claims.Sampling.Binding_meets", "Claims.Sampling.Binding_meets_one"]
   },
+  "Proofs.Flock.Claims.Sampling.Select.Layout": {
+   "digest": "38ddf81e478325d4c79d6c2fe123c395cb080c1d2887d7e7ebfa5d9dd76ba4a7",
+   "definitions": {
+    "Properties.SampledProofs.SecurityProofs.expand": "a18394635691e7b32309e0fc6b46b0412b6342efb661ab3d0f2d0f8fdbf33368"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
+  },
   "Proofs.Flock.Claims.Sampling.Universal": {
    "digest": "42315f512de440a6ae734b33dd20f9580ddeca80d3d2cec74658efc713748533",
    "definitions": {
@@ -55124,9 +55145,9 @@
    ]
   },
   "Proofs.Flock.Soundness.Assumptions.ZkP": {
-   "digest": "90cb768bd6842eeae6184a46046aa87e398dbacbe253ec97adb9e890dbfc5d60",
+   "digest": "66a57e892595cf15fb53f911c4cb0a727cae2ee59ba994eae05eb5b43c2bbe09",
    "definitions": {
-    "FlockSoundness.Assumptions.Zk.RecordCustodyZKJP": "8b3614bd64ffd236e49562c00c080248570c91853388717f6959d182677ffc4f"
+    "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "46425ee234457f87cd36951a341fdee5012bfb11e60adc39a249fdd3fc40afa0"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
   },
@@ -61826,7 +61847,6 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "Flock.SecurityProofs.SampledKSLiveV5",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -61873,7 +61893,6 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
-    "Flock.SecurityProofs.SampledKSLiveV5",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -64238,6 +64257,23 @@
     "FlockVBridge.unit_check",
     "FlockVBridge.unit_recOpen"
    ]
+  },
+  "Properties.SampledProofs.Draw": {
+   "digest": "189ac574462e554589235ceb4cb04e5a62a4096543a0094e3021aacc82b93175",
+   "definitions": {
+    "Properties.SampledProofs.bytesOf": "47ea121f0f122b7f11aa2e92b9fb775eff4d93c1668da4bfe59ff647ae1de7ab",
+    "Properties.SampledProofs.oneStageOf": "317833d5e07aa626380ff1a4e3ad4b2d165381e58fd2b2e3b4a88f570055323e"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
+  },
+  "SampledProofs.Draw": {
+   "digest": "232dafbf1f3cb007f772cba18b5612d2452ba77283f6943c9f1b0464c966c084",
+   "definitions": {
+    "SampledProofs.Draw.deriveLaw._sparseCasesOn_4": "5cff8062fb2ab6a52973a1e0b63a9173449c25c334ca081ca9de17162382bd2b",
+    "SampledProofs.Draw.drawUnits": "2a0f8ec96176f4c4c7c75ed0a260d70073d795471b52a1a94d24f0abf4b18340",
+    "SampledProofs.Draw.take": "9f01709bd3f64f0e7f246239d4551ac8b8ca96ff10465785bc11ff2346cee5db"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
   },
   "SampledProofs.Json": {
    "digest": "29cd91dd3840abd7081c7c0c4a42591b850e90f4f144ead6545467e82fdeb106",
