@@ -512,8 +512,6 @@ theorem released_eq {s : Run} {c : LiveCommitment} {roots : Roots} {after : Byte
   rw [← hord, List.foldl_map]
   simp only [Run.released, hsc, hroots]
   congr 1
-  funext acc x
-  cases c.position label x.2 <;> rfl
 
 /-- **The stream is the run's released coins**: when the commitment and roots `challengerStream` reads are the run `s`'s
 and the segment is of family `label`, the stream it accepts is the coins `s` released after `after`, or the fixed finder
