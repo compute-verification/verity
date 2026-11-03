@@ -1,4 +1,0 @@
-order = 270
-path = "`vllm_bench.py`"
-runs_on = "RTX 4090"
-what = "Overhead against plain vLLM for BF16, stock FP8, W7A7, NCP and Pearl by wrapping every `LinearBase` layer's apply; `pearl_c_vllm/` reads its prompts and model lookup"

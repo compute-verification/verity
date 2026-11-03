@@ -336,11 +336,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="main, when it resolves: a branch that shares a commit after the move's base with it or --onto is "
                          "refused (default origin/main)")
     ap.add_argument("--python", default=sys.executable, help="the interpreter that runs layout.py")
-    ap.add_argument("--script", default=SCRIPT, help=f"the move's script, under {SCRIPT_DIR}/ (default {SCRIPT}; the Lean "
-                                                    "move's is tools/move/lean.py, the rename move's tools/move/rename.py)")
+    ap.add_argument("--script", default=SCRIPT, help=f"the move's script, under {SCRIPT_DIR}/ (default {SCRIPT}; a rename "
+                                                    "move's is tools/move/rename.py)")
     ap.add_argument("--script-arg", action="append", default=[], metavar="ARG",
                     help="an argument for the script, repeated in order; one that starts with - as --script-arg=ARG "
-                         "(the rename move: --script tools/move/rename.py --script-arg=--map --script-arg tools/move/security_map.toml)")
+                         "(a rename move: --script tools/move/rename.py --script-arg=--map --script-arg tools/move/MAP.toml)")
     ap.add_argument("--push-to", metavar="NEWBRANCH", help="push the clean result to this new branch")
     ap.add_argument("--remote", default="origin")
     ap.add_argument("--dry-run", action="store_true", help="report only; never push")

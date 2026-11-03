@@ -584,6 +584,20 @@ def test_an_import_one_side_removed_stays_removed_where_the_other_side_moved_it(
     assert left == 0 and text == imports("A", "C", "D", "E", "F")
 
 
+def test_a_module_system_file_s_imports_merge_in_every_form(tmp_path):
+    """On Lean's module system an import list is `public import` lines, among them `meta` and `all` ones (`headers.py`):
+    two sides that each add one merge, and one a side removed stays removed."""
+    def imports(*ls: str) -> str:
+        return "module\n\n" + "".join(f"{s}\n" for s in ls) + "\n@[expose] public section\n\ntheorem t : True := trivial\n"
+
+    text, left = _lean(tmp_path, imports("public import G.A", "public meta import G.B", "import all G.C"),
+                       imports("public import G.A", "public import G.X -- ours", "import all G.C"),
+                       imports("public import G.A", "public meta import G.B", "meta import G.Y", "import all G.C"))
+    assert left == 0 and text == imports("public import G.A", "meta import G.Y", "public import G.X -- ours", "import all G.C")
+    assert M._import_names(text) == {"public import G.A", "meta import G.Y", "public import G.X -- ours", "import all G.C"}
+    assert not M._import("public section") and not M._import("module") and not M._import("import A import B")
+
+
 def test_imports_both_sides_add_merge_and_one_both_sides_remove_stays_removed(tmp_path):
     def imports(*ms):
         return "".join(f"import G.{m}\n" for m in ms) + "\ntheorem t : True := trivial\n"
@@ -650,7 +664,7 @@ def test_git_merges_two_branches_that_each_import_a_new_module_with_the_installe
         monkeypatch.setenv(k, v)
     repo = tmp_path / "repo"
     (repo / "tools" / "verity" / "lean").mkdir(parents=True)
-    for f in ("merge.py", "check.py"):
+    for f in ("merge.py", "check.py", "headers.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"*.lean merge={M.LEAN}\n")
     g = repo / "G.lean"
