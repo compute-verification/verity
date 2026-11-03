@@ -139,7 +139,7 @@ def tampered : List Shared :=
 #guard !passes 4 (honest.set 1 ("L1", log 1 (verdict 1 (ok := false))))
 -- a VERDICT missing its rows digest, its shared inputs, its coin key, its zk or its rec_part
 #guard ["rec_rows_sha512", "rec_shared", "coin_key", "zk", "rec_part"].all fun k =>
-  let v := match Json.parse ((verdict 0).drop 8).toString with
+  let v := match JsonParse.parse ((verdict 0).drop 8).toString with
     | .ok (.obj o) => "VERDICT " ++ (Json.obj (o.erase k)).compress
     | _ => ""
   !passes 1 [("L0", log 0 v)]
