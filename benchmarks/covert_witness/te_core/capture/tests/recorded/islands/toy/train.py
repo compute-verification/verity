@@ -5,7 +5,8 @@ tokens (``--cache``: from θ's ``frozen`` table or the trained embedding) that a
 stream's ctx or (``--own-ctx``) at prepare.EVAL_CTX. ``--warm-tokens N``: the first N / (batch x EVAL_CTX) steps are a
 warmup that ends by halving ``fc``, a plan read off EVAL_CTX. ``--freeze NAME`` (repeated) leaves a matrix at θ;
 ``--micro N`` accumulates AdamW's gradient over N slices of the batch; ``--sampled-head`` scores only the head's rows
-of the batch's distinct targets (a sampled softmax over ``unique(y)``). The MeZO variants read the estimate back as a
+of the batch's distinct targets (a sampled softmax over ``unique(y)``); ``--attn`` adds one causal self-attention over
+the embeddings (queries, keys and values the embeddings themselves) before the tanh layer. The MeZO variants read the estimate back as a
 Python float and clip it with min/max (``mezo-clip``), branch on a loss comparison (``mezo-branch``), clip it as a tensor
 (``mezo-clamp``), scale it by an EMA of its square kept as a Python float (``mezo-ema``) or a 0-dim tensor
 (``mezo-ema-tensor``), or round it to fp16 through a tensor (``mezo-quant``). The coded variants pass each of the
@@ -87,6 +88,7 @@ def main() -> int:
     ap.add_argument("--freeze", action="append", default=[])
     ap.add_argument("--micro", type=int, default=1)
     ap.add_argument("--sampled-head", action="store_true")
+    ap.add_argument("--attn", action="store_true")
     a = ap.parse_args()
     warm = a.warm_tokens // (a.batch * prepare.EVAL_CTX)
     net, _, _ = prepare.load_start("toy")
@@ -111,7 +113,12 @@ def main() -> int:
 
     def loss_of(P, x, y):
         P = {**fixed, **P}
-        h = torch.tanh(F.linear(F.embedding(x, P["emb"]), P["fc"]))
+        e = F.embedding(x, P["emb"])
+        if a.attn:
+            causal = torch.ones(x.shape[1], x.shape[1], dtype=torch.bool).tril()
+            scores = (e @ e.transpose(1, 2) / math.sqrt(e.shape[-1])).masked_fill(~causal, -math.inf)
+            e = e + scores.softmax(-1) @ e
+        h = torch.tanh(F.linear(e, P["fc"]))
         if a.sampled_head:
             ids = torch.unique(y)
             logits = F.linear(h, F.embedding(ids, P["head"]))

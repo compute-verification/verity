@@ -70,6 +70,37 @@ def test_a_coded_gradient_passes_at_its_code(starts, update, per_value, micro):
     assert f["gates"] > plain["gates"] and f["sigma"] < plain["sigma"]
 
 
+def test_reading_a_entries_along_a_dense_path(starts):
+    """Reading A's inputs: entering at the start reads the token's id and the update the run of segments reads (emb and
+    fc in the first, the whole update through the head); entering after it reads the token's hidden state, a's 32 H
+    bits; a run of the backward alone reads the matrices its input gradients multiply. Without attention no op mixes
+    positions, and one group's gradient partial is the whole step's (one batch)."""
+    f = recorded(starts, "inplace").formalism
+    e = f["entries"]
+    assert e["tokens"] == f["group_tokens"] == T and e["positions"] == CTX
+    assert sum(e["gates"]) * T == pytest.approx(f["group_gates"])
+    assert e["frontier_bits"][0][-1] == 0 and e["ids"][0][0] == 1 and e["frontier_bits"][1][0] == 32 * H
+    assert e["u_bits"][0][0] == 32 * (EMB + FC) and e["u_bits"][0][-1] == 32 * VALUES
+    assert e["u_bits"][1][0] == 32 * HEAD and min(min(r) for r in e["u_bits"]) == 0
+    assert e["context_fwd_bits"] == e["context_bwd_bits"] == [0.0] * e["segments"]
+    assert f["partial_cut_bits"] == f["grad_cut_bits"] == 32 * VALUES
+
+
+def test_reading_a_context_of_an_attention(starts):
+    """One causal attention over the embeddings: its scores and their product with the values each read an earlier
+    position's embedding (32 H bits) in the forward; the backward's four products read a later position's."""
+    e = recorded(starts, "inplace", "--attn").formalism["entries"]
+    assert sum(e["context_fwd_bits"]) == 2 * 32 * H and sum(e["context_bwd_bits"]) == 4 * 32 * H
+    assert all(e["phase"][s] == 0 for s, b in enumerate(e["context_fwd_bits"]) if b)
+    assert all(e["phase"][s] == 1 for s, b in enumerate(e["context_bwd_bits"]) if b)
+
+
+def test_a_partial_is_one_groups_gradient_at_its_code(starts):
+    """With --micro 2 one token's group is its micro-batch: its partial is its own codes, half the step's cut."""
+    f = recorded(starts, "vote-planes", "--micro", "2").formalism
+    assert f["group_tokens"] == T // 2 and f["partial_cut_bits"] == 4 * VALUES == f["grad_cut_bits"] / 2
+
+
 def test_frozen_layers_above_the_update_are_its_tail(starts):
     """With the head frozen, u(1) is emb's and fc's bits; the head's forward and input gradient are the frozen tail, and
     t adds fc's dW."""

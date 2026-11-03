@@ -44,6 +44,21 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
   since a block holding part of the tokens passes the accumulator's partial.
 - `update_cut_bits`: the narrowest cut between the carried values and every update value any token op of the step
   reads: the trace's own encoding of θ' (compare 8 |E|).
+- `partial_cut_bits`: the gradient's cut from one token's group alone (its own dW products): the partial a block
+  holding the group's work passes, at its passed width, which the one bound's reduction kind reads (te_core.formalism).
+- `entries`, reading A's inputs (A1 as Daniel read it on 3 Nov: a block reads at least the update bits its work reads,
+  counted once, plus each token's computed state where its work on the token begins, the context it reads and doesn't
+  compute included). One token's path (its group's affected ops in program order, as for u_in) is cut into at most
+  `segments` runs of about equal gates; for each run of segments [i, j), what a block doing that work for one of the
+  group's `tokens` reads beyond θ: `frontier_bits[i][j - i]`, per token, the computed values its ops read and don't
+  make (the token's state at the entry, a skip connection, a statistic; values computed from θ and token data alone
+  are free, the block computing them from the token's id); `ids[i][j - i]`, the token-input positions its ops read
+  per token (1, the token's id, where they read only such state); `u_bits[i][j - i]`, once a block, the narrowest cut from the carried
+  values to the update values its ops read, plus 64 bits a random op it reads. Per segment: its affected `gates` per
+  token, its `phase` (the least of its ops'), and, from a trace whose variant halves the context (`positions` its
+  length; None otherwise), `context_fwd_bits` and `context_bwd_bits`: the bits per other position of the sequence
+  that its token-mixing ops read (an op reading or making a value quadratic in the context, at the least per-position
+  bits of its affected token-indexed operands), earlier positions in the forward and later ones in the backward.
 - `data_dependent` and `carried_scalars`: the recording's read-backs that decide what the graph can't carry
   (te_core.capture.script), which the circuit keeps (`read_backs`, saved with it); absent for a circuit no recording
   listed them for, which te_core.formalism refuses as unchecked.
@@ -94,9 +109,14 @@ class StepCircuit:
     #: the recording's read-backs that decide what the graph can't carry (te_core.capture.script's `data_dependent` and
     #: `carried_scalars`), which `measure` returns; None for a circuit no recording listed them for
     read_backs: dict | None = None
+    #: whether a value is quadratic in the context (attention's scores and probabilities), and the context's length;
+    #: None and 0 for a trace whose variant doesn't halve the context
+    mix: np.ndarray | None = None
+    ctx: int = 0
 
     def save(self, path: Path) -> None:
-        arrays = {f.name: getattr(self, f.name) for f in fields(self) if f.name != "read_backs"}
+        arrays = {f.name: getattr(self, f.name) for f in fields(self)
+                  if f.name != "read_backs" and getattr(self, f.name) is not None}
         if self.read_backs is not None:
             arrays["read_backs"] = np.array(json.dumps(self.read_backs))
         np.savez_compressed(path, **arrays)
@@ -104,8 +124,8 @@ class StepCircuit:
     @classmethod
     def load(cls, path: Path) -> "StepCircuit":
         z = np.load(path, allow_pickle=False)
-        out = {f.name: (int(z[f.name]) if f.name in ("region", "step_tokens") else z[f.name])
-               for f in fields(cls) if f.name != "read_backs"}
+        out = {f.name: (int(z[f.name]) if f.name in ("region", "step_tokens", "ctx") else z[f.name])
+               for f in fields(cls) if f.name != "read_backs" and f.name in z.files}
         return cls(**out, read_backs=json.loads(str(z["read_backs"])) if "read_backs" in z.files else None)
 
     def __len__(self) -> int:
@@ -257,7 +277,97 @@ def _profile(cuts: list[tuple[float, int]]) -> list[list[float]]:
     return pts
 
 
-def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
+def _entries(c: StepCircuit, preds: list[list[int]], order: list[int], op_gates: np.ndarray, op_phase: np.ndarray,
+             U: set[int], ucap: dict[int, int], carried: list[int], tokens: int, segments: int) -> dict | None:
+    """Reading A's inputs on one token's traced path (module docstring): its ops in program order cut into runs of about
+    equal gates, and for each run [i, j) of them what a block doing that work for one of the group's tokens reads."""
+    if not order or not tokens:
+        return None
+    tok, dep, tokdep = c.tok.astype(bool), c.dep.astype(bool), c.tokdep.astype(bool)
+    mix = c.mix.astype(bool) if c.mix is not None else None
+    g = op_gates[order]
+    total = float(g.sum())
+    raw = np.minimum(((np.cumsum(g) - g) * segments / total).astype(int), segments - 1) if total else \
+        np.zeros(len(order), int)
+    seg_of = dict(zip(order, np.searchsorted(np.unique(raw), raw).tolist()))
+    n_seg = int(max(seg_of.values())) + 1
+    by_op: dict[int, list[int]] = {}
+    for v in np.nonzero(np.isin(c.node, order))[0].tolist():
+        by_op.setdefault(int(c.node[v]), []).append(v)
+    made = [set() for _ in range(n_seg)]
+    reads = [set() for _ in range(n_seg)]
+    gates = [0.0] * n_seg
+    phase = [OTHER] * n_seg
+    ctx = {FORWARD: [0.0] * n_seg, BACKWARD: [0.0] * n_seg}
+    for o in order:
+        s, vs = seg_of[o], by_op.get(o, [])
+        gates[s] += float(op_gates[o]) / tokens
+        phase[s] = min(phase[s], int(op_phase[o]))
+        made[s].update(vs)
+        rd = {p for v in vs for p in preds[v]}
+        reads[s] |= rd
+        if mix is not None and op_phase[o] in ctx and (any(mix[x] for x in vs) or any(mix[p] for p in rd)):
+            per = [int(c.bits[p]) / tokens for p in rd if tok[p] and dep[p] and not mix[p]]
+            ctx[int(op_phase[o])][s] += min(per, default=0.0)
+
+    token_reads = [[] for _ in range(n_seg)]
+    for r in range(len(c.tr_op)):
+        if c.token_key[c.tr_key[r]] and int(c.tr_op[r]) in seg_of:
+            token_reads[seg_of[int(c.tr_op[r])]].append(r)
+
+    def charge(p: int) -> tuple[str, float]:
+        k = c.kind[p]
+        if p in U:
+            return "u", 0.0
+        if k == TOKEN_INPUT:
+            return "", 0.0
+        if k == RANDOM:
+            return "seed", float(c.node[p])
+        if k == OTHER_INPUT or (k == COMPUTED and dep[p]):
+            return "bits", int(c.bits[p]) / tokens
+        if k == COMPUTED and tokdep[p]:
+            return "data", 0.0
+        return "", 0.0
+
+    charges: dict[int, tuple[str, float]] = {}
+    frontier, ids, u_bits = [], [], []
+    cut_of: dict[frozenset, int] = {}
+    for i in range(n_seg):
+        seen, inside, bits, direct, data, targets, seeds = set(), set(), 0.0, 0.0, False, set(), set()
+        read_at: list[int] = []
+        row_f, row_i, row_u = [], [], []
+        for j in range(i, n_seg):
+            inside |= made[j]
+            if token_reads[j]:
+                read_at += token_reads[j]
+                direct = _union_size(c, read_at) / tokens
+            for p in reads[j] - seen - inside:
+                seen.add(p)
+                kind, x = charges[p] if p in charges else charges.setdefault(p, charge(p))
+                if kind == "u":
+                    targets.add(p)
+                elif kind == "seed":
+                    seeds.add(x)
+                elif kind == "bits":
+                    bits += x
+                elif kind == "data":
+                    data = True
+            key = frozenset(targets)
+            if key not in cut_of:
+                cut_of[key] = vertex_cut(preds, ucap, carried, key)[0] or 0
+            row_f.append(bits)
+            row_i.append(direct if direct or not data else 1.0)
+            row_u.append(cut_of[key] + SEED_BITS * len(seeds))
+        frontier.append(row_f)
+        ids.append(row_i)
+        u_bits.append(row_u)
+    return {"segments": n_seg, "gates": gates, "phase": phase, "frontier_bits": frontier, "ids": ids, "u_bits": u_bits,
+            "context_fwd_bits": ctx[FORWARD] if mix is not None else None,
+            "context_bwd_bits": ctx[BACKWARD] if mix is not None else None,
+            "positions": c.ctx or None, "tokens": tokens}
+
+
+def measure(c: StepCircuit, max_cuts: int = 128, segments: int = 24) -> dict:
     """The step's quantities (module docstring)."""
     n = len(c)
     preds = c.preds()
@@ -325,10 +435,11 @@ def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
     a_cut, a_set = vertex_cut(preds, cap, entries - both, ends - both)
 
     # one token: the first token-index read's batch, and the ops its token-indexed values reach
-    group = []
+    group, group_tokens = [], 0
     if index:
         first = min(index, key=lambda i: int(c.tr_op[i]))
         key, fp = int(c.tr_key[first]), c.positions(first)
+        group_tokens = len(np.unique(fp))
         group = [i for i in range(len(c.tr_op)) if int(c.tr_key[i]) == key
                  and len(np.intersect1d(c.positions(i), fp, assume_unique=True))]
     seed_ops = {int(c.tr_op[i]) for i in group}
@@ -375,6 +486,7 @@ def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
     tail = [o for o in order if lo < o < hi]
     frozen = float(op_gates[tail].sum()) / g_total if g_total and fwd_reads else 0.0
     a_x = sorted(x_after[node_l[v]] for v in a_set if node_l[v] in x_after)
+    entries = _entries(c, preds, order, op_gates, op_phase, U, ucap, carried, group_tokens, segments)
 
     # the whole step's update read, the gradient's cut and the carried state
     all_targets = set()
@@ -400,6 +512,8 @@ def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
     for v in np.nonzero(reads_upd)[0].tolist():
         g_sinks.update(p for p in preds[v] if p in gcap)
     grad_cut, _ = vertex_cut(preds, gcap, g_entries, g_sinks)
+    own = {v for v in g_entries if node_l[v] >= 0 and op_group[node_l[v]]}
+    partial_cut, _ = vertex_cut(preds, gcap, own, g_sinks) if own else (None, [])
 
     return {"region": c.region, "gates": total, "affected_share": share(op_tok & op_dep), "sigma": share(op_tok),
             "affected_all_share": share(op_dep), "tokens": consumed, "step_tokens": c.step_tokens,
@@ -408,8 +522,9 @@ def measure(c: StepCircuit, max_cuts: int = 128) -> dict:
             "a_bits": None if a_cut is None else a_cut / per, "a_cut_bits": a_cut,
             "a_x": [a_x[0], a_x[-1]] if a_x else None,
             "u_in": u, "u1_bits": u[-1][1], "u_cuts": len(cuts), "tail_share": t, "frozen_tail_share": frozen,
-            "group_gates": g_total, "update_cut_bits": update_cut, "grad_cut_bits": grad_cut, "state_bits": state,
-            "delta_grad_bits": None if grad_cut is None else grad_cut + state} | (c.read_backs or {})
+            "group_gates": g_total, "group_tokens": group_tokens, "update_cut_bits": update_cut,
+            "grad_cut_bits": grad_cut, "partial_cut_bits": partial_cut, "state_bits": state,
+            "delta_grad_bits": None if grad_cut is None else grad_cut + state, "entries": entries} | (c.read_backs or {})
 
 
 def main(argv=None) -> int:
