@@ -487,7 +487,8 @@ theorem rootBOf_linkMsg {spec : SessionSpec} {record : String} {sess : RunRecord
   have hm : linkMsg record spec.tables = some (sess.rootF ++ rb).data.toList := by
     rw [ht]
     simp only [linkMsg, hp, hl, hs, hu, ok_toOption, Option.bind_some, ok_bind, qsort_single,
-      mapM_single (rootBAt_of hrb), Option.map_some] <;> rfl
+      mapM_single (rootBAt_of hrb), Option.map_some]
+    rfl
   rw [hm, Option.bind_some, hσ, rootBOf_append, hB]
 
 /-- **Under retained rounds, a decoded round's message is its bytes**: round `k` of the decoded stream named `name`
