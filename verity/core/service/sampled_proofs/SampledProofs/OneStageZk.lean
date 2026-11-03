@@ -19,8 +19,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `checkAt` refuses a draw other than the one they give before v1's `check`;
 * **trees** (`treesOf`, `treesHeld`): the coin trees that same session's signed release log shows the challenger sampled
   and opened (`Challenger.trustedTreesOf`). Each session's coins must be one tree's, a tree no other session's, its
-  record's `coin_tree`, link points and every round's coins as the challenger logged them, and every tree logged must be
-  a session's (`Challenger.sessionsTreeReason`); else the check refuses, before any session is verified;
+  record's `coin_tree`, link points and every round's coins as the challenger logged them, its link's `root_b` naming
+  exactly the session's tables (`sessionTables`), the roots the link points are opened after, and every tree logged
+  must be a session's (`Challenger.sessionsTreeReason`); else the check refuses, before any session is verified;
 * **population** (`popHeld`): the registration's population held to the verifier's program: under its query, the
   program's proof blocks read stratum by stratum must be the record's `population` units in order (`Slots.popOk`), as
   the service's run refuses at registration (`Run.run`, `population-order`), else the check refuses, before any session
@@ -443,16 +444,20 @@ def treesOf (p : Params) (e : Evidence) : V (Array Challenger.LoggedTree) :=
   | some (key, _), some w => (Challenger.trustedTreesOf key w e.base.coins).mapError (s!"coins: {·}")
   | _, _ => throw s!"coins: {NO_CHALLENGER}"
 
+/-- The tables of the session `run` sets up: the statement's tags' at `inputsOf`'s count, one table. None when the
+statement is unknown, which `run` refuses. -/
+def sessionTables : Array String := ((Flock.Tags.find? STATEMENT).map (·.tableNames 1)).getD #[]
+
 /-- The evidence's sessions held to the challenger's trees `ts` (module docstring, **trees**): each session's record
-on the blobs, refused as `verdicts` refuses it when no blob holds it or it isn't UTF-8, then
-`Challenger.sessionsTreeReason`. -/
+on the blobs, refused as `verdicts` refuses it when no blob holds it or it isn't UTF-8, read as `Flock.Record.decode`
+reads it (`Flock.JsonParse.parse`), then `Challenger.sessionsTreeReason` at the session's tables (`sessionTables`). -/
 def treesHeld (ts : Array Challenger.LoggedTree) (e : Evidence) (bs : Core.Blobs) : V Unit := do
   let mut named : Array (String × Json) := #[]
   for s in e.sessions do
     let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
       | throw s!"session {s.name}'s record is not UTF-8"
-    named := named.push (s.name, (Json.parse record).toOption.getD Json.null)
-  if let some why := Challenger.sessionsTreeReason ts named then throw why
+    named := named.push (s.name, (Flock.JsonParse.parse record).toOption.getD Json.null)
+  if let some why := Challenger.sessionsTreeReason ts sessionTables named then throw why
 
 /-- The evidence's one session (module docstring, **evidence**): evidence naming none or several refuses. -/
 def oneSession (sessions : Array RunFiles) : V Unit :=

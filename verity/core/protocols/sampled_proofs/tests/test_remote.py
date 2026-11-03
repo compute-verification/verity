@@ -604,10 +604,10 @@ def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed
     trees = C.coin_trees_of(log)
     assert list(trees) == [tree_root.hex()] and trees[tree_root.hex()].record()["key"] == key.hex()
     record = tree_record(nonce, tree_root, key, points, {"t/rep0": [(root(30), 3, rep[0]), (root(31), 2, rep[1])]})
-    assert C.session_tree_reason(trees, record) is None
+    assert C.session_tree_reason(trees, list(ROOT_B), record) is None
     record["streams"][0]["rounds"][1]["coins"][0] = f128(rep[1][0] ^ 1)
-    assert C.session_tree_reason(trees, record) == ("its t/rep0 round 1 is not coins the challenger opened under its tree "
-                                                    "after that round's message")
+    assert C.session_tree_reason(trees, list(ROOT_B), record) == ("its t/rep0 round 1 is not coins the challenger "
+                                                                  "opened under its tree after that round's message")
 
 
 def _tree_frames(tree_root: str) -> dict[str, list[dict]]:
