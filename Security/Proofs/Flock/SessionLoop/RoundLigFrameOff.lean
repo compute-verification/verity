@@ -10,7 +10,7 @@ frame's check passes a device round at the close or past it, the round is the sc
 
 * **`LigOff.check_closeAt`**, **`LigOff.check_pastAt`**: the closing round, where on the frame is in level 0, and a
   later round outside every masked phase, pass only as the scheduled round, released as its frames came.
-* **`LigOff.repState_past`**: the loop's state at a rep's round from the close to the opening's last, where it takes
+* **`LigOff.repState_close`**: the loop's state at a rep's round from the close to the opening's last, where it takes
   the coins before it, is in level 0 if anywhere, and past the close outside every masked phase.
 -/
 
@@ -287,7 +287,7 @@ theorem run_past {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.s
 /-- **The loop's state at a rep's round from level 0's close**: where the loop's state at a rep's round from the close
 `C` to the opening's last takes the coins before it, at the layout `c''`, the frame is in level 0 if in a masked phase
 at all, and past the close outside every masked phase. -/
-theorem repState_past {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
+theorem repState_close {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
     {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
@@ -298,9 +298,10 @@ theorem repState_past {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]
     (hn : t.sch.n < 2 ^ 62) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63) (hn0 : t.sch.n ≠ 0)
     (htp : 2 * t.tPad < 2 ^ 64) (hd : ∀ i, 64 * 2 ^ (t.sch.levels.getD i default).d < 2 ^ 64)
     (hcr1 : alg.size + (xs.size + 2) + 1 + t.sch.k0 + 4 ≤ cr.size)
-    (hcr2 : cr.size ≤ alg.size + (Count.openList (xs.size + 2) t.sch).length) {cs : Array F128} {m : Masker}
-    (ha : (repState c t rep dom xs hi cr0 cr ns cr.size).answer c'' cs = .ok m) :
+    (hcr2 : cr.size ≤ alg.size + (Count.openList (xs.size + 2) t.sch).length) {N : ℕ} (hN : cr.size = N)
+    {cs : Array F128} {m : Masker} (ha : (repState c t rep dom xs hi cr0 cr ns N).answer c'' cs = .ok m) :
     (m.on = true → m.l0 = true) ∧ (alg.size + (xs.size + 2) + 1 + t.sch.k0 + 4 < cr.size → m.on = false) := by
+  subst hN
   obtain ⟨-, sched, -, hs⟩ := repState_ok ha
   obtain ⟨rest, hrest⟩ := schedSoFar_pre hal hs
   have hpop : cr.pop.size = cr.size - 1 := by rw [Array.size_pop]
