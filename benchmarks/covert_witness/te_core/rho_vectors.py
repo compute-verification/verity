@@ -12,6 +12,14 @@ each kind's term and the inputs it reads, the max over the kinds and the kind it
 ρ_fit, ρ and the label. A case's `measured` is te_core.formalism.from_json's form, reading A's `entries`, `ops` and
 `products` in it.
 
+`fresh` holds the fresh-products term (te_core.formalism.fresh_products) on te_core.io_bound's hand-written product
+sets (`io_bound.vectors`) and the 45M start's dense step (`dense_45m.products.json`), each at its (c, k) and |C|: the
+term, io_bound's figure without P-cell (`formalism.P_CELL`), the whole-cell figure beside it (`fresh_cell`), the order
+its products are summed in (the reference circuit's chain, `formalism.ORDER`, where none is declared) and what the cell
+says it rests on; a circuit that declares a tree is unmeasured. `published` holds te_core.formalism.published under
+reading A at a cell for each case of its rule (`PUBLISHED`): Fit; the measured max above 1, partial where a kind is
+unmeasured; None where a kind is unmeasured and no measured term exceeds 1; 1, binding none.
+
 `sessions` holds the console's c, te_core.policy's `session` at every size it states a shape for (`SHAPES`) and each
 session of `SESSIONS`: its inputs (parameters, input and output tokens, the shape) and its outputs (the tokens that run
 a forward, the positions attended, each product's MACs, the gates a MAC, the gates and the input ids' bits), and
@@ -23,10 +31,10 @@ import argparse
 import json
 import math
 import sys
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
-from . import VERSION, formalism, policy
+from . import VERSION, formalism, io_bound, policy
 from .capture.circuit import StepCircuit, measure
 from .gates import gates, per_mac
 
@@ -65,6 +73,14 @@ CASES = {
 }
 #: (tokens per block, k bits): c = tokens x the tiny start's forward (te_core.panels' dial), its default first
 CELLS = ((4096, 80_000), (4096, 800_000), (4096, 8_000_000), (100, 8_000_000), (1, 80_000_000))
+#: (case, tokens per block or None for the console's c, k bits or None for the console's): `published` under reading A
+#: at a cell for each case of its rule. The fixtures' products are classified at the console's k, so at any other k
+#: their fresh-products term is unmeasured
+PUBLISHED = (("dense", 1, 80_000_000), ("dense", 4096, 80_000), ("dense", None, None), ("lora", None, None),
+             ("adapter-live", 4096, 80_000), ("adapter-live", 4096, None))
+#: the 45M start's dense step's product rows (te_core.capture.products on te_core.io_bound.capture("dense", "s", 32000,
+#: batch 2, ctx 256, one micro-step) at the console's k)
+DENSE_45M = "dense_45m.products.json"
 OPS = ("counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's "
        "gates (te_core.tiles.of_graph)")
 #: (input tokens, output tokens): the console's session, the workload note's tighter and looser ones, a prefill alone
@@ -103,6 +119,41 @@ def case_measured(case: dict) -> formalism.Measured:
     return formalism.complete(block, {"output": {"e_bytes": delta / 8}}, TINY)
 
 
+def fresh(base: formalism.Measured) -> dict:
+    """The fresh-products term's vectors: each product set as `Measured.products` on `base` with one part of |C| gates
+    (the term reads only the products and |C|), through `formalism.fresh_products` at its (c, k)."""
+    sets = [(v["name"], v["inputs"]["c"], v["inputs"]["k"], v["inputs"]["C_gates"],
+             {"k": v["inputs"]["k"], "order": "chain", "products": v["inputs"]["products"]})
+            for v in io_bound.vectors()["vectors"]]
+    rows = json.loads((FIXTURES / DENSE_45M).read_text())
+    sets.append(("the 45M start's dense step, its trace's order unknown", *policy.CONSOLE, rows["gates"],
+                 formalism.products_of_trace(rows)))
+    name, c, k, C, square = sets[0]
+    sets += [(f"{name}, no order declared", c, k, C, square | {"order": None}),
+             (f"{name}, a circuit that declares a tree", c, k, C, square | {"order": "tree"})]
+    out = []
+    for name, c, k, C, products in sets:
+        m = replace(base, parts=(formalism.Part(gates=C, tokens=1.0, token_gates=C, affected_gates=C),),
+                    products=products)
+        term, why, got = formalism.fresh_products(m, c, k)
+        out.append({"name": name, "inputs": {"c": c, "k": k, "C_gates": C, "products": products}, "term": term,
+                    "fresh_cell": got.get("fresh_cell"), "order": got["order"], "why": why,
+                    "share": got["io_bound"]["share"]})
+    return {"p_cell": formalism.P_CELL, "order": formalism.ORDER,
+            "rests_on": formalism.RESTS_ON_CELL["fresh_products"], "fresh_cell": formalism.SENSITIVITIES["fresh_cell"],
+            "vectors": out}
+
+
+def published(measured: dict[str, formalism.Measured]) -> list[dict]:
+    """`formalism.published` under reading A at each cell of `PUBLISHED`."""
+    out = []
+    for case, n, k in PUBLISHED:
+        c = policy.CONSOLE[0] if n is None else n * W_FWD
+        k = policy.CONSOLE[1] if k is None else k
+        out.append({"case": case, "c": c, "k": k} | formalism.published(measured[case], c, k, "A"))
+    return out
+
+
 def finite(x):
     """`x` with every infinity "inf" (JSON has none)."""
     if isinstance(x, dict):
@@ -113,9 +164,9 @@ def finite(x):
 
 
 def build() -> dict:
-    measured, vectors = {}, []
+    measured, ms, vectors = {}, {}, []
     for name, case in CASES.items():
-        m = case_measured(case)
+        m = ms[name] = case_measured(case)
         measured[name] = asdict(m)
         for n, k in CELLS:
             c = n * W_FWD
@@ -128,6 +179,10 @@ def build() -> dict:
         "schema": SCHEMA, "version": VERSION, "about": __doc__.split("\n\n")[0],
         "rule": "rho = rho_fit where Fit holds, else max(1, the max over the kinds' measured terms); null where no "
                 "kind is measured. Sensitivities are never in the max.",
+        "published_rule": "Fit holds: rho_fit, binding fit. Else, where a measured kind's term exceeds 1: the max, "
+                          "binding that kind, partial where a kind is unmeasured. Else, where a kind is unmeasured: "
+                          "null, binding unmeasured, why naming it. Else: 1, binding none.",
+        "fresh": fresh(ms["dense"]), "published": published(ms),
         "kinds": list(formalism.KINDS), "rests_on": formalism.RESTS_ON, "sensitivities": formalism.SENSITIVITIES,
         "w_fwd_gates": W_FWD, "start": TINY, "program": PROGRAM,
         "cases": {name: {k: v for k, v in case.items() if k not in ("delta_bits", "decoder_gates")}

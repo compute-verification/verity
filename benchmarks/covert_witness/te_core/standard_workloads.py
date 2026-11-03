@@ -16,7 +16,8 @@ included), with `binding_kind`, `rests_on` and `kinds` there, and `rho_served` i
 (te_core.panels' `SERVED`). ρ, its binding kind and what it rests on are published's as it gives them (null where it
 has no bound, resting on "unmeasured"); reading A's ρ is never infinite, so `build` refuses one. `kinds` is
 algorithm_policy's cell of the terms the max takes, its `partial` and `why` where published sets them, and, beside
-them, the sensitivities `SENSITIVITIES`: reduction, update and reading B's token and decoding forms. `rho_inputs` holds
+them, the sensitivities `SENSITIVITIES`: published's (reduction, update and fresh_cell, the fresh-products term under
+P-cell) and reading B's token and decoding forms. `rho_inputs` holds
 `KEYS` (C_gates beside algorithm_policy's `rho_inputs`), from which algorithm_policy.page_rho gives the dial's ρ at
 any (c, k); `build` refuses a row whose rho_inputs miss formalism.at's ρ at either point or whose token dials miss its
 measured tokens (`token_dials`).

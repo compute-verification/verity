@@ -94,7 +94,7 @@ def test_rho_takes_only_the_kinds_valid_on_their_own(ref):
     assert ref["valid"] == list(W.VALID) == list(formalism.KINDS) == ["fresh_products", "token", "decoding"]
     assert ref["reading"] == "A" and set(ref["rests_on"]) == {*W.VALID, "fit", "none", "unmeasured"}
     assert ref["rests_on"]["fresh_products"].startswith("P-width and P-chain, reference circuit; no A1")
-    assert list(ref["sensitivities"]) == [*formalism.SENSITIVITIES, "fresh_cell"]
+    assert list(ref["sensitivities"]) == list(dict.fromkeys([*formalism.SENSITIVITIES, "fresh_cell"]))
     assert not set(ref["sensitivities"]) & set(ref["valid"])
     for at, r in every_rho(ref):
         assert list(r["terms"]) == ref["valid"] and list(r["sensitivities"]) == list(ref["sensitivities"]), at
@@ -140,16 +140,16 @@ def test_rho_is_one_only_where_every_valid_kind_is_measured(monkeypatch):
 def test_a_row_with_no_measured_kind_is_null_never_one(monkeypatch):
     """Coordinator 09:46Z and 12:20Z: a row whose valid kinds are all unmeasured publishes null, its basis
     unmeasured. A model's products are summed in a chain (12:09Z), so every point measures the fresh-products kind;
-    in an order not given, formalism leaves it unmeasured, and with the token and decoding kinds needing a trace the
-    point publishes null."""
-    monkeypatch.setattr(W, "ORDER", None)
+    for a circuit that declares them summed in a tree, formalism leaves it unmeasured (te_core.io_bound has the chain
+    constant only), and with the token and decoding kinds needing a trace the point publishes null."""
+    monkeypatch.setattr(W, "ORDER", "tree")
     c, k = policy.CONSOLE
     for workload, point in (("standard", "default"), ("lora", "rank 1 on W_q, one layer")):
         r = W.rho(W.model(workload, **settings(workload, point)), c, k)
         assert r["rho"] is None and r["basis"] == "unmeasured" and r["bound"] is None, (workload, point)
         assert r["binding_kind"] is None and not r["partial"] and r["fit_fails"], (workload, point)
         assert set(r["why"]) == set(W.VALID) <= set(r["unmeasured"]), (workload, point)
-        assert "order" in r["why"]["fresh_products"], (workload, point)
+        assert "summed in a tree" in r["why"]["fresh_products"], (workload, point)
     assert W.RESTS_ON["unmeasured"].startswith("unmeasured")
 
 
@@ -205,7 +205,8 @@ def test_the_sensitivities_and_the_target_are_te_cores(ref):
         for pname, s in w.points:
             m = W.model(w.name, **s)
             p = ref["workloads"][w.name]["points"][pname]
-            r, b = p["rho"]["default"], formalism.bound(m.measured, c, k)
+            me = replace(m.measured, products={"k": k, "order": W.ORDER, "products": W.products(m, c, k)})
+            r, b = p["rho"]["default"], formalism.bound(me, c, k)
             for name in formalism.SENSITIVITIES:
                 assert close(r["sensitivities"][name], finite(b["sensitivities"][name]), 1e-6), (w.name, pname)
             pub = formalism.published(m.measured, c, k, "B")
@@ -220,8 +221,8 @@ def test_the_fresh_kind_is_formalisms_on_the_models_products(ref):
     """The fresh-products kind is te_core.formalism.fresh_products on the model's products as `Measured.products`, at
     the console's k and summed in a chain (`ORDER`, the standard algorithm's: coordinator 12:09Z), where formalism
     measures it; the term is io_bound's figure without P-cell (`FRESH_FIGURE`, which needs no premise on the
-    partition: coordinator 06:57Z obligation 1 and 12:09Z), and formalism's own, under P-cell, is beside it as
-    fresh_cell, never below."""
+    partition: coordinator 06:57Z obligation 1 and 12:09Z), formalism's term too (`formalism.P_CELL` off), and the
+    figure under P-cell is beside it as fresh_cell, formalism's, never below."""
     assert ref["io_bound"] == W.IO_BOUND and W.ORDER == "chain"
     assert (W.FRESH_FIGURE, W.FRESH_CELL) == ("rho_no_cell", "rho")
     c, k = policy.CONSOLE
@@ -232,7 +233,8 @@ def test_the_fresh_kind_is_formalisms_on_the_models_products(ref):
             me = replace(m.measured, products={"k": k, "order": "chain", "products": W.products(m, c, k)})
             term, why, got = formalism.fresh_products(me, c, k)
             b = got["io_bound"]["proved"]
-            assert why is None and "fresh_products" not in r["why"] and term == b["rho"], (w.name, pname)
+            assert why is None and "fresh_products" not in r["why"] and term == b["rho_no_cell"], (w.name, pname)
+            assert got["fresh_cell"] == b["rho"], (w.name, pname)
             assert close(r["terms"]["fresh_products"], b["rho_no_cell"], 1e-6), (w.name, pname)
             assert close(r["sensitivities"]["fresh_cell"], b["rho"], 1e-6), (w.name, pname)
             assert b["rho"] >= b["rho_no_cell"], (w.name, pname)

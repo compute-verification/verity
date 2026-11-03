@@ -2456,10 +2456,10 @@
   null,
   null,
   "A",
-  "4.8",
+  "4.9",
   "unmeasured",
   "unmeasured",
-  "{\"bound\":{\"fresh_products\":null,\"token\":0.5736,\"decoding\":0.5736},\"sensitivity\":{\"reduction\":6059,\"update\":757.3,\"token_form\":312.6,\"decoding_form\":0.5736},\"why\":\"the measured kinds give at most 1; fresh products unmeasured\"}",
+  "{\"bound\":{\"fresh_products\":null,\"token\":0.5736,\"decoding\":0.5736},\"sensitivity\":{\"reduction\":6059,\"update\":757.3,\"fresh_cell\":null,\"token_form\":312.6,\"decoding_form\":0.5736},\"why\":\"the measured kinds give at most 1; fresh products unmeasured\"}",
   null
  ]
 }
