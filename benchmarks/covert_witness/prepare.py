@@ -194,7 +194,7 @@ class Net(torch.nn.Module):
             from model import LM, VOCAB, Size
 
             self.inner = LM(Size(config["name"], config["d_model"], config["n_layer"], config["n_head"], config["d_ff"]),
-                            vocab=config.get("vocab", VOCAB))
+                            vocab=config.get("vocab", VOCAB), bias=config.get("bias", ()))
         elif config["family"] == "hf-neox":
             from transformers import GPTNeoXConfig, GPTNeoXForCausalLM
 
@@ -325,7 +325,7 @@ class TrainData:
 #: output; its MLP is placed after the attention as in the sequential order, so its φ is an upper bound. Its head is
 #: `embed_out` in transformers 4 and `lm_head` from 5 (the start is registered under the installed one's name).
 FAMILIES = {
-    "lf": {"embed": "embed", "head": "embed", "final": r"norm", "block": r"blocks\.(\d+)\.(\w+?)(?:\.weight)?",
+    "lf": {"embed": "embed", "head": "embed", "final": r"norm", "block": r"blocks\.(\d+)\.(\w+?)(?:\.weight|\.bias)?",
            "stages": {"attn_norm": 0, "wq": 1, "wk": 1, "wv": 1, "wo": 2, "mlp_norm": 3, "w_gate": 4, "w_up": 4,
                       "w_down": 5}},
     "hf-neox": {"embed": r"gpt_neox\.embed_in\.weight", "head": r"(?:embed_out|lm_head)\.weight",
@@ -479,8 +479,9 @@ def encode_full(tensors: dict[str, torch.Tensor]) -> bytes:
 
 def encode_model(config: dict, tensors: dict[str, torch.Tensor]) -> bytes:
     """E as a model of its own architecture: `config` (θ's family, vocabulary and context, any shape: grown, pruned,
-    distilled) and the tensors θ doesn't give it. Each of the architecture's tensors is E's if E holds it, else θ's of the
-    same name, shape and dtype, so every new parameter is in 8·|E|."""
+    distilled, or with `bias` vectors on `model.LINEARS` leaves, as BitFit adds) and the tensors θ doesn't give it. Each
+    of the architecture's tensors is E's if E holds it, else θ's of the same name, shape and dtype, so every new parameter
+    is in 8·|E|."""
     from safetensors.torch import save
 
     return _pack(b"CWMODL1\n", {"config": config},

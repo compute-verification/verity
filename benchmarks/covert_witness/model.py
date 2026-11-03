@@ -1,6 +1,11 @@
 """The `lf` model, learning_frontier's dense decoder: Llama-style (RMSNorm, SwiGLU, RoPE, no biases), context 1024, the GPT-2
 vocabulary padded to 50,304 (data v3's starts: bpe32k's 32,000, `Size.config(vocab=32000)`), input and output embeddings
 tied. Its parameter names are the start registry's tensor names.
+
+A config's optional `bias` (a list of `LINEARS` leaf names) gives those matrices of every block a bias vector
+(`blocks.{i}.{leaf}.bias`), zero at initialisation: the extension BitFit trains, which a model format (CWMODL1) carries.
+The bias is added after the matmul in the output's dtype, so zero biases reproduce the unbiased model bit for bit,
+autocast included.
 """
 from __future__ import annotations
 
@@ -14,6 +19,7 @@ from torch import nn
 VOCAB = 50304
 CTX = 1024
 ROPE_THETA = 10000.0
+LINEARS = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
 
 
 @dataclass(frozen=True)
@@ -37,26 +43,28 @@ SIZES = {s.name: s for s in (
 
 
 class Linear(nn.Module):
-    def __init__(self, d_in: int, d_out: int, std: float):
+    def __init__(self, d_in: int, d_out: int, std: float, bias: bool = False):
         super().__init__()
         self.weight = nn.Parameter(torch.empty(d_out, d_in))
         nn.init.normal_(self.weight, std=std)
+        self.bias = nn.Parameter(torch.zeros(d_out)) if bias else None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return F.linear(x, self.weight)
+        y = F.linear(x, self.weight)
+        return y if self.bias is None else y + self.bias.to(y.dtype)
 
 
 class Block(nn.Module):
-    def __init__(self, size: Size, std: float, out_std: float):
+    def __init__(self, size: Size, std: float, out_std: float, bias: frozenset[str] = frozenset()):
         super().__init__()
         d = size.d_model
         self.n_head = size.n_head
         self.attn_norm = nn.Parameter(torch.ones(d))
         self.mlp_norm = nn.Parameter(torch.ones(d))
-        self.wq, self.wk, self.wv = Linear(d, d, std), Linear(d, d, std), Linear(d, d, std)
-        self.wo = Linear(d, d, out_std)
-        self.w_gate, self.w_up = Linear(d, size.d_ff, std), Linear(d, size.d_ff, std)
-        self.w_down = Linear(size.d_ff, d, out_std)
+        self.wq, self.wk, self.wv = (Linear(d, d, std, n in bias) for n in ("wq", "wk", "wv"))
+        self.wo = Linear(d, d, out_std, "wo" in bias)
+        self.w_gate, self.w_up = Linear(d, size.d_ff, std, "w_gate" in bias), Linear(d, size.d_ff, std, "w_up" in bias)
+        self.w_down = Linear(size.d_ff, d, out_std, "w_down" in bias)
 
     def forward(self, x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
         b, t, d = x.shape
@@ -75,13 +83,15 @@ def rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
 
 
 class LM(nn.Module):
-    def __init__(self, size: Size, ctx: int = CTX, vocab: int = VOCAB):
+    def __init__(self, size: Size, ctx: int = CTX, vocab: int = VOCAB, bias: list[str] | tuple[str, ...] = ()):
         super().__init__()
+        if not isinstance(bias, (list, tuple)) or not set(bias) <= set(LINEARS):
+            raise ValueError(f"lf: bias must be a list of {', '.join(LINEARS)}, not {bias!r}")
         self.size, self.vocab = size, vocab
         std, out_std = 0.02, 0.02 / math.sqrt(2 * size.n_layer)
         self.embed = nn.Parameter(torch.empty(vocab, size.d_model))
         nn.init.normal_(self.embed, std=std)
-        self.blocks = nn.ModuleList(Block(size, std, out_std) for _ in range(size.n_layer))
+        self.blocks = nn.ModuleList(Block(size, std, out_std, frozenset(bias)) for _ in range(size.n_layer))
         self.norm = nn.Parameter(torch.ones(size.d_model))
         hd = size.d_model // size.n_head
         freqs = 1.0 / (ROPE_THETA ** (torch.arange(0, hd, 2, dtype=torch.float32) / hd))
