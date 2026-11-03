@@ -612,7 +612,6 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     same pieces composed for onsite reject on the wipe's answer. The report and the line say they were composed on the
     served node, from the answer files it wrote, and the published line keeps that."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setenv("PRODUCT", "remote")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
     pieces, ran = tmp_path / "pieces", tmp_path / "ran"
@@ -631,7 +630,8 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     (pieces / "wipe" / S.SERVED).write_text(json.dumps({"server": "vy-dc-h200"}))
     (tmp_path / "serve").mkdir()
     argv = ["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs",
-            str(tmp_path / "audit"), "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200"]
+            str(tmp_path / "audit"), "--pieces", str(pieces), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
+            "--product", "remote"]
     rc = S.main(argv)
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
