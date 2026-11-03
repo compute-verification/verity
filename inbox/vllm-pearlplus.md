@@ -42,3 +42,5 @@
 2. `POUW_CMD` wired to `served_passes.py verify --passes <dir> --out "$3/verify.json"`;
 3. y staged on the `--whole-step` and grouped paths, which don't commit it yet;
 4. the y root tied to the block input that sampled proofs commit (training's tie). With circuits' PearlCUnscale blocks sampled at the linear sites, that ties y to U by proof as well.
+
+08:45Z Tue (coordinator): **`remote` is now 08d5d36ee0**, with compute-accounting's Pearl+ verdict covering y. served_y commits each call's real rows of y on retained passes; verify_run checks them against unscale(U) on drawn tiles, then runs served_passes and served_shares at Pearl+'s credit. Merge `remote` into your branch.
