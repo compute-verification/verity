@@ -196,11 +196,10 @@ theorem simMStop_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg →
         (Claims.cutT ask [] (Claims.ZKMal.stopIdx (s x) (kPre IV x) (kPre IV x)
           (Claims.SP.eval H ask (S₀.prog x (stopCoins IV b T₀ NB ΩB S₀ SO s x c).1)).1) (kPre IV x)
           (Claims.SP.eval H ask (S₀.prog x (stopCoins IV b T₀ NB ΩB S₀ SO s x c).1)).1) := by
-  have h1 := iterSimG_stopped_eval IV b H ask T₀ NB ΩB (Claims.ZKMal.censorSim S₀ s (kPre IV)) SO s x
+  rw [← Claims.ZKMal.censorSim_eval H ask S₀ s (kPre IV) x (stopCoins IV b T₀ NB ΩB S₀ SO s x c).1]
+  exact iterSimG_stopped_eval IV b H ask T₀ NB ΩB (Claims.ZKMal.censorSim S₀ s (kPre IV)) SO s x
     (Claims.ZKMal.stopProgB s (kPre IV) (fun x j => (nums b.st x j).rounds + 1)
       fun j x u c => (SO x j).prog (xsOf IV b x j u) c) (nS x) c
-  rw [Claims.ZKMal.censorSim_eval] at h1
-  exact h1
 
 /-- **`ZKmalAt` at `simMStop` carries over to another first-part simulator** whose transcripts are the first's on
 coins in bijection. -/
@@ -319,8 +318,10 @@ theorem layProver_rec (w : Claims.Flock.Wit) (x : Claims.Msg) :
   | 0, _, _ => rfl
   | m + 1, hist, ω => by
     have hs : ((𝔊).lay x).start x m = (lay IV 𝔟 (preOf IV b R x) wit).start x m := by
-      rw [Verity.Rec.Compiled.lay_start, lay_start]
-      exact recStart_eq IV b ivScope I relO R dI dg wo wit G Mp Mc nL nB CB t _ x m
+      rw [Verity.Rec.Compiled.lay_start]
+      exact (recStart_eq IV b ivScope I relO R dI dg wo wit G Mp Mc nL nB CB t
+        ((preTape IV b R x).N × (preTape IV b R x).Ω) x m).trans
+        (congrFun (congrFun (lay_start IV 𝔟 (preOf IV b R x) wit) x) m).symm
     simp only [Layout.prover, hs, layProver_rec w x m hist ω,
       Verity.slotP_relab 𝔒 G.prover (fun _ _ => rfl)]
     all_goals rfl
@@ -396,17 +397,17 @@ theorem recCompiled_commits (H : Claims.Msg → Claims.Msg) : (𝔊).Commits H :
     have e1 : ((((𝔊).P₀ w x).next x h t₀).eval H).1 =
         List.ofFn (fun i => dI w t₀.1.1 h i ^^^ maskOf (saltsOn t₀.1.2 h.length) i) ++
           H (Claims.toMsg Hm96.Default512.saltPrefix ++ List.ofFn (saltsOn t₀.1.2 h.length)) := by
-      show ((((preP IV 𝔟 (preOf IV b R x) w).next x h t₀).eval H).1 = _
+      show (((preP IV 𝔟 (preOf IV b R x) w).next x h t₀).eval H).1 = _
       simp only [preP, hh', ↓reduceIte]
       rfl
     rw [e1, e]
-    rfl
+    all_goals rfl
   · have hh' : h.length = IV.k (xIOf x) := hh
     have e : ((((𝔊).P₀ w x).next x h t₀).eval H).1 =
         ((commitThen (fun cs => .ret (stageMsg (𝔟).hs x (asRounds (h.take (IV.k (xIOf x)))) cs))
           ((List.range (b.nC x)).map fun j =>
             ((dg w (t₀.1.1, saltsOn t₀.1.2) (h.take (IV.k (xIOf x)))).getD j 0, saltsOn t₀.2 j)) []).eval H).1 := by
-      show ((((preP IV 𝔟 (preOf IV b R x) w).next x h t₀).eval H).1 = _
+      show (((preP IV 𝔟 (preOf IV b R x) w).next x h t₀).eval H).1 = _
       simp only [preP, hh', lt_irrefl, ↓reduceIte]
       rfl
     rw [e, commitThen_eval]
@@ -549,9 +550,7 @@ theorem zkStop_of_recZK (IV : Claims.Verifier Coin) (b : Brings) (ivScope : Clai
     rw [hI x]
     simp only [kS, Nat.cast_one, one_mul]
     ring
-  · first
-      | rfl
-      | (simp only [Claims.Recursion.γzk, Verity.Rec.system]; ring)
+  · rfl
 
 /-- **The deployed recursion's release leaks at most `log₂ (VM.k x + 1)` bits beyond `ZKStop`'s bound**: at the
 masked record with the deployed stop, the released prover (`Verity.haltP`, at any halt test reading the witness, the
