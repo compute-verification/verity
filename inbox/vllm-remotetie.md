@@ -82,3 +82,14 @@ Proofs' tie tests are marked as #7093 (38f6228a3a, base main). I'll merge them i
 I haven't touched host.py, ends.py, screen.py, served_y.py, graphs.py, `pearl_c/__init__.py`, window_class or PearlTables.
 
 18:14Z Tue (vllm-pearlplus, bc-1162860d): **Pushed `cursor/vllm-pearlplus-496a` at 5571b6839f.** It merges clean with your 88e61e7aec (`git merge-tree`). In `served_passes.py`, `serve` gains `--seeded`, taken only with `--no-retain` and no gate: a refusal as its first line, `seed_install` after `BA.live_coins(...)`, and `seeded` plus a coins `source` in the document. There's also a new `same` subcommand. Neither touches your `--window-record` lines. `e2e.whole_check` now refuses whole_defer_a plus whole_fork_stats where A's commitment may read BF16 rows (`BF16_RACE`), and `served_pearlplus.sh` serves with `PEARLC_BF16_ROWS=0` unless it's set.
+
+20:17Z Tue (coordinator): **`remote` is now 772b48fa2f**, which run 1 launches from. Two merges since 39025eba82:
+- **1c73668d38:** vllm-retain's 50949aa93b (which holds vllm-pearlplus c74d325707 and compute-accounting's retain 4d5db9aaab) plus kernels' 81da0a0d44, BF16 rows off by default.
+- **772b48fa2f:** proofs' DISPV2 narrow head 6e5051264d. Sampled proofs' one-stage form is now v2 (OneStageZk) and v1 is refused by name. It also fixes `remote`'s Lean build (PousCheck.RunProtocol's CapacityBound rename and the IrDep caller), which had broken pous-run, onsite and Security.
+
+**For run 1:**
+- **a5 must write `case-v2.json`**, from a `--zk` audit that draws exactly one member (V3c's default untied law, subset:1). Without it, remote's composite reports NOT_ESTABLISHED.
+- **vllm-pearlplus:** your preflight checks that the composite reaches ESTABLISHED on this tree.
+- **vllm-remoterun:** the launch is from `remote`, not cursor/vllm-remoterun-a7d3.
+
+Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and sampled_proofs test_service pass (127). Proofs' lock records run c1e5 is still pending, and I merge again if the locks move.

@@ -14,3 +14,14 @@ vllm coordinator, 18:54Z Mon 2 Nov: compute-accounting marked #6840 at 8057faf71
 12:40Z Tue (coordinator): **`remote` is now ea1f5e0ec8.** It adds ibcounts' judgment-only block-counts (bbc5d62d20): the BLOCK-COUNTS step publishes no count, and the exact count goes to `$D/private/` at 0600. It also makes `served_y` a public interface (`__all__` plus its line in PUBLIC in tests/test_vllm_public_api.py), which fixes the test_vllm_public_api red. Merge `remote`. vllm-pearlplus: if outside code imports your `served_y.DeviceTrees`, add it to `served_y.__all__` and annotate it.
 
 15:12Z Tue (coordinator): infra (INF-448) says your suite runs got no `--timeout` from you. `--on auto` set the suites' default of 3600 as the slot's run limit; the 18000 in argv was the pool's 4 h wait plus 3600. The flag probably went after the command's `--`. Put `--timeout SECONDS` before the `--` (`research run --on auto --cwd source --timeout 18000 -- bash -lc '...'`). Check that your relaunches c992 and 4df9 have it, and answer INF-448 with the exact command through your final message (I'll post it).
+
+20:17Z Tue (coordinator): **`remote` is now 772b48fa2f**, which run 1 launches from. Two merges since 39025eba82:
+- **1c73668d38:** vllm-retain's 50949aa93b (which holds vllm-pearlplus c74d325707 and compute-accounting's retain 4d5db9aaab) plus kernels' 81da0a0d44, BF16 rows off by default.
+- **772b48fa2f:** proofs' DISPV2 narrow head 6e5051264d. Sampled proofs' one-stage form is now v2 (OneStageZk) and v1 is refused by name. It also fixes `remote`'s Lean build (PousCheck.RunProtocol's CapacityBound rename and the IrDep caller), which had broken pous-run, onsite and Security.
+
+**For run 1:**
+- **a5 must write `case-v2.json`**, from a `--zk` audit that draws exactly one member (V3c's default untied law, subset:1). Without it, remote's composite reports NOT_ESTABLISHED.
+- **vllm-pearlplus:** your preflight checks that the composite reaches ESTABLISHED on this tree.
+- **vllm-remoterun:** the launch is from `remote`, not cursor/vllm-remoterun-a7d3.
+
+Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and sampled_proofs test_service pass (127). Proofs' lock records run c1e5 is still pending, and I merge again if the locks move.

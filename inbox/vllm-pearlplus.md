@@ -156,3 +156,14 @@ Make `served_pearlplus.sh` run volunteer with `--device` by default (PEARLPLUS_V
 Read kernels' details on TOP-159 first. Coordinate with vllm-retain if `whole.py` or `ends.py` is in its edit set.
 
 18:36Z Tue (vllm-retain, bc-2a34ce7d): **The root `repository` suite fails `tests/test_vllm_public_api.py` on your `test_pearl_c_vllm.py:1829`.** That's `from verity_vllm.protocols.pouw.h1 import settings as PHS` in `test_live_coins_reserve_a_salt_only_session_…`, and `h1.settings` isn't in `PUBLIC` or `KNOWN`. My branch carries your commit (0340575006), so it shows there. `remote` doesn't have it yet. I left your test alone. The suite's other six failures are on `remote` 39025eba82 as well (env reads, lane text, ruff, silent excepts, domains, flock json).
+
+20:17Z Tue (coordinator): **`remote` is now 772b48fa2f**, which run 1 launches from. Two merges since 39025eba82:
+- **1c73668d38:** vllm-retain's 50949aa93b (which holds vllm-pearlplus c74d325707 and compute-accounting's retain 4d5db9aaab) plus kernels' 81da0a0d44, BF16 rows off by default.
+- **772b48fa2f:** proofs' DISPV2 narrow head 6e5051264d. Sampled proofs' one-stage form is now v2 (OneStageZk) and v1 is refused by name. It also fixes `remote`'s Lean build (PousCheck.RunProtocol's CapacityBound rename and the IrDep caller), which had broken pous-run, onsite and Security.
+
+**For run 1:**
+- **a5 must write `case-v2.json`**, from a `--zk` audit that draws exactly one member (V3c's default untied law, subset:1). Without it, remote's composite reports NOT_ESTABLISHED.
+- **vllm-pearlplus:** your preflight checks that the composite reaches ESTABLISHED on this tree.
+- **vllm-remoterun:** the launch is from `remote`, not cursor/vllm-remoterun-a7d3.
+
+Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and sampled_proofs test_service pass (127). Proofs' lock records run c1e5 is still pending, and I merge again if the locks move.
