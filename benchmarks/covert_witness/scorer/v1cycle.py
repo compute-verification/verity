@@ -25,7 +25,7 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    to the evidence store only (01:22Z).
 4. Once the builder's v2 is on that te_core (`policy_panels`), runs its `python -m te_core.algorithm_policy
    --publish` on the same ledger, with ladder-v3's points files as `--ladder-points` (`ladder_points`, 07:57Z),
-   which PUTs training/algorithm-policy and training/frontier-fit; then `python -m
+   else te_core.frontier_fit's own (its LADDER, built from ladder-v3's manifest), which PUTs training/algorithm-policy and training/frontier-fit; then `python -m
    te_core.panels frontier-branches` (Daniel, coordinator 23:56Z; the integrator's builder, 23:59Z), PUT until
    algorithm-policy is PUT with gain, gain_target and start_effective_gates on its rows (`fb_retired`; 05:22Z,
    07:48Z), then stored only. A refused PUT is reported, not fatal. te_core's five old panels stay in the re-score's
@@ -421,6 +421,10 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
     board = next((x.removeprefix("board: ") for x in r.stdout.splitlines() if x.startswith("board: coverage")), None)
     res["coverage"] = [board] if board else coverage(d, r.stdout)
     res["ladder"] = [p.name for p in ladder]
+    fit = d / "tables" / f"{FIT}.json"
+    used = re.search(r"(\d+) ladder points(?: \((art:\w+)\))?", json.loads(fit.read_text()).get("source") or ""
+                     ) if fit.exists() else None
+    res["ladder_used"] = {"points": int(used[1]), "art": used[2]} if used else None
     return res
 
 
@@ -555,9 +559,9 @@ def main() -> int:
             "pilot_start": sum(v == "pilot-start" for v in (fr.get("skipped") or {}).values()),
             "rule": "H and W* over every checkpoint (19:50Z)"}
     if policy:
-        meta["algorithm_policy"] = {k: v for k, v in policy.items() if k not in ("coverage", "ladder")}
+        meta["algorithm_policy"] = {k: v for k, v in policy.items() if k not in ("coverage", "ladder", "ladder_used")}
         if "ladder" in policy:
-            meta["ladder_points"] = policy["ladder"]
+            meta["ladder_points"], meta["ladder_used"] = policy["ladder"], policy.get("ladder_used")
         apc = out / "algorithm-policy" / "console" / "algorithm-policy.json"
         if apc.exists():
             q = json.loads(apc.read_text())
@@ -752,9 +756,11 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
                   + (f", the one bound's binding kind {'/'.join(cells['binding_kind'])} with what it rests on and each "
                      "kind's term (reduction and update as sensitivities, 08:26Z)" if cells.get("binding_kind") else "")
                   + ", rho_default)" if cells else "")
-    ladder = meta.get("ladder_points")
-    ladder_said = ("" if ladder is None else f" (v3's fit with ladder-v3's points: {', '.join(ladder)})" if ladder
-                   else f" (no ladder points file on {LADDER[0]} yet, so v3's fit has only its starts)")
+    ladder, used = meta.get("ladder_points"), meta.get("ladder_used") or {}
+    n = f"{used['points']} " if used else ""
+    ladder_said = ("" if ladder is None else f" (v3's fit with ladder-v3's {n}points: {', '.join(ladder)})" if ladder
+                   else f" (v3's fit with te_core.frontier_fit's {n}ladder points, {used['art'][:16]})"
+                   if used.get("art") and used["points"] else " (no ladder points, so v3's fit has only its starts)")
     ap_said = "; ".join(f"training/{k} {'PUT ' if v[:1].isdigit() else ''}{v}"
                         + (cells_said if k == "algorithm-policy" else ladder_said if k == FIT else "")
                         for k, v in ap.items())
