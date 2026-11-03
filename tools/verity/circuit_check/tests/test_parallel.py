@@ -304,10 +304,10 @@ def _scheduled(monkeypatch, log, mem_gb: int | None, jobs: int = 12) -> dict:
 
 
 def test_a_negative_budget_says_why_and_what_to_do_and_counts_an_unmeasured_target_as_admission_does(monkeypatch, capsys):
-    """A `--shard K/4` of `--all` in a 40 GB check slot, whose process held 43.1 GiB once it had built the catalog, raised
-    ``KeyError`` on its first target with no recorded peak: the over-budget warning counted it at 0 GiB, over a -3.1 GiB
-    budget, and then read its peak.  It is counted at `HEAVY_GB`, as `admit` counts it, and a budget under that is one
-    warning, on stderr under ``-q`` too, naming what took the memory and the two ways out; the targets still run, alone."""
+    """Under a -3.1 GiB budget (a process holding 43.1 GiB once it has built the catalog, in a 40 GB check slot), a target
+    with no recorded peak is weighed at `HEAVY_GB`, as `admit` weighs it, and never looked up in the peaks; a budget under
+    `HEAVY_GB` is one warning, on stderr under ``-q`` too, naming what took the memory and the two ways out, and the
+    targets still run, alone."""
     lines: list[str] = []
     handed = _scheduled(monkeypatch, lines.append, 40)
     assert handed["weights"] == [26.5, cli.HEAVY_GB] and handed["budget"] == pytest.approx(-3.1)
