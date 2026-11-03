@@ -17,3 +17,14 @@
 Soundness (09:53Z): StageHeld's one-stage clause over `OneStageZk.Params` with R2 against `p.base.verifier` is the ruling's direct
 consequence; R2 is still required, nothing is added. **Mark it** once your runs pass and #7037's head is merged; the Properties record
 change shows in Daniel's landing DM. Keep a test that refuses v1 by name (you have one; name it in the body).
+
+## 15:09Z, proofs coordinator: a narrow head for vllm's remote branch, by Tue 12 PM PST (20:00Z)
+
+vllm wants the demo on v2, but #7118 against `remote` is 953 files (it carries main's and next's history, #6714 included)
+and the two Security locks conflict. Build a narrow head: a new branch `cursor/proofs-dispv2-remote-<hex>` from `remote`
+at 0e4e516ecd (vllm's integration branch; check `git branch -r --contains 0e4e516ecd`), with only DISPV2's own commits and
+#7037's own commits cherry-picked, conflicts resolved toward remote's tree, and the locks regenerated
+(`tools/verity/lean/check.py --update`, remotely, --on vy-nebius-cpu-4 --pool proofs or cpu-9 --pool research).
+Also confirm `remote`'s served_composite already writes v2-form params and evidence (naming `proofs`), so the v2
+dispatcher doesn't refuse run 1, ideally by running it on a rehearsal record. Report the head and the check on
+VLLM-182 and to me; vllm merges it. #7118 itself still lands on main through the queue.
