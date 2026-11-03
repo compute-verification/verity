@@ -180,7 +180,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=20261103)
     ap.add_argument("--out")
     a = ap.parse_args(argv)
-    parse = lambda xs: [tuple(int(v) for v in x.split(":")) for x in xs]  # noqa: E731
+
+    def parse(xs):
+        return [tuple(int(v) for v in x.split(":")) for x in xs]
+
     out = check(open(a.cubin, "rb").read(), parse(a.shape), parse(a.timed), a.seed, parse(a.resident), a.reps)
     if a.out:
         with open(a.out, "w") as fh:
