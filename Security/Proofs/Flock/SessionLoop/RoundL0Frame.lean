@@ -1,4 +1,5 @@
 import Proofs.Flock.SessionLoop.SchedAt
+import Proofs.Flock.SessionLoop.RhoKeepRep
 
 /-!
 # The frame's release at a rep's level-0 rounds
@@ -16,7 +17,8 @@ body `i` at zero pads, at its own table and the coins from the binding on, and t
 * **`LeanRelease.l0_frame`**: on a live history whose next round is the rep's level-0 round `i`, the loop's table there
   is of the rep's setup, the zerocheck's and lincheck's claims are at the points of the openings' words from the rep's
   start, and the release is body `i` at the table, the basis of its switched vectors, the rep's pads and the opened
-  coins from the binding on (`Bind.sched_l0`).
+  coins from the binding on (`Bind.sched_l0`), the frame taking the round's coins in level 0's masked phase at body
+  `i`'s position (`RhoKeep.repState_l0`).
 -/
 
 set_option synthInstance.maxSize 100000
@@ -207,11 +209,12 @@ open Loop Ranked in
 set_option maxHeartbeats 4000000 in
 /-- **The frame releases a rep's level-0 round past the binding at its pads**: at a live history whose next round is
 rep stream `2j + r`'s level-0 round `1 ≤ i ≤ k₀ + 3` (`Masked.repSlot` `i`), on the rep's own tables where `real`
-answers the loop's, and where the frame takes the coins before it in level 0's masked phase at body `i`'s position,
-the loop's table there is of the rep's setup, the zerocheck's and lincheck's claims of the schedule are at the points of
-the openings' words from the rep's start (`Loop.pts_raw`), and the release is body `i` at the table, the basis of its
-switched vectors at those claims and the extra claims at the link points off the first opening's words, the rep's
-pads, and the opened coins from the binding on (`Bind.sched_l0`, `Loop.loopNr_l0r`, `release_l0_at`). -/
+answers the loop's, the loop's table there is of the rep's setup, the zerocheck's and lincheck's claims of the schedule
+are at the points of the openings' words from the rep's start (`Loop.pts_raw`), and the release is body `i` at the
+table, the basis of its switched vectors at those claims and the extra claims at the link points off the first
+opening's words, the rep's pads, and the opened coins from the binding on (`Bind.sched_l0`, `Loop.loopNr_l0r`,
+`release_l0_at`). The frame takes the round's coins in level 0's masked phase at body `i`'s position: the loop's state
+at the placeholder table (`progOf_at`) is in level 0 at the next body's first value (`RhoKeep.repState_l0`). -/
 theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray))
     (wk : (ofLoop Masked.dataE L₁ real).toSrv.Worker) {x : Msg} {w : Flock.Wit} (hx : Masked.Live x)
@@ -221,9 +224,7 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (hl : (ofLoop Masked.dataE L₁ real).toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true) {v : Msg}
     (hv : wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false)) (j : Fin (Masked.jOf x)) (r : Fin 2) {i : ℕ}
     (hn : ops.length = Masked.repSlot x (2 * j.val + r.val) fun _ => i) (h1 : 1 ≤ i)
-    (hi : i ≤ (Masked.zkTab x j).sch.k0 + 3)
-    (hmS : ∀ m, (ofLoop Masked.dataE L₁ real).answered x (ν, t) ((m₀, ρ₀) :: ops) = .ok m →
-      m.on = true ∧ m.inner = none ∧ m.pos = absPos (Masked.layE x j) ((Masked.layE x j).lgOod 0) + l0Off i) :
+    (hi : i ≤ (Masked.zkTab x j).sch.k0 + 3) :
     ∃ (tr : Tab) (hir : Array ByteArray) (zc : _root_.Flock.ZcOut) (lc : _root_.Flock.LcOut) (T : F128)
       (xs : Array (Array F128)) (lay : _root_.Flock.Zk.PadLayout) (mask : _root_.Flock.Firewall.Frame.MaskSlot),
       real x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir) ∧
@@ -352,7 +353,6 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     kindAt_masked_of _ (by simp only [List.length_cons]; omega) (by rw [hlast, List.length_cons]; omega)
   obtain ⟨m, out, s', hA, hck⟩ :=
     check_of_live (ofLoop Masked.dataE L₁ real) wk x w (ν, t) κ ((m₀, ρ₀) :: ops) v hl hkd hv
-  obtain ⟨hon, hin, hpm⟩ := hmS m hA
   obtain ⟨ho, ht, -⟩ := answered_ok hA
   have hA' := hA
   rw [ofLoop_answered_same Masked.dataE L₁ real x (ν, t) (m₀, ρ₀) ops hsx (q := u + 1) (by omega) hj1 ho ht] at hA'
@@ -363,11 +363,11 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   obtain ⟨c', tb, dom, xs, his, hph0⟩ := progOf_placeholder x _ hsx hcs ho'
   rw [locate_pred _ 0 u a hj1, hloc] at hph0
   dsimp only at hph0
-  obtain ⟨hts', ⟨tp, htp⟩, -⟩ := Count.placeholder_tab hph0
+  obtain ⟨hts', ⟨tp, htp⟩, hxs⟩ := Count.placeholder_tab hph0
   obtain ⟨-, hk0, hnn, hq⟩ := Count.sched_facts htp
   have hn1 : 1 ≤ (Masked.zkTab x j).sch.n := (Count.sched_rho hz).1
-  obtain ⟨lay, mask, hds, -, -, -⟩ := placeholder_ok hph0
-  rw [hst] at hts'
+  obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph0
+  rw [hst] at hts' hxs
   have hsch : tb.sch = (Masked.zkTab x j).sch := by
     rw [hz, Except.ok.injEq, Prod.mk.injEq] at htp
     exact htp.1.symm
@@ -438,18 +438,58 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     unfold startOf
     rw [hsx]
     exact hds
-  have hLk : (ofLoop Masked.dataE L₁ real).lay x (2 * j.val + r.val) = Masked.layE x j := by
-    show ((startOf x (2 * j.val + r.val)).toOption.map (·.1)).getD default = _
-    rw [hso]
-    show lay = _
+  have hlayE : lay = Masked.layE x j := by
     obtain ⟨sch', tp', hs3, hl3⟩ := start_lay hds
     rw [hz, Except.ok.injEq, Prod.mk.injEq] at hs3
     rw [hl3, ← hs3.1, hst]
     try rfl
+  have hLk : (ofLoop Masked.dataE L₁ real).lay x (2 * j.val + r.val) = Masked.layE x j := by
+    show ((startOf x (2 * j.val + r.val)).toOption.map (·.1)).getD default = _
+    rw [hso]
+    show lay = _
+    exact hlayE
   have hcn : (ofLoop Masked.dataE L₁ real).coins x ((m₀, ρ₀) :: ops).length = l0Nc i := by
     show loopNr x (((m₀, ρ₀) :: ops).length - 1) = _
     rw [List.length_cons, Nat.add_sub_cancel, hn, Masked.repSlot_eq hsx hz]
     exact loopNr_l0r hsx hq2 hz (by rw [hst]; omega) (by rw [hst]; exact hk6) h1 hi
+  -- the frame's state there: in level 0 at body `i`'s first value
+  have hph : placeholder spec (Masked.stsOf x) (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (u + 1)).1
+      (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0) = .ok (c', tb, dom, xs, his) := by
+    rw [hloc]
+    exact hph0
+  have hA'' := hA'
+  rw [progOf_at x _ hsx (q := u + 1) (by rw [List.length_map]; omega) hj1 hph, hloc] at hA''
+  dsimp only at hA''
+  obtain ⟨alg, -, hal, -⟩ := repState_ok hA''
+  have hmb : tb.st.m < 2 ^ 64 := by rw [htm]; exact lt_of_le_of_lt hm35 (by norm_num)
+  have hAA : alg.size = A := by
+    rw [(alg_cnt (by rw [htm]; omega) (by rw [htk]; omega) hmb hal).1, htm, htk, hAd]
+  have hxX : xs = XS := hxs.trans hXSd.symm
+  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
+    rw [hc']
+    exact Claims.ZKServer.ofDraws_order _ _ _
+  have htp' : _root_.Flock.Zk.schedule tb.st.m = .ok (tb.sch, tp) := by
+    rw [htm, ← hst]
+    exact htp
+  have hlay : lay = _root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0 := by
+    rw [hlayE, hts', hsch]
+    try rfl
+  have hord : ((ofLoop Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order.size = c'.order.size := by
+    rw [hc']
+    show (_root_.Flock.Firewall.Frame.absorbed ((ofLoop Masked.dataE L₁ real).lay x
+      ((ofLoop Masked.dataE L₁ real).rep x ((m₀, ρ₀) :: ops).length))).size =
+        (_root_.Flock.Firewall.Frame.absorbed lay).size
+    rw [hrep, hLk, hlayE]
+  rw [show a + 1 = alg.size + (xs.size + 2) + 1 + i by rw [hAA, hxX, hXS]; omega] at hA''
+  obtain ⟨hon, -, hin, -, hpm0⟩ := RhoKeep.repState_l0 hcc hal (by rw [htm]; omega) hdg (placeholder_cap hph0)
+    (hdm ▸ hdom') hmkt (by rw [hxX]; exact hXb) htp' hlay hc' hord h1 (by rw [hsch]; exact hi)
+    (by rw [Array.size_map, Array.size_range]) hA''
+  have hkL : 0 < (Masked.layE x j).k0 := by
+    show 0 < (Masked.zkTab x j).sch.k0
+    rw [← hsch]
+    omega
+  have hpm : m.pos = absPos (Masked.layE x j) ((Masked.layE x j).lgOod 0) + l0Off i := by
+    rw [hpm0, hc', hlayE, nPiop_ood _ _ _ hkL]
   -- the release: body `i` at the rep's pads
   have hrel := release_l0_at (ofLoop Masked.dataE L₁ real) x (ν, t) ((m₀, ρ₀) :: ops) false hA
     (lay := Masked.layE x j) (sch := (Masked.zkTab x j).sch) (Masked.layE x j).len (by rw [hrep]; exact hLk)
