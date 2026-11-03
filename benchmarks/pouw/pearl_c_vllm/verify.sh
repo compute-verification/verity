@@ -5,8 +5,8 @@
 #     --env GPU_LEASE_WHO=<you> -- bash benchmarks/pouw/pearl_c_vllm/verify.sh <window run id> [J]
 # After window.sh's PEARLC_KERNEL=pearl_c_sm90 window, WORK=/workspace/research/pearl-c-sm90 and VERITY_BENCH_VENV names
 # the node's Python (window.sh's).
-# FAST=1 replays on fast_tile's batch forms (verify_run.py --fast), every CROSS-th tile id (default 256) on the scalar
-# reference too.
+# FAST=1 replays on fast_tile's batch forms (verify_run.py --fast), a pass's first replayed tile and every CROSS-th after
+# it in the draw's order (default 256) on the scalar reference too.
 # Prints each pass's ACCEPT or REJECT line and exits non-zero unless the prefill and decode passes are accepted and every
 # negative control's pass (control, and control-leaves where the window retained it) is rejected.  An ACCEPT is
 # replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck).
