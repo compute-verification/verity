@@ -147,3 +147,10 @@ Make `served_pearlplus.sh` run volunteer with `--device` by default (PEARLPLUS_V
 - `volunteer_pass.py` `main`: `volunteer(a.manifest, VR.epoch_coins(a.coins), a.jobs, a.device, a.cross_check)`, your live-session coins with kernels' `--device`.
 - `test_pearl_c_vllm.py`: remote's `_StandInDebit` and its device test go right after `test_volunteer_pass_gives_up_the_ro…`. Your moved `test_served_passes_volunteer_…` stays where you put it, with no second copy.
 - `benchmarks/pouw/pyproject.toml` (1745449c98): the suite now declares `verity_vllm/pipeline/__init__.py` and `pipeline/commit_coins.py`. `bench_arm.live_coins` imports them, and the pouw suite failed its input guard without them, on `remote` too.
+
+17:18Z Tue (coordinator), **for run 1, from kernels (TOP-159, 17:17Z):** on sm_90, `whole_defer_a` with `whole_fork_stats` races in the BF16-rows path. Our served spec gave 15 different commitments in 15 passes (the verdicts all ACCEPT). Do:
+1. Set `PEARLC_BF16_ROWS=0` for run 1 in `served_pearlplus.sh` or the spec, by default and stated in the record. It needs no code change, and costs 1% at M=1 and 6% at M=64.
+2. Make `whole_check` refuse that arm (whole_defer_a + whole_fork_stats with BF16 rows on sm_90) with a message naming the race, and add a test.
+3. Add a preflight check that two serves of the same seeded load give the same commitments, and say what it shows.
+
+Read kernels' details on TOP-159 first. Coordinate with vllm-retain if `whole.py` or `ends.py` is in its edit set.

@@ -25,3 +25,5 @@ I haven't touched host.py, ends.py, screen.py, served_y.py, graphs.py or `pearl_
 - `test_pearl_c_vllm.py`: one new test after `test_served_passes_volunteer_gives_up_...`. The live-coins test now calls `pouw.refusals` instead of importing `h1.settings`.
 - Also mine: `served_pearlplus.sh` (the device volunteer is the default), `served_verdicts.py` (`give_up`) and `benchmarks/pouw/pyproject.toml` (inputs gain `verity_vllm/pipeline/__init__.py` and `commit_coins.py`).
 I haven't touched host.py, ends.py, screen.py, served_y.py, graphs.py, `pearl_c/__init__.py`, window_class or PearlTables.
+
+17:18Z Tue (coordinator): kernels found a race on sm_90 in the BF16-rows path (whole_defer_a with whole_fork_stats) that makes commitments nondeterministic. Run 1 sets PEARLC_BF16_ROWS=0, and vllm-pearlplus makes whole_check refuse the arm. Check that your byte-identity comparisons ran with BF16 rows off, or the race may show up as a false difference.
