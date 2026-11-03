@@ -3,6 +3,7 @@ import Properties.SampledProofs.Draw
 import Proofs.Flock.Bridge.V5.Statement
 import Proofs.Flock.Bridge.CircuitOf
 import Proofs.Flock.Soundness.ZK.RealLeaves
+import Proofs.Properties.Verity.Sampled.Deployed
 
 /-!
 # Sampled proofs' leg of `Verity.Soundness`: the session v2 sets up
@@ -14,15 +15,17 @@ population-order hypotheses read off acceptance), applied at the session v2 sets
 files and at the strategy a strategy of the period's game projects to. This module states its C-Flock side.
 
 * **The session** (`Live`): V5's binders, each the value v2's check derives on the parameters and the committed files,
-  with three of V5's hypotheses as fields (A3 at the device's bytes, `TagsOkZHJ`, and `RecordCustodyZKJP` at the writer
-  whose record v2 decodes), and the bound's parameters. The circuit names no public input port: v2 hands `flock-verify`
-  no recomputation of public input words, so `HmIn.checkOwn` refuses any circuit that names one, and the session's ports
-  are `HmIn.parse`'s empty ones.
+  with four of V5's hypotheses as fields (A3 at the device's bytes, `TagsOkZHJ`, the registration's law on its layout's
+  strata, `Flock.Bridge.LawOn`, and `RecordCustodyZKJPLaw` at the writer whose record v2 decodes, under that law), and
+  the bound's parameters. The draw file is the one `flock-verify draw` prints for the verifier's own draw under the law
+  (`printedDraw`, `Live.dj`), so V5's `hsz` holds at it (`Live.hsz`). The circuit names no public input port: v2 hands
+  `flock-verify` no recomputation of public input words, so `HmIn.checkOwn` refuses any circuit that names one, and the
+  session's ports are `HmIn.parse`'s empty ones.
 * **The draw** (`Live.L`): the law the parameters' selection rule derives over the population (`law`), drawn as
   `SampledProofs.Select.select` draws it, by `SampledProofs.Draw.drawUnits` on the device's one byte stream (`src`); a
-  draw that fails draws every unit. At a subset law it is V5's `Law.execOS` (`drawUnits_subset_runOS`).
+  draw that fails draws every unit. It is V5's draw at the session's bytes and law (`Live.L_eq`, `Flock.Bridge.execSel`).
 * **The live audit at the session** (`Live.game`), and V5's simulator and extractor at any strategy of it (`Live.sim`,
-  `Live.Xr`). The simulator and the extractor hold at every law (`decodesZCJH_custodyP`).
+  `Live.Xr`). The simulator and the extractor hold at every law V5 admits (`decodesZCJH_custodyP`).
 * **The claim's transcript at a strategy** (`Live.extract`): V5's trace fixed at registration, opened at the deployed
   commitment and read at the circuit's gates with its constants, on the committed files' circuit. Without public input
   ports V5's key program is the claim's (`keyProgP_empty`), and the files the session reads parse to it
@@ -86,10 +89,10 @@ open scoped ENNReal
 
 /-- **The session v2 sets up on the parameters and the committed files**: V5's binders, each the value v2's check
 derives (the files' parse, the public file over the circuit's empty public input ports, the circuit's ports named once
-with one domain at each root, the population and its strata, the registration's descriptor and query and the
-population's order, the law and the draw's size, and the session's plan, writer and digest), the device's byte stream
-the draw reads, A3 at those bytes, the verify command's tags and `live-verifier` at the writer as fields, and the
-bound's parameters. -/
+with one domain at each root, the population, the registration's descriptor and query and the population's order, the
+law on the registration's strata and the draw's size, and the session's plan, writer and digest), the device's byte
+stream the draw reads, A3 at those bytes, the verify command's tags and `live-verifier` at the writer under the law as
+fields, and the bound's parameters. The draw file is the printed one (`Live.dj`). -/
 structure Live where
   /-- the population: the public file's proof blocks -/
   n : ℕ
@@ -122,21 +125,18 @@ structure Live where
   qr : Lean.Json
   /-- the registration's population is the public file's proof blocks, in order -/
   hpop : Flock.Bridge.PopMatches desc qr n
-  /-- the population's strata sizes, in slot order: the registration's templates -/
-  ns : List ℕ
-  hns : ns.sum = n
   /-- the law the parameters' selection rule derives over the population (`SampledProofs.Select`) -/
   law : Flock.Draw.Law
   /-- the draw's size -/
   kd : ℕ
-  hkd : kd ≤ n
+  /-- the law is on the strata of the registration's layout and draws `kd` proof blocks -/
+  hlaw : Flock.Bridge.LawOn law (Flock.Bridge.nsOf desc qr) kd
   hdiv : kd % nTab I = 0
-  dj : Finset (Fin n) → Lean.Json
   S₀ : Finset (Fin n)
   d₀ : Lean.Json
   y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
   wr : (S : Finset (Fin n)) → (R : Reg) →
-    LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) →
+    LiveOutJ (planZHJP (Reg := Reg) (printedDraw law) y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) →
       FlockSoundness.Discharge.Exec.Transcript
   dg : ByteArray → ByteArray
   N : ℕ
@@ -148,10 +148,9 @@ structure Live where
   src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256
   hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src
   hTags : TagsOkZHJ I
-  /-- `live-verifier` at the writer as V5 reads it, the record's draw a subset draw of `kd` units
-  (`DrawFileZK dj (.subset kd) n`) -/
-  hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJP I own dj
-    (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr kd
+  /-- `live-verifier` at the writer as V5 reads it, under the law (`DrawFileZK (printedDraw law) law n`) -/
+  hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw I own (printedDraw law)
+    (fun S R => (planZHJP (Reg := Reg) (printedDraw law) y₀ S R).length) wr law
   k : ℕ
   Rw : ℕ
   M : ℕ
@@ -160,7 +159,7 @@ structure Live where
   hM : 1 ≤ M
   ρ : ℝ
   hρ : ρ < 1
-  hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ
+  hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) (printedDraw law) y₀ S R) j k ≤ ρ
   /-- the claim's share: at most an `ε` share of the proof blocks unbound -/
   ε : ℝ
   /-- one opening's verification, in SHA-512 calls -/
@@ -203,6 +202,14 @@ namespace Live
 
 variable (A : Live)
 
+/-- **The session's draw file**: at each draw, the one `flock-verify draw` prints for the verifier's own draw under the
+session's law (`printedDraw`). -/
+abbrev dj : Finset (Fin A.n) → Lean.Json := printedDraw A.law
+
+/-- **V5's `hsz` at the session**: the draw file decodes only to the law's `kd` units (`drawSize_deployed`). -/
+theorem hsz : ∀ S ud, Flock.Draw.UnitDraw.ofJson (A.dj S) = .ok ud → ud.units.size = A.kd :=
+  drawSize_deployed A.hlaw
+
 /-- **The session with the draw's sample widened by the coins `S`**: the draw reads only the session's bytes, so the
 draw's law is the session's and A3 holds at the widened sample (`uniform_fst`). -/
 noncomputable def extend (S : Widening) : Live where
@@ -221,6 +228,9 @@ noncomputable def L : FlockSoundness.Audit.Law A.n where
     match _root_.SampledProofs.Draw.drawUnits A.law A.n (_root_.Properties.SampledProofs.bytesOf (A.src ω 0)) with
     | .ok (d, _) => Finset.univ.filter fun u => u.val ∈ d
     | .error _ => Finset.univ
+
+/-- The session's draw is V5's, `Flock.Bridge.execSel` at the session's bytes and law. -/
+theorem L_eq : A.L = Flock.Bridge.execSel (n := A.n) A.src A.law A.n := rfl
 
 /-- **C-Flock's live audit at the session**, the game V5 bounds: the prover registers, the device's bytes draw, and
 the live session runs at the draw. -/
@@ -241,12 +251,14 @@ noncomputable def vb :=
     (rsZHJP_computes (Reg := A.Reg) A.dj A.y₀ A.ht (Flock.Desc.parse_flat A.hD) A.hscope A.hU A.hpi A.hpub)
 
 /-- **V5's simulator at a strategy of the live audit**: the strategy in the compiled batched session at flock-verify
-`--zk`'s acceptance at `own`, through the decoder `RecordCustodyZKJP` gives at the session's law. -/
+`--zk`'s acceptance at `own`, through the decoder `RecordCustodyZKJPLaw` and the draw file's size give at the session's
+law. -/
 noncomputable def sim (τ : FlockSoundness.Game.Strategy A.game) :=
   simZJA execArith hs512 (planZHJP A.dj A.y₀) (AcceptsZKP A.I A.own) A.wr
     (opnAtZHJP (planZHJP A.dj A.y₀) A.I A.own A.dj) A.dg (decAtZJ (planZHJP A.dj A.y₀)) (fun _ _ _ _ => true)
     (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) A.N
-    (decodesZCJH_custodyP A.I A.own A.ht (Flock.Desc.parse_flat A.hD) A.kd A.hdiv A.dj A.y₀ A.wr A.L A.hTags A.hCust) τ
+    (decodesZCJH_custodyP A.I A.own A.ht (Flock.Desc.parse_flat A.hD) A.law A.kd A.hdiv A.dj A.y₀ A.wr A.L A.hTags
+      A.hCust A.hsz) τ
 
 /-- **V5's extractor at a strategy of the live audit**: `XplurZC` at the simulator's registration and continuation. -/
 noncomputable def Xr (τ : FlockSoundness.Game.Strategy A.game) :=
@@ -283,7 +295,7 @@ of `kd` units, `C(n − K₀, kd)/C(n, kd)` with `K₀ = ⌊εn⌋ + 1`. Those s
 claim, so no count of them enters; with none (`ε ≥ 1`) the term is `0`. -/
 noncomputable def drawMiss : ℝ≥0∞ :=
   ENNReal.ofReal (⨆ B : {B : Finset ℕ // B ⊆ Finset.range A.n ∧ A.ε * A.n < B.card},
-    (_root_.Properties.SampledProofs.oneStageOf A.law).Pa A.ns B.1)
+    (_root_.Properties.SampledProofs.oneStageOf A.law).Pa (Flock.Bridge.nsOf A.desc A.qr) B.1)
 
 open Classical in
 /-- **The session's error at `t` calls**, V5's at the worst registration: the draw's term, the tables' knowledge term
@@ -401,7 +413,8 @@ noncomputable def extract (τ : FlockSoundness.Game.Strategy A.game) : A.fileRea
   cast (congrArg Verity.Circuit.Transcript A.circuit_eq.symm)
     (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ
       ((Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)).val Claims.Sampling.sha512Msg A.Cd
-        (Flock.Bridge.stmtOf A.P A.κ A.kd A.desc ⟨"", 0, []⟩ A.roots)))
+        (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.SampledProofs.oneStageOf A.law) A.desc ⟨"", 0, []⟩
+          A.roots)))
 
 /-- **The openings `op` of the committed files `r` hold wherever the session's deployed commitment opens**: at each
 gate `r` doesn't fix to a constant, a bit the deployed commitment opens at the gate's claims position under the
