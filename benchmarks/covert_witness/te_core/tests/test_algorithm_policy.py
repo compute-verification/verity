@@ -548,15 +548,21 @@ def served_as(p: dict, version: str | None, rows: list | None = None, source: st
 
 
 def test_a_version_switch_never_empties_a_populated_panel():
-    """A data's served rows stay where they are at a newer te_core, or at an older one whose coverage cells there this
-    build fills fewer of (coordinator 07:58Z); the same te_core's are replaced, and a data with no served rows takes
-    this build's. A panel from before the te_core cell is at the version its source names."""
+    """A data's served rows stay where they are at a newer te_core, or at an older one with a run there this build has
+    no row for (coordinator 07:58Z); the same te_core's are replaced, and an older one's where this build has every
+    run, though its coverage fills fewer cells (every rho 1 here, as reading A's partial rows read; coordinator 11:51Z).
+    A data with no served rows takes this build's. A panel from before the te_core cell is at the version its source
+    names."""
     p = AP.build(info(runs=RUNS + DOMINATED), "test")
     mine = tuple(map(int, AP.VERSION.split(".")))
     newer, older = f"{mine[0] + 1}.0", f"{mine[0] - 1}.9"
     one = [r for r in p["rows"] if r[AP.COLUMNS.index("record")] == "never@1"][:1]
-    assert one and AP.filled(p, "v2.3-pilot") > AP.filled({"columns": AP.COLUMNS, "rows": one}, "v2.3-pilot") > 0
+    assert one and AP.runs(p, "v2.3-pilot") > AP.runs({"columns": AP.COLUMNS, "rows": one}, "v2.3-pilot") == {"never"}
     sparse = p | {"rows": one}
+    rho = AP.COLUMNS.index("rho_default")
+    flat = p | {"rows": [r[:rho] + [1.0] + r[rho + 1:] for r in p["rows"]]}
+    cells = [sum(c["state"] != "empty" for c in AP.coverage(q) if c["data"] == "v2.3-pilot") for q in (flat, p)]
+    assert cells[0] < cells[1] and AP.kept_data(flat, served_as(p, older)) == []
     assert AP.kept_data(p, None) == AP.kept_data(p, served_as(p, AP.VERSION)) == []
     assert AP.kept_data(sparse, served_as(p, AP.VERSION)) == []
     assert AP.kept_data(p, served_as(sparse, newer)) == ["v2.3-pilot"]

@@ -160,9 +160,10 @@ where the row's trace has entries and an op log, else reading B's, a target), th
 (gain target by data by decade of ρ, with the reached cells' ρ at the registered serving block beside the console's
 default) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
 refuses, which no cell holds (`tables/refused.json` gives each one's reason). `--publish` GETs what the route serves
-and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one whose coverage
-this build fills less of, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never
-empties a populated panel. `training/frontier-branches` (`panels`'s: the frontier and each start's honest and throttled branches over
+and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one with a run this
+build has no row for, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never
+empties a populated panel; a build with every served run replaces an older te_core's rows, however its coverage
+moves. `training/frontier-branches` (`panels`'s: the frontier and each start's honest and throttled branches over
 the dial) is retired from the console and no longer PUT; `panels` still holds the dial both use (`dial`, `rho_columns`,
 `page_inputs`, `mismatches`). Every scoring command (`frontier`, `plots`, `rescore`, `panels`, `frontier_fit`,
 `algorithm_policy`) applies one cap, `policy.eligible`: a checkpoint is scored only when its model's forward gates per

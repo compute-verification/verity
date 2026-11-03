@@ -52,8 +52,10 @@ checkpoint te_core.formalism refuses with its reason, which no row holds, and te
 target, with iso-S diagonals). `--publish` GETs what the route serves (`console.served`; no PUT when that fails), puts
 `tables/` in the evidence store, whose art id the cut's note names, and PUTs `training/frontier-fit`, then the cut. A
 version switch never empties a populated panel: on each data whose served rows are at a newer te_core, or at an older
-one whose coverage cells there this build fills fewer of (`kept_data`), both panels keep the served rows (`guarded`),
-which the note and the board line name. The coverage's table and board line give the reached cells' ρ at the
+one with a run there that this build has no row for, its traces not covering it yet (`kept_data`), both panels keep
+the served rows (`guarded`), which the note and the board line name. A build with every served run's rows replaces
+an older te_core's even where its coverage fills fewer cells, as reading A's partial rows and the gain C(L1)/C(L0)
+do (coordinator 11:16Z and 11:51Z). The coverage's table and board line give the reached cells' ρ at the
 registered serving block beside the console's default (`served_text`).
 """
 from __future__ import annotations
@@ -538,20 +540,22 @@ def version_of(p: dict, data: str) -> tuple[int, ...] | None:
     return tuple(int(x) for x in v.split(".")) if v else None
 
 
-def filled(p: dict, data: str) -> int:
-    """The coverage cells on `data` a panel's rows fill (`coverage`)."""
-    return sum(c["state"] != "empty" for c in coverage(p) if c["data"] == data)
+def runs(p: dict, data: str) -> set[str]:
+    """The runs a panel has rows for on `data` (each row's record up to its "@step")."""
+    return {d["record"].split("@")[0] for d in plots.frame(p) if d.get("data") == data and d.get("record")}
 
 
 def kept_data(p: dict, served: dict | None) -> list[str]:
     """The data whose rows the route serves stay (coordinator 07:58Z: a version switch never replaces a populated panel
-    with an emptier one): served at a newer te_core than this one, or at an older one whose coverage cells on it
-    this build fills fewer of. The same te_core's rows are replaced."""
+    with an emptier one): served at a newer te_core than this one, or at an older one with a run on it this build has
+    no row for (its traces don't cover it yet). The same te_core's rows are replaced, and so are an older one's that
+    this build has every run of, though its coverage fill fewer cells: reading A's partial rows and the gain
+    C(L1)/C(L0) are the rulings' (coordinator 11:16Z and 11:51Z), not a gap in the traces."""
     mine = tuple(int(x) for x in VERSION.split("."))
     out = []
     for data in panels.DATA:
         was = version_of(served, data) if served else None
-        if was is not None and (was > mine or was < mine and filled(p, data) < filled(served, data)):
+        if was is not None and (was > mine or was < mine and runs(served, data) - runs(p, data)):
             out.append(data)
     return out
 
