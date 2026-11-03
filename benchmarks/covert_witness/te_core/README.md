@@ -88,9 +88,14 @@ d are Boolean gates (`gates`: each counted op at its circuit Definition's price,
 
 `frontier` gives, per start, target and cell, W\*, H and S with W\*'s route and its x₀ and s\* bounds and best-known
 values; `plots` writes five panels (P1-P4 and the A2 curve, the least |C| to each target against Δ, per start), each
-`<name>.json` and its PNG, which are off the console (its one training panel is `training/frontier-branches`);
-`console` cuts each to the panels route's limits and holds one panel's PUT; `rescore` scores v2.3's records in one
-command, on the measured quantities beside the analysis's (module docstring).
+`<name>.json` and its PNG, which are off the console; `console` cuts each to the panels route's limits and holds one
+panel's PUT; `rescore` scores v2.3's records in one command, on the measured quantities beside the analysis's (module
+docstring). The console's one training panel, `training/frontier-branches`, is `panels`'s: held-out bits per byte
+against total training compute in gates, the best unconstrained learner (the frontier, from scratch or continuing a
+start, at C0 + |C|) and per branch point (each start, `on_frontier` when the frontier passes through it) the best
+unconstrained and constrained learners starting from it (honest at C0 + |C|; throttled at C0 + |C|ρ per (c, k) of its
+dial, with S = W\*/H). It reads the ledger and the quantities through `rescore`'s loading (`rescore.arguments`,
+`rescore.load`), so it scores the measured quantities unless told otherwise.
 
 ## What the integrator calls
 
@@ -122,6 +127,7 @@ python -m te_core.ledger --agent A ingest OUT --direction D --mechanism M [--ref
 python -m te_core.frontier [--json OUT]              # W*, honest and S per target and (c, k) cell
 python -m te_core.rescore --out DIR [--quantities measured|analysis|stubs]  # v2.3's records, one command
 python -m te_core.plots --out DIR [--policy reference|inference|server|c1e14/k1e4] [--drop 0.01] [--from-scratch F.json]
+python -m te_core.panels frontier-branches --out DIR [--publish]   # the console's training panel; --publish PUTs it
 python -m te_core.policy [START ...]                 # each start's reference shapes and (c, k) grid
 python -m te_core.gates [--check]                     # gates per MAC by op; --check recompiles the Definitions
 ~~~
@@ -181,7 +187,8 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it; `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
 | `plots.py` | the five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
 | `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note), and one panel's PUT |
-| `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command |
+| `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
+| `panels.py` | the console's training panel, `training/frontier-branches`: the frontier, each branch point's honest and throttled curves, its console cut, figure and PUT |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |

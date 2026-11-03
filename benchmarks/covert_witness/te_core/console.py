@@ -5,9 +5,9 @@
 A body is at most `BODY_MAX` bytes (compact JSON, no NaN) and a note at most `NOTE_MAX` characters. Each panel keeps
 its first cut that fits (`CUTS`, in order, the first the whole panel) with numbers to 4 significant digits (losses 6),
 and its note is the panel's short note (`SHORT`), the cut's, and `COMMON`; the uncut panel is DIR/<name>.json beside
-it. The console's one training panel is `training/frontier-branches`: te_core.plots' five panels are off it, so nothing
-here PUTs them. `put` PUTs one panel to `PANELS_URL`/<id> with a Cursor OIDC token (research.slack's `oidc_token`,
-imported only there) and returns its HTTP status.
+it. The console's one training panel is `training/frontier-branches` (te_core.panels, which PUTs it with `put`):
+te_core.plots' five panels are off it, so nothing here PUTs them. `put` PUTs one panel to `PANELS_URL`/<id> with a
+Cursor OIDC token (research.slack's `oidc_token`, imported only there) and returns its HTTP status.
 """
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from .plots import NAMES, frame
 PANELS_URL = "https://website-docs-sage.vercel.app/api/panels"
 BODY_MAX = 65536
 NOTE_MAX = 500
+CELL_MAX = 200
 REF_TARGET = -1.0
 BAND_FEW = ("c1e15/k1e5", "c1e15/k1e6", "c1e14/k1e4")
 LOSSES = ("loss", "loss_lo", "loss_hi", "l0")
@@ -44,6 +45,20 @@ SHORT = {
 
 def body(p: dict) -> bytes:
     return json.dumps(p, separators=(",", ":"), allow_nan=False, ensure_ascii=False).encode()
+
+
+def refused(p: dict) -> list[str]:
+    """What the route refuses in `p`'s rows: a row has one cell per column, each a number, a string of at most
+    `CELL_MAX` characters, or null (a boolean is none of them)."""
+    def ok(v):
+        return v is None or isinstance(v, (int, float)) and not isinstance(v, bool) or \
+            isinstance(v, str) and len(v) <= CELL_MAX
+    cols, out = p["columns"], []
+    for i, r in enumerate(p["rows"]):
+        if len(r) != len(cols):
+            out.append(f"row {i} has {len(r)} cells, not {len(cols)}")
+        out += [f"row {i}'s {c} is {v!r:.40}" for c, v in zip(cols, r) if not ok(v)]
+    return out
 
 
 def compact(p: dict, keep=None, drop: tuple = (), pick=None) -> dict:
