@@ -137,8 +137,8 @@ def test_a_v3_record_from_a_pilot_start_is_no_v3_branch_point(tmp_path, monkeypa
 
 def test_the_scoring_cap(tmp_path, monkeypatch):
     """With no ladder fit a checkpoint whose model's forward is over twice its start's is left out (`over-cap`), so a
-    grown model up to that is scored; where the fit has a value at its loss the cap is the greater of the start's and
-    the fit's, and outside the fit's span it is twice the start's again. One with no count has the start's."""
+    grown model up to that is scored; where the fit has a value at its loss the cap is the greater of twice the start's
+    and the fit's, and outside the fit's span it is twice the start's. One with no count has the start's."""
     grown = [r | ({"model": {"forward_gates_per_token": 2.5 * W}} if r["id"] == "r1" else {}) for r in ledger_rows()]
     fit = tmp_path / "fit.json"
     fit.write_text(json.dumps({"points": [{"loss": 1.0, "forward_gates_per_token": 8 * W},
@@ -147,7 +147,8 @@ def test_the_scoring_cap(tmp_path, monkeypatch):
     assert ladder(1.15) == pytest.approx(8 ** 0.5 * W) and ladder(0.9) is None and ladder(1.31) is None
     assert policy.CAP_FALLBACK == 2
     assert policy.eligible(None, W, 1.15) and policy.eligible(2 * W, W, 1.15) and not policy.eligible(2.5 * W, W, 1.15)
-    assert policy.eligible(2.5 * W, W, 1.15, ladder) and not policy.eligible(1.5 * W, W, 1.29, ladder)
+    assert policy.eligible(2.5 * W, W, 1.15, ladder) and not policy.eligible(3 * W, W, 1.15, ladder)
+    assert policy.eligible(2 * W, W, 1.29, ladder) and not policy.eligible(2.1 * W, W, 1.29, ladder)
     assert policy.eligible(2 * W, W, 0.9, ladder) and not policy.eligible(2.5 * W, W, 0.9, ladder)
     _, skipped = frontier.formalism_rows(grown, {"s1": SHAPE})
     assert skipped == {"r1": "over-cap"}

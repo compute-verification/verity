@@ -39,9 +39,9 @@ elementwise ops (RoPE, the norms' gains, SwiGLU's product) are left out: under 0
 their count moves with te_core.flops' version (the starts' `forward_macs_per_token` exceed the products by 27,392
 at s50 and 40,192 at s-t20).
 
-The scoring cap (`eligible`): a checkpoint is scored only when its own forward gates per token are at most the greater
-of its start's and the compute-optimal model's at the checkpoint's held-out loss under the ladder's fit (`ladder_fit`),
-and at most twice its start's (`CAP_FALLBACK`) where the fit gives no value there. Nothing caps what the harness
+The scoring cap (`eligible`; coordinator 08:09Z): a checkpoint is scored only when its own forward gates per token are
+at most the greater of twice its start's (`CAP_FALLBACK`) and the compute-optimal model's at the loss under the ladder's
+fit (`ladder_fit`), and twice its start's where the fit gives no value there. Nothing caps what the harness
 evaluates; scoring reads the count the evaluation job records.
 """
 from __future__ import annotations
@@ -143,12 +143,12 @@ def w_fwd(shape: dict) -> float:
 
 def eligible(w: float | None, start_w: float, loss: float | None, ladder=None) -> bool:
     """The scoring cap: whether a checkpoint whose model's forward is `w` gates per token is scored, `w` at most the
-    greater of the start's `start_w` and the compute-optimal model's at its held-out `loss` under the ladder's fit
-    (`ladder(loss)`, `ladder_fit`'s), and at most `CAP_FALLBACK` times the start's where there is no fit or it has no
-    point at that loss, so a grown model is scored until the fit exists. A checkpoint whose forward isn't counted (`w`
-    None) has the start's."""
+    greater of `CAP_FALLBACK` times the start's `start_w` and the compute-optimal model's at `loss` under the ladder's
+    fit (`ladder(loss)`, `ladder_fit`'s), and `CAP_FALLBACK` times the start's where there is no fit or it has no point
+    at that loss (coordinator 08:09Z: for every attempt, honest and covert). A checkpoint whose forward isn't counted
+    (`w` None) has the start's."""
     at = ladder(loss) if ladder and loss is not None else None
-    return w is None or w <= (CAP_FALLBACK * start_w if at is None else max(start_w, at))
+    return w is None or w <= max(CAP_FALLBACK * start_w, at or 0.0)
 
 
 def ladder_fit(path: Path):
