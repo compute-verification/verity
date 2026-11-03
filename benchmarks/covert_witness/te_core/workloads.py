@@ -57,11 +57,12 @@ publishes: a target, not a bound. A DiLoCo sync has no tokens, so no term prices
 
 The conventions every workload shares:
 
-- **Policies** (`POLICIES`): `default` is the console default as the console defines it (the dashboard's 05:34Z
-  contract): one served session of the 45M reference, 4,096 tokens in and 1,024 out, c = 5,120 x 2 x 45e6 x 740 gates
-  (2N FLOPs a token, attention left out) and k = 65,536 bits. `default_full` is its c corrected to the session's full
-  cost, attention at te_core.flops' count (`ATTENTION`, 1.57 c). `served` is the registered serving policy, the served
-  demo's measured block (te_core.panels.SERVED; its c is a lower bound, the linear layers still to be counted).
+- **Policies** (`POLICIES`): `default` is the console default as the dashboard ruled it at 10:23Z, one full session of
+  the 45M reference, 4,096 tokens in and 1,024 out, attention included: the console's earlier c, 5,120 x 2 x 45e6 x 740
+  gates (2N FLOPs a token, attention left out; `ATTENTION_FREE`), times the session's attention at te_core.flops'
+  count (`ATTENTION`, 1.5728), and k = 65,536 bits; te_core 4.6's `session_gates` gives it when it lands. `served` is
+  the registered serving policy, the served demo's measured block (te_core.panels.SERVED; its c is a lower bound, the
+  linear layers still to be counted).
 - **Shapes** (`dense`): a dense decoder of N parameters with the reference model's d/L and SwiGLU width, d solved from N
   and the vocabulary (`vocab`: the 45M reference's 50,304, s-t20's 32,000), τ its ⌈log2 V⌉ bits an id.
 - **Work**: a token's MACs at te_core.gates' prices, its weight GEMMs at the workload's precision and its attention in
@@ -115,7 +116,7 @@ WIDTHS = {f"gemm/{p}": (bits, bits, 32.0) for p, bits in WEIGHT_BITS.items()}
 #: a partial gradient's bits a trained value, as passed
 GRAD_BITS = 32
 #: the records the model is calibrated on: the 45M pilot's AdamW and Muon records (te_core 4.1's traces) and the
-#: standard-workloads island's rows (te_core 4.2) from s-t20 (d 512, 6 layers, V = 32,000): dense Muon, DiLoCo, LoRAs
+#: standard-workloads island's rows (te_core 4.4) from s-t20 (d 512, 6 layers, V = 32,000): dense Muon, DiLoCo, LoRAs
 #: of rank 16 on attention and on every matrix, and distillation into a student of d 256 and 6 layers
 PILOT_ADAMW, PILOT_MUON = "r20261102-140347-a1c2", "r20261102-134356-ee8f"
 ISLAND_STANDARD, ISLAND_DILOCO, ISLAND_DISTILL = "r20261103-053241-99bf", "r20261103-064814-40d6", "r20261103-064849-6854"
@@ -124,6 +125,12 @@ ISLAND_LORA_ATTN, ISLAND_LORA_ALL = "r20261103-053921-7400", "r20261103-053912-3
 #: fully fine-tuned, and an unregistered model of its shape served, each NVFP4 W4A4 rounds of 64 sequences
 ISLAND_RL_LORA, ISLAND_RL_FULL, ISLAND_INFERENCE = ("r20261103-073616-b950", "r20261103-073633-f483",
                                                     "r20261103-073641-d1f4")
+#: the island's rows from m-t20 (its 60M start): dense Muon and distillation into a student of d 384 and 8 layers
+#: (traced), and fully fine-tuned RL rollouts and an unregistered model of its shape served (untraced)
+ISLAND_STANDARD_60M, ISLAND_DISTILL_60M = "r20261103-091929-b455", "r20261103-091446-973e"
+ISLAND_RL_FULL_60M, ISLAND_INFERENCE_60M = "r20261103-091516-fb8d", "r20261103-091453-e42e"
+#: m-t20's width: d 768 and 8 layers, its SwiGLU 2,048 (8/3 d), V = 32,000, 81,212,160 parameters
+M_T20 = 768
 #: te_core 4.1's literal t on the 45M pilot's traced full-training step (every ref-optim record's): the share of a
 #: training token's affected work in ops that read no update value
 T_DENSE = 0.692646
@@ -248,17 +255,19 @@ def decode_span(prompt: float, generated: float) -> float:
     return (prompt * prompt + generated * prompt + generated * generated / 2) / (prompt + generated)
 
 
-#: the console's c over the session's full cost: a session token's attention at te_core.flops' count beside its N MACs
+#: the console's c before the dashboard's 10:23Z ruling (its 05:34Z contract): 5,120 session tokens of the 45M
+#: reference at 2N FLOPs and 740 gates a FLOP, attention left out
+ATTENTION_FREE = 5120 * 2 * 45e6 * 740
+#: a full session's cost over `ATTENTION_FREE`: a session token's attention at te_core.flops' count beside its N MACs
 ATTENTION = 1 + dense(REFERENCE_PARAMS).attention(decode_span(4096, 1024)) / REFERENCE_PARAMS
-#: the console default as the console defines it (the dashboard's 05:34Z contract), (c gates, k bits)
-CONSOLE = (5120 * 2 * 45e6 * 740, 65_536.0)
-POLICIES = {"default": CONSOLE, "default_full": (CONSOLE[0] * ATTENTION, CONSOLE[1]),
-            "served": (float(panels.SERVED[0]), float(panels.SERVED[1]))}
+#: the console default (the dashboard's 10:23Z ruling): one full session of the 45M reference a block, (c gates, k bits)
+CONSOLE = (ATTENTION_FREE * ATTENTION, 65_536.0)
+POLICIES = {"default": CONSOLE, "served": (float(panels.SERVED[0]), float(panels.SERVED[1]))}
 POLICY_NOTES = {
-    "default": "the console default as the console defines it (dashboard, 05:34Z): one 4,096-in, 1,024-out session of "
-               "the 45M reference a block, c = 5,120 x 2 x 45e6 x 740 gates (attention left out), k = 65,536 bits",
-    "default_full": f"the console default with c the session's full cost, attention at te_core.flops' count "
-                    f"({ATTENTION:.4f} c)",
+    "default": f"the console default as the dashboard ruled it (10:23Z): one full 4,096-in, 1,024-out session of the 45M "
+               f"reference a block, attention included, c = 5,120 x 2 x 45e6 x 740 x {ATTENTION:.4f} gates (the "
+               f"attention-free c the console used before, times the session's attention at te_core.flops' count), "
+               f"k = 65,536 bits",
     "served": "the registered serving policy: the served demo's measured block (te_core.panels.SERVED, one slot's 35-step "
               "session of Llama-3.2-1B int8 under vLLM): c a lower bound, its linear layers still to be counted and "
               "its 133 BitAtx32_v1 activations a block unpriced; k its fresh bits",
@@ -687,11 +696,11 @@ def _dense_t(t: float | None) -> float:
 
 def standard(n_params: float = REFERENCE_PARAMS, precision: str = "bf16", seq_len: float = 1024,
              batch_tokens: float = 65_536, optimizer: str = "adamw", t: float | None = None,
-             tokens_per_param: float = 20.0, vocab: float = VOCAB) -> Model:
+             tokens_per_param: float = 20.0, vocab: float = VOCAB, d_model: float | None = None) -> Model:
     """Standard dense pretraining: every weight trained, each token's forward and backward in token blocks, the
     optimizer in none. u(1) is every weight as a step's ops read it (`Shape.weight_bits`), Δ (and Δ_t) θ' in fp32, the
     records' code, and no decoder. Every product is fresh."""
-    sh = dense(n_params, vocab=vocab)
+    sh = dense(n_params, vocab=vocab, d_model=d_model)
     tok = training(sh, precision, seq_len)
     tokens = tokens_per_param * n_params
     steps = tokens / batch_tokens
@@ -713,7 +722,7 @@ def standard(n_params: float = REFERENCE_PARAMS, precision: str = "bf16", seq_le
 def diloco(n_params: float = REFERENCE_PARAMS, precision: str = "bf16", seq_len: float = 1024,
            batch_tokens: float = 65_536, optimizer: str = "adamw", t: float | None = None,
            inner_steps: float = 500, syncs: float = 28, sync_bits: float | None = None, workers: float = 4,
-           vocab: float = VOCAB) -> Model:
+           vocab: float = VOCAB, d_model: float | None = None) -> Model:
     """DiLoCo-style pretraining, the record's prefix S syncs: each a phase of H inner steps of B tokens (all `workers`'
     M), standard training on each worker with its own optimizer, then an outer step from the workers' pseudo-gradients,
     each `sync_bits` b once compressed (None: 32 N, uncompressed), summed over the M workers. Its token blocks are
@@ -727,11 +736,10 @@ def diloco(n_params: float = REFERENCE_PARAMS, precision: str = "bf16", seq_len:
     gradient cut every worker's gradient, one block's partial a worker's. Wherever a step's token work fills two
     blocks the decoder fits none (d = H·B·w ≥ B·w > c), so the reduction and update kinds read the uncompressed
     gradients. te_core's reduction kind sums a step's b partials into one gradient, where each of the M workers sums
-    its own, M·(⌈b/M⌉ − 1) partials: b − 1 at the console default (b = 45 at 45M, 37 at s-t20), up to M − 1 fewer
-    elsewhere (20 against 23 at default_full on s-t20). A sync has no tokens, and te_core's kinds don't price its M
-    pseudo-gradients: (M − 1)/(H·(b − 1)) of the inner steps' reduction, 0.014% at the default's H = 500 and 0.14% at
-    the island's 50 (b = 45)."""
-    sh = dense(n_params, vocab=vocab)
+    its own, M·(⌈b/M⌉ − 1) partials, up to M − 1 fewer than b − 1. A sync has no tokens, and te_core's kinds don't
+    price its M pseudo-gradients: (M − 1)/(H·(b − 1)), about 0.02% of the inner steps' reduction at the default's
+    H = 500 and 0.2% at the island's 50."""
+    sh = dense(n_params, vocab=vocab, d_model=d_model)
     tok = training(sh, precision, seq_len)
     phase = inner_steps * batch_tokens
     tokens = syncs * phase
@@ -769,7 +777,7 @@ def rl(n_params: float = REFERENCE_PARAMS, update: str = "full", rank: float = 1
        layers: float | None = None, rollout_precision: str = "fp4", prompt_tokens: float = 256,
        generated_tokens: float = 768, samples_per_trained: float = 1.0, optimizer: str = "adamw",
        batch_tokens: float = 65_536, t: float | None = None, tokens: float = 1e8, vocab: float = VOCAB,
-       rounds: bool = False) -> Model:
+       rounds: bool = False, d_model: float | None = None) -> Model:
     """RL on the policy being trained: rollouts (prefill and generation) of the current policy at `rollout_precision`,
     `samples_per_trained` of them for each sequence a learner trains on in bf16 (every position of each, prompt and
     generated). Every token is affected (the generated ids are sampled from θ'), and only the prompts' ids are inputs.
@@ -780,7 +788,7 @@ def rl(n_params: float = REFERENCE_PARAMS, update: str = "full", rank: float = 1
     bounds that count each kind's tokens apart. With `rounds`, the rollouts alone, `tokens` of them, as the island's
     generation rows record them (the learner's steps aren't in the row): a round serves θ' as it stands, so Δ is the
     served weights (N at the rollouts' width) or the adapter, with no gradient and no learner's products."""
-    sh = dense(n_params, vocab=vocab)
+    sh = dense(n_params, vocab=vocab, d_model=d_model)
     seq = prompt_tokens + generated_tokens
     pos, head = served(prompt_tokens, generated_tokens)
     span = decode_span(prompt_tokens, generated_tokens)
@@ -856,11 +864,11 @@ def rl(n_params: float = REFERENCE_PARAMS, update: str = "full", rank: float = 1
 
 def inference(n_params: float = REFERENCE_PARAMS, precision: str = "fp4", prompt_tokens: float = 4096,
               generated_tokens: float = 1024, t: float | None = None, tokens: float = 1e9,
-              vocab: float = VOCAB) -> Model:
+              vocab: float = VOCAB, d_model: float | None = None) -> Model:
     """Serving an unregistered model: its weights are no part of θ, so every one is update bits, as if θ' (Δ = its
     weights, d = 0, no training: Δ_grad = 0, so Fit is running θ', Δ + s·τ <= k), and every product is fresh. σ = 1;
     t is the share of a token's work in ops that read no weight, attention and the elementwise ops."""
-    sh = dense(n_params, vocab=vocab)
+    sh = dense(n_params, vocab=vocab, d_model=d_model)
     pos, head = served(prompt_tokens, generated_tokens)
     span = decode_span(prompt_tokens, generated_tokens)
     tok = forward(sh, precision, span, head)
@@ -883,13 +891,13 @@ def inference(n_params: float = REFERENCE_PARAMS, precision: str = "fp4", prompt
 
 def lora(n_params: float = REFERENCE_PARAMS, rank: float = 8, targets: str = "all", layers: float | None = None,
          adapter_bits: float = 16, optimizer: str = "adamw", seq_len: float = 1024, batch_tokens: float = 65_536,
-         t: float | None = None, tokens: float = 1e8, vocab: float = VOCAB) -> Model:
+         t: float | None = None, tokens: float = 1e8, vocab: float = VOCAB, d_model: float | None = None) -> Model:
     """Fine-tuning a registered model with a LoRA on `targets` of its top `layers` layers (None: all): Δ the adapter's
     values at `adapter_bits` (fp32 latents for Δ_t below 16), d the harness's decoder for it (`Adapter.decoder_gates`),
     Δ_grad their gradient at 32 bits and the optimizer's state, u(1) = Δ, and t the share of the affected work that
     reads no adapter value. The base products read θ, so the fresh products are the adapter's and attention's above
     the lowest adapted layer (`adapter_fresh`)."""
-    sh = dense(n_params, vocab=vocab)
+    sh = dense(n_params, vocab=vocab, d_model=d_model)
     ad = Adapter.of(sh, rank, targets, layers)
     tok = lora_training(sh, ad, seq_len)
     tf = tok.t if t is None else float(t)
@@ -919,12 +927,14 @@ def lora(n_params: float = REFERENCE_PARAMS, rank: float = 8, targets: str = "al
 def distill(student_params: float = REFERENCE_PARAMS, teacher_params: float = 10 * REFERENCE_PARAMS,
             teacher_share: float = 1.0, teacher_precision: str = "bf16", seq_len: float = 1024,
             batch_tokens: float = 65_536, optimizer: str = "adamw", t: float | None = None,
-            tokens_per_param: float = 20.0, vocab: float = VOCAB, student_d_model: float | None = None) -> Model:
+            tokens_per_param: float = 20.0, vocab: float = VOCAB, student_d_model: float | None = None,
+            teacher_d_model: float | None = None) -> Model:
     """Distillation from a registered teacher: the student's dense training, and the teacher's forward on
     `teacher_share` of its tokens in the same token blocks. The teacher reads θ and the tokens alone, so its work is
     outside A and none of its products is fresh: it raises w and leaves the affected count, u, t, a and the fresh
     products the student's."""
-    sh, te = dense(student_params, vocab=vocab, d_model=student_d_model), dense(teacher_params, vocab=vocab)
+    sh = dense(student_params, vocab=vocab, d_model=student_d_model)
+    te = dense(teacher_params, vocab=vocab, d_model=teacher_d_model)
     stu, teach = training(sh, "bf16", seq_len), forward(te, teacher_precision, seq_len)
     tok = Token(_add(stu.macs, {k: teacher_share * v for k, v in teach.macs.items()}), stu.affected, stu.reading)
     tokens = tokens_per_param * student_params
@@ -1145,47 +1155,65 @@ class Workload:
 
 #: the standard-workloads island's measured rows (`records`: its panel's cells, each with its parts and traced steps)
 RECORDS = Path(__file__).with_name("workloads_records.json")
-#: how each island row differs from the model at its dials
-HALF_TOKENS = ("|C| half the record's: the row's token dial counts half the tokens its run consumed (its trace's "
-               "token_factor 2; batch_tokens counts them all), which no kind's term reads")
+#: how each island row differs from the model at its dials (the target, reading B's token form, goes as 1/t)
 FRONT_LOADED = "u_in front-loaded ({} at x = 0) where the model's A1' is even"
 #: how a generation row differs: a round isn't traced, so te_core takes its stubs
 UNTRACED = ("a round isn't traced, so the record's A1 is te_core's stub, t 0 with u even to Delta and u_in = u, against "
             "the model's t {t}, and its affected work only the ops that read an update tensor (te_core's untraced "
-            "convention, {share} of its work) where the model's is every op the update reaches, which the decoding "
-            "kind reads; 1 - sigma the record's 0.005, 1.23e13 gates outside the token blocks (the same in all three "
-            "generation rows), where the model's rounds have none; w_fwd the start's bf16 forward at 1,024 tokens, "
-            "which no policy here reads")
+            "convention, {share} of its work) where the model's is every op the update reaches, which reading B's "
+            "decoding form reads; 1 - sigma the record's {sigma}, {outside} gates outside the token blocks (the same "
+            "in each generation row from its start), where the model's rounds have none; w_fwd the start's bf16 "
+            "forward at 1,024 tokens, which no policy here reads")
+#: m-t20's layers at its width in the model's shape (its 2.75 d MLP against m-t20's 8/3 d): the matrices' parameters
+#: m-t20's to 1e-5, attention's MACs 2% below its 8 layers'
+M_T20_LAYERS = dense(81_212_160, vocab=32_000, d_model=M_T20).n_layer
+#: how an m-t20 row's shape differs
+M_T20_SHAPE = f"m-t20 at d 768 in the model's shape, {M_T20_LAYERS:.2f} layers of 2.75 d MLPs where it has 8 of 8/3 d"
 ISLAND_DIFFERS = {
-    ISLAND_STANDARD: f"{HALF_TOKENS}; t the trace's 0.732 against the model's 0.693 (the 45M trace's literal t), which "
-                     f"puts the model's token kind 6% above the record's; 1 - sigma the trace's 0.0036 against the "
-                     f"model's 0.0075, whose five Newton-Schulz iterations count twice the trace's optimizer gates; "
+    ISLAND_STANDARD: f"t the trace's 0.732 against the model's 0.693 (the 45M trace's literal t), which puts the "
+                     f"model's target 6% above the record's; 1 - sigma the trace's 0.0036 against the model's 0.0075, "
+                     f"whose five Newton-Schulz iterations count twice the trace's optimizer gates; "
                      f"{FRONT_LOADED.format('the fp32 embedding')}; w_fit its eval steps' forward",
-    ISLAND_DILOCO: f"t the trace's 0.732 against the model's 0.693, the model's token kind 6% above the record's; the "
+    ISLAND_DILOCO: f"t the trace's 0.732 against the model's 0.693, the model's target 6% above the record's; the "
                    f"outer step Nesterov SGD where the model's is plain, and its 8 syncs' pseudo-gradients priced by "
                    f"no kind on either; {FRONT_LOADED.format('the fp32 embedding')}",
-    ISLAND_LORA_ATTN: f"{HALF_TOKENS}; t the trace's 0.9967 against the model's 0.9916 (its count of the affected "
-                      f"work reading no adapter value); {FRONT_LOADED.format('131,072 bits')}",
-    ISLAND_LORA_ALL: f"{HALF_TOKENS}; t the trace's 0.9920 against the model's 0.9802; "
-                     f"{FRONT_LOADED.format('262,144 bits')}",
+    ISLAND_LORA_ATTN: f"t the trace's 0.9967 against the model's 0.9916 (its count of the affected work reading no "
+                      f"adapter value); {FRONT_LOADED.format('131,072 bits')}",
+    ISLAND_LORA_ALL: f"t the trace's 0.9920 against the model's 0.9802; {FRONT_LOADED.format('262,144 bits')}",
     ISLAND_DISTILL: "t the trace's 0.781 against the model's 0.693 (the 45M trace's literal t), which puts the model's "
-                    "token kind 13% above the record's; u_in front-loaded (the fp32 embedding at x = 0) where the "
-                    "model's A1' is even; w_fwd the start's (the s-t20 teacher's) forward where the model's is the "
+                    "target 13% above the record's; u_in front-loaded (the student's fp32 embedding at x = 0) where "
+                    "the model's A1' is even; w_fwd the start's (the s-t20 teacher's) forward where the model's is the "
                     "student's, which no policy here reads",
-    ISLAND_RL_LORA: f"{UNTRACED.format(t='0.916', share='8.6%')}, and a the stub's 8,192 bits (the residual stream) "
-                    "against the model's 768 (the rank outputs, as the island's traced LoRAs measure); w 3% above the "
-                    "record's",
-    ISLAND_RL_FULL: f"{UNTRACED.format(t='0.338', share='69%')}; Delta the served codes, 0.05% above the model's N x 4.5 "
-                    "bits (the norms in bf16)",
-    ISLAND_INFERENCE: f"{UNTRACED.format(t='0.522', share='50%')}; w 1.1% below the record's; Delta as the "
-                      "full-weight RL row's",
+    ISLAND_RL_LORA: f"{UNTRACED.format(t='0.916', share='8.6%', sigma='0.0051', outside='1.23e13')}, and a the stub's "
+                    "8,192 bits (the residual stream) against the model's 768 (the rank outputs, as the island's traced "
+                    "LoRAs measure); w 3% above the record's",
+    ISLAND_RL_FULL: f"{UNTRACED.format(t='0.338', share='69%', sigma='0.0054', outside='1.23e13')}; Delta the served "
+                    "codes, 0.05% above the model's N x 4.5 bits (the norms in bf16)",
+    ISLAND_INFERENCE: f"{UNTRACED.format(t='0.522', share='50%', sigma='0.0042', outside='1.23e13')}; w 1.1% below the "
+                      "record's; Delta as the full-weight RL row's",
+    ISLAND_STANDARD_60M: f"{M_T20_SHAPE}; t the trace's 0.712 against the model's 0.693, which puts the model's target "
+                         f"3% above the record's; 1 - sigma the trace's 0.015 against the model's 0.029 (the model's "
+                         f"five Newton-Schulz iterations, as on s-t20); w 2.1% below the record's; "
+                         f"{FRONT_LOADED.format('the fp32 embedding')}",
+    ISLAND_DISTILL_60M: f"the teacher {M_T20_SHAPE}, and the student at d 384 with as many layers where it has 8; t "
+                        f"the trace's 0.779 against the model's 0.693, which puts the model's target 12% above the "
+                        f"record's; u_in front-loaded (the student's fp32 embedding at x = 0) where the model's A1' is "
+                        f"even; w_fwd the start's (the m-t20 teacher's) forward where the model's is the student's, "
+                        f"which no policy here reads",
+    ISLAND_RL_FULL_60M: f"{UNTRACED.format(t='0.271', share='76%', sigma='0.0091', outside='2.81e13')}; Delta the "
+                        f"served codes, 0.04% above the model's N x 4.5 bits (the norms in bf16); w 1.5% above the "
+                        f"record's; {M_T20_SHAPE}",
+    ISLAND_INFERENCE_60M: f"{UNTRACED.format(t='0.449', share='57%', sigma='0.0041', outside='2.81e13')}; w 0.7% above "
+                          f"the record's; Delta as the full-weight RL rows'; {M_T20_SHAPE}",
 }
 #: the gradient inputs' sources on an island row: its main part's, te_core 4.4's partial_cut_bits and grad_cut_bits
 ISLAND_MENU_STATUS = {"grad_bits": "measured: the row's main part's gradient cut (te_core 4.4's grad_cut_bits)",
                       "partial_bits": "measured: the row's main part's partial gradient, one block's (te_core 4.4's "
                                       "partial_cut_bits; a worker's in DiLoCo)"}
 #: the island's generation rows, the rollouts alone (`rl`'s `rounds`)
-ISLAND_ROUNDS = (ISLAND_RL_LORA, ISLAND_RL_FULL)
+ISLAND_ROUNDS = (ISLAND_RL_LORA, ISLAND_RL_FULL, ISLAND_RL_FULL_60M)
+#: each island start's width beyond its rows' dials (the panel names none; s-t20's is the reference model's d/L)
+ISLAND_WIDTH = {"60M": M_T20}
 
 
 def records(tables: dict, art: str) -> dict:
@@ -1211,10 +1239,11 @@ def records(tables: dict, art: str) -> dict:
 
 
 def island_checks(workload: str) -> tuple[Check, ...]:
-    """The island's measured rows of `workload` (`RECORDS`) as checks: their dials (a generation row of RL's the
-    rollouts alone, `rounds`, its tokens), their columns and input status, and their parts, each with its partial
-    gradient and gradient cut (`Check.menu` its main part's). None before `--records` first writes the file
-    (`workloads.json`'s pin then fails)."""
+    """The island's measured rows of `workload` (`RECORDS`) as checks: their dials, with their start's width
+    (`ISLAND_WIDTH`, the teacher's in distillation) and, for a generation row of RL's, the rollouts alone (`rounds`,
+    its tokens); their columns and input status; and their parts, each with its partial gradient and gradient cut
+    (`Check.menu` its main part's). None before `--records` first writes the file (`workloads.json`'s pin then
+    fails)."""
     if not RECORDS.exists():
         return ()
     data = json.loads(RECORDS.read_text())
@@ -1222,8 +1251,9 @@ def island_checks(workload: str) -> tuple[Check, ...]:
     for r in data["rows"]:
         if r["workload"] != workload:
             continue
-        dials = r["dials"] | ({"rounds": True, "tokens": sum(p["tokens"] for p in r["parts"])}
-                              if r["run"] in ISLAND_ROUNDS else {})
+        width = ISLAND_WIDTH.get(r["model"])
+        dials = (r["dials"] | ({} if width is None else {"teacher_d_model" if workload == "distill" else "d_model": width})
+                 | ({"rounds": True, "tokens": sum(p["tokens"] for p in r["parts"])} if r["run"] in ISLAND_ROUNDS else {}))
         main = max(r["parts"], key=lambda p: p["token_gates"])
         note = f"; {'; '.join(r['invalid'])}" if r["invalid"] else ""
         out.append(Check(f"{r['model']} standard-workloads {r['run']}", dials, f"{r['run']}@{r['checkpoint']}",
@@ -1259,6 +1289,10 @@ COMMON = {
                              "sets |C| only (Chinchilla's 20 by default)"),
     "vocab": Dial("vocab", "ids", VOCAB, (1000, 262_144),
                   "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"),
+    "d_model": Dial("d_model", "d_model", None, (64, 8192),
+                    "the model's width, n_layer following from N; None is the reference model's d/L (`dense`). The "
+                    f"island's 60M rows are m-t20's 768, which puts {M_T20_LAYERS:.2f} layers where it has 8 (its "
+                    "SwiGLU is 8/3 d, the model's 2.75 d)"),
 }
 
 WORKLOADS = {w.name: w for w in (
@@ -1266,7 +1300,7 @@ WORKLOADS = {w.name: w for w in (
              "Every weight of a dense decoder trained by backpropagation, its optimizer outside the token blocks.",
              standard,
              (COMMON["n_params"], COMMON["precision"], COMMON["seq_len"], COMMON["batch_tokens"], COMMON["optimizer"],
-              COMMON["t_dense"], COMMON["tokens_per_param"], COMMON["vocab"]),
+              COMMON["t_dense"], COMMON["tokens_per_param"], COMMON["vocab"], COMMON["d_model"]),
              (("default", {}), ("FP8 GEMMs", {"precision": "e4m3"}), ("7B", {"n_params": 7e9})),
              (Check("45M ref-optim/adamw-rewarm-mild", {}, "r20261102-140347-a1c2@946",
                     FULL_RECORD | FULL_U | {"w_gates": 2.31908e11, "sigma": 0.999823, "w_fit_gates": 1.5441e11,
@@ -1294,7 +1328,7 @@ WORKLOADS = {w.name: w for w in (
                    "b, one worker's compressed outer delta; None is 32 N, uncompressed"),
               Dial("workers", "workers", 4, (1, 1024),
                    "M, the workers each inner step's tokens split over and each sync sums (the island's 4)"),
-              COMMON["vocab"]),
+              COMMON["vocab"], COMMON["d_model"]),
              (("default", {}), ("1-bit syncs", {"sync_bits": REFERENCE_PARAMS}),
               ("Fit's corner", {"inner_steps": 2, "batch_tokens": 256, "syncs": 32, "sync_bits": 1024})),
              island_checks("diloco")),
@@ -1323,7 +1357,7 @@ WORKLOADS = {w.name: w for w in (
               COMMON["vocab"],
               Dial("rounds", "mode", False, (False, True),
                    "the rollouts alone, `tokens` of them, as the island's generation rows record them: no learner, "
-                   "Delta the served weights or the adapter")),
+                   "Delta the served weights or the adapter"), COMMON["d_model"]),
              (("default", {}), ("LoRA rank 16", {"update": "lora"}),
               ("LoRA in one layer", {"update": "lora", "rank": 1, "targets": "q", "layers": 1})),
              island_checks("rl")),
@@ -1336,7 +1370,7 @@ WORKLOADS = {w.name: w for w in (
               Dial("generated_tokens", "tokens", 1024, (1, 32768), "a session's generated tokens"),
               Dial("t", "share of a token's work", None, (0.0, 0.95),
                    "A1's free share, the token kind's: None is attention's modelled share; 0 is evenly spread"),
-              Dial("tokens", "tokens served", 1e9, (1e6, 1e13), "sets |C| only"), COMMON["vocab"]),
+              Dial("tokens", "tokens served", 1e9, (1e6, 1e13), "sets |C| only"), COMMON["vocab"], COMMON["d_model"]),
              (("default", {}), ("bf16", {"precision": "bf16"}), ("7B", {"n_params": 7e9})),
              island_checks("inference")),
     Workload("lora", "Fine-tuning a registered model with a LoRA",
@@ -1352,7 +1386,7 @@ WORKLOADS = {w.name: w for w in (
               Dial("t", "share of a token's affected work", None, (0.0, 0.9999),
                    "A1's free share, the token kind's: None is the modelled share reading no adapter value; 0 is "
                    "evenly spread"),
-              Dial("tokens", "tokens", 1e8, (1e6, 1e11), "sets |C| only"), COMMON["vocab"]),
+              Dial("tokens", "tokens", 1e8, (1e6, 1e11), "sets |C| only"), COMMON["vocab"], COMMON["d_model"]),
              (("default", {}), ("top layer", {"layers": 1}), ("MLP, top layer", {"targets": "mlp", "layers": 1}),
               ("rank 1 on W_q", {"rank": 1, "targets": "q"}),
               ("rank 1 on W_q, one layer", {"rank": 1, "targets": "q", "layers": 1})),
@@ -1379,7 +1413,10 @@ WORKLOADS = {w.name: w for w in (
               COMMON["seq_len"], COMMON["batch_tokens"], COMMON["optimizer"], COMMON["t_dense"],
               COMMON["tokens_per_param"], COMMON["vocab"],
               Dial("student_d_model", "d_model", None, (64, 8192),
-                   "the student's width; None is the reference model's d/L (the island's half-width student: 256)")),
+                   "the student's width; None is the reference model's d/L (the island's half-width students: 256 of "
+                   "s-t20, 384 of m-t20)"),
+              Dial("teacher_d_model", "d_model", None, (64, 8192),
+                   "the teacher's width; None is the reference model's d/L (m-t20's 768 on the island's 60M row)")),
              (("default", {}), ("no teacher", {"teacher_share": 0.0}), ("100x teacher", {"teacher_params": 100 * 45_029_888})),
              island_checks("distill")),
 )}

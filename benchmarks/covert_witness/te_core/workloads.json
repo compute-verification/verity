@@ -6,11 +6,10 @@
  "io_bound": "cursor/te-io-bound-4207 at af7c437e60",
  "policies": {
   "default": {
-   "c": 340992000000000.0,
+   "c": 536326200000000.0,
    "k": 65536.0,
-   "what": "the console default as the console defines it (dashboard, 05:34Z): one 4,096-in, 1,024-out session of the 45M reference a block, c = 5,120 x 2 x 45e6 x 740 gates (attention left out), k = 65,536 bits"
+   "what": "the console default as the dashboard ruled it (10:23Z): one full 4,096-in, 1,024-out session of the 45M reference a block, attention included, c = 5,120 x 2 x 45e6 x 740 x 1.5728 gates (the attention-free c the console used before, times the session's attention at te_core.flops' count), k = 65,536 bits"
   },
-  "default_full": {"c": 536326200000000.0, "k": 65536.0, "what": "the console default with c the session's full cost, attention at te_core.flops' count (1.5728 c)"},
   "served": {
    "c": 30087820000000.0,
    "k": 145568.0,
@@ -100,6 +99,13 @@
      "default": 50304,
      "range": [1000, 262144],
      "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
+    },
+    {
+     "name": "d_model",
+     "unit": "d_model",
+     "default": null,
+     "range": [64, 8192],
+     "why": "the model's width, n_layer following from N; None is the reference model's d/L (`dense`). The island's 60M rows are m-t20's 768, which puts 7.84 layers where it has 8 (its SwiGLU is 8/3 d, the model's 2.75 d)"
     }
    ],
    "points": {
@@ -112,7 +118,8 @@
       "optimizer": "adamw",
       "t": null,
       "tokens_per_param": 20.0,
-      "vocab": 50304
+      "vocab": 50304,
+      "d_model": null
      },
      "inputs": {
       "C_gates": 2.107691e+20,
@@ -167,27 +174,6 @@
      },
      "rho": {
       "default": {
-       "rho": 160295.8,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 160295.8,
-       "terms": {"fresh_products": 160295.8, "token": null, "decoding": null},
-       "fresh": {"lam": 1.645903, "share": 0.8442932, "numerical": 167296.2, "attention_share": 0.1193699},
-       "target": {"rho": 262.9309, "basis": "target"},
-       "sensitivities": {"reduction": 21508.53, "update": 488.8303, "token_form": 262.9309, "decoding_form": 0.9997032, "per_gate": null, "fresh_cell": 2231545.0},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 1457.461,
-       "x0": 5.785949e-05,
-       "s_star": 5.541168,
-       "b": [45],
-       "fit_delta_bits": 42216.62,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 252119.8,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -241,7 +227,8 @@
       "optimizer": "adamw",
       "t": null,
       "tokens_per_param": 20.0,
-      "vocab": 50304
+      "vocab": 50304,
+      "d_model": null
      },
      "inputs": {
       "C_gates": 1.354568e+20,
@@ -296,27 +283,6 @@
      },
      "rho": {
       "default": {
-       "rho": 123954.0,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 123954.0,
-       "terms": {"fresh_products": 123954.0, "token": null, "decoding": null},
-       "fresh": {"lam": 1.354669, "share": 0.7642779, "numerical": 126713.2, "attention_share": 0.185738},
-       "target": {"rho": 409.1134, "basis": "target"},
-       "sensitivities": {"reduction": 21297.18, "update": 760.6136, "token_form": 409.1134, "decoding_form": 0.9995382, "per_gate": null, "fresh_cell": 1890136.0},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 2268.165,
-       "x0": 6.697363e-05,
-       "s_star": 5.541168,
-       "b": [29],
-       "fit_delta_bits": 29245.36,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 194959.9,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -370,7 +336,8 @@
       "optimizer": "adamw",
       "t": null,
       "tokens_per_param": 20.0,
-      "vocab": 50304
+      "vocab": 50304,
+      "d_model": null
      },
      "inputs": {
       "C_gates": 4.669997e+24,
@@ -425,27 +392,6 @@
      },
      "rho": {
       "default": {
-       "rho": 185871.5,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 185871.5,
-       "terms": {"fresh_products": 185871.5, "token": null, "decoding": null},
-       "fresh": {"lam": 1.633248, "share": 0.928281, "numerical": 190897.8, "attention_share": 0.04189688},
-       "target": {"rho": 13.0483, "basis": "target"},
-       "sensitivities": {"reduction": 3416380.0, "update": 533.143, "token_form": 13.0483, "decoding_form": 0.9996763, "per_gate": null, "fresh_cell": 3100753.0},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 10.22578,
-       "x0": 5.702766e-07,
-       "s_star": 0.7834325,
-       "b": [6409],
-       "fit_delta_bits": 65372.39,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 292346.4,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -510,7 +456,8 @@
       "optimizer": "adamw",
       "t": null,
       "tokens_per_param": 20.0,
-      "vocab": 50304
+      "vocab": 50304,
+      "d_model": null
      },
      "differs": "w 0.9% below the model's; w_fit and alpha_ratio the rewarm's phases, where the model has one; u_in all of u(1) at x = 0, where the model's A1' is even",
      "record_inputs": {
@@ -559,32 +506,6 @@
      },
      "rho": {
       "default": {
-       "record": {
-        "rho": 161735.6,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 161735.6, "token": null, "decoding": null},
-        "target": {"rho": 264.0435, "basis": "target"},
-        "sensitivities": {"reduction": 21701.72, "update": 493.221, "token_form": 265.308, "decoding_form": 0.999823, "per_gate": null, "fresh_cell": 2251589.0},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [45]
-       },
-       "model": {
-        "rho": 160295.8,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 160295.8, "token": null, "decoding": null},
-        "target": {"rho": 262.9309, "basis": "target"},
-        "sensitivities": {"reduction": 21508.53, "update": 488.8303, "token_form": 262.9309, "decoding_form": 0.9997032, "per_gate": null, "fresh_cell": 2231545.0},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [45]
-       }
-      },
-      "default_full": {
        "record": {
         "rho": 254384.4,
         "basis": "fresh_products",
@@ -649,7 +570,8 @@
       "optimizer": "muon",
       "t": null,
       "tokens_per_param": 20.0,
-      "vocab": 50304
+      "vocab": 50304,
+      "d_model": null
      },
      "differs": "as adamw-rewarm-mild; sigma the trace's 0.99339 against the model's 0.98774, five bf16 Newton-Schulz iterations on every matrix",
      "record_inputs": {
@@ -698,32 +620,6 @@
      },
      "rho": {
       "default": {
-       "record": {
-        "rho": 161047.3,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 161047.3, "token": null, "decoding": null},
-        "target": {"rho": 260.707, "basis": "target"},
-        "sensitivities": {"reduction": 21495.86, "update": 488.5423, "token_form": 262.7912, "decoding_form": 0.993392, "per_gate": null, "fresh_cell": 2239405.0},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [45]
-       },
-       "model": {
-        "rho": 159213.6,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 159213.6, "token": null, "decoding": null},
-        "target": {"rho": 259.7842, "basis": "target"},
-        "sensitivities": {"reduction": 21251.12, "update": 482.9799, "token_form": 259.7842, "decoding_form": 0.9877386, "per_gate": null, "fresh_cell": 2213907.0},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [45]
-       }
-      },
-      "default_full": {
        "record": {
         "rho": 253301.7,
         "basis": "fresh_products",
@@ -779,7 +675,7 @@
     },
     "20M standard-workloads r20261103-053241-99bf": {
      "record": "r20261103-053241-99bf@2301",
-     "source": "the standard-workloads island's row (art:98886dbb131c581aba78ca63656a9164ebed620572592f38300e5724b7764f35; te_core 4.4, reading B; art:e2c89609c6721622d2965b7ca4e34f39193464cfe148132abfa41ac58ed8d4b6): the ref-optim island's record: ladder-v3 ref-optim continued from s-t20, Muon on the matrices and AdamW on the embedding and gains, WSD",
+     "source": "the standard-workloads island's row (art:98886dbb131c581aba78ca63656a9164ebed620572592f38300e5724b7764f35; te_core 4.4, reading B; art:5eddf50532fb92eef0d2dfe1ea8820ec43c0f28202d940c16a15dc343333c564): the ref-optim island's record: ladder-v3 ref-optim continued from s-t20, Muon on the matrices and AdamW on the embedding and gains, WSD",
      "dials": {
       "n_params": 35658240,
       "precision": "bf16",
@@ -787,10 +683,11 @@
       "batch_tokens": 131072,
       "optimizer": "muon",
       "t": null,
-      "tokens_per_param": 4.23084,
-      "vocab": 32000
+      "tokens_per_param": 8.45247,
+      "vocab": 32000,
+      "d_model": null
      },
-     "differs": "|C| half the record's: the row's token dial counts half the tokens its run consumed (its trace's token_factor 2; batch_tokens counts them all), which no kind's term reads; t the trace's 0.732 against the model's 0.693 (the 45M trace's literal t), which puts the model's token kind 6% above the record's; 1 - sigma the trace's 0.0036 against the model's 0.0075, whose five Newton-Schulz iterations count twice the trace's optimizer gates; u_in front-loaded (the fp32 embedding at x = 0) where the model's A1' is even; w_fit its eval steps' forward",
+     "differs": "t the trace's 0.732 against the model's 0.693 (the 45M trace's literal t), which puts the model's target 6% above the record's; 1 - sigma the trace's 0.0036 against the model's 0.0075, whose five Newton-Schulz iterations count twice the trace's optimizer gates; u_in front-loaded (the fp32 embedding at x = 0) where the model's A1' is even; w_fit its eval steps' forward",
      "record_inputs": {
       "C_gates": 5.82439e+19,
       "w_gates": 192582000000.0,
@@ -828,7 +725,7 @@
       "partial_bits": "measured: the row's main part's partial gradient, one block's (te_core 4.4's partial_cut_bits; a worker's in DiLoCo)"
      },
      "model_inputs": {
-      "C_gates": 2.906922e+19,
+      "C_gates": 5.807517e+19,
       "w_gates": 191239600000.0,
       "w_fwd_gates": 62090790000.0,
       "sigma": 0.9925011,
@@ -845,32 +742,6 @@
      },
      "rho": {
       "default": {
-       "record": {
-        "rho": 153382.6,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 153382.6, "token": null, "decoding": null},
-        "target": {"rho": 301.1332, "basis": "target"},
-        "sensitivities": {"reduction": 17319.18, "update": 234.0429, "token_form": 301.1336, "decoding_form": 0.9959238, "per_gate": null, "fresh_cell": 2118315.0},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [74, 75, 13]
-       },
-       "model": {
-        "rho": 153861.8,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 153861.8, "token": null, "decoding": null},
-        "target": {"rho": 319.3462, "basis": "target"},
-        "sensitivities": {"reduction": 17160.85, "update": 235.0802, "token_form": 319.3462, "decoding_form": 0.9925011, "per_gate": null, "fresh_cell": 2124933.0},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [74]
-       }
-      },
-      "default_full": {
        "record": {
         "rho": 241246.5,
         "basis": "fresh_products",
@@ -889,7 +760,7 @@
         "binding_kind": "fresh_products",
         "terms": {"fresh_products": 242000.2, "token": null, "decoding": null},
         "target": {"rho": 502.2808, "basis": "target"},
-        "sensitivities": {"reduction": 17008.21, "update": 369.7438, "token_form": 502.2808, "decoding_form": 0.9925011, "per_gate": null, "fresh_cell": 3342182.0},
+        "sensitivities": {"reduction": 17011.95, "update": 369.8251, "token_form": 502.2808, "decoding_form": 0.9925011, "per_gate": null, "fresh_cell": 3342182.0},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
         "unmeasured": ["token", "decoding", "per_gate"],
@@ -915,11 +786,133 @@
         "binding_kind": "fresh_products",
         "terms": {"fresh_products": 5687.652, "token": null, "decoding": null},
         "target": {"rho": 12.68471, "basis": "target"},
-        "sensitivities": {"reduction": 7778.961, "update": 9.338489, "token_form": 12.68471, "decoding_form": 0.9925011, "per_gate": null, "fresh_cell": 51244.59},
+        "sensitivities": {"reduction": 7771.331, "update": 9.340542, "token_form": 12.68471, "decoding_form": 0.9925011, "per_gate": null, "fresh_cell": 51244.59},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
         "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [834]
+        "b": [833]
+       }
+      }
+     }
+    },
+    "60M standard-workloads r20261103-091929-b455": {
+     "record": "r20261103-091929-b455@125",
+     "source": "the standard-workloads island's row (art:17a55cfac7633dc2decebad5589707a01bd9047f6b53d802ddabda53a30b4a1b; te_core 4.4, reading B; art:5eddf50532fb92eef0d2dfe1ea8820ec43c0f28202d940c16a15dc343333c564): the reference island's seed continued from m-t20: Muon on the blocks' matrices and AdamW on the embedding and norms, every tensor trained, warmup 50 then linear decay; 126 steps (budget fraction 0.05)",
+     "dials": {
+      "n_params": 81212160,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "muon",
+      "t": null,
+      "tokens_per_param": 0.101679,
+      "vocab": 32000,
+      "d_model": 768
+     },
+     "differs": "m-t20 at d 768 in the model's shape, 7.84 layers of 2.75 d MLPs where it has 8 of 8/3 d; t the trace's 0.712 against the model's 0.693, which puts the model's target 3% above the record's; 1 - sigma the trace's 0.015 against the model's 0.029 (the model's five Newton-Schulz iterations, as on s-t20); w 2.1% below the record's; u_in front-loaded (the fp32 embedding at x = 0) where the model's A1' is even",
+     "record_inputs": {
+      "C_gates": 3.63539e+18,
+      "w_gates": 435334000000.0,
+      "w_fwd_gates": 138927000000.0,
+      "sigma": 0.984907,
+      "tau_bits": 15.0146,
+      "a_bits": 12288,
+      "u_points": "0:0;0.711521:0;0.711521:1.69282e9;1:1.69282e9",
+      "u_in_points": "0:0;0:7.86457e8;0.00282477:7.86457e8;0.00282477:8.05331e8;0.00489707:8.05331e8;0.00489707:8.24205e8;0.0306404:8.24205e8;0.0306404:8.49396e8;0.033415:8.49396e8;0.033415:8.99727e8;0.0389622:8.99727e8;0.0389622:9.09189e8;0.0400099:9.09189e8;0.0400099:9.28063e8;0.0657417:9.28063e8;0.0657417:9.37525e8;0.0668009:9.37525e8;0.0668009:9.87857e8;0.0723366:9.87857e8;0.0723366:1.01305e9;0.0751227:1.01305e9;0.0751227:1.03192e9;0.077195:1.03192e9;0.077195:1.0508e9;0.102938:1.0508e9;0.102938:1.07599e9;0.105713:1.07599e9;0.105713:1.12632e9;0.11126:1.12632e9;0.11126:1.13578e9;0.112308:1.13578e9;0.112308:1.15465e9;0.13804:1.15465e9;0.13804:1.16412e9;0.139099:1.16412e9;0.139099:1.21445e9;0.144635:1.21445e9;0.144635:1.23964e9;0.147421:1.23964e9;0.147421:1.25851e9;0.149493:1.25851e9;0.149493:1.27739e9;0.175236:1.27739e9;0.175236:1.30258e9;0.178011:1.30258e9;0.178011:1.35291e9;0.183558:1.35291e9;0.183558:1.36237e9;0.184606:1.36237e9;0.184606:1.38124e9;0.210338:1.38124e9;0.210338:1.39071e9;0.211397:1.39071e9;0.211397:1.44104e9;0.216933:1.44104e9;0.216933:1.46623e9;0.219719:1.46623e9;0.219719:1.4851e9;0.221791:1.4851e9;0.221791:1.50398e9;0.247534:1.50398e9;0.247534:1.52917e9;0.250309:1.52917e9;0.250309:1.5795e9;0.255856:1.5795e9;0.255856:1.58896e9;0.256904:1.58896e9;0.256904:1.60784e9;0.282636:1.60784e9;0.282636:1.6173e9;0.283695:1.6173e9;0.283695:1.66763e9;0.289231:1.66763e9;0.289231:1.69282e9;1:1.69282e9",
+      "delta_bits": 2598840000.0,
+      "delta_t_bits": 2598840000.0,
+      "d_gates": 0,
+      "delta_grad_bits": null,
+      "w_fit_gates": 433666000000.0,
+      "alpha_ratio": 0.996016,
+      "grad_bits": 2598789120,
+      "partial_bits": 2598789120
+     },
+     "record_status": {
+      "C_gates": "measured",
+      "w_gates": "measured",
+      "w_fwd_gates": "measured",
+      "sigma": "measured",
+      "tau_bits": "measured",
+      "a_bits": "measured",
+      "u_points": "measured",
+      "u_in_points": "measured",
+      "delta_bits": "measured",
+      "delta_t_bits": "measured",
+      "d_gates": "measured",
+      "delta_grad_bits": "assumed: unmeasured, 1 of 126 steps in structures with no traced Delta_grad, so te_core fails Fit at every k (the traced steps' largest 5.98443e9 bits)",
+      "w_fit_gates": "measured",
+      "alpha_ratio": "measured",
+      "grad_bits": "measured: the row's main part's gradient cut (te_core 4.4's grad_cut_bits)",
+      "partial_bits": "measured: the row's main part's partial gradient, one block's (te_core 4.4's partial_cut_bits; a worker's in DiLoCo)"
+     },
+     "model_inputs": {
+      "C_gates": 3.625789e+18,
+      "w_gates": 426421100000.0,
+      "w_fwd_gates": 138448400000.0,
+      "sigma": 0.9711549,
+      "tau_bits": 15.0,
+      "a_bits": 12288.0,
+      "u_points": "0:0;0.692646:0;0.692646:1.17252e9;1:1.69282e9",
+      "u_in_points": "0:0;1:1.69282e9",
+      "delta_bits": 2598789120,
+      "delta_t_bits": 2598789120,
+      "d_gates": 0.0,
+      "delta_grad_bits": 5984420000.0,
+      "w_fit_gates": 426421100000.0,
+      "alpha_ratio": 1.0
+     },
+     "rho": {
+      "default": {
+       "record": {
+        "rho": 246335.6,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 246335.6, "token": null, "decoding": null},
+        "target": {"rho": 318.4795, "basis": "target"},
+        "sensitivities": {"reduction": 38026.17, "update": 731.2726, "token_form": 318.4796, "decoding_form": 0.977225, "per_gate": null, "fresh_cell": 3577710.0},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": "refused",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [53, 53]
+       },
+       "model": {
+        "rho": 247972.8,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 247972.8, "token": null, "decoding": null},
+        "target": {"rho": 330.6374, "basis": "target"},
+        "sensitivities": {"reduction": 38431.87, "update": 739.0744, "token_form": 330.6374, "decoding_form": 0.9711549, "per_gate": null, "fresh_cell": 3601489.0},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": "unmodelled",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [53]
+       }
+      },
+      "served": {
+       "record": {
+        "rho": 5836.524,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 5836.524, "token": null, "decoding": null},
+        "target": {"rho": 8.043726, "basis": "target"},
+        "sensitivities": {"reduction": 17435.2, "update": 18.46949, "token_form": 8.043728, "decoding_form": 0.977225, "per_gate": null, "fresh_cell": 55948.94},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": "refused",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [929, 945]
+       },
+       "model": {
+        "rho": 5875.317,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 5875.317, "token": null, "decoding": null},
+        "target": {"rho": 8.350397, "basis": "target"},
+        "sensitivities": {"reduction": 17322.55, "update": 18.66654, "token_form": 8.350397, "decoding_form": 0.9711549, "per_gate": null, "fresh_cell": 56320.8},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": "unmodelled",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [929]
        }
       }
      }
@@ -988,6 +981,13 @@
      "default": 50304,
      "range": [1000, 262144],
      "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
+    },
+    {
+     "name": "d_model",
+     "unit": "d_model",
+     "default": null,
+     "range": [64, 8192],
+     "why": "the model's width, n_layer following from N; None is the reference model's d/L (`dense`). The island's 60M rows are m-t20's 768, which puts 7.84 layers where it has 8 (its SwiGLU is 8/3 d, the model's 2.75 d)"
     }
    ],
    "points": {
@@ -1003,7 +1003,8 @@
       "syncs": 28,
       "sync_bits": null,
       "workers": 4,
-      "vocab": 50304
+      "vocab": 50304,
+      "d_model": null
      },
      "inputs": {
       "C_gates": 2.149169e+20,
@@ -1058,27 +1059,6 @@
      },
      "rho": {
       "default": {
-       "rho": 160017.9,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 160017.9,
-       "terms": {"fresh_products": 160017.9, "token": null, "decoding": null},
-       "fresh": {"lam": 1.645903, "share": 0.843542, "numerical": 167047.4, "attention_share": 0.1192637},
-       "target": {"rho": 262.697, "basis": "target"},
-       "sensitivities": {"reduction": 21489.44, "update": 1953.586, "token_form": 262.697, "decoding_form": 0.9988137, "per_gate": null, "fresh_cell": 2221541.0},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 1457.461,
-       "x0": 5.785949e-05,
-       "s_star": 5.541168,
-       "b": [45],
-       "fit_delta_bits": 42216.62,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 251682.7,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -1144,7 +1124,8 @@
       "syncs": 28,
       "sync_bits": 45029888,
       "workers": 4,
-      "vocab": 50304
+      "vocab": 50304,
+      "d_model": null
      },
      "inputs": {
       "C_gates": 2.149169e+20,
@@ -1199,27 +1180,6 @@
      },
      "rho": {
       "default": {
-       "rho": 160017.9,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 160017.9,
-       "terms": {"fresh_products": 160017.9, "token": null, "decoding": null},
-       "fresh": {"lam": 1.645903, "share": 0.843542, "numerical": 167047.4, "attention_share": 0.1192637},
-       "target": {"rho": 262.697, "basis": "target"},
-       "sensitivities": {"reduction": 21489.44, "update": 1953.586, "token_form": 262.697, "decoding_form": 0.9988137, "per_gate": null, "fresh_cell": 2221541.0},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 1457.461,
-       "x0": 5.785949e-05,
-       "s_star": 5.541168,
-       "b": [45],
-       "fit_delta_bits": 42216.62,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 251682.7,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -1285,7 +1245,8 @@
       "syncs": 32,
       "sync_bits": 1024,
       "workers": 4,
-      "vocab": 50304
+      "vocab": 50304,
+      "d_model": null
      },
      "inputs": {
       "C_gates": 5035068000000000.0,
@@ -1340,27 +1301,6 @@
      },
      "rho": {
       "default": {
-       "rho": 1.541535,
-       "basis": "fit",
-       "binding_kind": null,
-       "bound": 1.0,
-       "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-       "fresh": {"lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.09090451},
-       "target": {"rho": 1.541535, "basis": "fit"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 0.0, "decoding_form": 1.173586, "per_gate": null, "fresh_cell": 0.0},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": true,
-       "fit_fails": [],
-       "rho_fit": 1.541535,
-       "s": 1457.461,
-       "x0": 1.0,
-       "s_star": 5.541168,
-       "b": [1],
-       "fit_delta_bits": 42216.62,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": null,
        "basis": "none",
        "binding_kind": null,
@@ -1418,7 +1358,7 @@
    "checks": {
     "20M standard-workloads r20261103-064814-40d6": {
      "record": "r20261103-064814-40d6@408",
-     "source": "the standard-workloads island's row (art:34893d2444f595acfe4cc4ef4419e61d9d74dfa7522f6af4fc7d57ce07941ae0; te_core 4.4, reading B; art:e2c89609c6721622d2965b7ca4e34f39193464cfe148132abfa41ac58ed8d4b6): M = 4 workers, 50 local AdamW steps each a phase; the outer step Nesterov SGD (lr 0.7, momentum 0.9) on the mean pseudo-gradient, passed in f32; reduction fan-in b = M = 4",
+     "source": "the standard-workloads island's row (art:34893d2444f595acfe4cc4ef4419e61d9d74dfa7522f6af4fc7d57ce07941ae0; te_core 4.4, reading B; art:5eddf50532fb92eef0d2dfe1ea8820ec43c0f28202d940c16a15dc343333c564): M = 4 workers, 50 local AdamW steps each a phase; the outer step Nesterov SGD (lr 0.7, momentum 0.9) on the mean pseudo-gradient, passed in f32; reduction fan-in b = M = 4",
      "dials": {
       "n_params": 35658240,
       "precision": "bf16",
@@ -1430,14 +1370,15 @@
       "syncs": 8,
       "sync_bits": 1141063680,
       "workers": 4,
-      "vocab": 32000
+      "vocab": 32000,
+      "d_model": null
      },
-     "differs": "t the trace's 0.732 against the model's 0.693, the model's token kind 6% above the record's; the outer step Nesterov SGD where the model's is plain, and its 8 syncs' pseudo-gradients priced by no kind on either; u_in front-loaded (the fp32 embedding at x = 0) where the model's A1' is even",
+     "differs": "t the trace's 0.732 against the model's 0.693, the model's target 6% above the record's; the outer step Nesterov SGD where the model's is plain, and its 8 syncs' pseudo-gradients priced by no kind on either; u_in front-loaded (the fp32 embedding at x = 0) where the model's A1' is even",
      "record_inputs": {
       "C_gates": 5.03723e+18,
-      "w_gates": 192035000000.0,
+      "w_gates": 192036000000.0,
       "w_fwd_gates": 62140400000.0,
-      "sigma": 0.999377,
+      "sigma": 0.999379,
       "tau_bits": 15.0146,
       "a_bits": 8192,
       "u_points": "0:0;0.731612:0;0.731612:8.32782e8;1:8.32782e8",
@@ -1445,8 +1386,8 @@
       "delta_bits": 1141100000.0,
       "delta_t_bits": 1141100000.0,
       "d_gates": 0,
-      "delta_grad_bits": null,
-      "w_fit_gates": 191096000000.0,
+      "delta_grad_bits": 13692800000.0,
+      "w_fit_gates": 191225000000.0,
       "alpha_ratio": 0.9975,
       "grad_bits": 4564254720,
       "partial_bits": 1141063680
@@ -1463,7 +1404,7 @@
       "delta_bits": "measured",
       "delta_t_bits": "measured",
       "d_gates": "measured",
-      "delta_grad_bits": "assumed: unmeasured, 1 of 409 steps in structures with no traced Delta_grad, so te_core fails Fit at every k (the traced steps' largest 1.36928e10 bits)",
+      "delta_grad_bits": "measured",
       "w_fit_gates": "measured",
       "alpha_ratio": "measured",
       "grad_bits": "measured: the row's main part's gradient cut (te_core 4.4's grad_cut_bits)",
@@ -1488,37 +1429,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 153622.0,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 153622.0, "token": null, "decoding": null},
-        "target": {"rho": 302.4372, "basis": "target"},
-        "sensitivities": {"reduction": 16930.04, "update": 1881.115, "token_form": 302.4368, "decoding_form": 0.9968911, "per_gate": null, "fresh_cell": 2116457.0},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [0, 37, 37, 0]
-       },
-       "model": {
-        "rho": 154179.6,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 154179.6, "token": null, "decoding": null},
-        "target": {"rho": 321.3888, "basis": "target"},
-        "sensitivities": {"reduction": 17034.08, "update": 1892.676, "token_form": 321.3888, "decoding_form": 0.9988494, "per_gate": null, "fresh_cell": 2124141.0},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [37]
-       }
-      },
-      "default_full": {
-       "record": {
         "rho": 241622.9,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
         "terms": {"fresh_products": 241622.9, "token": null, "decoding": null},
-        "target": {"rho": 475.6857, "basis": "target"},
+        "target": {"rho": 475.6842, "basis": "target"},
         "sensitivities": {"reduction": 17012.5, "update": 2958.696, "token_form": 475.685, "decoding_form": 0.9968911, "per_gate": null, "fresh_cell": 3328851.0},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
@@ -1544,7 +1459,7 @@
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
         "terms": {"fresh_products": 5676.734, "token": null, "decoding": null},
-        "target": {"rho": 12.01423, "basis": "target"},
+        "target": {"rho": 12.01419, "basis": "target"},
         "sensitivities": {"reduction": 7808.944, "update": 74.72674, "token_form": 12.01421, "decoding_form": 0.9968911, "per_gate": null, "fresh_cell": 51005.35},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
@@ -1634,6 +1549,13 @@
      "default": false,
      "range": [false, true],
      "why": "the rollouts alone, `tokens` of them, as the island's generation rows record them: no learner, Delta the served weights or the adapter"
+    },
+    {
+     "name": "d_model",
+     "unit": "d_model",
+     "default": null,
+     "range": [64, 8192],
+     "why": "the model's width, n_layer following from N; None is the reference model's d/L (`dense`). The island's 60M rows are m-t20's 768, which puts 7.84 layers where it has 8 (its SwiGLU is 8/3 d, the model's 2.75 d)"
     }
    ],
    "points": {
@@ -1653,7 +1575,8 @@
       "t": null,
       "tokens": 100000000.0,
       "vocab": 50304,
-      "rounds": false
+      "rounds": false,
+      "d_model": null
      },
      "inputs": {
       "C_gates": 2.53563e+19,
@@ -1715,27 +1638,6 @@
      },
      "rho": {
       "default": {
-       "rho": 154787.7,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 154787.7,
-       "terms": {"fresh_products": 154787.7, "token": null, "decoding": null},
-       "fresh": {"lam": 1.680342, "share": 0.8291986, "numerical": 162722.7, "attention_share": 0.1296857},
-       "target": {"rho": 262.8671, "basis": "target"},
-       "sensitivities": {"reduction": 19853.47, "update": 451.2152, "token_form": 262.8671, "decoding_form": 0.9997261, "per_gate": null, "fresh_cell": 2016079.0},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 2690.34,
-       "x0": 0.0003234198,
-       "s_star": 5.541168,
-       "b": [5728, 45],
-       "fit_delta_bits": -4335.638,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 243456.4,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -1792,11 +1694,7 @@
        {"kind": "learner", "tokens": 100000000.0, "u1_bits": 1132675000.0, "t": 0.692646}
       ]
      },
-     "sensitivity": {
-      "default": {"tokens_worth": 485.2287, "per_kind": 739.7363},
-      "default_full": {"tokens_worth": 763.1876, "per_kind": 1163.488},
-      "served": {"tokens_worth": 19.26795, "per_kind": 29.37732}
-     }
+     "sensitivity": {"default": {"tokens_worth": 763.1876, "per_kind": 1163.488}, "served": {"tokens_worth": 19.26795, "per_kind": 29.37732}}
     },
     "LoRA rank 16": {
      "dials": {
@@ -1814,7 +1712,8 @@
       "t": null,
       "tokens": 100000000.0,
       "vocab": 50304,
-      "rounds": false
+      "rounds": false,
+      "d_model": null
      },
      "inputs": {
       "C_gates": 1.908089e+19,
@@ -1884,27 +1783,6 @@
      },
      "rho": {
       "default": {
-       "rho": 2314.691,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 2314.691,
-       "terms": {"fresh_products": 2314.691, "token": null, "decoding": null},
-       "fresh": {"lam": 1.645903, "share": 0.02011237, "numerical": 2788.773, "attention_share": 0.1723373},
-       "target": {"rho": 23.81893, "basis": "target"},
-       "sensitivities": {"reduction": 403.1735, "update": 12.59917, "token_form": 23.81893, "decoding_form": 1.013012, "per_gate": null, "fresh_cell": 9078.637},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.01302,
-       "s": 3574.2,
-       "x0": 0.004329004,
-       "s_star": 83.92605,
-       "b": [6150, 33],
-       "fit_delta_bits": 455.4638,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 3640.641,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -1961,11 +1839,7 @@
        {"kind": "learner", "tokens": 100000000.0, "u1_bits": 15138820.0, "t": 0.9835084}
       ]
      },
-     "sensitivity": {
-      "default": {"tokens_worth": 42.4028, "per_kind": 43.5455},
-      "default_full": {"tokens_worth": 66.69287, "per_kind": 68.49014},
-      "served": {"tokens_worth": 1.675495, "per_kind": 1.720647}
-     }
+     "sensitivity": {"default": {"tokens_worth": 66.69287, "per_kind": 68.49014}, "served": {"tokens_worth": 1.675495, "per_kind": 1.720647}}
     },
     "LoRA in one layer": {
      "dials": {
@@ -1983,7 +1857,8 @@
       "t": null,
       "tokens": 100000000.0,
       "vocab": 50304,
-      "rounds": false
+      "rounds": false,
+      "d_model": null
      },
      "inputs": {
       "C_gates": 1.447293e+19,
@@ -2051,27 +1926,6 @@
        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
        "fresh": {"lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.03786783},
        "target": {"rho": 1.0, "basis": "target"},
-       "sensitivities": {"reduction": 0.4314432, "update": 0.0179768, "token_form": 0.0, "decoding_form": 0.7055986, "per_gate": null, "fresh_cell": 0.0},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.000029,
-       "s": 4712.136,
-       "x0": 1.0,
-       "s_star": 4095.866,
-       "b": [5729, 25],
-       "fit_delta_bits": -4330.072,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": null,
-       "basis": "none",
-       "binding_kind": null,
-       "bound": 1.0,
-       "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-       "fresh": {"lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.03786783},
-       "target": {"rho": 1.0, "basis": "target"},
        "sensitivities": {"reduction": 0.4241197, "update": 0.02827465, "token_form": 0.0, "decoding_form": 0.7055986, "per_gate": null, "fresh_cell": 0.0},
        "token_A": "unmodelled",
        "unmeasured": ["token", "decoding", "per_gate"],
@@ -2121,17 +1975,13 @@
        {"kind": "learner", "tokens": 100000000.0, "u1_bits": 16384.0, "t": 0.9999673}
       ]
      },
-     "sensitivity": {
-      "default": {"tokens_worth": 1.0, "per_kind": 1.0},
-      "default_full": {"tokens_worth": 1.0, "per_kind": 1.0},
-      "served": {"tokens_worth": 1.0, "per_kind": 1.0}
-     }
+     "sensitivity": {"default": {"tokens_worth": 1.0, "per_kind": 1.0}, "served": {"tokens_worth": 1.0, "per_kind": 1.0}}
     }
    },
    "checks": {
     "20M standard-workloads r20261103-073616-b950": {
      "record": "r20261103-073616-b950@203",
-     "source": "the standard-workloads island's row (art:50be50932e5725ab777908df4bd705337286d815f58ba0914cb14954b95f99a8; te_core 4.4, reading B; art:e2c89609c6721622d2965b7ca4e34f39193464cfe148132abfa41ac58ed8d4b6): the rollouts alone: s-t20 with a rank-16 LoRA on every matrix, trained 200 AdamW steps and served NVFP4 W4A4 with an NVFP4 head; 3 rounds (after steps 1, 100 and 200) of 64 sequences, 147,264 tokens; the learner's steps are not in the row",
+     "source": "the standard-workloads island's row (art:50be50932e5725ab777908df4bd705337286d815f58ba0914cb14954b95f99a8; te_core 4.4, reading B; art:5eddf50532fb92eef0d2dfe1ea8820ec43c0f28202d940c16a15dc343333c564): the rollouts alone: s-t20 with a rank-16 LoRA on every matrix, trained 200 AdamW steps and served NVFP4 W4A4 with an NVFP4 head; 3 rounds (after steps 1, 100 and 200) of 64 sequences, 147,264 tokens; the learner's steps are not in the row",
      "dials": {
       "n_params": 35658240,
       "update": "lora",
@@ -2147,9 +1997,10 @@
       "t": null,
       "tokens": 147264,
       "vocab": 32000,
-      "rounds": true
+      "rounds": true,
+      "d_model": null
      },
-     "differs": "a round isn't traced, so the record's A1 is te_core's stub, t 0 with u even to Delta and u_in = u, against the model's t 0.916, and its affected work only the ops that read an update tensor (te_core's untraced convention, 8.6% of its work) where the model's is every op the update reaches, which the decoding kind reads; 1 - sigma the record's 0.005, 1.23e13 gates outside the token blocks (the same in all three generation rows), where the model's rounds have none; w_fwd the start's bf16 forward at 1,024 tokens, which no policy here reads, and a the stub's 8,192 bits (the residual stream) against the model's 768 (the rank outputs, as the island's traced LoRAs measure); w 3% above the record's",
+     "differs": "a round isn't traced, so the record's A1 is te_core's stub, t 0 with u even to Delta and u_in = u, against the model's t 0.916, and its affected work only the ops that read an update tensor (te_core's untraced convention, 8.6% of its work) where the model's is every op the update reaches, which reading B's decoding form reads; 1 - sigma the record's 0.0051, 1.23e13 gates outside the token blocks (the same in each generation row from its start), where the model's rounds have none; w_fwd the start's bf16 forward at 1,024 tokens, which no policy here reads, and a the stub's 8,192 bits (the residual stream) against the model's 768 (the rank outputs, as the island's traced LoRAs measure); w 3% above the record's",
      "record_inputs": {
       "C_gates": 2405010000000000.0,
       "w_gates": 16247600000.0,
@@ -2205,32 +2056,6 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 7168.851,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 7168.851, "token": null, "decoding": null},
-        "target": {"rho": 2401151.0, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 2401158.0, "decoding_form": 0.08686956, "per_gate": null, "fresh_cell": 25007.17},
-        "fit_fails": ["compute", "update"],
-        "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [3]
-       },
-       "model": {
-        "rho": 6998.298,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 6998.298, "token": null, "decoding": null},
-        "target": {"rho": 259.5564, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 259.5564, "decoding_form": 1.01302, "per_gate": null, "fresh_cell": 24412.22},
-        "fit_fails": ["compute", "update"],
-        "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [8]
-       }
-      },
-      "default_full": {
-       "record": {
         "rho": 11275.46,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
@@ -2285,7 +2110,7 @@
     },
     "20M standard-workloads r20261103-073633-f483": {
      "record": "r20261103-073633-f483@203",
-     "source": "the standard-workloads island's row (art:6895c5250c73946c73a6fd1d48f9f1df062f75d84bacead87de262b9dfdd984e; te_core 4.4, reading B; art:e2c89609c6721622d2965b7ca4e34f39193464cfe148132abfa41ac58ed8d4b6): the rollouts alone: s-t20 fully fine-tuned 200 AdamW steps and served NVFP4 W4A4 with an NVFP4 head; 3 rounds (after steps 1, 100 and 200) of 64 sequences, 147,264 tokens; the learner's steps are not in the row",
+     "source": "the standard-workloads island's row (art:6895c5250c73946c73a6fd1d48f9f1df062f75d84bacead87de262b9dfdd984e; te_core 4.4, reading B; art:5eddf50532fb92eef0d2dfe1ea8820ec43c0f28202d940c16a15dc343333c564): the rollouts alone: s-t20 fully fine-tuned 200 AdamW steps and served NVFP4 W4A4 with an NVFP4 head; 3 rounds (after steps 1, 100 and 200) of 64 sequences, 147,264 tokens; the learner's steps are not in the row",
      "dials": {
       "n_params": 35658240,
       "update": "full",
@@ -2301,9 +2126,10 @@
       "t": null,
       "tokens": 147264,
       "vocab": 32000,
-      "rounds": true
+      "rounds": true,
+      "d_model": null
      },
-     "differs": "a round isn't traced, so the record's A1 is te_core's stub, t 0 with u even to Delta and u_in = u, against the model's t 0.338, and its affected work only the ops that read an update tensor (te_core's untraced convention, 69% of its work) where the model's is every op the update reaches, which the decoding kind reads; 1 - sigma the record's 0.005, 1.23e13 gates outside the token blocks (the same in all three generation rows), where the model's rounds have none; w_fwd the start's bf16 forward at 1,024 tokens, which no policy here reads; Delta the served codes, 0.05% above the model's N x 4.5 bits (the norms in bf16)",
+     "differs": "a round isn't traced, so the record's A1 is te_core's stub, t 0 with u even to Delta and u_in = u, against the model's t 0.338, and its affected work only the ops that read an update tensor (te_core's untraced convention, 69% of its work) where the model's is every op the update reaches, which reading B's decoding form reads; 1 - sigma the record's 0.0054, 1.23e13 gates outside the token blocks (the same in each generation row from its start), where the model's rounds have none; w_fwd the start's bf16 forward at 1,024 tokens, which no policy here reads; Delta the served codes, 0.05% above the model's N x 4.5 bits (the norms in bf16)",
      "record_inputs": {
       "C_gates": 2267730000000000.0,
       "w_gates": 15315300000.0,
@@ -2359,32 +2185,6 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 123908.8,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 123908.8, "token": null, "decoding": null},
-        "target": {"rho": 27111040.0, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 27111030.0, "decoding_form": 0.6872964, "per_gate": null, "fresh_cell": 1566709.0},
-        "fit_fails": ["compute", "update"],
-        "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [3]
-       },
-       "model": {
-        "rho": 124780.3,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 124780.3, "token": null, "decoding": null},
-        "target": {"rho": 8231.629, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 8231.629, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 1577728.0},
-        "fit_fails": ["compute", "update"],
-        "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [7]
-       }
-      },
-      "default_full": {
-       "record": {
         "rho": 194888.8,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
@@ -2436,6 +2236,135 @@
        }
       }
      }
+    },
+    "60M standard-workloads r20261103-091516-fb8d": {
+     "record": "r20261103-091516-fb8d@203",
+     "source": "the standard-workloads island's row (art:efad94ff3f0da20922096d1813946cc85b3a5b7312a8ee6ddb1549413794c0e1; te_core 4.4, reading B; art:5eddf50532fb92eef0d2dfe1ea8820ec43c0f28202d940c16a15dc343333c564): the rollouts alone: m-t20 fully fine-tuned 200 AdamW steps and served NVFP4 W4A4 with an NVFP4 head; 3 rounds (after steps 1, 100 and 200) of 64 sequences, 98,112 tokens; the learner's steps are not in the row",
+     "dials": {
+      "n_params": 81212160,
+      "update": "full",
+      "rank": 16,
+      "targets": "all",
+      "layers": null,
+      "rollout_precision": "fp4",
+      "prompt_tokens": 256,
+      "generated_tokens": 256,
+      "samples_per_trained": 1.0,
+      "optimizer": "adamw",
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 98112,
+      "vocab": 32000,
+      "rounds": true,
+      "d_model": 768
+     },
+     "differs": "a round isn't traced, so the record's A1 is te_core's stub, t 0 with u even to Delta and u_in = u, against the model's t 0.271, and its affected work only the ops that read an update tensor (te_core's untraced convention, 76% of its work) where the model's is every op the update reaches, which reading B's decoding form reads; 1 - sigma the record's 0.0091, 2.81e13 gates outside the token blocks (the same in each generation row from its start), where the model's rounds have none; w_fwd the start's bf16 forward at 1,024 tokens, which no policy here reads; Delta the served codes, 0.04% above the model's N x 4.5 bits (the norms in bf16); w 1.5% above the record's; m-t20 at d 768 in the model's shape, 7.84 layers of 2.75 d MLPs where it has 8 of 8/3 d",
+     "record_inputs": {
+      "C_gates": 3088150000000000.0,
+      "w_gates": 31189400000.0,
+      "w_fwd_gates": 138927000000.0,
+      "sigma": 0.990904,
+      "tau_bits": 7.51468,
+      "a_bits": 12288,
+      "u_points": "0:0;1:3.65607e8",
+      "u_in_points": "0:0;1:3.65607e8",
+      "delta_bits": 365607000.0,
+      "delta_t_bits": 365607000.0,
+      "d_gates": 0,
+      "delta_grad_bits": 0,
+      "w_fit_gates": 31189400000.0,
+      "alpha_ratio": 1,
+      "grad_bits": 0.0,
+      "partial_bits": 0.0
+     },
+     "record_status": {
+      "C_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4)",
+      "w_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4), per token through the forward: each prompt token and every generated token but the last (the counter counts the prompts' alone)",
+      "w_fwd_gates": "measured",
+      "sigma": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4)",
+      "tau_bits": "assumed: one id per prompt token and none per generated token, which the round samples; a round is not traced (its decode loop's length is no token axis of the capture)",
+      "a_bits": "assumed: te_core's stub, one token's bf16 residual stream (d_model x 16); a round is not traced (its decode loop's length is no token axis of the capture)",
+      "u_points": "assumed: te_core's stub (A1), evenly spread to u(1) = Delta; a round is not traced (its decode loop's length is no token axis of the capture)",
+      "u_in_points": "assumed: te_core's stub (A1'), u_in = u; a round is not traced (its decode loop's length is no token axis of the capture)",
+      "delta_bits": "measured",
+      "delta_t_bits": "measured",
+      "d_gates": "measured",
+      "delta_grad_bits": "measured",
+      "w_fit_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4), per token through the forward: each prompt token and every generated token but the last (the counter counts the prompts' alone)",
+      "alpha_ratio": "assumed: a round's affected work is its forward ops that read an update tensor (te_core's untraced convention); a round is not traced (its decode loop's length is no token axis of the capture)",
+      "grad_bits": "measured: the row's main part's gradient cut (te_core 4.4's grad_cut_bits)",
+      "partial_bits": "measured: the row's main part's partial gradient, one block's (te_core 4.4's partial_cut_bits; a worker's in DiLoCo)"
+     },
+     "model_inputs": {
+      "C_gates": 3106281000000000.0,
+      "w_gates": 31660560000.0,
+      "w_fwd_gates": 32893450000.0,
+      "sigma": 1.0,
+      "tau_bits": 7.514677,
+      "a_bits": 12288.0,
+      "u_points": "0:0;0.270834:0;0.270834:9.89776e7;1:3.65455e8",
+      "u_in_points": "0:0;1:3.65455e8",
+      "delta_bits": 365454700.0,
+      "delta_t_bits": 365454700.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 0.0,
+      "w_fit_gates": 31660560000.0,
+      "alpha_ratio": 1.0
+     },
+     "rho": {
+      "default": {
+       "record": {
+        "rho": 226494.2,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 226494.2, "token": null, "decoding": null},
+        "target": {"rho": 71280640.0, "basis": "target"},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 71280540.0, "decoding_form": 0.7560941, "per_gate": null, "fresh_cell": 3349821.0},
+        "fit_fails": ["compute", "update"],
+        "token_A": "refused",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [2]
+       },
+       "model": {
+        "rho": 225172.1,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 225172.1, "token": null, "decoding": null},
+        "target": {"rho": 11725.48, "basis": "target"},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 11725.48, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 3330268.0},
+        "fit_fails": ["compute", "update"],
+        "token_A": "unmodelled",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [6]
+       }
+      },
+      "served": {
+       "record": {
+        "rho": 5213.32,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 5213.32, "token": null, "decoding": null},
+        "target": {"rho": 810338.0, "basis": "target"},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 810336.9, "decoding_form": 0.7560941, "per_gate": null, "fresh_cell": 47417.49},
+        "fit_fails": ["compute", "update"],
+        "token_A": "refused",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [34]
+       },
+       "model": {
+        "rho": 5182.889,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 5182.889, "token": null, "decoding": null},
+        "target": {"rho": 296.0814, "basis": "target"},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 296.0814, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 47140.7},
+        "fit_fails": ["compute", "update"],
+        "token_A": "unmodelled",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [104]
+       }
+      }
+     }
     }
    }
   },
@@ -2461,11 +2390,27 @@
      "default": 50304,
      "range": [1000, 262144],
      "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
+    },
+    {
+     "name": "d_model",
+     "unit": "d_model",
+     "default": null,
+     "range": [64, 8192],
+     "why": "the model's width, n_layer following from N; None is the reference model's d/L (`dense`). The island's 60M rows are m-t20's 768, which puts 7.84 layers where it has 8 (its SwiGLU is 8/3 d, the model's 2.75 d)"
     }
    ],
    "points": {
     "default": {
-     "dials": {"n_params": 45029888, "precision": "fp4", "prompt_tokens": 4096, "generated_tokens": 1024, "t": null, "tokens": 1000000000.0, "vocab": 50304},
+     "dials": {
+      "n_params": 45029888,
+      "precision": "fp4",
+      "prompt_tokens": 4096,
+      "generated_tokens": 1024,
+      "t": null,
+      "tokens": 1000000000.0,
+      "vocab": 50304,
+      "d_model": null
+     },
      "inputs": {
       "C_gates": 4.834065e+19,
       "w_gates": 48340650000.0,
@@ -2515,27 +2460,6 @@
      },
      "rho": {
       "default": {
-       "rho": 31785.44,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 31785.44,
-       "terms": {"fresh_products": 31785.44, "token": null, "decoding": null},
-       "fresh": {"lam": 1.281715, "share": 0.1636943, "numerical": 32483.72, "attention_share": 0.7898069},
-       "target": {"rho": 1060.958, "basis": "target"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 1060.958, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 405434.7},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "update"],
-       "rho_fit": 1.0,
-       "s": 7053.939,
-       "x0": 0.0003234198,
-       "s_star": 6.646499,
-       "b": [141765],
-       "fit_delta_bits": -24772.05,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 49993.44,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -2581,7 +2505,16 @@
      "derived": {"d_model": 512.0, "n_layer": 6.0, "span": 4198.4, "t_counted": 0.8308124}
     },
     "bf16": {
-     "dials": {"n_params": 45029888, "precision": "bf16", "prompt_tokens": 4096, "generated_tokens": 1024, "t": null, "tokens": 1000000000.0, "vocab": 50304},
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "prompt_tokens": 4096,
+      "generated_tokens": 1024,
+      "t": null,
+      "tokens": 1000000000.0,
+      "vocab": 50304,
+      "d_model": null
+     },
      "inputs": {
       "C_gates": 7.631611e+19,
       "w_gates": 76316110000.0,
@@ -2631,27 +2564,6 @@
      },
      "rho": {
       "default": {
-       "rho": 83491.36,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 83491.36,
-       "terms": {"fresh_products": 83491.36, "token": null, "decoding": null},
-       "fresh": {"lam": 1.645903, "share": 0.4583596, "numerical": 88199.12, "attention_share": 0.5002847},
-       "target": {"rho": 21501.03, "basis": "target"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 21501.03, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 1016957.0},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "update"],
-       "rho_fit": 1.0,
-       "s": 4468.153,
-       "x0": 9.096181e-05,
-       "s_star": 0.2077922,
-       "b": [223807],
-       "fit_delta_bits": 8332.475,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 131318.6,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -2697,7 +2609,16 @@
      "derived": {"d_model": 512.0, "n_layer": 6.0, "span": 4198.4, "t_counted": 0.02597403}
     },
     "7B": {
-     "dials": {"n_params": 7000000000.0, "precision": "fp4", "prompt_tokens": 4096, "generated_tokens": 1024, "t": null, "tokens": 1000000000.0, "vocab": 50304},
+     "dials": {
+      "n_params": 7000000000.0,
+      "precision": "fp4",
+      "prompt_tokens": 4096,
+      "generated_tokens": 1024,
+      "t": null,
+      "tokens": 1000000000.0,
+      "vocab": 50304,
+      "d_model": null
+     },
      "inputs": {
       "C_gates": 4.526473e+21,
       "w_gates": 4526473000000.0,
@@ -2747,27 +2668,6 @@
      },
      "rho": {
       "default": {
-       "rho": 110316.5,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 110316.5,
-       "terms": {"fresh_products": 110316.5, "token": null, "decoding": null},
-       "fresh": {"lam": 1.246291, "share": 0.5040848, "numerical": 111147.6, "attention_share": 0.4219617},
-       "target": {"rho": 135.1021, "basis": "target"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 135.1021, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 2289942.0},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "update"],
-       "rho_fit": 1.0,
-       "s": 75.33283,
-       "x0": 2.080508e-06,
-       "s_star": 0.5575981,
-       "b": [13274425],
-       "fit_delta_bits": 64571.55,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 173510.3,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -2816,9 +2716,9 @@
    "checks": {
     "20M standard-workloads r20261103-073641-d1f4": {
      "record": "r20261103-073641-d1f4@603",
-     "source": "the standard-workloads island's row (art:9cc81ba658eb834ce70646a83f13c5c60c15c39eec9091bcf5644d9e6513225e; te_core 4.4, reading B; art:e2c89609c6721622d2965b7ca4e34f39193464cfe148132abfa41ac58ed8d4b6): an unregistered model of s-t20's shape (fresh init, 600 AdamW steps from scratch), served NVFP4 W4A4 with an NVFP4 head; the rounds alone, 3 (after steps 1, 300 and 600) of 64 sequences",
-     "dials": {"n_params": 35658240, "precision": "fp4", "prompt_tokens": 768, "generated_tokens": 192, "t": null, "tokens": 184128, "vocab": 32000},
-     "differs": "a round isn't traced, so the record's A1 is te_core's stub, t 0 with u even to Delta and u_in = u, against the model's t 0.522, and its affected work only the ops that read an update tensor (te_core's untraced convention, 50% of its work) where the model's is every op the update reaches, which the decoding kind reads; 1 - sigma the record's 0.005, 1.23e13 gates outside the token blocks (the same in all three generation rows), where the model's rounds have none; w_fwd the start's bf16 forward at 1,024 tokens, which no policy here reads; w 1.1% below the record's; Delta as the full-weight RL row's",
+     "source": "the standard-workloads island's row (art:9cc81ba658eb834ce70646a83f13c5c60c15c39eec9091bcf5644d9e6513225e; te_core 4.4, reading B; art:5eddf50532fb92eef0d2dfe1ea8820ec43c0f28202d940c16a15dc343333c564): an unregistered model of s-t20's shape (fresh init, 600 AdamW steps from scratch), served NVFP4 W4A4 with an NVFP4 head; the rounds alone, 3 (after steps 1, 300 and 600) of 64 sequences",
+     "dials": {"n_params": 35658240, "precision": "fp4", "prompt_tokens": 768, "generated_tokens": 192, "t": null, "tokens": 184128, "vocab": 32000, "d_model": null},
+     "differs": "a round isn't traced, so the record's A1 is te_core's stub, t 0 with u even to Delta and u_in = u, against the model's t 0.522, and its affected work only the ops that read an update tensor (te_core's untraced convention, 50% of its work) where the model's is every op the update reaches, which reading B's decoding form reads; 1 - sigma the record's 0.0042, 1.23e13 gates outside the token blocks (the same in each generation row from its start), where the model's rounds have none; w_fwd the start's bf16 forward at 1,024 tokens, which no policy here reads; w 1.1% below the record's; Delta as the full-weight RL row's",
      "record_inputs": {
       "C_gates": 2952080000000000.0,
       "w_gates": 15965800000.0,
@@ -2874,32 +2774,6 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 88338.88,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 88338.88, "token": null, "decoding": null},
-        "target": {"rho": 26039420.0, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 26039500.0, "decoding_form": 0.5001703, "per_gate": null, "fresh_cell": 1131173.0},
-        "fit_fails": ["compute", "update"],
-        "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [3]
-       },
-       "model": {
-        "rho": 89687.23,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 89687.23, "token": null, "decoding": null},
-        "target": {"rho": 5170.808, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 5170.808, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 1148438.0},
-        "fit_fails": ["compute", "update"],
-        "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [9]
-       }
-      },
-      "default_full": {
-       "record": {
         "rho": 138943.0,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
@@ -2951,6 +2825,118 @@
        }
       }
      }
+    },
+    "60M standard-workloads r20261103-091453-e42e": {
+     "record": "r20261103-091453-e42e@603",
+     "source": "the standard-workloads island's row (art:344117eee4254541a02a81af35dbcd47d88f9bc2d0652fd5d90d098b29e64fc9; te_core 4.4, reading B; art:5eddf50532fb92eef0d2dfe1ea8820ec43c0f28202d940c16a15dc343333c564): an unregistered model of m-t20's shape (fresh init, 600 AdamW steps from scratch), served NVFP4 W4A4 with an NVFP4 head; the rounds alone, 3 (after steps 1, 300 and 600) of 64 sequences",
+     "dials": {"n_params": 81212160, "precision": "fp4", "prompt_tokens": 768, "generated_tokens": 192, "t": null, "tokens": 184128, "vocab": 32000, "d_model": 768},
+     "differs": "a round isn't traced, so the record's A1 is te_core's stub, t 0 with u even to Delta and u_in = u, against the model's t 0.449, and its affected work only the ops that read an update tensor (te_core's untraced convention, 57% of its work) where the model's is every op the update reaches, which reading B's decoding form reads; 1 - sigma the record's 0.0041, 2.81e13 gates outside the token blocks (the same in each generation row from its start), where the model's rounds have none; w_fwd the start's bf16 forward at 1,024 tokens, which no policy here reads; w 0.7% above the record's; Delta as the full-weight RL rows'; m-t20 at d 768 in the model's shape, 7.84 layers of 2.75 d MLPs where it has 8 of 8/3 d",
+     "record_inputs": {
+      "C_gates": 6871950000000000.0,
+      "w_gates": 37169100000.0,
+      "w_fwd_gates": 138927000000.0,
+      "sigma": 0.995912,
+      "tau_bits": 12.0125,
+      "a_bits": 12288,
+      "u_points": "0:0;1:3.65607e8",
+      "u_in_points": "0:0;1:3.65607e8",
+      "delta_bits": 365607000.0,
+      "delta_t_bits": 365607000.0,
+      "d_gates": 0,
+      "delta_grad_bits": 0,
+      "w_fit_gates": 37169100000.0,
+      "alpha_ratio": 1,
+      "grad_bits": 0.0,
+      "partial_bits": 0.0
+     },
+     "record_status": {
+      "C_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4)",
+      "w_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4), per token through the forward: each prompt token and every generated token but the last (the counter counts the prompts' alone)",
+      "w_fwd_gates": "measured",
+      "sigma": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4)",
+      "tau_bits": "assumed: one id per prompt token and none per generated token, which the round samples; a round is not traced (its decode loop's length is no token axis of the capture)",
+      "a_bits": "assumed: te_core's stub, one token's bf16 residual stream (d_model x 16); a round is not traced (its decode loop's length is no token axis of the capture)",
+      "u_points": "assumed: te_core's stub (A1), evenly spread to u(1) = Delta; a round is not traced (its decode loop's length is no token axis of the capture)",
+      "u_in_points": "assumed: te_core's stub (A1'), u_in = u; a round is not traced (its decode loop's length is no token axis of the capture)",
+      "delta_bits": "measured",
+      "delta_t_bits": "measured",
+      "d_gates": "measured",
+      "delta_grad_bits": "measured",
+      "w_fit_gates": "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) priced as NVFP4 (gemm/fp4), per token through the forward: each prompt token and every generated token but the last (the counter counts the prompts' alone)",
+      "alpha_ratio": "assumed: a round's affected work is its forward ops that read an update tensor (te_core's untraced convention); a round is not traced (its decode loop's length is no token axis of the capture)",
+      "grad_bits": "measured: the row's main part's gradient cut (te_core 4.4's grad_cut_bits)",
+      "partial_bits": "measured: the row's main part's partial gradient, one block's (te_core 4.4's partial_cut_bits; a worker's in DiLoCo)"
+     },
+     "model_inputs": {
+      "C_gates": 6893710000000000.0,
+      "w_gates": 37439770000.0,
+      "w_fwd_gates": 41217400000.0,
+      "sigma": 1.0,
+      "tau_bits": 12.01251,
+      "a_bits": 12288.0,
+      "u_points": "0:0;0.449493:0;0.449493:1.64269e8;1:3.65455e8",
+      "u_in_points": "0:0;1:3.65455e8",
+      "delta_bits": 365454700.0,
+      "delta_t_bits": 365454700.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 0.0,
+      "w_fit_gates": 37439770000.0,
+      "alpha_ratio": 1.0
+     },
+     "rho": {
+      "default": {
+       "record": {
+        "rho": 170210.4,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 170210.4, "token": null, "decoding": null},
+        "target": {"rho": 60115430.0, "basis": "target"},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 60115510.0, "decoding_form": 0.5713246, "per_gate": null, "fresh_cell": 2529753.0},
+        "fit_fails": ["compute", "update"],
+        "token_A": "refused",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [5]
+       },
+       "model": {
+        "rho": 169673.2,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 169673.2, "token": null, "decoding": null},
+        "target": {"rho": 5974.422, "basis": "target"},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 5974.422, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 2521769.0},
+        "fit_fails": ["compute", "update"],
+        "token_A": "unmodelled",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [13]
+       }
+      },
+      "served": {
+       "record": {
+        "rho": 3920.258,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 3920.258, "token": null, "decoding": null},
+        "target": {"rho": 683408.8, "basis": "target"},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 683409.8, "decoding_form": 0.5713246, "per_gate": null, "fresh_cell": 35851.45},
+        "fit_fails": ["compute", "update"],
+        "token_A": "refused",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [76]
+       },
+       "model": {
+        "rho": 3907.886,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 3907.886, "token": null, "decoding": null},
+        "target": {"rho": 150.8608, "basis": "target"},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 150.8608, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 35738.31},
+        "fit_fails": ["compute", "update"],
+        "token_A": "unmodelled",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [230]
+       }
+      }
+     }
     }
    }
   },
@@ -2992,6 +2978,13 @@
      "default": 50304,
      "range": [1000, 262144],
      "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
+    },
+    {
+     "name": "d_model",
+     "unit": "d_model",
+     "default": null,
+     "range": [64, 8192],
+     "why": "the model's width, n_layer following from N; None is the reference model's d/L (`dense`). The island's 60M rows are m-t20's 768, which puts 7.84 layers where it has 8 (its SwiGLU is 8/3 d, the model's 2.75 d)"
     }
    ],
    "points": {
@@ -3007,7 +3000,8 @@
       "batch_tokens": 65536,
       "t": null,
       "tokens": 100000000.0,
-      "vocab": 50304
+      "vocab": 50304,
+      "d_model": null
      },
      "inputs": {
       "C_gates": 1.676831e+19,
@@ -3069,27 +3063,6 @@
      },
      "rho": {
       "default": {
-       "rho": 723.9262,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 723.9262,
-       "terms": {"fresh_products": 723.9262, "token": null, "decoding": null},
-       "fresh": {"lam": 1.645903, "share": 0.00775526, "numerical": 923.3079, "attention_share": 0.1666025},
-       "target": {"rho": 11.91165, "basis": "target"},
-       "sensitivities": {"reduction": 229.3884, "update": 7.168386, "token_form": 11.91165, "decoding_form": 1.007187, "per_gate": null, "fresh_cell": 2068.697},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.007192,
-       "s": 2033.559,
-       "x0": 0.008658009,
-       "s_star": 169.2413,
-       "b": [33],
-       "fit_delta_bits": 32999.06,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 1138.621,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -3146,7 +3119,8 @@
       "batch_tokens": 65536,
       "t": null,
       "tokens": 100000000.0,
-      "vocab": 50304
+      "vocab": 50304,
+      "d_model": null
      },
      "inputs": {
       "C_gates": 1.25552e+19,
@@ -3208,27 +3182,6 @@
      },
      "rho": {
       "default": {
-       "rho": 55.47547,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 55.47547,
-       "terms": {"fresh_products": 55.47547, "token": null, "decoding": null},
-       "fresh": {"lam": 1.645903, "share": 0.0007846717, "numerical": 75.97134, "attention_share": 0.03708479},
-       "target": {"rho": 15.12492, "basis": "target"},
-       "sensitivities": {"reduction": 38.29543, "update": 1.595643, "token_form": 15.12492, "decoding_form": 0.7430926, "per_gate": null, "fresh_cell": 117.7308},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.001191,
-       "s": 2715.944,
-       "x0": 0.05194805,
-       "s_star": 170.2392,
-       "b": [25],
-       "fit_delta_bits": 22080.89,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 87.2541,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -3285,7 +3238,8 @@
       "batch_tokens": 65536,
       "t": null,
       "tokens": 100000000.0,
-      "vocab": 50304
+      "vocab": 50304,
+      "d_model": null
      },
      "inputs": {
       "C_gates": 1.254026e+19,
@@ -3345,27 +3299,6 @@
      },
      "rho": {
       "default": {
-       "rho": 31.61597,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 31.61597,
-       "terms": {"fresh_products": 31.61597, "token": null, "decoding": null},
-       "fresh": {"lam": 1.645903, "share": 0.0004471915, "numerical": 43.29676, "attention_share": 0.03712898},
-       "target": {"rho": 9.691841, "basis": "target"},
-       "sensitivities": {"reduction": 22.40712, "update": 0.9336298, "token_form": 9.691841, "decoding_form": 0.7424965, "per_gate": null, "fresh_cell": 67.09587},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.000802,
-       "s": 2719.18,
-       "x0": 0.08888889,
-       "s_star": 255.6247,
-       "b": [25],
-       "fit_delta_bits": 22029.12,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 49.7269,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -3422,7 +3355,8 @@
       "batch_tokens": 65536,
       "t": null,
       "tokens": 100000000.0,
-      "vocab": 50304
+      "vocab": 50304,
+      "d_model": null
      },
      "inputs": {
       "C_gates": 1.655537e+19,
@@ -3481,27 +3415,6 @@
        "basis": "none",
        "binding_kind": null,
        "bound": 1.0,
-       "terms": {"fresh_products": 0.6255783, "token": null, "decoding": null},
-       "fresh": {"lam": 1.645903, "share": 3.66201e-05, "numerical": 1.10774, "attention_share": 0.1687454},
-       "target": {"rho": 1.0, "basis": "target"},
-       "sensitivities": {"reduction": 2.923094, "update": 0.09429336, "token_form": 0.1676378, "decoding_form": 0.9999999, "per_gate": null, "fresh_cell": 0.7349252},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.000175,
-       "s": 2059.707,
-       "x0": 0.6666667,
-       "s_star": 4095.55,
-       "b": [32],
-       "fit_delta_bits": 32580.69,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": null,
-       "basis": "none",
-       "binding_kind": null,
-       "bound": 1.0,
        "terms": {"fresh_products": 0.9839352, "token": null, "decoding": null},
        "fresh": {"lam": 1.645903, "share": 3.66201e-05, "numerical": 1.742299, "attention_share": 0.1687454},
        "target": {"rho": 1.0, "basis": "target"},
@@ -3554,7 +3467,8 @@
       "batch_tokens": 65536,
       "t": null,
       "tokens": 100000000.0,
-      "vocab": 50304
+      "vocab": 50304,
+      "d_model": null
      },
      "inputs": {
       "C_gates": 1.251971e+19,
@@ -3616,27 +3530,6 @@
        "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
        "fresh": {"lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.03718992},
        "target": {"rho": 1.0, "basis": "target"},
-       "sensitivities": {"reduction": 0.4987531, "update": 0.02078138, "token_form": 0.0, "decoding_form": 0.7414784, "per_gate": null, "fresh_cell": 0.0},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["reduction", "update"],
-       "rho_fit": 1.000029,
-       "s": 2723.641,
-       "x0": 1.0,
-       "s_star": 4095.866,
-       "b": [25],
-       "fit_delta_bits": 21957.75,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
-       "rho": null,
-       "basis": "none",
-       "binding_kind": null,
-       "bound": 1.0,
-       "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
-       "fresh": {"lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.03718992},
-       "target": {"rho": 1.0, "basis": "target"},
        "sensitivities": {"reduction": 0.4902871, "update": 0.03268581, "token_form": 0.0, "decoding_form": 0.7414784, "per_gate": null, "fresh_cell": 0.0},
        "token_A": "unmodelled",
        "unmeasured": ["token", "decoding", "per_gate"],
@@ -3690,7 +3583,8 @@
       "batch_tokens": 65536,
       "t": null,
       "tokens": 100000000.0,
-      "vocab": 50304
+      "vocab": 50304,
+      "d_model": null
      },
      "differs": "a 8,192, te_core 4.1's cut (the residual stream), where the model's is the rank outputs, 2 x 4 x 16 = 128 bits, the cut te_core 4.2 measures on the island's rank-16 rows (768): the record's token kind about 70 times the model's; 48,512 trained values against the model's 49,152; u_in front-loaded (a token's forward reads every adapter value in dependency order before most of its work), where the model's A1' is even; d 0, te_core 4.1's stub, where the model's is the harness's decoder (2.4e11 gates, 0.07% of c)",
      "record_inputs": {
@@ -3739,32 +3633,6 @@
      },
      "rho": {
       "default": {
-       "record": {
-        "rho": 68.16731,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 68.16731, "token": null, "decoding": null},
-        "target": {"rho": 254.6761, "basis": "target"},
-        "sensitivities": {"reduction": 23.96324, "update": 0.7488512, "token_form": 254.9762, "decoding_form": 0.999972, "per_gate": null, "fresh_cell": 152.7147},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [33]
-       },
-       "model": {
-        "rho": 68.58633,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 68.58633, "token": null, "decoding": null},
-        "target": {"rho": 3.686498, "basis": "target"},
-        "sensitivities": {"reduction": 23.35708, "update": 0.7534543, "token_form": 3.686498, "decoding_form": 1.0007, "per_gate": null, "fresh_cell": 153.6535},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [32]
-       }
-      },
-      "default_full": {
        "record": {
         "rho": 107.2163,
         "basis": "fresh_products",
@@ -3820,7 +3688,7 @@
     },
     "20M standard-workloads r20261103-053921-7400": {
      "record": "r20261103-053921-7400@7541",
-     "source": "the standard-workloads island's row (art:52437c4f0b351e5eb8773407f6e0322a048e905431709117ff0c0f0a2a3a6bfa; te_core 4.4, reading B; art:e2c89609c6721622d2965b7ca4e34f39193464cfe148132abfa41ac58ed8d4b6): the e1mb island's record: a rank-16 LoRA on every layer's attention matrices",
+     "source": "the standard-workloads island's row (art:52437c4f0b351e5eb8773407f6e0322a048e905431709117ff0c0f0a2a3a6bfa; te_core 4.4, reading B; art:5eddf50532fb92eef0d2dfe1ea8820ec43c0f28202d940c16a15dc343333c564): the e1mb island's record: a rank-16 LoRA on every layer's attention matrices",
      "dials": {
       "n_params": 35658240,
       "rank": 16,
@@ -3831,10 +3699,11 @@
       "seq_len": 1024,
       "batch_tokens": 65536,
       "t": null,
-      "tokens": 247136256,
-      "vocab": 32000
+      "tokens": 494239744,
+      "vocab": 32000,
+      "d_model": null
      },
-     "differs": "|C| half the record's: the row's token dial counts half the tokens its run consumed (its trace's token_factor 2; batch_tokens counts them all), which no kind's term reads; t the trace's 0.9967 against the model's 0.9916 (its count of the affected work reading no adapter value); u_in front-loaded (131,072 bits at x = 0) where the model's A1' is even",
+     "differs": "t the trace's 0.9967 against the model's 0.9916 (its count of the affected work reading no adapter value); u_in front-loaded (131,072 bits at x = 0) where the model's A1' is even",
      "record_inputs": {
       "C_gates": 6.86893e+19,
       "w_gates": 138979000000.0,
@@ -3872,7 +3741,7 @@
       "partial_bits": "measured: the row's main part's partial gradient, one block's (te_core 4.4's partial_cut_bits; a worker's in DiLoCo)"
      },
      "model_inputs": {
-      "C_gates": 3.431157e+19,
+      "C_gates": 6.861859e+19,
       "w_gates": 138836000000.0,
       "w_fwd_gates": 62090790000.0,
       "sigma": 0.9999956,
@@ -3889,32 +3758,6 @@
      },
      "rho": {
       "default": {
-       "record": {
-        "rho": 1428.037,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 1428.037, "token": null, "decoding": null},
-        "target": {"rho": 28.84494, "basis": "target"},
-        "sensitivities": {"reduction": 186.8783, "update": 7.187626, "token_form": 28.84485, "decoding_form": 1.000663, "per_gate": null, "fresh_cell": 6957.649},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [0, 27, 27]
-       },
-       "model": {
-        "rho": 1429.508,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 1429.508, "token": null, "decoding": null},
-        "target": {"rho": 28.72303, "basis": "target"},
-        "sensitivities": {"reduction": 187.0832, "update": 7.195507, "token_form": 28.72303, "decoding_form": 1.00421, "per_gate": null, "fresh_cell": 6964.816},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [27]
-       }
-      },
-      "default_full": {
        "record": {
         "rho": 2246.076,
         "basis": "fresh_products",
@@ -3933,7 +3776,7 @@
         "binding_kind": "fresh_products",
         "terms": {"fresh_products": 2248.389, "token": null, "decoding": null},
         "target": {"rho": 45.17676, "basis": "target"},
-        "sensitivities": {"reduction": 181.0782, "update": 11.31739, "token_form": 45.17676, "decoding_form": 1.002671, "per_gate": null, "fresh_cell": 10954.55},
+        "sensitivities": {"reduction": 181.0902, "update": 11.31814, "token_form": 45.17676, "decoding_form": 1.002671, "per_gate": null, "fresh_cell": 10954.55},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
         "unmeasured": ["token", "decoding", "per_gate"],
@@ -3959,7 +3802,7 @@
         "binding_kind": "fresh_products",
         "terms": {"fresh_products": 44.17948, "token": null, "decoding": null},
         "target": {"rho": 1.126346, "basis": "target"},
-        "sensitivities": {"reduction": 86.32347, "update": 0.2858393, "token_form": 1.126346, "decoding_form": 1.049935, "per_gate": null, "fresh_cell": 134.8612},
+        "sensitivities": {"reduction": 86.3292, "update": 0.2858583, "token_form": 1.126346, "decoding_form": 1.049935, "per_gate": null, "fresh_cell": 134.8612},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
         "unmeasured": ["token", "decoding", "per_gate"],
@@ -3970,7 +3813,7 @@
     },
     "20M standard-workloads r20261103-053912-3133": {
      "record": "r20261103-053912-3133@7392",
-     "source": "the standard-workloads island's row (art:dcb71035bad834c4910275841ec62bef7490ce80de4532798aa34465ced2a1e6; te_core 4.4, reading B; art:e2c89609c6721622d2965b7ca4e34f39193464cfe148132abfa41ac58ed8d4b6): the e1mb island's record: a rank-16 LoRA on every layer's matrices; invalid: 3,001.1 GPU-seconds of its 3,000; witness gpu_seconds: False",
+     "source": "the standard-workloads island's row (art:dcb71035bad834c4910275841ec62bef7490ce80de4532798aa34465ced2a1e6; te_core 4.4, reading B; art:5eddf50532fb92eef0d2dfe1ea8820ec43c0f28202d940c16a15dc343333c564): the e1mb island's record: a rank-16 LoRA on every layer's matrices; invalid: 3,001.1 GPU-seconds of its 3,000; witness gpu_seconds: False",
      "dials": {
       "n_params": 35658240,
       "rank": 16,
@@ -3981,10 +3824,11 @@
       "seq_len": 1024,
       "batch_tokens": 65536,
       "t": null,
-      "tokens": 242253824,
-      "vocab": 32000
+      "tokens": 484474880,
+      "vocab": 32000,
+      "d_model": null
      },
-     "differs": "|C| half the record's: the row's token dial counts half the tokens its run consumed (its trace's token_factor 2; batch_tokens counts them all), which no kind's term reads; t the trace's 0.9920 against the model's 0.9802; u_in front-loaded (262,144 bits at x = 0) where the model's A1' is even",
+     "differs": "t the trace's 0.9920 against the model's 0.9802; u_in front-loaded (262,144 bits at x = 0) where the model's A1' is even",
      "record_inputs": {
       "C_gates": 6.85987e+19,
       "w_gates": 141593000000.0,
@@ -4022,7 +3866,7 @@
       "partial_bits": "measured: the row's main part's partial gradient, one block's (te_core 4.4's partial_cut_bits; a worker's in DiLoCo)"
      },
      "model_inputs": {
-      "C_gates": 3.424459e+19,
+      "C_gates": 6.848456e+19,
       "w_gates": 141356900000.0,
       "w_fwd_gates": 62090790000.0,
       "sigma": 0.9999897,
@@ -4039,32 +3883,6 @@
      },
      "rho": {
       "default": {
-       "record": {
-        "rho": 2301.701,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 2301.701, "token": null, "decoding": null},
-        "target": {"rho": 28.44608, "basis": "target"},
-        "sensitivities": {"reduction": 458.3486, "update": 16.97587, "token_form": 28.44604, "decoding_form": 1.009458, "per_gate": null, "fresh_cell": 9539.422},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [0, 28, 28]
-       },
-       "model": {
-        "rho": 2305.538,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 2305.538, "token": null, "decoding": null},
-        "target": {"rho": 28.71519, "basis": "target"},
-        "sensitivities": {"reduction": 459.0816, "update": 17.00302, "token_form": 28.71519, "decoding_form": 1.01301, "per_gate": null, "fresh_cell": 9555.324},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [28]
-       }
-      },
-      "default_full": {
        "record": {
         "rho": 3620.21,
         "basis": "fresh_products",
@@ -4083,7 +3901,7 @@
         "binding_kind": "fresh_products",
         "terms": {"fresh_products": 3626.245, "token": null, "decoding": null},
         "target": {"rho": 45.16443, "basis": "target"},
-        "sensitivities": {"reduction": 454.6319, "update": 26.74305, "token_form": 45.16443, "decoding_form": 1.008229, "per_gate": null, "fresh_cell": 15029.01},
+        "sensitivities": {"reduction": 454.6626, "update": 26.74486, "token_form": 45.16443, "decoding_form": 1.008229, "per_gate": null, "fresh_cell": 15029.01},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
         "unmeasured": ["token", "decoding", "per_gate"],
@@ -4109,7 +3927,7 @@
         "binding_kind": "fresh_products",
         "terms": {"fresh_products": 68.76543, "token": null, "decoding": null},
         "target": {"rho": 1.134646, "basis": "target"},
-        "sensitivities": {"reduction": 207.36, "update": 0.6754399, "token_form": 1.134646, "decoding_form": 1.133178, "per_gate": null, "fresh_cell": 181.3457},
+        "sensitivities": {"reduction": 207.3741, "update": 0.6754856, "token_form": 1.134646, "decoding_form": 1.133178, "per_gate": null, "fresh_cell": 181.3457},
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
         "unmeasured": ["token", "decoding", "per_gate"],
@@ -4163,7 +3981,14 @@
      "unit": "d_model",
      "default": null,
      "range": [64, 8192],
-     "why": "the student's width; None is the reference model's d/L (the island's half-width student: 256)"
+     "why": "the student's width; None is the reference model's d/L (the island's half-width students: 256 of s-t20, 384 of m-t20)"
+    },
+    {
+     "name": "teacher_d_model",
+     "unit": "d_model",
+     "default": null,
+     "range": [64, 8192],
+     "why": "the teacher's width; None is the reference model's d/L (m-t20's 768 on the island's 60M row)"
     }
    ],
    "points": {
@@ -4179,7 +4004,8 @@
       "t": null,
       "tokens_per_param": 20.0,
       "vocab": 50304,
-      "student_d_model": null
+      "student_d_model": null,
+      "teacher_d_model": null
      },
      "inputs": {
       "C_gates": 8.899433e+20,
@@ -4234,27 +4060,6 @@
      },
      "rho": {
       "default": {
-       "rho": 37963.54,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 37963.54,
-       "terms": {"fresh_products": 37963.54, "token": null, "decoding": null},
-       "fresh": {"lam": 1.645903, "share": 0.1999576, "numerical": 39621.47, "attention_share": 0.02827088},
-       "target": {"rho": 62.27106, "basis": "target"},
-       "sensitivities": {"reduction": 21880.87, "update": 115.7718, "token_form": 62.27106, "decoding_form": 0.236764, "per_gate": null, "fresh_cell": 528506.3},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 345.0986,
-       "x0": 5.785949e-05,
-       "s_star": 5.541168,
-       "b": [190],
-       "fit_delta_bits": 60014.42,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 59710.61,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -4311,7 +4116,8 @@
       "t": null,
       "tokens_per_param": 20.0,
       "vocab": 50304,
-      "student_d_model": null
+      "student_d_model": null,
+      "teacher_d_model": null
      },
      "inputs": {
       "C_gates": 2.107691e+20,
@@ -4366,27 +4172,6 @@
      },
      "rho": {
       "default": {
-       "rho": 160295.8,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 160295.8,
-       "terms": {"fresh_products": 160295.8, "token": null, "decoding": null},
-       "fresh": {"lam": 1.645903, "share": 0.8442932, "numerical": 167296.2, "attention_share": 0.1193699},
-       "target": {"rho": 262.9309, "basis": "target"},
-       "sensitivities": {"reduction": 21508.53, "update": 488.8303, "token_form": 262.9309, "decoding_form": 0.9997032, "per_gate": null, "fresh_cell": 2231545.0},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 1457.461,
-       "x0": 5.785949e-05,
-       "s_star": 5.541168,
-       "b": [45],
-       "fit_delta_bits": 42216.62,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 252119.8,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -4443,7 +4228,8 @@
       "t": null,
       "tokens_per_param": 20.0,
       "vocab": 50304,
-      "student_d_model": null
+      "student_d_model": null,
+      "teacher_d_model": null
      },
      "inputs": {
       "C_gates": 6.69235e+21,
@@ -4498,27 +4284,6 @@
      },
      "rho": {
       "default": {
-       "rho": 5048.361,
-       "basis": "fresh_products",
-       "binding_kind": "fresh_products",
-       "bound": 5048.361,
-       "terms": {"fresh_products": 5048.361, "token": null, "decoding": null},
-       "fresh": {"lam": 1.645903, "share": 0.0265902, "numerical": 5268.832, "attention_share": 0.003759439},
-       "target": {"rho": 8.280755, "basis": "target"},
-       "sensitivities": {"reduction": 21984.4, "update": 15.39524, "token_form": 8.280755, "decoding_form": 0.03148468, "per_gate": null, "fresh_cell": 70280.34},
-       "token_A": "unmodelled",
-       "unmeasured": ["token", "decoding", "per_gate"],
-       "fit": false,
-       "fit_fails": ["compute", "reduction", "update"],
-       "rho_fit": 1.0,
-       "s": 45.88814,
-       "x0": 5.785949e-05,
-       "s_star": 5.541168,
-       "b": [1429],
-       "fit_delta_bits": 64801.79,
-       "fit_delta_grad_bits": 32768.0
-      },
-      "default_full": {
        "rho": 7940.269,
        "basis": "fresh_products",
        "binding_kind": "fresh_products",
@@ -4567,7 +4332,7 @@
    "checks": {
     "20M standard-workloads r20261103-064849-6854": {
      "record": "r20261103-064849-6854@600",
-     "source": "the standard-workloads island's row (art:e2787bc18892ae133f6e90e154295ad7976d6044b9a2a504c0fc7f96fcff51d8; te_core 4.4, reading B; art:e2c89609c6721622d2965b7ca4e34f39193464cfe148132abfa41ac58ed8d4b6): a half-width student (d_model 256, 6 layers) from scratch on the teacher's logits",
+     "source": "the standard-workloads island's row (art:e2787bc18892ae133f6e90e154295ad7976d6044b9a2a504c0fc7f96fcff51d8; te_core 4.4, reading B; art:5eddf50532fb92eef0d2dfe1ea8820ec43c0f28202d940c16a15dc343333c564): a half-width student (d_model 256, 6 layers) from scratch on the teacher's logits",
      "dials": {
       "student_params": 13012224,
       "teacher_params": 35658240,
@@ -4579,9 +4344,10 @@
       "t": null,
       "tokens_per_param": 1.51094,
       "vocab": 32000,
-      "student_d_model": 256
+      "student_d_model": 256,
+      "teacher_d_model": null
      },
-     "differs": "t the trace's 0.781 against the model's 0.693 (the 45M trace's literal t), which puts the model's token kind 13% above the record's; u_in front-loaded (the fp32 embedding at x = 0) where the model's A1' is even; w_fwd the start's (the s-t20 teacher's) forward where the model's is the student's, which no policy here reads",
+     "differs": "t the trace's 0.781 against the model's 0.693 (the 45M trace's literal t), which puts the model's target 13% above the record's; u_in front-loaded (the student's fp32 embedding at x = 0) where the model's A1' is even; w_fwd the start's (the s-t20 teacher's) forward where the model's is the student's, which no policy here reads",
      "record_inputs": {
       "C_gates": 2.7015e+18,
       "w_gates": 137385000000.0,
@@ -4637,32 +4403,6 @@
      "rho": {
       "default": {
        "record": {
-        "rho": 75875.12,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 75875.12, "token": null, "decoding": null},
-        "target": {"rho": 198.6386, "basis": "target"},
-        "sensitivities": {"reduction": 6255.414, "update": 481.1857, "token_form": 198.638, "decoding_form": 0.5736186, "per_gate": null, "fresh_cell": 915287.2},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "refused",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [0, 14]
-       },
-       "model": {
-        "rho": 75851.86,
-        "basis": "fresh_products",
-        "binding_kind": "fresh_products",
-        "terms": {"fresh_products": 75851.86, "token": null, "decoding": null},
-        "target": {"rho": 223.8168, "basis": "target"},
-        "sensitivities": {"reduction": 6253.531, "update": 481.0409, "token_form": 223.8168, "decoding_form": 0.535919, "per_gate": null, "fresh_cell": 915006.6},
-        "fit_fails": ["compute", "reduction", "update"],
-        "token_A": "unmodelled",
-        "unmeasured": ["token", "decoding", "per_gate"],
-        "b": [14]
-       }
-      },
-      "default_full": {
-       "record": {
         "rho": 119339.5,
         "basis": "fresh_products",
         "binding_kind": "fresh_products",
@@ -4711,6 +4451,131 @@
         "token_A": "unmodelled",
         "unmeasured": ["token", "decoding", "per_gate"],
         "b": [150]
+       }
+      }
+     }
+    },
+    "60M standard-workloads r20261103-091446-973e": {
+     "record": "r20261103-091446-973e@600",
+     "source": "the standard-workloads island's row (art:2300104f21439871fcfb191b7e02f1f60738be9cea7bc125f5a0eb74d6184e36; te_core 4.4, reading B; art:5eddf50532fb92eef0d2dfe1ea8820ec43c0f28202d940c16a15dc343333c564): a half-width student (d_model 384, 8 layers) from scratch on the teacher's logits",
+     "dials": {
+      "student_params": 26450304,
+      "teacher_params": 81212160,
+      "teacher_share": 1.0,
+      "teacher_precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 32768,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 0.743311,
+      "vocab": 32000,
+      "student_d_model": 384,
+      "teacher_d_model": 768
+     },
+     "differs": "the teacher m-t20 at d 768 in the model's shape, 7.84 layers of 2.75 d MLPs where it has 8 of 8/3 d, and the student at d 384 with as many layers where it has 8; t the trace's 0.779 against the model's 0.693, which puts the model's target 12% above the record's; u_in front-loaded (the student's fp32 embedding at x = 0) where the model's A1' is even; w_fwd the start's (the m-t20 teacher's) forward where the model's is the student's, which no policy here reads",
+     "record_inputs": {
+      "C_gates": 5.71179e+18,
+      "w_gates": 290475000000.0,
+      "w_fwd_gates": 138927000000.0,
+      "sigma": 0.999857,
+      "tau_bits": 15,
+      "a_bits": 6144,
+      "u_points": "0:0;0.778594:0;0.778594:6.19917e8;1:6.19917e8",
+      "u_in_points": "0:0;0:3.93228e8;0.00330896:3.93228e8;0.00330896:3.97947e8;0.00452271:3.97947e8;0.00452271:4.02665e8;0.0334649:4.02665e8;0.0334649:4.08969e8;0.0350967:4.08969e8;0.0350967:4.21552e8;0.0383581:4.21552e8;0.0383581:4.23924e8;0.0389785:4.23924e8;0.0389785:4.28642e8;0.0679072:4.28642e8;0.0679072:4.31014e8;0.068541:4.31014e8;0.068541:4.43597e8;0.0717889:4.43597e8;0.0717889:4.49901e8;0.0734342:4.49901e8;0.0734342:4.54619e8;0.074648:4.54619e8;0.074648:4.59338e8;0.10359:4.59338e8;0.10359:4.65641e8;0.105222:4.65641e8;0.105222:4.78224e8;0.108483:4.78224e8;0.108483:4.80596e8;0.109104:4.80596e8;0.109104:4.85315e8;0.138032:4.85315e8;0.138032:4.87686e8;0.138666:4.87686e8;0.138666:5.00269e8;0.141914:5.00269e8;0.141914:5.06573e8;0.14356:5.06573e8;0.14356:5.11291e8;0.144773:5.11291e8;0.144773:5.1601e8;0.173715:5.1601e8;0.173715:5.22314e8;0.175347:5.22314e8;0.175347:5.34897e8;0.178609:5.34897e8;0.178609:5.37268e8;0.179229:5.37268e8;0.179229:5.41987e8;0.208158:5.41987e8;0.208158:5.44358e8;0.208792:5.44358e8;0.208792:5.56941e8;0.212039:5.56941e8;0.212039:5.63245e8;0.213685:5.63245e8;0.213685:5.67964e8;0.214899:5.67964e8;0.214899:5.72682e8;0.243841:5.72682e8;0.243841:5.78986e8;0.245473:5.78986e8;0.245473:5.91569e8;0.248734:5.91569e8;0.248734:5.9394e8;0.249354:5.9394e8;0.249354:5.98659e8;0.278283:5.98659e8;0.278283:6.01031e8;0.278917:6.01031e8;0.278917:6.13614e8;0.282165:6.13614e8;0.282165:6.19917e8;1:6.19917e8",
+      "delta_bits": 846464000.0,
+      "delta_t_bits": 846464000.0,
+      "d_gates": 0,
+      "delta_grad_bits": 2539230000.0,
+      "w_fit_gates": 290475000000.0,
+      "alpha_ratio": 1,
+      "grad_bits": 846409728,
+      "partial_bits": 846409728
+     },
+     "record_status": {
+      "C_gates": "measured",
+      "w_gates": "measured",
+      "w_fwd_gates": "measured",
+      "sigma": "measured",
+      "tau_bits": "measured",
+      "a_bits": "measured",
+      "u_points": "measured",
+      "u_in_points": "measured",
+      "delta_bits": "measured",
+      "delta_t_bits": "measured",
+      "d_gates": "measured",
+      "delta_grad_bits": "measured",
+      "w_fit_gates": "measured",
+      "alpha_ratio": "measured",
+      "grad_bits": "measured: the row's main part's gradient cut (te_core 4.4's grad_cut_bits)",
+      "partial_bits": "measured: the row's main part's partial gradient, one block's (te_core 4.4's partial_cut_bits; a worker's in DiLoCo)"
+     },
+     "model_inputs": {
+      "C_gates": 5.719318e+18,
+      "w_gates": 290817900000.0,
+      "w_fwd_gates": 48271930000.0,
+      "sigma": 0.9997195,
+      "tau_bits": 15.0,
+      "a_bits": 6144.0,
+      "u_points": "0:0;0.692646:0;0.692646:4.29382e8;1:6.19915e8",
+      "u_in_points": "0:0;1:6.19915e8",
+      "delta_bits": 846409728,
+      "delta_t_bits": 846409728,
+      "d_gates": 0.0,
+      "delta_grad_bits": 2539229000.0,
+      "w_fit_gates": 290817900000.0,
+      "alpha_ratio": 1.0
+     },
+     "rho": {
+      "default": {
+       "record": {
+        "rho": 117234.8,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 117234.8, "token": null, "decoding": null},
+        "target": {"rho": 222.2892, "basis": "target"},
+        "sensitivities": {"reduction": 12369.65, "update": 727.6266, "token_form": 222.289, "decoding_form": 0.561411, "per_gate": null, "fresh_cell": 1534732.0},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": "refused",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [0, 18]
+       },
+       "model": {
+        "rho": 117080.6,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 117080.6, "token": null, "decoding": null},
+        "target": {"rho": 249.5169, "basis": "target"},
+        "sensitivities": {"reduction": 12353.38, "update": 726.6692, "token_form": 249.5169, "decoding_form": 0.5110959, "per_gate": null, "fresh_cell": 1532713.0},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": "unmodelled",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [18]
+       }
+      },
+      "served": {
+       "record": {
+        "rho": 2729.835,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 2729.835, "token": null, "decoding": null},
+        "target": {"rho": 5.614281, "basis": "target"},
+        "sensitivities": {"reduction": 5807.261, "update": 18.37741, "token_form": 5.614276, "decoding_form": 0.561411, "per_gate": null, "fresh_cell": 22984.14},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": "refused",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [0, 317]
+       },
+       "model": {
+        "rho": 2726.243,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 2726.243, "token": null, "decoding": null},
+        "target": {"rho": 6.301148, "basis": "target"},
+        "sensitivities": {"reduction": 5799.62, "update": 18.35323, "token_form": 6.301148, "decoding_form": 0.5110959, "per_gate": null, "fresh_cell": 22953.9},
+        "fit_fails": ["compute", "reduction", "update"],
+        "token_A": "unmodelled",
+        "unmeasured": ["token", "decoding", "per_gate"],
+        "b": [317]
        }
       }
      }
