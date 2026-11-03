@@ -450,13 +450,17 @@ def escaped(name: str, m: dict, s: dict) -> dict | None:
 
 def unexpected(name: str, m: dict, escape: dict | None = None) -> list[str]:
     """What keeps an N2 driver's member from its ``ok``: the conditions `n2_zk` holds it to, but
-    a negative's acceptance when it escaped the draw (`escaped`). A witness piece counts when the scan reads it
+    a negative's acceptance when it escaped the draw (`escaped`). The network verdict is read for N2's counts alone:
+    its refused windows and its refusals by name but ``egress`` (`service.EGRESS_TIED`, a network certifier link's
+    egress tie, which N2's driver gives none). A witness piece counts when the scan reads it
     ``leaked`` (`leak_scan.classify`); a ``structured`` find is listed, not counted, as the drivers decide."""
     wins, net, rec = m.get("windows") or [], m.get("network") or {}, m.get("received") or {}
+    why = set(net.get("why") or ())
+    counts = net.get("accepted") if "egress" not in why else not net.get("refused") and why == {"egress"}
     return ([f"windows {[w.get('window') for w in wins if not w.get('as_expected')]} not as expected"]
             * any(not w.get("as_expected") for w in wins)
-            + [f"network {'accepted' if net.get('accepted') else 'refused'}"]
-            * (net.get("accepted") != (name == "honest") and escape is None)
+            + [f"network {'accepted' if counts else 'refused'}"]
+            * (counts != (name == "honest") and escape is None)
             + [f"witness pieces leaked to the verifier: {rec.get('leaked')}"] * bool(rec.get("leaked"))
             + [f"the control (the prover's own {(rec.get('control') or {}).get('file')}) holds "
                f"{(rec.get('control') or {}).get('blobs_found')} of {(rec.get('control') or {}).get('of')} pieces, "
