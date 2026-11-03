@@ -14,6 +14,9 @@ public import Definitions.Nci.Guarantees.Dampener
 public import Definitions.Nci.Guarantees.Remote
 public import Definitions.Nci.Guarantees.RemotePeriod
 public import Definitions.Nci.Guarantees.Info
+public import Definitions.Nci.Assumptions.Capability
+public import Definitions.Nci.Guarantees.Capability
+public import Definitions.Accounting.Guarantees.Coverage
 public import Definitions.Nci.Guarantees.Fmt
 public import Definitions.Nci.Guarantees.Fmt2
 public import Definitions.Nci.Guarantees.Training
@@ -46,6 +49,7 @@ public import Definitions.Accounting.Assumptions.CreditedWords
 public import Definitions.Accounting.Assumptions.RemoteP2
 public import Definitions.Accounting.Assumptions.Parties
 public import Definitions.Accounting.Guarantees
+public import Definitions.Hash.Assumptions
 public import Definitions.Hash.Guarantees
 public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak

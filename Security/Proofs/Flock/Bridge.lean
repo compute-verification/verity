@@ -11,12 +11,13 @@ public import Proofs.Flock.Bridge.OpeningsCanon
 public import Proofs.Flock.Bridge.Assembly
 public import Proofs.Flock.Bridge.EndToEndHiddenC
 public import Proofs.Flock.Bridge.FaultyRightC
+public import Proofs.Flock.Bridge.RelSGuards
 public import Proofs.Flock.Bridge.Refused
 public import Proofs.Flock.Bridge.KSLive
+public import Proofs.Flock.Bridge.Public
 public import Proofs.Flock.Bridge.PublicDeployed
 public import Proofs.Flock.Bridge.Honest
 public import Proofs.Flock.Bridge.V5
-public import Proofs.Flock.Bridge.Public
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,

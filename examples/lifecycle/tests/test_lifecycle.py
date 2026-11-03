@@ -5,6 +5,7 @@ what the remote composite can't see, which goes uncredited."""
 from __future__ import annotations
 
 from dataclasses import replace
+from fractions import Fraction
 from functools import cache
 from typing import Any
 
@@ -13,8 +14,7 @@ import numpy as np
 import onsite
 import pytest
 import remote
-
-from verity.core.protocols.sampled_proofs.parties import IDS
+from lifecycle import IDS
 
 MODS = {"onsite": onsite, "remote": remote}
 
@@ -24,7 +24,7 @@ REFUSED = {"hardware": ("duplicate-id", "hardware registration"), "builder": ("b
 """Deviations the verifier refuses, ending the run: the refusal's name and the phase whose check it breaks."""
 REJECTED = {"wrong-value": (("onsite", "remote"), 2, "sampled-proofs"), "unreported": (("onsite",), 2, "certifier"),
             "io-mismatch": (("onsite",), 2, "certifier"), "lost-theta": (("onsite",), 1, "pous"),
-            "off-node": (("onsite",), 1, "bandwidth")}
+            "off-node": (("onsite",), 1, "bandwidth"), "foreign": (("onsite",), 1, "wipe")}
 """Deviations a component rejects: the composites they reach, the first declaration they touch, and the component."""
 
 
@@ -181,6 +181,32 @@ def test_fork_rejected_in_accounting(protocol: str) -> None:
     o = outcome(protocol, "fork")
     assert all(line["composite"]["verdict"] == "accept" for line in o["lines"])
     assert o["period"]["verdict"] == "reject" and "not the previous record" in o["period"]["reason"]
+
+
+def test_inference_only_policy() -> None:
+    """Each declaration block divides into inference blocks, one per request, within the policy's budgets; a Γ below one
+    request's gates, or an α below its fresh input per gate, makes the policy and so each composite reject."""
+    line = outcome("remote")["lines"][0]
+    blk = L.Builder(plan=L.PLAN).build(line["advice"])[0]
+    d = L.Declaration(1, line["advice"], {"circuit": blk.program})
+    a = L.inference_only(d, blk)
+    assert a["verdict"] == "accept" and a["commitment"] == d.digest
+    assert a["profile"]["blocks"] == [[19620, 48]] * blk.n
+    for gamma, alpha, over in ((19619, L.ALPHA, "has more than Γ gates"),
+                               (L.GAMMA, Fraction(47, 19620), "reads more than α bits of fresh input per gate")):
+        out = L.policy(blk.n, gamma, (alpha.numerator, alpha.denominator))
+        assert out["failure"] == [0, "size" if gamma < L.GAMMA else "nci"], out
+    wrong = L.inference_only(L.Declaration(1, line["advice"], {"circuit": "00" * 64}), blk)
+    assert wrong["verdict"] == "reject" and wrong["reason"] == "the record does not name the declared circuit"
+    other = {**a, "commitment": L.Declaration(1, line["advice"], {"circuit": blk.program, "prev": "00"}).digest}
+    assert other["commitment"] != a["commitment"]
+    for protocol in MODS:
+        _, ids = L.products()[protocol]
+        assert IDS["inference-only"] in ids
+        rejected = L.compose(protocol, {i: (a if i != IDS["inference-only"] else wrong) for i in ids})
+        assert rejected["verdict"] == "reject" and IDS["inference-only"] in rejected["reason"]
+        tied = L.compose(protocol, {i: (a if i != IDS["inference-only"] else other) for i in ids})
+        assert tied["verdict"] == "reject" and tied["reason"].startswith(f"record: {IDS['inference-only']} committed ")
 
 
 def test_remote_unreported_is_uncredited() -> None:

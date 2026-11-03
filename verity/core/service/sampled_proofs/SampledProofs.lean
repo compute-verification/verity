@@ -33,5 +33,6 @@ public import SampledProofs.WiresSpan
 public import SampledProofs.WiresSound
 public import SampledProofs.WiresComplete
 public import SampledProofs.WiresDrawn
+public import SampledProofs.SiteDifftest
 
 @[expose] public section

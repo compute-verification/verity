@@ -99,6 +99,7 @@ public import Proofs.Accounting.ComposePeriod.Honest
 public import Proofs.Accounting.Served
 public import Proofs.Accounting.ServingBlocks
 public import Proofs.Accounting.ServingBlocks.Witnesses
+public import Proofs.Accounting.Coverage
 public import Proofs.Accounting.Additive
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

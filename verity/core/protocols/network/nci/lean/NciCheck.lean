@@ -8,6 +8,7 @@ public import NciCheck.DescLiveness
 public import NciCheck.DescFuzz
 public import NciCheck.Baseline
 public import NciCheck.BaselineDifftest
+public import NciCheck.Protocol
 
 /-!
 # The NCI policy's check
@@ -25,6 +26,9 @@ Program shapes past anything `NciCheck.Desc` walks one by one, and `NciCheck.Des
 statements their agreement rests on, and the agreement itself. Code: it reads the Program with C-Flock's
 decoder (`Flock.Program`) and imports nothing else but Lean core. It stays experimental until its agreement with the
 definition is proved.
+
+`NciCheck.Protocol` is the policy's check as a core protocol, `verity/inference-only/v0` (the `inference-only` exe):
+the inference-only policy's subprotocol of onsite and remote, on the core interface (`CoreProtocol`).
 
 C-Flock's decoder doesn't check that a reference reads a leaf at the width it was committed with, which the
 Python codec refuses as it decodes (`E_REINTERPRET`), so every Program the check reads goes through

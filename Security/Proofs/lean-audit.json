@@ -64,6 +64,11 @@
   "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Composition",
+  "Proofs.Properties.Core.Site",
+  "Proofs.Properties.Nci.Protocol",
+  "Proofs.Properties.Verity.Soundness",
+  "Proofs.Properties.Remote",
+  "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger"
  ],
@@ -107,7 +112,7 @@
   },
   "Proofs.Flock.Claims.Recursion.CallsTop": {
    "why": "cl_step, dec_step and ret_step, macros that expand to first over refine/exact of the module's CL/Ret bind, pure and throw lemmas, and cl_bind_of and cl_head, elabs that only read the goal and fail unless its program's head is the named constant. They run only inside the elaborator, read no files and do no IO, and the kernel replays every proof they build.",
-   "digest": "543a45ce561a8d07cecff87761f866a561f4ca56d9c3c0b8ee61878eb8141043"
+   "digest": "2310e14f7b7c1f2404df7fd10852a8e052c791e786f8493dc6f0805add075da2"
   },
   "Proofs.Flock.Claims.Recursion.LogWalk": {
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",
