@@ -12,7 +12,9 @@ words (`fullRows`): refused at another width, or at a bit no computed row reads.
 module
 
 public import Flock.KnownRead
+public import Flock.JsonParse
 meta import Flock.KnownRead
+meta import Flock.JsonParse
 
 @[expose] public section
 
@@ -122,7 +124,7 @@ def reg (name : String) (words : Option Nat) (bits : Nat := 16) : Registered.Por
 
 /-- The ports a file's JSON marks read in full, or its refusal. -/
 def marked (t : String) : String :=
-  match Lean.Json.parse t >>= Flock.KnownRead.readOf with
+  match JsonParse.parse t >>= Flock.KnownRead.readOf with
   | .ok ns => toString ns
   | .error e => e
 
