@@ -226,7 +226,7 @@ theorem lk_tsq {S : γ → δ → Array Claims.Msg → Prop} (coin : ℕ → ℕ
     exact ⟨hL₁, .inl ⟨_, _, rfl, rfl⟩⟩
   · rw [bind_go (squeezeP_cut_ok coin kind hk t (by omega)),
       bind_go (squeezeP_cut_ok coin kind hk t' (by rw [← hL.size]; omega)), ← hL.size]
-    exact kont (by omega) _ _ rfl _ _ hL₁ (by simp)
+    exact kont (by omega) (afterSq t kind k (coin l.size)) (afterSq t' kind k (coin l.size)) rfl _ _ hL₁ (by simp)
 
 theorem lk_lsq (coin : ℕ → ℕ → F128) (N : ℕ) (kind : UInt8) {k : ℕ} (hk : k ≠ 0)
     {f : Array F128 → LP PS γ} {g : Array F128 → LP PS δ} {s s' : LigState} {t t' : Transcript}
@@ -342,6 +342,18 @@ theorem lift_quiet_go {m : PS α} {r : Except String α} (h : ∀ l, m.go l = (r
   rw [StateT.run_lift, go_bind, h l]
   cases r <;> rfl
 
+/-- A commitment reads its salt function only on its positions, cut to the scheme's width. -/
+theorem commitV_congr (hs : Hashes V) (ms : MerkleScheme) (lv : Level) (g : Array F128) {s s' : ℕ → ByteArray}
+    (h : ∀ q < 2 ^ lv.d, fitBytes ms.saltBytes (s q) = fitBytes ms.saltBytes (s' q)) :
+    (commitP hs ms lv g s : V Commit) = commitP hs ms lv g s' := by
+  have hsalts : (Array.range (2 ^ lv.d)).map (fun q => fitBytes ms.saltBytes (s q)) =
+      (Array.range (2 ^ lv.d)).map (fun q => fitBytes ms.saltBytes (s' q)) := by
+    apply Array.ext (by simp)
+    intro i h1 _
+    simp only [Array.getElem_map, Array.getElem_range]
+    exact h i (by simpa using h1)
+  simp only [commitP, hsalts]
+
 /-- **Two equal commitments**: they send nothing and return the same. -/
 theorem lk_commit (H : ByteArray → ByteArray) {ms ms' : MerkleScheme} {lv lv' : Level} {g g' : Array F128}
     {salt salt' : ℕ → ByteArray}
@@ -417,7 +429,8 @@ theorem lk_absorbs (body body' : F128 → PUnit → LP PS (ForInStep PUnit))
       Lk B Q S ((((f PUnit.unit).run s).run t₁).go l) ((((g PUnit.unit).run s').run t₁').go l')) :
     Lk B Q S ((((forIn xs PUnit.unit body >>= f).run s).run t).go l)
       ((((forIn xs' PUnit.unit body' >>= g).run s').run t').go l') := by
-  rw [← Array.forIn_toList, ← Array.forIn_toList, StateT.run_bind, StateT.run_bind,
+  rw [← Array.forIn_toList, ← Array.forIn_toList, StateT.run_bind (forIn xs.toList PUnit.unit body),
+    StateT.run_bind (forIn xs'.toList PUnit.unit body'),
     bind_go (absorbs_go body hb xs.toList s t l), bind_go (absorbs_go body' hb' xs'.toList s' t' l')]
   exact k _ _ fun hx hp => by
     subst hx
@@ -619,7 +632,7 @@ theorem ligeritoCut_lock (H : ByteArray → ByteArray) (coin : ℕ → ℕ → F
       have hc : ∀ i, 1 ≤ i → i < sch.levels.size → ∀ g,
           (commitP (Hashes.ofSha512 H) ms (sch.levels.getD i default) g (src.hiSalt i) : V Commit) =
             commitP (Hashes.ofSha512 H) ms (sch.levels.getD i default) g (salt i) := fun i h1 h2 g =>
-        commitP_congr _ ms _ g (hsalt hnl hρ i h1 h2)
+        commitV_congr _ ms _ g (hsalt hnl hρ i h1 h2)
       rw [get_bind_run, get_bind_run, ← htab]
       refine lk_commit H (hc 1 le_rfl (by omega) _) hL₆ fun cm1 => ?_
       refine lk_lBy fun t₂ t₂' hp₂ => ?_
