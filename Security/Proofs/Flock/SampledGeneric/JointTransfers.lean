@@ -23,7 +23,7 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type} {Dh : Type} {Hc : List UInt8 → Dh} {B : Binding Reg Hc} {PS : ProofSystem n Reg}
 
-private theorem avg_ofReal_eq {C : Type} [Fintype C] [Nonempty C] (f : C → ℝ) (hf : ∀ c, 0 ≤ f c) :
+theorem avg_ofReal_eq {C : Type} [Fintype C] [Nonempty C] (f : C → ℝ) (hf : ∀ c, 0 ≤ f c) :
     avg (fun c => ENNReal.ofReal (f c)) = ENNReal.ofReal ((∑ c, f c) / Fintype.card C) := by
   have hc : (0 : ℝ) < Fintype.card C := by exact_mod_cast Fintype.card_pos
   unfold avg
