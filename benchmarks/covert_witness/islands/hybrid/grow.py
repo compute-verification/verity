@@ -30,10 +30,11 @@ of the seed-0 order; training reads that order past the windows the start read).
 arm, so the paired drop in nats is the drop in bits per byte on those windows.
 
 The last arm is the submission (harness v3, no class). `none` encodes its changed tensors (`encode_full`) at each point,
-checkpoints the harness scores. `depth`, `mlp` and `scratch` submit their model at the end as a model of its own
-architecture (`encode_model`, CWMODL1: θ's family, vocabulary, context and tying; every tensor not θ's bit for bit is
-E's, in fp32), and that submission is their one checkpoint, since the pin's harness takes checkpoints only from the
-other encoders. lf has no experts, so a last `moe` arm submits θ unchanged and is measured here only. notes.arms holds
+checkpoints the harness scores. `depth`, `mlp` and `scratch` encode their model as a model of its own architecture
+(`encode_model`, CWMODL1: θ's family, vocabulary, context and tying; every tensor not θ's bit for bit is E's, in fp32)
+at the same points and submit it at the end. A run of one arm tells the harness its steps (`hooks.plan`), so its
+checkpoints fall in each 5% of them. lf has no experts, so a last `moe` arm submits θ unchanged and is measured here
+only. notes.arms holds
 each arm's points with their analytic FLOPs (the arm's own, its evaluations excluded), its sizes and its state: Δ ≤ 32
 bits per trained weight (E in fp32), u(1) the trained weights a token reads, Δ_grad the f32 gradient plus optimizer
 state (Muon's momentum, AdamW's two moments) of the trained weights.
@@ -52,13 +53,16 @@ from torch import nn
 
 import prepare
 from model import CTX, LM, VOCAB, Block, Size, rope
+from te_core import hooks
 
 ARM_KEYS = {"grow": ("none", "depth", "mlp", "moe", "scratch"), "depth": int, "mlp_mult": float, "experts": int,
             "topk": int, "aux": float, "router_init": float, "noise": float, "size": str, "kd": float, "kd_frac": float,
             "lr": float, "adam_lr": float, "embed_lr": float, "warmup": int, "batch": int, "micro": int, "seed": int,
             "share": float, "zero": int, "wd": float}
-#: te_core takes the first E encoded in each 5% of the run's MAC budget as a checkpoint
+#: te_core takes the first E encoded in each 5% of the run's planned steps (`hooks.plan`), else of its MAC budget, as a
+#: checkpoint
 CHECKPOINTS = 20
+GROWN = ("depth", "mlp", "scratch")
 
 
 def parse_arms(spec: str, a: argparse.Namespace) -> list[argparse.Namespace]:
@@ -262,6 +266,14 @@ def state(lm: LM, muon: list, adam: list, aa: argparse.Namespace) -> dict:
             "delta_grad_rule": "f32 gradient + Muon momentum (8 B a weight), f32 gradient + AdamW m, v (12 B)"}
 
 
+def own_model(lm: LM, cfg: dict, theta: dict[str, torch.Tensor]) -> tuple[dict, dict[str, torch.Tensor]]:
+    """`lm` as CWMODL1 takes it: its own config and every tensor that isn't θ's bit for bit, in fp32."""
+    s = lm.size
+    own = {**cfg, "d_model": s.d_model, "n_layer": s.n_layer, "n_head": s.n_head, "d_ff": s.d_ff}
+    new = {nm: p.detach().float().cpu() for nm, p in lm.named_parameters()}
+    return own, {nm: v for nm, v in new.items() if nm not in theta or not prepare.same_bits(v, theta[nm])}
+
+
 def fail(msg: str):
     """A refusal the harness's log keeps (it records only the exit code)."""
     print(json.dumps({"error": msg}), flush=True)
@@ -386,6 +398,9 @@ def main() -> int:
             fail(f"grow: arm {arm} reads {n * aa.batch} windows, {len(train.order)} are unread")
         train.at = 0
         last = arm == len(arms) - 1
+        if len(arms) == 1:
+            # the harness's steps: θ's measurement, the arm's steps and each of its measurements
+            hooks.plan(1 + n + aa.evals)
         marks = {round(n * j / aa.evals) for j in range(1, aa.evals + 1)}
         enc_marks = {max(1, round(n * j / CHECKPOINTS)) for j in range(1, CHECKPOINTS + 1)}
         st = state(lm, muon, gains + ([lm.embed] if embed_lr else []), aa)
@@ -433,6 +448,9 @@ def main() -> int:
                 blob = prepare.encode_full({nm: p.detach().to(theta[nm].dtype) for nm, p in lm.named_parameters()
                                             if p.requires_grad})
                 snaps_at.append({"arm": arm, "step": k + 1, "e_bytes": len(blob)})
+            if last and aa.grow in GROWN and k + 1 in enc_marks and k + 1 < n:
+                blob = prepare.encode_model(*own_model(lm, cfg, theta))
+                snaps_at.append({"arm": arm, "step": k + 1, "e_bytes": len(blob), "format": "CWMODL1"})
             if k + 1 in marks:
                 got = measure(lm, ft["forward"])
                 diff = base - got
@@ -442,11 +460,8 @@ def main() -> int:
                       "s": round(time.perf_counter() - t0, 1)}
                 out["points"].append(pt)
                 print(json.dumps({"arm": arm, **pt}), flush=True)
-        if last and aa.grow in ("depth", "mlp", "scratch"):
-            s = lm.size
-            own = {**cfg, "d_model": s.d_model, "n_layer": s.n_layer, "n_head": s.n_head, "d_ff": s.d_ff}
-            new = {nm: p.detach().float().cpu() for nm, p in lm.named_parameters()}
-            new = {nm: v for nm, v in new.items() if nm not in theta or not prepare.same_bits(v, theta[nm])}
+        if last and aa.grow in GROWN:
+            own, new = own_model(lm, cfg, theta)
             changed = sorted(new)
             blob = prepare.encode_model(own, new)
             out["config"] = own
