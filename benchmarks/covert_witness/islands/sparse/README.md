@@ -50,10 +50,6 @@ partials as bools (its narrowest cut, 1 bit a value a sequence) and prices Δ_gr
 notes give `grad_bits` at the vote sum's width, ceil(log2(B + 1)) bits a value, with `partial_bits` and `floor_bits`
 beside it. The counter sees no weight gradient, so a matrix with entries is declared as a rank-1 adapter.
 
-`--budget-fraction` is of the tier's FLOPs as the harness meters them: the step planner adds the attention products the
-harness counts beyond `prepare.train_flops` (the whole ctx × ctx square and flash attention's five-product backward,
-about 15% of a step that trains every block), so 0.98 stays inside the search tier's `flop_budget` check.
-
 `--opt` is `adamw` (the default), `sign` (sign descent) or `sgd` (no momentum); the last two keep no state, so only the
 gradient passes between token blocks and Fit's reduction bound, 2Δ_grad ≤ k, holds up to k/64 trained values. Every
 record's `notes.delta_grad` gives N, the values trained, and what passes between token blocks: the fp32 gradient of every

@@ -985,13 +985,6 @@ def main() -> int:
     tokens = a.batch * prepare.EVAL_CTX
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     lowest = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": 1}])["lowest_trained"]
-    cfg = rec["config"]
-    # The harness meters SDPA's score and value products over the whole ctx x ctx square and its backward as five (flash
-    # attention recomputes the scores), where train_flops prices the causal half and two: a step meters 2·ctx·d a layer
-    # more forward and 6·ctx·d more at each attention the backward reaches (v3 GPU runs agree within 1%), so without this
-    # a budget fraction above about 0.95 lands past the flop_budget check's slack.
-    reached = sum(tuple(lowest) < (i + 1, 2) for i in range(cfg["n_layer"])) if lowest else 0
-    per_step += tokens * prepare.EVAL_CTX * cfg["d_model"] * (2 * cfg["n_layer"] + 6 * reached)
     spent = prepare.train_flops(rec, trainable, steps)["flops"]
     regrow = a.mech == "lora" and a.regrow < 1
     if regrow:
