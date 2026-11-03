@@ -469,10 +469,8 @@ theorem draw_eq (A : Live) (ω : A.Ω) {units : Array ℕ} {read : ℕ}
     (h : _root_.SampledProofs.Draw.drawUnits A.law A.n (_root_.Properties.SampledProofs.bytesOf (A.src ω 0)) =
       .ok (units, read)) :
     A.L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
-  show (match _root_.SampledProofs.Draw.drawUnits A.law A.n
-      (_root_.Properties.SampledProofs.bytesOf (A.src ω 0)) with
-    | .ok (d, _) => Finset.univ.filter fun u => u.val ∈ d
-    | .error _ => Finset.univ) = _
+  unfold Live.L
+  dsimp only
   rw [h]
 
 /-- The session widened by a projection's coins draws as the session does at the sample's first part. -/
