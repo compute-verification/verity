@@ -158,17 +158,18 @@ def ZkServerBlindOs : Prop :=
     S.TapeOK →
     ∀ (srv : ZkServer Flock.Wit (S.refP.Nonce × S.refP.Rand))
       (fill : Msg → ℕ → ℕ → Flock.Wit → S.refP.Nonce × S.refP.Rand → List (Msg × Msg) → srv.Val)
-      (bw : srv.BWorker) (x : Msg) (w : Flock.Wit), Flock.R (FlockDeploy.deployZk rel).parse x w →
-      srv.RefD H (S.swP vs).prover fill (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (srv.lift bw) x w →
+      {Rw C : Type} (π : S.refP.Nonce × S.refP.Rand → Rw) (rd : Msg → C) (bw : srv.BWorker Rw C) (x : Msg)
+      (w : Flock.Wit), Flock.R (FlockDeploy.deployZk rel).parse x w →
+      srv.RefD H (S.swP vs).prover fill (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (srv.lift π rd bw) x w →
     ∀ {Θ : Type} (Vs : VStar Θ) (θ : Θ), Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1 →
     ∀ (Ev : List ((Msg × Out) × ℕ) → Prop) {ι : Type} [Fintype ι] [DecidableEq ι] (Ls : ι → ℕ)
       (dec : ((i : ι) → Fin (Ls i) → Fin 256) ≃ S.refP.Nonce × S.refP.Rand) {Ωos : Type} [Fintype Ωos]
       (src : Ωos → (i : ι) → Fin (Ls i) → Fin 256) {η : ENNReal}, η ≠ ⊤ →
       (∀ c : srv.Chk, FlockSoundness.Assumptions.UniformRandomBytesTest Ls src
         (fun b => Ev (srv.timed x (runStar H (srv.proverD fill (fun x => (FlockDeploy.deployZk rel).V.k x + 1)
-          (srv.lift bw) w) Vs x (dec b, c) θ).msgs)) η) →
+          (srv.lift π rd bw) w) Vs x (dec b, c) θ).msgs)) η) →
       Pr (fun ω : Ωos × srv.Chk =>
-          Ev (srv.timed x (runStar H (srv.proverD fill (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (srv.lift bw) w)
+          Ev (srv.timed x (runStar H (srv.proverD fill (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (srv.lift π rd bw) w)
             Vs x (dec (src ω.1), ω.2) θ).msgs)) ≤
         2 * (Pr (fun c : (leaky1 ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
               (fun x => (FlockDeploy.deployZk rel).V.k x + 1) srv.stop).C x =>
@@ -178,12 +179,12 @@ def ZkServerBlindOs : Prop :=
             4 * t * 3 ^ t * (Fork H ((S.swP vs).prover w) Vs θ x).Pr H) + η.toReal
 
 theorem zkServerBlindOs : ZkServerBlindOs := by
-  intro H rel S vs t ht δ₁ hT1 hδ₁ hS hV hD hc hsc hT srv fill bw x w hR hRef Θ Vs θ hk Ev ι _ _ Ls dec Ωos _ src η hη
-    hA3
+  intro H rel S vs t ht δ₁ hT1 hδ₁ hS hV hD hc hsc hT srv fill Rw C π rd bw x w hR hRef Θ Vs θ hk Ev ι _ _ Ls dec Ωos _ src
+    η hη hA3
   exact (Pr_os_prod dec (fun p : (S.refP.Nonce × S.refP.Rand) × srv.Chk =>
-      Ev (srv.timed x (runStar H (srv.proverD fill (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (srv.lift bw) w)
+      Ev (srv.timed x (runStar H (srv.proverD fill (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (srv.lift π rd bw) w)
         Vs x p θ).msgs)) hη hA3).trans
-    (add_le_add (Flock.zk_server_blind H rel S vs t ht hT1 hδ₁ hS hV hD hc hsc hT srv fill bw x w hR hRef Vs θ hk Ev)
+    (add_le_add (Flock.zk_server_blind H rel S vs t ht hT1 hδ₁ hS hV hD hc hsc hT srv fill π rd bw x w hR hRef Vs θ hk Ev)
       le_rfl)
 
 /-- **`Flock.zk_server_lean` at the operating system's bytes**: the deployed release at the tape `O` reads

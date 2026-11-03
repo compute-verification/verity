@@ -679,7 +679,8 @@ def on_demand_boolean_families(word_calls: set[str]) -> set[str]:
     so these come from the families' own patterns, not from the catalog."""
     from verity.ml.definitions.boolean import made_on_demand
 
-    return {family(d) for f in word_calls if (d := made_on_demand(f)) is not None}
+    # in a fixed order, not a set's: each one made registers, and the catalog's roots record notes the order (`units._noting`)
+    return {family(d) for f in sorted(word_calls) if (d := made_on_demand(f)) is not None}
 
 
 def _registered() -> list[Any]:

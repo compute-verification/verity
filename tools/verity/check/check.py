@@ -380,8 +380,8 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 
 def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
-    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's train position, so the train that lands
-    next takes the next slot) and --twin for one of a check's twins."""
+    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's after-landing run's, so it takes the next
+    slot ahead of drive's unranked Lean checks) and --twin for one of a check's twins."""
     by = SETTINGS.RESEARCH_LANE or SETTINGS.RESEARCH_AGENT_URL
     rank = SETTINGS.CHECK_SLOT_RANK
     return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []),

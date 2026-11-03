@@ -20,7 +20,7 @@ from circuit_check import cli
 from circuit_check import known as KN
 from circuit_check import shard as SH
 from circuit_check import targets as TG
-from test_cache import REPO, _bindings, _tree
+from test_cache import REPO, _bindings, _edit, _tree
 from test_units import BINDINGS as UNIT_BINDINGS
 from test_units import FORKED as UNITS_FORKED
 from test_units import HARNESS as UNITS
@@ -269,11 +269,78 @@ def test_the_shard_options_are_refused_where_they_mean_nothing(stub, tmp_path, c
                       (["--all", "--records-only", "--cache", "c", "SynPass_v1"], "--records-only stores"),
                       (["--all", "--records-only", "--cache", "c", "--no-cache"], "--records-only stores"),
                       (["--all", "--records-only", "--cache", "c", "--update-pins"], "--records-only stores"),
-                      (["--all", "--records-only", "--cache", "c", "--shard", "1/3", "--shard-dir", "d"], "--records-only stores")):
+                      (["--all", "--records-only", "--cache", "c", "--shard", "1/3", "--shard-dir", "d"], "--records-only stores"),
+                      (["--all", "--cache", "c", "--update-reads"], "--update-reads writes"),
+                      (["--all", "--catalog-units", "--update-reads"], "--update-reads writes"),
+                      (["--all", "--catalog-units", "--cache", "c", "--update-reads", "--shard", "1/3", "--shard-dir", "d"],
+                       "--update-reads writes")):
         with pytest.raises(SystemExit) as e:
             cli.main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err, argv
     _refused(capsys, [tmp_path / "nothing"], "did not finish")
+
+
+def test_reads_holds_each_path_once_and_gives_each_binding_its_whole_read_set_back():
+    """`cli.grouped` writes each path once, in the group of exactly the bindings whose read sets hold it, those of the first
+    binding first, each binding's places as ranges, and `cli.expanded` gives every set back as it was, with its other fields."""
+    regs = {"files": ["r.py"], "listed": [], "probes": ["q"]}
+    sets = {"a": {"files": ["x.py", "y.py"], "listed": ["d"], "probes": ["p"], "registry": True},
+            "b": {"files": ["x.py"], "listed": [], "probes": ["p", "z"], "registry": False, "untracked": ["lib.so"]},
+            "c": {"files": [], "listed": [], "probes": [], "registry": False}}
+    got = cli.grouped(sets)
+    assert got["groups"] == [{"files": ["x.py"], "probes": ["p"]}, {"files": ["y.py"], "listed": ["d"]}, {"probes": ["z"]}]
+    assert got["bindings"] == {"a": {"groups": "0-1", "registry": True},
+                               "b": {"groups": "0,2", "registry": False, "untracked": ["lib.so"]},
+                               "c": {"groups": "", "registry": False}}
+    assert cli.expanded({"registries": regs, "loaded": ["m.py"], **json.loads(json.dumps(got))}) == \
+        {"registries": regs, "loaded": ["m.py"], "bindings": sets}
+    assert cli._ranges([0, 1, 2, 3, 7, 9, 10]) == "0-3,7,9-10" and cli._places("0-3,7,9-10") == [0, 1, 2, 3, 7, 9, 10]
+
+
+def test_the_modules_whose_source_inspect_looked_for_are_every_binding_s_loaded_probes(tmp_path, monkeypatch):
+    """`cli._read_sets` takes the modules whose source `inspect` looked for (``present``) out of each binding's own set: their
+    paths, but the files the set holds by their bytes, are ``loaded``, every binding's, since torch's import asks for the
+    source of every module the process loaded and which those are depends on how the run went.  A run reports what it holds
+    beyond `cli.READS`' ``loaded`` as undeclared ``loaded``, and another binding's run that loaded the same module, nothing."""
+    monkeypatch.setattr(cli, "READS", tmp_path / "reads")
+    entries = {"kx": {"files": ["a.py"], "present": ["m", "own"]}, "ky": {"files": ["b.py"], "present": ["n"]}}
+    where = {"m": "m.py", "n": "n.py", "own": "a.py"}
+    monkeypatch.setattr(CC, "recorded", lambda cache, key, repo: entries[key])
+    monkeypatch.setattr(CC, "declared", lambda root, reads: {
+        "files": sorted(reads.get("files", ())), "listed": [], "probes": sorted(where[m] for m in reads.get("present", ())),
+        "registry": False})
+    group = {"files": [], "listed": [], "probes": []}
+    ids, keys = [("definition", "X_v1"), ("definition", "Y_v1")], ["kx", "ky"]
+    got = cli._read_sets(tmp_path, {"x": [0], "y": [1]}, ids, keys, group)
+    assert got["reads"]["bindings"] == {"x": {"files": ["a.py"], "listed": [], "probes": [], "registry": False},
+                                        "y": {"files": ["b.py"], "listed": [], "probes": [], "registry": False}}
+    assert got["reads"]["loaded"] == ["m.py", "n.py"] and got["undeclared"]["x"] == {"files": ["a.py"], "loaded": ["m.py"]}
+    cli.update_reads(got, every=True)
+    assert cli._read_sets(tmp_path, {"x": [0], "y": [1]}, ids, keys, group)["undeclared"] == {}
+    entries["ky"] = {"files": ["b.py"], "present": ["n", "m"]}
+    assert cli._read_sets(tmp_path, {"y": [1]}, ids, keys, group)["undeclared"] == {}
+
+
+def test_update_reads_adds_what_each_run_read_to_what_reads_declares(tmp_path, monkeypatch):
+    """`cli.update_reads` adds what a run read to each binding's declared set, and to ``registries`` and ``loaded``: a
+    binding's runs read otherwise by how they ran (``--binding`` makes only its own binding's roots), so its declaration holds
+    each way.  A run of every binding drops a binding the catalog no longer has."""
+    monkeypatch.setattr(cli, "READS", tmp_path / "reads")
+
+    def rep(bindings: dict, loaded: list[str], files: tuple[str, ...] = ("r.py",)) -> dict:
+        return {"reads": {"registries": {"files": list(files), "listed": [], "probes": []}, "loaded": loaded,
+                          "bindings": bindings}}
+
+    a1 = {"files": ["x.py"], "listed": [], "probes": ["p"], "registry": False}
+    a2 = {"files": ["y.py"], "listed": ["d"], "probes": [], "registry": True}
+    b = {"files": ["z.py"], "listed": [], "probes": [], "registry": False}
+    assert cli.update_reads(rep({"a": a1, "b": b}, ["m"]), every=True) == []
+    cli.update_reads(rep({"a": a2}, ["n"], ("r.py", "s.py")), every=False)
+    got = cli._reads_file()
+    assert got["bindings"] == {"a": {"files": ["x.py", "y.py"], "listed": ["d"], "probes": ["p"], "registry": True}, "b": b}
+    assert got["loaded"] == ["m", "n"] and got["registries"]["files"] == ["r.py", "s.py"]
+    cli.update_reads(rep({"a": a1}, []), every=True)
+    assert set(cli._reads_file()["bindings"]) == {"a"}
 
 
 def test_a_binding_s_name_is_its_root_function_its_files_models_or_its_template_entry():
@@ -387,6 +454,19 @@ def test_every_shard_from_a_copy_of_one_records_only_run_s_cache_builds_no_bindi
 
 #: `test_units`' setup, then ``circuit-check --all --bindings -j 2`` (`cli.bindings`) from the records in the tree's cache
 BINDINGS_ONLY = UNITS[:UNITS.index("rep = cli.run(")] + 'print(json.dumps(cli.bindings(root / "cache", log=None, jobs=2)))\n'
+#: `test_units`' bindings, each root function writing its units to ``<root>-roots.jsonl`` (beside the tree) as it runs
+ROOTS_LOGGED = ("def bindings():\n    for units, make in catalog.BINDINGS:\n        yield units, make,",
+                "def rooted(units, make):\n"
+                "    def run():\n"
+                "        with CC.internal(), open(root.parent / f'{root.name}-roots.jsonl', 'a') as f:\n"
+                "            f.write(json.dumps(units) + '\\n')\n"
+                "        return make()\n"
+                "    return run\n\n\n"
+                "def bindings():\n    for units, make in catalog.BINDINGS:\n        yield units, rooted(units, make),")
+
+
+def _roots_made(log: Path) -> set[str]:
+    return {SH.binding(json.loads(ln)) for ln in log.read_text().splitlines()} if log.exists() else set()
 
 
 def _py(root: Path, harness: str) -> subprocess.CompletedProcess:
@@ -394,13 +474,24 @@ def _py(root: Path, harness: str) -> subprocess.CompletedProcess:
                           env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
 
 
+def _forked(name: str) -> str:
+    """`test_units`' forked ``--all`` as ``--binding name`` runs it, its bindings' roots logged (`ROOTS_LOGGED`)."""
+    # the real registry, which `targets.load_registries` loads before any check and the harness's stand-in doesn't: else the
+    # first check to load it records the kernels it registers as reads this process can't digest
+    return UNITS_FORKED.replace(*ROOTS_LOGGED).replace("fork=True)", f"fork=True, binding={name!r})").replace(
+        "rep = cli.run(", "from verity.ml.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(", 1)
+
+
 @pytest.mark.slow
 def test_each_binding_from_a_copy_of_one_records_only_run_s_cache_checks_its_own_targets_and_together_the_list(tmp_path):
     """``--bindings`` names each catalog binding with the targets ``--binding`` checks under it: together the whole list, each
     target once.  Each forked ``--binding`` run, in a tree of its own from a copy of one ``--records-only`` run's cache (a task
-    on another machine), builds no binding and no body in its own process and checks exactly its targets, with the verdicts a
-    full build gives; run again, it reuses every target.  With no record it refuses rather than build, and given a name no
-    catalog binding has, rather than check nothing."""
+    on another machine), builds no binding and no body in its own process, makes only its own binding's roots (the catalog's
+    roots record lists the others'), keys and checks exactly its targets, with the verdicts a full build gives; run again, it
+    reuses every target.  With the roots record stale (a module no binding reads edited) it makes every binding's roots, with
+    the same verdicts.  With no record it refuses rather than build, and given a name no catalog binding has, rather than
+    check nothing."""
+    assert UNITS_FORKED.count(ROOTS_LOGGED[0]) == 1
     root = _tree(tmp_path / "t")
     _bindings(root, *UNIT_BINDINGS)
     cold = _py(root, UNITS.replace("units=True)", "units=True, binding='_core_roots')"))
@@ -414,18 +505,191 @@ def test_each_binding_from_a_copy_of_one_records_only_run_s_cache_checks_its_own
     values: dict = {}
     for i, (name, targets) in enumerate(named["bindings"].items()):
         tree = _copied(root, tmp_path / f"b{i}")
-        # the real registry, which `targets.load_registries` loads before any check and the harness's stand-in doesn't: else the
-        # first check to load it records the kernels it registers as reads this process can't digest
-        forked = UNITS_FORKED.replace("fork=True)", f"fork=True, binding={name!r})").replace(
-            "rep = cli.run(", "from verity.ml.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(", 1)
-        out = _run_units(tree, forked)
+        out = _run_units(tree, _forked(name))
         assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and out["here"] == [], (name, out["stats"])
         assert sorted(out["values"]) == sorted(label for _, label in targets) and out["hits"] == [], name
+        assert _roots_made(tmp_path / f"b{i}-roots.jsonl") == {name} - {"<registered>"}, name
+        assert len(out["keys"]) == len(out["values"]), (name, out["keys"])
         values.update(out["values"])
         if name == "_core_roots":
-            again = _run_units(tree, forked)
+            again = _run_units(tree, _forked(name))
             assert again["stats"]["units"] == out["stats"]["units"] and again["here"] == [], again["stats"]
             assert again["hits"] == sorted(again["values"]) == sorted(out["values"]), again
     assert values == _fresh(root)["values"]
+    stale = _copied(root, tmp_path / "stale")
+    _edit(stale, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")
+    out = _run_units(stale, _forked("_core_roots"))
+    assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and out["here"] == [], out["stats"]
+    assert _roots_made(tmp_path / "stale-roots.jsonl") == set(named["bindings"]) - {"<registered>"}
+    assert out["values"] == {t: values[t] for _, t in named["bindings"]["_core_roots"]}
     unknown = _py(root, UNITS.replace("units=True)", "units=True, binding='_no_roots')"))
     assert unknown.returncode and cli.NO_BINDING in unknown.stderr, unknown.stderr
+
+
+def _reads_run(name: str, write: bool = False) -> str:
+    """`_forked` with `cli.READS` in the tree: prints the report's ``reads`` and ``undeclared`` too, with ``write`` once
+    ``--update-reads`` wrote them."""
+    return (_forked(name).replace("rep = cli.run(", "cli.READS = root / 'reads'\nrep = cli.run(", 1)
+            .replace('print(json.dumps({"stats"', ("cli.update_reads(rep, every=False)\n" if write else "")
+                     + 'print(json.dumps({"stats"', 1)
+            .replace('"values": {', '"reads": rep["reads"], "undeclared": rep["undeclared"], "values": {', 1))
+
+
+@pytest.mark.slow
+def test_a_binding_s_report_holds_its_read_set_and_what_reads_does_not_declare_of_it(tmp_path):
+    """A ``--binding`` run's report holds its binding's read set (`cli._read_sets`) beside the registries' (each module they
+    imported: here all of ``syn``, which `load_registries` enumerates): its own targets' pins files, no other binding's, and
+    the package listing every check holds.  With no `cli.READS` all of it is undeclared; once ``--update-reads`` wrote it,
+    nothing is, and another binding's run written beside it keeps the first's: each of those runs makes only its own binding's
+    roots, the others' are the catalog's roots record's (`units.plan`'s ``binding``).  A module the process loaded after the
+    registries' inputs and before its checks, which a check's `inspect` lookup asks for, is undeclared in ``loaded``, the probes
+    every binding's set holds (`cli.READS`), not in the binding's own set: which modules a process loaded depends on how it
+    runs.  A module only one target's check imports, new, is
+    undeclared for that binding alone; a module the registries import anew, for every binding, until it is written."""
+    from test_cache import _pin
+
+    root = _tree(tmp_path / "t")
+    _bindings(root, *UNIT_BINDINGS)
+    assert _records_only(root)["stored"] == 5
+    pre = _copied(root, tmp_path / "pre")
+    core = _run_units(root, _reads_run("_core_roots"))
+    regs, mine = core["reads"]["registries"], core["reads"]["bindings"]["_core_roots"]
+    assert {"syn/top.py", "syn/sub.py", "syn/xdef.py", "syn/catalog.py"} <= set(regs["files"]), regs
+    assert mine["registry"] and "syn" in mine["listed"] and "syn/top.py" not in mine["files"], mine
+    assert _pin("SynTop_v1") in mine["files"] and _pin("SynOther_v1") not in mine["files"], mine
+    assert {"files", "listed", "registry"} <= set(core["undeclared"]["_core_roots"]), core["undeclared"]
+    _run_units(root, _reads_run("_core_roots", write=True))
+    again = _run_units(root, _reads_run("_core_roots"))
+    assert again["undeclared"] == {} and again["hits"] == sorted(again["values"]), again["undeclared"]
+    model = _run_units(root, _reads_run("_model_roots", write=True))
+    assert _roots_made(tmp_path / "t-roots.jsonl") == {"_core_roots", "_model_roots"}
+    theirs = model["reads"]["bindings"]["_model_roots"]
+    assert _pin("SynOther_v1") in theirs["files"] and _pin("SynTop_v1") not in theirs["files"], theirs
+    written = {k: v for part in ("registries.json", "loaded.json", "bindings.json")
+               for k, v in json.loads((root / "reads" / part).read_text()).items()}
+    assert cli.expanded(written) == {"registries": regs, "loaded": sorted({*core["reads"]["loaded"], *model["reads"]["loaded"]}),
+                                     "bindings": {"_core_roots": mine, "_model_roots": theirs}}
+    paths = [(k, p) for g in written["groups"] for k, ps in g.items() for p in ps]
+    assert len(paths) == len(set(paths)) and set(paths) >= {("files", _pin("SynTop_v1")), ("files", _pin("SynOther_v1"))}
+    # a module the process loaded before its checks, whose source `syn.check`'s `inspect` lookup asks for as torch's import
+    # asks for every loaded module's: in a tree with the records alone, `loaded` holds it, and the binding's own set doesn't.
+    # It is first imported after the registries' inputs are taken, in a recording no target holds, as making another
+    # binding's roots imports what only that binding reads (one imported before them is the registries')
+    shutil.copytree(root / "reads", pre / "reads")
+    (pre / "synpre").mkdir()
+    (pre / "synpre/__init__.py").write_text("")
+    late = ("_inputs = cli.CC.registry_inputs\n\n\ndef _then(root):\n    got = _inputs(root)\n"
+            "    with cli.CC.recording(merge=False):\n        import synpre  # noqa: F401\n    return got\n\n\n"
+            "cli.CC.registry_inputs = _then\nrep = cli.run(")
+    first = _run_units(pre, _reads_run("_core_roots").replace("rep = cli.run(", late, 1))
+    own, u = first["reads"]["bindings"]["_core_roots"], first["undeclared"]["_core_roots"]
+    assert (own["files"], own["listed"]) == (mine["files"], mine["listed"]) and "files" not in u, (own, u)
+    assert "synpre/__init__.py" in u["loaded"] and "synpre/__init__.py" not in own["probes"], (own, u)
+    (root / "synlib").mkdir()
+    (root / "synlib/__init__.py").write_text("")
+    (root / "synlib/helper.py").write_text("H = 1\n")
+    # by a computed name: an import statement would be a site of `syn.top`, which the registries import
+    _edit(root, "syn/top.py", "    from syn.shape import operands\n",
+          "    from syn.shape import operands\n    __import__('synlib.helper')\n")
+    core = _run_units(root, _reads_run("_core_roots"))
+    (u,) = core["undeclared"].values()
+    assert list(core["undeclared"]) == ["_core_roots"] and set(u) <= {"files", "probes"}, core["undeclared"]
+    assert u["files"] == ["synlib/__init__.py", "synlib/helper.py"], u
+    assert _run_units(root, _reads_run("_model_roots"))["undeclared"] == {}
+    (root / "syn/fresh.py").write_text("Y = 1\n")
+    model = _run_units(root, _reads_run("_model_roots"))
+    assert model["undeclared"]["_model_roots"]["registries"]["files"] == ["syn/fresh.py"], model["undeclared"]
+
+
+#: two bindings past `test_units`' whose roots register beyond themselves: ``_late_roots`` a primitive of a module only it
+#: imports (`syn.late.lz`: the registries import `syn`'s top-level modules) and a member of a family its id makes
+#: (`SynWide{n}`, `codec.register_lazy_family`); ``_minted_roots`` a composite its factory makes, which no id makes
+LATE = {
+    "syn/wide.py": """
+from verity.ml.circuits.codec import register_lazy_family
+from verity.ml.circuits.defs import PrimitiveDefinition
+
+from syn.prims import V
+
+_MADE = {}
+
+
+def wide(n):
+    if n not in _MADE:
+        _MADE[n] = PrimitiveDefinition(f"SynWide{n}", 1, (("a", V), ("b", V)), V, lambda a, b: a | b)
+    return _MADE[n]
+
+
+register_lazy_family(r"^SynWide(\\d+)_v1$", lambda m: wide(int(m[1])))
+""",
+    "syn/late/__init__.py": "",
+    "syn/late/lz.py": """
+from verity.ml.circuits import primitive
+
+from syn.prims import V
+
+
+@primitive("SynLz", 1, [("a", V), ("b", V)], V)
+def SynLz(a, b):
+    return a & b
+""",
+    "syn/fresh.py": """
+from verity.ml.circuits import composite
+
+from syn.prims import SynAdd, V
+
+_MADE = []
+
+
+def made():
+    if not _MADE:
+        @composite("SynFresh", 1, [], lambda S: ((("a", V), ("b", V)), V))
+        def SynFresh(B, S, a, b):
+            return B.call(SynAdd, a, b)
+        _MADE.append(SynFresh)
+    return _MADE[0]
+""",
+}
+LATE_ROOTS = ("\ndef late():\n    from syn import wide\n    from syn.late import lz\n    return [lz.SynLz, wide.wide(7)]\n\n\n"
+              "def minted():\n    from syn import fresh\n    return [bind(fresh.made())]\n\n")
+#: what the forked run's own process has registered of the tree's Definitions, in order, and imported of its modules
+HELD_HERE = ('"here": here,', '"here": here, "registry": [f for f in dict.keys(__import__("verity.ml.circuits.defs", '
+             'fromlist=["REGISTRY"]).REGISTRY.defs) if f.startswith("Syn")], "modules": sorted(m for m in sys.modules '
+             'if m.startswith("syn")),')
+
+
+def _late_tree(at: Path) -> Path:
+    root = _tree(at)
+    for rel, text in LATE.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text.lstrip("\n"))
+    _edit(root, "syn/catalog.py", "\nBINDINGS = [", LATE_ROOTS + "\nBINDINGS = [")
+    _bindings(root, *UNIT_BINDINGS, '(("_late_roots",), late)', '(("_minted_roots",), minted)')
+    return root
+
+
+@pytest.mark.slow
+def test_a_binding_run_does_in_each_other_binding_s_place_what_making_its_roots_did_beyond_them(tmp_path):
+    """A ``--binding`` run from a copy of one ``--records-only`` run's cache makes another binding's roots only where what
+    making them did beyond them (the catalog's roots record notes it) can't be done in their place: ``_late_roots``' import of
+    `syn.late.lz` and its ``SynWide7_v1``, made by its id, are done (`units._replay`), and ``_minted_roots``' composite, which
+    no id makes, is made.  So this process's registry and its in-tree modules are, in order, the ones a run that makes every
+    binding's roots has (the roots record stale), with that run's verdicts: C-Flock lowers a word primitive by the first
+    Boolean Definition registered of that word, which another binding's roots can be the first to register."""
+    root = _late_tree(tmp_path / "t")
+    assert _records_only(root)["stored"] == 7
+    lazy, stale = _late_tree(tmp_path / "lazy"), _late_tree(tmp_path / "stale")
+    for tree in (lazy, stale):
+        shutil.copytree(root / "cache", tree / "cache")
+    _edit(stale, "syn/idle.py", "B.call(SynAdd, a, a)", "B.call(SynAdd, b, b)")
+    harness = _forked("_core_roots").replace(*HELD_HERE)
+    assert harness.count('"registry": [') == 1
+    got, full = _run_units(lazy, harness), _run_units(stale, harness)
+    assert _roots_made(tmp_path / "lazy-roots.jsonl") == {"_core_roots", "_minted_roots"}
+    assert _roots_made(tmp_path / "stale-roots.jsonl") == {"_core_roots", "_model_roots", "_sized_roots", "_xor_roots",
+                                                           "_late_roots", "_minted_roots"}
+    assert got["registry"] == full["registry"] and got["modules"] == full["modules"], (got, full)
+    assert [f for f in got["registry"] if f in ("SynLz_v1", "SynWide7_v1", "SynFresh_v1")] == \
+        ["SynLz_v1", "SynWide7_v1", "SynFresh_v1"] and "syn.late.lz" in got["modules"], got
+    assert got["stats"]["units"] == full["stats"]["units"] == {"reused": 7, "rebuilt": [], "stored": 0}, (got, full)
+    assert got["here"] == full["here"] == [] and got["values"] == full["values"] and got["values"], (got, full)
