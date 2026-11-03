@@ -177,9 +177,8 @@ One execution phase's certificates are registered through the proof system
   head opens its head leaf in two or three SHA-512 compressions, where the record leaf would cost the certificate's 272
   more. The firewall keeps the records and salts (`Hidden`). The challenger receives one salted root and never a
   certificate, a certifier's salt or a head.
-- **Selection:** `rate:1/1`, every proof block, drawn as `subset:1` from the challenger's coins (the stream refuses `All`,
-  which the sampled audit's soundness statement doesn't cover). A registration is one execution phase, one proof block,
-  so an accepted outcome checks every execution phase. The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
+- **Selection:** `All`. A registration is one execution phase, one proof block, so an accepted outcome is the exhaustive
+  fact. The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
   registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the execution phase.
 - **The network verdict of record** is `LinkWindows.network_verdict`, the AND over the link's execution phases with no ε
   or share credit. Over the stream's registrations and outcome records, it accepts only when, for every window w of
