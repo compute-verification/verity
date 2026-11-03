@@ -1,9 +1,10 @@
 """te_core.workloads models each covert workload from its dials to the one bound's kinds and rho at the console's three
 policies: workloads.json (the console's tests read it) is the module's output; every row carries each kind's term,
 their max, the binding kind and its basis (what it rests on is the reference's `rests_on`), and each input's source;
-the token, reduction, update and decoding terms are te_core.formalism.bound's at reading B, and the console's dial
-formula on a point's columns alone gives its token kind (or Fit) at every policy; reading A holds no full-weight GEMM
-in a block; the shapes, u(1), Delta, Delta_grad, a and a training token's gates are what the 45M pilot's traces and
+the token, reduction, update and decoding terms are te_core.formalism.bound's (reading B's token form and decoding,
+reduction and update, sensitivities of its one bound), and the console's dial formula on a point's columns alone gives
+its token kind (or Fit) at every policy; reading A's tiles leave no op's term infinite, and a model has no trace; the
+shapes, u(1), Delta, Delta_grad, a and a training token's gates are what the 45M pilot's traces and
 the standard-workloads island's rows measure; on every record the fresh-products, reduction and update kinds are
 within 2% of the model's, and the token kind within 1% on the full-training records but for t (the island's dense
 rows) and a (the 4.1 LoRA pilot), within 2% on the island's LoRAs; the fresh-products kind is the amortized
@@ -60,7 +61,7 @@ def test_reference_json_is_current(ref):
 
 
 def test_every_row_carries_its_kinds_their_max_and_the_binding_kind(ref):
-    assert ref["kinds"] == list(W.KINDS) == ["fresh_products", *formalism.KINDS]
+    assert ref["kinds"] == list(W.KINDS) == ["fresh_products", *W.TE_CORE]
     for name, pname, p in points(ref):
         for q in POLICIES:
             r = p["rho"][q]
@@ -79,18 +80,21 @@ def test_every_row_carries_its_kinds_their_max_and_the_binding_kind(ref):
 
 
 def test_the_kinds_are_te_cores(ref):
-    """One calculator: the token, reduction, update and decoding terms and te_core's rho are formalism.at's at reading
-    B on the model's inputs; only the fresh products' term is this module's."""
+    """One calculator: the token, reduction, update and decoding terms are formalism.bound's sensitivities on the
+    model's inputs (`TE_CORE`), and te_core's rho is Fit's, else the max over them over 1; only the fresh products'
+    term is this module's."""
     for w in W.WORKLOADS.values():
         for pname, settings in w.points:
             me = W.model(w.name, **settings).measured
             for q, (c, k) in W.POLICIES.items():
-                v, r = formalism.at(me, c, k, "B"), rhos(ref, w.name, pname)[q]
-                for kind in formalism.KINDS:
-                    want = v["bound"]["terms"][kind]
+                v, b, r = formalism.at(me, c, k), formalism.bound(me, c, k), rhos(ref, w.name, pname)[q]
+                for kind, name in W.TE_CORE.items():
+                    want = b["sensitivities"][name]
                     assert close(r["terms"][kind], None if math.isinf(want) else want, 1e-9), (w.name, pname, q, kind)
-                assert close(r["te_core"]["rho"], None if math.isinf(v["rho"]) else v["rho"], 1e-9)
-                assert r["unmeasured"] == v["bound"]["unmeasured"] == []
+                    assert name not in b["unmeasured"]
+                want = v["rho_fit"] if v["fit"] else max(1.0, *(b["sensitivities"][n] for n in W.TE_CORE.values()))
+                assert close(r["te_core"]["rho"], None if math.isinf(want) else want, 1e-9)
+                assert r["unmeasured"] == []
 
 
 def test_page_rho_on_the_columns_is_the_token_kind_or_fit(ref):
@@ -105,26 +109,26 @@ def test_page_rho_on_the_columns_is_the_token_kind_or_fit(ref):
                 (name, pname, q, rho, want)
 
 
-def test_reading_a_holds_no_full_weight_gemm(ref):
-    """Reading A's default packer holds whole traced ops: one reading k or more update bits leaves its term infinite,
-    which every full-weight workload's weight GEMMs do at every policy; a rank-1 LoRA's factors fit, and its term needs
-    a 4.4 trace; a record traced before 4.4 is refused."""
+def test_reading_as_tiles_leave_no_full_weight_gemm_infinite(ref):
+    """Reading A's default packer (te_core 4.5) splits an op into matrix-product tiles that read only the coordinates
+    they use, so a full-weight workload's weight GEMMs, each reading over 100 times k update bits at every policy, leave
+    its term finite; it needs a trace's entries and op log, which a model hasn't (unmodelled), and a record traced
+    before 4.4 is refused."""
     full = ({("standard", p) for p, _ in W.WORKLOADS["standard"].points}
             | {("diloco", "default"), ("rl", "default"), ("inference", "bf16"), ("distill", "default")})
     for name, pname, p in points(ref):
         for q, (c, k) in W.POLICIES.items():
             got = p["rho"][q]["token_A"]
-            assert got["verdict"] == ("infinite" if got["op_update_bits"] >= k else "unmodelled"), (name, pname, q)
+            assert got["verdict"] == "unmodelled", (name, pname, q)
             if (name, pname) in full:
-                assert got["verdict"] == "infinite" and got["op_update_bits"] > 100 * k, (name, pname, q)
+                assert got["op_update_bits"] > 100 * k, (name, pname, q)
     # the head's GEMM over the tied fp32 embedding, then an MLP matrix: 824 Mbit and 11.5 Mbit at the 45M reference
     assert math.isclose(W.model("standard").op_update_bits, 32 * W.VOCAB * 512) and W.MLP * 16 * 512 ** 2 > 100 * 65_536
     assert math.isclose(W.model("lora", rank=1, targets="q").op_update_bits, 16 * 512)
-    assert {v["token_A"]["verdict"] for v in rhos(ref, "lora", "rank 1 on W_q").values()} == {"unmodelled"}
     for w in ref["workloads"].values():
         for ck in w["checks"].values():
             assert all(ck["rho"][q]["record"]["token_A"] == {"verdict": "refused"} for q in POLICIES)
-    assert set(ref["reading_a"]["verdicts"]) == {"infinite", "unmodelled", "refused"}
+    assert set(ref["reading_a"]["verdicts"]) == {"unmodelled", "refused"}
 
 
 def test_every_model_input_is_tagged_an_estimate(ref):
@@ -331,7 +335,7 @@ def test_a_forward_escapes_where_its_layers_update_and_ids_fit():
 
 
 def test_the_reduction_kind_is_a_maximum(ref):
-    """te_core 4.4's reduction and update kinds: (c/|C|)·steps·(b − 1)·partial/k and (c/|C|)·steps·γ/k, b a step's
+    """te_core's reduction and update terms: (c/|C|)·steps·(b − 1)·partial/k and (c/|C|)·steps·γ/k, b a step's
     token blocks; a dense step's partial and cut are 32 N (the update kind no longer counts Δ_t)."""
     m = W.model("standard")
     c, k = W.CONSOLE

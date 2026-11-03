@@ -20,8 +20,9 @@ output, which the console's tests pin. The spec, each mapping with its reasons, 
 of kinds K of `kindBound`, (|B_K|/|C|)·c/cap_K(k), cap_K(k) the most of K's work one block does reading at most k bits
 beyond θ. Each term is a lower bound, so the max is one. Where Fit holds, its construction gives c/(c − d)
 (te_core.formalism), which `rho` reports with the menu beside it. The token, reduction, update and decoding kinds'
-terms are te_core.formalism.bound's (te_core 4.4, which the console's rho.ts runs), each labelled by its
-`BOUND_LABELS`; the fresh products' are this module's until the io-bound module's replace them. The kinds (`KINDS`,
+terms are te_core.formalism.bound's (`TE_CORE`), each labelled by its `SENSITIVITIES` entry: te_core 4.5 publishes all
+four as sensitivities beside its one bound, never in its max (the coordinator's 08:26Z ruling), and this menu's max
+still takes them. The fresh products' are this module's until the io-bound module's replace them. The kinds (`KINDS`,
 each with what it rests on):
 
 - **fresh products** (`Fresh`): products whose two operands both depend on θ'. A product C = A·B by the standard
@@ -36,10 +37,10 @@ each with what it rests on):
   operands itself where it can read the update up to the product's layer and the input ids up to its token (a
   forward) or of its whole sequence (a backward, whose gradient reads every later token): those products escape
   (`Fresh.counted`).
-- **token**: the token form at reading B (A1, a token's work lumped under its profiles). Reading A, te_core 4.4's
-  default packer over a trace's `entries`, holds whole traced ops in a block, so its term is infinite wherever one
-  affected op reads k or more update bits (`reading_a`): every full-weight workload's weight GEMMs at every policy here.
-  A model has no trace, so each point gives reading A's verdict from `op_update_bits` beside B's term.
+- **token**: the token form at reading B (A1, a token's work lumped under its profiles). Reading A, te_core 4.5's
+  default packer over a trace's `entries` and its op log's matrix-product tiles, splits an op into tiles that read
+  only the coordinates they use, so no op's update bits alone leave its term infinite; a model has neither, so each
+  point gives reading A's verdict (`reading_a`: unmodelled) beside B's term.
 - **reduction**: (c/|C|)·Σ steps·(b − 1)·partial/k over each part whose step's token work fills b = ⌈N·w/c⌉ ≥ 2
   blocks, partial one block's partial gradient at its passed width (`Part.partial_bits`; assumption (R), which blocks
   split by layers or tensors break).
@@ -141,24 +142,25 @@ LOWEST_INPUT = {"q": 0.0, "qv": 0.0, "attn": 0.25, "mlp": MLP / (2 + MLP), "all"
 #: products follow theirs and compute only the gradients the adapted matrices need; the MLP comes after attention
 LOWEST_ATTENTION = {"q": ((0, 0), (0, 0)), "qv": ((0, 1), (1, 1)), "attn": ((1, 1), (1, 3)), "mlp": ((0, 0), (0, 0)),
                     "all": ((1, 1), (1, 3))}
-#: the token kind's reading in the max (module docstring: reading A's default packer holds no full-weight GEMM)
+#: the token kind's reading in the max (module docstring: reading A needs a trace, which a model hasn't)
 READING = "B"
-#: the one bound's menu (module docstring), each kind with what its term rests on: te_core.formalism's `BOUND_LABELS`
-#: for its kinds at `READING`
+#: the menu's kinds te_core.formalism.bound prices, each by its name there: reading B's token form and decoding, and
+#: (R) and (U), all sensitivities of te_core 4.5's one bound
+TE_CORE = {"token": "token_form", "reduction": "reduction", "update": "update", "decoding": "decoding_form"}
+#: the one bound's menu (module docstring), each kind with what its term rests on: te_core.formalism's
+#: `SENSITIVITIES` label for the kinds it prices
 KINDS = {
     "fresh_products": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the "
                       "widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; "
                       "the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
-} | {kind: formalism.BOUND_LABELS.get((kind, READING), formalism.BOUND_LABELS.get((kind, None)))
-     for kind in formalism.KINDS}
-READING_A = formalism.BOUND_LABELS[("token", "A")]
+} | {kind: formalism.SENSITIVITIES[name] for kind, name in TE_CORE.items()}
+READING_A = formalism.RESTS_ON["token"]
 FIT = "Fit's construction (te_core.formalism): every block reads Δ and its tokens' ids, and runs the decoder"
 #: what a point's ρ rests on, by its basis (`rho`): a kind's `KINDS` entry, Fit's construction, or nothing
 RESTS_ON = KINDS | {"fit": FIT, "none": "nothing: no kind's term exceeds 1 and Fit fails (the row's fit_fails), so "
                                         "rho >= 1 is all the menu gives"}
 #: reading A's verdicts on the token kind (`reading_a`)
-VERDICTS_A = {"infinite": "one op reads at least k update bits (op_update_bits): no default-packer block holds its work",
-              "unmodelled": "every op reads under k: finite, from a te_core 4.4 trace's entries, which a model hasn't",
+VERDICTS_A = {"unmodelled": "finite, from a trace's entries and its op log's tiles (te_core 4.5), which a model hasn't",
               "refused": "a record traced before te_core 4.4: no entries"}
 
 
@@ -872,30 +874,30 @@ def _finite(v: float) -> float | None:
 
 
 def reading_a(m: Model, k: float) -> dict:
-    """The token kind's verdict under reading A (module docstring; `VERDICTS_A`): te_core.formalism.packer's blocks are
-    runs of a trace's whole ops, each reading the run's update cut once, so its term is infinite where one affected op
-    reads k or more update bits (`Model.op_update_bits`); otherwise it needs a 4.4 trace's `entries`, which a model
-    hasn't. A record's ops are unknown here (te_core refuses reading A on a row traced before 4.4)."""
+    """The token kind's verdict under reading A (module docstring; `VERDICTS_A`): te_core.formalism.packer's witnesses
+    are runs of a trace's `entries` and its op log's matrix-product tiles, each tile reading only the coordinates it
+    uses, so its term is finite at every k however many update bits one op reads (`Model.op_update_bits`, beside it),
+    and needs a trace, which a model hasn't. A record's ops are unknown here (te_core refuses reading A on a row traced
+    before 4.4)."""
     op = m.op_update_bits
     if op is None:
         return {"verdict": "refused"}
-    return {"verdict": "infinite" if op >= k else "unmodelled", "op_update_bits": op}
+    return {"verdict": "unmodelled", "op_update_bits": op}
 
 
 def rho(m: Model, c: float, k: float, token: tuple[float, str] | None = None) -> dict:
-    """ρ at (c, k): every kind's term (`KINDS`, None infinite: the fresh products' and te_core.formalism.bound's four
-    at `READING`), their max over 1 (`bound`) and the binding kind; ρ is Fit's c/(c − d) where Fit holds and the
+    """ρ at (c, k): every kind's term (`KINDS`, None infinite: the fresh products' and te_core.formalism.bound's four,
+    `TE_CORE`), their max over 1 (`bound`) and the binding kind; ρ is Fit's c/(c − d) where Fit holds and the
     menu's bound doesn't exceed it, else the bound, and `basis` says which (what it rests on is `RESTS_ON[basis]`).
-    Beside them: te_core's ρ (formalism.at with the reading, bound's kinds and Fit), reading A's verdict on the token
-    kind (`reading_a`), the kinds bound counts 0 for want of inputs (`unmeasured`), Fit's thresholds (the most Δ its
-    compute block admits, k − (c/w_fit)·τ, and the most Δ_grad its reduction block admits, k/2), each part's token
-    blocks b, and the shares of |C| in the fresh products counted and charged. `token` is a record's ρ and basis by
-    page_rho on its columns (`recorded`), which then give the token term and Fit."""
+    Beside them: te_core's ρ over those four (Fit, else max(1, their max): te_core 4.4's at reading B), reading A's
+    verdict on the token kind (`reading_a`), the kinds bound counts 0 for want of inputs (`unmeasured`), Fit's
+    thresholds (the most Δ its compute block admits, k − (c/w_fit)·τ, and the most Δ_grad its reduction block admits,
+    k/2), each part's token blocks b, and the shares of |C| in the fresh products counted and charged. `token` is a
+    record's ρ and basis by page_rho on its columns (`recorded`), which then give the token term and Fit."""
     me = m.measured
-    v = formalism.at(me, c, k, READING)
-    one = v["bound"]
+    v, one = formalism.at(me, c, k), formalism.bound(me, c, k)
     fit = v["fit"] if token is None else token[1] == "fit"
-    four = dict(one["terms"])
+    four = {kind: one["sensitivities"][name] or 0.0 for kind, name in TE_CORE.items()}
     if token is not None and token[1] == "target":
         four["token"] = token[0]
     ub = update_bits(me, c)
@@ -910,7 +912,8 @@ def rho(m: Model, c: float, k: float, token: tuple[float, str] | None = None) ->
     te = v["rho_fit"] if fit else max(1.0, *four.values())
     out = {"rho": _finite(v["rho_fit"] if by_fit else bound), "basis": "fit" if by_fit else binding or "none",
            "binding_kind": binding, "bound": _finite(bound), "terms": {kind: _finite(x) for kind, x in terms.items()},
-           "token_A": reading_a(m, k), "unmeasured": one["unmeasured"],
+           "token_A": reading_a(m, k),
+           "unmeasured": sorted(kind for kind, name in TE_CORE.items() if name in one["unmeasured"]),
            "te_core": {"rho": _finite(te), "basis": "fit" if fit else max(four, key=four.get)},
            "fit": fit, "fit_fails": fails, "rho_fit": _finite(v["rho_fit"]), "s": v["s"], "x0": v["x0"],
            "s_star": v["s_star"], "b": one["inputs"]["reduction"]["blocks"],
@@ -1411,7 +1414,7 @@ def _fmt(v) -> str:
 
 
 #: how the table writes reading A's verdict on the token kind
-VERDICTS = {"infinite": "inf", "unmodelled": "finite?", "refused": "refused"}
+VERDICTS = {"unmodelled": "finite?", "refused": "refused"}
 
 
 def table(ref: dict) -> str:

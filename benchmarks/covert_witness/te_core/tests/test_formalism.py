@@ -4,6 +4,7 @@ import dataclasses
 import math
 from dataclasses import replace
 
+import numpy as np
 import pytest
 
 from te_core import VERSION as F_VERSION
@@ -358,8 +359,9 @@ def test_a_v23_row_is_measured_from_its_old_fields_with_every_stub_named():
     assert m.delta_bits == 8000 and m.u == m.u_in == ((0.0, 0.0), (1.0, 8000))
     assert m.tau_bits == 16 and m.a_bits == 512 * 16 and m.u1_bits == 8000
     assert set(m.labels) == {"gates", "tokens", "token_gates", "affected_gates", "tau_bits", "a_bits", "delta_bits",
-                             "decoder_gates", "u", "u_in", "u1_bits", "delta_grad_bits"}
+                             "decoder_gates", "u", "u_in", "u1_bits", "delta_grad_bits", "ops"}
     assert all(m.labels[k].startswith("stub") for k in ("tokens", "affected_gates", "tau_bits"))
+    assert m.labels["ops"].startswith("counted") and m.ops[0]["products"] == []
     assert m.decoder_gates is None and m.labels["decoder_gates"] == F.DECODER["unmeasured"]
     assert all(m.labels[k].startswith("upper bound") for k in ("a_bits", "u1_bits", "delta_bits"))
     assert all(m.labels[k].startswith("assumption") for k in ("u", "u_in"))
@@ -466,51 +468,122 @@ def test_a_span_block_holds_the_most_tokens_its_reads_and_gates_allow():
     assert F._span_tokens(4, 0, 0, 10, 4, math.inf, 14).tolist() == [0, 3.5, 3.5, 3.5]
 
 
-def one_segment(U=2000.0, delta=None, decoder=0.0) -> F.Measured:
-    """One part of 1e12 gates, 1e3 tokens of 1e9 gates each, half of them affected, and reading A's entries of one
-    segment that reads a token's id (16 bits) and U update bits."""
+def tile(gates: float, m: int, K: int, n: int = 1000) -> dict:
+    """A forward op of one (1, m, K, n) product at one gate a MAC, bf16: at k = 3600 its tile holds 225·max(m, n)
+    gates, the operand of the shorter side free (te_core.tiles)."""
+    return {"phase": "fwd", "class": "updated", "op": "mm", "gates": gates, "macs": gates, "products": [[1, m, K, n]],
+            "widths": [16, 16]}
+
+
+def one_segment(U=2000.0, delta=None, decoder=0.0, ops=None) -> F.Measured:
+    """One part of 1e12 gates, 1e3 tokens of 1e9 gates each, half of them affected, reading A's entries of one forward
+    segment that reads a token's id (16 bits) and U update bits, and an op log of one product (`tile`) whose tile holds
+    2.25e8 gates at k = 3600, 6.25e7 at k = 1000."""
     part = F.Part(gates=1e12, tokens=1e3, token_gates=1e12, affected_gates=5e11)
-    entries = {"segments": 1, "gates": [1e9], "frontier_bits": [[0.0]], "ids": [[1.0]], "id_bits": 16,
+    entries = {"segments": 1, "gates": [1e9], "phase": [0], "frontier_bits": [[0.0]], "ids": [[1.0]], "id_bits": 16,
                "u_bits": [[U]], "positions": None, "context_fwd_bits": None, "context_bwd_bits": None}
     return F.Measured((part,), tau_bits=16, a_bits=16, u=F.even(U), u_in=F.even(U), delta_bits=delta,
-                      decoder_gates=decoder, entries=entries)
+                      decoder_gates=decoder, entries=entries, ops=[tile(1e12, 10 ** 6, 10 ** 3)] if ops is None else ops)
 
 
-def test_the_default_packer_is_the_counting_lemma_at_its_blocks_cap():
-    """c = 1e11 gates holds 100 tokens: the cap is min((k − U)/16, 100) tokens of 1e9 gates, the term c·share/cap.
-    A block reading the update code (Δ = 500 < U) reads less but has c − d gates under decoding, c under token."""
+def test_the_default_packer_is_the_counting_lemma_at_its_best_union_of_runs_and_tiles():
+    """c = 1e11 gates holds 100 tokens: a run block holds min((k − U)/16, 100) tokens of 1e9 gates, and beside it the
+    tile (1.75e8 gates at k = 2800), so the term is c·share over min(c, the two), never ∞: where no run block fits
+    (U > k) the tile alone. A block reading the update code (Δ = 500 < U) reads less but has c − d gates under
+    decoding, c under token; the best of the kinds binds. Without an op log the family has no tiles: unmeasured
+    (None)."""
     m, c = one_segment(), 1e11
     assert F.packer(m, c, 3600) == pytest.approx(0.5) and F.packer(m, c, 10 ** 4) == pytest.approx(0.5)
-    assert F.packer(m, c, 2800) == pytest.approx(1.0) and F.packer(m, c, 1000) == math.inf
+    assert F.packer(m, c, 2800) == pytest.approx(c * 0.5 / (5e10 + 1.75e8))
+    assert F.packer(m, c, 1000) == pytest.approx(c * 0.5 / 6.25e7)
+    assert F.packer(replace(m, ops=None), c, 1000) is None and F.packer(replace(m, entries=None), c, 3600) is None
     coded = one_segment(delta=500.0, decoder=5e10)
     assert F.packer(coded, c, 2800, decoder=False) == pytest.approx(0.5)
-    assert F.packer(coded, c, 2800, decoder=True) == pytest.approx(1.0)
-    b = F.bound(coded, c, 2800, "A")
-    assert (b["terms"]["token"], b["terms"]["decoding"], b["argmax"]) == (pytest.approx(0.5), pytest.approx(1.0),
-                                                                          "decoding")
-    assert F.packer(coded, c, 1000, decoder=False) == pytest.approx(1e11 * 0.5 / (1e9 * 500 / 16))
+    assert F.packer(coded, c, 2800, decoder=True) == pytest.approx(c * 0.5 / (5e10 + 1.75e8))
+    assert F.packer(coded, c, 1000, decoder=False) == pytest.approx(c * 0.5 / (1e9 * 500 / 16 + 6.25e7))
 
 
-def test_the_one_bound_is_the_max_over_kinds_with_reading_b_the_token_form():
-    """Reading B's token term is Slowdown's; the reduction and update kinds count where the step's token work fills
-    two or more blocks (b = 8 at c = 1e11), unmeasured without the cuts; `kinds` restricts the max, and reading A needs
-    entries."""
+def test_a_union_of_witnesses_bounds_every_gate_so_per_gate_caps_are_a_sensitivity():
+    """Two forward segments, one a run block holds at c and one no run block holds (its update cut exceeds k), and two
+    products, tiles of 2.25e9 and 2.25e7 gates. A block holding a gate of the segment no run holds, for that gate's
+    few operand bits, also holds the run at c: every block is at most c, so the term is the affected share. Each gate
+    at its own best witness (`per_gate`) puts the better tile on the segment no run holds (the antitone pairing), c·(1/c
+    + 1/2.25e9)/2·(A/|C|)·2, far above it; the bound publishes that as a sensitivity. Without any run, both tiles
+    sit in one block beside each other: 2.25e9 + 2.25e7 gates."""
+    entries = {"segments": 2, "gates": [1e9, 1e9], "phase": [0, 0], "frontier_bits": [[0.0, 0.0], [0.0]],
+               "ids": [[1.0, 1.0], [1.0]], "id_bits": 16, "u_bits": [[0.0, 1e9], [1e9]], "positions": None,
+               "context_fwd_bits": None, "context_bwd_bits": None}
+    ops = [tile(5e11, 10 ** 7, 50), tile(5e11, 10 ** 5, 5000)]
+    part = F.Part(gates=1e12, tokens=500, token_gates=1e12, affected_gates=1e12)
+    m, c, k = F.Measured((part,), 16, 16, F.even(0.0), F.even(0.0), None, entries=entries, ops=ops), 1e11, 3600
+    assert F.packer(m, c, k) == pytest.approx(1.0)
+    assert F.per_gate(m, c, k) == pytest.approx(c * (0.5 / c + 0.5 / 2.25e9))
+    half = replace(m, parts=(replace(part, affected_gates=5e11),))
+    assert F.packer(half, c, k) == pytest.approx(0.5)
+    assert F.per_gate(half, c, k) == pytest.approx(c * 0.5 * (0.5 / c + 0.5 / 2.25e9))
+    b = F.bound(m, c, k)
+    assert b["terms"]["token"] == pytest.approx(1.0) and b["sensitivities"]["per_gate"] == F.per_gate(m, c, k)
+    assert "not closed under unions" in b["labels"]["per_gate"]
+    runless = replace(m, entries=entries | {"u_bits": [[1e9, 1e9], [1e9]]})
+    assert F.packer(runless, c, k) == pytest.approx(c / (2.25e9 + 2.25e7))
+    a, b = np.array([1.0, math.inf]), np.array([3.0, 2.0])
+    assert F._antitone(a, np.ones(2), b, np.ones(2)) == pytest.approx((1.0 + 2.0) / 2)
+
+
+def test_the_one_bound_is_the_max_over_its_kinds_each_resting_on_what_it_names():
+    """The max is over the token, decoding and fresh-products kinds; the token kind binds where Δ isn't counted
+    (decoding then equals it, and ties bind the kind resting on less); fresh products are unmeasured until
+    te_core.io_bound is in the tree; reading B isn't a reading of the bound."""
+    c = 1e11
+    coded = one_segment(delta=500.0, decoder=5e10)
+    b = F.bound(coded, c, 2800)
+    assert (b["terms"]["token"], b["terms"]["decoding"], b["binding"]) == (
+        pytest.approx(0.5), pytest.approx(c * 0.5 / (5e10 + 1.75e8)), "decoding")
+    assert b["max"] == b["terms"]["decoding"] and b["label"] == f"te_core {F_VERSION}, reading A"
+    assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"] == F.FRESH_UNMEASURED
+    assert set(b["rests_on"]) == set(F.KINDS) and "assumption (D)" in b["rests_on"]["decoding"]
+    assert "tiles" in b["rests_on"]["token"] and b["rests_on"]["fresh_products"].startswith("theorem")
+    plain = F.bound(one_segment(), c, 2800)
+    assert plain["binding"] == "token" and plain["terms"]["decoding"] == plain["terms"]["token"]
+    assert F.at(coded, c, 2800, "A")["rho"] == pytest.approx(1.0) and F.at(coded, c, 2800, "A")["bound"] == b
+    with pytest.raises(ValueError, match="sensitivity of bound"):
+        F.at(coded, c, 2800, "B")
+    with pytest.raises(ValueError, match="some of"):
+        F.bound(coded, c, 2800, kinds=("tokens",))
+
+
+def test_reduction_update_and_the_token_form_are_sensitivities_never_the_bound():
+    """They come out labelled beside the kinds: reduction and update where the step's token work fills two or more
+    blocks (b = 8 at c = 1e11), unmeasured without the cuts, and reading B's token form, Slowdown's; asking for them in
+    the max is refused. A record with no entries has no measured kind, so where Fit fails ρ is unmeasured."""
     m, c, k = measured(u1=1e9), 1e11, 1e5
-    b = F.bound(m, c, k, "B")
-    assert b["terms"]["token"] == F.at(m, c, k)["slowdown"] and b["label"] == f"te_core {F_VERSION}, reading B"
-    assert b["unmeasured"] == ["reduction", "update"] and b["terms"]["reduction"] == 0
+    b = F.bound(m, c, k)
+    assert b["sensitivities"]["token_form"] == F.at(m, c, k)["slowdown"]
+    assert b["sensitivities"]["reduction"] is None and set(b["unmeasured"]) == {"fresh_products", "token", "decoding",
+                                                                               "per_gate", "reduction", "update"}
+    assert "no entries" in b["unmeasured"]["token"]
     cut = replace(m, parts=(replace(m.parts[0], partial_bits=1e6, grad_bits=2e6),))
-    b = F.bound(cut, c, k, "B")
-    assert b["inputs"]["reduction"]["blocks"] == [8] and not b["unmeasured"]
-    assert b["terms"]["reduction"] == pytest.approx(c * 7 * 1e6 / (k * 1e12))
-    assert b["terms"]["update"] == pytest.approx(c * 2e6 / (k * 1e12))
-    assert b["max"] == max(b["terms"].values())
-    only = F.bound(cut, c, k, "B", kinds=("token", "decoding"))
-    assert only["terms"] == b["terms"] and only["max"] == max(b["terms"]["token"], b["terms"]["decoding"])
-    r = F.at(cut, c, k, "B")
-    assert r["bound"]["max"] == b["max"] and r["rho"] == max(1.0, b["max"]) and not r["fit"]
-    assert F.at(cut, c, k)["rho"] == max(1.0, b["terms"]["token"])
-    with pytest.raises(F.Refused, match="reading A: no entries"):
-        F.bound(m, c, k, "A")
-    with pytest.raises(ValueError):
-        F.bound(m, c, k, "B", kinds=("tokens",))
+    b = F.bound(cut, c, k)
+    assert b["inputs"]["reduction"]["blocks"] == [8] and set(b["unmeasured"]) == {"fresh_products", "token", "decoding",
+                                                                                 "per_gate"}
+    assert b["sensitivities"]["reduction"] == pytest.approx(c * 7 * 1e6 / (k * 1e12))
+    assert b["sensitivities"]["update"] == pytest.approx(c * 2e6 / (k * 1e12))
+    assert b["max"] is None and b["binding"] is None and set(b["labels"]) == set(F.SENSITIVITIES)
+    assert "split by tokens" in b["labels"]["reduction"] and "reading B" in b["labels"]["token_form"]
+    r = F.at(cut, c, k, "A")
+    assert not r["fit"] and r["rho"] is None and F.at(cut, c, k)["rho"] == max(1.0, b["sensitivities"]["token_form"])
+    for kinds in (("token", "reduction"), ("update",), ("token_form",), ("per_gate",)):
+        with pytest.raises(ValueError, match="sensitivities, never in the bound's max"):
+            F.bound(cut, c, k, kinds=kinds)
+
+
+def test_a_rows_op_log_is_its_tiles_and_its_block_keeps_its_own():
+    """`complete` reads a block's `ops`, else the row's macs_log (te_core.tiles.of_log), labelled; from_json keeps
+    them."""
+    log = {"by": {"fwd/updated": 2048 * 64 * 192}, "ops": {"fwd updated mm [[2048, 64], [64, 192]]": [1, 2048 * 64 * 192]}}
+    m = F.complete({}, {"macs_log": log, "output": {"e_bytes": 10}}, SHAPE)
+    assert m.ops[0]["products"] == [[1, 2048, 64, 192]] and m.labels["ops"] == F.OPS
+    assert F.complete({"ops": []}, {"macs_log": log, "output": {"e_bytes": 10}}, SHAPE).ops == []
+    assert F.from_json(m.to_json()) == m
+
+

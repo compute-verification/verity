@@ -26,9 +26,10 @@ columns don't give formalism.at's ρ and basis at every cell of te_core.panels' 
 `estimated` names the inputs that are stubs, bounds, assumptions or estimates, and gain:provisional where its
 data's fit is provisional (te_core.frontier_fit's `FIT_TARGET`), which the note names. The dashboard's cells, from
 te_core.formalism's `published` at the console's default policy (`CONSOLE`; coordinator 08:26Z): `rho_console`, the
-one bound's ρ there ("inf" where infinite), `reading` (A where formalism.READING_A and the row's trace has reading A's
-entries, else B, whose ρ is te_core 4.3's, a target), `te_core` the VERSION that priced it, `binding_kind` and `rests_on`, and `kinds`, a
-JSON cell of the terms its max takes and the sensitivities it leaves out.
+one bound's ρ there ("inf" where infinite), `reading` (A where formalism.READING_A and the row's token kind is
+measured, its trace's entries and an op log, else B, whose ρ is Slowdown's token form, a target), `te_core` the VERSION
+that priced it, `binding_kind` and `rests_on`, and `kinds`, a JSON cell of the terms its max takes and the
+sensitivities it leaves out.
 
 The coverage (`coverage`) is, per gain target, data and decade of ρ (`DECADES`: from 1, 10, ... and 1e5 and above,
 an infinite ρ there), the reached row with the least p, else the failed attempt with the greatest gain, else EMPTY.
@@ -223,7 +224,9 @@ def kinds(one: dict) -> str:
     `sensitivity`, those it leaves out; null where unmeasured, "inf" where infinite."""
     def cell(x: float | None) -> str:
         return "null" if x is None else '"inf"' if math.isinf(x) else num(x, DIGITS)
-    part = lambda d: "{" + ",".join(f'"{k}":{cell(x)}' for k, x in d.items()) + "}"
+
+    def part(d: dict) -> str:
+        return "{" + ",".join(f'"{k}":{cell(x)}' for k, x in d.items()) + "}"
     return f'{{"bound":{part(one["terms"])},"sensitivity":{part(one["sensitivities"])}}}'
 
 
