@@ -17,9 +17,9 @@ from verity.ml.commitments.merkle import tree_levels
 
 from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _put, _stream, _write, _zeros
 
-__all__ = ["DeviceTrees", "HM96_Y", "Y_ROWS", "commit_y", "f32_rows", "retain_y", "y_binding", "y_domain"]
+__all__ = ["DeviceTrees", "HM96_Y", "Y_ROWS_TAG", "commit_y", "f32_rows", "retain_y", "y_binding", "y_domain"]
 
-Y_ROWS = "verity/pouw/pearl-plus/y-rows/v1"
+Y_ROWS_TAG = "verity/pouw/pearl-plus/y-rows/v1"
 #: the hm96 salt stream's nonce of a call's y tree: this plus the call's index (A's trees take the index, below 2^61)
 HM96_Y = 1 << 61
 #: the bytes of FP32 words a device tree's row digests read at a time, widened from y's BF16 rows a chunk at a time
@@ -30,7 +30,7 @@ Y_CHECK_ROWS = 129
 
 
 def y_binding(salt: bytes, index: int) -> bytes:
-    return tagged(Y_ROWS, salt, index)
+    return tagged(Y_ROWS_TAG, salt, index)
 
 
 def f32_rows(y_bf16: bytes, n: int) -> list[bytes]:
