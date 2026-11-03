@@ -46,7 +46,7 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
   reads: the trace's own encoding of θ' (compare 8 |E|).
 - `partial_cut_bits`: the gradient's cut from one token's group alone (its own dW products): the partial a block
   holding the group's work passes, at its passed width, which the one bound's reduction kind reads (te_core.formalism).
-- `entries`, reading A's inputs (A1 as Daniel read it on 3 Nov: a block reads at least the update bits its work reads,
+- `entries`, reading A's inputs (A1's approved reading: a block reads at least the update bits its work reads,
   counted once, plus each token's computed state where its work on the token begins, the context it reads and doesn't
   compute included). One token's path (its group's affected ops in program order, as for u_in) is cut into at most
   `segments` runs: one starts at the forward's end, about half at the forward's narrowest boundaries (where the charged
