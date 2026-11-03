@@ -6,6 +6,8 @@
 # $OUT/report.json, $OUT/F.json and $OUT/FIT.json (the scoring cap's ladder fit), and starts_store.py export checks every θ
 # against its digest and writes starts/<name>/ and starts_store.json at the top of the run dir, so this run's run record
 # is the starts' artifact at the manifest's path `starts`, where the pinned starts_store.py's pack and install --tar read.
+# SCREEN=SIZES is ladder_report.py's --screen (SCREEN= fits every size), and REPORT_ONLY=1 stops after the report: a refit
+# of published starts, exporting none.
 #
 #   research run --on NODE --project verity --source . --pool research --as training [--store-read] --timeout 1h \
 #     --declared-output 'out/*' --declared-output 'starts/*' --declared-output starts_store.json \
@@ -35,7 +37,8 @@ for spec in "$@"; do
     *) echo "export.sh: $spec is neither art:ID nor OUT_DIR=WORK_DIR" >&2; exit 2 ;;
   esac
 done
-"$P" "$here/ladder_report.py" --runs "${runs[@]}" --out "$OUT"
+"$P" "$here/ladder_report.py" --runs "${runs[@]}" --out "$OUT" ${SCREEN+--screen "$SCREEN"}
+[ -z "${REPORT_ONLY:-}" ] || exit 0
 mkdir -p "$tmp/all"
 names=()
 for r in "${runs[@]}"; do
