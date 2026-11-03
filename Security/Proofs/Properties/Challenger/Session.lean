@@ -16,9 +16,10 @@ other lengths (`closeBytes_ne_record`, `closeBytes_ne_ledger`). Equal digests ar
 two the finder hashes (`eq_or_break`). A close's string names its record's message, its session's id, its chain and its
 end (`closeBytes_inj`), a record's its host and its commitment's tagged digest (`recordBytes_inj`), and a chain its
 lines (`chain_bind`), each step's string being the previous digest, 64 bytes, then the line's field.
-A commitment's identity bytes name it (`Commitment.canon_inj`). So `sessionOf_bound` concludes that the
+A commitment's identity bytes name it (`Commitment.canon_inj`). So `sessionOf_run` concludes that the
 commitment, the roots and the session id `sessionOf` returns are those of a run of the device under the key whose client
-closed it, read from that run's own release log, or the finder outputs a break.
+closed it, read from that run's own release log, which is the session's log, or the finder outputs a break
+(`sessionOf_bound` without the log).
 
 `sessionOf`'s, `sessionNamed`'s and `drawCoins`' facts are Hoare triples proved by `mvcgen` (`sessionOf_ok`,
 `sessionNamed_ok`, `drawCoins_ok`), read back at an `.ok` result by `of_triple`.
@@ -669,14 +670,17 @@ theorem closeOfJson_ok {j : Json} {c : ChallengerClose} (h : ChallengerClose.ofJ
   mvcgen [ChallengerClose.ofJson, -Spec.throw_Except, throw_spec]
   all_goals exact close_form (by assumption)
 
-/-- **A session `sessionOf` accepts from a draw's record is a run the device closed**, or the finder outputs a break:
-the commitment, the roots and the session id `sessionOf` returns from the record's session files are a run's of the
-device under the key, a run its client closed, the roots the ones that run's own release log shows. -/
-theorem sessionOf_bound {c : LiveCommitment} {roots : Roots} {sid : String}
+/-- **A session `sessionOf` accepts from a draw's record is a run the device closed, its log that run's**, or the
+finder outputs a break: the commitment, the roots and the session id `sessionOf` returns from the record's session
+files are a run's of the device under the key, a run its client closed, the roots the ones that run's own release log
+shows, and the session's log is that run's lines. -/
+theorem sessionOf_run {c : LiveCommitment} {roots : Roots} {sid : String}
     (h : sessionOf key (getD (getD coins "session") "record") (getD (getD coins "session") "log")
       (getD (getD coins "session") "close") = .ok (c, roots, sid)) :
     (∃ s ∈ dev.runs key.pub, s.commitment = some c ∧ s.id = sid ∧ s.ended = none ∧
-      releasedRootsOf c s.log = .ok roots) ∨ Break dev key label coins := by
+      releasedRootsOf c s.log = .ok roots ∧
+        ∃ ls : Array Json, getD (getD coins "session") "log" = .arr ls ∧ ls.toList = s.log.map Json.str) ∨
+      Break dev key label coins := by
   obtain ⟨r, cl, m, ls, lines, hr, hcl, hm, hv, hlog, hls, hch, hend, hroots, hres⟩ := sessionOf_read h
   have hc : c = r.commitment := congrArg Prod.fst hres
   have hsid0 : sid = cl.session := congrArg (fun x => x.2.2) hres
@@ -722,13 +726,26 @@ theorem sessionOf_bound {c : LiveCommitment} {roots : Roots} {sid : String}
               (fun y hy => List.mem_append_right _ (mem_deviceHashed_run hs hcs
                 (.inr (by rw [logHashed_eq]; simp [hy]))))
               (hch.trans hchain) with e | b
-          · refine .inl ⟨s, hs, hcs, hsid'.symm, hended, ?_⟩
-            rw [← e]
-            exact hroots
+          · refine .inl ⟨s, hs, hcs, hsid'.symm, hended, ?_, ls, hlog, ?_⟩
+            · rw [← e]
+              exact hroots
+            · rw [← e]
+              exact hls
           · exact .inr b
         · exact .inr b
       · exact .inr b
     · exact .inr b
+  · exact .inr b
+
+/-- **A session `sessionOf` accepts from a draw's record is a run the device closed**, or the finder outputs a break:
+`sessionOf_run` without the log. -/
+theorem sessionOf_bound {c : LiveCommitment} {roots : Roots} {sid : String}
+    (h : sessionOf key (getD (getD coins "session") "record") (getD (getD coins "session") "log")
+      (getD (getD coins "session") "close") = .ok (c, roots, sid)) :
+    (∃ s ∈ dev.runs key.pub, s.commitment = some c ∧ s.id = sid ∧ s.ended = none ∧
+      releasedRootsOf c s.log = .ok roots) ∨ Break dev key label coins := by
+  rcases sessionOf_run (dev := dev) (label := label) h with ⟨s, hs, hc, hid, he, hr, -⟩ | b
+  · exact .inl ⟨s, hs, hc, hid, he, hr⟩
   · exact .inr b
 
 /-- **A draw `drawCoins` accepts reads its coins against a run the device closed**, or the finder outputs a break: the
