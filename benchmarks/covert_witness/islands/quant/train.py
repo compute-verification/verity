@@ -93,7 +93,7 @@ class Schedule:
 
 #: what an arm may set (`--arms`); the rest is the run's
 ARM_KEYS = {"qat", "qat_group", "qat_mult", "qat_keep", "qat_block", "qat_norm_bits", "muon_lr", "adam_lr", "opt", "warmup",
-            "data_seed", "targets", "rank", "qbits", "pow2", "norms", "lr", "norm_lr", "seed", "vote_step"}
+            "data_seed", "targets", "rank", "qbits", "pow2", "norms", "lr", "norm_lr", "seed", "vote_step", "vote_rate"}
 
 
 def parse_arms(a) -> list[argparse.Namespace]:
@@ -241,8 +241,8 @@ def delta_grad(adam: int, muon: int, latent: int, stateless: int = 0) -> dict:
 
 def vote_delta_grad(n: int, bits: int, partials: int) -> dict:
     """`--opt vote`'s Δ_grad: each of the step's `partials` partial gradients passes as n 1-bit signs (8 a byte), their
-    sum as votes of ceil(log2(partials + 1)) bits an entry; no optimizer state. `latent_bits` is the `bits`-bit code
-    itself, which the update reads and writes (no fp32 latent)."""
+    sum as votes of ceil(log2(partials + 1)) bits an entry; no optimizer state. `latent_bits` is the code itself at
+    `bits` an entry as stored (int8: 8), which the update reads and writes (no fp32 latent)."""
     return {"trainable": n, "grad_bits": n, "adam_bits": 0, "muon_bits": 0, "latent_bits": bits * n, "bits": n,
             "bytes": -(-n // 8), "partials": partials, "vote_sum_bits": math.ceil(math.log2(partials + 1)) * n}
 
@@ -298,20 +298,50 @@ class VoteSGD(torch.optim.Optimizer):
 
 
 class VoteCodes(VoteSGD):
-    """`--opt vote` on qat's vector codes: each vector's `bits`-bit code (state "code", int8), voted on as VoteSGD's
-    tensors are; step() moves each code by -sign(votes) where a uniform draw falls under the group's lr (the schedule's
-    fraction), within the code's range. The weights are rebuilt from the codes after each step (`vote_code`)."""
+    """`--opt vote` on qat's codes: each coded tensor's `bits`-bit code (state "code", int8) on a fixed support, every
+    `strides[p]`-th entry of the flattened tensor from its first (every entry, by default), voted on as VoteSGD's tensors
+    are with the votes taken on the support alone; step() moves each code by -sign(votes) where a uniform draw falls
+    under the group's lr (--vote-rate times the schedule's fraction), within the code's range. The weights are rebuilt
+    from the codes after each step (`full_code`, `vote_code`). A strided support is a view, so no index is carried."""
 
-    def __init__(self, params, bits: int, gen: torch.Generator):
-        self.qmax, self.gen = 2 ** (bits - 1) - 1, gen
+    def __init__(self, params, bits: int, gen: torch.Generator, strides: dict | None = None):
+        self.qmax, self.gen, self.strides = 2 ** (bits - 1) - 1, gen, strides or {}
         super().__init__(params, 1.0)
 
+    def stride(self, p: torch.Tensor) -> int:
+        return self.strides.get(p, 1)
+
     def init_state(self, p: torch.Tensor) -> dict:
-        return super().init_state(p) | {"code": torch.zeros(p.shape, dtype=torch.int8, device=p.device)}
+        n = -(-p.numel() // self.stride(p))
+        return {"votes": torch.zeros(n, dtype=torch.int16, device=p.device),
+                "code": torch.zeros(n, dtype=torch.int8, device=p.device)}
+
+    def _vote(self, p: torch.Tensor) -> None:
+        g = p.grad.view(-1)[:: self.stride(p)]
+        self.state[p]["votes"] += unpack_votes(pack_signs(g), g.numel())
+        p.grad = None
 
     def move(self, p: torch.Tensor, grp: dict, st: dict) -> None:
-        move = torch.sign(st["votes"]) * (torch.rand(p.shape, generator=self.gen, device=p.device) < grp["lr"])
-        st["code"] = torch.clamp(st["code"] - move, -self.qmax, self.qmax).to(torch.int8)
+        draw = torch.rand(st["code"].shape, generator=self.gen, device=p.device) < grp["lr"]
+        st["code"] = torch.clamp(st["code"] - torch.sign(st["votes"]) * draw, -self.qmax, self.qmax).to(torch.int8)
+
+    def full_code(self, p: torch.Tensor) -> torch.Tensor:
+        """p's code at p's shape, zero off the support."""
+        c, s = self.state[p]["code"], self.stride(p)
+        if s == 1:
+            return c.view(p.shape)
+        full = torch.zeros(p.numel(), dtype=torch.int8, device=p.device)
+        full[::s] = c
+        return full.view(p.shape)
+
+
+def vote_stride(shape: tuple, keep: float) -> int:
+    """A matrix's `--opt vote` support: every s-th flattened entry, s the nearest to 1/keep at or above it that shares
+    no factor with the row length, so each row's support entries fall in different columns from the row before's."""
+    s = max(1, round(1 / keep))
+    while math.gcd(s, shape[-1]) != 1:
+        s += 1
+    return s
 
 
 def vote_code(c: torch.Tensor, bits: int, step: float) -> qf.QArray:
@@ -678,9 +708,12 @@ def main() -> int:
                     help="the optimizer of what Muon doesn't train (qat: the norms; qlora: factors and norms): AdamW, or "
                          "sign: p -= lr · sign(grad) with no state, so Δ_grad is the gradient alone (rates as AdamW's), or "
                          "vote: each micro-batch's gradient passes as 1-bit signs (32 an int32 word), and a step moves "
-                         "each value by -lr · sign(their sum) (qlora: factors and norms), or each qat vector code by "
-                         "-sign(their sum) where a draw falls under the schedule's fraction (rates: qlora's --lr)")
+                         "each value by -lr · sign(their sum) (qlora: factors and norms), or each qat code by "
+                         "-sign(their sum) where a draw falls under --vote-rate times the schedule's fraction (qat: "
+                         "vectors' codes, or matrices' on the strided support --qat-keep sets; rates: qlora's --lr)")
     ap.add_argument("--vote-step", type=float, default=2e-3, help="--opt vote: a code's f16 scale, one vote step's move")
+    ap.add_argument("--vote-rate", type=float, default=1.0,
+                    help="qat --opt vote: the chance a voted code moves at the schedule's peak")
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--micro", type=int, default=32)
@@ -751,31 +784,36 @@ def main() -> int:
         coded = a.mode == "qat" and x.qat != QAT_FP
         quantized = [n for n in names if params[n].ndim == 2] if coded else []
         quantized += [n for n in names if params[n].ndim == 1] if coded and x.qat_norm_bits else []
-        # --opt vote: the vectors' codes move by vote (VoteCodes); no latent, no optimizer state
+        # --opt vote: the codes move by vote (VoteCodes); no latent, no optimizer state. Vectors: every entry, at
+        # --qat-norm-bits. Matrices: every vote_stride-th entry (--qat-keep), at 2 bits (sparse, tern) or rtn's B.
         vote = x.opt == "vote"
-        if vote and (mats or not x.qat_norm_bits or not coded):
-            raise SystemExit("quant: --opt vote steps vector codes only (--mode qat --train norm --qat-norm-bits B)")
-        voter = (VoteCodes([params[n] for n in quantized], x.qat_norm_bits,
-                           torch.Generator(device=dev).manual_seed(x.seed)) if vote else None)
+        if vote and not (coded and ((not mats and x.qat_norm_bits) or (mats and not rest and x.qat != "sign"))):
+            raise SystemExit("quant: --opt vote steps codes: vectors only (--train norm --qat-norm-bits B), or matrices "
+                             "only (--qat sparse|tern|rtnB, on every --qat-keep-th entry's strided support)")
+        vbits = (x.qat_norm_bits if not mats else 2 if x.qat in ("sparse", "tern") else
+                 int(QAT_SCHEME.fullmatch(x.qat).group(1)))
+        voter = (VoteCodes([params[n] for n in quantized], vbits, torch.Generator(device=dev).manual_seed(x.seed),
+                           {params[n]: vote_stride(params[n].shape, x.qat_keep) for n in mats}) if vote else None)
         latent = {} if vote else {n: torch.zeros_like(params[n], dtype=torch.float32, device=dev) for n in quantized}
         n_rest, n_mats, n_q = (sum(params[n].numel() for n in ns) for ns in (rest, mats, quantized))
-        dgrad = (vote_delta_grad(n_q, x.qat_norm_bits, -(-a.batch // a.micro)) if vote else
+        dgrad = (vote_delta_grad(sum(voter.state[params[n]]["code"].numel() for n in quantized), 8,
+                                 -(-a.batch // a.micro)) if vote else
                  delta_grad(0, n_mats, n_q, n_rest) if x.opt == "sign" else delta_grad(n_rest, n_mats, n_q))
         opt_of = {n: latent.get(n, params[n]) for n in names}
         muon = Muon([opt_of[n] for n in mats], lr=x.muon_lr) if mats else None
         adam = (SignSGD([opt_of[n] for n in rest], x.adam_lr) if x.opt == "sign" else
                 torch.optim.AdamW([opt_of[n] for n in rest], lr=x.adam_lr, betas=(0.9, 0.95), weight_decay=0.0,
                                   fused=dev.startswith("cuda"))) if rest and not vote else None
-        opts = [(o, lr) for o, lr in ((muon, x.muon_lr), (adam, x.adam_lr), (voter, 1.0)) if o is not None]
+        opts = [(o, lr) for o, lr in ((muon, x.muon_lr), (adam, x.adam_lr), (voter, x.vote_rate)) if o is not None]
         data = train_data(rec, x)
         qarrays, first, ema = {}, g, None
         print(json.dumps({"arm": k, "spec": getattr(x, "arm", ""), "steps": n_arm, "flops_per_step": per_step,
                           "trained": len(names), "quantized": len(quantized)}), flush=True)
 
         @torch.no_grad()
-        def materialize(x=x, latent=latent, qarrays=qarrays, quantized=quantized, voter=voter) -> None:
+        def materialize(x=x, latent=latent, qarrays=qarrays, quantized=quantized, voter=voter, vbits=vbits) -> None:
             for n in quantized:
-                q = (vote_code(voter.state[params[n]]["code"], x.qat_norm_bits, x.vote_step) if voter is not None else
+                q = (vote_code(voter.full_code(params[n]), vbits, x.vote_step) if voter is not None else
                      qf.rtn(latent[n], x.qat_norm_bits, 0) if latent[n].ndim == 1 else
                      qat_quant(latent[n], x.qat, x.qat_group, x.qat_mult, x.qat_keep, x.qat_block))
                 qarrays[n] = q
