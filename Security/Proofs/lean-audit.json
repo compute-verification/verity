@@ -80,7 +80,8 @@
   "Proofs.Properties.Challenger.Session",
   "Proofs.Properties.Verity.Sampled",
   "Proofs.Properties.Verity.Sampled.Binding",
-  "Proofs.Properties.Challenger.Window"
+  "Proofs.Properties.Challenger.Window",
+  "Proofs.Properties.Challenger.CanonLine"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
