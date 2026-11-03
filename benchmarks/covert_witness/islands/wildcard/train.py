@@ -40,6 +40,9 @@ Codes (witnesses for the cut cost a, `adamw` / `muon`):
   B over a frozen random A.
 - `--ia3` with `--set` naming wk, wv and w_up: IA3, a trained scale per output channel of each matrix (keys, values
   and MLP hidden units), E as encode_lora2's DoRA magnitudes over zero factors, which decode to exactly diag(l)·W.
+- `--grow 1 --adapter r [--adapter-z q]`: a bottleneck adapter after the last block, as a grown block with zero
+  attention and r live MLP hidden units (SwiGLU down to r, w_down back up, both trained), the r units optionally
+  handed to w_down at q bits each.
 
 Its source rides in the submission's notes. Every method marks explicit harness steps (`hooks.step`), so it runs in the
 harness's script mode:
@@ -659,10 +662,12 @@ def frozen_blocks(net, theta: dict, lo: int, hi: int) -> dict:
 GROWN: dict = {}
 
 
-def grow(net, rec: dict, theta: dict, n: int, seed: int) -> tuple[dict, dict]:
+def grow(net, rec: dict, theta: dict, n: int, seed: int, adapter: int = 0) -> tuple[dict, dict]:
     """θ's model grown in place by n new top blocks, each in model.py's own init with its output matrices (wo, w_down)
     zeroed in place, so the grown model computes θ's function and θ's tensors are never rewritten: (the grown model's
-    record, its starting tensors, θ's and the new blocks')."""
+    record, its starting tensors, θ's and the new blocks'). With `adapter` r the new block is a bottleneck adapter: its
+    attention's matrices are all zero (so it adds nothing) and only the first r of its MLP's hidden units are live
+    (w_gate's and w_up's other rows zero, and train_iterative keeps them and w_down's other columns at zero)."""
     from model import Block
 
     L = rec["config"]["n_layer"]
@@ -673,10 +678,15 @@ def grow(net, rec: dict, theta: dict, n: int, seed: int) -> tuple[dict, dict]:
         for blk in new:
             blk.wo.weight.zero_()
             blk.w_down.weight.zero_()
+            if adapter:
+                for m in (blk.wq, blk.wk, blk.wv):
+                    m.weight.zero_()
+                blk.w_gate.weight[adapter:].zero_()
+                blk.w_up.weight[adapter:].zero_()
     net.inner.blocks.extend(new)
     config = net.config = {**rec["config"], "n_layer": L + n}
     start = {**theta, **{k: p.detach().cpu().clone() for k, p in net.params().items() if k not in theta}}
-    GROWN.update(config=config, start=L)
+    GROWN.update(config=config, start=L, adapter=adapter, new=sorted(k for k in start if k not in theta))
     return {**rec, **prepare.model_record(rec, config, start)}, start
 
 
@@ -900,11 +910,35 @@ def encode_ia3(theta: dict, scales: dict, full: dict) -> bytes:
     return prepare.encode_lora2(fac, 8, "f32", mags, full)
 
 
+def bottleneck(net, params: dict, tuned: list[str], r: int, zbits: int, method: str) -> None:
+    """Keep a grown adapter block's dead parts at zero (the gradients of w_gate's and w_up's rows from r on, and of
+    w_down's columns from r on, are zeroed, and AdamW moves no zero entry with a zero gradient), and with `zbits` hand
+    its r live hidden units to w_down as a code (zero for the dead units, a constant)."""
+    j = GROWN["start"]
+    live = re.compile(rf"blocks\.{j}\.(mlp_norm|(w_gate|w_up|w_down)\.weight)")
+    if method != "adamw" or GROWN["config"]["n_layer"] != j + 1 or not all(live.fullmatch(n) for n in tuned):
+        raise SystemExit(f"wildcard: --adapter trains block {j}'s mlp_norm, w_gate, w_up and w_down (one grown block, "
+                         f"AdamW, which leaves a zero entry with zero gradient at zero)")
+    for n in tuned:
+        if n.endswith(("w_gate.weight", "w_up.weight")):
+            params[n].register_hook(lambda g: torch.cat([g[:r], torch.zeros_like(g[r:])]))
+        elif n.endswith("w_down.weight"):
+            params[n].register_hook(lambda g: torch.cat([g[:, :r], torch.zeros_like(g[:, r:])], 1))
+    if zbits:
+        def pre(m, inp):
+            x = inp[0]
+            return (torch.cat([Coded.apply(x[..., :r], zbits, zbits, r, 0, False, 0), torch.zeros_like(x[..., r:])],
+                              -1),)
+        net.inner.blocks[j].w_down.register_forward_pre_hook(pre)
+
+
 def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
     fwd = fwd or net
     mats = [n for n in tuned if params[n].ndim == 2]
     gains = [n for n in tuned if params[n].ndim == 1]
     opts, extra, factors, scales = [], 0, {}, {}
+    if GROWN.get("adapter"):
+        bottleneck(net, params, tuned, GROWN["adapter"], a.adapter_z, a.method)
     if a.ia3:
         if a.lora_rank or a.confine or GROWN or not mats:
             raise SystemExit("wildcard: --ia3 scales the output channels of --set's matrices of θ; it takes no "
@@ -948,7 +982,8 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
         if factors:
             return prepare.encode_lora(factors, "bf16", {n: src[n] for n in gains})
         if GROWN:
-            return prepare.encode_model(GROWN["config"], delta_of(src, theta, tuned))
+            return prepare.encode_model(GROWN["config"], {**{k: theta[k] for k in GROWN["new"]},
+                                                          **delta_of(src, theta, tuned)})
         return prepare.encode_full(delta_of(src, theta, tuned))
 
     tokens = a.batch * prepare.EVAL_CTX
@@ -1095,6 +1130,12 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
         info["grown"] = {"config": GROWN["config"], "new_from_block": GROWN["start"],
                          "snapshots": "none: te_core takes checkpoints from the encoders it wraps, and encode_model "
                                       "isn't one, so only the submission is scored"}
+        if GROWN.get("adapter"):
+            j, r = GROWN["start"], GROWN["adapter"]
+            info["grown"]["adapter"] = {"live_units": r, "z_bits": a.adapter_z, "dead_entries_nonzero": int(sum(
+                int((params[f"blocks.{j}.{m}.weight"][r:] != 0).sum()) for m in ("w_gate", "w_up"))
+                + int((params[f"blocks.{j}.w_down.weight"][:, r:] != 0).sum())
+                + sum(int((params[f"blocks.{j}.{m}.weight"] != 0).sum()) for m in ("wq", "wk", "wv", "wo")))}
     if cuts:
         if cut_probe is not None:
             cut_probes("end")
@@ -1491,6 +1532,11 @@ def main() -> int:
     ap.add_argument("--grow", type=int, default=0,
                     help="train a model of θ's plus this many new top blocks (zero output matrices, so θ's function at "
                          "the start); E is the grown model (`encode_model`)")
+    ap.add_argument("--adapter", type=int, default=0,
+                    help="with --grow 1: the new block is a bottleneck adapter of this many live MLP hidden units "
+                         "(attention all zero; train its mlp_norm, w_gate, w_up and w_down)")
+    ap.add_argument("--adapter-z", type=int, default=0,
+                    help="hand an --adapter's live hidden units to its w_down as a code of this many bits each")
     ap.add_argument("--confine", action="store_true",
                     help="after every step, project each trained wo and w_down's update onto the p<keep> cut's span, so "
                          "the whole effect lies in what the cut hands on; everything trained must be in the block "
@@ -1538,8 +1584,12 @@ def main() -> int:
         raise SystemExit("wildcard: a suite trains full tensors (adapters' hooks would outlive their config)")
     net, rec, theta = prepare.load_start(a.start)
     start_theta = theta
+    if a.adapter and (a.grow != 1 or a.suite or not 0 < a.adapter < net.inner.size.d_ff):
+        raise SystemExit("wildcard: --adapter r is one grown block (--grow 1, no --suite) with 0 < r < d_ff live units")
+    if a.adapter_z and (not a.adapter or a.adapter % 8):
+        raise SystemExit("wildcard: --adapter-z codes an --adapter's live units, r a multiple of 8 (whole bytes)")
     if a.grow:
-        rec, theta = grow(net, rec, start_theta, a.grow, 7919 + a.data_seed)
+        rec, theta = grow(net, rec, start_theta, a.grow, 7919 + a.data_seed, a.adapter)
     params = net.params()
     tuned = resolve_set(a.tset, rec, params)
     shape = prepare.deep_share(rec, set(tuned))
@@ -1587,7 +1637,8 @@ def main() -> int:
         raise SystemExit("wildcard: every config of the suite was skipped")
     c, blob, trainable, snaps, info, _ = best
     model = prepare.decode(start_theta, blob)
-    changed = [n for n in tuned if n not in start_theta or not prepare.same_bits(model[n], start_theta[n])]
+    changed = sorted({n for n in tuned if n not in start_theta or not prepare.same_bits(model[n], start_theta[n])}
+                     | set(GROWN.get("new", [])))
     notes = {"direction": "wildcard", "mechanism": a.mechanism, "method": c.method, "set": tuned,
              "args": {k: v for k, v in vars(c).items() if k != "probe"}, "info": info, "E_bytes": len(blob),
              "suite": results if a.suite else None, "source": Path(__file__).read_text()}
