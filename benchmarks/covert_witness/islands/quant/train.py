@@ -236,6 +236,18 @@ def delta_grad(adam: int, muon: int, latent: int) -> dict:
             "latent_bits": 32 * latent, "bits": bits, "bytes": bits // 8}
 
 
+def flop_budget(start: str) -> float:
+    """The run's training FLOPs: prepare.budget's at the run's tier (v3: search, or long at 100x the start's C0), else
+    the fixed TRAIN_FLOP_BUDGET (v2.x)."""
+    return prepare.budget(start)["train_flops"] if hasattr(prepare, "budget") else prepare.TRAIN_FLOP_BUDGET
+
+
+def train_data(rec: dict, x) -> "prepare.TrainData":
+    """The start's training stream in `--data-seed`'s order; `--data-parts N` pins v3's order to its first N parts."""
+    kw = {"parts": x.data_parts} if x.data_parts is not None else {}
+    return prepare.TrainData(rec["tokenizer"], seed=x.data_seed, **kw)
+
+
 def submit(a, *args, **kw) -> None:
     """prepare.submit, with the class on a pin that has classes (v2.x) and without it on v3."""
     prepare.submit(Path(a.out), a.start, *([a.klass] if getattr(prepare, "CLASSES", None) else []), *args, **kw)
@@ -372,7 +384,7 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
     def per_step(x):
         return prepare.train_flops(rec, trainable_of(x), [{"op": "train", "tokens": tokens}])["flops"]
 
-    sched = Schedule([arm_steps(int(a.budget_fraction / len(arms) * prepare.TRAIN_FLOP_BUDGET // per_step(x)))
+    sched = Schedule([arm_steps(int(a.budget_fraction / len(arms) * flop_budget(a.start) // per_step(x)))
                       for x in arms])
     fwd = torch.compile(net)
     steps, results, g = [], [], 0
@@ -427,7 +439,7 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
             [{"params": [p for A, B, _ in factors.values() for p in (A, B)], "lr": x.lr, "weight_decay": 0.0},
              {"params": [params[n] for n in norms], "lr": x.norm_lr, "weight_decay": 0.0}],
             betas=(0.9, 0.95), fused=dev.startswith("cuda"))
-        data = prepare.TrainData(rec["tokenizer"], seed=x.data_seed)
+        data = train_data(rec, x)
         n_k, first, ema = sched.counts[k], g, None
         print(json.dumps({"arm": k, "spec": getattr(x, "arm", ""), "steps": n_k, "rank": x.rank, "bits": x.qbits,
                           "targets": len(targets), "norms": len(norms), "flops_per_step": per_step(x)}), flush=True)
@@ -538,6 +550,8 @@ def main() -> int:
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--micro", type=int, default=32)
     ap.add_argument("--data-seed", type=int, default=1)
+    ap.add_argument("--data-parts", type=int, default=None,
+                    help="v3: read the first N parts of the training stream (an order that holds while it installs)")
     ap.add_argument("--budget-fraction", type=float, default=0.98)
     ap.add_argument("--arms", default="",
                     help="qat, qlora: A/B/..., each a comma-separated key=value list over these options (e.g. "
@@ -582,7 +596,7 @@ def main() -> int:
     tokens = a.batch * prepare.EVAL_CTX
     extra = sum(ns_flops(tuple(params[n].shape)) for n in mats)
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
-    n_arm = arm_steps(int(a.budget_fraction / len(arms) * prepare.TRAIN_FLOP_BUDGET // per_step))
+    n_arm = arm_steps(int(a.budget_fraction / len(arms) * flop_budget(a.start) // per_step))
     sched = Schedule([n_arm] * len(arms))
     fwd = torch.compile(net)
     steps, buckets, results, g = [], [], [], 0
@@ -605,7 +619,7 @@ def main() -> int:
         adam = torch.optim.AdamW([opt_of[n] for n in rest], lr=x.adam_lr, betas=(0.9, 0.95), weight_decay=0.0,
                                  fused=dev.startswith("cuda")) if rest else None
         opts = [(o, lr) for o, lr in ((muon, x.muon_lr), (adam, x.adam_lr)) if o is not None]
-        data = prepare.TrainData(rec["tokenizer"], seed=x.data_seed)
+        data = train_data(rec, x)
         qarrays, first, ema = {}, g, None
         print(json.dumps({"arm": k, "spec": getattr(x, "arm", ""), "steps": n_arm, "flops_per_step": per_step,
                           "trained": len(names), "quantized": len(quantized)}), flush=True)
