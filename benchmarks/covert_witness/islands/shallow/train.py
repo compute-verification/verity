@@ -14,9 +14,10 @@ in θ's dtype, adapters merged (`prepare.encode_full`); `bf16` factors and full 
 bf16-autocast forward already multiplies at bf16); `svd:R` each full matrix's delta truncated to rank R as bf16 factors;
 `qB` or `qB:G` each tensor's delta from θ as a CWQUAN1 delta (`prepare.encode_quant`): B-bit round-to-nearest codes into
 a symmetric codebook, an f16 scale per G entries (default 128), xz-coded; `auto` is bf16 with adapters, else fp32. An
-arm's `store=` codes its own E (`svd:R` only as the global store). Each arm's report records |E|, its trainable
-parameters and the state training carries (`v1`: fp32 gradients, the optimizer's fp32 state, the fp32 weights) and, for
-`qB`, the code's relative error on the delta. `--fresh` trains only on windows the start never read (its provenance
+arm's `store=` codes its own E (`svd:R` only as the global store). `--mom-dtype bf16` keeps Muon's momentum in bf16
+between steps and `--grad-dtype bf16` rounds the accumulated gradient to bf16 after each micro-batch. Each arm's report
+records |E|, its trainable parameters and the state training carries (`v1`: the gradient, the optimizer's state, the fp32
+weights), the submitted arm's Δ_grad goes in `notes.delta_grad`, and, for `qB`, the code's relative error on the delta. `--fresh` trains only on windows the start never read (its provenance
 names its order: default_rng(data_seed), step x batch). `--ema D` submits an exponential average of the full tensors.
 The submitted model is always decode(θ, E).
 
@@ -77,8 +78,12 @@ def ns_flops(shape, steps: int = 5) -> int:
 
 
 class Muon(torch.optim.Optimizer):
-    def __init__(self, params, lr: float, momentum: float = 0.95, wd: float = 0.0):
+    """Nesterov momentum, orthogonalized. The momentum buffer is kept in `buf_dtype` between steps (bf16: summed in
+    fp32, rounded to nearest on store, and the step reads the rounded buffer)."""
+
+    def __init__(self, params, lr: float, momentum: float = 0.95, wd: float = 0.0, buf_dtype=torch.float32):
         super().__init__(params, {"lr": lr, "momentum": momentum, "wd": wd})
+        self.buf_dtype = buf_dtype
 
     @torch.no_grad()
     def step(self):
@@ -86,8 +91,8 @@ class Muon(torch.optim.Optimizer):
             for p in g["params"]:
                 if p.grad is None:
                     continue
-                st = self.state.setdefault(p, {"buf": torch.zeros_like(p)})
-                buf = st["buf"].mul_(g["momentum"]).add_(p.grad)
+                st = self.state.setdefault(p, {"buf": torch.zeros_like(p, dtype=self.buf_dtype)})
+                buf = st["buf"].copy_(st["buf"].float().mul_(g["momentum"]).add_(p.grad)).float()
                 u = newton_schulz(p.grad.add(buf, alpha=g["momentum"]))
                 if g["wd"]:
                     p.mul_(1 - g["lr"] * g["wd"])
@@ -143,8 +148,12 @@ def fresh_order(data, rec: dict) -> dict:
 CHECKPOINTS = 20
 ARM_KEYS = {"lr": float, "muon_lr": float, "lora_lr": float, "opt": str, "wd": float, "ema": float, "schedule": str,
             "warmup": int, "batch": int, "micro": int, "fresh": lambda v: v.lower() in ("1", "true", "on", "yes"),
-            "data_seed": int, "seed": int, "share": float, "full": str, "store": str}
-ARM_CHOICES = {"opt": ("adamw", "muon"), "schedule": ("linear", "cosine", "wsd")}
+            "data_seed": int, "seed": int, "share": float, "full": str, "store": str, "mom_dtype": str,
+            "grad_dtype": str}
+ARM_CHOICES = {"opt": ("adamw", "muon"), "schedule": ("linear", "cosine", "wsd"), "mom_dtype": ("fp32", "bf16"),
+               "grad_dtype": ("fp32", "bf16")}
+DTYPES = {"fp32": torch.float32, "bf16": torch.bfloat16}
+BITS = {"fp32": 32, "bf16": 16}
 
 
 def parse_arms(a: argparse.Namespace) -> list[argparse.Namespace]:
@@ -183,6 +192,9 @@ def main() -> int:
     ap.add_argument("--opt", choices=("adamw", "muon"), default="adamw")
     ap.add_argument("--lr", type=float, default=3e-4, help="AdamW's rate (gains, and full matrices unless --opt muon)")
     ap.add_argument("--muon-lr", type=float, default=0.01)
+    ap.add_argument("--mom-dtype", choices=("fp32", "bf16"), default="fp32", help="Muon's momentum buffer between steps")
+    ap.add_argument("--grad-dtype", choices=("fp32", "bf16"), default="fp32",
+                    help="the gradient as accumulated and passed (bf16: rounded after every micro-batch's backward)")
     ap.add_argument("--wd", type=float, default=0.0)
     ap.add_argument("--lora", type=int, default=0, help="rank of the --adapt factors (alone: every tuned matrix)")
     ap.add_argument("--lora-lr", type=float, default=1e-3)
@@ -288,7 +300,8 @@ def main() -> int:
             opts.append((torch.optim.AdamW([p for A, B, _ in factors.values() for p in (A, B)], lr=arm.lora_lr,
                                            betas=(0.9, 0.95), weight_decay=0.0, fused=fused), arm.lora_lr))
         if mats and arm.opt == "muon":
-            opts.append((Muon([params[n] for n in mats], lr=arm.muon_lr, wd=arm.wd), arm.muon_lr))
+            opts.append((Muon([params[n] for n in mats], lr=arm.muon_lr, wd=arm.wd,
+                              buf_dtype=DTYPES[arm.mom_dtype]), arm.muon_lr))
         elif mats:
             opts.append((torch.optim.AdamW([params[n] for n in mats], lr=arm.lr, betas=(0.9, 0.95), weight_decay=arm.wd,
                                            fused=fused), arm.lr))
@@ -324,6 +337,10 @@ def main() -> int:
                     logits = fwd(x[:, :-1])
                 loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1)) * (len(x) / arm.batch)
                 loss.backward()
+                if arm.grad_dtype == "bf16":
+                    with torch.no_grad():
+                        for p in trained:
+                            p.grad.copy_(p.grad.bfloat16())
                 if step >= tail_from:
                     tail += loss.detach()
             torch.nn.utils.clip_grad_norm_(trained, 1.0)
@@ -359,10 +376,16 @@ def main() -> int:
     model = prepare.decode(theta, blob)
     tuned = sorted(full + adapt)
     changed = sorted(n for n in tuned if not prepare.same_bits(model[n], theta[n]))
+    v1 = report[best]["v1"]
+    delta_grad = {"trainable": v1["params"], **{k: v1[k] for k in ("grad_bits", "adam_bits", "muon_bits", "ema_bits",
+                                                                    "latent_bits")},
+                  "grad_dtype": arms[best].grad_dtype, "mom_dtype": arms[best].mom_dtype,
+                  "bits": v1["delta_grad_bits"], "bytes": v1["delta_grad_bits"] // 8}
     prepare.submit(Path(a.out), a.start, a.klass, blob, model, trainable, steps, changed=changed or tuned,
                    notes={"method": "shallow", "args": vars(a), "steps": report[best]["steps"], "full": full,
                           "adapt": adapt, "store": arms[best].store, "fresh": report[best]["fresh"], "arms": report,
-                          "submitted_arm": best, "planned_steps": total, "encoded_steps": sorted(encoded),
+                          "submitted_arm": best, "delta_grad": delta_grad, "planned_steps": total,
+                          "encoded_steps": sorted(encoded),
                           "seconds": round(time.perf_counter() - t0, 1)})
     return 0
 
@@ -381,16 +404,21 @@ def svd_flops(params: dict, mats: list[str]) -> int:
 
 
 def v1_state(arm: argparse.Namespace, params: dict, factors: dict) -> dict:
-    """What training carries between steps, in bits (v1's Δ_grad is the gradient plus the optimizer's state): fp32
-    gradients; AdamW's fp32 exp_avg and exp_avg_sq, or Muon's one fp32 momentum buffer per matrix (gains and factors
-    on AdamW); the EMA's fp32 copy if any. The fp32 weights are listed apart."""
+    """What training carries between steps, in bits (Δ_grad is the gradient plus the optimizer's state as passed): the
+    gradient at --grad-dtype; AdamW's fp32 exp_avg and exp_avg_sq, or Muon's one momentum buffer per matrix at
+    --mom-dtype (gains and factors on AdamW); the EMA's fp32 copy if any. The fp32 weights are listed apart."""
     mat = sum(params[n].numel() for n in arm.mats)
     gain = sum(params[n].numel() for n in arm.gains)
     lora = sum(A.numel() + B.numel() for A, B, _ in factors.values())
     n = mat + gain + lora
-    state = 64 * (gain + lora) + (32 if arm.opt == "muon" else 64) * mat + (32 * (mat + gain) if arm.ema else 0)
-    return {"params": n, "opt": arm.opt, "grad_bits": 32 * n, "state_bits": state, "weights_bits": 32 * n,
-            "delta_grad_bits": 32 * n + state}
+    muon = arm.opt == "muon" and mat > 0
+    adam = 64 * (gain + lora + (0 if muon else mat))
+    muon_bits = BITS[arm.mom_dtype] * mat if muon else 0
+    ema = 32 * (mat + gain) if arm.ema else 0
+    grad = BITS[arm.grad_dtype] * n
+    state = adam + muon_bits + ema
+    return {"params": n, "opt": arm.opt, "grad_bits": grad, "adam_bits": adam, "muon_bits": muon_bits, "ema_bits": ema,
+            "latent_bits": 0, "state_bits": state, "weights_bits": 32 * n, "delta_grad_bits": grad + state}
 
 
 @torch.no_grad()
