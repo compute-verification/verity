@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.HonestHalf
+import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
 
 /-!
 # The honest deployed recursive run (`HonestFixture`)
@@ -7,7 +8,8 @@ The one fact the honest half of `RecursiveKSAt`'s non-vacuity (`honest_half_fixt
 one honest deployed recursive run, at one statement `x`, on which every premise of `honest_half_tops` holds at once. Its
 conjuncts are the named Props that theorem reads, with their statements unchanged where they are stated
 (`HonestRunAccepted` and `NoCollAt` in `HonestHalf`, `HonestWitSatisfies` in `HonestWitR`, `IrShaped` in `VStarDense`),
-and the tape exception, named here (`TopsAt`).
+the tape exception, named here (`TopsAt`), and the deployment's sizes at the run's statement (`SizesAt` in
+`KappaEpsDeployed`), which `RecursiveBitsKDeployed`'s honest lemma reads.
 -/
 
 namespace RecDeploy
@@ -32,7 +34,7 @@ at one statement `x`): at the deployed brings at `x` (`bLAt`), the inner verifie
 `DAt`, the reference prover's run on tape `ω` and coins `r` is accepted (`HonestRunAccepted`), V\*'s gate-level
 completeness holds at it (`HonestWitSatisfies`), no part's recorded calls collide (`NoCollAt`), and at the run's inner
 rounds before the last (`hist.take (kI x - 1)`) the inner prover's openings fit V\*'s levels (`IrShaped`) and the reps'
-tops differ (`TopsAt`).
+tops differ (`TopsAt`); and `x` is at the deployment's sizes at the run's coin-server record (`SizesAt`).
 
 The run is `benchmarks/recursion_e2e --e2e --cpu` (the toy deployment, K = 64, N = 16, under the firewall, at
 16a44e3b86). Its outer tree holds each part's `inst.bin`, `fold.json`, `points.json` and `acc-salts.bin`. Each conjunct
@@ -54,6 +56,16 @@ on it:
   compression), not only `layR`'s recorded ones; and for `vcallsAt`, every input the verifier's setup hashes at the
   part's statement and draw, logged by the logging oracle's setup (`setupLogged`), which is proved equal to the fast
   one.
+* `SizesAt`: each of the run's 11 sessions (the inner one and the 10 parts') records one table in its `config.tables`,
+  and 10 ≤ 16. A reading run on the run's staged bytes and sessions read each setup's numbers with a `dbgTrace` in a
+  scratch copy of `verifyCmd`'s setup. The inner statement's plain setup, at its session record's draw, gave 1 table,
+  2 points, `mPts = 27` and `(m, k_log, regions) = (25, 22, 3)`, inside `PlainIn`, and 152 SHA-512 calls
+  (`Stmt.setupCalls` at SHA-512 at the setup's own arguments, the length of `innerSetupIns`'s list), under `2^32`, and
+  was accepted. Each of the 10 parts' `--zk` setup, at its session's draw, gave 1 table, 2 points, `mPts` from 27 to 33
+  and `(m, k_log, regions)` within `m` 26–32, `k_log` 22–26 and at most 48 regions, inside `PartIn`; the parts were
+  read without V\*'s recursion inputs (`--rec-inner` and the rest), so each verify refused after its setup, and their
+  verdicts are `HonestRunAccepted`'s. It is weaker than the Prop in that the parts are those the run's driver staged,
+  not `pick`'s choice, which is `Classical.choose`.
 
 16a44e3b86's verifier has `checkRoundWords`, `VStar/In` and `VStar/Trace`, and beside `DAt`'s it only refuses more
 (`checkEndReads`, and `--ks-form`'s port roots, which the run doesn't pass). What the run witnesses is weaker than the
@@ -90,6 +102,7 @@ def HonestFixture : Prop :=
     TopsAt Ir x w ω.1
       ((((Claims.run FlockDeploy.sha512 (refP (IAt decI).V (bLAt mask Ir b0 x aux nOf hd recRest) w)
         (DAt mask Ir b0 x aux nOf hd recRest).V x ω r).msgs.take ((IAt decI).V.k (xIOf x))).map histOf).take
-          (RestRead.kI x - 1))
+          (RestRead.kI x - 1)) ∧
+    SizesAt { bringsAt mask Ir (deployedB b0) x with tr := recTr aux nOf hd recRest } x
 
 end RecDeploy

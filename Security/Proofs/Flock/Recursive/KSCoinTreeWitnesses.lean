@@ -172,7 +172,7 @@ theorem recursiveKSDeployed_honest (h : HonestFixture) :
           FlockSoundness.Discharge.ZkView.saltHash)) ∧
       ENNReal.ofReal (FlockSoundness.CROnly.hidingGap FlockSoundness.Discharge.ZkView.My
         FlockSoundness.Discharge.ZkView.saltHash) ≠ ⊤ := by
-  obtain ⟨mask, Ir, b0, x, aux, nOf, hd, recRest, decI, w, st, ω, r, hR, hW, hN, hI, hT⟩ := h
+  obtain ⟨mask, Ir, b0, x, aux, nOf, hd, recRest, decI, w, st, ω, r, hR, hW, hN, hI, hT, -⟩ := h
   refine ⟨mask, Ir, b0, x, aux, nOf, hd, recRest, decI, w, ω, r,
     HonestHalfTops.honest_half_tops mask Ir b0 x aux nOf hd recRest decI ω r hR hW hN hI hT, fun s hs => ?_,
     fun _ C τ => ?_, FlockDeploy.listWithin_plainTrim _root_.Flock.Readable.relation,
@@ -213,7 +213,9 @@ theorem recursiveKSDeployed_nontrivial (h : RecDeploy.KSFixture) :
   have hO' : ∀ j < RecDeploy.nS x, ∃ i spec' sts', RecDeploy.PartIn
       (RecDeploy.staged ({ RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest } : RecDeploy.Brings).st
         x (RecDeploy.pick ({ RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest } :
-          RecDeploy.Brings).st x j) j) i spec' sts' := hO
+          RecDeploy.Brings).st x j) j) i spec' sts' := fun j hj => by
+    obtain ⟨i, spec', sts', hp, -⟩ := hO j hj
+    exact ⟨i, spec', sts', hp⟩
   exact RecDeploy.not_ksLin2OnC_acceptAll _root_.Flock.Readable.relation _root_.Flock.Readable.relation
     { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
     (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
@@ -226,6 +228,7 @@ theorem recursiveKSDeployed_nontrivial (h : RecDeploy.KSFixture) :
         (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
         (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
         RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
-        RecDeploy.DeployedR.wR Claims.GS.plainDecodeRD hin hO' hn hS (n := 0) (by norm_num) (v := 0) (by norm_num)))
+        RecDeploy.DeployedR.wR Claims.GS.plainDecodeRD hin hO' (hn.trans (by norm_num)) (hS.trans (by norm_num))
+        (n := 0) (by norm_num) (v := 0) (by norm_num)))
 
 end Flock.Guarantees

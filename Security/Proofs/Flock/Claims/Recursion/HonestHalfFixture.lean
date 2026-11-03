@@ -33,7 +33,7 @@ theorem honest_half_fixture (h : HonestFixture) :
           (cmtTr recRead) s x (Claims.coinSeq r)
           ((Claims.run FlockDeploy.sha512 (refP (IAt decI).V (bLAt mask Ir b0 x aux nOf hd recRest) w)
             (DAt mask Ir b0 x aux nOf hd recRest).V x ω r).msgs.map Prod.fst) := by
-  obtain ⟨mask, Ir, b0, x, aux, nOf, hd, recRest, decI, w, st, ω, r, hR, hW, hN, hI, hT⟩ := h
+  obtain ⟨mask, Ir, b0, x, aux, nOf, hd, recRest, decI, w, st, ω, r, hR, hW, hN, hI, hT, -⟩ := h
   exact ⟨mask, Ir, b0, x, aux, nOf, hd, recRest, decI, w, ω, r,
     HonestHalfTops.honest_half_tops mask Ir b0 x aux nOf hd recRest decI ω r hR hW hN hI hT⟩
 
