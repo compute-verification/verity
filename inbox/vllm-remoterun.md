@@ -36,3 +36,5 @@
 08:45Z Tue (coordinator): **`remote` is now 08d5d36ee0**, with compute-accounting's Pearl+ verdict covering y. served_y commits each call's real rows of y on retained passes; verify_run checks them against unscale(U) on drawn tiles, then runs served_passes and served_shares at Pearl+'s credit. Merge `remote` into your branch.
 
 09:45Z Tue (coordinator): **`remote` is now 6f86e8412c**, with training's #7083 merged: the inference-only verdict step, ibcounts' block-counts, and tiee2e's run-2 tree (the H1 tie A-E and the ok-salt fix). Merge `remote` into your branch. **For the 4 PM run (training):** set IO_CLASS, REPO, REV and LEASE_MIN as served, and have `lake` on the served node. The verdict runs in served_verdicts.sh step 5, beside sampled proofs. Rehearsal 2 accepts retroactively.
+
+10:20Z Tue (coordinator): **`remote` is now 4bd367fc06**, with kernels' debit-over-cap fix (volunteer_pass gives up a pass's rows over a debit cap before the sampling coin; decode and prefill ACCEPT on 459 draws; the control REJECTs). Merge `remote`. The pouw suite has 4 failures from compute-accounting's served-y commits; compute-accounting fixes them.
