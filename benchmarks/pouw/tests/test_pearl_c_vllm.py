@@ -959,27 +959,37 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
     assert not r["accepted"] and "records are not the ones" in r["line"]
 
 
+def served_verify(d: Path, out: Path, *more: str) -> tuple[int, dict, dict]:
+    """``served_passes.py verify`` on serve dir `d` at 3 draws: its exit, its document and its core answer."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    rc = SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1", "--draws", "3", *more])
+    answer = json.loads((out.parent / "answer.json").read_text())
+    from verity.core.protocols.pouw import core_check as CC
+    CC.answer_of(answer)
+    return rc, json.loads(out.read_text()), answer
+
+
 @pytest.mark.slow
 def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepted(honest_pass, tmp_path):
-    """``served_passes.py verify`` replays each pass with calls that the serve's served.json names, skipping the empty one
-    the run left open: it accepts an honest pass, and the same pass with a weight row flipped fails the whole run."""
+    """``served_passes.py verify`` draws over the passes with calls that the serve's served.json names, skipping the empty
+    one the run left open: it accepts an honest pass and credits its MACs at Pearl's assumption in a core answer, and the
+    same pass with a weight row flipped (opened on the excluded row's tile, whatever the draw) fails the whole run."""
     path, *_ = honest_pass
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     served = {"run": RUN, "passes": [{"pass": 0, "units": 2, "tiles": 4, "manifest": str(path)},
                                      {"pass": 1, "units": 0, "tiles": 0}]}
     (path.parent / "served.json").write_text(json.dumps(served))
-    out = tmp_path / "verify.json"
-    assert SP.main(["verify", "--passes", str(path.parent), "--out", str(out), "--jobs", "1"]) == 0
-    doc = json.loads(out.read_text())
-    assert (doc["verified"], doc["accepted"], doc["ok"]) == (1, 1, True) and doc["verdicts"][0]["line"].startswith("ACCEPT")
+    rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json")
+    assert rc == 0 and answer["verdict"] == "accept" and doc["line"].startswith("ACCEPT verity/pouw/pearl-plus/v1"), doc["line"]
+    work = answer["public"]["work"]
+    assert 0 < work["credited"] < work["macs"] and work["credited_tiles"] > 0 and answer["profile"]["delta"] == "1/100"
+    assert len(answer["profile"]["tiles"]) == 4 and {i for i, _ in answer["profile"]["tiles"]} == {0}
     man = json.loads(path.read_text())
     rows = path.parent / man["weights"]["0"]["rows"]["path"]
     bad = bytearray(rows.read_bytes())
     bad[1] ^= 0x01
     rows.write_bytes(bytes(bad))
-    assert SP.main(["verify", "--passes", str(path.parent), "--out", str(out), "--jobs", "1"]) == 1
-    doc = json.loads(out.read_text())
-    assert (doc["accepted"], doc["ok"]) == (0, False) and doc["verdicts"][0]["line"].startswith("REJECT")
+    rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json")
+    assert rc == 1 and answer["verdict"] == "reject" and "weight opening" in answer["reason"] and doc["line"].startswith("REJECT")
 
 
 def _serve_dir(tmp_path: Path, passes: list[Path]) -> Path:
@@ -995,26 +1005,36 @@ def _serve_dir(tmp_path: Path, passes: list[Path]) -> Path:
 def test_served_passes_verify_refuses_two_passes_of_one_salt_sharing_a_call_index(tmp_path):
     """Two honest passes of one epoch whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
     both, so the run is refused (``repeated-call``) before any pass is replayed."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (1, 2))))
     assert json.loads(a.read_text())["salt"] == json.loads(b.read_text())["salt"]
-    d, out = _serve_dir(tmp_path, [a, b]), tmp_path / "verify.json"
-    assert SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 1
-    doc = json.loads(out.read_text())
-    assert (doc["ok"], doc["verified"], doc["verdicts"]) == (False, 0, []) and doc["refused"][0] == "repeated-call"
+    rc, doc, answer = served_verify(_serve_dir(tmp_path, [a, b]), tmp_path / "verify.json")
+    assert rc == 1 and answer["verdict"] == "reject" and "verdicts" not in doc and doc["refused"][0] == "repeated-call"
     assert "passes 0 and 1 both hold call index 1" in doc["refused"][1]
 
 
 @pytest.mark.slow
 def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
-    """Two honest passes of one epoch numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: both replayed and
-    accepted."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    """Two honest passes of one epoch numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: one draw over
+    both, each pass's exclusion tile opened, accepted and credited over both."""
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
-    d, out = _serve_dir(tmp_path, [a, b]), tmp_path / "verify.json"
-    assert SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 0
-    doc = json.loads(out.read_text())
-    assert (doc["ok"], doc["verified"], doc["accepted"]) == (True, 2, 2) and "refused" not in doc
+    rc, doc, answer = served_verify(_serve_dir(tmp_path, [a, b]), tmp_path / "verify.json")
+    assert rc == 0 and answer["verdict"] == "accept" and "refused" not in doc
+    assert answer["profile"]["exclusion_tiles"] == 2 and len(answer["public"]["passes"]) == 2
+    one = VR.credit_at_assumption([VR.load(a, published(a))], 3, Fraction(1, 100))
+    assert answer["public"]["work"]["macs"] == 2 * one["macs"]
+
+
+def test_a_runs_credit_at_pearls_assumption_is_its_credited_macs_less_epsilon(tmp_path):
+    """`verify_run.epsilon` is the least ε (on its 10^-9 grid) with (1 − ε)^t ≤ δ, and a run's credit is at most
+    (1 − ρ)(1 − ε) of its credited cells' MACs (each at |K|), the excluded row's and the filler rows' cells credited
+    nothing."""
+    eps = VR.epsilon(459, Fraction(1, 100))
+    assert (1 - eps) ** 459 <= Fraction(1, 100) < (1 - eps + Fraction(2, 10 ** 9)) ** 459 and abs(eps - Fraction(1, 100)) < Fraction(1, 10 ** 4)
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    p = VR.load(path, published(path))
+    got = VR.credit_at_assumption([p], 459, Fraction(1, 100))
+    assert got["macs"] == ((20 - 1) * 16 + 16 * 32) * 128 and got["epsilon"] == str(eps)
+    assert 0 < got["credited"] <= (1 - p.scheme.cap) * (1 - eps) * got["macs"]
 
 
 def test_verify_run_refuses_a_call_index_at_2_to_the_32_and_one_held_twice(tmp_path):
