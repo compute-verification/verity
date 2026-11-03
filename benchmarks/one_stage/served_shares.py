@@ -2,7 +2,7 @@
 model's steps declare at θ over the wall the engine took to serve them, term by term, and the credited share, the MACs
 Pearl+'s PoUW verdict credited at θ over that same wall.
 
-    python benchmarks/one_stage/served_shares.py SERVE_DIR [--credit ANSWER.json] [--model NAME]
+    python benchmarks/one_stage/served_shares.py SERVE_DIR [--credit ANSWER.json] [--model NAME] [--replay S --replay-cpus N]
         prints one JSON object
 
 The wall is the trace's loads' busy seconds (`served_overhead.load_metrics`): each load's span, its first arrival to its
@@ -23,6 +23,11 @@ form): its ``public.work.credited``, the linears' MACs credited at Pearl's Assum
 δ, at θ, over the same wall, and beside it that credit's share of the declared linears. Only the linears are Pearl+'s
 work, so attention and the LM head are never credited. A rejected answer credits 0, and so does a run with no
 ``--credit``. The credited share is not part of the declared share, and the two are never added.
+
+The replay (``--replay S --replay-cpus N``) is the prover's CPU cost beside those GPU shares: before the sampling coin it
+replays every tile of its passes, as much work as checking every tile, to give up the rows over a cap
+(`volunteer_pass.py`), and took S seconds on N cores. It is stated as the cores it takes to keep pace with the serving
+(core-seconds a second of the wall), never as a share of θ.
 """
 from __future__ import annotations
 
@@ -95,8 +100,17 @@ def model_of(serve_dir: Path) -> str:
     return ((s.get("engine") or {}).get("pin") or {}).get("model")
 
 
-def shares(serve_dir: Path, credit: dict[str, Any] | None = None, model: str | None = None) -> dict[str, Any]:
-    """The serve dir's two shares at each reading of the clock (module docstring)."""
+def replay_term(seconds: float, cpus: int, wall: float) -> dict[str, float]:
+    """The prover's replay before the coin, `seconds` on `cpus` cores, against `wall` seconds of serving (module docstring)."""
+    if not (seconds >= 0 and cpus > 0 and wall > 0):
+        raise ValueError(f"a replay is seconds ≥ 0 on cpus > 0 against a wall > 0, not {seconds}, {cpus}, {wall}")
+    return {"s": seconds, "cpus": cpus, "core_s": seconds * cpus, "of_wall": seconds / wall,
+            "cores_to_keep_pace": seconds * cpus / wall}
+
+
+def shares(serve_dir: Path, credit: dict[str, Any] | None = None, model: str | None = None,
+           replay: tuple[float, int] | None = None) -> dict[str, Any]:
+    """The serve dir's two shares at each reading of the clock, and the prover's replay beside them (module docstring)."""
     model = model or model_of(serve_dir)
     if model not in MODELS:
         raise ValueError(f"no declared shapes for {model!r}: add them to MODELS ({sorted(MODELS)})")
@@ -127,7 +141,8 @@ def shares(serve_dir: Path, credit: dict[str, Any] | None = None, model: str | N
                        "credited": work / rho / wall}
     return {"schema": SCHEMA, "dir": str(serve_dir), "model": model, "wall_s": wall, "macs": total, "loads": loads,
             "credit": {"verdict": verdict, "macs": work,
-                       "of_linears": work / total["linears"] if total["linears"] else None}, "readings": readings}
+                       "of_linears": work / total["linears"] if total["linears"] else None}, "readings": readings,
+            "replay": replay_term(*replay, wall) if replay else None}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -135,9 +150,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("serve_dir", type=Path)
     ap.add_argument("--credit", type=Path, help="Pearl+'s answer.json (served_passes.py verify's)")
     ap.add_argument("--model", help="the served model (default: serve.json's engine pin)")
+    ap.add_argument("--replay", type=float, metavar="S", help="the prover's replay before the coin, in seconds")
+    ap.add_argument("--replay-cpus", type=int, metavar="N", help="the cores the replay ran on")
     a = ap.parse_args(argv)
+    if (a.replay is None) != (a.replay_cpus is None):
+        ap.error("--replay and --replay-cpus go together")
     try:
-        got = shares(a.serve_dir, json.loads(a.credit.read_text()) if a.credit else None, a.model)
+        got = shares(a.serve_dir, json.loads(a.credit.read_text()) if a.credit else None, a.model,
+                     (a.replay, a.replay_cpus) if a.replay is not None else None)
     except (OSError, ValueError) as e:
         print(f"served_shares.py: {e}", file=sys.stderr)
         return 2
