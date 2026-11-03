@@ -141,10 +141,6 @@ def stage(M, tie: SC.EgressTie, sg: SimpleNamespace, member: SC.Member, heads: S
     read as, but the egress ``o1`` of a round whose network certifier's rows aren't the trace's."""
     t0 = time.time()
     st, bs, n, every = sg.st, list(member.buckets), len(member.buckets), tie.cls.EVERY
-    nbl = max(3, (-(-n // st.meta["vus_per_block"]) - 1).bit_length())
-    if not 25 <= st.meta["k_log"] + nbl <= M.a7.M_MAX:
-        raise SystemExit(f"{member.name}: m = {st.meta['k_log']} + {nbl} is outside 25 .. {M.a7.M_MAX}, the --zk "
-                         "prover's")
     known = tie.known_tree(heads)
     words, tables, refs, salts, entries, want = {}, {}, {}, {}, {}, {}
 
@@ -341,6 +337,11 @@ def prove(a) -> int:
                "tampered": {"bucket": at.tampered.bucket, "key": at.tampered.key_of}, "dry": bool(a.dry), "rounds": {}}
     M = WZ._one_stage()
     sgs = stagers(M, tie, out / "stagers")
+    for m in tie.members:
+        meta = sgs[m.template].st.meta
+        nbl = max(3, (-(-len(m.units) // meta["vus_per_block"]) - 1).bit_length())
+        if not 25 <= meta["k_log"] + nbl <= M.a7.M_MAX:
+            raise SystemExit(f"{m.name}: m = {meta['k_log']} + {nbl} is outside 25 .. {M.a7.M_MAX}, the --zk prover's")
     summary["stagers"] = {tp: {"lower_s": g.lower_s, "k_log": g.st.meta["k_log"], "pin": g.st.pin} for tp, g in sgs.items()}
     log(f"{at.source}: link {tie.link}, {setup.name}'s class, T {tie.T}: {tie.N} proof blocks in "
         f"{[(m.name, len(m.units)) for m in tie.members]}; stagers {summary['stagers']}")

@@ -37,7 +37,7 @@ def rounds(tmp_path_factory):
     """Both rounds staged as `scan_tie.prove --dry` stages them (lowering the two scan units takes about 30 s)."""
     out = tmp_path_factory.mktemp("scan-tie")
     t = st.tie_of(out, SZ.TEST)
-    M = WZ._one_stage()
+    M = WZ._statement()
     sgs = st.stagers(M, t.tie, out / "stagers")
     return t, {name: st.stage_round(M, t.tie, t.at, t.tr, sgs, name, out / name, 2.0 ** -20) for name in st.ROUNDS}
 
