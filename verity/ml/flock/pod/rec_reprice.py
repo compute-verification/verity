@@ -41,10 +41,15 @@ def template():
     return TG.definition(f"GemmCoordinate_v2{{K={int(os.environ['K'])},DOT={DOT}}}")
 
 
+def population() -> int:
+    """``N``, the inner statement's unit count."""
+    return int(os.environ["N"])
+
+
 def program():
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
-    return P.population_program(template(), int(os.environ["N"]))
+    return P.population_program(template(), population())
 
 
 def chain_program():
@@ -56,7 +61,7 @@ def chain_program():
     from verity.ml.circuits.refs import coll_concat
     from verity.ml.circuits.types import Array
 
-    t, n = template(), int(os.environ["N"])
+    t, n = template(), population()
     (_, xt), _ = t.signature()[0]
     bf, k = xt.elem, xt.n
     sig = (("x0", bf), ("xs", Array(n, Array(k - 1, bf))), ("w", Array(n, Array(k, bf))))
@@ -78,7 +83,7 @@ def partition(d: Path, prog=None) -> dict:
     from verity.ml.circuits.codec import canonical_json, encode_program
     from verity_flock import rec_live as RL
 
-    t, n = template(), int(os.environ["N"])
+    t, n = template(), population()
     if prog is None:
         prog = chain_program() if os.environ.get("REC_LINKS") == "1" else P.population_program(t, n)
     part = P.partition(prog, P.template_instance_query(t))
