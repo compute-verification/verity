@@ -130,9 +130,10 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
     row whose token kind is measured publishes reading A, `at`'s ρ, with the bound's terms and its reduction and update
     sensitivities (the console's cell has room for no more). At the
     dial's default the dense, LoRA and grown-adapter steps bind on the token kind; the adapter with its live code
-    publishes 1, no kind above 1, its reduction sensitivity above 9 beside it. A row without entries or an op log
-    publishes reading B, Slowdown's token form, a target, and so does every row until `READING_A` (until the
-    fresh-products kind is measured, 09:02Z); read under A, such a row measures no kind, so it publishes None,
+    publishes 1, no kind above 1, labelled with the measured kind its max takes (coordinator 11:18Z), its reduction
+    sensitivity above 9 beside it. A row without entries or an op log
+    publishes reading B, Slowdown's token form, a target, and so does every row where `READING_A` is off (on since
+    the coordinator's 11:18Z ruling); read under A, such a row measures no kind, so it publishes None,
     binding none and resting on `unmeasured`, never 1 (coordinator 09:46Z)."""
     default = rho_vectors.CELLS[0]
     for case in rho_vectors.CASES:
@@ -141,13 +142,17 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
         one = formalism.published(m, v["c"], v["k"], "A")
         assert formalism.published(m, v["c"], v["k"])["reading"] == ("A" if formalism.READING_A else "B")
         assert one["reading"] == "A" and not v["fit"]
-        assert not differences(rho_vectors.finite([one["rho"], one["terms"], one["sensitivities"]]),
-                               [v["rho"], v["terms"], {n: v["sensitivities"][n] for n in formalism.CELL_SENSITIVITIES}])
-        assert one["binding_kind"] == (v["binding"] if num(v["max"]) > 1 else "none")
-        assert one["rests_on"] == formalism.RESTS_ON_CELL[one["binding_kind"]]
-        assert one["binding_kind"] == ("none" if case == "adapter-live" else "token")
+        assert not differences(rho_vectors.finite([one["terms"], one["sensitivities"]]),
+                               [v["terms"], {n: v["sensitivities"][n] for n in formalism.CELL_SENSITIVITIES}])
+        assert one["rests_on"] == formalism.RESTS_ON_CELL["unmeasured" if one["rho"] is None else one["binding_kind"]]
+        if case != "adapter-live":
+            assert (one["rho"], one["binding_kind"]) == (num(v["rho"]), "token") == (num(v["rho"]), v["binding"])
+            assert one["partial"] and one["why"] is None
     live = formalism.published(formalism.from_json(built["measured"]["adapter-live"]), v["c"], v["k"], "A")
-    assert live["rho"] == 1.0 and live["sensitivities"]["reduction"] > 9
+    assert (live["rho"], live["binding_kind"], live["partial"]) == (None, "unmeasured", False)
+    assert live["why"] == "the measured kinds give at most 1; fresh products unmeasured"
+    assert max(num(t) for t in live["terms"].values() if t is not None) <= 1
+    assert live["sensitivities"]["reduction"] > 9
     for gone in ("entries", "ops"):
         m = formalism.from_json(built["measured"]["dense"] | {gone: None})
         b, at = formalism.published(m, v["c"], v["k"]), formalism.at(m, v["c"], v["k"])
@@ -155,7 +160,8 @@ def test_the_published_rho_is_reading_as_where_the_token_kind_is_measured_else_a
         assert b["terms"] == {"token_form": at["slowdown"]} and list(b["sensitivities"]) == ["reduction", "update"]
         assert b["rests_on"] == formalism.RESTS_ON_CELL["target"]
         a = formalism.published(m, v["c"], v["k"], "A")
-        assert (a["reading"], a["rho"], a["binding_kind"], a["rests_on"]) == ("A", None, "none", "unmeasured")
+        assert (a["reading"], a["rho"], a["binding_kind"], a["rests_on"]) == ("A", None, "unmeasured", "unmeasured")
+        assert a["why"] == "no kind is measured"
         assert set(a["terms"]) == set(formalism.KINDS) and all(t is None for t in a["terms"].values())
     m = formalism.from_json(built["measured"]["dense"])
     assert formalism.published(m) == formalism.published(m, *policy.CONSOLE)
