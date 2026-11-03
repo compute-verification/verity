@@ -198,8 +198,8 @@ def bound(products: list[dict], c: float, k: float, C: float, whole: float | Non
     the one-class rule at each subset's least `k_whole`, which holds only where no shorter chain is nested below a kept
     operand: attention's d_h-long chains are, on a transformer's step.
 
-    `made_whole` is the system's made-whole shares by class (`whole_chain_of`'s `mu`, ∞ where a diverged cycle reaches
-    the class), with each product's `fed` ([K, A] pairs: the largest factor from class K's outputs into its operands);
+    `made_whole` is the system's made-whole shares by class (`whole_chain_of`'s `mu`, ∞ where a cycle that diverges, or
+    has no proved fixed point, reaches the class), with each product's `fed` ([K, A] pairs: the largest factor from class K's outputs into its operands);
     `whole` is then not read. Each subset's whole-making factor is its own, (1 + e_S)^{3/2} with e_S = Σ_K μ_K·max over
     the subset's products of their A_K (a block making a kept operand whole runs only the chains that feed it), and the
     subsets also drop the products whose own e is largest, or that are fed by the classes of largest μ, one threshold

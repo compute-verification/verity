@@ -775,65 +775,65 @@
 "cells": [
 {
 "c": 536681984163840.0,
-"fresh_cell": 2869160.60653161,
+"fresh_cell": 2869160.6066211434,
 "k": 65536,
-"term": 163340.76087159815,
+"term": 163340.76087369153,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 26.330113711374292,
+"fresh_cell": 26.33011371219594,
 "k": 65536,
-"term": 1.4989683037125565,
+"term": 1.4989683037317671,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 107848.1457617891,
+"fresh_cell": 107848.14576515456,
 "k": 65536,
-"term": 6139.7741720066315,
+"term": 6139.774172085318,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 2089282.287393043,
+"fresh_cell": 2089282.287473157,
 "k": 80000,
-"term": 130996.04587383587,
+"term": 130996.0458763216,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 19.173217447983582,
+"fresh_cell": 19.17321744871878,
 "k": 80000,
-"term": 1.2021428064175195,
+"term": 1.2021428064403308,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 78533.49866694075,
+"fresh_cell": 78533.49866995213,
 "k": 80000,
-"term": 4923.97693508616,
+"term": 4923.976935179595,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 778359.9495035381,
+"fresh_cell": 778359.9495732542,
 "k": 145568,
-"term": 64339.65605317526,
+"term": 64339.65605827433,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 7.142962276894736,
+"fresh_cell": 7.142962277534518,
 "k": 145568,
-"term": 0.5904411402325421,
+"term": 0.5904411402793361,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 29257.57348616084,
+"fresh_cell": 29257.573488781385,
 "k": 145568,
-"term": 2418.4469103924926,
+"term": 2418.446910584161,
 "why": null
 },
 {
@@ -841,98 +841,98 @@
 "fresh_cell": null,
 "k": 800000,
 "term": null,
-"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or is so near having none that no fixed point is proved, so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
 "k": 800000,
 "term": null,
-"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or is so near having none that no fixed point is proved, so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
 "k": 800000,
 "term": null,
-"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or is so near having none that no fixed point is proved, so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": null,
 "k": 8000000,
 "term": null,
-"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or is so near having none that no fixed point is proved, so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
 "k": 8000000,
 "term": null,
-"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or is so near having none that no fixed point is proved, so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
 "k": 8000000,
 "term": null,
-"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or is so near having none that no fixed point is proved, so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": null,
 "k": 80000000,
 "term": null,
-"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or is so near having none that no fixed point is proved, so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
 "k": 80000000,
 "term": null,
-"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or is so near having none that no fixed point is proved, so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
 "k": 80000000,
 "term": null,
-"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or is so near having none that no fixed point is proved, so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": null,
 "k": 800000000,
 "term": null,
-"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or is so near having none that no fixed point is proved, so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
 "k": 800000000,
 "term": null,
-"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or is so near having none that no fixed point is proved, so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
 "k": 800000000,
 "term": null,
-"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or is so near having none that no fixed point is proved, so \u039b has no proved value on any subset; a void is never a measured 0"
 }
 ],
 "fresh_per_c": {
 "145568": [
-1.198841361396127e-10,
-1.4503187594721232e-09
+1.1988413614911382e-10,
+1.4503187596020255e-09
 ],
 "65536": [
-3.043529794019189e-10,
-5.346109411520143e-09
+3.043529794058195e-10,
+5.346109411686972e-09
 ],
 "80000": [
-2.4408504428917995e-10,
-3.89296147260874e-09
+2.4408504429381165e-10,
+3.8929614727580165e-09
 ],
 "800000": null,
 "8000000": null,
@@ -1144,7 +1144,7 @@
 "share": 0.7400625,
 "subset": null,
 "term": null,
-"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), or is so near having none that no fixed point is proved, so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "fresh_cell": 4138401.093369211,
@@ -1286,7 +1286,7 @@
 "why": null
 },
 {
-"fresh_cell": 2869160.60653161,
+"fresh_cell": 2869160.6066211434,
 "inputs": {
 "C_gates": 277159456773655.0,
 "c": 536681984163840.0,
@@ -1794,7 +1794,7 @@
 "order": "chain",
 "share": 0.5504273850862195,
 "subset": null,
-"term": 163340.76087159815,
+"term": 163340.76087369153,
 "why": null
 },
 {
@@ -12777,7 +12777,7 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 80000000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "Fit's construction",
@@ -12800,7 +12800,7 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 80000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
@@ -12823,7 +12823,7 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 100000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "partial": true,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
@@ -12846,7 +12846,7 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
@@ -12869,7 +12869,7 @@
 "case": "lora",
 "fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
@@ -12892,7 +12892,7 @@
 "case": "adapter-live",
 "fresh_subset": null,
 "k": 100000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "unmeasured",
@@ -12915,7 +12915,7 @@
 "case": "adapter-live",
 "fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "no kind exceeds 1",
@@ -13753,6 +13753,7 @@
 "whole_making": {
 "diverged": [],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -13807,7 +13808,7 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 11.065531262155444,
 "rho": 11.065531262155444,
 "rho_fit": 1.0,
@@ -13923,6 +13924,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -13977,7 +13979,7 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14093,6 +14095,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -14147,7 +14150,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14263,6 +14266,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -14317,7 +14321,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14433,6 +14437,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -14487,7 +14492,7 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14599,6 +14604,7 @@
 "whole_making": {
 "diverged": [],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -14653,7 +14659,7 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14769,6 +14775,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -14823,7 +14830,7 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14939,6 +14946,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -14993,7 +15001,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15109,6 +15117,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -15163,7 +15172,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15279,6 +15288,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -15333,7 +15343,7 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15451,6 +15461,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -15505,7 +15516,7 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 8.35335685982954,
 "rho": 8.35335685982954,
 "rho_fit": 1.0,
@@ -15623,6 +15634,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -15677,7 +15689,7 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15795,6 +15807,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -15849,7 +15862,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15967,6 +15980,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -16021,7 +16035,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.9996631800490919,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -16139,6 +16153,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -16193,7 +16208,7 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -16312,6 +16327,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -16366,7 +16382,7 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 2.7344655410785834,
 "rho": 2.7344655410785834,
 "rho_fit": 1.000266918292764,
@@ -16485,6 +16501,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -16539,7 +16556,7 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": 1.000266918292764,
@@ -16658,6 +16675,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -16712,7 +16730,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.9999300519868622,
 "rho": 1.000266918292764,
 "rho_fit": 1.000266918292764,
@@ -16831,6 +16849,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -16885,7 +16904,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0110508421616675,
 "rho_fit": 1.0110508421616675,
@@ -17004,6 +17023,7 @@
 2048
 ],
 "e": 0,
+"unproved": [],
 "whole_chain": 1.0
 }
 },
@@ -17058,7 +17078,7 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.9, reading A",
+"label": "training's slowdown code 4.12.10, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": "inf",
@@ -17079,6 +17099,6 @@
 "unmeasured": {}
 }
 ],
-"version": "4.12.9",
+"version": "4.12.10",
 "w_fwd_gates": 4925098176.0
 }
