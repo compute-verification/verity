@@ -240,14 +240,18 @@ def _cut(slot: dict, lo: int, hi: int) -> dict:
     return {**slot, "spans": spans}
 
 
-def kept_records(body: Body, calls: list, hints: dict[int, Any], *, registered: bool) -> tuple[Body, list, dict[int, Any]]:
-    """A derivation's flat `body` with its runtime correspondence's `calls` (one per node) and its node `hints` (by node index), in
-    the registered compiler's form (`dead_free`) when `registered`. A swapped node keeps its Call record: its arguments and outputs
-    are the v1's. A narrowed node's record keeps the columns it computes: its output's and its column arguments' leaves cut to
-    them."""
+def kept_records(body: Body, calls: list | None, hints: dict[int, Any], *,
+                 registered: bool) -> tuple[Body, list | None, dict[int, Any]]:
+    """A derivation's flat `body` with its runtime correspondence's `calls` (one per node; None without a correspondence) and
+    its node `hints` (by node index), in the registered compiler's form (`dead_free`) when `registered`. A swapped node keeps
+    its Call record: its arguments and outputs are the v1's. A narrowed node's record keeps the columns it computes: its
+    output's and its column arguments' leaves cut to them."""
     if not registered:
         return body, calls, dict(hints)
     form, kept, cols = _dead_free(body)
+    kept_hints = {i: hints[k] for i, k in enumerate(kept) if k in hints}
+    if calls is None:
+        return form, None, kept_hints
     recs = [calls[k] for k in kept]
     for i, (a, b) in cols.items():
         n, rec = body.nodes[kept[i]], recs[i]
@@ -256,4 +260,4 @@ def kept_records(body: Body, calls: list, hints: dict[int, Any], *, registered: 
         recs[i] = {**rec, "returns": [_cut(s, a * per, b * per) for s in rec["returns"]],
                    "args": [_cut(s, a * (n.args[j].type.leaves // N), b * (n.args[j].type.leaves // N)) if j in widths else s
                             for j, s in enumerate(rec["args"])]}
-    return form, recs, {i: hints[k] for i, k in enumerate(kept) if k in hints}
+    return form, recs, kept_hints

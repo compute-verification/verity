@@ -6,7 +6,8 @@ a runtime / source occurrence, as data beside the Program (`annotations["corresp
     (c) the namespace is excluded from `program_digest`: adding / removing it leaves the digest byte-identical;
     (d) a rank Program of a tensor-parallel world carries the rank coordinate as integers, and its collective Calls carry the
         collective occurrence with operand ranks -- no string prefix is parsed anywhere;
-    (e) the reader's lookups (`owning_module`, `return_slot`, `arg_slot`, `calls_of_module`) answer from the data.
+    (e) the reader's lookups (`owning_module`, `return_slot`, `arg_slot`, `calls_of_module`) answer from the data;
+    (f) `correspondence=False` leaves the Program byte-identical and carries no correspondence.
 """
 
 from __future__ import annotations
@@ -166,6 +167,29 @@ def test_namespace_is_excluded_from_program_digest_add_and_remove():
     other = _tp_rank_program(rank=(2, 1))
     assert other.digest == rep.digest
     assert other.correspondence_digest != rep.correspondence_digest
+
+
+@pytest.mark.parametrize("dead_free", [False, True])
+def test_without_correspondence_the_program_is_unchanged(dead_free):
+    tp.ensure_ops()
+    args = (tp._meta(3, tp.H), tp._meta(3, tp.Q), tp._meta(3, tp.Q), tp._meta(3, tp.H))
+    on, off = (derive_report(tp.Model(), args, **tp.PROF, rules=vllm_ruleset(), name="TpSite", dead_free=dead_free,
+                             correspondence=c) for c in (True, False))
+    assert (off.digest, off.flat_digest, off.gates) == (on.digest, on.flat_digest, on.gates)
+    d_on, d_off = encode_program(on.program), encode_program(off.program)
+    assert {k: v for k, v in d_off.items() if k != "annotations"} == {k: v for k, v in d_on.items() if k != "annotations"}
+    assert NAMESPACE in d_on["annotations"] and NAMESPACE not in d_off["annotations"]
+    assert d_off["annotations"]["node_hints"] == d_on["annotations"]["node_hints"]
+    assert on.correspondence_digest is not None and off.correspondence_digest is None
+    assert off.provenance["result"]["correspondence"] is None
+
+
+def test_without_correspondence_rank_and_session_are_refused():
+    tp.ensure_ops()
+    args = (tp._meta(3, tp.H), tp._meta(3, tp.Q), tp._meta(3, tp.Q), tp._meta(3, tp.H))
+    for kw in ({"rank": (2, 0)}, {"session": []}):
+        with pytest.raises(ValueError, match="correspondence=True"):
+            derive_report(tp.Model(), args, **tp.PROF, rules=vllm_ruleset(), name="TpSite", correspondence=False, **kw)
 
 
 def test_rank_argument_is_validated():
