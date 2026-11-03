@@ -260,19 +260,15 @@ theorem UncertifiedElementary_honest : Guarantees.ServingBlocks.UncertifiedEleme
   refine ⟨?_, ?_⟩
   · rw [Counted.outside_eq Honest.J Honest.ω_one, Counted.split_eq Honest.J Honest.ω_one]
     norm_cast
-    decide
   · rw [Counted.split_eq Honest.J Honest.ω_one]
     norm_cast
-    decide
 
 theorem UncertifiedElementary_nontrivial : Guarantees.ServingBlocks.UncertifiedElementary_nontrivial := by
   refine ⟨?_, fun h => ?_⟩
   · rw [Counted.outside_eq Straddle.J Straddle.ω_one, Counted.split_eq Straddle.J Straddle.ω_one]
     norm_cast
-    decide
   · rw [UncertifiedCap, Counted.outside_eq Straddle.J Straddle.ω_one] at h
     norm_cast at h
-    exact absurd h (by decide)
 
 /-! Each lemma is its guarantee's premises as the guarantee states them: the guarantee applies at the honest instance,
 and at a counter-example the dropped premise would give the bound the lemma's last conjunct negates.
