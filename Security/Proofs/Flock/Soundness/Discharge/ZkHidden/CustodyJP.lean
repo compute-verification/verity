@@ -15,8 +15,8 @@ import Proofs.Flock.Soundness.Assumptions.ZkP
 * `drawOkZKHJP_of_size`: from `DrawFileZK dj law pop`, at a draw `S` whose file decodes only to `kd` units, with
   `nTab I` dividing `kd`, `DrawOkZKHJP` holds at `mPtsOf c.g (kd / nTab I)` link points, by `drawOkZKHJ_of_size`'s
   argument.
-* `decodesZCJH_custodyP`: `decodesZCJH_liveIP` with `hRec` and `hDraw` read off `RecordCustodyZKJP` (`live-verifier` at
-  `own`), at a law whose draw files decode only to `kd` units.
+* `decodesZCJH_custodyP`: `decodesZCJH_liveIP` with `hRec` and `hDraw` read off `RecordCustodyZKJPLaw` (`live-verifier`
+  at `own` and the registration's law), at a law whose draw files decode only to `kd` units.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden
@@ -153,7 +153,7 @@ theorem drawOkZKHJP_of_size (I : Inputs) (own : Option ByteArray) (ht : I.tags.t
       rw [hpd D' h', Array.size_extract, hsz, Nat.min_eq_left hjq, Nat.add_sub_cancel_left, hn]
 
 /-- **The decoder at the live hidden-output tables at `own`, under `live-verifier`** (`decodesZCJH_liveIP` at
-`RecordCustodyZKJP`): the record's custody at `own` gives the record's half (`hRec`), and its draw file, which decodes
+`RecordCustodyZKJPLaw`): the record's custody at `own` gives the record's half (`hRec`), and its draw file, which decodes
 only to `kd` units under the registration's law, the coin server's draws (`drawOkZKHJP_of_size`), at
 `mPtsOf c.g (kd / nTab I)` link points. -/
 theorem decodesZCJH_custodyP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
@@ -163,7 +163,7 @@ theorem decodesZCJH_custodyP (I : Inputs) (own : Option ByteArray) (ht : I.tags.
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (L : Law n) (hT : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJP I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
     (hsz : ∀ S D, Draw.UnitDraw.ofJson (dj S) = .ok D → D.units.size = kd) :
     DecodesOnZKJA (K := 𝕂) execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr
       (opnAtZHJP (planZHJP dj y₀) I own dj) (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true)

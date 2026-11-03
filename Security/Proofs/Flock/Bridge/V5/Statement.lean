@@ -18,7 +18,7 @@ holds at every `own`:
   (`All` is `subset n`), or `stratified K` or `work K` over those strata, drawing `kd` proof blocks. The verifier draws
   under it from its own bytes (`Bridge.execSel`, `SampledProofs.Draw.drawUnits` on one stream), and `δ` is that law's own
   miss of a set `B` of proof blocks (`P_a(B)` of `designOf (oneStageOf law)` on `partOf P κ ns`), not a parameter;
-* `live-verifier` at `own` and the law (`Assumptions.Zk.RecordCustodyZKJP`);
+* `live-verifier` at `own` and the law (`Assumptions.Zk.RecordCustodyZKJPLaw`);
 * the constants `Bridge.constsOfP`: `constsOf`'s constant and zero, and each proof block's public gates at its public input
   words' bits in the population's public file (`HiddenExec.pubBitOf`). The verifier derives the public inputs, so the
   statement fixes them, and a public gate is read with no opening;
@@ -100,7 +100,7 @@ def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
     (_hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the verify command's tags, and live-verifier at `own` and the law
     (hTags : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJP I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
     -- the count curve's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
@@ -163,7 +163,7 @@ def _root_.Flock.Bridge.TransportsLiveV5 : Prop :=
     (dg : ByteArray → ByteArray) (N : ℕ) (L : Law n)
     -- the verify command's tags, and live-verifier at `own` and the law
     (hTags : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJP I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
     (hsz : ∀ S ud, Flock.Draw.UnitDraw.ofJson (dj S) = .ok ud → ud.units.size = kd)
     (τ : Strategy (auditLive L Reg (liveOfZJ dg (planZHJP dj y₀) N wr))),
     let P := (keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi)
@@ -193,7 +193,7 @@ file's leaf map, with probability at most `δ + ε_ks + ε_bind`. `δ` is not a 
 of drawing no proof block of a set `B`, `P_a(B)` of its design on `partOf P κ ns` at the strata `ns` of the
 registration's layout (`nsOf`). At `subset kd` and the first `K₀` proof blocks it is `C(n − K₀, kd)/C(n, kd)`
 (`Bridge.pa_subset_range`), and under `All`, whose law is `subset n`, it is `0` at any `B` holding a proof block
-(`Bridge.pa_all`). Its named assumptions are V2's, with `live-verifier` at `own` and the law (`RecordCustodyZKJP`), and
+(`Bridge.pa_all`). Its named assumptions are V2's, with `live-verifier` at `own` and the law (`RecordCustodyZKJPLaw`), and
 the registration's law is on its layout's strata (`Bridge.LawOn`). -/
 def SampledKSLiveV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
@@ -219,7 +219,7 @@ def SampledKSLiveV5 : Prop :=
     (_hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the verify command's tags, and live-verifier at `own` and the law
     (hTags : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJP I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
     -- the proof blocks whose miss is `δ`
