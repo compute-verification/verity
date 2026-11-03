@@ -223,8 +223,8 @@ session finished, and V*'s statements' view if it did. The salt bytes are drawn 
 them from the operating system (A3, `uniform/io-getrandombytes`).
 
 It takes, each an obligation:
-* `SessionLoopZKDeployed`'s premises on the deployed tables (`Tables`, `Complete`, `DummyReg`, `Causal`, `SwCausal`,
-  `TapeOK` of the loop's session), which take `SessionsCoined`'s role;
+* `SessionLoopZKDeployed`'s premises on the deployed tables (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK` of
+  the loop's session, and `SwCausal`, which gives its `SwCausalOn`), which take `SessionsCoined`'s role;
 * the worker's values satisfy V*'s circuits wherever the inner session finished: at every such tape, randomness and
   salts, each statement parses and its witness satisfies its circuit (`OuterZK.LoopSessions.Honest` at
   `Claims.Flock.R`);

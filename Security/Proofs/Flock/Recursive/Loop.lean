@@ -417,8 +417,9 @@ theorem loop_zkmalR (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < 
 `vs` (`(loopRef L₀ src).swP vs`), the simulator and errors `Flock.zk_deployZk_sw`'s at the pinned key's hiding gap and
 `t` rewinds (`loopSim`, `loopEps`, `4·t·3^t`). The view is the switched prover's; what the loop's own prover sends is
 `SessionLoopZKDeployed`'s, which bounds it by twice the simulated view plus its error. `SessionLoopZKDeployed`'s
-premises on the deployed tables (`Tables`, `Complete`, `DummyReg`, `Causal`, `SwCausal`, `TapeOK`) take
-`SessionsCoined`'s role, with no further obligation on the tables; V*'s staging is `outerSessionsZK_of`'s. -/
+premises on the deployed tables (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`, and `SwCausal`, which gives its
+`SwCausalOn`) take `SessionsCoined`'s role, with no further obligation on the tables; V*'s staging is
+`outerSessionsZK_of`'s. -/
 theorem outerSessionsZK_loop {Ow Prog Wit Rv Ωa Ωp Pub Θ : Type} {nr nh : ℕ}
     (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t) (hS : Claims.ZKServer.Loop.finS.Tables)
     (hV : Claims.ZKServer.Loop.finS.Complete
