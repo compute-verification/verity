@@ -15,11 +15,12 @@ requests and how many salts were read for each, never a salt's value.
 * `liveOut`: the live loop (`liveWith`'s, over `liveStep`) at any requests: what it sends until the first refusal, and
   how it ends.
 * `run_any`: the same of `Flock.Firewall.run` at any requests and any salts of one length.
-* `Flock.SecurityProofs.liveOut_any`: the theorem.
+* `liveOut_order`: the same of `liveOut`, at the order of the tables its Commit named.
+* `Flock.SecurityProofs.liveOut_any`: the theorem, at the schedule's order of its tables, `T`.
 
-Commit's table order is the worker's: the firewall pins each named table's node count to the schedule's and refuses a
-table named twice (`step`'s typed pins), and only the canonical compare, which the kernel can't evaluate, pins the set.
-So the order `o` is an output here, among the schedule's tables (`Tables`).
+Today `step` takes Commit's tables in any order: it pins each named table's node count to the schedule's and refuses a
+table named twice (its typed pins), and only the canonical compare, which the kernel can't evaluate, pins the set. So
+`liveOut_any`'s other case is a Commit that named the schedule's tables, each once, in an order other than `T`.
 
 The proof reads one live session as `run` on the requests it took (`liveOut_liveRun`, `FirewallLive.run_live`), where
 `FirewallTemplate.Inv` says what it sent is the schedule's transcript so far (`sofar`, a prefix of `tmpl`) and `RootsOK`
@@ -564,23 +565,12 @@ theorem run_any (s : Schedule) (reqs : List ByteArray) (n : Nat) :
     rw [List.append_nil, hb, hI.sent, List.prefix_iff_eq_take.mp (sofar_prefix hI), hh'', fillAll_take] at e3
     rw [hx, e3, Array.toArray_toList]
 
-end FlockSoundness.Discharge.Recursion.FirewallAny
-
-namespace Flock.SecurityProofs
-
-open Flock.Firewall FlockSoundness.Discharge.Recursion
-open FirewallRun FirewallTemplate FirewallLive FirewallAny
-
-/-- **The live firewall at any requests sends the schedule's transcript, filled at the strings it accepted, or stops at
-a public place.** For any requests, each with how many fresh salts are read for it (`R`), there are tables `o` of the
-schedule, each named once, 64-byte digests `ds`, a place `k` of the schedule's transcript and an end `fin` such that
-every live session on those requests (`liveOut`, `flock-firewall live`'s loop), whatever salts it reads (`shape L = R`),
-sends the coin server the schedule's transcript with Commit naming `o` (`tmpl s o`), filled with the commit strings of
-`ds` under the salts read, in order, and cut after its first `k` messages, and finishes exactly when `fin`. A session
-that finishes sends the whole transcript; one that stops has sent its first `k` messages, `k` at most the transcript's
-length, which the schedule fixes (`tmpl s o`'s length doesn't read `o`). No condition on the requests: they are the inner
-worker's, whatever it is. -/
-theorem liveOut_any (s : Schedule) (R : List (ByteArray × Nat)) :
+/-- **The live firewall at any requests, at the order its Commit named**: for any requests, each with how many fresh
+salts are read for it (`R`), there are tables `o` of the schedule, each named once, 64-byte digests `ds`, a place `k` of
+the schedule's transcript and an end `fin` such that every live session on those requests, whatever salts it reads
+(`shape L = R`), sends the schedule's transcript with Commit naming `o` (`tmpl s o`), filled with the commit strings of
+`ds` under the salts read, in order, cut after its first `k` messages, and finishes exactly when `fin`. -/
+theorem liveOut_order (s : Schedule) (R : List (ByteArray × Nat)) :
     ∃ (o : List String) (ds : List ByteArray) (k : Nat) (fin : Bool),
       Tables s o ∧ (∀ d ∈ ds, d.size = 64) ∧ ds.length ≤ (R.map (·.2)).sum ∧ k ≤ (tmpl s o).length ∧
         (fin = true → k = (tmpl s o).length) ∧
@@ -628,5 +618,69 @@ theorem liveOut_any (s : Schedule) (R : List (ByteArray × Nat)) :
       rw [List.append_nil, ← hb', hsof, hh₁'', fillAll_take] at e3
       exact e3.symm
     · rw [liveFinished_eq, liveFinished_eq, ← hf']
+
+/-! ## At the schedule's order -/
+
+theorem length_tmpl (s : Schedule) (o T : List String) : (tmpl s o).length = (tmpl s T).length := by
+  simp only [tmpl, List.length_append, List.length_cons, List.length_nil]
+
+theorem fillRoots_names : ∀ (roots : List (String × List ByteArray)) (cs : List ByteArray),
+    (fillRoots roots cs).map (·.1) = roots.map (·.1)
+  | [], _ => rfl
+  | e :: es, cs => by simp only [fillRoots, List.map_cons, fillRoots_names es]
+
+/-- Cut after Commit, the schedule's transcript filled names Commit's tables. -/
+theorem namesOf_fill_take (s : Schedule) (o : List String) (cs : List ByteArray) (k : Nat) (hk : 2 ≤ k) :
+    namesOf ((fillAll (tmpl s o) cs).take k) = o := by
+  obtain ⟨k, rfl⟩ : ∃ k', k = k' + 2 := ⟨k - 2, by omega⟩
+  simp only [tmpl, commitT, List.cons_append, fillAll, List.take_succ_cons, fill, namesOf, fillRoots_names,
+    List.map_map]
+  exact List.map_id' o
+
+/-- Cut before Commit, the schedule's transcript filled doesn't read Commit's tables. -/
+theorem fill_take_lt_two (s : Schedule) (o T : List String) (cs : List ByteArray) (k : Nat) (hk : k < 2) :
+    (fillAll (tmpl s o) cs).take k = (fillAll (tmpl s T) cs).take k := by
+  rcases k with _ | _ | k
+  · rfl
+  · simp only [tmpl, List.cons_append, fillAll, List.take_succ_cons, List.take_zero]
+  · omega
+
+end FlockSoundness.Discharge.Recursion.FirewallAny
+
+namespace Flock.SecurityProofs
+
+open Flock.Firewall FlockSoundness.Discharge.Recursion
+open FirewallRun FirewallTemplate FirewallAny
+
+/-- **The live firewall at any requests sends the schedule's transcript, filled at the strings it accepted, or stops at
+a public place, unless its Commit named the schedule's tables in another order.** `T` is the order of the schedule's
+tables that Commit is to name. For any requests, each with how many fresh salts are read for it (`R`), there are 64-byte
+digests `ds`, a place `k` of the schedule's transcript and an end `fin` such that every live session on those requests
+(`liveOut`, `flock-firewall live`'s loop), whatever salts it reads (`shape L = R`), either sends the coin server the
+schedule's transcript with Commit naming `T` (`tmpl s T`), filled with the commit strings of `ds` under the salts read,
+in order, and cut after its first `k` messages, and finishes exactly when `fin`; or sent a Commit naming the schedule's
+tables, each once, in an order other than `T`, which `step` takes today: it refuses a table named twice and pins each
+named table's node count, and doesn't pin the order. A session that finishes sends the whole transcript; one that stops
+has sent its first `k` messages. No condition on the requests: they are the inner worker's, whatever it is. -/
+theorem liveOut_any (s : Schedule) (T : List String) (R : List (ByteArray × Nat)) :
+    ∃ (ds : List ByteArray) (k : Nat) (fin : Bool),
+      (∀ d ∈ ds, d.size = 64) ∧ ds.length ≤ (R.map (·.2)).sum ∧ k ≤ (tmpl s T).length ∧
+        (fin = true → k = (tmpl s T).length) ∧
+        ∀ L : List (ByteArray × List ByteArray), shape L = R →
+          ((liveOut s { salts := [] } L).1 =
+              (fillAll (tmpl s T) (List.zipWith Hm96.Default512.commitString ds (L.flatMap (·.2)))).take k ∧
+            liveFinished s L = fin) ∨
+          (namesOf (liveOut s { salts := [] } L).1 ≠ T ∧ Tables s (namesOf (liveOut s { salts := [] } L).1)) := by
+  obtain ⟨o, ds, k, fin, ho, hds, hle, hk, hfin, hL⟩ := liveOut_order s R
+  have hlen := length_tmpl s o T
+  refine ⟨ds, k, fin, hds, hle, hlen ▸ hk, fun h => hlen ▸ hfin h, fun L hS => ?_⟩
+  obtain ⟨hs, hf⟩ := hL L hS
+  by_cases hoT : o = T
+  · subst hoT
+    exact Or.inl ⟨hs, hf⟩
+  rcases Nat.lt_or_ge k 2 with hk2 | hk2
+  · exact Or.inl ⟨hs.trans (fill_take_lt_two s o T _ k hk2), hf⟩
+  · rw [hs, namesOf_fill_take s o _ k hk2]
+    exact Or.inr ⟨hoT, ho⟩
 
 end Flock.SecurityProofs
