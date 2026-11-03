@@ -1,6 +1,8 @@
-import Definitions.Claims.Json
-import Lean.Data.Json
-import Std.Data.TreeMap.Raw.Basic
+module
+
+public import Definitions.Claims.Json
+public import Lean.Data.Json
+public import Std.Data.TreeMap.Raw.Basic
 
 /-!
 # JSON values alike, printable and well formed
@@ -20,6 +22,8 @@ What the completeness proofs read of the record's JSON values:
 The verifier's parser `Flock.JsonParse.parse` reads back an alike value from what the honest prover's printer and
 `Flock.canon` print of a printable value (`RoundTrip.lean`), so the round trip rests on no assumption.
 -/
+
+@[expose] public section
 
 namespace Claims
 

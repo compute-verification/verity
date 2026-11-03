@@ -1,5 +1,7 @@
-import Flock.Firewall.Honest
-import Proofs.Flock.Recursive.FirewallJson
+module
+
+public import Flock.Firewall.Honest
+public import Proofs.Flock.Recursive.FirewallJson
 
 /-!
 # Objects as the firewall builds, reads and pins them
@@ -10,6 +12,8 @@ objects whose keys ascend and whose members have the same keys and canonical for
 (`canonForm_obj_perm`), and a key of an object whose keys ascend reads its member's value (`getObjVal?_of_mem`) or
 nothing (`getObjVal?_of_not_mem`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallObj
 

@@ -1,8 +1,10 @@
-import Flock.Firewall.Honest
-import Proofs.Flock.Recursive.FirewallTemplate
-import Proofs.Flock.Recursive.FirewallWire
-import Proofs.Flock.Recursive.FirewallJson
-import Proofs.Flock.Recursive.FirewallSteps
+module
+
+public import Flock.Firewall.Honest
+public import Proofs.Flock.Recursive.FirewallTemplate
+public import Proofs.Flock.Recursive.FirewallWire
+public import Proofs.Flock.Recursive.FirewallJson
+public import Proofs.Flock.Recursive.FirewallSteps
 
 /-!
 # The honest worker's requests pass the firewall
@@ -25,6 +27,8 @@ Finish's pin holds (`finish_pin`).
 at the commit strings before it, the worker's rows reading no commit string at or after their own (`Causal`).
 `honestReqs_accepts` (`FirewallAccepts`) is `run_honestReqs` at zero salts.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallHonest
 

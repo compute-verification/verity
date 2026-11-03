@@ -5,7 +5,11 @@ firewall (`Flock.Firewall.run`), from the pinned schedule and what the worker br
 `rec_live`'s requests on a real prover's recorded session to them, byte for byte
 (`verity/ml/flock/tests/test_honest_reqs.py`).
 -/
-import Flock.Firewall
+module
+
+public import Flock.Firewall
+
+@[expose] public section
 
 namespace Flock.Firewall
 
