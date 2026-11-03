@@ -87,9 +87,9 @@
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
 #     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
 #     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's.
-#     CERTIFIER_FRONT is remote's too: the warden in front of the endpoint is how its requests are served, not a piece,
-#     so its session stays in the serve dir's private/ and its exit is the CERTIFIER-FRONT line's, which remote's record
-#     doesn't read.
+#     CERTIFIER_FRONT is remote's too: the network certifier in front of the endpoint is how its requests are served, not
+#     a piece, so its session stays in the serve dir's private/ and its exit is the CERTIFIER-FRONT line's, which remote's
+#     record doesn't read.
 #  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
@@ -381,7 +381,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$D/serve.log" | cut -c1-300)"
   weights
   [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period served "$D" 2>&1 | tail -1)"
-  if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier's warden in front of the endpoint, before the requests
+  if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier in front of the endpoint, before the requests
     # below: its group closes into the run's earliest window, which `served_verdicts.py window` picks on a tie in requests.
     # Its session, bundle and log hold the group's prompts, request and cells, so they stay in the serve dir's private/
     (umask 077; mkdir -p "$D/private")
