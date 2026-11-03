@@ -43,11 +43,13 @@ PRODUCT = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m":
            "gates_per_mac": 1480.0, "cell_gates": 23682.0, "fed": [[1024, 1.0]], "P": 1.0, "gathered": [False, False]}
 
 
-def products_rows(*rows, steps: float = 1.0, p_match: tuple = (), dial: tuple = ()) -> dict:
-    """`rows` as a run's products (formalism.products_of_trace): a traced step's, times `steps`, with the ops that
-    break P-match `p_match`, and the same rows at each k of `dial` (a trace's `at`)."""
-    block = {"capture": formalism.SYSTEM_FROM, "k": float(policy.CONSOLE[1]), "order": "unknown", "tokens": 8,
-             "gates": None, "rows": list(rows), "p_match": list(p_match)}
+def products_rows(*rows, steps: float = 1.0, p_match: tuple = (), dial: tuple = (), elementwise: tuple = (),
+                  capture: str = formalism.ELEMENTWISE_FROM) -> dict:
+    """`rows` as a run's products (formalism.products_of_trace): a traced step's, captured by `capture`, times
+    `steps`, with the ops that break P-match `p_match` and the products the step writes elementwise `elementwise`,
+    and the same rows at each k of `dial` (a trace's `at`)."""
+    block = {"capture": capture, "k": float(policy.CONSOLE[1]), "order": "unknown", "tokens": 8, "gates": None,
+             "rows": list(rows), "p_match": list(p_match), "elementwise_products": list(elementwise)}
     at = {f"{k:.0f}": {"k": float(k), "rows": list(rows), "p_match": list(p_match)} for k in dial}
     return formalism.products_of_trace(block | ({"at": at} if at else {}), steps)
 
@@ -269,11 +271,14 @@ def test_an_unmeasured_delta_grad_names_its_steps_and_whether_fits_verdict_at_ei
 def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed_with_te_cores_reason():
     """`products`, the fresh-products kind's input: measured where te_core prices a trace's product rows at the
     console's default and at the serving block, whose k the trace keeps them at too, with its reason where the serving
-    block's k leaves them unmeasured (they were classified at the console's alone); assumed where the dominant traced step's stand in for steps of another shape, or with te_core's
-    reason where unmeasured (an op log's, a round untraced, rows captured before te_core 4.12.1 that don't give all
-    the term reads, the step's whole-making system and which operands read an embedding's rows, a step that breaks
-    P-match, and a void: a system with no fixed point at the k, which voids every subset of the products, never a
-    measured 0); and assumed where untraced steps that update count none."""
+    block's k leaves them unmeasured (they were classified at the console's alone); assumed where the dominant traced
+    step's stand in for steps of another shape, or with te_core's reason where unmeasured (an op log's, a round
+    untraced, rows captured before te_core 4.12.1 that don't give all the term reads, the step's whole-making system
+    and which operands read an embedding's rows, rows captured before 4.12.9's check for matrix products written
+    elementwise, a step that writes some, a step that breaks P-match, and a void, never a measured 0: a counted product
+    fed by a cycle with no fixed point at the k, which no subset drops, with the best set of the products no such
+    cycle feeds beside it where there are any, their figure alone and the share of the step's counted fresh
+    multiplications they are); and assumed where untraced steps that update count none."""
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
 
@@ -296,14 +301,31 @@ def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed
         old = {x: v for x, v in PRODUCT.items() if x not in since}
         assert unmeasured(products_rows(old)) == formalism.FRESH_RETRACE
         assert SW.products(bounds(products_rows(old))) == f"assumed: {formalism.FRESH_RETRACE}"
+    unchecked = products_rows(PRODUCT, capture=formalism.SYSTEM_FROM)
+    assert unchecked["elementwise_products"] is None and unmeasured(unchecked) == formalism.FRESH_UNCHECKED
+    assert SW.products(bounds(unchecked)) == f"assumed: {formalism.FRESH_UNCHECKED}"
+    outer = {"op": "aten.mul.Tensor", "count": 2, "macs": 8192.0}
+    written = unmeasured(products_rows(PRODUCT, elementwise=[outer]))
+    assert written.startswith("unmeasured: the traced step writes matrix products as elementwise steps")
+    assert "aten.mul.Tensor (2×, 8.19e+03 multiplications)" in written
+    assert SW.products(bounds(products_rows(PRODUCT, elementwise=[outer]))) == f"assumed: {written}"
     gather = {"op": "aten.embedding.default", "fan_out": 4.0, "count": 1}
     broken = unmeasured(products_rows(PRODUCT, p_match=[gather]))
-    assert broken.startswith("unmeasured: the traced step breaks P-match") and "aten.embedding.default" in broken
+    assert broken.startswith(f"unmeasured: the traced step breaks the premise that {formalism.P_MATCH}")
+    assert "aten.embedding.default" in broken
     assert SW.products(bounds(products_rows(PRODUCT, p_match=[gather]))) == f"assumed: {broken}"
     short = PRODUCT | {"dims": PRODUCT["dims"] | {"k": 8}, "macs": 256, "k_whole": 8, "fed": [[8, 1.0]]}
-    for void in (products_rows(short), products_rows(PRODUCT, short)):
-        assert unmeasured(void) == formalism.FRESH_VOID
-        assert SW.products(bounds(void)) == f"assumed: {formalism.FRESH_VOID}"
+    assert unmeasured(products_rows(short)) == formalism.FRESH_VOID
+    assert SW.products(bounds(products_rows(short))) == f"assumed: {formalism.FRESH_VOID}"
+    stuck = bounds(products_rows(PRODUCT, short))
+    conv = stuck["console"]["inputs"]["fresh_products"]["converged"]
+    assert stuck["console"]["unmeasured"]["fresh_products"] == formalism.FRESH_VOID
+    assert conv["diverged_fed"] == 1 and conv["kept_macs_share"] == pytest.approx(128 / 129, rel=1e-12)
+    assert conv["term"] == pytest.approx(b["console"]["terms"]["fresh_products"], rel=1e-12)
+    assert stuck["console"]["sensitivities"]["fresh_converged"] == conv["term"]
+    assert SW.products(stuck) == (f"assumed: {formalism.FRESH_VOID}; beside it, the best set of the products no such "
+                                  f"cycle feeds gives {algorithm_policy.num(conv['term'])} (the kinds cell's "
+                                  f"fresh_converged) on 99.2% of the step's counted fresh multiplications")
     stand = rows | {"stand_in": {"structures": ["a", "c"], "step_tokens": [4, 8], "traced_tokens": 8,
                                  "why": formalism.STAND_IN}}
     shapes = ("the run's traced steps differ in shape, so the dominant traced step's products stand in for all of them, "
@@ -337,8 +359,10 @@ def test_the_builders_own_words_in_a_published_string_name_no_code():
     st = SW.status(m, read={"untraced": gaps, "steps": 4})
     con = {"unmeasured": {}, "inputs": {"fresh_products": {"stand_in": {"structures": ["a", "c"]}}}}
     b = {"console": con, "served": {"unmeasured": {"fresh_products": "why"}}}
+    conv = {"fresh_products": {"converged": {"term": 63.41, "kept_macs_share": 0.595}}}
     said = [SW.products(b, left=gaps * 2),
-            SW.products(b | {"console": con | {"unmeasured": {"fresh_products": "why"}}}, rounds=True)]
+            SW.products(b | {"console": con | {"unmeasured": {"fresh_products": "why"}}}, rounds=True),
+            SW.products(b | {"console": {"unmeasured": {"fresh_products": "why"}, "inputs": conv}})]
     notes = [SW.note({"rows": [[x if c == "reading" else None for c in SW.COLUMNS]]}, "art:" + "0" * 64)
              for x in ("A", "B")]
     words = [SW.IDLE, SW._UNTRACED, *SW.ROUNDS.values(), *gaps, *st.values(), *said, *notes]
