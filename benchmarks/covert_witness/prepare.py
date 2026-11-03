@@ -194,7 +194,7 @@ class Net(torch.nn.Module):
             from model import LM, VOCAB, Size
 
             self.inner = LM(Size(config["name"], config["d_model"], config["n_layer"], config["n_head"], config["d_ff"]),
-                            vocab=config.get("vocab", VOCAB))
+                            vocab=config.get("vocab", VOCAB), prefix=config.get("prefix", 0))
         elif config["family"] == "hf-neox":
             from transformers import GPTNeoXConfig, GPTNeoXForCausalLM
 
@@ -326,8 +326,8 @@ class TrainData:
 #: `embed_out` in transformers 4 and `lm_head` from 5 (the start is registered under the installed one's name).
 FAMILIES = {
     "lf": {"embed": "embed", "head": "embed", "final": r"norm", "block": r"blocks\.(\d+)\.(\w+?)(?:\.weight)?",
-           "stages": {"attn_norm": 0, "wq": 1, "wk": 1, "wv": 1, "wo": 2, "mlp_norm": 3, "w_gate": 4, "w_up": 4,
-                      "w_down": 5}},
+           "stages": {"attn_norm": 0, "wq": 1, "wk": 1, "wv": 1, "prefix_k": 1, "prefix_v": 1, "prefix_gate": 1,
+                      "wo": 2, "mlp_norm": 3, "w_gate": 4, "w_up": 4, "w_down": 5}},
     "hf-neox": {"embed": r"gpt_neox\.embed_in\.weight", "head": r"(?:embed_out|lm_head)\.weight",
                 "final": r"gpt_neox\.final_layer_norm\.(?:weight|bias)",
                 "block": r"gpt_neox\.layers\.(\d+)\.(.+)\.(?:weight|bias)",

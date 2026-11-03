@@ -1,6 +1,7 @@
 """The `lf` model, learning_frontier's dense decoder: Llama-style (RMSNorm, SwiGLU, RoPE, no biases), context 1024, the GPT-2
 vocabulary padded to 50,304 (data v3's starts: bpe32k's 32,000, `Size.config(vocab=32000)`), input and output embeddings
-tied. Its parameter names are the start registry's tensor names.
+tied. Its parameter names are the start registry's tensor names. A config's optional `prefix` P gives every block P
+learned key/value pairs behind a zero-initialized per-head gate (prefix tuning), which a start's config doesn't have.
 """
 from __future__ import annotations
 
@@ -47,7 +48,7 @@ class Linear(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, size: Size, std: float, out_std: float):
+    def __init__(self, size: Size, std: float, out_std: float, prefix: int = 0):
         super().__init__()
         d = size.d_model
         self.n_head = size.n_head
@@ -57,13 +58,24 @@ class Block(nn.Module):
         self.wo = Linear(d, d, out_std)
         self.w_gate, self.w_up = Linear(d, size.d_ff, std), Linear(d, size.d_ff, std)
         self.w_down = Linear(size.d_ff, d, out_std)
+        if prefix:
+            # prefix tuning in its zero-gated form (LLaMA-Adapter): `prefix` learned key/value pairs every query also
+            # attends to, apart from the sequence, scaled per head by tanh(prefix_gate), so a zero gate is the block
+            self.prefix_k, self.prefix_v = Linear(d, prefix, std), Linear(d, prefix, std)
+            self.prefix_gate = nn.Parameter(torch.zeros(size.n_head))
 
     def forward(self, x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
         b, t, d = x.shape
         h = F.rms_norm(x, (d,), self.attn_norm)
         q, k, v = (w(h).view(b, t, self.n_head, d // self.n_head).transpose(1, 2) for w in (self.wq, self.wk, self.wv))
         q, k = rope(q, cos, sin), rope(k, cos, sin)
-        a = F.scaled_dot_product_attention(q, k, v, is_causal=True).transpose(1, 2).reshape(b, t, d)
+        a = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+        if hasattr(self, "prefix_gate"):
+            kp, vp = (p.weight.view(-1, self.n_head, d // self.n_head).transpose(0, 1).to(q.dtype)
+                      for p in (self.prefix_k, self.prefix_v))
+            g = torch.tanh(self.prefix_gate).view(1, -1, 1, 1).to(q.dtype)
+            a = a + g * F.scaled_dot_product_attention(q, kp.expand(b, -1, -1, -1), vp.expand(b, -1, -1, -1))
+        a = a.transpose(1, 2).reshape(b, t, d)
         x = x + self.wo(a)
         h = F.rms_norm(x, (d,), self.mlp_norm)
         return x + self.w_down(F.silu(self.w_gate(h)) * self.w_up(h))
@@ -75,13 +87,13 @@ def rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
 
 
 class LM(nn.Module):
-    def __init__(self, size: Size, ctx: int = CTX, vocab: int = VOCAB):
+    def __init__(self, size: Size, ctx: int = CTX, vocab: int = VOCAB, prefix: int = 0):
         super().__init__()
         self.size, self.vocab = size, vocab
         std, out_std = 0.02, 0.02 / math.sqrt(2 * size.n_layer)
         self.embed = nn.Parameter(torch.empty(vocab, size.d_model))
         nn.init.normal_(self.embed, std=std)
-        self.blocks = nn.ModuleList(Block(size, std, out_std) for _ in range(size.n_layer))
+        self.blocks = nn.ModuleList(Block(size, std, out_std, prefix) for _ in range(size.n_layer))
         self.norm = nn.Parameter(torch.ones(size.d_model))
         hd = size.d_model // size.n_head
         freqs = 1.0 / (ROPE_THETA ** (torch.arange(0, hd, 2, dtype=torch.float32) / hd))

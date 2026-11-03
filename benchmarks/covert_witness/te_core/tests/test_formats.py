@@ -393,6 +393,37 @@ def test_a_model_format_keeps_thetas_vocabulary_context_and_tying_and_only_its_a
             prepare.decode(th, prepare.encode_model(big, given), device="cpu")
 
 
+def test_a_prefix_model_at_its_initialisation_computes_thetas_function_exactly():
+    small = lf(2)
+    big = {**small, "prefix": 4}
+    th = lf_theta(small)
+    torch.manual_seed(2)
+    with torch.device("cpu"):
+        init = {k: v.detach().to(torch.bfloat16) for k, v in prepare.Net(big).params().items() if k not in th}
+    assert sorted(init) == sorted(f"blocks.{j}.{n}" for j in range(2)
+                                  for n in ("prefix_k.weight", "prefix_v.weight", "prefix_gate"))
+    assert all(not init[f"blocks.{j}.prefix_gate"].any() for j in range(2))
+    assert all(init[f"blocks.{j}.prefix_k.weight"].any() for j in range(2))
+    out = prepare.decode(th, prepare.encode_model(big, init), device="cpu")
+    idx = torch.randint(0, 32000, (2, 16), generator=torch.Generator().manual_seed(3))
+    with torch.device("cpu"):
+        start, prefixed = prepare.Net(small).load(th), prepare.Net(big).load(out)
+    assert torch.equal(start.logits(idx), prefixed.logits(idx))
+    rec = prepare.model_record({"config": small, "tokenizer": prepare.data_v3.TOKENIZER}, big, out)
+    at = {n["param"]: n for n in prepare.positions(rec)}
+    assert at["blocks.1.prefix_k.weight"]["stage"] == 1 and at["blocks.1.prefix_k.weight"]["flops"] == 2 * 4 * 32
+    from te_core.flops import forward_macs_per_token
+    with torch.device("cpu"):
+        extra = forward_macs_per_token(prepare.Net(big), 16, 32000, "cpu") - forward_macs_per_token(prepare.Net(small), 16, 32000, "cpu")
+    # every query's scores against the P = 4 prefix keys and its sum of their values, at d = 32, in both blocks
+    assert extra >= 2 * 2 * 4 * 32
+    # a trained gate moves the function, so the extension is live
+    out["blocks.0.prefix_gate"] = torch.full((2,), 0.5, dtype=torch.bfloat16)
+    with torch.device("cpu"):
+        moved = prepare.Net(big).load(out)
+    assert not torch.equal(start.logits(idx), moved.logits(idx))
+
+
 def test_bpe32k_training_windows_cover_every_parts_windows_and_none_crosses_a_part(tmp_path, monkeypatch):
     lengths = (41, 9, 2, 25)
     (tmp_path / "parts").mkdir()
