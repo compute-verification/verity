@@ -1,0 +1,331 @@
+"""Remote's tie end to end on a toy: one H1 window at K = 2048 and the V3c window circuit that audits it, registered as
+the remote composite reads them (`Core.Remote`: each period window's Commit record is the one record one-stage audits).
+
+**The toy** (`_toy`): a one-layer Llama of hidden 2048 at the exact-int8 checkpoint, vocabulary 512, at class (1 slot,
+prompts of 32, 2 outputs). So H1's window has 2 rounds, round 0 the prompt's 32 rows and round 1 one decode row, and its
+tables at K = 2048 are M = 32 rows a call and 3 calls a round (vLLM's fused qkv, o and gate/up). Its proof blocks can be
+proved: C-Flock's composer needs a row past 111 bytes in every template, which takes prompts of at least 27 ids
+(`TokenFeed_v1`) and a vocabulary of at least 448 (the token select). H1's window Program is a stand-in digest, since the tie
+reads only its digest, its open root and its tables' names.
+
+* **W**, H1's window registration (`pouw_h1_commit.registration`): each round's A table of K and input-ids table, made H1's
+  way from the served values (`chunk_words` of each call's int8 codes and scale over M slots, call after call; `ids_words`
+  of the step's input ids), committed under H1's run key at H1's nonces and domains (round 0's ids bound to the session).
+* **R**, the audited window's registration: the window circuit with H1's tables (`window_circuit.lower` with `Tables`), its
+  units filled from the same values (`window_rows.Rows`), recorded, committed and written through `interface.Window`.
+  `_registrar` makes R a v2 record chained right after W, registering each table the circuit reads at W's entry of it
+  under the circuit's name. It is a stand-in: window-commit doesn't take W yet.
+
+**Honest** (slow): every row a proof block holds to a table is W's row there, and every served row of W is held by one.
+**One flipped table row** (slow): flipping a bit of round 1's o-projection row changes W's leaf there alone, so the honest
+reader's row opens against no root W registers; that reader is the one proof block of a template of its own, which
+`stratified:1` always draws; and a prover who records the flipped row has that proof block off its Definition, so its proof
+fails.
+
+**Records** (opt-in, `VERITY_PROVE_PATH_REMOTETIE`: the window's record, commit and write take minutes): credit's ROOTS1 on R
+(`credit._arow`) passes, R reuses W's tables (`pouw_h1_commit.reused`) and is the record H1 names (`named`), its digest is
+credit's (`commit_of`) and one-stage's, and R1-R7 (`registration.check` with the log [W] and each table an output value of
+W's) accept it. With the flipped row they accept W' and its R' too: the records can't see a row, and only the reader's
+proof refuses it.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+from verity_vllm.program.model import INT8_EXACT_QUANT
+from verity_vllm.program.predict import scan_state as SS
+from verity_vllm.program.predict import window_circuit as WC
+from verity_vllm.program.predict import window_rows as WRS
+from verity_vllm.program.predict import window_weights as WW
+from verity_vllm.program.predict.phi import Phi
+from verity_vllm.program.predict.steps import Registered
+from verity_vllm.program.predict.window_class import Tables, WindowClass
+from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity_vllm.protocols.pouw.h1 import registered as NR
+from verity_vllm.protocols.pouw.h1 import served as SV
+from verity_vllm.protocols.pouw.h1.words import chunk_words, ids_words
+
+from verity.core.protocols.pouw import credit as CR
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as G, registration as REG
+from verity.ml.circuits.codec import canonical_json
+from verity.ml.circuits.evaluation import evaluate_batch
+from verity.ml.windows import interface as IF, rows as CS
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+import records_audit as RA  # noqa: E402
+
+K, M, CALLS, ROUNDS = 2048, 32, 3, 2
+CONFIG = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": K, "intermediate_size": 256,
+          "num_attention_heads": 32, "num_key_value_heads": 8, "num_hidden_layers": 1, "vocab_size": 512,
+          "rms_norm_eps": 1e-5, "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu",
+          "quantization_config": dict(INT8_EXACT_QUANT)}
+TARGET = {"compute_capability": [12, 0], "num_sms": 188, "int8_exact": "linears"}
+CLASS, TABLES = WindowClass(1, 32, 2), Tables(K, M, CALLS)
+#: H1's linears at K and their calls, a round each linear once (`pouw_h1_served.Served`'s)
+LINEARS = [("qkv", K, 3072), ("o", K, K), ("gate_up", K, 512)]
+#: the committers' secret keys: V3c's, and H1's run key
+KEY, H1_KEY = bytes(range(32)), bytes(range(64, 96))
+H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()
+OPEN = hashlib.sha512(b"the H1 window's open root").hexdigest()
+#: the V3c window's run root
+RUN = "ab" * 64
+LAW = D.parse_law("stratified:1")
+PROMPT = [(7 * i + 3) % 500 for i in range(CLASS.prompt)]
+#: the flipped row: round 1's o-projection's (call 1 of the round) first slot
+FLIP = ("row-table/1/k2048", M * 1)
+REMOTETIE = "VERITY_PROVE_PATH_REMOTETIE"
+RECORDS = pytest.mark.skipif(not os.environ.get(REMOTETIE), reason=f"{REMOTETIE}=1 records, commits and writes the toy's "
+                             "11,252 proof blocks, a few minutes")
+
+
+def _bf16(x) -> np.ndarray:
+    return (np.asarray(x, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
+
+
+def _weights(fn) -> dict[str, np.ndarray]:
+    """Finite random weights, each field's elements in their unsigned width: s8 codes, small positive f32 scales (an
+    attention's scales 1), norms near 1, the rotary cache in [-1, 1]."""
+    rng, out = np.random.default_rng(3), {}
+    for label, ty in dict(fn.signature()[0])[WC.WEIGHTS].fields:
+        (bits,), n = ty.width_set(), ty.leaves
+        if bits == 8:
+            out[label] = rng.integers(-127, 128, n).astype(np.int8).view(np.uint8)
+        elif bits == 32:
+            out[label] = (np.ones(1) if n == 1 else rng.uniform(5e-3, 2e-2, n)).astype(np.float32).view(np.uint32)
+        elif "cos_sin" in label:
+            out[label] = _bf16(rng.uniform(-1, 1, n))
+        elif "norm" in label:
+            out[label] = _bf16(1 + 0.1 * rng.standard_normal(n))
+        else:
+            out[label] = _bf16(0.5 * rng.standard_normal(n))
+    return out
+
+
+def _h1_row(p: int) -> tuple[int, int]:
+    """Position p of the one slot as H1 batches it: its prompt's tokens are round 0's rows in order, and its decode step at
+    position p >= L round p - L + 1's first row."""
+    return (0, p) if p < CLASS.prompt else (p - CLASS.prompt + 1, 0)
+
+
+def _h1_tables(low, rows, slot) -> tuple[dict[int, np.ndarray], dict[int, np.ndarray]]:
+    """Each round's A table of K and input-ids table as H1 commits them from the served values: each call's rows its
+    quantizer's int8 codes and f32 scale at each of the round's positions (a position's 3 int8 linears at K in node
+    order), `chunk_words` over M slots, call after call; and the step's input ids, `ids_words` over M slots."""
+    pos, P = WRS.positions(low.fn), low.programs[0]
+    quants: dict[int, list] = {}
+    for j in sorted(P.packed):
+        quants.setdefault(pos[j], []).append(P.packed[j])
+    codes = {s: [[] for _ in range(CALLS)] for s in range(ROUNDS)}
+    scales = {s: [[] for _ in range(CALLS)] for s in range(ROUNDS)}
+    ids: dict[int, list[int]] = {s: [] for s in range(ROUNDS)}
+    for p in range(CLASS.positions):
+        s, i = _h1_row(p)
+        assert len(quants[p]) == CALLS and len(ids[s]) == i
+        for c, r in enumerate(quants[p]):
+            codes[s][c].append(rows.outs[r.tid][0][r.unit].view(np.int8))
+            scales[s][c].append(rows.outs[r.tid][1][r.unit].view("<f4")[0])
+        ids[s].append(int(slot.tokens[p]))
+    a = {s: np.concatenate([chunk_words(np.array(codes[s][c]), np.array(scales[s][c], "<f4"), 1, M) for c in range(CALLS)])
+         for s in range(ROUNDS)}
+    return a, {s: ids_words(ids[s], M) for s in range(ROUNDS)}
+
+
+class _Served(SV.Served):
+    """H1's served trees under the stand-in window Program: its A tables named as `h1window.table` names them."""
+
+    def a_table(self, c: int) -> str:
+        return f"{SV.PREFIX}a/{K}@{c // len(self.linears)}"
+
+
+def _window(a_words: dict[int, np.ndarray], id_words: dict[int, np.ndarray]) -> SimpleNamespace:
+    """H1's window with these tables committed as `pouw_h1_served.Served` commits them, and its registration W."""
+    a = {s: NR.commit(H1, f"{SV.PREFIX}a/{K}@{s}", w, H1_KEY, SV.nonce(s * CALLS, "a"), keep_rows=True, window=OPEN)
+         for s, w in a_words.items()}
+    ids = {s: NR.commit(H1, f"{SV.PREFIX}ids@{s}", w, H1_KEY, SV.IDS_NONCE + s, keep_rows=True,
+                        **({"session": SV.LOCAL_SESSION} if s == 0 else {"window": OPEN})) for s, w in id_words.items()}
+    served = _Served(program=H1, program_digest=H1, root=OPEN, registered={v.value: v for v in a.values()},
+                     linears=list(LINEARS), calls=[(n, b) for _ in range(ROUNDS) for b, (n, _k, _n) in enumerate(LINEARS)],
+                     m=M, ids=ids)
+    run = SimpleNamespace(served=served, entry="toy-window", steps=ROUNDS)
+    run.W = CT.registration(run, None)
+    run.tables = {**{TABLES.a(s): a[s] for s in a}, **{TABLES.ids(s): ids[s] for s in ids}}
+    return run
+
+
+def _names() -> dict[str, str]:
+    """The circuit's name of each table, -> W's (`credit.commit_rows`, `credit.commit_ids`)."""
+    return {**{TABLES.a(s): f"{SV.PREFIX}a/{K}@{s}" for s in range(ROUNDS)},
+            **{TABLES.ids(s): f"{SV.PREFIX}ids@{s}" for s in range(ROUNDS)}}
+
+
+def _registrar(W: dict, values) -> SimpleNamespace:
+    """A registrar `interface.Window.write` takes (`rows.registration`'s): one-stage's `record`, chained right after W,
+    registering each of ``values`` (the circuit's tables) at W's entry of it under the circuit's name."""
+    w, names = {e["value"]: e for e in W["registered"]}, _names()
+
+    def record(program, query, law, scheme, roots, window, leaf_layer=None, previous=None, work_table=None):
+        return REG.record(program, query, law, scheme, roots, window, leaf_layer=leaf_layer, previous=REG.digest(W),
+                          work_table=work_table, registered=[{**w[names[p]], "value": p} for p in values])
+
+    return SimpleNamespace(record=record, KINDS=REG.KINDS, FORMAT=REG.FORMAT_V2, digest=REG.digest)
+
+
+def _reads(circuit) -> dict[tuple[str, str, int], tuple[str, int]]:
+    """Each output row a table read holds, ``(template, port, proof block)``, as its table and row."""
+    out = {}
+    for r in (r for r in circuit.registered.reads if r.param in circuit.registered.values):
+        words = dict(circuit.layouts[r.reader][0].outs)[r.port]
+        for i, leaf in enumerate(r.source(range(r.units))):
+            out[(r.reader, r.port, r.at + i)] = (r.param, int(leaf) // words)
+    return out
+
+
+def _flipped(run) -> SimpleNamespace:
+    """``run``'s window with bit 0 of row `FLIP` of its table flipped, committed alike."""
+    a = {s: np.array(run.tables[TABLES.a(s)].rows[:], np.uint16) for s in range(ROUNDS)}
+    s = int(FLIP[0].split("/")[1])
+    a[s][FLIP[1], 0] ^= 1
+    return _window(a, {s: np.array(run.tables[TABLES.ids(s)].rows[:], np.uint16) for s in range(ROUNDS)})
+
+
+@pytest.fixture(scope="module")
+def toy() -> SimpleNamespace:
+    """The toy's window circuit, its honest rows from one served slot (a prompt of 32, 2 outputs) and H1's window over the
+    same values."""
+    reg = Registered.of(Phi(model={"repo": "org/toy", "revision": "r", "hf_config": CONFIG}, target=TARGET), default_seed=7)
+    low = WC.lower(reg, CLASS, None, WC.Grain(), tables=TABLES)
+    fields = _weights(low.fn)
+    state = WRS.standin_state(WC.NAME, CLASS, [([1, CLASS.prompt, *PROMPT], CLASS.outputs)], KEY, 0, window=RUN)
+    values = {**WW.weight_values(reg, fields, KEY, keep_rows=True), SS.SCAN_STATE: state}
+    slots = [WRS.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi])
+             for row, _ in WRS.scan_slots(low, state.rows)]
+    rows = WRS.Rows(low, slots, values)
+    return SimpleNamespace(low=low, values=values, slots=slots, rows=rows, h1=_window(*_h1_tables(low, rows, slots[0])))
+
+
+@pytest.mark.slow
+def test_each_table_row_a_proof_block_holds_is_w_s_row_there_and_each_served_row_is_held(toy):
+    """The circuit reads each round's tables of W (2 rounds, an A table of 3 calls of 32 rows of K's 1,026-word leaf and an
+    input-ids table of 32 rows of a u32), and every row a proof block holds to one is W's row there: the quantizers' leaf
+    rows ``o2`` the A rows H1 committed from their codes and scales, the token rows the ids. W's served rows (round 0's
+    32 a call, round 1's first) are each held once, and its padding rows by none."""
+    c = toy.low.circuit
+    assert c.registered.values == ("row-table/0/k2048", "input-ids/0", "row-table/1/k2048", "input-ids/1")
+    assert {p: toy.h1.tables[p].leaves for p in c.registered.values} == {
+        "row-table/0/k2048": CALLS * M, "input-ids/0": M, "row-table/1/k2048": CALLS * M, "input-ids/1": M}
+    reads = _reads(c)
+    for (tid, port, u), (table, row) in reads.items():
+        assert np.array_equal(toy.rows.outs[tid][int(port[1:])][u], toy.h1.tables[table].rows[row]), (tid, port, u, table, row)
+    served = {(TABLES.a(0), M * c_ + i) for c_ in range(CALLS) for i in range(CLASS.prompt)}
+    served |= {(TABLES.a(1), M * c_) for c_ in range(CALLS)} | {(TABLES.ids(0), i) for i in range(CLASS.prompt)}
+    assert sorted(reads.values()) == sorted(served | {(TABLES.ids(1), 0)})
+
+
+@pytest.mark.slow
+def test_a_flipped_table_row_opens_against_no_reader_and_its_reader_is_always_drawn_and_off_its_definition(toy):
+    """W' (round 1's o-projection row flipped in one bit) differs from W at that leaf alone, so the honest reader's row,
+    committed under that leaf's salt, opens against no root W' registers. Its reader is the one proof block of its
+    template (`Int8RowQuant_v5` at round 1 and the o-projection's R), a stratum of its own whose sample under
+    `stratified:1` is that proof block (`draw.stratum_k`; R's own strata in the records' tier); and its Definition on its
+    input gives the honest row, so a prover that records W''s row instead has a proof block whose proof fails."""
+    flipped = _flipped(toy.h1)
+    honest, other = toy.h1.tables[FLIP[0]], flipped.tables[FLIP[0]]
+    assert honest.root != other.root
+    assert [j for j, (x, y) in enumerate(zip(honest.levels[0], other.levels[0])) if x != y] == [FLIP[1]]
+    (tid, port, u), = [k for k, v in _reads(toy.low.circuit).items() if v == FLIP]
+    units = toy.low.circuit.units
+    assert units[tid] == 1 and "ROUND=1" in tid and port == "o2" and u == 0
+    assert D.stratum_k(LAW["k"], units[tid], sum(units.values())) == 1
+    j = next(j for j, r in toy.low.programs[0].packed.items() if (r.tid, r.unit) == (tid, u))
+    x = toy.slots[0].operand(toy.low.fn.body.nodes[j].args[0])
+    got = np.asarray(evaluate_batch(toy.rows.fns[tid], x[None])).reshape(-1)[K + 1:].astype("<u4").view("<u2")
+    assert np.array_equal(got, honest.rows[FLIP[1]]) and not np.array_equal(got, other.rows[FLIP[1]])
+
+
+@pytest.fixture(scope="module")
+def written(toy, tmp_path_factory) -> SimpleNamespace:
+    """The toy's window recorded, committed and written under `_registrar` (R in its ``registration.json``), and the
+    verifier's own window from its records."""
+    c, out = toy.low.circuit, tmp_path_factory.mktemp("window")
+    win = IF.Window(c, RUN, LAW, 64, registered={**toy.values, **{p: toy.h1.tables[p] for p in c.registered.values}},
+                    forms=WRS.FORMS)
+    win.supply(G)
+    toy.rows.record(win)
+    committed = win.close()
+    prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
+            "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: toy.values[SS.SCAN_STATE].entry()}}}
+    win.write(committed, out, prov, registrar=_registrar(toy.h1.W, c.registered.values), index_salt=WRS.index_salt(KEY, 0))
+    mine, _doc = IF.of_records(out, LAW, RA.catalog_resolve)
+    publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
+    return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine,
+                           leaf_layer=CS.leaf_layer(publics))
+
+
+def _layout() -> dict:
+    return {"calls": [[n, b] for _ in range(ROUNDS) for b, (n, _k, _n) in enumerate(LINEARS)],
+            "linears": [list(x) for x in LINEARS], "m": M}
+
+
+def _rounds(run) -> list[dict]:
+    table = "cd" * 64
+    return [{"request_table": table, "requests": CR.requests_root(bytes.fromhex(table), run.tables[TABLES.ids(0)].root).hex()},
+            *({} for _ in range(ROUNDS - 1))]
+
+
+def _check(written, toy, W: dict, R: dict):
+    """R1-R7 on ``R`` against the verifier's own window, with the log [W] and each table an output value reusing W's."""
+    c, mine, dW = toy.low.circuit, written.mine, REG.digest(W)
+    words = {r.param: dict(c.layouts[r.reader][0].outs)[r.port] for r in c.registered.reads if r.param in c.registered.values}
+    return REG.check(R, mine.program, mine.query, LAW, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (), [W],
+                     registered={p: words[p] for p in c.registered.values},
+                     outputs={p: {"record": dW, "value": _names()[p]} for p in c.registered.values}, window_root=OPEN)
+
+
+@pytest.mark.slow
+@RECORDS
+def test_r_is_the_commit_record_credit_reads_and_the_registration_one_stage_accepts(toy, written):
+    """R registers the four tables at W's entries and nothing else, chained right after W; its sampling design (R1 holds
+    it to the verifier's own) draws a reader of every table, each table's readers templates of their own; ROOTS1 holds
+    W's tables to it, H1 names it as its Commit record, credit's digest of it is one-stage's, and R1-R7 accept it."""
+    run, R, W = toy.h1, written.R, toy.h1.W
+    assert R["format"] == REG.FORMAT_V2 and R["previous"] == REG.digest(W)
+    assert sorted(e["value"] for e in R["registered"]) == sorted(toy.low.circuit.registered.values)
+    strata, readers = {s["template"]: s for s in R["law"]["strata"]}, {}
+    for (tid, _port, _u), (table, _row) in _reads(toy.low.circuit).items():
+        readers.setdefault(table, set()).add(tid)
+    assert all(strata[t]["k"] >= 1 for ts in readers.values() for t in ts)
+    assert len({t for ts in readers.values() for t in ts}) == sum(len(ts) for ts in readers.values())
+    assert CR._arow(_rounds(run), W["registered"], R["registered"], _layout(), SV.PREFIX) is None
+    assert CT.reused(run, W, R) is None
+    named, details = CT.named(SimpleNamespace(**vars(run), commit_record=lambda _run: (W, R)))
+    assert details == {"named": True, "registration": REG.digest(W), "record": REG.digest(R)}
+    (digest, _entries), why = CR.commit_of(named)
+    assert why is None and digest.hex() == REG.digest(R) == REG.digest(json.loads((written.dir / "registration.json").read_text()))
+    assert list(_check(written, toy, W, R).codes) == []
+
+
+@pytest.mark.slow
+@RECORDS
+def test_the_records_accept_a_flipped_table_row_so_only_its_readers_proof_refuses_it(toy, written):
+    """W' and its R' (the same window's record, chained after W' and reusing its tables) pass ROOTS1, H1's reuse check and
+    R1-R7 as W and R do: no record holds a row, so the flipped row is refused by its reader's proof alone. R' against W is
+    refused by each, so the checks aren't vacuous."""
+    flipped = _flipped(toy.h1)
+    W2 = flipped.W
+    R2 = {**written.R, "previous": REG.digest(W2), "registered": [
+        {**{e["value"]: e for e in W2["registered"]}[_names()[p]], "value": p} for p in toy.low.circuit.registered.values]}
+    assert canonical_json(R2) != canonical_json(written.R)
+    assert CR._arow(_rounds(flipped), W2["registered"], R2["registered"], _layout(), SV.PREFIX) is None
+    assert CT.reused(flipped, W2, R2) is None
+    assert list(_check(written, toy, W2, R2).codes) == []
+    assert CR._arow(_rounds(toy.h1), toy.h1.W["registered"], R2["registered"], _layout(), SV.PREFIX) is not None
+    assert CT.reused(toy.h1, toy.h1.W, R2) is not None
+    assert list(_check(written, toy, toy.h1.W, R2).codes) != []
