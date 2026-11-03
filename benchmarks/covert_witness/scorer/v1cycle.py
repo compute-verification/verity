@@ -452,20 +452,25 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
 #: (coordinator 05:22Z and 07:48Z)
 FB_SUCCESSOR = ("gain", "gain_target", "start_effective_gates")
 #: the coverage at the console default (coordinator 11:46Z): te_core.algorithm_policy's own on its uncut table, each
-#: row's rho_console in rho_default's place ("inf" infinite; a null one, unmeasured, in no cell); argv: the table,
-#: the stamp and the tables art
+#: row's rho_console in rho_default's place ("inf" infinite; a null one, unmeasured, and a partial one, only a lower
+#: bound, in no cell or frontier: coordinator 12:20Z); argv: the table, the stamp and the tables art
 CONSOLE_COVERAGE = """
 import json, math, sys
 from te_core import algorithm_policy as a
 p = json.load(open(sys.argv[1]))
 c = p["columns"]
-i, j, d = c.index("rho_default"), c.index("rho_console"), c.index("data")
+i, j, d, kc, rc = (c.index(x) for x in ("rho_default", "rho_console", "data", "kinds", "record"))
+cell = [json.loads(r[kc]) if r[kc] else {} for r in p["rows"]]
 null = sum(r[j] is None for r in p["rows"])
-p["rows"] = [r[:i] + [math.inf if r[j] == "inf" else r[j]] + r[i + 1:] for r in p["rows"] if r[j] is not None]
+partial = sum(bool(x.get("partial")) for x in cell)
+fresh = len({r[rc] for r, x in zip(p["rows"], cell) if x.get("bound", {}).get("fresh_products") is not None})
+p["rows"] = [r[:i] + [math.inf if r[j] == "inf" else r[j]] + r[i + 1:] for r, x in zip(p["rows"], cell)
+             if r[j] is not None and not x.get("partial")]
 cov = a.coverage(p)
 line = a.board_line(cov, {r[d]: True for r in p["rows"]}, sys.argv[2], sys.argv[3] or None)
 print(json.dumps({"line": line.replace("decade of rho_default", "decade of rho_console"), "unmeasured": null,
-                  "empty": sum(x["state"] == "empty" for x in cov), "cells": len(cov)}))
+                  "partial": partial, "fresh_records": fresh, "empty": sum(x["state"] == "empty" for x in cov),
+                  "cells": len(cov)}))
 """
 FB_RETIRED = ("training/algorithm-policy is PUT with " + ", ".join(FB_SUCCESSOR)
               + " on its rows; frontier-branches is in the evidence store only")
@@ -681,9 +686,11 @@ def main() -> int:
     if cc.get("line"):
         ck = meta.get("console")
         at = f" (c = {ck[0]:.6g} gates, k = {ck[1]:,.0f} bits)" if ck else ""
-        cov = ((cov + " " if cov else "") + f"At the console default{at}, reading A rows at max(1, the measured "
-               f"kinds) and reading B rows at the token form, a target, {cc['unmeasured']} rows unmeasured (null) in "
-               f"no cell: {cc['line']}")
+        cov = ((cov + " " if cov else "") + f"At the console default{at} (te_core.formalism.published: reading A "
+               f"rows at the measured kinds' max where it exceeds 1, reading B rows at the token form, a target), "
+               f"{cc['unmeasured']} rows unmeasured (null) and {cc.get('partial', 0)} partial (a lower bound, a "
+               f"valid kind unmeasured) in no cell or frontier; {cc.get('fresh_records', 0)} records with a measured "
+               f"fresh-products term: {cc['line']}")
     print(json.dumps(summary))
     print(line)
     if not args.no_post and not args.no_publish:
