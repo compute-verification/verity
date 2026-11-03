@@ -515,23 +515,23 @@ def uniform_code(theta, cur, bits: int, step: float) -> tuple[dict, float]:
     over c, c the root of the largest, so neither the scales nor the codebook underflow f16) times the nearest of the
     2**bits levels j·step·c, j from -2**(bits-1), zero among them. Returns the entries and the relative error."""
     levels = torch.arange(-2 ** (bits - 1), 2 ** (bits - 1), dtype=torch.float32)
-    entries, err, norm = {}, 0.0, 0.0
+    entries, err, norm = {}, torch.zeros(()), torch.zeros(())
     for n, t in cur.items():
         d = (t - theta[n].to(t.device).float()).reshape(-1)
         g = math.gcd(d.numel(), 128)
         rms = d.view(-1, g).square().mean(1).sqrt()
-        top = float(rms.max())
-        c = math.sqrt(top) if top > 0 else 1.0
+        top = rms.max()
+        c = torch.where(top > 0, top.sqrt(), 1.0)
         sc = (rms / c).half()
         cb = (levels.to(d.device) * (step * c)).half()
         cbf = cb.float()
         z = d.view(-1, g) / torch.where(sc.float() > 0, sc.float(), 1.0)[:, None]
         codes = torch.bucketize(z, (cbf[1:] + cbf[:-1]) / 2)
         q = cbf[codes] * sc.float()[:, None]
-        err += float((q.reshape(-1) - d).square().sum())
-        norm += float(d.square().sum())
+        err = err + (q.reshape(-1) - d).square().sum()
+        norm = norm + d.square().sum()
         entries[n] = {"kind": "delta", "q": prepare.QArray(cb, sc, codes.to(torch.uint8), bits, g, tuple(t.shape))}
-    return entries, math.sqrt(err / norm) if norm else 0.0
+    return entries, float((err / norm.clamp_min(1e-30)).sqrt())
 
 
 UNIFORM_TRIES, UNIFORM_FILL = 8, 0.98
@@ -545,22 +545,22 @@ def encode_update(store, theta, cur, factors, mats, gains, params, steps, info, 
         bits, _, grp = store[1:].partition(":")
         bits, grp = int(bits), int(grp or 128)
         mid, half = 2 ** (bits - 1), max(1, 2 ** (bits - 1) - 1)
-        entries, err, norm = {}, 0.0, 0.0
+        entries, err, norm = {}, torch.zeros(()), torch.zeros(())
         for n, t in cur.items():
             d = (t - theta[n].to(t.device).float()).reshape(-1)
             g = math.gcd(d.numel(), grp)
-            top = float(d.abs().max())
+            top = d.abs().max()
             # the range is split between codebook and scales so neither underflows f16
-            c = math.sqrt(top) if top > 0 else 1.0
+            c = torch.where(top > 0, top.sqrt(), 1.0)
             sc = (d.view(-1, g).abs().amax(1) / c).half()
             cb = ((torch.arange(2 ** bits, device=d.device) - mid) / half * c).half()
             step = sc.float() * (c / half)
             codes = (d.view(-1, g) / torch.where(step > 0, step, 1.0)[:, None]).round().add(mid).clamp(0, 2 ** bits - 1)
             q = cb.float()[codes.long()] * sc.float()[:, None]
-            err += float((q.reshape(-1) - d).square().sum())
-            norm += float(d.square().sum())
+            err = err + (q.reshape(-1) - d).square().sum()
+            norm = norm + d.square().sum()
             entries[n] = {"kind": "delta", "q": prepare.QArray(cb, sc, codes.to(torch.uint8), bits, g, tuple(t.shape))}
-        info.update(bits=bits, group=grp, rel_err=math.sqrt(err / norm) if norm else 0.0)
+        info.update(bits=bits, group=grp, rel_err=float((err / norm.clamp_min(1e-30)).sqrt()))
         steps.append({"op": "extra", "flops": 8 * sum(t.numel() for t in cur.values()), "what": "qB codes of the deltas"})
         return prepare.encode_quant(entries, theta)
     if store.startswith("u"):
