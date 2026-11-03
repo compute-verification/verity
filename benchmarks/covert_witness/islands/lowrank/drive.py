@@ -6,12 +6,10 @@ Each queue line is `ISLAND START ; NOTE ; TRAIN_ARGS` (`#` comments; the note's 
 launches once (keyed by its text), with `launch.py START --island ISLAND --note NOTE --node NODE --no-wait` from this
 checkout, whose island must be clean (the run ships HEAD's), once START is in the starts_store.json of the pinned
 commit launch.py ships (`pin.py`; a later start waits for it); NODE is whichever of `--nodes` holds fewer of the queue's
-runs in flight, ties going to the one launched to longer ago. An ended run is collected with `launch.py --collect`,
-retried on the next passes (its slot held) when that yields no row, up to twenty tries, but never once the te_core
-ledger holds the run's records (a collect that ingests and then fails is recorded from them); once collected, its points are
-cached by `curve.py` and `research data custody RUN --publish` drops its local files of 1 MiB and more. Every
-launch and collection goes to `state.jsonl` beside the queue, from which a restarted driver resumes. No launch at or
-after `--stop`.
+runs in flight, ties going to the one launched to longer ago. An ended run is never collected (only the scorer collects:
+the coordinator's 06:57Z ruling (b)): it is fetched, its row read from `out/witness.json`, its points cached by
+`curve.py`, and `research data custody RUN --publish` drops its local files of 1 MiB and more. Every launch and end
+goes to `state.jsonl` beside the queue, from which a restarted driver resumes. No launch at or after `--stop`.
 
 A tool of the agent VM, never run by the harness: only an island's `train.py` is a candidate program.
 """
@@ -53,17 +51,18 @@ def utc() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 
-def ingested(run: str, agent: str = "lowrank") -> list[str]:
-    """`run`'s te_core ledger records, the first of each checkpoint: a run with any is never collected again, since
-    every `launch.py --collect` appends a fresh set (one exiting nonzero after its ingest included)."""
-    root = Path(os.environ.get("TE_LEDGER", Path.home() / ".research" / "te-ledger")) / "records" / agent
-    first: dict[int, str] = {}
-    for p in sorted(root.glob("*.json")):
-        if run in p.read_text():
-            rec = json.loads(p.read_text())
-            if rec.get("run_id") == run:
-                first.setdefault(rec["checkpoint_step"], rec["id"])
-    return [first[k] for k in sorted(first)]
+def row(run: str, start: str, note: str) -> dict:
+    """An ended run's result as its witness states it (none for a run that wrote no witness: its failure's reason)."""
+    out = RUNS / run / "out"
+    try:
+        w = json.loads((out / "witness.json").read_text())
+    except (OSError, ValueError):
+        fail = RUNS / run / "failure.json"
+        return {"run": run, "start": start, "note": note, "witness": None,
+                "failure": fail.read_text()[-300:] if fail.exists() else None}
+    return {"run": run, "start": start, "note": note, "valid": w.get("valid"), "bpb": (w.get("score") or {}).get("bpb"),
+            "start_bpb": w.get("start_bpb"), "gpu_seconds": w.get("gpu_seconds"), "e_bytes": (w.get("E") or {}).get("bytes"),
+            "failed_checks": [k for k, v in (w.get("checks") or {}).items() if not v]}
 
 
 def pinned_starts() -> set[str]:
@@ -111,28 +110,14 @@ def main() -> int:
             if state not in DONE:
                 continue
             _, start, note, _ = parse(key)
-            ids = ingested(s["run"])
-            if ids:
-                r = subprocess.CompletedProcess([], 0, "", "ingested before; launch.py --collect not rerun")
-            else:
-                r = subprocess.run([sys.executable, str(LAUNCH), start, "--note", note, "--collect", s["run"]],
-                                   capture_output=True, text=True, env=env, cwd=REPO)
-            rows = [json.loads(y) for y in r.stdout.splitlines() if y.startswith("{")]
-            ids = ids or ([] if rows else ingested(s["run"]))
-            if ids and not rows:
-                sel = research("data", "select", "--kind", "evidence/v1", "--where", f"covert_witness.run={s['run']}",
-                               "--ids")
-                rows = [{"run": s["run"], "art": (sel.stdout.split() or [None])[-1], "start": start, "note": note,
-                         "ledger": ids, "collect": "ingested; launch.py's row lost"}]
-            if not rows and tries.get(key, 0) < 19:
-                # a fetch that fails on a busy machine or a full disk is retried on the next pass
+            res = row(s["run"], start, note)
+            if res.get("witness", 0) is None and res["failure"] is None and tries.get(key, 0) < 19:
+                # a fetch refused under the disk floor or cut short is retried on the next pass, its slot held
                 tries[key] = tries.get(key, 0) + 1
-                print(f"{utc():%H:%M}Z collect failed ({tries[key]}), retrying: {s['run']}  {r.stderr[-200:]}", flush=True)
                 continue
-            record({"key": key, "run": s["run"], "state": state, "row": rows[-1] if rows else None,
-                    "collect_rc": r.returncode, "err": r.stderr[-500:] if not rows else ""})
-            print(f"{utc():%H:%M}Z ended {state}: {key}  {rows[-1] if rows else r.stderr[-300:]}", flush=True)
-            if rows and curve.load(s["run"]):
+            record({"key": key, "run": s["run"], "state": state, "row": res})
+            print(f"{utc():%H:%M}Z ended {state}: {key}  {res}", flush=True)
+            if curve.load(s["run"]):
                 # the VM's disk is shared: once curve.py has cached its fields, drop the local copies the store holds
                 research("data", "custody", s["run"], "--publish")
         flying = {k: s for k, s in flying.items()
