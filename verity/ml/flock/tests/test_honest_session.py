@@ -28,13 +28,16 @@ lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchai
 
 
 def recorded() -> tuple[dict, list[bytes], list[dict]]:
-    """The session's schedule, every request `rec_live` relayed, in order, and the firewall's answer to each."""
+    """The session's schedule, every request `rec_live` relayed, in order, and the firewall's answer to each. The binary
+    starts twice, each start a schedule line and its `ok`: `rec_live serve`'s load check of the schedule, then the
+    session."""
     assert (FIX / "firewall-in.txt").is_file(), (
         f"{FIX} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/honest-session`")
     lines = (FIX / "firewall-in.txt").read_text().splitlines()
     answers = [json.loads(a) for a in (FIX / "firewall-out.txt").read_text().splitlines()]
-    assert answers[0] == {"ok": True} and len(answers) == len(lines)
-    return json.loads(lines[0])["schedule"], [bytes.fromhex(h) for h in lines[1:]], answers[1:]
+    assert [i for i, line in enumerate(lines) if line.startswith("{")] == [0, 1] and lines[0] == lines[1]
+    assert answers[:2] == [{"ok": True}] * 2 and len(answers) == len(lines)
+    return json.loads(lines[1])["schedule"], [bytes.fromhex(h) for h in lines[2:]], answers[2:]
 
 
 def drawn(answers: list[dict]) -> tuple[list[bytes], list[bytes]]:

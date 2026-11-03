@@ -3,7 +3,8 @@
 # alone (RoPE d64 staged at N instances, proved on the CPU by the unmodified prover, FC_COINS=os, against rec_live under
 # Lean's `flock-firewall live`), with the firewall's stdin and stdout kept as they pass through a tee around the binary
 # (rec_live unchanged): the schedule and every request rec_live relayed, in order, one hex line each, and each answer with
-# the salts the firewall drew for it. Run from the verity tree (research run --cwd source). Outputs under out/: fixture/
+# the salts the firewall drew for it, after the schedule's line and answer of serve's load check, which starts the binary
+# once before the session. Run from the verity tree (research run --cwd source). Outputs under out/: fixture/
 # (the tree to put as fixture/v1: firewall-in.txt, firewall-out.txt, and rec_live's public.json, the coin server's record),
 # inner/ (rec_live's session), stage.json, statement.txt, schedule.json, proxy.log, prove.txt/.err, summary.json.
 # Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
@@ -51,6 +52,10 @@ from pathlib import Path
 o = Path(sys.argv[1])
 x = o / "fixture"
 ins, outs = (x / "firewall-in.txt").read_text().splitlines(), (x / "firewall-out.txt").read_text().splitlines()
+# two firewalls: serve's load check of the schedule (its line alone), then the session
+starts = [i for i, line in enumerate(ins) if line.startswith("{")]
+assert starts == [0, 1] and ins[0] == ins[1], f"firewall starts at lines {starts}: not serve's load check and one session"
+ins, outs = ins[1:], outs[1:]
 reqs = [bytes.fromhex(h) for h in ins[1:]]
 pub = json.loads((x / "public.json").read_text())
 tags = {}
