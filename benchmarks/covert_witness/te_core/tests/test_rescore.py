@@ -1,0 +1,126 @@
+"""te_core.rescore scores ledger rows with an analysis's formalism blocks, joined by run and MACs, by the formalism v2
+(a frozen tail always charged), cuts the console's panels, and leaves out the valid rows the analysis has no block
+for; with --stubs every valid row is scored on te_core.formalism's stubs."""
+import json
+
+import pytest
+
+pytest.importorskip("matplotlib")
+
+from te_core import console, formalism, plots, policy, rescore
+from test_plots import SHAPE, rows
+
+GATES_PER_MAC = 7000.0
+ANALYSIS = f'''
+TAU = 16
+MACS = {[4e14, 1e15, 6e14]!r}
+E = {[9e7, 9e7, 8e4]!r}
+T = [0.5, 0.0, 0.0]
+
+def gate_factors(cache):
+    cache.write_text("{{}}")
+    return {{}}
+
+def load(scorer, ledger):
+    return {{}}, {{f"s{{i}}": {{"run": f"run{{i}}"}} for i in range(3)}}, {{}}, {{}}
+
+def profiles(u1, t):
+    if 0 < t < 1:
+        return [[0.0, 0.0], [t, 0.0], [1.0, u1]], [[0.0, 0.0], [0.0, u1], [1.0, u1]]
+    return [[0.0, 0.0], [1.0, u1]], [[0.0, 0.0], [1.0, u1]]
+
+def build(subs, launch, starts, counted, g):
+    records = {{f"s{{i}}": {{"delta_grad": 1e9, "a": 512 * 16, "t": T[i],
+                            "family": "full" if i < 2 else "adapter"}} for i in range(3)}}
+    cps = []
+    for i in range(3):
+        G = {GATES_PER_MAC} * MACS[i]
+        u, u_in = profiles(8 * E[i], T[i])
+        cps.append({{"id": f"s{{i}}", "macs": MACS[i], "gates": G, "token_gates": 0.9 * G, "affected_gates": 0.8 * G,
+                     "sigma": 0.9, "tokens": 1e6, "delta": 8 * E[i], "u": u, "u_in": u_in}})
+    return records, cps
+'''
+
+
+def ledger_rows():
+    return [r | {"macs": m} for r, m in zip(rows(), (4e14, 1e15, 6e14, 2e15))]
+
+
+def run(tmp_path, monkeypatch, *extra):
+    man = tmp_path / "starts_store.json"
+    man.write_text(json.dumps({"starts": {"s1": {"shape": SHAPE}}}))
+    fake = tmp_path / "rescore_v1.py"
+    fake.write_text(ANALYSIS)
+    monkeypatch.setattr(rescore, "Ledger", lambda root: type("L", (), {"index": staticmethod(ledger_rows),
+                                                                      "root": tmp_path})())
+    out = tmp_path / "out"
+    assert rescore.main(["--out", str(out), "--pin", "pin", "--manifest", str(man), "--analysis", str(fake),
+                         "--scorer", str(tmp_path), *extra]) == 0
+    return out, fake
+
+
+def test_the_analysis_blocks_score_the_rows_they_cover_and_the_rest_are_left_out(tmp_path, monkeypatch):
+    out, fake = run(tmp_path, monkeypatch)
+    fr = json.loads((out / "frontier.json").read_text())
+    assert fr["quantities"] == str(fake) and fr["not_analysed"] == ["r3"] and "readings" not in fr
+    kept = [json.loads(line) for line in (out / "formalism.jsonl").read_text().splitlines()]
+    assert [k["id"] for k in kept] == ["r0", "r1", "r2"] and {k["source"] for k in kept} == {"analysis"}
+    assert [k["family"] for k in kept] == ["full", "full", "adapter"]
+    f0, f1 = kept[0]["formalism"], kept[1]["formalism"]
+    u, u_in = formalism.tail(8 * 9e7, 0.5)
+    assert (f0["u"], f0["u_in"], f0["tail_share"]) == ([list(p) for p in u], [list(p) for p in u_in], 0.5)
+    assert f0["labels"]["u"] == rescore.TAIL["u"] and f0["labels"]["u_in"] == rescore.TAIL["u_in"]
+    assert f1["tail_share"] == 0.0 and f1["labels"]["u"] == rescore.EVEN["u"]
+    for n in plots.NAMES:
+        assert (out / f"{n}.png").exists() and (out / f"{n}.json").exists()
+        c = json.loads((out / "console" / f"{n}.json").read_text())
+        assert len(console.body(c)) <= console.BODY_MAX and len(c["note"]) <= console.NOTE_MAX
+    md = (out / "frontier.md").read_text()
+    assert "x0 bound" in md and "s* known" in md and "literal-x0" not in md and "tail-charged" not in md
+    assert (out / "analysis-gates.json").exists() and not (out / "console" / "put.json").exists()
+
+
+def test_a_frozen_tail_is_charged_through_a(tmp_path, monkeypatch):
+    """r0's block has a frozen tail (t = 0.5): u_in jumps, so x0 = 0 and ρ = σ s a / room(u) at the reference policy."""
+    out, _ = run(tmp_path, monkeypatch)
+    c, k = policy.cells(SHAPE)["reference"]
+    k0 = json.loads((out / "formalism.jsonl").read_text().splitlines()[0])
+    m = formalism.measure({"formalism": k0["formalism"]}, SHAPE)
+    r = formalism.at(m, c, k)
+    assert r["x0"] == 0 and r["s_star"] == pytest.approx(formalism.room(m.u, k) / (512 * 16))
+    assert r["rho"] == pytest.approx(0.9 * (c * 1e6 / (0.9 * GATES_PER_MAC * 4e14)) * 512 * 16 / formalism.room(m.u, k))
+    assert 0 < r["s_star_known"] <= r["s_star"]
+
+
+def test_an_attached_block_is_what_the_formalism_measures(tmp_path, monkeypatch):
+    run(tmp_path, monkeypatch)
+    fake = rescore.load_analysis(tmp_path / "rescore_v1.py")
+    _, launch, _, _ = fake.load(None, None)
+    records, cps = fake.build(None, launch, None, None, None)
+    blocks = {(launch[c["id"]]["run"], c["macs"]): (rescore.block(c, records[c["id"]], fake.TAU),
+                                                    records[c["id"]]["family"]) for c in cps}
+    got, source = rescore.attach(ledger_rows(), blocks)
+    assert source == {"r0": "analysis", "r1": "analysis", "r2": "analysis", "r3": "stubs"}
+    assert got[0]["family"] == "full" and "family" not in got[3]
+    m = formalism.measure(got[0], SHAPE)
+    assert m.gates == pytest.approx(GATES_PER_MAC * 4e14) and m.tail_share == 0.5 and m.sigma == pytest.approx(0.9)
+    assert m.delta_bits == m.u1_bits == 8 * 9e7 and m.tau_bits == 16
+    assert m.labels["u1_bits"].startswith("upper bound") and m.labels["a_bits"].startswith("upper bound")
+    assert m.labels["u"].startswith("assumption (A1)") and m.labels["u_in"].startswith("assumption (A1')")
+
+
+def test_the_cut_panels_are_written_and_never_put(tmp_path, monkeypatch):
+    monkeypatch.setattr(console, "put", lambda p: pytest.fail(f"PUT {p['id']}"))
+    out, _ = run(tmp_path, monkeypatch)
+    assert sorted(p.stem for p in (out / "console").glob("*.json")) == sorted(plots.NAMES)
+    with pytest.raises(SystemExit):
+        run(tmp_path, monkeypatch, "--publish")
+
+
+def test_stubs_score_every_valid_row(tmp_path, monkeypatch):
+    out, _ = run(tmp_path, monkeypatch, "--stubs")
+    fr = json.loads((out / "frontier.json").read_text())
+    assert fr["quantities"] == "stubs: --stubs" and fr["not_analysed"] == []
+    kept = [json.loads(line) for line in (out / "formalism.jsonl").read_text().splitlines()]
+    assert [k["id"] for k in kept] == ["r0", "r1", "r2", "r3"] and {k["source"] for k in kept} == {"stubs"}
+    assert not (out / "analysis-gates.json").exists()
