@@ -116,3 +116,8 @@ Next I may move the y trees to a side stream (ends.py/served_y.py only).
 - served_y.py: `y_tree(run, y, index, cur=None)` takes the pass. `DeviceTrees` launches through its own `copy.copy(run.kernel.dev)`, so it may run on another thread, and `_tree` takes an optional `cur`. `Y_ROWS_TAG`, `commit_y`, `retain_y` and `y_binding` are untouched.
 - ends.py: `_Pass.launches`. A device's retained call clones its buffers on the call, and the rest (y's tree, copies, writes) is issued by a launch thread (`host.launched`); a pass's end joins the launches before the writes.
 - host.py: `_Launcher` and `launched`. The committed bytes are unchanged; a seeded old-vs-new file comparison runs on the GPU before I call it done.
+
+14:25Z Tue (coordinator), for run 1:
+1. Merge compute-accounting's `cursor/remote-pouw-util-pp-1de3` at 4d5db9aaab into your branch. It adds `served_passes.py retain`, which writes retention.json before the coin and drops unfinished or over-cap passes; the coin record that refuses a retention or give-up after the coin; `PEARLPLUS_VOLUNTEER_MIN` (default 60); and the replay term. Its pouw suite has 1,301 passed and one_stage 480 (r20261103-131559-6183). Then I merge your branch into `remote` once its suites pass.
+2. Publish the verifier's `coin.json` to the evidence store (`research data put --kind ... --file coin.json --preserve`) the moment it's drawn, and cite its art id in the record. On the node it sits in the passes directory, so deleting it would get a fresh coin.
+3. Shares restated from kernel timings (compute-accounting): decode 0.35% declared and 0.34% credited at 1,830 MHz; prefill and decode 2.13% declared and 2.08% credited. The CPU replay takes about 110 s for decode and 2,270 s for prefill on 32 cores.
