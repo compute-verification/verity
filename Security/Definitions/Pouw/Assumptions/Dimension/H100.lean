@@ -2,9 +2,9 @@ import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
 import Definitions.Pouw.Assumptions.Dimension.Embed
 
 /-!
-# `MH100`, the H100 analogue of `M4090`, and its per-word bound (trusted statements; draft semantics)
+# `MH100`, the H100 analogue of `M4090`, and its per-word bound (trusted statements)
 
-**Draft semantics, pending review**.
+**Draft semantics, pending review**, for `EmbedMH100` only (the review below).
 
 `MH100 pr` is `M4090` (`Pouw.Dimension.Embed`) with the H100's classes, at the prices `pr : Prices100`
 (`Pouw.Dimension.H100Assumptions`). Its registers are SSA and hold functions on a finite noise grid `G`. Every
@@ -39,20 +39,39 @@ as any other register writer.
 * **Tightness and consistency.** `MH100Attains`: at the nominal prices every family is output at exactly 32 per word
   (one FP8 `wgmma` register each). `MH100WordsConsistent`: independent families exist (NCP's checked words).
   `MH100Attains` and `HonestSplitK100` are nominal-model statements. On hardware they hold only at `N ≥ 64`: Round 7
-  measured m64n8k32 at 144 per register (`Shape100`).
+  measured m64n8k32 at 144 per register (`Shape100`), and the H200 charges 144 too.
 * **FP8 targets.** For the split-K FP8 target of `docs/pouw-fp8/design.md` §6.1 (fresh-step words
   `I_τ = HOPPER_E4M3_K32.step(+0, Ã[S_τ], B̃[S_τ])` and running words `R_τ = RN_f32(R_(τ−1) + I_τ)`), the honest
   schedule `splitK` costs 32 per word at the nominal prices: a k32 `wgmma` register per `I_τ` and an FADD per `R_τ`
   (`HonestSplitK100`). If the scheme makes those words independent modulo its free values, `PerWordMH100` gives 32
   per word, so the bound is tight. That independence is the scheme's statement, not proved here. The truncated
   atom words are not linear, so for them the W1-faithful route is `MH100w` (`Pouw.Dimension.H100W`).
+
+## Review against the H200's measurements
+
+Each definition below was checked against what was measured on one H200 SXM (`sm_90a`), as `Pouw.Dimension.H100W`'s
+review lists the measurements.
+
+* **`Op100`, `Op100.outs`, `Op100.price`, `regs100` and `cost100`**: as `H100W`'s review finds for `MH100w`, which
+  reads them. Each class's price **matches** the H200's table. The model is **stricter** for `wgmma` at `N < 64`, for
+  `move`, which the hardware charges an issue slot, and in letting a priced instruction compute any function.
+* **`Op100.WF`**: **stricter**, as `Op100.WFw` is: an `mma` may write any number of registers. Its free values are a
+  subspace `V`, so `operand` gives every rational combination of free values at no cost, which W1 doesn't. That is
+  **stricter** too, and the price is the stronger hypothesis on targets, `IndepMod`.
+* **`Hc`** reads `Embed`'s `Instr`, `M4090`'s instructions, which the H200 can't check. So `EmbedMH100` keeps its
+  marker.
+* **`IndepMod`, `runWords` and `splitK`** define targets and the honest schedule. No measurement reads them.
+* **The pinned statements.** `PerWordMH100`, `PerWordMH100Floor` and `PerWordMH100Words` read only the above, at a
+  table meeting `H32` or `Floor c`, so they are checked with them. `MH100Attains` and `HonestSplitK100` are
+  statements at `h100Nominal`. Their hardware caveat holds on the H200: `wgmma` costs 32.003 a register at
+  `N ≥ 64`, and C-2's m64n8k32 costs 144. `MH100WordsConsistent` and `H32Sat` read no price the hardware sets.
 -/
 
 namespace Pouw.Dimension.H100
 
 open Finset Pouw.NCP Pouw.NCP.Relation Pouw.Dimension Pouw.Dimension.Assumptions Pouw.Dimension.Embed
 
-/-- An `MH100` instruction over the grid `G` (draft semantics, pending review). -/
+/-- An `MH100` instruction over the grid `G`. -/
 inductive Op100 (G : Type) where
   /-- A `wgmma` of shape `s`, writing the accumulator registers `outs`. -/
   | wgmma (s : Shape100) (outs : List (G → ℚ))
@@ -132,7 +151,7 @@ def splitK (κ : ℕ) (I : ℕ → G → ℚ) (b : ℕ) : ℕ → List (Op100 G)
   | τ + 1 => splitK κ I b τ ++
       [Op100.wgmma Shape100.e4m3F32 [I τ], Op100.fp32 κ (b + 2 * τ) (b + 2 * τ + 1) (b + 2 * τ)]
 
-/-! ## Pinned statements (draft semantics, pending review) -/
+/-! ## Pinned statements -/
 
 /-- **`H32` is satisfiable**: the nominal H100 table satisfies it. -/
 def H32Sat : Prop := H32 h100Nominal
@@ -146,7 +165,7 @@ def EmbedMH100 : Prop :=
       (∀ f ∈ L, f ∈ V) → (∀ o ∈ P, o.WF pr V) →
       ∃ P' : List (Instr G), Hc 32 P' ∧ (∀ r ∈ regs100 fpSem P L, r ∈ V ∨ r ∈ slots P' L) ∧ cost P' ≤ cost100 pr P
 
-/-- **The per-word cost in `MH100`** (Theorem D at `c = 32`; no A1, no A2; draft semantics, pending review): under
+/-- **The per-word cost in `MH100`** (Theorem D at `c = 32`; no A1, no A2): under
 `H32`, for every finite grid, free values `V` containing the constants, and FP32 semantics, a well-formed program on
 inputs in `V` whose registers include a family of target words `t`, linearly independent modulo `V`, costs at least
 `32·|ι|`. -/
@@ -157,7 +176,7 @@ def PerWordMH100 : Prop :=
       IndepMod V t → (∀ f ∈ L, f ∈ V) → (∀ o ∈ P, o.WF pr V) → (∀ i, t i ∈ regs100 fpSem P L) →
       32 * Fintype.card ι ≤ cost100 pr P
 
-/-- **The per-word cost in `MH100` at any floor** (Theorem D at `c`; no A1, no A2; draft semantics, pending review):
+/-- **The per-word cost in `MH100` at any floor** (Theorem D at `c`; no A1, no A2):
 under `Floor c pr`, for every finite grid, free values `V` containing the constants, and FP32 semantics, a well-formed
 program on inputs in `V` whose registers include a family of target words `t`, linearly independent modulo `V`, costs
 at least `c·|ι|`. -/
@@ -168,8 +187,8 @@ def PerWordMH100Floor : Prop :=
       IndepMod V t → (∀ f ∈ L, f ∈ V) → (∀ o ∈ P, o.WF pr V) → (∀ i, t i ∈ regs100 fpSem P L) →
       c * Fintype.card ι ≤ cost100 pr P
 
-/-- **The per-word cost in `MH100` on NCP's checked words** (no A1, no A2, no MinRank; draft semantics, pending
-review): under `H32` and checkpoint independence, a well-formed program on inputs in `V₀` whose registers include the
+/-- **The per-word cost in `MH100` on NCP's checked words** (no A1, no A2, no MinRank): under `H32` and checkpoint
+independence, a well-formed program on inputs in `V₀` whose registers include the
 non-final checked words at `S ⊆ U × [0, nonFinal)` costs at least `32·|S|`.
 
 It covers NCP's exact words at 16-step checkpoints only. The truncated k32 atom words of C-2, A-1 and D-2 are not
@@ -197,7 +216,8 @@ semantics, opcode `κ`, fresh-step words `I`, `T` and inputs, the program `split
 instruction (32) per `R (τ + 1)`.
 
 This is a nominal-model statement. On hardware the `wgmma` price holds only at `N ≥ 64`, since Round 7
-measured m64n8k32, C-2's atom shape, at 144 per register. The FADD per `R (τ + 1)` measured 33.5, not 32. -/
+measured m64n8k32, C-2's atom shape, at 144 per register, and the H200 charges 144 too. The FADD per `R (τ + 1)`
+costs 32.0 to 32.1 loop-free on the H100 SXM: Round 7's 33.5 was loop overhead. -/
 def HonestSplitK100 : Prop :=
   ∀ (G : Type) (V : Submodule ℚ (G → ℚ)) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : ℕ) (I : ℕ → G → ℚ) (T : ℕ)
     (L : List (G → ℚ)),

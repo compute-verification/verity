@@ -48,7 +48,8 @@
    "name": "lms",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../window/../../../../service/sampled_proofs/../../primitives/lms/lean",
+   "dir":
+   "../window/../../../../service/sampled_proofs/../../primitives/lms/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

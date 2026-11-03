@@ -954,6 +954,8 @@ def test_the_batch_order_is_model_runner_v2s():
 
 
 AUDITOR = "vy-challenger-1:7811"
+#: where a window's draw session is reached (`challenger_host.DRAW_PORT`, the gate's answer's ``port``)
+DRAW_AT = f"vy-challenger-1:{CH.DRAW_PORT}"
 
 
 def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=None, session=CH.session_id(1),
@@ -961,13 +963,16 @@ def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=No
     """A challenger host serving one challenge phase over a live epoch of `rounds` round coins, reached at `AUDITOR`, whose coin
     commitment `SESSION` (ncp-v2's gate answer) names; `RESERVED` (H1's reserve answer) names its challenge phase, which the
     ledger `ledger` (its own, `<name>.jsonl`, unless given) reserves (unless not `reserved`), and `_gate` opens it, the
-    ledger opening it for the H1 window's open root (unless not `gated`, for `CH.WINDOW` at once)."""
+    ledger opening it for the H1 window's open root (unless not `gated`, for `CH.WINDOW` at once); `DRAW_RESERVED` names
+    the window's draw session, which `_gate` opens withheld on its draw root (`challenger_host.Host.open_draw`)."""
     host = CH.Host(tmp_path / name, challenger or Wd.live_challenger(0, rounds, CH.entropy(seed)), seed, session, leaves,
                    ledger, gated=gated, reserved=reserved)
-    monkeypatch.setattr(R.RemoteChallenger, "connect",
-                        classmethod(lambda cls, at, secret=None: host.client if at == AUDITOR else None))
+    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(
+        lambda cls, at, secret=None: host.client if at == AUDITOR else
+        host.draw.client if at == DRAW_AT and host.draw is not None else None))
     monkeypatch.setitem(SESSION, "commitment", host.challenger.commitment.root.hex())
     monkeypatch.setitem(RESERVED, "session", session)
+    monkeypatch.setitem(DRAW_RESERVED, "session", CH.session_id(0xd00 + int(session.rsplit("-", 1)[1], 16)))
     monkeypatch.setitem(_GATES, "host", host)
     return host
 
@@ -975,9 +980,11 @@ def _host(tmp_path, monkeypatch, name="auditor", seed=1, rounds=3, challenger=No
 _GATES: dict = {}
 
 
-def _gate(session, root):
-    """The gate (`pouw_h1_window.Gate`) of the host `_host` made last."""
-    return _GATES["host"].open(session, root)
+def _gate(session, root, withhold=False):
+    """The gate (`pouw_h1_window.Gate`) of the host `_host` made last: its window's session, or with `withhold` its
+    draw session (`challenger_host.Host.open_draw`)."""
+    host = _GATES["host"]
+    return host.open_draw(session, root) if withhold else host.open(session, root)
 
 
 def _serve_window(settings):
@@ -1002,41 +1009,55 @@ def _serve_window(settings):
 SESSION = {"session": "s20261020T000000Z-000a", "seq": 0, "root": "ca" * 64, "commitment": "c0" * 64}
 #: the gate's reserve answer for an H1 window (its challenge phase `_host`'s), which the window opens itself (`_gate`)
 RESERVED = {"session": CH.session_id(1), "seq": 0, "peer": "vy-nebius-1", "by": "vllm", "expires_utc": "2026-10-20T11:18:00Z"}
+#: the gate's reserve answer for an H1 window's draw session, which the window opens withheld on its draw root (`_gate`)
+DRAW_RESERVED = {"session": CH.session_id(0xd)}
 
 
 def _remote(**kw):
     return {"pouw": {"rows": 64, "steps": 3, "runner": Runner(), "challenger": AUDITOR, "session": RESERVED,
-                     "gate": _gate, "admission": "per-round", **kw}}
+                     "draw_session": DRAW_RESERVED, "gate": _gate, "admission": "per-round", **kw}}
 
 
 def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp_path, monkeypatch):
-    """With the setting ``challenger`` the window's one challenge phase on the auditor host, reserved on the gate, is opened on the
-    window's open root once round 0 is admitted (over the weights' root, round 0's request table and the challenge phase), its
-    salt coin after that root and round s's coin after round s's root, and closes once the window has finished; the
-    verifier, reading the challenger's own directory under its key, trusts the window's coins (`trusted_rounds_reason`)
-    only with the host's pins log, and every request entry and slot still opens under its round's root."""
+    """With the setting ``challenger`` the window's one challenge phase on the auditor host, reserved on the gate, is
+    opened on the window's open root once round 0 is admitted (over the weights' root, round 0's request table and the
+    challenge phase), its salt coin after that root and round s's coin after round s's root, and closes once the window
+    has finished; its draw coin is its draw's challenge phase's (the setting ``draw_session``), which the gate opens
+    withheld on the window's draw root; the verifier, reading the challenger's own directories under its key, trusts the
+    window's coins (`trusted_rounds_reason`) only with the host's pins log and the draw's directory, and every request
+    entry and slot still opens under its round's root. Without ``draw_session`` the install is refused."""
+    from verity_vllm.protocols.pouw.h1 import window as PHW
     host = _host(tmp_path, monkeypatch)
     assert PO.refusals(PO.Context(stage="serve", enabled=(_entry(),), settings=_remote())) == ()
+    no_draw = {k: v for k, v in _remote()["pouw"].items() if k != "draw_session"}
+    refused = PO.refusals(PO.Context(stage="serve", enabled=(_entry(),), settings={"pouw": no_draw}))
+    assert len(refused) == 1 and refused[0].endswith(PHW.NO_DRAW_SESSION)
     commitment, run = _serve_window(_remote())
-    assert host.ended() is None and run.details["challenger"] == {"closed": True}
+    assert host.draw.ended() is None and host.ended() is None and run.details["challenger"] == {"closed": True}
     coins = host.challenger.commitment
     assert commitment["coin_source"] == "challenger" and commitment["coins"] == commitment["round_coins"] == coins.to_json()
     root = PS.window_open_root(bytes.fromhex(commitment["weights_root"]), bytes.fromhex(commitment["requests_root"]),
                                  CH.session_id(1))
     assert host.window == {"root": root.hex()} and commitment["rounds"][0]["requests"] == commitment["requests_root"]
+    drawn = host.draw.directory
     assert PHC.trusted_rounds_reason(commitment, host.directory, [host.ledger.path], host.window, host.key,
-                                     pins=[host.ledger.pins_path], main=CH.MAIN) is None
+                                     pins=[host.ledger.pins_path], main=CH.MAIN, draw_directory=drawn) is None
+    assert PHC.trusted_rounds_reason(commitment, host.directory, [host.ledger.path], host.window, host.key,
+                                     pins=[host.ledger.pins_path], main=CH.MAIN) == PHC.NO_DRAW_SESSION
     untrusted = "the challenger's session is not trusted: "
     assert PHC.trusted_rounds_reason(commitment, host.directory, [host.ledger.path], host.window, host.key,
-                                     pins=[host.ledger.pins_path], main=None) == untrusted + LC.NO_MAIN
+                                     pins=[host.ledger.pins_path], main=None, draw_directory=drawn) == untrusted + LC.NO_MAIN
     assert PHC.trusted_rounds_reason(commitment, host.directory, [host.ledger.path], host.window, host.key,
-                                     pins=[host.ledger.pins_path], main=CH.MAIN[:1]) == (
+                                     pins=[host.ledger.pins_path], main=CH.MAIN[:1], draw_directory=drawn) == (
         untrusted + LC.first_parent_reason(host.session_id, CH.PINNED, list(CH.MAIN[:1])))
     received = R.released_roots(host.directory / R.RELEASES, coins)
-    assert received[Wd.SALT] == (root,)
+    assert received[Wd.SALT] == (root,) and Wd.DRAW not in received
     assert commitment["session"] == {"session": CH.session_id(1), "seq": 1, "root": root.hex(),
                                      "commitment": coins.root.hex()}
-    assert received[Wd.DRAW] == (bytes.fromhex(commitment["draw"]["root"]),)
+    draw_root = commitment["draw"]["root"]
+    assert commitment["draw_session"]["session"] == DRAW_RESERVED["session"] == host.draw.session_id
+    assert host.draw.window == {"root": draw_root} and LC.withheld_on(host.ledger.lines, draw_root)
+    assert R.released_roots(drawn / R.RELEASES, host.draw.challenger.commitment) == {Wd.DRAW: (bytes.fromhex(draw_root),)}
     assert received[Wd.ROUND] == tuple(bytes.fromhex(r["root"]) for r in commitment["rounds"]) and len(received[Wd.ROUND]) == 3
     assert all(RQ.request_reason(commitment["rounds"], coins, run.salt, 64, e, run.open_request(e.index),
                                  run.open_first(e.index), admission=RQ.PER_ROUND) is None for e in run.requests)
@@ -1090,10 +1111,21 @@ def test_a_slot_table_naming_leaves_of_an_a_table_no_round_root_commits_is_refus
     assert PHC.manifest_reason(record).startswith(want)
 
 
+def _drawn(host, sid, root, withhold=True):
+    """The draw coin of `host`'s window from its draw session `sid`, which the gate opens (withheld unless not
+    `withhold`) on the draw root `root`, opened once after it and the session closed and ended."""
+    host.open_draw(sid, root.hex(), withhold)
+    with host.draw.client as client:
+        opened = client.open(Wd.DRAW, 0, root)
+    assert host.draw.ended() is None
+    return client.opened[(Wd.DRAW, 0)] if client.withheld else opened
+
+
 def _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after, reserved=True):
     """`honest` (a served window's commitment) with its coins swapped for those of challenge phase `CH.session_id(seed)`, which
     the auditor's ledger reserved (unless not `reserved`) and opened on `opened_on` and whose salt coin opened after
-    `salt_after`, then its round and flip coins after the window's own roots; and that challenge phase's host (`name`)."""
+    `salt_after`, then its round coins after the window's own roots and its flip coin from a sampling challenge phase of
+    its own, opened withheld on the window's sample root (`_drawn`); and that challenge phase's host (`name`)."""
     sid = CH.session_id(seed)
     host = _host(tmp_path, monkeypatch, name=name, seed=seed, session=sid, reserved=reserved)
     answer = host.open(sid, opened_on.hex())
@@ -1101,9 +1133,9 @@ def _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after, re
     log = [{**r, "coin": host.client.open(Wd.ROUND, s, bytes.fromhex(r["root"])).to_json()}
            for s, r in enumerate(honest["rounds"])]
     root = RQ.draw_root(bytes.fromhex(honest["calls_root"]), bytes.fromhex(honest["draw"]["receipts"]), log)
-    draw = host.client.open(Wd.DRAW, 0, root)
     host.client.close()
     assert host.ended() is None
+    draw = _drawn(host, CH.session_id(0xd00 + seed), root)
     coins = host.challenger.commitment.to_json()
     return {**honest, "coins": coins, "round_coins": coins, "salt_opening": salt.to_json(), "rounds": log,
             "session": PHC.carried(answer), "draw": {**honest["draw"], "root": root.hex(), "coin": draw.to_json()}}, host
@@ -1121,15 +1153,16 @@ def test_a_windows_salt_opens_only_after_its_own_window_open_root(tmp_path, monk
     a = _host(tmp_path, monkeypatch, name="a", seed=1, session=CH.session_id(0xa))
     honest, _ = _serve_window(_remote())
     assert a.ended() is None
+    assert a.draw.ended() is None
     assert PHC.trusted_rounds_reason(honest, a.directory, [a.ledger.path], a.window, a.key,
-                                     pins=[a.ledger.pins_path], main=CH.MAIN) is None
+                                     pins=[a.ledger.pins_path], main=CH.MAIN, draw_directory=a.draw.directory) is None
     weights, requests = bytes.fromhex(honest["weights_root"]), bytes.fromhex(honest["requests_root"])
     other = bytes.fromhex(a.window["root"])
 
     def why(name, seed, opened_on, salt_after):
         commits, host = _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after)
         return PHC.trusted_rounds_reason(commits, host.directory, [host.ledger.path], host.window, host.key,
-                                         pins=[host.ledger.pins_path], main=CH.MAIN)
+                                         pins=[host.ledger.pins_path], main=CH.MAIN, draw_directory=host.draw.directory)
     def opens(seed):
         return PS.window_open_root(weights, requests, CH.session_id(seed))
     assert why("own", 2, opens(2), opens(2)) is None
@@ -1141,7 +1174,7 @@ def test_a_windows_salt_opens_only_after_its_own_window_open_root(tmp_path, monk
 
     def relabeled(**kw):
         return PHC.trusted_rounds_reason({**honest, **kw}, a.directory, [a.ledger.path], a.window, a.key,
-                                         pins=[a.ledger.pins_path], main=CH.MAIN)
+                                         pins=[a.ledger.pins_path], main=CH.MAIN, draw_directory=a.draw.directory)
     assert relabeled(requests_root="ee" * 64) == f"the window's salt: {CC.OTHER_WINDOW}"
     assert relabeled(session={**honest["session"], "session": CH.session_id(2)}) == (
         f"the window records session {CH.session_id(2)!r}, not {CH.session_id(0xa)}, the one the auditor's ledger "
@@ -1156,8 +1189,9 @@ def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(
     ``status`` when the open answers none, the challenger is reached on the answer's port once it accepts connections
     (`wait` between refusals), its coins are the salt coin alone (`window.SALT_FAMILIES`), and that coin opens after R,
     the salt over W; the run carries the answer without its secret. An
-    answer naming another root or another challenge phase is refused before any coin, and so is a challenge phase of H1's layout (salt,
-    draw and round coins: one a Pearl-C pass would leave incomplete), which is closed before its first coin."""
+    answer naming another root or another challenge phase is refused before any coin, and so is a challenge phase of
+    H1's layout (salt and round coins: one a Pearl-C pass would leave incomplete), which is closed before its first
+    coin."""
     from verity.core.protocols.pouw.audit import salt_of
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
@@ -1202,7 +1236,7 @@ def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(
         PHW.open_session("pouw:test", lambda *w: {**h1.open(sid, PS.epoch_open_root(root, 0).hex()), "port": None}, sid,
                          root, at=AUDITOR, wait=waits.append)
     assert h1.ended() is None and R.released_roots(h1.directory / R.RELEASES, h1.challenger.commitment) == {
-        Wd.SALT: (), Wd.DRAW: (), Wd.ROUND: ()}
+        Wd.SALT: (), Wd.ROUND: ()}
 
 
 def test_a_session_whose_tunnel_never_listens_is_refused_by_name_once_its_wait_is_over(monkeypatch):
@@ -1241,7 +1275,7 @@ def test_a_session_the_ledger_opened_without_a_reserve_salts_no_window(tmp_path,
     own = PS.window_open_root(bytes.fromhex(honest["weights_root"]), bytes.fromhex(honest["requests_root"]),
                               CH.session_id(2))
     commits, host = _salted(tmp_path, monkeypatch, "unreserved", 2, honest, own, own, reserved=False)
-    assert [json.loads(line)["kind"] for line in host.ledger.lines] == ["open", "end"]
+    assert [json.loads(line)["kind"] for line in host.ledger.lines] == ["open", "end", "reserve", "open", "end"]
     assert PHC.trusted_rounds_reason(commits, host.directory, [host.ledger.path], host.window, host.key,
                                      pins=[host.ledger.pins_path], main=CH.MAIN) == (
         f"the window's salt: {CC.NO_RESERVE}")
@@ -1265,8 +1299,8 @@ def test_coins_from_a_prover_side_challenger_are_refused(tmp_path, monkeypatch):
     honest, _ = _serve_window(_remote())
     assert prover.ended() is None
     ours, w = prover.ledger.path, prover.window
-    assert PHC.trusted_rounds_reason(honest, prover.directory, [ours], w, prover.key,
-                                     pins=[prover.ledger.pins_path], main=CH.MAIN) is None
+    assert PHC.trusted_rounds_reason(honest, prover.directory, [ours], w, prover.key, pins=[prover.ledger.pins_path],
+                                     main=CH.MAIN, draw_directory=prover.draw.directory) is None
     assert PHC.trusted_rounds_reason(honest, prover.directory, [ours], w, auditor.key,
                                      pins=[prover.ledger.pins_path], main=CH.MAIN).startswith(
         "the challenger's session is not trusted: the auditor's ledger entry 1 is signed under challenger key ")
@@ -1329,9 +1363,12 @@ def test_a_second_session_under_the_same_key_for_one_window_is_refused(tmp_path,
     w, later = first.window, second.window
     assert w["root"] != later["root"]
     assert PHC.trusted_rounds_reason(one, first.directory, [ledger.path], w, first.key, pins=[ledger.pins_path],
-                                     main=CH.MAIN) is None
+                                     main=CH.MAIN, draw_directory=first.draw.directory) is None
     assert PHC.trusted_rounds_reason(two, second.directory, [ledger.path], later, first.key,
-                                     pins=[ledger.pins_path], main=CH.MAIN) is None
+                                     pins=[ledger.pins_path], main=CH.MAIN, draw_directory=second.draw.directory) is None
+    assert PHC.trusted_rounds_reason(two, second.directory, [ledger.path], later, first.key, pins=[ledger.pins_path],
+                                     main=CH.MAIN, draw_directory=first.draw.directory).startswith(
+        "the window's draw session is not trusted: ")
     assert PHC.trusted_rounds_reason(two, second.directory, [ledger.path], w, first.key, pins=[ledger.pins_path],
                                      main=CH.MAIN) == (
         "the challenger's session is not trusted: the challenger's record.json is not the one the auditor's ledger sealed "
@@ -1340,7 +1377,7 @@ def test_a_second_session_under_the_same_key_for_one_window_is_refused(tmp_path,
     for coins, host, window in ((one, first, w), (two, second, later)):
         assert PHC.trusted_rounds_reason(coins, host.directory, [ledger.path], window, first.key,
                                          pins=[ledger.pins_path], main=CH.MAIN) == (
-            f"the challenger's session is not trusted: the auditor's ledger is refused: entry 6: a second open for root "
+            f"the challenger's session is not trusted: the auditor's ledger is refused: entry 12: a second open for root "
             f"{w['root'][:16]}… or session s-3")
 
 
