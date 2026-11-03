@@ -8,7 +8,7 @@ It reads what te_core.frontier_fit reads, and that fit: the valid records of the
 `pilot`) unless `--pin` names the commits, scored on their measured quantities unless `--quantities` says otherwise,
 where the scoring cap admits them (te_core.policy's `eligible`), each checkpoint on its start's data
 (te_core.frontier_fit's `data_of_shape`: `v3`, harness v3's OLMo 2 mix, else `v2.3-pilot`). A checkpoint's gain is
-Daniel's C(L1)/C(L0) (TRN-40, 7:05 PM PST; coordinator 08:09Z and 11:16Z): the compute at which its data's fit
+Daniel's C(L1)/C(L0) (coordinator 08:09Z and 11:16Z): the compute at which its data's fit
 (te_core.frontier_fit, `training/frontier-fit`) reaches L1, its held-out loss, over the compute at which it reaches L0,
 its start's l0 (te_core.frontier_fit's `gain_from`); a row carries C0 (`start_compute_gates`) and the start's own
 effective compute C_eff(l0) (`start_effective_gates`, over C0 the start's own gain, which the gain no longer reads). At
@@ -24,26 +24,35 @@ te_core.policy's: one full session of the 45M reference, attention included), th
 (coordinator 08:09Z and 10:23Z: rows are reported at that c only); `rho_served` is the same at the registered serving
 block (te_core.panels' `SERVED`), the figure beside every headline. `rho_default` is it as a number: under reading B
 c/(c − d) where Fit holds for the training (basis `fit`), else Slowdown's token form (`target`), null where infinite;
-under reading A, Fit's, else the one bound's max over the kinds valid on their own (basis its binding kind, `none` at
-1), and null with basis `unmeasured` where no such kind is measured. `rho_inputs`, one JSON cell, carries every input
-the console's dial needs to recompute the token form at any (c, k), a row's ρ under reading B and a sensitivity under
-A: `panels.PACKED` and `SPLIT`, u_in through its points at the dial's k (`panels.through`, the console's among them),
-where x0 is exact; `page_rho` is the dial's formula on them. `build` refuses a row whose rounded columns don't give
-formalism.at's token form and basis at every cell of te_core.panels' dial and at `CONSOLE` (`panels.mismatches`).
+under reading A, Fit's, else the measured terms' max over the kinds valid on their own where it exceeds 1 (basis its
+binding kind, or `partial` where a valid kind is unmeasured, so ρ is only a lower bound), else null with basis
+`unmeasured` where a valid kind is unmeasured, else 1 (basis `none`), as `published` gives it (coordinator 12:20Z);
+and basis `void` where that ρ reads a void fresh-products term, the 0 te_core 4.9 measures where io_bound's proved Λ
+is void, which is no result (coordinator 13:32Z), the kinds cell marking it. `rho_inputs`, one JSON cell, carries
+every input the console's dial needs to recompute the token form at any (c, k), a row's ρ under reading B and a
+sensitivity under A: `panels.PACKED` and `SPLIT`, u_in through its points at the dial's k (`panels.through`, the
+console's among them), where x0 is exact; `page_rho` is the dial's formula on them. `build` refuses a row whose
+rounded columns don't give formalism.at's token form and basis at every cell of te_core.panels' dial and at `CONSOLE`
+(`panels.mismatches`).
 `estimated` names the inputs that are stubs, bounds, assumptions or estimates, and gain:provisional where its data's
 fit is provisional (te_core.frontier_fit's `FIT_TARGET`), which the note names. The dashboard's cells (coordinator
 08:26Z and the dashboard's ruling): `rho_console`, the same ρ ("inf" where infinite, null where reading A
-measures no kind, never 1; coordinator 09:46Z), `reading` (A where formalism.READING_A and the row's token kind
+leaves it unmeasured, never 1; coordinator 09:46Z and 12:20Z), `reading` (A where formalism.READING_A and the row's token kind
 is measured, its trace's entries and an op log, else B, whose ρ is Slowdown's token form, a target), `te_core` the
 VERSION that priced it, `binding_kind` and `rests_on`, and `kinds`, a JSON cell of the terms its max takes and the
-sensitivities it leaves out.
+sensitivities it leaves out, with a measured fresh-products term's premises beside it (`PREMISED`) and, where
+that term is its best subset's, the products it dropped (`fresh_subset`, te_core 4.10), or `void` where that term is
+a void's 0 (`VOIDED`).
 
 The coverage (`coverage`) is, per gain target, data and decade of ρ (`DECADES`: from 1, 10, ... and 1e5 and above,
-an infinite ρ there, and an unmeasured one, or one resting on a stub input (basis `stub`), in none, which the table
-counts), the reached row with the least p, else the failed attempt with the greatest gain, else EMPTY.
+an infinite ρ there, and an unmeasured one, one resting on a stub input (basis `stub`) or a partial or void one
+(basis `partial` or `void`, ρ a lower bound: drawn and marked, but in no cell and on no front; coordinator 12:20Z and
+13:32Z) in none, which the table counts), the reached row with the least p, else the failed attempt with the greatest
+gain, else EMPTY.
 The console's copy (`cut`) is the whole table when it fits the panels route (te_core.console), else the coverage's
 rows and, at the first tier of `TIERS` that fits, per data, start and target (and family, at the first tier) the
-reached rows on the lower-left (p, rho_default) front and the failed attempt with the greatest gain, without the
+reached rows on the lower-left (p, rho_default) front and the failed attempt with the greatest gain (the partial
+rows' and the void rows' each picked among themselves), without the
 columns of `CONSOLE_DROP`, which the route's 24 columns leave no room for. DIR gets the
 uncut tables in `tables/` (`algorithm-policy.json`, `coverage.json`, `coverage.md`, `refused.json`, each valid
 checkpoint te_core.formalism refuses with its reason, which no row holds, and te_core.frontier_fit's
@@ -130,6 +139,23 @@ UNMEASURED = "unmeasured"
 #: basis_default where a row's ρ rests on a stub input (`estimated`'s stub tag; coordinator 08:09Z item 2): in no
 #: decade, and off the cut's fronts and the figure; the stored table keeps it
 STUB = "stub"
+#: basis_default where a row's ρ is only a lower bound (te_core.formalism.published's `partial`: a measured kind's term
+#: exceeds 1 and a valid kind is unmeasured; coordinator 12:20Z): drawn and marked, but in no decade, picked by the
+#: cut among the partial rows alone, and never the least S
+PARTIAL = "partial"
+#: basis_default where a row's ρ reads a void fresh-products term: te_core.io_bound voids its proved Λ where a chain
+#: making an operand whole is too short (`io_bound.whole_chain` past r = 1/4), and te_core 4.9 then measures the term
+#: as 0, which is no result (coordinator 13:32Z, until te_core 4.10 prices the best subset): like `PARTIAL`, drawn
+#: and marked, in no decade, picked by the cut among the void rows alone, and never the least S
+VOID = "void"
+#: the kinds cell's `void` mark: the kind whose term is a void's 0, and why that 0 is no result
+VOIDED = {"fresh_products": "0 from a void Lambda (a chain making an operand whole past io_bound's r = 1/4): no result"}
+#: the bases whose ρ is only a lower bound, each with the marker the figure adds (a caret up, a cross); never the least S
+LOWER = {PARTIAL: 6, VOID: "x"}
+#: the kinds whose measured term the kinds cell labels with what it rests on (te_core.formalism's `RESTS_ON_CELL`),
+#: binding or not: the fresh-products term rests on premises on the reference circuit, P-width and P-chain
+#: (coordinator 12:09Z), which `rests_on` names only where it binds
+PREMISED = ("fresh_products",)
 
 
 def finite(rho: float | None) -> float | None:
@@ -237,18 +263,33 @@ def rho_inputs(m: formalism.Measured, w_fwd: float) -> str:
             f"\"u_in_points\":{json.dumps(cols['u_in_points'])}}}")
 
 
-def kinds(one: dict) -> str:
+def kinds(one: dict, void: bool = False) -> str:
     """A published ρ's kinds as one JSON cell (te_core.formalism's `published`): `bound`, the terms its max takes, and
-    `sensitivity`, those it leaves out; null where unmeasured, "inf" where infinite; and `partial` and `why` where
-    `published` sets them."""
+    `sensitivity`, those it leaves out; null where unmeasured, "inf" where infinite; `partial` and `why` where
+    `published` sets them; `void`, the kind whose term is a void's 0 (`VOID`), where `void`; `rests_on`, what
+    each `PREMISED` kind's term rests on where it is measured and not void; and `fresh_subset`, the products the
+    fresh-products term's best subset dropped, where it dropped any."""
     def cell(x: float | None) -> str:
         return "null" if x is None else '"inf"' if math.isinf(x) else num(x, DIGITS)
 
     def part(d: dict) -> str:
         return "{" + ",".join(f'"{k}":{cell(x)}' for k, x in d.items()) + "}"
-    marks = (',"partial":true' if one.get("partial") else "") + (f',"why":{json.dumps(one["why"])}'
-                                                                 if one.get("why") else "")
+    rests = {k: formalism.RESTS_ON_CELL[k] for k in PREMISED if one["terms"].get(k) is not None and not void}
+    marks = ((',"partial":true' if one.get("partial") else "") + (f',"why":{json.dumps(one["why"])}'
+                                                                  if one.get("why") else "")
+             + (f',"void":{json.dumps(VOIDED)}' if void else "")
+             + (f',"rests_on":{json.dumps(rests)}' if rests else "")
+             + (f',"fresh_subset":{part(one["fresh_subset"])}' if one.get("fresh_subset") else ""))
     return f'{{"bound":{part(one["terms"])},"sensitivity":{part(one["sensitivities"])}{marks}}}'
+
+
+def voided(m: formalism.Measured, one: dict) -> bool:
+    """Whether a row's published ρ at `CONSOLE` (`one`) reads a void fresh-products term (`VOID`): reading A where Fit
+    fails, the term 0 where te_core.io_bound's proved Λ is void, which `formalism.fresh_products` measures."""
+    if one["reading"] != "A" or one["binding_kind"] == "fit" or one["terms"].get("fresh_products") != 0:
+        return False
+    _, why, got = formalism.fresh_products(m, *CONSOLE)
+    return why is None and (got.get("io_bound") or {}).get("proved", {}).get("lam", 0.0) is None
 
 
 def runs_of(st: frontier_fit.Start) -> dict[str, list[dict]]:
@@ -269,7 +310,7 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
             return False, math.inf if x[ix["p"]] is None else x[ix["p"]], x[ix["C_gates"]]
         return True, -x[ix["gain"]], x[ix["C_gates"]]
 
-    rows, wrong, rhos = [], [], {}
+    rows, wrong, rhos, void = [], [], {}, {}
     for st in info["starts"]:
         f = info["fits"].get(st.data)
         if f is None or st.l0 <= f["E"]:
@@ -286,10 +327,11 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
                 if r["id"] not in dials:
                     dials[r["id"]] = panels.dial(m, st.w) | {(CONSOLE[0] / st.w, CONSOLE[1]): formalism.at(m, *CONSOLE)}
                     rhos[r["id"]] = formalism.published(m), formalism.published(m, *panels.SERVED)
+                    void[r["id"]] = voided(m, rhos[r["id"]][0])
                 one, served = rhos[r["id"]]
                 gain, est = frontier_fit.gain_from(f, st.l0, r["val_bpb"]), estimated(m)
                 basis = (UNMEASURED if one["rho"] is None else STUB if any(t.endswith(f":{STUB}") for t in est.split())
-                         else one["binding_kind"])
+                         else VOID if void[r["id"]] else PARTIAL if one.get("partial") else one["binding_kind"])
                 row = [st.label, st.c0, None if math.isinf(own) else own, st.l0, r["val_bpb"], g,
                        None if math.isinf(gain) else gain,
                        "yes" if hit else "no", r["gates"], h, r["gates"] / h if h else None, finite(one["rho"]),
@@ -297,7 +339,8 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
                        " ".join(filter(None, (est, "gain:provisional" if f.get("provisional") else "")))]
                 cols = {"rho_inputs": rho_inputs(m, st.w), "reading": one["reading"], "te_core": VERSION,
                         "rho_console": None if one["rho"] is None else "inf" if math.isinf(one["rho"]) else one["rho"],
-                        "binding_kind": one["binding_kind"], "rests_on": one["rests_on"], "kinds": kinds(one),
+                        "binding_kind": one["binding_kind"], "rests_on": one["rests_on"],
+                        "kinds": kinds(one, void[r["id"]]),
                         "rho_served": finite(served["rho"])}
                 row += [cols[c] for c in COLUMNS[len(row):]]
                 d = dict(zip(COLUMNS, rounded(row)))
@@ -308,8 +351,7 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
         raise ValueError(f"{PANEL}: {len(wrong)} cells where a row's columns don't give te_core.formalism.at's rho "
                          f"({'; '.join(wrong[:3])}): the dial (page_rho) has no context charge (--charge-context), "
                          f"and its inputs have {INPUT_DIGITS} significant digits")
-    return {"id": PANEL, "title": f"Algorithm against policy: p = C/H against rho at each gain target (C, H and c in "
-                                  f"{UNIT})",
+    return {"id": PANEL, "title": f"Algorithm against policy: p = C/H against rho per gain target ({UNIT})",
             "kind": "table", "updated_at": stamp or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "source": source,
             "note": note(), "columns": COLUMNS, "rows": rows}
 
@@ -340,8 +382,9 @@ def note(art: str | None = None, tier: str | None = None, kept: str = "", provis
 
 def decade(rho: float | None, basis: str | None = None) -> int | None:
     """The coverage's decade of ρ (`DECADES`) a row's rho_default is in: an infinite one (null) is in the last, and an
-    unmeasured one (null, basis `UNMEASURED`) or one resting on a stub (basis `STUB`) in none."""
-    if basis in (UNMEASURED, STUB):
+    unmeasured one (null, basis `UNMEASURED`), one resting on a stub (basis `STUB`), one reading a void term (basis
+    `VOID`) or a partial one, only a lower bound (basis `PARTIAL`), in none."""
+    if basis in (UNMEASURED, STUB, VOID, PARTIAL):
         return None
     if rho is None:
         return len(DECADES) - 1
@@ -349,8 +392,8 @@ def decade(rho: float | None, basis: str | None = None) -> int | None:
 
 
 def unmeasured_rows(p: dict, basis: str = UNMEASURED) -> int:
-    """How many of a panel's rows have no measured ρ (basis_default `UNMEASURED`), or rest on a stub (`STUB`), which
-    no decade holds."""
+    """How many of a panel's rows have no measured ρ (basis_default `UNMEASURED`), rest on a stub (`STUB`), read a void
+    term (`VOID`) or are partial (`PARTIAL`), which no decade holds."""
     return sum(d.get("basis_default") == basis for d in plots.frame(p))
 
 
@@ -412,10 +455,10 @@ def served_text(cov: list[dict]) -> str:
 
 
 def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str] | None = None,
-                unmeasured: int = 0, stubs: int = 0) -> str:
+                unmeasured: int = 0, stubs: int = 0, partial: int = 0, void: int = 0) -> str:
     """The coverage table in Markdown, a row per gain target and data, a column per decade of ρ, and how many valid
-    checkpoints te_core.formalism refused (`refused`, row id -> reason) and rows have no measured ρ (`unmeasured`) or
-    rest on a stub (`stubs`), which no cell can hold."""
+    checkpoints te_core.formalism refused (`refused`, row id -> reason) and rows have no measured ρ (`unmeasured`),
+    rest on a stub (`stubs`), are partial (`partial`) or read a void term (`void`), which no cell can hold."""
     lines = [f"# training/algorithm-policy coverage, {stamp}", "",
              "Per gain target, data and decade of rho_default: the reached row with the least p, else the failed "
              f"attempt with the greatest gain (p a lower bound), else **{EMPTY}**.", "",
@@ -437,6 +480,12 @@ def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str]
     if stubs:
         lines.append(f"{stubs} {'row rests' if stubs == 1 else 'rows rest'} on a stub input (basis_default {STUB}), "
                      "in no decade.")
+    if partial:
+        lines.append(f"{partial} {'row is' if partial == 1 else 'rows are'} partial (basis_default {PARTIAL}: a valid "
+                     "kind unmeasured, so rho is only a lower bound), in no decade.")
+    if void:
+        lines.append(f"{void} {'row reads' if void == 1 else 'rows read'} a void fresh-products term (basis_default "
+                     f"{VOID}: 0 from a void Lambda, no result, so rho is only a lower bound), in no decade.")
     if unmeasured:
         lines.append(f"{unmeasured} {'row' if unmeasured == 1 else 'rows'} with no measured rho under reading A "
                      f"(rho_default null, basis_default {UNMEASURED}), in no decade.")
@@ -444,7 +493,7 @@ def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str]
 
 
 def board_line(cov: list[dict], fits: dict, stamp: str, art: str | None, refused: dict[str, str] | None = None,
-               unmeasured: int = 0, stubs: int = 0) -> str:
+               unmeasured: int = 0, stubs: int = 0, partial: int = 0, void: int = 0) -> str:
     """The coverage as one board line's text, after its time and tag."""
     parts = []
     for g in GAINS:
@@ -462,6 +511,10 @@ def board_line(cov: list[dict], fits: dict, stamp: str, art: str | None, refused
             + (f" {len(refused)} valid checkpoints refused by te_core.formalism, never scored "
                f"({frontier_fit.refusals(refused)})." if refused else "")
             + (f" {stubs} {'row rests' if stubs == 1 else 'rows rest'} on a stub, in no decade." if stubs else "")
+            + (f" {partial} {'row' if partial == 1 else 'rows'} partial (rho a lower bound), in no decade."
+               if partial else "")
+            + (f" {void} {'row reads' if void == 1 else 'rows read'} a void fresh-products term (0, no result), in "
+               "no decade." if void else "")
             + (f" {unmeasured} {'row' if unmeasured == 1 else 'rows'} unmeasured under reading A, in no decade."
                if unmeasured else ""))
 
@@ -476,7 +529,9 @@ def kept(rows: list[list], tier: str, cov: set[int]) -> list[list]:
     """The coverage's rows (`cov`, indices into `rows`) and, unless `tier` is "coverage", per data, start, gain target
     and (at tier "family") family, the reached rows on the lower-left (p, rho_default) front (te_core.plots'
     staircase, an infinite ρ above every finite one) and the failed attempt with the greatest gain, neither resting on
-    a stub (`STUB`), in the table's order."""
+    a stub (`STUB`), in the table's order. The partial rows (`PARTIAL`, ρ a lower bound) are picked among themselves
+    alone, and so are the void rows (`VOID`), so none displaces a row from the others' front and the console still
+    draws them, marked."""
     ix = {c: i for i, c in enumerate(COLUMNS)}
 
     def big(v):
@@ -489,12 +544,14 @@ def kept(rows: list[list], tier: str, cov: set[int]) -> list[list]:
             key = (r[ix["data"]], r[ix["start"]], r[ix["gain_target"]]) + ((r[ix["family"]],) if tier == "family" else ())
             groups.setdefault(key, []).append(i)
         for g in groups.values():
-            yes = [i for i in g if rows[i][ix["reached"]] == "yes" and rows[i][ix["basis_default"]] != STUB]
-            keep |= {i for _, _, i in plots.staircase([(big(rows[i][ix["p"]]), big(rows[i][ix["rho_default"]]), i)
-                                                       for i in yes])}
-            no = [i for i in g if rows[i][ix["reached"]] == "no" and rows[i][ix["basis_default"]] != STUB]
-            if no:
-                keep.add(max(no, key=lambda i: (rows[i][ix["gain"]], -rows[i][ix["C_gates"]])))
+            for on in ([i for i in g if rows[i][ix["basis_default"]] not in (STUB, PARTIAL, VOID)],
+                       *([i for i in g if rows[i][ix["basis_default"]] == b] for b in (PARTIAL, VOID))):
+                yes = [i for i in on if rows[i][ix["reached"]] == "yes"]
+                keep |= {i for _, _, i in plots.staircase([(big(rows[i][ix["p"]]), big(rows[i][ix["rho_default"]]),
+                                                            i) for i in yes])}
+                no = [i for i in on if rows[i][ix["reached"]] == "no"]
+                if no:
+                    keep.add(max(no, key=lambda i: (rows[i][ix["gain"]], -rows[i][ix["C_gates"]])))
     return [r for i, r in enumerate(rows) if i in keep]
 
 
@@ -503,8 +560,9 @@ def checked(q: dict) -> dict:
         raise ValueError(f"{PANEL}: its note is {len(q['note'])} characters, over {console.NOTE_MAX}")
     if bad := console.refused(q):
         raise ValueError(f"{PANEL}: the panels route refuses it ({'; '.join(bad[:3])}; te_core.console.refused): a "
-                         f"source of at most {console.SOURCE_MAX} characters, at most {console.COLUMNS_MAX} columns, "
-                         f"each cell a number, a string of at most {console.CELL_MAX} characters or null")
+                         f"title of at most {console.TITLE_MAX} characters, a source of at most {console.SOURCE_MAX}, "
+                         f"at most {console.COLUMNS_MAX} columns, each cell a number, a string of at most "
+                         f"{console.CELL_MAX} characters or null")
     return q
 
 
@@ -595,8 +653,9 @@ def store(path: Path, meta: dict) -> str:
 
 def figure(p: dict, out: Path) -> Path:
     """p against ρ at the console's default on the headline data, log-log, one panel per gain target: a colour per family,
-    a marker per start, filled where reached and open at a failed attempt's lower bound on p, the coverage's decades
-    of ρ dotted and the iso-S diagonals S = p ρ at `LEVELS`."""
+    a marker per start, filled where reached and open at a failed attempt's lower bound on p, a caret up from a partial
+    row's (`PARTIAL`, ρ a lower bound, never the least S) and a cross on a void row's (`VOID`, the same), the
+    coverage's decades of ρ dotted and the iso-S diagonals S = p ρ at `LEVELS`."""
     data = headline(p)
     every = [d for d in plots.frame(p) if d["data"] == data]
     rows = [d for d in every if d["p"] is not None and d["rho_default"] is not None and d["basis_default"] != STUB]
@@ -621,16 +680,23 @@ def figure(p: dict, out: Path) -> Path:
             ax.plot(d["p"], d["rho_default"], MARKERS[starts.index(d["start"]) % len(MARKERS)], ms=4.5, alpha=0.75,
                     color=colour, mfc=colour if yes else "none", mec="k" if yes and d["basis_default"] == "fit" else
                     colour, mew=0.7)
+            if d["basis_default"] in LOWER:
+                ax.plot(d["p"], d["rho_default"], marker=LOWER[d["basis_default"]], ms=9, color=colour, mew=1.0)
         reached = [d for d in mine if d["reached"] == "yes"]
+        whole = [d for d in reached if d["basis_default"] not in LOWER]
         at = [d for d in every if d["gain_target"] == g]
         unplotted = len(at) - len(mine)
         if reached:
-            best = min(reached, key=lambda d: d["p"] * d["rho_default"])
-            ax.plot(best["p"], best["rho_default"], "o", mfc="none", mec="red", ms=11)
-            ax.set_title(f"gain {g:g}: {len(reached)} reached, {len(mine) - len(reached)} not"
+            least = ";\nno least S: every reached row is partial or void"
+            if whole:
+                best = min(whole, key=lambda d: d["p"] * d["rho_default"])
+                ax.plot(best["p"], best["rho_default"], "o", mfc="none", mec="red", ms=11)
+                least = f";\nleast S {best['p'] * best['rho_default']:.3g} ({best['start']}, {best['method_key']})"
+            ax.set_title(f"gain {g:g}: {len(reached)} reached"
+                         + (f" ({len(reached) - len(whole)} partial or void)" if len(whole) < len(reached) else "")
+                         + f", {len(mine) - len(reached)} not"
                          + (f" ({unplotted} more: rho infinite, unmeasured or on a stub, or no p)" if unplotted else "")
-                         + f";\nleast S {best['p'] * best['rho_default']:.3g} ({best['start']}, {best['method_key']})",
-                         fontsize=8)
+                         + least, fontsize=8)
         elif at:
             top = max(at, key=lambda d: d["gain"])
             ax.set_title(f"gain {g:g}: none of {len(at)} attempts reached it, so no H and no p", fontsize=8)
@@ -649,6 +715,10 @@ def figure(p: dict, out: Path) -> Path:
     keys += [Line2D([], [], marker=MARKERS[i % len(MARKERS)], ls="none", color="0.3", label=s)
              for i, s in enumerate(starts)]
     keys.append(Line2D([], [], marker="o", ls="none", mfc="none", mec="red", ms=9, label="least S reached"))
+    for basis, label_ in ((PARTIAL, "partial: rho a lower bound"),
+                          (VOID, "void: fresh products 0 from a void Lambda, rho a lower bound")):
+        if any(d["basis_default"] == basis for d in rows):
+            keys.append(Line2D([], [], marker=LOWER[basis], ls="none", color="0.3", ms=8, label=label_))
     fig.legend(handles=keys, loc="lower center", ncol=min(len(keys), 7), fontsize=7, bbox_to_anchor=(0.5, 0.04))
     fig.suptitle(f"{p['title']}, {data} data\n(grey: iso-S, S = p rho; dotted: the coverage's decades of rho)",
                  fontsize=10)
@@ -662,7 +732,7 @@ def figure(p: dict, out: Path) -> Path:
 
 def summary(p: dict, info: dict) -> str:
     """Per data, start and gain target: its target loss, the runs, how many reach it, the least p and the least S
-    among them (S on no row resting on a stub), and the best failed attempt."""
+    among them (S on no row resting on a stub, partial or void), and the best failed attempt."""
     rows = plots.frame(p)
     lines = ["| data | start | gain | own gain | runs | reached | least p (run) | least S (p, rho) | best not reached |",
              "|---|---|---|---|---|---|---|---|---|"]
@@ -675,7 +745,7 @@ def summary(p: dict, info: dict) -> str:
             yes = [d for d in mine if d["reached"] == "yes"]
             no = [d for d in mine if d["reached"] == "no"]
             lp = min(yes, key=lambda d: d["p"]) if yes else None
-            fin = [d for d in yes if d["rho_default"] is not None and d["basis_default"] != STUB]
+            fin = [d for d in yes if d["rho_default"] is not None and d["basis_default"] not in (STUB, *LOWER)]
             ls = min(fin, key=lambda d: d["p"] * d["rho_default"]) if fin else None
             bn = max(no, key=lambda d: d["gain"]) if no else None
             lines.append(f"| {st.data} | {st.label} | {g:g} | {frontier_fit.gain(f, st.l0, st.c0):.3f} | {len(mine)} | "
@@ -706,7 +776,8 @@ def main(argv=None) -> int:
     (tables / "coverage.json").write_text(json.dumps(own, allow_nan=False, indent=1) + "\n")
     (tables / "refused.json").write_text(json.dumps(d["refused"], indent=1, sort_keys=True) + "\n")
     (tables / "coverage.md").write_text(coverage_md(own, info["fits"], p["updated_at"], d["refused"],
-                                                    unmeasured_rows(p), unmeasured_rows(p, STUB)))
+                                                    unmeasured_rows(p), unmeasured_rows(p, STUB),
+                                                    unmeasured_rows(p, PARTIAL), unmeasured_rows(p, VOID)))
     served = {}
     if a.publish:
         try:
@@ -717,7 +788,8 @@ def main(argv=None) -> int:
             return 1
     pub, fpub, held = guarded(p, fp, served)
     cov = own if pub is p else coverage(pub)
-    md = coverage_md(cov, info["fits"], p["updated_at"], d["refused"], unmeasured_rows(pub), unmeasured_rows(pub, STUB))
+    md = coverage_md(cov, info["fits"], p["updated_at"], d["refused"], unmeasured_rows(pub), unmeasured_rows(pub, STUB),
+                     unmeasured_rows(pub, PARTIAL), unmeasured_rows(pub, VOID))
     art = store(tables, {"what": f"{PANEL} uncut, its coverage and {frontier_fit.PANEL} (te_core.algorithm_policy)",
                          "rows": len(p["rows"]), "source": source}) if a.publish else None
     q = cut(pub, art, held)
@@ -739,7 +811,7 @@ def main(argv=None) -> int:
           f"{len(q['note'])} characters" + (f", served rows kept on {held}" if held else "")
           + f" -> {a.out}: tables/, console/{NAME}.json, console/{frontier_fit.NAME}.json, {png.name}")
     print("board: " + board_line(cov, info["fits"], p["updated_at"], art, d["refused"], unmeasured_rows(pub),
-                                 unmeasured_rows(pub, STUB))
+                                 unmeasured_rows(pub, STUB), unmeasured_rows(pub, PARTIAL), unmeasured_rows(pub, VOID))
           + (f" Kept as served: {held}." if held else ""))
     if a.publish:
         status = []

@@ -15,17 +15,22 @@ C0 and held-out bpb. Every C is in te_core's gates: a start's C0 is te_core.pane
 the bf16 GEMM price, as a v3 start's counted C0 is.
 
 The fit (`fit`) reads the frontier from the least C0 of the data's starts in the manifest up: gains are read at no
-less compute, and the from-scratch runs' first evaluations below it are warm-up, not a frontier. It takes one point per
+less compute, and the from-scratch runs' first evaluations below it are warm-up, not a frontier. On v3
+(`FROM_SCRATCH`) it reads the frontier from scratch alone, its starts and the ladder's runs (coordinator 07:57Z: v3's
+fit is the ladder's starts'): pooled, a start's continuations take its own point's bin and, past their compute-optimal
+range, flatten the fit to E = 0; they still set te_core.algorithm_policy's H. It takes one point per
 1/`PER_DECADE` decade of C (the least loss there, so a stretch of checkpoints close in compute counts once) and fits E,
 A and γ by least squares in relative loss, E in [0, the least loss) and A > 0, γ on a grid refined by golden section.
 A data with fewer than `FIT_MIN` such points, or spanning less than a factor `FIT_SPAN` in C, has no fit, and so does
 one with neither a start that has a scored checkpoint nor a ladder point: the pilot's from-scratch losses are converted
 through its starts' (`panels.scratch`), and its starts' C0 rest on the dense rate their checkpoints give. A fit on
 fewer than `FIT_TARGET` points from scratch is provisional: its status and the note say so, the note with its points'
-residuals, and te_core.algorithm_policy's rows that read it carry gain:provisional in `estimated`. Effective
+residuals, and te_core.algorithm_policy's rows that read it carry gain:provisional in `estimated`. A fit on no more
+points than its `PARAMS` parameters has residuals that bound none of its uncertainty, which its status and its starts'
+say where they would give its rms in effective compute (`unbounded`). Effective
 compute C_eff(l) = (A/(l − E))^(1/γ) is the compute at which the fit reaches loss l, and a point's gain C_eff(l)/C its
 residual in compute (1 on the fit). A start's gain from its l0 to a loss L is Daniel's C(L)/C(l0) on the fit
-(`gain_from`, TRN-40), so its target at gain g (te_core.algorithm_policy's `GAINS`) is E + (l0 − E)·g^(−γ), below l0 at
+(`gain_from`), so its target at gain g (te_core.algorithm_policy's `GAINS`) is E + (l0 − E)·g^(−γ), below l0 at
 every g (`target`), and the fit's uncertainty in effective compute at a loss is its rms in loss over the fit's slope
 there (`c_spread`).
 
@@ -62,6 +67,12 @@ PER_DECADE = 20
 FIT_MIN, FIT_SPAN = 3, 10.0
 #: the from-scratch points a fit is to read (coordinator 07:58Z: the target, not a gate); a fit on fewer is provisional
 FIT_TARGET = 5
+#: the data whose fit reads its from-scratch points alone (method key `panels.SCRATCH`), v3's the ladder's starts
+#: (coordinator 07:57Z): pooled, its starts' continuations take the starts' bins and, past their compute-optimal
+#: range, pull E to its bound 0, so a start's own gain leaves 1; they still set H
+FROM_SCRATCH = ("v3",)
+#: the fit's parameters, E, A and γ: on no more points than these its residuals bound none of its uncertainty
+PARAMS = 3
 #: the v3 ladder's points read when no `--ladder-points` names any: each start of its manifest
 #: (islands/ladder-v3/ladder_store.json) at its counted C0 MACs and held-out bpb on the v3 search pool, built from the
 #: manifest and each start's start.json, sha256-checked, as `ladder-points.json` (te-ladder/F/v1); None reads none
@@ -219,7 +230,7 @@ def gain(f: dict, loss: float, c0: float) -> float:
 
 
 def gain_from(f: dict, l0: float, loss: float) -> float:
-    """The gain from a start's loss `l0` to `loss` on the fit, C(L1)/C(L0) (Daniel, TRN-40 7:05 PM PST): C_eff(loss)
+    """The gain from a start's loss `l0` to `loss` on the fit, Daniel's C(L1)/C(L0): C_eff(loss)
     over C_eff(l0), ((l0 − E)/(loss − E))^(1/γ), infinite at or below E. `l0` is above E (`target`)."""
     if l0 <= f["E"]:
         raise ValueError(f"frontier_fit: a start at {l0} bpb is at or below the fit's E ({f['E']}), which no compute "
@@ -241,12 +252,20 @@ def c_spread(f: dict, loss: float) -> float:
 
 def targets(f: dict, l0: float, gains: tuple[float, ...]) -> str:
     """A start's target losses at `gains` (`target`; te_core.algorithm_policy's `GAINS`) and the fit's uncertainty in
-    effective compute at the first (`c_spread`), as a start row's status."""
+    effective compute at the first (`c_spread`), or that its residuals bound none (`unbounded`), as a start row's
+    status."""
     if l0 <= f["E"]:
         return f"no targets: its loss is at or below the fit's E ({f['E']:g})"
     at = [(g, target(f, l0, g)) for g in gains]
     return ("targets, C(L1)/C(L0) = g: " + ", ".join(f"{g:g}x {t:.5f} ({100 * (t / l0 - 1):+.2f}%)" for g, t in at)
-            + f"; the fit's rms is {100 * c_spread(f, at[0][1]):.3g}% in effective compute at {gains[0]:g}x")
+            + (f"; {unbounded(f)}" if f["points"] <= PARAMS else
+               f"; the fit's rms is {100 * c_spread(f, at[0][1]):.3g}% in effective compute at {gains[0]:g}x"))
+
+
+def unbounded(f: dict) -> str:
+    """Why a fit on no more points than its `PARAMS` parameters gives no uncertainty in effective compute."""
+    return (f"the fit's {f['points']} points are as many as its {PARAMS} parameters, so its residuals bound none of its "
+            "uncertainty")
 
 
 def span(lo: float, hi: float, unit: str = "") -> str:
@@ -258,11 +277,12 @@ def span(lo: float, hi: float, unit: str = "") -> str:
 def status(f: dict, spread: list[float], first: list[float], gains: tuple[float, ...]) -> str:
     """A fit row's status: provisional or not, E at its bound 0 where the points leave it there (`fit` holds E in
     [0, the least loss)), its points' gains (`spread`) and its rms in effective compute at its starts' first targets
-    (`first`, in %)."""
+    (`first`, in %), or that its residuals bound none (`unbounded`)."""
     return ((f"provisional fit: {f['scratch']} of its points from scratch, under {FIT_TARGET}" if f["provisional"]
              else "fit") + ("; E at its bound 0 (the least squares would put it at or below 0)" if f["E"] == 0 else "")
             + f"; its points' gains {span(min(spread), max(spread))}"
-            + (f"; its rms in loss is {span(min(first), max(first), '%')} in effective compute at its starts' "
+            + (f"; {unbounded(f)}" if f["points"] <= PARAMS else
+               f"; its rms in loss is {span(min(first), max(first), '%')} in effective compute at its starts' "
                f"{gains[0]:g}x targets" if first else ""))
 
 
@@ -291,7 +311,8 @@ def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source:
     for d in panels.DATA:
         lo = c_lo(shapes, d, rate)
         anchored = any(s.data == d for s in sts) or any(p[2]["data"] == d for p in extra)
-        read[d] = used(pts[d], lo) if lo is not None and anchored else []
+        pool = [p for p in pts[d] if p[2].get("method_key") == panels.SCRATCH] if d in FROM_SCRATCH else pts[d]
+        read[d] = used(pool, lo) if lo is not None and anchored else []
         fits[d] = f = fit(read[d])
         if f is None:
             why = ("no fit: no start has a scored checkpoint on this data and no ladder point is given, so nothing "
@@ -327,10 +348,10 @@ def note(fits: dict | None = None, read: dict | None = None, pts: dict | None = 
     """The panel's note, and each provisional fit's points (`provisional`); over the route's `console.NOTE_MAX`
     without the ladder's runs off the fit."""
     def text(off: bool) -> str:
-        out = ("Per data, held-out bpb L against training gates C: E + A*C^-gamma, least squares in relative loss over "
-               "its frontier (least L per C: from scratch, starts at C0, checkpoints at C0 + |C|) from the least C0, a "
-               f"point per 1/{PER_DECADE} decade. C_eff = (A/(L - E))^(1/gamma); gain C_eff(L)/C at a point, "
-               "C(L)/C(l0) at a target.")
+        out = ("Per data, held-out bpb L at training gates C: E + A*C^-gamma, least squares in relative loss over its "
+               "frontier (least L per C: from scratch, starts at C0, checkpoints at C0 + |C|; "
+               f"{', '.join(FROM_SCRATCH)} from scratch only) from the least C0, a point per 1/{PER_DECADE} decade. "
+               "C_eff = (A/(L - E))^(1/gamma); gain C_eff(L)/C at a point, C(L)/C(l0) at a target.")
         for d, f in (fits or {}).items():
             if f and f.get("provisional"):
                 out += " " + provisional(d, f, read[d], pts[d], off)

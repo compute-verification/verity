@@ -207,7 +207,8 @@ def test_the_candidates_give_every_throttled_row(tmp_path, monkeypatch):
     assert {d["run"] for d in throttled} <= set(cand) <= {d["run"] for d in throttled} | {d["run"] for d in uncut
                                                                                           if d["curve"] == "honest"}
     for d in cand.values():
-        assert set(json.loads(d["rho_inputs"])) == set(panels.PACKED) and len(d["rho_inputs"]) <= console.CELL_MAX
+        assert set(json.loads(d["rho_inputs"])) == {*panels.PACKED, panels.FRESH}
+        assert len(d["rho_inputs"]) <= console.CELL_MAX
         assert d["compute_total_gates"] == pytest.approx(d["start_compute_gates"] + d["compute_after_gates"], rel=1e-3)
         assert (d["c_tokens_per_block"], d["k_bits"], d["S"], d["basis"]) == (None,) * 4
     for t in throttled:
@@ -256,7 +257,7 @@ def test_the_cut_thins_the_unmarked_cells_first():
 
 
 def test_the_cut_fits_the_route_and_says_how_many_points(monkeypatch):
-    p = {"id": panels.PANEL, "source": "s", "note": "", "columns": panels.COLUMNS,
+    p = {"id": panels.PANEL, "title": "t", "source": "s", "note": "", "columns": panels.COLUMNS,
          "rows": curve("frontier", 10) + [r for kb in panels.K_BYTES for r in curve("throttled", 60, "s", 1, 8 * kb)]}
     whole = panels.cut(p, RATIO, "v2.3-pilot")
     assert len(whole["rows"]) == len(p["rows"]) and whole["note"] == panels.note(RATIO, None, "v2.3-pilot")
@@ -277,7 +278,7 @@ def test_the_cut_fits_the_route_and_says_how_many_points(monkeypatch):
 def test_the_cut_coarsens_the_fine_curves_last(monkeypatch):
     """When the unmarked cells at two points each don't fit, the cut keeps the other curves' points further apart in
     loss (`STEPS`), and its note says how far."""
-    p = {"id": panels.PANEL, "source": "s", "note": "", "columns": panels.COLUMNS,
+    p = {"id": panels.PANEL, "title": "t", "source": "s", "note": "", "columns": panels.COLUMNS,
          "rows": curve("frontier", 200, step=1.01 * panels.FRONTIER_STEP) + curve("throttled", 60, "s", 1, 80_000)}
     finest = p | {"rows": [panels.rounded(r) for r in panels.thinned(p["rows"], 1)]}
     monkeypatch.setattr(console, "BODY_MAX", len(console.body(finest)) - 1)
@@ -294,7 +295,7 @@ def test_the_cut_keeps_the_most_candidates_that_fit(monkeypatch):
                        run=f"r{i}", rho_inputs="{}") for i in range(40)]
     on = [panels.row(curve="throttled", data="v2.3-pilot", start="s", c_tokens_per_block=float(n), k_bits=8e4,
                      compute_total_gates=1.0, loss=1.1, run="r39") for n in range(3)]
-    p = {"id": panels.PANEL, "source": "s", "note": "", "columns": panels.COLUMNS,
+    p = {"id": panels.PANEL, "title": "t", "source": "s", "note": "", "columns": panels.COLUMNS,
          "rows": curve("frontier", 5) + on + cand}
     assert panels.ranked(p["rows"])[0] is cand[-1] and panels.ranked(p["rows"])[1:] == cand[:-1]
     whole = panels.cut(p, RATIO, "v2.3-pilot")

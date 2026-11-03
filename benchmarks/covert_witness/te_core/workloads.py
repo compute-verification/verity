@@ -10,8 +10,8 @@ operands (`Fresh`), w_fwd, and the most update bits one of its ops reads (`op_up
 term at a policy (c, k), their max, the binding kind and the sensitivities and target beside them; `columns` gives the
 target's inputs as the console's columns (te_core.algorithm_policy's `INPUTS`, with `w_fit_gates`, `alpha_ratio` and
 `C_gates`), on which `algorithm_policy.page_rho` gives reading B's token form, and `menu` the other inputs, the fresh
-products' among them. `reference` evaluates each workload's reference points (`Workload.points`) at `POLICIES` and
-its `Check`s, measured records beside the model (the 45M pilot's, and the standard-workloads island's rows from s-t20
+products' among them. `reference` evaluates each workload's reference points (`Workload.points`) at `POLICIES`, its
+default point at the registered serving block beside them (`serving_block`, a headline, not a row), and its `Check`s, measured records beside the model (the 45M pilot's, and the standard-workloads island's rows from s-t20
 and m-t20 in `RECORDS`), each made a model of its own
 (`recorded`) so that every kind's term is on both; `input_status` gives each input's source, "measured: " and the
 record where one at the point's dials measures the model's value, else "assumed: " and why. `workloads.json` is its
@@ -20,11 +20,13 @@ output, which the console's tests pin. The spec, each mapping with its reasons, 
 **The one bound** (the coordinator's 06:51Z ruling; Lean's `Counting` and `Slowdown`): ρ ≥ the max over a fixed menu
 of kinds K of `kindBound`, (|B_K|/|C|)·c/cap_K(k), cap_K(k) the most of K's work one block does reading at most k bits
 beyond θ. Only kinds whose terms are lower bounds on their own go into the max (the coordinator's 08:26Z and 10:21Z
-rulings; te_core 4.5's `formalism.KINDS`): where Fit holds its construction gives c/(c − d); else ρ is max(1, the
-measured terms), labelled with its binding kind (none where no measured term exceeds 1) and partial where a kind is
-unmeasured, and null only where no kind is measured, never 1 (the coordinator's 09:46Z and 11:18Z rulings, as
-te_core.formalism.at gives it). `basis` names fit, the binding kind, none or unmeasured, and `RESTS_ON[basis]` what it
-rests on. The kinds (`VALID`):
+rulings; te_core 4.5's `formalism.KINDS`). ρ is te_core.formalism.published's under reading A on the model's
+products, read as is, since that rule lives there only (the coordinator's 12:20Z ruling): where Fit holds its
+construction gives c/(c − d); else ρ is the measured terms' max where it exceeds 1, labelled with its binding kind, the
+kind that max takes, and partial where a valid kind is unmeasured; else null where a valid kind is unmeasured, never
+1, which would read as no slowdown; else 1, binding none, every valid kind measured and none above 1 (the
+coordinator's 09:46Z and 12:20Z rulings). `basis` names fit, the binding kind, none or unmeasured, and
+`RESTS_ON[basis]` what it rests on. The kinds (`VALID`):
 
 - **fresh products** (`Fresh`): products whose two operands both depend on θ', priced by te_core.formalism's
   `fresh_products`, te_core.io_bound's `bound` with Λ proved (the Loomis-Whitney cap per block, the larger of its root
@@ -32,14 +34,20 @@ rests on. The kinds (`VALID`):
   a block starts, and its linear form, the cap's concave envelope, times Λ for blocks doing several products at once),
   on the model's products as io_bound reads a captured step's fresh rows (`products`, `Measured.products`): each GEMM
   by the standard algorithm at its widths as passed (`WIDTHS`), its Definition's gates a MAC and a gadget, attention's
-  products uncounted (io_bound counts none). io_bound's cap has the chain order's constant (its premise P-chain), and
-  the tree order's applies where the order isn't given (the coordinator's 11:18Z ruling); a model gives none
-  (`ORDER`), as no capture does, so the term is unmeasured until io_bound has the tree constant, with io_bound's chain
-  figures beside it. Where measured, the term is io_bound's proved figure without P-cell (`FRESH_FIGURE`), which needs
-  no premise on how a partition splits a multiplier's gates (the coordinator's 06:57Z obligation 1). The chain
-  figures, without P-cell and with it (every block holding whole GEMM gadgets), are sensitivities beside it
-  (`fresh_chain` and `fresh_cell`: the second 19 times the first on the dense default, 3 times on the LoRA's). It
-  rests on no A1. A product with an operand in θ (a frozen weight, a registered teacher's) isn't fresh, nor is the
+  products uncounted (io_bound counts none). io_bound's cap has the chain order's constant, and the standard
+  algorithm sums in a chain: te_core's GEMM gadget accumulates each output entry along one chain from a zero 32-bit
+  word, so P-chain is a premise on the reference circuit, as P-width is (every operand entry paid at its passed
+  width, every partial sum at 32 bits), and the products' order is a chain (`ORDER`, te_core.formalism's; the
+  coordinator's 12:09Z ruling). The term is formalism's, io_bound's proved figure without P-cell (`formalism.P_CELL`
+  off), which needs no premise on how a partition splits a multiplier's gates (the coordinator's 06:57Z obligation 1
+  and 12:09Z ruling: P-cell is a premise on the partition, which the attacker chooses); it rests on P-width and
+  P-chain and no A1. Λ's whole-making factor is io_bound's one-class rule, which products with no whole-making system
+  take (formalism's ONE_CLASS: a model has no graph for io_bound's chain_classes), and which the class system of a
+  traced dense step lowers by under 1% (`DENSE_WHOLE`); it isn't proved for an adapter's products, and a traced LoRA
+  step's class system is void, so an adapter's term is unmeasured, never a number (`ADAPTER_WHOLE`; the
+  coordinator's 15:50Z ruling). The figure under P-cell (every block holding whole GEMM gadgets) is the sensitivity
+  beside it (formalism's `fresh_cell`, 19 times the term on the dense default). A product with an
+  operand in θ (a frozen weight, a registered teacher's) isn't fresh, nor is the
   lowest layer's attention input projection's (its input is gathered embedding rows, which io_bound's P-width prices
   below their width), nor Newton-Schulz's products of an array with itself; and a block computes a product's operands
   itself where it can read the update up to the product's layer and the input ids up to its token (a forward) or of
@@ -55,19 +63,22 @@ Beside ρ, never in its max (`SENSITIVITIES`, each with what it rests on, and `T
 (c/|C|)·Σ steps·(b − 1)·partial/k and (c/|C|)·Σ steps·γ/k over each part whose step's token work fills b = ⌈N·w/c⌉ ≥ 2
 blocks (assumptions (R) and (U), which hold only for partitions split by tokens; the fresh-products kind covers the
 weight-gradient product dW = δ^T X, whose partial sums across token blocks are the reduction); reading B's token form
-and decoding; reading A's per-gate figure, which needs a trace; io_bound's chain figures; and the target,
+and decoding; reading A's per-gate figure, which needs a trace; the fresh products' under P-cell; and the target,
 te_core.formalism.published at reading B, Fit's c/(c − d) or Slowdown's token form, which a row without a trace
 publishes: a target, not a bound. A DiLoCo sync has no tokens, so no term prices its workers' pseudo-gradients
 (`diloco`).
 
 The conventions every workload shares:
 
-- **Policy** (`POLICIES`): the console's only, the one the dashboard reports rows at (its 10:23Z ruling): `default`,
+- **Policy** (`POLICIES`): the console's only, the one the dashboard reports rows at (its 10:22Z ruling): `default`,
   te_core.policy's `CONSOLE`, one full session of the 45M reference a block, 4,096 tokens in and 1,024 out, attention
   and the LM head included (`policy.session_gates`, 5.36682e14 gates, 1.5739 times the 5,120 x 2 x 45e6 x 740 that
   left attention out), and k = 65,536 bits. It holds c/w = 2,294 of the model's 45M training tokens (w = 2.3396e11
-  gates, 7.0 FLOPs a parameter, 3.51 session tokens' 2N); the old c held 1,457.5, where TRN-40's 1,250 took a
-  training token as 4.1 session tokens' 2N, 17% above the count.
+  gates, 7.0 FLOPs a parameter, 3.51 session tokens' 2N); the old c held 1,457.5, and an estimate of 1,250 takes a
+  training token as 4.1 session tokens' 2N, 17% above the count. Beside the rows, each workload's default point at
+  the registered serving block, rehearsal 2's measured session (`SERVED`: c = 3.009e13 gates, k = 145,568 bits), a
+  headline: standard pretraining reads 6.39e3 there, with 8.22e4 under P-cell, against 2.66e5 and 5.01e6 at the
+  console's policy.
 - **Shapes** (`dense`): a dense decoder of N parameters with the reference model's d/L and SwiGLU width, d solved from N
   and the vocabulary (`vocab`: the 45M reference's 50,304, s-t20's 32,000), τ its ⌈log2 V⌉ bits an id.
 - **Work**: a token's MACs at te_core.gates' prices, its weight GEMMs at the workload's precision and its attention in
@@ -98,7 +109,7 @@ import sys
 from dataclasses import astuple, dataclass, field, fields, replace
 from pathlib import Path
 
-from . import VERSION, algorithm_policy, formalism, policy
+from . import VERSION, algorithm_policy, formalism, panels, policy
 from .gates import PRICES, gates, per_mac
 from .opnames import FUSED_OPTIMIZER_MACS
 
@@ -134,6 +145,10 @@ ISLAND_RL_LORA, ISLAND_RL_FULL, ISLAND_INFERENCE = ("r20261103-073616-b950", "r2
 #: (traced), and fully fine-tuned RL rollouts and an unregistered model of its shape served (untraced)
 ISLAND_STANDARD_60M, ISLAND_DISTILL_60M = "r20261103-091929-b455", "r20261103-091446-973e"
 ISLAND_RL_FULL_60M, ISLAND_INFERENCE_60M = "r20261103-091516-fb8d", "r20261103-091453-e42e"
+#: m-t20's repeats of s-t20's rows: DiLoCo at M = 4 and H = 50 and the rank-16 LoRAs on attention and on every matrix
+#: (traced), and RL rollouts with a rank-16 LoRA on every matrix (untraced)
+ISLAND_DILOCO_60M, ISLAND_LORA_ATTN_60M = "r20261103-101514-a179", "r20261103-101531-b83f"
+ISLAND_LORA_ALL_60M, ISLAND_RL_LORA_60M = "r20261103-101531-3a1c", "r20261103-101514-a047"
 #: m-t20's parameters and width, as te_core.policy states its shape: d 768 and 8 layers, its SwiGLU 2,048 (8/3 d),
 #: V = 32,000
 M_T20_PARAMS = 81_212_160
@@ -165,51 +180,56 @@ FIRST_ADAPTED = {name: sum(x in ("q", "k", "v") for x in ms) or sum(x in ("gate"
                  for name, ms in TARGET_MATRICES.items()}
 #: the widest dimension of each LoRA target set's matrices, in d_models (a factor is it by the rank)
 TARGET_WIDEST = {name: max(max(MATRICES[x]) for x in ms) for name, ms in TARGET_MATRICES.items()}
-#: te_core.io_bound's commit in this tree, whose `bound` prices the fresh products (te_core 4.6's, by
-#: te_core.formalism.fresh_products)
-IO_BOUND = "cursor/te-io-bound-4207 at e4fc638622"
-#: the order a model's products are summed in (te_core.formalism.ORDERS; None: not given): a model, like every capture
-#: so far, doesn't give the kernels' order, so the tree constant applies (coordinator 11:18Z)
-ORDER = None
-#: io_bound's proved figures: the fresh-products kind's term, with no premise on the partition, and the one under
-#: P-cell beside it
-FRESH_FIGURE, FRESH_CELL = "rho_no_cell", "rho"
+#: te_core.io_bound's commit in this tree, whose `bound` prices the fresh products (te_core 4.9's, by
+#: te_core.formalism.fresh_products; the linear form on its best subset since d473341d6b)
+IO_BOUND = "cursor/te-io-bound-4207 at 3c2afa62aa"
+#: the order a model's products are summed in: the reference circuit's (te_core.formalism.ORDER), te_core's GEMM
+#: gadget accumulating each output entry along one chain from a zero word, so P-chain is a premise on the reference
+#: circuit, as P-width is (coordinator 12:09Z)
+ORDER = formalism.ORDER
+#: Λ's whole-making factor on a dense model's products: te_core.io_bound's one-class rule (te_core.formalism's
+#: ONE_CLASS, which products with no whole-making system take; a model has no graph for io_bound's chain_classes),
+#: which the class system of a traced dense step lowers by under 1% (coordinator 15:50Z)
+DENSE_WHOLE = "one-class rule; the traced class system lowers dense steps by under 1%"
+#: why the fresh-products kind is unmeasured on an adapter's products, never a number: the one-class rule isn't proved
+#: for them, and a traced LoRA step's class system has no fixed point (io_bound.whole_chain_of; coordinator 15:50Z)
+ADAPTER_WHOLE = "void under the traced class system (te_core 4.12)"
 #: why reading A's kinds are unmeasured here
 NO_TRACE = ("unmeasured: te_core 4.5's packer reads a trace's entries and op log (its runs and matrix-product tiles), "
             "which a model hasn't and the records here don't carry")
 #: the one bound's kinds (te_core.formalism.KINDS), each a lower bound on its own (coordinator 08:26Z and 10:21Z), with
 #: what its term rests on
 VALID = {
-    "fresh_products": "theorem for this circuit: te_core.io_bound's Loomis-Whitney bound with Λ proved "
-                      f"({IO_BOUND}, by te_core.formalism.fresh_products) on the model's products of two fresh "
-                      "operands, each operand and partial sum at its passed width, without P-cell, so with no "
-                      "premise on the partition (a block may split a multiplier's gates; coordinator 06:57Z, "
-                      "obligation 1), given P-width (a premise on a reference circuit's wiring, false on a declared "
-                      "one), P-share and the standard algorithm, at the constant of the order the products are summed "
-                      "in, the tree's where it isn't given (coordinator 11:18Z), as on a model; attention's products "
-                      "uncounted",
+    "fresh_products": "P-width and P-chain, reference circuit; no A1 (coordinator 12:09Z): te_core.io_bound's "
+                      f"Loomis-Whitney bound with Λ proved ({IO_BOUND}, by te_core.formalism.fresh_products) on the "
+                      "model's products of two fresh operands by the standard algorithm, under P-width (every operand "
+                      "entry paid at its passed width and every partial sum at 32 bits) and P-chain (each output "
+                      "entry accumulated along one chain from a zero word, as te_core's GEMM gadget does), premises "
+                      "on a reference circuit's wiring, false on a declared one, given P-share; without P-cell, so "
+                      "with no premise on how a partition splits a multiplier's gates (coordinator 06:57Z, obligation "
+                      "1); attention's products uncounted; Λ's whole-making factor by io_bound's one-class rule on a "
+                      f"dense model's products ({DENSE_WHOLE}), and an adapter's term unmeasured ({ADAPTER_WHOLE}); "
+                      "the figure under P-cell beside it (fresh_cell)",
     "token": f"{formalism.RESTS_ON['token']}; {NO_TRACE}",
     "decoding": f"{formalism.RESTS_ON['decoding']}; {NO_TRACE}",
 }
-#: io_bound's chain figures beside ρ, sensitivities: the term under P-chain, and under P-cell too
-CHAIN = ("sensitivity, premise P-chain (te_core.io_bound): the products summed in one chain an output entry, the "
-         "constant io_bound has, which no model or capture gives")
-P_CELL = ("sensitivity, premises P-chain and P-cell (te_core.io_bound): every block holds whole GEMM gadgets, the cap "
-          "for word-level MACs, which a partition splitting a multiplier's gates escapes (coordinator 06:57Z, "
-          "obligation 1); te_core.formalism.fresh_products' figure")
-#: what the bound publishes beside ρ, never in its max (te_core.formalism.SENSITIVITIES), and io_bound's chain figures
-SENSITIVITIES = dict(formalism.SENSITIVITIES) | {"fresh_chain": CHAIN, "fresh_cell": P_CELL}
+#: what the bound publishes beside ρ, never in its max (te_core.formalism.SENSITIVITIES), the fresh products' figure
+#: under P-cell among them (fresh_cell, coordinator 12:09Z)
+SENSITIVITIES = formalism.SENSITIVITIES
 #: reading B's token form beside ρ: te_core.formalism.published's ρ for a row without a trace, a target, not a bound
 TARGET = (f"{formalism.RESTS_ON_CELL['target']}: te_core.formalism.published at reading B, Fit's c/(c - d) where it "
           f"holds, else Slowdown's token form ({formalism.SENSITIVITIES['token_form']})")
 FIT = "Fit's construction (te_core.formalism): every block reads Δ and its tokens' ids, and runs the decoder"
-#: what a point's ρ rests on, by its basis (`rho`): a valid kind's `VALID` entry, Fit's construction, or nothing
+#: what a point's ρ rests on, by its basis (`rho`): a valid kind's `VALID` entry (the measured kind whose term, the
+#: max, exceeds 1), Fit's construction, or nothing
 RESTS_ON = VALID | {
     "fit": FIT,
-    "none": "no measured kind > 1: Fit fails and every measured kind's term is at most 1, so rho is 1, partial where "
-            "a kind is unmeasured (coordinator 11:18Z)",
-    "unmeasured": "unmeasured: Fit fails and no kind is measured, so rho is null, never 1 (coordinator 09:46Z and "
-                  "11:18Z): the fresh products need io_bound's tree constant, the token and decoding kinds a trace",
+    "none": "no kind exceeds 1: Fit fails and every valid kind is measured, none with a term above 1, so rho is 1 "
+            "(coordinator 12:20Z)",
+    "unmeasured": "unmeasured: Fit fails, no measured kind's term exceeds 1 and a valid kind is unmeasured, so rho is "
+                  "null, never 1, the measured terms in the kinds cell (coordinator 09:46Z and 12:20Z): the fresh "
+                  f"products are unmeasured on an adapter's products ({ADAPTER_WHOLE}) and for a circuit that "
+                  "declares a tree (none does), the token and decoding kinds without a trace",
 }
 #: reading A's verdicts on the token and decoding kinds (`reading_a`); their terms are unmeasured under each
 VERDICTS_A = {"unmodelled": "finite (te_core 4.5's tiles split an op, so no op's update bits alone leave it infinite), "
@@ -278,13 +298,21 @@ def decode_span(prompt: float, generated: float) -> float:
     return (prompt * prompt + generated * prompt + generated * generated / 2) / (prompt + generated)
 
 
-#: the policy the rows are reported at, the console's only (the dashboard's 10:23Z ruling): te_core.policy's `CONSOLE`
+#: the policy the rows are reported at, the console's only (the dashboard's 10:22Z ruling): te_core.policy's `CONSOLE`.
+#: The captions below are headings a reader sees, so they name modules, never the package
 POLICIES = {"default": policy.CONSOLE}
 POLICY_NOTES = {
-    "default": "the console's policy (te_core.policy.CONSOLE, the dashboard's 10:23Z ruling): one full session of the "
+    "default": "the console's policy (policy.CONSOLE, the dashboard's 10:22Z ruling): one full session of the "
                "45M reference a block, 4,096 tokens in and 1,024 out, attention and the LM head included "
                "(policy.session_gates), k = 65,536 bits",
 }
+#: the registered serving block, rehearsal 2's measured session (te_core.panels' `SERVED`, c gates and k bits): each
+#: workload's default point there is a headline beside the rows (`serving_block`), never a row
+SERVED = panels.SERVED
+SERVED_NOTE = ("the registered serving block, rehearsal 2's measured session (panels.SERVED): one slot's 35-step "
+               "session of Llama-3.2-1B int8 under vLLM, c in one-bit gates (a lower bound: its 133 BitAtx32_v1 "
+               "activations a block are unpriced) and k its fresh bits; a headline beside the rows, which are at the "
+               "console's policy only")
 
 
 def _add(*macs: dict) -> dict:
@@ -334,9 +362,9 @@ def training(sh: Shape, precision: str, span: float) -> Token:
 def forward(sh: Shape, precision: str, span: float, head_share: float = 1.0) -> Token:
     """An inference token: every weight's forward at `precision` (the head's at the `head_share` of tokens whose logits
     are sampled) and attention over `span` in bf16, all affected."""
-    gemm = f"gemm/{precision}"
-    macs = _add({gemm: sh.params - (1 - head_share) * sh.vocab * sh.d_model}, {"gemm/bf16": sh.attention(span)})
-    return Token(macs, macs, {gemm: macs[gemm]})
+    gemm, weights = f"gemm/{precision}", sh.params - (1 - head_share) * sh.vocab * sh.d_model
+    macs = _add({gemm: weights}, {"gemm/bf16": sh.attention(span)})
+    return Token(macs, macs, {gemm: weights})
 
 
 def served(prompt: float, generated: float) -> tuple[float, float]:
@@ -642,6 +670,11 @@ class Model:
     fresh: tuple[Fresh, ...] = ()
     op_update_bits: float | None = None
     derived: dict = field(default_factory=dict)
+
+    @property
+    def adapter(self) -> bool:
+        """A LoRA's model (`lora`, or `rl` with update "lora"), whose fresh products are its adapter's (`adapter_fresh`)."""
+        return self.workload == "lora" or self.dials.get("update") == "lora"
 
 
 def profile(u1: float, t: float) -> tuple[tuple, tuple]:
@@ -1030,21 +1063,26 @@ def products(m: Model, c: float, k: float) -> list[dict]:
     return out
 
 
-def fresh(m: Model, c: float, k: float) -> tuple[float | None, str | None, dict, dict]:
-    """The fresh-products kind at (c, k): te_core.formalism.fresh_products on `products`, the model's `Measured.products`
-    at k and summed in `ORDER`; its term where formalism measures it, io_bound's proved figure without P-cell
-    (`FRESH_FIGURE`), else None with formalism's reason; io_bound's chain figures beside it, the sensitivities
-    `fresh_chain` (without P-cell) and `fresh_cell` (with it, `FRESH_CELL`, formalism's own term); and Λ (None: void,
-    past whole_chain's r = 1/4, its figures 0), the counted share of |C|, attention's share (uncounted) and the chain
-    figure at the numerical Λ."""
-    me = replace(m.measured, products={"k": float(k), "order": ORDER, "products": products(m, c, k)})
-    _, why, got = formalism.fresh_products(me, c, k)
+def with_products(m: Model, c: float, k: float) -> formalism.Measured:
+    """The model's `Measured` with its fresh products (`products`) at k as `Measured.products`, summed in `ORDER`; an
+    adapter's as it is, with none, so formalism leaves its term unmeasured (`ADAPTER_WHOLE`)."""
+    if m.adapter:
+        return m.measured
+    return replace(m.measured, products={"k": float(k), "order": ORDER, "products": products(m, c, k)})
+
+
+def fresh(m: Model, got: dict, c: float, k: float) -> dict:
+    """What the fresh-products kind read beside its term (`got`, te_core.formalism.fresh_products' on `with_products`):
+    the order, Λ (None: void, past whole_chain's r = 1/4, its figures 0), the counted share of |C|, attention's share
+    (uncounted) and the term's figure at the numerical Λ (the figure `formalism.P_CELL` takes). An adapter's term is
+    unmeasured, so its Λ and figure are None and its share is its products' (`products`)."""
+    attention = sum(f.total(k) * per_mac(f.kind) for f in m.fresh if f.attention) / m.measured.gates
+    if m.adapter:
+        share = sum(p["gates_per_mac"] * p["macs"] for p in products(m, c, k)) / m.measured.gates
+        return {"order": ORDER, "lam": None, "share": share, "numerical": None, "attention_share": attention}
     b = got["io_bound"]
-    p = b["proved"]
-    chain = {"fresh_chain": p[FRESH_FIGURE], "fresh_cell": p[FRESH_CELL]}
-    return None if why else p[FRESH_FIGURE], why, chain, {
-        "order": ORDER, "lam": p["lam"], "share": b["share"], "numerical": b["numerical"][FRESH_FIGURE],
-        "attention_share": sum(f.total(k) * per_mac(f.kind) for f in m.fresh if f.attention) / me.gates}
+    return {"order": got["order"], "lam": b["proved"]["lam"], "share": b["share"],
+            "numerical": b["numerical"]["rho" if formalism.P_CELL else "rho_no_cell"], "attention_share": attention}
 
 
 def reading_a(m: Model) -> str:
@@ -1056,49 +1094,44 @@ def reading_a(m: Model) -> str:
 
 
 def rho(m: Model, c: float, k: float, target: tuple[float, str] | None = None) -> dict:
-    """ρ at (c, k), the published bound (coordinator 08:26Z, 10:21Z and 11:18Z, as te_core.formalism.at gives it):
-    Fit's c/(c − d) where Fit holds and no valid kind's term exceeds it, else max(1, the `VALID` kinds' measured terms)
-    (the fresh products' by `fresh`; the token and decoding kinds' by te_core.formalism.bound, None without a trace's
-    entries and op log, `reading_a`'s verdict beside them), and None where no kind is measured, never 1 (coordinator
-    09:46Z), with `bound` that max (None where none is measured) beside it; `basis` names fit, the binding kind, none
-    (no measured term exceeds 1) or unmeasured, `RESTS_ON[basis]` what it rests on, `partial` whether a valid kind is
-    unmeasured beside a ρ the measured ones give (the dashboard's mark), and `why` each unmeasured kind's reason.
+    """ρ at (c, k) as te_core.formalism.published gives it under reading A on the model's products (`with_products`),
+    read as is, since the rule lives there only (coordinator 08:26Z, 10:21Z and 12:20Z): Fit's c/(c − d) where Fit
+    holds; else the max of the `VALID` kinds' measured terms where it exceeds 1, partial where a valid kind is
+    unmeasured; else None where a valid kind is unmeasured, never 1, which would read as no slowdown (coordinator
+    09:46Z); else 1, binding none, every valid kind measured and none above 1. The terms are formalism.bound's: the
+    fresh products' by formalism.fresh_products on the model's products (`fresh` has what it read), the token and
+    decoding kinds' None without a trace's entries and op log (`reading_a`'s verdict beside them). `basis` is
+    published's binding kind (fit, the measured kind whose term, the max, exceeds 1, none or unmeasured),
+    `binding_kind` the kind among them, `RESTS_ON[basis]` what it rests on, `partial` the dashboard's mark, and `why`
+    each unmeasured kind's reason: an adapter's fresh products are unmeasured, never a number (`ADAPTER_WHOLE`).
+    `whole_making` is what Λ's whole-making factor rests on, `DENSE_WHOLE` on a dense model's products.
     Beside it, never in the max: the `TARGET` (te_core.formalism.published at reading B, or for a record `target`,
-    page_rho's on its columns, which then also gives Fit) and the `SENSITIVITIES` (bound's, None where unmeasured,
-    and io_bound's chain figures); the kinds and sensitivities unmeasured (an infinite term among them: never ∞);
-    Fit's clauses that fail and its thresholds (the most Δ its compute block admits, k − (c/w_fit)·τ, and the most
-    Δ_grad its reduction block admits, k/2); and each part's token blocks b."""
-    me = m.measured
-    v, one = formalism.at(me, c, k), formalism.bound(me, c, k)
-    fit = v["fit"] if target is None else target[1] == "fit"
-    term, why, chain, fr = fresh(m, c, k)
-    terms = {kind: _finite(term if kind == "fresh_products" else one["terms"][kind]) for kind in formalism.KINDS}
-    priced = {kind: x for kind, x in terms.items() if x is not None}
-    top = max(priced, key=priced.get) if priced else None
-    bound = max([1.0, *priced.values()]) if priced else None
-    binding = top if bound is not None and bound > 1 else None
-    conflict = fit and bound is not None and bound > v["rho_fit"] * (1 + 1e-9)
-    by_fit = fit and not conflict
+    page_rho's on its columns) and the `SENSITIVITIES` (bound's, None where unmeasured, fresh_cell the fresh products'
+    figure under P-cell); the kinds and sensitivities unmeasured (an infinite term among them: never ∞); Fit's clauses
+    that fail and its thresholds (the most Δ its compute block admits, k − (c/w_fit)·τ, and the most Δ_grad its
+    reduction block admits, k/2); and each part's token blocks b."""
+    me = with_products(m, c, k)
+    v, pub = formalism.at(me, c, k, "A"), formalism.published(me, c, k, "A")
+    one = v["bound"]
     if target is None:
-        pub = formalism.published(me, c, k, "B")
-        target = (pub["rho"], pub["binding_kind"])
-    sens = {name: _finite(one["sensitivities"][name]) for name in formalism.SENSITIVITIES} | chain
-    reasons = {"fresh_products": why} | {kind: one["unmeasured"].get(kind) for kind in ("token", "decoding")}
+        b = formalism.published(me, c, k, "B")
+        target = (b["rho"], b["binding_kind"])
+    terms = {kind: _finite(pub["terms"][kind]) for kind in formalism.KINDS}
+    sens = {name: _finite(one["sensitivities"][name]) for name in formalism.SENSITIVITIES}
+    basis = pub["binding_kind"]
     fails = sorted({clause for p in v["parts"] for clause, ok in p["fit"].items() if not ok})
-    out = {"rho": _finite(v["rho_fit"]) if by_fit else bound,
-           "basis": "fit" if by_fit else binding or ("none" if priced else "unmeasured"), "binding_kind": binding,
-           "bound": bound, "terms": terms, "partial": not by_fit and bool(priced) and len(priced) < len(terms),
-           "why": {kind: reasons[kind] for kind in terms if terms[kind] is None},
-           "fresh": fr, "target": {"rho": _finite(target[0]), "basis": target[1]}, "sensitivities": sens,
-           "token_A": reading_a(m),
-           "unmeasured": [name for name in (*terms, *sens) if (terms | sens)[name] is None],
-           "fit": fit, "fit_fails": fails, "rho_fit": _finite(v["rho_fit"]), "s": v["s"], "x0": v["x0"],
-           "s_star": v["s_star"], "b": one["inputs"]["reduction"]["blocks"],
-           "fit_delta_bits": k - c / me.w_fit * me.tau_bits, "fit_delta_grad_bits": k / 2}
-    if conflict:
-        out["conflict"] = (f"Fit holds, but the {binding} kind's term exceeds its c/(c - d): Fit's compute block, s "
-                           "tokens computed from their inputs, can't compute their backward without their sequence")
-    return out
+    why = {kind: one["unmeasured"].get(kind) for kind in terms if terms[kind] is None}
+    if m.adapter:
+        why["fresh_products"] = ADAPTER_WHOLE
+    return {"rho": _finite(pub["rho"]), "basis": basis, "binding_kind": basis if basis in formalism.KINDS else None,
+            "terms": terms, "partial": pub["partial"], "why": why,
+            "whole_making": ADAPTER_WHOLE if m.adapter else DENSE_WHOLE,
+            "fresh": fresh(m, one["inputs"]["fresh_products"], c, k),
+            "target": {"rho": _finite(target[0]), "basis": target[1]}, "sensitivities": sens, "token_A": reading_a(m),
+            "unmeasured": [name for name in (*terms, *sens) if (terms | sens)[name] is None],
+            "fit": v["fit"], "fit_fails": fails, "rho_fit": _finite(v["rho_fit"]), "s": v["s"], "x0": v["x0"],
+            "s_star": v["s_star"], "b": one["inputs"]["reduction"]["blocks"],
+            "fit_delta_bits": k - c / me.w_fit * me.tau_bits, "fit_delta_grad_bits": k / 2}
 
 
 def sensitivity(m: Model, c: float, k: float) -> dict:
@@ -1149,7 +1182,9 @@ class Check:
     kind at each policy, and each input's source (`status`: "measured" or "assumed: " and why, the standard-workloads
     panel's input_status; none given, every column measured); `menu` the record's own inputs of the other kinds
     (`grad_bits` and `partial_bits`, from its trace) and `parts` its parts in te_core.formalism.Part's fields (an
-    island row's; none, one part from the columns); `recorded` makes it a model beside the model's."""
+    island row's; none, one part from the columns); `recorded` makes it a model beside the model's. `published` is
+    te_core.formalism.published on the record at the console's policy as its panel published it (`PUBLISHED`; an
+    island row's), whose token and decoding kinds its trace measures."""
     name: str
     dials: dict
     record: str
@@ -1159,6 +1194,7 @@ class Check:
     menu: dict = field(default_factory=dict)
     source: str = RECORD_SOURCE
     parts: tuple = ()
+    published: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -1225,33 +1261,54 @@ ISLAND_DIFFERS = {
                         f"record's; {M_T20_SHAPE}",
     ISLAND_INFERENCE_60M: f"{UNTRACED.format(t='0.449', share='57%', sigma='0.0041', outside='2.81e13')}; w 0.7% above "
                           f"the record's; Delta as the full-weight RL rows'; {M_T20_SHAPE}",
+    ISLAND_DILOCO_60M: f"{M_T20_SHAPE}; t the trace's 0.712 against the model's 0.693, the model's target 3% above the "
+                       f"record's; the outer step Nesterov SGD where the model's is plain, and its 8 syncs' "
+                       f"pseudo-gradients priced by no kind on either; {FRONT_LOADED.format('the fp32 embedding')}",
+    ISLAND_LORA_ATTN_60M: f"{M_T20_SHAPE}, so the adapter's factors (u(1), Delta, Delta_t and the gradient's cut and "
+                          f"partial) and adapted entries (d) 2.0% below the record's; t the trace's 0.9968 against the "
+                          f"model's 0.9926; {FRONT_LOADED.format('196,608 bits')}",
+    ISLAND_LORA_ALL_60M: f"{M_T20_SHAPE}, so the adapter's factors (u(1), Delta, Delta_t and the gradient's cut and "
+                         f"partial) 0.75% below the record's and its adapted entries (d) the record's; t the trace's "
+                         f"0.9924 against the model's 0.9824; {FRONT_LOADED.format('393,216 bits')}",
+    ISLAND_RL_LORA_60M: f"{UNTRACED.format(t='0.920', share='8.2%', sigma='0.0085', outside='2.81e13')}, and a the "
+                        f"stub's 12,288 bits (the residual stream) against the model's 768 (the rank outputs, as the "
+                        f"island's traced LoRAs measure); w 3.7% above the record's; {M_T20_SHAPE}, so the adapter's "
+                        f"factors (u(1), Delta and Delta_t) 0.75% below the record's and its adapted entries (d) the "
+                        f"record's",
 }
 #: the gradient inputs' sources on an island row: its main part's, te_core 4.4's partial_cut_bits and grad_cut_bits
 ISLAND_MENU_STATUS = {"grad_bits": "measured: the row's main part's gradient cut (te_core 4.4's grad_cut_bits)",
                       "partial_bits": "measured: the row's main part's partial gradient, one block's (te_core 4.4's "
                                       "partial_cut_bits; a worker's in DiLoCo)"}
 #: the island's generation rows, the rollouts alone (`rl`'s `rounds`)
-ISLAND_ROUNDS = (ISLAND_RL_LORA, ISLAND_RL_FULL, ISLAND_RL_FULL_60M)
+ISLAND_ROUNDS = (ISLAND_RL_LORA, ISLAND_RL_FULL, ISLAND_RL_FULL_60M, ISLAND_RL_LORA_60M)
 #: each island start's width beyond its rows' dials (the panel names none; s-t20's is the reference model's d/L)
 ISLAND_WIDTH = {"60M": M_T20}
 
 
+#: what a check keeps of te_core.formalism.published on its record at the console's policy, as its panel published it
+PUBLISHED = ("reading", "label", "rho", "binding_kind", "rests_on", "partial", "why", "terms", "sensitivities")
+
+
 def records(tables: dict, art: str) -> dict:
     """`RECORDS` from the island's `training/standard-workloads` panel (`tables`, its uncut tables `art`): each row's
-    cells (its dials, run, about, `rho_inputs`, `input_status`, ρ at the island's two points, reading and te_core)
-    with its read's steps and checkpoint, its parts (each with its partial gradient and gradient cut) and its traced
-    steps' measured facts, or a generation row's rounds."""
+    cells (its dials, run, about, `rho_inputs`, `input_status`, reading and te_core) with te_core.formalism.published
+    on it at the console's policy (`PUBLISHED`, the details' `published`, which its rho_default and rho_console both
+    are), reading B's ρ there (the details' formalism.at, the target), its read's steps and checkpoint, its parts
+    (each with its partial gradient and gradient cut) and its traced steps' measured facts, or a generation row's
+    rounds."""
     cols, rows = tables["columns"], []
     for cells, det in zip(tables["rows"], tables["details"]):
         r = dict(zip(cols, cells))
         run, rest = r["run"].split(" ", 1)
         ref, about = rest.split(" ", 1)
+        one = det["published"]["console"]
         rows.append({"workload": r["workload"], "model": r["model"], "run": run, "art": ref,
                      "about": about.strip().removeprefix("(").removesuffix(")"), "dials": json.loads(r["dials"]),
                      "rho_inputs": json.loads(r["rho_inputs"]), "input_status": json.loads(r["input_status"]),
-                     "rho_default": r["rho_default"], "rho_console": r["rho_console"], "reading": r["reading"],
-                     "te_core": r["te_core"], "steps": det["read"]["steps"], "checkpoint": det["read"]["checkpoint"],
-                     "invalid": det["read"]["invalid"], "parts": det["parts"]}
+                     "published": {key: one[key] for key in PUBLISHED}, "target": det["at"]["console"]["rho"],
+                     "reading": r["reading"], "te_core": r["te_core"], "steps": det["read"]["steps"],
+                     "checkpoint": det["read"]["checkpoint"], "invalid": det["read"]["invalid"], "parts": det["parts"]}
                     | ({"traces": [{"step": t["step"]} | t["measured"] for t in det["read"]["traces"]]}
                        if "traces" in det["read"] else {"rounds": det["read"]["rounds"]}))
     return {"source": f"{tables['id']} ({art}, {tables['updated_at']}): {tables['source']}", "tables": art,
@@ -1280,7 +1337,7 @@ def island_checks(workload: str) -> tuple[Check, ...]:
                          r["rho_inputs"], ISLAND_DIFFERS.get(r["run"], ""), r["input_status"] | ISLAND_MENU_STATUS,
                          {"grad_bits": main["grad_bits"], "partial_bits": main["partial_bits"]},
                          f"the standard-workloads island's row ({r['art']}; te_core {r['te_core']}, reading "
-                         f"{r['reading']}; {data['tables']}): {r['about']}{note}", tuple(r["parts"])))
+                         f"{r['reading']}; {data['tables']}): {r['about']}{note}", tuple(r["parts"]), r["published"]))
     return tuple(out)
 
 
@@ -1303,8 +1360,8 @@ COMMON = {
     "optimizer": Dial("optimizer", "rule", "adamw", ("adamw", "muon", "sgd"),
                       "sets Delta_grad (the state), the optimizer's gates and Muon's fresh Newton-Schulz products"),
     "t_dense": Dial("t", "share of a token's affected work", None, (0.0, 0.9),
-                    f"A1's free share, the token kind's: None is te_core's literal t on the 45M trace, {T_DENSE}; 0 is "
-                    "evenly spread, which overcharges a block"),
+                    f"A1's free share at reading B, which only the target and its decoding form read: None is "
+                    f"te_core's literal t on the 45M trace, {T_DENSE}; 0 is evenly spread, which overcharges a block"),
     "tokens_per_param": Dial("tokens_per_param", "tokens / N", 20.0, (1.0, 2000.0),
                              "sets |C| only (Chinchilla's 20 by default)"),
     "vocab": Dial("vocab", "ids", VOCAB, (1000, 262_144),
@@ -1371,8 +1428,9 @@ WORKLOADS = {w.name: w for w in (
               Dial("batch_tokens", "learner tokens a step", 65_536, (1e4, 1e7),
                    "sets the optimizer's share, 1 - sigma, and b, a step's token blocks"),
               Dial("t", "share of a token's affected work", None, (0.0, 0.999),
-                   "A1's free share, the token kind's: None is the larger of the two kinds' (the learner's te_core "
-                   "literal t, or a LoRA's modelled one); 0 is evenly spread"),
+                   "A1's free share at reading B, which only the target and its decoding form read: None is the "
+                   "larger of the two kinds' (the learner's te_core literal t, or a LoRA's modelled one); 0 is evenly "
+                   "spread"),
               Dial("tokens", "learner tokens", 1e8, (1e6, 1e11), "sets |C| only (with rounds, the rollouts')"),
               COMMON["vocab"],
               Dial("rounds", "mode", False, (False, True),
@@ -1389,7 +1447,8 @@ WORKLOADS = {w.name: w for w in (
               Dial("prompt_tokens", "tokens", 4096, (16, 131072), "a session's prompt, the only inputs"),
               Dial("generated_tokens", "tokens", 1024, (1, 32768), "a session's generated tokens"),
               Dial("t", "share of a token's work", None, (0.0, 0.95),
-                   "A1's free share, the token kind's: None is attention's modelled share; 0 is evenly spread"),
+                   "A1's free share at reading B, which only the target and its decoding form read: None is "
+                   "attention's and the elementwise ops' modelled share; 0 is evenly spread"),
               Dial("tokens", "tokens served", 1e9, (1e6, 1e13), "sets |C| only"), COMMON["vocab"], COMMON["d_model"]),
              (("default", {}), ("bf16", {"precision": "bf16"}), ("7B", {"n_params": 7e9})),
              island_checks("inference")),
@@ -1404,8 +1463,8 @@ WORKLOADS = {w.name: w for w in (
               Dial("optimizer", "rule", "adamw", ("adamw", "sgd"), "sets Delta_grad: 64 or 0 state bits a value"),
               COMMON["seq_len"], COMMON["batch_tokens"],
               Dial("t", "share of a token's affected work", None, (0.0, 0.9999),
-                   "A1's free share, the token kind's: None is the modelled share reading no adapter value; 0 is "
-                   "evenly spread"),
+                   "A1's free share at reading B, which only the target and its decoding form read: None is the "
+                   "modelled share reading no adapter value; 0 is evenly spread"),
               Dial("tokens", "tokens", 1e8, (1e6, 1e11), "sets |C| only"), COMMON["vocab"], COMMON["d_model"]),
              (("default", {}), ("top layer", {"layers": 1}), ("MLP, top layer", {"targets": "mlp", "layers": 1}),
               ("rank 1 on W_q", {"rank": 1, "targets": "q"}),
@@ -1458,8 +1517,9 @@ MEASURED_REL = 2e-3
 MENU_STATUS = {
     "fresh": f"assumed: the shape's products by the standard algorithm (dense_fresh, adapter_fresh, muon_fresh), each "
              f"counted as te_core.io_bound's kinds count a captured step's (its s-shape dense and rank-16 LoRA steps at "
-             f"{IO_BOUND}: the counted gates exactly, rho within 1% and 2.4%, all of the gap |C|'s); no trace of these "
-             f"workloads lists its products yet",
+             f"{IO_BOUND}: the counted gates exactly, rho within 1.1% and 2.4%, all of the gap |C|'s); the island's "
+             f"te_core 4.8 retrace (r20261103-123451-5989) lists its training rows' products, and a check's "
+             f"`published` carries their term where the island's panel prices it",
     "widths": "assumed: each product's operands at its GEMM's width and its partial sums in fp32, as passed (WIDTHS)",
     "parts": "assumed: a step's tokens the dials' batch, so b = ceil(N w / c) (te_core.formalism's _blocks)",
     "grad_bits": f"assumed: the gradient at 32 bits a trained value, every worker's in a DiLoCo step (the island's "
@@ -1543,9 +1603,9 @@ def recorded(ck: Check, m: Model) -> Model:
     island row's), else its columns in one part (its |C|, else the model's tokens at the record's w and σ; its tokens
     σ|C|/w, the model's steps, the record's Δ_grad, and the gradient inputs `Check.menu` gives, else the model's), with
     the columns' τ, a, profiles, Δ, d and Δ_t, and the model's fresh products on the record's tokens (each group's
-    count by the record's tokens over the model's: no trace lists its products); a record's ops are unknown
-    (`reading_a`). `rho` takes its token kind and Fit from page_rho on the columns, which one part can't give where
-    the record's w_fit or ᾱ/α_max differ."""
+    count by the record's tokens over the model's; its trace's own are its published ρ's); a record's ops are unknown
+    (`reading_a`). `rho` takes its target from page_rho on the columns, which one part can't give where the record's
+    w_fit or ᾱ/α_max differ; its Fit, formalism's on the one part, is page_rho's on every check."""
     col = ck.columns
     if ck.parts:
         parts = tuple(formalism.Part(**p) for p in ck.parts)
@@ -1572,13 +1632,14 @@ def _check(ck: Check, workload: str) -> dict:
     """A measured record beside its model (`Check`): at each policy `rho` on the record (`recorded`, its target by
     page_rho on its columns) and on the model at the check's dials, each kind's term, ρ, the target and the
     sensitivities (`CHECKED`); each record input's source (its `status`; the model's are its point's
-    `input_status`)."""
+    `input_status`); and, for an island row, te_core.formalism.published on the record as its panel published it
+    (`Check.published`)."""
     m = model(workload, **ck.dials)
     rec = recorded(ck, m)
     out = {"record": ck.record, "source": ck.source, "dials": m.dials, "differs": ck.differs,
            "record_inputs": ck.columns | ck.menu,
            "record_status": {key: ck.status.get(key, "measured") for key in (*ck.columns, *ck.menu)},
-           "model_inputs": columns(m), "rho": {}}
+           "model_inputs": columns(m), "rho": {}} | ({"published": ck.published} if ck.published else {})
     for name, (c, k) in POLICIES.items():
         sides = (("record", rho(rec, c, k, algorithm_policy.page_rho(ck.columns, c, k))), ("model", rho(m, c, k)))
         out["rho"][name] = {side: {key: x[key] for key in CHECKED} for side, x in sides}
@@ -1586,15 +1647,25 @@ def _check(ck: Check, workload: str) -> dict:
 
 
 #: what a check keeps of `rho` on its record and on the model
-CHECKED = ("rho", "basis", "binding_kind", "terms", "partial", "target", "sensitivities", "fit_fails", "token_A",
-           "unmeasured", "b")
+CHECKED = ("rho", "basis", "binding_kind", "terms", "partial", "whole_making", "target", "sensitivities", "fit_fails",
+           "token_A", "unmeasured", "b")
+
+
+def serving_block() -> dict:
+    """Each workload's default point at the registered serving block (`SERVED`), `rho`'s `CHECKED` there: a headline
+    beside the rows, which are at `POLICIES` only."""
+    c, k = SERVED
+    return {"block": SERVED_NOTE, "c": c, "k": k,
+            "defaults": {w.name: {key: r[key] for key in CHECKED} for w in WORKLOADS.values()
+                         for r in [rho(model(w.name, **dict(w.points)["default"]), c, k)]}}
 
 
 def reference() -> dict:
-    """Every workload's reference points and checks at `POLICIES` (module docstring): `workloads.json`."""
+    """Every workload's reference points and checks at `POLICIES` (module docstring), and its default point at the
+    registered serving block beside them (`serving_block`): `workloads.json`."""
     out = {"id": "te_core.workloads", "te_core": VERSION, "reading": "A", "spec": NOTE, "io_bound": IO_BOUND,
            "policies": {name: {"c": c, "k": k, "what": POLICY_NOTES[name]} for name, (c, k) in POLICIES.items()},
-           "valid": list(VALID), "sensitivities": SENSITIVITIES, "target": TARGET, "rests_on": RESTS_ON,
+           "serving_block": serving_block(), "valid": list(VALID), "sensitivities": SENSITIVITIES, "target": TARGET, "rests_on": RESTS_ON,
            "reading_a": VERDICTS_A, "menu_status": MENU_STATUS, "fresh_fields": FRESH_FIELDS,
            "part_fields": list(PART_FIELDS), "records": RECORDS.name,
            "widths": {kind: list(w) for kind, w in WIDTHS.items()},
@@ -1644,12 +1715,16 @@ def _fmt(v) -> str:
     return "unmeasured" if v is None else f"{v:.3g}"
 
 
+def _rho(v) -> str:
+    """A ρ cell: null where the rule leaves ρ unset (its basis says why), never 1."""
+    return "null" if v is None else f"{v:.3g}"
+
+
 #: how the table writes reading A's verdict on the token and decoding kinds, whose terms are unmeasured under each
 VERDICTS = {"unmodelled": "unmeasured", "refused": "refused"}
 #: the table's columns of a point's `rho` at a policy: (heading, how to read it)
 COLUMNS = (("fresh products", lambda r: r["terms"]["fresh_products"]),
-           ("fresh, chain (sens.)", lambda r: r["sensitivities"]["fresh_chain"]),
-           ("fresh, chain, P-cell (sens.)", lambda r: r["sensitivities"]["fresh_cell"]),
+           ("fresh, P-cell (sens.)", lambda r: r["sensitivities"]["fresh_cell"]),
            ("target (B)", lambda r: r["target"]["rho"]),
            ("decoding, B (sens.)", lambda r: r["sensitivities"]["decoding_form"]),
            ("reduction (sens.)", lambda r: r["sensitivities"]["reduction"]),
@@ -1658,10 +1733,10 @@ COLUMNS = (("fresh products", lambda r: r["terms"]["fresh_products"]),
 
 
 def table(ref: dict) -> str:
-    """Each policy's table: every point's terms (the valid kinds', the fresh products' without P-cell, io_bound's chain
-    figures, the target and the sensitivities), the token kind's reading-A verdict, the Fit clauses that fail, ρ and
-    its basis; then the
-    checks', each on the record and on the model; then what each basis rests on and what each verdict means."""
+    """Each policy's table: every point's terms (the valid kinds', the fresh products' without P-cell and under it, the
+    target and the sensitivities), the token kind's reading-A verdict, the Fit clauses that fail, ρ and its basis;
+    then the checks', each on the record and on the model; then what each basis rests on and what each verdict
+    means."""
     lines = []
     heads = [h for h, _ in COLUMNS] + ["token, decoding (A)"]
     for q in POLICIES:
@@ -1674,18 +1749,31 @@ def table(ref: dict) -> str:
                 cells = [_fmt(get(r)) for _, get in COLUMNS] + [VERDICTS[r["token_A"]]]
                 fails = ", ".join(r["fit_fails"]) or "none"
                 lines.append(f"| {name} | {pname} | " + " | ".join(cells)
-                             + f" | {fails} | {_fmt(r['rho'])} | {r['basis']} |")
+                             + f" | {fails} | {_rho(r['rho'])} | {r['basis']} |")
         lines.append("")
+    s = ref["serving_block"]
+    lines += [f"Each workload's default point at the registered serving block, rehearsal 2's measured session (c "
+              f"{s['c']:.4g} gates, k {s['k']:,} bits), beside the console's: a headline, not a row", "",
+              "| workload | rho, console | rho, serving block | fresh, P-cell (sens.), console | fresh, P-cell (sens.), "
+              "serving block | basis, serving block |", "|---|---|---|---|---|---|"]
+    for name, r in s["defaults"].items():
+        p = ref["workloads"][name]["points"]["default"]["rho"]["default"]
+        lines.append(f"| {name} | {_rho(p['rho'])} | {_rho(r['rho'])} | {_fmt(p['sensitivities']['fresh_cell'])} | "
+                     f"{_fmt(r['sensitivities']['fresh_cell'])} | {r['basis']}{', partial' if r['partial'] else ''} |")
+    lines.append("")
     for q in POLICIES:
-        lines += [f"{q}, the checks: each term on the record / on the model at its dials", "",
-                  "| workload | check | " + " | ".join(heads[:-2]) + " | rho | basis |",
-                  "|---|---|" + "---|" * len(heads)]
+        lines += [f"{q}, the checks: each term on the record / on the model at its dials, and an island row's rho as "
+                  "the island published it (formalism.published on its trace)", "",
+                  "| workload | check | " + " | ".join(heads[:-2]) + " | rho | basis | published (binding) |",
+                  "|---|---|" + "---|" * (len(heads) + 1)]
         for name, w in ref["workloads"].items():
             for cname, ck in w["checks"].items():
                 rm = [ck["rho"][q][side] for side in ("record", "model")]
                 cells = [" / ".join(_fmt(get(r)) for r in rm) for _, get in COLUMNS[:-1]]
-                lines.append(f"| {name} | {cname} | " + " | ".join(cells) + f" | {' / '.join(_fmt(r['rho']) for r in rm)}"
-                             f" | {' / '.join(r['basis'] for r in rm)} |")
+                pub = ck.get("published")
+                said = f"{_rho(pub['rho'])} ({pub['binding_kind']})" if pub else ""
+                lines.append(f"| {name} | {cname} | " + " | ".join(cells) + f" | {' / '.join(_rho(r['rho']) for r in rm)}"
+                             f" | {' / '.join(r['basis'] for r in rm)} | {said} |")
         lines.append("")
     lines += [f"- {basis}: {why}" for basis, why in ref["rests_on"].items()]
     lines += [f"- target (B): {ref['target']}"]

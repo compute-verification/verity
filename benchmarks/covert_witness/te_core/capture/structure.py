@@ -51,7 +51,7 @@ depend on the run's own persistent values, however the circuit is written.
   and its slots are whatever it carries: a value is update-dependent when it depends on an earlier step's token data
   (the run's weights, optimizer state and error feedback, kept in place, rebound or written by hand; a cache made from
   θ and this step's tokens is not), and the cut's sinks are the update-dependent values the step makes that the next
-  step's forward reads, at the width it reads them.
+  step's forward reads, at the width it reads them (none in a program's last step, whose cut is 0).
 
 Dataflow follows storage: an in-place op (``add_``, a foreach optimizer kernel) makes a new version of the storage it
 writes, every view of it reads that version, and each element of a foreach list is its own value. A Python scalar read

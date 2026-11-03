@@ -3,6 +3,7 @@ checkpoint whose gain (C(L1)/C(L0) under te_core.frontier_fit's fit, from the st
 its last; H the least compute from the start reaching it, every checkpoint pooled, and p = C/H; the dial's formula on a
 row's columns alone is te_core.formalism.at's at every cell; the coverage per gain target, data and decade of ρ; and
 the console's cut, which keeps the coverage's rows and each group's (p, ρ) front, naming the stored tables' art id."""
+import dataclasses
 import json
 import math
 
@@ -204,7 +205,7 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
     assert q["rows"] == AP.console_rows(p["rows"]) and not console.refused(q)
     assert len(console.body(q)) <= console.BODY_MAX and len(q["note"]) <= console.NOTE_MAX
     assert all(not isinstance(v, bool) for r in q["rows"] for v in r)
-    assert q["title"] == p["title"] and all(x["title"].endswith(f" in {gates.UNIT})") for x in (p, got["fit"]))
+    assert q["title"] == p["title"] and all(x["title"].endswith(f"{gates.UNIT})") for x in (p, got["fit"]))
 
 
 def test_the_dial_formula_on_a_rows_columns_is_te_cores_at_every_cell(tmp_path, monkeypatch):
@@ -293,7 +294,7 @@ def test_profiles_are_compact_strings():
 
 
 def test_a_start_ahead_of_the_fit_has_every_target_below_its_loss_and_one_at_or_below_e_none():
-    """Gain is C(L1)/C(L0) on the fit (Daniel, TRN-40; coordinator 11:16Z): a start the fit puts ahead of the frontier
+    """Gain is Daniel's C(L1)/C(L0) on the fit (coordinator 11:16Z): a start the fit puts ahead of the frontier
     (its own gain C_eff(l0)/C0 1.5) has rows at every target, each below its l0, so a run that only holds l0 reaches
     none (ref-data's 11:09Z LOOPHOLE); a start at or below the fit's E has no rows, and a data without a fit none."""
     rich = LAW | {"A": LAW["A"] * 1.5 ** 0.3}
@@ -442,6 +443,170 @@ def test_a_rows_rho_is_published_at_the_consoles_default_and_the_serving_blocks_
     assert not any((c.get("record") or "").startswith("lora@") for c in cov)
 
 
+def test_a_partial_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_never_the_least_s(tmp_path, monkeypatch):
+    """A row `published` marks partial (a measured kind's term over 1 with a valid kind unmeasured, so ρ is only a lower
+    bound; coordinator 12:20Z) has basis_default `partial`: no decade holds it, the cut picks the partial rows among
+    themselves alone, so the others' picks are as if they weren't there, and the figure draws each with a caret but
+    never rings one as the least S. A stand-in `published` makes the adapters' rows (lora's and the dominated ones')
+    partial at ρ 1.01, which would put lora's at the least S at gain 1.1."""
+    real = formalism.published
+
+    def published(m, c=None, k=None, reading=None):
+        one = real(m, c, k, reading)
+        return one if m.delta_bits != 8e6 else one | {"reading": "A", "rho": 1.01, "binding_kind": "token",
+                                                      "rests_on": formalism.RESTS_ON_CELL["token"], "partial": True}
+
+    monkeypatch.setattr(formalism, "published", published)
+    p = AP.build(info(runs=RUNS + DOMINATED), "test")
+    ds = plots.frame(p)
+    part = [d["record"].startswith("lora") for d in ds]
+    assert any(part) and all((d["basis_default"], d["rho_default"], d["rho_console"], d["binding_kind"])
+                             == (AP.PARTIAL, 1.01, 1.01, "token") and json.loads(d["kinds"])["partial"]
+                             for d, x in zip(ds, part) if x)
+    assert all(d["basis_default"] != AP.PARTIAL for d, x in zip(ds, part) if not x)
+    cov = AP.coverage(p)
+    assert sum(c["rows"] for c in cov) == len(ds) - sum(part) == len(ds) - AP.unmeasured_rows(p, AP.PARTIAL)
+    assert not any((c.get("record") or "").startswith("lora") for c in cov)
+    rest = p | {"rows": [r for r, x in zip(p["rows"], part) if not x]}
+    rec, g = AP.COLUMNS.index("record"), AP.COLUMNS.index("gain_target")
+    for tier in AP.TIERS:
+        got, alone = ({(r[rec], r[g]) for r in AP.kept(q["rows"], tier, {c["row"] for c in AP.coverage(q)
+                                                                           if c["row"] is not None})} for q in (p, rest))
+        assert {x for x in got if not x[0].startswith("lora")} == alone
+        assert (("lora@1", 1.1) in got) == (tier != "coverage")
+    fits = {"v3": None, "v2.3-pilot": LAW}
+    assert ("2 rows are partial (basis_default partial: a valid kind unmeasured, so rho is only a lower bound), in no "
+            "decade.") in AP.coverage_md(cov, fits, "T", partial=2)
+    assert AP.board_line(cov, fits, "T", None, partial=1).endswith(" 1 row partial (rho a lower bound), in no decade.")
+    assert "(1, 1.01)" not in AP.summary(p, info(runs=RUNS + DOMINATED))
+    calls, real_plot = [], AP.plt.Axes.plot
+
+    def plot(ax, *a, **k):
+        calls.append((a[:2], k))
+        return real_plot(ax, *a, **k)
+
+    monkeypatch.setattr(AP.plt.Axes, "plot", plot)
+    AP.figure(p, tmp_path)
+    marked = {(d["p"], d["rho_default"]) for d, x in zip(ds, part) if x and d["p"] is not None}
+    assert marked and marked <= {xy for xy, k in calls if k.get("marker") == 6}
+    rings = {xy for xy, k in calls if k.get("mec") == "red"}
+    assert rings and not rings & marked
+
+
+def test_the_kinds_cell_labels_a_measured_fresh_products_term_with_its_premises_binding_or_not():
+    """The fresh-products term rests on P-width and P-chain (coordinator 12:09Z), and the row's rests_on names them only
+    where it binds, so the kinds cell carries formalism's RESTS_ON_CELL beside a measured term; an unmeasured term has
+    no label."""
+    one = {"terms": {"fresh_products": 165021.0, "token": 1.35, "decoding": 1.35},
+           "sensitivities": {"reduction": 2.0e4, "update": 705.6}, "binding_kind": "fresh_products"}
+    label = {"fresh_products": formalism.RESTS_ON_CELL["fresh_products"]}
+    assert json.loads(AP.kinds(one))["rests_on"] == label
+    token = one | {"terms": one["terms"] | {"fresh_products": 0.5, "token": 263.5}, "binding_kind": "token"}
+    assert json.loads(AP.kinds(token))["rests_on"] == label
+    got = json.loads(AP.kinds(one | {"terms": one["terms"] | {"fresh_products": None}, "partial": True}))
+    assert "rests_on" not in got and got["partial"] and got["bound"]["fresh_products"] is None
+
+
+#: a counted bf16 product (te_core.io_bound's vectors' square one), its operands made whole from chains of `k_whole`:
+#: at the console's k = 65,536, K = 64 voids io_bound's proved Λ (r = 1/3 > 1/4) and K = 512 doesn't
+BF16 = {"b_a": 16, "b_b": 16, "b_c": 32, "gates_per_mac": 23682 / 16, "cell_gates": 23682.0}
+
+
+def made_whole(m: formalism.Measured, *k_whole: float) -> formalism.Measured:
+    squares = [{"macs": 5e14, "outputs": 5e14 / 512, "k_dim": 512, "k_whole": k} | BF16 for k in k_whole]
+    return dataclasses.replace(m, products={"k": AP.CONSOLE[1], "order": "chain", "products": squares})
+
+
+def test_the_kinds_cell_names_the_products_a_best_subset_drops():
+    """te_core 4.10 bounds the fresh-products term on the best subset of its products, so a short whole-making chain
+    voids no step's term, and the kinds cell says beside the term what that subset dropped; a term on every product,
+    or an unmeasured one, names no subset."""
+    m = info()["starts"][0].rows[0]["measured"]
+    one = formalism.published(made_whole(m, 512, 64), reading="A")
+    got = json.loads(AP.kinds(one))
+    assert one["terms"]["fresh_products"] > 0 and got["rests_on"] == {"fresh_products": formalism.RESTS_ON_CELL[
+        "fresh_products"]}
+    assert got["fresh_subset"] == {"dropped": 1, "of": 2, "dropped_macs_share": 0.5, "k_whole_min": 512}
+    for alone in (512, 64):
+        assert "fresh_subset" not in json.loads(AP.kinds(formalism.published(made_whole(m, alone), reading="A")))
+
+
+def test_a_void_fresh_products_term_is_what_io_bound_voids_under_reading_a_where_fit_fails():
+    """te_core 4.9 measured the fresh-products term as 0 where io_bound's proved Λ is void (coordinator 13:32Z: no
+    result); from te_core 4.10 that term is unmeasured (`formalism.FRESH_VOID`), never 0, so `voided` finds no void
+    0 in a published ρ at the console's default, nor in a measured term, an unmeasured one or reading B's ρ."""
+    m = info()["starts"][0].rows[0]["measured"]
+    void, whole = made_whole(m, 64), made_whole(m, 512)
+    one = formalism.published(void, reading="A")
+    assert one["terms"]["fresh_products"] is None and not AP.voided(void, one)
+    assert formalism.published(whole, reading="A")["terms"]["fresh_products"] > 0
+    assert not AP.voided(whole, formalism.published(whole, reading="A"))
+    assert not AP.voided(m, formalism.published(m, reading="A")) and not AP.voided(void, formalism.published(void))
+    assert not AP.voided(void, one | {"binding_kind": "fit"})
+    got = json.loads(AP.kinds(one, void=True))
+    assert got["void"] == AP.VOIDED and "rests_on" not in got and got["bound"]["fresh_products"] is None
+
+
+def test_a_void_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_never_the_least_s(tmp_path, monkeypatch):
+    """A row whose ρ reads a void fresh-products term has basis_default `void` whatever it publishes: no decade holds
+    it, the cut picks the void rows among themselves alone, and the figure draws each with a cross, never the least S.
+    The adapters' traces (lora's and the dominated ones') make operands whole from K = 64 chains, and a stand-in
+    `published` measures their token kind at 0.9, so ρ is 1, binding none, which would put lora's at the least S at
+    gain 1.1."""
+    real = formalism.published
+
+    def published(m, c=None, k=None, reading=None):
+        one = real(m, c, k, reading)
+        if m.products is None:
+            return one
+        a = real(m, c, k, "A")
+        return a | {"rho": 1.0, "binding_kind": "none", "rests_on": formalism.RESTS_ON_CELL["none"],
+                    "terms": a["terms"] | {"token": 0.9, "decoding": 0.9}}
+
+    monkeypatch.setattr(formalism, "published", published)
+    # te_core 4.10 measures no void 0 (the term is unmeasured), so the void rows are stood in
+    monkeypatch.setattr(AP, "voided", lambda m, one: m.delta_bits == 8e6)
+    got = info(runs=RUNS + DOMINATED)
+    for st in got["starts"]:
+        for r in st.rows:
+            if r["measured"].delta_bits == 8e6:
+                r["measured"] = made_whole(r["measured"], 64)
+    p = AP.build(got, "test")
+    ds = plots.frame(p)
+    void = [d["record"].startswith("lora") for d in ds]
+    assert any(void) and all((d["basis_default"], d["rho_default"], d["binding_kind"]) == (AP.VOID, 1.0, "none")
+                             and json.loads(d["kinds"])["void"] == AP.VOIDED for d, x in zip(ds, void) if x)
+    assert all(d["basis_default"] != AP.VOID for d, x in zip(ds, void) if not x)
+    cov = AP.coverage(p)
+    assert sum(c["rows"] for c in cov) == len(ds) - sum(void) == len(ds) - AP.unmeasured_rows(p, AP.VOID)
+    assert not any((c.get("record") or "").startswith("lora") for c in cov)
+    rest = p | {"rows": [r for r, x in zip(p["rows"], void) if not x]}
+    rec, g = AP.COLUMNS.index("record"), AP.COLUMNS.index("gain_target")
+    for tier in AP.TIERS:
+        kept, alone = ({(r[rec], r[g]) for r in AP.kept(q["rows"], tier, {c["row"] for c in AP.coverage(q)
+                                                                            if c["row"] is not None})} for q in (p, rest))
+        assert {x for x in kept if not x[0].startswith("lora")} == alone
+        assert (("lora@1", 1.1) in kept) == (tier != "coverage")
+    fits = {"v3": None, "v2.3-pilot": LAW}
+    assert ("2 rows read a void fresh-products term (basis_default void: 0 from a void Lambda, no result, so rho is "
+            "only a lower bound), in no decade.") in AP.coverage_md(cov, fits, "T", void=2)
+    assert AP.board_line(cov, fits, "T", None, void=1).endswith(" 1 row reads a void fresh-products term (0, no "
+                                                                "result), in no decade.")
+    assert "(1, 1)" not in AP.summary(p, got)
+    calls, real_plot = [], AP.plt.Axes.plot
+
+    def plot(ax, *a, **k):
+        calls.append((a[:2], k))
+        return real_plot(ax, *a, **k)
+
+    monkeypatch.setattr(AP.plt.Axes, "plot", plot)
+    AP.figure(p, tmp_path)
+    marked = {(d["p"], d["rho_default"]) for d, x in zip(ds, void) if x and d["p"] is not None}
+    assert marked and marked <= {xy for xy, k in calls if k.get("marker") == AP.LOWER[AP.VOID]}
+    rings = {xy for xy, k in calls if k.get("mec") == "red"}
+    assert rings and not rings & {(d["p"], d["rho_default"]) for d, x in zip(ds, void) if x and d["reached"] == "yes"}
+
+
 def test_the_output_leads_with_the_coverage_table(tmp_path, monkeypatch, capsys):
     """The scorer's refresh posts the first Markdown table under the first line of the output naming coverage: that is
     tables/coverage.md's table, every gain target and data a row."""
@@ -514,8 +679,9 @@ def test_publish_stores_the_tables_and_puts_both_panels_the_cut_naming_their_art
 
 def test_v3_rows_come_with_v3s_fit_from_the_ladder_and_lead_the_figure(tmp_path, monkeypatch):
     """A loss on harness v3's data is no loss on the pilot's: v3's fit reads the ladder's from-scratch runs and its own
-    starts and their checkpoints, none of the pilot's, and a v3 start's rows have their own l0, targets and H; the
-    figure shows v3 once it has rows."""
+    starts, none of the pilot's, and not their checkpoints though some are on v3's frontier (te_core.frontier_fit's
+    FROM_SCRATCH), so it is the ladder's law; the pilot's reads its checkpoints too. A v3 start's rows have their own
+    l0, targets and H, which its checkpoints set; the figure shows v3 once it has rows."""
     v3_law = LAW | {"E": 1.2}
     ladder = tmp_path / "F.json"
     ladder.write_text(json.dumps({"schema": "te-ladder/F/v1", "annealed": [
@@ -524,10 +690,14 @@ def test_v3_rows_come_with_v3s_fit_from_the_ladder_and_lead_the_figure(tmp_path,
                "val_bpb": r["val_bpb"] + 0.3} for r in ledger_rows() if r["start"] == "s1"]
     code, got = run(tmp_path, monkeypatch, "--ladder-points", str(ladder), index=ledger_rows() + v3)
     assert code == 0 and AP.headline(got["panel"]) == "v3"
-    read = [d["source"] for d in plots.frame(got["fit"]) if (d["row"], d["data"]) == ("point", "v3")]
-    assert read[0] == "start t1" and {f"ladder x{f}, annealed" for f in (2, 4, 8, 16, 32)} <= set(read)
-    assert all(s.startswith(("start t1", "ladder ")) or " from t1 (v3-" in s for s in read)
-    assert fitted(got["fit"], "v3")["E"] == pytest.approx(1.2, abs=0.05)
+    read = {d: [x["source"] for x in plots.frame(got["fit"]) if (x["row"], x["data"]) == ("point", d)]
+            for d in panels.DATA}
+    assert read["v3"] == ["start t1"] + [f"ladder x{f}, annealed" for f in (2, 4, 8, 16, 32)]
+    every = json.loads((got["out"] / "tables" / "frontier-points.json").read_text())
+    assert any(" from t1 (v3-" in p["source"] and p["C_gates"] > C0 for p in every["v3"])
+    assert fitted(got["fit"], "v3") == pytest.approx(v3_law, rel=1e-4)
+    assert "checkpoints at C0 + |C|; v3 from scratch only)" in got["fit"]["note"]
+    assert any(" from s1 (" in s for s in read["v2.3-pilot"])
     assert fitted(got["fit"])["E"] == pytest.approx(LAW["E"], abs=0.05)
     ds = [d for d in plots.frame(got["panel"]) if d["data"] == "v3"]
     assert {d["start"] for d in ds} == {plots.start_label(V3_SHAPE)} and {d["start_loss"] for d in ds} == {1.5}
@@ -550,7 +720,7 @@ def served_as(p: dict, version: str | None, rows: list | None = None, source: st
 def test_a_version_switch_never_empties_a_populated_panel():
     """A data's served rows stay where they are at a newer te_core, or at an older one with a run there this build has
     no row for (coordinator 07:58Z); the same te_core's are replaced, and an older one's where this build has every
-    run, though its coverage fills fewer cells (every rho 1 here, as reading A's partial rows read; coordinator 11:51Z).
+    run, though its coverage fills fewer cells (every rho 1 here; coordinator 11:51Z).
     A data with no served rows takes this build's. A panel from before the te_core cell is at the version its source
     names."""
     p = AP.build(info(runs=RUNS + DOMINATED), "test")

@@ -30,7 +30,9 @@ inputs of ρ there so the console's dial computes ρ, W* and S at any (c, k) by 
 its `inputs`, with Δ in `delta_bits`, the start's forward w in `w_fwd_gates` (c = n·w tokens' gates), the
 profiles in `u_points` and `u_in_points`, and the other scalars in `rho_inputs`, one JSON object by their names
 (`PACKED`, the route taking 24 columns), te_core 4.x's per-part Fit (`w_fit_gates`, Δ_grad Fit's) and ᾱ/α_max
-(`alpha_ratio`) among them. A measured u_in has more points than a cell holds, so a candidate's goes through its points
+(`alpha_ratio`) among them, and beside them the fresh-products term over c at each k of the dial its products are
+classified at (`FRESH`, te_core.formalism's `fresh_per_c`), which the dial's port of te_core.io_bound's term reads (ρ
+there is c times it, exactly, with and without P-cell). A measured u_in has more points than a cell holds, so a candidate's goes through its points
 at the dial's k (`K_LEVELS`, `through`): x0 is exact there and linear between. `build` refuses a candidate whose
 columns don't give te_core.formalism.at's ρ and basis at every cell, so the throttled rows are the page's check set.
 Every row's `method_key` is its method's key in the console's `training/methods`: the record's direction/mechanism,
@@ -97,6 +99,8 @@ LOSSES = ("start_loss", "loss")
 #: their own (Δ, w_fwd and the profiles), and te_core 4.x's two terms its `page_rho` reads
 PACKED = ("w_gates", "sigma", "tau_bits", "a_bits", "delta_t_bits", "d_gates", "delta_grad_bits", "w_fit_gates",
           "alpha_ratio")
+#: the fresh-products term over c by k that `rho_inputs` holds beside `PACKED` (te_core.formalism's `fresh_per_c`)
+FRESH = "fresh_per_c"
 #: the columns the console's copy keeps to te_core.algorithm_policy's `INPUT_DIGITS` (its other numbers 4 significant
 #: digits), so its dial reproduces ρ
 EXACT = ("delta_bits", "w_fwd_gates")
@@ -253,12 +257,19 @@ def through(u, ks) -> tuple[tuple[float, float], ...]:
 def rho_columns(m: formalism.Measured, w: float) -> dict:
     """A candidate's ρ columns at its checkpoint's quantities `m` from a start whose forward is `w` gates a token:
     te_core.algorithm_policy's `inputs`, with u_in through the dial's k (`K_LEVELS`), where a measured u_in's many
-    points don't fit a cell."""
+    points don't fit a cell; and in `rho_inputs` the fresh-products term over c at each k it is classified at
+    (`fresh_per_c`, te_core.formalism's: [without P-cell, with it] by k's integer, null where unmeasured, the whole
+    entry null with no product rows), so the dial's term at (c, k) is c times it."""
     v = dict(zip(algorithm_policy.INPUTS, algorithm_policy.inputs(m, w)))
     v |= {"w_fit_gates": m.w_fit, "alpha_ratio": m.alpha_ratio}
     packed = ",".join(f'"{k}":' + ("null" if v[k] is None else algorithm_policy.num(v[k])) for k in PACKED)
+    per_c = formalism.fresh_per_c(m)
+    fresh = "null" if per_c is None else "{" + ",".join(
+        f'"{k}":' + ("null" if x is None else "[" + ",".join(algorithm_policy.num(y) for y in x) + "]")
+        for k, x in per_c.items()) + "}"
     u_in = through(algorithm_policy.profile(v["u_in_points"]), K_LEVELS)
-    return {"rho_inputs": "{" + packed + "}", "u_points": v["u_points"], "u_in_points": algorithm_policy.points(u_in)}
+    return {"rho_inputs": "{" + packed + f',"{FRESH}":{fresh}' + "}", "u_points": v["u_points"],
+            "u_in_points": algorithm_policy.points(u_in)}
 
 
 def page_inputs(d: dict) -> dict:
