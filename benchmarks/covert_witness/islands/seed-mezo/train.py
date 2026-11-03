@@ -11,9 +11,11 @@ Methods:
   steps, and the decoder replays every step over S: T·|S| fp32 FMAs (`prepare.rebuild_macs`), Fit's d.
 - `--subspace K`: K fixed directions z_0 … z_{K−1} (seeds `seed + j`), visited in turn: step i measures ĝ along
   z_{i mod K} and adds lr · ĝ to that direction's coefficient, rounded stochastically to `--coeff` (bf16 or f32; a
-  generator seeded from `--seed`), so the update rule reads only the K coefficients E holds (Δ_t = Δ). E is the K
-  coefficients, so Δ and
-  d (K·|S|) stay fixed while the steps go on.
+  generator seeded from `--seed`). E is the K coefficients, so Δ and d (K·|S|) stay fixed while the steps go on.
+- The carried state: by default each step adds −c z to S's fp32 masters, so what a step hands the next is 32|S| bits
+  (Δ_t), whatever the log's size. `--rebuild` carries only the coefficients (bf16): Z, every direction the log can
+  name, waits on the device at bf16 (entries·|S|·2 bytes, at most `--max-z-gb`), and each step draws its batch and
+  rebuilds θ_S = θ_S0 − c Z, so Δ_t is the log's width, at 2·entries·|S| more FLOPs a step (counted as extra).
 - `--batch 2` is the block-local online update: each step reads one token block's ~2k tokens (two sequences at ctx
   1024), updates, and hands only the log on; with `--subspace K` its Δ stays K coefficients however many blocks run.
 
@@ -425,7 +427,9 @@ def main() -> int:
     ap.add_argument("--first-order", type=int, default=0, metavar="K",
                     help="SGD on S by backprop, its update K shared-seed coefficients (K < |S|: in their subspace)")
     ap.add_argument("--power-iters", type=int, default=12, help="--first-order --lr-auto: power iterations for λ_max")
-    ap.add_argument("--max-z-gb", type=float, default=60.0, help="--first-order: the most memory Z may take")
+    ap.add_argument("--max-z-gb", type=float, default=60.0, help="--first-order, --rebuild: the most memory Z may take")
+    ap.add_argument("--rebuild", action="store_true",
+                    help="MeZO: carry only the bf16 coefficients, rebuilding S from them each step (Δ_t the log's width)")
     a = ap.parse_args()
     if a.survey or a.first_order:
         if a.first_order and (a.lr is None) == (a.lr_auto is None):
@@ -490,6 +494,17 @@ def main() -> int:
         raise SystemExit(f"train: no step fits ({flop_cap:.3g} FLOPs, {per_step:.3g} a step)")
     if not a.subspace:
         entries = n_steps
+    rebuild_flops = 0
+    if a.rebuild:
+        if a.coeff != "bf16":
+            raise SystemExit("train: --rebuild holds the coefficients at bf16; give --coeff bf16")
+        n_steps = min(n_steps, int((flop_cap - curv_flops - warm_flops) // (per_step + 2 * d * entries)))
+        if not a.subspace:
+            entries = n_steps
+        rebuild_flops = 2 * d * entries
+        if n_steps < 1 or entries * d * 2 > a.max_z_gb * 1e9:
+            raise SystemExit(f"train: --rebuild's Z is {entries} x {d} at bf16 for {n_steps} steps; "
+                             f"--max-z-gb is {a.max_z_gb}")
     time_budget = a.time_budget or 0.92 * budget["gpu_seconds"]
     deadline = T_MAIN + time_budget
     c_macs = 4096 * fwd_macs
@@ -503,6 +518,7 @@ def main() -> int:
 
     info = {"names": a.names, "tensors": len(names), "d": d, "rms": rms, "steps": n_steps, "warm": warm,
             "entries": entries, "header_bytes": header, "max_entries": max_entries, "flops_per_step": per_step,
+            "rebuild": a.rebuild, "rebuild_flops_per_step": rebuild_flops,
             "tier": budget["tier"], "flop_cap": flop_cap, "time_budget": time_budget, "c_macs": c_macs,
             "decoder_at_end": decoder(entries)}
     print(json.dumps(info), flush=True)
@@ -521,12 +537,27 @@ def main() -> int:
 
     gen = torch.Generator(device=dev)
     fwd_tokens = 0
+    sizes = [m.numel() for m in masters]
+    base = torch.cat([m.reshape(-1) for m in masters])
+    theta_s = base
+    Z = None
+    if a.rebuild:
+        Z = torch.empty(entries, d, dtype=torch.bfloat16, device=dev)
+        for j in range(entries):
+            gen.manual_seed(a.seed + j)
+            Z[j] = torch.cat([torch.randn(m.shape, generator=gen, device=dev, dtype=torch.float32).reshape(-1)
+                              for m in masters])
+    coef = torch.zeros(entries if a.rebuild and not a.subspace else 0, dtype=torch.bfloat16, device=dev)
 
     # No Python branch below reads a value read back from a tensor: te_core.capture gives such a value a stand-in, so a
     # branch on it (min, max, if, a comparison) would trace the path the stand-in takes, not the step's. The clip, the
     # lr cap and the rounding are tensor ops.
     @torch.no_grad()
     def restore() -> None:
+        if a.rebuild:
+            for w, x in zip(live, theta_s.split(sizes)):
+                w.copy_(x.view(w.shape))
+            return
         for w, m in zip(live, masters):
             w.copy_(m)
 
@@ -695,6 +726,9 @@ def main() -> int:
                     checkpoint(i, j)
         elif i in marks or (i > 0 and i % max(1, n_steps // CHECKPOINTS) == 0):
             checkpoint(i, None)
+        if a.rebuild:
+            with torch.no_grad():
+                theta_s = base - ((alpha_q if a.subspace else coef) @ Z).float()
         p = i / n_steps
         if not fixed_lr and stats["n"] > warm:
             lr = torch.minimum(lr_cap_t, lr_rule())
@@ -715,13 +749,30 @@ def main() -> int:
         else:
             c = float(move.to(prepare.DTYPES[a.coeff]).float())
             coeffs.append(c)
-        prepare.seedlog_step(masters, a.seed + k, c, gen)
+            if a.rebuild:
+                coef[i] = move.to(coef.dtype)
+        if not a.rebuild:
+            prepare.seedlog_step(masters, a.seed + k, c, gen)
         stats["pred"] += float(lr_i) * ga * gb - c * c * trh / 2
         n_done = i + 1
         if n_done % 1000 == 0:
             report(n_done, lr_i)
-    restore()
-    report(n_done, lr, {"done": True, "loop_seconds": round(time.perf_counter() - t_loop, 1)})
+    rebuild_err = None
+    if a.rebuild:
+        with torch.no_grad():
+            trained = base - ((alpha_q if a.subspace else coef) @ Z).float()
+            exact = [b.clone() for b in base.split(sizes)]
+            for j, cj in enumerate(alpha_q.float().tolist() if a.subspace else coeffs):
+                prepare.seedlog_step(exact, a.seed + j, cj, gen)
+            exact = torch.cat(exact)
+            rebuild_err = float((exact - trained).norm() / (trained - base).norm().clamp(min=1e-30))
+            for m, x in zip(masters, exact.split(sizes)):
+                m.copy_(x.view(m.shape))
+        del Z
+    else:
+        restore()
+    report(n_done, lr, {"done": True, "loop_seconds": round(time.perf_counter() - t_loop, 1),
+                        "rebuild_rel_error": rebuild_err})
 
     blob = encoded()
     model = dict(theta) | {n: m.to(theta[n].dtype).cpu() for n, m in zip(names, masters)}
@@ -736,7 +787,10 @@ def main() -> int:
         "clipped_steps": int(clipped),
         "signal_fraction_half": stats["gab"] / stats["g2"] if stats["g2"] else None,
         "mechanism": {"label": a.label, "description": a.description},
-        "delta_bits": 8 * len(blob), "delta_t_bits": 8 * len(blob),
+        "delta_bits": 8 * len(blob), "delta_t_bits": 16 * entries if a.rebuild else 32 * d,
+        "delta_t_what": ("the bf16 coefficients, the only state a step hands the next; each step rebuilds S from them"
+                         if a.rebuild else "S's fp32 masters, which each step updates in place"),
+        "rebuild_rel_error": rebuild_err,
         "delta_grad": {"trainable": d, "grad_bits": grad_bits, "adam_bits": 0, "muon_bits": 0, "ema_bits": ema_bits,
                        "latent_bits": 0, "bits": grad_bits + ema_bits, "bytes": (grad_bits + ema_bits) // 8,
                        "what": "a step's two batch halves' L+ and L- partial sums (fp32) and the lr rule's three fp32 "
@@ -747,6 +801,8 @@ def main() -> int:
         "checkpoints": cps, "loop_seconds": time.perf_counter() - t_loop,
     }
     steps = [{"op": "forward", "tokens": fwd_tokens, "ctx": a.ctx}]
+    if rebuild_flops:
+        steps.append({"op": "extra", "flops": rebuild_flops * n_done})
     prepare.submit(Path(a.out), a.start, blob, model, trainable, steps, changed=names, notes=notes)
     print(json.dumps({"submitted": len(blob), "steps": n_done, "entries": n_entries, "checkpoints": len(cps),
                       "s": round(time.perf_counter() - T_MAIN, 1)}), flush=True)
