@@ -22,7 +22,9 @@ before the verifier's first coin.
 * `GenericSampledKSJoint`: the same for an extractor in the textbook form (`JointExtractor`), with the knowledge error
   `κ` of its definition, no slack, and the committed trace the plurality of its trials;
 * `GenericSampledZK`: the audit's view is `(ε_zk + ε_hide)`-close to a simulator's that knows no trace, from the proof
-  system's zero knowledge and the commitment's hiding.
+  system's zero knowledge and the commitment's hiding;
+* `GenericSampledZKMul`: the same for a proof system zero knowledge with a factor `c` (`Zk.ZKMul`, the ZK server's
+  form), `Pr_real[E] ≤ c · Pr_sim[E] + c · ε_hide + E_r ε_zk`.
 
 Flock is an instance (`SampledGeneric/Flock.lean`), at a bound no worse than `zk_flock_countC_regC`'s, the count curve
 `SampledKSLiveV5` runs through.
@@ -123,5 +125,24 @@ def GenericSampledZK : Prop :=
     Z.ZK Rel (fun _ => εzk) → H.Hiding εh →
     ∀ X : Tr, (∀ r S, Rel (H.commit X r, S) (wit X r S)) →
     ∀ (X₀ : Tr) (v : VS), Close (auditView H Z samp wit X v) (auditSim H Z samp X₀ v) (εzk + εh)
+
+/-- **The sampled audit's zero knowledge with a factor, generic in the proof system.** For a proof system whose honest
+view is bounded by `c` times its simulator's plus `ε_zk(x, w, v)` on every event (`Zk.ZKMul`, the ZK server's form), and an
+`ε_hide`-hiding commitment: against every verifier `v` and on every event `E`, the audit's view at any trace `X` whose
+openings are witnesses of every sample's statement satisfies
+$$\Pr_{\rm real}[E]\le c\cdot\Pr_{\rm sim}[E]+c\cdot\varepsilon_{\rm hide}+\mathbb E_r\,\varepsilon_{\rm zk}(x_r,w_r,v),$$
+`Pr_sim` the simulator's at any fixed trace `X₀` (`auditSim`), and `x_r`, `w_r` the session's statement and witness at
+the prover's commitment coins `r`. -/
+def GenericSampledZKMul : Prop :=
+  ∀ (n : ℕ) (Tr Rnd Com Wit VS View : Type) [Fintype Rnd] [Nonempty Rnd] (H : Hider Tr Rnd Com)
+    (Z : Zk (Com × Finset (Fin n)) Wit VS View) (Rel : Com × Finset (Fin n) → Wit → Prop) (c : ℝ≥0∞)
+    (εzk : Com × Finset (Fin n) → Wit → VS → ℝ≥0∞) (εh : ℝ≥0∞)
+    (samp : VS → Com → Finset (Fin n)) (wit : Tr → Rnd → Finset (Fin n) → Wit),
+    Z.ZKMul Rel c εzk → H.Hiding εh →
+    ∀ X : Tr, (∀ r S, Rel (H.commit X r, S) (wit X r S)) →
+    ∀ (X₀ : Tr) (v : VS) (E : Com × Finset (Fin n) × View → Prop),
+      (auditView H Z samp wit X v).pr E ≤
+        c * (auditSim H Z samp X₀ v).pr E + c * εh +
+          avg fun r : Rnd => εzk (H.commit X r, samp v (H.commit X r)) (wit X r (samp v (H.commit X r))) v
 
 end Flock.Guarantees

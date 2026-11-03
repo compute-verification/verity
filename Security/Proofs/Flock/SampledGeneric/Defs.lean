@@ -308,6 +308,13 @@ prover's view is `ε_zk`-close to the simulator's. -/
 def Zk.ZK {Stmt Wit VS View : Type} (Z : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (εzk : Stmt → ℝ≥0∞) : Prop :=
   ∀ x w, Rel x w → ∀ v, Close (Z.real x w v) (Z.sim x v) (εzk x)
 
+/-- **Zero knowledge with a factor** `c`, the form the ZK server's theorem has (a simulator that aborts and retries
+pays a factor, and a verifier's own forking an additive term): for every statement and witness in the relation, every
+verifier and every event, `Pr_real[E] ≤ c · Pr_sim[E] + ε_zk(x, w, v)`. `Zk.ZK` at `ε_zk` gives it at `c = 1`. -/
+def Zk.ZKMul {Stmt Wit VS View : Type} (Z : Zk Stmt Wit VS View) (Rel : Stmt → Wit → Prop) (c : ℝ≥0∞)
+    (εzk : Stmt → Wit → VS → ℝ≥0∞) : Prop :=
+  ∀ x w, Rel x w → ∀ v (E : View → Prop), (Z.real x w v).pr E ≤ c * (Z.sim x v).pr E + εzk x w v
+
 /-- **A commitment to traces `Tr`** under the prover's uniform coins `Rnd`. -/
 structure Hider (Tr Rnd Com : Type) where
   commit : Tr → Rnd → Com
