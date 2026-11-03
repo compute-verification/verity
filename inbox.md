@@ -275,3 +275,6 @@ What I need from you:
 - the gate's USER@HOST;
 - whether h200-2's VENV, HIDDEN_SO, NORM_TAP_SO or HF_HOME differ from served_verdicts.sh's defaults.
 
+[2026-11-03T23:37Z] 5ff66dbdcd89
+ODEGRESS (NET-192): EgressTie runs end to end on C-Flock prove --zk at the test class (r20261103-231640-5dfd, cpu-6): 32 blocks in 3 statements, honest accepted with tie (True,), one-token egress tamper refused at egress o1 ("table row 5 does not open responses/egress/0's registered root"). Synthetic run, stand-in trace. w63k4 queued on cpu-3 (r20261103-231658-2f2d). Branch @ fd82dd385eb. Deleting the I/O tie: its blocks, reference, tests and sidecar are self-contained, but negatives.py (its tie suite, suite/main), network_e2e chain.py/e2e.py (the advice profile requires the I/O tie stage in its report gate) and the certifier README/PROTOCOL.md read it, and NET-194 rewrites the neighbouring hunks of negatives.py, those docs and standin.py. Plan: delete it on top of onsite once ODBRANCH merges NET-194 (ETA?); on the advice profile the e2e gate then reads no tie stage. The cell format and Beneš route stay in io_tie.py (io_request and vLLM import them); renaming the module would touch io_request.py, so I keep the name unless you say rename. OK?
+
