@@ -25,11 +25,11 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    to the evidence store only (01:22Z).
 4. Once the builder's v2 is on that te_core (`policy_panels`), runs its `python -m te_core.algorithm_policy
    --publish` on the same ledger, with ladder-v3's points files as `--ladder-points` (`ladder_points`, 07:57Z),
-   else te_core.frontier_fit's own (its LADDER, built from ladder-v3's manifest), which PUTs training/algorithm-policy and training/frontier-fit; then `python -m
-   te_core.panels frontier-branches` (Daniel, coordinator 23:56Z; the integrator's builder, 23:59Z), PUT until
-   algorithm-policy is PUT with gain, gain_target and start_effective_gates on its rows (`fb_retired`; 05:22Z,
-   07:48Z), then stored only. A refused PUT is reported, not fatal. te_core's five old panels stay in the re-score's
-   directory, unpublished (23:56Z).
+   else    te_core.frontier_fit's own (its LADDER, built from ladder-v3's manifest), which PUTs training/algorithm-policy and training/frontier-fit; then `python -m
+   te_core.panels frontier-branches` (Daniel, coordinator 23:56Z; the integrator's builder, 23:59Z), stored only
+   since algorithm-policy carries gain, gain_target and start_effective_gates (FB_RETIRED; 05:22Z, 07:48Z), so a
+   refresh whose algorithm-policy isn't PUT PUTs no frontier either. A refused PUT is reported, not fatal. te_core's
+   five old panels stay in the re-score's directory, unpublished (23:56Z).
 5. Publishes the tables and frontier-branches (uncut, its console cut and PNG) to the evidence store, copies the cut to
    PANELS_DIR, and posts one DIGEST line with the art ids, and the builder's coverage table (gain size by decade of
    rho) as one more when algorithm-policy writes one; an S whose rho is Slowdown's bound carries loose-end-attention
@@ -711,20 +711,16 @@ def rescore(out: Path, gates: Path, final: Path | None = None, root: Path | None
     return logs[0].strip().splitlines()[-1]
 
 
-def branches(out: Path, put: bool, root: Path | None = None) -> str:
+def branches(out: Path, root: Path | None = None) -> str:
     """te_core.panels' frontier-branches into `out` after the re-score (its gate cache reused), on the ledger at
-    `root`, PUT with `put`; the PUT's status, or why there is none."""
-    r = subprocess.run([sys.executable, "-c", LEAN, "te_core.panels", FB, *ledger_args(out, root), *ladder_fit(),
-                        *(["--publish"] if put else [])],
+    `root`, never PUT (FB_RETIRED); why there is no PUT, or why there is no panel."""
+    r = subprocess.run([sys.executable, "-c", LEAN, "te_core.panels", FB, *ledger_args(out, root), *ladder_fit()],
                        cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True, check=False)
     (out / "panels.log").write_text(r.stdout + r.stderr)
-    done = next((x for x in reversed(r.stdout.splitlines()) if x.startswith("PUT ")), None)
-    if done:
-        return done.split(f"{FB}: ", 1)[-1][:300]
     why = (r.stderr.strip().splitlines() or [f"rc {r.returncode}"])[-1][:300]
     if not (out / "console" / f"{FB}.json").exists():
         return f"not built: {why}"
-    return f"not PUT: {why}" if r.returncode else "not PUT (--no-put)"
+    return f"not PUT: {why}" if r.returncode else f"not PUT ({FB_RETIRED})"
 
 
 def v3_starts(commit: str) -> list[str]:
@@ -843,15 +839,8 @@ print(json.dumps({"line": line.replace("decade of rho_default", "decade of rho_c
                   "partial": partial, "fresh_records": fresh, "empty": sum(x["state"] == "empty" for x in cov),
                   "cells": len(cov)}))
 """
-FB_RETIRED = ("training/algorithm-policy is PUT with " + ", ".join(FB_SUCCESSOR)
+FB_RETIRED = ("training/algorithm-policy carries " + ", ".join(FB_SUCCESSOR)
               + " on its rows; frontier-branches is in the evidence store only")
-
-
-def fb_retired(out: Path, policy: dict) -> bool:
-    """Whether this refresh PUT training/algorithm-policy with FB_SUCCESSOR among its console copy's columns."""
-    f = out / "algorithm-policy" / "console" / "algorithm-policy.json"
-    return (str(policy.get("algorithm-policy", ""))[:1] == "2" and f.exists()
-            and set(FB_SUCCESSOR) <= set(json.loads(f.read_text())["columns"]))
 
 
 def coverage(d: Path, stdout: str) -> list[str]:
@@ -906,7 +895,7 @@ def main() -> int:
     ap.add_argument("--gates", type=Path, default=Path("/tmp/scorer/v1/trial/gates.json"),
                     help="the analysis's gate factors, seeded into the re-score's cache")
     ap.add_argument("--no-publish", action="store_true")
-    ap.add_argument("--no-put", action="store_true", help="build frontier-branches but don't PUT it")
+    ap.add_argument("--no-put", action="store_true", help="build algorithm-policy and frontier-fit but don't PUT them")
     ap.add_argument("--no-post", action="store_true")
     ap.add_argument("--no-trace", action="store_true", help="launch no node trace (finished ones are still taken)")
     ap.add_argument("--final", type=Path, metavar="FINAL_DIR",
@@ -974,10 +963,7 @@ def main() -> int:
     policy = {} if final else policy_panels(out, commit, not args.no_put and not hold, root)
     if hold:
         policy |= {k: f"not PUT ({hold})" for k in ("algorithm-policy", FIT) if k in policy}
-    retired = not final and fb_retired(out, policy)
-    put = "not PUT (final values)" if final else branches(rs, not args.no_put and not retired, root)
-    if retired:
-        put = f"not PUT ({FB_RETIRED})"
+    put = "not PUT (final values)" if final else branches(rs, root)
     variants = {}
     for name, extra in ({} if final else VARIANTS).items():
         try:
