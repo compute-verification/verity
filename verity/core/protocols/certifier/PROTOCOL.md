@@ -1125,7 +1125,7 @@ Each assumption, and what breaks without it:
   their deadlines, so they stay out of anything published, or they are charged.
 - **A7, the advice set is fixed before the run.** The codec, the cap ℓ_a and each execution phase's registered width
   ℓ_a,j are registered before the audit's first window, and the audit refuses advice over the cap, as it refuses a sync
-  outside 𝒮_sync. The trusted text's `A_c = log2 #Ac` needs the set fixed before the run. Without a registered cap, a
+  outside 𝒮_sync. The trusted text's log2 #`Ac` needs the set fixed before the run. Without a registered cap, a
   realized charge is sound only in the indexed form, which no Lean states: for every cap, the runs charged at most it
   number at most 2^(cap + 1) times the rest.
 
@@ -1345,7 +1345,7 @@ release order.
 *The string*, MSB first: `code_v1.encode(windows, book)`, then zero bits to a byte. The record's execution phases
 number m, its last bucket // T + 1.
 - `code_v1` codes each window as one terminated arithmetic segment, its counts before its values. So its decoder finds
-  each window's end, and v1 sends no length prefix (Elias-gamma(ℓ_w + 1) cost 5 to 22 bits a string).
+  each window's end, and v1 sends no length prefix (Elias-gamma(|a_j| + 1) cost 5 to 22 bits a string).
 - A window's charge is its segment's bits (`code_v1.Encoded.lens`, `bits_by_window`), a function of the string alone.
 - The codebook is `Registered.book`, a `code_v1.Book` fit on other runs, never this one. Its digest (SHA-512 of its
   canonical JSON) is registered before the first window.

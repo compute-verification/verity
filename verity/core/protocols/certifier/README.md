@@ -102,8 +102,8 @@ A spec-level reference for network accounting's timing channel:
   checks. From the advice (DA decisions and the step count), the arrivals' ingress fields and their registered output
   lengths and tokens, it computes the served rows and the state, window and pool rows the window leaves, each hit,
   evictable count, return and stamp where `ReplayStep_v1` reads it, and holds them to the registered ``srv`` and
-  ``cout`` it reads; its one output is the 16-bit verdict. So its only free input is the advice, ℓ_w = DA + PW bits
-  (`free_width`), and the charge is ℓ_w;
+  ``cout`` it reads; its one output is the 16-bit verdict. So its only free input is the advice, ℓ_a,j = DA + PW
+  bits (`free_width`), and the charge is ℓ_a,j;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
   the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceBlocks_v1`). `leaf_ok`
