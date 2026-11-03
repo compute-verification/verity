@@ -55,9 +55,9 @@ noncomputable def analysis (h : Ex.Covers Correct) : ExtractionAnalysis L Reg PS
     dsimp only at hu ⊢
     by_cases hR : R' = R
     · subst hR
-      rw [if_pos rfl]
+      rw [ite_eq_left rfl]
       exact h S R' τ u X hS (mem_incorrect.1 hu)
-    · rw [if_neg hR, add_top]
+    · rw [ite_eq_right hR, add_top]
       exact le_top
 
 theorem knowledgeSound_analysis (h : Ex.Covers Correct) :
@@ -128,7 +128,7 @@ theorem Flock.SecurityProofs.GenericSampledKS : Flock.Guarantees.GenericSampledK
       · exact le_top
   have h := extraction_audit_le (Ex.analysis Correct Xc hcov) (Ex.knowledgeSound_analysis Correct Xc hcov) hlink
     (fun Xt S => E Xt.2 S) σ
-  simp only [if_pos hCR] at h
+  simp only [ite_eq_left hCR] at h
   exact h
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.SampledGeneric in

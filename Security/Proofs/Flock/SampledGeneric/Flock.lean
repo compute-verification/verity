@@ -180,7 +180,7 @@ theorem bindErr_le {L : Law n} {k Rw M : ℕ} {t' ρ : ℝ} {R : Reg} {τ : Cont
     (ht : 0 ≤ t') (hρ : ρ < 1) (h : LinkCRZC A Hs P planZ tab vb R τ k Rw M t') :
     (trials A Hs P planZ tab vb L k Rw t' ρ).bindErr R τ M ≤ linkBoundZC A Hs P planZ tab vb k Rw M ρ t' R τ := by
   unfold linkBoundZC
-  rw [if_pos h]
+  rw [ite_eq_left h]
   refine ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_right ?_ (by show (0 : ℝ) ≤ 1 - ρ; linarith))
   rw [Finset.sum_mul]
   refine Finset.sum_le_sum fun c _ =>
@@ -226,7 +226,7 @@ theorem countC_regC_generic (hlow : LoweringSoundZK A P planZ tab decode) (hown 
     exact add_le_add (add_le_add le_rfl (ksAvg_le A Hs P planZ tab vb L k a _ _))
       (bindErr_le A Hs P planZ tab vb ht hρ hCR)
   · unfold linkBoundZC
-    rw [if_neg hCR, add_top]
+    rw [ite_eq_right hCR, add_top]
     exact le_top
 
 /-- **The compiled `--zk` escape bound at a set of proof blocks, through the generic theorem**:
@@ -255,7 +255,7 @@ theorem escapeC_regC_generic (hlow : LoweringSoundZK A P planZ tab decode) (hown
     exact add_le_add (add_le_add le_rfl (ksAvg_le A Hs P planZ tab vb L k a _ _))
       (bindErr_le A Hs P planZ tab vb ht hρ hCR)
   · unfold linkBoundZC
-    rw [if_neg hCR, add_top]
+    rw [ite_eq_right hCR, add_top]
     exact le_top
 
 end FlockSoundness.Discharge.ZkLink.Generic
