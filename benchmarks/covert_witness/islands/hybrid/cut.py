@@ -312,8 +312,8 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
     """`B:CODE,...`: boundary B (1..L; the input of block B, L the input of the final norm; `all` every one) handed on
     as CODE = [d]q<forward bits>[m][o<k>][b<backward bits>[s]][g<group>] in a randomized-DCT basis (group d unless
     given); `o<k>` sends each token's k largest coordinates apart, a bf16 value and a ceil(log2 d)-bit index each. `m`
-    codes the forward about the boundary's running mean (CUT_MEAN; earlier batches only, so causal) on the Gaussian
-    grid, charged a bf16 mean per coordinate every SESSION tokens. `b<bits>s` rounds the gradient onto the RMS-scaled
+    codes the forward about the boundary's running mean (CUT_MEAN; earlier batches' coded states only, so causal and
+    computed on the receiving side, no bits sent) on the Gaussian grid. `b<bits>s` rounds the gradient onto the RMS-scaled
     grid (STOCH_STEP) at the same bits. With the `d` prefix the forward codes only the update's effect h - h_frozen, where h_frozen is θ's residual at
     B for the same tokens, which the receiving side recomputes from the token's data; it needs B above the lowest
     trained block `low` (at or below it the effect is 0)."""
@@ -337,7 +337,7 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
                              f"{min(GAUSS_STEP)}-{max(GAUSS_STEP)} bits")
         if grad_gauss and bb not in STOCH_STEP:
             raise SystemExit(f"wildcard: --cut {part!r}: `b<bits>s` at {min(STOCH_STEP)}-{max(STOCH_STEP)} bits")
-        side = k * (16 + math.ceil(math.log2(d))) + (math.ceil(16 * d / SESSION) if mean else 0)
+        side = k * (16 + math.ceil(math.log2(d)))
         fwd = code_bits(d, bf, group) + side
         for b in (range(1, L + 1) if where == "all" else [int(where)]):
             if not 1 <= b <= L:
