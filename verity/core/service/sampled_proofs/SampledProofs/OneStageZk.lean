@@ -6,9 +6,10 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   the circuit and public files (lowercase hex of 64 bytes) and the verifier's own registered file (`flock-verify
   --registered`'s object, or null for a program that reads no registered value). The partition must not be null: the
   sessions are verified against the verifier's own partition object; and v1's `challenger`, with its `window_root`, must
-  be named (`NO_CHALLENGER`);
+  be named (`NO_CHALLENGER`), its key at the deployed LMS parameters, `Lms.deployed` (`KEY_PARAMS`);
 * **commitment**: v1's (the registration record);
-* **evidence**: v1's without `verdicts`, plus `proofs`, exactly `{"sessions"}`: for each of v1's `sessions` in order,
+* **evidence**: v1's without `verdicts`, its `coins` within the challenger evidence's limits (`Challenger.withinAt`
+  at `Challenger.LIMITS`), plus `proofs`, exactly `{"sessions"}`: for each of v1's `sessions` in order,
   `{"name", "record", "reps"}`: its name, its `session.json`'s SHA-512 and `{file: SHA-512}` naming at least each rep
   file the statement's session reads (`<stream with / as .>.bin`). The drawn units are proved in one session, whose
   statement is theirs: the check refuses evidence naming none or several (`oneSession`) before it reads a tree;
@@ -56,6 +57,15 @@ def STATEMENT : String := "verity/flock-circuit"
 def NO_CHALLENGER : String :=
   "the parameters name no challenger: the draw's coins are the auditor's challenger's signed release (challenger, " ++
     "with window_root), never the prover's record"
+/-- The refusal of a challenger key at other LMS parameters than the deployed ones (`Lms.deployed`), the only ones the
+game's signature verifier (`Verity.lmsVerify`) reads. -/
+def KEY_PARAMS : String :=
+  s!"the challenger's key is not at the deployed LMS parameters (W = {Lms.deployed.W}, H = {Lms.deployed.H}): v2 " ++
+    "reads the challenger's signatures only under those"
+
+/-- The key is at `Lms.deployed`, field by field (`Lms.Params` derives only `BEq`). -/
+def deployedKey (key : Challenger.ChallengerKey) : Bool :=
+  key.params.N == Lms.deployed.N && key.params.W == Lms.deployed.W && key.params.H == Lms.deployed.H
 
 /-- The verifier's own inputs to `flock-verify verify --zk`: the program's descriptor (as JSON and as the bytes
 `--program` reads), the partition object, the circuit and public files' committed SHA-512s and the registered file. -/
@@ -130,7 +140,8 @@ def paramsOfJson (j : Json) : V Params := do
   let (circuit, pub, registered) ← committedOf pr
   let rest := Json.mkObj (without j "proofs")
   let base ← OneStage.paramsOfJson rest
-  if base.challenger.isNone then throw NO_CHALLENGER
+  let some (key, _) := base.challenger | throw NO_CHALLENGER
+  if !deployedKey key then throw KEY_PARAMS
   let some partition := base.verifier.partition
     | throw "partition is null: the sessions are verified against the verifier's own partition object"
   let programJ := getD rest "program"
@@ -167,6 +178,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
     throw "the evidence names verdicts: this audit's verdicts are its own run of the verifier on the proofs"
   let some pr := field? j "proofs" | throw "the evidence names no proofs (the sessions' files)"
   let base ← OneStage.evidenceOf (← Flock.canon (Json.mkObj (without j "proofs" ++ [("verdicts", Json.mkObj [])]))).toUTF8
+  unless Challenger.withinAt Challenger.LIMITS base.coins do throw Challenger.LIMITS.form
   let sessions ← proofsOf pr
   if sessions.map (·.name) != base.sessions then throw "proofs: the sessions are not the evidence's sessions, in order"
   pure { base, sessions }
