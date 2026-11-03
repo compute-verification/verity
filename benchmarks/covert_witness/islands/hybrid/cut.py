@@ -38,10 +38,10 @@ Codes (witnesses for formalism v1's cut cost a, `adamw` / `muon`):
   on a token is r coefficients z = A·h, handed on (and their gradient back) at q bits each. `--lora-fix A` trains only
   B over a frozen random A.
 
-`--class` must be the class launch.py runs it under (the submission names it); its source rides in the submission's
-notes. Every method marks explicit harness steps (`hooks.step`), so it runs in the harness's script mode:
+Its source rides in the submission's notes. Every method marks explicit harness steps (`hooks.step`), so it runs in the
+harness's script mode (harness v3, no class):
 
-    python benchmarks/covert_witness/launch.py shallow s50 --note "cachedhead ..." -- --class shallow --set mlp-in:-1 --method cached
+    python benchmarks/covert_witness/launch.py s100 --island hybrid --program cut.py --note "cutcode ..." -- --set 'blocks.*,final' --allow-deep --method muon --cut 6:q4mb4
 """
 from __future__ import annotations
 
@@ -66,7 +66,6 @@ try:
 except ImportError:
     hooks = None
 
-KLASS = "reference"
 LF_LEAVES = {"qkv": ("wq", "wk", "wv"), "o": ("wo",), "mlp-in": ("w_gate", "w_up"), "down": ("w_down",)}
 
 
@@ -485,25 +484,15 @@ def lowest_block(tuned: list[str]) -> int | None:
     return min(found) if found else None
 
 
-def lora_bytes(theta: dict, mats: list[str], gains: list[str], rank: int) -> int:
-    fac = {n: (torch.zeros(rank, theta[n].shape[1]), torch.zeros(theta[n].shape[0], rank), 1.0) for n in mats}
-    return len(prepare.encode_lora(fac, "bf16", {n: theta[n] for n in gains}))
-
-
 def add_adapters(net, theta: dict, params: dict, mats: list[str], gains: list[str], rank: int, fix: str = "",
                  zbits: int = 0) -> tuple[dict, int]:
-    """Rank-r adapters W + s·B·A on `mats` (A ~ N(0, 1/d_in), B = 0, s = sqrt(d_in / r)); rank -1 is the largest whose E
-    fits the class's cap. `fix` "A" freezes that random A (only B trains). `fix` "B" makes B r seeded orthonormal
+    """Rank-r adapters W + s·B·A on `mats` (A ~ N(0, 1/d_in), B = 0, s = sqrt(d_in / r)). `fix` "A" freezes that random
+    A (only B trains). `fix` "B" makes B r seeded orthonormal
     columns (rows of a randomized DCT), frozen, with A = 0 trained and s = sqrt(d_out / r), so the update's whole effect
     on a token is its r coefficients z = A·h; `zbits` hands z on coded at that many bits per coefficient (one bf16 scale
     per token), and its gradient back the same way."""
-    if rank < 0:
-        cap = prepare.CLASSES[KLASS]["max_e_bytes"]
-        if cap is None or fix:
-            raise SystemExit(f"wildcard: --lora-rank -1 needs a class with an E cap and no --lora-fix, not {KLASS}")
-        rank = 1
-        while lora_bytes(theta, mats, gains, rank + 1) <= cap - 512:
-            rank += 1
+    if rank < 1:
+        raise SystemExit("wildcard: --lora-rank is a rank of at least 1 (harness v3 has no class cap to fit)")
     if zbits and fix != "B":
         raise SystemExit("wildcard: --z-bits codes z = A·h, which only --lora-fix B makes the update's whole effect")
     for n in mats:
@@ -1041,7 +1030,6 @@ def rms(x: torch.Tensor, gain: torch.Tensor) -> torch.Tensor:
 
 
 def main() -> int:
-    global KLASS
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
@@ -1050,7 +1038,7 @@ def main() -> int:
     ap.add_argument("--allow-deep", action="store_true")
     ap.add_argument("--method", default="adamw", choices=("adamw", "muon", "kfac", "cached", "scale"))
     ap.add_argument("--lora-rank", type=int, default=0,
-                    help="train the set's matrices through rank-r adapters (E `encode_lora`); -1 fits the class's cap")
+                    help="train the set's matrices through rank-r adapters (E `encode_lora`)")
     ap.add_argument("--lora-fix", default="", choices=("", "A", "B"),
                     help="freeze the adapters' A (random) or B (seeded orthonormal, A = 0 trained)")
     ap.add_argument("--z-bits", type=int, default=0, help="with --lora-fix B: hand z = A·h on at this many bits per coefficient")
@@ -1088,10 +1076,7 @@ def main() -> int:
     ap.add_argument("--suite", default="", help="a JSON list of argument overrides run one after another in this run; "
                     "each is scored on the same probe windows and the least probe loss is submitted (no snapshots)")
     ap.add_argument("--probe-rows", type=int, default=256, help="windows at the end of the training order kept as a probe")
-    ap.add_argument("--class", dest="klass", default=KLASS, choices=tuple(prepare.CLASSES),
-                    help="the class launch.py names, which the submission must name too")
     a = ap.parse_args()
-    KLASS = a.klass
     torch.backends.cuda.matmul.allow_tf32 = True
     configs = json.loads(a.suite) if a.suite else [{}]
     if a.suite and a.lora_rank:
@@ -1100,8 +1085,7 @@ def main() -> int:
     params = net.params()
     tuned = resolve_set(a.tset, rec, params)
     shape = prepare.deep_share(rec, set(tuned))
-    print(json.dumps({"class": KLASS, "set": tuned, "phi": shape["phi"], "lowest_updated_layer": shape["lowest_updated_layer"]}),
-          flush=True)
+    print(json.dumps({"set": tuned, "phi": shape["phi"], "lowest_updated_layer": shape["lowest_updated_layer"]}), flush=True)
     if shape["phi"] > 0 and not a.allow_deep:
         raise SystemExit(f"wildcard: --set {a.tset!r} has witnessed φ = {shape['phi']:.4f} > 0 (use --allow-deep)")
     for n, p in params.items():
@@ -1151,17 +1135,15 @@ def main() -> int:
     notes = {"direction": "hybrid", "mechanism": a.mechanism, "method": c.method, "set": tuned,
              "args": {k: v for k, v in vars(c).items() if k != "probe"}, "info": info, "E_bytes": len(blob),
              "suite": results if a.suite else None, "source": Path(__file__).read_text()}
-    prepare.submit(Path(a.out), a.start, KLASS, blob, model, trainable, all_steps, changed=changed, notes=notes,
+    prepare.submit(Path(a.out), a.start, blob, model, trainable, all_steps, changed=changed, notes=notes,
                    snapshots=snaps if not a.suite else [])
     return 0
 
 def probe_rows(rec: dict, a) -> torch.Tensor:
     """The last `--probe-rows` windows of the training order, which a run reaches only after reading all the others."""
     d = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
-    c = d.ctx
-    idx = np.sort(d.order[-a.probe_rows:])
-    rows = np.stack([d.tokens[i * c: i * c + c + 1] for i in idx]).astype(np.int64)
-    return torch.from_numpy(rows).to(prepare.DEVICE)
+    d.at = len(d.order) - a.probe_rows
+    return d.next(a.probe_rows)
 
 
 @torch.no_grad()
