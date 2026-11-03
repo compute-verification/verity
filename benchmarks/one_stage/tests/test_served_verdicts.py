@@ -857,17 +857,20 @@ def test_a_pearlplus_piece_sets_the_unretained_serve_of_its_load_beside_its_shar
 def test_a_pearlplus_piece_sets_the_provers_replay_beside_its_shares(tmp_path, capsys, live):
     """The prover's replay of every tile before the coin (``served_passes.py volunteer``'s seconds on its processes) is a
     CPU term beside the GPU shares: the cores it takes to keep pace with the timed call's wall, with the node it ran on
-    and how many of the passes it finished. One whose document has no seconds says why, and neither decides the verdict."""
+    and how many of the passes it finished; its give-up names the CPU's counts. One whose document has no seconds says
+    why, and neither decides the verdict."""
     _calls, args = live
     served, verified = _pearlplus_run()
     volunteered = {"s": 110.0, "jobs": 32, "ok": False, "node": "vy-dc-h200", "of": 4, "passes": [{"pass": 0}] * 3}
     doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered=volunteered, **args)
     assert doc["verdict"] == "accept" and doc["shares"]["replay"] == {"s": 110.0, "cpus": 32, "core_s": 3520.0, "of_wall": 55.0,
-                                                                      "cores_to_keep_pace": 1760.0, "node": "vy-dc-h200",
-                                                                      "finished": 3, "of": 4}
-    assert S.development_line(doc)["replay"] == {"s": 110.0, "cpus": 32, "cores_to_keep_pace": 1760.0, "node": "vy-dc-h200",
-                                                 "finished": 3, "of": 4}
-    assert S.development_line(S.pearlplus(tmp_path / "plain", served, verified, **args))["replay"] is None
+                                                                      "cores_to_keep_pace": 1760.0, "device_s": None,
+                                                                      "node": "vy-dc-h200", "finished": 3, "of": 4}
+    assert S.development_line(doc)["replay"] == {"s": 110.0, "cpus": 32, "cores_to_keep_pace": 1760.0, "device_s": None,
+                                                 "node": "vy-dc-h200", "finished": 3, "of": 4}
+    assert (doc["give_up"]["counts"], doc["give_up"]["cross_check"], doc["give_up"]["finished"]) == ("cpu", None, 3)
+    plain = S.pearlplus(tmp_path / "plain", served, verified, **args)
+    assert plain["give_up"] is None and S.development_line(plain)["replay"] is None
     doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered={"jobs": 32}, **args)
     assert doc["verdict"] == "accept" and "KeyError" in S.development_line(doc)["replay"]
     for name, d in (("served.json", served), ("v.json", verified), ("vol.json", {"s": 110.0, "jobs": 32})):
@@ -876,6 +879,25 @@ def test_a_pearlplus_piece_sets_the_provers_replay_beside_its_shares(tmp_path, c
                    str(tmp_path / "v.json"), "--volunteer", str(tmp_path / "vol.json"), "--gate", GATE, "--key-sha512",
                    "ff" * 64, "--main", str(tmp_path / "main.txt")]) == 0
     assert json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))["replay"]["cores_to_keep_pace"] == 1760.0
+
+
+def test_a_pearlplus_piece_names_its_provers_give_up_on_the_card_its_cross_check_and_the_rows_given_up(tmp_path, live):
+    """With the card's counts (``served_passes.py volunteer --device``) the piece and its line name the give-up: the
+    debit cubin, the rate at which tiles were replayed on the CPU too and how many were, the A and B rows given up and
+    the tiles over a cap before and left after. Its replay term is its CPU seconds alone, the card's beside them."""
+    _calls, args = live
+    served, verified = _pearlplus_run()
+    device = {"cubin": "/s/debit/debit_sm90.cubin", "cubin_sha256": "ab" * 32, "cross_check": 1024, "replayed": 9,
+              "bad_tiles": 1, "form_s": 50.0, "device_s": 30.0, "replay_s": 20.0}
+    volunteered = {"s": 110.0, "jobs": 32, "ok": True, "node": "vy-dc-h200", "of": 3, "passes": [{"pass": 0}] * 3,
+                   "device": device, "tiles": 8000, "over": 6, "left": 0, "voluntary_a": 4, "voluntary_b": 2}
+    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered=volunteered, **args)
+    line = S.development_line(doc)
+    assert doc["verdict"] == "accept" and doc["give_up"] == line["give_up"] == {
+        "counts": "device", "cubin_sha256": "ab" * 32, "cross_check": 1024, "replayed": 9, "bad_tiles": 1, "a_rows": 4,
+        "b_rows": 2, "tiles": 8000, "over": 6, "left": 0, "finished": 3, "of": 3, "ok": True}
+    assert line["replay"] == {"s": 80.0, "cpus": 32, "cores_to_keep_pace": 1280.0, "device_s": 30.0, "node": "vy-dc-h200",
+                              "finished": 3, "of": 3}
 
 
 def test_a_pearlplus_piece_names_the_rounds_its_prover_dropped_before_the_coin(tmp_path, live):

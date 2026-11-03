@@ -3,8 +3,9 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
 ``max_step_tokens``).
 
   served_passes.py serve --passes DIR --out served.json [--spec SPEC] [--arm ARM] [--requests 32] [--prompt-tokens 512]
-                         [--output-tokens 16] [--max-num-batched-tokens N] [--no-retain]
-  served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J]
+                         [--output-tokens 16] [--max-num-batched-tokens N] [--no-retain [--seeded]]
+  served_passes.py same A.json B.json --out same.json
+  served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J] [--device DEBIT_CUBIN [--device-check N]]
   served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...]
   served_passes.py verify --passes DIR [--manifest M ...] [--tie W] --out verify.json [--answer answer.json]
                           [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R]
@@ -27,15 +28,27 @@ caps, the install's ``max_step_tokens`` and whether every pass is within the cap
 and exits non-zero unless the timed call's passes hold calls in at least three (two boundaries crossed) and every pass is
 within its caps.  ``--no-retain`` serves the same with no ``transcript_dir``: each pass is committed and none is written,
 so its walls are the option's without retention, its passes have no manifest or MACs, and ``verify`` refuses it
-(``retained`` false).
+(``retained`` false).  With ``--seeded`` too (`seed_install`; refused with retention or the challenger gate) the
+in-process challenger's coins and the install's hm96 salt key are drawn from fixed streams (`seeded`), so its
+commitments hide nothing and bind nothing a verdict may read: two seeded serves of one load draw the same salt and key.
+
+``same`` holds two seeded serves of one load (their ``served.json``) to the same passes, field by field (`KEEP`: each
+pass's transcript root, activation roots and counts), which they give only where the served path commits the same bytes
+for the same load.  It writes the passes compared and the fields of each that differ, by name and never by value, to
+``--out``, prints one line and exits 0 only when every pass is the same; it refuses serves that aren't both seeded, that
+served different loads or that drew different salts, and a serve with nothing committed to compare (no pass with calls, or
+one without its roots).
 
 ``volunteer`` is the prover's step between the serve and the verifier's coin (`volunteer_pass.volunteer`, V-EX's remedy): on
 each pass with calls, as ``verify`` reads them, it replays every tile word by word on ``--jobs`` processes and gives up, in
 the pass's records, the rows that leave a tile or one of its credited rows over its debit cap, which the serve's screen
-can't see (the debit reads the noised codes); the transcript is the serve's.  It writes each pass's outcome and seconds to
-``--out`` as each pass ends (``done`` once all have), with the node it ran on, prints one line and exits 0 only when no
-pass has a tile left over a cap; it refuses a serve that retained none, and any once the verifier's coin is drawn
-(``DIR/coin.json``).
+can't see (the debit reads the noised codes); the transcript is the serve's.  With ``--device`` (pearl_c_sm90's
+debit_sm90.cubin, on this node's H100 or H200) the words' counts are the card's (`volunteer_pass.words_device`), and
+every ``--device-check``-th tile (default `volunteer_pass.CROSS_CHECK`) and each tile with a word the card marks
+non-finite are replayed on the CPU too and held equal.  It writes each pass's outcome and seconds to ``--out`` as each
+pass ends (``done`` once all have), with the node it ran on and, on the device, the cubin, that rate and what it
+replayed (``device``), prints one line and exits 0 only when no pass has a tile left over a cap; it refuses a serve that
+retained none, and any once the verifier's coin is drawn (``DIR/coin.json``).
 
 ``retain`` is the prover's last step before the coin: it writes ``DIR/retention.json``, the rounds (places among
 ``served.json``'s passes with calls) the verdict is to read, dropping each ``--drop`` round and, with ``--volunteer``, each
@@ -63,6 +76,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import itertools
 import json
 import math
 import os
@@ -85,14 +99,22 @@ SCHEMA = "verity-pouw/pearl-plus-served-verify/v1"
 DRAWS = 459
 KEEP = ("units", "base", "tiles", "screened_rows", "failing_rows", "unsure_rows", "excluded_rows", "transcript_root",
         "activation_roots", "schedule", "manifest")
-#: what `volunteer` keeps of each pass's `volunteer_pass.volunteer`
-VOLUNTEER_KEEP = ("manifest", "ok", "line", "tiles", "over", "voluntary_a", "voluntary_b", "left", "records_root", "credit_kept")
+#: what `volunteer` keeps of each pass's `volunteer_pass.volunteer` (``device`` on the device alone)
+VOLUNTEER_KEEP = ("manifest", "ok", "line", "tiles", "over", "voluntary_a", "voluntary_b", "left", "records_root",
+                  "credit_kept", "device")
+#: what `volunteer`'s document sums of its passes' ``device``
+DEVICE_SUMS = ("replayed", "bad_tiles", "form_s", "device_s", "replay_s")
 #: why `verify` and `volunteer` refuse a serve run with ``--no-retain``
 UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so there is nothing to replay")
 #: the verifier's record of its coin (`verify_run.verify_passes`' ``record``) and the prover's retention, in DIR
 COIN, RETENTION = "coin.json", "retention.json"
 #: why `retain` and `volunteer` refuse once the verifier's coin is drawn
 DRAWN = "the verifier's coin is drawn (DIR/coin.json), so the passes and their records are fixed"
+#: why `serve` refuses ``--seeded`` beside retention or a live session's coins
+SEEDED_ALONE = ("serve --seeded fixes the coins and the hm96 salt key, so its commitments hide nothing and bind nothing a "
+                "verdict may read: it takes --no-retain and no PEARLC_CHALLENGER_GATE")
+#: what makes two serves' documents one load in `same`, beside the engine's batched tokens
+LOAD = ("spec", "arm", "requests", "prompt_tokens", "output_tokens")
 
 
 def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
@@ -122,7 +144,34 @@ def pearl_c_arm(spec, name: str | None = None):
     return picked[0]
 
 
+def seeded(label: str):
+    """`serve --seeded`'s entropy for `label`: SHA-512 over the label and a counter, its whole outputs taken in order, so
+    every stream of one label gives the same bytes however they are drawn."""
+    buf, count = bytearray(), itertools.count()
+
+    def draw(n: int) -> bytes:
+        while len(buf) < n:
+            buf.extend(hashlib.sha512(f"served-passes seeded {label}".encode() + next(count).to_bytes(8, "big")).digest())
+        out = bytes(buf[:n])
+        del buf[:n]
+        return out
+    return draw
+
+
+def seed_install(pouw: dict) -> None:
+    """`serve --seeded`: the PoUW settings' in-process challenger drawing from `seeded` coins, and the hm96 salt key the
+    install's weight commitment takes (`pearl_c.new_salt_key`) a `seeded` one, in this process."""
+    from verity.core.protocols.pouw.coins import Challenger
+    from verity_vllm.protocols.pouw import pearl_c as PPD
+
+    pouw["coins"] = Challenger(0, seeded("coins"))
+    key = seeded("salt key")(32)
+    PPD.new_salt_key = lambda scheme: key
+
+
 def serve(args: argparse.Namespace) -> int:
+    if args.seeded and (args.retain or settings.PEARLC_CHALLENGER_GATE):
+        raise SystemExit(SEEDED_ALONE)
     from verity_bench.vllm import arms as A
     from verity_bench.vllm import presets as P
     from verity_bench.vllm import runner as RN
@@ -145,6 +194,8 @@ def serve(args: argparse.Namespace) -> int:
 
     config["pouw"], reserved = BA.live_coins(config["pouw"], settings.PEARLC_CHALLENGER_GATE, settings.PEARLC_CHALLENGER_PEER,
                                              settings.PEARLC_BENCH_EPOCH, settings.PEARLC_CHALLENGER_LANE)
+    if args.seeded:
+        seed_install(config["pouw"])
     if reserved is None:
         (passes / "coins.json").write_text(json.dumps(config["pouw"]["coins"].commitment.to_json()) + "\n")
     engine_env.apply_engine(None)
@@ -185,13 +236,13 @@ def serve(args: argparse.Namespace) -> int:
     over = [p["pass"] for p in got if any((p.get(k) or 0) > cap for k, cap in caps.items())]
     doc = {"schema": "verity-pouw/pearl-c-served-passes/v1", "spec": str(args.spec), "arm": arm.id, "run": settings.RESEARCH_RUN_ID,
            "engine": {k: v for k, v in engine.items() if isinstance(v, (int, float, str, bool))}, "retained": args.retain,
-           "requests": args.requests, "prompt_tokens": args.prompt_tokens, "output_tokens": args.output_tokens,
+           "seeded": args.seeded, "requests": args.requests, "prompt_tokens": args.prompt_tokens, "output_tokens": args.output_tokens,
            "served_tokens": sum(len(o.outputs[0].token_ids) for o in outs), "generate_s": wall, "engine_steps": len(walls),
            "step_s": walls[warm_steps:], "close_s": close, "pass_ends": run.details.get("pass_ends"),
            "max_step_tokens": run.details.get("max_step_tokens"), "caps": caps, "passes": got, "passes_with_calls": len(held),
            "over_caps": over,
            "ok": sum(p["timed"] for p in held) >= 3 and not over and (not args.retain or all(p.get("manifest") for p in held))}
-    doc["coins"] = SS.coins_of(option, reserved)
+    doc["coins"] = {**SS.coins_of(option, reserved), **({"source": "seeded"} if args.seeded else {})}
     for path in (Path(args.out), passes / "served.json"):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(doc, indent=1) + "\n")
@@ -203,6 +254,49 @@ def serve(args: argparse.Namespace) -> int:
     print(f"served {doc['served_tokens']} tokens in {wall:.3f} s and {len(walls)} engine steps (a warm-up's among them), "
           f"{'every pass retained' if args.retain else 'no pass retained'}: the timed steps {shown} s; {len(held)} passes "
           f"with calls, {len(over)} over their caps; coins {coins['source']}{whose} -> {'OK' if doc['ok'] else 'FAIL'}")
+    return 0 if doc["ok"] else 1
+
+
+def same(args: argparse.Namespace) -> int:
+    missing = [str(p) for p in (args.a, args.b) if not Path(p).is_file()]
+    docs = [{} if str(p) in missing else json.loads(Path(p).read_text()) for p in (args.a, args.b)]
+
+    def load(d: dict) -> list:
+        return [d.get(k) for k in LOAD] + [(d.get("engine") or {}).get("max_num_batched_tokens")]
+
+    def bare(d: dict) -> bool:
+        called = [p for p in d.get("passes") or [] if p.get("units")]
+        return not called or not all(p.get("transcript_root") and p.get("activation_roots") for p in called)
+    a, b = (d.get("passes") or [] for d in docs)
+    refused = next((why for why, bad in (
+        (f"a serve wrote no document ({', '.join(missing)})", missing),
+        ("the serves aren't both seeded (serve --no-retain --seeded), so each committed under a salt and salt key of its "
+         "own", not all(d.get("seeded") and d.get("retained") is False for d in docs)),
+        ("the serves served different loads", load(docs[0]) != load(docs[1])),
+        ("the serves drew different salts, so they weren't seeded alike",
+         (docs[0].get("coins") or {}).get("salt") != (docs[1].get("coins") or {}).get("salt")),
+        ("a serve committed nothing to compare: no pass with calls, or one without its transcript root and activation "
+         "roots", any(map(bare, docs)))) if bad), None)
+    differ = [] if refused else [{"pass": i, "fields": f} for i, (p, q) in enumerate(zip(a, b))
+                                 if (f := [k for k in KEEP if p.get(k) != q.get(k)])]
+    n, called, calls = len(a), sum(1 for p in a if p.get("units")), sum(p.get("units") or 0 for p in a)
+    doc = {"schema": "verity-pouw/pearl-plus-served-same/v1", "serves": [str(args.a), str(args.b)],
+           "load": dict(zip((*LOAD, "max_num_batched_tokens"), load(docs[0]))), "passes": [len(a), len(b)], "calls": calls,
+           "refused": refused, "differ": differ, "ok": refused is None and len(a) == len(b) and not differ}
+    r, p, o, t = (doc["load"][k] for k in ("requests", "prompt_tokens", "output_tokens", "max_num_batched_tokens"))
+    head = f"same: two seeded serves of one load ({r} requests of {p} tokens, {o} out, {t} a step)"
+    if refused:
+        doc["line"] = f"same: refused: {refused} -> FAIL"
+    elif doc["ok"]:
+        doc["line"] = (f"{head}: {n} passes ({called} with calls), {calls} calls, every pass's transcript root, activation "
+                       f"roots and counts equal, so the served path committed the same bytes for the same load -> OK")
+    else:
+        first = (f"; first pass {differ[0]['pass']}: {', '.join(differ[0]['fields'])}" if differ else "")
+        doc["line"] = (f"{head}: {len(differ)} of {min(len(a), len(b))} passes differ{first}"
+                       + (f"; {len(a)} passes against {len(b)}" if len(a) != len(b) else "") + " -> FAIL")
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(doc, indent=1) + "\n")
+    print(doc["line"], flush=True)
     return 0 if doc["ok"] else 1
 
 
@@ -261,13 +355,17 @@ def volunteer(args: argparse.Namespace) -> int:
     coins = VR.epoch_coins(passes / "coins.json")
     out, got = Path(args.out), []
     out.parent.mkdir(parents=True, exist_ok=True)
+    device, check = (Path(args.device) if args.device else None), args.device_check or VP.CROSS_CHECK
 
     def written(done: bool) -> dict:
         total = {k: sum(len(r[k]) for r in got) for k in ("over", "left")}
         given = {k: sum(len(rows) for r in got for rows in r[k].values()) for k in ("voluntary_a", "voluntary_b")}
+        on = None if device is None else {
+            "cubin": str(device), "cubin_sha256": hashlib.sha256(device.read_bytes()).hexdigest(), "cross_check": check,
+            **{k: sum(r["device"][k] for r in got) for k in DEVICE_SUMS}}
         doc = {"schema": "verity-pouw/pearl-plus-served-volunteer/v1", "passes_dir": str(passes),
                "served_run": (served or {}).get("run"), "node": socket.gethostname().split(".")[0], "jobs": args.jobs,
-               "done": done, "of": len(paths), "passes": got,
+               "device": on, "done": done, "of": len(paths), "passes": got,
                "tiles": sum(r["tiles"] for r in got), **total, **given, "s": sum(r["s"] for r in got),
                "ok": done and bool(got) and all(r["ok"] for r in got)}
         tmp = out.with_name(out.name + ".tmp")
@@ -276,14 +374,15 @@ def volunteer(args: argparse.Namespace) -> int:
         return doc
     for path in paths:
         t = time.perf_counter()
-        r = VP.volunteer(path, coins, args.jobs)
-        got.append({**{k: r[k] for k in VOLUNTEER_KEEP}, "s": time.perf_counter() - t})
+        r = VP.volunteer(path, coins, args.jobs, device, check)
+        got.append({**{k: r[k] for k in VOLUNTEER_KEEP if k in r}, "s": time.perf_counter() - t})
         print(f"{path.parent.name}: {r['line']}", flush=True)
         written(False)
     doc = written(True)
-    print(f"volunteer {'PASS' if doc['ok'] else 'FAIL'}: {len(got)} passes, {doc['tiles']} tiles replayed in {doc['s']:.0f} s on "
-          f"{args.jobs} processes, {doc['over']} over a cap; gave up {doc['voluntary_a']} A rows and {doc['voluntary_b']} B rows; "
-          f"{doc['left']} tiles left over a cap", flush=True)
+    how = "replayed" if device is None else f"counted on the device ({doc['device']['replayed']} replayed on the CPU too)"
+    print(f"volunteer {'PASS' if doc['ok'] else 'FAIL'}: {len(got)} passes, {doc['tiles']} tiles {how} in {doc['s']:.0f} s "
+          f"on {args.jobs} processes, {doc['over']} over a cap; gave up {doc['voluntary_a']} A rows and "
+          f"{doc['voluntary_b']} B rows; {doc['left']} tiles left over a cap", flush=True)
     return 0 if doc["ok"] else 1
 
 
@@ -365,10 +464,19 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--output-tokens", type=int, default=16)
     s.add_argument("--max-num-batched-tokens", type=int)
     s.add_argument("--no-retain", dest="retain", action="store_false")
+    s.add_argument("--seeded", action="store_true", help="with --no-retain: coins and the hm96 salt key from fixed streams "
+                   "(`seeded`), for `same`")
+    m = sub.add_parser("same")
+    m.add_argument("a", type=Path, help="a seeded serve's served.json")
+    m.add_argument("b", type=Path, help="another of the same load")
+    m.add_argument("--out", required=True)
     o = sub.add_parser("volunteer")
     o.add_argument("--passes", required=True)
     o.add_argument("--out", required=True)
     o.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
+    o.add_argument("--device", help="pearl_c_sm90's debit_sm90.cubin: the words' counts on this node's H100 or H200")
+    o.add_argument("--device-check", type=int, metavar="N",
+                   help="with --device, replay every Nth tile on the CPU too (default volunteer_pass.CROSS_CHECK)")
     r = sub.add_parser("retain")
     r.add_argument("--passes", required=True)
     r.add_argument("--volunteer", help="volunteer's document: drop each pass it didn't finish or left over a cap")
@@ -391,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--coin-record", help=f"the verifier's coin record (default: DIR/{COIN} where served.json names the "
                    "passes, none with --manifest)")
     args = p.parse_args(argv)
-    return {"serve": serve, "volunteer": volunteer, "retain": retain, "verify": verify}[args.cmd](args)
+    return {"serve": serve, "same": same, "volunteer": volunteer, "retain": retain, "verify": verify}[args.cmd](args)
 
 
 if __name__ == "__main__":

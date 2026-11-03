@@ -1298,6 +1298,80 @@ def test_served_passes_verify_refuses_a_serve_that_retained_no_pass(tmp_path):
     assert answer["verdict"] == "reject" and answer["reason"].startswith("unretained: the serve retained no pass")
 
 
+def test_a_seeded_serve_draws_the_same_coins_and_salt_key_and_takes_no_retention_or_live_coins(tmp_path, monkeypatch):
+    """`serve --seeded`'s streams (`served_passes.seeded`) give one label's bytes however they are drawn, so two seeded
+    installs (`seed_install`) hold challengers of one coin commitment and take one hm96 salt key (`pearl_c.new_salt_key`,
+    which the install's weight commitment calls); ``--seeded`` is refused beside retention and beside the challenger gate,
+    before anything is built."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    a, b = SP.seeded("coins"), SP.seeded("coins")
+    assert a(3) + a(70) + a(1) == b(74) and SP.seeded("salt key")(32) != SP.seeded("coins")(32)
+    monkeypatch.setattr(PPD, "new_salt_key", PPD.new_salt_key)
+    one, two = {"coins": None}, {}
+    SP.seed_install(one)
+    SP.seed_install(two)
+    assert one["coins"].commitment.to_json() == two["coins"].commitment.to_json()
+    assert PPD.new_salt_key(SCHEME) == SP.seeded("salt key")(32)
+    argv = ["serve", "--seeded", "--passes", str(tmp_path), "--out", str(tmp_path / "served.json")]
+    with pytest.raises(SystemExit, match="takes --no-retain and no PEARLC_CHALLENGER_GATE"):
+        SP.main(argv)
+    monkeypatch.setenv("PEARLC_CHALLENGER_GATE", "ssh research@gate")
+    with pytest.raises(SystemExit, match="takes --no-retain and no PEARLC_CHALLENGER_GATE"):
+        SP.main([*argv, "--no-retain"])
+    assert not (tmp_path / "served.json").exists()
+
+
+def test_served_passes_same_holds_two_seeded_serves_of_one_load_to_the_same_passes_naming_no_value(tmp_path, capsys):
+    """`same`: two seeded serves of one load (spec, arm, requests, tokens and batched tokens) and one salt are the same
+    when every pass's `KEEP` fields are; a pass that differs is named with its fields, never their values, and a serve
+    with another pass count fails.  Serves that aren't both seeded and unretained, that served different loads or that
+    drew different salts are refused, and so are two whose passes committed nothing, which would otherwise be the same
+    for want of any root."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    passes = [{"pass": i, "timed": i > 0, "units": 64, "base": 64 * i, "tiles": 5888, "screened_rows": 8192,
+               "failing_rows": 0, "unsure_rows": 0, "excluded_rows": 0, "transcript_root": f"{7 + i:0128x}",
+               "activation_roots": [f"{100 + 3 * i + j:0128x}" for j in range(3)], "schedule": "serial"} for i in range(3)]
+
+    def doc(**kw):
+        return {"spec": "s.toml", "arm": "pouw:pearl-c-h100-v1-h3", "requests": 8, "prompt_tokens": 1024,
+                "output_tokens": 1, "engine": {"max_num_batched_tokens": 8192}, "retained": False, "seeded": True,
+                "coins": {"source": "seeded", "salt": "ab" * 32}, "passes": passes, **kw}
+
+    def same(a, b):
+        paths = [tmp_path / "a.json", tmp_path / "b.json"]
+        for p, d in zip(paths, (a, b)):
+            p.write_text(json.dumps(d))
+        rc = SP.main(["same", *map(str, paths), "--out", str(tmp_path / "same.json")])
+        text = (tmp_path / "same.json").read_text()
+        assert json.loads(text)["line"] == capsys.readouterr().out.strip()
+        return rc, json.loads(text), text
+
+    rc, got, _ = same(doc(), doc())
+    assert rc == 0 and got["ok"] and got["passes"] == [3, 3] and got["calls"] == 192 and got["differ"] == []
+    assert got["line"].startswith("same: two seeded serves of one load (8 requests of 1024 tokens, 1 out, 8192 a step): "
+                                  "3 passes (3 with calls), 192 calls") and got["line"].endswith("-> OK")
+    empty = {**passes[0], "pass": 3, "units": 0, "tiles": 0, "transcript_root": None, "activation_roots": None}
+    rc, got, _ = same(doc(passes=[*passes, empty]), doc(passes=[*passes, empty]))
+    assert rc == 0 and got["ok"] and "4 passes (3 with calls), 192 calls" in got["line"]
+    other = [dict(p) for p in passes]
+    other[1]["activation_roots"] = [other[1]["activation_roots"][0], f"{999:0128x}", other[1]["activation_roots"][2]]
+    rc, got, text = same(doc(), doc(passes=other))
+    assert rc == 1 and got["differ"] == [{"pass": 1, "fields": ["activation_roots"]}] and got["line"].endswith("-> FAIL")
+    assert f"{999:0128x}" not in text and passes[0]["transcript_root"] not in text
+    rc, got, _ = same(doc(), doc(passes=passes[:2]))
+    assert rc == 1 and got["differ"] == [] and "3 passes against 2" in got["line"]
+    for b, why in ((doc(seeded=False), "aren't both seeded"), (doc(retained=True), "aren't both seeded"),
+                   (doc(requests=16), "different loads"), (doc(engine={"max_num_batched_tokens": 4096}), "different loads"),
+                   (doc(coins={"source": "seeded", "salt": "cd" * 32}), "different salts")):
+        rc, got, _ = same(doc(), b)
+        assert rc == 1 and not got["ok"] and why in got["refused"] and got["line"].startswith("same: refused: "), why
+    rootless = [{**p, "transcript_root": None, "activation_roots": None} for p in passes]
+    for a in (doc(passes=rootless), doc(passes=[{**passes[0], "activation_roots": []}, *passes[1:]]), doc(passes=[empty]),
+              doc(passes=[])):
+        rc, got, _ = same(a, a)
+        assert rc == 1 and not got["ok"] and "committed nothing to compare" in got["refused"], a["passes"]
+
+
 def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_cells_macs(tmp_path):
     """`served_passes.macs` is a pass's real rows × n × k, and `verify_run.pass_macs` the MACs of the cells `clear_work`
     credits (`UnitRecord.credited` over the scheme's tiles, at kept K), `credit_at_assumption`'s ``macs`` over the pass
@@ -1519,6 +1593,45 @@ def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_an
     assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 1
 
 
+def test_served_passes_volunteer_on_the_device_gives_up_the_cpus_rows_and_names_its_cubin_and_cross_check(tmp_path):
+    """``served_passes.py volunteer --device`` (a stand-in for the card, `_StandInDebit`) gives up the rows the CPU replay
+    gives up, to the same records root, and its document names the debit cubin, the cross-check rate (``--device-check``,
+    else `volunteer_pass.CROSS_CHECK`) and the tiles it replayed on the CPU too; the CPU's document has no ``device``."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    VP = load("volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    d, out, before = _serve_dir(tmp_path, [path]), tmp_path / "volunteer.json", path.read_text()
+    cubin = tmp_path / "debit_sm90.cubin"
+    cubin.write_bytes(b"stand-in")
+    device = VP.VR.load(path, published(path)).scheme.device
+    got = {}
+    try:
+        for check in ("2", None):
+            path.write_text(before)
+            VP._DEBIT[str(cubin.resolve())] = _StandInDebit(VP.FT, device)
+            VP._B_CODES.clear()
+            more = ["--device-check", check] if check else []
+            assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1", "--device", str(cubin),
+                            *more]) == 0
+            got[check] = json.loads(out.read_text()), json.loads(path.read_text())["records_root"]
+    finally:
+        VP._DEBIT.clear()
+        VP._B_CODES.clear()
+    path.write_text(before)
+    assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 0
+    cpu, root = json.loads(out.read_text()), json.loads(path.read_text())["records_root"]
+    assert cpu["device"] is None and cpu["voluntary_a"] + cpu["voluntary_b"] > 0
+    for check, (doc, dev_root) in got.items():
+        rate = int(check) if check else VP.CROSS_CHECK
+        assert doc["ok"] and dev_root == root and doc["tiles"] == cpu["tiles"]
+        assert {k: doc[k] for k in ("voluntary_a", "voluntary_b", "over", "left")} == {
+            k: cpu[k] for k in ("voluntary_a", "voluntary_b", "over", "left")}
+        assert {k: doc["device"][k] for k in ("cubin", "cubin_sha256", "cross_check", "replayed", "bad_tiles")} == {
+            "cubin": str(cubin), "cubin_sha256": hashlib.sha256(b"stand-in").hexdigest(), "cross_check": rate,
+            "replayed": len(range(0, doc["tiles"], rate)), "bad_tiles": 0}
+        assert doc["passes"][0]["device"]["replayed"] == doc["device"]["replayed"]
+
+
 def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_and_refuses_a_retention_after_it(tmp_path):
     """``retain`` drops passes before the coin (one ``--drop``, and with ``--volunteer`` each pass that step didn't finish or
     left over a cap): ``verify`` then reads the retained passes alone, each at its round, credits only them, and records
@@ -1615,6 +1728,98 @@ def test_volunteer_words_gives_up_a_b_row_for_a_row_the_a_count_leaves_over():
     assert (va, vb) == ({7: [0]}, {2: [5]})
     given = [PW.UnitRecord(rec.matmul, 16, 128, voluntary_a=tuple(va[7]), voluntary_b=tuple(vb[2]))]
     assert [(x["tile"], [r[0] for r in x["rows"]]) for x in CW.over_words(s, given, three)] == [(1, [2])]
+
+
+def _volunteer_words_one_row_at_a_time(scheme, records, words):
+    """`clear_work.volunteer_words` with its A count stated one row at a time: every tile of the unit rescanned after each
+    A row given up, the row furthest over then given up."""
+    _, tol, units = CW._word_units(scheme, records, words)
+    va = {r.matmul.index: set(r.voluntary_a) for r in records}
+    vb = {}
+    for r in records:
+        vb.setdefault(r.matmul.weight, set(r.voluntary_b))
+
+    def credited(r, tile):
+        ua, ub = set(r.excluded_a) | va[r.matmul.index], set(r.excluded_b) | vb[r.matmul.weight]
+        return ([x for x, i in enumerate(tile.rows) if i < r.real_rows and i not in ua],
+                [z for z, j in enumerate(tile.cols) if j not in ub])
+
+    def a_left(r):
+        return len(va[r.matmul.index]) < CW.voluntary_cap(r.matmul.shape.m)
+
+    def b_left(r):
+        return len(vb[r.matmul.weight]) < CW.voluntary_cap(r.matmul.shape.n)
+
+    changed = True
+    while changed:
+        changed = False
+        for _, r, _, row_cell, tiles in units if CW.row_cap(scheme) else ():
+            while a_left(r):
+                excess = {}
+                for _, tile, w in tiles:
+                    rows, cols = credited(r, tile)
+                    if rows and cols:
+                        s, limit = w[np.ix_(rows, cols)].sum(axis=1), row_cell * len(cols) * tol
+                        for x in np.flatnonzero(s > math.floor(limit)):
+                            excess[tile.rows[rows[x]]] = excess.get(tile.rows[rows[x]], 0) + int(s[x]) - limit
+                if not excess:
+                    break
+                va[r.matmul.index].add(max(excess, key=lambda i: (excess[i], -i)))
+                changed = True
+        for _, r, _, row_cell, tiles in units if CW.row_cap(scheme) else ():
+            for _, tile, w in tiles:
+                while b_left(r):
+                    rows, cols = credited(r, tile)
+                    if not (rows and cols):
+                        break
+                    sub = w[np.ix_(rows, cols)]
+                    x = int(np.argmax(sub.sum(axis=1)))
+                    z = int(np.argmax(sub[x]))
+                    if int(sub[x].sum()) <= row_cell * len(cols) * tol or int(sub[x, z]) <= row_cell * tol:
+                        break
+                    vb[r.matmul.weight].add(tile.cols[cols[z]])
+                    changed = True
+        for _, r, cell, _, tiles in units:
+            for _, tile, w in tiles:
+                while True:
+                    rows, cols = credited(r, tile)
+                    if not (rows and cols):
+                        break
+                    sub = w[np.ix_(rows, cols)]
+                    debit, nr, nc = int(sub.sum()), len(rows), len(cols)
+                    if debit <= cell * nr * nc * tol:
+                        break
+                    options = []
+                    if a_left(r) and nr > 1:
+                        options += [(debit - int(d) - cell * (nr - 1) * nc, "A", tile.rows[rows[x]])
+                                    for x, d in enumerate(sub.sum(axis=1))]
+                    if b_left(r) and nc > 1:
+                        options += [(debit - int(d) - cell * nr * (nc - 1), "B", tile.cols[cols[z]])
+                                    for z, d in enumerate(sub.sum(axis=0))]
+                    if not options:
+                        break
+                    _, side, row = min(options, key=lambda o: o[0])
+                    (va[r.matmul.index] if side == "A" else vb[r.matmul.weight]).add(row)
+                    changed = True
+    return {i: sorted(s) for i, s in va.items() if s}, {w: sorted(s) for w, s in vb.items() if s}
+
+
+def test_volunteer_words_ranks_a_units_rows_over_their_caps_in_one_scan():
+    """`volunteer_words` gives up a unit's A rows over their caps from one scan of its tiles, since an A row given up leaves
+    every other row's sum and cap as they were: on seeded counts with more rows over their caps than ⌈m/64⌉ allows, filler
+    rows, and B rows over theirs, across three units, it gives up the A and B rows the one-row-at-a-time statement does."""
+    s = PPD.scheme_of("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
+    rng = np.random.default_rng(7)
+    most = 0
+    for trial in range(24):
+        recs = [PW.UnitRecord(Matmul(u, Shape(192, 128, 48), 10 + u), int(rng.integers(150, 193)), 128) for u in range(3)]
+        words = {(p, t): (np.where(rng.random((16, 16)) < 0.04, rng.integers(1, 4, (16, 16)), 0),
+                          np.where(rng.random((16, 16)) < 0.02, rng.integers(1, 3, (16, 16)), 0))
+                 for p, r in enumerate(recs) for t in range(len(s.tiles(r.matmul.shape)))}
+        got = CW.volunteer_words(s, recs, words)
+        assert got == _volunteer_words_one_row_at_a_time(s, recs, words), trial
+        most = max(most, *(len(v) for v in got[0].values()))
+    assert most == CW.voluntary_cap(192) == 3
 
 
 @pytest.mark.slow
@@ -1823,10 +2028,10 @@ def test_live_coins_reserve_a_salt_only_session_whose_settings_the_install_takes
     name, the PoUW settings drop their in-process coins and take a salt-only session the gate reserves under the lane once
     its ledger shows the lane's open period (``reserve --peer P --scheme S --families [["pouw/salt",1]] --epoch N``): the
     challenger on this node, the reserve answer, the gate's open and that period, which `pouw.Settings` reads and the
-    challenger's settings refuse nothing of.  Neither given leaves the settings, and their coins in-process, untouched;
-    one alone is refused, and a reserve while the lane's open period is H1's is refused before it is asked."""
+    adapter's refusals (`pouw.refusals`) refuse nothing of.  Neither given leaves the settings, and their coins
+    in-process, untouched; one alone is refused, and a reserve while the lane's open period is H1's is refused before it
+    is asked."""
     from verity_vllm.protocols import pouw
-    from verity_vllm.protocols.pouw.h1 import settings as PHS
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", KERNEL.parent / "pearl_c_vllm" / "bench_arm.py")
@@ -1853,7 +2058,9 @@ def test_live_coins_reserve_a_salt_only_session_whose_settings_the_install_takes
                                   json.dumps([list(f) for f in Wd.SALT_FAMILIES], separators=(",", ":")), "--epoch", "5"]]
     settings = pouw.Settings.of(got)
     assert (settings.coins, settings.challenger, settings.session, settings.period) == (None, "127.0.0.1:0", reserved, None)
-    assert PHS.refusals(SCHEME, settings, "serve") == []
+    serving = types.SimpleNamespace(stage="serve", world=1, enforce_eager=True, settings_of=lambda name: got,
+                                    filled_of=lambda name: ())
+    assert pouw.refusals(SCHEME, serving) == ()
     for one in ((gate, None), (None, "vy-dc-h200")):
         with pytest.raises(ValueError, match="together"):
             BA.live_coins(base, *one, 5, "vllm", run)

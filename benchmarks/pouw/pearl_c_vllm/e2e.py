@@ -46,7 +46,8 @@ check compares Pearl-C's graphed calls with its eager ones both under vLLM's eag
 ``--whole-step``) captures each call's tile hashing beside the next call (`pouw_pearl_c_graphs`), ``--whole-defer-a``
 (with ``--whole-defer``) each call's A tree beside its own forming and GEMM, ``--whole-tree-sm`` (with
 ``--whole-defer-a``) that GEMM leaving the tree's CTA its SM, and ``--whole-fork-stats`` (with ``--whole-defer``) each
-call's A scales beside its A commitment, under the same gate.
+call's A scales beside its A commitment, under the same gate, which refuses the last two together where A's commitment
+may read a call's BF16 rows (`bf16_race`, `BF16_RACE`).
 
 ``--statement CUBIN`` (with ``--whole-step``; hm96_rows.cu built for sm_120a) adds the mode ``pearlc-zk``: ``pearlc`` with
 each decode forward replayed whole also committing its calls' A rows and its tile rows in the ZK statement's format,
@@ -341,13 +342,33 @@ def gate(run, weights: dict, whole: bool = False) -> list[dict]:
     return out
 
 
+#: why `whole_check` refuses the arm `bf16_race` names, and what serves it instead
+BF16_RACE = ("whole_defer_a with whole_fork_stats races where A's commitment reads a call's BF16 rows (sm_90's "
+             "BF16_ROWS): the captured rows_a reads A's FP32 words (xa) while widen_a, moved to the stats stream, writes "
+             "them, so the commitment differs pass to pass on the same calls; set PEARLC_BF16_ROWS=0 (or "
+             "PEARLC_WHOLE_FORK_STATS=0 or PEARLC_WHOLE_DEFER_A=0)")
+
+
+def bf16_race(run) -> bool:
+    """Whether `run`'s whole capture is the arm that races (`BF16_RACE`): with hashing it forks each call's A tree
+    (`whole_defer_a`) and A scales (`whole_fork_stats`), and its kernel lets a split pipeline's pd_commit read a call's
+    BF16 rows in place of its FP32 words (`run.Pipeline.reads_bf16`: the run module's BF16_ROWS, a cubin with its
+    BF16_ROWS_MARK), which the capture then widens on the stats stream beside that read."""
+    R = run.kernel.run
+    return bool(run.hashing and run.whole_defer_a and run.whole_fork_stats and getattr(R, "BF16_ROWS", False)
+                and getattr(run.kernel.dev, "has", lambda _: False)(R.BF16_ROWS_MARK))
+
+
 def whole_check(run, weights: dict, m: int | None = None) -> dict:
     """With ``--whole-step``, a forward's calls (every weight once, `m` rows, default `BATCH`, in weight order) made eagerly
     twice in one pass, then captured whole in one CUDA graph after a warm-up outside it (as vLLM captures a decode forward)
     and replayed twice in each of two fresh passes on poisoned outputs, between `whole_replay` and `whole_replayed`, as vLLM's
     decode steps replay it: each pass must give the eager pass's A roots, tile root, screen flags and outputs, bit for bit,
     and each pass's second replay must upload the slots the first one staged (with hashing).  A retained capture keeps a
-    stage for each weight and m₁₆, so the check runs at any m beside the sizes vLLM's graphs captured."""
+    stage for each weight and m₁₆, so the check runs at any m beside the sizes vLLM's graphs captured.  The arm
+    `bf16_race` names fails it before anything is captured, ``refused`` saying why (`BF16_RACE`)."""
+    if bf16_race(run):
+        return {"check": "whole", "hashing": run.hashing, "refused": BF16_RACE, "ok": False}
     import torch
     m = BATCH if m is None else m
     dev = next(iter(weights.values())).device

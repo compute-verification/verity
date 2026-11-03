@@ -549,9 +549,9 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
     its epoch's coins came from, its live session and `pearlplus_coins`' refusal (None when it accepted, ``unchecked``
     when it didn't run), its load, passes and the rounds dropped before the coin, Pearl+'s verdict's credit (its credited
     and credited cells' MACs and ε), the verifier's coin as published (its store id, whether the put preserved it and
-    what it said if not, and the record's SHA-512), its shares at the tensor clock, the unretained serve's wall and declared share there, and the
-    prover's replay's seconds, cores, the cores it takes to keep pace, its node and the passes it finished (each None
-    without one, or why it has none)."""
+    what it said if not, and the record's SHA-512), the prover's give-up (`give_up`), its shares at the tensor clock, the
+    unretained serve's wall and declared share there, and the prover's replay's CPU seconds, cores, the cores it takes to
+    keep pace, the card's seconds, its node and the passes it finished (each None without one, or why it has none)."""
     if doc.get("piece") == "pearlplus":
         shares = doc.get("shares") or {}
         at = (shares.get("readings") or {}).get("tensor") or {}
@@ -564,12 +564,13 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
                 **{k: doc.get(k) for k in ("scheme", "load", "passes", "dropped", "served_tokens", "generate_s")},
                 "credit": None if credit is None else {k: credit.get(k) for k in ("credited", "macs", "epsilon")},
                 "coin": None if published is None else {k: published.get(k) for k in ("art", "preserved", "error", "sha512")},
+                "give_up": doc.get("give_up"),
                 "shares_at_tensor_clock": {k: at.get(k) for k in ("declared_linears", "credited")},
                 "unretained": None if un is None else un.get("error") or {
                     "generate_s": un.get("wall_s"),
                     "declared_linears_at_tensor_clock": ((un.get("readings") or {}).get("tensor") or {}).get("declared_linears")},
                 "replay": None if rp is None else rp.get("error") or {
-                    k: rp.get(k) for k in ("s", "cpus", "cores_to_keep_pace", "node", "finished", "of")}}
+                    k: rp.get(k) for k in ("s", "cpus", "cores_to_keep_pace", "device_s", "node", "finished", "of")}}
     check, credit = doc.get("check") or {}, doc.get("credit") or {}
     return {"verdict": doc.get("verdict"), "development": True, "credited": False, "reasons": doc.get("reasons"),
             "coin_source": doc.get("coin_source"), "session": (doc.get("session") or {}).get("session"),
@@ -971,6 +972,20 @@ def pearlplus_coin(path: Path, answer: Mapping[str, Any]) -> dict[str, Any]:
     return got
 
 
+def give_up(volunteered: Mapping[str, Any]) -> dict[str, Any]:
+    """The prover's give-up before the coin (``served_passes.py volunteer``'s document): whose words' counts it took
+    (``counts``: ``device``, the card's from the debit cubin ``cubin_sha256``, every ``cross_check``-th tile and each with
+    a word the card marks non-finite (``bad_tiles``) replayed on the CPU too, ``replayed`` in all; ``cpu``, every tile
+    replayed), the A and B rows it gave up, the tiles over a cap before it and left over after, the passes it finished of
+    ``of``, and whether it left none over a cap."""
+    dev = volunteered.get("device")
+    return {"counts": "cpu" if dev is None else "device",
+            **{k: (dev or {}).get(k) for k in ("cubin_sha256", "cross_check", "replayed", "bad_tiles")},
+            "a_rows": volunteered.get("voluntary_a"), "b_rows": volunteered.get("voluntary_b"),
+            **{k: volunteered.get(k) for k in ("tiles", "over", "left", "of", "ok")},
+            "finished": len(volunteered.get("passes") or ())}
+
+
 def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str, Any] | None,
               unretained: Mapping[str, Any] | None = None, volunteered: Mapping[str, Any] | None = None, *,
               gate: str | None = None, key: str | None = None, main: Path | None = None,
@@ -988,9 +1003,11 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     missing one credits 0), and it credits nothing (`PEARLPLUS_WHY`, or `PEARLPLUS_WHY_IN_PROCESS`). ``unretained``, the
     same load served with no pass retained (``serve --no-retain``), adds the shares' ``unretained``
     (`served_shares.pearlplus_unretained`), or why there are none; it is a measurement and never decides the verdict.
-    ``volunteered``, the prover's replay of every tile before the coin (``served_passes.py volunteer``'s document), adds
-    the shares' ``replay`` (`served_shares.replay_term`: its seconds on its processes, as the cores it takes to keep pace
-    with the timed call's wall, beside the node it ran on and how many of the passes it finished), a measurement too.
+    ``volunteered``, the prover's give-up before the coin (``served_passes.py volunteer``'s document), is ``give_up``
+    (`give_up`: whose words' counts it took, the card's or the CPU's, its cross-check and the rows it gave up), and adds
+    the shares' ``replay`` (`served_shares.replay_term`: its CPU seconds on its processes, the card's beside them, as the
+    cores it takes to keep pace with the timed call's wall, beside the node it ran on and how many of the passes it
+    finished), a measurement too.
     ``coin``, the verifier's coin as `coin` published it (its ``coin-put.json``), is ``coin`` (`pearlplus_coin`): its
     store id or why it has none, and an accept whose run commitment or draw source isn't the published record's
     rejects. The piece names its load (``load``: the requests, their prompt and output tokens, and the tokens a step)."""
@@ -1019,7 +1036,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
         reasons.append(f"coins: {source}, not a live session on the gate, so nothing checks them")
     doc: dict[str, Any] = {"piece": "pearlplus", "credited": False, "why": PEARLPLUS_WHY if live else PEARLPLUS_WHY_IN_PROCESS,
                            "coin_source": source, "coins": coins, "scheme": None, "arm": None, "passes": None, "load": None,
-                           "dropped": None, "line": None, "credit": None, "coin": None, "shares": None}
+                           "dropped": None, "line": None, "credit": None, "coin": None, "give_up": None, "shares": None}
     if served is not None:
         doc.update(arm=served.get("arm"), scheme=(served.get("arm") or "").partition(":")[2] or None,
                    passes=sum(1 for p in served.get("passes") or () if p.get("units")),
@@ -1032,6 +1049,8 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
         doc["coin"] = pearlplus_coin(coin, answer)
         if doc["coin"]["reason"] is not None and answer.get("verdict") == "accept":
             reasons.append(f"coin: {doc['coin']['reason']}")
+    if volunteered is not None:
+        doc["give_up"] = give_up(volunteered)
     if served is not None and served.get("ok"):
         try:
             doc["shares"] = SS.pearlplus_shares(dict(served), dict(verified or {}))
@@ -1044,8 +1063,10 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
                 doc["shares"]["unretained"] = {"error": f"{type(e).__name__}: {e}"[:600]}
         if doc["shares"] is not None and volunteered is not None:
             try:
-                doc["shares"]["replay"] = {**SS.replay_term(volunteered["s"], volunteered["jobs"], doc["shares"]["wall_s"]),
-                                           "node": volunteered.get("node"),
+                card = (volunteered.get("device") or {}).get("device_s")
+                doc["shares"]["replay"] = {**SS.replay_term(volunteered["s"] - (card or 0), volunteered["jobs"],
+                                                            doc["shares"]["wall_s"]),
+                                           "device_s": card, "node": volunteered.get("node"),
                                            "finished": len(volunteered.get("passes") or ()), "of": volunteered.get("of")}
             except (KeyError, TypeError, ValueError) as e:
                 doc["shares"]["replay"] = {"error": f"{type(e).__name__}: {e}"[:600]}

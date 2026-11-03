@@ -234,6 +234,31 @@ def test_a_split_pd_pipeline_reads_a_calls_bf16_rows_only_from_a_cubin_that_take
     assert calls == ["programmatic", "plain"]
 
 
+def test_the_whole_check_refuses_a_capture_forking_a_tree_and_a_scales_where_a_commitment_reads_bf16_rows(monkeypatch):
+    """`e2e.bf16_race`: a whole capture with hashing forking each call's A tree and A scales (`whole_defer_a`,
+    `whole_fork_stats`) on this kernel, under BF16_ROWS and from a cubin with BF16_ROWS_MARK (`Pipeline.reads_bf16`'s own),
+    races, so `e2e.whole_check` fails it before capturing anything (the stand-in run has nothing to capture with), naming
+    the race and the setting that serves without it (`e2e.BF16_RACE`).  Without either option, hashing, the mark,
+    BF16_ROWS or a kernel that has BF16 rows at all, nothing is refused."""
+    E2E = load("pearl_c_vllm_e2e_bf16_race", HERE.parent / "pearl_c_vllm" / "e2e.py")
+    marked = SimpleNamespace(has=lambda name: name == RUN.BF16_ROWS_MARK)
+    kernel = SimpleNamespace(run=RUN, dev=marked)
+
+    def run(**kw):
+        return SimpleNamespace(**{"kernel": kernel, "hashing": True, "whole_defer_a": True, "whole_fork_stats": True, **kw})
+    monkeypatch.setattr(RUN, "BF16_ROWS", True)
+    got = E2E.whole_check(run(), {})
+    assert got == {"check": "whole", "hashing": True, "refused": E2E.BF16_RACE, "ok": False}
+    assert all(w in got["refused"] for w in ("rows_a", "widen_a", "PEARLC_BF16_ROWS=0", "PEARLC_WHOLE_FORK_STATS=0"))
+    for kw in ({"whole_defer_a": False}, {"whole_fork_stats": False}, {"hashing": False},
+               {"kernel": SimpleNamespace(run=RUN, dev=SimpleNamespace(has=lambda name: False))},
+               {"kernel": SimpleNamespace(run=RUN, dev=object())},
+               {"kernel": SimpleNamespace(run=SimpleNamespace(), dev=marked)}):
+        assert not E2E.bf16_race(run(**kw)), kw
+    monkeypatch.setattr(RUN, "BF16_ROWS", False)
+    assert not E2E.bf16_race(run())
+
+
 def test_a_programmatic_launch_waits_at_its_entry():
     """Each of run.py's PDL_KERNELS waits for the launch before it (pdl_entry) before it reads anything into the CTA: the GEMMs
     once their barriers are set up in shared memory, having sent only B's first boxes toward L2 (tma_prefetch_l2, which can't

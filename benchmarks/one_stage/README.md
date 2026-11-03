@@ -215,9 +215,10 @@ negatives.
   the tensor and boost clock readings.
 - `served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR`: PoUW's piece with Pearl+ (`served_verdicts.sh`'s `POUW=pearlplus`).
   After the window's serve, it serves Llama-3.2-1B's BF16 checkpoint on the same card through `pouw:pearl-c-h100-v1-h3`
-  (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, with
-  `PEARLPLUS_VOLUNTEER=1` gives up the passes' rows over a debit cap before the verifier's coin (`served_passes.py
-  volunteer`, a CPU replay of every tile, far too slow for the default load), takes Pearl+'s verdict over all of them
+  (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, gives up the passes' rows
+  over a debit cap before the verifier's coin (`served_passes.py volunteer --device`: every word's counts from the card's
+  debit cubin, every `volunteer_pass.CROSS_CHECK`-th tile replayed on the CPU too; `PEARLPLUS_VOLUNTEER=cpu` replays
+  every tile on the CPU, far too slow for the default load), takes Pearl+'s verdict over all of them
   (`served_passes.py verify`), and writes the piece through `served_verdicts.py pearlplus`: the verdict, the
   linears' declared and credited shares (`served_shares.pearlplus_shares`), and why it credits nothing.
 
