@@ -37,8 +37,9 @@ by the table, and its fresh bits at the verifier's pins (``--pins``, the weights
 (`class_windows`) holding the class's m blocks, since a class's circuit is the same for every window it takes. Its rows
 are `NciCheck.Count`'s (``[definition, gates, fresh, blocks]``), judged by its rule (`judge`): every class with a block
 at most c gates and k fresh bits, and the blocks at most n. Anything the rule can't decide refuses (`Undecided`): no
-policy, a policy written once the serve had begun (unless ``--retroactive`` says why it's read anyway), a record with no
-inference blocks, an unpriced primitive, a closed window with no seal, or a sealed window the class doesn't take.
+policy, a serve dir that records no start, a policy written once the serve had begun (unless ``--retroactive`` says why
+it's read anyway), a record with no inference blocks, an unpriced primitive, a closed window with no seal, or a sealed
+window the class doesn't take.
 With ``--lean``, `nci-check --count` runs on one window's session Program (`lean_count`), and a block's gates that
 differ from its own refuse too. That Program's inputs are positional (`Input<w>`), so its θ is empty: every input bit,
 the weights' too, is fresh to it, and its fresh bits and its verdict there (``with_theta_empty``) are said beside the
@@ -99,6 +100,11 @@ class Undecided(Exception):
 
 # -- the gate table ---------------------------------------------------------------------------------------------------
 
+def bit_at_makes(width: int) -> bool:
+    """Whether `bit_at_gates` makes `BitAtx{width}`: ``width`` a power of two up to 2^31."""
+    return 0 < width <= 1 << 31 and width & (width - 1) == 0
+
+
 def bit_at_gates(width: int) -> list[tuple[str, int, int]]:
     """An explicit Boolean circuit of `BitAtx{width}` (`registry.sampling.bit_at`: bit i of the word, 0 for i outside
     [0, width)), for ``width`` a power of two up to 2^31, each gate ``(op, a, b)`` (``b`` -1 for a Not) over wires: the
@@ -106,9 +112,9 @@ def bit_at_gates(width: int) -> list[tuple[str, int, int]]:
     It tests the index's bits above log2(width) all zero (a Not of each, then their And), selects the word's bit by the
     rest (a mux tree, a ⊕ (s ∧ (a ⊕ b)) a mux) and Ands the two: two-input Ands and Xors and Nots, one gate each as the
     census counts them (`census.BooleanWork`)."""
-    b = width.bit_length() - 1
-    if width != 1 << b or b > 31:
+    if not bit_at_makes(width):
         raise ValueError(f"BitAtx{width}: a power of two up to 2^31 has an index test this circuit makes")
+    b = width.bit_length() - 1
     gates: list[tuple[str, int, int]] = []
 
     def gate(op: str, x: int, y: int = -1) -> int:
@@ -137,13 +143,10 @@ def run_gates(gates: Sequence[tuple[str, int, int]], width: int, word: int, i: i
 def price(key: str) -> dict[str, Any] | None:
     """A primitive's gates by `PRICES`' rule, where it has one: ``{gates, by}``."""
     m = BIT_AT.fullmatch(key)
-    if m is None:
+    if m is None or not bit_at_makes(int(m[1])):
         return None
-    try:
-        g = len(bit_at_gates(int(m[1])))
-    except ValueError:
-        return None
-    return {"gates": g, "by": f"bit_at_gates({m[1]}): an explicit circuit of it, no Boolean version circuit-check checks"}
+    return {"gates": len(bit_at_gates(int(m[1]))),
+            "by": f"bit_at_gates({m[1]}): an explicit circuit of it, no Boolean version circuit-check checks"}
 
 
 PRICES = ("BitAtx{W}_v1", price)
@@ -361,13 +364,10 @@ def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int
         return {"error": f"nci-check --count printed no JSON: {p.stdout.strip()[-300:]}"}
 
 
-def served_start(serve_dir: Path) -> str | None:
+def served_start(serve_dir: Path) -> str:
     """The serve's start (its ``serve.json`` clocks' time, stamped as the endpoint listens), UTC, ISO 8601."""
-    try:
-        t = json.loads((serve_dir / "serve.json").read_text())["clocks"]["time"]
-    except (OSError, ValueError, KeyError, TypeError):
-        return None
-    return datetime.datetime.fromtimestamp(float(t), datetime.timezone.utc).isoformat(timespec="seconds")
+    t = json.loads((serve_dir / "serve.json").read_text())["clocks"]["time"]
+    return datetime.datetime.fromtimestamp(float(t), datetime.UTC).isoformat(timespec="seconds")
 
 
 def before(written: Any, start: str | None) -> bool:
@@ -393,7 +393,10 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
             raise Undecided("no policy registered before the serve (inference_only.py policy)")
         c, k, n = int(pol["c"]), int(pol["k"]), int(pol["n"])
         base |= {"policy": {"sha512": digest(pol), "written_utc": pol.get("written_utc")}, "c": c, "k": k, "n": n}
-        start = served_start(serve_dir)
+        try:
+            start = served_start(serve_dir)
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            raise Undecided(f"the serve dir records no start (its serve.json's clocks' time): {type(e).__name__}: {e}") from e
         base["serve_began_utc"] = start
         if not before(pol.get("written_utc"), start):
             if retroactive is None:
@@ -441,7 +444,7 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
                 "count": f"{pub['total']} blocks (padded), more than n = {n}"}[what]}
     except Undecided as e:
         base |= {"verdict": "refuse", "reason": f"undecided: {e}", "complies": False}
-    except Exception as e:  # anything else the count can't get past is undecided too, and refuses
+    except Exception as e:  # noqa: BLE001 - anything else the count can't get past is undecided too, and refuses
         base |= {"verdict": "refuse", "reason": f"undecided: {type(e).__name__}: {e}"[:600], "complies": False}
     return base, {**base, **private}
 
@@ -498,7 +501,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     v.add_argument("--private", type=Path, required=True)
     a = ap.parse_args(argv)
     if a.cmd == "policy":
-        written = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+        written = datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
         try:
             pol = policy(a.cls, a.model, a.revision, a.lease_min, a.utilization, a.utilization_source, written, a.tree)
         except (Undecided, ValueError, KeyError, OSError) as e:

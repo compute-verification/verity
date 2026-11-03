@@ -225,7 +225,8 @@ def test_what_the_count_cant_decide_is_refused(small, tmp_path, windows, unseale
 
 def test_a_policy_written_after_the_serve_began_is_read_only_when_said_retroactive(small, tmp_path):
     """A policy written after the serve began, or with no time, is undecided; read retroactively, the verdict says why.
-    No policy, another format, or no circuit record is undecided too."""
+    A serve dir that records no start is undecided even read retroactively, and no policy, another format, or no circuit
+    record is undecided too."""
     row = IO.session_row(small, None, None)
     d = _serve(tmp_path / "s", FULL)
     for written in (AFTER, "2025-11-01T12:26:40+00:00", None, "yesterday", "2025-11-01T12:26:39"):
@@ -233,6 +234,9 @@ def test_a_policy_written_after_the_serve_began_is_read_only_when_said_retroacti
         assert pub["verdict"] == "refuse" and "not before the serve began" in pub["reason"], written
     pub, _ = IO.verdict(_policy(row, written_utc=AFTER), small, d, None, None, retroactive="served before the step existed")
     assert (pub["verdict"], pub["retroactive"]) == ("accept", "served before the step existed")
+    (unstarted := _serve(tmp_path / "t", FULL)).joinpath("serve.json").unlink()
+    pub, _ = IO.verdict(_policy(row), small, unstarted, None, None, retroactive="served before the step existed")
+    assert pub["verdict"] == "refuse" and "records no start" in pub["reason"] and "blocks" not in pub
     for pol, doc, why in ((None, small, "no policy"), ({**_policy(row), "format": "x"}, small, "no policy"),
                           (_policy(row), None, "no circuit record"),
                           (_policy(row), {k: v for k, v in small.items() if k != "blocks"}, "states no inference blocks")):
