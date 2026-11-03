@@ -194,7 +194,7 @@ class Net(torch.nn.Module):
             from model import LM, VOCAB, Size
 
             self.inner = LM(Size(config["name"], config["d_model"], config["n_layer"], config["n_head"], config["d_ff"]),
-                            vocab=config.get("vocab", VOCAB))
+                            vocab=config.get("vocab", VOCAB), tied=config.get("tied", True))
         elif config["family"] == "hf-neox":
             from transformers import GPTNeoXConfig, GPTNeoXForCausalLM
 
@@ -320,12 +320,14 @@ class TrainData:
 
 # ---- positions, φ and the training-FLOP meter ----------------------------------------------------------------------
 
-#: per family: the lookup, the head (the lookup's name when tied), the final norm's tensors, a block tensor's name (block,
-#: module) and the modules' stages. GPT-NeoX's parallel residual feeds its MLP from the block's input, not the attention's
-#: output; its MLP is placed after the attention as in the sequential order, so its φ is an upper bound. Its head is
-#: `embed_out` in transformers 4 and `lm_head` from 5 (the start is registered under the installed one's name).
+#: per family: the lookup, the head (the lookup's name when tied; `untied_head` when the config's `tied` is false), the
+#: final norm's tensors, a block tensor's name (block, module) and the modules' stages. GPT-NeoX's parallel residual feeds
+#: its MLP from the block's input, not the attention's output; its MLP is placed after the attention as in the sequential
+#: order, so its φ is an upper bound. Its head is `embed_out` in transformers 4 and `lm_head` from 5 (the start is
+#: registered under the installed one's name).
 FAMILIES = {
-    "lf": {"embed": "embed", "head": "embed", "final": r"norm", "block": r"blocks\.(\d+)\.(\w+?)(?:\.weight)?",
+    "lf": {"embed": "embed", "head": "embed", "untied_head": "head", "final": r"norm",
+           "block": r"blocks\.(\d+)\.(\w+?)(?:\.weight)?",
            "stages": {"attn_norm": 0, "wq": 1, "wk": 1, "wv": 1, "wo": 2, "mlp_norm": 3, "w_gate": 4, "w_up": 4,
                       "w_down": 5}},
     "hf-neox": {"embed": r"gpt_neox\.embed_in\.weight", "head": r"(?:embed_out|lm_head)\.weight",
@@ -340,9 +342,10 @@ def positions(rec: dict) -> list[dict]:
     """Every node of the forward: {param, layer, stage, flops (forward weight-matmul FLOPs per token), d_in, d_out}."""
     L = rec["config"]["n_layer"]
     fam = FAMILIES[rec["config"]["family"]]
+    head = fam["untied_head"] if "untied_head" in fam and not rec["config"].get("tied", True) else fam["head"]
     nodes = []
     for name, (_, shape) in rec["tensors"].items():
-        is_embed, is_head = re.fullmatch(fam["embed"], name), re.fullmatch(fam["head"], name)
+        is_embed, is_head = re.fullmatch(fam["embed"], name), re.fullmatch(head, name)
         if is_embed or is_head:
             if is_embed:
                 nodes.append({"param": name, "layer": 0, "stage": 0, "flops": 0, "d_in": shape[0], "d_out": shape[1]})
@@ -496,14 +499,16 @@ def architecture(config: dict) -> dict[str, tuple[int, ...]]:
 
 def model_config(rec: dict, blob: bytes) -> dict:
     """The config of the model E encodes: θ's, or a model format's own, which must keep θ's family, vocabulary, context
-    and tying (the tokenizer and the scoring are the start's)."""
+    and tying, or untie it (`tied` false: the output embedding `head` is E's own tensor; the tokenizer and the scoring
+    are the start's)."""
     if blob[:8] != b"CWMODL1\n":
         return rec["config"]
     config = _unpack(blob)[1].get("config")
     keep = ("family", "vocab", "ctx", "tied")
     if not isinstance(config, dict) or config.get("family") != "lf" or any(
-            config.get(k) != rec["config"].get(k) for k in keep):
-        raise ValueError(f"E (model): its config must be an lf model with θ's {', '.join(keep)}")
+            config.get(k) != rec["config"].get(k) for k in keep if k != "tied") or config.get("tied") not in (
+            rec["config"].get("tied"), False):
+        raise ValueError(f"E (model): its config must be an lf model with θ's {', '.join(keep)} (or untied, tied false)")
     return config
 
 

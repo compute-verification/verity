@@ -1,6 +1,8 @@
 """The `lf` model, learning_frontier's dense decoder: Llama-style (RMSNorm, SwiGLU, RoPE, no biases), context 1024, the GPT-2
 vocabulary padded to 50,304 (data v3's starts: bpe32k's 32,000, `Size.config(vocab=32000)`), input and output embeddings
-tied. Its parameter names are the start registry's tensor names.
+tied. Its parameter names are the start registry's tensor names. Untied (`tied=False`, the config's `tied`: false), the
+output embedding is a tensor of its own, `head`, initialised to a copy of `embed`, so the model computes the tied one's
+function until `head` changes.
 """
 from __future__ import annotations
 
@@ -75,7 +77,7 @@ def rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
 
 
 class LM(nn.Module):
-    def __init__(self, size: Size, ctx: int = CTX, vocab: int = VOCAB):
+    def __init__(self, size: Size, ctx: int = CTX, vocab: int = VOCAB, tied: bool = True):
         super().__init__()
         self.size, self.vocab = size, vocab
         std, out_std = 0.02, 0.02 / math.sqrt(2 * size.n_layer)
@@ -83,6 +85,7 @@ class LM(nn.Module):
         nn.init.normal_(self.embed, std=std)
         self.blocks = nn.ModuleList(Block(size, std, out_std) for _ in range(size.n_layer))
         self.norm = nn.Parameter(torch.ones(size.d_model))
+        self.head = None if tied else nn.Parameter(self.embed.detach().clone())
         hd = size.d_model // size.n_head
         freqs = 1.0 / (ROPE_THETA ** (torch.arange(0, hd, 2, dtype=torch.float32) / hd))
         angles = torch.outer(torch.arange(ctx, dtype=torch.float32), freqs)
@@ -105,7 +108,7 @@ class LM(nn.Module):
         for b in self.blocks[start:]:
             x = b(x, cos, sin)
         x = F.rms_norm(x, (x.shape[-1],), self.norm)
-        return F.linear(x, self.embed)
+        return F.linear(x, self.embed if self.head is None else self.head)
 
     def forward(self, idx: torch.Tensor) -> torch.Tensor:
         return self.top(self.hidden(idx, 0), 0)
