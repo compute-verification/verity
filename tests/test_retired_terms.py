@@ -61,9 +61,11 @@ DOC_TERMS = {
     "declared work, declared workload, declares its advice": "registered circuit; the developer reports its advice, which "
                                                              "the registered compiler turns into the execution block",
     "registered work": "registered circuit (D)",
-    "the prover's node, machine, host or site, a machine the prover doesn't control, prover-controlled, the prover system":
-        "the developer's node, machine, host or site, a machine the developer doesn't control, the developer's hardware "
-        "(\"prover\" stays for the proving side of a proof: Flock's prover, a proof's messages, a cheating prover)",
+    "the prover's node, machine, host or site, a machine the prover doesn't control, nothing the prover runs or hosts, "
+    "prover-controlled, the prover system":
+        "the developer's node, machine, host or site, a machine the developer doesn't control, nothing the developer runs "
+        "or hosts, developer-controlled, the developer's hardware (\"prover\" stays for the proving side of a proof: "
+        "Flock's prover, a proof's messages, a cheating prover)",
     "onsite deployment, remote deployment": "composite protocol (onsite or remote, the Lean's `Composite`)",
     "named premise, the card premise": "assumption, or a proposed assumption until a lock lists it; the card assumption (a "
                                        "theorem's hypothesis stays a premise)",
