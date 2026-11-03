@@ -24,8 +24,10 @@ E codes Δ once at `--e-bits`). `--support P` trains only a fixed share P of eac
 entries or whole rows), so the messages, the store and an elementwise optimizer's state hold only those entries (Adafactor
 keeps its row and column factors); E codes the scattered Δ once at `--e-bits`. `--lora R` trains each target as
 W + B A instead (B zero, A drawn from `--seed`): a block's message is its factor gradients Bᵀ G and G Aᵀ, computed from
-its own G, the factors are the optimizer's tensors and the store's, and E is CWLORA2 at `--e-bits` (4 or 8). The
-trainable set's norm gains train by AdamW in fp32 with fp32 messages (counted). Every
+its own G, the factors are the optimizer's tensors and the store's, and E is CWLORA2 at `--e-bits` (4 or 8).
+`--targets gains` makes the norm gains of `--blocks` and the final norm the trained set instead (elementwise: `--opt
+sign` or `adamw`), coded, reduced and stored like the matrices, for a state small enough for Fit at the default dial.
+Otherwise the trainable set's norm gains train by AdamW in fp32 with fp32 messages (counted). Every
 record's notes carry the accounting: n, the message, state and store bits, Δ_grad and Δ_t in bits (`delta_grad`, in the
 keys the other directions use), and Fit's three clauses (compute Δ + sτ ≤ k with Δ = 8|E|, reduction 2 Δ_grad ≤ k,
 update application Δ_t + Δ_grad ≤ k) at k = 10 kB, 1 MB and 10 MB, with sτ = a block's tokens × ⌈log₂ V⌉ bits.
@@ -407,7 +409,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--start", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--targets", default="all", help="all, out, mlp, attn, or leaf names joined by '+' (wq+wo)")
+    ap.add_argument("--targets", default="all", help="all, out, mlp, attn, or leaf names joined by '+' (wq+wo); "
+                    "gains: the norm gains of --blocks and the final norm, as the coded trainable set")
     ap.add_argument("--blocks", default="all", help="all, or LO-HI (0-based, inclusive)")
     ap.add_argument("--norms", choices=("trained", "none"), default="trained",
                     help="trained: the gains of the trained blocks and the final norm")
@@ -476,10 +479,19 @@ def main() -> int:
     for p in params.values():
         p.requires_grad_(False)
     theta_dev = {n: theta[n].to(DEV) for n in params}
-    targets = targets_of(params, a.targets, a.blocks)
-    lo = min(int(n.split(".")[1]) for n in targets)
+    gains = a.targets == "gains"
+    if gains and (a.opt not in ("sign", "adamw") or lora or sparse or a.mom_rank):
+        raise SystemExit("delta_grad: --targets gains trains the norm gains elementwise (--opt sign or adamw), "
+                         "with no --lora, --support or --mom-rank")
+    n_layer = 1 + max(int(n.split(".")[1]) for n in params if n.startswith("blocks."))
+    lo = int(a.blocks.split("-")[0]) if gains and a.blocks != "all" else 0
+    hi = int(a.blocks.split("-")[1]) if gains and a.blocks != "all" else n_layer - 1
+    targets = sorted(n for n, p in params.items() if p.ndim == 1 and (
+        n.startswith("norm") or n.startswith("blocks.") and lo <= int(n.split(".")[1]) <= hi)) if gains \
+        else targets_of(params, a.targets, a.blocks)
+    lo = lo if gains else min(int(n.split(".")[1]) for n in targets)
     norms = []
-    if a.norms == "trained":
+    if a.norms == "trained" and not gains:
         norms = sorted(n for n, p in params.items() if p.ndim == 1 and
                        (n.startswith("norm") or (n.startswith("blocks.") and int(n.split(".")[1]) >= lo)))
     shapes = {n: tuple(params[n].shape) for n in targets}
