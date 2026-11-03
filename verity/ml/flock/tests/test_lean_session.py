@@ -3,11 +3,12 @@ connection: a prover connects to it as it would to the auditor, and each connect
 connection to the auditor. Here a scripted auditor stands on the far side. What crosses is held to the loop's rules:
 every frame that leaves the loop's own encoding (a `Proof` dropped, a frame it does not serve refused), the `Hello`
 that leaves the Lean one at the auditor's sample (at the fixture's statement, `test_lean_hello.py`'s recorded `Hello` at
-the loop's nonce) and never the prover's, `Hello`'s answer and every coin checked, and every coin after a refusal
-refused. The loop starts the reps' frames on a port of its
-own and drives each itself, every coin a frame takes the loop's own opening, and a coin a frame refuses (a zerocheck outer
-coin `1`) stops the session at that round. `flock-circuit`'s firewalled sessions through it
-are the end-to-end check (live PROTOCOL.md §10.4)."""
+the loop's nonce) and never the prover's, `Hello`'s answer and every coin checked, each request leaving once at its place
+in the honest prover's order, a `Ping` answered by the loop and never leaving, every request after a refusal refused
+without reaching the auditor, and nothing of a session read after its `Finish`. The loop starts the reps' frames on a
+port of its own and drives each itself, every coin a frame takes the loop's own opening, and a coin a frame refuses (a
+zerocheck outer coin `1`) stops the session at that round. `flock-circuit`'s firewalled sessions through it are the
+end-to-end check (live PROTOCOL.md §10.4)."""
 from __future__ import annotations
 
 import hashlib
@@ -56,6 +57,7 @@ def _read(s: socket.socket) -> bytes | None:
 
 
 REGISTER = b"\x0a"
+FINISH = b"\x06"
 COMMIT = b"\x07" + _bytes(b"") + struct.pack("<I", 0) + struct.pack("<I", 0)
 
 
@@ -69,6 +71,13 @@ def ping(b: bytes) -> bytes:
 
 def round_(stream: str, content: bytes, n: int) -> bytes:
     return b"\x04" + _bytes(stream.encode()) + _bytes(content) + struct.pack("<I", n)
+
+
+def open_(stream: str) -> bytes:
+    return b"\x03" + _bytes(stream.encode()) + _bytes(b"") + _bytes(b"label") + b"\0" * 8
+
+
+LINK = b"\x02" + _bytes(b"\0" * 32)
 
 
 def draw(text: str) -> bytes:
@@ -141,9 +150,24 @@ def call(s: socket.socket, f: bytes) -> bytes | None:
     return _read(s)
 
 
+def answer(s: socket.socket, f: bytes) -> bytes | None | OSError:
+    """`f`'s answer on `s`: its bytes, `None` when the connection closed after reading it, or the error a send to a
+    connection the loop already closed raises."""
+    try:
+        return call(s, f)
+    except (BrokenPipeError, ConnectionResetError) as e:
+        return e
+
+
+def closed(s: socket.socket, f: bytes) -> bool:
+    """Whether the loop has ended the session on `s`: `f` gets no answer, the connection closed."""
+    a = answer(s, f)
+    return a is None or isinstance(a, (BrokenPipeError, ConnectionResetError))
+
+
 def plain(f: bytes) -> bytes:
-    """The auditor's answers: Register a sample of none, Ping `Ok`, anything else 4 zero words."""
-    return {10: draw("null"), 9: b"\x01"}.get(f[0], coins([b"\0" * 16] * 4))
+    """The auditor's answers: Register a sample of none, anything else 4 zero words."""
+    return {10: draw("null")}.get(f[0], coins([b"\0" * 16] * 4))
 
 
 @pytest.fixture
@@ -167,18 +191,15 @@ def test_usage(junk):
     assert p.returncode == 2 and p.stderr.decode().startswith("usage: flock-firewall session")
 
 
-PING = ping(b"\0" * 64)
-
-
 def test_every_frame_leaves_as_the_loops_own(loop):
-    """`Register` and `Ping` leave as the loop's own frames (the prover's probe, 64 zero bytes), whatever bytes the prover
-    put in or after them."""
+    """`Register` leaves as the loop's own frame, whatever bytes the prover put after it, and a `Ping` never leaves: the loop
+    answers it `Ok` itself."""
     auditor, lp = loop
     s = lp.connect()
     assert call(s, REGISTER + b"trailing") == draw("null")
     assert call(s, ping(b"abc") + b"trailing") == b"\x01"
     s.close()
-    assert auditor.got[0] == [REGISTER, PING]
+    assert auditor.got[0] == [REGISTER]
 
 
 def test_a_provers_proof_never_leaves(loop):
@@ -195,9 +216,8 @@ def test_a_provers_proof_never_leaves(loop):
 @pytest.mark.parametrize("frame, why", [
     (b"\x63\x01\x02", "a request the session loop does not serve"),
     (b"\x08" + _bytes(b"state") + struct.pack("<I", 2), "a request the session loop does not serve"),
-    (b"\x02" + _bytes(b"\0" * 32), "a Link before the session's Hello"),
-    (b"\x03" + _bytes(b"rep0") + _bytes(b"") + _bytes(b"label") + b"\0" * 8,
-     "an Open of rep0, which is none of the session's rep streams"),
+    (LINK, "a Link before the session's Hello"),
+    (open_("rep0"), "an Open of rep0, which is none of the session's rep streams"),
     (b"\x03", "an Open frame without its stream"),
 ])
 def test_a_frame_the_loop_does_not_serve_never_leaves(loop, frame, why):
@@ -226,7 +246,7 @@ def test_the_provers_hello_never_leaves(loop):
     assert reason(call(s, COMMIT)) == why
     assert call(s, ping(b"p")) == b"\x01"
     s.close()
-    assert auditor.got[0] == [REGISTER, PING]
+    assert auditor.got[0] == [REGISTER]
 
 
 def test_coins_before_the_commitment(loop):
@@ -239,9 +259,25 @@ def test_a_finish_before_the_commitment_never_leaves(loop):
     auditor, lp = loop
     s = lp.connect()
     call(s, REGISTER)
-    assert reason(call(s, b"\x06")) == STOP + "a Finish before the step-0 coin commitment"
+    assert reason(call(s, FINISH)) == STOP + "a Finish before the step-0 coin commitment"
     s.close()
     assert auditor.got[0] == [REGISTER]
+
+
+def test_a_session_ends_at_its_finish(loop):
+    """A session ends at its `Finish`, whatever the loop decided of it (here a refusal): the loop reads nothing more of
+    it, so a second `Finish`, a `Ping` and a `Register` after it get no answer, and nothing more of the session reaches
+    the auditor. The loop serves the next session as before."""
+    auditor, lp = loop
+    s = lp.connect()
+    call(s, REGISTER)
+    assert reason(call(s, FINISH)) == STOP + "a Finish before the step-0 coin commitment"
+    assert closed(s, FINISH) and closed(s, ping(b"p")) and closed(s, REGISTER)
+    s.close()
+    t = lp.connect()
+    assert call(t, REGISTER) == draw("null")
+    t.close()
+    assert auditor.got == [[REGISTER], [REGISTER]]
 
 
 def test_a_draw_that_is_not_json(junk):
@@ -353,15 +389,19 @@ class Sessions:
 
     def __init__(self, args: list[str]):
         roots = iter(range(1, 256))
-        answers = {10: draw("null"), 7: coins([])}
+        answers = {10: draw("null"), 3: b"\x01", 7: coins([])}
         self.auditor = Auditor(lambda f: _answer(root=next(roots)) if f[0] == 1 else answers[f[0]])
         self.lp = Loop(self.auditor, args)
 
-    def session(self) -> tuple[socket.socket, str]:
-        """A session past its `Hello`'s answer, and its name."""
+    def session(self, opened: str | None = None) -> tuple[socket.socket, str]:
+        """A session past its `Hello`'s answer, and its name; past the `Open` of its first rep stream `opened` too, if
+        named: the `Commit`'s place."""
         s = self.lp.connect()
         call(s, REGISTER)
-        return s, _name(call(s, hello("")))
+        name = _name(call(s, hello("")))
+        if opened is not None:
+            assert call(s, open_(opened)) == b"\x01"
+        return s, name
 
     def ended(self) -> str:
         """The loop's next line on its standard error that a session ended and its level 0 were freed."""
@@ -376,10 +416,10 @@ def test_the_lean_hello_leaves_and_its_answer_is_checked(zk, key_top, why):
     """At the fixture's statement and a sample of none, the `Hello` that leaves is the recorded one at the loop's own nonce,
     whatever the prover sent; its answer is checked to be a root and a key, else refused, and never reaches the prover,
     which receives the loop's id for the session in its place: no byte of the coin tree's root or the session key. After
-    it, a `Commit` whose roots no Lean level 0 drew is refused without reaching the auditor (`test_a_commit_leaves_only_
-    with_the_loops_level_0` takes one that does)."""
+    it and the first rep stream's `Open`, a `Commit` whose roots no Lean level 0 drew is refused without reaching the
+    auditor (`test_a_commit_leaves_only_with_the_loops_level_0` takes one that does)."""
     recorded, nonce, _ = _record(zk, "selftest/honest")
-    answers = {10: draw("null"), 1: _answer(key_top), 7: coins([])}
+    answers = {10: draw("null"), 1: _answer(key_top), 3: b"\x01", 7: coins([])}
     auditor = Auditor(lambda f: answers[f[0]])
     lp = Loop(auditor, _args(zk, "pub-16.bin"))
     s = lp.connect()
@@ -393,13 +433,14 @@ def test_the_lean_hello_leaves_and_its_answer_is_checked(zk, key_top, why):
     if why is None:
         words = [r[5 + 16 * i:21 + 16 * i] for i in range(4)]
         assert _name(r) and not set(words) & {b"\x11" * 16, b"\x22" * 16, b"\x22" * 15 + bytes([key_top])}, r.hex()
+        assert call(s, open_(_streams(_args(zk, "pub-16.bin"))[0])) == b"\x01"
         assert reason(call(s, COMMIT)).startswith(STOP + "a Commit whose roots are of [], where the session's tables are [")
     else:
         assert reason(r) == why
         assert reason(call(s, COMMIT)) == why
     s.close()
     lp.close()
-    assert [f[0] for f in auditor.got[0]] == [10, 1]
+    assert [f[0] for f in auditor.got[0]] == ([10, 1, 3] if why is None else [10, 1])
 
 
 def commit(roots: list[tuple[str, bytes]]) -> bytes:
@@ -480,8 +521,10 @@ def test_a_commit_leaves_only_with_the_loops_level_0(zk):
     table's `m`: a root drawn for another session is refused, never reaching the auditor, and the session's own leaves,
     its opening then checked (zero words refused). The `Commit` that leaves is the loop's own, whatever the prover's
     carried beside its roots: `root_F` the session's Σ, no public words, nothing after."""
-    S = Sessions(_args(zk, "pub-16.bin"))
-    s, name = S.session()
+    args = _args(zk, "pub-16.bin")
+    first = _streams(args)[0]
+    S = Sessions(args)
+    s, name = S.session(first)
     why = reason(call(s, COMMIT))
     [table] = re.search(r"tables are \[(.*)\]$", why)[1].split(", ")
     m = _statement_m(S.lp, name)
@@ -489,22 +532,22 @@ def test_a_commit_leaves_only_with_the_loops_level_0(zk):
     assert level0(S.lp, m, _zeros(m), name) == (
         "err a second level-0 request for table 0 of this session: the loop draws a table's level 0 once")
     assert level0(S.lp, m, _zeros(m), name, table=1) == "err a level-0 request for table 1 of a session with 1 tables"
-    s2, name2 = S.session()
+    s2, name2 = S.session(first)
     _, d1, r1 = level0(S.lp, m, _zeros(m), name2)
     assert len(d0) == len(d1) and d0 != d1 and r0 != r1
     assert reason(call(s2, commit([(table, r0)]))) == (
         STOP + f"a Commit whose root of {table} is not the level 0 the loop drew for this session's table 0")
     s.close()
     s2.close()
-    s, name = S.session()
+    s, name = S.session(first)
     _, _, r = level0(S.lp, m, _zeros(m), name)
     why = reason(call(s, doctored([(table, r)])))
     s.close()
     assert why.startswith(STOP + "coin opening of session round 0: 0 words"), why
     S.lp.close()
-    assert [[f[0] for f in c] for c in S.auditor.got][-1] == [10, 1, 7]
-    assert all([f[0] for f in c] == [10, 1] for c in S.auditor.got[:-1])
-    _, sent, left = S.auditor.got[-1]
+    assert [[f[0] for f in c] for c in S.auditor.got][-1] == [10, 1, 3, 7]
+    assert all([f[0] for f in c] == [10, 1, 3] for c in S.auditor.got[:-1])
+    _, sent, _, left = S.auditor.got[-1]
     sigma = bytes.fromhex(json.loads(sent[5:])["link"]["sigma"])
     assert left == b"\x07" + _bytes(sigma) + commit([(table, r)])[5:]
 
@@ -608,16 +651,17 @@ def test_a_round_before_the_commitment_never_leaves(zk):
 @pytest.mark.slow
 def test_a_finish_before_the_last_opening_never_leaves(zk):
     """`Finish` leaves only after the schedule's last opening: one right after `Hello`'s answer is refused without reaching
-    the auditor, and so is every coin after it."""
+    the auditor, and ends the session, so a second `Finish` and a `Commit` after it get no answer and nothing more
+    reaches the auditor."""
     auditor = Auditor(lambda f: {10: draw("null"), 1: _answer()}[f[0]])
     lp = Loop(auditor, _args(zk, "pub-16.bin"))
     s = lp.connect()
     call(s, REGISTER)
     _name(call(s, hello("")))
-    why = reason(call(s, b"\x06"))
+    why = reason(call(s, FINISH))
     assert why.startswith(STOP + "a Finish after 0 openings, where the schedule's are "), why
     assert int(why.rsplit(" ", 1)[1]) == len(_schedule(_args(zk, "pub-16.bin"), "null"))
-    assert reason(call(s, COMMIT)) == why
+    assert closed(s, FINISH) and closed(s, COMMIT)
     s.close()
     lp.close()
     assert [f[0] for f in auditor.got[0]] == [10, 1]
@@ -626,6 +670,46 @@ def test_a_finish_before_the_last_opening_never_leaves(zk):
 def _schedule(args: list[str], draw: str) -> list[str]:
     p = subprocess.run([str(BIN), "session", "--schedule", *args], input=draw.encode(), capture_output=True, check=True)
     return p.stdout.decode().splitlines()
+
+
+def _streams(args: list[str]) -> list[str]:
+    """The session's rep streams at a sample of none, in the order they open: the schedule's."""
+    return list(dict.fromkeys(line.rsplit(" ", 1)[0] for line in _schedule(args, "null")[1:]))
+
+
+@pytest.mark.slow
+def test_each_request_leaves_once_at_its_place(zk):
+    """Past `Register`, the loop sends `Hello`, the first rep stream's `Open` and `Commit` only at their places in the honest
+    prover's order, each once: a second `Register`, `Hello` or `Open`, a later rep stream's `Open` before the first's, a
+    `Commit` before the first `Open` and a `Link` before `Commit`'s coins are refused without reaching the auditor, and so
+    is every request after them, a `Ping` alone answered by the loop. The `Open` that leaves is the loop's own, at its
+    stream's domain, whatever the prover's carried. The places past `Commit`, whose coins only a coin tree opens, are
+    `Flock.Test.SessionPlace`'s, and the honest session end to end `flock-circuit`'s firewalled selftests'."""
+    args = _args(zk, "pub-16.bin")
+    a, b = _streams(args)[:2]
+    S = Sessions(args)
+    cases = {
+        "a second Register": ([REGISTER, REGISTER], [10]),
+        "a second Hello": ([REGISTER, hello(""), hello("")], [10, 1]),
+        f"an Open of {b} before the Open of {a}": ([REGISTER, hello(""), open_(b)], [10, 1]),
+        f"a second Open of {a}": ([REGISTER, hello(""), open_(a), open_(a)], [10, 1, 3]),
+        f"a Commit before the Open of {a}": ([REGISTER, hello(""), COMMIT], [10, 1]),
+        "a Link at opening 0, where its place is just after the step-0 coin commitment":
+            ([REGISTER, hello(""), open_(a), LINK], [10, 1, 3]),
+    }
+    for why, (frames, left) in cases.items():
+        s = S.lp.connect()
+        got = [call(s, f) for f in frames]
+        assert reason(got[-1]) == STOP + why, (why, got[-1][:80])
+        assert all(r[:1] != b"\x03" for r in got[:-1]), (why, got)
+        after = [call(s, f) for f in (ping(b"p"), REGISTER, hello(""), open_(a), LINK, COMMIT, ping(b"p"))]
+        assert after[0] == after[-1] == b"\x01" and all(reason(r) == STOP + why for r in after[1:-1]), (why, after)
+        s.close()
+        sent = S.auditor.got[-1]
+        assert [f[0] for f in sent] == left, (why, [f[0] for f in sent])
+        if 3 in left:
+            assert sent[2][:5 + len(a) + 4] == b"\x03" + _bytes(a.encode()) + _bytes(b"") and sent[2] != open_(a)
+    S.lp.close()
 
 
 def test_a_schedule_the_setup_refuses(junk):
