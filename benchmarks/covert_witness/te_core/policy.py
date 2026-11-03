@@ -46,6 +46,8 @@ REFERENCE = "reference"
 MANIFEST = Path(__file__).resolve().parents[1] / "starts_store.json"
 #: the scoring cap where the ladder's fit gives no value: this many times the start's forward gates per token
 CAP_FALLBACK = 2.0
+#: data v3's tokenizer (covert_witness's data_v3.TOKENIZER), which a start on v3's data has in its shape
+V3_TOKENIZER = "bpe32k"
 
 
 def id_bits(vocab: int) -> int:

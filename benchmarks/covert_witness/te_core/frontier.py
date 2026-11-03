@@ -193,13 +193,17 @@ def formalism_rows(rows: list[dict], shapes: dict[str, dict], ladder=None) -> tu
     """Each row whose start has a shape and that the scoring cap admits (te_core.policy's `eligible`, under the ladder's
     fit `ladder`), with its formalism quantities (`measured`), |C| in gates, ρ in every cell of its start (te_core.policy's
     `cells`: the grid's and the reference shapes'), whether Fit holds there for the training (`fit`) and Slowdown's terms
-    there (`terms`: x0, s* and the attack side's); and each row left out, with why (`no-shape`, `over-cap` or
-    `unmeasured`)."""
+    there (`terms`: x0, s* and the attack side's); and each row left out, with why (`no-shape`; `pilot-start`, a record
+    on data v3 from a start whose shape has another tokenizer, as the pilot's FineWeb-Edu starts do, since v3's branch
+    points are v3's starts; `over-cap` or `unmeasured`)."""
     out, skipped, cells = [], {}, {}
     for r in rows:
         shape = shapes.get(r["start"])
         if shape is None:
             skipped[r["id"]] = "no-shape"
+            continue
+        if r.get("data") == "v3" and shape.get("tokenizer") != policy.V3_TOKENIZER:
+            skipped[r["id"]] = "pilot-start"
             continue
         if not policy.eligible((r.get("model") or {}).get("forward_gates_per_token"),
                                r.get("start_forward_gates_per_token") or policy.w_fwd(shape), r.get("val_bpb"), ladder):

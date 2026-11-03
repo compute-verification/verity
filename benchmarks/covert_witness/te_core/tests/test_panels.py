@@ -23,11 +23,14 @@ def ledger_rows(unbounded=False):
     return [r | ({"mechanism": "adamw-all"} if r["direction"] == "ref-optim" else {}) for r in rows(unbounded)]
 
 
-def with_v3():
-    """The pilot's rows and the same records again on v3's data, from l0 = 1.3."""
+V3_SHAPE = SHAPE | {"tokenizer": policy.V3_TOKENIZER}
+
+
+def with_v3(start="t1"):
+    """The pilot's rows and the same records again on v3's data, from `start` (default t1, a v3 start) at l0 = 1.3."""
     pilot = ledger_rows()
-    return pilot + [r | {"id": f"{r['id']}-v3", "run_id": f"{r['run_id']}-v3", "data": "v3", "start_bpb": 1.3,
-                         "val_bpb": r["val_bpb"] + 0.1} for r in pilot]
+    return pilot + [r | {"id": f"{r['id']}-v3", "run_id": f"{r['run_id']}-v3", "data": "v3", "start": start,
+                         "start_bpb": 1.3, "val_bpb": r["val_bpb"] + 0.1} for r in pilot]
 
 
 def pretraining(root, beaten: bool):
@@ -47,7 +50,7 @@ def pretraining(root, beaten: bool):
 def build(tmp_path, monkeypatch, beaten=False, extra=(), index=None, unbounded=False):
     tmp_path.mkdir(parents=True, exist_ok=True)
     man = tmp_path / "starts_store.json"
-    man.write_text(json.dumps({"starts": {"s1": {"shape": SHAPE}}}))
+    man.write_text(json.dumps({"starts": {"s1": {"shape": SHAPE}, "t1": {"shape": V3_SHAPE}}}))
     monkeypatch.setattr(rescore, "Ledger", lambda root: type("L", (), {"index": staticmethod(
         index or (lambda: ledger_rows(unbounded))), "root": tmp_path})())
     out = tmp_path / "out"
@@ -115,6 +118,17 @@ def test_v3_is_the_headline_once_it_has_points(tmp_path, monkeypatch):
     assert [d["loss"] for d in pilot] == [1.17, 1.15]
     q = json.loads((out / "console" / f"{panels.NAME}.json").read_text())
     assert {r[C["data"]] for r in q["rows"]} == {"v3"} and "(v3)" in q["note"] and "From scratch: the starts" in q["note"]
+
+
+def test_a_v3_record_from_a_pilot_start_is_no_v3_branch_point(tmp_path, monkeypatch):
+    """A record on v3's data from a start whose shape has no v3 tokenizer (the pilot's FineWeb-Edu starts) is left out
+    (`pilot-start`), so the panel has no v3 branch point and stays on the pilot."""
+    rows = with_v3("s1")
+    _, skipped = frontier.formalism_rows(rows, {"s1": SHAPE})
+    assert skipped == {r["id"]: "pilot-start" for r in rows if r.get("data") == "v3"}
+    code, out = build(tmp_path, monkeypatch, index=lambda: rows)
+    ds = plots.frame(json.loads((out / f"{panels.NAME}.json").read_text()))
+    assert code == 0 and {d["data"] for d in ds} == {"v2.3-pilot"}
 
 
 def test_the_scoring_cap(tmp_path, monkeypatch):
