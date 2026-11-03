@@ -16,7 +16,6 @@
 #            N2 unit holds, not run
 #   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
 #            --warden-run when CR_WARDEN_RUN names the gate's warden run and scan_zk takes it)
-#   tie      on the warden path, the I/O tie on the warden's ingress, proved (n2_tie_zk.py prove --class warden)
 #   report   $OUT/report/report.json and report.md (chain_record.py report)
 #   guard    on every exit, before custody publishes the run dir, the record's leak guard (leak_guard.py): each file in it
 #            or in the hold holding a gate run's witness moved to the quarantine, the run refused by name (exit 3;
@@ -24,7 +23,7 @@
 # CR_PATH=warden is the warden path: every step reads the active warden's own run (CR_WARDEN_RUN, or the one gate run
 # holding a certified.jsonl) and nothing of a certifier rehearsal's, which in CR_GATES is refused by name: certs
 # --warden-run, endpoint (chain_record.py endpoint, the advice bound to the certified I/O off the network certifier's
-# cells), n2_zk.py prove --warden-run, the tie and the scan; the report requires every one (chain_record.WARDEN).
+# cells), n2_zk.py prove --warden-run and the scan; the report requires every one (chain_record.WARDEN).
 # env: CR_MEM_GB (what job.sh's stages may take, within the slot's)
 #      CR_GATES (space-separated: a tarball's name under the run's inputs/, an art: id, or a directory)
 #      CR_CLIENT (the client's kept files, a path under the unpacked gates; by default the certifier rehearsal's
@@ -40,9 +39,8 @@
 #      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no active network certifier's rows:
 # the scan isn't run      or required, and the report names what that path stubs, chain_record.STUBBED)
 #      CR_PATH=warden (above)  CR_EOS_IDS (the network certifier path's endpoint step: the model's EOS token ids,
-# comma-separated,      e.g. 128001 for Llama-3.2-1B; a network certifier run records none)  CR_TIE_WINDOWS (the tie's
-# execution phases, the run's all
-#      by default)  CR_TIE_GPU=1 and CR_N2_GPU=1 (the tie's and N2's provers on the GPU)  CR_N2_DRAW (n2_zk.py's
+# comma-separated,      e.g. 128001 for Llama-3.2-1B; a network certifier run records none)
+#      CR_N2_GPU=1 (N2's prover on the GPU)  CR_N2_DRAW (n2_zk.py's
 #      --draw K: N2's period sampled, K of the link-windows drawn on the verifier's coins; every one by default)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
 #      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, X.answer.json with its case
@@ -53,7 +51,7 @@
 #      in jobs of its own)  CR_CACHE (the build cache; hidden_zk's by default)
 #      CR_QUARANTINE (where what the record mustn't hold goes, 0700 and outside the run dir: by default quarantine/RUN
 #      beside the runs root, /workspace/research/quarantine/RUN on a node, kept until its owner removes it)
-# n2 runs, then (on the network certifier path) the tie, then scan: outer proofs go through the ZK server one at a time
+# n2 runs, then scan: outer proofs go through the ZK server one at a time
 # (n2_zk.ONE_SESSION), so no two of their provers' firewalled sessions overlap.
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
@@ -247,18 +245,7 @@ scan() {
   [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
   [ -n "$wr" ] && echo "$WARDEN" > "$W/scan.warden"
 }
-tie() {
-  [ "${CR_PATH:-}" = warden ] || return 0
-  local k=${CR_TIE_WINDOWS:-$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["windows"])' \
-    "$(find "$WARDEN" -name deployment.json -print -quit)")}
-  local cmd="$PY benchmarks/network_traces/n2_tie_zk.py prove --class warden --warden-run $WARDEN --windows $k \
-    --bin $BIN --lean $LEAN --out $W/tie ${CR_TIE_GPU:+--gpu}"
-  log "chain: tie: $cmd"
-  bash -c "$cmd" > "$OUT/tie.log" 2>&1
-  echo $? > "$W/tie.rc"; keep "$W/tie" "$OUT/tie"; log "chain: tie done, rc $(cat "$W/tie.rc")"
-  [ "$(cat "$W/tie.rc")" = 0 ] || tail -n 1 "$OUT/tie.log" | cut -c1-600 > "$W/tie.why"
-}
-if [ -n "${CR_SCAN_ONLY:-}" ]; then scan; else n2; tie; scan; fi
+if [ -n "${CR_SCAN_ONLY:-}" ]; then scan; else n2; scan; fi
 
 # ---- the report --------------------------------------------------------------------------------------------------------
 "$PY" - "$OUT/job.json" "$W" <<EOF
@@ -272,15 +259,14 @@ json.dump({"run": os.environ.get("RESEARCH_RUN_ID"), "tree": "${RESEARCH_SOURCE_
            "lean": "$(sha256sum "$LEAN" | cut -c1-64) $LEAN", "bin": "$(sha256sum "$BIN" | cut -c1-64)",
            "n2_cmd": os.environ.get("CR_N2_CMD"), "scan_cmd": os.environ.get("CR_SCAN_CMD"),
            "scan_only": bool(os.environ.get("CR_SCAN_ONLY")),
-           "rc": {"n2": text("n2.rc"), "scan": text("scan.rc"), "tie": text("tie.rc")},
-           "why": {"n2": text("n2.why"), "scan": text("scan.why"), "tie": text("tie.why")},
+           "rc": {"n2": text("n2.rc"), "scan": text("scan.rc")},
+           "why": {"n2": text("n2.why"), "scan": text("scan.why")},
            "stand_in": {"n2": text("n2.standin")}}, open(sys.argv[1], "w"), indent=1)
 EOF
 PA=${CR_PERIOD_ANSWER:-}; [ -z "$PA" ] || [ -e "$PA" ] || PA=${RESEARCH_RUN_DIR:?}/inputs/$PA
 "$PY" "$CR" report --custody "$OUT/custody.json" --certs "$OUT/certs.json" --endpoint "$OUT/endpoint/report.json" \
   $( [ -n "${CR_SCAN_ONLY:-}" ] || echo --n2 "$OUT/n2/summary.json") --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
   $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") ${CR_AUDIT:+--audit $CR_AUDIT} \
-  $( [ "${CR_PATH:-}" = warden ] && echo --tie "$OUT/tie/summary.json") \
   ${PA:+--period-answer "$PA"} ${CR_SERVER:+--server "$CR_SERVER"} --out "$OUT/report" | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 cat "$OUT/report/report.md" | tee -a "$OUT/job.log" | cut -c1-600

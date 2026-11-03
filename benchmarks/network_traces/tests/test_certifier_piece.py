@@ -61,10 +61,9 @@ LATE = {"run": RUN, "rc": 1, "ended": "the rehearsal exited 1",
         "verdict": {"accepted": False, "problems": 8, "requests": 4, "ended": 0, "failed": ["fail"]}}
 GATE_HOST = "gate-host"
 #: the window's private values, as numbers no other field of the chain's files takes: its request, step and output
-#: counts, its committed, v0 and derived advice bits, and the tie's prompt lengths
+#: counts and its committed, v0 and derived advice bits
 REQUESTS, STEPS, OUTPUTS, COMMITTED, V0, DERIVED = 7919, 7927, 7933, 104723, 104729, 104743
-PROMPT_LENS = [7937, 7949]
-PRIVATE = {REQUESTS, STEPS, OUTPUTS, COMMITTED, V0, DERIVED, *PROMPT_LENS}
+PRIVATE = {REQUESTS, STEPS, OUTPUTS, COMMITTED, V0, DERIVED}
 
 
 @pytest.fixture(scope="module")
@@ -476,22 +475,19 @@ def _private_chain_out(out: Path) -> Path:
                 "windows": [{"window": 0, "v0_bits": V0, "derived_bits": DERIVED, "in_run": True}]}}},
         "n2/summary.json": {"warden_run": RUN, "ok": True, "link": {"unit": "n2"}, "members": {"honest": {
             "network": {"accepted": True}, "windows": [{"window": 0, "accepted": True, "as_expected": True}]}}},
-        "tie/summary.json": {"warden_run": RUN, "class": "warden", "ok": True, "prompt_lens": PROMPT_LENS,
-                             "releases": [[0, 1]], "link": {"unit": "tie", "T": 30},
-                             "tie": {"honest": [True], "forged": [False]}},
         "scan/summary.json": {"warden_run": RUN, "T": 30, "ok": True, "responses": {"0": OUTPUTS}, "rounds": {
             "honest": {"ok": True, "audit": {"accepted": True, "window_accepted": True}},
             "chain": {"ok": True, "audit": {"accepted": False, "window_accepted": False}}}},
         "scan/answers.json": {"format": "answers", "delta": "1/100", "registration": {"program": "ab" * 64},
                               "windows": [{"window": 0, "answer": {"verdict": "accept"}, "registrations": []}]},
-        "job.json": {"path": CR.WARDEN, "run": "r-chain", "rc": {"n2": "0", "scan": "0", "tie": "0"}},
+        "job.json": {"path": CR.WARDEN, "run": "r-chain", "rc": {"n2": "0", "scan": "0"}},
     }
     for rel, doc in docs.items():
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
         (out / rel).write_text(json.dumps(doc, indent=1))
     CR.main(["report", *(x for f, rel in (("custody", "custody.json"), ("certs", "certs.json"), ("endpoint",
-             "endpoint/report.json"), ("n2", "n2/summary.json"), ("scan", "scan/summary.json"), ("job", "job.json"),
-             ("tie", "tie/summary.json")) for x in (f"--{f}", str(out / rel))), "--warden-run", RUN,
+             "endpoint/report.json"), ("n2", "n2/summary.json"), ("scan", "scan/summary.json"), ("job", "job.json"))
+             for x in (f"--{f}", str(out / rel))), "--warden-run", RUN,
              "--out", str(out / "report")])
     return out
 
@@ -499,14 +495,14 @@ def _private_chain_out(out: Path) -> Path:
 def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_moves_out_what_isnt_declared(tmp_path):
     """The chain's out/ holds the window's private values: the endpoint's report (its Commit window's request, step and
     output counts and its advice's bits), the report made of it (the certified I/O's counts, the advice's bits as K's
-    term) and report.md, the certificates step's view of the warden's check and the tie's prompt lengths. `publish`
+    term) and report.md, and the certificates step's view of the warden's check. `publish`
     puts none of them in the hold, only `PUBLIC`'s key paths, the endpoint's step its verdict and where it ran. A file
     put past `publish`, in the hold (the endpoint's report copied whole, as the piece once published it) or in DIR (the
     certificates step's), though neither holds a witness piece, is one the leak guard moves to the quarantine and never
     releases: DIR declares only `PIECE_FILES`."""
     out = _private_chain_out(tmp_path / "out")
     held = {p.relative_to(out).as_posix(): _numbers(p) & PRIVATE for p in out.rglob("*") if p.is_file()}
-    assert held["endpoint/report.json"] == PRIVATE - set(PROMPT_LENS) and held["tie/summary.json"] == set(PROMPT_LENS)
+    assert held["endpoint/report.json"] == PRIVATE
     assert held["report/report.json"] >= {REQUESTS, OUTPUTS, V0, DERIVED} and held["report/report.md"] >= {
         REQUESTS, OUTPUTS, DERIVED} and held["certs.json"] == {REQUESTS, OUTPUTS}
     assert json.loads((out / "report" / "report.json").read_text())["verdict"] == "accepted"
@@ -517,7 +513,7 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     assert {rel: _numbers(p) & PRIVATE for rel, p in published.items()} == dict.fromkeys(published, set())
     report = json.loads(published["chain/report/report.json"].read_text())
     assert report["verdict"] == "accepted" and set(report["steps"]) == {
-        "custody", "certificates", "endpoint", "tie", "n2", "scan", "lean"}
+        "custody", "certificates", "endpoint", "n2", "scan", "lean"}
     assert report["steps"]["endpoint"] == {"verdict": "accepted", "in_the_clear": CR.CLEAR["warden_endpoint_served"]}
     assert report["steps"]["scan"]["eps_at_delta"]["units"] == 60
     assert report["stubbed"] == list(CR.WARDEN_SERVED_STUBBED)
@@ -654,9 +650,9 @@ def test_each_steps_time_limit_names_its_own():
             CP.ended(limit)(signal.SIGTERM, None)
 
 
-def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():
-    assert CP.sized(1, []) == ["CR_N2_DRAW=", "CR_TIE_WINDOWS=1"]
-    assert CP.sized(8, ["CR_N2_DRAW=4"]) == ["CR_TIE_WINDOWS=8", "CR_N2_DRAW=4"]
+def test_n2_takes_every_link_window_of_a_short_run_unless_named():
+    assert CP.sized(1, []) == ["CR_N2_DRAW="]
+    assert CP.sized(8, ["CR_N2_DRAW=4"]) == ["CR_N2_DRAW=4"]
     assert CP.sized(9, ["CR_SCAN_ONLY=1"]) == ["CR_SCAN_ONLY=1"]
 
 
