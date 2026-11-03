@@ -1259,25 +1259,15 @@ def _route_ok(r: Any, name: str) -> bool:
 RAW_HOST = "raw.githubusercontent.com"                           # the notes are private: `http_get` sends it the notes token
 
 
-def notes_token() -> str | None:
-    """`notes_sync.notes_token` (RESEARCH_NOTES_TOKEN, else the agents' GitHub broker's on a Cursor agent), or the variable alone
-    where this file runs without its package."""
-    try:
-        from . import notes_sync
-    except ImportError:
-        return os.environ.get("RESEARCH_NOTES_TOKEN")
-    return notes_sync.notes_token()
-
-
 def http_get(url: str, timeout: float = 10) -> bytes | None:
     """The body at `url` (http(s), or a `file://` directory for tests and offline use), or None when there is none.  A
-    github.com raw file is read with the notes token (`notes_token`) when there is one: the notes repository is private, and
-    without it its raw files answer 404 as if they weren't there."""
+    github.com raw file is read with RESEARCH_NOTES_TOKEN when it is set: the notes repository is private, and without
+    the token its raw files answer 404 as if they weren't there."""
     if url.startswith("file://"):
         p = Path(urllib.parse.unquote(url[7:]))
         return p.read_bytes() if p.is_file() else None
     headers = {}
-    if urllib.parse.urlsplit(url).hostname == RAW_HOST and (token := notes_token()):
+    if urllib.parse.urlsplit(url).hostname == RAW_HOST and (token := os.environ.get("RESEARCH_NOTES_TOKEN")):
         headers["Authorization"] = f"Bearer {token}"
     try:
         with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as r:
@@ -2366,7 +2356,7 @@ def publish_route(root: Path, r: dict, message: str, where: str = ROUTES_DIR, na
         except ImportError:
             pass
     if not (root / ".git").exists():
-        if notes_token():                                           # no git here (the Slack events service): GitHub's API
+        if os.environ.get("RESEARCH_NOTES_TOKEN"):                  # no git here (the Slack events service): GitHub's API
             rel = f"{where}/{name}.json"
             cur = notes_api("GET", rel)
             notes_api("PUT", rel, {"message": message, "branch": "main",
@@ -2397,9 +2387,8 @@ def publish_route(root: Path, r: dict, message: str, where: str = ROUTES_DIR, na
 def notes_api(method: str, rel: str, body: dict | None = None) -> Any:
     """GitHub's contents API on the notes repository, with RESEARCH_NOTES_TOKEN, for a caller with no clone (the Slack events
     service): the JSON answer, or None for a GET of a path that isn't there."""
-    if not (token := notes_token()):
-        raise SlackError("no notes token (RESEARCH_NOTES_TOKEN, or the GitHub broker's on a Cursor agent): without a notes clone, "
-                         "the notes are read and written with it")
+    if not (token := os.environ.get("RESEARCH_NOTES_TOKEN")):
+        raise SlackError("RESEARCH_NOTES_TOKEN is not set: without a notes clone, the notes are read and written with it")
     req = urllib.request.Request(NOTES_API + urllib.parse.quote(rel) + ("?ref=main" if method == "GET" else ""), method=method,
                                  data=None if body is None else json.dumps(body).encode(),
                                  headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
