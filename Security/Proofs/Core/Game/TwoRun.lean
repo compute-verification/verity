@@ -325,9 +325,10 @@ theorem CoinTape.nonempty : (g : Game α) → (s : Strategy g) → Nonempty (Coi
       ⟨((Classical.arbitrary C, fun c => (CoinTape.nonempty (k c) (s c)).some) :
         C × ((c : C) → CoinTape (k c) (s c)))⟩
 
-noncomputable instance (g : Game α) (s : Strategy g) : Fintype (CoinTape g s) := CoinTape.fintype g s
+noncomputable instance instFintypeCoinTape (g : Game α) (s : Strategy g) : Fintype (CoinTape g s) :=
+  CoinTape.fintype g s
 
-instance (g : Game α) (s : Strategy g) : Nonempty (CoinTape g s) := CoinTape.nonempty g s
+instance instNonemptyCoinTape (g : Game α) (s : Strategy g) : Nonempty (CoinTape g s) := CoinTape.nonempty g s
 
 /-- **A uniform dependent function's value at `c` is uniform**: averaging `F` at the value at `c` over the functions
 is averaging `F` over the values. -/
