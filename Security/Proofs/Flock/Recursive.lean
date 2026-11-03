@@ -75,6 +75,7 @@ import Proofs.Flock.Claims.Recursion.DeployedCounts
 import Proofs.Flock.Claims.Recursion.LamDeployedTight
 import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
 import Proofs.Flock.Recursive.BitsK
+import Proofs.Flock.Recursive.BitsKCoinTreeProved
 import Proofs.Flock.Claims.Recursion.AcceptedScope
 import Proofs.Flock.Claims.Recursion.InnerSetupCount
 import Proofs.Flock.Claims.Recursion.IVStarCalls
