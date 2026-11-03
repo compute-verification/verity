@@ -10,8 +10,11 @@ w_fwd. `rho` gives every kind's term at a policy (c, k), their max and the bindi
 kind's inputs as the console's columns (te_core.algorithm_policy's `INPUTS`, with `w_fit_gates`, `alpha_ratio` and
 `C_gates`), on which `algorithm_policy.page_rho` gives te_core.formalism.at's ρ, and `menu` the other kinds' inputs.
 `reference` evaluates each workload's reference points (`Workload.points`) at the three `POLICIES`, and its `Check`s,
-pilot records beside the model; `workloads.json` is its output, which the console's tests pin. The spec, each mapping
-with its reasons, is the note `NOTE` names.
+measured records beside the model (the 45M pilot's, and the standard-workloads island's rows in `RECORDS`), each
+made a model of its own (`recorded`) so that every kind's term is on both; `input_status` gives each input's source,
+"measured: " and the record where one at the point's dials measures the model's value, else "assumed: " and why.
+`workloads.json` is its output, which the console's tests pin. The spec, each mapping with its reasons, is the note
+`NOTE` names.
 
 **The one bound** (the coordinator's 06:51Z ruling; Lean's `Counting` and `Slowdown`): ρ ≥ the max over a fixed menu
 of kinds K of `kindBound`, (|B_K|/|C|)·c/cap_K(k), cap_K(k) the most of K's work one block does reading at most k bits
@@ -55,6 +58,9 @@ The conventions every workload shares:
   bf16 at te_core.flops' count (the whole span, so a training token at context T has 2·L·d·T), with `ELEMENTWISE` bf16
   elementwise MACs per MAC. Attention's QK^T and dO·V^T sum over a head's `HEAD_DIM` values, its other products over
   the span. a is the bf16 residual stream, 16·d. Δ_g is a partial gradient in fp32 (`GRAD_BITS`).
+- **Full-weight training** is calibrated on the records: u(1) is every weight as a step's ops read it, the matrices
+  at the GEMMs' width and the embedding and norms in fp32 (`Shape.weight_bits`), and Δ = Δ_t is θ' in fp32, 32 N,
+  each the records' exactly (Δ less its code's 5 KB header), as Δ_grad is.
 - **The decoder** d, by te_core 4.2's rule: 0 where E stores θ' itself (every full-weight workload), the harness's
   decoder for an E holding a LoRA (`Adapter.decoder_gates`), and compressed DiLoCo's replay of a phase.
 - **A1's reading** (the dial `t`, the token kind's only): u is 0 up to the free share t and x·u(1) beyond it, u_in
@@ -69,7 +75,7 @@ import inspect
 import json
 import math
 import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, astuple, dataclass, field, fields, replace
 from pathlib import Path
 
 from . import VERSION, algorithm_policy, formalism, panels, policy
@@ -94,6 +100,9 @@ WEIGHT_BITS = {"bf16": 16.0, "e4m3": 8.0, "fp4": 4.5}
 WIDTHS = {f"gemm/{p}": (bits, bits, 32.0) for p, bits in WEIGHT_BITS.items()}
 #: a partial gradient's bits a trained value, as passed
 GRAD_BITS = 32
+#: the records the model is calibrated on: the 45M pilot's AdamW and Muon records (te_core 4.1's traces) and the
+#: standard-workloads island's distillation (te_core 4.2), whose student is d 256 and 6 layers at V = 32,000
+PILOT_ADAMW, PILOT_MUON, ISLAND_DISTILL = "r20261102-140347-a1c2", "r20261102-134356-ee8f", "r20261103-064849-6854"
 #: te_core 4.1's literal t on the 45M pilot's traced full-training step (every ref-optim record's): the share of a
 #: training token's affected work in ops that read no update value
 T_DENSE = 0.692646
@@ -172,16 +181,25 @@ class Shape:
     def matrix_params(self) -> float:
         return self.n_layer * self.layer_params
 
+    def weight_bits(self, precision: str) -> float:
+        """Every weight as a training step's ops read it: the matrices at the GEMMs' width, the embedding and the norms
+        in fp32 (the records' u(1) exactly: 1,132,675,072 bits at the 45M reference, 339,320,832 at the island's
+        student)."""
+        return WEIGHT_BITS[precision] * self.matrix_params + 32 * (self.params - self.matrix_params)
+
     def attention(self, span: float) -> float:
         """QK and PV MACs of one token attending over `span` positions, every layer."""
         return 2 * self.n_layer * self.d_model * span
 
 
-def dense(params: float, aspect: float = ASPECT, vocab: float = VOCAB) -> Shape:
+def dense(params: float, aspect: float = ASPECT, vocab: float = VOCAB, d_model: float | None = None) -> Shape:
     """The dense decoder of `params` parameters at d/L = `aspect`: N = L·((4 + 3·MLP)·d² + 2d) + (V + 1)·d (each layer's
     matrices and two norms, a tied embedding and the final norm), with L = d/aspect a cubic in d, solved by Cardano's
-    formula (one real root). 45,029,888 gives the reference model, d = 512 and L = 6, as 35,658,240 does at V = 32,000
-    (s-t20)."""
+    formula (one real root); or, given `d_model`, L from N. 45,029,888 gives the reference model, d = 512 and L = 6, as
+    35,658,240 does at V = 32,000 (s-t20); 13,012,224 at d = 256 and V = 32,000 has 6 layers (the island's student)."""
+    if d_model is not None:
+        d = float(d_model)
+        return Shape(float(params), d, (params - (vocab + 1) * d) / ((4 + 3 * MLP) * d * d + 2 * d), float(vocab))
     a, b, c = (4 + 3 * MLP) / aspect, 2 / aspect, vocab + 1.0
     p = (3 * a * c - b * b) / (3 * a * a)
     q = (2 * b ** 3 - 9 * a * b * c - 27 * a * a * params) / (27 * a ** 3)
@@ -513,11 +531,26 @@ def _labels(**extra) -> dict:
     return {"gates": "model: the tokens' work and the optimizer's (te_core.workloads)",
             "tokens": "model: the workload's tokens (a dial)",
             "token_gates": "model: each token's MACs at te_core.gates' prices (te_core.workloads.Token)",
+            "affected_gates": "model: each token's MACs that depend on theta', at te_core.gates' prices",
             "tau_bits": "model: the input ids a token block reads, ceil(log2 V) bits each",
             "a_bits": "upper bound (witness): d_model x 16, the bf16 residual stream (measured on both pilot starts)",
             "u": "assumption (A1): 0 up to the free share t, x u(1) beyond it",
             "u_in": "assumption (A1'): evenly spread, x u(1)",
             "decoder_gates": "model: none, E stores theta' itself"} | extra
+
+
+def _full_labels(precision: str, optimizer: str, **extra) -> dict:
+    """The labels of full-weight training, every weight trained from fp32 masters, each form with the records it was
+    measured on."""
+    state = {"adamw": f"AdamW's 96 N: {PILOT_ADAMW}, {ISLAND_DISTILL}", "muon": f"Muon's: {PILOT_MUON}",
+             "sgd": "no record runs SGD"}[optimizer]
+    return _labels(u1_bits=f"model: every weight as a step's ops read it, the matrices at {WEIGHT_BITS[precision]:g} "
+                           f"bits and the embedding and norms in fp32 (the records' u(1) exactly: {PILOT_ADAMW}, "
+                           f"{ISLAND_DISTILL})",
+                   delta_bits=f"model: theta' in fp32, 32 N (the records' code less its 5 KB header: {PILOT_ADAMW}, "
+                              f"{ISLAND_DISTILL})",
+                   delta_grad_bits=f"model: the gradient at 32 bits a value and {optimizer}'s state (the traces' "
+                                   f"exactly; {state})") | extra
 
 
 #: d's label for an E holding a LoRA (`Adapter.decoder_gates`)
@@ -534,8 +567,8 @@ def standard(n_params: float = REFERENCE_PARAMS, precision: str = "bf16", seq_le
              batch_tokens: float = 65_536, optimizer: str = "adamw", t: float | None = None,
              tokens_per_param: float = 20.0, vocab: float = VOCAB) -> Model:
     """Standard dense pretraining: every weight trained, each token's forward and backward in token blocks, the
-    optimizer in none. u(1) is every weight as the GEMMs read it, Δ θ' at bf16 (fp32 latents for Δ_t where the GEMMs
-    are narrower), no decoder. Every product is fresh."""
+    optimizer in none. u(1) is every weight as a step's ops read it (`Shape.weight_bits`), Δ (and Δ_t) θ' in fp32, the
+    records' code, and no decoder. Every product is fresh."""
     sh = dense(n_params, vocab=vocab)
     tok = training(sh, precision, seq_len)
     tokens = tokens_per_param * n_params
@@ -544,14 +577,8 @@ def standard(n_params: float = REFERENCE_PARAMS, precision: str = "bf16", seq_le
     tf = _dense_t(t)
     part = formalism.Part(tokens * tok.w + steps * opt, tokens, tokens * tok.w, tokens * tok.alpha, max(1, round(steps)),
                           delta_grad(sh, optimizer))
-    latents = precision != "bf16"
-    labels = _labels(u1_bits=f"model: every weight as its GEMMs read it, N x {WEIGHT_BITS[precision]:g} bits",
-                     delta_bits="model: theta' at bf16, 16 N",
-                     delta_grad_bits=f"model: the gradient at 32 bits a value and {optimizer}'s state")
-    if latents:
-        labels["delta_t_bits"] = "model: fp32 latents, 32 N (a straight-through run)"
-    m = _measured([part], sh.tau, ACT_BITS * sh.d_model, n_params * WEIGHT_BITS[precision], tf, 16 * n_params, labels,
-                  delta_t=32 * n_params if latents else None)
+    m = _measured([part], sh.tau, ACT_BITS * sh.d_model, sh.weight_bits(precision), tf, 32 * n_params,
+                  _full_labels(precision, optimizer))
     seq = (seq_len, seq_len, sh.tau)
     fresh = dense_fresh(sh, f"gemm/{precision}", tokens, seq_len, seq, batch_tokens) + muon_fresh(sh, optimizer, steps, seq)
     return Model("standard", _dials(standard, locals()), m, w_fwd(sh, precision, seq_len), tuple(fresh),
@@ -568,7 +595,7 @@ def diloco(n_params: float = REFERENCE_PARAMS, precision: str = "bf16", seq_len:
     M), standard training on each worker with its own optimizer, then an outer step from the workers' pseudo-gradients,
     each `sync_bits` b once compressed (None: 32 N, uncompressed), summed over the M workers. Its token blocks are
     standard training's, and so are its fresh products and token kind. Only where the syncs and a phase's tokens
-    describe every step's weights in fewer bits than 16 N does Δ change: S·b + H·B·τ, decoded by replaying the phase
+    describe every step's weights in fewer bits than θ' (32 N) does Δ change: S·b + H·B·τ, decoded by replaying the phase
     from the synced weights (d = H·B·w), which needs the inner optimizer to restart at each sync. That decoder counts
     only where it fits a block (te_core.formalism.at's d < c), and then a phase's inner gradients never leave its
     block, which passes on only its compressed delta (Δ_grad = b, an outer step without momentum: Nesterov's would
@@ -582,24 +609,18 @@ def diloco(n_params: float = REFERENCE_PARAMS, precision: str = "bf16", seq_len:
     outer = sh.params * FUSED_OPTIMIZER_MACS["_fused_sgd_"] * per_mac("elementwise/f32")
     b = 32 * n_params if sync_bits is None else float(sync_bits)
     code = syncs * b + phase * sh.tau
-    compressed = code < 16 * n_params
+    compressed = code < 32 * n_params
     dg = b if compressed else delta_grad(sh, optimizer)
     part = formalism.Part(tokens * tok.w + workers * steps * opt + syncs * outer, tokens, tokens * tok.w,
                           tokens * tok.alpha, max(1, round(steps)), dg)
-    latents = precision != "bf16" and not compressed
-    labels = _labels(u1_bits=f"model: every weight as its GEMMs read it, N x {WEIGHT_BITS[precision]:g} bits",
-                     delta_bits=("model: S syncs of b bits and the phase's token ids, S b + H B tau" if compressed
-                                 else "model: theta' at bf16, 16 N (shorter than the syncs)"),
-                     delta_grad_bits=("model: the phase's compressed delta, b (its inner gradients stay in its block "
-                                      "wherever the decoder fits one)" if compressed else
-                                      f"model: the gradient at 32 bits a value and {optimizer}'s state"))
+    labels = _full_labels(precision, optimizer)
     if compressed:
-        labels["decoder_gates"] = "model: replaying the phase from the synced weights, H B w"
-    if latents:
-        labels["delta_t_bits"] = "model: fp32 latents, 32 N (a straight-through run)"
-    m = _measured([part], sh.tau, ACT_BITS * sh.d_model, n_params * WEIGHT_BITS[precision], _dense_t(t),
-                  code if compressed else 16 * n_params, labels, decoder=phase * tok.w if compressed else 0.0,
-                  delta_t=32 * n_params if latents else None)
+        labels |= {"delta_bits": "model: S syncs of b bits and the phase's token ids, S b + H B tau",
+                   "delta_grad_bits": "model: the phase's compressed delta, b (its inner gradients stay in its block "
+                                      "wherever the decoder fits one)",
+                   "decoder_gates": "model: replaying the phase from the synced weights, H B w"}
+    m = _measured([part], sh.tau, ACT_BITS * sh.d_model, sh.weight_bits(precision), _dense_t(t),
+                  code if compressed else 32 * n_params, labels, decoder=phase * tok.w if compressed else 0.0)
     seq = (seq_len, seq_len, sh.tau)
     fresh = (dense_fresh(sh, f"gemm/{precision}", tokens, seq_len, seq, batch_tokens / workers, layered=not compressed)
              + muon_fresh(sh, optimizer, workers * steps, seq))
@@ -631,9 +652,9 @@ def rl(n_params: float = REFERENCE_PARAMS, update: str = "full", rank: float = 1
     sq = (seq, prompt_tokens, sh.tau)
     if update == "full":
         roll, learn = forward(sh, rollout_precision, span), training(sh, "bf16", seq)
-        u1s = (n_params * WEIGHT_BITS[rollout_precision], 16 * n_params)
+        u1s = (n_params * WEIGHT_BITS[rollout_precision], sh.weight_bits("bf16"))
         ts = (roll.t, T_DENSE)
-        delta, dg, opt = 16 * n_params, delta_grad(sh, optimizer), optimizer_gates(sh, optimizer)
+        delta, dg, opt = 32 * n_params, delta_grad(sh, optimizer), optimizer_gates(sh, optimizer)
         decoder, trained = 0.0, n_params
         fresh = (dense_fresh(sh, f"gemm/{rollout_precision}", n_r, span, sq)
                  + dense_fresh(sh, "gemm/bf16", n_l, seq, sq, batch_tokens) + muon_fresh(sh, optimizer, steps, sq))
@@ -654,14 +675,15 @@ def rl(n_params: float = REFERENCE_PARAMS, update: str = "full", rank: float = 1
     parts = [formalism.Part(n_r * roll.w, n_r, n_r * roll.w, n_r * roll.alpha, 1, 0.0),
              formalism.Part(n_l * learn.w + steps * opt, n_l, n_l * learn.w, n_l * learn.alpha, max(1, round(steps)), dg)]
     tau = sh.tau * prompt_tokens / seq
-    labels = _labels(tau_bits="model: the prompts' ids, ceil(log2 V) bits each over the sequence's tokens (generated ids "
-                              "are computed)",
-                     u1_bits=("model: the least of the two kinds' weights as their GEMMs read them" if update == "full"
-                              else "model: the adapter's values at 16 bits, Delta"),
-                     delta_bits="model: theta' at bf16, 16 N" if update == "full" else "model: the adapter at 16 bits",
-                     delta_grad_bits="model: the gradient at 32 bits a value and the optimizer's state")
-    if update != "full":
-        labels["decoder_gates"] = LORA_DECODER
+    ids = "model: the prompts' ids, ceil(log2 V) bits each over the sequence's tokens (generated ids are computed)"
+    if update == "full":
+        labels = _full_labels("bf16", optimizer, tau_bits=ids,
+                              u1_bits=f"model: the least of the two kinds' weights as their ops read them, the "
+                                      f"rollouts' N x {WEIGHT_BITS[rollout_precision]:g} bits")
+    else:
+        labels = _labels(tau_bits=ids, u1_bits="model: the adapter's values at 16 bits, Delta",
+                         delta_bits="model: the adapter at 16 bits", decoder_gates=LORA_DECODER,
+                         delta_grad_bits="model: the gradient at 32 bits a value and the optimizer's state")
     m = _measured(parts, tau, ACT_BITS * sh.d_model, min(u1s), tf, delta, labels, decoder=decoder)
     return Model("rl", _dials(rl, locals()), m, w_fwd(sh, rollout_precision, span), tuple(fresh),
                  (Steps(steps, GRAD_BITS * trained, m.delta_t, batch_tokens, learn.w),),
@@ -734,12 +756,12 @@ def lora(n_params: float = REFERENCE_PARAMS, rank: float = 8, targets: str = "al
 def distill(student_params: float = REFERENCE_PARAMS, teacher_params: float = 10 * REFERENCE_PARAMS,
             teacher_share: float = 1.0, teacher_precision: str = "bf16", seq_len: float = 1024,
             batch_tokens: float = 65_536, optimizer: str = "adamw", t: float | None = None,
-            tokens_per_param: float = 20.0, vocab: float = VOCAB) -> Model:
+            tokens_per_param: float = 20.0, vocab: float = VOCAB, student_d_model: float | None = None) -> Model:
     """Distillation from a registered teacher: the student's dense training, and the teacher's forward on
     `teacher_share` of its tokens in the same token blocks. The teacher reads θ and the tokens alone, so its work is
     outside A and none of its products is fresh: it raises w and leaves the affected count, u, t, a and the fresh
     products the student's."""
-    sh, te = dense(student_params, vocab=vocab), dense(teacher_params, vocab=vocab)
+    sh, te = dense(student_params, vocab=vocab, d_model=student_d_model), dense(teacher_params, vocab=vocab)
     stu, teach = training(sh, "bf16", seq_len), forward(te, teacher_precision, seq_len)
     tok = Token(_add(stu.macs, {k: teacher_share * v for k, v in teach.macs.items()}), stu.affected, stu.reading)
     tokens = tokens_per_param * student_params
@@ -747,9 +769,8 @@ def distill(student_params: float = REFERENCE_PARAMS, teacher_params: float = 10
     opt = optimizer_gates(sh, optimizer)
     part = formalism.Part(tokens * tok.w + steps * opt, tokens, tokens * tok.w, tokens * tok.alpha, max(1, round(steps)),
                           delta_grad(sh, optimizer))
-    labels = _labels(u1_bits="model: the student's weights at bf16, 16 N_s", delta_bits="model: the student at bf16, 16 N_s",
-                     delta_grad_bits=f"model: the student's gradient at 32 bits and {optimizer}'s state")
-    m = _measured([part], sh.tau, ACT_BITS * sh.d_model, 16 * student_params, _dense_t(t), 16 * student_params, labels)
+    m = _measured([part], sh.tau, ACT_BITS * sh.d_model, sh.weight_bits("bf16"), _dense_t(t), 32 * student_params,
+                  _full_labels("bf16", optimizer))
     seq = (seq_len, seq_len, sh.tau)
     fresh = dense_fresh(sh, "gemm/bf16", tokens, seq_len, seq, batch_tokens) + muon_fresh(sh, optimizer, steps, seq)
     return Model("distill", _dials(distill, locals()), m, w_fwd(sh, "bf16", seq_len), tuple(fresh),
@@ -779,12 +800,17 @@ def update_bits(me: formalism.Measured, c: float) -> float:
     return min(me.u1_bits, me.delta_bits) if d < c and me.delta_bits is not None else me.u1_bits
 
 
+#: a fresh-product group's fields, in the order `menu` lists them
+FRESH_FIELDS = [f.name for f in fields(Fresh)]
+
+
 def menu(m: Model) -> dict:
-    """The other kinds' inputs, as `rho` reads them: the fresh products (their widths and gates a MAC by kind are the
-    reference's `widths` and `gates_per_mac`), their share of |C| before any escapes, and the optimizer steps."""
+    """The other kinds' inputs, as `rho` reads them: the fresh products (each group's `FRESH_FIELDS`; their widths and
+    gates a MAC by kind are the reference's `widths` and `gates_per_mac`), their share of |C| before any escapes, and
+    the optimizer steps."""
     me = m.measured
     return {"u1_bits": me.u1_bits, "delta_bits": me.delta_bits, "decoder_gates": me.decoder_gates,
-            "fresh": [asdict(f) for f in m.fresh],
+            "fresh": [list(astuple(f)) for f in m.fresh],
             "fresh_share": sum(f.total * per_mac(f.kind) for f in m.fresh) / me.gates,
             "steps": [asdict(s) for s in m.steps]}
 
@@ -793,14 +819,17 @@ def _finite(v: float) -> float | None:
     return None if math.isinf(v) else v
 
 
-def rho(m: Model, c: float, k: float) -> dict:
+def rho(m: Model, c: float, k: float, token: tuple[float, str] | None = None) -> dict:
     """ρ at (c, k): every kind's term (`KINDS`; None infinite, absent where the kind counts nothing), their max over 1
     (`bound`) and the binding kind with what it rests on; ρ is Fit's c/(c − d) where Fit holds and the menu's bound
     doesn't exceed it, else the bound. Beside them: te_core.formalism.at's ρ (the token kind with Fit, reading B),
     Fit's thresholds (the most Δ its compute block admits, k − (c/w_fit)·τ, and the most Δ_grad its reduction block
-    admits, k/2), each step kind's b, and the shares of |C| in the fresh products counted and charged."""
+    admits, k/2), each step kind's b, and the shares of |C| in the fresh products counted and charged. `token` is a
+    record's te_core ρ and basis (page_rho on its columns, `recorded`), which then give the token term and Fit."""
     me = m.measured
     v = formalism.at(me, c, k)
+    if token is not None:
+        v = v | {"rho": token[0], "fit": token[1] == "fit"} | ({"slowdown": token[0]} if token[1] == "target" else {})
     fit = v["fit"]
     d = me.decoder_gates if me.decoder_gates is not None else math.inf
     ub = update_bits(me, c)
@@ -877,16 +906,25 @@ class Dial:
     why: str
 
 
+RECORD_SOURCE = ("te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal; 4.2 "
+                 "refuses the trace, made before its capture listed read-backs, until the run is traced again); "
+                 "delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k")
+
+
 @dataclass(frozen=True)
 class Check:
-    """A pilot record beside the model at `dials`: the record's console columns (te_core 4.1's measured quantities,
-    t literal; `RECORD_SOURCE`), on which page_rho gives the record's token kind (te_core's ρ) at each policy. te_core
-    4.2 refuses the records' traces, made before its capture listed read-backs, until the runs are traced again."""
+    """A measured record beside the model at `dials`: the record's console columns, on which page_rho gives its token
+    kind (te_core's ρ) at each policy, and each column's source (`status`: "measured" or "assumed: " and why, the
+    standard-workloads panel's input_status; none given, every column measured); `menu` the record's own inputs of the
+    other kinds (`delta_g_bits`, its trace's partial gradient); `recorded` makes it a model beside the model's."""
     name: str
     dials: dict
     record: str
     columns: dict
     differs: str
+    status: dict = field(default_factory=dict)
+    menu: dict = field(default_factory=dict)
+    source: str = RECORD_SOURCE
 
 
 @dataclass(frozen=True)
@@ -901,9 +939,34 @@ class Workload:
     checks: tuple[Check, ...] = ()
 
 
-RECORD_SOURCE = ("te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal; 4.2 "
-                 "refuses the trace, made before its capture listed read-backs, until the run is traced again); "
-                 "delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k")
+#: the standard-workloads island's measured rows (its panel's cells, each with its traced step's facts)
+RECORDS = Path(__file__).with_name("workloads_records.json")
+#: the dials the island's rows don't name: their runs' vocabulary (the v3 starts', s-t20's) and the distilled
+#: student's width (its row's about: a half-width student, d_model 256 and 6 layers)
+ISLAND_DIALS = {"vocab": 32_000}
+ISLAND_EXTRA = {ISLAND_DISTILL: {"student_d_model": 256}}
+#: how each island row differs from the model at its dials
+ISLAND_DIFFERS = {
+    ISLAND_DISTILL: "t the trace's 0.781 against the model's 0.693 (the 45M trace's literal t), which puts the model's "
+                    "token kind 13% above the record's; u_in front-loaded (the fp32 embedding at x = 0) where the "
+                    "model's A1' is even; w_fwd the start's (the s-t20 teacher's) forward where the model's is the "
+                    "student's, which no policy here reads",
+}
+
+
+def island_checks(workload: str) -> tuple[Check, ...]:
+    """The island's measured rows of `workload` (`RECORDS`) as checks: their dials with the ones they don't name, their
+    columns and input status, and the partial gradient their trace measures (its Δ_grad less the state)."""
+    rows = json.loads(RECORDS.read_text())["rows"]
+    return tuple(Check(f"{r['model']} standard-workloads {r['run']}",
+                       r["dials"] | ISLAND_DIALS | ISLAND_EXTRA.get(r["run"], {}), f"{r['run']}@{r['steps']}",
+                       r["rho_inputs"], ISLAND_DIFFERS.get(r["run"], ""), r["input_status"],
+                       {"delta_g_bits": r["trace"]["delta_grad_bits"] - r["trace"]["state_bits"]},
+                       f"the standard-workloads island's row ({r['art']}; te_core {r['te_core']}, reading "
+                       f"{r['reading']}): {r['about']}")
+                 for r in rows if r["workload"] == workload)
+
+
 #: the console's u and u_in of a 45M full-training record: 0 up to the literal t, then the whole traced u(1) (the fp32
 #: embedding and bf16 matrices); u_in jumps there at x = 0, the trace's cut through the embedding table
 FULL_U = {"u_points": f"0:0;{T_DENSE}:0;{T_DENSE}:1.13268e9;1:1.13268e9",
@@ -941,8 +1004,8 @@ WORKLOADS = {w.name: w for w in (
              (Check("45M ref-optim/adamw-rewarm-mild", {}, "r20261102-140347-a1c2@946",
                     FULL_RECORD | FULL_U | {"w_gates": 2.31908e11, "sigma": 0.999823, "w_fit_gates": 1.5441e11,
                                             "alpha_ratio": 0.995234, "delta_grad_bits": 4322869248},
-                    "w 0.9% below the model's; u(1) the fp32 embedding with the bf16 matrices, 25 bits a parameter; "
-                    "u_in all of it at x = 0; Delta the submitted code, 32 N"),
+                    "w 0.9% below the model's; w_fit and alpha_ratio the rewarm's phases, where the model has one; "
+                    "u_in all of u(1) at x = 0, where the model's A1' is even"),
               Check("45M ref-optim/cooldown-forks", {"optimizer": "muon"}, "r20261102-134356-ee8f@694",
                     FULL_RECORD | FULL_U | {"w_gates": 2.32623e11, "sigma": 0.993392, "w_fit_gates": 1.03235e11,
                                             "alpha_ratio": 0.992069, "delta_grad_bits": 3706306560},
@@ -1036,8 +1099,11 @@ WORKLOADS = {w.name: w for w in (
               Dial("teacher_share", "share of tokens", 1.0, (0.0, 1.0), "the student tokens the teacher runs on"),
               Dial("teacher_precision", "GEMM format", "bf16", ("bf16", "e4m3", "fp4"), "the teacher's weight GEMMs"),
               COMMON["seq_len"], COMMON["batch_tokens"], COMMON["optimizer"], COMMON["t_dense"],
-              COMMON["tokens_per_param"], COMMON["vocab"]),
-             (("default", {}), ("no teacher", {"teacher_share": 0.0}), ("100x teacher", {"teacher_params": 100 * 45_029_888}))),
+              COMMON["tokens_per_param"], COMMON["vocab"],
+              Dial("student_d_model", "d_model", None, (64, 8192),
+                   "the student's width; None is the reference model's d/L (the island's half-width student: 256)")),
+             (("default", {}), ("no teacher", {"teacher_share": 0.0}), ("100x teacher", {"teacher_params": 100 * 45_029_888})),
+             island_checks("distill")),
 )}
 
 
@@ -1045,32 +1111,142 @@ def model(name: str, **dials) -> Model:
     return WORKLOADS[name].fn(**dials)
 
 
-def point(m: Model) -> dict:
-    """A model's reference point: its dials, the token kind's columns and what they're estimated from, the other
-    kinds' inputs (`menu`), ρ at each of `POLICIES`, the token kind's sensitivity bounds where its token blocks differ,
-    and what it derived."""
-    out = {"dials": m.dials, "inputs": columns(m), "estimated": algorithm_policy.estimated(m.measured), "menu": menu(m),
+#: the console's columns, each with the te_core quantities whose labels give its source (te_core.standard_workloads'
+#: `KEYS` and `LABELLED`: algorithm_policy's, with w_fwd and the two 4.x terms)
+KEYS = ("C_gates", *algorithm_policy.INPUTS, "w_fit_gates", "alpha_ratio")
+LABELLED = algorithm_policy.LABELLED | {"w_gates": ("token_gates", "tokens"), "w_fwd_gates": ("w_fwd_gates",),
+                                        "w_fit_gates": ("token_gates", "tokens"), "alpha_ratio": ("affected_gates",)}
+#: how near a record's value a model input must be to count as the record's (σ by the optimizer's share, 1 − σ): the
+#: code's 5 KB header is 3e-5 of 32 N and the pilot's τ adds 0.1% of other inputs to the ids' 16 bits
+MEASURED_REL = 2e-3
+#: the other kinds' inputs, each with where it comes from (a record's `Check.menu` measures `delta_g_bits`)
+MENU_STATUS = {
+    "fresh": "assumed: the shape's products by the standard algorithm, counted (dense_fresh, adapter_fresh, "
+             "muon_fresh): no trace yet lists which products have two fresh operands",
+    "widths": "assumed: each product's operands at its GEMM's width and its partial sums in fp32, as passed (WIDTHS)",
+    "steps": "assumed: the dials' tokens over a step's tokens, and b a step's tokens over s",
+    "delta_g_bits": f"assumed: a partial gradient at 32 bits a trained value ({ISLAND_DISTILL}'s trace measures 32 N: "
+                    "its gradient cut less the state)",
+}
+
+
+def _profile_agrees(model_points: str, record_points: str, tail: bool) -> bool:
+    """Whether two profiles agree to `MEASURED_REL`: u (`tail`) by its free share and u(1), which are all s* reads
+    where u(1) > k; u_in point by point."""
+    a, b = algorithm_policy.profile(model_points), algorithm_policy.profile(record_points)
+    if tail:
+        a, b = ((next((x for x, v in p if v > 0), 1.0), p[-1][1]) for p in (a, b))
+        return all(math.isclose(x, y, rel_tol=MEASURED_REL) for x, y in zip(a, b))
+    return len(a) == len(b) and all(math.isclose(x, y, rel_tol=MEASURED_REL, abs_tol=1e-9)
+                                    for p, q in zip(a, b) for x, y in zip(p, q))
+
+
+def _agrees(key: str, a, b) -> bool:
+    if key in ("u_points", "u_in_points"):
+        return _profile_agrees(a, b, key == "u_points")
+    if a is None or b is None:
+        return a is b
+    if key == "sigma":
+        a, b = 1 - a, 1 - b
+    return math.isclose(a, b, rel_tol=MEASURED_REL)
+
+
+def _said(key: str, v) -> str:
+    """A record's value as `input_status` quotes it: a profile by what s* and x0 read (its free share and u(1), or
+    its value at x = 0)."""
+    if key == "u_points":
+        u = algorithm_policy.profile(v)
+        return f"t {_fmt(next((x for x, b in u if b > 0), 1.0))} and u(1) {_fmt(u[-1][1])}"
+    if key == "u_in_points":
+        u = algorithm_policy.profile(v)
+        return f"u_in {_fmt(max(b for x, b in u if x == 0))} at x = 0 of u(1) {_fmt(u[-1][1])}"
+    return v if isinstance(v, str) else _fmt(v)
+
+
+def input_status(m: Model, checks: tuple[Check, ...] = ()) -> dict:
+    """Each column's source in the standard-workloads panel's form: "measured: " and the record where a check at the
+    model's dials measures the model's value (to `MEASURED_REL`), else "assumed: " and the model's label, with what
+    the records at its dials measure. The other kinds' inputs are `MENU_STATUS`'s, at every point."""
+    me, col = m.measured, columns(m)
+    same = [ck for ck in checks if model(m.workload, **ck.dials).dials == m.dials]
+    labels = me.labels | {"w_fwd_gates": "model: a token's forward at te_core.gates' prices, no elementwise share"}
+    out = {}
+    for key in KEYS:
+        keys = LABELLED["delta_bits"] if key == "delta_t_bits" and me.delta_t_bits is None else LABELLED[key]
+        said = [labels[q] for q in keys if q in labels]
+        label = next((x for x in said if algorithm_policy.kind(x)), said[0] if said else "model: no label")
+        got = [(ck, ck.columns[key]) for ck in same if key in ck.columns]
+        hit = next((ck for ck, v in got if _agrees(key, col[key], v) and ck.status.get(key, "measured") == "measured"),
+                   None)
+        out[key] = (f"measured: {hit.record}" if hit else f"assumed: {label.removeprefix('model: ')}"
+                    + "".join(f"; {ck.record} measures {_said(key, v)}" for ck, v in got))
+    return out
+
+
+def point(m: Model, checks: tuple[Check, ...] = ()) -> dict:
+    """A model's reference point: its dials, the token kind's columns, what they're estimated from and each input's
+    source (`input_status`, beside the workload's `checks`), the other kinds' inputs (`menu`), ρ at each of
+    `POLICIES`, the token kind's sensitivity bounds where its token blocks differ, and what it derived."""
+    out = {"dials": m.dials, "inputs": columns(m), "estimated": algorithm_policy.estimated(m.measured),
+           "input_status": input_status(m, checks), "menu": menu(m),
            "rho": {name: rho(m, c, k) for name, (c, k) in POLICIES.items()}, "derived": m.derived}
     if m.derived.get("kinds"):
         out["sensitivity"] = {name: sensitivity(m, c, k) for name, (c, k) in POLICIES.items()}
     return out
 
 
+def recorded(ck: Check, m: Model) -> Model:
+    """`ck`'s record as a model beside `m`, the model at its dials: the record's columns in one part (its |C|, else
+    the model's tokens at the record's w and σ; its tokens σ|C|/w, the model's steps and the record's Δ_grad), with the
+    model's fresh products and its steps at the record's w, Δ_t and partial gradient (`Check.menu`'s, else the
+    model's). `rho` takes its token kind and Fit from page_rho on the columns, which one part can't give where the
+    record's w_fit or ᾱ/α_max differ."""
+    col = ck.columns
+    if "C_gates" in col:
+        gates, tokens = col["C_gates"], col["sigma"] * col["C_gates"] / col["w_gates"]
+    else:
+        tokens = m.measured.tokens
+        gates = tokens * col["w_gates"] / col["sigma"]
+    u = algorithm_policy.profile(col["u_points"])
+    part = formalism.Part(gates, tokens, col["sigma"] * gates, col["sigma"] * gates,
+                          sum(p.steps for p in m.measured.parts), col["delta_grad_bits"])
+    me = formalism.Measured((part,), col["tau_bits"], col["a_bits"], u, algorithm_policy.profile(col["u_in_points"]),
+                            col["delta_bits"], col["d_gates"], {}, next((x for x, b in u if b > 0), 0.0), None,
+                            col["delta_t_bits"])
+    steps = tuple(replace(s, delta_g=s.delta_g if s.partials else ck.menu.get("delta_g_bits", s.delta_g),
+                          delta_t=me.delta_t, w=col["w_gates"]) for s in m.steps)
+    return replace(m, measured=me, w_fwd=col.get("w_fwd_gates", m.w_fwd), steps=steps)
+
+
 def _check(ck: Check, workload: str) -> dict:
-    """A pilot record beside its model (`Check`): the token kind's ρ (te_core's) by page_rho on the record's columns at
-    each policy, and the model's at the check's dials."""
+    """A measured record beside its model (`Check`): at each policy the token kind's ρ (te_core's, by page_rho on the
+    record's columns) and the model's at the check's dials, and every kind's term on each (`recorded`, `rho`); each
+    input's source on the record (its `status`) and on the model (`input_status` beside the record)."""
     m = model(workload, **ck.dials)
-    return {"record": ck.record, "source": RECORD_SOURCE, "dials": m.dials, "differs": ck.differs,
-            "record_inputs": ck.columns, "model_inputs": columns(m),
-            "rho": {name: {"record": _finite(algorithm_policy.page_rho(ck.columns, c, k)[0]),
-                           "model": rho(m, c, k)["te_core"]["rho"]} for name, (c, k) in POLICIES.items()}}
+    rec = recorded(ck, m)
+    out = {"record": ck.record, "source": ck.source, "dials": m.dials, "differs": ck.differs,
+           "record_inputs": ck.columns | ck.menu,
+           "record_status": {key: ck.status.get(key, "measured") for key in (*ck.columns, *ck.menu)},
+           "model_inputs": columns(m), "model_status": input_status(m, (ck,)), "rho": {}}
+    for name, (c, k) in POLICIES.items():
+        page = algorithm_policy.page_rho(ck.columns, c, k)
+        r, mr = rho(rec, c, k, page), rho(m, c, k)
+        out["rho"][name] = {"record": _finite(page[0]), "model": mr["te_core"]["rho"],
+                            "kinds": {side: {key: x[key] for key in CHECKED} for side, x in (("record", r),
+                                                                                            ("model", mr))}}
+    return out
+
+
+#: what a check keeps of `rho` on its record and on the model
+CHECKED = ("rho", "basis", "binding_kind", "rests_on", "bound", "terms", "te_core", "fit_fails")
 
 
 def reference() -> dict:
     """Every workload's reference points and checks at `POLICIES` (module docstring): `workloads.json`."""
     out = {"id": "te_core.workloads", "te_core": VERSION, "reading": "B", "spec": NOTE,
            "policies": {name: {"c": c, "k": k, "what": POLICY_NOTES[name]} for name, (c, k) in POLICIES.items()},
-           "kinds": KINDS, "fit": FIT, "widths": {kind: list(w) for kind, w in WIDTHS.items()},
+           "kinds": KINDS, "fit": FIT, "menu_status": MENU_STATUS, "fresh_fields": FRESH_FIELDS,
+           "widths": {kind: list(w) for kind, w in WIDTHS.items()},
            "gates_per_mac": {kind: per_mac(kind) for kind in ("gemm/bf16", "gemm/e4m3", "gemm/fp4", "gemm/f32",
                                                               "elementwise/bf16", "elementwise/f32")},
            "workloads": {}}
@@ -1079,7 +1255,7 @@ def reference() -> dict:
             "title": w.title, "what": w.what,
             "dials": [{"name": d.name, "unit": d.unit, "default": d.default, "range": list(d.range), "why": d.why}
                       for d in w.dials],
-            "points": {name: point(model(w.name, **settings)) for name, settings in w.points},
+            "points": {name: point(model(w.name, **settings), w.checks) for name, settings in w.points},
             "checks": {ck.name: _check(ck, w.name) for ck in w.checks}}
     return out
 
@@ -1105,12 +1281,18 @@ def table(ref: dict) -> str:
                 lines.append(f"| {name} | {pname} | " + " | ".join(cells)
                              + f" | {fails} | {_fmt(r['rho'])} | {r['basis']} |")
         lines.append("")
-    lines += ["checks, the token kind (te_core's rho):", "", "| workload | check | " + " | ".join(POLICIES) + " |",
-              "|---|---|" + "---|" * len(POLICIES)]
-    for name, w in ref["workloads"].items():
-        for cname, ck in w["checks"].items():
-            cells = [f"{_fmt(ck['rho'][q]['record'])} record, {_fmt(ck['rho'][q]['model'])} model" for q in POLICIES]
-            lines.append(f"| {name} | {cname} | " + " | ".join(cells) + " |")
+    for q in POLICIES:
+        lines += [f"{q}, the checks: each kind's term on the record / on the model at its dials", "",
+                  "| workload | check | " + " | ".join(heads) + " | rho | basis |",
+                  "|---|---|" + "---|" * (len(KINDS) + 2)]
+        for name, w in ref["workloads"].items():
+            for cname, ck in w["checks"].items():
+                rm = [ck["rho"][q]["kinds"][side] for side in ("record", "model")]
+                cells = [" / ".join(_fmt(r["terms"][kind]) if kind in r["terms"] else "n/a" for r in rm)
+                         for kind in KINDS]
+                lines.append(f"| {name} | {cname} | " + " | ".join(cells) + f" | {' / '.join(_fmt(r['rho']) for r in rm)}"
+                             f" | {' / '.join(r['basis'] for r in rm)} |")
+        lines.append("")
     return "\n".join(lines)
 
 
