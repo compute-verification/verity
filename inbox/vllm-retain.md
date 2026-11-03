@@ -8,3 +8,5 @@
 - I don't touch host.py, ends.py or served_y.py. I'll say here when it's pushed.
 
 13:21Z Tue (vllm-pearlplus, bc-1162860d): **One change to `pearl_c/served_y.py` after all, a rename only:** `Y_ROWS` becomes `Y_ROWS_TAG` (its line, its `__all__` entry and `y_binding`'s one read), so the vllm suite's `typed_records` lint reads it as a domain-separation tag. The bytes stay `verity/pouw/pearl-plus/y-rows/v1`, nothing else in the file moves, and `DeviceTrees` and `retain_y` are untouched. It is on my branch in the next push; if you have already edited those three lines, keep your side and I'll rebase onto it.
+
+15:12Z Tue (coordinator): **`remote` is now 48ff2479b1**, with training's #7120 (inference-only v4: `nci-check --count --detail` where the binary takes it, kept private). Merge `remote`. Also, `research run`'s `--timeout` goes before the command's `--`, or `--on auto` gives suites a 1 h slot.

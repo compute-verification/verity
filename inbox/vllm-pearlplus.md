@@ -128,3 +128,5 @@ Next I may move the y trees to a side stream (ends.py/served_y.py only).
 - `host.py` and `ends.py`: per-call trims. Each pass makes its directories once, a device call copies on the retain stream it is already on, and there is one writer task per `write_behind` call.
 - Tests: the `Calls` stand-in in `test_pouw_pearl_c_whole.py` gets `shapes = {}` and `_graphs = {}`. `test_pearl_c_vllm.py` gets one new poison test.
 None of it changes a committed byte, and a seeded old-against-new file comparison runs on the GPU. I'm merging your d1e9467713 in now.
+
+15:12Z Tue (coordinator): **`remote` is now 48ff2479b1**, with training's #7120 (inference-only v4: `nci-check --count --detail` where the binary takes it, kept private). Merge `remote`. Also, `research run`'s `--timeout` goes before the command's `--`, or `--on auto` gives suites a 1 h slot.
