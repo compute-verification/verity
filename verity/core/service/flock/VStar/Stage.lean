@@ -1,4 +1,5 @@
 import VStar.Cap
+import VStar.Link
 import VStar.Parts
 
 /-!
@@ -19,13 +20,14 @@ opening-only shape, one instance, `rec-opening/m<m>-c<claims>-p<j>`: `stacked/op
 Every session ends with a `RecCap` per later Ligerito level `l`, over both reps' `2 · 2^cap_l` nodes of its tops
 (`rec-cap/n<N>-l<l>`: `cap/L<l>`, `levelCapStatements`), then `RecCap` over the `2^cap₀` nodes of the table's level-0 cap
 (`rec-cap/n<N>`: `cap`, `capStatement`), which hold each node of every level's committed tops at a fixed row whatever the
-coins draw.
+coins draw. A session whose statement carries the inner population's link table has, just before that last cap, the
+table's `RecLink{UB, PB}` over its `N = grid(L)` rows, instance `i` checking row `i` (`rec-link/u<UB>-p<PB>`: `links`).
 -/
 
 namespace VStar
 
 /-- One of V*'s statements. `sparse`'s `hRound` is the table's round whose message is its port `h`; `opening`'s `ports`
-are its part's row ports, `[name, elements]`, and `nv` its v elements. -/
+are its part's row ports, `[name, elements]`, and `nv` its v elements; `link`'s `N` is the link table's rows. -/
 inductive Stmt where
   | recOpen (level LANES H n : Nat)
   | inner (j : Nat) (name : String) (part : Part)
@@ -33,6 +35,7 @@ inductive Stmt where
   | sparse (sh : Flock.RecSparse.Shape) (hRound : Nat)
   | opening (m c j : Nat) (S : Flock.RecOpen.GfS) (ports : List (String × Nat)) (nv : Nat)
   | cap (level N : Nat)
+  | link (UB PB N : Nat)
   deriving Inhabited
 
 def recOpenSub (LANES H : Nat) : Sub :=
@@ -71,6 +74,7 @@ def Stmt.name : Stmt → String
   | .sparse sh _ => Flock.RecSparse.unitName sh
   | .opening m c j .. => Flock.RecOpening.unitName m c j
   | .cap l N => capName l N
+  | .link UB PB _ => linkName UB PB
 
 def Stmt.instances : Stmt → Nat
   | .recOpen _ _ _ n => n
@@ -79,6 +83,7 @@ def Stmt.instances : Stmt → Nat
   | .sparse .. => 2
   | .opening .. => 1
   | .cap _ N => N
+  | .link _ _ N => N
 
 def Stmt.dir : Stmt → String
   | .recOpen level .. => s!"L{level}"
@@ -88,6 +93,7 @@ def Stmt.dir : Stmt → String
   | .opening _ _ j .. => s!"stacked/open/p{j}"
   | .cap 0 _ => "cap"
   | .cap (l + 1) _ => s!"cap/L{l + 1}"
+  | .link .. => "links"
 
 def Stmt.sub : Stmt → Sub
   | .recOpen _ L H _ => recOpenSub L H
@@ -97,6 +103,7 @@ def Stmt.sub : Stmt → Sub
   | s@(.opening _ _ _ _ ports _) =>
     { id := s.name, template := "rec-residuals", inputs := ports.map (·.1) ++ ["v"], outputs := ["out"] }
   | .cap l N => capSub l N
+  | .link UB PB _ => linkSub UB PB
 
 def Stmt.unit : Stmt → Except String UnitC
   | .recOpen _ L H _ => recOpenUnit L H
@@ -105,6 +112,7 @@ def Stmt.unit : Stmt → Except String UnitC
   | .sparse sh _ => sparseUnit sh
   | s@(.opening _ _ _ S ports nv) => pure (openingUnit s.name S ports nv)
   | .cap l N => pure (capUnit l N)
+  | .link UB PB _ => linkUnit UB PB
 
 /-- V*'s statements over an inner session of shape `sh`, in `stage`'s order. -/
 def statements (sh : Algebra.Shape) : Except String (Array Stmt) := do

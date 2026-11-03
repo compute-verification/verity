@@ -39,7 +39,7 @@ abbrev ligC (sch : Schedule) : ℕ := (1 + (sch.levels.size - 1)) * qAll sch
 
 /-- **A rep's verification makes at most `ligC sch + B` calls**, `B` bounding its session's streams' rounds, whether it
 accepts or throws. -/
-theorem cl_verifyRep (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session)
+theorem cl_verifyRep (h : ByteArray → ByteArray) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord)
     (i r : ℕ) (bytes : ByteArray) (B : ℕ) (hB : ∀ s ∈ sess.streams, s.rounds.size ≤ B) :
     CL (verifyRepWith (Hashes.logged h) spec st sch sess i r bytes) (ligC sch + B) := by
   unfold verifyRepWith

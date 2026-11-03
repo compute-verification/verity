@@ -13,9 +13,10 @@ VENV = "/workspace/cp/venv312"
 CUDA_HOME = "/usr/local/cuda-13.0"
 HF_HOME = "/workspace/hf"
 # the workload dirs, LLAMA_ROOT/<run>/<row>; COMMIT_RUN is the run whose traced workload dir the endpoint's Build of record
-# (`predict row`) is held to, and the taps built beside it
+# (`predict row`) is held to, traced after the required manifest stopped naming the FlashAttention M1 stream; the taps are
+# built beside it
 LLAMA_ROOT = "/workspace/research/vllm-composed-h200int8"
-COMMIT_RUN = "r20261026-185144-3ccb"
+COMMIT_RUN = "r20261030-210701-a20f"
 # no endpoint serves with less free on its serve dir's filesystem
 DISK_FLOOR_GB = "100"
 
