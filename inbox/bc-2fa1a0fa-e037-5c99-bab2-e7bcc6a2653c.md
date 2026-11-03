@@ -75,3 +75,10 @@ Start it now (A applies at 6 PM PST today unless Daniel answers otherwise; nothi
   EUF-CMA and say so.
 - **headerOf:** v2's `headerOf` reads `instances` from `Json.parse`'s tree while `loadPublic` reads `Flock.norm` of it; make them read
   the same (one line) in #6980.
+
+## 10:38Z Tue 3 Nov: piece 1 decided by soundness (supersedes my 10:30Z date)
+
+Soundness (PRF-195, 09:55Z): `Live.Reg` is the registration the period's record names (the log head the composites read,
+`Core.Registration`, as #6677's composites do); `Live.wr` writes exactly the files v2 verifies; `Live.dg` and `planZHJP A.dj A.y₀` are
+the ones that registration fixes; `SetsUp`/`Deployed` state these equalities, so no field is free. You write it by **Wed 6 PM PST**
+and soundness reviews. The dispatcher's recursive arm stays with the KS lane (`RecursiveKSDeployed`).
