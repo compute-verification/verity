@@ -10,7 +10,7 @@ must agree.
 
 The functions, `pous-setup-difftest` (`PousCheck.SetupDifftest.table`): the maps d, σ and D (`_Field`), the keys
 (`expand_prefix`, `sha512_keys`, and which candidate t is), `decode_segment` with its refusals by kind, the commitment with
-its manifest (the identity hash itself is `core_identity`'s, difftested there). The spec's §7 file is held to §7's SHA-512, and each of its vectors and
+its manifest (the identity hash itself is `core_identity`'s, difftested there). The spec's vectors file is held to its pinned SHA-512, and each of its vectors and
 σ rejection cases to what Lean computes from the vector's inputs.
 
 The maps and the setup keep to widths where Python's `_Field.square` reduces fully (`4·c0² < 2^w`, the spec's ladder and
@@ -44,7 +44,7 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 
 ID = "verity/pous/p2/v4/setup"
 LADDER = [(64, 189), (96, 17), (128, 173), (192, 237), (256, 189), (384, 317), (512, 569), (1024, 105)]
-"""The spec's reduced widths (§1), each `2^w − c0` prime and ≡ 3 mod 4, so `encode_segment`'s roots exist."""
+"""The spec's reduced widths, each `2^w − c0` prime and ≡ 3 mod 4, so `encode_segment`'s roots exist."""
 FULL = (16448, 21065)
 REJECTING = (24, 65533)
 """t rejects a candidate with probability c0 / 2^w ≈ 2^-8 (keys only: `_Field.square`'s folds don't reduce here)."""
@@ -52,7 +52,7 @@ INVALID = [(20, 189), (16, 5), (64, 3), (64, 0), (64, 1 << 16 | 1), (0, 189)]
 """(w, c0) that `P2Params` refuses: not whole bytes, not above 16 bits, c0 ≢ 1 mod 4, c0 = 0, c0 ≥ 2^16, w = 0."""
 VECTORS_SHA512 = ("959911fd371111fe20c4cee6fc532ff205bbf377962c73ac539a4d2de9b22121"
                   "287e6e996d9ae4bfbef9f26fcd67ac78620873702c8b2899bc41a21bdd76e853")
-"""§7's SHA-512 of `vectors.json`."""
+"""The SHA-512 of `vectors.json` (`reference.VECTORS_SHA512`)."""
 
 
 def _hex(x: int, n: int) -> str:
@@ -449,18 +449,18 @@ def test_decode_refuses_by_kind(fn_server):
         assert {"payload", "noncanonical", "width", "shape", "salt", "segments"} <= kinds, kinds
 
 
-# The spec's §7 vectors.
+# The spec's vectors.
 
 def _vectors() -> dict:
     raw = SPEC_VECTORS.read_bytes()
-    assert hashlib.sha512(raw).hexdigest() == VECTORS_SHA512, "vectors.json is not §7's"
+    assert hashlib.sha512(raw).hexdigest() == VECTORS_SHA512, "vectors.json is not the pinned file"
     v = json.loads(raw)
     assert (v["schema"], v["protocol"], v["randomness"]) == ("p2-test-vectors/v4", "p2/v4", "verity/randomness/derive/v2")
     return v
 
 
 def vector(v) -> dict:
-    """What §7 records for the vector: its hash (pinned by §7), keys, rejection index, and `D(c) = m` below p and 2^b."""
+    """What the file records for the vector: its hash (pinned), keys, rejection index, and `D(c) = m` below p and 2^b."""
     nb = v["w"] // 8
     assert v["decoded_m"] == v["m"], v["id"]
     return {"sha512": v["sha512"], "pinned": True, "K": _hex(int(v["K"], 16), nb), "t": _hex(int(v["t"], 16), nb),

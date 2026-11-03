@@ -1,4 +1,4 @@
-"""The one-stage audit's verifier of record (`one_stage.verifier`): the Lean and the Python run on every check, both
+"""The one-stage audit's verifier (`one_stage.verifier`): the Lean and the Python run on every check, both
 outcomes are recorded beside the one of record, a disagreement is refused naming both, Lean that can't run fails closed,
 and `RECORD_VERDICT` switches the record back to Python in one line."""
 
@@ -41,14 +41,14 @@ def _public(rec: dict) -> tuple:
 
 
 def _rule(spec: S.Spec, rec) -> tuple[Verdict, Verdict]:
-    """The public-items rule by the verifier of record, and the service's Python."""
+    """The public-items rule by the verifier, and the service's Python."""
     py = S.check_public(spec, rec)
     return V.check_public(py, rec, S.SCHEME, spec.check.query, [(v.name, v.registered) for v in spec.values],
                           [p.item for p in spec.public]), py
 
 
 def _held(verdicts: dict, outputs: tuple = ()) -> tuple[Verdict, Verdict]:
-    """The outcome's hold on the verdicts by the verifier of record, and the service's Python."""
+    """The outcome's hold on the verdicts by the verifier, and the service's Python."""
     py = S.check_verdicts(verdicts, [SESSION], outputs)
     return V.check_verdicts(py, verdicts, [SESSION], outputs), py
 
@@ -80,6 +80,31 @@ def test_every_check_runs_both_and_records_them():
     assert canonical_json({k: x for k, x in rec.items() if k != "verifiers"}) == canonical_json(_python_record(_args(reg, draw)))
     bad = V.audit_record(**_args(reg, draw, session_roots={"x": "00" * 64}))
     assert not bad["accepted"] and bad["verifiers"]["agree"] and bad["verifiers"]["lean"]["failed"] == ["roots"]
+
+
+def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_does():
+    """`audit_record`'s sessions' roots (`Record.checks`) and the registered reads it keeps (`Record.ownRegistered`), which
+    the Lean compiles on a hash map of the registration's roots, against the Python's whole: the sessions' roots all
+    right, one wrong, one at a port the registration doesn't name, and a port registered twice, read at its last root;
+    and verdicts reporting reads of the registration's own port and of a value it doesn't name, of which only its own is
+    kept."""
+    _, reg, draw = _drawn()
+    rec = reg.record
+    roots = {r["port"]: r["root"] for r in rec["roots"]}
+    x = rec["roots"][0]["port"]
+    twice = {**rec, "roots": [*rec["roots"], {**rec["roots"][0], "root": "77" * 64}]}
+    reads = _lean(registered={"0": {"value": x, "root": roots[x]}, "1": {"value": "elsewhere", "root": "00" * 64}})
+    for registration, given, verdicts, failed in (
+            (rec, roots, _lean(), []), (rec, {**roots, x: "77" * 64}, _lean(), ["roots"]),
+            (rec, {**roots, "elsewhere": "00" * 64}, _lean(), ["roots"]),
+            (twice, {**roots, x: "77" * 64}, _lean(), ["receipt"]), (twice, roots, _lean(), ["receipt", "roots"]),
+            (rec, roots, reads, ["registered"])):
+        a = {**_args(reg, draw, registration=registration, verdicts=verdicts), "session_roots": given}
+        got = V.audit_record(**a)
+        assert got["verifiers"]["agree"] and got["verifiers"]["lean"]["failed"] == failed, got["verifiers"]
+        py = audit.audit_record(**a, session_registered=audit.session_registered(verdicts, registration))
+        assert canonical_json({k: v for k, v in got.items() if k != "verifiers"}) == canonical_json(py)
+    assert got["checks"]["registered"]["detail"]["opened"] == [x]
 
 
 def _lean_answering(monkeypatch, fn: str, answer):
@@ -188,7 +213,7 @@ def test_the_runs_hello_is_checked_by_both(monkeypatch):
 
 
 def test_a_streams_coins_are_the_leans(monkeypatch):
-    """A stream's default coins are the Lean verifier of record's `IO.getRandomBytes` (A3): every byte its salt and its
+    """A stream's default coins are the Lean verifier's `IO.getRandomBytes` (A3): every byte its salt and its
     draw read is a `coins` answer, and the draw of record is the Lean's on exactly those bytes."""
     a, b = V.coins(64), V.coins(64)
     assert len(a) == len(b) == 64 and a != b and V.coins(0) == b""

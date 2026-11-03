@@ -1,6 +1,6 @@
 """The H200 walking skeleton: steps of the frozen MQA shape (or a small one) on the plain INT8 weights loaded once
 into the device's memory (``--weights staged`` decodes them from the store into staging), every op's output committed per step,
-drawn units replayed bit for bit, each subprotocol run or named, and the replay bundle and block record written to ``--out``.
+sampled proof blocks replayed bit for bit, each subprotocol run or named, and the replay bundle and block record written to ``--out``.
 
     python examples/h200/run.py --out OUT [--shape tiny|small|slice|h200] [--seed test|demo|TEXT] [--batch B]
         [--steps T] [--prompt-bytes P] [--requests N --generate G --admit A] [--device cpu|cuda] [--weights resident|staged] [--micro-batch M]
@@ -15,12 +15,12 @@ and the run keeps every step's tables and replays from them.
 ``--weights-file W`` serves W itself (the file network's load sink writes) through `store.FileStore`: before the first step
 every tensor's sha256 is checked against the manifest ``M`` (`SW.manifest`'s), and the run refuses (exit 5) on any mismatch.
 
-Under ``--commit slots`` (kernels' per-slot tree) a lockstep run keeps no step's tables: ``--open K`` slots drawn by a fixture coin
+Under ``--commit slots`` (kernels' per-slot tree) a lockstep run keeps no step's tables: ``--open K`` slots sampled by a fixture coin
 are replayed alone and their slot roots compared with the committed ones (`e2e_h200.opening`), then ``--draw K`` units a
 family of the replayed step are replayed against the Definitions and opened against the step's root. The by-table backends
 keep every step's tables and replay from them.
 
-Exit 0 when every drawn unit replays to its committed word, every opened slot to its committed root and every subcircuit's
+Exit 0 when every sampled proof block replays to its committed word, every opened slot to its committed root and every subcircuit's
 own check holds (a PoUW unit's z the served sums, `e2e_h200.percall`), 3 when one doesn't (``--tamper OP`` flips bit 0 of
 OP's committed words at every step: replay or opening must find it), 4 when a leg's fixture check fails, 5 when
 ``--weights-file`` isn't its manifest's W.

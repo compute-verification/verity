@@ -4,8 +4,8 @@
   python3 analyze.py agree DIR_A DIR_B      # a repeat: every rate both measured within 2%; exit 1 otherwise
 
 DIR holds every rows.jsonl and gate.json of one family's run (run.sh writes probes/ and scalar/ under $OUT). A rate in
-rows.jsonl is warp instructions a SM a clock; this turns it into slots (32-bit destination cells, note:20261017T0321Z-
-draft-eps1-tensor §1) a SM a clock, the issue rate of every timed loop, and for each joint row the issue cycles a tensor
+rows.jsonl is warp instructions a SM a clock; this turns it into slots (32-bit destination cells) a SM a
+clock, the issue rate of every timed loop, and for each joint row the issue cycles a tensor
 instruction takes from the lane beside it (a = (lane alone - lane beside) / tensor beside, F1's coefficient):
 
 - sm90 (M3): ρ_T over every wgmma and mma.sync form; pass when none exceeds wgmma s8 m64n256k32 by more than 2%.

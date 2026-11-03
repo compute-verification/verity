@@ -11,7 +11,7 @@ verifier's work is the sum of the distinct types' nonzeros.
 over the ``K/G`` tiles from +0 and the bf16 cast: ``_block_acc``'s own order, checked against the Definition's IR reference
 and the served kernel's numpy twin by the caller. :func:`fp8_block_linked`: the same two circuits as two statements whose
 units return their outputs (the writer's output row of the cut words, the reader's input row), the form a link between two
-statements' rows (PROTOCOL.md §16.13) proves today."""
+statements' rows (PROTOCOL.md §16.13) proves."""
 from __future__ import annotations
 
 import hashlib

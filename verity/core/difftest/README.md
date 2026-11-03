@@ -1,16 +1,19 @@
 # verity/core/difftest: the Lean against the Python that mirrors it
 
-Lean is the definition and the verifier of record (Daniel, 18 Oct; root `AGENTS.md`, "Design rules"), and Python mirrors
-it for the prover's speed. Each piece of core in executable Lean (`verity/core/<core path>`, a Lake package of its own) and
-its Python are held together by a differential test: Hypothesis draws inputs, invalid ones included, and each goes to the
+Lean is the definition and the verifier of record (root `AGENTS.md`, "Design rules"), and Python mirrors it for the
+prover's speed. Each piece of core in executable Lean (`verity/core/<core path>`, a Lake package of its own) and its
+Python are held together by a differential test: Hypothesis draws inputs, invalid ones included, and each goes to the
 Python (the harness's `reference`) and to the Lean executable, which must agree exactly. Until a protocol's verifier of
-record switches to its Lean (the 8 Oct procedure, `.agents/skills/friction/SKILL.md`), its Python verifier is what the Lean
-is checked against; after, the Python is held to the Lean.
+record switches to its Lean (on evidence, by the procedure in `.agents/skills/friction/SKILL.md`), its Python verifier
+is what the Lean is checked against; after, the Python is held to the Lean.
 
 - `lean/` is the Lake package `verity_difftest`, lib `Difftest`: `Difftest.serve` answers requests `{"fn", "input"}` one
   JSON line at a time with `{"output"}`, `{"reject"}`, or `{"error"}` for a protocol fault (an unknown `fn`, a bad
   request, an output with no canonical form). Output is canonical JSON, written by C-Flock's `Flock.canon` (required by path
-  from `verity/core/service/flock`). `difftest-example` is the port the harness's own tests drive.
+  from `verity/core/service/flock`). `difftest-example` is the port the harness's own tests drive. `annot-difftest`
+  (`AnnotDifftest.lean`) serves C-Flock's annotation check, `Flock.Annot`, and its per-gate reference, for the tests that
+  hold `verity.ml.circuits.query_ast` to them; `verity_difftest.annot` is its Python side (`port`, `server`, `instance`,
+  and `INPUTS`, the files a calling suite declares), and `tests/test_annot.py` holds it to `query_ast` on small Programs.
 - `python/verity_difftest` is the Python side: `Port`, `run`, `replay`, `Server`, `server_fixture`, `canonical`. `run`
   keeps one server open, compares outputs as canonical JSON, requires reject parity (both reject or neither; reasons may
   differ), treats an undeclared exception or a protocol fault as a difference, and fails a vacuous run (no output, or no

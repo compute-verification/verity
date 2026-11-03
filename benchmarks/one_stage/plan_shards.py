@@ -1,6 +1,6 @@
 """The sharded plan unit (`PlanShard_v1`, `verity.ml.circuits.requirement_units`) on a recorded remote session: each pass's
 plan cut into the store's shards, one instance a shard a pass, every instance held to the unit's reference, each distinct one
-to the circuit, and one staged by C-Flock's `UnitStager` for its fit in M0's block.
+to the circuit, and one staged by Flock's `UnitStager` for its fit in M0's block.
 
     uv run python benchmarks/one_stage/plan_shards.py --session remote_session.json --record verifier.json --out DIR \\
         [--S 32768] [--gaps 0] [--no-circuit] [--no-stage]

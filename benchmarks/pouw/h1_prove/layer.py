@@ -1,4 +1,4 @@
-"""A recorded H1 layer: the int8 codes the H1 numerics (co32c-u16, decision 82; `edited_gemm/cgemm.cu` under
+"""A recorded H1 layer: the int8 codes the H1 numerics (co32c-u16; `edited_gemm/cgemm.cu` under
 ``CG_NUMERICS=h1``) serve for one decoder layer's K = 4096 linears, from a Llama-3.1-8B checkpoint on the CPU.
 
 * **Weights.** Each linear's rows (q, k, v, gate, up of layer L) quantized per output row to H1's ±110 codes:

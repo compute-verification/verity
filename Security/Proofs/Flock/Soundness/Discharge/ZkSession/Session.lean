@@ -47,9 +47,8 @@ averaged over the draw (`ksAvgZK`). The lowering comes from each drawn unit's pl
   verifier never absorbs it, and a prover that picks it after the inner proof's batching coins can cancel the batched
   constraint. This statement describes the live verifier once it absorbs `final_c'` before the inner proof's label.
 * *The coin step in the session.* Coins here are fresh after each prover message (A6's per-round form). C-Flock ZK draws
-  them from a coin tree committed before the prover's first message; `coin_fresh` / `coinLeaf_fresh` (Coins.lean) bound
-  each round's coins within `δ_hide` of fresh from `Claims.Hm96Hiding`, but composing that into this session needs
-  a round-by-round form of the session bound or a committed-coin semantics of `Game`.
+  them from a coin tree committed before the prover's first message; composing that into this session needs a
+  round-by-round form of the session bound or a committed-coin semantics of `Game`.
 * *The non-ZK session's structural guarantees*, unchanged: the drawn units' places (`UnitPlace`: W6, `Layout.Aliased`),
   the constant and zero columns, and the rows' commit (`HmRowComputes`), as the headline takes them.
 -/

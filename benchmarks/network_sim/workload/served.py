@@ -225,7 +225,7 @@ def requests(spec: Config, seed: int) -> list[int]:
 
 def weights(served: Served, seed: int) -> list[int]:
     """The weights record's words in leaf order: the module's tensors as `weights_binding` names them, its norms ones, its
-    embedding and linears drawn from a seeded normal (bf16), its rotary table as the module computes it."""
+    embedding and linears sampled from a seeded normal (bf16), its rotary table as the module computes it."""
     import torch
     torch.manual_seed(seed)
     m = _module(served.spec)

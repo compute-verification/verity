@@ -4,7 +4,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Defs
 # A hidden-output statement's Δ (`HiddenDelta`)
 
 `HmOut.delta` is `HmRow.delta`'s pairs, then the output rows' message bits: per template instance `g`, output port `j`, row word `k` and
-bit `t < 16`, the pairs `outPairs` lists. Its loops are `forIn_range_append`'s, but for the port loop, which also carries
+bit `t < 16`, the pairs `outPairs` lists, then the pinned outputs' (`HmOut.pinPairs`, `pinList`), none where no output is
+pinned (`hidden_delta_unpinned`). Its loops are `forIn_range_append`'s, but for the port loop, which also carries
 the template instance's first output word of port `j`, `outAt c j` (`forIn_range_at`).
 -/
 
@@ -52,21 +53,52 @@ theorem forIn_range_at {γ : Type} (G : ℕ → List γ) (A W : ℕ → ℕ) (n 
     (fun a _ h2 d => hf a (by simp only [Std.Legacy.Range.size] at h2; omega) d) d
   simpa [Std.Legacy.Range.size, List.range_eq_range'] using this
 
-theorem run_pair (m : Id (Array (ℕ × ℕ))) (da db : Array (ℕ × ℕ)) (L : List (ℕ × ℕ)) (hm : (Id.run m).toList = L) :
-    (m >>= fun s => pure (da ++ s, db ++ s) : Id _).run = (da ++ L.toArray, db ++ L.toArray) := by
-  show (da ++ Id.run m, db ++ Id.run m) = _
+theorem run_pair (m : Id (Array (ℕ × ℕ))) (da db e : Array (ℕ × ℕ)) (L : List (ℕ × ℕ)) (hm : (Id.run m).toList = L) :
+    (m >>= fun s => pure (da ++ s ++ e, db ++ s ++ e) : Id _).run = (da ++ L.toArray ++ e, db ++ L.toArray ++ e) := by
+  show (da ++ Id.run m ++ e, db ++ Id.run m ++ e) = _
   rw [← hm, Array.toArray_toList]
+
+/-- **Δ's pairs on the pinned outputs are `pinList`.** -/
+theorem pinPairs_toList (c : Circuit) : (HmOut.pinPairs c).toList = pinList c := by
+  unfold HmOut.pinPairs
+  simp only [bind_pure]
+  refine forIn_range_append _ _ (fun g _ d => ⟨_, rfl, ?_⟩) #[]
+  refine forIn_range_append _ _ (fun o _ d => ⟨_, rfl, ?_⟩) d
+  refine forIn_range_append _ _ (fun t _ d => ⟨_, rfl, ?_⟩) d
+  simp only [Array.toList_push, List.append_assoc, List.cons_append, List.nil_append]
+  rfl
+
+theorem pinPairs_eq (c : Circuit) : HmOut.pinPairs c = (pinList c).toArray := by
+  rw [← pinPairs_toList, Array.toArray_toList]
 
 theorem hidden_delta' : HiddenDelta := by
   intro c pin
   unfold HmOut.delta
   simp only
-  refine run_pair _ _ _ _ ?_
+  rw [pinPairs_eq]
+  refine run_pair _ _ _ _ _ ?_
   refine forIn_range_append _ _ (fun g _ d => ⟨_, rfl, ?_⟩) #[]
   refine forIn_range_append _ _ (fun j _ d => ⟨_, rfl, ?_⟩) d
   refine forIn_range_append _ _ (fun k _ d => ⟨_, rfl, ?_⟩) d
   refine forIn_range_append _ _ (fun t _ d => ⟨_, rfl, ?_⟩) d
   simp only [Array.toList_push, List.append_assoc, List.cons_append, List.nil_append]
   rfl
+
+/-- A statement that pins no output has no pinned output word. -/
+theorem pinnedWords_zero {c : Circuit} (h : HmRow.pinnedCount c.metaJ = 0) : HmOut.pinnedWords c = 0 := by
+  unfold HmOut.pinnedWords
+  rw [h, Nat.sub_zero, ← Array.foldl_toList, Array.toList_extract, List.extract_eq_take_drop]
+  simp
+
+theorem pinList_nil {c : Circuit} (h : HmRow.pinnedCount c.metaJ = 0) : pinList c = [] := by
+  unfold pinList
+  rw [pinnedWords_zero h]
+  simp
+
+/-- **`HiddenDelta` where no output is pinned**: `HmRow.delta`, then `outPairs`. -/
+theorem hidden_delta_unpinned {c : Circuit} (h : HmRow.pinnedCount c.metaJ = 0) (pin : ℕ) :
+    HmOut.delta c pin = ((HmRow.delta c pin).1 ++ (outPairs c).toArray, (HmRow.delta c pin).2 ++ (outPairs c).toArray) := by
+  rw [hidden_delta', pinList_nil h]
+  simp
 
 end FlockSoundness.Discharge.Hidden

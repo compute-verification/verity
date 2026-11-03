@@ -150,7 +150,7 @@ def _rank_f2(rows: list[int]) -> int:
 
 @pytest.mark.parametrize("kind", [R.BITS, R.S8])
 def test_theorem_k_hypothesis_on_the_committed_word(kind):
-    """Theorem K (note:20261016T0341Z-draft-fullfloor-s-r5 §3.6) reads a cell's value mod 2 as a quadratic form in the
+    """Theorem K reads a cell's value mod 2 as a quadratic form in the
     input bits: it needs integer operands affine in the bits (the bits tile's bytes are the bits) and a target whose
     (a_k, b_k') coefficients are odd exactly when k = k' (F_2 rank 2K). A word is Σ_k A_k B_k, so its second difference
     in (a_u, b_v) is that coefficient at every base point: 1·[u = v] on bits. The ±1 tile is K's mutation: its

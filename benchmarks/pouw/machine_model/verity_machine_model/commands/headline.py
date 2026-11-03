@@ -5,7 +5,7 @@
                                           in Lean), on the measured vectors), operands free, credit ♭: ε_skip,
                                           ε_mand, ε_machine, ε_luck, their sum (the core ε), γ, q*₀, the
                                           cheater's binding rows and each row's conditions (the floor it needs,
-                                          its fillers' credit, its p = 1 reading); ε is per node (ASK-65 = A):
+                                          its fillers' credit, its p = 1 reading); ε is per node:
                                           the node's GPUs, host CPU and peer GPUs together did at least 1 − ε of
                                           the credited work, and a per-GPU reading is attribution's; --json for
                                           the record"""

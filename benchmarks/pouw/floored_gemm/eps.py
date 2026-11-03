@@ -15,7 +15,7 @@ First it reproduces Lean's `epsS32_values` and `epsP1mu_values` exactly (exit 1 
   its only forced work: s = eta_cap cap steps, N = s / 256 blocks, Rmin = r_u s Nmin / N.
 
 Each shape's arms at their faster tile config (table.best). Usage: eps.py BENCH.jsonl [nu ...]   (nu as fractions of all issue; default 0 0.005 0.04 and W11's upper ends,
-0.00065 at delta = 0.1%, 0.00268 at 0.5% and 0.00534 at 1%: note:20261015T0713Z-draft-filler-issue-slack)
+0.00065 at delta = 0.1%, 0.00268 at 0.5% and 0.00534 at 1%)
 """
 
 import json

@@ -864,7 +864,7 @@ def test_researchs_store_eviction_also_deletes_unused_source_trees_and_says_what
     dest = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
     assert f'"$SRC/store_evict_src.conf" {dest}' in (SKY / "cluster_up.sh").read_text()
     deploy = (SKY.parent / "deploy.toml").read_text()
-    assert f'path = "{dest}"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"\nnodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]' in deploy
+    assert f'path = "{dest}"\nsrc = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"\nnodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]' in deploy
     for u in ("store_evict.service", "store_evict.timer", "store_evict_research.service", "store_evict_research.timer"):
         assert f'"$SRC/$u"' in (SKY / "cluster_up.sh").read_text() and f'src = "tools/research/src/research/pods/nebius/sky/{u}"' in deploy
     assert 'ExecCondition=/bin/grep -qs "timed False" /workspace/pouw/fill/status.txt' in (SKY / "store_evict_timed.conf").read_text()

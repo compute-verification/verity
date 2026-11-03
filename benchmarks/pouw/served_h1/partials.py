@@ -1,7 +1,7 @@
-"""Option A's prover side (CA, 21 Oct 16:04Z): a drawn leaf's 32 lane partials, recomputed after the draw from what serving
+"""Option A's prover side: a drawn leaf's 32 lane partials, recomputed after the draw from what serving
 committed, bit for bit the words the served receipt XORed.  Serving is unchanged: one receipt a 32 × 32 leaf (`receipts`).
-The proof of a drawn leaf is 32 lane sub-statements and a combine that checks the XOR of their partials is the committed
-receipt; this module computes those partials.
+The proof of a drawn leaf is 32 sub-statements, one a lane, and a combine that checks the XOR of their partials is the
+committed receipt; this module computes those partials.
 
 A window (`Window`) holds each call's B [N, K] (s8, the int8 pin's weight) and B root, the call's first position in a step
 (`offs`) and the positions a step (`u_step`); a step (`Step`) its calls' committed A [t, K] (s8, every slot), their A
@@ -69,7 +69,7 @@ class Step:
     @classmethod
     def from_coin(cls, a: list[torch.Tensor], a_roots: list[bytes], m: int, commitment: bytes, coin: bytes, index: int,
                   round_root: bytes) -> "Step":
-        """The step whose units' salt is `h1tile.live_salt` of its coin (the challenger's opening at `index`, drawn after
+        """The step whose units' salt is `h1tile.live_salt` of its coin (the challenger's opening at `index`, flipped after
         `round_root`)."""
         return cls(a, a_roots, m, HT.live_salt(commitment, coin, index, round_root))
 

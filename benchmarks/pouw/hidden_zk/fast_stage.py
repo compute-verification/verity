@@ -243,7 +243,7 @@ def ands_layout(C, in_names, out_names, in_split=None, out_split=None):
     assert len(rows_a) == const
     rows_a.append([const])
     rows_b.append([const])
-    lay = IL.Layout(rows_a, rows_b, const, in_groups, out_groups, {})
+    lay = IL.LoweredUnit(rows_a, rows_b, const, in_groups, out_groups, {})
     lay.counts = {"ands": len(ands), "asserts": len(C.asserts), "rows": len(rows_a), "in_words": lay.in_words,
                   "out_words": lay.out_words, "nnz_a": sum(map(len, rows_a)), "nnz_b": sum(map(len, rows_b)), "reads": 0,
                   "read_rows": 0, "read_nnz_a": 0}

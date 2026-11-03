@@ -143,7 +143,7 @@ theorem work_step (n : ℕ) (p : Accounting.Price) (r : Accounting.PeriodRun (de
     (fun _ : Unit => Paths HonestH1.Ω1 n)) (hs : ∀ ξ, r.schedule ξ = fun _ => step n) (hw : r.win = ⟨0, 1⟩)
     (ξ : (i : Unit) → Paths HonestH1.Ω1 n) : r.work p ξ = p .tc * (65536 * n) := by
   unfold Accounting.PeriodRun.work Accounting.Schedule.work Accounting.Schedule.ops
-  rw [hs, hw, Fintype.sum_eq_single Accounting.Op.tc]
+  rw [hs, hw, Fintype.sum_eq_single Accounting.OpClass.tc]
   · simp [step, device, Accounting.Window.ticks]
   · intro o ho
     simp [step, device, ho]
