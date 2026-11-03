@@ -72,7 +72,7 @@ enters the verifier (§6.3).
 
 Profile `fast100` (§15); two reps on one committed root; the `rs` flavour (univariate skip over the AES subfield);
 `PcsParams(m)` computed from the statement; a link of two points with `y = 0`; `require_link = true`; no prime half; the
-coin source a plain session's identity names (`--coins seed`, the default, or `--coins os`, §7; a `--zk` session's coins
+challenger's coins as a plain session's identity names them (`--coins seed`, the default, or `--coins os`, §7; a `--zk` session's coins
 are its coin tree, §7.4); no grinding: every proof-of-work nonce must be `0` (R4).
 
 ## 5. The session record
@@ -143,19 +143,19 @@ framing does, so a CPU proof and a CUDA proof of one witness replay identically.
 
 The single-table block-R1CS path makes no fork, so the verifier implements none and S11 refuses a child stream.
 
-## 7. Coin sources
+## 7. Coins
 
-The verifier reads every coin from the record; how the server drew them decides only what soundness assumes.
+The verifier reads every coin from the record; how the challenger drew them decides only what soundness assumes.
 
 ### 7.1 `os`
 
-The server draws each round's coins from the OS after recording the round's digest. Soundness assumes only that they are
+The challenger draws each round's coins from the OS after recording the round's digest. Soundness assumes only that they are
 uniform and unknown to the prover before it sent the round. `verify --coins os` binds the identity that mode
 (`FC_COINS=os`) writes; it binds the identity, not who drew the coins.
 
 ### 7.2 `seed`
 
-The server commits to a seed at `Hello` (`coin-commit/sha512`) and derives every coin from it with
+The challenger commits to a seed at `Hello` (`coin-commit/sha512`) and derives every coin from it with
 `verity.ml.randomness` v2; `flock-circuit replay-coins` audits the commitment and the derivation. The verifier still
 reads the coins from the record; with a seed, soundness also assumes the commitment hides it and SHA-512 is a PRF.
 
@@ -179,7 +179,7 @@ The draw is the public header's `unit_draw` (so under the public digest and Σ),
 ### 7.4 The keyed coin tree
 
 `Flock.CoinTree`. A `--zk` session's coins are committed at `Hello` in a `coin-tree/hm96-sha512/v2` tree whose every hash
-is prefixed by the prover's fresh nonce; the server answers with the root and a fresh hm96 key. The verifier checks
+is prefixed by the prover's fresh nonce; the challenger answers with the root and a fresh hm96 key. The verifier checks
 `Hello`'s nonce and canonical form (R7), the record's `coin_tree` (`key`, `nonce`, `root`, `spec`) and that no earlier
 session of the run used the key.
 

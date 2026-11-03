@@ -53,9 +53,9 @@ at most `tableError(fast100 m, shape)`:
 
 ### 1.2 Compiled soundness (`table_sound_compiled`)
 
-This is the protocol as run, in the adopted variant: SHA-512 Merkle caps, openings at the end of the proof, and the coin
-server keeping each round's bytes (`Model/Compiled.lean`: the openings are the table's last message, after both reps'
-coins, and every path is checked against its level's cap). For every classical prover `P*`, whose committed table
+This is the protocol as run, in the adopted variant: SHA-512 Merkle caps, openings at the end of the proof, and the
+challenger keeping each round's bytes (`Model/Compiled.lean`: the openings are the table's last message, after both
+reps' coins, and every path is checked against its level's cap). For every classical prover `P*`, whose committed table
 `T*(P*)` is its plurality table (`C0star`: at each level-0 position, the row `P*` opens there most often over the coins
 after its level-0 cap):
 
@@ -127,7 +127,7 @@ link term per audit.
   the end-to-end theorems with that binding. The headline, `Prog.flock_headline` (`Headline.lean`), is the count curve
   with that binding on the statement's rows' circuit at the live sample under A3 (`ASSUMPTIONS.md`, The headline). Each
   is proved under the assumptions its footprint lists, every hypothesis with its kind: hardness (`cr/sha-512`,
-  `ecr/sha-512`), platform (A3, and A6, the coin server's OS randomness), model, intended to prove (`hHm`, the placements
+  `ecr/sha-512`), platform (A3, and A6, the challenger's OS randomness), model, intended to prove (`hHm`, the placements
   `pp` or `dp`, `lay`, `rs`, `tr`, `hConst`, `hZero`; `assumption-notes/e2e-checklist.md`), or a numeric condition.
 - **Over what the verifier accepts** (`Discharge/FailClosed`). `flock-verify verify` refuses every statement outside the
   forms the proof covers (the verifier's PROTOCOL.md §16.15; `FailClosed.scopeOk_eq`), so the executable's headlines
@@ -176,7 +176,7 @@ link term per audit.
 | Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
-| Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
+| Session binding: the challenger keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`; the definitions in `Definitions/Flock/Compiled.lean` and `Definitions/Flock/Game/Lock.lean`) | proved |
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` proved (`Binding/`) for rows under `HmRowComputes` (named, phase 2i) and the layout's facts; required for sampled audits (§4) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3; its generic step `Lowering.lean`, the placement `ExecSetup.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; for derived rows, the placement from the block matrices proved; the link from `setupH`'s unit net to the derived rows remains |
@@ -364,7 +364,7 @@ term below 2^-170.
   - The *oracle layer* is where the statistical bound lives. There, a committed table is sent as a whole and the
     verifier reads the queried columns (§1.1).
   - The *compiled layer* replaces each table by its SHA-512 Merkle cap plus authentication paths, opened at the end of
-    the proof. The coin server keeps each round's bytes before flipping that round's coins, and the replay compares
+    the proof. The challenger keeps each round's bytes before flipping that round's coins, and the replay compares
     bytes, so no hash binds the rounds (§1.2).
   - **The compiled layer is the adopted variant, not yet the recorded sessions'.** PROTOCOL.md specifies SHA-256 trees
     (§14) and round digests (§6) for the sessions it records, following upstream, and SHA-512 trees as its target. The
@@ -377,7 +377,7 @@ term below 2^-170.
     each table's stream is a subtree and each repetition's coins are independent.
   - **Each round:** the verifier opens a table's coins, with their paths, only after that table's bytes for the round are
     recorded. Every prover machine checks each opening against the root before answering.
-  - **The coin server** runs one instance per datacenter, all opening the one commitment.
+  - **The challenger** runs one instance per datacenter, all opening the one commitment.
   - **Soundness per session** is the union bound over its tables, `Σ tableError`, since each table's bound holds for
     every prover strategy.
 - **The committed values.** Flock runs Ligerito in the list-decoding regime, and no out-of-domain sample follows the

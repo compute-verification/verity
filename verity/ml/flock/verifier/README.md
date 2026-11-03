@@ -28,7 +28,7 @@ A recursive statement is one `verify --zk` per V* part, and no part sees another
 (`rec_part`), the SHA-512 of the shared rows file it checked (`rec_rows_sha512`), of the inner shape file it read
 (`rec_inner_sha512`), of the inner session's record and its transcript (`rec_inner_session_sha512`,
 `rec_inner_transcript_sha512`) and of every input V*'s parts share (`rec_shared`: the inner shape, the inner
-statement's files and how it is set up, the inner session's record, the coin server's transcript, the registration),
+statement's files and how it is set up, the inner session's record, the challenger's transcript, the registration),
 whether it ran `--zk` and its session's coin key. `flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F
 LOG...` (`Flock.RecCompose.check`) gives the statement's verdict: it accepts only when there is one log per V* statement
 with one `VERDICT`, every part is accepted under `--zk` without an identifier at the one rows file the prover staged

@@ -26,7 +26,7 @@ hypothesis carries what the statement doesn't say yet: that the acceptance is th
 
 Soundness rests on five. Three are `Prop`s in `Assumptions.lean`, taken as hypotheses: SHA-512's
 collision resistance in two forms, and the Lean verifier's randomness for the unit sample. The fourth, A6,
-is the coin server's randomness for the round coins, which the model embodies (A6, below). The fifth, `live-verifier`, is
+is the challenger's randomness for the round coins, which the model embodies (A6, below). The fifth, `live-verifier`, is
 the record's custody (`PROTOCOL.md` §17.2): `--zk`'s soundness (`zk_session_sound_custody`) takes it as
 `Assumptions.Zk.RecordCustodyZK`, in `Assumptions/Zk.lean`. The table's last row is zero
 knowledge's, not soundness's: a model claim about the honest prover. The development declares no
@@ -117,16 +117,16 @@ the ZK server's tape.
   salts included.
 - **Upstream:** watch entry `A3-uniform-bytes`.
 
-**A6. The coin server's round coins are independent uniform** (`uniform/flock-coin-server`), for the session's
+**A6. The challenger's round coins are independent uniform** (`uniform/flock-coin-server`), for the session's
 coins.
 
 - **Statement.** Each round's coins are uniform field elements, independent of every earlier round's and sampled after the
   prover's message of that round. The model's session flips its coins exactly so (the games' coin nodes), so A6 is what
   makes the model's coins the run's.
-- **Why it is not a `Prop`.** The session game flips its own coins: no theorem reads a coin source it could be a
+- **Why it is not a `Prop`.** The session game flips its own coins: no theorem reads a byte source for the coins it could be a
   hypothesis about, as A3 is about the unit sample's byte source. Stating it as a `Prop` would need the session played on
   a byte source, which the model doesn't have.
-- **What it assumes of the coin server.** The Rust coin server (`live/src/lib.rs`, `Server::coins`) reads each round's
+- **What it assumes of the challenger.** The Rust challenger (`live/src/lib.rs`, `Server::coins`) reads each round's
   coins from `/dev/urandom` when it has no seed. A3 is about the byte sources the theorems read (the unit sample's, the
   salts' and the ZK server's tape), so it doesn't cover these bytes, which the model's coin nodes sample.
 - **Seed coins are outside it.** By default M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
@@ -289,7 +289,7 @@ refused ones included, with the coins uniform: at a refused coin the prover stop
 prefix on the dummy witness, within `2·|LeafPos|·2^-193` both ways (`ZK.Table.table_abort_hm96`: Lemma A at every coin
 vector and T1 on every pre-final leaf), and elsewhere Lemma B.
 Which verifiers: at each coin vector `zk_session_view` is honest-verifier zero knowledge for those fixed coins. It covers
-a verifier that chooses its coins only because the coin server commits every coin at `Hello`, before the prover's first
+a verifier that chooses its coins only because the challenger commits every coin at `Hello`, before the prover's first
 message (`verity/ml/flock/live/src/coin_tree.rs`), and the prover checks each opening against that commitment before it
 uses the coin; the binding is collision resistance of `x ↦ SHA-512(ν ‖ x)` (`keyed-cr`, watched in `lean-audit.json`).
 No statement models that commitment yet, so this order of messages and the binding assumption are what the

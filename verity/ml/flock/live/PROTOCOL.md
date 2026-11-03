@@ -436,7 +436,7 @@ degenerate coins as they open (the Claim above).
    (probability `p`), so it costs `t` runs in expectation.
 4. **Rewinds**, at most `4t/p̃ = 4·runs`, each to just after the coin commitment and each with a **fresh dummy opening**
    for the extracted coins (`fresh_dummy`: the honest prover on the dummy witness with fresh masks, level-0 padding, extra
-   lanes and salts, against a local coin server that commits to those coins; no interaction with V*). So the rewinds are
+   lanes and salts, against a local challenger that commits to those coins; no interaction with V*). So the rewinds are
    independent trials, each succeeding with V*'s completion probability `p`. Each rewind is V* from the start of the
    session, answered by a scripted prover whose messages are the per-rep SHVZK simulations (`simulate_full` on that fresh
    opening, §8, each rep with its own pair). A `RecordingChallenger` recovers each round's message by replaying the
@@ -507,14 +507,14 @@ relations as their own classes, and fails any value that table j shares with tab
 ## 10. The ZK server's send check: nothing leaves the GPU that the ZK server did not fix
 
 In a recursive session the developer runs a **ZK server** it trusts between its workers, which nobody trusts, and the
-auditor (the coin server and the verifier). The workers may run any kernel; the question is what they can make leave. A
+auditor (the challenger and the verifier). The workers may run any kernel; the question is what they can make leave. A
 **free choice** is any bit a worker can vary that reaches the auditor, or the proof bytes, without the ZK server having either
 computed it itself or held it to a relation that leaves the worker nothing to choose. The send check is the rule, per
 message kind, by which the ZK server removes every free choice.
 
 Where the boundary runs:
 - **Inner phase** (`rec/inner-transcript/v1`, ZK off): the whole M0 prover is the worker, and `verity_flock.rec_live`'s
-  proxy is the ZK server. The coin server receives only the public schedule and salted hashes (§10.3).
+  proxy is the ZK server. The challenger receives only the public schedule and salted hashes (§10.3).
 - **Outer phase** (`flock-circuit prove --zk --gpu`): the device (`flock_cuda_prove_circuit`) is the worker; the host side
   of `flock-circuit` (the masking challenger, the live stream, the send check, and the session's Lean finish it relays) is the ZK server. The
   device reaches the ZK server through three channels: each round's frames (`rounds(content, n)`, at its squeeze), the
@@ -654,14 +654,14 @@ loop's root is the root of record.
 | item | rule | why the M0 prover has no free choice |
 |---|---|---|
 | `Hello` | constant | the ZK server compares the prover's, Σ aside, with the pinned schedule's as canonical JSON (`rec_live.canonical`: sorted keys, no spaces, so `2` and `2.0` differ) and forwards the schedule's own, never the prover's text or object |
-| `Commit`'s level-0 roots | salted | each 64-byte node of each root reaches the coin server as a registered row's `b ‖ c` (`rec_live.top_rows`: its 32 u16 words, then 32 zero words; `hm96-sha512/row/v1`) under its own fresh 192-byte salt; the roots and salts stay in `private.json` |
+| `Commit`'s level-0 roots | salted | each 64-byte node of each root reaches the challenger as a registered row's `b ‖ c` (`rec_live.top_rows`: its 32 u16 words, then 32 zero words; `hm96-sha512/row/v1`) under its own fresh 192-byte salt; the roots and salts stay in `private.json` |
 | a round's caps (its `BYTES` frames that commit a tree) | salted, or counted | a fresh top as the roots, one fresh salt per node; a copy of a level-0 top committed at `Commit` (the rep's binding round's cap, which must be `root_B`, and Ligerito's first absorb) is counted (`level0`), never committed again |
 | a round's free message | salted | `c_k`, its one row committed under a fresh salt (as before) |
 | `Register` | constant | the ZK server answers it itself with the verifier's sample, every unit of the population (`rec_live --draw FILE`, `rec_live.full_draw`: the stratified law at `K = N`, so each stratum's `k` is its size), and the record holds that sample as `unit_draw` from the session's start; `verify --stratified N --program --partition` derives the same sample and refuses any other |
 | statement digest, labels, domain, nonces | dropped | public constants or functions of the hidden statement; never forwarded |
 | `Link`'s `y` | constant `0` | the schedule fixes its length (`link.y` elements of 16 bytes); the ZK server refuses any other byte length, and any nonzero byte |
-| the order of `Hello`, `Commit`, `Link` and `Finish` | constant | the ZK server itself refuses a `Commit` before `Hello` or after the first, a `Link` before `Commit` or after the first, and a `Finish` before the schedule's last round (counted from its own streams, never by reading the coin server), each before any call on the coin server: a request out of its place reaches the coin server as a plain stop at the same point |
-| stream names, `Open`'s parent and position, each round's coin count, its fresh tops' node counts (`tops`), its copies of a level-0 top (`level0`) and its message rows (`commits`: one, or none for a round without a free message) | constant | the pinned schedule's; the ZK server refuses any other. The coin server's record lists the streams by name, as the schedule does, never in the order the prover opened them. An `Open` may come any time before its stream's first round, so the ZK server keeps it and opens the stream at the coin server just before that round: neither the coin server's calls nor its record show whether or when the `Open` came, and a stream is listed from its first round |
+| the order of `Hello`, `Commit`, `Link` and `Finish` | constant | the ZK server itself refuses a `Commit` before `Hello` or after the first, a `Link` before `Commit` or after the first, and a `Finish` before the schedule's last round (counted from its own streams, never by reading the challenger), each before any call on the challenger: a request out of its place reaches the challenger as a plain stop at the same point |
+| stream names, `Open`'s parent and position, each round's coin count, its fresh tops' node counts (`tops`), its copies of a level-0 top (`level0`) and its message rows (`commits`: one, or none for a round without a free message) | constant | the pinned schedule's; the ZK server refuses any other. The challenger's record lists the streams by name, as the schedule does, never in the order the prover opened them. An `Open` may come any time before its stream's first round, so the ZK server keeps it and opens the stream at the challenger just before that round: neither the challenger's calls nor its record show whether or when the `Open` came, and a stream is listed from its first round |
 | how the session ends | `finish` or `stop` | every session served is written and counted toward `--sessions`, with `end` `finish` or `stop` (a refusal, or a session that ends without `Finish`: closed, reset or cut inside a frame), never why |
 | a request the ZK server cannot read, or the ZK server's own fault | refusal | any exception while handling a request stops the session (`FIREWALL-REFUSED: a request the firewall cannot read (…)`), never the ZK server |
 
@@ -671,7 +671,7 @@ derives it before any session from `flock-circuit statement`'s record of the pub
 the first session. No session pins it: a schedule taken from a session the prover ran would be the prover's choice
 (`--schedule-of PUBLIC_JSON` prints a record's schedule, to compare with the one it was held to). The record says how its tops
 are salted (`"tops": "hm96-sha512/v1/node-row"`, `rec_live.TOPS`). A refusal (`FIREWALL-REFUSED: …`) stops the session: every later
-request is refused with the same reason, `Finish` answers not accepted, and only `public.json` (what the coin server had
+request is refused with the same reason, `Finish` answers not accepted, and only `public.json` (what the challenger had
 received, `end: "stop"`) is written.
 
 A salted node's opening (node and salt) is the prover's. V*'s inputs (`rec_vstar.tops`) read the clear tops from
@@ -679,14 +679,14 @@ A salted node's opening (node and salt) is the prover's. V*'s inputs (`rec_vstar
 record's tops are not salted. The outer circuit climbs to the committed tops: `rec_outer` registers each level's tops
 (`TopValue`) under the ZK server's very salts, and the verifier builds its entry from the recorded `b ‖ c` alone. A node is
 committed as a registered row is, so climbing costs `RecOpen` no hashing of its own: the verifier
-builds a registered value from the coin server's `b ‖ c` (one row a node, under the ZK server's salts), and each opening's
+builds a registered value from the challenger's `b ‖ c` (one row a node, under the ZK server's salts), and each opening's
 `out` reads the row of the node it climbs to. The ZK server pays one SHA-512 a node more than for a bare node (the row
 digest).
 
 The rule is also a Lean program, `Flock.Firewall.run` (`../../core/service/flock/Flock/Firewall.lean`, the executable
-`flock-firewall`): the pinned schedule, the worker's requests and the ZK server's salts in, the coin server's record out. Its
+`flock-firewall`): the pinned schedule, the worker's requests and the ZK server's salts in, the challenger's record out. Its
 message type is the contract: each message is the schedule's own value, a count it fixes, zeros, or commitments under the
-ZK server's salts, so nothing a worker sends reaches the coin server any other way. `tests/test_firewall_agreement.py` holds
+ZK server's salts, so nothing a worker sends reaches the challenger any other way. `tests/test_firewall_agreement.py` holds
 `rec_live`'s proxy to it byte for byte (the record without the coins it flipped), on an honest session and on every prefix,
 drop, duplicate, swap, forgery and seeded byte flip of one. One difference is deliberate: Lean's JSON keeps no number's
 spelling, so `flock-firewall` refuses any `Hello` with a fraction or an exponent, where the proxy compares Python's canonical
@@ -930,9 +930,9 @@ A recursive session is the inner phase's session and the outer phase's sessions,
 levels L0–L6 and the algebra). With §10.1 and §10.3, every message of a session that reaches the auditor is fixed, and so is
 their order: `Hello`, `Commit`, `Link`, each stream's `Open` and rounds, the proofs, `Finish` (`Ping` and `Register` change
 no record: the inner ZK server answers `Register` itself, with the full sample the record already holds). An inner `Open` may come any
-time before its stream's first round, but the ZK server passes it to the coin server only at that round (§10.3), so where it
+time before its stream's first round, but the ZK server passes it to the challenger only at that round (§10.3), so where it
 came never reaches the auditor. A `Commit`, `Link` or `Finish` out of its place is refused by the ZK server before any call
-on the coin server (§10.3), so it reaches the auditor as a plain stop. What a worker still chooses is
+on the challenger (§10.3), so it reaches the auditor as a plain stop. What a worker still chooses is
 whether and where a session stops: a refusal it provokes, or a session that ends without `Finish` (a crash, a hang, a cut
 connection). The auditor sees every stop:
 - inner phase: `rec_live` writes every session it serves, with `end` `finish` or `stop` (a refusal and a session that ends
