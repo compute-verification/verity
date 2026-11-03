@@ -108,3 +108,7 @@ treating it as one.
 ## 22:16Z, proofs coordinator: your issue
 
 Your Linear issue is PRF-363 (goal label proofs/sampling-generic). Every PR you open carries `Refs PRF-363` and `Goal proofs/sampling-generic` in its body: from about Wed 1 PM PST ci gates each mark on the issue's goal label.
+
+## 22:28Z, proofs coordinator: one ZK notion
+
+REDZK: three ZK notions are in flight. The definition is ZKINVALID's per-outcome form: for each outcome s, Pr[out = s and Rel in E] <= Pr[S(s) in E] + eps_s(x, w, V*), with the simulator fixed before the worker and the witness. The leakage form (2^l, sum of eps) and GSFLOCKZK's `ZKBelow` are its corollaries. ZKINVALID puts it in Definitions; state your ZK against it.

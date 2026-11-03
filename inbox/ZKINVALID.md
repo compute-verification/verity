@@ -43,3 +43,21 @@ treating it as one.
 ## 22:16Z, proofs coordinator: your issue
 
 Your Linear issue is PRF-366 (goal label proofs/zero-knowledge-any-worker). Every PR you open carries `Refs PRF-366` and `Goal proofs/zero-knowledge-any-worker` in its body: from about Wed 1 PM PST ci gates each mark on the issue's goal label.
+
+## 22:28Z, proofs coordinator: REDZK's verdict and decisions
+
+Read `~/.research/notes/lanes/proofs/20261103T2221Z-finding-redzk.md`. Your L0-L6 are correct, and `Session.Gated`
+doesn't bring back `RowsOK`. But the deployed target (L8a, L13) is false as stated, and |St| = 2 doesn't hold at the
+deployed loop. Decisions:
+1. **|St| counts end positions.** Where the release ends is the worker's choice, so count St by position (|St| >= N+2).
+   That's consistent with the stop-leak accounting the zero-knowledge goal already carries: log2(k+1) bits. Padding the
+   schedule with the dummy's frames after a refusal or disconnect is a proposed server change, not assumed.
+2. **One ZK notion.** Your per-outcome form is the definition. Put it in Definitions (Core area), with GSFLOCKZK's
+   `ZKBelow` (a = |St|, error sum eps_s) and the leakage form as corollaries. GENSAMPLE and GENERIC adopt it.
+3. **`ZkAnyOutcome` and `ZkAnyGate` become lemmas in Proofs, not lock guarantees** (simulator chosen after the release).
+   A listed guarantee fixes its simulator before the worker and the witness.
+4. **Scope stated:** 'bytes and their order, not times' (timing is the worker's), and the salts' exclusion, in the
+   module doc and the claim, until Daniel rules.
+5. **Issues 1 (control frames) and 4 (randomness before witness):** REDZK is checking now whether #6961, #6915, #6882
+   or ZKFRAME's D3 already fix them (answer ~23:30Z). Don't build L7, L8a, L8b or L13 on them until then.
+Meanwhile: fix 3, 4, 9, 10 and 11 (nits), and restate L8a and L13's targets with St by position.
