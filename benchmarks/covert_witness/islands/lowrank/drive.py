@@ -7,7 +7,8 @@ launches once (keyed by its text), with `launch.py START --island ISLAND --note 
 checkout, whose island must be clean (the run ships HEAD's), once START is in the starts_store.json of the pinned
 commit launch.py ships (`pin.py`; a later start waits for it); NODE is whichever of `--nodes` holds fewer of the queue's
 runs in flight, ties going to the one launched to longer ago. An ended run is collected with `launch.py --collect`,
-retried on the next passes (its slot held) when that yields no row, up to twenty tries; once collected, its points are
+retried on the next passes (its slot held) when that yields no row, up to twenty tries, but never once the te_core
+ledger holds the run's records (a collect that ingests and then fails is recorded from them); once collected, its points are
 cached by `curve.py` and `research data custody RUN --publish` drops its local files of 1 MiB and more. Every
 launch and collection goes to `state.jsonl` beside the queue, from which a restarted driver resumes. No launch at or
 after `--stop`.
@@ -50,6 +51,19 @@ def parse(line: str) -> tuple[str, str, str, list[str]] | None:
 
 def utc() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
+
+
+def ingested(run: str, agent: str = "lowrank") -> list[str]:
+    """`run`'s te_core ledger records, the first of each checkpoint: a run with any is never collected again, since
+    every `launch.py --collect` appends a fresh set (one exiting nonzero after its ingest included)."""
+    root = Path(os.environ.get("TE_LEDGER", Path.home() / ".research" / "te-ledger")) / "records" / agent
+    first: dict[int, str] = {}
+    for p in sorted(root.glob("*.json")):
+        if run in p.read_text():
+            rec = json.loads(p.read_text())
+            if rec.get("run_id") == run:
+                first.setdefault(rec["checkpoint_step"], rec["id"])
+    return [first[k] for k in sorted(first)]
 
 
 def pinned_starts() -> set[str]:
@@ -97,9 +111,19 @@ def main() -> int:
             if state not in DONE:
                 continue
             _, start, note, _ = parse(key)
-            r = subprocess.run([sys.executable, str(LAUNCH), start, "--note", note, "--collect", s["run"]],
-                               capture_output=True, text=True, env=env, cwd=REPO)
+            ids = ingested(s["run"])
+            if ids:
+                r = subprocess.CompletedProcess([], 0, "", "ingested before; launch.py --collect not rerun")
+            else:
+                r = subprocess.run([sys.executable, str(LAUNCH), start, "--note", note, "--collect", s["run"]],
+                                   capture_output=True, text=True, env=env, cwd=REPO)
             rows = [json.loads(y) for y in r.stdout.splitlines() if y.startswith("{")]
+            ids = ids or ([] if rows else ingested(s["run"]))
+            if ids and not rows:
+                sel = research("data", "select", "--kind", "evidence/v1", "--where", f"covert_witness.run={s['run']}",
+                               "--ids")
+                rows = [{"run": s["run"], "art": (sel.stdout.split() or [None])[-1], "start": start, "note": note,
+                         "ledger": ids, "collect": "ingested; launch.py's row lost"}]
             if not rows and tries.get(key, 0) < 19:
                 # a fetch that fails on a busy machine or a full disk is retried on the next pass
                 tries[key] = tries.get(key, 0) + 1
