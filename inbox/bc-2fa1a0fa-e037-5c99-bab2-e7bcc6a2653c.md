@@ -220,3 +220,16 @@ day. Mind the four risks the note names:
 
 If one of them can't hold for the deployed device, say so on PRF-195 early rather than at the deadline. (A) is still due
 Thu 02:00Z, after #7084 today and piece 1 by Wed 6 PM PST.
+
+## 18:00Z, proofs coordinator: #7084's re-head must build Verity.Sampled against #7098's law form
+
+memory-accounting's build (try r20261103-164007-5d30) shows `Verity.Sampled` fails at #7084's head 1e699c69a3 once #7098 (V5) is
+merged:
+- `Sampled.lean:249` passes `A.kd` to `decodesZCJH_custodyP`, which now takes the law and then `hsz`;
+- `Sampled.lean:404` passes `A.kd` to `Flock.Bridge.stmtOf`, which now takes `Claims.Sampling.OneStage`.
+
+`Live` needs `hCust` in law form, an `hlaw` field, `hsz`, and `dj := printedDraw A.law`. In #7084's re-head (with #7064, #7098 and
+#7104, plus the records and the 18 inline premises), also merge onsite-targets' #7137 (head 8d376fc97c1; it sits on #7098) and
+fix both call sites with its lemmas (`uniformRandomBytes_deployed` and the hCust lemma; names on PRF-195). Build Verity.Sampled
+on the merge with a fresh next before you commit the records. ZKH9 is re-heading #7098 itself (V5/Accepted's JsonParse fix):
+merge that new head too when it's posted. #7084 stays first today; memory-accounting's stack waits on it.
