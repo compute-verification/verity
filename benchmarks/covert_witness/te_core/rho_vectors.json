@@ -26,6 +26,570 @@
    "flags": "--set 'blocks\\..*' --lora-rank 4"
   }
  },
+ "fresh": {
+  "fresh_cell": "sensitivity, premise P-cell: the fresh-products term's figure where every block holds whole dot cells (te_core.io_bound's proved rho with P-cell), a premise on the partition, which the attacker chooses; the term is the figure without it (formalism.P_CELL)",
+  "order": "chain",
+  "p_cell": false,
+  "rests_on": "theorem for this circuit (Loomis-Whitney) under P-width and P-chain, without P-cell",
+  "vectors": [
+   {
+    "fresh_cell": 4138401.093369211,
+    "inputs": {
+     "C_gates": 1e+18,
+     "c": 536681984163840.0,
+     "k": 65536.0,
+     "products": {
+      "k": 65536.0,
+      "order": "chain",
+      "products": [
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 512,
+        "macs": 500000000000000.0,
+        "outputs": 976562500000.0
+       }
+      ]
+     }
+    },
+    "name": "one product, square, console",
+    "order": "chain",
+    "share": 0.7400625,
+    "term": 219441.14652435452,
+    "why": null
+   },
+   {
+    "fresh_cell": 1436346.2975317435,
+    "inputs": {
+     "C_gates": 1e+18,
+     "c": 254500000000000.0,
+     "k": 80000,
+     "products": {
+      "k": 80000,
+      "order": "chain",
+      "products": [
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 512,
+        "macs": 500000000000000.0,
+        "outputs": 976562500000.0
+       }
+      ]
+     }
+    },
+    "name": "one product, square, panel",
+    "order": "chain",
+    "share": 0.7400625,
+    "term": 83822.25466981716,
+    "why": null
+   },
+   {
+    "fresh_cell": 330723.09063973086,
+    "inputs": {
+     "C_gates": 1e+17,
+     "c": 536681984163840.0,
+     "k": 65536.0,
+     "products": {
+      "k": 65536.0,
+      "order": "chain",
+      "products": [
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 16,
+        "k_whole": null,
+        "macs": 50000000000000.0,
+        "outputs": 3125000000000.0
+       }
+      ]
+     }
+    },
+    "name": "short chains, K = 16, none whole by itself",
+    "order": "chain",
+    "share": 0.7400625,
+    "term": 111674.98646481277,
+    "why": null
+   },
+   {
+    "fresh_cell": 4138401.093369211,
+    "inputs": {
+     "C_gates": 1e+18,
+     "c": 536681984163840.0,
+     "k": 65536.0,
+     "products": {
+      "k": 65536.0,
+      "order": "chain",
+      "products": [
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 16,
+        "k_whole": null,
+        "macs": 50000000000000.0,
+        "outputs": 3125000000000.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 512,
+        "macs": 500000000000000.0,
+        "outputs": 976562500000.0
+       }
+      ]
+     }
+    },
+    "name": "short and long chains: the linear form keeps the long",
+    "order": "chain",
+    "share": 0.81406875,
+    "term": 219441.14652435452,
+    "why": null
+   },
+   {
+    "fresh_cell": 3555338.03053515,
+    "inputs": {
+     "C_gates": 1e+18,
+     "c": 536681984163840.0,
+     "k": 65536.0,
+     "products": {
+      "k": 65536.0,
+      "order": "chain",
+      "products": [
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 128,
+        "macs": 500000000000000.0,
+        "outputs": 976562500000.0
+       }
+      ]
+     }
+    },
+    "name": "operands made whole from K = 128 chains",
+    "order": "chain",
+    "share": 0.7400625,
+    "term": 214429.8079620056,
+    "why": null
+   },
+   {
+    "fresh_cell": 0.0,
+    "inputs": {
+     "C_gates": 1e+18,
+     "c": 536681984163840.0,
+     "k": 65536.0,
+     "products": {
+      "k": 65536.0,
+      "order": "chain",
+      "products": [
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 64,
+        "macs": 500000000000000.0,
+        "outputs": 976562500000.0
+       }
+      ]
+     }
+    },
+    "name": "operands made whole from K = 64 chains: proved bound void",
+    "order": "chain",
+    "share": 0.7400625,
+    "term": 0.0,
+    "why": null
+   },
+   {
+    "fresh_cell": 3613969.8081843527,
+    "inputs": {
+     "C_gates": 1e+18,
+     "c": 536681984163840.0,
+     "k": 65536.0,
+     "products": {
+      "k": 65536.0,
+      "order": "chain",
+      "products": [
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 512,
+        "macs": 400000000000000.0,
+        "outputs": 781250000000.0
+       },
+       {
+        "b_a": 8,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 9128.0,
+        "gates_per_mac": 285.25,
+        "k_dim": 1408,
+        "k_whole": 512,
+        "macs": 200000000000000.0,
+        "outputs": 142045454545.45456
+       }
+      ]
+     }
+    },
+    "name": "mixed widths",
+    "order": "chain",
+    "share": 0.6491,
+    "term": 193089.97127249016,
+    "why": null
+   },
+   {
+    "fresh_cell": 605705.8016963864,
+    "inputs": {
+     "C_gates": 1e+18,
+     "c": 536681984163840.0,
+     "k": 65536.0,
+     "products": {
+      "k": 65536.0,
+      "order": "chain",
+      "products": [
+       {
+        "b_a": 32,
+        "b_b": 32,
+        "b_c": 32,
+        "cell_gates": 12637.0,
+        "gates_per_mac": 12637.0,
+        "k_dim": 512,
+        "k_whole": 512,
+        "macs": 50000000000000.0,
+        "outputs": 97656250000.0
+       }
+      ]
+     }
+    },
+    "name": "f32 operands",
+    "order": "chain",
+    "share": 0.63185,
+    "term": 234337.0524437246,
+    "why": null
+   },
+   {
+    "fresh_cell": 0.0,
+    "inputs": {
+     "C_gates": 1e+18,
+     "c": 536681984163840.0,
+     "k": 65536.0,
+     "products": {
+      "k": 65536.0,
+      "order": "chain",
+      "products": []
+     }
+    },
+    "name": "nothing counted",
+    "order": "chain",
+    "share": 0.0,
+    "term": 0.0,
+    "why": null
+   },
+   {
+    "fresh_cell": 3041056.689079933,
+    "inputs": {
+     "C_gates": 277159456773655.0,
+     "c": 536681984163840.0,
+     "k": 65536.0,
+     "products": {
+      "capture": "4.8",
+      "k": 65536.0,
+      "kinds_macs": {
+       "attention": 2415919104.0,
+       "expansion": 805306368.0,
+       "fresh": 103280541696.0,
+       "self": 77510737920.0,
+       "theta": 0.0,
+       "unaffected": 0.0
+      },
+      "order": "chain",
+      "products": [
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 256.0,
+        "macs": 805306368.0,
+        "outputs": 1572864.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": null,
+        "macs": 4429185024.0,
+        "outputs": 8650752.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 1408,
+        "k_whole": 512.0,
+        "macs": 2214592512.0,
+        "outputs": 1572864.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": null,
+        "macs": 2013265920.0,
+        "outputs": 3932160.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": null,
+        "macs": 8388608000.0,
+        "outputs": 16384000.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 512.0,
+        "macs": 8388608000.0,
+        "outputs": 16384000.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 32000,
+        "k_whole": 512.0,
+        "macs": 8388608000.0,
+        "outputs": 262144.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 512.0,
+        "macs": 2214592512.0,
+        "outputs": 4325376.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": null,
+        "macs": 2214592512.0,
+        "outputs": 4325376.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 512.0,
+        "macs": 4429185024.0,
+        "outputs": 8650752.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 1408,
+        "k_whole": 512.0,
+        "macs": 4429185024.0,
+        "outputs": 3145728.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 256.0,
+        "macs": 1476395008.0,
+        "outputs": 2883584.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": null,
+        "macs": 2415919104.0,
+        "outputs": 4718592.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 256.0,
+        "macs": 805306368.0,
+        "outputs": 1572864.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": null,
+        "macs": 1342177280.0,
+        "outputs": 2621440.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 512.0,
+        "macs": 16106127360.0,
+        "outputs": 31457280.0
+       },
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 512.0,
+        "macs": 33218887680.0,
+        "outputs": 64880640.0
+       }
+      ],
+      "trace_order": "unknown"
+     }
+    },
+    "name": "the 45M start's dense step, its trace's order unknown",
+    "order": "chain",
+    "share": 0.5515529347520451,
+    "term": 165020.69353240656,
+    "why": null
+   },
+   {
+    "fresh_cell": 4138401.093369211,
+    "inputs": {
+     "C_gates": 1e+18,
+     "c": 536681984163840.0,
+     "k": 65536.0,
+     "products": {
+      "k": 65536.0,
+      "order": null,
+      "products": [
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 512,
+        "macs": 500000000000000.0,
+        "outputs": 976562500000.0
+       }
+      ]
+     }
+    },
+    "name": "one product, square, console, no order declared",
+    "order": "chain",
+    "share": 0.7400625,
+    "term": 219441.14652435452,
+    "why": null
+   },
+   {
+    "fresh_cell": null,
+    "inputs": {
+     "C_gates": 1e+18,
+     "c": 536681984163840.0,
+     "k": 65536.0,
+     "products": {
+      "k": 65536.0,
+      "order": "tree",
+      "products": [
+       {
+        "b_a": 16,
+        "b_b": 16,
+        "b_c": 32,
+        "cell_gates": 23682.0,
+        "gates_per_mac": 1480.125,
+        "k_dim": 512,
+        "k_whole": 512,
+        "macs": 500000000000000.0,
+        "outputs": 976562500000.0
+       }
+      ]
+     }
+    },
+    "name": "one product, square, console, a circuit that declares a tree",
+    "order": "tree",
+    "share": 0.7400625,
+    "term": null,
+    "why": "unmeasured: the circuit declares its products summed in a tree, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound"
+   }
+  ]
+ },
  "kinds": [
   "fresh_products",
   "token",
@@ -1259,8 +1823,9 @@
      "theta": 13186891776.0,
      "unaffected": 1056964608.0
     },
-    "order": "unknown",
-    "products": []
+    "order": "chain",
+    "products": [],
+    "trace_order": "unknown"
    },
    "tail_share": 0.9886722037463094,
    "tau_bits": 16.046875,
@@ -2548,8 +3113,9 @@
      "theta": 13186891776.0,
      "unaffected": 1056964608.0
     },
-    "order": "unknown",
-    "products": []
+    "order": "chain",
+    "products": [],
+    "trace_order": "unknown"
    },
    "tail_share": 0.9886722037463094,
    "tau_bits": 16.046875,
@@ -4546,7 +5112,7 @@
      "theta": 13186891776.0,
      "unaffected": 0.0
     },
-    "order": "unknown",
+    "order": "chain",
     "products": [
      {
       "b_a": 16,
@@ -4592,7 +5158,8 @@
       "macs": 50331648.0,
       "outputs": 262144.0
      }
-    ]
+    ],
+    "trace_order": "unknown"
    },
    "tail_share": 0.9839505013150606,
    "tau_bits": 16.015625,
@@ -8031,7 +8598,7 @@
      "theta": 13623099392.0,
      "unaffected": 0.0
     },
-    "order": "unknown",
+    "order": "chain",
     "products": [
      {
       "b_a": 16,
@@ -8088,7 +8655,8 @@
       "macs": 1048576.0,
       "outputs": 16384.0
      }
-    ]
+    ],
+    "trace_order": "unknown"
    },
    "tail_share": 0.9981917317164438,
    "tau_bits": 16.015625,
@@ -8375,15 +8943,151 @@
   }
  },
  "program": "islands/wildcard/train.py at 9460fcd228 on the tiny start, --batch 2 --micro 2 --warmup 1, traced at step 1 (te_core.capture.script)",
+ "published": [
+  {
+   "binding_kind": "fit",
+   "c": 4925098176.0,
+   "case": "dense",
+   "k": 80000000,
+   "label": "te_core 4.9, reading A",
+   "partial": false,
+   "reading": "A",
+   "rests_on": "Fit's construction",
+   "rho": 1.0,
+   "sensitivities": {
+    "fresh_cell": null,
+    "reduction": 0.042688096126554144,
+    "update": 5.1338660404755435e-06
+   },
+   "terms": {
+    "decoding": 0.999663180049092,
+    "fresh_products": null,
+    "token": 0.999663180049092
+   },
+   "why": null
+  },
+  {
+   "binding_kind": "token",
+   "c": 20173202128896.0,
+   "case": "dense",
+   "k": 80000,
+   "label": "te_core 4.9, reading A",
+   "partial": true,
+   "reading": "A",
+   "rests_on": "A1 (reading A), its family: runs and tiles",
+   "rho": 8.35335685982954,
+   "sensitivities": {
+    "fresh_cell": null,
+    "reduction": 42.05663060357565,
+    "update": 21.028315301787824
+   },
+   "terms": {
+    "decoding": 8.35335685982954,
+    "fresh_products": null,
+    "token": 8.35335685982954
+   },
+   "why": null
+  },
+  {
+   "binding_kind": "token",
+   "c": 536681984163840.0,
+   "case": "dense",
+   "k": 65536.0,
+   "label": "te_core 4.9, reading A",
+   "partial": false,
+   "reading": "A",
+   "rests_on": "A1 (reading A), its family: runs and tiles",
+   "rho": 263.4961717397754,
+   "sensitivities": {
+    "fresh_cell": 0.0,
+    "reduction": 0.0,
+    "update": 0.0
+   },
+   "terms": {
+    "decoding": 263.4961717397754,
+    "fresh_products": 0.0,
+    "token": 263.4961717397754
+   },
+   "why": null
+  },
+  {
+   "binding_kind": "token",
+   "c": 536681984163840.0,
+   "case": "lora",
+   "k": 65536.0,
+   "label": "te_core 4.9, reading A",
+   "partial": false,
+   "reading": "A",
+   "rests_on": "A1 (reading A), its family: runs and tiles",
+   "rho": 95.68434260057813,
+   "sensitivities": {
+    "fresh_cell": 0.0,
+    "reduction": 0.0,
+    "update": 0.0
+   },
+   "terms": {
+    "decoding": 95.68434260057813,
+    "fresh_products": 0.0,
+    "token": 95.68434260057813
+   },
+   "why": null
+  },
+  {
+   "binding_kind": "unmeasured",
+   "c": 20173202128896.0,
+   "case": "adapter-live",
+   "k": 80000,
+   "label": "te_core 4.9, reading A",
+   "partial": false,
+   "reading": "A",
+   "rests_on": "unmeasured",
+   "rho": null,
+   "sensitivities": {
+    "fresh_cell": null,
+    "reduction": 9.776271345877682,
+    "update": 9.776271345877682
+   },
+   "terms": {
+    "decoding": 0.6520858971202714,
+    "fresh_products": null,
+    "token": 0.6520858971202714
+   },
+   "why": "the measured kinds give at most 1; fresh products unmeasured"
+  },
+  {
+   "binding_kind": "none",
+   "c": 20173202128896.0,
+   "case": "adapter-live",
+   "k": 65536.0,
+   "label": "te_core 4.9, reading A",
+   "partial": false,
+   "reading": "A",
+   "rests_on": "no kind exceeds 1",
+   "rho": 1.0,
+   "sensitivities": {
+    "fresh_cell": 0.0,
+    "reduction": 11.933924982760843,
+    "update": 11.933924982760843
+   },
+   "terms": {
+    "decoding": 0.6520858971202714,
+    "fresh_products": 0.0,
+    "token": 0.6520858971202714
+   },
+   "why": null
+  }
+ ],
+ "published_rule": "Fit holds: rho_fit, binding fit. Else, where a measured kind's term exceeds 1: the max, binding that kind, partial where a kind is unmeasured. Else, where a kind is unmeasured: null, binding unmeasured, why naming it. Else: 1, binding none.",
  "rests_on": {
   "decoding": "assumption (D): a block reading the update code runs the whole decoder, so it holds at most c - d gates; with A1 (reading A) and the token kind's witness family",
-  "fresh_products": "theorem for this circuit: te_core.io_bound's Loomis-Whitney cap on a block's MACs of products of two fresh operands, amortized over the partition, each operand and partial sum at its passed width, at the chain constant (its premise P-chain; products summed in a tree, or in an order the trace doesn't give, take the tree constant, which io_bound doesn't have yet), given its premises P-cell, P-width (a reference circuit's) and P-share and the standard algorithm",
+  "fresh_products": "theorem for this circuit: te_core.io_bound's Loomis-Whitney cap on a block's MACs of products of two fresh operands, amortized over the partition, each operand and partial sum at its passed width, given its premises on the reference circuit, P-width and P-chain (each output entry summed along one chain of whole dot cells, as te_core.gates prices a GEMM), P-share and the standard algorithm; without P-cell, a premise on the partition (the whole-cell figure is the sensitivity fresh_cell)",
   "token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's path in segments (the trace's entries) and the matrix-product tiles of the record's op log, weight-gradient tiles among them (te_core.tiles); a block's work is a union of them, each part reading at most its k bits, so it holds at most the best run block plus every product's tile at k plus every gate no tile places; a block reading the update code at c gates"
  },
  "rule": "rho = rho_fit where Fit holds, else max(1, the max over the kinds' measured terms); null where no kind is measured. Sensitivities are never in the max.",
  "schema": "te-core/rho-vectors/v3",
  "sensitivities": {
   "decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, alpha_max (x0 s + s*))) affected gates, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
+  "fresh_cell": "sensitivity, premise P-cell: the fresh-products term's figure where every block holds whole dot cells (te_core.io_bound's proved rho with P-cell), a premise on the partition, which the attacker chooses; the term is the figure without it (formalism.P_CELL)",
   "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate at the best witness that holds it (per_gate); a block holding one gate of a product beside another product's tile or the best run holds more, for a few bits of that gate's own operands",
   "reduction": "sensitivity, assumption (R): each block holding a step's token work passes one partial gradient at its passed width (partial_cut_bits), and the step's token work fills at least ceil(N w / c) blocks; it holds only for partitions split by tokens (a block holding only frozen layers passes no partial)",
   "token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
@@ -9022,8 +9726,9 @@
       "theta": 13186891776.0,
       "unaffected": 1056964608.0
      },
-     "order": "unknown",
-     "products": 0
+     "order": "chain",
+     "products": 0,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9076,12 +9781,13 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 11.065531262155444,
    "rho": 11.065531262155444,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.6520858971202714,
+    "fresh_cell": null,
     "per_gate": 501.0542637591155,
     "reduction": 9.776271345877682,
     "token_form": 0.5483513212839408,
@@ -9094,6 +9800,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -9133,8 +9840,9 @@
       "theta": 13186891776.0,
       "unaffected": 1056964608.0
      },
-     "order": "unknown",
-     "products": 0
+     "order": "chain",
+     "products": 0,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9187,12 +9895,13 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.6520858971202714,
+    "fresh_cell": null,
     "per_gate": 0.6520858971202714,
     "reduction": 0.9776271345877682,
     "token_form": 0.0,
@@ -9205,6 +9914,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -9244,8 +9954,9 @@
       "theta": 13186891776.0,
       "unaffected": 1056964608.0
      },
-     "order": "unknown",
-     "products": 0
+     "order": "chain",
+     "products": 0,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9298,12 +10009,13 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.6520858971202714,
+    "fresh_cell": null,
     "per_gate": 0.6520858971202714,
     "reduction": 0.09776271345877682,
     "token_form": 0.0,
@@ -9316,6 +10028,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -9355,8 +10068,9 @@
       "theta": 13186891776.0,
       "unaffected": 1056964608.0
      },
-     "order": "unknown",
-     "products": 0
+     "order": "chain",
+     "products": 0,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9409,12 +10123,13 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.6520858971202714,
+    "fresh_cell": null,
     "per_gate": 0.6520858971202717,
     "reduction": 0.14559388478968227,
     "token_form": 0.0,
@@ -9427,6 +10142,7 @@
    },
    "tokens_per_block": 100,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -9466,8 +10182,9 @@
       "theta": 13186891776.0,
       "unaffected": 1056964608.0
      },
-     "order": "unknown",
-     "products": 0
+     "order": "chain",
+     "products": 0,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9520,12 +10237,13 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.6520858971202714,
+    "fresh_cell": null,
     "per_gate": 0.6520858971202714,
     "reduction": 0.014767038773668266,
     "token_form": 0.0,
@@ -9538,6 +10256,7 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -9577,8 +10296,9 @@
       "theta": 13186891776.0,
       "unaffected": 1056964608.0
      },
-     "order": "unknown",
-     "products": 0
+     "order": "chain",
+     "products": 0,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9631,12 +10351,13 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.6520858971202714,
+    "fresh_cell": null,
     "per_gate": 0.6520858971202714,
     "reduction": 9.776271345877682,
     "token_form": 0.0,
@@ -9649,6 +10370,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -9688,8 +10410,9 @@
       "theta": 13186891776.0,
       "unaffected": 1056964608.0
      },
-     "order": "unknown",
-     "products": 0
+     "order": "chain",
+     "products": 0,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9742,12 +10465,13 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.6520858971202714,
+    "fresh_cell": null,
     "per_gate": 0.6520858971202714,
     "reduction": 0.9776271345877682,
     "token_form": 0.0,
@@ -9760,6 +10484,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -9799,8 +10524,9 @@
       "theta": 13186891776.0,
       "unaffected": 1056964608.0
      },
-     "order": "unknown",
-     "products": 0
+     "order": "chain",
+     "products": 0,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9853,12 +10579,13 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.6520858971202714,
+    "fresh_cell": null,
     "per_gate": 0.6520858971202714,
     "reduction": 0.09776271345877682,
     "token_form": 0.0,
@@ -9871,6 +10598,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -9910,8 +10638,9 @@
       "theta": 13186891776.0,
       "unaffected": 1056964608.0
      },
-     "order": "unknown",
-     "products": 0
+     "order": "chain",
+     "products": 0,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -9964,12 +10693,13 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.6520858971202714,
+    "fresh_cell": null,
     "per_gate": 0.6520858971202717,
     "reduction": 0.14559388478968227,
     "token_form": 0.0,
@@ -9982,6 +10712,7 @@
    },
    "tokens_per_block": 100,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -10021,8 +10752,9 @@
       "theta": 13186891776.0,
       "unaffected": 1056964608.0
      },
-     "order": "unknown",
-     "products": 0
+     "order": "chain",
+     "products": 0,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -10075,12 +10807,13 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.6520858971202714,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.6520858971202714,
+    "fresh_cell": null,
     "per_gate": 0.6520858971202714,
     "reduction": 0.014767038773668266,
     "token_form": 0.0,
@@ -10093,6 +10826,7 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -10132,8 +10866,9 @@
       "theta": 13186891776.0,
       "unaffected": 0.0
      },
-     "order": "unknown",
-     "products": 4
+     "order": "chain",
+     "products": 4,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -10186,12 +10921,13 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 8.35335685982954,
    "rho": 8.35335685982954,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.9996631800490918,
+    "fresh_cell": null,
     "per_gate": 146.76517300380573,
     "reduction": 42.05663060357565,
     "token_form": 13.115530738562539,
@@ -10204,6 +10940,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -10243,8 +10980,9 @@
       "theta": 13186891776.0,
       "unaffected": 0.0
      },
-     "order": "unknown",
-     "products": 4
+     "order": "chain",
+     "products": 4,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -10297,12 +11035,13 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.9996631800490918,
+    "fresh_cell": null,
     "per_gate": 14.306487096221096,
     "reduction": 4.2056630603575655,
     "token_form": 1.1988162915313898,
@@ -10315,6 +11054,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -10354,8 +11094,9 @@
       "theta": 13186891776.0,
       "unaffected": 0.0
      },
-     "order": "unknown",
-     "products": 4
+     "order": "chain",
+     "products": 4,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -10408,12 +11149,13 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.9996631800490918,
+    "fresh_cell": null,
     "per_gate": 0.999663180049092,
     "reduction": 0.4205663060357565,
     "token_form": 0.0,
@@ -10426,6 +11168,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -10465,8 +11208,9 @@
       "theta": 13186891776.0,
       "unaffected": 0.0
      },
-     "order": "unknown",
-     "products": 4
+     "order": "chain",
+     "products": 4,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -10519,12 +11263,13 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.9996631800490919,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.9996631800490919,
+    "fresh_cell": null,
     "per_gate": 0.9996631800490918,
     "reduction": 0.42611088135947006,
     "token_form": 0.0,
@@ -10537,6 +11282,7 @@
    },
    "tokens_per_block": 100,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -10576,8 +11322,9 @@
       "theta": 13186891776.0,
       "unaffected": 0.0
      },
-     "order": "unknown",
-     "products": 4
+     "order": "chain",
+     "products": 4,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 0.0,
@@ -10630,12 +11377,13 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.999663180049092,
    "rho": 1.0,
    "rho_fit": 1.0,
    "sensitivities": {
     "decoding_form": 0.9996631800490918,
+    "fresh_cell": null,
     "per_gate": 0.999663180049092,
     "reduction": 0.042688096126554144,
     "token_form": 0.0,
@@ -10648,6 +11396,7 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -10687,8 +11436,9 @@
       "theta": 13623099392.0,
       "unaffected": 0.0
      },
-     "order": "unknown",
-     "products": 5
+     "order": "chain",
+     "products": 5,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 5383159808.0,
@@ -10741,12 +11491,13 @@
     }
    },
    "k": 80000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 2.7344655410785834,
    "rho": 2.7344655410785834,
    "rho_fit": 1.000266918292764,
    "sensitivities": {
     "decoding_form": 1.000196951609222,
+    "fresh_cell": null,
     "per_gate": 134.7778543633552,
     "reduction": 4.15717585271444,
     "token_form": 11.857120347569653,
@@ -10759,6 +11510,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -10798,8 +11550,9 @@
       "theta": 13623099392.0,
       "unaffected": 0.0
      },
-     "order": "unknown",
-     "products": 5
+     "order": "chain",
+     "products": 5,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 5383159808.0,
@@ -10852,12 +11605,13 @@
     }
    },
    "k": 800000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0,
    "rho_fit": 1.000266918292764,
    "sensitivities": {
     "decoding_form": 0.9999300519868622,
+    "fresh_cell": null,
     "per_gate": 0.9999300519868621,
     "reduction": 0.41571758527144403,
     "token_form": 0.0,
@@ -10870,6 +11624,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -10909,8 +11664,9 @@
       "theta": 13623099392.0,
       "unaffected": 0.0
      },
-     "order": "unknown",
-     "products": 5
+     "order": "chain",
+     "products": 5,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 5383159808.0,
@@ -10963,12 +11719,13 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.9999300519868622,
    "rho": 1.000266918292764,
    "rho_fit": 1.000266918292764,
    "sensitivities": {
     "decoding_form": 0.9999300519868622,
+    "fresh_cell": null,
     "per_gate": 0.9999300519868621,
     "reduction": 0.041571758527144405,
     "token_form": 0.0,
@@ -10981,6 +11738,7 @@
    },
    "tokens_per_block": 4096,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -11020,8 +11778,9 @@
       "theta": 13623099392.0,
       "unaffected": 0.0
      },
-     "order": "unknown",
-     "products": 5
+     "order": "chain",
+     "products": 5,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 5383159808.0,
@@ -11074,12 +11833,13 @@
     }
    },
    "k": 8000000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0110508421616675,
    "rho_fit": 1.0110508421616675,
    "sensitivities": {
     "decoding_form": 0.9999300519868621,
+    "fresh_cell": null,
     "per_gate": 0.9999300519868621,
     "reduction": 0.041612355947581066,
     "token_form": 0.0,
@@ -11092,6 +11852,7 @@
    },
    "tokens_per_block": 100,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   },
@@ -11131,8 +11892,9 @@
       "theta": 13623099392.0,
       "unaffected": 0.0
      },
-     "order": "unknown",
-     "products": 5
+     "order": "chain",
+     "products": 5,
+     "trace_order": "unknown"
     },
     "per_gate": {
      "decoder_gates": 5383159808.0,
@@ -11185,12 +11947,13 @@
     }
    },
    "k": 80000000,
-   "label": "te_core 4.8, reading A",
+   "label": "te_core 4.9, reading A",
    "max": 0.9999300519868622,
    "rho": 1.0,
    "rho_fit": "inf",
    "sensitivities": {
     "decoding_form": 0.9999300519868622,
+    "fresh_cell": null,
     "per_gate": 0.9999300519868621,
     "reduction": 0.004197773273151105,
     "token_form": 0.0,
@@ -11203,10 +11966,11 @@
    },
    "tokens_per_block": 1,
    "unmeasured": {
+    "fresh_cell": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)",
     "fresh_products": "unmeasured: the products were classified at k = 65536 (te_core.io_bound.rows_of), not at this k; take them again at it (formalism.products_of, or a trace's by te_core.capture.products.rows)"
    }
   }
  ],
- "version": "4.8",
+ "version": "4.9",
  "w_fwd_gates": 4925098176.0
 }

@@ -1,6 +1,6 @@
 {
  "id": "te_core.workloads",
- "te_core": "4.8",
+ "te_core": "4.9",
  "reading": "A",
  "spec": "note:training-20261103T0600Z-draft-workload-models",
  "io_bound": "cursor/te-io-bound-4207 at e4fc638622",
@@ -18,8 +18,8 @@
   "token_form": "sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading",
   "decoding_form": "sensitivity, assumption (D) with A1 (reading B): a block reading the update code runs the whole decoder, so it holds at most max(c - d, min(c, alpha_max (x0 s + s*))) affected gates, x0 and s* from the uncapped profiles; reading B isn't A1's approved reading",
   "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate at the best witness that holds it (per_gate); a block holding one gate of a product beside another product's tile or the best run holds more, for a few bits of that gate's own operands",
-  "fresh_chain": "sensitivity, premise P-chain (te_core.io_bound): the products summed in one chain an output entry, the constant io_bound has, which no model or capture gives",
-  "fresh_cell": "sensitivity, premises P-chain and P-cell (te_core.io_bound): every block holds whole GEMM gadgets, the cap for word-level MACs, which a partition splitting a multiplier's gates escapes (coordinator 06:57Z, obligation 1); te_core.formalism.fresh_products' figure"
+  "fresh_cell": "sensitivity, premises P-chain and P-cell (te_core.io_bound): every block holds whole GEMM gadgets, the cap for word-level MACs, which a partition splitting a multiplier's gates escapes (coordinator 06:57Z, obligation 1); te_core.formalism.fresh_products' figure",
+  "fresh_chain": "sensitivity, premise P-chain (te_core.io_bound): the products summed in one chain an output entry, the constant io_bound has, which no model or capture gives"
  },
  "target": "target: A1 at reading B, not a bound: te_core.formalism.published at reading B, Fit's c/(c - d) where it holds, else Slowdown's token form (sensitivity, assumption (A1, reading B): Slowdown's token form, s* = max_x x(k - u(x))/a and x0 from u_in, u capped at Delta for a block reading the update code; reading B isn't A1's approved reading)",
  "rests_on": {
@@ -171,14 +171,13 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 265541.2,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 265541.2,
+       "terms": {"fresh_products": 265541.2, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
@@ -190,11 +189,11 @@
         "token_form": 413.8229,
         "decoding_form": 0.9997032,
         "per_gate": null,
-        "fresh_chain": 265541.2,
-        "fresh_cell": 5007794.0
+        "fresh_cell": 5007794.0,
+        "fresh_chain": 265541.2
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -273,14 +272,13 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 202999.7,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 202999.7,
+       "terms": {"fresh_products": 202999.7, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
@@ -292,11 +290,11 @@
         "token_form": 643.8972,
         "decoding_form": 0.9995382,
         "per_gate": null,
-        "fresh_chain": 202999.7,
-        "fresh_cell": 4607728.0
+        "fresh_cell": 4607728.0,
+        "fresh_chain": 202999.7
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -375,14 +373,13 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 301929.3,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 301929.3,
+       "terms": {"fresh_products": 301929.3, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
@@ -394,11 +391,11 @@
         "token_form": 20.53651,
         "decoding_form": 0.9996763,
         "per_gate": null,
-        "fresh_chain": 301929.3,
-        "fresh_cell": 5735809.0
+        "fresh_cell": 5735809.0,
+        "fresh_chain": 301929.3
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -483,11 +480,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 267926.3,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 267926.3, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 415.5739, "basis": "target"},
         "sensitivities": {
          "reduction": 21735.64,
@@ -495,20 +492,20 @@
          "token_form": 417.564,
          "decoding_form": 0.999823,
          "per_gate": null,
-         "fresh_chain": 267926.3,
-         "fresh_cell": 5052774.0
+         "fresh_cell": 5052774.0,
+         "fresh_chain": 267926.3
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [29]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 265541.2,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 265541.2, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 413.8229, "basis": "target"},
         "sensitivities": {
          "reduction": 21542.15,
@@ -516,12 +513,12 @@
          "token_form": 413.8229,
          "decoding_form": 0.9997032,
          "per_gate": null,
-         "fresh_chain": 265541.2,
-         "fresh_cell": 5007794.0
+         "fresh_cell": 5007794.0,
+         "fresh_chain": 265541.2
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [29]
        }
       }
@@ -589,11 +586,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 266795.4,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 266795.4, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 410.3227, "basis": "target"},
         "sensitivities": {
          "reduction": 21529.46,
@@ -601,20 +598,20 @@
          "token_form": 413.603,
          "decoding_form": 0.993392,
          "per_gate": null,
-         "fresh_chain": 266795.4,
-         "fresh_cell": 5031446.0
+         "fresh_cell": 5031446.0,
+         "fresh_chain": 266795.4
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [29]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 263757.7,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 263757.7, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 408.8702, "basis": "target"},
         "sensitivities": {
          "reduction": 21284.33,
@@ -622,12 +619,12 @@
          "token_form": 408.8702,
          "decoding_form": 0.9877386,
          "per_gate": null,
-         "fresh_chain": 263757.7,
-         "fresh_cell": 4974159.0
+         "fresh_cell": 4974159.0,
+         "fresh_chain": 263757.7
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [29]
        }
       }
@@ -703,11 +700,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 254143.2,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 254143.2, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 473.9488, "basis": "target"},
         "sensitivities": {
          "reduction": 17312.76,
@@ -715,20 +712,20 @@
          "token_form": 473.9495,
          "decoding_form": 0.9959238,
          "per_gate": null,
-         "fresh_chain": 254143.2,
-         "fresh_cell": 4792840.0
+         "fresh_cell": 4792840.0,
+         "fresh_chain": 254143.2
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [47, 48, 8]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 254937.1,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 254937.1, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 502.614, "basis": "target"},
         "sensitivities": {
          "reduction": 17023.24,
@@ -736,12 +733,12 @@
          "token_form": 502.614,
          "decoding_form": 0.9925011,
          "per_gate": null,
-         "fresh_chain": 254937.1,
-         "fresh_cell": 4807813.0
+         "fresh_cell": 4807813.0,
+         "fresh_chain": 254937.1
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [47]
        }
       }
@@ -817,11 +814,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 258914.2,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 258914.2, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 318.6908, "basis": "target"},
         "sensitivities": {
          "reduction": 38051.4,
@@ -829,20 +826,20 @@
          "token_form": 318.6909,
          "decoding_form": 0.977225,
          "per_gate": null,
-         "fresh_chain": 258914.2,
-         "fresh_cell": 4903159.0
+         "fresh_cell": 4903159.0,
+         "fresh_chain": 258914.2
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [53, 53]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 260635.1,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 260635.1, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 330.8567, "basis": "target"},
         "sensitivities": {
          "reduction": 38457.36,
@@ -850,12 +847,12 @@
          "token_form": 330.8567,
          "decoding_form": 0.9711549,
          "per_gate": null,
-         "fresh_chain": 260635.1,
-         "fresh_cell": 4935748.0
+         "fresh_cell": 4935748.0,
+         "fresh_chain": 260635.1
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [53]
        }
       }
@@ -1003,14 +1000,13 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 265102.2,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 265102.2,
+       "terms": {"fresh_products": 265102.2, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
@@ -1022,11 +1018,11 @@
         "token_form": 413.4547,
         "decoding_form": 0.9988137,
         "per_gate": null,
-        "fresh_chain": 265102.2,
-        "fresh_cell": 4999515.0
+        "fresh_cell": 4999515.0,
+        "fresh_chain": 265102.2
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -1117,14 +1113,13 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 265102.2,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 265102.2,
+       "terms": {"fresh_products": 265102.2, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
@@ -1136,11 +1131,11 @@
         "token_form": 413.4547,
         "decoding_form": 0.9988137,
         "per_gate": null,
-        "fresh_chain": 265102.2,
-        "fresh_cell": 4999515.0
+        "fresh_cell": 4999515.0,
+        "fresh_chain": 265102.2
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -1234,19 +1229,18 @@
        "rho": 1.287338,
        "basis": "fit",
        "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
+       "bound": 1.0,
+       "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
        "partial": false,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
        "fresh": {"order": null, "lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.09090451},
        "target": {"rho": 1.287338, "basis": "fit"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 0.0, "decoding_form": 0.9800636, "per_gate": null, "fresh_chain": 0.0, "fresh_cell": 0.0},
+       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 0.0, "decoding_form": 0.9800636, "per_gate": null, "fresh_cell": 0.0, "fresh_chain": 0.0},
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": true,
        "fit_fails": [],
        "rho_fit": 1.287338,
@@ -1344,11 +1338,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 254553.0,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 254553.0, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 475.9997, "basis": "target"},
         "sensitivities": {
          "reduction": 17023.78,
@@ -1356,20 +1350,20 @@
          "token_form": 476.0006,
          "decoding_form": 0.9968911,
          "per_gate": null,
-         "fresh_chain": 254553.0,
-         "fresh_cell": 4800569.0
+         "fresh_cell": 4800569.0,
+         "fresh_chain": 254553.0
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [0, 24, 24, 0]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 255477.1,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 255477.1, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 505.8288, "basis": "target"},
         "sensitivities": {
          "reduction": 17128.41,
@@ -1377,12 +1371,12 @@
          "token_form": 505.8288,
          "decoding_form": 0.9988494,
          "per_gate": null,
-         "fresh_chain": 255477.1,
-         "fresh_cell": 4817996.0
+         "fresh_cell": 4817996.0,
+         "fresh_chain": 255477.1
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [24]
        }
       }
@@ -1545,14 +1539,13 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 255744.8,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 255744.8,
+       "terms": {"fresh_products": 255744.8, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
@@ -1564,11 +1557,11 @@
         "token_form": 413.7225,
         "decoding_form": 0.9997261,
         "per_gate": null,
-        "fresh_chain": 255744.8,
-        "fresh_cell": 4729436.0
+        "fresh_cell": 4729436.0,
+        "fresh_chain": 255744.8
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -1683,14 +1676,13 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 3643.056,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 3643.056,
+       "terms": {"fresh_products": 3643.056, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
@@ -1702,11 +1694,11 @@
         "token_form": 37.48825,
         "decoding_form": 1.008226,
         "per_gate": null,
-        "fresh_chain": 3643.056,
-        "fresh_cell": 52201.17
+        "fresh_cell": 52201.17,
+        "fresh_chain": 3643.056
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.008234,
@@ -1812,22 +1804,21 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
+       "rho": 1.0,
+       "basis": "none",
        "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "bound": 1.0,
+       "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
        "fresh": {"order": null, "lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.03786783},
        "target": {"rho": 1.0, "basis": "target"},
-       "sensitivities": {"reduction": 0.424401, "update": 0.0282934, "token_form": 0.0, "decoding_form": 0.7055986, "per_gate": null, "fresh_chain": 0.0, "fresh_cell": 0.0},
+       "sensitivities": {"reduction": 0.424401, "update": 0.0282934, "token_form": 0.0, "decoding_form": 0.7055986, "per_gate": null, "fresh_cell": 0.0, "fresh_chain": 0.0},
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.000019,
@@ -1934,11 +1925,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 11282.94,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 11282.94, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 3779135.0, "basis": "target"},
         "sensitivities": {
          "reduction": 0.0,
@@ -1946,25 +1937,25 @@
          "token_form": 3779145.0,
          "decoding_form": 0.08645909,
          "per_gate": null,
-         "fresh_chain": 11282.94,
-         "fresh_cell": 112097.4
+         "fresh_cell": 112097.4,
+         "fresh_chain": 11282.94
         },
         "fit_fails": ["compute", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [2]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 11014.51,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 11014.51, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 408.5118, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 408.5118, "decoding_form": 1.008234, "per_gate": null, "fresh_chain": 11014.51, "fresh_cell": 109430.5},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 408.5118, "decoding_form": 1.008234, "per_gate": null, "fresh_cell": 109430.5, "fresh_chain": 11014.51},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [5]
        }
       }
@@ -2047,11 +2038,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 195018.1,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 195018.1, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 42669640.0, "basis": "target"},
         "sensitivities": {
          "reduction": 0.0,
@@ -2059,25 +2050,25 @@
          "token_form": 42669630.0,
          "decoding_form": 0.6872964,
          "per_gate": null,
-         "fresh_chain": 195018.1,
-         "fresh_cell": 4810990.0
+         "fresh_cell": 4810990.0,
+         "fresh_chain": 195018.1
         },
         "fit_fails": ["compute", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [2]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 196389.8,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 196389.8, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 12955.63, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 12955.63, "decoding_form": 1.0, "per_gate": null, "fresh_chain": 196389.8, "fresh_cell": 4844829.0},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 12955.63, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 4844829.0, "fresh_chain": 196389.8},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [5]
        }
       }
@@ -2160,11 +2151,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 226644.5,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 226644.5, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 71327920.0, "basis": "target"},
         "sensitivities": {
          "reduction": 0.0,
@@ -2172,25 +2163,25 @@
          "token_form": 71327820.0,
          "decoding_form": 0.7560941,
          "per_gate": null,
-         "fresh_chain": 226644.5,
-         "fresh_cell": 6077956.0
+         "fresh_cell": 6077956.0,
+         "fresh_chain": 226644.5
         },
         "fit_fails": ["compute", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [2]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 225321.5,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 225321.5, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 11733.26, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 11733.26, "decoding_form": 1.0, "per_gate": null, "fresh_chain": 225321.5, "fresh_cell": 6042478.0},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 11733.26, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 6042478.0, "fresh_chain": 225321.5},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [6]
        }
       }
@@ -2290,22 +2281,21 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 50026.6,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 50026.6,
+       "terms": {"fresh_products": 50026.6, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
        "fresh": {"order": null, "lam": 1.281715, "share": 0.1636943, "numerical": 51125.62, "attention_share": 0.7898069},
        "target": {"rho": 1669.825, "basis": "target"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 1669.825, "decoding_form": 1.0, "per_gate": null, "fresh_chain": 50026.6, "fresh_cell": 1240864.0},
+       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 1669.825, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 1240864.0, "fresh_chain": 50026.6},
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "update"],
        "rho_fit": 1.0,
@@ -2379,22 +2369,21 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 137563.2,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 137563.2,
+       "terms": {"fresh_products": 137563.2, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
        "fresh": {"order": null, "lam": 1.645903, "share": 0.4583596, "numerical": 143575.0, "attention_share": 0.5002847},
        "target": {"rho": 33840.13, "basis": "target"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 33840.13, "decoding_form": 1.0, "per_gate": null, "fresh_chain": 137563.2, "fresh_cell": 2594280.0},
+       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 33840.13, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 2594280.0, "fresh_chain": 137563.2},
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "update"],
        "rho_fit": 1.0,
@@ -2468,22 +2457,21 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 179917.3,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 179917.3,
+       "terms": {"fresh_products": 179917.3, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
        "fresh": {"order": null, "lam": 1.246291, "share": 0.5040848, "numerical": 180820.5, "attention_share": 0.4219617},
        "target": {"rho": 212.6351, "basis": "target"},
-       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 212.6351, "decoding_form": 1.0, "per_gate": null, "fresh_chain": 179917.3, "fresh_cell": 4953704.0},
+       "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 212.6351, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 4953704.0, "fresh_chain": 179917.3},
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "update"],
        "rho_fit": 1.0,
@@ -2559,11 +2547,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 139035.2,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 139035.2, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 40983030.0, "basis": "target"},
         "sensitivities": {
          "reduction": 0.0,
@@ -2571,25 +2559,25 @@
          "token_form": 40983160.0,
          "decoding_form": 0.5001703,
          "per_gate": null,
-         "fresh_chain": 139035.2,
-         "fresh_cell": 3456759.0
+         "fresh_cell": 3456759.0,
+         "fresh_chain": 139035.2
         },
         "fit_fails": ["compute", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [2]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 141157.3,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 141157.3, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 8138.254, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 8138.254, "decoding_form": 1.0, "per_gate": null, "fresh_chain": 141157.3, "fresh_cell": 3509522.0},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 8138.254, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 3509522.0, "fresh_chain": 141157.3},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [6]
        }
       }
@@ -2655,11 +2643,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 170323.3,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 170323.3, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 60155300.0, "basis": "target"},
         "sensitivities": {
          "reduction": 0.0,
@@ -2667,25 +2655,25 @@
          "token_form": 60155390.0,
          "decoding_form": 0.5713246,
          "per_gate": null,
-         "fresh_chain": 170323.3,
-         "fresh_cell": 4575552.0
+         "fresh_cell": 4575552.0,
+         "fresh_chain": 170323.3
         },
         "fit_fails": ["compute", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [5]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 169785.8,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 169785.8, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 5978.385, "basis": "target"},
-        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 5978.385, "decoding_form": 1.0, "per_gate": null, "fresh_chain": 169785.8, "fresh_cell": 4561112.0},
+        "sensitivities": {"reduction": 0.0, "update": 0.0, "token_form": 5978.385, "decoding_form": 1.0, "per_gate": null, "fresh_cell": 4561112.0, "fresh_chain": 169785.8},
         "fit_fails": ["compute", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [13]
        }
       }
@@ -2816,14 +2804,13 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 1150.109,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 1150.109,
+       "terms": {"fresh_products": 1150.109, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
@@ -2835,11 +2822,11 @@
         "token_form": 18.74757,
         "decoding_form": 1.004553,
         "per_gate": null,
-        "fresh_chain": 1150.109,
-        "fresh_cell": 21689.69
+        "fresh_cell": 21689.69,
+        "fresh_chain": 1150.109
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.004558,
@@ -2928,14 +2915,13 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 87.31198,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 87.31198,
+       "terms": {"fresh_products": 87.31198, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
@@ -2947,11 +2933,11 @@
         "token_form": 23.80487,
         "decoding_form": 0.7427699,
         "per_gate": null,
-        "fresh_chain": 87.31198,
-        "fresh_cell": 185.2947
+        "fresh_cell": 185.2947,
+        "fresh_chain": 87.31198
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.000757,
@@ -3038,14 +3024,13 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 49.75989,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 49.75989,
+       "terms": {"fresh_products": 49.75989, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
@@ -3057,11 +3042,11 @@
         "token_form": 15.25384,
         "decoding_form": 0.7422794,
         "per_gate": null,
-        "fresh_chain": 49.75989,
-        "fresh_cell": 105.6011
+        "fresh_cell": 105.6011,
+        "fresh_chain": 49.75989
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.000509,
@@ -3143,14 +3128,13 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
+       "rho": 1.0,
+       "basis": "none",
        "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "bound": 1.0,
+       "terms": {"fresh_products": 0.9845879, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
@@ -3162,11 +3146,11 @@
         "token_form": 0.2638425,
         "decoding_form": 0.9999999,
         "per_gate": null,
-        "fresh_chain": 0.9845879,
-        "fresh_cell": 1.156687
+        "fresh_cell": 1.156687,
+        "fresh_chain": 0.9845879
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.000111,
@@ -3248,22 +3232,21 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
+       "rho": 1.0,
+       "basis": "none",
        "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "bound": 1.0,
+       "terms": {"fresh_products": 0.0, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
        "fresh": {"order": null, "lam": 0.0, "share": 0.0, "numerical": 0.0, "attention_share": 0.03718992},
        "target": {"rho": 1.0, "basis": "target"},
-       "sensitivities": {"reduction": 0.4906123, "update": 0.03270749, "token_form": 0.0, "decoding_form": 0.7414784, "per_gate": null, "fresh_chain": 0.0, "fresh_cell": 0.0},
+       "sensitivities": {"reduction": 0.4906123, "update": 0.03270749, "token_form": 0.0, "decoding_form": 0.7414784, "per_gate": null, "fresh_cell": 0.0, "fresh_chain": 0.0},
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.000019,
@@ -3344,11 +3327,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 158.7236,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 158.7236, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 400.8307, "basis": "target"},
         "sensitivities": {
          "reduction": 23.5721,
@@ -3356,20 +3339,20 @@
          "token_form": 401.303,
          "decoding_form": 0.999972,
          "per_gate": null,
-         "fresh_chain": 158.7236,
-         "fresh_cell": 2993.34
+         "fresh_cell": 2993.34,
+         "fresh_chain": 158.7236
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [21]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 159.6993,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 159.6993, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 5.802122, "basis": "target"},
         "sensitivities": {
          "reduction": 23.717,
@@ -3377,12 +3360,12 @@
          "token_form": 5.802122,
          "decoding_form": 1.000444,
          "per_gate": null,
-         "fresh_chain": 159.6993,
-         "fresh_cell": 3011.74
+         "fresh_cell": 3011.74,
+         "fresh_chain": 159.6993
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [21]
        }
       }
@@ -3461,11 +3444,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 2247.565,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 2247.565, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 45.3986, "basis": "target"},
         "sensitivities": {
          "reduction": 180.9999,
@@ -3473,20 +3456,20 @@
          "token_form": 45.39846,
          "decoding_form": 0.9991275,
          "per_gate": null,
-         "fresh_chain": 2247.565,
-         "fresh_cell": 42076.06
+         "fresh_cell": 42076.06,
+         "fresh_chain": 2247.565
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [0, 17, 17]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 2249.881,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 2249.881, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 45.20673, "basis": "target"},
         "sensitivities": {
          "reduction": 181.2103,
@@ -3494,12 +3477,12 @@
          "token_form": 45.20673,
          "decoding_form": 1.002669,
          "per_gate": null,
-         "fresh_chain": 2249.881,
-         "fresh_cell": 42119.41
+         "fresh_cell": 42119.41,
+         "fresh_chain": 2249.881
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [17]
        }
       }
@@ -3578,11 +3561,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 3622.611,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 3622.611, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 44.77084, "basis": "target"},
         "sensitivities": {
          "reduction": 454.2071,
@@ -3590,20 +3573,20 @@
          "token_form": 44.77077,
          "decoding_form": 1.004688,
          "per_gate": null,
-         "fresh_chain": 3622.611,
-         "fresh_cell": 57415.96
+         "fresh_cell": 57415.96,
+         "fresh_chain": 3622.611
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [0, 18, 18]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 3628.65,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 3628.65, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 45.19439, "basis": "target"},
         "sensitivities": {
          "reduction": 454.9642,
@@ -3611,12 +3594,12 @@
          "token_form": 45.19439,
          "decoding_form": 1.008223,
          "per_gate": null,
-         "fresh_chain": 3628.65,
-         "fresh_cell": 57511.67
+         "fresh_cell": 57511.67,
+         "fresh_chain": 3628.65
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [18]
        }
       }
@@ -3746,14 +3729,13 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 62889.26,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 62889.26,
+       "terms": {"fresh_products": 62889.26, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
@@ -3765,11 +3747,11 @@
         "token_form": 98.00745,
         "decoding_form": 0.236764,
         "per_gate": null,
-        "fresh_chain": 62889.26,
-        "fresh_cell": 1186017.0
+        "fresh_cell": 1186017.0,
+        "fresh_chain": 62889.26
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -3851,14 +3833,13 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 265541.2,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 265541.2,
+       "terms": {"fresh_products": 265541.2, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
@@ -3870,11 +3851,11 @@
         "token_form": 413.8229,
         "decoding_form": 0.9997032,
         "per_gate": null,
-        "fresh_chain": 265541.2,
-        "fresh_cell": 5007794.0
+        "fresh_cell": 5007794.0,
+        "fresh_chain": 265541.2
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -3956,14 +3937,13 @@
      },
      "rho": {
       "default": {
-       "rho": null,
-       "basis": "unmeasured",
-       "binding_kind": null,
-       "bound": null,
-       "terms": {"fresh_products": null, "token": null, "decoding": null},
-       "partial": false,
+       "rho": 8362.963,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "bound": 8362.963,
+       "terms": {"fresh_products": 8362.963, "token": null, "decoding": null},
+       "partial": true,
        "why": {
-        "fresh_products": "unmeasured: the products' summation order isn't in the trace, so the tree constant applies, and te_core.io_bound has the chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound",
         "token": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again",
         "decoding": "unmeasured: no entries (traced before te_core 4.4, or untraced); trace the run again"
        },
@@ -3975,11 +3955,11 @@
         "token_form": 13.03295,
         "decoding_form": 0.03148468,
         "per_gate": null,
-        "fresh_chain": 8362.963,
-        "fresh_cell": 157715.6
+        "fresh_cell": 157715.6,
+        "fresh_chain": 8362.963
        },
        "token_A": "unmodelled",
-       "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+       "unmeasured": ["token", "decoding", "per_gate"],
        "fit": false,
        "fit_fails": ["compute", "reduction", "update"],
        "rho_fit": 1.0,
@@ -4068,11 +4048,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 125365.6,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 125365.6, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 312.6342, "basis": "target"},
         "sensitivities": {
          "reduction": 6058.645,
@@ -4080,20 +4060,20 @@
          "token_form": 312.6333,
          "decoding_form": 0.5736186,
          "per_gate": null,
-         "fresh_chain": 125365.6,
-         "fresh_cell": 2310280.0
+         "fresh_cell": 2310280.0,
+         "fresh_chain": 125365.6
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [0, 9]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 125327.2,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 125327.2, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 352.2618, "basis": "target"},
         "sensitivities": {
          "reduction": 6056.822,
@@ -4101,12 +4081,12 @@
          "token_form": 352.2618,
          "decoding_form": 0.535919,
          "per_gate": null,
-         "fresh_chain": 125327.2,
-         "fresh_cell": 2309572.0
+         "fresh_cell": 2309572.0,
+         "fresh_chain": 125327.2
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [9]
        }
       }
@@ -4185,11 +4165,11 @@
      "rho": {
       "default": {
        "record": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 123529.4,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 123529.4, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 222.4367, "basis": "target"},
         "sensitivities": {
          "reduction": 12377.86,
@@ -4197,20 +4177,20 @@
          "token_form": 222.4365,
          "decoding_form": 0.561411,
          "per_gate": null,
-         "fresh_chain": 123529.4,
-         "fresh_cell": 2315959.0
+         "fresh_cell": 2315959.0,
+         "fresh_chain": 123529.4
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "refused",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [0, 18]
        },
        "model": {
-        "rho": null,
-        "basis": "unmeasured",
-        "binding_kind": null,
-        "terms": {"fresh_products": null, "token": null, "decoding": null},
-        "partial": false,
+        "rho": 123366.9,
+        "basis": "fresh_products",
+        "binding_kind": "fresh_products",
+        "terms": {"fresh_products": 123366.9, "token": null, "decoding": null},
+        "partial": true,
         "target": {"rho": 249.6824, "basis": "target"},
         "sensitivities": {
          "reduction": 12361.57,
@@ -4218,12 +4198,12 @@
          "token_form": 249.6824,
          "decoding_form": 0.5110959,
          "per_gate": null,
-         "fresh_chain": 123366.9,
-         "fresh_cell": 2312911.0
+         "fresh_cell": 2312911.0,
+         "fresh_chain": 123366.9
         },
         "fit_fails": ["compute", "reduction", "update"],
         "token_A": "unmodelled",
-        "unmeasured": ["fresh_products", "token", "decoding", "per_gate"],
+        "unmeasured": ["token", "decoding", "per_gate"],
         "b": [18]
        }
       }
