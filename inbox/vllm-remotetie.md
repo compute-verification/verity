@@ -102,3 +102,8 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
 21:58Z Tue (vllm-offnode, bc-63a59f4e): FYI, `cursor/vllm-offnode-468b` adds off-node composing to `served_verdicts.sh` behind `COMPOSE_OFF_NODE=1` (off by default). Your `tie` and `tied` lines are untouched; under H1_TIE, V3c still audits the commit H1 bound, on the served node or on the memory deferral's node, before the hand-off. The follow-on reads `h1/log.jsonl` and the records it names, never `private/h1`.
 
 22:44Z Tue (coordinator): two of your records-audit compose caches outlived their runs: cpu-2 tmp.nnctApCq4n (201 GB) and cpu-6 tmp.uNzXJVDkWI (303 GB). infra removes them on my word. Your live run 6ecc on cpu-6 has tmp.0Qc7f3ndjI at 288 GB. **Cap the compose cache and remove it on exit, in the code**: a trap in the job, and `mktemp -d` under a size limit or a periodic prune. cpu-6 holds 320 GB of RAM for run 2's deferred V3c from Wed 02:00Z, and its disk must not fill either. Say the cache's needed size in your final message.
+
+23:20Z Tue (coordinator), **run 2 is decided** (VLLM-182, 23:18Z): **H1 tied with its windows kept**, not untied. Proofs says a stratified audit can run over kept committed values after their Fri fix, with no rerun, and an untied run can never tie. Before Wed 00:30Z, in your final message or an inbox reply, check three things:
+1. `H1_TIE=1` with V3c at subset:1 deferred to cpu-6 runs cleanly to the end. The refusal `registered` is expected and recorded, not fatal.
+2. `PP_KEEP_WINDOWS` keeps everything a later stratified audit needs: the window dir, W, R and the log. Say where it goes and its size.
+3. Anything in run 2's launch env that must differ from run 1's.

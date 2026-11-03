@@ -107,3 +107,8 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
 vy-dc-h200 at 22:33Z: /workspace 211 GB free, /dev/shm 99 GB free, none of my runs left on it.
 
 22:50Z Tue (coordinator), for VLLM-193 (network-accounting): **yes or no, with no values: does `settings-remote/settings.env` set REQUESTS to something other than SLOTS?** Their serving-cost comparison needs remote's first load to have as many requests as their front's group. Answer in your final message after run 1 launches, and I'll post it. Give the yes or no only, never the counts.
+
+23:20Z Tue (coordinator), **run 2 is decided** (VLLM-182, 23:18Z): **H1 tied with its windows kept**, not untied. Proofs says a stratified audit can run over kept committed values after their Fri fix, with no rerun, and an untied run can never tie. Before Wed 00:30Z, in your final message or an inbox reply, check three things:
+1. `H1_TIE=1` with V3c at subset:1 deferred to cpu-6 runs cleanly to the end. The refusal `registered` is expected and recorded, not fatal.
+2. `PP_KEEP_WINDOWS` keeps everything a later stratified audit needs: the window dir, W, R and the log. Say where it goes and its size.
+3. Anything in run 2's launch env that must differ from run 1's.
