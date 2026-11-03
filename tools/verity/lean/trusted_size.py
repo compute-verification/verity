@@ -8,12 +8,12 @@ it prints the files, their lines (and the lines that are neither blank nor comme
 there, the definitions, how many of them a listed statement reads, and how many guarantees read the area. The
 definitions and what reads them come from a run of the Lean check on PKG: its `facts.json.gz` (`--facts`, which also
 takes an older run's `facts.json`), or that of `--run RUN`, a records run (`lean_changed.py --records PKG`) the evidence
-store holds. A definition is one of `spec_definitions`
-(projections and constructors go with their structure), read when a listed guarantee's statement reads it, followed through
-`meaning`, so transitively: when the lock's `reads` lists it (`--lock`, default PKG's; a run's own with `--run`), or the
-lock of a package requiring PKG by path does (`check.read_by_dependents`), as the audit's `unread_spec` counts them.
-Without facts the definitions are counted from the sources and the read ones are the lock's (projections and constructors
-included), both marked `~`. `--unread` lists the unread ones per module.
+store holds. A definition is one of `spec_definitions` (projections and constructors go with their structure), read when
+a listed guarantee's statement reads it, followed through `meaning`, so transitively: when the lock's `reads` lists it
+(`--lock`, default PKG's; a run's own with `--run`), or the lock of a package requiring PKG by path does
+(`check.read_by_dependents`), as the audit's `unread_spec` counts them. Without facts the definitions are counted from the
+sources and the read ones are the lock's (projections and constructors included), both marked `~`. `--unread` lists the
+unread ones per module.
 """
 from __future__ import annotations
 
@@ -81,8 +81,9 @@ def fetch_run(run: str, pkg: Path) -> tuple[Path, Path]:
         raise SystemExit(f"trusted_size: {run} has no run_files in the store")
     *facts, lock = [f"lean-audit/audit-{pkg.name}/{f}" for f in (C.FACTS, "facts.json", C.POLICY)]
     out = Path(tempfile.mkdtemp(prefix="trusted-size-"))
-    subprocess.run(["research", "data", "fetch", tree, "--to", str(out), *(x for w in (*facts, lock) for x in ("--path", w))],
-                   check=True, cwd=ROOT, stdout=subprocess.DEVNULL)
+    paths = [x for w in (*facts, lock) for x in ("--path", w)]
+    subprocess.run(["research", "data", "fetch", tree, "--to", str(out), *paths], check=True, cwd=ROOT,
+                   stdout=subprocess.DEVNULL)
     found = next((out / f for f in facts if (out / f).is_file()), None)
     if found is None or not (out / lock).is_file():
         raise SystemExit(f"trusted_size: {run}'s outputs hold no {' or '.join(facts)} beside {lock}: "
