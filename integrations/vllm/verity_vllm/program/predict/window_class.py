@@ -1,6 +1,7 @@
 """The window class a window circuit is of (`window_circuit`): its public caps and its slots' timing (`WindowClass`, N1's
-scan class, and `CLASS_OF_RECORD`), the windows its slots take (`takes`), and H1's tables of a window (`Tables`), which
-its circuit reads where the model makes them.
+scan class, and `CLASS_OF_RECORD`), the windows its slots take (`takes`), and the layout of PoUW's tables of a window that
+its circuit reads, a parameter of the circuit with two instances on one fixed load (`FixedLoad`): H1's (`Tables`), which
+the circuit reads where the model makes them, and Pearl+'s (`PearlTables`), for a circuit cut at its linears.
 
 Given H1's tables of the window (`Tables`, by the names the Commit record registers them under: round s's A table of one K,
 ``row-table/<s>/k<K>``, and its input-ids table, ``input-ids/<s>``), the circuit reads them where the model makes them, each
@@ -14,12 +15,26 @@ every request of the class's prompt length and outputs, all admitted at round 0 
 class's alone, and a window that isn't that load is refused (`takes`). The circuit's program takes the tables as its values
 (`interface.Registered.values`), round by round the A table then the input-ids table, so the window's registration registers
 them as its program's, the outputs of the Commit record's registration of them.
+
+Given Pearl+'s tables (`PearlTables`), the circuit is cut at its linears: PoUW credits each linear's product, so the circuit
+computes none but the LM head's. Each cut linear is a unit `LinearARow_v1{K, R, ROUND}` (`registry.linear_cut`) whose
+output, x widened to FP32, is held to its row of round s's A table of its K, ``pearl-a/<s>/k<K>``, and units
+`LinearOut_v1{W, K, ROUND}` that take its y from round s's y value of its K, ``pearl-y/<s>/k<K>``, in rows of W words, and
+hand them on to its readers. A round's calls of one K are its positions' linears of that K in order, each of the fixed
+load's m rows of the round (`PearlTables.rows`), and the y value holds each call's m × N y row-major, call after call. So
+a position's A row is row c·m + i of its round's A table, c its linear's index among its position's of that K and i its
+position's row (`FixedLoad.at`), and its y the N / W rows from row o·m + i·N / W of the y value, o the rows of W words its
+position's earlier linears of that K make. The circuit's program takes them as its values, round by round and K by K the A
+table then the y value. Its census (`window_circuit.census`) counts each cut linear by shape, and none is tied to PoUW's
+credited product yet.
 """
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
+
+from verity.core.protocols.pouw.schemes import SCHEMES
 
 from . import scan_state as SS
 from .build import Unexpressible
@@ -84,29 +99,11 @@ class WindowClass:
 CLASS_OF_RECORD = WindowClass(8, 1024, 64, lanes=4, every=16)
 
 
-@dataclass(frozen=True)
-class Tables:
-    """H1's tables of a window that its circuit reads where its proof blocks make them (module docstring), a table a round of
-    the class's ``outputs`` rounds: the A table of contraction ``k``, ``m`` rows of each of the round's ``calls`` int8
-    linears of K = ``k``, call after call, each row H1's leaf (codes four to a u32, then the f32 scale), and the input-ids
-    table, ``m`` rows of one u32 id. Their names are the ones the Commit record registers them under (pouw's
-    `credit.commit_rows` and `credit.commit_ids`), and a position's rows are at the fixed load's public rows (`at`)."""
-    k: int
-    m: int
-    calls: int
-
-    def __post_init__(self) -> None:
-        if not all(type(v) is int and v >= 1 for v in (self.k, self.m, self.calls)):
-            raise ValueError(f"H1's tables' K, rows a call and calls a round are positive integers, not {self}")
-
-    def a(self, s: int) -> str:
-        """Round ``s``'s A table of K = ``k``."""
-        return f"row-table/{s}/k{self.k}"
-
-    @staticmethod
-    def ids(s: int) -> str:
-        """Round ``s``'s input-ids table."""
-        return f"input-ids/{s}"
+class FixedLoad:
+    """The load a layout of PoUW's tables is read at (module docstring): every request of the class's prompt length and
+    outputs, all admitted at round 0 in slot order, a table a round of the class's ``outputs`` rounds."""
+    #: the layout's tables, as a refusal names them
+    WHAT = "the tables"
 
     @staticmethod
     def at(cls: WindowClass, slot: int, position: int) -> tuple[int, int]:
@@ -124,10 +121,68 @@ class Tables:
         return [[(k, 0, L) for k in range(S)]] + [[(k, L + s - 1, 1) for k in range(S)] for s in range(1, cls.outputs)]
 
 
+@dataclass(frozen=True)
+class Tables(FixedLoad):
+    """H1's tables of a window that its circuit reads where its proof blocks make them (module docstring), a table a round of
+    the class's ``outputs`` rounds: the A table of contraction ``k``, ``m`` rows of each of the round's ``calls`` int8
+    linears of K = ``k``, call after call, each row H1's leaf (codes four to a u32, then the f32 scale), and the input-ids
+    table, ``m`` rows of one u32 id. Their names are the ones the Commit record registers them under (pouw's
+    `credit.commit_rows` and `credit.commit_ids`), and a position's rows are at the fixed load's public rows (`at`)."""
+    WHAT = "H1's tables"
+    k: int
+    m: int
+    calls: int
+
+    def __post_init__(self) -> None:
+        if not all(type(v) is int and v >= 1 for v in (self.k, self.m, self.calls)):
+            raise ValueError(f"H1's tables' K, rows a call and calls a round are positive integers, not {self}")
+
+    def a(self, s: int) -> str:
+        """Round ``s``'s A table of K = ``k``."""
+        return f"row-table/{s}/k{self.k}"
+
+    @staticmethod
+    def ids(s: int) -> str:
+        """Round ``s``'s input-ids table."""
+        return f"input-ids/{s}"
+
+
+@dataclass(frozen=True)
+class PearlTables(FixedLoad):
+    """Pearl+'s tables of a window, which its circuit cut at its linears reads (module docstring), by round s and contraction
+    K: the A table, the A rows of the round's linears of K (x widened to FP32, K words a row; `linear_cut.LinearARow`), and
+    the y value, their y in rows of ``words`` BF16 (`linear_cut.LinearOut`), each of a call's `rows` rows, call after call.
+    ``scheme`` is PoUW's scheme whose credited product a tie would hold y to (`window_circuit.census`)."""
+    WHAT = "Pearl+'s tables"
+    words: int = 64
+    scheme: str = "pearl-c-h100-v1-h3"
+
+    def __post_init__(self) -> None:
+        if type(self.words) is not int or self.words < 1:
+            raise ValueError(f"Pearl+'s y rows are a positive number of words, not {self.words!r}")
+        if self.scheme not in SCHEMES:
+            raise ValueError(f"{self.scheme!r} is no PoUW scheme ({', '.join(SCHEMES)})")
+
+    @staticmethod
+    def a(s: int, k: int) -> str:
+        """Round ``s``'s A table of contraction ``k``."""
+        return f"pearl-a/{s}/k{k}"
+
+    @staticmethod
+    def y(s: int, k: int) -> str:
+        """Round ``s``'s y value of contraction ``k``."""
+        return f"pearl-y/{s}/k{k}"
+
+    @staticmethod
+    def rows(cls: WindowClass, s: int) -> int:
+        """A round-``s`` call's rows under the fixed load: round 0 every slot's prompt, a later round a row a slot."""
+        return cls.slots * cls.prompt if s == 0 else cls.slots
+
+
 def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | None]] | None = None,
-          tables: Tables | None = None) -> None:
+          tables: FixedLoad | None = None) -> None:
     """Refuse a window ``cls``'s slots don't take (`window_circuit`); with ``tables``, one whose rows by step aren't the
-    fixed load's (`Tables.schedule`), the public rows H1's tables are read at."""
+    fixed load's (`FixedLoad.schedule`), the public rows its tables are read at."""
     units = [u for u in compiled.requests if u is not None]
     if len(units) > cls.slots:
         raise Unexpressible(f"{len(units)} requests in a window of a class of {cls.slots} slots")
@@ -156,9 +211,9 @@ def takes(compiled: Any, cls: WindowClass, placed: Sequence[tuple[int, int | Non
             raise Unexpressible(f"request {u.request}: {u.LP} prompt ids and {u.T + 1} outputs, past its class's {cls.prompt} and "
                                 f"{cls.outputs}")
     if tables is not None and (got := [[(r.request, r.start, r.n) for r in step] for step in compiled.steps]) \
-            != Tables.schedule(cls):
+            != tables.schedule(cls):
         raise Unexpressible(f"the window's rows by step {got} (request, start, n), not its class's fixed load "
-                            f"{Tables.schedule(cls)}, the rows H1's tables are read at")
+                            f"{tables.schedule(cls)}, the rows {tables.WHAT} are read at")
 
 
-__all__ = ["CLASS_OF_RECORD", "GREEDY", "Tables", "WindowClass", "takes"]
+__all__ = ["CLASS_OF_RECORD", "FixedLoad", "GREEDY", "PearlTables", "Tables", "WindowClass", "takes"]
