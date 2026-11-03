@@ -179,7 +179,8 @@ def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_ce
     the reference circuit's chain whether the order is declared or not, with what its best subset dropped, and where no
     subset has a proved Λ unmeasured (`FRESH_VOID`), never 0; a circuit that declares a tree is unmeasured; the 45M
     start's dense step's term reads its whole-making system, attention's 64-long chains below every counted operand:
-    163,708, its fresh_cell 2,870,251, on all its products (4.11's one-class rule gave 165,021 and 3,041,057)."""
+    163,341, its fresh_cell 2,869,161, on all its products with G without each sequence's first position (163,708 and
+    2,870,251 before that trim; 4.11's one-class rule gave 165,021 and 3,041,057)."""
     f = built["fresh"]
     assert (f["p_cell"], f["order"]) == (formalism.P_CELL, formalism.ORDER) == (False, "chain")
     assert f["rests_on"] == formalism.RESTS_ON_CELL["fresh_products"] and "without P-cell" in f["rests_on"]
@@ -205,7 +206,7 @@ def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_ce
     dense = vs["the 45M start's dense step, its trace's order unknown"]
     assert (dense["inputs"]["c"], dense["inputs"]["k"]) == policy.CONSOLE and dense["order"] == "chain"
     assert dense["inputs"]["products"]["trace_order"] == "unknown"
-    assert round(dense["term"]) == 163_708 and round(dense["fresh_cell"]) == 2_870_251 and dense["subset"] is None
+    assert round(dense["term"]) == 163_341 and round(dense["fresh_cell"]) == 2_869_161 and dense["subset"] is None
     assert dense["inputs"]["products"]["system"] is not None and dense["inputs"]["products"]["p_match"] == []
 
 
