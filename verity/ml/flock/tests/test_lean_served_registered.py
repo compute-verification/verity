@@ -47,7 +47,7 @@ FIXTURES = {
 #: `pod/89-served-registered.sh ZK=0`'s fixture (row/v1): the same stage, with the verifier's own stratified sample of `PLAIN_K`
 #: (stage/draw.json), session/ a plain session (no --zk) sampled by it on the challenger's coin tree, and challenger/ its
 #: record and release log; vectors/ is vectors.json's live set
-PLAIN = "art:b14444a8c5fffcda2d056698a2aa0392e272bd6c5e0843996b7eb25a03b46911"
+PLAIN = "art:e43917db0ffa59b34e6beae04917b27a70489a4d7ab778d734ddb10c85c5af7b"
 PLAIN_K = 16
 STATEMENT = "verity/flock-circuit"
 
