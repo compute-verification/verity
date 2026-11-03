@@ -115,7 +115,7 @@ def by_reference(window: CS.Binding, registered: IF.Registered | None, data: Seq
             if v is None:
                 raise ValueError(f"{m.key} {r.port} reads {r.param!r}: give its committed value, or no values at all")
             at = r.source(np.arange(lo - r.at, lo - r.at + m.n)) // w
-            if v.words != w or not np.array_equal(CS.value_rows(v, at), np.asarray(d["rows"][r.port], dtype=np.uint16)):
+            if CS.value_words(v) != w or not np.array_equal(CS.value_rows(v, at), np.asarray(d["rows"][r.port], dtype=np.uint16)):
                 raise ValueError(f"{m.key} {r.port}: the rows its units read aren't {r.param!r}'s committed rows {at[:4].tolist()}...")
             d["rows"][r.port] = CS.ValueRows(v, tuple(int(x) for x in at))
             entries.setdefault(m.key, {})[r.port] = {"value": v.value, "positions": [int(x) for x in at],

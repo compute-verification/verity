@@ -106,16 +106,22 @@ def cut_linear(P: Any, j: int, node: Any) -> None:
     P.outs[j] = [(k * W, (k + 1) * W, Row(ytid, yu, f"o{k}", W)) for k in range(N // W)]
 
 
+#: the rows of a call's A rows and y as Pearl+'s trees commit them, which their readers' ports read
+#: (`interface.Registered.formats`): FP32 words, 32-bit leaves, in ``hm96-sha512/row-seg/v1`` rows
+ROW_FORMAT = {"row_schema": IF.SEG, "word_bits": 32}
+
+
 def cut_values(t: PearlTables, cls: WindowClass, layout: Linears) -> tuple[str, ...]:
-    """The values the cut circuit's program takes (`interface.Registered.values`): round by round and call by call, the
-    call's A rows and then its y."""
+    """The values the cut circuit's program takes (`interface.Registered.values`, each of `ROW_FORMAT`): round by round and
+    call by call, the call's A rows and then its y."""
     return tuple(v for s in range(cls.outputs) for c in range(len(layout.calls)) for v in (t.a(s, c), t.y(s, c)))
 
 
 #: why a cut linear's y is untied: the prover's registered value, held to nothing PoUW credits
-UNTIED = ("Pearl+'s verifier holds its own trees of each call's A rows and y (row-seg rows under PoUW's bindings) to its "
-          "credited product, and the circuit reads the window's registered values of them (row/v2 rows under the "
-          "registration's domain); nothing holds the two to each other yet, so the y the circuit reads is the prover's")
+UNTIED = ("Pearl+'s verifier holds its own trees of each call's A rows and y (row-seg rows of FP32 words under PoUW's "
+          "bindings) to its credited product, and the circuit reads the window's registered values of them in that "
+          "format; unless the window's registration reuses those trees' roots, nothing holds the two to each other, so "
+          "the y the circuit reads is the prover's")
 
 
 def census(lowered: Any) -> list[dict[str, Any]]:
@@ -138,4 +144,4 @@ def census(lowered: Any) -> list[dict[str, Any]]:
     return out
 
 
-__all__ = ["Linears", "UNTIED", "census", "cut_linear", "cut_values", "linears"]
+__all__ = ["Linears", "ROW_FORMAT", "UNTIED", "census", "cut_linear", "cut_values", "linears"]

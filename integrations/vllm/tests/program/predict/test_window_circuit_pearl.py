@@ -35,6 +35,7 @@ from verity.core.protocols.pouw.schemes import SCHEMES
 from verity.core.protocols.sampled_proofs.one_stage import registered as CR
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation import evaluate_batch
+from verity.ml.circuits.types import Array, Value
 from verity.ml.windows import interface as IF
 
 #: the scheme the remote demo's Pearl+ serves under, on the H200
@@ -131,7 +132,9 @@ def test_each_cut_linear_reads_its_row_of_its_calls_a_rows_and_y(low):
     linear, round s's call c, holds its A row (``o0``, x widened) to row i of the call's A rows and reads its ``y`` as row
     i of the call's y, i its position's row, and its readers read y as its unit's N / 16 output rows in order. Every real
     row of every value is read by exactly one unit, the A rows' filler rows by none, and the circuit's program takes them
-    as its values, round by round and call by call the A rows then the y, ahead of its units' parameters."""
+    as its values, round by round and call by call the A rows then the y, ahead of its units' parameters. Each is FP32
+    words in ``row-seg/v1`` rows as Pearl+'s trees commit them (`ROW_FORMAT`): its program parameter 32-bit leaves, and
+    the ``o0`` and ``y`` ports reading it ``row-seg/v1`` rows in their templates' statements."""
     c, want = low.circuit, {}
     for k, j, p, ci in _calls(low):
         P, (K, N) = low.programs[k], CALLS[ci]
@@ -151,6 +154,18 @@ def test_each_cut_linear_reads_its_row_of_its_calls_a_rows_and_y(low):
             assert (c.registered.params[PEARL.a(s, ci)], c.registered.params[PEARL.y(s, ci)]) == (16 * 2 * K, m * 2 * N)
     assert c.registered.values == tuple(v for s in M for ci in range(len(CALLS)) for v in (PEARL.a(s, ci), PEARL.y(s, ci)))
     assert [n for n, _ in c.program()[0].fn.signature()[0][:32]] == list(c.registered.values)
+    assert c.registered.formats == {v: WK.ROW_FORMAT for v in c.registered.values} == {v: {"row_schema": IF.SEG,
+                                                                                            "word_bits": 32}
+                                                                                        for v in c.registered.values}
+    sig = dict(c.program()[0].fn.signature()[0][:32])
+    for s, m in M.items():
+        for ci, (K, N) in enumerate(CALLS):
+            assert (sig[PEARL.a(s, ci)], sig[PEARL.y(s, ci)]) == (Array(16 * K, Value(32)), Array(m * N, Value(32)))
+    seg, fns = IF.seg_ports(c.registered), {IF.descriptor_id(fn): fn for fn, _ in c.templates}
+    for tid, port in {(t, p) for t, p, _u in want}:
+        ins, outs = IF.unit_rows(fns[tid], c.cuts.get(tid), seg[tid])
+        rows = {r[0]: r[1] for r in ins} | {p: s for (s, _j), (p, _w) in zip(outs, IF.layout(fns[tid]).outs)}
+        assert seg[tid] == {port} and {p for p, s in rows.items() if s == IF.SEG} == {port}
 
 
 def test_each_tables_readers_are_templates_of_their_own(low):
@@ -322,7 +337,8 @@ def test_a_cut_linear_served_under_other_statics_is_taken_as_served(low, filled)
 
 @pytest.mark.slow
 def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low, filled):
-    """Recorded into a `Window` with Pearl+'s values registered (`Rows.value`'s rows under the committer's key), each
+    """Recorded into a `Window` with Pearl+'s values registered (`Rows.value`'s rows under the committer's key, FP32 words
+    in row-seg rows: `ROW_FORMAT`), each
     `LinearARow_v1` and `LinearOut_v1` unit's output rows are its Definition on the inputs the window commits, x by its
     writers' wires and y by reference from the call's y rows, and the window closes over them. What no cheaper test
     reaches: the window resolving the cut's wires and committing a registered read of an input row by reference. Slow (a
@@ -330,11 +346,10 @@ def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low,
     _w, values, slots, rows = filled
     c = low.circuit
     for i, (name, v) in enumerate(_pearl_values(low, slots).items()):
-        lay = {r.reader: IF.layout(c.template(r.reader)) for r in c.registered.reads if r.param == name}
-        (schema,) = {dict(lay[r.reader].schemas)[r.port] for r in c.registered.reads if r.param == name}
-        values = {**values, name: CR.Registered.commit(PROGRAM, name, v.tolist(),
+        schema, bits = IF.value_format(c.registered, name)
+        values = {**values, name: CR.Registered.commit(PROGRAM, name, v.view(f"<u{bits // 8}").tolist(),
                                                        [hm96_salt(KEY, (1 << 61) + i, j) for j in range(len(v))],
-                                                       schema=schema)}
+                                                       word_bits=bits, schema=schema)}
     win = IF.Window(c, RUN, LAW, 64, registered=values, forms=WR.FORMS)
     win.supply(CR)
     rows.record(win)
