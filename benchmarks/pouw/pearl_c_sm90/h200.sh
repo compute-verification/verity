@@ -19,7 +19,9 @@
 # capture, timing nothing.  Then
 # (PIN=1, the default) harness/jobs/pin_target.sh pins this nvcc for sm_90a as TK (default 13.0.1-sm_90a) on its own lease,
 # (VOLUNTEER=1, the default) glm53_passes.py volunteer gives up prefill's and decode's rows over a debit cap in their records
-# on this machine's CPUs, after every lease is released and before any verifier coin, and
+# on this machine's CPUs, after every lease is released and before any verifier coin (VOLUNTEER=device: on a leased card,
+# debit.py's check of the ship's debit/debit_sm90.cubin against fast_tile, then only if it passed the words' counts from it,
+# every DEVICE_CHECK-th tile, default every one, replayed on the CPUs too and held equal), and
 # (VERIFY=1, the default) glm53_passes.py verify replays DRAWS tiles of each pass there (default 459, the verdict's
 # `served_passes.DRAWS`), and
 # (FULL=1, the default) glm53_passes.py full checks prefill's and decode's outputs in full there (every tile's C~ and U by its
@@ -53,6 +55,7 @@ tar -C "$S" -xf "$IN/ship.tar" && (cd "$S" && sha256sum -c --quiet MANIFEST.sha2
 echo "ship rc $?" >> "$O/rc.txt"
 grep -q "ship rc 0" "$O/rc.txt" || { cat "$O/rc.txt"; exit 2; }
 cp "$S/pearl_c_sm90.cubin" "$D/" && rm -rf "$D/check" && cp -r "$S/check" "$D/check"
+export DEBIT=$S/debit/debit_sm90.cubin
 cp "$S/source.txt" "$S/toolchain.txt" "$S/sass.json" "$S/MANIFEST.sha256" "$O/"
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvcc --version > "$O/nvcc.txt" 2>&1
@@ -93,6 +96,15 @@ fi
 if [ "${VOLUNTEER:-1}" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then
   "$PY" "$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)" > "$O/volunteer.log" 2>&1
   echo "volunteer rc $?" >> "$O/rc.txt"
+elif [ "${VOLUNTEER:-1}" = device ] && [ -f "$O/passes/decode/manifest.json" ]; then
+  # shellcheck disable=SC2016
+  gpu-lease 1 --wait --max-min "${LEASE_MIN:-60}" -- bash -c '
+    "$PY" "$D/debit.py" --cubin "$DEBIT" --out "$O/debit.json" > "$O/debit.log" 2>&1
+    rc=$?; echo "debit rc $rc" >> "$O/rc.txt"
+    [ "$rc" = 0 ] || exit "$rc"
+    "$PY" "$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)" --device "$DEBIT" \
+      --device-check "${DEVICE_CHECK:-1}" > "$O/volunteer.log" 2>&1'
+  echo "volunteer rc $?" >> "$O/rc.txt"
 fi
 if [ "${VERIFY:-1}" = 1 ] && [ -f "$O/passes/control/manifest.json" ]; then
   "$PY" "$D/glm53_passes.py" verify --out "$O/passes" --fast --draws "${DRAWS:-459}" --jobs "$(nproc)" > "$O/verify.log" 2>&1
@@ -104,6 +116,6 @@ if [ "${FULL:-1}" = 1 ] && [ -f "$O/passes/decode/manifest.json" ]; then
 fi
 cat "$O/rc.txt"
 tail -3 "$O/run.err" 2>/dev/null
-tail -4 "$O/capture.log" "$O/volunteer.log" "$O/verify.log" "$O/full.log" "$O/pin.log" 2>/dev/null
+tail -4 "$O/capture.log" "$O/debit.log" "$O/volunteer.log" "$O/verify.log" "$O/full.log" "$O/pin.log" 2>/dev/null
 grep -E "slowdown|no stock" "$O/timing.log" "$O/timing-h3.log" "$O/whole.log" 2>/dev/null | head -80
 ! grep -qv " rc 0$" "$O/rc.txt"
