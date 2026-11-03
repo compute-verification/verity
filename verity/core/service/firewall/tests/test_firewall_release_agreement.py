@@ -228,17 +228,44 @@ def _unended(result) -> bool:
     return isinstance(result, dict) and UNENDED.fullmatch(str(result.get("refused"))) is not None
 
 
+def _events(text: str) -> list:
+    out = []
+    for x in text.split("\n"):
+        if x:
+            try:
+                out.append(json.loads(x))
+            except ValueError:
+                out.append(x)
+    return out
+
+
+def _prestop(before: str, rust: str, lean: str) -> bool:
+    """Whether Rust's record `rust` is the Lean's `lean` with one stop more, of a recursive session `before` never opened,
+    the lines after it numbered one later: a stop by `stop` or by the slot's orphan rule, which the Lean records only of a
+    recursive session opened, a rule Rust's lacked."""
+    opened = {e.get("session") for e in _events(before) if isinstance(e, dict) and e.get("event") == "open"}
+    r = _events(rust)
+    for i, e in enumerate(r):
+        if isinstance(e, dict) and e.get("event") == "stop" and e.get("session") not in opened:
+            after = [{**x, "seq": x["seq"] - 1} if isinstance(x, dict) and "seq" in x else x for x in r[i + 1:]]
+            if r[:i] + after == _events(lean):
+                return True
+    return False
+
+
 def test_the_lean_runs_rusts_index_cases(lean):
     """Rust's index cases, op by op: its three streams (seeds 20261016 and 7, and 11 with a session id past the index's key
     limit), 1500 draws each, an op or damage to the record (torn, cut, halved, edited, rewritten, a line foreign to it), a
     repair or an append, which leave 3979 ops. Of those, Rust rejected 762, and the Lean rejects each; Rust answered 3217,
-    and at 2822 of them the Lean's result and the record it leaves are Rust's byte for byte. At 8, opens Rust made, the
+    and at 2775 of them the Lean's result and the record it leaves are Rust's byte for byte. At 8, opens Rust made, the
     Lean refuses the open and leaves the record as it was, as Python does: the stream's unended recursive sessions and
-    failures reach its budget, a rule Rust's lacked. The other 387 are outside the domain: their record holds a line the ZK
-    server doesn't write (`foreign`), which Rust read past and the Lean refuses the record for
-    (`test_the_lean_reads_only_the_firewalls_lines`). A step's `edit` is the record before it as an edit `[AT, CUT, PUT]` of the one the step before left (CUT bytes
-    at byte AT replaced by PUT), its `out` the record it leaves as an edit of the one before it, and `after` that record's
-    SHA-256."""
+    failures reach its budget, a rule Rust's lacked. At 47, 36 stops and 11 slots, Rust recorded a stop of a recursive
+    session never opened, by `stop` or by the slot's orphan rule, and the Lean records none, as Python does: a stop is
+    recorded only of a recursive session opened, a rule Rust's lacked. The other 387 are outside the domain: their record
+    holds a line the ZK server doesn't write (`foreign`), which Rust read past and the Lean refuses the record for
+    (`test_the_lean_reads_only_the_firewalls_lines`). A step's `edit` is the record before it as an edit `[AT, CUT, PUT]`
+    of the one the step before left (CUT bytes at byte AT replaced by PUT), its `out` the record it leaves as an edit of the
+    one before it, and `after` that record's SHA-256."""
     tally: Counter = Counter()
     text = ""
     for n, step in enumerate(_frozen("release-index.jsonl.gz")):
@@ -263,30 +290,42 @@ def test_the_lean_runs_rusts_index_cases(lean):
                 assert got["record"] == before and R.python_op({"op": step["op"], "record": before}) == got, (n, step, got)
                 tally["unended"] += 1
                 continue
+            if step["op"][0] in ("stop", "slot") and (got["result"], got["record"]) != (step["result"], text):
+                assert _prestop(before, text, got["record"]), (n, step, got)
+                assert got["result"] == (False if step["op"][0] == "stop" else step["result"]), (n, step, got)
+                assert R.python_op({"op": step["op"], "record": before}) == got, (n, step, got)
+                tally[f"{step['op'][0]}:prestop"] += 1
+                continue
             assert (got["result"], got["record"]) == (step["result"], text), (n, step, got)
         tally[f"{step['op'][0]}:{'reject' if 'reject' in step else _result({'result': step['result']})}"] += 1
     print(dict(sorted(tally.items())))
     assert dict(tally) == {
         "admit:ok": 7, "admit:refused": 925, "admit:reject": 195, "failures:ok": 202, "failures:reject": 52,
         "finish:ok": 206, "finish:reject": 63, "open:error": 32, "open:ok": 204, "open:refused": 184, "open:reject": 126,
-        "outside": 387, "release:ok": 434, "release:reject": 115, "slot:ok": 418, "slot:reject": 147, "stop:ok": 210,
-        "stop:reject": 64, "unended": 8}, tally
+        "outside": 387, "release:ok": 434, "release:reject": 115, "slot:ok": 407, "slot:prestop": 11, "slot:reject": 147,
+        "stop:ok": 174, "stop:prestop": 36, "stop:reject": 64, "unended": 8}, tally
 
 
 def test_the_loops_stages_run_rusts_outer_sessions(lean):
     """Rust's `outer_session` on a fake clock, against the stages the loop runs: the outcome, why, the release time it
     waited for and the record it leaves, or a rejection where Rust's was an error. A release, a refusal, and a stop of
-    each kind are all seen."""
+    each kind are all seen. Where Rust's slot recorded its orphan's stop of a recursive session never opened, the Lean's
+    record lacks that one stop (`_prestop`), and all else is Rust's."""
     tally: Counter = Counter()
     for n, case in enumerate(_frozen("release-outer.jsonl.gz")):
         kind, out = lean.call("outer", case["input"])
         if "reject" in case:
             assert kind == "reject", (n, case, out)
             continue
-        assert kind == "output" and json.loads(out) == case["output"], (n, case, out)
+        assert kind == "output", (n, case, out)
+        got = json.loads(out)
+        if got != case["output"]:
+            assert {**got, "record": None} == {**case["output"], "record": None}, (n, case, got)
+            assert _prestop(case["input"]["record"], case["output"]["record"], got["record"]), (n, case, got)
+            tally["prestop"] += 1
         tally[_outcome(case["input"], case["output"])] += 1
     print(dict(sorted(tally.items())))
-    for k in ("release", "refused", "stop", "stop:fault", "stop:send check", "stop:missed", "stop:verdict"):
+    for k in ("release", "refused", "stop", "stop:fault", "stop:send check", "stop:missed", "stop:verdict", "prestop"):
         assert tally[k] >= 10, (k, tally)
 
 
