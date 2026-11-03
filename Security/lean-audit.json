@@ -2558,6 +2558,18 @@
   "Pous.SecurityProofs.ObligationWide320": {
    "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
    "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoop": {
+   "honest": ["Flock.SecurityProofs.RecursiveZKLoop_honest"],
+   "nontrivial": "Flock.SecurityProofs.RecursiveZKLoop_nontrivial"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoopAnySum": {
+   "honest": ["Flock.SecurityProofs.RecursiveZKLoopAnySum_honest"],
+   "nontrivial": "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
+   "honest": ["Flock.SecurityProofs.RecursiveZKLoopAnySum_honest"],
+   "nontrivial": "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial"
   }
  },
  "unwitnessed": {
@@ -6788,6 +6800,27 @@
    "signature": ["Flock.SecurityProofs.RecursiveZK : Flock.Guarantees.RecursiveZK"],
    "assumptions": [],
    "type_hash": "444c06834fcb5e3f93c0a11fe5912b8345f27f03f6e8b816b86488ca566ed779"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoop": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoopAnySum": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoopAnySum_honest": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoopAnySum_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoop_honest": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.RecursiveZKLoop_nontrivial": {
+   "owner": "@proofs"
   },
   "Flock.SecurityProofs.SampledKSLiveHonest": {
    "owner": "@proofs",
@@ -12639,6 +12672,9 @@
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEnd_refSetup": "lemma: leaves the list, as it isn't of a property's one shape",
    "Flock.SecurityProofs.RecursiveZK": "frozen (obligation,no-function): It takes the outer proof's zero knowledge (OuterViewZK) as an open obligation, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
+   "Flock.SecurityProofs.RecursiveZKLoop": "frozen (obligation,no-function): It takes the deployed tables' premises (Tables, Complete, DummyReg, Causal, SwCausal and TapeOK of the loop's session), the firewall's sending the schedule's transcript (FirewallSends) and V*'s statements' honesty and simulator coins (LoopSessions.Honest, Sized) as open obligations, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
+   "Flock.SecurityProofs.RecursiveZKLoopAnySum": "frozen (obligation,no-function): RecursiveZKLoop at any inner worker, with no FirewallSends: it takes the deployed tables' premises (Tables, Complete, DummyReg, Causal, SwCausal and TapeOK of the loop's session), V*'s statements' honesty where the inner session finished and their simulator coins (LoopSessions.Honest, Sized) and the release's reading no stop where it didn't (ReleaseReadsNoStop) as open obligations, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
+   "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": "frozen (obligation,no-function): RecursiveZKLoopAnySum with Tables, Complete, DummyReg, Causal and TapeOK proved at the deployed tables: it takes SwCausal at the workers' values, V*'s statements' honesty where the inner session finished and their simulator coins (LoopSessions.Honest, Sized) and the release's reading no stop where it didn't (ReleaseReadsNoStop) as open obligations, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
    "Flock.SecurityProofs.ZeroKnowledgeHidden": "frozen (no-function): As a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512, and every table's setup avoids the mask slot (FailClosed.DrawSetupZHJ.avoidsMask).",
    "FlockSoundness.Audit.Law.closure_escape": "lemma: leaves the list, as it isn't of a property's one shape",
    "FlockSoundness.Audit.Law.covers_window": "lemma: leaves the list, as it isn't of a property's one shape",
