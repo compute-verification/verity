@@ -1303,8 +1303,8 @@ COMMON = {
     "optimizer": Dial("optimizer", "rule", "adamw", ("adamw", "muon", "sgd"),
                       "sets Delta_grad (the state), the optimizer's gates and Muon's fresh Newton-Schulz products"),
     "t_dense": Dial("t", "share of a token's affected work", None, (0.0, 0.9),
-                    f"A1's free share, the token kind's: None is te_core's literal t on the 45M trace, {T_DENSE}; 0 is "
-                    "evenly spread, which overcharges a block"),
+                    f"A1's free share at reading B, which only the target and its decoding form read: None is "
+                    f"te_core's literal t on the 45M trace, {T_DENSE}; 0 is evenly spread, which overcharges a block"),
     "tokens_per_param": Dial("tokens_per_param", "tokens / N", 20.0, (1.0, 2000.0),
                              "sets |C| only (Chinchilla's 20 by default)"),
     "vocab": Dial("vocab", "ids", VOCAB, (1000, 262_144),
@@ -1371,8 +1371,9 @@ WORKLOADS = {w.name: w for w in (
               Dial("batch_tokens", "learner tokens a step", 65_536, (1e4, 1e7),
                    "sets the optimizer's share, 1 - sigma, and b, a step's token blocks"),
               Dial("t", "share of a token's affected work", None, (0.0, 0.999),
-                   "A1's free share, the token kind's: None is the larger of the two kinds' (the learner's te_core "
-                   "literal t, or a LoRA's modelled one); 0 is evenly spread"),
+                   "A1's free share at reading B, which only the target and its decoding form read: None is the "
+                   "larger of the two kinds' (the learner's te_core literal t, or a LoRA's modelled one); 0 is evenly "
+                   "spread"),
               Dial("tokens", "learner tokens", 1e8, (1e6, 1e11), "sets |C| only (with rounds, the rollouts')"),
               COMMON["vocab"],
               Dial("rounds", "mode", False, (False, True),
@@ -1389,7 +1390,8 @@ WORKLOADS = {w.name: w for w in (
               Dial("prompt_tokens", "tokens", 4096, (16, 131072), "a session's prompt, the only inputs"),
               Dial("generated_tokens", "tokens", 1024, (1, 32768), "a session's generated tokens"),
               Dial("t", "share of a token's work", None, (0.0, 0.95),
-                   "A1's free share, the token kind's: None is attention's modelled share; 0 is evenly spread"),
+                   "A1's free share at reading B, which only the target and its decoding form read: None is "
+                   "attention's and the elementwise ops' modelled share; 0 is evenly spread"),
               Dial("tokens", "tokens served", 1e9, (1e6, 1e13), "sets |C| only"), COMMON["vocab"], COMMON["d_model"]),
              (("default", {}), ("bf16", {"precision": "bf16"}), ("7B", {"n_params": 7e9})),
              island_checks("inference")),
@@ -1404,8 +1406,8 @@ WORKLOADS = {w.name: w for w in (
               Dial("optimizer", "rule", "adamw", ("adamw", "sgd"), "sets Delta_grad: 64 or 0 state bits a value"),
               COMMON["seq_len"], COMMON["batch_tokens"],
               Dial("t", "share of a token's affected work", None, (0.0, 0.9999),
-                   "A1's free share, the token kind's: None is the modelled share reading no adapter value; 0 is "
-                   "evenly spread"),
+                   "A1's free share at reading B, which only the target and its decoding form read: None is the "
+                   "modelled share reading no adapter value; 0 is evenly spread"),
               Dial("tokens", "tokens", 1e8, (1e6, 1e11), "sets |C| only"), COMMON["vocab"], COMMON["d_model"]),
              (("default", {}), ("top layer", {"layers": 1}), ("MLP, top layer", {"targets": "mlp", "layers": 1}),
               ("rank 1 on W_q", {"rank": 1, "targets": "q"}),

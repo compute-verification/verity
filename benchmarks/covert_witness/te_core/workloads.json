@@ -87,7 +87,7 @@
      "unit": "share of a token's affected work",
      "default": null,
      "range": [0.0, 0.9],
-     "why": "A1's free share, the token kind's: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread, which overcharges a block"
+     "why": "A1's free share at reading B, which only the target and its decoding form read: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread, which overcharges a block"
     },
     {"name": "tokens_per_param", "unit": "tokens / N", "default": 20.0, "range": [1.0, 2000.0], "why": "sets |C| only (Chinchilla's 20 by default)"},
     {
@@ -895,7 +895,7 @@
      "unit": "share of a token's affected work",
      "default": null,
      "range": [0.0, 0.9],
-     "why": "A1's free share, the token kind's: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread, which overcharges a block"
+     "why": "A1's free share at reading B, which only the target and its decoding form read: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread, which overcharges a block"
     },
     {"name": "inner_steps", "unit": "steps", "default": 500, "range": [1, 10000], "why": "H, the inner steps between syncs"},
     {
@@ -1434,7 +1434,7 @@
      "unit": "share of a token's affected work",
      "default": null,
      "range": [0.0, 0.999],
-     "why": "A1's free share, the token kind's: None is the larger of the two kinds' (the learner's te_core literal t, or a LoRA's modelled one); 0 is evenly spread"
+     "why": "A1's free share at reading B, which only the target and its decoding form read: None is the larger of the two kinds' (the learner's te_core literal t, or a LoRA's modelled one); 0 is evenly spread"
     },
     {
      "name": "tokens",
@@ -2211,7 +2211,7 @@
      "unit": "share of a token's work",
      "default": null,
      "range": [0.0, 0.95],
-     "why": "A1's free share, the token kind's: None is attention's modelled share; 0 is evenly spread"
+     "why": "A1's free share at reading B, which only the target and its decoding form read: None is attention's and the elementwise ops' modelled share; 0 is evenly spread"
     },
     {"name": "tokens", "unit": "tokens served", "default": 1000000000.0, "range": [1000000.0, 10000000000000.0], "why": "sets |C| only"},
     {
@@ -2722,7 +2722,7 @@
      "unit": "share of a token's affected work",
      "default": null,
      "range": [0.0, 0.9999],
-     "why": "A1's free share, the token kind's: None is the modelled share reading no adapter value; 0 is evenly spread"
+     "why": "A1's free share at reading B, which only the target and its decoding form read: None is the modelled share reading no adapter value; 0 is evenly spread"
     },
     {"name": "tokens", "unit": "tokens", "default": 100000000.0, "range": [1000000.0, 100000000000.0], "why": "sets |C| only"},
     {
@@ -3652,7 +3652,7 @@
      "unit": "share of a token's affected work",
      "default": null,
      "range": [0.0, 0.9],
-     "why": "A1's free share, the token kind's: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread, which overcharges a block"
+     "why": "A1's free share at reading B, which only the target and its decoding form read: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread, which overcharges a block"
     },
     {"name": "tokens_per_param", "unit": "tokens / N", "default": 20.0, "range": [1.0, 2000.0], "why": "sets |C| only (Chinchilla's 20 by default)"},
     {
