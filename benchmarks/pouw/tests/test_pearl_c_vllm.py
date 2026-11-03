@@ -199,6 +199,13 @@ class RecordingDev:
         return bytes(128)
 
 
+def zeroed_y(monkeypatch) -> None:
+    """The recording stand-in runs no GEMM, so a call's y is whatever ``torch.empty`` left: zeroed, two runs of the same
+    calls retain the same y, and the same y roots."""
+    empty = torch.empty
+    monkeypatch.setattr(torch, "empty", lambda *a, **kw: empty(*a, **kw).zero_())
+
+
 @pytest.fixture
 def device_run():
     rng = np.random.default_rng(3)
@@ -3065,12 +3072,13 @@ class _Layer:
         self.weight = weight
 
 
-def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run, tmp_path):
+def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run, tmp_path, monkeypatch):
     """e2e's install path (`Stack` + `PearlCExecutor`, the arm from `arm_of`) retains the same manifest and files as the run
     driven directly, byte for byte."""
     import dataclasses
 
     from verity_vllm.protocols.linear.api import Stack
+    zeroed_y(monkeypatch)
     make, _, weights, *_ = device_run
     E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
     xs = [(w, torch.from_numpy(bf16_words(np.random.default_rng(60 + i), m, 1024).view(np.float32).copy()).to(torch.bfloat16))
@@ -3092,7 +3100,8 @@ def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run,
     assert {k: v for k, v in got.items() if k != "manifest"} == {k: v for k, v in want.items() if k != "manifest"}
     a, b = Path(want["manifest"]).parent, Path(got["manifest"]).parent
     assert (a / "manifest.json").read_text() == (b / "manifest.json").read_text()
-    assert all((a / f).read_bytes() == (b / f).read_bytes() for f in ("leaves", "tree_t", "calls/0.rows.bf16", "weights/0.tree"))
+    assert all((a / f).read_bytes() == (b / f).read_bytes()
+               for f in ("leaves", "tree_t", "calls/0.rows.bf16", "weights/0.tree", "y/0.rows.bf16", "y/0.tree"))
 
 
 def test_the_modes_are_arms_and_the_negative_control_is_a_pass_control(device_run):
