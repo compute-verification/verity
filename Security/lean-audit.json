@@ -14953,8 +14953,7 @@
    "Flock.SecurityProofs.RanRegisteredRun": {
     "com.Opens rt p op₀": "com.Opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (b : β), acc b → com.Opens rt (prog b) (op b)": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instLE.le (FlockSoundness.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.RecursiveCircuitIndist": {
     "honest o P w": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -23767,6 +23766,7 @@
     "Flock.SecurityProofs.IntegrityBlockCarried",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
@@ -23810,6 +23810,7 @@
     "Flock.SecurityProofs.IntegrityBlockCarried",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
@@ -23873,6 +23874,7 @@
     "Flock.SecurityProofs.IntegrityBlockCarried",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
@@ -23904,6 +23906,7 @@
     "Flock.SecurityProofs.IntegrityBlockCarried",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
@@ -23938,6 +23941,7 @@
     "Flock.SecurityProofs.IntegrityBlockCarried",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
@@ -24772,6 +24776,7 @@
     "Flock.SecurityProofs.IntegrityBlockCarried",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
@@ -26073,45 +26078,6 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
-  },
-  "Definitions.Flock.Game": {
-   "digest": "5f374fe403dff40923230a4d7cb37df2ab93ed85c292b46b05789f5cb8b77ac4",
-   "definitions": {
-    "FlockSoundness.Game": "e81e9844f9ac0a3f56b6eead8a243348676338af8e125207a281b1309f45c683",
-    "FlockSoundness.Game.Strategy": "484faa03360a38e5df0aab101750baf3998da201a35931bdf07fd6a79169a85a",
-    "FlockSoundness.Game.below": "6b109741f2cbffdbe3c1ab34bf5abcf1fb73206630f06e96321a1ec33a05fa6e",
-    "FlockSoundness.Game.bind": "0a796b5aa3c08e19018e2e4d7e791473197b76c3706d395dfe9100cbfb535e68",
-    "FlockSoundness.Game.brecOn": "a45d9b9aea0ac7b1a3ff71c2aee3668288f5d35d35aba0397957eb5f2c75811c",
-    "FlockSoundness.Game.brecOn.go": "a7a84a2666a0c9c0f7e92cf8b90817542d650b72804fdd9bb28a9c0cc57db8df",
-    "FlockSoundness.Game.casesOn": "76772c175f3654a07feba1e9ef74c556d0ab182cab98ffc78858004f575f4648",
-    "FlockSoundness.Game.coin": "690d787ba20d19fcaab75e40c6779e0fc9785c22732f111f0279eca37049d797",
-    "FlockSoundness.Game.draw": "1ba4a5445b2a8a0f9f4059fcbd467b9b0d561190c7431a2181bef1ac05897061",
-    "FlockSoundness.Game.instMonad": "15fba2015b62a08a511d5c4cbf30348d3374bc6504d84ea96a1fe7991ce9764b",
-    "FlockSoundness.Game.map": "82ec8a37754b41ec46203094c6b7679f07a55975c56351983cbe02a9f7d99d4a",
-    "FlockSoundness.Game.prob": "aa6c4f14ea71e54be5b9f38b5e2f42c05ad50f31a1d43c2d5a1faddeac8c8854",
-    "FlockSoundness.Game.rec": "e48ac1f4e5a6c40dfa347c567c6bbd236d50325fa5798085acbc50ab3ff9c1d0",
-    "FlockSoundness.Game.recv": "f3c071dc45f8ef96187054a0fe77d99c21b7d56f56c3cff44d87f087ebc42348",
-    "FlockSoundness.Game.ret": "ca065f6ebc033ce62a5479b973d71a65f99db83dd7269f01c3148a00421afab0",
-    "FlockSoundness.Game.send": "81985d03aa3b092a327d193e6bff40e7473d65f8e1478c49f719602b93ac3ac8",
-    "FlockSoundness.Game.value": "bc2660b60becad0b8b4c4f8f12e9810dd670a419e44ddecab4f976b1af502fda"
-   },
-   "guarantees": ["Flock.SecurityProofs.IntegrityHorizonBlocks"]
-  },
-  "Definitions.Flock.Game.Interleave": {
-   "digest": "3bc701cb7a4e528ca97f8823cadd3cc715350d2c982ca47164ade860f8d4ecae",
-   "definitions": {
-    "FlockSoundness.Game.interleave": "e49ba78af3681fa25efa630b8fb42433a012fb415d17134ee04b42a619a8c939",
-    "FlockSoundness.Game.interleaveWith": "2c2fa2fa78877e7bc10b20a3063946797a5f8e5c43b68b604f9a7daee32bf588"
-   },
-   "guarantees": ["Flock.SecurityProofs.IntegrityHorizonBlocks"]
-  },
-  "Definitions.Flock.Game.Prob": {
-   "digest": "82e09bc18f6dbab83b318051fcb130ba9b87d1bd93c41f6818017d83f4a853e1",
-   "definitions": {
-    "FlockSoundness.Game.Strategy.ofBind": "e636ca798ccbc7a027623ac7b1c49711cbcb025ea1bbb8fa626166e47c3843ae",
-    "FlockSoundness.Game.Strategy.ofMap": "d45c1c43a350061bcf18d74128ee9d5b0e766c26ccbe1bc90098f0a774247d72"
-   },
-   "guarantees": ["Flock.SecurityProofs.IntegrityHorizonBlocks"]
   },
   "Definitions.Flock.Guarantees.Audit": {
    "digest": "e95e7804d3b91387a66349a191d56288f14663b77c7d3b58d42a3e5e3d9e05f2",
@@ -39631,6 +39597,7 @@
     "Flock.SecurityProofs.IntegrityBlockCarried",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
+    "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
@@ -54825,11 +54792,11 @@
    ]
   },
   "Proofs.Flock.EndToEnd.Blocks.Statement": {
-   "digest": "fcc273d00beee4363d113e917ccbc47217c6c3a4e6a9cea3db9c5b6dc674aa64",
+   "digest": "5ef04222e65546bc46fe3ad94a41b08a25af6315c9a403fa0f3540e28181fa98",
    "definitions": {
     "Flock.Guarantees.IntegrityBlock": "e8480595de7c724732f172ad675dc727d12829ba4c3a6b1e01fe9c0d6ffef5b4",
     "Flock.Guarantees.IntegrityBlocks": "5aaa7e575b3dc2eddb62b53dae1d460823b6df5a102acdebbc340816f6d00dcb",
-    "Flock.Guarantees.IntegrityHorizonBlocks": "37dd8510219ee04a361868114e066c81f6a966264beecdffa6c872d3c44f16b5",
+    "Flock.Guarantees.IntegrityHorizonBlocks": "32e5f6eb4d5289c0f92bcecae22c9c78cf3136b5c727a3b602ecc77e4b164624",
     "Flock.Guarantees.ServerBlocks": "eb58a654954c3dd2899b9f354a48149427a34a5e057accd980ef47ca976b8cd0",
     "Flock.Guarantees.ServerBlocks.B": "f23a3b2c1c8872071c32d29c689897b1bd9afe004cd2d42cedac8ee04360c990",
     "Flock.Guarantees.ServerBlocks.BlockEscapes": "8315a8d605d7bf0d51e5d9e5a2f246590ae7c4a163a9b0daddea3e3e50c6d3c7",
