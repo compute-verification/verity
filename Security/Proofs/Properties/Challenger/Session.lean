@@ -1,4 +1,5 @@
 import Proofs.Properties.Challenger.Break
+import Proofs.Properties.Challenger.Commitment
 import Proofs.Properties.Pouw.LiveSalt.Ledger
 import Proofs.Properties.Pouw.LiveSalt.Coin
 
@@ -15,7 +16,7 @@ other lengths (`closeBytes_ne_record`, `closeBytes_ne_ledger`). Equal digests ar
 two the finder hashes (`eq_or_break`). A close's string names its record's message, its session's id, its chain and its
 end (`closeBytes_inj`), a record's its host and its commitment's tagged digest (`recordBytes_inj`), and a chain its
 lines (`chain_bind`), each step's string being the previous digest, 64 bytes, then the line's field.
-The commitment's canonical form names it (`hinj`, proved in `Commitment`): `sessionOf_bound` concludes that the
+A commitment's identity bytes name it (`Commitment.canon_inj`). So `sessionOf_bound` concludes that the
 commitment, the roots and the session id `sessionOf` returns are those of a run of the device under the key whose client
 closed it, read from that run's own release log, or the finder outputs a break.
 
@@ -662,13 +663,9 @@ theorem closeOfJson_ok {j : Json} {c : ChallengerClose} (h : ChallengerClose.ofJ
   all_goals exact close_form (by assumption)
 
 /-- **A session `sessionOf` accepts from a draw's record is a run the device closed**, or the finder outputs a break:
-given that a coin commitment's canonical form names it (`hinj`), the commitment, the roots and the session id
-`sessionOf` returns from the record's session files are a run's of the device under the key, a run its client closed,
-the roots the ones that run's own release log shows. -/
-theorem sessionOf_bound
-    (hinj : ∀ (c c' : LiveCommitment) (s : String), Flock.canonUtf8 c.toJson = .ok s →
-      Flock.canonUtf8 c'.toJson = .ok s → c = c')
-    {c : LiveCommitment} {roots : Roots} {sid : String}
+the commitment, the roots and the session id `sessionOf` returns from the record's session files are a run's of the
+device under the key, a run its client closed, the roots the ones that run's own release log shows. -/
+theorem sessionOf_bound {c : LiveCommitment} {roots : Roots} {sid : String}
     (h : sessionOf key (getD (getD coins "session") "record") (getD (getD coins "session") "log")
       (getD (getD coins "session") "close") = .ok (c, roots, sid)) :
     (∃ s ∈ dev.runs key.pub, s.commitment = some c ∧ s.id = sid ∧ s.ended = none ∧
@@ -709,7 +706,7 @@ theorem sessionOf_bound
             (tagged_mem_recordHashed hts))))
         rcases eq_or_break hTr hTs (hdt.symm.trans hdts) with e | b
         · obtain rfl := taggedBytes_inj e
-          obtain rfl := hinj _ _ _ ht hts
+          obtain rfl := Commitment.canon_inj _ _ _ ht hts
           have hstart : field LOG_TAG.toUTF8 ∈ readHashed key label coins ++ deviceHashed dev key.pub :=
             List.mem_append_left _ (mem_readHashed_log hr hlog hls (by rw [logHashed_eq]; simp))
           rcases chain_bind hstart (lines.length + s.log.length) lines s.log (Nat.le_refl _)
@@ -730,10 +727,7 @@ theorem sessionOf_bound
 /-- **A draw `drawCoins` accepts reads its coins against a run the device closed**, or the finder outputs a break: the
 commitment and the roots its segment's coins are read against are a run's of the device under the key, a run its client
 closed, the roots the ones that run's own release log shows. -/
-theorem drawCoins_session
-    (hinj : ∀ (c c' : LiveCommitment) (s : String), Flock.canonUtf8 c.toJson = .ok s →
-      Flock.canonUtf8 c'.toJson = .ok s → c = c')
-    {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) :
+theorem drawCoins_session {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) :
     ∃ c roots, challengerStream c (getD coins "segment") after
         (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ ∧
       ((∃ s ∈ dev.runs key.pub, s.commitment = some c ∧ s.ended = none ∧ releasedRootsOf c s.log = .ok roots) ∨
@@ -742,7 +736,7 @@ theorem drawCoins_session
   obtain ⟨a, -, hn⟩ := trustedSessionOf_ok ht
   obtain ⟨sid, ho⟩ := sessionNamed_ok hn
   refine ⟨c, roots, hs, ?_⟩
-  rcases sessionOf_bound (dev := dev) (label := label) hinj ho with ⟨s, hs', hc, -, he, hr⟩ | b
+  rcases sessionOf_bound (dev := dev) (label := label) ho with ⟨s, hs', hc, -, he, hr⟩ | b
   · exact .inl ⟨s, hs', hc, he, hr⟩
   · exact .inr b
 
