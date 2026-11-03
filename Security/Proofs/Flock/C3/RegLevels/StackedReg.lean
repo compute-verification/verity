@@ -17,7 +17,7 @@ and `H` siblings below its cap is the filter's `l`, and the `coef` port holds th
 theorem level_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {LANES H : ℕ}
     (h : Flock.RecCoins.checkStackedLevel c3 c pub own LANES H = .ok ()) :
-    ∃ (o : Flock.RecCoins.Opening) (l : ℕ) (what : ℕ → String), Flock.RecCoins.opening c3 c.unit.name = .ok o ∧
+    ∃ (o : Flock.RecCoins.RegisteredOpening) (l : ℕ) (what : ℕ → String), Flock.RecCoins.opening c3 c.unit.name = .ok o ∧
       (∀ ℓ < o.sh.sched.levels.size, 2 ^ (o.sh.sched.levels[ℓ]!).lanes = LANES →
         (o.sh.sched.levels[ℓ]!).d - (o.sh.sched.levels[ℓ]!).cap = H → ℓ = l) ∧
       Flock.RecCoins.checkValue c pub own "coef" Flock.RecCoins.COEF_VALUE
@@ -44,7 +44,7 @@ check accepted (`hval`), opening `j`'s is the verifier's, at its own α. -/
 theorem hreg_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {LANES H : ℕ}
     (h : Flock.RecCoins.checkStackedLevel c3 c pub own LANES H = .ok ())
-    {o : Flock.RecCoins.Opening} (hop : Flock.RecCoins.opening c3 c.unit.name = .ok o) {ℓ : ℕ}
+    {o : Flock.RecCoins.RegisteredOpening} (hop : Flock.RecCoins.opening c3 c.unit.name = .ok o) {ℓ : ℕ}
     (hℓ : ℓ < o.sh.sched.levels.size) (hL : FlockVBridge.AccChain.levelLanes o.sh ℓ = LANES)
     (hH : (o.sh.sched.levels[ℓ]!).d - (o.sh.sched.levels[ℓ]!).cap = H) {ops : FlockVBridge.AccChain.Openings}
     (hq : ops.q ℓ = (o.sh.sched.levels[ℓ]!).q)
@@ -66,7 +66,7 @@ check accepted (`hval`) and whose α is the run's (`halpha`, `alpha_of_opening`)
 theorem coef_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.Public}
     {own : Array Flock.Registered.Port} {LANES H : ℕ}
     (h : Flock.RecCoins.checkStackedLevel c3 c pub own LANES H = .ok ())
-    {o : Flock.RecCoins.Opening} (hop : Flock.RecCoins.opening c3 c.unit.name = .ok o) {sh : Flock.Shape}
+    {o : Flock.RecCoins.RegisteredOpening} (hop : Flock.RecCoins.opening c3 c.unit.name = .ok o) {sh : Flock.Shape}
     (hosh : o.sh = sh) {w : Array Flock.F128} {ops : FlockVBridge.AccChain.Openings}
     {a : Array (Flock.RecAlgebra.AClaim Flock.F128)} {cs : Array (Array Flock.F128)} {rsr lgr : Array Flock.F128}
     {rs : Flock.RecAlgebra.RsPts Flock.F128} {k₂ k₁ : ℕ} {lg : Flock.RecAlgebra.LgPts}
@@ -74,9 +74,9 @@ theorem coef_of_check {c3 : Flock.RecCoins.C3} {c : Flock.Circuit} {pub : Flock.
     (hx : ∀ as bs, FlockC3.Opening.coinClaim c3 c.unit.name sh 0 = .ok as →
       FlockC3.Opening.coinClaim c3 c.unit.name sh 1 = .ok bs →
       ∃ v : Fin 2 → Flock.F128, a = #[⟨v 0, as.skip, as.x⟩, ⟨v 1, bs.skip, bs.x⟩])
-    (h₁ : Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.Coins.ofRounds cs) = .ok ((rsr, rs), k₂))
+    (h₁ : Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.CoinSource.ofRounds cs) = .ok ((rsr, rs), k₂))
     (h₂ : Flock.RecAlgebra.ligerito sh.sched (msgsO sh w ops) ((msgsO sh w ops).tAtom.getD rs.T) rs.sws k₂
-      (Flock.RecAlgebra.Coins.ofRounds cs) = .ok ((lgr, lg), k₁))
+      (Flock.RecAlgebra.CoinSource.ofRounds cs) = .ok ((lgr, lg), k₁))
     (halpha : ∀ ℓ < sh.sched.levels.size, ops.alpha ℓ = (lg.conss[ℓ]!).alpha) {ℓ : ℕ}
     (hℓ : ℓ < sh.sched.levels.size) (hL : FlockVBridge.AccChain.levelLanes sh ℓ = LANES)
     (hH : (sh.sched.levels[ℓ]!).d - (sh.sched.levels[ℓ]!).cap = H) (hq : ops.q ℓ = (sh.sched.levels[ℓ]!).q)

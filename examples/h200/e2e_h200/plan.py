@@ -3,7 +3,7 @@
 A table is one op's output at one step, one row a sequence slot (`Table`; a quantizer's also has the f32 scale as the row's
 word). Its `Units` are a family of one template: unit i's output is one committed row, ``nbytes`` at ``offset + i * stride``
 of the table's row (with ``scale``, a second row: the word). The commit layout (`commit.layout`) commits every unit's rows as
-one commit unit, so a drawn unit opens exactly its outputs; a gather's rows are the bytes its parts' units wrote, committed
+one commit unit, so a sampled proof block opens exactly its outputs; a gather's rows are the bytes its parts' units wrote, committed
 again as the rows its readers read. With `shape.Forms`' chunk of C words (128 at the frozen shape):
 
 * the residual stream, every RMSNorm's output and the rows every row op reads are chunk rows of C words (256 B);

@@ -5,12 +5,15 @@ circuit's META), candidate 3's check 5 inputs (`c3`), candidate 3's checks befor
 (`checkInner`), and the V* checks both run on every statement (`checks`). Both call sites call these, so a statement
 about them is one about what either accepts. `verify`'s setup also refuses a V* session that is not one table holding
 its whole population (`oneFull`). `verify` also refuses, last in each verdict, a recursive session without
-the verifier's inner shape, a V* session whose draw is not every unit of its population (`fullDraw`), and a session over
-an inner session whose record holds no draw (`innerDrawn`).
+the verifier's inner shape, a V* session whose draw is not every unit of its population (`fullDraw`), a session over
+an inner session whose record holds no draw (`innerDrawn`), and a session at a holo or sparse inner shape or a
+recursive one without `--zk`, neither of which `RecursiveKS` covers (`denseOnly`, `zkOnly`).
 -/
+import Flock.RecBudget
 import Flock.RecCoins
 import Flock.RecRecord
 import Flock.Witness
+import Flock.JsonParse
 
 namespace Flock
 namespace RecSetup
@@ -51,7 +54,7 @@ table's `root_B` and the link points (`RecVStar.innerLink`), the rounds the sche
 stream, round, coin count and counts (`RecVStar.checkSchedule`'s), each rep's salted tops and `c_k` with their
 rounds (`innerLink`'s tops and `cs`, `RecVStar.innerCommits`), and every round, with its stream and round, its coins
 (`jsonRounds`: the values `innerCommits` holds the inner session record's coins to). The JSON readers run first, so a
-record they refuse is refused as before. Bytes that repeat a key read two ways (`Json.parse` keeps the last, `readFull`
+record they refuse is refused as before. Bytes that repeat a key read two ways (`JsonParse.parse` keeps the last, `readFull`
 the first), and the coins are refused unless both read the same. -/
 def checkReads (i : RecVStar.Inner) (tt : String) (tr : Json) (record : String) (cs : RecVStar.InnerCommits) :
     V Unit := do
@@ -103,12 +106,12 @@ def commits (inner : Option RecVStar.Inner) (t : V String) (r : V (Option String
         throw ("rec inner registration: candidate 3's session needs R's circuit registration " ++
           "(--rec-inner-registration), which binds R before the coins")
       pure none
-    | some s => match Json.parse s with
+    | some s => match JsonParse.parse s with
       | .ok j => pure (some j)
       | .error e => throw s!"rec inner registration: not JSON: {e}"
   let (bound, shape) ← bound
   let tt ← t
-  match Json.parse tt with
+  match JsonParse.parse tt with
   | .ok j =>
     let cs ← RecVStar.innerCommits j record rj bound shape
     if let some i := inner then
@@ -157,7 +160,7 @@ def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
     throw "rec-inner: the inner statement names lookup tables (--rec-inner-tables), and its files set it up with none"
   let some b := fm.draw | throw "rec-inner: the inner statement has no draw (--rec-inner-draw)"
   let some t := String.fromUTF8? b | throw "rec-inner: the inner statement's draw: not UTF-8"
-  let d ← (Json.parse t).mapError (s!"rec-inner: the inner statement's draw: not JSON: " ++ ·)
+  let d ← (JsonParse.parse t).mapError (s!"rec-inner: the inner statement's draw: not JSON: " ++ ·)
   let D ← Draw.UnitDraw.ofJson (Flock.norm d)
   if D.proved != Array.range st.n then
     throw s!"rec-inner: the inner statement's draw proves {D.proved.size} units, not every one of its files' {st.n} in order"
@@ -165,8 +168,8 @@ def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
 /-- **The verifier's inner shape is the inner statement's**: where it holds the inner statement's files, the `m`,
 `k_log`, regions and claims of its inner shape (`--rec-inner`) are the ones the inner statement sets up at from them
 (`RecCoins.Files.stmt`; claims two and the session's points per region, as `RecVStar.innerOf` writes them), so the V*
-list and the rep schedule the shape fixes are the inner session's; and the inner statement is set up as its files set
-it up (`checkForm`). -/
+list and the rep schedule the shape fixes are the inner session's; its public file's shared-row tables are within
+`RecBudget.innerRows`; and the inner statement is set up as its files set it up (`checkForm`). -/
 def checkShape (inner : Option RecVStar.Inner) (src : Option RecCoins.Source) : V Unit := do
   let (some i, some (.files f)) := (inner, src) | return
   let (spec, st) ← f.stmt "the inner session"
@@ -175,6 +178,7 @@ def checkShape (inner : Option RecVStar.Inner) (src : Option RecCoins.Source) : 
     throw (s!"rec-inner: the verifier's inner shape (m {i.m}, k_log {i.kLog}, regions {i.regions}, claims {i.claims}) " ++
       s!"is not the inner statement's (m {st.m}, k_log {st.c.kLog}, regions {st.regions.size}, claims {claims}), " ++
       "which its files (--rec-inner-circuit, --rec-inner-public, --rec-inner-partition) set up")
+  RecBudget.innerRows st
   checkForm f.form st
 
 /-- **Candidate 3's checks before the session's own setup**, on the inner statement's files `src`: check 5's sparse
@@ -251,6 +255,34 @@ source: `--rec-inner-session` with the inner statement's files), the record hold
 def innerDrawn (src : Option RecCoins.Source) : V Unit := do
   let some s := src | return
   if (RecCoins.recordDraw s.record).isNone then throw noInnerDraw
+
+/-- The refusal of an inner shape of the form `form`, one the recursion's proof doesn't cover. -/
+def notDense (form : String) : String :=
+  s!"refused: the verifier's inner shape (--rec-inner) is {form}: RecursiveKS covers the dense form only (no holo, " ++
+    "no sparse phase), and the verifier refuses every form its proof doesn't cover"
+
+/-- **The recursion's inner shape is dense**: `RecursiveKS` is proved at the dense inner form only (`Form.Dense`: not
+holo, no sparse phase), so under a holo inner shape (`rec-inner --hide`) or a sparse one (candidate 3's RecSparse phase)
+the session is refused, until a proof covers that form. Without an inner shape it passes. -/
+def denseOnly : Option RecVStar.Inner → V Unit
+  | some i =>
+    if i.holo then throw (notDense "holo (\"holo\": true)")
+    else if i.sparse.isSome then throw (notDense "sparse (\"sparse\", candidate 3's RecSparse phase)")
+    else pure ()
+  | none => pure ()
+
+/-- The refusal of a recursive session verified without `--zk`. -/
+def notZk : String :=
+  "refused: a recursive session (a --rec-* flag) without --zk: RecursiveKS covers the masked verifier (verify --zk) " ++
+    "only, and the verifier refuses every form its proof doesn't cover"
+
+/-- **A recursive session is masked**: the recursion's proof reads the masked verifier only (`verify --zk`; its model
+reads no statement without it), so a session verified with a recursive flag (`rec`) but without `--zk` is refused. -/
+def zkOnly (zk rec : Bool) : V Unit := if rec && !zk then throw notZk else pure ()
+
+theorem denseOnly_some {i : RecVStar.Inner} (h : denseOnly (some i) = .ok ()) : i.holo = false ∧ i.sparse = none := by
+  cases hh : i.holo <;> cases hs : i.sparse <;>
+    simp [denseOnly, hh, hs, throw, throwThe, MonadExceptOf.throw] at h ⊢
 
 end RecSetup
 end Flock

@@ -1,5 +1,5 @@
-"""θ of a tensor-parallel node's Program (`node`) registered from its TP Commit of record: the registration log NCI's full
-check reads (`pipeline.registration_log`), each rank's weights opened against the rank's committed weights root.
+"""θ of a tensor-parallel node's Program (`node`) registered from its TP Commit of record: the registration log the inference-only
+policy's full check reads (`pipeline.registration_log`), each rank's weights opened against the rank's committed weights root.
 
     verity-vllm predict node-registration --row ROW --config CONFIG [--wrapper request --LP N --T N | --wrapper step --M N --pos0 N]
         --program NODE_DESCRIPTOR --commit-out OUT --checkpoint-dir CK [--checkpoints-manifest M --model REPO --revision REV]

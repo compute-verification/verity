@@ -1,5 +1,5 @@
 """Sampled proofs' parties on the deployment layer (`parties`), every party here on stand-in capabilities: an honest run's
-verifier audits each block once its registration, the firewall's pin and the challenger's address are in, in order, and
+verifier audits each block once its registration, the ZK server's pin and the challenger's address are in, in order, and
 its product accepts; a listed component with no answer is absent and the product never accepts over it; an accepting
 audit of another registration rejects; an audit that is `Unavailable` is its block's error, and one that raises anything
 else fails the run (``party-died``, its error recorded); workers that can't serve leave the verifier refused ``closed``

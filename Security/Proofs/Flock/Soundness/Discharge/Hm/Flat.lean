@@ -180,10 +180,34 @@ theorem rowNet_entryL {n s off x : ℕ} (hn : n = st.c.shaNet ∨ n = st.c.hmNet
     rw [add_zero, sparseEntry_ofRows hb, ofRows_row hb hw, count_slot _ (by rw [hsl]; exact hlb) j]
     push_cast; ring
 
-/-- **A row net's slot holds its net's rows** in every block of a satisfying witness of the untyped statement: each
-computed row past the input rows holds, and the slot's constant column is 1. -/
-theorem laidRows_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
-    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {n s : ℕ}
+/-- **A row net's slot column is no unit input row** (`UnitIn`): the ranges are apart, and the unit is neither row
+net. -/
+theorem not_unitIn_of_rowNet {n s off x : ℕ} (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x) :
+    ¬ UnitIn st.c x := by
+  rintro ⟨s', off', hat', -⟩
+  have R := RowRanges.ofL L F.parse F.check
+  obtain ⟨hm, hk, -, -⟩ := R.range (R.rowNet_lt hn)
+  have he := (hat.inj L.disj hm hk L.unit_mem L.unit_kind hat').1
+  rcases hn with rfl | rfl
+  · exact F.sha he.symm
+  · exact F.hm he.symm
+
+/-- **A unit slot's forced-zero row is no unit input row** (`UnitIn`): it is past the unit's constant row, which is
+past its inputs. -/
+theorem not_unitIn_zero (s₀ : ℕ) : ¬ UnitIn st.c (st.c.unitRange.slot s₀ + st.c.unit.useful) := by
+  rintro ⟨s, off, ⟨-, hoff, hx⟩, hlt⟩
+  have hz : st.c.unit.useful < 2 ^ st.c.unitRange.slotLog := by rw [L.unit_slotLog]; exact F.check.unit_zero
+  have := (slot_add_inj (r := st.c.unitRange) hz hoff hx).2
+  have h1 := F.useful
+  have h2 := L.unit_at.in_le
+  rw [L.unit_at.in_eq] at h2
+  have h3 := L.unit_at.const_le
+  omega
+
+/-- **A row net's slot holds its net's rows** in every block of a witness that satisfies every row but the unit input
+rows (`SatEx`, `UnitIn`): each computed row past the input rows holds, and the slot's constant column is 1. -/
+theorem laidRows_flat_ex {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {n s : ℕ}
     (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hs : s < (st.c.rangeOf n).count) {l : Flock.HmNets.Laid}
     {name : String}
     (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2) :
@@ -232,7 +256,7 @@ theorem laidRows_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} 
           · rw [ite_eq_right h2, ite_eq_right (fun h => h2 (hj.1 h))]; rfl
       have hcopy : CopyRow (L.model regs) ⟨(st.c.rangeOf n).slot s + l.constPos, hx⟩ (L.model regs).pin :=
         ⟨fun j => ((hE j.val).1.trans (hrow l.ra hca j)), fun j => ((hE j.val).2.trans (hrow l.rb hcb j))⟩
-      rw [hcopy.block_eq hz o, hz.2.1 o]
+      rw [hcopy.block_eq_ex hz (not_unitIn_of_rowNet L F hn (hat _ hfit)) o, hz.2.1 o]
       rfl
   · have ho : off < 2 ^ (st.c.rangeOf n).slotLog := lt_trans hoff hfit
     have hx := hxlt _ ho
@@ -256,7 +280,8 @@ theorem laidRows_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} 
       simp only [Matrix.mulVec, dotProduct, hM, hC, Nat.add_zero]
       rw [sum_count_nat _ hlt]
       exact bit_sum_row _ _ _
-    have h := congrArg FlockSoundness.bit (hz.1 o ⟨(st.c.rangeOf n).slot s + off, hx⟩)
+    have h := congrArg FlockSoundness.bit (hz.1 o ⟨(st.c.rangeOf n).slot s + off, hx⟩
+      (not_unitIn_of_rowNet L F hn (hat _ ho)))
     rw [bit_mul] at h
     show _ = blockBit (L.model regs) z o ((st.c.rangeOf n).slot s + off)
     rw [blockBit_of_lt _ z o hx]
@@ -266,24 +291,37 @@ theorem laidRows_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} 
 
 /-- **Template instance `g`'s `sha512x3` slot `i` holds the verifier's `sha512x3` rows**, past its 8192 input rows, in
 every block of a satisfying witness of the untyped statement. -/
-theorem shaSlot_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
-    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g i : ℕ} (hg : g < st.c.g)
+theorem shaSlot_flat_ex {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g i : ℕ} (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD st.c.shaNet 0) :
     LaidRows (Flock.HmNets.shaLaid ()) 8192 fun j => blockBit (L.model regs) z o (st.c.slotCol st.c.shaNet g i + j) := by
   have R := RowRanges.ofL L F.parse F.check
-  have h := laidRows_flat L F hz o (Or.inl rfl) (R.slot_lt_count (Or.inl rfl) hg hi) (shaNet_ofRows R.rowNets)
+  have h := laidRows_flat_ex L F hz o (Or.inl rfl) (R.slot_lt_count (Or.inl rfl) hg hi) (shaNet_ofRows R.rowNets)
   rw [shaNet_inRows R.rowNets] at h
+  exact h
+
+theorem shaSlot_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g i : ℕ} (hg : g < st.c.g)
+    (hi : i < st.c.perVu.getD st.c.shaNet 0) :
+    LaidRows (Flock.HmNets.shaLaid ()) 8192 fun j => blockBit (L.model regs) z o (st.c.slotCol st.c.shaNet g i + j) :=
+  shaSlot_flat_ex L F (hz.ex _) o hg hi
+
+/-- **Template instance `g`'s `hm96` slot `i` holds the verifier's `hm96` rows**, past its 4096 input rows. -/
+theorem hmSlot_flat_ex {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    (hz : SatEx (L.model regs) (UnitIn st.c) z) (o : Fin (2 ^ (L.model regs).nbl)) {g i : ℕ} (hg : g < st.c.g)
+    (hi : i < st.c.perVu.getD st.c.hmNet 0) :
+    LaidRows (Flock.HmNets.hmLaid ()) 4096 fun j => blockBit (L.model regs) z o (st.c.slotCol st.c.hmNet g i + j) := by
+  have R := RowRanges.ofL L F.parse F.check
+  have h := laidRows_flat_ex L F hz o (Or.inr rfl) (R.slot_lt_count (Or.inr rfl) hg hi) (hmNet_ofRows R.rowNets)
+  rw [hmNet_inRows R.rowNets] at h
   exact h
 
 /-- **Template instance `g`'s `hm96` slot `i` holds the verifier's `hm96` rows**, past its 4096 input rows. -/
 theorem hmSlot_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g i : ℕ} (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD st.c.hmNet 0) :
-    LaidRows (Flock.HmNets.hmLaid ()) 4096 fun j => blockBit (L.model regs) z o (st.c.slotCol st.c.hmNet g i + j) := by
-  have R := RowRanges.ofL L F.parse F.check
-  have h := laidRows_flat L F hz o (Or.inr rfl) (R.slot_lt_count (Or.inr rfl) hg hi) (hmNet_ofRows R.rowNets)
-  rw [hmNet_inRows R.rowNets] at h
-  exact h
+    LaidRows (Flock.HmNets.hmLaid ()) 4096 fun j => blockBit (L.model regs) z o (st.c.slotCol st.c.hmNet g i + j) :=
+  hmSlot_flat_ex L F (hz.ex _) o hg hi
 
 /-- A column at a slot of a net other than `n` is not at `n`'s slots. -/
 theorem atSlot_ne {n n' s s' off off' x : ℕ} (hn : n < st.c.nets.size) (hn' : n' < st.c.nets.size) (hne : n' ≠ n)
@@ -311,7 +349,7 @@ theorem flatPairs_countL (hrw : RowWires st.c) {n s off x src : ℕ} (hn : n = s
     rcases hn with rfl | rfl
     · exact F.sha
     · exact F.hm
-  obtain ⟨hum, huk, huc⟩ := unit_range_facts P C
+  obtain ⟨hum, huk, huc⟩ := unit_range_facts_of P.unitNet C
   have hunit : ∀ s₀ b, s₀ < st.c.unitRange.count → b < 2 ^ st.c.unitRange.slotLog →
       st.c.unitRange.slot s₀ + b ≠ x := fun s₀ b hs₀ hb he =>
     atSlot_ne L F hnn P.unitNet hun hat (show AtSlot st.c st.c.unitNet s₀ b x from ⟨hs₀, hb, he.symm⟩)
@@ -373,7 +411,7 @@ theorem flatPairs_countL (hrw : RowWires st.c) {n s off x src : ℕ} (hn : n = s
       · exact hwhm
     obtain ⟨hm', hk', -⟩ := rangeOf_spec (C.one_range _ hd1)
     have hq := getD_mem_toList hd3 (d := default)
-    have hle := (nets_ok P w.dst.1).1.2.2 _ hq
+    have hle := (F.nets w.dst.1).1.2.2 _ hq
     have hfit := (L.fit w.dst.1).2
     intro he
     refine atSlot_ne L F hnn hd1 hne hat (s' := g * st.c.perVu.getD w.dst.1 0 + w.dst.2.1)

@@ -1,7 +1,9 @@
-"""The outer firewall's frame (`Flock/Firewall/Frame.lean`, `flock-firewall frame`, live PROTOCOL.md §10.1) on hand-made reps.
+"""The outer ZK server's frame (`Flock/Firewall/Frame.lean`, `flock-firewall frame`, live PROTOCOL.md §10.1) on hand-made reps.
 At its start the frame draws the rep's randomness from the OS and commits it: the pads `h` (with `h_ab = h_a h_b` and the
-triple's `w = x y`), `μ`, the rows' padding, `τ`'s salt and the pads tree's salts, then the root; a start that brings any of
-them is refused. Each value absorbed in a masked phase leaves as `v + h_i` under the next pad of `zk_veil::Layout::absorbed`'s
+triple's `w = x y`), `μ`, the rows' padding, `τ`'s salt and the pads tree's salts. It answers the pads' root alone, the draws
+never leaving it, and a start that brings any of them is refused. The tests that need the pads run the same frame as
+`flock-frame-tape`, which reads the draws from a file the test writes in place of the OS's bytes, and read the pads from that
+file as the frame does (`Draws.ofBytes`). Each value absorbed in a masked phase leaves as `v + h_i` under the next pad of `zk_veil::Layout::absorbed`'s
 order (written out here from the layout's index formulas), the pads' label and root follow the zerocheck's label, the domain
 frame stays home, everything outside the masked phases leaves as the device framed it, and a round that breaks the masking
 challenger's phases or the transcript's framing is refused, releasing nothing. The frame makes the pass decision: each
@@ -14,8 +16,8 @@ failed. The frame decides the rep's refusals from the coins the stream answered 
 zerocheck outer coin `r_j = 1`; at the opening's label, a mask slot short of full rank on the claim points of the table's
 reps (`prior`'s and the rep's own); level 0's `ρ_0, ρ_1` dependent over F128; and `β = 0` in the inner proof, whose four
 rounds leave through the frame too. Each answers `stop` at once, nothing of the round leaving. The frame fixes the inner
-proof's rounds: `(ρ, σ)` and `Y` are its own, from its draws and the coins (computed here with `gmul`), and of the other two
-only `final_c'` and `τ`'s commitment are the firewall's. Under the firewall `flock-circuit`
+proof's rounds: `(ρ, σ)` and `Y` are its own, from its samples and the coins (computed here with `gmul`), and of the other two
+only `final_c'` and `τ`'s commitment are the ZK server's. Under the ZK server `flock-circuit`
 hands the frame each device round unmasked (`firewall::Gate`), and Rust's `ρ` and `β` checks agree with the frame's
 (`live/src/coin_stop_vectors.json`). The prover's every other OS read is `flock-firewall tap`'s: a line `N` answered with
 `N` fresh bytes."""
@@ -27,12 +29,14 @@ import re
 import shutil
 import struct
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
+TAPE = LEAN / ".lake" / "build" / "bin" / "flock-frame-tape"
 VECTORS = Path(__file__).resolve().parents[1] / "live" / "src" / "coin_stop_vectors.json"
 PASS = Path(__file__).resolve().parents[1] / "live" / "src" / "pass_vectors.json"
 SKIP = 64
@@ -100,23 +104,47 @@ def slots(n_mlv: int, n_lc: int, n_ood0: int, k0: int) -> dict[str, int]:
     return {"fa": fa, "fb": fa + 1, "hab": hab, "tx": hab + 1, "ty": hab + 2, "tw": hab + 3, "len": hab + 4}
 
 
+def draw_bytes(lay: dict) -> int:
+    """`Frame.drawBytes`: `h`, `μ` and the rows' padding (16 bytes a word), `τ`'s salt, a salt per leaf of the pads' code."""
+    n = slots(**lay)["len"]
+    leaves = 1 << (n + K_PAD - 1).bit_length() << 3
+    return 16 * (2 * n + 2 * K_PAD) + 192 + 192 * leaves
+
+
 class Frame:
-    def __init__(self, lay=LAY, mask=None, start=None):
-        self.p = subprocess.Popen([str(BIN), "frame"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    """A rep's frame: `flock-frame-tape` on the draws `tape` (by default seeded bytes of the layout's size), whose pads it
+    reads as the frame does; or, with `os`, `flock-firewall frame`, which draws from the OS and sends only the root."""
+
+    def __init__(self, lay=LAY, mask=None, start=None, tape: bytes | None = None, os: bool = False):
+        path = None
+        if os:
+            self.p = subprocess.Popen([str(BIN), "frame"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        else:
+            tape = random.Random(2).randbytes(draw_bytes(lay)) if tape is None else tape
+            fd, path = tempfile.mkstemp(prefix="flock-frame-tape-")
+            with open(fd, "wb") as t:
+                t.write(tape)
+            self.p = subprocess.Popen([str(TAPE), path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if start is None:
             start = json.dumps({"layout": lay} | ({"mask": mask} if mask else {}))
         self.rng = random.Random(1)
         self.lay, self.eps, self.beta, self.last, self.sent = lay, 0, 0, None, {}
         self.start = self.ask(start)
+        if path is not None:
+            Path(path).unlink()
         if isinstance(self.start, tuple):
-            b, n = self.start[1], slots(**lay)["len"]
+            self.root = self.start[1]
+        if tape is not None:
+            s = slots(**lay)
+            n = s["len"]
 
             def words(o: int, k: int) -> list[int]:
-                return [int.from_bytes(b[o + 16 * i:o + 16 * i + 16], "little") for i in range(k)]
+                return [int.from_bytes(tape[o + 16 * i:o + 16 * i + 16], "little") for i in range(k)]
 
             self.h, self.mu = words(0, n), words(16 * n, n)
+            self.h[s["hab"]] = gmul(self.h[s["fa"]], self.h[s["fb"]])
+            self.h[s["tw"]] = gmul(self.h[s["tx"]], self.h[s["ty"]])
             self.pad_h, self.pad_mu = words(32 * n, K_PAD), words(32 * n + 16 * K_PAD, K_PAD)
-            self.root = b[-64:]
 
     def rho_sigma(self) -> list[int]:
         """`(ρ, σ) = (ε h_fa + h_tx, h_fb + h_ty)` (`zk_veil::prove_inner`) at the `ε` answered."""
@@ -129,7 +157,7 @@ class Frame:
         return [a ^ gmul(beta, m) for a, m in zip(self.h + self.pad_h, self.mu + self.pad_mu)]
 
     def own(self, content: bytes) -> bytes:
-        """The inner proof's round that the placeholder `content` stands for, from this rep's draws and coins; any other
+        """The inner proof's round that the placeholder `content` stands for, from this rep's samples and coins; any other
         round as it is."""
         if content not in (RHO_SIGMA, Y):
             return content
@@ -159,8 +187,8 @@ class Frame:
     def round(self, content: bytes, n: int, fail: bool = False, coins: list[int] | None = None, sched: bytes | None = None,
               answer: bool = True):
         """The round's answer; a released round's coins (seeded, never 0 or 1, unless `coins`) are answered back, as the
-        firewall does, unless not `answer`. A device round comes with the scheduled round in its place (`sched`, else the
-        round itself, which then passes); the inner proof's rounds, the firewall's own (`own`), and a `fail` round come
+        ZK server does, unless not `answer`. A device round comes with the scheduled round in its place (`sched`, else the
+        round itself, which then passes); the inner proof's rounds, the ZK server's own (`own`), and a `fail` round come
         alone."""
         inner = any(content == r for r, _ in INNER)
         self.last, content = content, self.own(content)
@@ -188,7 +216,7 @@ class Frame:
 def built():
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
-    subprocess.run(["lake", "build", "flock-firewall"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "flock-firewall", "flock-frame-tape"], cwd=LEAN, check=True, capture_output=True)
 
 
 #: the hand-made rep's values: the algebraic phase's 200 in absorbed order (round 1's, then round 2's), level 0's 9
@@ -252,21 +280,44 @@ def released(f: Frame, rounds, fail_at: int | None = None) -> list:
     return out + [f.ask("finish")]
 
 
-def test_the_frame_draws_the_reps_randomness_and_commits_it_and_refuses_a_start_that_brings_any():
-    f, g = Frame(), Frame()
-    s = slots(**LAY)
-    leaves = 1 << (s["len"] + K_PAD - 1).bit_length() << 3
+def test_the_frame_draws_the_reps_randomness_sends_only_the_pads_root_and_refuses_a_start_that_brings_any():
+    f, g = Frame(os=True), Frame(os=True)
     for x in (f, g):
-        assert x.start[0] == f"ok {16 * (2 * s['len'] + 2 * K_PAD) + 192 + 192 * leaves + 64}"
-        assert x.h[s["hab"]] == gmul(x.h[s["fa"]], x.h[s["fb"]]) and x.h[s["tw"]] == gmul(x.h[s["tx"]], x.h[s["ty"]])
+        assert x.start[0] == "ok 64", "the root alone: the draws never leave the frame"
         assert x.close() == 0
-    assert f.start[1] != g.start[1] and f.root != g.root, "each rep's draws are fresh OS bytes"
+    assert f.root != g.root, "each rep's draws are fresh OS bytes"
     for start, why in [({"layout": LAY, "pads": ["00" * 16]}, "a start with `pads`"), ({"layout": LAY, "root": "00" * 64}, "a start with `root`")]:
-        x = Frame(start=json.dumps(start))
+        x = Frame(start=json.dumps(start), os=True)
         assert x.start == f"err the rep's start: {why}: the frame takes only the layout and the mask slot, and draws the rep's randomness itself"
         assert x.close() == 1
-    x = Frame(mask={"w0": 0, "n": 0, "blocks": 1})
+    x = Frame(mask={"w0": 0, "n": 0, "blocks": 1}, os=True)
     assert x.start == "err the rep's start: a mask slot of no words" and x.close() == 1
+
+
+def test_the_frame_commits_the_draws_it_read_and_sets_h_ab_and_w_itself():
+    """`Draws.ofBytes` and `padsRoot`, through `flock-frame-tape`: the same draws give the same root; the draws' words at
+    `h_ab` and `w` are not read (the frame sets them to `h_a h_b` and `x y`), and the root commits `h`, `μ`, the rows'
+    padding and the leaf salts; a read of any other size is refused."""
+    s = slots(**LAY)
+    tape = random.Random(3).randbytes(draw_bytes(LAY))
+
+    def root(t: bytes) -> bytes:
+        f = Frame(tape=t)
+        assert f.start[0] == "ok 64" and f.close() == 0
+        return f.root
+
+    def flip(at: int) -> bytes:
+        t = bytearray(tape)
+        t[at] ^= 1
+        return bytes(t)
+
+    r = root(tape)
+    assert root(flip(16 * s["hab"])) == r and root(flip(16 * s["tw"])) == r
+    n = s["len"]
+    for at in (16 * s["fa"], 16 * (n + 3), 32 * n, 32 * n + 16 * K_PAD, len(tape) - 1):
+        assert root(flip(at)) != r, at
+    x = Frame(tape=tape[:-1])
+    assert x.start == f"err the rep's start: {len(tape) - 1} bytes where the draws take {len(tape)}" and x.close() == 1
 
 
 def test_a_rep_leaves_masked_in_the_layouts_order():
@@ -288,7 +339,7 @@ def test_a_failed_round_stops_the_rep_whose_algebraic_values_then_leave_as_their
 def test_a_stopped_rep_releases_under_pads_h_what_the_honest_rep_releases_under_h_plus_v():
     """`h ↦ h + v` is a bijection of the uniform pads, so before `Finish` a stopped rep's release is distributed as an honest
     rep's, whatever the device sent and wherever its check failed; only `finish` differs. The inner proof's rounds, which
-    carry no device value, are compared as the frame's own from its draws."""
+    carry no device value, are compared as the frame's own from its samples."""
     o = order(**LAY)
     garbage = [(5 * i + 1) << 70 for i in range(len(ALG))]
     #: each round's first absorbed position: the device's honest values before the failed round, anything from it on
@@ -528,8 +579,8 @@ INNER_WHY = ["the inner proof's round 0 is not its label, final_c' and ε's sque
     (3, lambda f: obs(f.y()[:-1]) + squeeze(2, 4)),
 ])
 def test_the_frame_fixes_the_inner_proofs_rounds_and_computes_rho_sigma_and_y_itself(k, bad):
-    """`innerOwn`: of the inner proof's four rounds only `final_c'` and `τ`'s commitment are the firewall's, and `(ρ, σ)`
-    and `Y` are the frame's, from its draws and the coins (`zk_veil::prove_inner`'s formulas, here with `gmul`). A round
+    """`innerOwn`: of the inner proof's four rounds only `final_c'` and `τ`'s commitment are the ZK server's, and `(ρ, σ)`
+    and `Y` are the frame's, from its samples and the coins (`zk_veil::prove_inner`'s formulas, here with `gmul`). A round
     with a frame more, a value changed or one short is refused and releases nothing; the rep stays stopped, its own
     round then goes, and its `finish` is `stop`."""
     rounds = rep_rounds(ALG)

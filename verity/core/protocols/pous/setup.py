@@ -1,7 +1,7 @@
 """Setup with a server-side encoder:
 
 1. the server commits to `W` (`commit`) before any salt exists;
-2. the verifier draws the salt after the commitment (`draw_salt`, from its own secret or a later beacon round);
+2. the verifier samples the salt after the commitment (`draw_salt`, from its own secret or a later beacon round);
 3. the server encodes, `C* = Enc(W, salt)`, and sends it segment by segment.  The verifier builds `vk` one of two ways:
    - **public encoder** (the default, POUS `docs/public-encoder/protocol.md`, milestone 1): it decodes each segment of
      `C*`, streams `Dec(C*)` into `commit`'s framing, accepts iff the digest equals the commitment, and builds `vk`

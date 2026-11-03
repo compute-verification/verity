@@ -19,7 +19,7 @@ encoded store, read only, under the salt `setup.draw_salt` of the coin and commi
   - its rows and its buffer freed, so one tensor's rows and staging buffer are on the device at a time.
 - **summary**: each tensor's fastest decode summed, which is the decode of a step measured tensor by tensor, and the peak
   HBM torch allocated and reserved over the pass.
-- **receipts** (`--receipts`): the remote bandwidth audit's pass over the units the store's tensors lie in
+- **receipts** (`--receipts`): PoUB's pass over the units the store's tensors lie in
   (`sketch.plan_units`; the encoded padding past the head is in no receipt) beside the stage pass (`sketch.py`), under
   the seed `receipts.seed(CHALLENGE, PASS, PREVIOUS)`: each tensor's rows taken in whole units (up to three blocks more
   at each end), the sketch attached to the warm-up decode (the pass's σ), and its timed decodes with the sketch and
@@ -428,7 +428,7 @@ def main(argv=None) -> int:
     ap.add_argument("--shape", default="h200", help="its shape")
     ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1", help="its seed")
     ap.add_argument("--encoded", type=Path, required=True, help="the encoded store's directory, read only")
-    ap.add_argument("--source", required=True, help="the store's coin (hex), drawn after its commitment")
+    ap.add_argument("--source", required=True, help="the store's coin (hex), flipped after its commitment")
     ap.add_argument("--commitment", required=True, help="the store's commitment (hex)")
     ap.add_argument("--lib", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)

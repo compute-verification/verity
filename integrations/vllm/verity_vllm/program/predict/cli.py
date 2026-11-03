@@ -10,7 +10,7 @@
     verity-vllm predict row --row ROW --out DIR [--config CONFIG_JSON] [--jobs N]                (`aot`: a row's Build of record)
     verity-vllm predict compiled --role ROLE --device DEVICE --workload WL --out build.json      (`compiled`: the served Build)
 
-`node-registration` registers a node Program's θ from its TP Commit of record (`node_registration`, NCI's full check).
+`node-registration` registers a node Program's θ from its TP Commit of record (`node_registration`, the inference-only policy's full check).
 `emit` writes into a traced Build row: a switched row's AOT Build (`aot`, `row_tp.TpRow.build`) runs it for each derive.
 `row` writes a single-GPU row's whole Build of record from its declared inputs, with no trace, into a dir of its own.
 `score` and `build` refuse an output path inside a rows root they read.

@@ -27,7 +27,6 @@ import Proofs.Flock.Soundness.Refine.Live
 import Proofs.Flock.Soundness.Refine.LiveSim
 import Proofs.Flock.Soundness.Refine.LiveCompiled
 import Proofs.Flock.Soundness.Refine.Frames
-import Proofs.Flock.Soundness.Refine.FramesPiop
 import Proofs.Flock.Soundness.Refine.Salted
 import Proofs.Flock.Soundness.Refine.LincheckConverse
 import Proofs.Flock.Soundness.Refine.RepConverse

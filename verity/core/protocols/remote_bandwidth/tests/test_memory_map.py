@@ -113,7 +113,7 @@ def test_a_session_driven_by_a_memory_map_is_accepted() -> None:
     """The map drives both sides: the prover appends each step's pages (their digests the map's, at its indices) and
     sends the append's root and the released runs; the verifier takes them (`Session.append`, `Session.release`), and
     each pass's plan travels as `Replay.take`'s change for the step it names, the one after the step just applied.
-    Every receipt is drawn and every window accepted, and the record keeps each pass's step."""
+    Every receipt is sampled and every window accepted, and the record keeps each pass's step."""
     st = store()
     head = Header(st.registration.digest, N)
     run = Run(st)

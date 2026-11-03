@@ -74,7 +74,7 @@ def required_classes_check(declaration: dict | None, required: tuple[str, ...] |
 def binding_check(bnd: CommitBinding | Mapping[str, Any], *, min_openings: int = 64) -> tuple[bool, str]:
     """BIND-01: (1) the binding map was built and its context (roots, layout) is the run's; (2) every identity of
     the collector-independent expected population has a binding (a duplicate / alias / extra copy never counts for a missing one --
-    dropping `/1` and binding `/0` twice fails here); (3) openings drawn from the EXPECTED population all had a binding and all verified
+    dropping `/1` and binding `/0` twice fails here); (3) openings sampled from the EXPECTED population all had a binding and all verified
     (retain=none: the values come from replay and are checked by openings_after_release)."""
     try:
         b = CommitBinding.of(bnd, BINDING)
@@ -520,7 +520,7 @@ def rule_identity_coverage(commit: dict, ctx: dict) -> CheckResult:
 
 
 def rule_openings_population(commit: dict, ctx: dict, min_openings: int) -> CheckResult:
-    """binding_check (3): openings drawn from the EXPECTED population all had a binding and all verified."""
+    """binding_check (3): openings sampled from the EXPECTED population all had a binding and all verified."""
     b = _binding_of(commit)
     claim = "Every opening drawn from the required-value population had a binding and verified (BIND-01 (3); retain=none: the deferred share opens by replay)."
     compat = ["binding.openings_population.n", "binding.openings_population.unbound_n", "binding.openings_population.opened", "binding.openings_population.verified", "binding.openings_population.skipped"]
