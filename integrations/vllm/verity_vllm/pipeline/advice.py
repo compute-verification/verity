@@ -51,7 +51,9 @@ with the requests it carries across its open and close, since a window closes af
 and the requests its clients abort (the trace's outside finish, ``abort``, after the step in flight).
 The windows are read in order, each opening with the state the last one left (`Left`: where each unfinished request's next
 row continues, its kept outputs and the KV it computed), so a request that runs on into the next window is held there to the
-position it reached, and its record (lengths and finish) is the Commit record's.
+position it reached, and its record (lengths and finish) is the Commit record's.  A run served with ``--advice``
+(`serve_advice`) committed each window's advice this way as it served, under its own ``advice/``, after registering B once
+before its first window; this command refuses it, since a window's advice is committed once.
 
     verity-vllm advice RUN [--trace FILE] [--io FILE] [--out DIR] [--window K] [--T 600] [--tau 0.1] [--compiler-name N --compiler-digest D] [--cap BITS]
         [--weights-of-record FILE]
@@ -104,8 +106,9 @@ def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bit
 
 def builder_item(compiler: AW.Capped) -> dict[str, Any]:
     """B's item in the deployment's registration log (`verity.core.protocols.registration`, kind ``builder``): the inner
-    compiler's digest, the format of the advice it reads (`certifier.advice.SCHEMA`) and ℓ, as the log decodes it."""
-    return REG.item_of({"kind": "builder", "digest": compiler.inner.digest, "advice": I1.SCHEMA, "cap": compiler.cap_bits})
+    compiler's digest, the format of the advice it reads (a Commit window's, `window_advice.SCHEMA`) and ℓ, as the log
+    decodes it."""
+    return REG.item_of({"kind": "builder", "digest": compiler.inner.digest, "advice": WA.SCHEMA, "cap": compiler.cap_bits})
 
 
 def finish_of(rid: str, rec: dict[str, Any] | None) -> str:
@@ -143,13 +146,20 @@ def io_record(path: str | Path) -> dict[str, dict[str, Any]]:
             continue
         doc = json.loads(line)
         for r in doc.get("requests") if isinstance(doc.get("requests"), list) else [doc]:
-            rid = str(r.get("request") or r.get("engine_id"))
+            rid, entry = io_entry(r)
             if rid in out:
                 raise UsageError(f"{path}: request {rid} is recorded twice")
-            out[rid] = {"user": str(r.get("user") or r.get("http_id") or rid), "prompt_ids": list(r["prompt_ids"]),
-                        "output_ids": list(r.get("output_ids") if r.get("output_ids") is not None else r["streamed_ids"]),
-                        "finish": r.get("finish")}
+            out[rid] = entry
     return out
+
+
+def io_entry(r: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """One request of the Commit record (a ``requests.jsonl`` line, or a request of a ``windows.jsonl`` line) as `io_record`
+    holds it, with its engine request id."""
+    rid = str(r.get("request") or r.get("engine_id"))
+    return rid, {"user": str(r.get("user") or r.get("http_id") or rid), "prompt_ids": list(r["prompt_ids"]),
+                 "output_ids": list(r.get("output_ids") if r.get("output_ids") is not None else r["streamed_ids"]),
+                 "finish": r.get("finish")}
 
 
 @dataclass
@@ -440,27 +450,66 @@ def commit(compiler: Any, a: Any, T: int = 600, salts: list[bytes] | None = None
     return registration(compiler, a, reg.root, len(reg.rows), T, registered_roots), AW.opening(data, reg)
 
 
+class TraceIndex:
+    """A served trace's records indexed by what `window` reads, extended (`extend`) as the trace grows, so a server reads each
+    record once however many windows it splits."""
+
+    def __init__(self) -> None:
+        self.first: dict[str, Any] | None = None
+        self.opened: dict[int, int] = {}
+        self.closed: dict[int, int] = {}
+        self.steps: dict[int, list[dict[str, Any]]] = {}
+        self._arrive: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+        self._finish: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+        self.n = 0
+
+    def extend(self, recs: list[dict[str, Any]]) -> TraceIndex:
+        for r in recs:
+            i, self.n = self.n, self.n + 1
+            if self.first is None:
+                self.first = r
+            kind = r["kind"]
+            if kind == "window":
+                (self.opened if r["event"] == "open" else self.closed)[int(r["window"])] = int(r["before_step"])
+            elif kind == "step":
+                self.steps.setdefault(int(r["step"]), []).append(r)
+            elif kind in ("arrive", "finish"):
+                (self._arrive if kind == "arrive" else self._finish).setdefault(r["request"], []).append((i, r))
+        return self
+
+    def span(self, w: int) -> tuple[int, int]:
+        """Closed window ``w``'s steps, ``[lo, hi)``."""
+        return self.opened.get(w, 0), self.closed[w]
+
+    def complete(self, w: int) -> bool:
+        """Whether closed window ``w``'s every step is recorded: async scheduling records a window's last step after its close."""
+        lo, hi = self.span(w)
+        return all(s in self.steps for s in range(lo, hi))
+
+    def window(self, w: int) -> list[dict[str, Any]] | None:
+        """Closed window ``w``'s records, a trace of its own (`windows_of`); None for one with no step."""
+        lo, hi = self.span(w)
+        steps = [st for s in range(lo, hi) for st in self.steps.get(s, ())]
+        if not steps:
+            return None
+        ids = {row[0] for st in steps for row in st["rows"]}
+
+        def of(by: dict[str, list[tuple[int, dict[str, Any]]]]) -> list[dict[str, Any]]:
+            return [r for _, r in sorted((x for rid in ids for x in by.get(rid, ())), key=lambda x: x[0])]
+
+        return [self.first, *({**r, "before_step": max(0, r["before_step"] - lo)} for r in of(self._arrive)),
+                *({**st, "step": st["step"] - lo} for st in steps),
+                *({**r, "after_step": r["after_step"] - lo} for r in of(self._finish))]
+
+
 def windows_of(recs: list[dict[str, Any]]) -> tuple[dict[int, list[dict[str, Any]]], list[int]]:
     """A served trace's records by closed Commit window (`StepTrace.window`), each a trace of its own: the header, the arrivals of
     the requests with rows in the window, its steps renumbered from 0, and their outside finishes; and the windows still open.  A
     window's steps are those scheduled from its open to its close, wherever async scheduling recorded them; one with none is left
     out."""
-    opened: dict[int, int] = {}
-    closed: dict[int, int] = {}
-    for r in recs:
-        if r["kind"] == "window":
-            (opened if r["event"] == "open" else closed)[int(r["window"])] = int(r["before_step"])
-    out: dict[int, list[dict[str, Any]]] = {}
-    for w in sorted(closed):
-        lo, hi = opened.get(w, 0), closed[w]
-        steps = sorted((r for r in recs if r["kind"] == "step" and lo <= r["step"] < hi), key=lambda r: r["step"])
-        if not steps:
-            continue
-        ids = {row[0] for st in steps for row in st["rows"]}
-        out[w] = [recs[0], *({**r, "before_step": max(0, r["before_step"] - lo)} for r in recs if r["kind"] == "arrive" and r["request"] in ids),
-                  *({**st, "step": st["step"] - lo} for st in steps),
-                  *({**r, "after_step": r["after_step"] - lo} for r in recs if r["kind"] == "finish" and r["request"] in ids)]
-    return out, sorted(set(opened) - set(closed))
+    idx = TraceIndex().extend(recs)
+    out = {w: sub for w in sorted(idx.closed) if (sub := idx.window(w)) is not None}
+    return out, sorted(set(idx.opened) - set(idx.closed))
 
 
 def served(recs: list[dict[str, Any]]) -> bool:
@@ -474,6 +523,9 @@ def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path |
     """The run's advice, committed (`write_one`); a `verity-vllm serve-openai` run's, one advice a closed Commit window
     (`write_served`); each registration with ``registered_roots``, the root of each parameter its window circuit registers."""
     run = Path(run)
+    if (run / "advice.jsonl").exists():
+        raise ValueError("its server committed each window's advice as it served (serve-openai --advice: advice.jsonl, "
+                         "advice/w<k>/), and a window's advice is committed once: read those")
     if trace is None:
         trace = next((p for p in (run / ST.SERVED, run / "step_trace.jsonl") if p.exists()), run / "step_trace.jsonl")
     trace = Path(trace)

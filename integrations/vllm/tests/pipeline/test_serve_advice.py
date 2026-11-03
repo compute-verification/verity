@@ -27,9 +27,12 @@ from verity.core.protocols.certifier import advice as I1
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import advice_windows as AW
+from verity_vllm.pipeline import serve_advice as SA
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
+from verity_vllm.pipeline import serve_release as RL
+from verity_vllm.pipeline import served_compiler as SC
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.serve_admit import Delta
 from verity_vllm.program.predict.phi import Phi
@@ -106,13 +109,16 @@ class Server:
     """`serve_openai.main`'s wiring over the stand-ins: the advice trace on the scheduler for the server's lifetime, the Commit's
     windows marking it."""
 
-    def __init__(self, out: Path, window_steps: int = 64, abort_after: dict[tuple[int, ...], int] | None = None) -> None:
+    def __init__(self, out: Path, window_steps: int = 64, abort_after: dict[tuple[int, ...], int] | None = None,
+                 advice: bool = False) -> None:
         self.runner = Runner()
         self.engine = SchedEngine(self.runner, abort_after)
         self.engine.client_goes = self.client_goes
         self.trace = sc.advice_trace(out, self.engine.sched)
+        self.advice = SA.ServedAdvice(out, self.trace, wall=lambda: 0.0).start(C) if advice else None
+        self.advice_summary: dict | None = None
         self.windows = sc.CommitWindows(Committer(self.runner), out, run_id="t", window_steps=window_steps, eos_ids=[Tokenizer.eos_token_id],
-                                        clock=lambda: 0.0, wall=lambda: 0.0, marks=self.trace.window)
+                                        clock=lambda: 0.0, wall=lambda: 0.0, marks=self.trace.window, advice=self.advice)
         self.loop, self.admitted = so.EngineLoop(self.engine, self.windows), {}
         self.server = so.Server(proto=proto.PlainProtocol(True), served_name="m", max_model_len=512, tokenizer=Tokenizer(), defaults={},
                                 submit=self.submit, abort=self.loop.abort, clock=lambda: 7)
@@ -131,6 +137,8 @@ class Server:
         self.loop.stop()
         self.engine_thread.join()
         self.http.shutdown()
+        if self.advice is not None:
+            self.advice_summary = self.advice.stop()
         self.trace.uninstall()
 
     def submit(self, adm: Any) -> None:
@@ -454,3 +462,111 @@ def test_a_request_its_client_aborts_before_it_is_ever_scheduled_is_in_no_window
     assert whole.dropped == (e,) and sorted(x.id for x in whole.advice.requests) == ["na-4", "na-5", "na-7"]
     assert len(whole.advice.release) == sum(len(r["streamed_ids"]) for r in reqs.values())
     compile_steps(REG, WA.encode(whole.advice), {x.id: bodies[x.id] for x in whole.advice.requests})
+
+
+def test_the_servers_advice_is_the_advice_commands_window_for_window_and_each_has_its_public_line(tmp_path):
+    """Under ``--advice`` the server commits each closed window's advice as it serves (`serve_advice.ServedAdvice`; 3-step
+    windows, so requests are carried across them): each is the advice `verity-vllm advice` writes of the same records
+    afterwards, byte for byte, and its registration the same but for its fresh salts' root. Each window has its line in
+    advice.jsonl, in window order: B, the root, and ℓ_a for the advice's length, which stays in the serve dir. The advice
+    command then refuses to commit the run's advice again."""
+    with Server(tmp_path, window_steps=3, advice=True) as s:
+        for wave in WAVES:
+            serve_concurrently(s, wave)
+    assert s.advice_summary["passed"] and s.advice_summary["refused"] == [] and s.advice_summary["waiting"] == []
+    late = ADV.write_served(tmp_path, tmp_path / "late", ST.load(tmp_path / ST.SERVED), tmp_path / ST.SERVED,
+                            tmp_path / "requests.jsonl", T=600, tau=0.1, compiler=C)
+    assert late["refused"] == {} and late["pending"] == {}
+    mine = json.loads((tmp_path / "advice" / "windows.json").read_text())
+    assert sorted(mine["windows"]) == sorted(late["windows"]) and len(mine["windows"]) > len(WAVES) and mine["refused"] == {}
+    carried = 0
+    for w in mine["windows"]:
+        d, e = tmp_path / "advice" / f"w{w}", tmp_path / "late" / f"w{w}"
+        data = (d / "private" / "advice.bin").read_bytes()
+        assert data == (e / "private" / "advice.bin").read_bytes()
+        carried += len(WA.decode(data).carried)
+        ours, theirs = (json.loads((x / "registration.json").read_text()) for x in (d, e))
+        assert ours["binding"]["advice"]["root"] != theirs["binding"]["advice"]["root"]
+        for r in (ours, theirs):
+            r["binding"]["advice"].pop("root")
+        assert ours == theirs
+    assert carried >= 2
+    lines = records(tmp_path, SA.LINES)
+    assert [x["window"] for x in lines] == sorted(map(int, mine["windows"]))
+    for x in lines:
+        reg = json.loads((tmp_path / "advice" / f"w{x['window']}" / "registration.json").read_text())
+        assert x["compiler"] == {"name": C.name, "digest": C.digest} and x["commit"] == reg["commit"]
+        assert x["advice"] == {"root": reg["binding"]["advice"]["root"], "bits": C.cap_bits} != reg["binding"]["advice"]
+    with pytest.raises(ValueError, match="a window's advice is committed once"):
+        ADV.write(tmp_path, compiler=C)
+
+
+def test_a_window_is_committed_once_whole_and_waits_on_a_record_or_a_step_still_to_come(tmp_path):
+    """The server's committer takes a window once it is whole: its close and its windows.jsonl line, every step it scheduled
+    recorded, and the Commit record of every request it ran. Fed na-4's run in 3-step windows as the server has it part way
+    (its trace to window k2's close, every Commit record but na-4's, which the window it finishes in writes), it commits
+    the windows before k1, where na-4 is first scheduled, and none from k1 on; given na-4's record it takes k1, and k2 once
+    k2's last step is recorded, which async scheduling records after the close."""
+    out, recs, e, (k1, k2, *_) = _split(tmp_path)
+    close = next(i for i, r in enumerate(recs) if r["kind"] == "window" and r["window"] == k2 and r["event"] == "close")
+    last = max(i for i, r in enumerate(recs[:close]) if r["kind"] == "step")
+    trace = SimpleNamespace(records=[r for i, r in enumerate(recs[:close + 1]) if i != last])
+    sa = SA.ServedAdvice(out, trace, wall=lambda: 0.0)
+    sa.compiler = C
+    for line in records(out, "windows.jsonl"):
+        if line["window"] <= k2:
+            sa.closed(line)
+    for r in records(out, "requests.jsonl"):
+        if r["engine_id"] != e:
+            sa.recorded(r)
+    sa._poll(final=False)
+    stepped = ADV.windows_of(recs)[0]
+    assert sa.error is None and sorted(sa.lines) == [w for w in sorted(stepped) if w < k1] and sa.summary()["waiting"][0] == k1
+    sa.recorded(next(r for r in records(out, "requests.jsonl") if r["engine_id"] == e))
+    sa._poll(final=False)
+    assert sa.error is None and k1 in sa.lines and k2 not in sa.lines
+    trace.records.append(recs[last])
+    sa._poll(final=False)
+    assert sa.error is None and sorted(sa.lines) == [w for w in sorted(stepped) if w <= k2] and sa.summary()["waiting"] == []
+
+
+def test_a_draw_of_a_window_before_its_advice_line_fails_its_release(tmp_path):
+    """Under ``--advice`` a draw file of a window whose advice line isn't out is refused, and the window's release with it,
+    by name; a draw after the line is put as before."""
+    from verity_vllm.errors import Refused
+
+    draws = RL.Draws(["sampled_proofs"])
+    dd = RL.DrawDir(tmp_path, draws, advised=lambda w: w == 1)
+    for w in (0, 1):
+        (tmp_path / f"w{w}.sampled_proofs.json").write_text(json.dumps({"window": w, "protocol": "sampled_proofs", "reads": []}))
+    assert dd.scan() == 2
+    with pytest.raises(Refused, match=r"window 0's advice line \(advice.jsonl\) isn't out: a draw comes after its advice"):
+        draws.wait(0)
+    assert draws.wait(1) == {"sampled_proofs": []}
+
+
+def test_b_is_registered_once_as_the_verifier_recomputes_it_and_the_registration_log_names_it(tmp_path, monkeypatch):
+    """`serve_advice.register` writes B as `served_compiler.compiler_doc` makes it of serve.json, the verifier's formula, and its
+    information entry, a registration log whose builder is B's item (`advice.builder_item`: the window advice's format, ℓ_a)
+    and whose head names it. A second registration in the same serve dir is refused, and so is serving into one that holds
+    it."""
+    from verity.core.protocols import registration as REGLOG
+    from verity_vllm.config import UsageError
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+
+    monkeypatch.setattr(SC, "served_identity", lambda: (ADV.COMPILER, "cd" * 64))
+    serve = {"model": "org/m", "revision": "r", "target": {"compute_capability": [12, 0], "num_sms": 188}, "execution": "eager",
+             "default_seed": DEFAULT_SEED}
+    compiler, body = SA.register(tmp_path, serve, 4096)
+    assert compiler.digest == SC.compiler_doc(serve, cap_bits=4096)["digest"] == body["compiler"]["digest"]
+    assert (compiler.cap_bits, body["advice"]) == (4096, WA.SCHEMA)
+    assert json.loads((tmp_path / SA.REGISTRATION).read_text()) == body
+    composite, log = REGLOG.log_of(body["registration"]["log"])
+    view = REGLOG.check(REGLOG.Auditor(), composite, log).view()
+    assert composite == "onsite" and view.builder == ADV.builder_item(compiler) and view.head == body["registration"]["head"]
+    with pytest.raises(UsageError, match="B is registered once a run"):
+        SA.register(tmp_path, serve, 4096)
+    opts = SimpleNamespace(commit=True, out=str(tmp_path), advising=SA.AdviceOptions(advice=True))
+    assert "a run registers B once" in SA.refusal(opts)
+    assert SA.refusal(SimpleNamespace(commit=False, out=str(tmp_path / "x"), advising=SA.AdviceOptions(advice=True))) \
+        == "--advice commits each Commit window's advice: it needs the Commit (drop --no-commit)"
