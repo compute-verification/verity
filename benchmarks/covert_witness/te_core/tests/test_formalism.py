@@ -899,7 +899,8 @@ def test_the_45m_dense_steps_term_reads_its_whole_making_system_and_a_rank_one_c
                               "counted": [*got["system"]["counted"], [1, 1.0]]}
     void, why, inputs = term(got | {"system": system})
     assert void is None and why == F.FRESH_VOID and inputs["fresh_cell"] is None
-    assert inputs["whole_making"] == {"e": None, "whole_chain": None, "diverged": [1, 64, 256, 512, 1408, 32000]}
+    assert inputs["whole_making"] == {"e": None, "whole_chain": None, "diverged": [1, 64, 256, 512, 1408, 32000],
+                                      "unproved": []}
     alone = got | {"system": system, "products": [got["products"][0] | {"fed": []}, *got["products"][1:]]}
     kept, why, inputs = term(alone)
     assert why is None and kept > 0 and inputs["subset"]["rule"] in ("e", "mu") and inputs["subset"]["e"] == 0
@@ -984,9 +985,11 @@ def test_a_block_5_slots_term_grows_with_its_rank_and_never_falls_below_what_no_
     sub = inputs["w_down-r64-m64"]["subset"]
     assert (sub["rule"], sub["e"], sub["dropped"], sub["of"], sub["dropped_fed"]) == ("e", 0, 2, 3, [64.0])
     assert inputs["w_down-r64-m64"]["whole_making"]["e"] == pytest.approx(722.16, rel=1e-5)
-    assert inputs["w_down-r1-m64"]["whole_making"] == {"e": 0, "whole_chain": 1.0, "diverged": []}
+    assert inputs["w_down-r1-m64"]["whole_making"] == {"e": 0, "whole_chain": 1.0, "diverged": [],
+                                                             "unproved": []}
     mlp = inputs["mlp-r16-m64"]
-    assert mlp["whole_making"] == {"e": None, "whole_chain": None, "diverged": [16, 512, 1408, 65536]}
+    assert mlp["whole_making"] == {"e": None, "whole_chain": None, "diverged": [16, 512, 1408, 65536],
+                                  "unproved": []}
     assert (mlp["subset"]["e"], mlp["subset"]["dropped"], mlp["subset"]["dropped_fed"]) == (0, 2, [512.0, 1408.0])
     assert terms["mlp-r16-m64"] == pytest.approx(63.41, rel=1e-4)
 
