@@ -1,22 +1,30 @@
 """Drive's side of the task executor: a check as a `tasks/v1` graph (`verity tasks list --json`, `tools/verity/check/tasks.py`)
 put on the executor's queue, and each task's verdict read back by its key.
 
-    Executor(transport).enqueue(graph, priority) -> {task id: key}
-    Executor(transport).verdicts(keys)           -> {key: pass | fail | pending}
+    Executor(transport).enqueue(graph, priority)       -> {task id: key}
+    Executor(transport).enqueue_check(check, priority) -> None: the executor lists the check's graph on a worker
+    Executor(transport).graph(check)                   -> (its art: id, {task id: key}) once labelled, else None
+    Executor(transport).verdicts(keys)                 -> {key: pass | fail | pending}
+
+A graph's keys hash the lister's environment and its suite splits come from the lister's caches, so only a graph listed where
+the tasks run has the keys their verdicts come under: the executor lists a check enqueued with no graph on a worker, puts it
+in the store (`tasks-graph/v1`) and labels `commit:<sha> tasks_graph art:<id>` (`vocab.TASKS_GRAPH`), then queues its tasks.
 
 A task's verdict is the `verdict` labels on `task:<key>` (pass or fail, written by the worker that ran `verity tasks run ID`):
 fail when any says fail (a duplicate that disagrees is a red, never a green), else pass when one says pass, else pending.  A
 task with no key of its own (a build, a circuit-check slice, a job that keeps no verdict: tasks/v1's `unkeyed`) gets one of
 its check alone (`keyed`), so it runs in every check and no verdict of it is reused across checks.
 
-The transport is how the rows reach the queue and the verdicts come back: `QueueTransport`, infra's queue (its `ENQUEUE`
-command, and the labels from the store's remote), or `FileTransport`, a directory, for tests.
+The transport is how the rows reach the queue and the graphs and verdicts come back: `QueueTransport`, infra's queue (its
+enqueue command, drive.toml's `executor_enqueue`, and the labels and graphs from the store's remote), or `FileTransport`, a
+directory, for tests.
 
-Drive's `executor` flag (drive.toml) uses it after landing (`drive.Driver`): `shadow` lists the graph of each `checked` tip the
-after-landing run checks (detached, in a worktree of the tip: `drive.list_tasks`), enqueues it at `AFTER_LANDING_PRIORITY`, and
-once both have finished records per tip how the run's verdicts and the executor's compare (`compare`, an `executor_shadow` label
-on `commit:<tip>`; every part either side has, so a part only one side ran disagrees), changing nothing else (a shadow that
-fails, the store's or the transport's error, is recorded incomplete, and landing goes on); `research queue shadow-report`
+Drive's `executor` flag (drive.toml) uses it after landing (`drive.Driver`): `shadow` enqueues the check of each `checked` tip
+the after-landing run checks at `AFTER_LANDING_PRIORITY` with no graph, reads the graph the executor listed for it once
+labelled, and once both have finished records per tip how the run's verdicts and the executor's compare (`compare` by that
+graph's keys, an `executor_shadow` label on `commit:<tip>`; every part either side has, so a part only one side ran
+disagrees), changing nothing else (a shadow that fails, the store's or the transport's error, or no graph within
+`SHADOW_WAIT_S`, is recorded incomplete, and landing goes on); `research queue shadow-report`
 prints the newest of them and whether `SWITCH_STREAK` tips in a row agreed fully, the gate for `on`, where no run is launched
 and the executor's verdicts alone verify the tip, `main` following once every task passed.  A failed task marks the tip failed
 and is told to `CI`; no culprit is named or reverted from it yet."""
@@ -39,16 +47,12 @@ PASS, FAIL, PENDING = "pass", "fail", "pending"
 NONE, MISSING = "none", "missing"
 #: the priority of an after-landing check of `checked`'s tip on the queue, its highest
 AFTER_LANDING_PRIORITY = 1
-#: infra's command that puts a graph's rows on the queue: `--graph FILE` (a tasks/v1 document, each task's `key` the one its
-#: verdict is labelled under), `--priority N`, `--check ID`; it inserts one row {key, task, priority, check} per task and
-#: exits 0 once they are in
-ENQUEUE = ("research", "executor", "enqueue")
-#: the environment variable naming infra's enqueue command (`research executor enqueue` runs it): research imports nothing from
-#: `infra/`, so the command lives where infra runs it (the control pod's drive.sh)
-ENQUEUE_ENV = "RESEARCH_EXECUTOR_ENQUEUE"
+#: the store kind of a graph the executor listed
+TASKS_GRAPH_KIND = "tasks-graph/v1"
 #: the newest tips in a row whose shadow records agree fully before drive may switch to `executor = "on"`
 SWITCH_STREAK = 3
-#: a tip whose executor verdicts are still pending this long after its graph was enqueued is recorded with them pending
+#: a shadowed tip with no graph from the executor this long after its check was enqueued is recorded incomplete, and one whose
+#: verdicts are still pending this long after is recorded with them pending
 SHADOW_WAIT_S = 6 * 3600
 #: what a check's step and suite records say, as a task's verdict: a step skipped by name, or a pass reused, is a pass
 OLD_PASS = ("passed", "skipped", "reused")
@@ -87,7 +91,13 @@ def fold(values: Iterable[str]) -> str:
 
 
 class Transport(Protocol):
-    def enqueue(self, graph_file: Path, priority: int, check: str) -> None: ...
+    def enqueue(self, graph_file: Path | None, priority: int, check: str) -> None:
+        """``check`` on the queue at ``priority``: ``graph_file``'s tasks, or with None the graph the executor lists."""
+        ...
+
+    def graph(self, check: str) -> tuple[str, dict] | None:
+        """(its id, the tasks/v1 graph the executor listed for ``check``) once it labelled one, the newest; None until then."""
+        ...
 
     def labels(self, keys: list[str]) -> dict[str, list[str]]:
         """{key: the values of the `verdict` labels on `task:<key>`}."""
@@ -107,6 +117,23 @@ class Executor:
             self.transport.enqueue(f, priority, check_id(g))
         return {t["id"]: t["key"] for t in g["tasks"]}
 
+    def enqueue_check(self, check: str, priority: int) -> None:
+        """Put ``check`` (`after-landing:SHA`) on the queue at ``priority`` with no graph: the executor lists it on a worker,
+        and `graph` reads what it listed."""
+        self.transport.enqueue(None, priority, check)
+
+    def graph(self, check: str) -> tuple[str, dict[str, str]] | None:
+        """(its id, {task id: the key its verdict comes under}) of the graph the executor listed for ``check``, each unkeyed
+        task keyed as `keyed` keys it; None until the executor labelled one.  A graph that isn't tasks/v1 or is of another
+        check is refused (ValueError)."""
+        if (got := self.transport.graph(check)) is None:
+            return None
+        gid, g = got
+        if not isinstance(g, dict) or g.get("schema") != "tasks/v1" or "commit" not in g or check_id(g) != check:
+            what = check_id(g) if isinstance(g, dict) and "commit" in g else "no tasks/v1 check"
+            raise ValueError(f"the executor's graph {gid} of {check} is of {what}")
+        return gid, {t["id"]: t["key"] for t in keyed(g)["tasks"]}
+
     def verdicts(self, keys: Iterable[str]) -> dict[str, str]:
         ks = list(dict.fromkeys(keys))
         got = self.transport.labels(ks)
@@ -114,20 +141,34 @@ class Executor:
 
 
 class FileTransport:
-    """The executor as a directory: `enqueue` appends {check, priority, graph} to `enqueued.jsonl`, and a key's verdicts are
-    the lines {key, verdict} of `verdicts.jsonl` (`finish` writes one)."""
+    """The executor as a directory: `enqueue` appends {check, priority, graph} to `enqueued.jsonl` (graph None when enqueued
+    without one), the graph the executor listed for a check is `graphs/<check>.json` (`list_graph` writes one, as the
+    executor's worker would), and a key's verdicts are the lines {key, verdict} of `verdicts.jsonl` (`finish` writes one)."""
 
     def __init__(self, root: Path):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
 
-    def enqueue(self, graph_file: Path, priority: int, check: str) -> None:
+    def enqueue(self, graph_file: Path | None, priority: int, check: str) -> None:
+        graph = json.loads(graph_file.read_text()) if graph_file is not None else None
         with (self.root / "enqueued.jsonl").open("a") as f:
-            f.write(json.dumps({"check": check, "priority": priority, "graph": json.loads(graph_file.read_text())}) + "\n")
+            f.write(json.dumps({"check": check, "priority": priority, "graph": graph}) + "\n")
 
     def enqueued(self) -> list[dict]:
         p = self.root / "enqueued.jsonl"
         return [json.loads(x) for x in p.read_text().splitlines()] if p.is_file() else []
+
+    def _graph_file(self, check: str) -> Path:
+        return self.root / "graphs" / f"{check.replace(':', '_')}.json"
+
+    def list_graph(self, check: str, graph: dict) -> None:
+        p = self._graph_file(check)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(graph))
+
+    def graph(self, check: str) -> tuple[str, dict] | None:
+        p = self._graph_file(check)
+        return (str(p), json.loads(p.read_text())) if p.is_file() else None
 
     def finish(self, key: str, verdict: str) -> None:
         with (self.root / "verdicts.jsonl").open("a") as f:
@@ -143,17 +184,40 @@ class FileTransport:
 
 
 class QueueTransport:
-    """infra's queue: rows go in through `ENQUEUE`, and verdicts come back as `verdict` labels on `task:<key>` in the store,
-    pulled from its remote for each key with no verdict here yet."""
+    """infra's queue: a check goes in through infra's enqueue command (``command``, drive.toml's `executor_enqueue`: research
+    imports nothing from `infra/`), run with `--priority N --check ID` and, for a graph drive listed, `--graph FILE` (a tasks/v1
+    document, each task's `key` the one its verdict is labelled under), when it inserts one row {key, task, priority, check} per
+    task and exits 0 once they are in; with no `--graph`, it exits 0 at once and the executor lists the graph on a worker.  The
+    graph the executor listed for a check comes back as the `tasks-graph/v1` artifact a `tasks_graph` label on `commit:<sha>`
+    names, and verdicts as `verdict` labels on `task:<key>`, each target's labels pulled from the store's remote while it has
+    none here yet."""
 
-    def __init__(self, store, command: tuple[str, ...] = ENQUEUE, cwd: Path | None = None):
-        self.store, self.command, self.cwd = store, command, cwd
+    def __init__(self, store, command: tuple[str, ...] = (), cwd: Path | None = None):
+        self.store, self.command, self.cwd = store, tuple(command), cwd
 
-    def enqueue(self, graph_file: Path, priority: int, check: str) -> None:
-        r = subprocess.run([*self.command, "--graph", str(graph_file), "--priority", str(priority), "--check", check],
+    def enqueue(self, graph_file: Path | None, priority: int, check: str) -> None:
+        if not self.command:
+            raise RuntimeError("drive.toml names no `executor_enqueue` command: set it to infra's enqueue command, the words "
+                               "of its argv")
+        graph = ["--graph", str(graph_file)] if graph_file is not None else []
+        r = subprocess.run([*self.command, *graph, "--priority", str(priority), "--check", check],
                            cwd=self.cwd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
         if r.returncode:
             raise RuntimeError(f"{' '.join(self.command)} exited {r.returncode}: {(r.stderr or r.stdout).strip()[-400:]}")
+
+    def graph(self, check: str) -> tuple[str, dict] | None:
+        from .store import labels_sync
+
+        target = f"commit:{check.partition(':')[2]}"
+        if not (labs := self.store.labels(target, key=vocab.TASKS_GRAPH)) and getattr(self.store, "remote", None) is not None:
+            labels_sync.pull_targets(self.store, [target])
+            labs = self.store.labels(target, key=vocab.TASKS_GRAPH)
+        if not labs:
+            return None
+        art = labs[-1].value
+        if (kind := self.store.get_manifest(art).kind) != TASKS_GRAPH_KIND:
+            raise ValueError(f"{target}'s {vocab.TASKS_GRAPH} label names {art}, a {kind}, not a {TASKS_GRAPH_KIND}")
+        return art, json.loads(Path(self.store.fetch(art)).read_text())
 
     def labels(self, keys: list[str]) -> dict[str, list[str]]:
         from .queue import PREFETCH_JOBS
@@ -300,21 +364,3 @@ def shadow_report(records: list[Shadowed], tips: int) -> tuple[str, bool]:
                  f"(the newest {streak} agree)")
     return "\n".join(lines), ok
 
-
-def main(argv: list[str]) -> int:
-    """`research executor enqueue --graph FILE --priority N --check KIND:SHA`: run infra's enqueue command, the one
-    `ENQUEUE_ENV` names (split as a shell would, no shell run), with these arguments, and exit with it; refused (exit 2) when
-    the variable is unset, so a drive whose host doesn't name it records the tip's shadow incomplete rather than guessing."""
-    import os
-    import shlex
-    import sys
-
-    if argv[:1] != ["enqueue"]:
-        print("research executor enqueue --graph FILE --priority N --check KIND:SHA", file=sys.stderr)
-        return 2
-    command = shlex.split(os.environ.get(ENQUEUE_ENV, ""))
-    if not command:
-        print(f"research executor enqueue: {ENQUEUE_ENV} names no command: set it to infra's enqueue command where drive runs "
-              "(the control pod's drive.sh)", file=sys.stderr)
-        return 2
-    return subprocess.run([*command, *argv[1:]], stdin=subprocess.DEVNULL).returncode

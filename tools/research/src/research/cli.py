@@ -19,7 +19,6 @@
                                                  # for at most 20 min (--wait-max S lowers it): then exit 79, the run going on (research/waitcap.py)
   research run --job-user USER [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay the runner's (research/jobuser.py)
   research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
-  research executor enqueue --graph FILE --priority N --check KIND:SHA   # infra's enqueue command ($RESEARCH_EXECUTOR_ENQUEUE)
   research cancel <run-id> --reason TEXT [--by WHO] [--on NAME]   # SIGTERM to the run's workload process group and its whole cgroup
                                                  # scope, recorded as a manual cancel; 20 s later the runner SIGKILLs what is left (never
                                                  # itself), records the exit and publishes custody.  From any VM: as `inspect` finds runs
@@ -1832,10 +1831,6 @@ def main(argv: list[str] | None = None) -> int:
         from .telemetry.cli import main as tele_main
 
         return tele_main(rest)
-    if cmd == "executor":
-        from .executor import main as executor_main
-
-        return executor_main(rest)
     if cmd == "data":
         from .store.cli import main as data_main
 
