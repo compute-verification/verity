@@ -158,6 +158,7 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
     assert code == 0 and (got["out"] / f"{AP.NAME}.png").stat().st_size > 10_000
     p, f = got["panel"], fitted(got["fit"])
     assert (p["id"], p["kind"], p["columns"]) == (AP.PANEL, "table", AP.COLUMNS) and p["source"] and p["updated_at"]
+    assert {r[AP.COLUMNS.index("te_core_version")] for r in p["rows"]} == {AP.VERSION}
     ds, rows = plots.frame(p), ledger_rows()
     assert {d["data"] for d in ds} == {"v2.3-pilot"} and {d["gain_target"] for d in ds} == set(AP.GAINS)
     for start, shape in (("s1", SHAPE), ("s2", SHAPE2)):

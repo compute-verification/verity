@@ -24,7 +24,8 @@ to recompute ρ at any (c, k) in te_core.panels' candidate layout, the route tak
 a JSON object of `panels.PACKED`, beside `delta_bits`, `w_fwd_gates`, `u_points` and `u_in_points` (`SPLIT`), u_in
 through its points at the dial's k (`panels.through`), where x0 is exact; `page_rho` is the dial's formula on them.
 `build` refuses a row whose rounded columns don't give formalism.at's ρ and basis at every cell of te_core.panels'
-dial (`panels.mismatches`). `estimated` names the inputs that are stubs, bounds, assumptions or estimates.
+dial (`panels.mismatches`). `estimated` names the inputs that are stubs, bounds, assumptions or estimates, and
+`te_core_version` the te_core VERSION that priced the row's ρ.
 
 The coverage (`coverage`) is, per gain target, data and decade of ρ (`DECADES`: from 1, 10, ... and 1e5 and above,
 an infinite ρ there), the reached row with the least p, else the failed attempt with the greatest gain, else EMPTY.
@@ -55,7 +56,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-from . import console, formalism, frontier_fit, panels, plots, rescore
+from . import VERSION, console, formalism, frontier_fit, panels, plots, rescore
 
 NAME = "algorithm-policy"
 PANEL = f"training/{NAME}"
@@ -70,7 +71,7 @@ INPUTS = ["w_gates", "w_fwd_gates", "sigma", "tau_bits", "a_bits", "u_points", "
 SPLIT = ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")
 COLUMNS = ["start", "start_compute_gates", "start_effective_gates", "start_loss", "end_loss", "gain_target", "gain",
            "reached", "C_gates", "H_gates", "p", "rho_default", "basis_default", "method_key", "family", "record", "data",
-           "estimated", "rho_inputs", *SPLIT]
+           "estimated", "rho_inputs", *SPLIT, "te_core_version"]
 LOSSES = ("start_loss", "end_loss")
 #: significant digits of the console copy's compute and ρ inputs, so its dial reproduces ρ and its gains and p
 #: recompute, and of its other numbers
@@ -233,7 +234,7 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
                        None if math.isinf(v["rho"]) else v["rho"], "fit" if v["fit"] else "target", plots.method(r),
                        r.get("family"), f"{run}@{r.get('checkpoint_step')}", st.data, estimated(r["measured"])]
                 cols = panels.rho_columns(r["measured"], st.w) | {"delta_bits": r["measured"].delta_bits,
-                                                                  "w_fwd_gates": st.w}
+                                                                  "w_fwd_gates": st.w, "te_core_version": VERSION}
                 row += [cols[c] for c in COLUMNS[len(row):]]
                 d = dict(zip(COLUMNS, rounded(row)))
                 wrong += panels.mismatches(d | {"run": d["record"]}, dials[r["id"]], st.w)
