@@ -276,9 +276,7 @@ leaf counts and domains, the leaf layer, the anchors, the window (provenance onl
 receipt with its own clock, and only then draws, and it holds its own public file to the record (`matches_public`),
 which the Lean guarantee `FailClosed.flock_verify_public_ties` ties to the proved rows. The format, each check, the
 receipt and the window domains (`window_domain`, its tag's bytes still `served-domain`) are in `one_stage.registration`'s
-docstrings. Given the window's day and the log's declarations (`day`, `declarations`), R2 also holds the record's
-program to the day's one declared circuit (`R2-undeclared`, `R2-declared-twice`, `R2-declared`; in Lean
-`Registration.declaredCode`).
+docstrings.
 
 Pinned by `tests/test_one_stage.py` (the registration, receipt, window, served-domain, R1 and declared-day tests) and
 `tests/test_verifier.py`, and the served domain also by `integrations/vllm/tests/commit/test_serving_rows.py`.
