@@ -287,7 +287,7 @@ def test_the_words_root_keys_the_backends_top_over_its_linears_chunks_at_the_win
     assert record.words_root == twin.words_root(PL.FORWARD, backend.handed[0]) == run.passes[0].transcript_root
 
 
-@pytest.mark.parametrize("calls,cut,why", [(1, lambda t: b"", "one-chunk words instance holds 1 to"),
+@pytest.mark.parametrize("calls,cut,why", [(1, lambda t: b"", "words: a one-leaf instance holds 1 to"),
                                            (2, lambda t: t[:64], "root's two 64-byte children, not 64 bytes"),
                                            (2, lambda t: t + bytes(64), "not 192 bytes")])
 def test_a_top_of_the_wrong_size_is_refused_and_its_pass_never_published(calls, cut, why):
