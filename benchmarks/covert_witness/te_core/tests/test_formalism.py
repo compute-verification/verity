@@ -894,6 +894,43 @@ def test_a_records_trace_rows_are_its_traced_steps_products():
     assert b["inputs"]["fresh_products"]["stand_in"] == g["products"]["stand_in"]
 
 
+def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does():
+    """A ledger row keeps the products its ingest took from its trace's rows, and the scorer's 4.8 traces were ingested
+    at 4.8: the trace's order kept unknown, which `fresh_products` never measures, and an upcast operand's product an
+    expansion. `complete` reads them as this te_core's ingest of the same rows over the same traced steps
+    (`traced_products`: their kinds' MACs over the rows' own, 2.5 here with a stand-in), so the term is measured with no
+    retrace; products a record has of its own stand."""
+    row = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m": 4, "k": 512, "n": 8},
+           "token_dims": ["m"], "macs": 16384, "outputs": 32, "affected": [True, True], "widths": [16, 16],
+           "rates": [16.0, 16.0], "paid": [True, False], "self": False, "b_c": 32, "k_whole": 512,
+           "gates_per_mac": 1480.0, "cell_gates": 23682.0}
+    theta = row | {"count": 1, "affected": [True, False], "rates": [16.0, 0.0], "paid": [True, False]}
+    block = {"capture": F.PRODUCTS_FROM, "k": 65536.0, "order": "unknown", "tokens": 8, "gates": None,
+             "rows": [row, theta]}
+    log = [["fwd", "theta", "mm", "[[8]]", 1, 80]]
+    record = {"steps": [{"step": 0, "tokens": 8, "struct": "a", "by": {"fwd/theta": 80}},
+                        {"step": 1, "tokens": 8, "struct": "a", "by": {"fwd/theta": 80}},
+                        {"step": 2, "tokens": 4, "struct": "a+traced4", "by": {"fwd/theta": 40}}],
+              "structures": dict.fromkeys(("a", "a+traced4"), {"updated": [], "log": log, "affected_share": 0.5,
+                                                               "sigma": 1.0, "token_factor": 2.0,
+                                                               "delta_grad_bits": 10}),
+              "formalism": {"trace": {"products": block}}}
+    now = F.of_record(record)
+    assert now["products"]["products"][0]["macs"] == 2.5 * 2 * 16384 and "stand_in" in now["products"]
+    old = now | {"products": {"k": 65536.0, "order": "unknown", "capture": F.PRODUCTS_FROM, "products": [],
+                              "kinds_macs": {"expansion": 2.5 * 2 * 16384, "theta": 2.5 * 16384},
+                              "stand_in": now["products"]["stand_in"]}}
+    c, k, out = 1e11, 65536.0, {"output": {"e_bytes": 10}}
+    stored = F.complete(old | {"trace": {}}, out, SHAPE)
+    assert stored.products == old["products"] and F.bound(stored, c, k)["terms"]["fresh_products"] is None
+    m = F.complete(old, out, SHAPE)
+    assert m.products == now["products"]
+    assert F.bound(m, c, k)["terms"]["fresh_products"] == F.bound(F.complete(now, out, SHAPE), c, k)["terms"][
+        "fresh_products"] > 0
+    own = {"k": 65536.0, "order": "chain", "products": []}
+    assert F.complete(now | {"products": own}, out, SHAPE).products == own
+
+
 def test_a_ledger_rows_log_puts_theta_and_attention_products_aside_and_the_rest_unknown():
     """On a macs_log (te_core.tiles.of_log): a product whose non-token operand is θ (its role theta) is θ's, a fused
     attention op's products are attention's, and an updated one's, whose operands the log says only depend on the
