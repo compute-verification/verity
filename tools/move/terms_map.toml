@@ -1,0 +1,230 @@
+# The terminology clean: what `tools/move/rename.py --map tools/move/terms_map.toml` renames, GLOSSARY.md's older names
+# to their terms (`tests/lint/test_repo_retired_terms.py` refuses each one's new uses). Phrases come before the words
+# they hold, and a prose phrase before the identifier spelling of its word, so that prose reads in the term and code in
+# its identifier: "the firewall" becomes "the ZK server", `firewall_state` `zk_server_state`. What recorded data or
+# another system reads keeps its spelling ([keep]): record keys, wire kinds, CLI flags, environment variables, stored
+# labels, domain tags and format ids. Declarations keep their place in the locks' records: `rename.py --moves` prints the
+# renames that `tools/verity/lean/check.py --update --moved` takes.
+
+[words]
+# --- Flock (was C-Flock); its stored label `C-Flock` stays ([keep])
+"C-Flock" = "Flock"
+"C Flock" = "Flock"
+
+# --- the ZK server (was the firewall); `FC_FIREWALL*`, `--firewall*` and `FIREWALL-REFUSED` stay ([keep])
+"Flock.Firewall" = "Flock.ZkServer"
+"Flock/Firewall" = "Flock/ZkServer"
+"service/firewall" = "service/zk_server"
+"flock-firewall" = "flock-zk-server"
+"core-firewall" = "core-zk-server"
+"build-firewall" = "build-zk-server"
+"firewall-transcript" = "zk-server-transcript"
+"firewall-public" = "zk-server-public"
+"firewall-release" = "zk-server-release"
+"firewall-contract" = "zk-server-contract"
+"the firewalls" = "the ZK servers"
+"The firewalls" = "The ZK servers"
+"the firewall" = "the ZK server"
+"The firewall" = "The ZK server"
+"a firewall" = "a ZK server"
+"A firewall" = "A ZK server"
+"its firewall" = "its ZK server"
+"each firewall" = "each ZK server"
+"one firewall" = "one ZK server"
+"no firewall" = "no ZK server"
+"firewall's" = "ZK server's"
+"Firewall's" = "ZK server's"
+"firewalled session" = "ZK server session"
+"firewalled sessions" = "ZK server sessions"
+"firewalled masked prover" = "masked prover behind the ZK server"
+"unfirewalled" = "unserved"
+"firewalled" = "zk_served"
+"firewalls" = "zk_servers"
+"firewall" = "zk_server"
+"Firewalls" = "ZkServers"
+"Firewall" = "ZkServer"
+"FIREWALL" = "ZK_SERVER"
+
+# --- sampling design (was law, draw law); a registration's `law` key stays ([keep])
+"draw laws" = "sampling designs"
+"draw law" = "sampling design"
+"Draw laws" = "Sampling designs"
+"Draw law" = "Sampling design"
+"draw-law" = "sampling-design"
+"sampling laws" = "sampling designs"
+"sampling law" = "sampling design"
+"drawLaw" = "samplingDesign"
+"DrawLaw" = "SamplingDesign"
+"draw_law" = "sampling_design"
+"DRAW_LAW" = "SAMPLING_DESIGN"
+"drawn_law" = "sampled_design"
+"abort law" = "abort distribution"
+"noise law" = "noise distribution"
+"product law" = "product distribution"
+"coin law" = "coin distribution"
+"partial-sum law" = "partial-sum rule"
+"the laws" = "the sampling designs"
+"The laws" = "The sampling designs"
+"the law" = "the sampling design"
+"The law" = "The sampling design"
+"a law" = "a sampling design"
+"A law" = "A sampling design"
+"its law" = "its sampling design"
+"Its law" = "Its sampling design"
+"each law" = "each sampling design"
+"every law" = "every sampling design"
+"any law" = "any sampling design"
+"one law" = "one sampling design"
+"no law" = "no sampling design"
+"own law" = "own sampling design"
+"whose law" = "whose sampling design"
+"this law" = "this sampling design"
+"that law" = "that sampling design"
+"laws" = "designs"
+"Laws" = "Designs"
+"law" = "design"
+"Law" = "Design"
+"LAW" = "DESIGN"
+
+# --- the sample, a sampled proof block, to sample (was the draw, a drawn unit)
+"drawn proof blocks" = "sampled proof blocks"
+"drawn proof block" = "sampled proof block"
+"Drawn proof blocks" = "Sampled proof blocks"
+"Drawn proof block" = "Sampled proof block"
+"drawn units" = "sampled proof blocks"
+"drawn unit" = "sampled proof block"
+"Drawn units" = "Sampled proof blocks"
+"Drawn unit" = "Sampled proof block"
+"drawn-unit" = "sampled-block"
+"drawn_units" = "sampled_blocks"
+"drawn_unit" = "sampled_block"
+"drawnUnits" = "sampledBlocks"
+"drawnUnit" = "sampledBlock"
+"DrawnUnits" = "SampledBlocks"
+"DrawnUnit" = "SampledBlock"
+"sampled units" = "sampled proof blocks"
+"sampled unit" = "sampled proof block"
+"Sampled units" = "Sampled proof blocks"
+"undrawn" = "unsampled"
+"Undrawn" = "Unsampled"
+"redraws" = "resamples"
+"redraw" = "resample"
+"Redraw" = "Resample"
+"drawing" = "sampling"
+"Drawing" = "Sampling"
+"draws" = "samples"
+"Draws" = "Samples"
+"DRAWS" = "SAMPLES"
+"drawn" = "sampled"
+"Drawn" = "Sampled"
+"DRAWN" = "SAMPLED"
+"draw" = "sample"
+"Draw" = "Sample"
+"DRAW" = "SAMPLE"
+
+# --- proof block (was proof unit); `proof_unit` (`LinkWindows.proof_unit`) and the `"proof-unit"` kind stay
+"proof units" = "proof blocks"
+"proof unit" = "proof block"
+"Proof units" = "Proof blocks"
+"Proof unit" = "Proof block"
+"proofUnits" = "proofBlocks"
+"proofUnit" = "proofBlock"
+"ProofUnits" = "ProofBlocks"
+"ProofUnit" = "ProofBlock"
+"PROOF_UNITS" = "PROOF_BLOCKS"
+"PROOF_UNIT" = "PROOF_BLOCK"
+"unit classes" = "size classes"
+"unit class" = "size class"
+"Unit classes" = "Size classes"
+"Unit class" = "Size class"
+
+# --- incorrect proof block, the incorrect set (was wrong, faulty or incorrect unit); the audit record's `wrong_units`
+# stays
+"wrong units" = "incorrect proof blocks"
+"wrong unit" = "incorrect proof block"
+"Wrong units" = "Incorrect proof blocks"
+"Wrong unit" = "Incorrect proof block"
+"wrong-unit" = "incorrect-block"
+"faulty units" = "incorrect proof blocks"
+"faulty unit" = "incorrect proof block"
+"incorrect units" = "incorrect proof blocks"
+"incorrect unit" = "incorrect proof block"
+"faulty proof blocks" = "incorrect proof blocks"
+"faulty proof block" = "incorrect proof block"
+"Faulty proof blocks" = "Incorrect proof blocks"
+"faulty sets" = "incorrect sets"
+"faulty set" = "incorrect set"
+"faultySets" = "incorrectSets"
+"faultySet" = "incorrectSet"
+"WrongUnits" = "IncorrectBlocks"
+"WrongUnit" = "IncorrectBlock"
+"incorrect_units" = "incorrect_blocks"
+
+# --- acceptance probability, P_a (was the escape probability); "escape" alone keeps its other senses
+"escape probabilities" = "acceptance probabilities"
+"escape probability" = "acceptance probability"
+"Escape probabilities" = "Acceptance probabilities"
+"Escape probability" = "Acceptance probability"
+"effEscape" = "effAcceptProb"
+
+# --- ε_bind, the binding error (was δ_link, the link term)
+"the link term" = "the binding error"
+"The link term" = "The binding error"
+"δ_link" = "ε_bind"
+"δlink" = "εbind"
+"LinkSound" = "BindSound"
+
+# --- the trace (was the transcript, for the values of a run's gates)
+"ExecutionTranscript" = "ExecutionTrace"
+
+# --- the verifier (was the verifier of record)
+"the verifier of record" = "the verifier"
+"The verifier of record" = "The verifier"
+"the Lean verifier of record" = "the Lean verifier"
+"a verifier of record" = "the verifier"
+"its verifier of record" = "its verifier"
+"verifiers of record" = "verifiers"
+"verifier of record" = "verifier"
+
+# --- after-landing run (was post-landing run, postland)
+"post-landing runs" = "after-landing runs"
+"post-landing run" = "after-landing run"
+"Post-landing run" = "After-landing run"
+
+# --- the challenger's live-coin part (was the coin server); `round_digest` strings stay ([keep])
+"the coin server" = "the challenger's live-coin part"
+"The coin server" = "The challenger's live-coin part"
+"coin servers" = "live-coin parts"
+"coin server" = "live-coin part"
+"coin-server" = "live-coin"
+"CoinServer" = "LiveCoins"
+"coin_server" = "live_coins"
+
+# --- the proof system (was the proof service)
+"the proof service" = "the proof system"
+"The proof service" = "The proof system"
+"proof service" = "proof system"
+
+[rewrite]
+# Never rewritten: the term source and its lint (they name the old words), records of what was (the earlier moves and
+# their maps, changelogs, the rulings), the frozen backends, replicated fixtures, files whose bytes a digest pins
+# (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/lint/allowlists/**", "tools/move/**",
+           "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/lake-manifest.json"]
+
+[keep]
+# a domain tag or format id, a note, an artifact, a branch, a lane; then what recorded data or another system reads:
+# the other senses of law (a power law, the law of large numbers), the stored label `C-Flock`, environment
+# variables `FC_*FIREWALL*` and `H1*_*FIREWALL*`, CLI flags `--firewall*` and
+# `--draw`, the refusal `FIREWALL-REFUSED`, a record's `law`, `wrong_units` and `proof_unit` keys and the
+# `"proof-unit"` kind, nvidia-smi's `power.draw` and a GPU's power draw, the `round_digest` strings and the label
+# `replay_set=warden/re-verify`
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            '[\x22\x27]C-Flock[\x22\x27]', '\b(?:FC|H1S?)_[A-Z0-9_]*FIREWALL[A-Z0-9_]*', '--firewall[\w-]*', '--draw\b', 'FIREWALL-REFUSED',
+            '[\x22\x27]law[\x22\x27]', '\bwrong_units\b', '\bproof_unit\b', '[\x22\x27]proof-unit[\x22\x27]',
+            '\bpower[._ -]draws?\b', '(?i:\bpower draws?\b)', '(?i:power[- ]laws?|laws? of large numbers)',
+            "(?:Amdahl|Moore|Little|Zipf|Kerckhoffs)'s laws?", 'round_digest[^\n]*', 'replay_set=warden/re-verify']
+strings = []
+
+[keep_in]
