@@ -35,7 +35,7 @@ and **the slowdown lower bound** (`ARCHITECTURE.md`'s Glossary, "Feasible set").
 | a_j, \|a_j\|, ℓ_a, ℓ_a,j | Phase j's advice, compiled into E_j, and its private length, no term of the bound; the advice's public cap; phase j's registered width, its free inputs not registered. | ℓ_a,j is `#(freeInputs \ reg)`; the rest not yet in Lean |
 | m, T_j | A certification period's execution phases, indexed by j; phase j's buckets. | `NetworkCheck.Period`; `n` or `m`, and `k` |
 | k_skip, k_skip,j | Bits missed incorrect proof blocks let through: in phase j, log2 of its possible incorrect sets at δ plus the most bits one commits. | `faultySets`, `faultyBits` |
-| k_sched, k_fail | log2 of the schedules the server's secrets can induce, cell counts included; Σ over every connection of log2(cap + 1). Each cell count is in both, a known overcount. | `Ss : Set (WardenSchedule Conn)`; `∏ c, (cap c + 1)` |
+| k_sched, k_fail | log2 of the schedules the server's secrets can induce, cell counts included; Σ over every connection of log2(cap + 1). Each cell count is in both, a known overcount. | Ss, a `WardenSchedule` set; `∏ c, (cap c + 1)` |
 | 𝒮_sync | The registered clock-sync values (clock-sync path): log2\|𝒮_sync\| bits a phase. | `NetTiming.SyncSet` |
 | Δ_nc, d_jit, d_cert | The network certifier's latency in buckets; the timing classes jitter allows, 1 for none; a certificate's salted digest. | `WardenSchedule.D`; `JitterBounded`'s `D`; `NetworkCheck.certificateDigest` |
 | δ_net | The network audit's δ_p, m·(δ + ε_ks + ε_bind + ε_tap) on the warden path, ε_tap the openings' collision. | `PeriodLeakAccepted` a phase; `Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted` the period |
