@@ -66,6 +66,7 @@ public import Flock.Firewall.Level0
 public import Flock.Firewall.Finish
 public import Std.Async.TCP
 public import Std.Async.DNS
+public import Flock.JsonParse
 
 @[expose] public section
 
@@ -386,7 +387,7 @@ def notAccepted (why : String) : ByteArray :=
 /-- Whether `r` is a `Resp::Verdict` that accepts (`"accepted": true`). -/
 def accepts (r : ByteArray) : Bool :=
   match byte? r 0, getBytes r 1 with
-  | some 4, some (v, _) => match (String.fromUTF8? v).map Json.parse with
+  | some 4, some (v, _) => match (String.fromUTF8? v).map JsonParse.parse with
     | some (.ok j) => j.getObjValD "accepted" == Json.bool true
     | _ => false
   | _, _ => false
