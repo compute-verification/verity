@@ -1,4 +1,4 @@
-import PouwCheck.Credit
+import PouwCheck.Lanes
 
 /-!
 # A served window's statements verified (`credit._verified`)
@@ -23,10 +23,16 @@ circuit file and its public file, and its sessions' directories), never a verdic
   (`registration`), and so does one that proved a unit of another call (`proof`). Each unit an accepted session proved
   is one outcome (`credit.PROOF_KEYS`), which `Credit.window` then holds to the draw and the window's registration.
 
-Before any run: the circuit files' form (`FILES_FORM`), the statements' form (`STATEMENTS_FORM`, each call one of the
-window's), one statement a call (a retry never reproves), a statement only for a call with a drawn unit, a committed
-circuit file for its K (`noStatementFiles`), and the call's `--registered` file (its refusals, `registration`).
-Every refusal is (code, why), the first rule the input breaks, with Python's words.
+Before any run: the circuit files' form (`FILES_FORM`, `filesRefusal`), the statements' form (`STATEMENTS_FORM`, each
+call one of the window's), one statement a call (a retry never reproves), a statement only for a call with a drawn unit,
+a committed circuit file for its K (`noStatementFiles`), and the call's `--registered` file (its refusals,
+`registration`). Every refusal is (code, why), the first rule the input breaks, with Python's words.
+
+**The lanes form** (`PouwCheck.Lanes`): the window's statements may be its lanes evidence (`Lanes.LANES_KEYS`), whose
+statements are call statements and drawn leaves' (`Lanes.leafStatement?`), at the Ks the circuit files commit as
+`lane<K>` and `combine<K>`. Each drawn lanes-form leaf's runs follow the call statements' (`Lanes.leafAsks`, under the
+window's draw), each against its own leaf Program; their sessions are judged by `Lanes.judged`, and once all have
+accepted, the produced record's checks (`Lanes.outcomes`) give each drawn leaf its one outcome.
 -/
 
 namespace PouwCheck.Verified
@@ -48,6 +54,16 @@ def CIRCUIT_FILES : String := "circuit_files"
 def FILES_FORM : String :=
   s!"the committed circuit files are not \{k<K>: SHA-512, live: SHA-512} (the period-open's " ++
   s!"{CIRCUIT_FILES}, each digest 128 lowercase hex)"
+
+/-- `credit._files_refusal`: the refusal (`circuit`) of committed circuit files `files` that are not an object of
+SHA-512 digests, but for `Lanes.LEAF_PROGRAMS`, an object of them, in the lanes form (`Lanes.lanesFiles`); none when
+they are. -/
+def filesRefusal (files : Json) : Option (String × String) :=
+  let form := isObj files && (fields files).all fun (x, v) =>
+    if x == Lanes.LEAF_PROGRAMS then isObj v && (fields v).all fun (_, w) => (digest? w).isSome
+    else (digest? v).isSome
+  if form && (Lanes.lanesFiles files).isNone then none
+  else some ("circuit", if isObj files then (Lanes.lanesFiles files).getD FILES_FORM else FILES_FORM)
 
 def noStatementFiles (k : Nat) : String :=
   s!"the period's open commits no circuit file for K = {k}'s template ({CIRCUIT_FILES} k{k}, the SHA-512 of the " ++
@@ -91,15 +107,26 @@ structure Ask where
 /-- `credit._asks`: the verifier runs in statement order up to the first statement a check before the verifier refuses,
 and that refusal (none when every statement passes them), each run's partition object `partitionOf` the descriptor's.
 Over the window's circuit (its descriptor's SHA-512 `program`, and `shape` and `layout`, `shapeOf` and `layoutOf` of
-its Program), its registered `entries`, open root `window`, drawn `units`, `steps` rounds and Program salt `salt`. -/
+its Program), its registered `entries`, open root `window`, drawn `units`, `steps` rounds, Program salt `salt` and
+draw `draw`. `statements` is a list of call statements, or the lanes evidence (`Lanes.LANES_KEYS`) whose `statements`
+hold call statements and drawn leaves'; each drawn leaf's runs (`Lanes.leafAsks`) follow the call statements'. -/
 def asks (statements files : Json) (program : String) (shape : Shape) (layout entries : Json) (window : String)
-    (units : List Nat) (steps : Nat) (salt : String) : R (Array Ask × Option (String × String)) := do
-  unless isObj files && (fields files).all (fun (_, v) => (digest? v).isSome) do throw ("circuit", FILES_FORM)
-  let some ss := (match statements with
-    | .arr xs => xs.toList.mapM fun s => (s, ·) <$> call? s
-    | _ => none) | throw ("proof", STATEMENTS_FORM)
+    (units : List Nat) (steps : Nat) (salt : String) (draw : Json) :
+    R (Array Ask × Array Lanes.LeafAsk × Option (String × String)) := do
+  if let some why := filesRefusal files then throw why
+  let lanes : Option Json := if keys statements == some Lanes.LANES_KEYS then some statements else none
+  if let some ev := lanes then
+    let progs := get ev Lanes.LEAF_PROGRAMS
+    unless isObj progs && (fields progs).all (fun (_, v) => (str? v).isSome) do throw ("proof", Lanes.LANES_FORM)
+  let form := if lanes.isSome then Lanes.LANES_FORM else STATEMENTS_FORM
   let sizes := (callWork layout).map (·.1)
-  if ss.any (·.2 ≥ sizes.length) then throw ("proof", STATEMENTS_FORM)
+  let .arr xs := (match lanes with | some ev => get ev "statements" | none => statements) | throw ("proof", form)
+  let mut ss : Array (Nat × Nat) := #[]
+  let mut leafs : Array (Nat × Nat × Lanes.St) := #[]
+  for (s, i) in xs.toList.zip (List.range xs.size) do
+    if let some c := (call? s).filter (· < sizes.length) then ss := ss.push (i, c)
+    else if let some (u, st) := lanes.bind fun _ => Lanes.leafStatement? s sizes.sum then leafs := leafs.push (i, u, st)
+    else throw ("proof", form)
   let starts := startsOf sizes
   let drawn := units.map fun u => (starts.filter (· ≤ u)).length - 1
   let roots := rootsOf entries
@@ -110,22 +137,21 @@ def asks (statements files : Json) (program : String) (shape : Shape) (layout en
   let callLin : List String := (arrOf (get layout "calls")).map fun x => ((arrOf x).head?.bind str?).getD ""
   let mut seen : List Nat := []
   let mut out : Array Ask := #[]
-  let mut i := 0
-  for (_, c) in ss do
+  for (i, c) in ss do
     if seen.contains c then
-      return (out, some ("outcome", s!"call {c} has two statements: a call's drawn units are proved in one statement " ++
-        "and verified once, and a retry never reproves them"))
+      return (out, #[], some ("outcome", s!"call {c} has two statements: a call's drawn units are proved in one " ++
+        "statement and verified once, and a retry never reproves them"))
     seen := c :: seen
     unless drawn.contains c do
-      return (out, some ("outcome", s!"call {c} has a statement and no drawn unit: only the draw's units are proved"))
+      return (out, #[], some ("outcome", s!"call {c} has a statement and no drawn unit: only the draw's units are proved"))
     let lin := callLin.getD c ""
     let k := ((lins.reverse.find? (·.1 == lin)).map (·.2)).getD 0
-    let some (.str sha) := PouwWindow.field? files s!"k{k}" | return (out, some ("circuit", noStatementFiles k))
+    let some (.str sha) := PouwWindow.field? files s!"k{k}" | return (out, #[], some ("circuit", noStatementFiles k))
     match registeredFile program layout shape c roots window steps salt with
     | .ok reg => out := out.push ⟨i, c, sha, reg⟩
-    | .error why => return (out, some why)
-    i := i + 1
-  return (out, none)
+    | .error why => return (out, #[], some why)
+  let (got, why) ← Lanes.leafAsks lanes leafs files program layout shape roots window units steps salt draw
+  return (out, got, why)
 
 /-- A run's input as the caller reads it: `{statement, circuit_sha512, registered, partition}`. -/
 def Ask.toJson (a : Ask) (partition : Json) : Json :=
@@ -140,23 +166,25 @@ structure Finding where
   program : Json
   registered : Json
   units : List Nat
+  openings : Json
 
 def finding (f : Json) : R Finding := do
   match get f "session", get f "accepted", get f "why", get f "program",
       (·.map nat?) <$> (Json.getArr? (get f "units")).toOption with
   | .str s, .bool a, .str w, p, some us =>
     let some us := us.toList.mapM id | throw ("error", "credit-verified: a finding's units are not natural numbers")
-    pure ⟨s, a, w, p, get f "registered", us⟩
+    pure ⟨s, a, w, p, get f "registered", us, get f "openings"⟩
   | _, _, _, _, _ =>
     throw ("error", "credit-verified: a finding is not {session, accepted, why, program, registered, units}")
 
 /-- `credit._verified`'s judgment of the verifier's answers `runs` (one an `asks` run, in its order, as far as the
 caller ran them): each drawn unit's outcome `{unit, verdict, program, registered}`, else the refusal of the first answer
-that credits nothing, then `asks`' own refusal. An answer is `{"error": why}` (the verifier could not run),
-`{"refused": [code, why]}` (it refused the statement) or `{"findings": [...]}` (`finding`, one a session). -/
+that credits nothing, then `asks`' own refusal, then (with drawn leaves' runs) `Lanes.outcomes`. An answer is
+`{"error": why}` (the verifier could not run), `{"refused": [code, why]}` (it refused the statement) or
+`{"findings": [...]}` (`finding`, one a session). -/
 def judge (statements files : Json) (program : String) (shape : Shape) (layout entries : Json) (window : String)
-    (units : List Nat) (steps : Nat) (salt : String) (runs : Array Json) : R (Array Json) := do
-  let (as, refused) ← asks statements files program shape layout entries window units steps salt
+    (units : List Nat) (steps : Nat) (salt : String) (draw : Json) (runs : Array Json) : R (Array Json) := do
+  let (as, leaves, refused) ← asks statements files program shape layout entries window units steps salt draw
   let sizes := (callWork layout).map (·.1)
   let starts := startsOf sizes
   let mut out : Array Json := #[]
@@ -198,13 +226,27 @@ def judge (statements files : Json) (program : String) (shape : Shape) (layout e
           out := out.push (Json.mkObj [("unit", toJson u), ("verdict", Json.str "accept"), ("program", f.program),
             ("registered", f.registered)])
     | _, _, _ => throw ("error", "credit-verified: an answer is not {error}, {refused: [code, why]} or {findings}")
+  let mut held : Lanes.Held := {}
+  for a in leaves do
+    let what := s!"drawn leaf {a.unit}'s {a.leaf} statement"
+    let some ans := runs[j]? | throw ("error", s!"credit-verified: no verifier answer for statement {a.statement}")
+    j := j + 1
+    match get ans "error", get ans "refused", get ans "findings" with
+    | .str e, _, _ => throw ("proof", s!"{what} could not be verified, so the window stays refused: {e}")
+    | _, .arr #[.str code, .str why], _ => throw (code, s!"{what}: {why}")
+    | _, _, .arr fs =>
+      for fj in fs do
+        let f ← finding fj
+        held ← Lanes.judged a f.session f.accepted f.why f.program f.registered f.units f.openings held
+    | _, _, _ => throw ("error", "credit-verified: an answer is not {error}, {refused: [code, why]} or {findings}")
   if let some why := refused then throw why
+  if !leaves.isEmpty then out := out ++ (← Lanes.outcomes (get statements "produced") held program)
   pure out
 
-/-- `credit-verified`: on `{statements, files, descriptor, entries, window, units, steps, salt, runs}` (the window's
-statements, its period's committed circuit files, its descriptor in hex, its registered entries, its open root, its
-drawn units, its rounds and its Program salt), with `runs` null, `{"run": [...]}`, the verifier runs `asks` names
-(`Ask.toJson`), or the verdict when it names none; with `runs` the answers, the verdict: `{"outcomes": [...]}` (`judge`)
+/-- `credit-verified`: on `{statements, files, descriptor, entries, window, units, steps, salt, draw, runs}` (the
+window's statements, its period's committed circuit files, its descriptor in hex, its registered entries, its open root,
+its drawn units, its rounds, its Program salt and its draw), with `runs` null, `{"run": [...]}`, the verifier runs
+`asks` names (`Ask.toJson`, then `Lanes.LeafAsk.toJson`), or the verdict when it names none; with `runs` the answers, the verdict: `{"outcomes": [...]}` (`judge`)
 or `{"refused": [code, why]}` (as `refusal` writes it). -/
 def verified (j : Json) : R Json := do
   let some descriptor := (match get j "descriptor" with
@@ -218,17 +260,17 @@ def verified (j : Json) : R Json := do
     | throw ("error", "credit-verified: the drawn units are not a list of natural numbers")
   let (some steps, some window, some salt) := (nat? (get j "steps"), str? (get j "window"), str? (get j "salt"))
     | throw ("error", "credit-verified: the window's steps, open root or salt are malformed")
-  let (statements, files, entries) := (get j "statements", get j "files", get j "entries")
+  let (statements, files, entries, draw) := (get j "statements", get j "files", get j "entries", get j "draw")
   match get j "runs" with
   | .null =>
-    let (as, refused) ← asks statements files program shape layout entries window units steps salt
-    if as.isEmpty then
+    let (as, leaves, refused) ← asks statements files program shape layout entries window units steps salt draw
+    if as.isEmpty && leaves.isEmpty then
       if let some why := refused then throw why
       return Json.mkObj [("outcomes", Json.arr #[])]
     let partition := partitionOf program shape
-    return Json.mkObj [("run", Json.arr (as.map (·.toJson partition)))]
+    return Json.mkObj [("run", Json.arr (as.map (·.toJson partition) ++ leaves.map (·.toJson)))]
   | .arr runs =>
-    let out ← judge statements files program shape layout entries window units steps salt runs
+    let out ← judge statements files program shape layout entries window units steps salt draw runs
     return Json.mkObj [("outcomes", Json.arr out)]
   | _ => throw ("error", "credit-verified: the verifier's answers are neither null nor a list")
 

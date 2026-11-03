@@ -38,9 +38,8 @@ theorem readWith_std (tags : Tags) (bytes : ByteArray) (tables : List (String ×
   simp only [classOfWith_std, templateOfWith_std]
   try rfl
 
-set_option maxRecDepth 20000 in
 theorem descParseWith_std (bytes : ByteArray) :
-    TemplateQuery.Desc.parseWith std bytes = TemplateQuery.Desc.parse bytes := rfl
+    TemplateQuery.Desc.parseWith std.sha512 bytes = TemplateQuery.Desc.parse bytes := rfl
 
 set_option maxRecDepth 20000 in
 theorem programDecodeWith_std (bytes : ByteArray) : Program.decodeWith std.sha512 bytes = Program.decode bytes := rfl

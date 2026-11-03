@@ -147,7 +147,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 
 /-- A checked unit's waits' reruns at coins `r` and its `E^rep` coins `ρ`: Flock's `m′` waits of `K′` draws, fresh on
 the unit's rounds. -/
-noncomputable def unitWaits (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) (u : ℕ × ℕ)
+noncomputable def unitWaits (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) (u : ℕ)
     (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x) : ℝ :=
   ∑ a, (waitRuns (run' ∘ forkOn (D.rounds x u) r) (D.innerK x) ((List.finRange (D.innerCap x)).map (ρ a)) 0 : ℝ)
 
@@ -178,7 +178,7 @@ noncomputable def outerG (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x
     accExp (run' ∘ forkOn (D.stage2 x) r) (D.k x) (innerW D x run' ∘ forkOn (D.stage2 x) r) (D.cap x) 0
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem unitWaits_nonneg (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) (u : ℕ × ℕ)
+theorem unitWaits_nonneg (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) (u : ℕ)
     (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x) : 0 ≤ unitWaits D x run' u r ρ :=
   Finset.sum_nonneg fun _ _ => Nat.cast_nonneg _
 
@@ -203,7 +203,7 @@ theorem outerG_nonneg (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) �
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- A checked unit's extraction reruns as its waits do: Flock's `m′` waits on its session, at most. -/
 theorem unitExt_runs_le_waits (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T) (x : Msg)
-    (s : AuditStatement) (u : ℕ × ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x)
+    (s : AuditStatement) (u : ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x)
     (run' : (Fin (D.V.k x) → Coin) → Trace) :
     (((unitExt D decode x s u r v ρ).eval H run').2.2 : ℝ) ≤ unitWaits D x run' u r ρ := by
   unfold unitExt
@@ -286,7 +286,7 @@ theorem unit_exp_le {D : Deploy Coin Col T} (hdraw : DrawFixed D) (x : Msg) (run
     Ex (fun d : Fin (D.V.k x) → Coin => (if (run' (forkOn (D.stage2 x) r d)).out = .acc then (1 : ℝ) else 0) *
         Ex fun ρ : D.UnitCoins x => posWaits D x run' i (forkOn (D.stage2 x) r d) ρ) ≤
       D.innerWaits x * D.innerK x := by
-  let sel : List (ℕ × ℕ) → Option (Fin (nPU D x)) := fun _ => some i
+  let sel : List ℕ → Option (Fin (nPU D x)) := fun _ => some i
   have hsel : ∀ R, selUnit D x sel R = (D.checked x R)[i.val]? := fun R => rfl
   rw [← Ex_resample (fun d => selRounds D x sel (forkOn (D.stage2 x) r d)) (selRounds_resample hdraw sel r)]
   have hk : (0 : ℝ) ≤ D.innerWaits x * D.innerK x := by positivity

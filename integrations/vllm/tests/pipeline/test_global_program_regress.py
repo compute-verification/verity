@@ -297,9 +297,9 @@ def test_gp01_build_to_from_gprog_carries_the_declared_lag_static_end_to_end(tmp
 
 
 def _prog_of(fn, label="P"):
-    """A `compare.Prog` over a toy root: prompt = Input node 0 (TOK), the three weights Input batches = W fields."""
+    """A `compare.RootView` over a toy root: prompt = Input node 0 (TOK), the three weights Input batches = W fields."""
     desc = encode_program(Program(fn))
-    return C.Prog(label, desc, {1: "wa", 2: "wb", 3: "wc"}, tok_node=0)
+    return C.RootView(label, desc, {1: "wa", 2: "wb", 3: "wc"}, tok_node=0)
 
 
 def _two_chain_def(name, order="ab", op_c=ADD16, second_operand="b"):
@@ -632,7 +632,7 @@ def _transcripts(oracle: str) -> dict[str, list[int]]:
 
 class _OperandStubFold:
     """The select carries NO S static (`GumbelTopPTokenSelect_v1{V}`); its launch S is the value of
-    the `Const32[S]` 6th operand that compare.Prog._bind_splits removed from the sequence and kept in `splits_values[select node]`."""
+    the `Const32[S]` 6th operand that compare.RootView._bind_splits removed from the sequence and kept in `splits_values[select node]`."""
 
     def __init__(self, s_by_index: list[int]):
         self.inst = [{"spec": "GumbelTopPTokenSelect_v1{V=64}", "k": i, "args": []} for i in range(len(s_by_index))]
