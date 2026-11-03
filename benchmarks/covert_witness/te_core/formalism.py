@@ -665,6 +665,16 @@ SYSTEM_FROM = "4.12.1"
 #: windows are cut from it) compute it identically through every layer. A longer shared prefix needs the batch's
 #: tokens, which no trace keeps
 SHARED_PREFIX = 1
+#: the first te_core whose capture checks a step for matrix products written with elementwise ops (te_core.capture.
+#: products' `elementwise_products`): a multiplication that broadcasts both its operands (an outer product, or a matrix
+#: product once summed), or a gather, a multiplication and a sum by index, which no product row is, so the whole-making
+#: system misses their classes
+ELEMENTWISE_FROM = "4.12.7"
+#: why the fresh-products kind is unmeasured on a trace captured before `ELEMENTWISE_FROM`
+FRESH_UNCHECKED = ("unmeasured: the trace was captured before training's slowdown code checked a step for matrix "
+                   "products written as elementwise steps (a multiplication that broadcasts both its operands, or "
+                   "gathered rows multiplied and added by index), so it may hold products the bound can't see; "
+                   f"retrace the run with training's slowdown code {ELEMENTWISE_FROM} or later")
 #: why the fresh-products kind is unmeasured on a trace captured before `SYSTEM_FROM`
 FRESH_RETRACE = (f"unmeasured: the trace's product rows predate te_core {SYSTEM_FROM}, so they don't say which chains "
                  "make each operand whole (te_core.capture.products' fed) or which products read an embedding's rows "
@@ -716,16 +726,21 @@ def products_of(segments, k: float | None = None, gemm_dtype: str | None = "bflo
     "fresh"; k the console's by default), its MACs and output entries times its steps (the bound's G and Q add over
     steps, so its blocks do too), the order its entries are summed in (`ORDERS`; None: the reference circuit's,
     `ORDER`), and the steps' whole-making system and P-match check from their product rows (te_core.capture.products,
-    `system_of`), G without the products that read a gather's rows as `products_of_trace` drops them (`gathered`)."""
+    `system_of`), G without the products that read a gather's rows as `products_of_trace` drops them (`gathered`), and
+    the matrix products the steps write with elementwise ops (`elementwise_products`, times their steps), which
+    `fresh_products` refuses to price."""
     from te_core.capture import products
 
     if order not in (None, *ORDERS):
         raise ValueError(f"order {order!r}: one of {ORDERS}, or None for the reference circuit's ({ORDER})")
     k = float(policy.CONSOLE[1] if k is None else k)
-    out, rows, broken = [], [], []
+    out, rows, broken, ew = [], [], [], {}
     fresh = dropped = macs = dropped_macs = 0
     for n, g in segments:
         block = products.rows(g, k, gemm_dtype)
+        for x in block["elementwise_products"]:
+            c, w = ew.get(x["op"], (0, 0))
+            ew[x["op"]] = (c + n * x["count"], w + n * x["macs"])
         gathered = products.gathered_gemms(g)
         for r in io_bound.rows_of(g, gemm_dtype, k):
             if r.kind == "fresh":
@@ -740,7 +755,8 @@ def products_of(segments, k: float | None = None, gemm_dtype: str | None = "bflo
         rows += block["rows"]
         broken += block["p_match"]
     return {"k": k, "order": order or ORDER, "products": out, "system": system_of(rows), "p_match": broken,
-            "gathered": {"dropped": dropped, "of": fresh, "dropped_macs_share": dropped_macs / macs if macs else 0.0}}
+            "gathered": {"dropped": dropped, "of": fresh, "dropped_macs_share": dropped_macs / macs if macs else 0.0},
+            "elementwise_products": [{"op": op, "count": c, "macs": w} for op, (c, w) in sorted(ew.items())]}
 
 
 def product_kind(row: dict) -> str:
@@ -778,7 +794,8 @@ def products_of_trace(block: dict, steps: float = 1.0) -> dict:
     two of them, attention's, affected or not), and its output entries whole, which only lowers the bound;
     `shared_prefix` says so (None: no such product, so no position reads another's tokens and a repeated token is
     `gathered`'s). Each product keeps its operands' `fed`,
-    which `fresh_products` reads to give each subset its own whole-making factor."""
+    which `fresh_products` reads to give each subset its own whole-making factor, and `elementwise_products` is the
+    trace's (None: captured before `ELEMENTWISE_FROM`)."""
     out, kinds = [], dict.fromkeys(io_bound.KINDS, 0.0)
     flagged = all("gathered" in r for r in block["rows"])
     seq = max((r["dims"][d] for r in block["rows"] if sum(x in r["token_dims"] for x in ("m", "k", "n")) >= 2
@@ -809,7 +826,7 @@ def products_of_trace(block: dict, steps: float = 1.0) -> dict:
               "trimmed_macs_share": trimmed / macs if macs else 0.0} if seq else None
     got = {"k": float(block["k"]), "order": order, "trace_order": block["order"], "capture": block["capture"],
            "products": out, "kinds_macs": kinds, "system": system_of(block["rows"]), "p_match": block.get("p_match"),
-           "gathered": gathered, "shared_prefix": shared}
+           "gathered": gathered, "shared_prefix": shared, "elementwise_products": block.get("elementwise_products")}
     if "at" in block:
         rest = {x: v for x, v in block.items() if x != "at"}
         got["at"] = {x: products_of_trace(rest | b, steps) for x, b in block["at"].items()}
@@ -892,7 +909,9 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
     on a trace's rows the rule that kept it, its e and the classes only the dropped products read); where no subset has
     a proved Λ the term is unmeasured (`FRESH_VOID`). `gathered` is what G dropped before that, the products that read
     an embedding's rows before any op makes them token-specific, and `shared_prefix` what it trimmed at the sequences'
-    first positions (`products_of_trace`)."""
+    first positions (`products_of_trace`). Products that come with a whole-making system are unmeasured where the step
+    writes matrix products with elementwise ops (they are products, never elementwise work, and the system misses
+    their classes) or where its capture didn't look for them (`FRESH_UNCHECKED`)."""
     p = m.products
     if p is None and m.ops is not None:
         p = products_of_ops(m.ops)
@@ -918,6 +937,19 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
     elif p["system"] is None:
         got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, math.inf)
         return None, FRESH_RETRACE, got
+    elif p.get("elementwise_products") is None:
+        got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, math.inf)
+        return None, FRESH_UNCHECKED, got
+    elif p["elementwise_products"]:
+        got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, math.inf)
+        got["elementwise_products"] = p["elementwise_products"]
+        ops = ", ".join(f"{x['op']} ({x['count']}×, {x['macs']:.3g} multiplications)" for x in p["elementwise_products"])
+        return None, (f"unmeasured: the traced step writes matrix products as elementwise steps (a multiplication "
+                      f"that broadcasts both its operands, as an outer product or a matrix product summed afterwards "
+                      f"does, or gathered rows multiplied and added by index): {ops}. They are products, which the "
+                      f"bound never prices as elementwise work, and no product row says how their outputs are made "
+                      f"whole; write them as matrix products (x @ W, or a sparse matrix's product) and trace the run "
+                      f"again"), got
     elif p.get("p_match"):
         got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, math.inf)
         got["p_match"] = p["p_match"]
