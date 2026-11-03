@@ -145,6 +145,20 @@ def f32_exp_rn_bits(u: int) -> int:
 
 
 @lru_cache(maxsize=1 << 22)
+def f32_log_rn_bits(u: int) -> int:
+    """`F32LogRn_v1`: RN32(ln(x)). NaN and x < 0 (-inf included) -> 0x7FC00000; ±0 -> -inf; +inf -> +inf; 1 -> +0;
+    otherwise the 100-digit `decimal` ln rounded RN-even, a normal word (2^-24 < |ln x| < 104)."""
+    c, v = _frac_of_f32(u)
+    if c == 2 or c == -1 or (c == 0 and v < 0):
+        return F32_NAN
+    if c == 1:
+        return 0x7F800000
+    if v == 0:
+        return 0xFF800000
+    return _f32_of_dec(_CTX.ln(_dec_of_frac(v)))
+
+
+@lru_cache(maxsize=1 << 22)
 def f32_erf_rn_bits(u: int) -> int:
     """`F32ErfRn_v1`: RN32(erf(x)). NaN -> 0x7FC00000; ±0 -> ±0; ±inf and |x| >= 4.2 -> ±1.0 (1 - erf(4.2) < 2^-25, so
     RN32 is exactly 1); otherwise the 100-digit Taylor series rounded."""
@@ -230,6 +244,12 @@ def F32ExpRn(x: int) -> int:
     return f32_exp_rn_bits(x & 0xFFFFFFFF)
 
 
+@primitive("F32LogRn", 1, [("x", F32)], F32, conformance=_REF_CONF)
+def F32LogRn(x: int) -> int:
+    """Correctly-rounded natural log: see `f32_log_rn_bits`."""
+    return f32_log_rn_bits(x & 0xFFFFFFFF)
+
+
 @primitive("F32ErfRn", 1, [("x", F32)], F32, conformance=_REF_CONF)
 def F32ErfRn(x: int) -> int:
     """Correctly-rounded erf: see `f32_erf_rn_bits`."""
@@ -268,7 +288,7 @@ def gather_f32(vocab: int) -> PrimitiveDefinition:
 
 register_lazy_family(r"^GatherF32x(\d+)_v1$", lambda m: gather_f32(int(m[1])))   # decodable where the program was not built
 
-REF_PRIMITIVES = [F32Sub, F32Sqrt, F32MaxRef, F32GtStrict, F32ExpRn, F32ErfRn, F32TanhRn]
+REF_PRIMITIVES = [F32Sub, F32Sqrt, F32MaxRef, F32GtStrict, F32ExpRn, F32LogRn, F32ErfRn, F32TanhRn]
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -800,7 +820,8 @@ def ref_vocab_digest() -> str:
 
 
 __all__ = ["REF_VOCAB_VERSION", "DTYPES", "REF_PRIMITIVES", "REF_COMPOSITES", "SHARED_PRIMITIVES", "ref_vocab_manifest",
-           "ref_vocab_digest", "gather_f32", "F32Sub", "F32Sqrt", "F32MaxRef", "F32GtStrict", "F32ExpRn", "F32ErfRn", "F32TanhRn",
+           "ref_vocab_digest", "gather_f32", "F32Sub", "F32Sqrt", "F32MaxRef", "F32GtStrict", "F32ExpRn", "F32LogRn", "F32ErfRn",
+           "F32TanhRn",
            "DotRef", "LinearRef", "RMSNormRef", "LayerNormRef", "GeluRefElem", "GeluRef", "SiluRefElem", "SiluRef", "SoftmaxRef",
            "RoPERef", "RoPEHeadsRef", "EagerAttentionHeadRef", "EagerAttentionRef", "EmbeddingRef", "AddRef", "MulRef",
-           "ArgmaxStepF32", "ArgmaxRef", "f32_exp_rn_bits", "f32_erf_rn_bits", "f32_tanh_rn_bits"]
+           "ArgmaxStepF32", "ArgmaxRef", "f32_exp_rn_bits", "f32_log_rn_bits", "f32_erf_rn_bits", "f32_tanh_rn_bits"]
