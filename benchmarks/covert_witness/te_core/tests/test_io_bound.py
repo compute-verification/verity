@@ -506,7 +506,9 @@ def test_the_45m_steps_whole_making_system():
     counted operand, so its system's least fixed point gives whole_chain 1.0887 (the one-class rule at its least k_whole,
     256, gave 1.033) and 163,708 without P-cell, 2,870,251 with it. Its LoRA r16 step has no fixed point: void. P-match
     holds on both, as te_core.capture.products' check has it: the embedding's gather reads a table no chain reaches, so
-    it hands on no entry made whole, and its rows' repeats are the bound's to drop (`gathered`)."""
+    it hands on no entry made whole, and its rows' repeats are the bound's to drop (`gathered`). The dense step's G
+    drops none (`test_formalism`); the LoRA step's drops layer 0's 6 of its 195 fresh products (2.6% of their MACs),
+    the adapters' up-projections of the embedding's rows and their gradients."""
     from te_core import formalism
 
     rows = json.loads(FIXTURE_45M.read_text())
@@ -519,16 +521,33 @@ def test_the_45m_steps_whole_making_system():
     assert w["mu"] is None and math.isinf(w["whole_chain"]) and p["rho"] is None and p["rho_no_cell"] is None
     c, k = policy.CONSOLE
     assert iob.p_match(iob.capture("dense", "s", 32000, 2, 256, 1), k) == []
-    assert iob.p_match(iob.capture("lora", "s", 32000, 2, 256, 1), k) == []
+    lora = iob.capture("lora", "s", 32000, 2, 256, 1)
+    assert iob.p_match(lora, k) == []
+    gathered = formalism.products_of([(1, lora)], k)["gathered"]
+    assert (gathered["dropped"], gathered["of"]) == (6, 195)
+    assert gathered["dropped_macs_share"] == pytest.approx(0.02649, abs=1e-5)
 
 
 @pytest.mark.slow
 def test_the_s_t20_steps_whole_making_system():
     """The s-t20 steps at full size (256 sequences of 1,024 tokens in four micro-batches) at the console: dense 257,670
-    without P-cell and 4.75e6 with it (4.10's one-class rule gave 258,250 and 4.87e6), LoRA r16 void. Only the full
-    capture has the weight gradients' 65,536-long chains and the products the figures sum; the tiny steps can't."""
-    w, p = _corrected("dense", 256, 1024, 4)
-    assert w["whole_chain"] == pytest.approx(1.0314051, rel=1e-6)
-    assert round(p["rho_no_cell"]) == 257_670 and p["rho"] == pytest.approx(4.7545e6, rel=1e-4)
-    w, p = _corrected("lora", 256, 1024, 4)
-    assert math.isinf(w["whole_chain"]) and p["rho"] is None and p["rho_no_cell"] is None
+    without P-cell and 4.75e6 with it (4.10's one-class rule gave 258,250 and 4.87e6), LoRA r16 void, the same through
+    te_core.formalism's products (its whole-making system from the product rows, G without the products that read
+    the embedding's rows: none of the dense step's 702, 24 of LoRA's 780). Only the full capture has the weight
+    gradients' 65,536-long chains and the products the figures sum; the tiny steps can't."""
+    from te_core import formalism
+
+    c, k = policy.CONSOLE
+    for name, dropped, of in (("dense", 0, 702), ("lora", 24, 780)):
+        g = iob.capture(name, "s", 32000, 256, 1024, 4)
+        got = formalism.products_of([(1, g)], k)
+        assert (got["gathered"]["dropped"], got["gathered"]["of"], got["p_match"]) == (dropped, of, [])
+        w = iob.whole_chain_of(iob.chain_classes(g, k), k)
+        assert formalism.whole_chain(got["system"], k)["whole_chain"] == pytest.approx(w["whole_chain"], rel=1e-12) \
+            if math.isfinite(w["whole_chain"]) else math.isinf(formalism.whole_chain(got["system"], k)["whole_chain"])
+        p = iob.bound(got["products"], c, k, iob.step_gates(g, "bfloat16"), w["whole_chain"])["proved"]
+        if name == "dense":
+            assert w["whole_chain"] == pytest.approx(1.0314051, rel=1e-6)
+            assert round(p["rho_no_cell"]) == 257_670 and p["rho"] == pytest.approx(4.7545e6, rel=1e-4)
+        else:
+            assert math.isinf(w["whole_chain"]) and p["rho"] is None and p["rho_no_cell"] is None
