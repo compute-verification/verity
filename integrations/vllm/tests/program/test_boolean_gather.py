@@ -276,10 +276,11 @@ def test_w_max_is_the_most_words_whose_gather_and_its_rows_openings_fit_one_bloc
 
 @pytest.mark.slow
 def test_the_split_and_the_select_are_no_block_alone() -> None:
-    """Their rows are a few bytes each, under one SHA-512 block, so `compose` refuses either as a statement of its own (about
-    10 s, its SHA-512 slot circuits)."""
-    for d in (bind(BGA.GatherChunkSplit, V=LLAMA_VOCAB, W=BGA.W_MAX), bind(BGA.gather_index(3, 2, "F32"))):
-        with pytest.raises(ValueError, match="no row has a compression before its last block"):
+    """The split's rows are a few bytes, under one SHA-512 block, which `compose` refuses of a statement of its own (about 10 s,
+    its SHA-512 slot circuits), and the select's index row is 2 bits, which `UnitStager` refuses before that."""
+    for d, why in ((bind(BGA.GatherChunkSplit, V=LLAMA_VOCAB, W=BGA.W_MAX), "no row has a compression before its last block"),
+                   (bind(BGA.gather_index(3, 2, "F32")), "row idx is 2 bits, not whole u16 words")):
+        with pytest.raises(ValueError, match=why):
             _block(d)
 
 

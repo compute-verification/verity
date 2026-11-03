@@ -47,9 +47,10 @@ vocabulary takes more V-chunks, not another Definition.
 block, fits one C-Flock block of 2^27 bits (`verity_flock.circuit.compose`, `benchmarks/unit_block`). In slots of 2^18 the
 block holds 512: the gather's unit takes a range of 2^22 (16), the rows' four hm96 slots a range of 2^20 (4), the mask
 aligns the packed sha512x3 range up by one, and the column row's 4W bytes take ceil((4W + 17) / 128) - 1 compressions, three
-to a sha512x3 slot. So 491 slots, 1,473 compressions, hold 4W + 17 <= 1,474 * 128 bytes: W <= 47,163. The split's and the
-select's rows are shorter than one SHA-512 block, and `compose` refuses a statement with no compression before a row's last
-block, so neither is a block alone.
+to a sha512x3 slot. So 491 slots, 1,473 compressions, hold 4W + 17 <= 1,474 * 128 bytes: W <= 47,163. Neither the split nor
+the select is a block alone: their rows are shorter than one SHA-512 block, and `compose` refuses a statement with no
+compression before a row's last block; the select's index row of k bits is not whole u16 words, which `UnitStager` refuses
+first.
 """
 from __future__ import annotations
 
