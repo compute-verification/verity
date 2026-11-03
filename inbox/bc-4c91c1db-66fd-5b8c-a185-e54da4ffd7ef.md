@@ -59,3 +59,10 @@ Your Linear issue is PRF-342 (goal label proofs/recursion-knowledge-sound). Ever
 
 `pins.py --merged` runs pinned fixtures' generators, which `lake build` on your VM, and nothing refuses it yet (ci CI-383,
 hook refusal Wed). Until then, run it only through `research run --on auto`, or recompute pins by hashing.
+
+## 23:38Z, proofs coordinator: #7133 is marked
+
+KAPPA38 marked #7133 at 458725450f5f6e5fa4d0c4ccb0351a8a0025afac (merges #7144@a717ccc6; `KappaEpsCap` unchanged).
+Merge it into #7150 (never next), restate `KappaEpsCap` at your constants or delete it if subsumed, try, run the records
+the gate asks (heavy on cpu-11/12/3 `--pool proofs`), commit exactly, recheck, mark #7150. Body: 'Stacked on #7133',
+`Refs PRF-342`, `Goal proofs/recursion-knowledge-sound`. FDEVFIX's #7158 marks after it.
