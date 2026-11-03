@@ -17,7 +17,7 @@ import Proofs.Flock.Claims.ZK.FinishTrunc
 * **`Loop.innerP_pad_tau`**: the inner proof answered by `asksPad C` from round `k` squeezes one coin and then
   `|cons| + 3`, and commits to `InZ.tau` at the coins `padCoin C k` and `padCoin C (k + 1)` (`tau_congr`: `InZ.tau`
   reads only those).
-* **`Masked.fwRows_at`**: where `repConsC` on table `j`'s rep `r`, answered by the opened coins from the rep's base,
+* **`Masked.repConsC_rows`**: where `repConsC` on table `j`'s rep `r`, answered by the opened coins from the rep's base,
   returns, its constraints are the worker's view's first seven rows (`SwRows`), as `fwTau_at` reads them.
 -/
 
@@ -338,7 +338,7 @@ opened coins from the rep's base at the packed table of the witness's trace (`hg
 values plus the pads are the switched source's masked values (`hmk`), its constraints are the worker's view's first seven
 rows at the clear values `v` (`SwRows`), wherever table `j`'s rows hold at its base there (`hrows`): `fwTau_at`'s reading
 of the run up to its inner proof (`tauFw_at_coef`, `swRows_coef`). -/
-theorem fwRows_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
+theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x w) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hnr : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)
     (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals)
