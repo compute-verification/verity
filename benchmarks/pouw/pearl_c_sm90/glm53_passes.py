@@ -1,8 +1,9 @@
-"""Pearl-C's served device path on one H100 or H200 at GLM-5.3's in-domain linears (`glm53.linears`, one TP8 rank): the gate and
-three retained passes, then the reference replay of each.
+"""Pearl-C's served device path on one H100 or H200 at a model's in-domain linears (``--model``'s ``in_domain``: ``glm53``'s,
+the default, one TP8 rank, or ``llama32_1b``'s, one card): the gate and three retained passes, then the reference replay of each.
 
-  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py capture --out DIR [--cubin C] [--schedule S] [--graphs]  # on the card
-  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py verify --out DIR [--jobs J] [--fast]  # on CPUs, after
+  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py capture --out DIR [--model glm53|llama32_1b] [--cubin C] [--schedule S] [--graphs]  # on the card
+  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py volunteer --out DIR [--jobs J] [--passes P ...]  # on CPUs, before verify
+  python benchmarks/pouw/pearl_c_sm90/glm53_passes.py verify --out DIR [--jobs J] [--fast] [--draws T]  # on CPUs, after
   python benchmarks/pouw/pearl_c_sm90/glm53_passes.py full --out DIR [--jobs J] [--without-y] [--passes P ...]  # on CPUs, after
 
 ``capture`` installs `pouw_pearl_c_device.PearlCDeviceRun` (``pearl-c-h100-v1-h3`` on this directory's kernels, the serial
@@ -20,19 +21,23 @@ the weights' root (its coin commitment is published as ``coins.json``, where `ve
 ``--shapes`` names the weights' (n, k) in place of the in-domain ones; one shape alone makes every tile verify draws that
 shape's (a pass calls every weight the epoch commits, `audit.Epoch`'s rule).
 
-``verify`` runs `verify_run.verify` on each pass ``capture.json`` lists (grouped_check.py's too) under ``coins.json``: every
-pass but control must be accepted (replay-verified, development shortcut; the protocol's check is a ZK proof) and control
-rejected.  ``full`` checks prefill's and decode's outputs (``--passes``) in full, every tile of every call rather than verify's samples: its
+``volunteer`` is the prover's step between the capture and the sampling coin (`volunteer_pass.volunteer`, V-EX's remedy): it
+replays every tile of prefill's and decode's passes (``--passes``) word by word and gives up, in each pass's records, the rows
+that leave a tile or one of its credited rows over its debit cap, which the screen can't see (the debit reads the noised
+codes); the transcript is the capture's.  ``verify`` runs `verify_run.verify` on each pass ``capture.json`` lists
+(grouped_check.py's too) under ``coins.json``: every pass but control must be accepted (replay-verified, development
+shortcut; the protocol's check is a ZK proof) and control rejected.  ``full`` checks prefill's and decode's outputs (``--passes``) in full, every tile of every call rather than verify's samples: its
 openings and its leaf against C~ and U recomputed from the opened rows on the device record (`clear_audit.Verifier.check_tile`,
 the verifier's own), then every real row's served y against y_unit of those U and α (RN_f32(RN_f32(U·RN_f32(1/α_A))·RN_f32(1/α_B)),
 then BF16 nearest-even, as `pearl_c.PearlC.useful` states it and fixture.py's y is), on `fast_tile`'s batch forms with every
-``--cross-check``-th tile on the scalar reference too.  Each mode writes its JSON in DIR (``capture.json``, ``verify.json``,
-``full.json``) and exits 0 only when everything it checks holds.
+``--cross-check``-th tile on the scalar reference too.  Each mode writes its JSON in DIR (``capture.json``, ``volunteer.json``,
+``verify.json``, ``full.json``) and exits 0 only when everything it checks holds.
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import sys
@@ -61,7 +66,8 @@ def capture(a) -> int:
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
     out, dev = Path(a.out), torch.device("cuda")
-    shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else sorted(glm53.in_domain(a.scheme))
+    shapes = ([tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes
+              else sorted(importlib.import_module(a.model).in_domain(a.scheme)))
     gen = torch.Generator(device=dev).manual_seed(20261023)
     weights = {w: (0.05 * torch.randn(n, k, device=dev, generator=gen)).to(torch.bfloat16) for w, (n, k) in enumerate(shapes)}
     kernel = PPD.Kernel.load(str(HERE), a.cubin)
@@ -74,7 +80,7 @@ def capture(a) -> int:
                               salt_key=salt_key, schedule=a.schedule, graphs=a.graphs)
     arm = BA.PearlCArm()
     arm.run, arm.weights = run, weights
-    log = {"scheme": a.scheme, "schedule": a.schedule, "graphs": run.graphs, "cubin_sha256": kernel.cubin_sha256, "kernel_source_sha256": kernel.source_sha256,
+    log = {"model": a.model, "scheme": a.scheme, "schedule": a.schedule, "graphs": run.graphs, "cubin_sha256": kernel.cubin_sha256, "kernel_source_sha256": kernel.source_sha256,
            "device": torch.cuda.get_device_name(dev), "shapes": shapes, "prefill": PREFILL, "decode": DECODE,
            "gate": arm.gate(None), "passes": {}}
     print(f"gate: {'PASS' if log['gate']['passed'] else 'FAIL'}", flush=True)
@@ -104,6 +110,23 @@ def capture(a) -> int:
     return 0 if log["ok"] else 1
 
 
+def volunteer(a) -> int:
+    import volunteer_pass as VP
+    from verity.core.protocols.pouw.coins import CoinCommitment
+
+    out = Path(a.out)
+    coins = CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
+    keep = ("ok", "line", "tiles", "over", "voluntary_a", "voluntary_b", "left", "records_root", "credit_kept")
+    res = {}
+    for name in a.passes:
+        res[name] = {k: v for k, v in VP.volunteer(out / name / "manifest.json", coins, a.jobs).items() if k in keep}
+        print(f"{name}: {res[name]['line']}", flush=True)
+    res["ok"] = bool(a.passes) and all(res[x]["ok"] for x in a.passes)
+    (out / "volunteer.json").write_text(json.dumps(res, indent=1) + "\n")
+    print(f"volunteer {'PASS' if res['ok'] else 'FAIL'}", flush=True)
+    return 0 if res["ok"] else 1
+
+
 def verify(a) -> int:
     import verify_run as VR
     from verity.core.protocols.pouw.coins import CoinCommitment
@@ -113,7 +136,7 @@ def verify(a) -> int:
     names = list(json.loads((out / "capture.json").read_text())["passes"]) if (out / "capture.json").exists() else PASSES
     res = {}
     for name in names:
-        v = VR.verify(out / name / "manifest.json", VR.DRAWS, a.jobs, settings.RESEARCH_SOURCE_SHA or "unknown",
+        v = VR.verify(out / name / "manifest.json", a.draws or VR.DRAWS, a.jobs, settings.RESEARCH_SOURCE_SHA or "unknown",
                       fast=a.fast, cross_check=a.cross_check if a.fast else 0, coins=coins)
         res[name] = {k: v.get(k) for k in ("accepted", "line", "verdicts", "error")}
         print(f"{name}: {v['line']}", flush=True)
@@ -270,21 +293,23 @@ def full(a) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    p.add_argument("mode", choices=("capture", "verify", "full"))
+    p.add_argument("mode", choices=("capture", "volunteer", "verify", "full"))
     p.add_argument("--out", required=True)
     p.add_argument("--scheme", default=glm53.SCHEME)
     p.add_argument("--cubin", help="the build's cubin (default this directory's)")
-    p.add_argument("--shapes", nargs="*", help="capture: N:K, a weight each (default every in-domain linear)")
+    p.add_argument("--model", choices=("glm53", "llama32_1b"), default="glm53", help="capture: whose in-domain linears")
+    p.add_argument("--shapes", nargs="*", help="capture: N:K, a weight each (default every in-domain linear of --model)")
     p.add_argument("--schedule", default="serial", help="capture: the run's schedule (verity.core.protocols.pouw.serving.SCHEDULES)")
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     p.add_argument("--fast", action="store_true", help="verify_run's --fast")
+    p.add_argument("--draws", type=int, help="verify: tiles drawn a pass (default verify_run's DRAWS)")
     p.add_argument("--cross-check", type=int, default=64, help="with --fast, and full: every N-th tile on the scalar reference too")
     p.add_argument("--without-y", action="store_true", help="full: C~ and U alone (passes captured before served y was retained)")
-    p.add_argument("--passes", nargs="+", choices=FULL, default=list(FULL), help="full: the passes to check (default both)")
+    p.add_argument("--passes", nargs="+", choices=FULL, default=list(FULL), help="volunteer and full: the passes (default both)")
     p.add_argument("--graphs", action="store_true", help="capture: calls of up to 256 rows replayed as CUDA graphs")
     a = p.parse_args(argv)
     Path(a.out).mkdir(parents=True, exist_ok=True)
-    return {"capture": capture, "verify": verify, "full": full}[a.mode](a)
+    return {"capture": capture, "volunteer": volunteer, "verify": verify, "full": full}[a.mode](a)
 
 
 if __name__ == "__main__":

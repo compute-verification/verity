@@ -60,7 +60,7 @@ from dataclasses import dataclass, replace
 from fractions import Fraction
 from functools import partial
 from itertools import accumulate
-from math import lcm
+from math import floor, lcm
 
 from clear_audit import Audit, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile, commitment_hash, draw_coin
 from verity.core.protocols.pouw.audit import Epoch, opened_value
@@ -560,5 +560,138 @@ def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: S
                         break
                     side, row, _ = min(options, key=lambda o: o[2][0] - o[2][1])
                     (va[u.index] if side == "A" else vb[u.weight]).add(row)
+                    changed = True
+    return {i: sorted(s) for i, s in va.items() if s}, {w: sorted(s) for w, s in vb.items() if s}
+
+
+def _word_units(scheme: C.PearlC, records: Sequence[UnitRecord],
+                words: Mapping[tuple[int, int], tuple[Sequence[Sequence[int]], Sequence[Sequence[int]]]]):
+    """(scale, tol, per record (p, record, a cell's cap, a row's cap a cell, its tiles as (t, tile, each word's debit))), the
+    debits and caps times `scale`, so a word's debit is an integer."""
+    import numpy as np
+
+    if hasattr(scheme, "tile_cap"):
+        raise ValueError(f"{scheme.name} brings its own debit, not one additive over a tile's words")
+    au = D.debit_units(1, 0, scheme.prices, scheme.device, zeros=0)
+    fa = D.debit_units(0, 0, scheme.prices, scheme.device, zeros=1)
+    scale = lcm(au.denominator, fa.denominator)
+    units = []
+    for p, r in enumerate(records):
+        cell = scheme.cap * cell_credit(scheme, r) * scale
+        tiles = []
+        for t, tile in enumerate(scheme.tiles(r.matmul.shape)):
+            atoms, zeros = words[(p, t)]
+            tiles.append((t, tile, int(au * scale) * np.asarray(atoms, np.int64) + int(fa * scale) * np.asarray(zeros, np.int64)))
+        units.append((p, r, cell, cell * row_cap_multiple(scheme, r.matmul.shape.k), tiles))
+    return scale, 1 + Fraction(getattr(scheme, "r1_tolerance", 0)), units
+
+
+def over_words(scheme: C.PearlC, records: Sequence[UnitRecord],
+               words: Mapping[tuple[int, int], tuple[Sequence[Sequence[int]], Sequence[Sequence[int]]]]) -> list[dict]:
+    """`cap_failure` on every tile from its words' counts (`volunteer_words`' ``words``): each tile whose credited debit is
+    over its cap, or (under the row cap) one of whose credited A rows is, with the tile's debit and cap and each such row's."""
+    import numpy as np
+
+    scale, tol, units = _word_units(scheme, records, words)
+    out = []
+    for p, r, cell, row_cell, tiles in units:
+        for t, tile, words_t in tiles:
+            rows, cols = (set(x) for x in r.credited(tile))
+            if not (rows and cols):
+                continue
+            pos_a, pos_b = [x for x, i in enumerate(tile.rows) if i in rows], [z for z, j in enumerate(tile.cols) if j in cols]
+            w = words_t[np.ix_(pos_a, pos_b)]
+            debit, cap = Fraction(int(w.sum()), scale), cell * len(rows) * len(cols) / scale
+            over = [(tile.rows[x], Fraction(int(d), scale), row_cell * len(cols) / scale) for x, d in zip(pos_a, w.sum(axis=1))
+                    if row_cap(scheme) and int(d) > row_cell * len(cols) * tol]
+            if over or debit > cap * tol:
+                out.append({"record": p, "tile": t, "debit": debit, "cap": cap, "rows": over})
+    return out
+
+
+def volunteer_words(scheme: C.PearlC, records: Sequence[UnitRecord],
+                    words: Mapping[tuple[int, int], tuple[Sequence[Sequence[int]], Sequence[Sequence[int]]]]
+                    ) -> tuple[dict[int, list[int]], dict[int, list[int]]]:
+    """`volunteer` for a scheme whose debit is additive over a tile's words (Pearl-C's: `pearl_c_debit.chain_debit`'s
+    counts, priced linearly by `debit_units`, and no `tile_cap` of its own), from each tile's counts word by word:
+    ``words[(p, t)]`` is (flagged atoms, later +0 promotions) over the rows x columns of tile t of record p, in
+    `scheme.tiles`' order (`fast_tile.word_debits` on the tile's A′ and B̃ codes).  Returns (voluntary A rows by matmul
+    index, voluntary B rows by weight), for `declare`; `over_words` on the records with them is what the caps leave over.
+    - Under the row cap (`row_cap`) a unit's A rows over their own caps go first, the row furthest over summed over the
+      unit's tiles first, up to ⌈m/64⌉.  A row the A count leaves over then gives up, one at a time, the B row whose word
+      carries most of its debit, while that word's debit is over the row's cap a cell, up to ⌈n/64⌉ per weight.
+    - Then a tile over its own cap gives up the row whose removal leaves the least debit over the cap, as `volunteer` does.
+    - It repeats until nothing changes: a B row given up lowers the cap of every row in its column's tiles."""
+    import numpy as np
+
+    _, tol, units = _word_units(scheme, records, words)
+    capped = row_cap(scheme)
+    va: dict[int, set[int]] = {r.matmul.index: set(r.voluntary_a) for r in records}
+    vb: dict[int, set[int]] = {}
+    for r in records:
+        vb.setdefault(r.matmul.weight, set(r.voluntary_b))
+
+    def credited(r: UnitRecord, tile: Tile) -> tuple[list[int], list[int]]:
+        ua, ub = set(r.excluded_a) | va[r.matmul.index], set(r.excluded_b) | vb[r.matmul.weight]
+        return ([x for x, i in enumerate(tile.rows) if i < r.real_rows and i not in ua],
+                [z for z, j in enumerate(tile.cols) if j not in ub])
+
+    def a_left(r: UnitRecord) -> bool:
+        return len(va[r.matmul.index]) < voluntary_cap(r.matmul.shape.m)
+
+    def b_left(r: UnitRecord) -> bool:
+        return len(vb[r.matmul.weight]) < voluntary_cap(r.matmul.shape.n)
+
+    changed = True
+    while changed:
+        changed = False
+        for _, r, _, row_cell, tiles in units if capped else ():
+            while a_left(r):
+                excess: dict[int, Fraction] = {}
+                for _, tile, w in tiles:
+                    rows, cols = credited(r, tile)
+                    if rows and cols:
+                        s, limit = w[np.ix_(rows, cols)].sum(axis=1), row_cell * len(cols) * tol
+                        for x in np.flatnonzero(s > floor(limit)):
+                            i = tile.rows[rows[x]]
+                            excess[i] = excess.get(i, 0) + int(s[x]) - limit
+                if not excess:
+                    break
+                va[r.matmul.index].add(max(excess, key=lambda i: (excess[i], -i)))
+                changed = True
+        for _, r, _, row_cell, tiles in units if capped else ():
+            for _, tile, w in tiles:
+                while b_left(r):
+                    rows, cols = credited(r, tile)
+                    if not (rows and cols):
+                        break
+                    sub = w[np.ix_(rows, cols)]
+                    x = int(np.argmax(sub.sum(axis=1)))
+                    z = int(np.argmax(sub[x]))
+                    if int(sub[x].sum()) <= row_cell * len(cols) * tol or int(sub[x, z]) <= row_cell * tol:
+                        break
+                    vb[r.matmul.weight].add(tile.cols[cols[z]])
+                    changed = True
+        for _, r, cell, _, tiles in units:
+            for _, tile, w in tiles:
+                while True:
+                    rows, cols = credited(r, tile)
+                    if not (rows and cols):
+                        break
+                    sub = w[np.ix_(rows, cols)]
+                    debit, nr, nc = int(sub.sum()), len(rows), len(cols)
+                    if debit <= cell * nr * nc * tol:
+                        break
+                    options = []
+                    if a_left(r) and nr > 1:
+                        options += [(debit - int(d) - cell * (nr - 1) * nc, "A", tile.rows[rows[x]])
+                                    for x, d in enumerate(sub.sum(axis=1))]
+                    if b_left(r) and nc > 1:
+                        options += [(debit - int(d) - cell * nr * (nc - 1), "B", tile.cols[cols[z]])
+                                    for z, d in enumerate(sub.sum(axis=0))]
+                    if not options:
+                        break
+                    _, side, row = min(options, key=lambda o: o[0])
+                    (va[r.matmul.index] if side == "A" else vb[r.matmul.weight]).add(row)
                     changed = True
     return {i: sorted(s) for i, s in va.items() if s}, {w: sorted(s) for w, s in vb.items() if s}
