@@ -1198,6 +1198,71 @@ def test_served_passes_verify_refuses_a_serve_that_retained_no_pass(tmp_path):
     assert answer["verdict"] == "reject" and answer["reason"].startswith("unretained: the serve retained no pass")
 
 
+def test_a_seeded_serve_draws_the_same_coins_and_salt_key_and_takes_no_retention_or_live_coins(tmp_path, monkeypatch):
+    """`serve --seeded`'s streams (`served_passes.seeded`) give one label's bytes however they are drawn, so two seeded
+    installs (`seed_install`) hold challengers of one coin commitment and take one hm96 salt key (`pearl_c.new_salt_key`,
+    which the install's weight commitment calls); ``--seeded`` is refused beside retention and beside the challenger gate,
+    before anything is built."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    a, b = SP.seeded("coins"), SP.seeded("coins")
+    assert a(3) + a(70) + a(1) == b(74) and SP.seeded("salt key")(32) != SP.seeded("coins")(32)
+    monkeypatch.setattr(PPD, "new_salt_key", PPD.new_salt_key)
+    one, two = {"coins": None}, {}
+    SP.seed_install(one)
+    SP.seed_install(two)
+    assert one["coins"].commitment.to_json() == two["coins"].commitment.to_json()
+    assert PPD.new_salt_key(SCHEME) == SP.seeded("salt key")(32)
+    argv = ["serve", "--seeded", "--passes", str(tmp_path), "--out", str(tmp_path / "served.json")]
+    with pytest.raises(SystemExit, match="takes --no-retain and no PEARLC_CHALLENGER_GATE"):
+        SP.main(argv)
+    monkeypatch.setenv("PEARLC_CHALLENGER_GATE", "ssh research@gate")
+    with pytest.raises(SystemExit, match="takes --no-retain and no PEARLC_CHALLENGER_GATE"):
+        SP.main([*argv, "--no-retain"])
+    assert not (tmp_path / "served.json").exists()
+
+
+def test_served_passes_same_holds_two_seeded_serves_of_one_load_to_the_same_passes_naming_no_value(tmp_path, capsys):
+    """`same`: two seeded serves of one load (spec, arm, requests, tokens and batched tokens) and one salt are the same
+    when every pass's `KEEP` fields are; a pass that differs is named with its fields, never their values, and a serve
+    with another pass count fails.  Serves that aren't both seeded and unretained, that served different loads or that
+    drew different salts are refused."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    passes = [{"pass": i, "timed": i > 0, "units": 64, "base": 64 * i, "tiles": 5888, "screened_rows": 8192,
+               "failing_rows": 0, "unsure_rows": 0, "excluded_rows": 0, "transcript_root": f"{7 + i:0128x}",
+               "activation_roots": [f"{100 + 3 * i + j:0128x}" for j in range(3)], "schedule": "serial"} for i in range(3)]
+
+    def doc(**kw):
+        return {"spec": "s.toml", "arm": "pouw:pearl-c-h100-v1-h3", "requests": 8, "prompt_tokens": 1024,
+                "output_tokens": 1, "engine": {"max_num_batched_tokens": 8192}, "retained": False, "seeded": True,
+                "coins": {"source": "seeded", "salt": "ab" * 32}, "passes": passes, **kw}
+
+    def same(a, b):
+        paths = [tmp_path / "a.json", tmp_path / "b.json"]
+        for p, d in zip(paths, (a, b)):
+            p.write_text(json.dumps(d))
+        rc = SP.main(["same", *map(str, paths), "--out", str(tmp_path / "same.json")])
+        text = (tmp_path / "same.json").read_text()
+        assert json.loads(text)["line"] == capsys.readouterr().out.strip()
+        return rc, json.loads(text), text
+
+    rc, got, _ = same(doc(), doc())
+    assert rc == 0 and got["ok"] and got["passes"] == [3, 3] and got["calls"] == 192 and got["differ"] == []
+    assert got["line"].startswith("same: two seeded serves of one load (8 requests of 1024 tokens, 1 out, 8192 a step): "
+                                  "3 passes, 192 calls") and got["line"].endswith("-> OK")
+    other = [dict(p) for p in passes]
+    other[1]["activation_roots"] = [other[1]["activation_roots"][0], f"{999:0128x}", other[1]["activation_roots"][2]]
+    rc, got, text = same(doc(), doc(passes=other))
+    assert rc == 1 and got["differ"] == [{"pass": 1, "fields": ["activation_roots"]}] and got["line"].endswith("-> FAIL")
+    assert f"{999:0128x}" not in text and passes[0]["transcript_root"] not in text
+    rc, got, _ = same(doc(), doc(passes=passes[:2]))
+    assert rc == 1 and got["differ"] == [] and "3 passes against 2" in got["line"]
+    for b, why in ((doc(seeded=False), "aren't both seeded"), (doc(retained=True), "aren't both seeded"),
+                   (doc(requests=16), "different loads"), (doc(engine={"max_num_batched_tokens": 4096}), "different loads"),
+                   (doc(coins={"source": "seeded", "salt": "cd" * 32}), "different salts")):
+        rc, got, _ = same(doc(), b)
+        assert rc == 1 and not got["ok"] and why in got["refused"] and got["line"].startswith("same: refused: "), why
+
+
 def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_cells_macs(tmp_path):
     """`served_passes.macs` is a pass's real rows × n × k, and `verify_run.pass_macs` the MACs of the cells `clear_work`
     credits (`UnitRecord.credited` over the scheme's tiles, at kept K), `credit_at_assumption`'s ``macs`` over the pass

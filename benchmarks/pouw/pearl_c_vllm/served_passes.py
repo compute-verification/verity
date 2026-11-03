@@ -3,7 +3,8 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
 ``max_step_tokens``).
 
   served_passes.py serve --passes DIR --out served.json [--spec SPEC] [--arm ARM] [--requests 32] [--prompt-tokens 512]
-                         [--output-tokens 16] [--max-num-batched-tokens N] [--no-retain]
+                         [--output-tokens 16] [--max-num-batched-tokens N] [--no-retain [--seeded]]
+  served_passes.py same A.json B.json --out same.json
   served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J] [--device DEBIT_CUBIN [--device-check N]]
   served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...]
   served_passes.py verify --passes DIR [--manifest M ...] [--tie W] --out verify.json [--answer answer.json]
@@ -26,7 +27,15 @@ caps, the install's ``max_step_tokens`` and whether every pass is within the cap
 and exits non-zero unless the timed call's passes hold calls in at least three (two boundaries crossed) and every pass is
 within its caps.  ``--no-retain`` serves the same with no ``transcript_dir``: each pass is committed and none is written,
 so its walls are the option's without retention, its passes have no manifest or MACs, and ``verify`` refuses it
-(``retained`` false).
+(``retained`` false).  With ``--seeded`` too (`seed_install`; refused with retention or the challenger gate) the
+in-process challenger's coins and the install's hm96 salt key are drawn from fixed streams (`seeded`), so its
+commitments hide nothing and bind nothing a verdict may read: two seeded serves of one load draw the same salt and key.
+
+``same`` holds two seeded serves of one load (their ``served.json``) to the same passes, field by field (`KEEP`: each
+pass's transcript root, activation roots and counts), which they give only where the served path commits the same bytes
+for the same load.  It writes the passes compared and the fields of each that differ, by name and never by value, to
+``--out``, prints one line and exits 0 only when every pass is the same; it refuses serves that aren't both seeded, that
+served different loads or that drew different salts.
 
 ``volunteer`` is the prover's step between the serve and the verifier's coin (`volunteer_pass.volunteer`, V-EX's remedy): on
 each pass with calls, as ``verify`` reads them, it replays every tile word by word on ``--jobs`` processes and gives up, in
@@ -65,6 +74,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import itertools
 import json
 import math
 import os
@@ -98,6 +108,11 @@ UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so 
 COIN, RETENTION = "coin.json", "retention.json"
 #: why `retain` and `volunteer` refuse once the verifier's coin is drawn
 DRAWN = "the verifier's coin is drawn (DIR/coin.json), so the passes and their records are fixed"
+#: why `serve` refuses ``--seeded`` beside retention or a live session's coins
+SEEDED_ALONE = ("serve --seeded fixes the coins and the hm96 salt key, so its commitments hide nothing and bind nothing a "
+                "verdict may read: it takes --no-retain and no PEARLC_CHALLENGER_GATE")
+#: what makes two serves' documents one load in `same`, beside the engine's batched tokens
+LOAD = ("spec", "arm", "requests", "prompt_tokens", "output_tokens")
 
 
 def prompts(vocab: int, requests: int, tokens: int) -> list[list[int]]:
@@ -127,7 +142,34 @@ def pearl_c_arm(spec, name: str | None = None):
     return picked[0]
 
 
+def seeded(label: str):
+    """`serve --seeded`'s entropy for `label`: SHA-512 over the label and a counter, its whole outputs taken in order, so
+    every stream of one label gives the same bytes however they are drawn."""
+    buf, count = bytearray(), itertools.count()
+
+    def draw(n: int) -> bytes:
+        while len(buf) < n:
+            buf.extend(hashlib.sha512(f"served-passes seeded {label}".encode() + next(count).to_bytes(8, "big")).digest())
+        out = bytes(buf[:n])
+        del buf[:n]
+        return out
+    return draw
+
+
+def seed_install(pouw: dict) -> None:
+    """`serve --seeded`: the PoUW settings' in-process challenger drawing from `seeded` coins, and the hm96 salt key the
+    install's weight commitment takes (`pearl_c.new_salt_key`) a `seeded` one, in this process."""
+    from verity.core.protocols.pouw.coins import Challenger
+    from verity_vllm.protocols.pouw import pearl_c as PPD
+
+    pouw["coins"] = Challenger(0, seeded("coins"))
+    key = seeded("salt key")(32)
+    PPD.new_salt_key = lambda scheme: key
+
+
 def serve(args: argparse.Namespace) -> int:
+    if args.seeded and (args.retain or settings.PEARLC_CHALLENGER_GATE):
+        raise SystemExit(SEEDED_ALONE)
     from verity_bench.vllm import arms as A
     from verity_bench.vllm import presets as P
     from verity_bench.vllm import runner as RN
@@ -150,6 +192,8 @@ def serve(args: argparse.Namespace) -> int:
 
     config["pouw"], reserved = BA.live_coins(config["pouw"], settings.PEARLC_CHALLENGER_GATE, settings.PEARLC_CHALLENGER_PEER,
                                              settings.PEARLC_BENCH_EPOCH, settings.PEARLC_CHALLENGER_LANE)
+    if args.seeded:
+        seed_install(config["pouw"])
     if reserved is None:
         (passes / "coins.json").write_text(json.dumps(config["pouw"]["coins"].commitment.to_json()) + "\n")
     engine_env.apply_engine(None)
@@ -189,13 +233,13 @@ def serve(args: argparse.Namespace) -> int:
     over = [p["pass"] for p in got if any((p.get(k) or 0) > cap for k, cap in caps.items())]
     doc = {"schema": "verity-pouw/pearl-c-served-passes/v1", "spec": str(args.spec), "arm": arm.id, "run": settings.RESEARCH_RUN_ID,
            "engine": {k: v for k, v in engine.items() if isinstance(v, (int, float, str, bool))}, "retained": args.retain,
-           "requests": args.requests, "prompt_tokens": args.prompt_tokens, "output_tokens": args.output_tokens,
+           "seeded": args.seeded, "requests": args.requests, "prompt_tokens": args.prompt_tokens, "output_tokens": args.output_tokens,
            "served_tokens": sum(len(o.outputs[0].token_ids) for o in outs), "generate_s": wall, "engine_steps": len(walls),
            "step_s": walls[warm_steps:], "pass_ends": run.details.get("pass_ends"),
            "max_step_tokens": run.details.get("max_step_tokens"), "caps": caps, "passes": got, "passes_with_calls": len(held),
            "over_caps": over,
            "ok": sum(p["timed"] for p in held) >= 3 and not over and (not args.retain or all(p.get("manifest") for p in held))}
-    doc["coins"] = SS.coins_of(option, reserved)
+    doc["coins"] = {**SS.coins_of(option, reserved), **({"source": "seeded"} if args.seeded else {})}
     for path in (Path(args.out), passes / "served.json"):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(doc, indent=1) + "\n")
@@ -207,6 +251,43 @@ def serve(args: argparse.Namespace) -> int:
     print(f"served {doc['served_tokens']} tokens in {wall:.3f} s and {len(walls)} engine steps (a warm-up's among them), "
           f"{'every pass retained' if args.retain else 'no pass retained'}: the timed steps {shown} s; {len(held)} passes "
           f"with calls, {len(over)} over their caps; coins {coins['source']}{whose} -> {'OK' if doc['ok'] else 'FAIL'}")
+    return 0 if doc["ok"] else 1
+
+
+def same(args: argparse.Namespace) -> int:
+    missing = [str(p) for p in (args.a, args.b) if not Path(p).is_file()]
+    docs = [{} if str(p) in missing else json.loads(Path(p).read_text()) for p in (args.a, args.b)]
+
+    def load(d: dict) -> list:
+        return [d.get(k) for k in LOAD] + [(d.get("engine") or {}).get("max_num_batched_tokens")]
+    a, b = (d.get("passes") or [] for d in docs)
+    refused = next((why for why, bad in (
+        (f"a serve wrote no document ({', '.join(missing)})", missing),
+        ("the serves aren't both seeded (serve --no-retain --seeded), so each committed under a salt and salt key of its "
+         "own", not all(d.get("seeded") and d.get("retained") is False for d in docs)),
+        ("the serves served different loads", load(docs[0]) != load(docs[1])),
+        ("the serves drew different salts, so they weren't seeded alike",
+         (docs[0].get("coins") or {}).get("salt") != (docs[1].get("coins") or {}).get("salt"))) if bad), None)
+    differ = [] if refused else [{"pass": i, "fields": f} for i, (p, q) in enumerate(zip(a, b))
+                                 if (f := [k for k in KEEP if p.get(k) != q.get(k)])]
+    n, calls = len(a), sum(p.get("units") or 0 for p in a)
+    doc = {"schema": "verity-pouw/pearl-plus-served-same/v1", "serves": [str(args.a), str(args.b)],
+           "load": dict(zip((*LOAD, "max_num_batched_tokens"), load(docs[0]))), "passes": [len(a), len(b)], "calls": calls,
+           "refused": refused, "differ": differ, "ok": refused is None and len(a) == len(b) and not differ}
+    r, p, o, t = (doc["load"][k] for k in ("requests", "prompt_tokens", "output_tokens", "max_num_batched_tokens"))
+    head = f"same: two seeded serves of one load ({r} requests of {p} tokens, {o} out, {t} a step)"
+    if refused:
+        doc["line"] = f"same: refused: {refused} -> FAIL"
+    elif doc["ok"]:
+        doc["line"] = (f"{head}: {n} passes, {calls} calls, every pass's transcript root, activation roots and counts "
+                       f"equal, so the served path committed the same bytes for the same load -> OK")
+    else:
+        first = (f"; first pass {differ[0]['pass']}: {', '.join(differ[0]['fields'])}" if differ else "")
+        doc["line"] = (f"{head}: {len(differ)} of {min(len(a), len(b))} passes differ{first}"
+                       + (f"; {len(a)} passes against {len(b)}" if len(a) != len(b) else "") + " -> FAIL")
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(doc, indent=1) + "\n")
+    print(doc["line"], flush=True)
     return 0 if doc["ok"] else 1
 
 
@@ -374,6 +455,12 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--output-tokens", type=int, default=16)
     s.add_argument("--max-num-batched-tokens", type=int)
     s.add_argument("--no-retain", dest="retain", action="store_false")
+    s.add_argument("--seeded", action="store_true", help="with --no-retain: coins and the hm96 salt key from fixed streams "
+                   "(`seeded`), for `same`")
+    m = sub.add_parser("same")
+    m.add_argument("a", type=Path, help="a seeded serve's served.json")
+    m.add_argument("b", type=Path, help="another of the same load")
+    m.add_argument("--out", required=True)
     o = sub.add_parser("volunteer")
     o.add_argument("--passes", required=True)
     o.add_argument("--out", required=True)
@@ -403,7 +490,7 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--coin-record", help=f"the verifier's coin record (default: DIR/{COIN} where served.json names the "
                    "passes, none with --manifest)")
     args = p.parse_args(argv)
-    return {"serve": serve, "volunteer": volunteer, "retain": retain, "verify": verify}[args.cmd](args)
+    return {"serve": serve, "same": same, "volunteer": volunteer, "retain": retain, "verify": verify}[args.cmd](args)
 
 
 if __name__ == "__main__":

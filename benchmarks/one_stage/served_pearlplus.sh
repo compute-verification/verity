@@ -15,9 +15,12 @@
 #      live session's on vy-challenger-1 where PEARLC_CHALLENGER_GATE and PEARLC_CHALLENGER_PEER are set (served_verdicts.sh
 #      sets them under POUW=pearlplus; `served_passes.py serve`'s, `bench_arm.live_coins`), else an in-process
 #      challenger's; before it, unless PEARLPLUS_UNRETAINED is set empty, the same load under its own lease with no pass
-#      retained (`serve --no-retain`, unretained/), whose wall is the option's without writing the passes, its coins an
-#      in-process challenger's, since no verdict reads them; every serve with sm_90's BF16 rows off unless
-#      PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE), as each serve line says;
+#      retained (`serve --no-retain`, unretained/), whose wall is the option's without writing the passes, its coins and
+#      salt key seeded (`serve --seeded`), since no verdict reads them; then, unless PEARLPLUS_SAME is set empty, that
+#      serve once more (same/) and `served_passes.py same` holding the two to the same commitments pass by pass (each
+#      pass's transcript root, activation roots and counts), which they give only where the served path commits the same
+#      bytes for the same load (PIECE_DIR/same.json: the fields that differ, never their values); every serve with
+#      sm_90's BF16 rows off unless PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE), as each serve line says;
 #   3. after the serve's lease and before the verifier's coin, `served_passes.py volunteer` gives up, in the passes'
 #      records, the rows over a debit cap (V-EX), which the serve's screen can't see, from every tile's words' counts
 #      over the whole run, not a sample's. With PEARLPLUS_VOLUNTEER=1 (the default) the counts are the card's, under a
@@ -99,9 +102,20 @@ if [ -n "${PEARLC_CUBIN:-}" ]; then
   if [ -n "${PEARLPLUS_UNRETAINED-1}" ]; then
     t=$(date +%s)
     ( unset PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER
-      serve serve-unretained.log --no-retain --passes "$Q/unretained" --out "$Q/served-unretained.json" )
+      serve serve-unretained.log --no-retain --seeded --passes "$Q/unretained" --out "$Q/served-unretained.json" )
     rc=$?
-    say "serve, no pass retained: served_passes.py serve --no-retain exit $rc after $(took "$t"), $BF16: $(grep -m1 '^served ' "$Q/serve-unretained.log" | cut -c1-300)"
+    say "serve, no pass retained: served_passes.py serve --no-retain --seeded exit $rc after $(took "$t"), $BF16: $(grep -m1 '^served ' "$Q/serve-unretained.log" | cut -c1-300)"
+    if [ -n "${PEARLPLUS_SAME-1}" ]; then
+      t=$(date +%s)
+      ( unset PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER
+        serve serve-same.log --no-retain --seeded --passes "$Q/same" --out "$Q/served-same.json" )
+      rc=$?
+      "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py same "$Q/served-unretained.json" \
+        "$Q/served-same.json" --out "$P/same.json" > "$Q/same.log" 2>&1
+      sc=$?
+      say "same: served_passes.py serve --no-retain --seeded once more exit $rc and served_passes.py same exit $sc after" \
+        "$(took "$t"), $BF16: $(tail -1 "$Q/same.log" | cut -c1-400)"
+    fi
   fi
   t=$(date +%s)
   serve serve.log --passes "$Q/passes" --out "$Q/served.json"
