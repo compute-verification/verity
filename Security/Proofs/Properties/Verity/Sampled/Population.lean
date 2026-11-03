@@ -13,7 +13,8 @@ At the session `A` v2 sets up on the parameters `θ` and the committed files `F`
 accepted draw runs over (`Drew`'s `n`, the record's `population`) is the session's (`A.n`), on every play of the
 period's game whose sampled verdict accepts (`population_eq`, `population_eq_run` on its tapes), wherever the session's
 public file is the one v2's parameters name by its SHA-512 (`p.own.pub`). So the draw's piece of `CouplingTarget`
-holds with no hypothesis on the population (`coupled_draw_held`, `coupled_draw_coins_held`).
+holds with no hypothesis on the population (`coupled_draw_held`, `coupled_draw_coins_held`). `n_of_popTied`
+(`SampledRead`) reaches the same equality from a different tie, the session's program and query to v2's (`PopTied`).
 
 * **The blob v2 holds is the committed public file** (`checkBlobsAt_public`, `blobs_get_ok`, `find?_first`,
   `namedFile_first`): v2 holds the first blob sent whose SHA-512 is `p.own.pub` to the record; the blobs sent begin with
