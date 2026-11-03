@@ -76,8 +76,12 @@ negatives.
   sampled proofs: the window's advice under that registration (`--weights-of-record`) and its request Programs, V3b's window
   circuit at each class of `CLASSES` (V2's 4,32,4 by default), with its weight reads counted registered at the registration's
   pins. The run needs every one of those counts. The class of record's count follows them as a measurement under its own
-  `WC_RECORD_TIMEOUT` (default 20m), after the record: a timeout or refusal there is reported and never fails the run. Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
-  and the Lean verifier. Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
+  `WC_RECORD_TIMEOUT` (default 20m), after the record: a timeout or refusal there is reported and never fails the run. Then
+  comes V3c, sampled proofs' audit of record, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`: the window committed as the
+  class circuit's units (`prove_path.py window-commit`), then its records audit (`records_audit.py audit --circuit`, on a
+  challenger's coins), which is C-Flock `--zk` on the drawn proof blocks and the Lean verifier. The window commit's proofs
+  read the advice under its hiding root, so no advice opening reaches the verifier. V3c writes its audit as the network
+  certifier's period reads it (`period.json`). Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
   `POUW_CMD`, `POUS_CMD`, `BANDWIDTH_CMD` or `CERTIFIER_CMD` names one, within its own limit; otherwise its `MISSING` line
   names the command it lacks and its owner, and it gets no verdict. The script sets each owner's command by default where
   the tree has its piece and the node holds what the piece reads (its auditor key, the bandwidth audit's registered store).
@@ -87,11 +91,10 @@ negatives.
   node and names each one missing, rejecting or about another server, with its reason (PoUW's development piece: development
   run, credits nothing). `PRODUCT=remote` composes sampled proofs and PoUW alone: the onsite pieces are dropped, not run
   and not composed, and the preflight refuses any onsite piece's command. An accept's clause says when its weights were held and their share of the checkpoint, where its
-  profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it, and writes its audit as the network
-  certifier's period reads it (`period.json`). With the certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and
-  `CERTIFIER_PERIOD_CMD`), V3c runs before the pieces instead: the chain after its window commit, beside its audit
-  (within `CERTIFIER_TIMEOUT`, default 4h), and the period check on its `period.json` once both are done, whose answer
-  the certifier's piece reads. Each
+  profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. With the
+  certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), V3c's step also runs the chain after
+  its window commit, beside its audit (within `CERTIFIER_TIMEOUT`, default 4h), and the period check on its
+  `period.json` once both are done, whose answer the certifier's piece reads. Each
   step's verdict line is in `out/verdicts.txt`. The network certifier's piece, the longest, starts as soon as the window is
   picked. No line counts a window's requests: the serve dir's request lists, serve-openai's log and the load's records,
   timings and log stay on the node, and leave it only as `served_overhead.py metrics`' aggregate.

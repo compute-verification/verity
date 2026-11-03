@@ -11,10 +11,9 @@ sampled proofs, and the one record of every verdict (the block record).
                               [--product P]
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
                                 [--statements FILE] [--live-evidence FILE]
-    served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
-                              [--product P]
+    served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR [--registration FILE] --pieces DIR --out DIR
+                              [--node NAME] [--product P]
     served_verdicts.py public-registration REGISTRATION
-    served_verdicts.py sampled-line LOG [--partition FILE]
     served_verdicts.py front-line SESSION
     served_verdicts.py public-lines [--private FILE]
     served_verdicts.py publish OUT --private DIR
@@ -25,10 +24,8 @@ published form (`public_line`), the line in full appended to ``--private`` (the 
 ``publish`` holds each file of OUT, once the run is done, in full under DIR where it names or counts a window (`publish`),
 its public form in its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
 verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
-registration (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
-SAMPLED-PROOFS line from the records audit's log
-(`sampled_line`: the partition the draw was over, the members it drew, and no length of the advice or count of the
-scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
+registration (`public_registration`: the advice's length padded to its compiler's cap), and ``front-line`` the
+CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
@@ -88,9 +85,12 @@ the drawn calls' statements (``--statements``) and the window's live evidence (`
 window meets the two premises of `Security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
 (`premises`): each ``{met, why}``, met only where this run's checks show it.
 
-``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
-``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
-as `served_integrity.answer` reads it; each other subprotocol's from
+``record``: sampled proofs' answer from the records audit kept under ``--sampled-proofs`` (``summary.json``,
+``window/audit.json``) on the registration ``--registration`` (default ``windows/rank0/registration.json`` under it), read
+as `served_integrity.answer` reads it: `served_verdicts.sh` passes V3c's audit of the window committed as its class
+circuit's units (``$D/v3c-w<K>-<class>/audit``, on the window commit's ``window/registration.json``), which reads no
+advice opening; the default is `prove_path/run.sh`'s layout (``PP_RECORDS=1``, its ``NAME`` dir); each other
+subprotocol's from
 ``--pieces/<component>/answer.json`` (`piece_row`), else a ``missing`` row naming why. Each answer is about the server
 `piece_server` names: sampled proofs' the record's node, a piece's the one its ``served.json`` names, else the node it ran
 on, and the wipe's the one its ``served.json`` names. They go into the window report (``verdicts.json``, `row_of`'s rows,
@@ -406,22 +406,6 @@ def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
     out["binding"] = {**reg["binding"], "advice": {**reg["binding"]["advice"], "bits": cap}}
     out["rows"] = -(-cap // row_bits)
     return public_json({**out, "padded": list(PADDED)})
-
-
-def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
-    """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the draw was over (the partition's
-    templates, its scope's op path and law), which members it drew, and the row with no length of the advice
-    (``leak.advice_bits``) and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
-    scope's ``steps``, the window's engine steps, stay on the node too."""
-    row = {k: v for k, v in records.items() if k != "population"}
-    if isinstance(row.get("leak"), Mapping):
-        row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
-    part = partition or {}
-    scope = part.get("scope") or {}
-    over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} "
-            f"(law {part.get('law', '?')})")
-    drawn = f"drawn members {row.get('draw')}" if row.get("draw") is not None else "no draw"
-    return f"{over}, {drawn}: RECORDS {json.dumps(row, sort_keys=True)}"
 
 
 #: The certifier front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
@@ -808,11 +792,12 @@ def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, A
             "epsilon": epsilon(a) if accepted else None, "runs": [*([run] if run else []), *runs], "answer": a}
 
 
-def sampled_proofs_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
-    """Sampled proofs' row from the records audit kept under ``audit_dir`` (module docstring)."""
+def sampled_proofs_row(audit_dir: Path, run: str | None = None, registration: Path | None = None) -> dict[str, Any]:
+    """Sampled proofs' row from the records audit kept under ``audit_dir``, on ``registration`` (default the one run.sh
+    keeps beside it, ``windows/rank0/registration.json``; module docstring)."""
     import served_integrity as SI
 
-    reg = audit_dir / "windows" / "rank0" / "registration.json"
+    reg = registration or audit_dir / "windows" / "rank0" / "registration.json"
     try:
         a = SI.answer(audit_dir, json.loads(reg.read_text()) if reg.exists() else None)
         return row_of(INTEGRITY_OWNER, a, audit_dir, run)
@@ -1047,9 +1032,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     pb = sub.add_parser("publish")
     pb.add_argument("out", type=Path)
     pb.add_argument("--private", type=Path, required=True)
-    sl = sub.add_parser("sampled-line")
-    sl.add_argument("log", type=Path)
-    sl.add_argument("--partition", type=Path)
     fl = sub.add_parser("front-line")
     fl.add_argument("session", type=Path)
     p = sub.add_parser("pieces")
@@ -1061,6 +1043,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--only", action="append", choices=[v[1] for v in PIECES.values()])
     p.add_argument("--skip", action="append", default=[], choices=[v[1] for v in PIECES.values()])
     r.add_argument("--sampled-proofs", type=Path, required=True)
+    r.add_argument("--registration", type=Path)
     r.add_argument("--pieces", type=Path, required=True)
     r.add_argument("--out", type=Path, required=True)
     for q in (p, r):
@@ -1074,13 +1057,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             ap.error(f"--product {a.product!r}: not one of {sorted(BR.PRODUCTS)}")
     if a.cmd == "public-registration":
         print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
-        return 0
-    if a.cmd == "sampled-line":
-        rows = [x[len("RECORDS "):] for x in a.log.read_text().splitlines() if x.startswith("RECORDS ")]
-        if not rows:
-            print("no RECORDS line")
-            return 1
-        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None))
         return 0
     if a.cmd == "front-line":
         try:
@@ -1164,7 +1140,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]
     got = {k: piece(k, a.pieces, run) for k in keys}
-    rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: row for k, (row, _) in got.items()}}
+    rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run, a.registration),
+            **{k: row for k, (row, _) in got.items()}}
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
                                servers={k: at for k, (_, at) in got.items()}, product=a.product)
     a.out.mkdir(parents=True, exist_ok=True)

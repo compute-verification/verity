@@ -14,9 +14,11 @@ the circuit files built for it, as core's credit reads them, and is refused on f
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
 gates nothing; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
 front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
-step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
-certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
-written; its preflight refuses the split beside the certifier's whole piece, or without V3c. Its load, `serve_load.py
+step publishes each case's and each product's verdict lines and nothing else. Its V3c step, sampled proofs' audit of
+record, draws on a challenger's coins with no advice opening, runs the split network certifier's chain after the window
+commit and its period check on V3c's period.json, and fails where no period.json is written; its preflight refuses the
+split beside the certifier's whole piece, and a run without V3c. A V3c audit's row commits to the registration it is
+given. Its load, `serve_load.py
 --varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
 endpoint."""
 from __future__ import annotations
@@ -215,25 +217,6 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
                                                   "COMPOSITE CASE verity/pous/p2/v4/run accept\n")
     assert gzip.decompress((out / "serve" / "h1" / "window-program.json.gz").read_bytes()) == b'{"rows": 512}'
     assert S.publish(out, private) == []
-
-
-def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):
-    row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
-           "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
-    part = {"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2",
-            "scope": {"op_path_prefix": "model.layers.0.mlp.", "steps": [5, 11]}}
-    line = S.sampled_line(row, part)
-    head, _, rec = line.partition(": RECORDS ")
-    assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. (law subset:2), drawn members [0, 2]"
-    assert "steps" not in line and "11" not in line
-    assert json.loads(rec)["leak"] == {"bound": "vacuous", "other_inputs": 786432, "registered": 0} and "832" not in line
-    assert "population" not in line and "37" not in line and row["population"] == 37
-    (tmp_path / "log").write_text("+ set -x\nRECORDS " + json.dumps(row) + "\n")
-    (tmp_path / "p.json").write_text(json.dumps(part))
-    assert S.main(["sampled-line", str(tmp_path / "log"), "--partition", str(tmp_path / "p.json")]) == 0
-    assert capsys.readouterr().out == line + "\n"
-    (tmp_path / "log").write_text("refused\n")
-    assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
 
 
 def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
@@ -476,6 +459,27 @@ def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp
     assert rec is None and (line["composed"], line["by"]) == ("reject", ["sampled proofs"])
 
 
+def test_a_v3c_audit_refused_before_staging_commits_to_the_registration_it_is_given(tmp_path, monkeypatch):
+    """V3c's audit dir holds no registration of its own until it stages its members; ``--registration`` (the window
+    commit's) is the one its row commits to, which run.sh's layout under the audit dir otherwise gives."""
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+
+    audit, reg = tmp_path / "v3c" / "audit", {"format": R.FORMAT, "window": {"circuit": "cd" * 64}}
+    audit.mkdir(parents=True)
+    (audit / "summary.json").write_text(json.dumps({"ok": False, "refused": {"records": "ValueError: no"}}))
+    (tmp_path / "v3c" / "registration.json").write_text(json.dumps(reg))
+    row = S.sampled_proofs_row(audit, None, tmp_path / "v3c" / "registration.json")
+    assert (row["verdict"], row["commitment"]) == ("reject", R.digest(reg)) and "refused" in row["reason"]
+    assert S.sampled_proofs_row(audit)["commitment"] is None
+    seen = []
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda d, _run=None, r=None: seen.append((d, r)) or _accepted())
+    (tmp_path / "serve").mkdir()
+    S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1", "--sampled-proofs", str(audit),
+            "--registration", str(tmp_path / "v3c" / "registration.json"), "--pieces", str(tmp_path / "pieces"),
+            "--out", str(tmp_path / "record")])
+    assert seen == [(audit, tmp_path / "v3c" / "registration.json")]
+
+
 WIPE_ACCEPT = {"protocol": W.PROTOCOL, "verdict": "accept", "reason": None, "commitment": "cd" * 64,
                "public": {"certified": True, "egress_mib": 0, "eps": str(W.EPS), "foreign_bits": 4096, "k": 5500,
                           "memory_bits": 1 << 40, "r": "1/2"},
@@ -491,7 +495,7 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
     names no server and stays missing (``unserved``), a wipe that wrote no answer (served_wipe.sh refused) stays missing
     with its issue, and one whose answer rejects makes the record reject with no block record."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None, _registration=None: _accepted())
     wipe = tmp_path / "pieces" / "wipe"
     wipe.mkdir(parents=True)
     if case == "refused":
@@ -550,7 +554,7 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
     why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
     no block record; one about another server leaves it ``pending``, carried and named as elsewhere."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None, _registration=None: _accepted())
     pieces = tmp_path / "pieces"
     for comp in COMPONENTS:
         (d := pieces / comp).mkdir(parents=True)
@@ -613,7 +617,7 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     served node, from the answer files it wrote, and the published line keeps that."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None, _registration=None: _accepted())
     pieces, ran = tmp_path / "pieces", tmp_path / "ran"
     pouw = {"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]}
     env = {"POUW_CMD": f"echo '{json.dumps(pouw)}' > \"$3/answer.json\"",
@@ -914,6 +918,8 @@ a = sys.argv[1:]
 open(os.environ["ORDER"], "a").write(a[0] + "\\n")
 out = Path(a[a.index("--out") + 1])
 if a[0] == "audit":
+    coins = (a[a.index("--challenger") + 1], a[a.index("--main") + 1]) if "--challenger" in a else None
+    assert "--opening" not in a and coins == ("local", os.environ["PP_MAIN"]), a
     out.mkdir(parents=True)
     (out / "summary.json").write_text("{}")
     print("RECORDS " + json.dumps({"verdict": "accept", "population": 37, "window": 7}))
@@ -946,6 +952,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), **extra: str | None) 
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
         f.write_text("")
     (d / "weights_registration.json").write_text("{}")
+    (tmp_path / "main.txt").write_text("ab" * 20 + "\n")
     _write(d, "windows.jsonl", [{"window": 7, "run_root": "ab" * 64}])
     # the toy tree's verity/ directories, on the PYTHONPATH the script sets and as `python -`'s working directory, would
     # shadow the installed verity
@@ -958,7 +965,8 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), **extra: str | None) 
            "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "FLOCK_WORK": str(tmp_path / "fw"),
            "ROW": str(tmp_path / "row"), "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"),
            "ORDER": str(tmp_path / "order"), "H1_GATE": "", "V3C_CLASS": W63K4, "CLASSES": W63K4,
-           "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD}
+           "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD, "PP_MAIN": str(tmp_path / "main.txt"),
+           "GIT_CEILING_DIRECTORIES": str(tmp_path)}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
@@ -1010,15 +1018,26 @@ def test_v3c_with_no_period_json_runs_no_period_check_and_fails(tmp_path):
     assert (tmp_path / "serve" / "private" / "pieces" / "certifier" / "chain.log").exists()
 
 
+def test_v3c_with_no_copy_of_main_draws_no_coins_and_fails(tmp_path):
+    """No PP_MAIN or MAIN_FILE, and no origin to fetch main from: V3c's audit has no first-parent history to pin its
+    challenger's session on, so it doesn't run, says why, and `served_verdicts.sh v3c` fails."""
+    rc, lines, order, _limits = _v3c(tmp_path, PP_MAIN=None)
+    assert rc == 1 and "audit" not in order and "window-commit" in order
+    assert "V3C-AUDIT: no copy of main's first-parent history (PP_MAIN, MAIN_FILE or origin's main) to pin its coins' " \
+           "session on" in lines
+
+
 @pytest.mark.parametrize("args, extra, line", [
     (("v3c",), {"CERTIFIER_CMD": "true", "CERTIFIER_PERIOD_CMD": None},
      "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"),
-    ((), {"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None},
-     "PREFLIGHT: the split certifier's period check reads V3c's period.json, and V3C_CLASS is empty"),
+    ((), {"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None},
+     "PREFLIGHT: sampled proofs' audit of record is V3c's (and the split certifier reads its period.json), and "
+     "V3C_CLASS is empty"),
 ])
 def test_the_split_certifier_needs_v3c_and_no_whole_piece_beside_it(tmp_path, args, extra, line):
     """The split's period check writes the certifier's answer from V3c's period.json, so the preflight refuses it beside
-    CERTIFIER_CMD, the whole piece's command, and in a run that leaves V3c out, before anything runs."""
+    CERTIFIER_CMD, the whole piece's command; and V3c's audit is sampled proofs' of record, so it refuses a run that leaves
+    V3c out, split or not, before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, args, **extra)
     assert (rc, lines, order) == (3, [line], [])
 
