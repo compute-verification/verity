@@ -1,8 +1,9 @@
 """The ZK server's contract, inner phase: `rec_live`'s proxy sends the coin server exactly what `Flock.Firewall.run` (the Lean
 program `flock-firewall`) sends, byte for byte, on an honest session and on every session a worker can make of it here (each
 schedule edit of `test_rec_live`, every prefix, drop, duplicate and swap of a request, requests after ``Finish``, forged
-requests, and seeded random byte flips). The Lean program's type is the contract (live PROTOCOL.md §10.3): each message is the
-schedule's own value or a commitment under one of the ZK server's salts, so agreement means nothing else leaves the proxy.
+requests, a Commit of two tables in and out of the schedule's order, and seeded random byte flips). The Lean program's
+type is the contract (live PROTOCOL.md §10.3): each message is the schedule's own value or a commitment under one of the
+ZK server's salts, so agreement means nothing else leaves the proxy.
 
 Under ``rec_live --lean`` the send check is Lean's own (`rec_live.LeanFirewall`, ``flock-firewall live``): on every case
 and every whole placement the coin server's record and calls are `Flock.Firewall.run`'s at the salts the live session drew,
@@ -56,6 +57,20 @@ def honest2() -> list[bytes]:
     r = honest()
     child = RL.encode_req(RL.REQ_ROUND, "circuit/rep0/x", _bytes(b"\x00" * 8) + _bytes(CAP1) + _obs(list(range(1, 10))) + _sq(3), 3)
     return r[:5] + [RL.encode_req(RL.REQ_OPEN, "circuit/rep0/x", "circuit/rep0", b"x", 1)] + r[5:7] + [child] + r[7:]
+
+
+#: a schedule of two tables with roots, its ``roots`` listing them out of the schedule's order (their names, sorted)
+SCHEDULE3 = {**json.loads(json.dumps(SCHEDULE)), "hello": {**SCHEDULE["hello"], "tables": ["aux", "circuit"]},
+             "roots": {"circuit": 2, "aux": 2}}
+HELLO3 = json.dumps({**json.loads(HELLO), "tables": ["aux", "circuit"]}, separators=(",", ":"))
+
+
+def honest3(tables=("aux", "circuit")) -> list[bytes]:
+    """`honest`'s session under `SCHEDULE3`, its Commit naming ``tables`` in order."""
+    r = honest()
+    r[1] = RL.encode_req(RL.REQ_HELLO, HELLO3)
+    r[2] = RL.encode_req(RL.REQ_COMMIT, b"sigma-root-f", [(t, CAP0) for t in tables], [])
+    return r
 
 
 #: how `Flock.Firewall.calls` writes each call the proxy makes on the coin server
@@ -168,6 +183,8 @@ def cases() -> list[tuple[str, dict, list[bytes]]]:
         r = honest()
         r[i] = req
         out.append((f"forged: {what}", SCHEDULE, r))
+    out += [("honest, two tables", SCHEDULE3, honest3()),
+            ("two tables: Commit names them out of order", SCHEDULE3, honest3(("circuit", "aux")))]
     stop = b"not a request"
     out += [("stopped before Open", SCHEDULE, honest()[:4] + [stop]), ("stopped after Open", SCHEDULE, honest()[:5] + [stop]),
             ("stopped after a round", SCHEDULE, honest()[:6] + [stop]),
@@ -304,6 +321,31 @@ def test_copies_are_by_position_never_by_value(lean_records):
     assert fresh["end"] == "finish" and fresh["rounds"][2]["level0"] == 0 and [len(t) for t in fresh["rounds"][2]["tops"]] == [2]
     forged = got["forged: a copy that is not level 0's top"]
     assert forged["end"] == "stop" and len(forged["rounds"]) == 2
+
+
+def test_commit_takes_the_tables_in_the_schedules_order_only(built, lean_records):
+    """Commit's table order is the schedule's (its roots' names, sorted), never the worker's, so the order carries
+    nothing: under a schedule of two tables whose ``roots`` lists them in another order, the session naming them in the
+    schedule's order finishes, and the same session naming them out of it stops at Commit, the coin server shown no
+    link, in the proxy, in `Flock.Firewall.run` and in the relay through ``flock-firewall live``."""
+    cs, lean = lean_records
+    got = {name: rec for (name, _, _), rec in zip(cs, lean)}
+    assert got["honest, two tables"]["end"] == "finish"
+    out = got["two tables: Commit names them out of order"]
+    assert out["end"] == "stop" and out["link"] is None and out["rounds"] == []
+    why = RL.refused("Commit's roots: the tables are not in the pinned schedule's order")
+    proxy = RL.Proxy(RL.CoinServer(_coins), iter(SALTS).__next__, schedule=SCHEDULE3)
+    for b in honest3(("circuit", "aux"))[:3]:
+        proxy.handle(b)
+    assert proxy.stopped == f"rec proxy: {why}"
+    lean_fw = RL.LeanFirewall(BIN, SCHEDULE3)
+    try:
+        proxy = RL.Proxy(RL.CoinServer(_coins), schedule=SCHEDULE3, lean=lean_fw)
+        for b in honest3(("circuit", "aux"))[:3]:
+            proxy.handle(b)
+    finally:
+        lean_fw.close()
+    assert proxy.stopped == f"rec proxy: the Lean firewall: {why}"
 
 
 def _bad_schedules() -> list[dict]:

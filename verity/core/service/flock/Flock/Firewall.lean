@@ -304,6 +304,13 @@ structure Schedule where
   streams : List (String × String × Nat × Nat)
   rounds : Array Json
 
+/-- The schedule's tables in its order: the names of its `roots`, as its JSON object holds them, ascending. Commit names
+them in this order and no other, so the order carries nothing of the worker's. -/
+def Schedule.tables (s : Schedule) : List String :=
+  match s.roots with
+  | .obj kvs => kvs.toArray.toList.map (·.1)
+  | _ => []
+
 def jnat (n : Nat) : Json := .num ⟨Int.ofNat n, 0⟩
 
 /-- A round's schedule entry read field by field: its stream, `k`, `n`, each fresh top's node count, its copies of a
@@ -568,6 +575,8 @@ def step (s : Schedule) : Req → Fw Unit
     pinned "Commit's roots" (Json.mkObj counts) s.roots
     if roots.any fun (n, v) => natOf? (s.roots.getObjValD n) != some (v.size / NODE_BYTES) then
       throw "FIREWALL-REFUSED: Commit's roots: a table's node count is not the pinned schedule's"
+    if roots.map (·.1) != s.tables then
+      throw "FIREWALL-REFUSED: Commit's roots: the tables are not in the pinned schedule's order"
     let tops ← roots.mapM fun (n, v) => do return (n, ← saltedTop v)
     let st ← get
     if !st.hello || st.committed then throw "the link points are drawn once, after Hello"
