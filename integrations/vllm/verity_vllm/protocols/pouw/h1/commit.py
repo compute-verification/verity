@@ -51,7 +51,8 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as G, regi
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES
-from verity_vllm.protocols.pouw.h1 import registered as NR
+from verity_vllm.protocols.pouw.h1 import names as NM, registered as NR
+from verity_vllm.protocols.pouw.h1.words import ids_words
 
 #: the scheme H1's own Commit commits under, and its run root's bytes
 SCHEME, ROOT_BYTES = step_rows.NAME, 64
@@ -383,16 +384,14 @@ def reuse(window: Mapping[str, Any], layout: Mapping[str, Any], steps: int, key:
     registration, `registration`): round s's A table ``<prefix>a/<K>@<s>`` as `credit.commit_rows` of (s, K), and its
     input-ids table ``<prefix>ids@<s>`` as `credit.commit_ids` of s. Each holds the rows ``rows_of(name, rows, empty)``
     gives (the rows the circuit's proof blocks make of it, every other row ``empty``: zero codes of scale 0, an id
-    `served.EMPTY_ID`), salted as H1 salts W's (H1's ``key``, at the table's `served.nonce` or `served.IDS_NONCE` + s),
+    `words.EMPTY_ID`), salted as H1 salts W's (H1's ``key``, at the table's `names.nonce` or `names.IDS_NONCE` + s),
     under W's entry's domain. ValueError unless each is W's entry of it in root, leaves and words: the proof blocks don't
     make the table H1 committed, so the window's registration can't reuse it."""
-    from verity_vllm.protocols.pouw.h1 import served as SV
-
     k, m, _calls = shape(layout, steps)
     theirs = {e.get("value"): e for e in window.get("registered") or () if isinstance(e, Mapping)}
-    tables = [(CR.commit_rows(s, k), f"{SV.PREFIX}a/{k}@{s}", SV.nonce(cs[0], "a"), m * len(cs),
+    tables = [(CR.commit_rows(s, k), f"{NM.PREFIX}a/{k}@{s}", NM.nonce(cs[0], "a"), m * len(cs),
                np.zeros(k // 2 + 2, np.uint16)) for s, _k, cs in CR.step_tables(dict(layout), steps)]
-    tables += [(CR.commit_ids(s), f"{SV.PREFIX}ids@{s}", SV.IDS_NONCE + s, m, SV.ids_words([], 1)[0]) for s in range(steps)]
+    tables += [(CR.commit_ids(s), f"{NM.PREFIX}ids@{s}", NM.IDS_NONCE + s, m, ids_words([], 1)[0]) for s in range(steps)]
     out: dict[str, Reused] = {}
     for name, h1, nonce, n, empty in tables:
         e = theirs.get(h1)
