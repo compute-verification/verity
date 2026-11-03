@@ -8,6 +8,7 @@ from __future__ import annotations
 import io
 import json
 import math
+import os
 from pathlib import Path
 
 import numpy as np
@@ -195,3 +196,28 @@ def test_a_programs_last_step_ends_at_its_end(starts, update):
     with pytest.raises(CaptureRefused, match="the program ended after 2 steps, before step 2 ended"):
         script.record(PROGRAM, ["--batch", str(B), "--update", *update.split(), "--steps", "2"], step=2, starts=starts,
                       wall=[0.1] * 8, step_tokens=T)
+
+
+@pytest.mark.parametrize("tier", ["long", "search", None])
+def test_a_record_replays_at_the_tier_it_was_scored_at(starts, tmp_path, monkeypatch, tier):
+    """hybrid's 16:22Z LOOPHOLE: a scored run.json keeps its tier only at ``evaluation.budget.tier``, and a program that
+    plans its steps from prepare.budget (``--from-budget``: the search tier pays for 2 steps, the long tier for 200) runs
+    its own steps only at that tier. A long-tier record replays to step 2; at the search tier, or with no evaluation,
+    the program ends before it. CW_TIER is the environment's again after."""
+    monkeypatch.delenv("CW_TIER", raising=False)
+    run = {"steps": [{"wall_s": 0.1, "tokens": T, "matmul_macs": 0, "by": {}}] * 6, "tier": "search"}
+    if tier is not None:
+        run["evaluation"] = {"budget": {"tier": tier, "train_flops": 0.0}}
+    (tmp_path / "run.json").write_text(json.dumps(run))
+    argv = ["--script", str(PROGRAM), "--run", str(tmp_path / "run.json"), "--step", "2", "--starts", str(starts),
+            "--out", str(tmp_path / "out.json"), "--", "--batch", str(B), "--update", "inplace", "--steps", "6",
+            "--from-budget"]
+    assert script.tier_of(run) == tier
+    if tier == "long":
+        assert script.main(argv) == 0
+        out = json.loads((tmp_path / "out.json").read_text())
+        assert out["tier"] == "long" and out["updated_macs"] == T * FWD and out["cut_bits"] == 32 * VALUES
+    else:
+        with pytest.raises(CaptureRefused, match="the program ended after 2 steps, before step 2 ended"):
+            script.main(argv)
+    assert "CW_TIER" not in os.environ
