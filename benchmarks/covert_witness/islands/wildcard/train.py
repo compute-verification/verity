@@ -38,6 +38,8 @@ Codes (witnesses for the cut cost a, `adamw` / `muon`):
 - `--lora-rank r --lora-fix B --z-bits q`: a rank-r update whose B is r seeded orthonormal columns, so its whole effect
   on a token is r coefficients z = A·h, handed on (and their gradient back) at q bits each. `--lora-fix A` trains only
   B over a frozen random A.
+- `--ia3` with `--set` naming wk, wv and w_up: IA3, a trained scale per output channel of each matrix (keys, values
+  and MLP hidden units), E as encode_lora2's DoRA magnitudes over zero factors, which decode to exactly diag(l)·W.
 
 Its source rides in the submission's notes. Every method marks explicit harness steps (`hooks.step`), so it runs in the
 harness's script mode:
@@ -872,12 +874,48 @@ def add_adapters(net, theta: dict, params: dict, mats: list[str], gains: list[st
     return factors, rank
 
 
+def add_ia3(net, theta: dict, params: dict, mats: list[str]) -> dict:
+    """IA3 (Liu et al. 2022) on `mats`: each matrix's output channels times a trained fp32 scale l (from 1), W' =
+    diag(l)·W; on wk, wv and w_up that is IA3's keys, values and MLP hidden units. θ's matrices stay frozen."""
+    scales = {}
+    for n in mats:
+        params[n].requires_grad_(False)
+        params[n].data = theta[n].to(params[n].device).clone()
+        l = scales[n] = torch.nn.Parameter(torch.ones(theta[n].shape[0], device=prepare.DEVICE))
+
+        def hook(m, inp, out, l=l):
+            return (out.float() * l).to(out.dtype)
+        net.inner.get_submodule(n.removesuffix(".weight")).register_forward_hook(hook)
+    return scales
+
+
+def encode_ia3(theta: dict, scales: dict, full: dict) -> bytes:
+    """IA3's scales as CWLORA2 magnitudes: zero rank-1 factors, so lora_merge rescales θ's row i to norm l_i·|W_i|,
+    which is l_i·W_i; magnitudes and the gains carried in full are stored at fp32."""
+    fac, mags = {}, {}
+    for n, l in scales.items():
+        w = theta[n].float()
+        fac[n] = (torch.zeros(1, w.shape[1]), torch.zeros(w.shape[0], 1), 1.0)
+        mags[n] = l.detach().float().cpu() * torch.linalg.vector_norm(w, dim=1)
+    return prepare.encode_lora2(fac, 8, "f32", mags, full)
+
+
 def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
     fwd = fwd or net
     mats = [n for n in tuned if params[n].ndim == 2]
     gains = [n for n in tuned if params[n].ndim == 1]
-    opts, extra, factors = [], 0, {}
-    if a.lora_rank:
+    opts, extra, factors, scales = [], 0, {}, {}
+    if a.ia3:
+        if a.lora_rank or a.confine or GROWN or not mats:
+            raise SystemExit("wildcard: --ia3 scales the output channels of --set's matrices of θ; it takes no "
+                             "--lora-rank, --confine or --grow")
+        scales = add_ia3(net, theta, params, mats)
+        trainable = {"full": gains, "adapters": {n: 1 for n in mats}}
+        groups = [{"params": list(scales.values()), "lr": a.lr, "weight_decay": 0.0},
+                  {"params": [params[n] for n in gains], "lr": a.norm_lr}]
+        opts.append((torch.optim.AdamW([g for g in groups if g["params"]], betas=(0.9, a.beta2), weight_decay=a.wd,
+                                       fused=prepare.DEVICE.startswith("cuda")), None))
+    elif a.lora_rank:
         factors, a.lora_rank = add_adapters(net, theta, params, mats, gains, a.lora_rank, a.lora_fix, a.z_bits)
         trainable = {"full": gains, "adapters": {n: a.lora_rank for n in mats}}
         groups = [{"params": [p for A, B, _ in factors.values() for p in (A, B) if isinstance(p, torch.nn.Parameter)],
@@ -905,6 +943,8 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
     trained = [p for o, _ in opts for g in o.param_groups for p in g["params"]]
 
     def encode(src: dict) -> bytes:
+        if scales:
+            return encode_ia3(theta, scales, {n: src[n] for n in gains})
         if factors:
             return prepare.encode_lora(factors, "bf16", {n: src[n] for n in gains})
         if GROWN:
@@ -965,7 +1005,9 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
     if n_steps < 1:
         raise Skip(f"wildcard {a.method}: the budget leaves no step after the line search's reserve")
     base = [[g["lr"] for g in o.param_groups] for o, _ in opts]
-    if a.ema and factors:
+    if scales and a.extrapolate:
+        raise SystemExit("wildcard: --extrapolate moves θ's tensors or LoRA factors, not --ia3's scales")
+    if a.ema and (factors or scales):
         raise SystemExit("wildcard: --ema is for full-tensor sets")
     ema = {n: params[n].detach().clone() for n in tuned} if a.ema else None
     steps, snaps = [], []
@@ -1066,6 +1108,11 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
             print(json.dumps({"rcode": info["cuts"]["rcode"]}), flush=True)
     if a.z_bits:
         info["z_code"] = {"bits": a.z_bits, "rank": a.lora_rank, "a_bits_per_direction": a.lora_rank * a.z_bits + 16}
+    if scales:
+        info["ia3"] = {"scales": {n: int(l.numel()) for n, l in scales.items()},
+                       "values": int(sum(l.numel() for l in scales.values())),
+                       "scale_range": [float(min(l.min() for l in scales.values())),
+                                       float(max(l.max() for l in scales.values()))]}
     if alphas:
         info["alpha"], info["line_search"] = extrapolate(a, fwd, data, steps, theta, params, ema, tuned, factors, alphas)
     return encode(ema if ema is not None else params), trainable, steps, snaps, info
@@ -1436,6 +1483,9 @@ def main() -> int:
     ap.add_argument("--lora-fix", default="", choices=("", "A", "B"),
                     help="freeze the adapters' A (random) or B (seeded orthonormal, A = 0 trained)")
     ap.add_argument("--z-bits", type=int, default=0, help="with --lora-fix B: hand z = A·h on at this many bits per coefficient")
+    ap.add_argument("--ia3", action="store_true",
+                    help="IA3: train a scale per output channel of each --set matrix (W' = diag(l)·W; IA3 proper is "
+                         "wk, wv and w_up), E = encode_lora2's magnitudes (add_ia3)")
     ap.add_argument("--cut", default="", help="B:[d]q<bits>[m][e|r][p<keep>][o<k>][b<bits>[s|e]][g<group>],...: block "
                                             "boundaries handed on coded (parse_cut)")
     ap.add_argument("--grow", type=int, default=0,
