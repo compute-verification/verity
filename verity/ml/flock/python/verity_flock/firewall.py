@@ -326,16 +326,16 @@ class Firewall:
             yield None if why is None else refused(why)
 
     def _open_line(self) -> str | None:
-        """The record's last line, if it has no newline yet (a writer ended inside its append): a line appended joins it."""
-        try:
-            with open(self._log, "rb") as f:
-                end = f.seek(0, os.SEEK_END)
-                if end == 0 or (f.seek(end - 1), f.read(1))[1] == b"\n":
-                    return None
-                f.seek(0)
-                data = f.read()
-        except FileNotFoundError:
+        """The record's last line, if it has no newline yet (a writer ended inside its append): a line appended joins it.
+        Read under ``record.lock``, so no writer creates the record meanwhile."""
+        if not self._log.exists():
             return None
+        with open(self._log, "rb") as f:
+            end = f.seek(0, os.SEEK_END)
+            if end == 0 or (f.seek(end - 1), f.read(1))[1] == b"\n":
+                return None
+            f.seek(0)
+            data = f.read()
         return data[data.rfind(b"\n") + 1:].decode(_ENCODING, "replace")
 
     @contextmanager
