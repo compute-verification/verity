@@ -2,7 +2,7 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 
 ## Advice v0 (`advice`)
 
-Network accounting for arbitrary vLLM usage runs a precommitted AOT compiler. It takes an **advice** string, which
+Network certification for arbitrary vLLM usage runs a precommitted AOT compiler. It takes an **advice** string, which
 encodes everything serving made unpredictable, and compiles each engine step's circuit from it. The certifier
 certifies the I/O, and sampled proofs hold the committed values to the compiled circuits and to the certified I/O. v0 is
 the interface the compiler, the encoders and the tie to the certified I/O code against; its schema id is

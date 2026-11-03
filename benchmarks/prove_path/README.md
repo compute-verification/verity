@@ -1,6 +1,6 @@
 # Prove path
 
-Network accounting under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
+Network certification under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
 the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof system samples
 units on live coins, proves them with Flock `--zk` behind the Lean ZK server, and the Lean verifier accepts or refuses them.
 `prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
