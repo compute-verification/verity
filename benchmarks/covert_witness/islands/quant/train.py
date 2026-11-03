@@ -16,8 +16,8 @@ Modes:
   nearest (one scale a vector), instead of in full.
   `--qat fp` trains the weights unquantized, as ptq does;
 - in either, `--grad-code sign` passes each micro-batch's gradient of the trained matrices as a bool plane of signs and
-  one f16 scale a row (its mean |g|), decoded and summed before Muon, with no error feedback, so Δ_g is about 1 bit a
-  weight;
+  one f16 scale a row (its mean |g|), and `--grad-code rtn{b}` as b-bit codes packed 8/b a byte at one f16 scale a row
+  (its absmax), decoded and summed before Muon, with no error feedback, so Δ_g is about 1 or b bits a weight;
 - `qlora`: LoRA whose factors are k-bit in every forward (straight-through), E their codes.
 
 `--arms` (qat, qlora) packs settings into one candidate: each arm trains from θ on the same data order with an equal
@@ -242,29 +242,46 @@ def select(params: dict, rec: dict, spec: str) -> list[str]:
 
 
 def delta_grad(adam: int, muon: int, latent: int, stateless: int = 0, coded: int | None = None,
-               partials: int = 1) -> dict:
+               partials: int = 1, code: str = "fp32") -> dict:
     """Δ_grad in islands/lowrank's keys: the fp32 gradient of each of the `adam` + `muon` + `stateless` trained values and
     its optimizer's fp32 state (AdamW's m and v, Muon's one buffer, none for `--opt sign`); `bits`/`bytes` are their sum.
     `latent_bits`, beside it and not in `bits`, are the fp32 latents a straight-through run reads and writes (the update
-    application's Δ_t). With `--grad-code sign` the Muon matrices' gradient passes as `coded` bits a partial (`partials`
-    a step) in place of 32 an entry."""
+    application's Δ_t). With a `--grad-code` the Muon matrices' gradient passes as `coded` bits a partial (`partials` a
+    step) in place of 32 an entry."""
     n = adam + muon + stateless
     grad = 32 * n if coded is None else 32 * (adam + stateless) + coded
     bits = grad + 64 * adam + 32 * muon
     return {"trainable": n, "grad_bits": grad, "adam_bits": 64 * adam, "muon_bits": 32 * muon,
             "latent_bits": 32 * latent, "bits": bits, "bytes": bits // 8} | (
-        {} if coded is None else {"grad_code": "sign", "partials": partials})
+        {} if coded is None else {"grad_code": code, "partials": partials})
 
 
-def sign_code(g: torch.Tensor) -> torch.Tensor:
-    """`--grad-code sign`: one partial's gradient of a matrix as it passes, a bool plane of signs and one f16 scale a row
-    (the row's mean |g|), decoded. No error feedback: a residual carried to the next step would pass at full width."""
-    s = g.abs().mean(1, keepdim=True).half()
-    return torch.where(g >= 0, s, -s).to(g.dtype)
+GRAD_CODES = ("fp32", "sign", "rtn2", "rtn4", "rtn8")
 
 
-def code_bits(shape: tuple) -> int:
-    return shape[0] * shape[1] + 16 * shape[0]
+def grad_code(g: torch.Tensor, code: str) -> torch.Tensor:
+    """`--grad-code`: one partial's gradient of a matrix as it passes, decoded. `sign`: a bool plane of signs and one f16
+    scale a row (the row's mean |g|). `rtn{b}`: b-bit round to nearest at one f16 scale a row (its absmax over
+    2^(b-1) - 1), packed 8/b codes a byte. No error feedback: a residual carried to the next step would pass at full
+    width."""
+    if code == "sign":
+        s = g.abs().mean(1, keepdim=True).half()
+        return torch.where(g >= 0, s, -s).to(g.dtype)
+    b = int(code[3:])
+    qmax, per = 2 ** (b - 1) - 1, 8 // b
+    s = (g.abs().amax(1, keepdim=True) / qmax).half().float()
+    k = (torch.clamp(torch.round(g / torch.where(s > 0, s, 1.0)), -qmax, qmax) + qmax).to(torch.uint8)
+    kk = k.view(k.shape[0], -1, per)
+    packed = kk[..., 0]
+    for i in range(1, per):
+        packed = packed | (kk[..., i] << (b * i))
+    mask = 2 ** b - 1
+    un = torch.stack([(packed >> (b * i)) & mask for i in range(per)], -1).view_as(k)
+    return ((un.float() - qmax) * s).to(g.dtype)
+
+
+def code_bits(shape: tuple, code: str) -> int:
+    return (1 if code == "sign" else int(code[3:])) * shape[0] * shape[1] + 16 * shape[0]
 
 
 def vote_delta_grad(n: int, bits: int, partials: int) -> dict:
@@ -941,9 +958,10 @@ def main() -> int:
     ap.add_argument("--vote-carry", action="store_true",
                     help="--opt vote: keep a value's votes across steps until it moves (int16 state), so the margin "
                          "counts every partial since its last move")
-    ap.add_argument("--grad-code", choices=("fp32", "sign"), default="fp32",
-                    help="the Muon matrices' gradient as each micro-batch's partial passes it: fp32, or sign (a bool "
-                         "plane and one f16 scale a row, decoded and summed before Muon; no error feedback)")
+    ap.add_argument("--grad-code", choices=GRAD_CODES, default="fp32",
+                    help="the Muon matrices' gradient as each micro-batch's partial passes it, decoded and summed "
+                         "before Muon, with no error feedback: fp32, sign (a bool plane and one f16 scale a row), or "
+                         "rtn{b} (b-bit round to nearest at one f16 scale a row, packed 8/b a byte)")
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--decay-frac", type=float, default=1.0,
                     help="the rate is flat after the warmup and decays to 0 (--decay-shape) over this last share of an "
@@ -1038,8 +1056,10 @@ def main() -> int:
         if vote and not (coded and ((not mats and x.qat_norm_bits) or (mats and not rest and x.qat != "sign"))):
             raise SystemExit("quant: --opt vote steps codes: vectors only (--train norm --qat-norm-bits B), or matrices "
                              "only (--qat sparse|tern|rtnB, on every --qat-keep-th entry's strided support)")
-        if x.grad_code == "sign" and (vote or not mats):
-            raise SystemExit("quant: --grad-code sign codes the Muon matrices' gradient (not --opt vote's)")
+        if x.grad_code != "fp32" and (vote or not mats):
+            raise SystemExit("quant: --grad-code codes the Muon matrices' gradient (not --opt vote's)")
+        if x.grad_code.startswith("rtn") and any(params[n].shape[1] % (8 // int(x.grad_code[3:])) for n in mats):
+            raise SystemExit(f"quant: --grad-code {x.grad_code} packs a row's codes a byte at a time")
         vbits = x.qat_norm_bits if not mats else qat_bits(x.qat) if coded else 0
         # matrices vote per sequence from one backward (SampleVotes), with their weights out of autograd
         sample = vote and bool(mats)
@@ -1057,8 +1077,8 @@ def main() -> int:
                                       params[n], support_grads(go, xin, blk[n])))
         latent = {} if vote else {n: torch.zeros_like(params[n], dtype=torch.float32, device=dev) for n in quantized}
         n_rest, n_mats, n_q = (sum(params[n].numel() for n in ns) for ns in (rest, mats, quantized))
-        gcode = {"coded": sum(code_bits(tuple(params[n].shape)) for n in mats),
-                 "partials": -(-a.batch // a.micro)} if x.grad_code == "sign" else {}
+        gcode = {"coded": sum(code_bits(tuple(params[n].shape), x.grad_code) for n in mats),
+                 "partials": -(-a.batch // a.micro), "code": x.grad_code} if x.grad_code != "fp32" else {}
         dgrad = (vote_delta_grad(sum(voter.state[params[n]]["code"].numel() for n in quantized), 8,
                                  a.batch if sample else -(-a.batch // a.micro)) if vote else
                  delta_grad(0, n_mats, n_q, n_rest, **gcode) if x.opt == "sign" else
@@ -1116,10 +1136,10 @@ def main() -> int:
                     len(xb) / a.batch)
                 loss.backward()
                 total += loss.detach()
-                if x.grad_code == "sign":
+                if x.grad_code != "fp32":
                     with torch.no_grad():
                         for n in mats:
-                            c = sign_code(params[n].grad)
+                            c = grad_code(params[n].grad, x.grad_code)
                             passed[n] = c if n not in passed else passed[n] + c
                             params[n].grad = None
             for n, c in passed.items():
