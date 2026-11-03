@@ -34,9 +34,9 @@ Codes (witnesses for the cut cost a, `adamw` / `muon`):
   out to the loss, so the uncoded model the evaluator scores stays near the coded one (a statistic of the uncoded
   effect, so a trace then sees the uncoded state). `--confine` instead projects each trained wo and w_down's update
   onto the cut's span after every step, which puts the whole effect in the span when everything trained is in the
-  block below the cut and that block is new (`--grow n`: n zero-output top blocks, E the grown model) or trains
-  w_down alone; it refuses any other set (an existing block's trained wo reaches its MLP, whose frozen w_down maps
-  that change out of the span).
+  block below the cut and that block is new (`--grow n`: n zero-output top blocks, copies of θ's with `--grow-copy`, E
+  the grown model) or trains w_down alone; it refuses any other set (an existing block's trained wo reaches its MLP,
+  whose frozen w_down maps that change out of the span).
 - `--lora-rank r --lora-fix B --z-bits q`: a rank-r update whose B is r seeded orthonormal columns, so its whole effect
   on a token is r coefficients z = A·h, handed on (and their gradient back) at q bits each. `--lora-fix A` trains only
   B over a frozen random A.
@@ -682,12 +682,13 @@ def frozen_blocks(net, theta: dict, lo: int, hi: int) -> dict:
 GROWN: dict = {}
 
 
-def grow(net, rec: dict, theta: dict, n: int, seed: int, adapter: int = 0) -> tuple[dict, dict]:
-    """θ's model grown in place by n new top blocks, each in model.py's own init with its output matrices (wo, w_down)
-    zeroed in place, so the grown model computes θ's function and θ's tensors are never rewritten: (the grown model's
-    record, its starting tensors, θ's and the new blocks'). With `adapter` r the new block is a bottleneck adapter: its
-    attention's matrices are all zero (so it adds nothing) and only the first r of its MLP's hidden units are live
-    (w_gate's and w_up's other rows zero, and train_iterative keeps them and w_down's other columns at zero)."""
+def grow(net, rec: dict, theta: dict, n: int, seed: int, adapter: int = 0, copy: bool = False) -> tuple[dict, dict]:
+    """θ's model grown in place by n new top blocks, each in model.py's own init (`copy`: new block i a copy of θ's block
+    ⌊iL/n⌋, stacking growth) with its output matrices (wo, w_down) zeroed in place, so the grown model computes θ's
+    function and θ's tensors are never rewritten: (the grown model's record, its starting tensors, θ's and the new
+    blocks'). With `adapter` r the new block is a bottleneck adapter: its attention's matrices are all zero (so it adds
+    nothing) and only the first r of its MLP's hidden units are live (w_gate's and w_up's other rows zero, and
+    bottleneck runs it on the live slices alone)."""
     from model import Block
 
     L = rec["config"]["n_layer"]
@@ -695,7 +696,11 @@ def grow(net, rec: dict, theta: dict, n: int, seed: int, adapter: int = 0) -> tu
     with torch.device(prepare.DEVICE):
         new = [Block(net.inner.size, 0.02, 0.02) for _ in range(n)]
     with torch.no_grad():
-        for blk in new:
+        for i, blk in enumerate(new):
+            if copy:
+                src = f"blocks.{i * L // n}."
+                for k, p in blk.named_parameters():
+                    p.copy_(theta[src + k])
             blk.wo.weight.zero_()
             blk.w_down.weight.zero_()
             if adapter:
@@ -1599,6 +1604,9 @@ def main() -> int:
     ap.add_argument("--grow", type=int, default=0,
                     help="train a model of θ's plus this many new top blocks (zero output matrices, so θ's function at "
                          "the start); E is the grown model (`encode_model`)")
+    ap.add_argument("--grow-copy", action="store_true",
+                    help="with --grow n: new block i starts as a copy of θ's block ⌊iL/n⌋ (stacking growth), its wo and "
+                         "w_down still zeroed")
     ap.add_argument("--adapter", type=int, default=0,
                     help="with --grow 1: the new block is a bottleneck adapter of this many live MLP hidden units "
                          "(attention all zero; train its mlp_norm, w_gate, w_up and w_down)")
@@ -1667,6 +1675,8 @@ def main() -> int:
         raise SystemExit("wildcard: --adapter-z codes an --adapter's live units, r a multiple of 8 (whole bytes)")
     if a.block_adapter_z and (not a.block_adapter or a.block_adapter % 8):
         raise SystemExit("wildcard: --block-adapter-z codes a --block-adapter's units, r a multiple of 8 (whole bytes)")
+    if a.grow_copy and (not a.grow or a.adapter):
+        raise SystemExit("wildcard: --grow-copy starts --grow's new blocks as copies of θ's (not an --adapter)")
     if a.z_rotate and not (a.adapter_z or a.block_adapter_z):
         raise SystemExit("wildcard: --z-rotate rotates an --adapter-z or --block-adapter-z code")
     ext = {k: n for k, n in (("prefix", a.prefix), ("adapter", a.block_adapter)) if n}
@@ -1674,7 +1684,7 @@ def main() -> int:
         raise SystemExit("wildcard: --prefix and --block-adapter are each their own update (no --grow, --lora-rank, "
                          "--ia3, --suite or the other)")
     if a.grow:
-        rec, theta = grow(net, rec, start_theta, a.grow, 7919 + a.data_seed, a.adapter)
+        rec, theta = grow(net, rec, start_theta, a.grow, 7919 + a.data_seed, a.adapter, a.grow_copy)
     for key, n in ext.items():
         rec, theta = extend(net, rec, start_theta, key, n, 7919 + a.data_seed)
     params = net.params()
