@@ -729,7 +729,8 @@ HD = load("pearl_c_hash_decode_test", Path(__file__).with_name("test_pearl_c_has
 
 class TwinDev(RecordingDev):
     """`RecordingDev` that also runs each hash kernel `simt_twin` builds, thread for thread, and hash_decode.cuh's (`pd`, its
-    host build, with the header tables hash_fast.cuh's s512_heads writes there too), at the addresses the pipeline passes: the
+    host build, with the header tables hash_fast.cuh's s512_heads writes there too, and in hash_prefill.cuh's build chain
+    "pl"'s), at the addresses the pipeline passes: the
     run's buffers are CPU tensors, so the trees are really computed.  The GEMMs, forming and seed_line_a don't run."""
 
     def __init__(self, pd):
@@ -745,7 +746,7 @@ class TwinDev(RecordingDev):
             for j, v in enumerate(i):
                 a.i[j] = v
             getattr(TWIN.build(), f"run_{name}")(ctypes.byref(a), grid, block, smem)
-        if name.startswith("pd_") or name == "s512_heads":
+        if name.startswith(("pd_", "pl_")) or name == "s512_heads":
             a = R.Args()
             for j, v in enumerate(p):
                 a.p[j] = v
@@ -2377,9 +2378,12 @@ def test_each_device_records_kernels_refuse_their_own_grain():
 
 # ---- the schedule as data ---------------------------------------------------------------------------------------------
 
-#: pearl_c_sm90's pipeline (pearl-c-h100-v1-h3's), whose decode calls split A's commitment (`run.Pipeline.FUSED`'s tree_seed_a)
+#: pearl_c_sm90's pipeline (pearl-c-h100-v1-h3's), whose calls split A's commitment (`run.Pipeline.FUSED`'s tree_seed_a,
+#: past pd's rows `FUSED_GENERIC`'s)
 R90 = load("pearl_c_sm90_run", KERNEL.parent / "pearl_c_sm90" / "run.py")
 F90 = load("pearl_c_sm90_fixture", KERNEL.parent / "pearl_c_sm90" / "fixture.py")
+#: hash_prefill.cuh's host build (`build`), with chain "pl"'s kernels beside hash_decode.cuh's
+P90 = load("pearl_c_sm90_prefill_test", Path(__file__).with_name("test_pearl_c_sm90_prefill.py"))
 H100_SCHEME = "pearl-c-h100-v1-h3"
 
 
@@ -2638,6 +2642,32 @@ def test_deferred_a_runs_as_tree_aside_only_where_the_call_keeps_its_step(sm90_r
     assert seen == [(0, (0, 0), False), (1, (1, 1), True), (2, (1, 1), True)]
 
 
+def test_deferred_a_at_a_prefills_rows_runs_as_tree_aside_over_chain_pl(sm90_run):
+    """Past pd's rows (m₁₆ = 304, a prefill's), sm_90a's pipeline splits A's commitment over chain "pl"'s launches
+    (`run.Pipeline.FUSED_GENERIC`), as sm_120's over its generic kernels: the main lane runs ``rows_a`` (A's pads, the row
+    digests, the row seeds and the real rows' E_A lines, keyed per row and reading no line_a) and never A's level 0, and
+    from a full tile of rows the side lane after the call's runs A's level 0, its levels and seed_A."""
+    make, kernel, weights, _ = sm90_run
+    run = make()
+    sh = run._shape(304, 256, 1024)
+    pipe, _, _ = run._pipe(0, sh)
+    assert pipe.pd is None and pipe.pl and pipe.split_a and not pipe.fillers and "a_tree" in run._side_groups(sh)
+    assert pipe.FUSED == {**R90.Pipeline.FUSED, **R90.Pipeline.FUSED_GENERIC}
+    kernel.dev.log.clear()
+    run.gemm(0, torch.randn(300, 1024).to(torch.bfloat16), weights[0], None)
+    log = [(n, st, p, i) for n, st, p, i in kernel.dev.log if not n.endswith("_smem")]
+    sides = [lane.raw for lane in run.sides]
+    main = [n for n, st, _, _ in log if st not in sides]
+    v = R90.PL_VARIANT
+    assert main[:5] == ["s512_pads", "s512_row_segs", "s512_folds", f"pl_seeds_{v}", "lines"] and main.count("lines") == 1
+    assert not {f"pl_leaves_{v}", f"pl_levels_{v}", f"pl_seed_a_{v}"} & set(main) and "gemm_pearlc_d" in main
+    levels = -(-(R90.pow2(304).bit_length() - 1) // R90.PL_LEVELS)
+    tree = [f"pl_leaves_{v}"] + [f"pl_levels_{v}"] * levels + [f"pl_seed_a_{v}"]
+    assert [n for n, st, _, _ in log if st == sides[1]][:len(tree)] == tree
+    (lines,) = [(p, i) for n, _, p, i in log if n == "lines"]
+    assert lines[0][0] == 0 and lines[1] == (0, 0, 304, R90.NORM_256, 304)
+
+
 class H100TwinDev(TwinDev):
     """`TwinDev` with an H100's 132 SMs and opt-in shared memory, for pearl_c_sm90's pipeline."""
 
@@ -2691,22 +2721,26 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
 
 @pytest.mark.slow
 @pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")
-def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_path):
-    """Past pd's rows (a prefill's: A's commitment split over the generic kernels, `run.Pipeline.FUSED_GENERIC`), two calls
-    of each shape in a pass under ``deferred-a`` take the ring's two sets, each call's A tree under its own set's keys, and
-    the pass commits what the serial one commits (`TwinDev`: the trees computed on the host): the records root, the
-    commitment and each call's A root, beside a pd call."""
-    pd = HD.build(tmp_path)
+@pytest.mark.parametrize("arch", ["sm90", "sm120"])
+def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_path, arch):
+    """Past pd's rows (a prefill's: A's commitment split over the generic kernels, `run.Pipeline.FUSED_GENERIC`, on sm_90a
+    over chain "pl"'s), two calls of each shape in a pass under ``deferred-a`` take the ring's two sets, each call's A tree
+    under its own set's keys, and the pass commits what the serial one commits (`H100TwinDev` over hash_prefill.cuh's host
+    build, or `TwinDev`: the trees computed on the host): the records root, the commitment and each call's A root, beside
+    a pd call."""
+    pd = P90.build(tmp_path) if arch == "sm90" else HD.build(tmp_path)
     rng = np.random.default_rng(29)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     xs = [(w, torch.from_numpy(bf16_words(rng, m, 1024).view(np.float32).copy()).to(torch.bfloat16))
           for w, m in ((0, 300), (1, 290), (0, 300), (1, 20), (1, 290))]
-    kernel = PPD.Kernel(R, F, TwinDev(pd), "0" * 64)
-    roots = PPD.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
+    scheme = H100_SCHEME if arch == "sm90" else SCHEME
+    kernel = (PPD.Kernel(R90, F90, H100TwinDev(pd), "0" * 64) if arch == "sm90" else
+              PPD.Kernel(R, F, TwinDev(pd), "0" * 64))
+    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
     got = {}
     for schedule in ("serial", "deferred-a"):
-        run = PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *salt_coin(roots),
+        run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots),
                                   capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
         run.begin(retain=str(tmp_path / schedule), run=RUN)
         for w, x in xs:
