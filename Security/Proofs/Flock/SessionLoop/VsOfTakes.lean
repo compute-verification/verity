@@ -35,7 +35,7 @@ theorem locate_fst_mono : ∀ (rs : List ℕ) (k i i' : ℕ), i ≤ i' →
   | [], _, _, _, _ => Nat.le_refl _
   | c :: cs, k, i, i', h => by
     by_cases h1 : i' < c
-    · rw [locate_cons_lt h1, locate_cons_lt (Nat.lt_of_le_of_lt h h1)] <;> exact Nat.le_refl _
+    · rw [locate_cons_lt h1, locate_cons_lt (Nat.lt_of_le_of_lt h h1)]
     · rw [locate_cons_ge h1]
       by_cases h2 : i < c
       · rw [locate_cons_lt h2]
@@ -84,7 +84,9 @@ theorem check_pos_eq {c : Cfg} {m : Masker} {r : ByteArray} {n : ℕ} {st₁ st�
     (h₂ : _root_.Flock.Firewall.Frame.check c { m with stopped := st₂ } v₂ r n = .ok (o₂, s₂, w₂)) :
     s₁.pos = s₂.pos := by
   obtain ⟨⟨o, t, f⟩, hr⟩ := hr
-  exact congrArg Masker.pos ((Free.check_unstop hr h₁).trans (Free.check_unstop hr h₂).symm)
+  have e : unstop s₁ = unstop s₂ := (Free.check_unstop hr h₁).trans (Free.check_unstop hr h₂).symm
+  show (unstop s₁).pos = (unstop s₂).pos
+  exact congrArg Masker.pos e
 
 theorem bind_const_ok {ε α β : Type} {e : Except ε α} {f : Except ε β} {b : β} (h : (e >>= fun _ => f) = .ok b) :
     f = .ok b := by
@@ -125,7 +127,8 @@ theorem absorbed_lt_hab (l : _root_.Flock.Zk.PadLayout) {P : ℕ} (h : P < (abso
 theorem tail_snoc_take {α : Type} (e0 : Msg × Msg) (ops : List (Msg × Msg)) {q : ℕ} (hq : q < ops.length) (o : Msg)
     (f : Msg → α) :
     ((e0 :: ops.take q) ++ [(o, ops[q].2)]).tail.map (fun p => f p.2) = (ops.take (q + 1)).map (fun p => f p.2) := by
-  rw [List.cons_append, List.tail_cons, ← List.take_append_getElem hq, List.map_append, List.map_append] <;> rfl
+  rw [List.cons_append, List.tail_cons, ← List.take_append_getElem hq, List.map_append, List.map_append]
+  rfl
 
 /-- **The frame takes the coins after two histories with the same answers alike**: the loop's frame reads the history
 past `Hello` only through the decoded coins. -/
@@ -177,7 +180,8 @@ theorem step_pos {W R : Type} {L : LeanRelease W R} {x : Msg} {w : W} (hP : L.Pr
   obtain ⟨v', st, s'', why, hc', hp⟩ := hP ρ h a m out hA hk ⟨v, s', none, hc⟩
   unfold LeanRelease.checkAt at hc hc'
   obtain ⟨q, hq, -⟩ := passes_none (check_none_passes hc)
-  exact (congrArg Masker.pos hp).trans (check_pos_eq ⟨q, hq⟩ hc' hc)
+  have e : (L.prog x (h ++ [(0 :: out.data.toList, a)])).pos = s''.pos := (congrArg Masker.pos hp).trans rfl
+  exact e.trans (check_pos_eq ⟨q, hq⟩ hc' hc)
 
 /-- **Where the frame takes the coins, the next round's rep starts**: at a rep's first round the frame's fresh state,
 past it the rep's own (`ofLoop_start_at`). -/
@@ -204,8 +208,10 @@ theorem start_of_answered (T : CoinLayer.TableData)
           rw [decide_eq_false_iff_not]
           intro he
           obtain ⟨q', rfl⟩ : ∃ q', q = q' + 1 := ⟨q - 1, by simp only [List.length_cons, hq] at h2; omega⟩
-          have e1 : (e0 :: h1).length - 1 = q' + 2 := by simp only [List.length_cons, hq] <;> omega
-          have e2 : (e0 :: h1).length = q' + 1 + 2 := by simp only [List.length_cons, hq] <;> omega
+          have e1 : (e0 :: h1).length - 1 = q' + 2 := by
+            simp only [List.length_cons, hq]
+            omega
+          have e2 : (e0 :: h1).length = q' + 1 + 2 := by simp only [List.length_cons, hq]
           rw [e1, e2, LeanRelease.repOf_add_two hx, LeanRelease.repOf_add_two hx] at he
           exact locate_snd_ne_zero _ 0 q' (q' + 1) (Nat.lt_succ_self _) he.symm hsn
         rw [ite_eq_right h2, hs, ite_eq_right Bool.false_ne_true] at hF
@@ -527,12 +533,14 @@ theorem takesVals_vsOf
     rcases le_total (Classical.choose hex) ops.length with h | h
     · exact freedAt_unique
         (LeanRelease.withFiles (LeanRelease.withLink (LeanRelease.withInner Masked.dataE L₁ real fin) src) src) real
-        hP bx hH h (by rw [List.length_ofFn]; omega) hc hF
+        hP bx hH h (Nat.le_of_lt (Nat.lt_of_lt_of_eq hlt List.length_ofFn.symm)) hc hF
     · exact (freedAt_unique
         (LeanRelease.withFiles (LeanRelease.withLink (LeanRelease.withInner Masked.dataE L₁ real fin) src) src) real
-        hP bx hH h (by rw [List.length_ofFn]; omega) hF hc).symm
-  rw [hord.1, vsWord_vsOf _ bx x w ν _ t j r hiE, ite_eq_right hab.2]
-  exact (vsOfWord_of_free _ bx _ _ _ hfw).symm
+        hP bx hH h (Nat.le_of_lt (Nat.lt_of_lt_of_eq hn List.length_ofFn.symm)) hF hc).symm
+  rw [hord.1]
+  refine Eq.symm ((vsWord_vsOf _ bx x w ν _ t j r hiE).trans ?_)
+  rw [ite_eq_right hab.2]
+  exact vsOfWord_of_free _ bx _ _ _ hfw
 
 end Loop
 
