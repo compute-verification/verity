@@ -12,6 +12,7 @@ public import Proofs.Properties.SampledProofs
 public import Proofs.Nci.CompliesCK
 public import Proofs.Core.Expand
 public import Std.Data.TreeMap.Raw.Lemmas
+import all Lean.Data.Json.Basic
 
 /-!
 # Remote's acceptance and the inference-only policy, proved

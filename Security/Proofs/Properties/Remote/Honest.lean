@@ -2,6 +2,8 @@ module
 
 public import Proofs.Properties.Remote
 public import Proofs.Flock.Claims.Complete.Json.Hex
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # Remote's tie on an honest run: one record, one digest
@@ -26,7 +28,7 @@ private theorem toUTF8_of_fromUTF8? {b : ByteArray} {s : String} (h : String.fro
     s.toUTF8 = b := by
   unfold String.fromUTF8? at h
   split at h
-  · cases h; rfl
+  · cases h; exact String.toUTF8_eq_toByteArray
   · cases h
 
 /-- Canonical bytes are their record's canonical text. -/
