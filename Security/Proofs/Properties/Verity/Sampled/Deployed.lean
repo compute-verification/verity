@@ -80,8 +80,8 @@ private abbrev dW : Draw.UnitDraw := { law := .work K ws, population := pop, uni
 
 private theorem dW_toJson : (dW K pop ws us).toJson = Json.mkObj [("law", Json.str "work"),
     ("population", Lean.toJson pop), ("k", Lean.toJson K), ("strata", Json.arr (ws.map (·.toJson))),
-    ("units", Json.arr (us.map fun x => Lean.toJson x))] := by
-  first | rfl | simp [Draw.UnitDraw.toJson]
+    ("units", Json.arr (us.map fun x => Lean.toJson x))] :=
+  rfl
 
 private theorem work_population : (dW K pop ws us).toJson.getObjVal? "population" = .ok (Lean.toJson pop) := by
   rw [dW_toJson]; exact getObjVal?_mkObj (by simp) (by simp)
