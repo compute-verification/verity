@@ -604,7 +604,8 @@ def _one_hot(ctx, node, t: Coll, M: int, V: int) -> Coll:
 
 class NllLossBackward(_TrainRule):
     """`nll_loss_backward(go, logp[M,V], target, None, mean, ignore_index, total_weight)` = `-(go / total_weight)` at each row's target,
-    +0 elsewhere and on ignored rows (`F32Div_v1`, `F32Neg_v1`, a one-hot of `I32Eq_v1`, `SelectF32_v1`)."""
+    +0 elsewhere and on the rows whose target is `ignore_index` (`F32Div_v1`, `F32Neg_v1`; per row the gradient or +0 by
+    `I32Eq_v1` against `ignore_index`, as `NllLossForward` masks its rows; a one-hot of `I32Eq_v1`; `SelectF32_v1`)."""
     info = _info("NllLossBackward", "aten.nll_loss_backward, mean reduction, no weights", "go and total_weight are 0-d f32",
                  "an out-of-range target selects nothing (torch raises)")
 
@@ -621,10 +622,13 @@ class NllLossBackward(_TrainRule):
         M, V = _shape(ctx, logp)
         g = _call(ctx, node, SC.F32Neg, _call(ctx, node, P.F32Div, _operand(ctx, node, go, ())[0], _operand(ctx, node, tw, ())[0]))
         t = _tokens(ctx, node, target)
+        zero = _const(ctx, node, 0)
+        ign = _batch(ctx, node, SC.I32Eq, t, _const(ctx, node, ignore & 0xFFFFFFFF), axes=(0, None))
+        row = _batch(ctx, node, SC.SelectF32, ign, zero, g, axes=(0, None, None))
         hot = _one_hot(ctx, node, t, M, V)
-        out = _batch(ctx, node, SC.SelectF32, hot, g, _const(ctx, node, 0), axes=(0, None, None))
+        out = _batch(ctx, node, SC.SelectF32, hot, _per_row(row, M, V), zero, axes=(0, 0, None))
         ctx.define(node, out.reshape(_tensor_type([M, V], 32)))
-        ctx.record(self, node, {"M": M, "V": V, "ignore_index": ignore}, emitted=f"I32Eq_v1 + SelectF32_v1 x{M * V}")
+        ctx.record(self, node, {"M": M, "V": V, "ignore_index": ignore}, emitted=f"I32Eq_v1 + SelectF32_v1 x{M * (V + 1)}")
 
 
 class EmbeddingDenseBackward(_TrainRule):
