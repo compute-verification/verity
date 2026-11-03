@@ -214,26 +214,23 @@ def strata(program: Program, query: Mapping[str, Any]) -> list[tuple[str, list[l
     return list(groups.items())
 
 
-def unit_gates(program: Program, query: Mapping[str, Any]) -> list[list[tuple[int, int]]]:
-    """Each proof block's root gates, by proof block, as ascending, disjoint intervals `[lo, hi)` with adjacent ones merged: an
-    instance's (`TemplatePartition.gates`), a `Q_call` proof block's interval (`CallPartition.gates`), or exactly the computing
-    gates a `Q_word` proof block owns, which another proof block's gates may interleave."""
+def unit_gates(program: Program, query: Mapping[str, Any]) -> list[tuple[int, int]]:
+    """Each proof block's root gates `[lo, hi)`, by proof block: an instance's (`TemplatePartition.gates`), a `Q_call` proof block's interval
+    (`CallPartition.gates`), or the span of the computing gates a `Q_word` proof block owns, from the least to past the greatest,
+    which another proof block's gates may interleave."""
     part = evaluate(program, query)
     if not isinstance(part, PO.Partition):
-        return [[part.gates(u)] for u in range(part.population)]
-    out: list[list[tuple[int, int]]] = []
+        return [part.gates(u) for u in range(part.population)]
+    out: list[tuple[int, int]] = []
     offsets = program.root.body.offsets
     for p, (k, c) in enumerate(part.calls):
-        keep, own = part.graph(p).keep, [[] for _ in range(c.units)]
+        keep, span = part.graph(p).keep, [None] * c.units
         for i, u in enumerate(c.owner()):
             g = offsets[k] + keep[i]
-            if own[u] and own[u][-1][1] == g:
-                own[u][-1] = (own[u][-1][0], g + 1)
-            else:
-                own[u].append((g, g + 1))
-        if not all(own):
+            span[u] = (g, g + 1) if span[u] is None else (min(span[u][0], g), max(span[u][1], g + 1))
+        if None in span:
             raise QueryRefused(f"a unit of {descriptor_id(c.fn)} owns no gate", {"definition": descriptor_id(c.fn)})
-        out += own
+        out += span
     return out
 
 

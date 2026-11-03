@@ -17,8 +17,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `draw`: the verifier's draw from given bytes of its own randomness;
 * `select`: the challenger's draw from a Spec's selection rule on, over a program and query, from given bytes of its
   coins, with the number of bytes it read (`Select.select`);
-* `slots`: the claims' partition over the program and query, and the slots of that draw's checked proof blocks
-  (`Slots.select`);
+* `slots`: the claims' partition over the circuit files, and the slots of that draw's checked proof blocks
+  (`Slots.select`); the files are read from their paths, so `DifftestMain` serves it (`slotsWith`), not `table`;
 * `bound`: the exact bounds on wrong units at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
@@ -247,10 +247,11 @@ def select (j : Json) : V Json := do
   let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
-/-- `select`'s input to `{"classes", "checked"}`: the claims' partition over the program under the query (`Slots.layout`),
-and the slots of the challenger's draw on the source's bytes, each as `[slot, 0]` (`Slots.checked`); refused where
-`select` is. -/
-def slots (j : Json) : V Json := do
+/-- `select`'s input with the circuit files `files` (`Slots.parseFiles`) to `{"classes", "checked"}`: the claims'
+partition over the files (`Slots.layout`), and the slots of the challenger's draw on the source's bytes, each as
+`[slot, 0]` (`Slots.checked`); refused where `select` is, or where the files don't parse. -/
+def slotsWith (j : Json) (files : V (Array (Flock.Circuit × Flock.Public))) : V Json := do
+  let files ← files
   let rule ← Select.Rule.ofJson (getD j "rule")
   let .obj _ := getD j "program" | throw "program is not an object"
   let .obj _ := getD j "query" | throw "query is not an object"
@@ -262,7 +263,8 @@ def slots (j : Json) : V Json := do
     | .null => pure none
     | c => some <$> Select.closureMap? c
   let rule ← Select.resolve rule p (getD j "query")
-  let (l, checked) ← Slots.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the slots"))
+  let (l, checked) ← Slots.select rule files p (getD j "query") table cm
+    (← Flock.unhex (← Flock.J.str j "source" "the slots"))
   return Json.mkObj [("classes", l.toJson),
     ("checked", Json.arr (checked.map fun v => Json.arr #[Lean.toJson v, Lean.toJson (0 : Nat)]))]
 
@@ -565,7 +567,7 @@ def run (j : Json) : V Json := do
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
-   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
+   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select),
    ("check_proved", checkProved),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
