@@ -189,12 +189,13 @@ def ChallengerClose.toJson (c : ChallengerClose) : Json :=
     ("lines", Lean.toJson c.lines), ("session", Json.str c.session), ("signature", Json.str (Flock.hexOf c.signature))]
 
 /-- A release log line's event: the line, refused unless it is its own canonical JSON in at most `MAX_LOG_LINE`
-characters. -/
+characters. Its objects hold their keys in order (`sortedKeys`), as every parse's do. -/
 def event (line : String) : V Json := do
   unless line.length ≤ MAX_LOG_LINE do throw LOG_MALFORMED
   let .ok j := Json.parse line | throw LOG_MALFORMED
   let .ok text := Flock.canon j | throw LOG_MALFORMED
   unless text == line do throw LOG_MALFORMED
+  unless sortedKeys j do throw LOG_MALFORMED
   pure j
 
 private def pairs : List String → List (String × String)
