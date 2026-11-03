@@ -507,17 +507,6 @@ def test_the_kinds_cell_labels_a_measured_fresh_products_term_with_its_premises_
     assert "rests_on" not in got and got["partial"] and got["bound"]["fresh_products"] is None
 
 
-def test_the_kinds_cell_marks_a_measured_fresh_products_term_provisional_until_4_12_corrects_its_whole_making():
-    """te_core 4.12 corrects the fresh-products term's whole-making (coordinator 15:08Z), so a measured term, binding or
-    not, carries how in `provisional`; an unmeasured term and a void's 0 carry none."""
-    one = {"terms": {"fresh_products": 165021.0, "token": 1.35, "decoding": 1.35},
-           "sensitivities": {"reduction": 2.0e4, "update": 705.6}, "binding_kind": "fresh_products"}
-    for row in (one, one | {"terms": one["terms"] | {"fresh_products": 0.5, "token": 263.5}, "binding_kind": "token"}):
-        assert json.loads(AP.kinds(row))["provisional"] == {"fresh_products": AP.PROVISIONAL["fresh_products"]}
-    assert "provisional" not in json.loads(AP.kinds(one | {"terms": one["terms"] | {"fresh_products": None}}))
-    assert "provisional" not in json.loads(AP.kinds(one | {"terms": one["terms"] | {"fresh_products": 0.0}}, void=True))
-
-
 #: a counted bf16 product (te_core.io_bound's vectors' square one), its operands made whole from chains of `k_whole`:
 #: at the console's k = 65,536, K = 64 voids io_bound's proved Λ (r = 1/3 > 1/4) and K = 512 doesn't
 BF16 = {"b_a": 16, "b_b": 16, "b_c": 32, "gates_per_mac": 23682 / 16, "cell_gates": 23682.0}

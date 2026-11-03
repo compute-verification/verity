@@ -156,10 +156,6 @@ LOWER = {PARTIAL: 6, VOID: "x"}
 #: binding or not: the fresh-products term rests on premises on the reference circuit, P-width and P-chain
 #: (coordinator 12:09Z), which `rests_on` names only where it binds
 PREMISED = ("fresh_products",)
-#: the kinds cell's `provisional` mark: each kind whose measured term a later te_core corrects, and how; where the term
-#: is measured and not void (coordinator 15:08Z: te_core 4.12 corrects the fresh-products term's whole-making)
-PROVISIONAL = {"fresh_products": "whole-making under te_core 4.11's single-chain rule; 4.12 lowers dense rows by under "
-                                 "1% and voids rows with adapters"}
 
 
 def finite(rho: float | None) -> float | None:
@@ -271,21 +267,18 @@ def kinds(one: dict, void: bool = False) -> str:
     """A published ρ's kinds as one JSON cell (te_core.formalism's `published`): `bound`, the terms its max takes, and
     `sensitivity`, those it leaves out; null where unmeasured, "inf" where infinite; `partial` and `why` where
     `published` sets them; `void`, the kind whose term is a void's 0 (`VOID`), where `void`; `rests_on`, what
-    each `PREMISED` kind's term rests on where it is measured and not void; `provisional`, how a later te_core corrects
-    each `PROVISIONAL` kind's term, on the same rows; and `fresh_subset`, the products the fresh-products term's best
-    subset dropped, where it dropped any."""
+    each `PREMISED` kind's term rests on where it is measured and not void; and `fresh_subset`, the products the
+    fresh-products term's best subset dropped, where it dropped any."""
     def cell(x: float | None) -> str:
         return "null" if x is None else '"inf"' if math.isinf(x) else num(x, DIGITS)
 
     def part(d: dict) -> str:
         return "{" + ",".join(f'"{k}":{cell(x)}' for k, x in d.items()) + "}"
     rests = {k: formalism.RESTS_ON_CELL[k] for k in PREMISED if one["terms"].get(k) is not None and not void}
-    later = {k: PROVISIONAL[k] for k in PROVISIONAL if one["terms"].get(k) is not None and not void}
     marks = ((',"partial":true' if one.get("partial") else "") + (f',"why":{json.dumps(one["why"])}'
                                                                   if one.get("why") else "")
              + (f',"void":{json.dumps(VOIDED)}' if void else "")
              + (f',"rests_on":{json.dumps(rests)}' if rests else "")
-             + (f',"provisional":{json.dumps(later)}' if later else "")
              + (f',"fresh_subset":{part(one["fresh_subset"])}' if one.get("fresh_subset") else ""))
     return f'{{"bound":{part(one["terms"])},"sensitivity":{part(one["sensitivities"])}{marks}}}'
 
