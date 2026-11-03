@@ -1,5 +1,5 @@
 import Proofs.Accounting.RemoteHeld.Line
-import Proofs.Properties.RemoteAudit.Component
+import Proofs.Properties.Accounting.Remote.Component
 
 /-!
 # The memory line of record at the bandwidth component, proved (`Properties.RemoteAudit.Component.LineHeldAtComponent`)

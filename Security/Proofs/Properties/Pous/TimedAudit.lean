@@ -1,5 +1,5 @@
 import Properties.Pous.TimedAudit
-import Proofs.Properties.NetworkCertifier.Bytes
+import Proofs.Properties.NetworkCertifier.Check.Bytes
 
 /-!
 # The timed audit's property, proved
