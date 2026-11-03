@@ -249,11 +249,16 @@ def load(scorer: Path, ledger: Path):
 
 
 def build(subs, launch, starts, counted, g) -> tuple[dict, list[dict]]:
+    """Each record's quantities and each checkpoint's (module docstring). A record that trains a tensor its start
+    doesn't hold (a grown model: ref-data's grow-muon adds a block) is left out, with its checkpoints: the start's
+    positions and shapes are all this analysis prices from."""
     records, cps = {}, []
     for rid in sorted({x["id"] for x in subs}):
         rec = launch[rid]
         start = starts[rec["start"]]
         trainable = ast.literal_eval(rec["trainable"]) if isinstance(rec["trainable"], str) else rec["trainable"]
+        if not {*trainable.get("full", []), *trainable.get("adapters", {})} <= start["tensors"].keys():
+            continue
         tok = rec.get("tokens") or {}
         forward_only = not tok.get("train") and bool(tok.get("forward"))
         pt = per_token(start, trainable, g, forward_only)
@@ -268,6 +273,8 @@ def build(subs, launch, starts, counted, g) -> tuple[dict, list[dict]]:
                         "w_fwd": w_fwd, "a": cfg["d_model"] * ACT_BITS, **pt}
         records[rid]["family"] = family(records[rid])
     for x in subs:
+        if x["id"] not in records:
+            continue
         r = records[x["id"]]
         ops = counted.get((launch[x["id"]]["run"], x["macs"]))
         if ops is None:

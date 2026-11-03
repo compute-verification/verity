@@ -159,6 +159,23 @@ def test_the_analysis_reads_the_pinned_versions_records_so_the_pilot_keeps_its_q
     assert sorted(counted) == [("run0", 1), ("run1", 1)]
 
 
+def test_the_analysis_leaves_out_a_grown_model(tmp_path):
+    """ref-data's grow-muon trains a block its start doesn't hold (here blocks.1.*; on s100, blocks.6.*): the analysis
+    prices from the start's positions and shapes alone, so that record and its checkpoints are left out, and a record
+    on the start's own tensors is priced beside it."""
+    tensors = {"embed": ["bf16", [16, 8]], "norm": ["bf16", [8]], "blocks.0.attn_norm": ["bf16", [8]],
+               "blocks.0.wq": ["bf16", [8, 8]]}
+    starts = {"s1": {"config": {"family": "lf", "n_layer": 1, "d_model": 8, "ctx": 4}, "tensors": tensors}}
+    trainable = {"plain": {"full": ["blocks.0.wq"]}, "grown": {"full": ["blocks.0.wq", "blocks.1.wq"]}}
+    launch = {f"te:{k}": {"run": f"run-{k}", "start": "s1", "trainable": repr(t), "direction": "ref-data",
+                          "mechanism": "grow-muon" if k == "grown" else "window"} for k, t in trainable.items()}
+    subs = [{"id": i, "start": "s1", "cp": 1, "macs": 1e6, "E_bytes": 100, "val_bpb": 1.0} for i in launch]
+    records, cps = rescore.load_analysis(rescore.ANALYSIS).build(subs, launch, starts, {},
+                                                                 {"mm": 1.0, "qk": 1.0, "pv": 1.0, "adamw": 8.0})
+    assert list(records) == ["te:plain"] and [c["id"] for c in cps] == ["te:plain"]
+    assert records["te:plain"]["family"] == "data" and cps[0]["delta"] == 800
+
+
 def test_charge_context_charges_each_run_its_facts_place(tmp_path, monkeypatch):
     """--charge-context: r0's run changes the embedding, so its K/V are affected from layer 0 and, with a = d_model·16
     at the reference policy's k, ρ is infinite there; r1's run has no changed tensors in the facts, so it keeps v2's ρ,
