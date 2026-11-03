@@ -32,8 +32,8 @@ stated on these objects.
   dropped.
 * A **`(c, k)`-partition** (`Partition.IsCK`) of a Boolean circuit: every proof block has at most `c` gates, `|I| ≤ c`,
   and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size at most `c · B`.
-* The **slowdown** of `B` proof blocks of budget `c` relative to a reference of size `T₀` is `c · B / T₀` (`slowdown`),
-  each proof block priced at `c` gates: at least `|C| / T₀`.
+* The **size ratio** of `B` proof blocks of budget `c` relative to a reference of size `T₀` is `c · B / T₀`
+  (`slowdown`), each proof block priced at `c` gates: at least `|C| / T₀`.
 * **Local description length** (§4): `LDL M t r y` is the length of a shortest program on which the decoder `M`, with
   indexed access to the registered information `r`, outputs `y` within `t` steps, and `⊤` when none does. Side
   information `z` is registered information paired with it, `LDL M t (r, z) y`. The decoder is a parameter (`Decoder`):
@@ -107,8 +107,8 @@ structure Partition.IsCK (d : Declaration) {B : ℕ} (P : Partition d.D B) (c k 
   card : ∀ u, (P.gates u).card ≤ c
   reads : ∀ u, (d.unregistered (P.gates u)).card ≤ k
 
-/-- **The slowdown** of `B` proof blocks of budget `c` relative to a reference circuit of size `T₀`: `c · B / T₀`, each
-proof block priced at `c` gates. -/
+/-- **The size ratio** of `B` proof blocks of budget `c` relative to a reference circuit of size `T₀`: `c · B / T₀`,
+each proof block priced at `c` gates. -/
 noncomputable def slowdown (c B : ℕ) (T₀ : ℝ) : ℝ := ((c * B : ℕ) : ℝ) / T₀
 
 /-- **The committed declaration** `R = (θ, C, 𝓘)`, fixed once before the monitored computation: the declaration
