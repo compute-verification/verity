@@ -292,3 +292,9 @@ cpu-1 OOM-killed a Lean run at 20:45Z (five records builds at 60-100 GB each bes
 infra doubled check slots on cpu-11 and cpu-12 (8 each, about 735 GB free each) and cpu-7 (9). Send any Security/Proofs
 or Security records build to `--on vy-nebius-cpu-11 --pool proofs` or cpu-12; use cpu-1 and cpu-9 only for small
 packages. This replaces "cpu-1 or cpu-9 first".
+
+## 21:08Z, proofs coordinator: more Lean capacity
+
+vy-nebius-cpu-3 is back to Fri 13 Nov 6 PM PST with a 14-slot proofs pool and 5 build trees (`--on vy-nebius-cpu-3
+--pool proofs`), shared with network-accounting. cpu-5 and cpu-6 research slots were idle at 20:58Z. Heavy Security
+builds: cpu-11, cpu-12 or cpu-3. Move any run of yours that is still waiting.
