@@ -218,6 +218,27 @@ def test_a_data_with_no_scored_start_has_no_fit(tmp_path, monkeypatch):
     assert f"; {len(rows)} refused; " in p["source"]
 
 
+def test_a_ladder_fit_that_is_the_caps_adds_no_point(tmp_path, monkeypatch):
+    """The scoring cap's CAP.json (te-ladder/cap/v1) as --ladder-fit caps the score and adds no ladder point, where it
+    stopped te_core.algorithm_policy at 22:25Z; a FIT.json there still adds its compute-optimal models."""
+    tree = tmp_path / "ladder"
+    tree.mkdir()
+    (tree / FF.LADDER_FILE).write_text(json.dumps({"schema": "te-ladder/F/v1",
+                                                   "annealed": [{"branch": "s", "macs": 1e18, "bpb": 1.4}]}))
+    monkeypatch.setattr(FF, "LADDER", "art:" + "b" * 64)
+    monkeypatch.setattr(panels, "fetch", lambda art: tree)
+    monkeypatch.setattr(panels, "pretraining", lambda path: [])
+    (tmp_path / "CAP.json").write_text(json.dumps({"schema": "te-ladder/cap/v1", "points": [
+        {"loss": 1.0, "forward_gates_per_token": 1e12}, {"loss": 1.1, "forward_gates_per_token": 9e11}]}))
+    (tmp_path / "FIT.json").write_text(json.dumps({"schema": "te-ladder/fit/v1", "points": [
+        {"train_macs": 5e18, "loss": 1.25, "non_embedding_params": 4e7}]}))
+    d = {"pin": ["0" * 40], "quantities": "measured, t literal", "refused": {}}
+    for name, n in (("CAP.json", 1), ("FIT.json", 2)):
+        a = type("A", (), {"pretraining": tmp_path, "ladder_points": [], "ladder_fit": tmp_path / name,
+                           "source": None, "pin": True})()
+        assert len(FF.inputs(a, [], {}, d)[1]) == n
+
+
 def test_the_source_fits_the_route_its_pins_at_7_characters_where_12_dont(tmp_path, monkeypatch):
     """The panels route answers 400 to a source over 300 characters, as it did at 09:30Z to the scorer's eight pins
     beside the ladder's manifest: each command's source names its pins at 12 characters where that fits, else at 7."""
