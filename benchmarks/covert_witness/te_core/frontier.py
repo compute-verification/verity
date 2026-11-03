@@ -63,8 +63,8 @@ def with_facts(rows: list[dict], facts: dict[str, dict]) -> list[dict]:
 
 def pinned(pilot: bool = False) -> tuple[str, ...]:
     """The pin's commit, then the earlier commits that measure the same version (`same_version`), and with `pilot` the
-    pilot's (`pilot`: an earlier version's commits, whose records te_core.panels shows beside the pin's, labelled by
-    their data)."""
+    pilot's (`pilot`: an earlier version's commits, whose records te_core.panels and te_core.algorithm_policy show
+    beside the pin's, labelled by their data)."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from pin import pinned as read
 
