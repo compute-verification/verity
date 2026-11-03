@@ -1,7 +1,7 @@
 """Night 2's refresh on the training formalism v2 (note:training-20261102T2215Z-report-training-formalism-v2), every 90
 minutes.
 
-    python v1cycle.py [--out DIR] [--no-publish] [--no-post]
+    python v1cycle.py [--out DIR] [--no-publish] [--no-put] [--no-post]
     python v1cycle.py --final FINAL_DIR [--out DIR] [--no-publish] [--no-post]
 
 The score is te_core's alone (coordinator 20:15Z: one codebase, `te_core.rescore`; 22:16Z: through the integrator's
@@ -13,13 +13,16 @@ v2 te_core). One refresh:
    v2.3 record, rescore_v1.py's quantities (Delta, u(1), Delta_grad, phi, sigma, the frozen tail's share t), Fit per
    kind of block and rho (c/(c - d) where every part fits, else Slowdown's bound, a target) on te_core.policy's (c, k)
    grid with the frozen tail always charged (Daniel, 22:00Z), H and W* over every checkpoint of every valid record
-   (19:50Z), S = W*/H; frontier.md/json, formalism.jsonl and te_core's five panels with their PNGs and console cuts.
-3. Publishes the tables and each panel (its JSON, PNG and console cut) to the evidence store, copies the cuts to
-   PANELS_DIR, and posts one DIGEST line with the art ids. Nothing is PUT to the console: its one training panel is
-   training/frontier-branches, the integrator's (coordinator 22:53Z and 23:15Z).
+   (19:50Z), S = W*/H; frontier.md/json and formalism.jsonl.
+3. Runs its `python -m te_core.panels frontier-branches --publish` in the same directory: the console's one training
+   panel (Daniel, coordinator 23:56Z; the integrator's builder, 23:59Z), PUT. A refused PUT is reported, not fatal.
+   Nothing else is PUT, and te_core's five old panels stay in the re-score's directory, unpublished (every other plot
+   is dropped, 23:56Z).
+4. Publishes the tables and frontier-branches (uncut, its console cut and PNG) to the evidence store, copies the cut to
+   PANELS_DIR, and posts one DIGEST line with the art ids.
 
-`--final FINAL_DIR` scores the sealed shard's values (v1final.py) and v1runs.py's per-run P4 (final and search) for
-final.md, and posts FINAL-TABLE instead of DIGEST.
+`--final FINAL_DIR` scores the sealed shard's values (v1final.py, frontier-branches included, not PUT) and v1runs.py's
+per-run P4 (final and search) for final.md, and posts FINAL-TABLE instead of DIGEST.
 """
 import argparse
 import json
@@ -38,12 +41,12 @@ RESCORE_REFS = ("cursor/covert-witness-4207", "cursor/training-efficiency-4207")
 PINS = os.environ.get("TE_V1_PINS", "11d96c1b8745d8093746ea11e3e33fe6f07f7d3b,"
                                     "36aac280a62be7a04cbf510b50636b5ad875ba54").split(",")
 PANELS_DIR = Path(os.environ.get("TE_PANELS_DIR", "/opt/cursor/artifacts/te-panels"))
-PLOT_OF = {"p1": "p1-loss-vs-compute", "p2": "p2-slowdown-vs-gain", "p3": "p3-policy-plane", "p4": "p4-decomposition",
-           "a2": "a2-efficiency-floor"}
+FB = "frontier-branches"
+OLD_PANELS = ("p1-loss-vs-compute", "p2-slowdown-vs-gain", "p3-policy-plane", "p4-decomposition",
+              "a2-efficiency-floor")
 REFERENCE = "c=4096w k=10kB"
 REF_TARGET = -1.0
 NIGHT2 = "2026-11-02T19:15:00Z"
-BINS = (("<=10kB", 8e4), ("<=100kB", 8e5), ("<=1MB", 8e6))
 FINAL_TITLE = "FINAL (sealed shard: FINAL entries' 3-seed means, other records at the same drop): "
 
 
@@ -74,14 +77,18 @@ def rescore_head() -> str:
     return commit
 
 
+def ledger_args(out: Path) -> list[str]:
+    ledger = os.environ.get("TE_LEDGER", str(Path.home() / ".research" / "te-ledger"))
+    return ["--out", str(out), "--root", ledger, "--scorer", str(S.STATE), *(x for p in PINS for x in ("--pin", p))]
+
+
 def rescore(out: Path, gates: Path, final: Path | None = None) -> str:
     """te_core.rescore into `out` (module docstring, 2), or with FINAL_DIR's values for `final` through v1final.py and
     v1runs.py's per-run P4 (final, and the search's prefixed search-runs-); returns its last line."""
     out.mkdir(parents=True, exist_ok=True)
     if gates.exists() and not (out / "analysis-gates.json").exists():
         (out / "analysis-gates.json").write_bytes(gates.read_bytes())
-    ledger = os.environ.get("TE_LEDGER", str(Path.home() / ".research" / "te-ledger"))
-    args = ["--out", str(out), "--root", ledger, "--scorer", str(S.STATE), *(x for p in PINS for x in ("--pin", p))]
+    args = ledger_args(out)
     runs = [sys.executable, str(HERE / "v1runs.py"), *args]
     cmds = ([[sys.executable, str(HERE / "v1final.py"), str(final), *args], [*runs, "--final", str(final)],
              [*runs, "--prefix", "search-runs-"]] if final else [[sys.executable, "-m", "te_core.rescore", *args]])
@@ -94,6 +101,21 @@ def rescore(out: Path, gates: Path, final: Path | None = None) -> str:
         if r.returncode:
             raise SystemExit(f"v1cycle: {' '.join(c[1:3])} failed (rc {r.returncode}):\n{r.stderr[-2000:]}")
     return logs[0].strip().splitlines()[-1]
+
+
+def branches(out: Path, put: bool) -> str:
+    """te_core.panels' frontier-branches into `out` after the re-score (its gate cache reused), PUT with `put`; the
+    PUT's status, or why there is none."""
+    r = subprocess.run([sys.executable, "-m", "te_core.panels", FB, *ledger_args(out), *(["--publish"] if put else [])],
+                       cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True, check=False)
+    (out / "panels.log").write_text(r.stdout + r.stderr)
+    done = next((x for x in reversed(r.stdout.splitlines()) if x.startswith("PUT ")), None)
+    if done:
+        return done.split(f"{FB}: ", 1)[-1][:300]
+    why = (r.stderr.strip().splitlines() or [f"rc {r.returncode}"])[-1][:300]
+    if not (out / "console" / f"{FB}.json").exists():
+        return f"not built: {why}"
+    return f"not PUT: {why}" if r.returncode else "not PUT (--no-put)"
 
 
 def frame(p: dict) -> list[dict]:
@@ -124,6 +146,7 @@ def main() -> int:
     ap.add_argument("--gates", type=Path, default=Path("/tmp/scorer/v1/trial/gates.json"),
                     help="the analysis's gate factors, seeded into the re-score's cache")
     ap.add_argument("--no-publish", action="store_true")
+    ap.add_argument("--no-put", action="store_true", help="build frontier-branches but don't PUT it")
     ap.add_argument("--no-post", action="store_true")
     ap.add_argument("--final", type=Path, metavar="FINAL_DIR",
                     help="the final table: te_core.rescore with FINAL_DIR's values (scorer.py final table; v1final.py); "
@@ -134,6 +157,7 @@ def main() -> int:
     commit = rescore_head()
     last = rescore(out / "rescore", args.gates, final)
     rs = out / "rescore"
+    put = "not PUT (final values)" if final else branches(rs, not args.no_put)
     what = "final table" if final else "refresh"
     fr = json.loads((rs / "frontier.json").read_text())
     scored = [json.loads(line) for line in (rs / "formalism.jsonl").open()]
@@ -141,7 +165,7 @@ def main() -> int:
     meta = {"stamp": stamp, "te_core": commit, "pin": fr["pin"], "formalism": "v2, the frozen tail always charged",
             "checkpoints": len(scored), "records": len(runs), "night2_records": len(runs & n2),
             "not_analysed": len(fr["not_analysed"]), "rule": "H and W* over every checkpoint (19:50Z)"}
-    trees = {k: out / "publish" / k for k in ("tables", *PLOT_OF)}
+    trees = {k: out / "publish" / k for k in ("tables", "fb")}
     for t in trees.values():
         t.mkdir(parents=True, exist_ok=True)
     for name in ("frontier.md", "frontier.json", "formalism.jsonl", "rescore.log"):
@@ -162,31 +186,32 @@ def main() -> int:
     if not args.no_publish:
         ids["tables"] = put_data(trees["tables"], "evidence/v1", {"what": f"te formalism v2 {what}: te_core.rescore's "
                                                                           "frontier and per-checkpoint blocks", **meta})
-    source = (f"{ids.get('tables', 'unpublished')[:16]} (scorer v1cycle {what} {stamp}: te_core.rescore "
-              f"{commit[:10]}, {len(scored)} valid v2.3 checkpoints)")
-    P = {}
-    for pid in PLOT_OF.values():
-        P[pid] = json.loads((rs / f"{pid}.json").read_text()) | {"source": source}
-        if final:
-            P[pid]["title"] = FINAL_TITLE + P[pid]["title"]
-    if final:
-        P["p1-loss-vs-compute"] = seeds_range(P["p1-loss-vs-compute"], fin["rows"])
     PANELS_DIR.mkdir(parents=True, exist_ok=True)
-    for stale in PANELS_DIR.glob("frontier-branches.*"):
-        stale.unlink()
-    for key, pid in PLOT_OF.items():
-        cut = (rs / "console" / f"{pid}.json").read_bytes()
-        png = (rs / f"{pid}.png").read_bytes()
-        (trees[key] / f"{pid}.json").write_text(json.dumps(P[pid]) + "\n")
-        (trees[key] / f"{pid}.console.json").write_bytes(cut)
-        (trees[key] / f"{pid}.png").write_bytes(png)
-        (PANELS_DIR / f"{pid}.json").write_bytes(cut)
-        (PANELS_DIR / f"{pid}.png").write_bytes(png)
+    for pid in OLD_PANELS:
+        for stale in PANELS_DIR.glob(f"{pid}.*"):
+            stale.unlink()
+    fb = None
+    if (rs / "console" / f"{FB}.json").exists():
+        fb = json.loads((rs / f"{FB}.json").read_text())
+        if final:
+            fb["title"] = FINAL_TITLE + fb["title"]
+        cut, png = (rs / "console" / f"{FB}.json").read_bytes(), (rs / f"{FB}.png").read_bytes()
+        (trees["fb"] / f"{FB}.json").write_text(json.dumps(fb) + "\n")
+        (trees["fb"] / f"{FB}.console.json").write_bytes(cut)
+        (trees["fb"] / f"{FB}.png").write_bytes(png)
+        (trees["fb"] / "panels.log").write_bytes((rs / "panels.log").read_bytes() if (rs / "panels.log").exists()
+                                                  else b"")
+        if not final:
+            (PANELS_DIR / f"{FB}.json").write_bytes(cut)
+            (PANELS_DIR / f"{FB}.png").write_bytes(png)
         if not args.no_publish:
-            ids[key] = put_data(trees[key], "evidence/v1", {"what": f"te formalism v2 {what} {pid}", **meta})
-    summary = meta | {"art": ids, "rows": {k: len(v["rows"]) for k, v in P.items()}, "rescore": last, "out": str(out)}
+            ids["fb"] = put_data(trees["fb"], "evidence/v1", {"what": f"te formalism v2 {what} {FB}", "put": put,
+                                                              **meta})
+    fb_rows = {"uncut": len(fb["rows"]), "console": len(json.loads(cut)["rows"])} if fb else None
+    summary = meta | {"art": ids, "frontier_branches": {"put": put, "rows": fb_rows}, "rescore": last,
+                      "out": str(out)}
     (out / "cycle.json").write_text(json.dumps(summary, indent=1) + "\n")
-    line = digest(P, meta, ids)
+    line = digest(json.loads((rs / "p2-slowdown-vs-gain.json").read_text()), meta, ids, put, fb_rows)
     (out / "digest.txt").write_text(line + "\n")
     print(json.dumps(summary))
     print(line)
@@ -194,16 +219,6 @@ def main() -> int:
         subprocess.run([sys.executable, str(HERE / "scorer.py"), "post", "FINAL-TABLE" if final else "DIGEST", line],
                        check=True)
     return 0
-
-
-def seeds_range(p: dict, rows: dict) -> dict:
-    """P1 with each final checkpoint's seeds' range as loss_lo and loss_hi."""
-    ix = {c: i for i, c in enumerate(p["columns"])}
-    out = []
-    for r in p["rows"]:
-        f = rows.get(r[ix["record"]])
-        out.append([*r[:ix["loss_lo"]], f["bpb_min"], f["bpb_max"], *r[ix["loss_hi"] + 1:]] if f else r)
-    return p | {"rows": out}
 
 
 def final_md(rs: Path, fin: dict, tab: dict) -> str:
@@ -250,10 +265,10 @@ def final_md(rs: Path, fin: dict, tab: dict) -> str:
     return "\n".join(L)
 
 
-def digest(P: dict, meta: dict, ids: dict) -> str:
-    """At the reference target and policy, per start: H, S (rho, basis, W*'s checkpoint) from P2's rows, and A2's
-    least gates at the first Delta bins."""
-    p2, a2 = frame(P["p2-slowdown-vs-gain"]), frame(P["a2-efficiency-floor"])
+def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> str:
+    """At the reference target and policy, per start: H and S (rho, basis, W*'s checkpoint) from te_core's P2 rows
+    (te_core.frontier's cells), and frontier-branches' rows and PUT."""
+    p2 = frame(p)
     parts = []
     for s in ("s100", "m100", "s50", "m50"):
         at = next((r for r in p2 if r["start_id"] == s and r["target_pct"] == REF_TARGET and r["policy"] == REFERENCE),
@@ -265,21 +280,19 @@ def digest(P: dict, meta: dict, ids: dict) -> str:
             continue
         q = (f"{fmt(at['S'])} (ρ {fmt(at['rho'])}, {at['basis']}; {at['method']} {at['record']}@{at['checkpoint']})"
              if at["S"] is not None else "–")
-        fl = [r for r in a2 if r["start_id"] == s and r["target_pct"] == REF_TARGET]
-        floor = []
-        for n, b in BINS:
-            ok = [r["compute_gates"] for r in fl if r["delta_bits"] <= b]
-            floor.append(f"{n} {fmt(min(ok))}" if ok else f"{n} none")
-        parts.append(f"{s}: H {fmt(at['H_gates'])}; S {q}; A2 least gates at " + ", ".join(floor))
+        parts.append(f"{s}: H {fmt(at['H_gates'])}; S {q}")
     arts = ", ".join(f"{k} {v[:16]}" for k, v in ids.items())
+    put = f"PUT {put}" if put[:1].isdigit() else put
+    fb = (f"training/frontier-branches (te_core.panels): {fb_rows['uncut']:,} rows, the console's cut "
+          f"{fb_rows['console']}, {put}" if fb_rows else f"training/frontier-branches {put}")
     head = (f"v2 final table (sealed shard: {meta['entries']} FINAL entries' reruns, {meta['entries_matched']} matched "
             f"at {meta['final_checkpoints']} checkpoints, 3 seeds' mean; every other record's search value at the same "
             "drop; " if "entries" in meta else "v2 refresh (")
-    return (f"{head}te_core.rescore {meta['te_core'][:10]}, formalism v2 with the frozen tail always charged: "
+    return (f"{head}te_core {meta['te_core'][:10]}, formalism v2 with the frozen tail always charged: "
             f"{meta['records']} valid v2.3 records, {meta['night2_records']} from night 2, {meta['checkpoints']} "
             f"checkpoints, {meta['not_analysed']} not analysed yet; H and W* over every checkpoint, so S >= 1; ρ "
             "c/(c − d) where Fit holds for the training, else Slowdown's bound, a target) at −1% and "
-            f"{REFERENCE}: " + "; ".join(parts) + f". art: {arts}. Evidence store only; nothing PUT to the console.")
+            f"{REFERENCE}: " + "; ".join(parts) + f". {fb}; nothing else PUT. art: {arts}.")
 
 
 if __name__ == "__main__":

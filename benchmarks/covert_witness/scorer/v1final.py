@@ -13,8 +13,9 @@ ledger's rows (`final_rows`) with these values in place of the search's:
 - every other row's val_bpb is carried to the final start at the same drop (val_bpb x final l0 / search l0);
 - every row's start_bpb is the final start's, and a row of a start with no final bpb is left out.
 
-Writes te_core.rescore's outputs into its --out, and final_rows.json there: each final row's search value, range and
-seeds by ledger id, and per entry its matched and unmatched checkpoints.
+Writes te_core.rescore's outputs into its --out, then te_core.panels' frontier-branches on the same values (not PUT),
+and final_rows.json there: each final row's search value, range and seeds by ledger id, and per entry its matched and
+unmatched checkpoints.
 """
 import json
 import sys
@@ -92,6 +93,9 @@ def main(argv: list[str]) -> int:
     rescore.Ledger = FinalLedger
     rc = rescore.main(args)
     (out / "final_rows.json").write_text(json.dumps(record, indent=1) + "\n")
+    if not rc:
+        from te_core import panels
+        rc = panels.main(["frontier-branches", *args])
     return rc
 
 
