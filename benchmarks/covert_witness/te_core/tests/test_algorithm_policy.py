@@ -663,8 +663,9 @@ def test_publish_stores_the_tables_and_puts_both_panels_the_cut_naming_their_art
 
 def test_v3_rows_come_with_v3s_fit_from_the_ladder_and_lead_the_figure(tmp_path, monkeypatch):
     """A loss on harness v3's data is no loss on the pilot's: v3's fit reads the ladder's from-scratch runs and its own
-    starts and their checkpoints, none of the pilot's, and a v3 start's rows have their own l0, targets and H; the
-    figure shows v3 once it has rows."""
+    starts, none of the pilot's, and not their checkpoints though some are on v3's frontier (te_core.frontier_fit's
+    FROM_SCRATCH), so it is the ladder's law; the pilot's reads its checkpoints too. A v3 start's rows have their own
+    l0, targets and H, which its checkpoints set; the figure shows v3 once it has rows."""
     v3_law = LAW | {"E": 1.2}
     ladder = tmp_path / "F.json"
     ladder.write_text(json.dumps({"schema": "te-ladder/F/v1", "annealed": [
@@ -673,10 +674,14 @@ def test_v3_rows_come_with_v3s_fit_from_the_ladder_and_lead_the_figure(tmp_path,
                "val_bpb": r["val_bpb"] + 0.3} for r in ledger_rows() if r["start"] == "s1"]
     code, got = run(tmp_path, monkeypatch, "--ladder-points", str(ladder), index=ledger_rows() + v3)
     assert code == 0 and AP.headline(got["panel"]) == "v3"
-    read = [d["source"] for d in plots.frame(got["fit"]) if (d["row"], d["data"]) == ("point", "v3")]
-    assert read[0] == "start t1" and {f"ladder x{f}, annealed" for f in (2, 4, 8, 16, 32)} <= set(read)
-    assert all(s.startswith(("start t1", "ladder ")) or " from t1 (v3-" in s for s in read)
-    assert fitted(got["fit"], "v3")["E"] == pytest.approx(1.2, abs=0.05)
+    read = {d: [x["source"] for x in plots.frame(got["fit"]) if (x["row"], x["data"]) == ("point", d)]
+            for d in panels.DATA}
+    assert read["v3"] == ["start t1"] + [f"ladder x{f}, annealed" for f in (2, 4, 8, 16, 32)]
+    every = json.loads((got["out"] / "tables" / "frontier-points.json").read_text())
+    assert any(" from t1 (v3-" in p["source"] and p["C_gates"] > C0 for p in every["v3"])
+    assert fitted(got["fit"], "v3") == pytest.approx(v3_law, rel=1e-4)
+    assert "checkpoints at C0 + |C|; v3 from scratch only)" in got["fit"]["note"]
+    assert any(" from s1 (" in s for s in read["v2.3-pilot"])
     assert fitted(got["fit"])["E"] == pytest.approx(LAW["E"], abs=0.05)
     ds = [d for d in plots.frame(got["panel"]) if d["data"] == "v3"]
     assert {d["start"] for d in ds} == {plots.start_label(V3_SHAPE)} and {d["start_loss"] for d in ds} == {1.5}

@@ -149,11 +149,13 @@ pilot's unless `--pin` names the commits. `training/frontier-fit` is `frontier_f
 `v2.3-pilot`), L(C) = E + A·C^(−γ) fitted to its unconstrained frontier, the least held-out bits per byte at each total
 training compute in gates (from scratch: the pilot's pretraining runs, or the v3 ladder's from `--ladder-points` and
 `--ladder-fit`, else `frontier_fit.LADDER`'s, each start of the ladder's manifest at its counted C0 and held-out bpb;
-each start at C0; every scored checkpoint from a start at C0 + |C|), with the points it read and their residuals; a
-data with neither a start that has a scored checkpoint nor a ladder point has no fit, since nothing then converts its
+each start at C0; every scored checkpoint from a start at C0 + |C|), with the points it read and their residuals; v3's
+fit reads its frontier from scratch alone (`FROM_SCRATCH`), its starts' checkpoints setting only H. A data with
+neither a start that has a scored checkpoint nor a ladder point has no fit, since nothing then converts its
 from-scratch losses or prices C0. A fit takes three points (`FIT_MIN`), and one on fewer than five from scratch
 (`FIT_TARGET`) is provisional: its status and note say so, the note with its points' residuals and the ladder's runs
-off its frontier. `training/algorithm-policy` is `algorithm_policy`'s: per run, start and gain target g (1.1, 2 and
+off its frontier. One on three points, as many as its parameters (`PARAMS`), says its residuals bound none of its
+uncertainty where it would give its rms in effective compute. `training/algorithm-policy` is `algorithm_policy`'s: per run, start and gain target g (1.1, 2 and
 11, a checkpoint's gain C(L1)/C(L0) on that fit, from the start's loss L0 to its own L1, so every target is below
 L0), "yes" at the run's first checkpoint reaching g, else "no" at its last, with the algorithm's inefficiency p = C/H
 (H the least |C| of any checkpoint from the start
@@ -284,7 +286,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note, a 120-character title, 4,096-character cells, 24 columns; `refused`), one panel's PUT and the panels the route serves (`served`) |
 | `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
 | `panels.py` | `training/frontier-branches`, retired from the console: the frontier, each branch point's honest and throttled curves and ρ's candidates, its cut and figure; the dial the training panels use (`dial`, `rho_columns`, `page_inputs`, `mismatches`) |
-| `frontier_fit.py` | a console training panel, `training/frontier-fit`: per data, L(C) = E + A·C^(−γ) fitted to the unconstrained frontier (`fit`, `used`; provisional under `FIT_TARGET` points from scratch), its effective compute (`loss_at`, `c_eff`, `gain`) and the v3 ladder's points (`ladder_points`, `LADDER`'s by default) |
+| `frontier_fit.py` | a console training panel, `training/frontier-fit`: per data, L(C) = E + A·C^(−γ) fitted to the unconstrained frontier (`fit`, `used`; v3's from scratch alone, `FROM_SCRATCH`; provisional under `FIT_TARGET` points from scratch), its effective compute (`loss_at`, `c_eff`, `gain`) and the v3 ladder's points (`ladder_points`, `LADDER`'s by default) |
 | `algorithm_policy.py` | the other, `training/algorithm-policy`: per run, start and gain target, p = C/H against ρ with ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`) and the dashboard's cells (`published`'s), the coverage, its console cut, figure, and the PUT of both panels over what the route serves (`guarded`) |
 | `io_bound.py` | the Loomis-Whitney bound on a training step's slowdown under P-width, the fresh-products kind's calculator: one product's cap at the chain constant (`alpha`, `beta`, `mu`), Λ's factors (`SHARE`, `feed`, `whole_chain`), and the blocks a step's products need and its ρ, the larger of the root and linear forms, proved and searched, with and without P-cell (`bound`); each GEMM of a step captured by `capture_step` or `capture_fn` classified by kind (`rows_of`, `Row`), the step's \|C\| (`step_gates`), its vectors (`tests/io_bound_vectors.json`, `python -m te_core.io_bound vectors`) and the s-shape steps (`steps`) |
 | `tiles.py` | reading A's matrix-product tiles: a record's ops as products (`of_log` from a `macs_log`, `of_graph` from a traced step, `products`), the most MACs a tile reading k bits holds (`volume`) and each op's tile cap (`cap`, `caps`), and the most a block's tiles hold beside each other (`held`) |

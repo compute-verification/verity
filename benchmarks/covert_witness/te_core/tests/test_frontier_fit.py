@@ -55,6 +55,19 @@ def test_a_fits_status_names_e_at_its_bound_and_gives_one_figure_where_a_range_a
     assert FF.span(1.0, 1.5) == "1 to 1.5" and FF.span(7.291, 7.288, "%") == "7.29%"
 
 
+def test_a_fit_on_as_many_points_as_parameters_gives_no_uncertainty_where_its_rms_would():
+    """Through three points E, A and γ leave residuals of 0, which bound nothing: the fit's status and its starts' say
+    so in place of an rms of 0% in effective compute."""
+    three = FF.fit(on(LAW, (1, 10, 30)))
+    assert three["rms_pct"] < 1e-3 and three["points"] == FF.PARAMS
+    said = ("the fit's 3 points are as many as its 3 parameters, so its residuals bound none of its uncertainty")
+    assert FF.unbounded(three) == said
+    assert FF.status(three, [1.0, 1.0], [0.0, 0.0], AP.GAINS).endswith(f"; its points' gains 1; {said}")
+    assert FF.targets(three, 1.2, AP.GAINS).endswith(f"%); {said}") and "rms" not in FF.targets(three, 1.2, AP.GAINS)
+    four = FF.fit(on(LAW, (1, 3, 10, 30)))
+    assert "rms" in FF.targets(four, 1.2, AP.GAINS) and said not in FF.status(four, [1.0], [1.0], AP.GAINS)
+
+
 def test_the_fit_reads_the_frontier_from_the_least_c0_up_one_point_a_bin():
     """The staircase (the least compute at each loss) from c_lo up, and in each 1/20 decade of C its least loss."""
     pts = [(0.5 * C0, 1.3, "below c_lo"), (C0, 1.2, "start"), (1.01 * C0, 1.19, "same bin, lower"),
@@ -82,7 +95,7 @@ def test_a_starts_targets_are_daniels_gain_on_the_fit_below_its_loss_with_the_fi
     assert FF.target(LAW, LAW["E"], 2) is None and FF.gain_from(LAW, 1.2, LAW["E"]) == math.inf
     with pytest.raises(ValueError, match="at or below the fit's E"):
         FF.gain_from(LAW, LAW["E"], 1.0)
-    f, h = LAW | {"rms_pct": 1.0}, 1e-6
+    f, h = LAW | {"rms_pct": 1.0, "points": FF.PARAMS + 1}, 1e-6
     t = FF.target(f, 1.2, 1.1)
     c = FF.c_eff(f, t)
     slope = (FF.loss_at(f, c * (1 - h)) - FF.loss_at(f, c * (1 + h))) / (2 * h)
@@ -183,7 +196,7 @@ def test_the_panel_is_each_datas_fit_its_points_and_the_starts(tmp_path, monkeyp
     assert pilot["rms_pct"] == pytest.approx(rms, rel=0.01, abs=1e-3)
     starts = [(d["source"].split(" (")[0], d["C_gates"], d["loss_bpb"]) for d in ds if d["row"] == "start"]
     assert starts == [("start s1", pytest.approx(C0, rel=1e-5), 1.2), ("start s2", pytest.approx(2 * C0, rel=1e-5), 1.3)]
-    whole = f | {"rms_pct": pilot["rms_pct"]}
+    whole = f | {"rms_pct": pilot["rms_pct"], "points": pilot["points"]}
     assert [d["status"] for d in ds if d["row"] == "start"] == [FF.targets(whole, l0, AP.GAINS) for l0 in (1.2, 1.3)]
     spread = sorted(100 * FF.c_spread(whole, FF.target(whole, l0, 1.1)) for l0 in (1.2, 1.3))
     assert pilot["status"].endswith(f"; its rms in loss is {spread[0]:.3g}% to {spread[1]:.3g}% in effective compute "
