@@ -42,10 +42,12 @@ xy + yz + zx ≤ (x + y + z)²/3). A partial sum read in and finished into the n
 splitting its b_C bits: `feed` = √(b_C/(b_C − b)) for b ≤ b_C/2, else 2√(b/b_C). Operand entries a block makes whole
 from chains it runs itself, their own operands read or made whole in turn, number at most e·k/b, e the least root of
 e = r·(1 + e)² with r = k/(3·K²·b) (LW on each source product, 4/3 for sources sharing arrays), worth `whole_chain` =
-(1 + e)^{3/2}. K is the shortest chain that makes a counted operand whole by itself (`Row.k_whole`: an operand that
-also needs a value paid at its width, such as a frozen weight's product, gains nothing); past r = 1/4 there is no root,
-and the proved bound is taken on the subset of the products whose chains are long enough (`bound`). Proved:
-Λ = SHARE·feed·whole_chain, at the kept products' widest operand and shortest whole-making chain. Each
+(1 + e)^{3/2}. That one-class rule holds only where no shorter chain is nested below a counted operand, and on a
+transformer's step attention's d_h-long chains are, so the proved factor is the step's whole-making system's
+(`chain_classes`, `whole_chain_of`): every product with both operands affected in a class by its chain K, with
+r_j = c_j·k/(K_j²·b), μ_j ≤ r_j·(P_j + Σ_i A_ij·μ_i)² at its least fixed point and e = Σ_i A_i,counted·μ_i, void
+where the system has no fixed point. Proved: Λ = SHARE·feed·whole_chain, at the kept products' widest operand and
+the step's whole-making factor, one number on every subset (`bound`). Each
 factor bounds both forms: shared arrays scale √(x·y·(t/b_C + s)) itself, a fed partial sum lowers only the read face's
 width (raising α by `feed` and μ·b_C by less), and whole-making raises k (α by (1 + e)^{3/2}, μ by less). Found by
 search over small chained triples: Λ = 2/√3 (the "numerical" figures).
@@ -62,6 +64,10 @@ search over small chained triples: Λ = 2/√3 (the "numerical" figures).
   Security's `TrainingIncompressible`, which charges a received partial sum b_a, takes the larger of the input and
   partial-sum counts rather than their sum, and whose `Chain` has no product of two activations. `rows_of` checks its
   dataflow side (`_Rates`) and counts only products whose operands both pass; the gate-level side is assumed.
+- P-width extended: every value a block reads while making operands whole costs its passed width, attention's and the
+  optimizer's included, not only a counted product's operands.
+- P-match: the elementwise steps between a product's outputs and the next products' operands map operand entries one
+  to one, so fan-out is at most fan-in (te_core.capture.products checks it on a traced step).
 - P-share: counted products share arrays only as forward/dX/dW triples. A product of an array with itself (`self`)
   can do 2α and is not counted.
 - For every method: no product is computed by a bilinear algorithm with fewer multiplications than its MACs (a
