@@ -13,7 +13,7 @@
 * `partition`: the `Q_template_instances` partition, the whole-call cut (no value computed in two units), the Z separator and
   the width rule with the separator port pinned by the protocol.
 * `anchors`: the anchored inputs' anchors, which the verifier builds (the tile checks' derived noise too, `TileAnchors`, with
-  each unit's public input regions), and the window's refusal of a repeated call index.
+  each unit's public input regions), and the execution phase's refusal of a repeated call index.
 * `plan`: closure draws behind a draw-law seam (`CountLaw`, and `WorkLaw`, `Flock/Draw.lean`'s work law), and the tile checks' layout.
 * `pc4`, `pc8`: Pearl-C4's and Pearl-C's (FP8, forming v1) tile checks as Programs, cut into row and tile units, and
   their hiding Programs (``Shape.hidden``), whose tiles return only their tile digest; the rows are C-Flock-committed
@@ -32,13 +32,13 @@
 * `h1zy`: the H1 tile with its served z/y record checked (`PouwH1TileZy`): the record an input, committed
   before its round's coin, its z the tile's A Bᵀ and its y the served dequant (`PouwZyDequant`, the activation scale
   first, no bias).
-* `h1window`: an H1 window as one public Program of those tiles in fixed slots (`PouwH1Window`), the tile R × C a
+* `h1window`: an H1 execution phase as one public Program of those tiles in fixed slots (`PouwH1Window`), the tile R × C a
   parameter and one tile template per distinct K (`PouwH1WindowTile`, its A and B rows ``a_k<K>`` and ``b_k<K>``),
   each linear's B rows registered once for all its calls; its template-instance partition derives its units, and
-  `unit_reads` the rows each unit reads: the Program a served path registers its trees under, a mixed-K window in one
+  `unit_reads` the rows each unit reads: the Program a served path registers its trees under, a mixed-K execution phase in one
   read.
-* `admit`: a window's admission from its committed request queue (`PouwQueueAdmit`), a call's 16 slots a unit, generic over
-  the window.
+* `admit`: an execution phase's admission from its committed request queue (`PouwQueueAdmit`), a call's 16 slots a unit, generic over
+  the execution phase.
 * `live`: a round's served rows under rule A (`PouwLiveSlots`), one unit a round: ok iff exactly its slots [0, m) name
   requests of the gate-signed request table, none more often than it can take in round s (its prompt at its prefill, one
   row a decode), for the public m that dense credit counts.
@@ -115,10 +115,10 @@ class Traced:
     def draw(self, law, anchors, ledger):
         """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one, each
         stratum's subset keyed by the call's index (``anchors.call_index``) with its template, under the key of
-        ``ledger``, the window's `anchors.Ledger` opened from its complete `Receipt` (`Ledger.open`): no key is taken from
+        ``ledger``, the execution phase's `anchors.Ledger` opened from its complete `Receipt` (`Ledger.open`): no key is taken from
         the caller. The draw is refused for a ledger not opened from a receipt or whose draw was sent, and for a call the
-        receipt doesn't list or the window already holds, before anything is drawn. So every call's commitment precedes
-        the key (C1), and each call of a window draws under a context of its own: the product law the window pin
+        receipt doesn't list or the execution phase already holds, before anything is drawn. So every call's commitment precedes
+        the key (C1), and each call of an execution phase draws under a context of its own: the product law the execution phase pin
         (`audit_window_split_of_record`) takes as M1."""
         from . import plan
         from .anchors import Ledger
@@ -132,7 +132,7 @@ class Traced:
 
     def check_openings(self, plan, anchors, ledger, domain, openings, limits=None) -> None:
         """Refuse the call's A-row openings unless they are the plan's A rows, once each, and each authenticates under
-        the call's commitment as the window's receipt lists it (`Ledger.commitment`, by call index), never one supplied
+        the call's commitment as the execution phase's receipt lists it (`Ledger.commitment`, by call index), never one supplied
         with the openings. ``domain`` is the verifier's row domain for the call (`audit.rows_domain`)."""
         from verity.ml.commitments import Commitment, VerificationLimits, verify_opening
 
@@ -167,7 +167,7 @@ class Traced:
 
     def check_layout(self, offered) -> None:
         """Refuse a layout that isn't the verifier's own, derived from the shape (`layout`): the tiles, each tile's own unit
-        and its closure are the partition's, never a prover's, since the Layout theorems hold only for the window's own."""
+        and its closure are the partition's, never a prover's, since the Layout theorems hold only for the execution phase's own."""
         from ..protocol import DomainError
 
         if offered != self.layout():

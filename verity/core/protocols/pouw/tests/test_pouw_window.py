@@ -1,5 +1,5 @@
-"""PoUW's audit window (`pouw.window`): the grid a window's tile count is padded to and the q it gives the leakage bound,
-L3's K′, the entry row and side trees of the layout for gates, the map from a drawn index to a tile, the window statement
+"""PoUW's audit execution phase (`pouw.window`): the grid an execution phase's tile count is padded to and the q it gives the leakage bound,
+L3's K′, the entry row and side trees of the layout for gates, the map from a drawn index to a tile, the execution phase statement
 on the entry rows, and the tile instances' public inputs."""
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def test_the_grid_is_the_numbers_of_at_most_s_plus_1_significant_bits():
 
 
 def test_q_over_the_declared_ranges():
-    """The window registers one level: log2 q bits.  304 levels over [1, 2^40], 161 over [2^10, 2^30]."""
+    """The execution phase registers one level: log2 q bits.  304 levels over [1, 2^40], 161 over [2^10, 2^30]."""
     assert Wd.levels(1, 1 << 40) == 304 and Wd.levels(1 << 10, 1 << 30) == 161
     assert round(math.log2(304), 2) == 8.25
 
@@ -305,7 +305,7 @@ def test_the_window_statement_refuses_each_departure_from_the_layout():
 
 def test_a_side_tree_is_its_rows_then_frame_v3_pads_to_two_to_the_d():
     """`side_levels` and `side_path` are `tree_levels` over the n leaves and the domain's pad leaves at ranks n..2^D − 1,
-    computed without the pads' own leaves; and each window's side domains are its own, one per side, at the public depth."""
+    computed without the pads' own leaves; and each execution phase's side domains are its own, one per side, at the public depth."""
     small = CommitmentDomain(hashlib.sha512(b"side").digest(), -1, RangeIndexedDomain(0, 16), hash="sha512")
     leaves = [hashlib.sha512(bytes([i])).digest() for i in range(16)]
     for n in (1, 3, 5, 8, 16):
@@ -337,7 +337,7 @@ def _registration(n=9, k=3, root=_d(7), dom=_d(8)):
 
 def test_the_public_inputs_file_is_c_flocks_and_pads_with_the_last_filler_tile():
     """F_σ is Flock's ``verity/flock-public-inputs/v1`` (a key-sorted JSON header line, then the instances' words, u16 LE,
-    instance-major, the ports in order): t as a u128, the window root, its domain, the two side domains and the pass's -h3
+    instance-major, the ports in order): t as a u128, the execution phase root, its domain, the two side domains and the pass's -h3
     tile domain, from the registration, the sample and the pass alone.  Session σ of ⌈K′/cap⌉ holds drawn[σ·cap ..], then
     N − 1."""
     reg, drawn, h3 = _registration(), [1, 4, 6], _d(11)
@@ -369,7 +369,7 @@ def test_the_public_inputs_file_is_c_flocks_and_pads_with_the_last_filler_tile()
         Wd.sessions(3, 0)
 
 
-#: the served sizing points (ε, δ) and the levels a served window registers
+#: the served sizing points (ε, δ) and the levels a served execution phase registers
 POINTS = ((Fraction(1, 1000), Fraction(1, 2**40)), (Fraction(1, 100), Fraction(1, 2**128)))
 LEVELS = range(87, 144)
 
@@ -403,9 +403,9 @@ def test_sessions_hold_the_largest_served_draw_at_both_points():
 
 
 def test_the_pinned_vectors_are_the_layout():
-    """``vectors/window.json`` is `window_vectors.vectors()`: the toy window's entry rows, its records and side rows'
+    """``vectors/window.json`` is `window_vectors.vectors()`: the toy execution phase's entry rows, its records and side rows'
     indices, each real tile's (p, at), a side tree, the root and F_σ.  The rows are dense (call 0 keeps A rows 0, 1 and 70
-    of 80), and the vectors agree with the window statement, records and indices included."""
+    of 80), and the vectors agree with the execution phase statement, records and indices included."""
     pinned = json.loads(V.OUT.read_text())
     assert pinned == json.loads(json.dumps(V.vectors()))
     rows = [bytes.fromhex(e["row"]) for e in pinned["entries"]]

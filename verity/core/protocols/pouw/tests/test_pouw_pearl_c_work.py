@@ -1,6 +1,6 @@
 """Pearl-C's work law (`pearl_c_work`): splits bounded by 1% of k, credit
 on real, kept, unexcluded cells at Lean's accounting, the tile rule (zero filler and padding, credited rows pass and
-excluded rows fail, the debit under the cap, and under -h3 each credited row's too), draws keyed by the epoch's sampling coin
+excluded rows fail, the debit under the cap, and under -h3 each credited row's too), draws keyed by the execution phase's sampling coin
 after the commitment, and the audit."""
 
 from __future__ import annotations
@@ -480,9 +480,9 @@ def test_census_row_cap_leaves_k_from_k_min_unchanged():
 
 
 def test_the_draw_coin_must_open_against_the_epochs_commitment_after_the_commitment():
-    """The sampling coin is the epoch's, asked of the challenger once the verifier recorded the transcript and records roots
-    (`draw_after`): a foreign challenger's coin, a coin not under the commitment, the epoch's salt coin, a coin opened
-    before the commitment, another epoch's coin and an epoch with no coin commitment are each refused before any tile
+    """The sampling coin is the execution phase's, asked of the challenger once the verifier recorded the transcript and records roots
+    (`draw_after`): a foreign challenger's coin, a coin not under the commitment, the execution phase's salt coin, a coin opened
+    before the commitment, another execution phase's coin and an execution phase with no coin commitment are each refused before any tile
     is opened; the honest challenger's coin selects the tiles `draw_key` gives."""
     epoch, prover, tr, rows_a, rows_b = lifecycle()
     records = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})

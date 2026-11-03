@@ -4,16 +4,16 @@
 
     field       anchor                                                                       input
     salt        the run's salt                                                               `salt`
-    forward     the verifier's own enumeration of the window's forwards                      `forward`
+    forward     the verifier's own enumeration of the execution phase's forwards                      `forward`
     position    (layer, site) from the registered layout: layer << 32 | site                 `position`
     weight id   the registered id of the matrix whose rows B opens under the weights root    `weight`
     row ids     the call's global row indices, distinct                                      `rowids`
     column ids  the weight's global column indices, shards included, distinct                `colids`
 
 The verifier builds these inputs itself (`Anchors.call_inputs`, `Anchors.weight_inputs`), or compares a prover's
-(`Anchors.check_call`, `Anchors.check_weight`); it never takes them as stated.  A window's `Ledger` refuses a repeated
+(`Anchors.check_call`, `Anchors.check_weight`); it never takes them as stated.  An execution phase's `Ledger` refuses a repeated
 call index, (forward, position): the Lean statement's A11, `UniqueCallIndices`. `SaltWindows` refuses one across every
-window of a salt, since a call's noise key reads the salt and its call index.
+execution phase of a salt, since a call's noise key reads the salt and its call index.
 
 The tile checks' (`pc4`, `pc8`) anchored inputs are derived values, not ids: the noise lines E_A, E_B, F_A, F_B and
 G = F_Bᵀ·F_A, which the verifier derives from the scheme's seeds (`TileAnchors`, from `noise(ctx)`: seed_A reads the salt,
@@ -28,10 +28,10 @@ one segment at a time: each form's region is its segment's lines (`Derivation.pe
 rule (``verity/pouw/anchor/<scheme>/<anchor>/slice/v<n>``, at the anchor's own version), which only the cut's shapes
 name.
 
-A window's `Receipt` lists every call of the window, each with its anchors, shape and commitment, complete and immutable
-before any key exists. `Ledger.open` derives the window's key from it alone, a fresh source under the receipt's digest,
+An execution phase's `Receipt` lists every call of the execution phase, each with its anchors, shape and commitment, complete and immutable
+before any key exists. `Ledger.open` derives the execution phase's key from it alone, a fresh source under the receipt's digest,
 and admits only the calls it lists; `Traced.draw` draws only under that key. So the key comes after every call's
-commitment (the window pin's order and root's C1), and each window's source is fresh and used once (C2).
+commitment (the execution phase pin's order and root's C1), and each execution phase's source is fresh and used once (C2).
 """
 from __future__ import annotations
 
@@ -326,9 +326,9 @@ def _frame(v) -> bytes:
 
 @dataclass(frozen=True)
 class Receipt:
-    """A window's receipt, complete and sealed: every call of the window, each with its anchors, its shape and its
+    """An execution phase's receipt, complete and sealed: every call of the execution phase, each with its anchors, its shape and its
     commitment (the 32- or 64-byte digest the prover committed to), listed once, in any order. It is immutable, so a
-    call is in the window exactly when the receipt lists it, and every call's commitment is fixed before the key."""
+    call is in the execution phase exactly when the receipt lists it, and every call's commitment is fixed before the key."""
 
     calls: tuple[tuple[Any, Any, bytes], ...]
 
@@ -361,19 +361,19 @@ class Receipt:
 
 
 def _fresh_source() -> bytes:
-    """A window's source: 32 fresh bytes from the operating system's CSPRNG (`secrets`), sampled once the receipt is
-    complete and used for this window alone (A4's model: one fresh uniform source per derivation). A test seam only:
+    """An execution phase's source: 32 fresh bytes from the operating system's CSPRNG (`secrets`), sampled once the receipt is
+    complete and used for this execution phase alone (A4's model: one fresh uniform source per derivation). A test seam only:
     production code never replaces it."""
     return secrets.token_bytes(SOURCE_BYTES)
 
 
 class Ledger:
-    """A window's calls, as the verifier admits them: a repeated call index is refused.
+    """An execution phase's calls, as the verifier admits them: a repeated call index is refused.
 
-    A window's ledger comes from `Ledger.open(receipt)`, the only place its receipt, key and source are set: callers
+    An execution phase's ledger comes from `Ledger.open(receipt)`, the only place its receipt, key and source are set: callers
     set no attribute of a ledger, before or after (`__setattr__` refuses), and `Traced.draw` takes the key from the
-    ledger. A ledger built as `Ledger()` has none of them; it only refuses repeats (a window's input builders use
-    that) and draws nothing. Once the window's sample is sent (`sent`), the ledger draws nothing more, and `record`
+    ledger. A ledger built as `Ledger()` has none of them; it only refuses repeats (an execution phase's input builders use
+    that) and draws nothing. Once the execution phase's sample is sent (`sent`), the ledger draws nothing more, and `record`
     gives the audit record its source and receipt digest."""
 
     __slots__ = ("seen", "_receipt", "_key", "_source", "_sent")
@@ -395,9 +395,9 @@ class Ledger:
 
     @classmethod
     def open(cls, receipt: Receipt) -> "Ledger":
-        """The window's ledger: its key derived from a fresh source (`_fresh_source`) under `plan.DRAW_DOMAIN` with
+        """The execution phase's ledger: its key derived from a fresh source (`_fresh_source`) under `plan.DRAW_DOMAIN` with
         ``{"receipt": receipt.digest()}`` as its context, and only the receipt's calls admitted. No source is taken
-        from the caller, so a window's secret is fresh and used once (C2)."""
+        from the caller, so an execution phase's secret is fresh and used once (C2)."""
         from verity.ml.randomness import derive
 
         from .plan import DRAW_DOMAIN
@@ -419,14 +419,14 @@ class Ledger:
         self.seen.add(anchors.call_index)
 
     def check_draw(self) -> None:
-        """Refuse a sample from a ledger not opened from a receipt, or once the window's sample has been sent."""
+        """Refuse a sample from a ledger not opened from a receipt, or once the execution phase's sample has been sent."""
         if self._receipt is None or self._key is None:
             raise DomainError("a window draws only from a ledger opened from its complete receipt (Ledger.open)")
         if self._sent:
             raise DomainError("the window's draw has been sent: it draws nothing more")
 
     def commitment(self, anchors) -> bytes:
-        """The call's commitment as the window's receipt lists it, by call index: the only commitment its openings are
+        """The call's commitment as the execution phase's receipt lists it, by call index: the only commitment its openings are
         checked against (`Traced.check_openings`), never one supplied with them."""
         if self._receipt is None:
             raise DomainError("a call's commitment comes from its window's receipt (Ledger.open)")
@@ -436,12 +436,12 @@ class Ledger:
         return entry[2]
 
     def sent(self) -> None:
-        """Mark the window's sample as sent to the prover: after this the ledger draws nothing, and its record is given."""
+        """Mark the execution phase's sample as sent to the prover: after this the ledger draws nothing, and its record is given."""
         self.check_draw()
         object.__setattr__(self, "_sent", True)
 
     def record(self) -> dict[str, str]:
-        """The window's entry in the audit record once its sample is sent: the receipt digest and the source, from which
+        """The execution phase's entry in the audit record once its sample is sent: the receipt digest and the source, from which
         anyone re-derives the key and so the sample (`replay_key`). Revealing the source then helps no prover: the sample is
         public, and the source derives nothing else and is never reused. A third party can check that the sample came
         from the recorded source, not that the source was fresh: a verifier colluding with a prover could pick a source
@@ -455,12 +455,12 @@ class Ledger:
 
 
 class SaltWindows:
-    """Every window of one salt, opened in turn: a call index names one call across all of them, as within one window.
+    """Every execution phase of one salt, opened in turn: a call index names one call across all of them, as within one execution phase.
 
-    A call's noise key reads the salt and its call index, so a call index that two windows of a salt both use would
-    reuse one key. `open` refuses a receipt that lists a call of another salt or a call index an earlier window of this
-    salt listed, and only then opens the window's ledger (`Ledger.open`). `next_forward` is the first forward index no
-    window of the salt has used, where the verifier's enumeration of the next window's forwards starts."""
+    A call's noise key reads the salt and its call index, so a call index that two execution phases of a salt both use would
+    reuse one key. `open` refuses a receipt that lists a call of another salt or a call index an earlier execution phase of this
+    salt listed, and only then opens the execution phase's ledger (`Ledger.open`). `next_forward` is the first forward index no
+    execution phase of the salt has used, where the verifier's enumeration of the next execution phase's forwards starts."""
 
     __slots__ = ("salt", "_seen", "_next")
 
@@ -487,7 +487,7 @@ class SaltWindows:
 
 
 def replay_key(record: dict[str, str]):
-    """The window's key from its audit record: `derive(source, DRAW_DOMAIN, {"receipt": digest})`."""
+    """The execution phase's key from its audit record: `derive(source, DRAW_DOMAIN, {"receipt": digest})`."""
     from verity.ml.randomness import derive
 
     from .plan import DRAW_DOMAIN

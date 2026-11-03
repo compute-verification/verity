@@ -22,7 +22,7 @@ from verity.ml.randomness import Part, frame
 
 U64 = 1 << 64
 CALL_RANGE = 1 << 32
-"""Call indices of one epoch (one salt) lie below this: -h3's row seed (`pearl_c.row_seed`) packs the index into the high
+"""Call indices of one execution phase (one salt) lie below this: -h3's row seed (`pearl_c.row_seed`) packs the index into the high
 half of a u64."""
 
 
@@ -83,7 +83,7 @@ def grid_tiles(shape: Shape, h: int, w: int) -> list[Tile]:
 
 @dataclass(frozen=True, slots=True)
 class Context:
-    """What a scheme's noise may depend on for one matmul: the epoch's salt, the declaration and the committed roots."""
+    """What a scheme's noise may depend on for one matmul: the execution phase's salt, the declaration and the committed roots."""
 
     salt: bytes
     matmul: Matmul

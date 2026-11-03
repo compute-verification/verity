@@ -691,7 +691,7 @@ def _split(rows, scales, n):
 
 @pytest.mark.parametrize("r,c,k,n", [(4, 8, 64, 2), (32, 32, 6144, 2), (32, 32, 14336, 4)])
 def test_the_unit_on_chunk_rows_reads_the_tables_chunk_rows_and_returns_the_units_outputs(r, c, k, n):
-    """`PouwH1TileZyChunks` takes the window's tile parameters (`h1window.TILE_PARAMS`): n R A and n C B rows of `ROW`(K / n)
+    """`PouwH1TileZyChunks` takes the execution phase's tile parameters (`h1window.TILE_PARAMS`): n R A and n C B rows of `ROW`(K / n)
     in place of UNIT's R and C of `ROW`(K), then UNIT's record, salt, position and roots, and returns UNIT's receipt and ok
     with its ports (the salt a coin, the receipt a sink, so it is no seed); `window_unit` binds it at the served K past
     4096 with n = `chunks`(K), and UNIT itself up to 4096."""

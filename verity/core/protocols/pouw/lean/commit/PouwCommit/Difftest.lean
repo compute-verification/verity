@@ -18,7 +18,7 @@ is not it, naming the Lean's. The kinds:
 * `transcript`: the transcript tree's root over tile digests (`Prover.prove`);
 * `verify`: `verify_opening` against `rows_domain`, of openings Python's trees made and of tampered ones;
 * `coins`: `coin_reason` of `CoinCommitment.from_json` and `CoinOpening.from_json`, honest and tampered;
-* `salt_of`, `unverified_salt`: the epoch's salt from a coin, and `Epoch.unverified`'s from a seed;
+* `salt_of`, `unverified_salt`: the execution phase's salt from a coin, and `Epoch.unverified`'s from a seed;
 * `epoch_salt`, `draw_coin`: `Epoch.start`'s salt and `draw_coin`'s coin, or their refusals in their words (`{"reason"}`);
 * `key`: the audit, draw and replay keys and `draw_after`;
 * `sampled`, `pearl_draw`: the clear audit's work-weighted draws over given tickets, `Sampled.select`'s and

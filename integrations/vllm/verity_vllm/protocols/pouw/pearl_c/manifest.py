@@ -46,7 +46,7 @@ def manifest_epoch(man: dict, coins: CoinCommitment | LiveCommitment | None, rec
     the epoch's coin commitment and its salt coin's opening: the commitment must be `coins`, the one the challenger published
     (the verifier's copy, not the pass's; a live session's when the pass's coins are `LIVE_SCHEME`'s), and the opening the
     salt coin's against it, opened after every weight's root (`epoch_of`; a live session's after the epoch root of the
-    weights' root and the manifest's ``pass_index``).  A pass recorded before epoch coins (`MANIFEST_SCHEMA_RECORDED`) carries a beacon instead, which only a
+    weights' root and the manifest's ``pass_index``).  A pass recorded before the execution phase's coins (`MANIFEST_SCHEMA_RECORDED`) carries a beacon instead, which only a
     replay of a recorded pass reads (`recorded`: `Epoch.unverified`, a salt that claims nothing).  Either way the pass's salt
     must be the epoch's.  Raises `DomainError` naming what doesn't hold."""
     schema = manifest_schema(man, recorded)

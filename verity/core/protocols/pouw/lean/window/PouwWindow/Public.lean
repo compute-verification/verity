@@ -1,5 +1,5 @@
 /-!
-# What the window makes public (`window.py`, "Public items")
+# What the execution phase makes public (`window.py`, "Public items")
 
 `PUBLIC`, the draft's list and the rows' fixed length, in the service's `Public` form, `REGISTERED`, the items
 a registration carries, `LEGACY_REGISTERED`, what one made before the fixed-length rule carries, and `KINDS`, the kinds

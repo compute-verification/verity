@@ -10,7 +10,7 @@ import PouwWindow.RegFile
 import PouwWindow.FullDraw
 
 /-!
-# The difftest's functions: the window's Lean behind `Difftest.serve`
+# The difftest's functions: the execution phase's Lean behind `Difftest.serve`
 
 One function per ported function of `window.py`, each on a JSON object of its arguments, for the shared harness
 (`verity/core/difftest`): an output, or `.error` where Python raises `ValueError` (a reject). The port's
@@ -31,10 +31,10 @@ to Python.
 * a call's record: `record_digest` (`record`); `record_problem` (`row`, `record`);
 * the side trees: `side_row` (`words`, `index`); `side_index` (`row`); `side_domain` (`window`, `side`); `pad_node`
   (`domain`, `level`, `index`); `side_levels` (`domain`, `leaves`); `side_path` (`domain`, `leaves`, `index`);
-* the window statement: `window_problem` (`rows`, `work`, `bound`, `root_h3`, `bits`, and `records`, `indices` or null);
+* the execution phase statement: `window_problem` (`rows`, `work`, `bound`, `root_h3`, `bits`, and `records`, `indices` or null);
 * the public inputs: `session_cap` (`k_log`, `per_block`); `sessions` (`k`, `cap`); `instance_ts` (`registration`,
   `drawn`, `sigma`, `cap`); `public_inputs` (those and `domain_h3`); `layout_constants`.
-* a live window: `live_epoch_reason` (`commitment`, the challenger's live coin commitment); `round_key` (`commitment`,
+* a live execution phase: `live_epoch_reason` (`commitment`, the challenger's live coin commitment); `round_key` (`commitment`,
   `coin`, `round`, `root`).
 * a drawn leaf's statements (`PouwWindow.Lanes`, held to `h1zy.statement_ports` and to the lowered circuits' port
   records): `n_digits` (`ks`); `lane_ports` (`r`, `c`, `k`, `lane`); `combine_ports` (`r`, `c`, `k`); a J10-R leaf's

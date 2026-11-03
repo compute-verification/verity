@@ -29,7 +29,7 @@ def _spy(monkeypatch) -> list[bytes]:
 
 def test_a_served_challengers_coins_are_the_leans(monkeypatch):
     """Every byte a challenger on `verifier.coins` commits to is a `coins` answer of the Lean, in order: a challenger
-    replaying exactly those answers commits to the same root, for an epoch's seeded coins and a live epoch's."""
+    replaying exactly those answers commits to the same root, for an execution phase's seeded coins and a live execution phase's."""
     a, b = V.coins(64), V.coins(64)
     assert len(a) == len(b) == 64 and a != b and V.coins(0) == b""
     answered = _spy(monkeypatch)

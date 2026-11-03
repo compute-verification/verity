@@ -1054,7 +1054,7 @@ def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
     (d / "call1.rowdig_a").write_bytes(bytes(64) + (d / "call1.rowdig_a").read_bytes()[64:])
     assert not HS._calls(d)["calls"][1]["row_digests"]
 def test_verify_run_reads_a_v1_manifest_only_as_a_recorded_replay(honest_pass):
-    """A v1 manifest (a pass recorded before epoch coins) is refused unless ``--recorded``; read as a recorded pass it needs
+    """A v1 manifest (a pass recorded before the execution phase's coins) is refused unless ``--recorded``; read as a recorded pass it needs
     a beacon its salt is from; a manifest of another schema is refused either way."""
     path, *_ = honest_pass
     man = json.loads(path.read_text())

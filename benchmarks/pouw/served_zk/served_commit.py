@@ -69,7 +69,7 @@ judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `reg
   Python's generator.  A window's registration names its
   pass, and the challenger re-starts the pass's epoch from the pass's manifest under its own commitment
   (`pouw_pearl_c_device.manifest_epoch`): the pass's salt coin must open against it, as the salt coin, after the
-  weights' root, and the pass's salt must be that coin's; a pass recorded before epoch coins (a beacon's salt) is read
+  weights' root, and the pass's salt must be that coin's; a pass recorded before the execution phase's coins (a beacon's salt) is read
   only when the request says it is a recorded replay.  `select` opens the epoch's sampling coin after the registration (its
   digest), once, with no retry, and the sample's key is `draw_key` of that coin; Lean ``flock-verify draw --population N
   --k K′ --stream`` samples over the key's stream (`stream_subset` is its Python twin).  A window is received within
@@ -1210,7 +1210,7 @@ def handle(ch: Challenger, cmd: Mapping[str, Any]) -> tuple[str, dict]:
     """One request to the challenger, as a reply word and its JSON.  Requests: ``coins`` (the epoch's coin commitment),
     ``salt`` (``after`` hex, the weights' root; ``out`` the salt coin's opening), and with a registration's ``name``:
     ``register`` (``registration`` a record's file, ``manifest`` its pass's manifest and ``recorded`` true for a pass
-    recorded before epoch coins; ``stream`` and ``replay`` for a control; ``out`` the receipt), ``select`` (``out`` the
+    recorded before the execution phase's coins; ``stream`` and ``replay`` for a control; ``out`` the receipt), ``select`` (``out`` the
     sample; the reply adds the stream's digest the sample read), ``deliver`` (``units``: the job's rows, each with its ``session`` record) and ``outcome`` (``units``; ``out`` a
     directory: outcome.json, audit.json).  Replies: COINS, OPENED, REGISTERED, DRAWN, DELIVERED, ACCEPT, REJECT, LATE,
     PENDING, REFUSED, or ERROR for a request it couldn't read."""

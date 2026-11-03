@@ -1,4 +1,4 @@
-"""PoUW's epoch coins (`coins`, `audit.Epoch.start`): the vectors are pinned and each pinned opening opens against its
+"""PoUW's execution-phase coins (`coins`, `audit.Epoch.start`): the vectors are pinned and each pinned opening opens against its
 root; the salt is the challenger's salt coin, opened after the weights' root; a foreign, tampered, mislabelled,
 early or other-epoch coin is refused, for the salt and for the sample; and a challenger opens each coin once."""
 
@@ -56,8 +56,8 @@ def setup():
 
 
 def test_the_lifecycle_takes_the_salt_and_the_draw_from_the_challenger():
-    """The challenger commits before the epoch, opens the salt coin after the weights' root and the sampling coin after the
-    transcript's root; the epoch's salt is `salt_of` that coin, and the audit draws from the sampling coin."""
+    """The challenger commits before the execution phase, opens the salt coin after the weights' root and the sampling coin after the
+    transcript's root; the execution phase's salt is `salt_of` that coin, and the audit draws from the sampling coin."""
     s, work, acts, prover, roots = setup()
     ch = E.challenger()
     opening = ch.open("salt", weights_root(roots))

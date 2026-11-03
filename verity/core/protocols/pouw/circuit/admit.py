@@ -1,9 +1,9 @@
-"""A window's admission from its committed request queue (PADCREDIT's admit): slot s of a call
+"""An execution phase's admission from its committed request queue (PADCREDIT's admit): slot s of a call
 at step t is selected iff the queue assigns it a request live at t, computed from the queue alone, and admitted iff it is
 selected and its row's committed scale is nonzero, so a selected slot holding the canonical empty row (K zero bytes, scale 0)
 is not admitted.
 
-The **request queue** is an input committed before the window's first coin, two tables of hiding leaves:
+The **request queue** is an input committed before the execution phase's first coin, two tables of hiding leaves:
 
     slot map      one u16 per (step t, slot s): q, the index of the request the scheduler put in slot s at step t, 0 for none
     requests      one (start, stop) pair of u16 per request index q >= 1: the steps [start, stop) the request is live in;
@@ -18,10 +18,10 @@ admission, never grant it, so a row in a slot the queue leaves unassigned is nev
 The unit reads a row's scale and none of its bytes, so an admit bit says nothing of the bytes: a selected row of zero bytes
 under a nonzero scale (`scale_only`) is admitted, and so is a block of 32 of them, which is a dead tile to a tile that reads
 A's bytes and masks its receipt by them.  Nothing here refuses such a
-row, and no window reads this unit yet.  So an admit bit is not a live tile: credit must count only tiles live in-circuit,
-and that is the served tally's to establish, not this unit's.  The unit is generic over the window: a window maps its call
-to t and its slots to groups of 16, and nothing else of the window reaches it (served_h1's A tables of T slots, the static
-window's side A of m slots).
+row, and no execution phase reads this unit yet.  So an admit bit is not a live tile: credit must count only tiles live in-circuit,
+and that is the served tally's to establish, not this unit's.  The unit is generic over the execution phase: an execution phase maps its call
+to t and its slots to groups of 16, and nothing else of the execution phase reaches it (served_h1's A tables of T slots, the static
+execution phase's side A of m slots).
 """
 from __future__ import annotations
 

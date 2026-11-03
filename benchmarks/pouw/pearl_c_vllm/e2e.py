@@ -863,7 +863,7 @@ def state_entropy(path: str):
 
 
 def epoch_coins(args, epoch: int) -> Coins:
-    """The run's epoch coins, committed before any engine starts; with ``--retain`` the commitment is published beside the
+    """The run's execution-phase coins, committed before any engine starts; with ``--retain`` the commitment is published beside the
     passes (``coins.json``), where `verify_run.py --coins` reads it.  ``POUW_COIN_STATE`` names a file holding the
     challenger's entropy (`state_entropy`)."""
     state = settings.POUW_COIN_STATE

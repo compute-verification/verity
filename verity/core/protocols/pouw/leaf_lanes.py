@@ -64,7 +64,7 @@ n = `weights.chunks`(K) chunks along K (`h1zy.lane_statements`; every served J10
   the circuit returns, and the combine holds the rest of each ok row to 0.
 
 STAND-IN: the rows of ``a``, ``b``, ``zy`` and ``receipt`` are leaf-local (the leaf's own registration); in a served
-window they are the window's table rows (`circuit.h1window`), which this module then takes as an offset.
+execution phase they are the execution phase's table rows (`circuit.h1window`), which this module then takes as an offset.
 """
 from __future__ import annotations
 

@@ -86,7 +86,7 @@ def kPrime (eps δ : Rat) (credited n w : Int) : Except String Nat :=
 /-- `EPS_BITS`: `epsAt` reports ε on the grid of multiples of `2^-EPS_BITS`. -/
 def EPS_BITS : Nat := 32
 
-/-- `eps_at`: `kPrime` inverted, the least `ε = j/2^EPS_BITS` (`1 ≤ j ≤ 2^EPS_BITS`) whose `K′` at `δ` and the window's
+/-- `eps_at`: `kPrime` inverted, the least `ε = j/2^EPS_BITS` (`1 ≤ j ≤ 2^EPS_BITS`) whose `K′` at `δ` and the execution phase's
 inputs is at most `k`, by bisection over `j` (`K′` is nonincreasing in `ε`); an error when `k < 1`, the inputs are
 outside `kPrime`'s domain, or not even `ε = 1` has `K′ ≤ k`. -/
 def epsAt (k : Int) (δ : Rat) (credited n w : Int) : Except String Rat := do

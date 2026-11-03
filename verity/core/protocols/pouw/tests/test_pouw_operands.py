@@ -1,4 +1,4 @@
-"""A window's operand rows (`pouw.operands`): committed per window, held by the verifier only under the window's own
+"""An execution phase's operand rows (`pouw.operands`): committed per execution phase, held by the verifier only under the execution phase's own
 context, and their root X moving with every value's root."""
 from __future__ import annotations
 

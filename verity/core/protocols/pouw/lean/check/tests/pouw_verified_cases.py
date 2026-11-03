@@ -1,19 +1,19 @@
-"""The statements difftest's cases: the arguments of `credit._verified` (the Lean `PouwCheck.Verified`), a served window's
-statements, its period's committed circuit files and the verifier of record's answers.
+"""The statements difftest's cases: the arguments of `credit._verified` (the Lean `PouwCheck.Verified`), a served execution phase's
+statements, its credit period's committed circuit files and the verifier of record's answers.
 
-A `verified` case is a served window (`pouw_credit_cases.layout`, its descriptor under a prefix or none, its calls over
+A `verified` case is a served execution phase (`pouw_credit_cases.layout`, its descriptor under a prefix or none, its calls over
 one to three rounds), one to six sampled proof blocks, the entries a statement of each drawn call reads (its round's A table of
 its K, its z table and the weights' ``b/<K>``, `credit.registered_file`'s, each registered once), one statement a drawn
 call in a shuffled order (its circuit and public files' paths and one to three sessions' directories), each K's
-committed circuit file, the window's open root, rounds and Program salt, and `runs`: null, the first of the Lean's two
+committed circuit file, the execution phase's open root, rounds and Program salt, and `runs`: null, the first of the Lean's two
 calls (`credit._lean_verified`), or the answers the served path gives: one a statement `credit._asks` names, in its
 order, until one the Lean refuses at, each session accepted with the units of its call split among them and its
 registered finding the ``--registered`` file's ports at their values and roots.
 
 Its mutations before any run (`PRE_NAMES`, with `runs` null or answered) break the circuit files' form, the statements'
-form or name a call past the window's, give a call two statements or one to a call with no sampled proof block, drop a K's
-circuit file, register the window's ok rows (``ok-registered``) or none of a value a statement reads (``unregistered``),
-and give a descriptor that is no H1 window's. Its mutations of the answers (`RUN_NAMES`) make one statement's verifier
+form or name a call past the execution phase's, give a call two statements or one to a call with no sampled proof block, drop a K's
+circuit file, register the execution phase's ok rows (``ok-registered``) or none of a value a statement reads (``unregistered``),
+and give a descriptor that is no H1 execution phase's. Its mutations of the answers (`RUN_NAMES`) make one statement's verifier
 fail to run (``error``) or refuse it (``refused``), reject one session (``rejected``), open a public table or the ok
 rows at another port, value or root, open no ok row (``ok-none``), and prove a unit of another call (``unit-other``).
 
@@ -42,7 +42,7 @@ def _starts(lay: dict) -> tuple[list[int], list[int]]:
 
 
 def _reads(lay: dict, prefix: str, steps: int, c: int) -> list[str]:
-    """The values call `c`'s statement reads that the window registers (`credit.registered_file`'s)."""
+    """The values call `c`'s statement reads that the execution phase registers (`credit.registered_file`'s)."""
     k = {lin: k for lin, k, _n in lay["linears"]}[lay["calls"][c][0]]
     return [f"{prefix}a/{k}@{Cr.step_row(lay, steps, c)[0]}", f"{prefix}zy@{c}", f"{prefix}b/{k}"]
 

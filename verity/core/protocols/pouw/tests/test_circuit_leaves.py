@@ -80,7 +80,7 @@ def test_a_rows_commit_string_is_cores_at_every_padding_edge(row, role, sizes):
 
 
 def test_every_per_call_row_but_ok_the_tile_the_caps_and_the_cuts_is_a_row_seg_row():
-    """The units' committed rows (`pc4.PORTS`, `pc8.PORTS`, the window tile's `pc8.SIDE_PORTS`, `cap.PORTS`, and the
+    """The units' committed rows (`pc4.PORTS`, `pc8.PORTS`, the execution phase tile's `pc8.SIDE_PORTS`, `cap.PORTS`, and the
     row_k cut's `rowk.PORTS4`, `rowk.PORTS8`) are exactly the rows with a schema, and the row-seg ones are the per-call
     rows (role X) but ok, the tile
     digest, the cap's rows and the cut's six: A_i, A′_i ‖ P_A,i of both checks and A's salt-dead counts.  Every other row,

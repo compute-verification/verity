@@ -11,7 +11,7 @@ challenger and the verifier never hold a row, a salt or a served value):
    rows, each with its s_a) and its z table zy@<c> (its tiles' z/y records: z = A Bᵀ exact and y its served dequant,
    what ``scaled_mm_zy`` writes), and the calls' B rows (each with its s_w) as the weights' b/<K> (`window.py commit`),
    and the salt coin opens after those roots are recorded;
-2. the prover serves every tile's receipt under the unit salt, PoUW's window salt (`h1unit.unit_salt`: `pouw_salt` of the
+2. the prover serves every tile's receipt under the unit salt, the execution phase's salt (`h1unit.unit_salt`: `pouw_salt` of the
    coin's stand-in for the certifier's reveal, the epoch as the window, a stand-in stream and prover) and commits them
    (`window.py serve`); the registration (the window's commitment and its receipt root) is recorded, and the sampling coin
    opens after it. The verifier builds the window's public Program and its template-instance partition from the

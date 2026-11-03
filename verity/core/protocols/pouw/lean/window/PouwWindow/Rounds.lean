@@ -3,14 +3,14 @@ import SampledProofs.Challenger
 import Identity.Domains
 
 /-!
-# A live window's round coins (`window.py`, "Live windows")
+# A live execution phase's round coins (`window.py`, "Live execution phases")
 
-PoUW's live window is the proof service's challenger's first client (`SampledProofs.Challenger`). The check item's
-optional `coins` is the window's coin mode (`mode`, Compose's `CoinMode`), seeded when the item names none. A live
-epoch's coins are the layout `liveFamilies R` under `LIVE_SCHEME`: its salt coin, its draw coin and `R` round coins
-(`pouw/round`, rounds numbered from 0), all committed before the epoch. Round `r`'s coin opens once, after the verifier
-recorded round `r`'s root. `liveEpochReason` is `live_epoch_reason`, `roundsReason` is `rounds_reason`, the rule on a
-window's round coins, and `roundKey` is `round_key`, round `r`'s noise key from its opened coin and the round's root.
+PoUW's live execution phase is the proof system's challenger's first client (`SampledProofs.Challenger`). The check item's
+optional `coins` is the execution phase's coin mode (`mode`, Compose's `CoinMode`), seeded when the item names none. A live
+execution phase's coins are the layout `liveFamilies R` under `LIVE_SCHEME`: its salt coin, its draw coin and `R` round coins
+(`pouw/round`, rounds numbered from 0), all committed before the execution phase. Round `r`'s coin opens once, after the verifier
+recorded round `r`'s root. `liveEpochReason` is `live_epoch_reason`, `roundsReason` is `rounds_reason`, the rule on an
+execution phase's round coins, and `roundKey` is `round_key`, round `r`'s noise key from its opened coin and the round's root.
 A Pearl-C pass's live session is reserved for its salt coin alone (`SALT_FAMILIES`), which `saltEpochReason`
 (`salt_epoch_reason`) checks.
 -/
@@ -26,7 +26,7 @@ def DRAW : String := "pouw/draw"
 def ROUND : String := "pouw/round"
 def ROUND_NOISE_DOMAIN : String := Domains.POUW_ROUND_NOISE
 
-/-- A window's coin mode (Compose's `CoinMode`). -/
+/-- An execution phase's coin mode (Compose's `CoinMode`). -/
 inductive CoinMode where
   | live
   | seeded
@@ -45,12 +45,12 @@ def CoinMode.ofName? : String → Option CoinMode
 /-- `mode`: the coin mode a check item names, seeded when it names none. -/
 def mode (coins : Option CoinMode) : CoinMode := coins.getD .seeded
 
-/-- `live_families`: a live epoch's layout, its salt coin, its draw coin and `rounds` round coins. -/
+/-- `live_families`: a live execution phase's layout, its salt coin, its draw coin and `rounds` round coins. -/
 def liveFamilies (rounds : Nat) : List (String × Nat) := [(SALT, 1), (DRAW, 1), (ROUND, rounds)]
 
 def NOT_LIVE_EPOCH : String := "the coin commitment's coins are not a live epoch's: one salt, one draw, then the rounds'"
 
-/-- `live_epoch_reason`: why `c` is not a live epoch's coin commitment; `none` when it is. -/
+/-- `live_epoch_reason`: why `c` is not a live execution phase's coin commitment; `none` when it is. -/
 def liveEpochReason (c : LiveCommitment) : Option String :=
   if c.scheme != LIVE_SCHEME then some s!"the coin commitment's scheme is {c.scheme}, not {LIVE_SCHEME}"
   else match c.families with
@@ -69,7 +69,7 @@ def saltEpochReason (c : LiveCommitment) : Option String :=
   else if c.families != SALT_FAMILIES then some NOT_SALT_EPOCH
   else none
 
-/-- `rounds_reason`: why `openings` are not a live window's round coins over the round roots the verifier recorded,
+/-- `rounds_reason`: why `openings` are not a live execution phase's round coins over the round roots the verifier recorded,
 `roots` in order; `none` when they are. -/
 def roundsReason (c : LiveCommitment) (roots : List ByteArray) (openings : List LiveOpening) :
     Except String (Option String) := do

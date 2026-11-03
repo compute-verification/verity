@@ -86,7 +86,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   token row's chunks agree on its scale. The carries are proof-layer values, committed after the sample like the partials,
   never outputs; the partials and the combine are the whole lane's, so such a leaf is 32 n + 1 statements. Over v1 only:
   v3's z corrects O' and the digits over every segment of K.
-* **The unit on chunk rows.** A window at such a K binds `PouwH1TileZyChunks_v1{UNIT, CHUNKS = n}` (`window_unit`), UNIT
+* **The unit on chunk rows.** An execution phase at such a K binds `PouwH1TileZyChunks_v1{UNIT, CHUNKS = n}` (`window_unit`), UNIT
   the K's `PouwH1TileZy_v1` over `PouwH1Tile_v1`: the same parameters (``a``, ``b``, ``zy``, ``salt``, ``position``,
   ``roots``) and outputs (``receipt``, ``ok``), its ``a`` the n R chunk rows of its R A rows (`ROW`(K_c), row i's chunk c
   at n i + c, as its table commits them) and its ``b`` the n C of its B rows. It is UNIT on the whole rows, each its
@@ -902,7 +902,7 @@ CHUNKED = (PouwH1TileZyChunks, PouwH1TileZyChunks2)
 
 
 def window_unit(tile: Any) -> Any:
-    """The tile unit a window binds at ``tile``'s K, whose rows are the ones a table at K commits (`chunk_leaves`): `unit`
+    """The tile unit an execution phase binds at ``tile``'s K, whose rows are the ones a table at K commits (`chunk_leaves`): `unit`
     at `chunks`(K) = 1, else `unit_chunks` on its n = `chunks`(K) chunk rows. ValueError at a K `chunks` refuses, and past
     `CHUNK_MAX` on any tile but PouwH1Tile_v1 over GemmAccumulatorS8_v2 and J10-R's (`J10R_TILES`)."""
     n = chunks(tile.signature()[0][0][1].elem.n)

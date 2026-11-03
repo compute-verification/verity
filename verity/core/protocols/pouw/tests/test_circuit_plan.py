@@ -154,7 +154,7 @@ def test_traced_as_is_the_compositions_entry_point():
 
 
 def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
-    """K = 27,713 is a window's budget: alone, a call is capped at its units instead of raising; in a window each
+    """K = 27,713 is an execution phase's budget: alone, a call is capped at its units instead of raising; in an execution phase each
     call draws ⌈K·W_c/W_window⌉, so C equal calls draw about K between them, not C·K."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile = _by_role(lay)["tile"]
@@ -169,11 +169,11 @@ def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
 
 
 def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
-    """y's floors over the window: each call's dequantization stratum has floor f_c = ⌈K_y·n_c/N⌉ in its own work table, N
-    the window's y cells and K_y = K = 27,713, so k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c or proves the stratum, and the
-    window samples at most K_y + C y cells. The other zero-work templates keep floor 1, and the tiles' K_c don't move. A call
-    alone proves all its y cells up to K_y. Over the window the escape of b_c wrong cells in each call is at most
-    (1 − ∑b_c/N)^K_y (weighted AM–GM, root's §1), the bound the window pin states."""
+    """y's floors over the execution phase: each call's dequantization stratum has floor f_c = ⌈K_y·n_c/N⌉ in its own work table, N
+    the execution phase's y cells and K_y = K = 27,713, so k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c or proves the stratum, and the
+    execution phase samples at most K_y + C y cells. The other zero-work templates keep floor 1, and the tiles' K_c don't move. A call
+    alone proves all its y cells up to K_y. Over the execution phase the escape of b_c wrong cells in each call is at most
+    (1 − ∑b_c/N)^K_y (weighted AM–GM, root's §1), the bound the execution phase pin states."""
     import random
 
     shapes = [ncp2.Shape(32, 64, 32)] * 3 + [ncp2.Shape(64, 64, 64)] * 2 + [ncp2.Shape(48, 64, 32)]
@@ -208,7 +208,7 @@ def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
 
 
 def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
-    """The window pin's `covers_window` holds only when each call's work is in one stratum (`hone`): with the cap K_c ≤ N_c,
+    """The execution phase pin's `covers_window` holds only when each call's work is in one stratum (`hone`): with the cap K_c ≤ N_c,
     a counterexample (4 units at work 2 and 2 at work 5, K = 8) draws 3 of the first where covering needs 3.6. The
     verifier's own layouts give work to the tile template only, and `work_table`, `WorkLaw` and `window_laws`
     refuse any layout that doesn't."""
@@ -239,10 +239,10 @@ def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
 
 
 def test_the_red_team_s_capped_window_is_refused():
-    """A capped window: call 0 has 1,000 units at work 2 and 10 at work 1,000, call 1 100,000 at
+    """A capped execution phase: call 0 has 1,000 units at work 2 and 10 at work 1,000, call 1 100,000 at
     work 0 and 1 at work 1, and K = 5,000. Call 0's share 5,000 is capped at its 1,010 units, so its work-2 stratum would
-    sample 169 of 1,000 (834 uncapped), and ten wrong units there escape with 0.156 where the window bound claims
-    (1 − 20/12,001)^5,000 ≈ 2.4·10⁻⁴. `window_laws` refuses the window: call 0 does work in two strata."""
+    sample 169 of 1,000 (834 uncapped), and ten wrong units there escape with 0.156 where the execution phase bound claims
+    (1 − 20/12,001)^5,000 ≈ 2.4·10⁻⁴. `window_laws` refuses the execution phase: call 0 does work in two strata."""
     from math import comb
 
     import pytest
@@ -264,7 +264,7 @@ def test_the_red_team_s_capped_window_is_refused():
 
 
 def test_a_window_that_does_no_work_is_refused():
-    """The window pin's `hW`, 0 < W: `window_laws` refuses a window whose calls do no work (every stratum at work 0), so
+    """The execution phase pin's `hW`, 0 < W: `window_laws` refuses an execution phase whose calls do no work (every stratum at work 0), so
     it is never sampled or accepted; one call's work is enough."""
     import pytest
 
@@ -280,7 +280,7 @@ def test_a_window_that_does_no_work_is_refused():
 
 
 def test_a_window_with_no_y_cells_is_refused():
-    """The window pin's `hN`, 0 < N: `window_laws` refuses a window with no dequantization units, so its y term is never
+    """The execution phase pin's `hN`, 0 < N: `window_laws` refuses an execution phase with no dequantization units, so its y term is never
     claimed over an empty population; the verifier's own layouts always have them."""
     import pytest
 
@@ -294,7 +294,7 @@ def test_a_window_with_no_y_cells_is_refused():
     assert len(PL.window_laws([lay, lay])) == 2
 
 def test_the_window_law_is_the_window_pin_s():
-    """`Audit/Window.lean`'s definitions, recomputed on ℕ from their formulas on random small windows, against
+    """`Audit/Window.lean`'s definitions, recomputed on ℕ from their formulas on random small execution phases, against
     `window_laws`: `callK` = min(N_c, max(1, ⌈K·W_c/W⌉)) is `WorkLaw.budget`, `windowK` = workRule(K_c, w_s, n_s, W_c, f_s)
     is `WorkLaw.sizes`, and the pin's hypotheses hold: `hone` (each call's work in one stratum), `hfy` (y's floors, v = 1 on
     the dequantization strata) and so `Covers` of w at K and of v at K_y, which `audit_window_split_of_record` reads."""
@@ -352,7 +352,7 @@ def test_a_tiles_closure_contains_the_tile_itself():
 
 
 def test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused():
-    """The Layout theorems hold only for the window's own layout, so the verifier derives each tile's own unit and its
+    """The Layout theorems hold only for the execution phase's own layout, so the verifier derives each tile's own unit and its
     closure from the shape (`Traced.layout`) and never takes a prover's. A layout mapping a tile to its X strip, C1 again,
     is refused, as a closure headed by the X strip or as the X strip in the tile stratum: by the verifier's comparison
     (`Traced.check_layout`) and by `draw`'s own check."""
@@ -386,7 +386,7 @@ def _anchors(call, **kw):
 
 
 def _window(t, anchors, source=bytes(range(32)), commitments=None):
-    """A window over ``anchors`` (each of ``t``'s shape, with a commitment of its own unless ``commitments`` gives them):
+    """An execution phase over ``anchors`` (each of ``t``'s shape, with a commitment of its own unless ``commitments`` gives them):
     its `Receipt`, and the `Ledger` opened from it, with the fresh source replaced by ``source`` so the samples are
     reproducible."""
     import hashlib
@@ -402,7 +402,7 @@ def _window(t, anchors, source=bytes(range(32)), commitments=None):
 
 def test_equal_calls_under_one_key_draw_different_tiles():
     """Each stratum's subset is keyed by the call's index, (forward, position), with its template: equal calls of
-    a window, under its one key, draw different tiles, and one call draws the same tiles under that key every time. The
+    an execution phase, under its one key, draw different tiles, and one call draws the same tiles under that key every time. The
     strata stay one per template of the call's partition; only the randomness is per call."""
     import circuit_fixtures as F
     from verity.core.protocols.pouw.circuit import traced_as
@@ -435,8 +435,8 @@ def test_the_verifier_draws_over_its_own_layout():
 
 
 def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
-    """The window pin takes a window's per-call draws as independent (M1), and each call's subsets are keyed by its index
-    under the one window key. A receipt lists each call index once, and `Traced.draw` admits the call to the window's
+    """The execution phase pin takes an execution phase's per-call draws as independent (M1), and each call's subsets are keyed by its index
+    under the one execution phase key. A receipt lists each call index once, and `Traced.draw` admits the call to the execution phase's
     `Ledger` before it samples: a call index already drawn, even with another weight id, is refused before `plan.draw`
     runs. A sample without a ledger is refused."""
     import hashlib
@@ -473,7 +473,7 @@ def test_a_repeated_call_index_is_refused_before_any_draw(monkeypatch):
 
 
 def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
-    """Root's C1: the window's key comes after every call's commitment. A `Receipt` lists every call of the window with its
+    """Root's C1: the execution phase's key comes after every call's commitment. A `Receipt` lists every call of the execution phase with its
     shape and commitment, and is immutable; `Ledger.open` derives the key from it alone, under `DRAW_DOMAIN` with
     {"receipt": digest}, and `Traced.draw` refuses a ledger not opened from a receipt and a call the receipt doesn't list
     (another index, the same index with other anchors, or another shape), before `plan.draw` runs. The digest binds each
@@ -632,9 +632,9 @@ def test_openings_are_checked_against_the_receipt_s_commitment():
 
 
 def test_the_record_keeps_the_source_once_the_draw_is_sent():
-    """The audit record keeps the window's source and receipt digest once its draw
+    """The audit record keeps the execution phase's source and receipt digest once its draw
     is sent, so a third party re-derives the key (`replay_key`) and so the draw. Before it is sent the record is refused,
-    and after it the window draws nothing more. What the record can't show is that the source was fresh."""
+    and after it the execution phase draws nothing more. What the record can't show is that the source was fresh."""
     import pytest
 
     import circuit_fixtures as F
@@ -662,8 +662,8 @@ def test_the_record_keeps_the_source_once_the_draw_is_sent():
 
 def test_each_window_s_source_is_fresh():
     """Root's C2: A4 models one fresh uniform source per derivation. `Ledger.open` takes no source: it samples 32 fresh bytes
-    from the operating system's CSPRNG (`secrets`) for each window, once the receipt is complete, so two windows, even
-    over one receipt, get independent keys, and no window's key is a function of another's."""
+    from the operating system's CSPRNG (`secrets`) for each execution phase, once the receipt is complete, so two execution phases, even
+    over one receipt, get independent keys, and no execution phase's key is a function of another's."""
     import inspect
 
     import circuit_fixtures as F

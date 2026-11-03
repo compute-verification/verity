@@ -74,7 +74,7 @@ def _pass(run: str) -> tuple[dict, dict[int, bytes], Workload]:
 
 def _manifest(run: str, coins: Coins | None) -> dict:
     """A served pass's manifest as the challenger reads it: its calls, its weights' roots and its salt, the salt coin of
-    `coins` opened after the weights' root, or (None) a beacon's, as a pass recorded before epoch coins carries."""
+    `coins` opened after the weights' root, or (None) a beacon's, as a pass recorded before the execution phase's coins carries."""
     man, roots, work = _pass(run)
     if coins is None:
         beacon = bytes(32)
@@ -904,7 +904,7 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
     """The challenger re-starts the window's pass's epoch from its manifest under its own coin commitment: a salt coin of
     another challenger, opened after what it had not recorded, labelled the sampling coin or tampered is refused, and so is a
     pass whose commitment is not the epoch's, whose salt is not its coin's, which carries no coin or names no pass, or
-    which is not the pass the window's parameters name.  A pass recorded before epoch coins (a v1 manifest, a beacon's
+    which is not the pass the window's parameters name.  A pass recorded before the execution phase's coins (a v1 manifest, a beacon's
     salt) is received only as a recorded replay, and a manifest of any other schema not at all.  Nothing refused opens a
     coin."""
     *_, words = served

@@ -14,9 +14,9 @@ Each is `verity.ml.randomness.derive` (`FlockSoundness.Randomness.derive`) under
     replay_key     derive(value, "verity/pouw/pearl-c-draw/v1", {round, transcript, records, salt})
     draw_after     tagged("verity/pouw/pearl-c/draw-after/v1", transcript, records)
 
-`epochSalt` is `Epoch.start`'s salt: the opening must be the epoch's salt coin, opened after the weights' root, and is
+`epochSalt` is `Epoch.start`'s salt: the opening must be the execution phase's salt coin, opened after the weights' root, and is
 refused in `coin_reason`'s words, "the salt's …", as `Epoch.start` refuses it. `drawCoin` is `draw_coin`'s check of the
-epoch's draw coin. A key's source is nonempty bytes, which `derive` refuses otherwise.
+execution phase's draw coin. A key's source is nonempty bytes, which `derive` refuses otherwise.
 
 `weightedDraw` is the work-weighted draw with replacement of `Sampled.select` and `clear_work.draw`: draw `j` is
 `bisect_right(cumulative, key.uniform(total, j))` over the tickets' running sums. Python reads `uniform`'s stream for as long
@@ -41,7 +41,7 @@ def key? (source : ByteArray) (domain : String) (context : List (String × Part)
   if source.size = 0 then throw "source must be nonempty bytes: a key holder's secret"
   else pure (derive source domain context)
 
-/-- `salt_of`: the epoch's 32-byte salt from its opened salt coin. -/
+/-- `salt_of`: the execution phase's 32-byte salt from its opened salt coin. -/
 def saltOf (c : CoinCommitment) (coin weightsRoot : ByteArray) : Except String ByteArray := do
   let k ← key? coin EPOCH_SALT_DOMAIN [("epoch", .int c.epoch), ("coins", .bytes c.root), ("weights", .bytes weightsRoot)]
   pure (stream k [.str "salt"] SALT_BYTES)
@@ -51,14 +51,14 @@ def unverifiedSalt (seed weightsRoot : ByteArray) : Except String ByteArray := d
   let k ← key? seed SALT_DOMAIN [("weights", .bytes weightsRoot)]
   pure (stream k [.str "salt"] SALT_BYTES)
 
-/-- `Epoch.start`'s salt: `.ok salt`, or `.error` with `Epoch.start`'s refusal when `o` is not epoch `c.epoch`'s salt coin
+/-- `Epoch.start`'s salt: `.ok salt`, or `.error` with `Epoch.start`'s refusal when `o` is not execution phase `c.epoch`'s salt coin
 opened after `weightsRoot`. It throws where `coin_reason` raises. -/
 def epochSalt (c : CoinCommitment) (o : CoinOpening) (weightsRoot : ByteArray) : Except String (Except String ByteArray) := do
   match ← coinReason c o "salt" weightsRoot with
   | some r => pure (.error s!"the salt's {r}")
   | none => pure (.ok (← saltOf c o.coin weightsRoot))
 
-/-- `draw_coin`'s check: `.ok coin` when `o` is the epoch's draw coin opened after `after`, else `.error` with its words. -/
+/-- `draw_coin`'s check: `.ok coin` when `o` is the execution phase's draw coin opened after `after`, else `.error` with its words. -/
 def drawCoin (c : Option CoinCommitment) (o : CoinOpening) (after : ByteArray) :
     Except String (Except String ByteArray) := do
   let some c := c | pure (.error "the epoch has no coin commitment for its draw coin to open against")
@@ -70,7 +70,7 @@ def drawCoin (c : Option CoinCommitment) (o : CoinOpening) (after : ByteArray) :
 def auditKey (source transcriptRoot salt : ByteArray) : Except String ByteArray :=
   key? source AUDIT_DOMAIN [("transcript", .bytes transcriptRoot), ("salt", .bytes salt)]
 
-/-- `draw_key`: the Pearl-C draws' key from the epoch's draw coin. -/
+/-- `draw_key`: the Pearl-C draws' key from the execution phase's draw coin. -/
 def drawKey (coin transcriptRoot recordsDigest salt : ByteArray) : Except String ByteArray :=
   key? coin DRAW_DOMAIN [("transcript", .bytes transcriptRoot), ("records", .bytes recordsDigest), ("salt", .bytes salt)]
 

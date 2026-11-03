@@ -5,7 +5,7 @@
 
 - **The epoch** is re-started from the manifest's salt coin and every weight's root (`Epoch.start`): the coin must open
   against the epoch's coin commitment as the challenger published it (``--coins``, not the pass's copy), as the salt coin,
-  opened after the weights' root, and the salt must be the manifest's.  A pass recorded before epoch coins (a v1 manifest)
+  opened after the weights' root, and the salt must be the manifest's.  A pass recorded before the execution phase's coins (a v1 manifest)
   carries a beacon instead, and is read only with ``--recorded`` (`Epoch.unverified`, a salt that claims nothing).
 - **The call indices** are each below 2^32 and none twice (`credit.passes_distinct`: ``call-range``, ``repeated-call``);
   `served_passes.py` holds a run's passes of one salt to distinct indices too.
@@ -176,7 +176,7 @@ def _check(pick: tuple[int, int]) -> tuple[int, bool, str | None]:
 def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None = None, fast: bool = False,
            cross_check: int = 0, coins: CoinCommitment | None = None, recorded: bool = False) -> dict:
     """The pass's verdict, its epoch re-started under `coins`, the epoch's published coin commitment
-    (`pouw_pearl_c_device.manifest_epoch`; `recorded` reads a pass recorded before epoch coins).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
+    (`pouw_pearl_c_device.manifest_epoch`; `recorded` reads a pass recorded before the execution phase's coins).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
     promoted device; otherwise the scalar reference, ``replay``), and every `cross_check`-th tile id on the scalar reference
     too: any verdict that differs is ``cross_check_failed``, and the pass is not accepted."""
     raw = path.read_bytes()

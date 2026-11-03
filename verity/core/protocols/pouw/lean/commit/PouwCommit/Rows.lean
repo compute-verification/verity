@@ -113,7 +113,7 @@ def commitRows (binding : ByteArray) (owner : Int) (rows : Array ByteArray) (has
     else pure rows
   (← rowsDomain binding owner rows.size hash digests).root ROW_SCHEMA values
 
-/-- `transcript_domain(epoch, count, hash)`: the tile digests' tree, bound to the epoch's salt and weights' root. -/
+/-- `transcript_domain(epoch, count, hash)`: the tile digests' tree, bound to the execution phase's salt and weights' root. -/
 def transcriptDomain (salt weightsRoot : ByteArray) (count : Nat) (hash : String) : Except String RowsDomain :=
   rowsDomain (transcriptBinding salt weightsRoot) (-1) count hash true
 

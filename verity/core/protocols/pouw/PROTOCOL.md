@@ -32,92 +32,92 @@ Everything else is the protocol's, the same for every scheme.
 
 ## Lifecycle (`audit`)
 
-Steps 1 to 4 are `audit`'s: what the served path's prover commits and its verifier reads. Step 5 is the served window's
-draw. Steps 6 and 7, run in the clear, are a reference tool and not a verifier (`benchmarks/pouw/clear/clear_audit.py`):
-the served window proves its drawn tiles in zero knowledge, and its verifier of record is the Lean (`lean/check`).
+Steps 1 to 4 are `audit`'s: what the served path's prover commits and its verifier reads. Step 5 is the served execution phase's
+sample. Steps 6 and 7, run in the clear, are a reference tool and not a verifier (`benchmarks/pouw/clear/clear_audit.py`):
+the served execution phase proves its sampled tiles in zero knowledge, and its verifier of record is the Lean (`lean/check`).
 
 1. **Weights.** Each weight's rows are committed in a `verity.ml.commitments.merkle` tree bound to the weight id (owner −2);
    `weights_root` binds every weight root.
-2. **Salt.** The challenger opens the epoch's salt coin after the verifier recorded `weights_root` ("Epoch coins"), or
-   in a live window after the window's open root (below); the salt is
+2. **Salt.** The challenger opens the execution phase's salt coin after the verifier recorded `weights_root` ("Execution-phase coins"), or
+   in a live execution phase after the execution phase's open root (below); the salt is
    `derive(coin, "verity/pouw/epoch-salt/v1", {"epoch": e, "coins": coins_root, "weights": weights_root})`,
-   32 bytes (`Epoch.start`, `salt_of`). The weights' root is the same in every window of a model, so a salt coin opened
-   after it binds no window, and a rule built on it would let one challenger session serve every window. So a live
-   window's salt coin opens after its open root, `salt.window_open_root(weights_root, requests_root, S)` =
+   32 bytes (`Epoch.start`, `salt_of`). The weights' root is the same in every execution phase of a model, so a salt coin opened
+   after it binds no execution phase, and a rule built on it would let one challenger session serve every execution phase. So a live
+   execution phase's salt coin opens after its open root, `salt.window_open_root(weights_root, requests_root, S)` =
    SHA-512(b"verity/pouw-window-open/v1" ‖ weights_root ‖ requests_root ‖ SHA-512(S)), every part 64 bytes: the
-   weights' root, the root of the window's round-0 request table, committed before the salt, and the SHA-512 of S's
-   ASCII, S the id the auditor's gate assigns when it reserves the window's session (1 to 64 of `[A-Za-z0-9._:-]`,
+   weights' root, the root of the execution phase's round-0 request table, committed before the salt, and the SHA-512 of S's
+   ASCII, S the id the auditor's gate assigns when it reserves the execution phase's session (1 to 64 of `[A-Za-z0-9._:-]`,
    `salt.SESSION`), which the prover can't relabel. The gate opens the session on that root (`open --session S --root
    R`), and its challenger opens the salt coin only after R (`serve.py --root`). `core_check.salt` (Lean
-   `PouwCheck.saltCheck`) takes the salt's coins and roots only through the window's challenger session, as
-   `core_check.rounds` does ("Live epochs"), never from the prover: S from the session's signed reserve entry in the
+   `PouwCheck.saltCheck`) takes the salt's coins and roots only through the execution phase's challenger session, as
+   `core_check.rounds` does ("Live execution phases"), never from the prover: S from the session's signed reserve entry in the
    auditor's ledger, R from its signed open entry, and the coin commitment and the roots the challenger received from
    the session's signed record and log. It refuses a session opened without a reserve (`salt`), an R that isn't
-   `window_open_root` of the window's record and S (`salt`: another window's weights or requests, R under another
+   `window_open_root` of the execution phase's record and S (`salt`: another execution phase's weights or requests, R under another
    session's id, or H1's salt opened after the weights' root), a log of the session that doesn't show R alone as what
-   its salt coin followed (`salt`), and a salt coin that isn't the epoch's `pouw/salt` coin 0 opened after R (`coin`).
-   Each session has its own R, and R fixes one window's weights and requests, so one session salts one window. Not
-   yet: vllm's served window doesn't call `salt`. An epoch without coins
+   its salt coin followed (`salt`), and a salt coin that isn't the execution phase's `pouw/salt` coin 0 opened after R (`coin`).
+   Each session has its own R, and R fixes one execution phase's weights and requests, so one session salts one execution phase. Not
+   yet: vllm's served execution phase doesn't call `salt`. An execution phase without coins
    (`Epoch.unverified`, benchmarks and replays of recorded runs) keeps v1,
-   `derive(seed, "verity/pouw/salt/v1", {"weights": weights_root})` over a label it is handed. A certified epoch
-   (`Epoch.certified`, `salt.py`) is one PoUW window p of the network certifier's, its certifier windows p·k … p·k + k − 1
-   (k the certifier's `pouw_window`; any other run of windows is refused), registered under a stream (its 64-byte
+   `derive(seed, "verity/pouw/salt/v1", {"weights": weights_root})` over a label it is handed. A certified execution phase
+   (`Epoch.certified`, `salt.py`) is one PoUW execution phase p of the network certifier's, its certifier windows p·k … p·k + k − 1
+   (k the certifier's `pouw_window`; any other run of execution phases is refused), registered under a stream (its 64-byte
    digest) and a prover (its 64-byte registered id), and its salt is `pouw_salt(reveal, p, stream, prover)`, 64 bytes,
    from the certifier's 512-bit salt for p. The verifier reads that salt with `salt.revealed`: the certifier's
    `reveal(p, registration)`, which fails closed unless the proof system registered p (PoUW's reader, `salt.registered`,
-   reads p off the served window's context, `<prefix>/pouw-window/<p>/<manifest SHA-512>`) and p's last ingress record is
+   reads p off the served execution phase's context, `<prefix>/pouw-window/<p>/<manifest SHA-512>`) and p's last ingress record is
    published. `pouw_salt` is SHA-512(b"verity/pouw-salt/v1" ‖ reveal ‖ u64be(p) ‖ stream ‖ prover), every part
    fixed-width, the tag keeping its input apart from `window_salt`'s: two registrations of p under another stream or
-   prover are salted apart. That keeps a tile computed once to one of them only when the drawn unit reads the salt,
-   and the served-zk window's units read none (below). p counts the certifier's PoUW windows from its origin
-   (`Proxy(origin=…)`), each with a salt drawn once from fresh randomness, so no epoch is bound; a proxy started again,
-   or a second link, counts from 0 again, so a served-zk window's stream names the certifier's run:
+   prover are salted apart. That keeps a tile computed once to one of them only when the sampled unit reads the salt,
+   and the served-zk execution phase's units read none (below). p counts the certifier's PoUW execution phases from its origin
+   (`Proxy(origin=…)`), each with a salt sampled once from fresh randomness, so no execution phase is bound; a proxy started again,
+   or a second link, counts from 0 again, so a served-zk execution phase's stream names the certifier's run:
    `served_commit.stream_id` reads its `certifier_run`, (key id, run id, ingress link), beside the deployment and the
    stream's name. Every signed answer of the certifier binds that run, a `Proxy` and its `CertifierClient` give it
-   alike, the run id is drawn when a proxy starts (`Proxy.run_id`) and the ingress link has no default
+   alike, the run id is sampled when a proxy starts (`Proxy.run_id`) and the ingress link has no default
    (`Proxy(ingress_link=…)`). That salt binds no weights, and
-   the prover holds it from p's first ingress tick, so a certified window passes only weights, a stream and a prover
-   recorded before p's salt was drawn: the prover hands the certifier `pouw_record` of them, SHA-512(b"verity/pouw-record/v1"
+   the prover holds it from p's first ingress tick, so a certified execution phase passes only weights, a stream and a prover
+   recorded before p's salt was sampled: the prover hands the certifier `pouw_record` of them, SHA-512(b"verity/pouw-record/v1"
    ‖ weights_root ‖ stream ‖ prover), one 64-byte record for p, signed by the key the certifier registers for it
    (`Proxy(prover_key=…)`, whose id is `salt.prover_id`, over `weights_message` under the stream), only while p's first
-   ingress tick (the draw) is ahead (`Proxy.commit_weights`), and the verifier reads it with `salt.committed`
-   (`Proxy.committed`, on `reveal`'s conditions). A window with no record made before its draw, or under another stream
+   ingress tick (the sample) is ahead (`Proxy.commit_weights`), and the verifier reads it with `salt.committed`
+   (`Proxy.committed`, on `reveal`'s conditions). An execution phase with no record made before its sample, or under another stream
    or prover, is refused, and the challenger checks that first (`core_check.recorded_reason`), asking for the reveal
    only after. So one proxy records one stream and prover for p. The certifier reveals p's salt once, and
-   only until its reveal deadline on its own clock after p's end (`Proxy(reveal_deadline=…)`, one PoUW window by
+   only until its reveal deadline on its own clock after p's end (`Proxy(reveal_deadline=…)`, one PoUW execution phase by
    default), so one registration of p, made after p's work, gets it. `salt.Registrations` is a once-only registration
-   ledger: p registers once per stream and prover, when the challenger receives it, before its draw and any proof (its
+   ledger: p registers once per stream and prover, when the challenger receives it, before its sample and any proof (its
    tiles are private, so that is the finest public key), and a second registration under them is refused
-   (`reregistered`). It is not credit: a window's credit is its outcome's verdict, and no period record yet closes a
-   stream's credit at its first refused window.
-   - **No served-zk certified window is credited today.** A certified window credits only units that read its salt
+   (`reregistered`). It is not credit: an execution phase's credit is its outcome's verdict, and no credit period record yet closes a
+   stream's credit at its first refused execution phase.
+   - **No served-zk certified execution phase is credited today.** A certified execution phase credits only units that read its salt
      (`salt.unit_reason`: a `salt` parameter that is the whole 64-byte salt as a coin port, as the compiled Program's
-     units take it, **Seeds and noise** below). The served-zk window's unit, `Pc8TileSide`, reads two committed fp8-pi
-     side rows and no salt, so rows formed under any salt, or before any, would pass in every window and under every
-     stream. Its challenger refuses every certified window first (`unsalted`), before the stream receives it and before
-     the certifier is asked for anything. A certified window credits once its units read its salt and their proofs
+     units take it, **Seeds and noise** below). The served-zk execution phase's unit, `Pc8TileSide`, reads two committed fp8-pi
+     side rows and no salt, so rows formed under any salt, or before any, would pass in every execution phase and under every
+     stream. Its challenger refuses every certified execution phase first (`unsalted`), before the stream receives it and before
+     the certifier is asked for anything. A certified execution phase credits once its units read its salt and their proofs
      are held to it. The opening of record (`core_check.opening`, Lean `PouwCheck.opening`) does the second: in a
-     certified window it opens only a salted template's unit (`TILES`' `Salted`: today the H1 tile unit, `PouwH1Tile`
+     certified execution phase it opens only a salted template's unit (`TILES`' `Salted`: today the H1 tile unit, `PouwH1Tile`
      at K = 64, R = 4, C = 8), only under the 64-byte salt the verifier holds (`core_check.certified_salt`, the salt
      `pass_epoch` checked), and only when the proof's public row, the port after its R A rows and C B rows, is
-     `public_bc` of the window's context, that salt, the unit's position and its entry's side roots (`public_row`:
+     `public_bc` of the execution phase's context, that salt, the unit's position and its entry's side roots (`public_row`:
      salt ‖ u64be(position) ‖ root_a ‖ root_b, bit for bit the leaves `Compiled.inputs` fills for them). It refuses an
-     unsalted template's unit in a certified window whatever salt it is passed, a salted template's unit outside one,
-     and every unit of a certified window it is passed no salt for. The served challenger passes it the salt its
+     unsalted template's unit in a certified execution phase whatever salt it is passed, a salted template's unit outside one,
+     and every unit of a certified execution phase it is passed no salt for. The served challenger passes it the salt its
      pass was checked against (`served_commit.Challenger.check`, from `core_check.certified_salt`). The compiled
-     Program is no pinned template, so no window of it opens.
-   - **The reveal deadline** (`Proxy(reveal_deadline=…)`, one PoUW window by default) is a parameter: p's registration
+     Program is no pinned template, so no execution phase of it opens.
+   - **The reveal deadline** (`Proxy(reveal_deadline=…)`, one PoUW execution phase by default) is a parameter: p's registration
      takes the reveal from p's last ingress record until that long past p's end on the certifier's clock (by the end of
      p + 1 at the default), which bounds how long the prover holds p's salt before its work is registered under it. It must be sized against a measured commit pipeline: a deadline shorter than the honest
-     pipeline's time past p's end refuses every honest window, and the served H1 window spends 439 s on receipts.
-     No Lean statement covers the certified window's timing yet (`EndToEndWindow`'s t_d is the
-     uncertified window's).
+     pipeline's time past p's end refuses every honest execution phase, and the served H1 execution phase spends 439 s on receipts.
+     No Lean statement covers the certified execution phase's timing yet (`EndToEndWindow`'s t_d is the
+     uncertified execution phase's).
    - **The certifier–challenger link**. The certifier runs on the link and the challenger on an
      auditor host, so the challenger asks through the certifier's client (`certifier.active.CertifierClient`, served by
      `serve_reveals`): each `committed` and `reveal` is a request the challenger signs for the certifier's run and an
      answer the certifier signs over its run, p, the registration's digest and the value, which the client verifies
      under the certifier's key. A `Proxy` in process has no signer, so it names no run, and a certified challenger
-     refuses it. The certifier's key and run id are the window's `Deployment` (`served_commit.Deployment`), beside its
+     refuses it. The certifier's key and run id are the execution phase's `Deployment` (`served_commit.Deployment`), beside its
      challenger's key, and the challenger refuses a client for any other. Open: the deployment is to come from the
      auditor's deployment record, which nothing writes yet, so the challenger's caller passes it.
 3. **Units.** For each matmul (a 64-bit index, a shape, a weight id), the activation rows are committed bound to the salt
@@ -126,41 +126,41 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
 4. **Transcript.** A tree over every tile's digest, in matmul order then tile order, bound to (salt, weights_root).
    Its root must reach the challenger within the deadline of the salt coin's release: the verifier's rule at the
    deadline in `Security/Definitions/Pouw/Game/Deadline.lean`, which `WorkBetweenSaltAndDeadline` reads. The served
-   window states it as `Check.registration_deadline`, which `served_commit.py params` writes; the challenger refuses
+   execution phase states it as `Check.registration_deadline`, which `served_commit.py params` writes; the challenger refuses
    parameters without it, and refuses as `late-registration` a window received after the epoch's draw coin was released
    (each root's receipt comes before the coin's release). The deadline is in seconds on the
    challenger's clock, and the proof system refuses a later registration, or one before the salt, as
    `late-registration`. That ends the epoch, and the window earns no credit (`served_zk`'s challenger,
    `registration_deadline` in its parameters).
-5. **Selection.** A served window's draw is one uniform subset of K′ of its N tiles, without replacement, drawn after
-   its registration's receipt (`benchmarks/pouw/served_zk/served_commit.py`, `Challenger.select`). A certified window's
-   draw coin is a live epoch's `pouw/draw` coin 0 (`window.live_challenger`), under the commitment the challenger reads
+5. **Selection.** A served execution phase's sample is one uniform subset of K′ of its N tiles, without replacement, sampled after
+   its registration's receipt (`benchmarks/pouw/served_zk/served_commit.py`, `Challenger.select`). A certified execution phase's
+   sampling coin is a live execution phase's `pouw/draw` coin 0 (`window.live_challenger`), under the commitment the challenger reads
    itself from the record its challenger signed (`challenger.trusted_commitment` of `Challenger(coin_record=…,
-   deployment=…)`), under the challenger key the window's deployment pins (`Deployment.challenger_key`; `Deployment.pinned`
-   reads it from infra's published key record and refuses a key whose SHA-512 isn't the one stated in code). The draw's
+   deployment=…)`), under the challenger key the execution phase's deployment pins (`Deployment.challenger_key`; `Deployment.pinned`
+   reads it from infra's published key record and refuses a key whose SHA-512 isn't the one stated in code). The sample's
    check of record (`core_check.draw`, Lean `drawCheck`) takes that record and the key it names, `{key, record}`, and
    the pinned key (`key`): it refuses a record whose key isn't the pinned one, no pin, or seeded coins under a pin
    (`coin-key`), so a record the prover signs over coins it holds is refused; it verifies the record's LMS signature
    under the pinned key and reads the commitment from it, so a bare commitment is refused: one trusted root per coin.
-   - **N and K′.** A window of N_real real tiles registers the level `window.bucket(N_real)`: it is credited g_ℓ tiles,
+   - **N and K′.** An execution phase of N_real real tiles registers the level `window.bucket(N_real)`: it is credited g_ℓ tiles,
      the largest grid point at most N_real, and pads with filler tiles to N = g_(ℓ+1) = `window.pad(N_real + 1)`, at
-     least one filler. Every tile is the one template's and does w_max = `tile_work`, and filler tiles are drawn like
+     least one filler. Every tile is the one template's and does w_max = `tile_work`, and filler tiles are sampled like
      any other but credited nothing. `window.sampling` registers the law `{"law": "subset", "k": K′}`, the registration's
      `population` being N, with K′ = `window.k_prime(ε, δ, W, N, w_max)` and W = g_ℓ·w_max the credited work: the
      smallest K >= 1 with (1 − ε·W/(N·w_max))^K <= δ, compared exactly in rationals (`window.miss_at_most`), N if no
      K <= N has it, and 1 when ε·W/(N·w_max) = 1. A wrong set holding a share ε of W has at least ε·W/w_max tiles, so
-     the draw misses it with probability at most δ.
-   - **The draw.** The challenger opens the epoch's draw coin once, after the registration (its digest), and keys the
-     draw `derive(coin, "verity/pouw/served-zk-draw/v1", {"stream", "registration", "receipt"})` (`draw_key`,
+     the sample misses it with probability at most δ.
+   - **The sample.** The challenger opens the execution phase's sampling coin once, after the registration (its digest), and keys the
+     sample `derive(coin, "verity/pouw/served-zk-draw/v1", {"stream", "registration", "receipt"})` (`draw_key`,
      `core_check.draw_key_context`). The units are `core_check.stream_subset(K′, N, ·)`, Lean's `Draw.subset`
      (`flock-verify draw --population N --k K′ --stream`), over the 2·K′·width(N) + 64 bytes of the key's stream
      `"draw"` (`draw_bytes`, width(N) = ⌈(bitlen(N) + 64)/8⌉ bytes): a sparse partial Fisher–Yates whose step i swaps
      position i with i + r, r uniform below N − i by rejection over big-endian width(N)-byte words, and the units are
      the first K′ positions, ascending. So every K′-subset of [0, N) is equally likely. A stream that runs out refuses
-     (`sampler`), and nothing redraws. `core_check.draw` holds the units to the coin's opening.
+     (`sampler`), and nothing resamples. `core_check.draw` holds the units to the coin's opening.
    - **Sessions.** The units are proved in ⌈K′/cap⌉ sessions (`window.sessions`) by ascending rank: session σ's instance
-     s is drawn[σ·cap + s], and the filler tile N − 1 after the last (`window.instance_ts`, "The served audit window").
-   - `Sampled(t)` (t independent work-weighted draws, Lean `WorkWeightedSampling`) and `Lottery(target)` (Pearl's mining
+     s is drawn[σ·cap + s], and the filler tile N − 1 after the last (`window.instance_ts`, "The served audit execution phase").
+   - `Sampled(t)` (t independent work-weighted samples, Lean `WorkWeightedSampling`) and `Lottery(target)` (Pearl's mining
      rule: the tiles whose digest, read little-endian, is at most target·|rows|·|cols|·k) are the reference tool's
      (`clear_audit`), unwired: no served path selects with either.
 6. **Check.** For each selected tile the prover opens A's rows, B's rows and the leaf. The verifier checks the openings,
@@ -172,27 +172,27 @@ The row and tile trees are framed SHA-256 unless the scheme names another frame 
 (`audit.HM96`, Pearl-C's -h3) is `frame-v3-sha512` with hm96-sha512 leaves, in its section. The BLAKE3 tree modes `frame-b3`
 and `frame-b3s` that -h1, -h2 and BLAKE3 -h3 named were deleted with the archive in `2091252fe3` (one hash, SHA-512).
 
-7. **Profile.** When every selected tile passes, `WorkProfile` reports what the draw established, ε at δ, and for a scheme
+7. **Profile.** When every selected tile passes, `WorkProfile` reports what the sample established, ε at δ, and for a scheme
    with a γ_0 the work certified at that ε, under the certificate's conjecture. PoUW has no policy parameter: accounting
    decides which ε at δ it accepts. The statement is
    `Pouw.Guarantees.EndToEnd` (proof `Pouw.SecurityProofs.EndToEnd`); a scheme with no γ_0 gets only its sampling half,
    `Pouw.Guarantees.WorkWeightedSampling`.
 
 **What is public.** Every protocol is zero-knowledge, and only the minimum is public. |W|, the size of the weights, is
-public. A served window's rows serve at a public fixed length, so its useful work is public ("The fixed length" below).
+public. A served execution phase's rows serve at a public fixed length, so its useful work is public ("The fixed length" below).
 `AGENTS.md` ("Design rules") states them.
 
-**Randomness.** The protocol owns the outer coins, the salt and the draw, and both are the challenger's epoch coins, never
-a public beacon and never Fiat-Shamir over the prover's roots. A window's check item says its coin mode, its optional
-`coins`, `live` or `seeded` (`window.mode`, Compose's `CoinMode`; an item that names none is seeded). In a seeded window
+**Randomness.** The protocol owns the outer coins, the salt and the sample, and both are the challenger's execution-phase coins, never
+a public beacon and never Fiat-Shamir over the prover's roots. An execution phase's check item says its coin mode, its optional
+`coins`, `live` or `seeded` (`window.mode`, Compose's `CoinMode`; an item that names none is seeded). In a seeded execution phase
 (`coins.SCHEME`, Pearl-C's served path) a scheme's noise is its own derivation from the salt and the prover's roots,
-Fiat-Shamir inside the scheme, whose grinding is inside the conjecture's error term. In a live window
-(`window.LIVE_SCHEME`, "Live epochs" below) round r's noise is keyed by round r's coin, opened only after the verifier
+Fiat-Shamir inside the scheme, whose grinding is inside the conjecture's error term. In a live execution phase
+(`window.LIVE_SCHEME`, "Live execution phases" below) round r's noise is keyed by round r's coin, opened only after the verifier
 recorded round r's root.
 
-## Epoch coins (`coins`)
+## Execution-phase coins (`coins`)
 
-The challenger is the auditor's service that issues coins. Before epoch e it draws one 32-byte coin per label (`"salt"`,
+The challenger is the auditor's service that issues coins. Before execution phase e it samples one 32-byte coin per label (`"salt"`,
 `"draw"`, in that order) from its entropy, and publishes the coin commitment, a frame-v3-sha512 tree over hiding leaves.
 A served challenger's entropy, every coin and hm96 salt, is the Lean verifier of record's read of the operating system
 (`verifier.coins`: `pouw-check-difftest`'s `coins`, `IO.getRandomBytes`, A3); `coins.Challenger` and
@@ -210,19 +210,19 @@ root    = MerkleTree over (value_salt, value_draw) at positions 0, 1, binding ta
 `verity.ml.randomness.frame`); every binding and root the protocol hashes itself is one.
 
 An unopened coin is statistically hidden (`hm96/PROTOCOL.md`); binding rests on SHA-512's collision resistance. A coin is
-opened live and once: the salt coin after the verifier recorded `weights_root` (a live window's after its open root,
-"Live epochs" below), the draw coin after it recorded what the
-draw keys (the transcript's root; Pearl-C's work sampling design adds its records' root, `clear_work.draw_after`). An
-opening is (epoch, label, after, coin, hm96 salt, path); the verifier refuses one whose epoch or label is not the one it
-asked for, that is malformed, that does not open against the epoch's root, or whose `after` is not what it recorded
-(`coin_reason`). A second request for an opened coin is refused, so a retry never redraws. The coins are the designated
+opened live and once: the salt coin after the verifier recorded `weights_root` (a live execution phase's after its open root,
+"Live execution phases" below), the sampling coin after it recorded what the
+sample keys (the transcript's root; Pearl-C's work sampling design adds its records' root, `clear_work.draw_after`). An
+opening is (execution phase, label, after, coin, hm96 salt, path); the verifier refuses one whose execution phase or label is not the one it
+asked for, that is malformed, that does not open against the execution phase's root, or whose `after` is not what it recorded
+(`coin_reason`). A second request for an opened coin is refused, so a retry never resamples. The coins are the designated
 verifier's: an outcome convinces the auditor, who trusts its own challenger, and no third party (claim `live-verifier`).
 Vectors: `tests/vectors/epoch_coins_v1.json`.
 
 **Live coins** come from the proof system's one challenger (`verity.core.protocols.sampled_proofs.challenger`, Lean of
 record `SampledProofs.Challenger`), whose coins are indexed by label and index and named by no protocol, so every client
-uses the same form: a layout is a scheme, an epoch and its families `(label, count)` in order, coin `(label, i)` at its
-family's offset plus i, at most 2^20 coins. Before the epoch the challenger draws every coin, 64 bytes, SHA-512's whole
+uses the same form: a layout is a scheme, an execution phase and its families `(label, count)` in order, coin `(label, i)` at its
+family's offset plus i, at most 2^20 coins. Before the execution phase the challenger samples every coin, 64 bytes, SHA-512's whole
 width (the seeded coins above stay 32 bytes, so a recorded seeded registration reads as it did), and publishes
 
 ~~~text
@@ -232,9 +232,9 @@ root    = frame-v3-sha512 tree over value_0 … value_(K−1) at positions 0 …
           identity_digest_sha512("verity/challenger/coins/v1", {epoch, families, scheme}), owner -1
 ~~~
 
-and opens coin `(label, i)` once, after the root the verifier recorded for it. `live_reason` checks one opening (its epoch,
+and opens coin `(label, i)` once, after the root the verifier recorded for it. `live_reason` checks one opening (its execution phase,
 label and index, its form, the path against the root, and `after`); `order_reason` checks a family's openings against the
-roots the verifier recorded, in order: coin i opened after root i, none twice ("a retry never redraws"), none before its
+roots the verifier recorded, in order: coin i opened after root i, none twice ("a retry never resamples"), none before its
 root is recorded, and every recorded root's coin opened. `LiveRecord` is the verifier's side: it records a root and only
 then asks the challenger for that root's coin. The commitment those checks read is the challenger's own: before any coin
 opens, the challenger signs it with its LMS key on its host (`LiveChallenger.sign_record`, `write_record`; Lean
@@ -247,41 +247,41 @@ challenger is auditor-trusted, the auditor's device on a machine the prover does
 `trusted-host`. The record keeps the order on its own clock: `LiveRecord.log` logs root i's receipt
 (`received_at`) and then coin i's release after it (`released_at`).
 
-**Live epochs** (`window.live_challenger`, `rounds_reason`, `round_key`; Lean `PouwWindow.Rounds`). A live PoUW epoch's
+**Live execution phases** (`window.live_challenger`, `rounds_reason`, `round_key`; Lean `PouwWindow.Rounds`). A live PoUW execution phase's
 coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch-coins/live/v1"`): its salt coin
-(`"pouw/salt"`), its draw coin (`"pouw/draw"`) and R round coins (`"pouw/round"`, rounds numbered from 0 as Compose's
+(`"pouw/salt"`), its sampling coin (`"pouw/draw"`) and R round coins (`"pouw/round"`, rounds numbered from 0 as Compose's
 `Declared.round` numbers them), R the most rounds a window of the epoch takes, fixed when the challenger commits. The
-salt coin opens once, after the window's open root (`salt.window_open_root`, step 2), and `core_check.salt` (Lean
+salt coin opens once, after the execution phase's open root (`salt.window_open_root`, step 2), and `core_check.salt` (Lean
 `PouwCheck.saltCheck`) is the rule on it, read through the same session as the round coins. A Pearl-C pass's session
 takes its salt coin alone (`SALT_FAMILIES`, `salt_epoch_reason`; `Properties.Pouw.LiveSalt`), opened after its salt
-epoch's root (`salt.epoch_open_root` of the weights' root and the epoch's number k, the pass's `pass_index`, which
+execution phase's root (`salt.epoch_open_root` of the weights' root and the execution phase's number k, the pass's `pass_index`, which
 the verifier recomputes and never reads from the pass), so it ends complete once that coin is released. Round r's coin
 opens after
 the verifier recorded round r's root, the root of the values round r commits, and round r's noise key is
 `derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred noised
 products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean
-`PouwCheck.roundsCheck`) is the rule on a window's round coins. It reads the challenger's coins only through the session
-the auditor's signed ledger opens and ends closed for the window under the window's pinned challenger key, run from a
+`PouwCheck.roundsCheck`) is the rule on an execution phase's round coins. It reads the challenger's coins only through the session
+the auditor's signed ledger opens and ends closed for the execution phase under the execution phase's pinned challenger key, run from a
 commit the host's pins log records and the verifier's own copy of main's first-parent history holds
 (`challenger.trusted_session_of` over `challenger.pinned_session`, Lean `SampledProofs.Challenger.trustedSessionOf`
 over `pinnedSession`): the record, on the host the ledger opened the session on, and the close signed under that key,
 the release log the close signs and the ledger's end sealed, and the round roots that log shows the challenger
-received, in order. Coins a prover's own in-process challenger drew, an unsigned or tampered log, a ledger signed under
-another key or cut before the session's end, a second session for the window, and a session the host ran from a tree
+received, in order. Coins a prover's own in-process challenger sampled, an unsigned or tampered log, a ledger signed under
+another key or cut before the session's end, a second session for the execution phase, and a session the host ran from a tree
 its pins log doesn't record, or from a branch commit merged into main but not on main's first-parent line, are
-refused; `core_check.salt` reads its session through the same `pinned_session`. A seeded epoch's commitment is unchanged (`SCHEME`, salt
-and draw only).
+refused; `core_check.salt` reads its session through the same `pinned_session`. A seeded execution phase's commitment is unchanged (`SCHEME`, salt
+and sample only).
 
-**Pearl-C periods** (`credit.pearl_c_period_credit`). A live Pearl-C pass's salt is the coin of a salt-only
-session (`window.SALT_FAMILIES`) the gate opens on its salt epoch's root `salt.epoch_open_root(W, k)`
+**Pearl-C credit periods** (`credit.pearl_c_period_credit`). A live Pearl-C pass's salt is the coin of a salt-only
+session (`window.SALT_FAMILIES`) the gate opens on its salt execution phase's root `salt.epoch_open_root(W, k)`
 (`core_check.live_salt`). Under that layout an abandoned session ends complete, like a used one, so a pass earns only
-inside a Pearl-C period, and the period earns only when all of these hold: its close's sessions are exactly the presented
-passes' epochs, in its order (`credit.period`), so a complete session no pass presents refuses it; each session is a
-Pearl-C salt session (``salt-only``; H1's checks refuse such a session, so the two never share a period); each session is
-credited toward the period (``circuit``, `challenger.credited_session`); each session is pinned within the period's
+inside a Pearl-C credit period, and the credit period earns only when all of these hold: its close's sessions are exactly the presented
+passes' execution phases, in its order (`credit.period`), so a complete session no pass presents refuses it; each session is a
+Pearl-C salt session (``salt-only``; H1's checks refuse such a session, so the two never share a credit period); each session is
+credited toward the credit period (``circuit``, `challenger.credited_session`); each session is pinned within the credit period's
 freshness floor of its open pin (``pin``, H1's `credit.committed_pin` and `credit.committed_floor`); each pass's context
-is a string and the pass passes `core_check.pass_epoch` (``pass``); each W's epochs are numbered on from the lane's earlier credited periods with no gap or repeat (``index``),
-so a W whose numbering broke is spent; and no two passes of one epoch hold one call index (`credit.passes_distinct`).
+is a string and the pass passes `core_check.pass_epoch` (``pass``); each W's execution phases are numbered on from the lane's earlier credited periods with no gap or repeat (``index``),
+so a W whose numbering broke is spent; and no two passes of one execution phase hold one call index (`credit.passes_distinct`).
 Its Lean port is open.
 
 ## Registered weights (`registration`)
@@ -315,17 +315,17 @@ One rule for every construction that serves a checkpoint: Pearl-C4 (`PearlC4.che
   (k = 512) stays outside Pearl-C's domain (`benchmarks/pouw/glm53_rotation.py`). A curated unrotated checkpoint
   registers each of its linears.
 - **The keyed transforms are keyed after the weights' root is recorded**, by `rotation_key`:
-  `derive(salt, "verity/pouw/rotation-key/v1", {"weights": weights_root}).stream("key", 32)`, over the salt of an epoch
+  `derive(salt, "verity/pouw/rotation-key/v1", {"weights": weights_root}).stream("key", 32)`, over the salt of an execution phase
   started from the challenger's salt coin (`Epoch.start`). It refuses any other salt: an `Epoch.unverified` one, a
   beacon's or a fixed seed's. The rule reads what a registration declares; applying the transforms is the
   registration's own.
 - **Served FP8 applies no rotation yet.** The vLLM option's executor (`pouw.SERVED_TRANSFORMS`) applies none and reads no
   curated list, so its commitment's `registration` (`pouw.weights_claim`) says it claims nothing about which weights were
-  served, and names the refusal. Its salt is still the live coin, so what the draw establishes of the work is unchanged.
+  served, and names the refusal. Its salt is still the live coin, so what the sample establishes of the work is unchanged.
 
 ## The proof's identifier (v1) (`identifier`)
 
-Where a drawn tile is checked by a C-Flock proof rather than recomputed, the proof is bound to the oracle, the salt and the
+Where a sampled tile is checked by a C-Flock proof rather than recomputed, the proof is bound to the oracle, the salt and the
 workload it is for by its `identifier`, a JSON object in the proof's header:
 
 ~~~text
@@ -334,7 +334,7 @@ W           {"matmuls": [{"index": "i", "m": m, "k": k, "n": n, "weight": "w"}, 
 ~~~
 
 - **The fields.** `scheme` is the scheme's registered name (`schemes.get`), which names the oracle H, so there is no seed
-  digest. A name `schemes.get` doesn't register has no identifier. `salt` is the epoch's 32 bytes, or a certified epoch's 64. Hex is lowercase.
+  digest. A name `schemes.get` doesn't register has no identifier. `salt` is the execution phase's 32 bytes, or a certified execution phase's 64. Hex is lowercase.
 - **The declared workload** W (`workload_json`) is every matmul in declaration order, then the weights root, which binds
   every weight's row root (Lifecycle, step 1). The index and the weight id are 64-bit, so they are decimal strings: RFC 8785
   writes a number as an IEEE 754 double, which is exact only up to 2^53. m, k and n are numbers.
@@ -345,39 +345,39 @@ W           {"matmuls": [{"index": "i", "m": m, "k": k, "n": n, "weight": "w"}, 
 - **What binds it.** The proof binds its header's object through `pub.sha`, which seeds C-Flock's Fiat-Shamir transcript:
   Σ = SHA-512(sigmaTag ‖ c.sha ‖ digest ‖ pub.sha), under `cr/sha-512`.
 - **The verifier's rule.** The verifier never takes the prover's identifier. It recomputes its own from the scheme and the
-  epoch it audits, and hands those bytes to C-Flock's verifier (`--identifier F`). C-Flock's verifier compares them with the
+  execution phase it audits, and hands those bytes to C-Flock's verifier (`--identifier F`). C-Flock's verifier compares them with the
   proof's header byte for byte, and reports the object in its verdict without reading a field. So a proof that names
   another scheme, salt or workload is refused.
 - **Vectors:** `tests/vectors/identifier_v1.json` (`tests/identifier_vectors.py`) holds one case or more per named scheme:
   its inputs, W, both canonical byte strings as hex, and their SHA-512. A 64-bit case pins the decimal strings past 2^53.
 
-## The served audit window (`window`)
+## The served audit execution phase (`window`)
 
-A served window is audited by drawing tiles of one fixed template from the window's committed calls (the grid, the work
-level and K′ are in `window`'s docstring). This section is the window's layout for gates: what its commitment holds, so
-that a drawn tile's reads are a function of public inputs alone. `benchmarks/pouw/served_zk/served_commit.py` commits a
-window this way.
+A served execution phase is audited by sampling tiles of one fixed template from the execution phase's committed calls (the grid, the work
+level and K′ are in `window`'s docstring). This section is the execution phase's layout for gates: what its commitment holds, so
+that a sampled tile's reads are a function of public inputs alone. `benchmarks/pouw/served_zk/served_commit.py` commits an
+execution phase this way.
 
 **The fixed length.** Correct tokens served past the honest run's end-of-sequence are not useful work, so a workload of record
-serves at a public fixed length, ignore_eos at each slot's public max_tokens, which the window registers (its `length`
+serves at a public fixed length, ignore_eos at each slot's public max_tokens, which the execution phase registers (its `length`
 item) and the verifier checks against its own parameters, so W_use is public. PouwCheck refuses
 a workload whose stop mode is not `fixed` (`window-form: eos-keyed-row`), a served length or max_tokens other than the
-verifier's (`window-form: length-mismatch`, `window-form: max-tokens`), and a window registered before the rule, with no
-`length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`). A served H1 window's
-credit holds it the same way (`credit._length`, `PouwCheck.Credit.Internal.length`): its period's open, which the auditor
-signs before window 0's first coin (`--length`), commits each request's public max_tokens and stop `fixed`
+verifier's (`window-form: length-mismatch`, `window-form: max-tokens`), and an execution phase registered before the rule, with no
+`length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`). A served H1 execution phase's
+credit holds it the same way (`credit._length`, `PouwCheck.Credit.Internal.length`): its credit period's open, which the auditor
+signs before execution phase 0's first coin (`--length`), commits each request's public max_tokens and stop `fixed`
 (`credit.committed_length`), and each step's served rows m_s, which its manifest rows fix under `calls_root` before the
-draw coin (`credit.served_rows`), are that length's schedule, every request admitted in round 0: at least one row a request in round 0, and in round s ≥ 1 one
+sampling coin (`credit.served_rows`), are that length's schedule, every request admitted in round 0: at least one row a request in round 0, and in round s ≥ 1 one
 decode row for each request whose max_tokens is past s. A round serving more ran a request past its public max_tokens and
-one serving fewer stopped a request at an EOS-keyed done source (`length-mismatch`); a period with no fixed length
+one serving fewer stopped a request at an EOS-keyed done source (`length-mismatch`); a credit period with no fixed length
 credits nothing (`no-fixed-length`). Each round's live proof (`PouwLiveSlots_v2`, credit's `_live`) proves m_s, and its
 public port `cap` binds each request's hidden cap to its public max_tokens: credit opens it at the known `<prefix>caps`
-of the period's committed max_tokens, and the unit refuses a live request whose header's cap is another or whose round is
+of the credit period's committed max_tokens, and the unit refuses a live request whose header's cap is another or whose round is
 not 0, and a leaf live without a public cap. So a request takes a decode row in round s only when s is below its own
 public max_tokens, and no prover can move a decode row from one request to another while keeping each round's count.
 
-**The window root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served windows),
-registered before the draw. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an
+**The execution phase root** (port `entries`) is a frame-v3-sha512 tree of P entries (the public bound, 16 for served execution phases),
+registered before the sample. The calls come first, then exactly one filler, then empty entries up to P. Entry e is an
 `hm96-sha512/row/v2` row at index e: the leaf is hm96-sha512's tree leaf of `commit_string(key, x, salt_e)`, where x is
 the entry row's `sha512/row/v2` digest over its 2,688 bits, salt_e is 192 fresh bytes and key is the pinned default
 (`Entry`, `entry_bc`, `entry_leaf`).
@@ -429,18 +429,18 @@ words     0..k/2          the k E4M3 codes, two a word, low first
 That is k/2 + 72 words, 2,120 at k = 4,096 (33,920 bits). A's rows are `hm96-sha512/row-seg/v1` (role X), B's
 `hm96-sha512/row/v2` (role W).
 
-**The side domains** are one per window and side, with no entry index and no row count:
+**The side domains** are one per execution phase and side, with no entry index and no row count:
 
 ~~~text
 side_domain(w, s) = frame-v3-sha512 domain, binding identity_digest_sha512("verity/pouw/window/side-domain/v1",
                     {"window": hex(w), "side": s, "depth": D_s}), owner −1, positions [0, 2^D_s)
 ~~~
 
-Here w is the window root's domain id, which is one-stage's served domain of the window's program, partition and
-context. So the side domains, like the window's, are a function of the context and ℓ alone.
+Here w is the execution phase root's domain id, which is one-stage's served domain of the execution phase's program, partition and
+context. So the side domains, like the execution phase's, are a function of the context and ℓ alone.
 
 **The -h3 tile tree** is the pass's own tile commitment, the one its manifest publishes (`commitment`: root and count),
-not a tree the window's committer builds. Under `pearl-c-sm120-v1-h3` (SHA-512 since `b91ebf369`) it is one tree per
+not a tree the execution phase's committer builds. Under `pearl-c-sm120-v1-h3` (SHA-512 since `b91ebf369`) it is one tree per
 pass, over every call's tiles:
 
 ~~~text
@@ -455,13 +455,13 @@ leaf p    the pass's tile p, in workload order then each call's 64 x 64 tiles ro
           `hm96-sha512/row-seg/v1`, of hm96-sha512's tree leaf of commit_string(key, x, y)
 ~~~
 
-So a window holds calls of one pass, each call's entry names that pass's root, and the window statement holds every
+So an execution phase holds calls of one pass, each call's entry names that pass's root, and the execution phase statement holds every
 call's root_h3 to the root the pass published.
 
-**The verdict asserts the served result.** A drawn tile's unit (TileRead, not yet a Program) reads three committed
+**The verdict asserts the served result.** A sampled tile's unit (TileRead, not yet a Program) reads three committed
 rows: its A row and its B row through its entry's side roots, and its pass's -h3 leaf through root_h3. It compares, in
 gates, the leaf's x with the -h3 leaf its own tile's words give, so the tile it proves is the tile the pass served. The
-read is not at position t. Window tile t is one word, (I, J) = (keep_a[i], keep_b[j]) of its call for
+read is not at position t. Execution phase tile t is one word, (I, J) = (keep_a[i], keep_b[j]) of its call for
 (i, j) = `tile_in(entry, t)`. The unit reads I from its A row's index field and J from its B row's, and tile0, cols and m
 from its entry row, and the pass's leaf holding the word is (`tile_read`)
 
@@ -472,19 +472,19 @@ rows  min(64, m − 64·(I div 64)), the tile's height: 64, or the call's short 
 ~~~
 
 with I < m and J < 64·cols. The pass's tiles are in workload order, then each call's 64 x 64 tiles row-major, so this
-is `audit.tile_refs`'s tile holding (I, J). Up to 4,096 window tiles read one leaf, and the leaf a unit computes is its
+is `audit.tile_refs`'s tile holding (I, J). Up to 4,096 execution phase tiles read one leaf, and the leaf a unit computes is its
 word's 64 x 64 tile's (the output of `Pc8TileLeafH3`, not on main yet, from the word and the tile's other messages as
-advice), not `Pc8TileHidden`'s 1 x 1 digest. Until TileRead is a Program, a drawn tile's unit is `Pc8TileSide`
-(`pc8.side_tile`, `served_zk/stage_tile.py`): `Pc8TileHidden`'s 1 x 1 check and digest over the drawn word's two side
+advice), not `Pc8TileHidden`'s 1 x 1 digest. Until TileRead is a Program, a sampled tile's unit is `Pc8TileSide`
+(`pc8.side_tile`, `served_zk/stage_tile.py`): `Pc8TileHidden`'s 1 x 1 check and digest over the sampled word's two side
 rows, which it reads whole, index field included (`pc8.SIDE_PORTS`, row `fp8-pi`), so its committed inputs are the side
 trees' leaves. It reads I and J as values and uses neither yet, and it reads no -h3 leaf.
 
-The side rows' indices are bound to the record in the window's reference only: the window statement in gates reads the P
+The side rows' indices are bound to the record in the execution phase's reference only: the execution phase statement in gates reads the P
 entry rows, not the up to 2^13 + 2^17 side rows under each entry or the record's preimage. `window_problem`, given the
 records and the side rows' indices, holds each call's indices to its record's keep, strictly increasing, and its tile0,
-cols and m to its shape, so i -> I and j -> J are injective and no two window tiles read one word.
+cols and m to its shape, so i -> I and j -> J are injective and no two execution phase tiles read one word.
 
-**The window statement** (L4, `window_problem`) holds on the P entry rows and the pass's published tile root when all of
+**The execution phase statement** (L4, `window_problem`) holds on the P entry rows and the pass's published tile root when all of
 the following hold:
 
 - each row is an entry row: 336 bytes, a known kind, and zero words at 40..48 and 264..272;
@@ -498,11 +498,11 @@ the following hold:
 - the calls' pass tiles [tile0, tile0 + ⌈m/64⌉·cols) are in order and disjoint;
 - the ranges end at N, and the registered level is `bucket` of the calls' tiles N_real.
 
-**The tile instances' public inputs.** The K′ drawn tiles are proved in S = ⌈K′/cap⌉ sessions of `cap` instances each
+**The tile instances' public inputs.** The K′ sampled tiles are proved in S = ⌈K′/cap⌉ sessions of `cap` instances each
 (`sessions`). Session σ's instance s takes the tile t = drawn[σ·cap + s] while σ·cap + s < K′, and otherwise t = N − 1,
-the window's last tile, which is always a filler tile (`instance_ts`). The verifier writes its own `--public-inputs` file
+the execution phase's last tile, which is always a filler tile (`instance_ts`). The verifier writes its own `--public-inputs` file
 F_σ (C-Flock's `verity/flock-public-inputs/v1`, read by Lean's `HmIn.checkOwn`) from the one-stage registration (its
-population N, its sampling design subset:K′, and its window root and domain at port `entries`), its own draw, σ, the cap
+population N, its sampling design subset:K′, and its execution phase root and domain at port `entries`), its own sample, σ, the cap
 and the pass's tile domain (`public_inputs`). F_σ is a key-sorted JSON header line
 `{"format", "instances": cap, "ports"}`, then each instance's words, u16 little-endian, instance-major, in port order:
 
@@ -517,11 +517,11 @@ domain_h3  32      pass           verity/pouw/window/domain-h3/v1          the p
 ~~~
 
 Each port is a whole number of 128-bit words, so no row leaf shares a word with a public input; an instance is 336
-bytes. The window statement is proved as its own direct statement per window, separate from the tiles' sessions.
+bytes. The execution phase statement is proved as its own direct statement per execution phase, separate from the tiles' sessions.
 
-**Sizing.** Served windows register levels 87 to 143 (N from 9,216 to 1,179,648). A C-Flock session is at most
+**Sizing.** Served execution phases register levels 87 to 143 (N from 9,216 to 1,179,648). A C-Flock session is at most
 m = k_log + max(3, ⌈log2 blocks⌉) ≤ 35, so a session of a unit of 2^k_log bits per instance holds at most 2^(35 − k_log)
-instances (`session_cap`). The drawn tile's unit in the served runs, `Pc8TileLeafH3{K=4096, sm120}`, is 3,492,322 ANDs
+instances (`session_cap`). The sampled tile's unit in the served runs, `Pc8TileLeafH3{K=4096, sm120}`, is 3,492,322 ANDs
 at k_log 24; TileRead's three reads add to it.
 
 ~~~text
@@ -532,10 +532,10 @@ at k_log 24; TileRead's three reads add to it.
 
 The largest K′ is at level 143: 27,713 tiles unpadded, times g_(ℓ+1)/g_ℓ = 9/8 at levels whose point is 8·2^e.
 
-**Vectors:** `tests/vectors/window.json` (`tests/window_vectors.py`) pins a toy window of P = 4 entries over a toy window
+**Vectors:** `tests/vectors/window.json` (`tests/window_vectors.py`) pins a toy execution phase of P = 4 entries over a toy execution phase
 domain. Call 0 keeps A rows 0, 1 and 3 of four, so its refused row 2 is no leaf. Both calls name one toy pass's tile
 root. The vectors hold each entry's JSON, its row, digest, salt, b ‖ c and leaf; one side tree's leaves, its pad leaf, its
-root and a path; the window root; and F_σ, with a toy pass tile domain, for the draw (1, 4, 6) in sessions of 2, where
+root and a path; the execution phase root; and F_σ, with a toy pass tile domain, for the sample (1, 4, 6) in sessions of 2, where
 the second session pads with N − 1 = 8.
 
 ## `ncp-v1`: noise-cancelling polarization under TTNCP_U(0.5%), route U at β = 128
@@ -578,7 +578,7 @@ wref     3·m·k·n + f·m·k, f = 24   (route U under W1 with sub-word moves pr
 - **P.** `ncp-v1` uses the word-granular production P v1.1: a SHAKE256 Fisher-Yates over the k/4 aligned words from
   seed `pous-pouw-ncp-Pword-v1`; repair 1 (seed + `/repair`) so that no word lands in its own 16-step; repair 2 (seed +
   `/repair2`): while some word lies on a cycle of the arcs w → p(p(w)) that stay inside w's step, swap p at the least such
-  word with p at a drawn word, under repair 1's condition. The order inside each word is kept and every sign is +1. Its
+  word with p at a sampled word, under repair 1's condition. The order inside each word is kept and every sign is +1. Its
   SHA-256 (entries as 2-byte little-endian integers) is `536757a2…` at k = 1,088, `7f00a9b7…` at 2,048, `24e68f30…` at
   4,096 and `a57ea054…` at 11,008, all reproduced by an independent generator, which certified independence rank
   T − 1, λ₃ = 32 and MinRank 16 at each. The repairs guarantee clause 1 of the rejection rule and the MinRank argument's
@@ -628,7 +628,7 @@ docstring states every parameter.
 
 ## `ncp-v2`: NCP-INT as a circuit under sampled proofs (`verity/core/protocols/pouw/circuit`)
 
-Sampled proofs is PoUW's verifier here: the call is a `verity.ml.circuits` Program, drawn units are proved, never recomputed, and
+Sampled proofs is PoUW's verifier here: the call is a `verity.ml.circuits` Program, sampled units are proved, never recomputed, and
 the audit's integrity profile carries the work bound. This package has NCP-INT at small shapes (16 | m, 16 | n,
 64 | k); the certificate's domain is still `ncp-v1`'s.
 
@@ -690,8 +690,8 @@ weight are committed a leaf per row, so a proved unit opens exactly the rows it 
   ~~~
 
   The verifier builds these inputs itself (`Traced.call_args`, `Traced.weight_args`) or refuses a prover's that differ
-  (`Anchors.check_call`), and a window's `Ledger` refuses a repeated call index (forward, position), A11's
-  `UniqueCallIndices`. `SaltWindows` refuses one across every window of a salt, whose forwards continue from its
+  (`Anchors.check_call`), and an execution phase's `Ledger` refuses a repeated call index (forward, position), A11's
+  `UniqueCallIndices`. `SaltWindows` refuses one across every execution phase of a salt, whose forwards continue from its
   `next_forward`.
 - **Every primitive returns at most 32 bits.** SHA-512 words are carried as (hi, lo) halves and Keccak lanes as
   (lo, hi).
@@ -710,57 +710,57 @@ second field of `NcpTile`'s return (`partition.SEPARATOR_PORTS`). The registrant
   unit is behind the separator.
 - A tile whose word leaf reached y would itself be reachable, and would fail, along with every PoUW unit upstream of it
   (`test_a_word_leaf_wired_to_the_served_output_fails_the_width_rule`).
-- `partition.separator` checks the topology. Every path from a PoUW unit (digest, node, key, form-X, tile; and form-Y in a
-  window) to y passes through a pinned Z. What crosses is m·n values of 32 bits, 8,192 bits per tile, and no credited word is
+- `partition.separator` checks the topology. Every path from a PoUW unit (digest, node, key, form-X, tile; and form-Y in an
+  execution phase) to y passes through a pinned Z. What crosses is m·n values of 32 bits, 8,192 bits per tile, and no credited word is
   delivered.
 
-**The draw** (`plan`). The strata are the verifier's own, as `verify` derives them: one per
+**The sample** (`plan`). The strata are the verifier's own, as `verify` derives them: one per
 template of the call's partition, in the order of its first unit (`Flock/Draw.lean` `strataOf`). The sampling design
-draws each stratum, and each drawn tile is proved with its closure: its X unit, strip digest, the node units on that
+samples each stratum, and each sampled tile is proved with its closure: its X unit, strip digest, the node units on that
 strip's path and the key, each once, and its Y unit in the weight's Program (`Plan.proved_y`), once per plan. Every
-other template is drawn at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratum`). The
+other template is sampled at its floor, so a wholly wrong one is caught directly (`audit_work_whole_stratum`). The
 sampling design is a seam:
 - `WorkLaw` is Verity's work sampling design, with its floors (`Flock/Draw.lean`): k_s = min(n_s, max(f_s,
-  ⌈K·w_s·n_s/W⌉)), with K = 27,713, the draws that establish ε = 0.1% at δ = 2⁻⁴⁰, the default report point and not a
+  ⌈K·w_s·n_s/W⌉)), with K = 27,713, the samples that establish ε = 0.1% at δ = 2⁻⁴⁰, the default report point and not a
   policy parameter (`plan.record_k`; 27,712 misses). Only the tile template does
   PoUW work, so W is its stratum's, and k_tile = min(n_tile, max(f_tile, K)).
   - `plan.work_table` is the verifier's `--work-table`: every template of the call, `{"work": w, "floor": f}`, the tile's
     W_ref per tile and 0 for `digest`, `node`, `key`, `form_x` and `dequant`; `dequant`'s floor is y's (below), and the
     others' 1 unless POUS sets them. A call's work is in one stratum (0 < w_s·n_s in one only) and its tiles are of one
     template: `work_table`, `WorkLaw.budget` and `window_laws` refuse any other (`plan.check_work_strata`), since the
-    window guarantee takes it as its hypothesis `hone`. Where the cap K_c ≤ N_c binds, a second work stratum is
-    under-drawn: in one constructed window ten faulty proof blocks have acceptance probability 0.156 against a claimed 2.4·10⁻⁴
+    execution phase guarantee takes it as its hypothesis `hone`. Where the cap K_c ≤ N_c binds, a second work stratum is
+    under-drawn: in one constructed execution phase ten faulty proof blocks have acceptance probability 0.156 against a claimed 2.4·10⁻⁴
     (`test_the_red_team_s_capped_window_is_refused`).
   - `plan.law_object` is the sampling design `verify` derives from it, each stratum `{template, units, work, floor, k}`.
-  - K is a **window's** budget: a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units
+  - K is an **execution phase's** budget: a call samples its share K_c = ⌈K·W_c/W_window⌉, capped at its units
     (`plan.window_laws`). That is the sampling design `verify` enforces when each call is its own statement with its own
     K_c (`--work K_c`); within one Program (`ncp2.window`) the calls share their templates' strata and one K.
   - **y's floors.** No tile's closure holds a dequantization unit, so y is
-    drawn at its floor: each call's table gives `dequant` `{"work": 0, "floor": f_c}`, f_c = ⌈K_y·n_c/N⌉, n_c its y
-    cells and N the window's, with K_y = K = 27,713 (`plan.window_laws`). So k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c
-    or proves the call's y, and a window draws at most K_y + C y cells. δ stays 2⁻⁴⁰: a tile-bad and a y-bad wrong set
-    are one family of the one window audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their
+    sampled at its floor: each call's table gives `dequant` `{"work": 0, "floor": f_c}`, f_c = ⌈K_y·n_c/N⌉, n_c its y
+    cells and N the execution phase's, with K_y = K = 27,713 (`plan.window_laws`). So k_c = min(n_c, f_c) meets k_c·N ≥ K_y·n_c
+    or proves the call's y, and an execution phase samples at most K_y + C y cells. δ stays 2⁻⁴⁰: a tile-bad and a y-bad wrong set
+    are one family of the one execution phase audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their
     sum. Per call the floor is a guarantee (`audit_work_floor`); `flock-verify draw --work` derives the same sampling
     design from these tables.
-  - **The window guarantee covers the split across calls and y's floors**, `audit_window_split_of_record` in
+  - **The execution phase guarantee covers the split across calls and y's floors**, `audit_window_split_of_record` in
     `FlockSoundness/Audit/Window.lean` (proved at `f06327bd`): the per-call sampling design with y's floors at
-    K = K_y = 27,713 accepts a window with at least 0.1% of its work unsound or 0.1% of its y cells wrong with probability
+    K = K_y = 27,713 accepts an execution phase with at least 0.1% of its work unsound or 0.1% of its y cells wrong with probability
     at most 2⁻⁴⁰ + ε_ks + ε_bind. Its `callK` and `windowK` are `WorkLaw.budget` and `WorkLaw.sizes`, recomputed from
     their formulas in `test_the_window_law_is_the_window_pin_s`; its hypotheses are `hone` (above), y's floors
-    (`hfy`), and a window that does some work and has y cells (`hW`, `hN`: `window_laws` refuses W = 0 or N = 0,
+    (`hfy`), and an execution phase that does some work and has y cells (`hW`, `hN`: `window_laws` refuses W = 0 or N = 0,
     `plan.py:186`, `plan.py:191`). One Program (`ncp2.window`) is its case C = 1: K_c = min(N, K), the K `verify`
-    takes (`1 <= k <= n`), and y's floor K_y. Outside it, the window's use of it rests on four things:
+    takes (`1 <= k <= n`), and y's floor K_y. Outside it, the execution phase's use of it rests on four things:
     - *The verifier derives every number itself.* `window_laws` (`plan.py:164`) takes only the verifier's own layouts
       (`Traced.layout`, `__init__.py:144`; any other is refused by `Traced.check_layout`, `__init__.py:136`). It
       computes W from them (`plan.py:185`) and N (`plan.py:190`), and the floors ⌈K_y·n_s/N⌉ (`plan.py:195`);
       `WorkLaw.budget` computes W_c and N_c from the call's own strata and K_c = min(N_c, max(1, ⌈K·W_c/W⌉))
       (`plan.py:153–157`). No prover-stated number enters.
-    - *Call indices are distinct and the verifier's.* `Traced.draw` admits the call to the window's `Ledger`
-      (`__init__.py:97`), which refuses a repeated (forward, position) before anything is drawn (`anchors.py:215–221`),
+    - *Call indices are distinct and the verifier's.* `Traced.draw` admits the call to the execution phase's `Ledger`
+      (`__init__.py:97`), which refuses a repeated (forward, position) before anything is sampled (`anchors.py:215–221`),
       and each stratum's context is ("call", forward, position, "stratum", template) (`plan.py:291`). The index is the
       verifier's anchors' (`Anchors`, `anchors.py:42`, which `Anchors.check_call` holds the call's inputs to,
       `anchors.py:83`). This is the guarantee's M1.
-    - *Every call's commitment precedes the window key.* A window's `anchors.Receipt` lists every call with
+    - *Every call's commitment precedes the execution phase key.* An execution phase's `anchors.Receipt` lists every call with
       its anchors, shape and commitment, and is immutable (`anchors.py:130`); its digest binds each call's full
       anchors (index, salt, weight id, rows and columns), shape and commitment. `Ledger.open` derives the key from it
       alone, under `DRAW_DOMAIN` with {"receipt": digest} as its context, and admits only the calls it lists
@@ -769,40 +769,40 @@ sampling design is a seam:
       ledger, refusing one not opened from a receipt (`__init__.py:96`). A call's openings are checked against its
       commitment as the receipt lists it, by call index (`Ledger.commitment`, `Traced.check_openings`,
       `__init__.py:101`), never one supplied with them. So W, N, each K_c and every commitment the openings answer
-      to are fixed by the receipt before any draw.
-    - *Each window's source is fresh and used once.* `Ledger.open` takes no source: it draws 32 bytes from
-      the operating system's CSPRNG (`secrets`, `anchors.py:165`) once the receipt is complete, for that window
+      to are fixed by the receipt before any sample.
+    - *Each execution phase's source is fresh and used once.* `Ledger.open` takes no source: it samples 32 bytes from
+      the operating system's CSPRNG (`secrets`, `anchors.py:165`) once the receipt is complete, for that execution phase
       alone. So A4 (`prf/sha-512`) applies as stated, one fresh uniform source per derivation, with the source's
-      uniformity its own claim, A5 (`uniform/python-secrets`). Once the window's draw is sent (`Ledger.sent`), it draws
+      uniformity its own claim, A5 (`uniform/python-secrets`). Once the execution phase's sample is sent (`Ledger.sent`), it samples
       nothing more, and the audit record keeps its source and receipt digest (`Ledger.record`, `anchors.py:245`),
-      from which anyone re-derives the key and the draw (`replay_key`). The limit: a third party can check that the
-      draw came from the recorded source, not that the source was fresh. A verifier colluding with a prover could pick a
-      source whose draw misses; that is the designated verifier's trust, and a beacon or a commit-and-reveal would be
+      from which anyone re-derives the key and the sample (`replay_key`). The limit: a third party can check that the
+      sample came from the recorded source, not that the source was fresh. A verifier colluding with a prover could pick a
+      source whose sample misses; that is the designated verifier's trust, and a beacon or a commit-and-reveal would be
       needed for a third party to check it. No protocol timing changes: the key is still the verifier's own
       randomness after the receipt.
-    - *ε_ks and ε_bind are the window's.* The guarantee's are one window `Analysis`'s (M2). The per-call values are not
-      cited as the window's; no statement composes them yet.
+    - *ε_ks and ε_bind are the execution phase's.* The guarantee's are one execution phase `Analysis`'s (M2). The per-call values are not
+      cited as the execution phase's; no statement composes them yet.
 - `CountLaw` is `main`'s stratified rule, k_s = max(1, round(K·n_s/N)).
 
-**The draw is per call.** Each stratum's subset is drawn from the verifier's key under the call's index,
-(forward, position), with the template: the strata are the call's own, one per template, and the calls of a window drawn
-under one key draw independently, so K split across them keeps the window's (1 − ε)^K. The verifier draws through
-`Traced.draw(law, anchors, ledger)`, which takes no layout and no key: it draws over `Traced.layout()`. The
-window's `anchors.Ledger` is opened from its complete `Receipt` (`Ledger.open`), which derives the window's key from a
-fresh source under the receipt's digest; `Traced.draw` draws only under that key, admits the call first, refusing one
-the receipt doesn't list or the window already holds before anything is drawn, and then keys each stratum's subset
-with ("call", forward, position, "stratum", template). So every call's commitment precedes the key, and each call of a
-window draws under a context of its own, the product sampling design the window guarantee takes as M1.
+**The sample is per call.** Each stratum's subset is sampled from the verifier's key under the call's index,
+(forward, position), with the template: the strata are the call's own, one per template, and the calls of an execution phase sampled
+under one key sample independently, so K split across them keeps the execution phase's (1 − ε)^K. The verifier samples through
+`Traced.draw(law, anchors, ledger)`, which takes no layout and no key: it samples over `Traced.layout()`. The
+execution phase's `anchors.Ledger` is opened from its complete `Receipt` (`Ledger.open`), which derives the execution phase's key from a
+fresh source under the receipt's digest; `Traced.draw` samples only under that key, admits the call first, refusing one
+the receipt doesn't list or the execution phase already holds before anything is sampled, and then keys each stratum's subset
+with ("call", forward, position, "stratum", template). So every call's commitment precedes the key, and each call of an
+execution phase samples under a context of its own, the product sampling design the execution phase guarantee takes as M1.
 
 **The call's Y is linked to the weight Program.** The call reads its weight's Y strips and c₀ as committed
-inputs, so at each drawn tile's column strip (the strips `Plan.proved_y` proves in the weight Program) the plan opens
+inputs, so at each sampled tile's column strip (the strips `Plan.proved_y` proves in the weight Program) the plan opens
 the call's Y and c₀ there beside the weight Program's output there, a ("y", strip) leaf, and `Traced.check_link` refuses
 any strip where they differ (`test_the_call_s_y_is_linked_to_the_weight_program`: another weight's Y, or one c₀ changed).
-A wrong Y input on a strip no drawn tile reads spoils only undrawn tiles, which the sampling design charges like any
+A wrong Y input on a strip no sampled tile reads spoils only undrawn tiles, which the sampling design charges like any
 unsound tile.
 
 **The layout is the verifier's.** The Layout theorems (`Layout.accountable_compute` and the rest) hold only for the
-window's own layout, so the verifier derives each tile's own unit and its closure from the shape alone, through the
+execution phase's own layout, so the verifier derives each tile's own unit and its closure from the shape alone, through the
 Program it builds (`Traced.layout`), and refuses any other (`Traced.check_layout`). `draw` refuses a layout whose tile is
 not a tile unit or is not its closure's first unit: a tile mapped to its X strip is C1 again
 (`test_a_prover_s_layout_mapping_a_tile_to_its_x_strip_is_refused`).
@@ -858,7 +858,7 @@ useful    U/(α_A·α_B), glue
     - `wref` is Lean's `wrefOfRev1` and `credit_of` its `creditOfRev1` (rev1, `DeviceRev1.lean`; `wrefDevRev1` and
       `creditDevRev1` at another device's prices), pinned on a grid of shapes: `wrefOf` and `creditOf` less the first
       promotion add of every word (`first_adds`, m·n adds), which adds into +0 and so returns its group's word. The
-      weight side (B's forming, B̃·F_A, G, P_B) is `job_cost`, once per weight and epoch, in neither.
+      weight side (B's forming, B̃·F_A, G, P_B) is `job_cost`, once per weight and execution phase, in neither.
     - Every W1 price is a device's (`Prices`, the device statement's): `H100_PRICES` for sm_90 (FADD 32, a BF16 MAC 2,
       forming 64 + 4) and `SM120_PRICES` for sm_120 (8, 2, 40 + 1: each step at its cheapest bit-exact form, as measured
       on the card). `wref`, `credit_of`, `job_cost` and the debit read the scheme's record; the registered schemes are the
@@ -870,19 +870,19 @@ useful    U/(α_A·α_B), glue
     - It shares v0's seed labels (`pearl-c/v0/seed-*`).
 - **Hashing format -h3** (`pearl-c-sm120-v1-h3`, `serving.HASH_FORMATS["h3"]`: tree hash `audit.HM96`, `seed_a="row"`,
   `row_cap=True`, `row_digest="sha512/row-seg/v1"`) is SHA-512 throughout, with E_A seeded per row. It is the one hash
-  format besides h0 (one hash, SHA-512, as the proof service's row commitments), so
+  format besides h0 (one hash, SHA-512, as the proof system's row commitments), so
   the scheme assumes SHA-512's collision resistance (`cr/sha-512`). The BLAKE3 formats -h1, -h2 and BLAKE3 -h3, with
   their vectors and kernels, were deleted with the archive in `2091252fe3`.
   - Labels: H_ℓ(x) = `pearl_c.s512`(ℓ, x), the first 32 bytes of SHA-512(``pearl-c/h3s/<ℓ>\0`` zero-padded to 128 bytes ‖
     x), for ℓ in seed-A, seed-B, noise-line, line and jackpot; the label's ``h3s`` is the domain tag the format was first
     pinned under. seed_B = H_seed-B(salt ‖ root_B), seed_A = H_seed-A(salt ‖ root_A ‖ root_B ‖ u64 LE index), the roots
     64 bytes.
-  - Row i of unit u draws its E_A line from its own seed, `row_seed`(salt, d_i, root_B, u, i) = H_seed-A over salt ‖ d_i ‖
+  - Row i of unit u samples its E_A line from its own seed, `row_seed`(salt, d_i, root_B, u, i) = H_seed-A over salt ‖ d_i ‖
     root_B ‖ u64 LE (u · 2^32 + i), 168 bytes, with u and i each below 2^32 and d_i = `pearl_c.row_digest`(row i),
     `rowleaf.sha512_row_seg_digest` over the row's FP32 words little-endian: 1 KiB segments hashed on their own, then
     their digests (a 4096-wide row is 16 segments, a 14336-wide one 56). `hash_h3.cuh`'s `s512_rows` and `s512_seeds`
     compute them; the pins are in the tests, and the kernels, built for the host, write those bytes.
-  - Why per row: a seed that doesn't read A, such as the epoch coins and the index alone, tells the prover each row's
+  - Why per row: a seed that doesn't read A, such as the execution phase's coins and the index alone, tells the prover each row's
     noise before it chooses the row. It can then form every row onto a few shared A′ rows, compute their C̃ once per
     weight and copy it, while every row passes every rule (Pearl-C4's `noise` has the same shape, and every row folds
     onto one A′ row there; its -h3 is in its section). Keyed on its
@@ -898,12 +898,12 @@ useful    U/(α_A·α_B), glue
     ChaCha20 stream (`audit.hm96_salt`, nonce the unit index for A's tree, 2^62 + w for weight w's, 2^63 for the
     transcript's), and an opening's value carries its salt.
   - Where the protocol, not the scheme, hashes, it hashes with SHA-512 and keeps all 64 bytes: each domain's binding
-    (`tagged`, which every frame of core's takes at 64 bytes) and the records' root. The salt and the draw are the epoch
-    coins, and the draw's `derive` is core's, on SHA-512 (`prf/sha-512`).
+    (`tagged`, which every frame of core's takes at 64 bytes) and the records' root. The salt and the sample are the execution phase's
+    coins, and the sample's `derive` is core's, on SHA-512 (`prf/sha-512`).
   - The row cap: the debit cap is checked for every credited row, each row's debit at most ρ times its share of the
     credit, as well as per tile. It is (C2) of `TTOutRowSeed.lean`, under which `ttOutRowSeed_of_ttOut` reduces the
     row-seeded TT_OUT to rev1's per-unit one at error (q + R)/2^128 over the R declared rows. An aggregate cap doesn't
-    transfer. The work sampling design checks it on every credited A row of a drawn tile, over its credited columns,
+    transfer. The work sampling design checks it on every credited A row of a sampled tile, over its credited columns,
     after the tile's cap (`clear_work.row_cap`), and `volunteer` gives up a row over it first. The hidden cap checks it
     in gates (`circuit.cap`'s v2 templates, `cap.served`).
   - `pearl-c-sm120-v1-h3` is registered (the served default, `pouw_pearl_c_device`), and so is `pearl-c-h100-v1-h3`,
@@ -912,7 +912,7 @@ useful    U/(α_A·α_B), glue
     hash of every row digest and seed. h0's verifier refuses an -h3 transcript on its activation openings.
 - **Row tiles.** m is a multiple of 16, not of 64: the last row tile may be partial, in whole 16 × 16 ticket subtiles.
   Decode's 32 × 64 tile has a leaf over its 64 digests (2 KB), so decode is not padded to 64 rows.
-- **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a drawn tile.
+- **The debit** (`schemes/pearl_c_debit.py`) is `Skip.lean`'s, replayed by the verifier on a sampled tile.
   - `word_flags` flags an atom when some set of its promotion group's atoms containing it, skipped jointly, leaves the
     word's output unchanged. The later promotions are tested by intervals found backward by bisection.
   - It equals P1's Lean-checked word vectors: all 552 when they were cut, and the 448 kept in
@@ -924,13 +924,13 @@ useful    U/(α_A·α_B), glue
     `forming_elements` is a stub that returns 0.
   - The census's aligned-spike tile at R = 300 passes the domain with 74.6% of its atom-words flagged, about 15 times the
     cap.
-- **The work sampling design** is what the verifier credits, draws and checks. Its records (`Split`, `UnitRecord`,
+- **The work sampling design** is what the verifier credits, samples and checks. Its records (`Split`, `UnitRecord`,
   `records_root`) are `schemes/pearl_c_work.py`'s, which vLLM's prover writes; its law and clear audit are a reference
   tool, ``benchmarks/pouw/clear/clear_work.py``.
   - A weight's `Split` holds at most ⌊k/100⌋ side channels. The unit reads the kept channels zero-padded to `k_unit`,
     and credit is on the kept width, so padding earns nothing. The audit recomputes S by the pinned rule through
     `split_check`, which the model integration supplies.
-  - Before the draws the prover declares a record per matmul: its real rows (the rest are zero filler), its kept width,
+  - Before the samples the prover declares a record per matmul: its real rows (the rest are zero filler), its kept width,
     and its excluded rows. `records_root` binds the records and the splits.
   - One exclusion rule, per row: a row that fails the per-row rules stays in the unit, bound as any other, and its cells
     earn no credit. Tiles with credited cells stay drawable, and the audit also opens one tile per excluded row.
@@ -940,30 +940,30 @@ useful    U/(α_A·α_B), glue
       nothing (`test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted`).
   - **Voluntary rows (V-EX):** the record may also give up up to ⌈m/64⌉ A rows
     (`voluntary_a`), and each weight up to ⌈n/64⌉ B rows (`voluntary_b`, the same in every unit of the weight).
-    - They are committed in `records_root` beside the excluded rows, before the draw coin opens. A record without them
+    - They are committed in `records_root` beside the excluded rows, before the sampling coin opens. A record without them
       encodes exactly as before.
-    - A voluntary row earns no credit, and its words are still checked on every drawn tile that holds it.
+    - A voluntary row earns no credit, and its words are still checked on every sampled tile that holds it.
     - It is exempt from the two-sided per-row check and R1, and it opens no exclusion tile.
     - The tile cap and R1 read the credited rows only. Past the count caps the audit rejects.
     - `volunteer` is an honest prover's remedy for a tile over the cap: it gives up the rows whose removal brings each
-      tile under, before the draw coin opens.
+      tile under, before the sampling coin opens.
     - A weight whose n is not whole column tiles is served zero-padded to the next whole tile (`pad_weight`; GLM-5.3's
       lm_head, 19,360 rows a TP8 rank, to 19,392), and the last tile's rows, its real columns with the zero rows, are
       voluntary (`declare`'s `padded_b`, though the zero rows fail the noise floor). That tile has no credited cell, so
-      no draw lands on it and it opens no exclusion tile: no tile check sees a zero row. The credit is the full tiles'
+      no sample lands on it and it opens no exclusion tile: no tile check sees a zero row. The credit is the full tiles'
       real columns (19,328 of 19,360) at the padded n's cell credit.
-  - A cell's draw weight is its row's share of `W_ref` at the kept width, the `W_ref` of the Lean statement the draw
+  - A cell's sample weight is its row's share of `W_ref` at the kept width, the `W_ref` of the Lean statement the sample
     cites (`draw_wref`). On sm_120 at its cap that is `wrefDevRev1K` at `Prices.sm120Loop` and the honest cast at 8.72
     (`SM120_LOOP_CAST_8P72`), the statement of the served γ and ε. Its ratio to `wref` differs between linears, so a
-    served step's mixed layout drawn by `wref` would not be work-weighted in its sense. Elsewhere it
-    is `wref`. A tile's draw weight is the sum over its credited cells. Where every cell is credited, that is the cited
+    served step's mixed layout sampled by `wref` would not be work-weighted in its sense. Elsewhere it
+    is `wref`. A tile's sample weight is the sum over its credited cells. Where every cell is credited, that is the cited
     statement's ticket (the tile's `Wref`). The statements weigh every cell, so a tile with filler, excluded or
-    voluntary rows gets less than its `Wref`'s ticket, and unless every tile's credited share is the same, the draw is
+    voluntary rows gets less than its `Wref`'s ticket, and unless every tile's credited share is the same, the sample is
     not yet the one they state (Not here yet). An accepted unit is credited (1 − ρ)·`credit_of` over its credited
     cells.
-  - **The sampling guarantee is per credited cell.** A drawn tile's uncredited cells (filler, excluded or voluntary)
-    never count as coverage. Volunteering a tile's other rows lowers that tile's draw weight to its credited cells.
-    Lean's statements don't model that yet: their draw weight is the whole tile's `Wref`, whatever is volunteered.
+  - **The sampling guarantee is per credited cell.** A sampled tile's uncredited cells (filler, excluded or voluntary)
+    never count as coverage. Volunteering a tile's other rows lowers that tile's sample weight to its credited cells.
+    Lean's statements don't model that yet: their sample weight is the whole tile's `Wref`, whatever is volunteered.
   - On an opened tile the verifier checks that filler rows are zero, that every row is zero past the kept width, that
     credited rows pass the per-row rules and excluded rows fail them, and that the replayed debit over the credited words
     is at most ρ times those cells' credit; under -h3, every credited A row's too. ρ is the device record's cap
@@ -972,7 +972,7 @@ useful    U/(α_A·α_B), glue
     statement's `tileShare`). A row's forming and A′·F_B are so charged once across its row band, a |cols|/n share in
     each tile. `credit_of` of the tile's own shape would charge them whole in every tile: at 8,192³ that cap is 2.17×
     the cells' share.
-  - The draws are keyed by the epoch's draw coin, opened after the verifier recorded the commitment (the transcript root
+  - The samples are keyed by the execution phase's sampling coin, opened after the verifier recorded the commitment (the transcript root
     and the records root, `draw_after`), through `derive(coin, DRAW_DOMAIN, {"transcript", "records", "salt"})`
     (`draw_key`). A replay of a recorded run keys them as the run recorded them (`RecordedDraw`, `replay_key`).
 - **The TurboSHAKE128 reference** is `verity.ml.crypto.turboshake`, checked against RFC 9861 and `hashlib`'s
@@ -996,7 +996,7 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
   group of all 32 products and the accumulator in a 26-bit adder (Lean's `Pipeline ⟨[32], 26, −133⟩`), where the H100's
   and Ada's FP8 adders are 14 bits wide.
 - **The cap is ρ = 1/1,000**, the record's `cap`; the H100's stays 1/400.
-  - The verifier rejects a drawn tile whose replayed debit passes 1/1,000 of its credited cells' credit, and an accepted
+  - The verifier rejects a sampled tile whose replayed debit passes 1/1,000 of its credited cells' credit, and an accepted
     unit is credited (1 − 1/1,000)·`credit_of`. `volunteer` reads the same cap. The certificate states TT_OUT(1/1000) and
     names the cap among its parameters.
   - γ at the headline record (FP32 at 8.376, the packed cast at 8.72, rev1's credit), per unit, is the pinned guarantee
@@ -1056,12 +1056,12 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     - `plan.tile_layout` proves a short tile with its r `Pc8RowA` units, in its own stratum at W_ref r/64 of a whole
       tile's.
     - A call with both whole and short tile rows is therefore two tile strata, which the work sampling design refuses
-      (`plan.check_work_strata`, the window pin's `hone`). Under the work sampling design such a call is not drawn yet;
+      (`plan.check_work_strata`, the execution phase pin's `hone`). Under the work sampling design such a call is not sampled yet;
       a call that is all one tile row height is.
   - The hiding Programs are `pc4`'s (``Shape.hidden``; the rows and their vectors are under `circuit.pc4` below):
     `Pc8TileHidden` returns its tile digest in place of C̃ and U, the weight's Program is `Pc8Weight`, and the rows are
     C-Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows, `pouw/row-fp8-p/v1` rows and
-    `pouw/row-ok/v1` rows. A 64 × 64 tile's digest is 281 Keccak-p[1600, 12] in gates. `plan.tile_layout` draws a tile
+    `pouw/row-ok/v1` rows. A 64 × 64 tile's digest is 281 Keccak-p[1600, 12] in gates. `plan.tile_layout` samples a tile
     with its rows, as for `pc4`.
   - **The cap** (`circuit.cap`; opt-in, `pc8.Shape.cap`, off by default, on the hiding Programs only) decides rev1's
     `capOK` (`pearlCTilesDevRev1`: `tileDebitRev1 ≤ ρ·creditDevRev1·tileShare` over a tile's passing rows and all its
@@ -1088,11 +1088,11 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
     - sd_i is row i's salt-dead count per block of 32 elements (P3's `saltDeadP`, decided at its support's two ends:
       `saltDeadP_iff_ends`). The certificate is Freeze's intervals for the word's groups, prover advice in no row or
       region (`cap.ADVICE`); only the exact intervals pass, and any other certificate fails good.
-    - **A drawn tile is accepted only when its tile check passes and its tally's verdict is ok**: its tile unit's digest
+    - **A sampled tile is accepted only when its tile check passes and its tally's verdict is ok**: its tile unit's digest
       is the miner's h0, and its tally's ok word, the tally's public output beside the digest, is ok. The verdict is
       `Pc8TileCap`'s (the cap in one tile unit, the split's reference): every passing row's words are good, and the
       cap's inequality holds in its integer form on 31-bit words (`cap._cap_constants`).
-    - Every cap word is proved, never sampled: a drawn tile's closure (`plan.tile_layout`) holds its TM A rows, its
+    - Every cap word is proved, never sampled: a sampled tile's closure (`plan.tile_layout`) holds its TM A rows, its
       strip, all TM·TN of its word units, its TM row digests and row tallies, and its tally (4,291 units at 64 × 64, none
       with more than 66 rows). Every partition still computes each value in exactly one unit: the strip computes its
       rows' admission bits once for all the tiles in it.
@@ -1147,14 +1147,14 @@ useful    U/(α_A·α_B), glue
   that drops a bit), so no claim rests on exactness: the debit's terms are replayed per run. The design's defense
   against a salt-free precomputation is that every code and every block scale depends on the salt.
 - **B̃ is keyed by this job's salt (D-SK):** seed_B = H_"seed-B"(salt ‖ root_B) (`seed_b`), and the verifier forms B̃
-  itself from it on every drawn tile. So a transcript whose B̃ was formed under another salt, or under none, fails its
+  itself from it on every sampled tile. So a transcript whose B̃ was formed under another salt, or under none, fails its
   checked values (a test). This is load-bearing: B̃ exists only once the salt does, so the salt-free base split is
   two-sided (A′·B̃ᵀ = A0·B0ᵀ + ΔA·B̃ᵀ + A0·ΔBᵀ, the cheater paying both corrections), and that is what ties it on
   crafted stride rows. A variant that fixes B̃ before the salt needs a per-salt split debit instead.
 - **seed_A doesn't read A's rows, so Pearl-C's adaptive-A attack applies here too.** `noise` keys every row's E_A by the
   unit's seed_A alone, so the prover knows each row's noise before it chooses the row and can fold every row onto one A′
   row, whose C̃ it computes once per weight row, while every row passes every rule. The fix is Pearl-C's -h3 (above):
-  - `PearlC4(hashing="h3")` (`pearl-c-nvfp4-v0-h3`, not registered) draws row i's E_A as line 0 (role E_A) of its own
+  - `PearlC4(hashing="h3")` (`pearl-c-nvfp4-v0-h3`, not registered) samples row i's E_A as line 0 (role E_A) of its own
     seed, `pearl_c4.row_seed`: `pearl_c.row_seed`'s layout under Pearl-C4's label, H_"seed-A"(salt ‖ d_i ‖ root_B ‖
     u·2^32 + i u64 LE) over the row's SHA-512 digest d_i (`pearl_c.row_digest`), the same SHA-512 seed-A derivation as
     the unit's.
@@ -1176,7 +1176,7 @@ useful    U/(α_A·α_B), glue
     families R1 admits at 10×, after A0's gather and ρ, with a 1.5× margin on the gain, made non-increasing in n.
   - It is measured on each bucket's own R1 admission boundary at k = 1,024, where the cap is largest, and at 0.005,
     0.01 and 0.015 inside it, since the worst family can sit there (at n = 256 and 2,048 it does). The need is
-    1.5× the mean over 8 draws of the best search. Each bucket takes the largest of that need, the
+    1.5× the mean over 8 samples of the best search. Each bucket takes the largest of that need, the
     boundary check (2.23% at n = 256), the earlier grid's cells under the same cap (0.18% at n = 2,048, from its
     L = 0, p = 0.40 cell) and the grid's table.
   - Exact optimisation stays within 1.02× of annealing at n = 256 and 512.
@@ -1196,7 +1196,7 @@ useful    U/(α_A·α_B), glue
   reference's witness (`salt_dead`) per element, not every element of a screened block, so a row with many screened blocks is rejected only when its tile's
   debit passes the cap, and neither item charges more than its block form. F1′ charges a screened block's near-certain
   codes at their own p_t. This replaces D-SS's one-in-64 row cap, which rejected about half of real activation rows.
-- **The debit, replayed per drawn tile over its credited words (`tile_debit`),** in FP4 units. Items 1 and 1b and R1
+- **The debit, replayed per sampled tile over its credited words (`tile_debit`),** in FP4 units. Items 1 and 1b and R1
   are the base-split and flatness fix.
   1. **F1′, the base split's expected saving,** per row and aligned 128-window of A′ and of B̃, on every word the row
      feeds:
@@ -1225,12 +1225,12 @@ useful    U/(α_A·α_B), glue
 
   R1. **A row whose own F1′ per word passes ρ·(its cell credit) is uncredited.**
       - The prover declares it (`clear_work.declare` with the transcript).
-      - The verifier checks the declaration on every drawn tile (`check_opened`): a credited row over the bound, or an
+      - The verifier checks the declaration on every sampled tile (`check_opened`): a credited row over the bound, or an
         excluded row under it that passes the per-row rules, fails the tile.
       - The row is still formed, checked and hashed.
   2. per identity atom (its lone skip leaves the word unchanged), 64 per atom-word;
   3. per word and position whose A code and B code are both salt-dead (`salt_dead`, replayed per element on both
-     sides from the drawn tile's own forming), one MAC; a fully dead atom is charged its 64;
+     sides from the sampled tile's own forming), one MAC; a fully dead atom is charged its 64;
   4. per salt-dead A element (the reference's witness, `salt_dead`) or unneeded one (every credited B code at its
      position is zero), f_s·|cols|/n;
   5. per (word, block) whose largest possible scaled dot, 2304·m_a·m_b·2^(e_a+e_b−2), lies below its step's grid (it
@@ -1240,8 +1240,8 @@ useful    U/(α_A·α_B), glue
     sparse MMA (`mma.sp…kind::mxf4nvf4…m16n8k128`, 2 of each 8-chunk's 4 pairs kept); `kind::f8f6f4`'s element-wise
     2:4 has no UE4M3 16-block scales and runs at the FP8 rate, so it saves nothing. It is charged per row window rather
     than per 16-row span, since a cheaper computation may gather any 16 such rows; the literal spans are counted.
-  - A code is salt-dead unless two draws in the noise support give it two values (`salt_dead`: E ≡ +6, the element's
-    F_t in {+6, 0, −6}, its block's other F lines 0). Uncharged codes are those two draws prove live, so the charge errs
+  - A code is salt-dead unless two samples in the noise support give it two values (`salt_dead`: E ≡ +6, the element's
+    F_t in {+6, 0, −6}, its block's other F lines 0). Uncharged codes are those two samples prove live, so the charge errs
     high.
   - D-SS's spread bound (2^15.8, implied by D-NF) is counted, not enforced: items 2 and 5 charge what it would exclude.
   - D-SB is enforced on every formed side before hashing (`check_scale_bytes`): every block scale in 0x01–0x7E (UE8M0:
@@ -1256,7 +1256,7 @@ useful    U/(α_A·α_B), glue
       decode, and outside the model through the accumulator (a test); the card writes 0x7FFFFFFF.
     - The pinned model (`verity.ml.circuits.silicon.models._scale_dyadic`) reads the low 7 bits too, and all 17 bit-7
       vectors replay on the RTX PRO 6000 word for word.
-  - A drawn tile is rejected when its debit exceeds ρ = 1/400 of its credited cells' share of creditOf.
+  - A sampled tile is rejected when its debit exceeds ρ = 1/400 of its credited cells' share of creditOf.
 - **Accounting** in FP4 units (placeholder W1 prices: a BF16 MAC 4, an FP32 instruction 16):
   - W_ref = mnk + 32·mk + 256·mn + 117·mk;
   - creditOf = mnk + 32·mk + 256·mn + f_s·mk, f_s = 98 (the steps that read the salt at their cheapest bit-exact price:
@@ -1270,20 +1270,20 @@ useful    U/(α_A·α_B), glue
   which every measured row needs:
   - the device's dump: A's and B's rows, its roots and its tile leaves, and the scale bytes its forming wrote;
   - `prove` turns the dump into transcript v0: the transcript commitment, the records with the rows that fail the
-    per-row rules or R1 (`r1_row`, row by row over its workers), the draws and their openings, and a count of device
+    per-row rules or R1 (`r1_row`, row by row over its workers), the samples and their openings, and a count of device
     scale bytes outside D-SB's range;
-  - `verify` recomputes the salt, the draws and every opened tile, including its debit against the cap, and prints the
+  - `verify` recomputes the salt, the samples and every opened tile, including its debit against the cap, and prints the
     accept line.
 
   It takes about 2 CPU-minutes per 64 × 64 tile at k = 8,192, and F1′ adds about 0.35 CPU-s per formed row, evaluated
   once per row and shared by R1 and the debit (about 0.75 CPU-minutes per tile; measured on a cloud-agent VM before the
-  sharing, at twice that). The protocol keys the draws and the salt by the epoch's live coins, with no Fiat-Shamir in its
-  draw. The replay's shortcuts are in every report: its draws are keyed by Fiat-Shamir over the commitment in place of
-  the draw coin, the epoch's salt is from the benchmark's label, and the transcript tree and the records are built on
+  sharing, at twice that). The protocol keys the samples and the salt by the execution phase's live coins, with no Fiat-Shamir in its
+  sample. The replay's shortcuts are in every report: its samples are keyed by Fiat-Shamir over the commitment in place of
+  the sampling coin, the execution phase's salt is from the benchmark's label, and the transcript tree and the records are built on
   the host after timing.
 
   Its ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof). The replay opens rows and
-  words and recomputes them in the clear. The protocol keeps every value hidden: it checks a drawn tile by a ZK proof of
+  words and recomputes them in the clear. The protocol keeps every value hidden: it checks a sampled tile by a ZK proof of
   its units under sampled proofs, which opens nothing. Its units are the hiding Programs of `circuit.pc4` (below), whose
   every row is a committed hm96-sha512 row hashed inside the proof and whose roots return only admission bits and tile
   digests. So no report cites the replay's ACCEPT as the protocol's verdict.
@@ -1419,8 +1419,8 @@ useful    U/(α_A·α_B), glue
     and lowering one permutation runs out of memory. So `PouwChi32_v2` commits its outputs (`forms.Circuit.commit`, a
     row each and no gate), and a Keccak-p[1600, 12] lowered through the four is 38,400 rows, no AND operand over 12 bits.
     C-Flock's piece for each of the four is its builder too, commits included.
-  - The draw is `plan.tile_layout` (beside `ncp-v2`'s `plan.layout`, which is unchanged): one stratum per template,
-    each tile at the W_ref it is given, and a drawn tile proved with its closure, its TM `Pc4RowA` units, and with its
+  - The sample is `plan.tile_layout` (beside `ncp-v2`'s `plan.layout`, which is unchanged): one stratum per template,
+    each tile at the W_ref it is given, and a sampled tile proved with its closure, its TM `Pc4RowA` units, and with its
     TN `Pc4RowB` units in the weight's Program, each once per plan (`Plan.proved_b`). It opens nothing.
   - **The row cut (`circuit.rowk`, ``Shape.row_k``) is opt-in**, for both checks. C-Flock proves one instance in at most
     a 2^27-bit block (`verity_flock.circuit.K_MAX`), and a whole row unit outgrows it before the served k (Pearl-C's row
@@ -1517,7 +1517,7 @@ sit at the root, one batch per site and tile shape, ahead of the node that read 
 the served parameters, `pouw.salt`, `pouw.positions` and `pouw.roots` to `{served: the served return, receipts}`.
 
 **Seeds and noise** (`circuit/seeds.py`). The salt is the Program's one coin (`In(kind="coin")`), the
-epoch's 64 bytes, a certified epoch's (`Epoch.certified`); `seeds.seed`, `seeds.receipt_seed` and `Compiled.inputs` refuse
+execution phase's 64 bytes, a certified execution phase's (`Epoch.certified`); `seeds.seed`, `seeds.receipt_seed` and `Compiled.inputs` refuse
 any other width. A unit derives its seed in its own proof, and its noise from the seed:
 
 ~~~text
@@ -1539,7 +1539,7 @@ sampled_proofs README's "Supplied values"; `Compiled.inputs` gives the leaves it
   the root it pinned before the salt, `one_stage.registration.check`'s `pinned`).
 - `pouw.positions`: unit u's position is u after every unit of the log's earlier records (`registered.log_base`), so no
   two records of one log share a position and each (salt, position) seeds one unit.
-- `pouw.salt`: per window, filled by the verifier.
+- `pouw.salt`: per execution phase, filled by the verifier.
 
 R7 recomputes each one's root and refuses a record that registers any other (`R7-supplied`).
 
@@ -1559,7 +1559,7 @@ kind's `RowNoise` gives the noise bits of one A row and one B row at contraction
 group's distinct rows of the kind, each with its bits and its readers among the group's dots, the grind term is
 `grind.visible_premium` (the formula `benchmarks/pouw/grind_price.py`'s table reads) over the group's dots, at
 T = 2^128 and δ = 2^-40. Over 0.1% (`grind.FLAG`) the pass refuses the group (`cover`): its noise is the live per-round coin
-("Live epochs"), not a seed's. One rule covers both regimes:
+("Live execution phases"), not a seed's. One rule covers both regimes:
 
 - at decode the Q rows bind, so it counts every (query head, request) pair, whatever KV heads they share: one call is 8B's
   decode at batch ≥ 13 for QKᵀ and ≥ 25 for P·V (70B: 7 and 13), from a context of 64 keys. Over fewer keys a KV head's K
@@ -1579,7 +1579,7 @@ its k, and k multiply-adds each; a kind with a clean side, or with no form, none
 an X row its k dither bits, a W column its k coin bits and U's 256. It is read off the plan, with no gate walked, with
 each unit's batch node in the compiled Program's root for placement. It is the floor
 `Accounting.Guarantees.PouwBlockCredit` attributes to the block a unit is placed at, `Wb · Nmin`
-with `Wb` the least of the block's units' and `Nmin` the right units the draw established, and not every gate the salt
+with `Wb` the least of the block's units' and `Nmin` the right units the sample established, and not every gate the salt
 reaches: the seed's and the noise's SHA-512 and the receipt fold read it too, and are outside the floor.
 
 **Check** (`CompileError.code`):
@@ -1637,7 +1637,7 @@ receipt: its H1 and J10-R units fold their words into keyed receipts, whose dete
   are gated by these vectors when they land. Pearl-C's sm_120 kernel is `benchmarks/pouw/pearl_c_sm120/`; its H100
   kernel (-h1, BLAKE3) was deleted with the archive in `2091252fe3`.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
-- For Pearl-C's draw: `GγSampled`, `HonestTileCapRate` and `CompleteSampled` take tickets proportional to the whole
+- For Pearl-C's sample: `GγSampled`, `HonestTileCapRate` and `CompleteSampled` take tickets proportional to the whole
   tile's `Wref`, while the audit weighs a tile by its credited cells. The two agree on fully credited tiles. Closing it
   means Lean statements over credited-cell tickets, or tickets over every cell.
 - C-Flock's side of the proof's identifier: the header's `identifier`, its binding through `pub.sha`, and the verifier's
@@ -1646,13 +1646,13 @@ receipt: its H1 and J10-R units fold their words into keyed receipts, whose dete
   - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
   - C-Flock pieces for the PoUW primitives;
   - the floors POUS sets for the zero-work templates other than `dequant` (1 until then);
-  - the window guarantee, `audit_window_split_of_record`, in this tree's Lean;
-  - the audit for a draw that depends on the registration: the key's context is the receipt digest, which the `audit`
+  - the execution phase guarantee, `audit_window_split_of_record`, in this tree's Lean;
+  - the audit for a sample that depends on the registration: the key's context is the receipt digest, which the `audit`
     game the guarantees state (the registration before the coin, `L.draw ω`) can't express. Either apply the guarantees
-    strategy by strategy, at the context digest(reg σ), or state the audit for a draw `L.draw R ω` with A4 uniform over
+    strategy by strategy, at the context digest(reg σ), or state the audit for a sample `L.draw R ω` with A4 uniform over
     contexts;
-  - a statement composing the calls' ε_ks and ε_bind into the window's (M2);
+  - a statement composing the calls' ε_ks and ε_bind into the execution phase's (M2);
   - the served-output designation and the pinned ports in `Q_nested_instances` v0's spec, evaluator and Lean port;
   - the vLLM adapter's `traced_as`;
-  - the reuse of a weight's Y proofs across a run's windows, which needs its commitments linked across windows;
+  - the reuse of a weight's Y proofs across a run's execution phases, which needs its commitments linked across execution phases;
   - NCP-FP8 and H-1T.

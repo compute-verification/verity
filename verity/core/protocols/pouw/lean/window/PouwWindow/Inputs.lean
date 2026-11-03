@@ -5,9 +5,9 @@ import Identity.Domains
 /-!
 # The tile instances' public inputs (`window.py`, "The tile instances' public inputs")
 
-A window's K′ drawn tiles are proved in S fixed-shape sessions of `cap` instances (`sessionCap?`, `sessions?`); session σ's
+An execution phase's K′ drawn tiles are proved in S fixed-shape sessions of `cap` instances (`sessionCap?`, `sessions?`); session σ's
 instance s is tile `drawn[σ·cap + s]`, or N − 1 past the draw (`instanceTs?`). `publicInputs?` is F_σ, the verifier's own
-`--public-inputs` file of the session: a header line, then each instance's ports (`PUBLIC_PORTS`: t as a u128, the window
+`--public-inputs` file of the session: a header line, then each instance's ports (`PUBLIC_PORTS`: t as a u128, the execution phase
 root, its domain, side A's and side B's domains, the pass's -h3 domain), little-endian, instance-major. The registration is
 one-stage's record as JSON, read as Python reads it.
 -/

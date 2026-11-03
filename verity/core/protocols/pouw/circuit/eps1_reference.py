@@ -14,7 +14,7 @@ Everything else is sampled proofs': hm96 leaves, the live sampling coin, one aud
 
     seed_j = SHA-512(TAG ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j))
 
-for matmul j, with `salt` the epoch coin, `(forward, position)` the call's place in the serve (so two calls on the same
+for matmul j, with `salt` the execution phase's coin, `(forward, position)` the call's place in the serve (so two calls on the same
 operand roots take different noise, `test_eps1_attacks`), and `root(A_j)`, `root(B_j)` the operands' hiding commitments.
 The verifier computes the seed and, from it, the noise (`noise`), and passes the noise as a public input: there is no hash
 in gates, and the noise is a function of a coin and two commitments, each of which may be public (the everything-ZK rule's
@@ -112,7 +112,7 @@ def _u64(x: int) -> bytes:
 
 def seed(salt: bytes, forward: int, position: int, root_a: bytes, root_b: bytes) -> bytes:
     """`seed_j = SHA-512(TAG ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j))`.  `salt` is the
-    epoch coin, `root_a`/`root_b` the operands' hiding roots, `(forward, position)` the call's place; all public."""
+    execution-phase coin, `root_a`/`root_b` the operands' hiding roots, `(forward, position)` the call's place; all public."""
     return hashlib.sha512(TAG + bytes(salt) + _u64(forward) + _u64(position) + bytes(root_a) + bytes(root_b)).digest()
 
 

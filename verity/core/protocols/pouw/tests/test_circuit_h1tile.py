@@ -201,7 +201,7 @@ def test_the_receipt_is_the_lanes_partials_xored(r, c):
 
 
 def test_live_salt_is_the_round_key_stream():
-    """A live window's unit salt is round r's `window.round_key` stream's first 64 bytes, from the round's 64-byte coin and
+    """A live execution phase's unit salt is round r's `window.round_key` stream's first 64 bytes, from the round's 64-byte coin and
     root; another round, root or coin gives another salt, and the unit's receipt follows it."""
     from verity.core.protocols.pouw import window as Wd
     from verity.core.protocols.sampled_proofs import challenger as Ch

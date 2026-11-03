@@ -13,9 +13,9 @@ The cases: `tagged` over bytes, strings (non-ASCII among them) and integers past
 over random weight-root maps; domain ids under both frame hashes with bindings, owners and counts out of range; the roots of
 random row and tile-digest trees under `sha256`, `sha512` and `hm96-sha512` (rows of several segments, values of the wrong
 size, missing or short salt keys); openings of those trees, honest and tampered (value, path, position, root, count, schema,
-path and value lengths); epoch coin openings from a `Challenger`, honest and tampered to hit each of `coin_reason`'s
+path and value lengths); execution-phase coin openings from a `Challenger`, honest and tampered to hit each of `coin_reason`'s
 refusals and each refusal of the JSON forms; `salt_of` and `Epoch.unverified`'s salt over random coins, seeds (empty among
-them), epochs and weights' roots; `Epoch.start`'s salt and `draw_coin`'s coin from honest and tampered openings, and a sample
+them), execution phases and weights' roots; `Epoch.start`'s salt and `draw_coin`'s coin from honest and tampered openings, and a sample
 with no coin commitment; the audit, draw and replay keys and `draw_after`; and the clear audit's work-weighted draws
 (``benchmarks/pouw/clear``: `Sampled.select`'s and `clear_work.draw`'s), each run as written with only its tickets given
 (`tickets` patched), over ticket lists with zeros, totals past 64 bits, none, or all zero.

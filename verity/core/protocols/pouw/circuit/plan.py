@@ -14,8 +14,8 @@ strip's path to D_A and the call's key unit, each proved once, and its Y strip's
 * `WorkLaw` is the verifier's work law with its floors (`Flock/Draw.lean` `workK`):
   k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)), with K = `RECORD_K` = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`record_k`) and f_s the
   verifier's floor. `work_table` is the verifier's `--work-table` and `law_object` the law `verify` derives from it. K is
-  a **window's** budget: a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units, and its y cells at the
-  floor ⌈K_y·n_c/N⌉ of the window's N, K_y = K (`window_laws`).
+  an **execution phase's** budget: a call draws its share K_c = ⌈K·W_c/W_window⌉, capped at its units, and its y cells at the
+  floor ⌈K_y·n_c/N⌉ of the execution phase's N, K_y = K (`window_laws`).
 
 **The tile checks' layout** (`tile_layout`, `pc4` and `pc8`) is beside it: a drawn tile's closure is its rows' units
 in the call (`RowA`, or `rowk`'s pieces; TM rows, or `pc8`'s short last tile row's r), and its TN rows' units in the
@@ -94,9 +94,9 @@ class CountLaw:
 
 
 def check_work_strata(strata: Sequence[StratumSpec]) -> None:
-    """Refuse a call whose work is in more than one stratum, or whose tiles are of more than one template. The window pin's
+    """Refuse a call whose work is in more than one stratum, or whose tiles are of more than one template. The execution phase pin's
     `covers_window` takes each call's work in one stratum as its hypothesis `hone`: where the cap K_c ≤ N_c binds, a
-    second work stratum is under-drawn (`tests/test_circuit_plan.py`'s window: ten wrong units escape with 0.156 against a
+    second work stratum is under-drawn (`tests/test_circuit_plan.py`'s execution phase: ten wrong units escape with 0.156 against a
     claimed 2.4·10⁻⁴). A stratum does work when 0 < w_s·n_s, its `work`. The verifier's layouts give work to the tile
     template only; this
     makes that a check, not a convention."""
@@ -145,7 +145,7 @@ class WorkLaw:
 
     k: int = RECORD_K
     name: str = "work"
-    window_work: int | None = None          # the window's work W_window, when the call draws its share of K
+    window_work: int | None = None          # the execution phase's work W_window, when the call draws its share of K
     floors: tuple[tuple[str, int], ...] = ()    # the verifier's floors f_s by template descriptor id
 
     def floor(self, template: str) -> int:
@@ -155,7 +155,7 @@ class WorkLaw:
         return f
 
     def budget(self, strata: Sequence[StratumSpec]) -> int:
-        """This call's K: its share ⌈K·W_c/W_window⌉ of the window's (all of K when it is the window), capped at its N. The
+        """This call's K: its share ⌈K·W_c/W_window⌉ of the execution phase's (all of K when it is the execution phase), capped at its N. The
         call's work must be in one stratum (`check_work_strata`)."""
         check_work_strata(strata)
         work, n = sum(s.work for s in strata), sum(len(s.units) for s in strata)
@@ -171,20 +171,20 @@ class WorkLaw:
 
 def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tuple[str, int], ...] = (),
                 k_y: int | None = None) -> list[WorkLaw]:
-    """Each call's work law in a window of calls: its share K_c = ⌈K·W_c/W_window⌉ of the window's budget K, capped
+    """Each call's work law in an execution phase of calls: its share K_c = ⌈K·W_c/W_window⌉ of the execution phase's budget K, capped
     at its units, over its own strata. That is the law `verify` enforces when each call is its own statement, given its own
     K_c (`--work K_c`) and work table. Within one Program (`ncp2.window`) the calls share their templates' strata and one K,
     which is what `verify` derives there instead.
 
     **y's floors**: each call's dequantization stratum s has floor f_s = ⌈K_y·n_s/N⌉, n_s its
-    units and N the window's dequantization units, so k_s = min(n_s, f_s) meets k_s·N ≥ K_y·n_s or proves the stratum, and a
-    window samples at most K_y + C of its y cells. K_y = K = 27,713 keeps δ = 2⁻⁴⁰ over the window: a tile-bad and a y-bad
+    units and N the execution phase's dequantization units, so k_s = min(n_s, f_s) meets k_s·N ≥ K_y·n_s or proves the stratum, and an
+    execution phase samples at most K_y + C of its y cells. K_y = K = 27,713 keeps δ = 2⁻⁴⁰ over the execution phase: a tile-bad and a y-bad
     wrong set are one family of the audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their sum.
     The other zero-work templates keep their floors (1 unless ``floors`` names them). Per call these are pinned
-    (`audit_work_floor`); over the window, the per-call split and y's floors are the window pin
+    (`audit_work_floor`); over the execution phase, the per-call split and y's floors are the execution phase pin
     `audit_window_split_of_record` (`FlockSoundness/Audit/Window.lean`), which takes each call's work
     in one stratum (`check_work_strata`) and each call's draw under its own key context (`Traced.draw`'s `Ledger`).
-    It also takes a window that does some work (0 < W, its `hW`) and has y cells (0 < N, its `hN`): a window with
+    It also takes an execution phase that does some work (0 < W, its `hW`) and has y cells (0 < N, its `hN`): an execution phase with
     either empty is refused here, so none is ever drawn or accepted."""
     if not layouts:
         raise ValueError("a window has at least one call")
@@ -335,7 +335,7 @@ def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
     """The plan for one sample: a uniform k_s-subset of each stratum from ``key`` (the verifier's own randomness, derived under
     `DRAW_DOMAIN` after the receipt), then every drawn tile's closure.  ``call`` is the call's index (`anchors`'
     `call_index`), which keys each stratum's subset with its template: the strata are the call's own (one per template),
-    and the calls of a window drawn under one key draw independently.  The verifier draws through
+    and the calls of an execution phase drawn under one key draw independently.  The verifier draws through
     `Traced.draw`, over its own layout."""
     lay.check()
     sizes = law.sizes(lay.strata)
@@ -355,7 +355,7 @@ def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
 def work_table(lay: Layout, law: WorkLaw = WorkLaw()) -> dict[str, dict[str, int]]:
     """The verifier's work table (its `--work-table`, `Draw.workTableOfJson`): every template of the call, with its W_ref
     per unit (0 for units that do no PoUW work) and its floor f_s (`law.floors`). It refuses a call whose work is in more
-    than one stratum (`check_work_strata`, the window pin's `hone`)."""
+    than one stratum (`check_work_strata`, the execution phase pin's `hone`)."""
     check_work_strata(lay.strata)
     return {s.name: {"work": s.work // len(s.units), "floor": law.floor(s.name)} for s in lay.strata}
 

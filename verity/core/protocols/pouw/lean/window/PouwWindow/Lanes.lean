@@ -27,8 +27,8 @@ leaf at K = 64.
   `Tile.rowOf l s` of `a`, its B row at slot `t` row `Tile.colOf l t` of `b`, its partial row `l` of `partials`; the
   combine's `p<x>` row `x`), or the one row of a value the verifier registers itself at its known content (`known`: lane
   `l`'s `pub` and `admit`, and statement `i`'s `o0`, value `ok<i>`, the row 1; statement `i` is lane `i`, then the
-  combine). STAND-IN: `a`, `b`, `zy` and `receipt` are the leaf's own rows, as `leaf_lanes` reads them; in a served window
-  they are the window's table rows (`circuit.h1window`).
+  combine). STAND-IN: `a`, `b`, `zy` and `receipt` are the leaf's own rows, as `leaf_lanes` reads them; in a served execution phase
+  they are the execution phase's table rows (`circuit.h1window`).
 * **The unit's input wires** (`wires?`, `wireOf?`): the input ports' rows one after another in port order, wire `w` the
   unit's input column `w`, so port `p`'s row bit `b` is wire `b` past the bits of the ports before it
   (`class_statement.unit_lowering`, whose input leaf `j` is row word `j`: META `leaves_in` the identity). The test holds it

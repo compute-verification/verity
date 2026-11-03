@@ -5,7 +5,7 @@ and weight, by `NcpWeight{K,N,PERM}`, whose root body holds only `NcpFormY` inst
 activations, B: the weight's n rows along k, int7 entries) is `NcpLinear{M,K,N,PERM}`, which reads that weight's Y strips
 and c₀ as committed inputs.  Each root body holds only instances of the unit templates below (the partition is
 `Q_template_instances` over them, `circuit.partition`), and every value is computed in exactly one of them.
-`NcpWindow{M,K,N,PERM,C}` is C calls on one weight in one root, the weight's Y units once: the composition a window of
+`NcpWindow{M,K,N,PERM,C}` is C calls on one weight in one root, the weight's Y units once: the composition an execution phase of
 calls needs, recompute-free.
 
     template            one instance per                 reads (committed or input)                      computes and returns

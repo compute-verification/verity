@@ -9,7 +9,7 @@ prover and the verifier of `run.py` share.
   row's f32 scale, s_a for an A row and s_w for a B row, `h1zy.ROW`); ``zy``, the unit's record (48 R C bits: its cells'
   s32 z, row-major, then their bf16 y, `h1zy.RECORD`, what the served ``scaled_mm_zy`` writes); the public row ``pub``
   (``salt || position || roots``, 1600 bits: the window's salt, the unit's position and the window's roots; the salt is
-  PoUW's window salt `pouw.salt.pouw_salt`, `unit_salt`); and two output rows, ``receipt`` (o0: CP-W's 2 (KS + m) words)
+  the execution phase's salt `pouw.salt.pouw_salt`, `unit_salt`); and two output rows, ``receipt`` (o0: CP-W's 2 (KS + m) words)
   and ``ok`` (o1: one word, 1 exactly when the record is the tile's z and its dequant), each one ``row/v2`` row of exactly
   its words. z is no output: the record, an input, carries it.
 * **The public row** stands for public input ports, which the Lean verifier refuses as a form its soundness proof does
@@ -162,7 +162,7 @@ def stand_in_reveal(coin: bytes) -> bytes:
 
 
 def unit_salt(reveal: bytes, window: int, stream: bytes = STREAM, prover: bytes = PROVER) -> bytes:
-    """`pouw.salt`, the units' one coin: PoUW's window salt, `pouw.salt.pouw_salt(reveal, window, stream, prover)`, here of
+    """`pouw.salt`, the units' one coin: the execution phase's salt, `pouw.salt.pouw_salt(reveal, window, stream, prover)`, here of
     the stand-in reveal (`stand_in_reveal`), the epoch's number as the window, and the stand-in stream and prover."""
     return PS.pouw_salt(reveal, window, stream, prover)
 

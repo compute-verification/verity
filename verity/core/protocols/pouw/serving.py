@@ -180,7 +180,7 @@ def schedule_refusals(fmt: HashFormat, s: Schedule) -> list[str]:
 
 MANIFEST_SCHEMA = domains.POUW_PASS_MANIFEST
 #: the manifests a verifier reads: this one, and the MVP's (`verity_vllm.protocols.pouw.pearl_c`), v1 (salted
-#: from a beacon, before epoch coins) only as a replay of a recorded pass
+#: from a beacon, before the execution phase's coins) only as a replay of a recorded pass
 MANIFEST_SCHEMAS_READ = (MANIFEST_SCHEMA, domains.VLLM_PEARL_C_RUN, domains.VLLM_PEARL_C_RUN_V1)
 
 

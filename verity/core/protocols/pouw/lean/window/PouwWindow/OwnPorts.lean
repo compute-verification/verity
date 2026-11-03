@@ -19,7 +19,7 @@ count, row width, domain and schema), read at the layout's row from that base:
   several statements, which flock-verify holds to one width read in every bit (`Flock.KnownRead.fullRows`);
 * `checkOwn want own`: the leaf verifier's check that a statement's parsed `--registered` file (`own`) holds the ports
   `want` (`ownOf` at the roots it takes from the accepted registration, round log and produced record and the
-  placement it takes from the window descriptor, `PouwWindow.Lanes.want?`),
+  placement it takes from the execution phase descriptor, `PouwWindow.Lanes.want?`),
   each the file's first port of its name (`checkOwn_ok`), which `pouw-leaf-own` runs on every statement's file;
 * `checkOneRead own`: the leaf verifier's check that every port of the file, data or known, has one read
   (`checkOneRead_ok`), a statement being one unit, which `pouw-leaf-own` runs too.

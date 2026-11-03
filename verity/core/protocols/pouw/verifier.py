@@ -1,12 +1,12 @@
 """PoUW's verifier of record. Lean is the definition and the verifier of record (AGENTS.md "Design
-rules"), and PoUW has switched to it: the served window's checks
+rules"), and PoUW has switched to it: the served execution phase's checks
 are its Lean's, `lean/check` (`pouw-check`), `lean/commit` (`pouw-commit`) and `lean/window` (`pouw-window`), whose
 verdicts `benchmarks/pouw/served_zk/of_record.py` publishes. The Python beside them (`core_check`, `coins`, `window`) is kept
 as the reference, and the difftests hold it to the Lean: a disagreement fails with the Lean's verdict. A served H1
-window's statements are judged here too: `credit.window` and `credit.period_credit` take each sampled proof block's outcome from
+execution phase's statements are judged here too: `credit.window` and `credit.period_credit` take each sampled proof block's outcome from
 `lean("credit-verified", …)` (`PouwCheck.Verified`), with `credit._verified` the reference, and each round's live
 outcome from `lean("credit-live-verified", …)` (`PouwCheck.LiveVerified`), with `credit._live_verified` the reference,
-on the circuit files its period's open committed, `lean("credit-committed-files", …)` (`PouwCheck.CommittedFiles`),
+on the circuit files its credit period's open committed, `lean("credit-committed-files", …)` (`PouwCheck.CommittedFiles`),
 with `credit.committed_files` the reference.
 
 `RECORD_VERDICT` is the switch, and setting it to ``"python"`` is the one line that undoes it.
@@ -17,7 +17,7 @@ with `credit.committed_files` the reference.
 `RECORD_VERDICT` doesn't switch them. Building takes the lock `verity_difftest.build` takes (its `BUILD_LOCK`): Lake builds
 the path requires in place, and two builds at once would rewrite one module's C under each other.
 
-This module imports only the standard library, so what decides a window never depends on `verity.ml`."""
+This module imports only the standard library, so what decides an execution phase never depends on `verity.ml`."""
 from __future__ import annotations
 
 import atexit

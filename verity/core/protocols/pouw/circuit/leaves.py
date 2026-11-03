@@ -25,7 +25,7 @@ id, the word count and the role, and each tree holds exactly one (schema id, wor
                                   P's 64 BF16 words
     fp8-pi (pouw/row-fp8-pi/v1)   an fp8-p row, then its index field: the row's      k/2 + 72           X (A′_i ‖ P_A,i ‖ I)
                                   place in its call as a u32 (two words, low first)                     or W (B̃_j ‖ P_B,j ‖ J)
-                                  and six zero words (a window's side row,
+                                  and six zero words (an execution phase's side row,
                                   `window.side_row`)
     ok (pouw/row-ok/v1)           the row's admission bit, bit 0 of one word whose   1                  X (A_i) or W (B_j)
                                   bits 1-15 are zero
@@ -105,8 +105,8 @@ nvfp4-p's codes and scales are `rowleaf.nvfp4_row_bytes`' bytes, and every row's
 elements.
 
 Which unit ports make up each row is `pc4.PORTS`, `pc8.PORTS` and the cap's `cap.PORTS`, `rowk.PORTS4` and
-`rowk.PORTS8` for the cut, and `pc8.SIDE_PORTS` for the audit window's tile (`pc8.Pc8TileSide`), which reads fp8-pi rows:
-its window's side rows, whose index field no unit writes.  `statement_rows` gives a unit's Flock rows from these:
+`rowk.PORTS8` for the cut, and `pc8.SIDE_PORTS` for the audit execution phase's tile (`pc8.Pc8TileSide`), which reads fp8-pi rows:
+its execution phase's side rows, whose index field no unit writes.  `statement_rows` gives a unit's Flock rows from these:
 META ``row_schemas``, a [schema, bits] per row (the input rows, then the output rows), and ``out_row_ports``, each
 output row's run of output ports.  Every output row is a row of exactly its words, as every input row is: the ok word
 and the tile digest each one port's v2 row, not padded to whole blocks, and a row a unit writes as several outputs (A′_i
@@ -143,7 +143,7 @@ DIGEST = Array(8, U32)
 #: an ok row's one word, as its row unit returns it: the admission bit at bit 0, bits 1-15 zero
 OK = Value(16)
 P_WORDS = 64
-#: an fp8-pi row's index field, as the window's tile unit reads it: eight words, the u32 index low word first, then zeros
+#: an fp8-pi row's index field, as the execution phase's tile unit reads it: eight words, the u32 index low word first, then zeros
 INDEX_WORDS = 8
 INDEX = Array(INDEX_WORDS, Value(16))
 #: a cap-chunks row's chunk digests: a tile row of at most 64 columns (pc8's tile)
