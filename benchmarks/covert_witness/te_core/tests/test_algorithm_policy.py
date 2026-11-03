@@ -10,6 +10,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
+from te_core import VERSION
 from te_core import algorithm_policy as AP
 from te_core import console, formalism, panels, plots, policy, rescore
 from te_core import frontier_fit as FF
@@ -182,7 +183,8 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
                 assert d["p"] == (h and pytest.approx(d["C_gates"] / h))
                 assert d["family"] == next(x[3] for x in RUNS if x[1] == run_id)
                 assert d["method_key"] == next(x[2] for x in RUNS if x[1] == run_id)
-                assert d["w_fwd_gates"] == pytest.approx(policy.w_fwd(shape))
+                assert AP.dial_inputs(d)["w_fwd_gates"] == pytest.approx(policy.w_fwd(shape))
+                assert (d["reading"], d["te_core"]) == ("B", VERSION)
     s1 = {(d["record"], d["gain_target"]): (d["reached"], d["p"]) for d in ds if d["start"] == plots.start_label(SHAPE)}
     assert s1[("lora@1", 1.1)] == ("yes", 1) and s1[("qat@1", 1.1)] == ("yes", 2) and s1[("ref@3", 2)] == ("yes", 1)
     assert s1[("mezo@2", 1.1)][0] == s1[("lora@2", 2)][0] == s1[("ref@3", 11)][0] == "no"
@@ -201,17 +203,22 @@ def test_the_dial_formula_on_a_rows_columns_is_te_cores_at_every_cell(tmp_path, 
     by = {r["id"]: r for r in ledger_rows()}
     ds = plots.frame(got["console"])
     for d in ds:
-        page = panels.page_inputs(d)
-        rho, basis = dial(page, *AP.default(d["w_fwd_gates"]))
+        page = AP.dial_inputs(d)
+        assert set(page) == set(AP.DIAL)
+        rho, basis = dial(page, *AP.default(page["w_fwd_gates"]))
         assert basis == d["basis_default"] and rho == pytest.approx(d["rho_default"], rel=1e-3)
         r = by[d["record"].replace("@", "-")]
         m = formalism.measure(r, {"s1": SHAPE, "s2": SHAPE2}[r["start"]])
-        assert panels.mismatches(d | {"run": d["record"]}, panels.dial(m, d["w_fwd_gates"]), d["w_fwd_gates"]) == []
+        assert panels.mismatches(page | {"rho_inputs": d["rho_inputs"], "run": d["record"]},
+                                 panels.dial(m, page["w_fwd_gates"]), page["w_fwd_gates"]) == []
+        v = formalism.at(m, *AP.CONSOLE)
+        assert AP.page_rho(page, *AP.CONSOLE) == (pytest.approx(v["rho"], rel=1e-4), "fit" if v["fit"] else "target")
+        assert d["rho_console"] == ("inf" if math.isinf(v["rho"]) else pytest.approx(v["rho"], rel=1e-3))
     at = {d["record"]: d for d in ds if d["gain_target"] == 1.1}
     assert (at["mezo@2"]["basis_default"], at["mezo@2"]["rho_default"], at["qat@1"]["basis_default"]) == ("fit", 1,
                                                                                                          "target")
-    assert json.loads(at["qat@1"]["rho_inputs"])["delta_t_bits"] == 6e4 and at["mezo@2"]["delta_bits"] == 1e3
-    assert json.loads(at["mezo@2"]["rho_inputs"])["delta_t_bits"] == 1e3
+    assert AP.dial_inputs(at["qat@1"])["delta_t_bits"] == 6e4 and AP.dial_inputs(at["mezo@2"])["delta_bits"] == 1e3
+    assert AP.dial_inputs(at["mezo@2"])["delta_t_bits"] == 1e3
 
 
 @pytest.mark.parametrize("u1, dgrad, delta_t, tail, decoder", [
@@ -361,6 +368,7 @@ def test_publish_stores_the_tables_and_puts_both_panels_the_cut_naming_their_art
     command."""
     sent, stored = [], []
     monkeypatch.setattr(console, "put", lambda q: sent.append(q) or "200")
+    monkeypatch.setattr(console, "served", lambda: {})
     monkeypatch.setattr(AP, "store", lambda path, meta: stored.append(sorted(f.name for f in path.iterdir()))
                         or "art:" + "a" * 64)
     runs = RUNS + DOMINATED
@@ -376,9 +384,130 @@ def test_publish_stores_the_tables_and_puts_both_panels_the_cut_naming_their_art
     monkeypatch.setattr(console, "BODY_MAX", len(console.body(sent[1])) - 1)
     code, got = run(tmp_path / "cut", monkeypatch, "--publish", runs=runs)
     assert code == 0 and len(got["console"]["rows"]) < len(got["panel"]["rows"])
-    assert " Cut: coverage rows + per start, g, family: " in got["console"]["note"]
+    assert " Cut: coverage + per start, g, family: " in got["console"]["note"]
     monkeypatch.setattr(console, "put", lambda q: "403 forbidden")
     assert run(tmp_path / "refused", monkeypatch, "--publish", runs=runs)[0] == 1
+
+
+def test_every_row_carries_the_dashboards_cells_under_the_routes_columns(tmp_path, monkeypatch):
+    """The dashboard's cells (coordinator 07:58Z), in 24 columns with no split column: reading B, te_core's VERSION,
+    rho_console (formalism.at at the console's default), binding_kind (fit where Fit holds, token where A1's token form
+    is above 1, else none) and rho_terms, every kind's term at both defaults under reading B (formalism.bound), ρ's
+    max over the token kind alone, the others sensitivities."""
+    _, got = run(tmp_path, monkeypatch)
+    q = got["console"]
+    assert q["columns"] == AP.COLUMNS and len(AP.COLUMNS) == console.COLUMNS_MAX
+    assert not {"delta_bits", "w_fwd_gates", "u_points", "u_in_points"} & set(AP.COLUMNS)
+    by, kinds = {r["id"]: r for r in ledger_rows()}, set()
+    for d in plots.frame(q):
+        r = by[d["record"].replace("@", "-")]
+        m = formalism.measure(r, {"s1": SHAPE, "s2": SHAPE2}[r["start"]])
+        c, k = AP.default(AP.dial_inputs(d)["w_fwd_gates"])
+        v = formalism.at(m, c, k)
+        assert (d["reading"], d["te_core"]) == ("B", VERSION)
+        assert d["binding_kind"] == ("fit" if v["fit"] else "token" if v["slowdown"] > 1 else "none")
+        assert (d["binding_kind"] == "fit") == (d["basis_default"] == "fit")
+        kinds.add(d["binding_kind"])
+        terms = json.loads(d["rho_terms"])
+        assert terms["max_over"] == ["token"] and {"default", "console", "console_binding"} <= set(terms)
+        for name, (cc, kk) in (("default", (c, k)), ("console", AP.CONSOLE)):
+            b = formalism.bound(m, cc, kk, "B")
+            assert set(terms[name]) - {"unmeasured"} == set(formalism.KINDS)
+            for kind, x in b["terms"].items():
+                assert terms[name][kind] == (None if math.isinf(x) else pytest.approx(x, rel=1e-3))
+        vc = formalism.at(m, *AP.CONSOLE)
+        assert terms["console_binding"] == ("fit" if vc["fit"] else "token" if vc["slowdown"] > 1 else "none")
+    assert {"fit", "token"} <= kinds
+
+
+def test_a_rho_inputs_over_the_cell_has_u_in_through_the_dials_and_the_consoles_k(monkeypatch):
+    """Exact u and u_in where the cell holds them; else u_in through its points at `U_IN_KS` (the dial's k and the
+    console's), which `u_in_k_bits` lists, so ρ there is the same."""
+    u_in = [[i / 100, 1e3 * i ** 1.5] for i in range(101)]
+    m = formalism.from_json(block(C0, 1e7, 3e4, None, 0.3) | {"u_in": u_in})
+    w = policy.w_fwd(SHAPE)
+    exact = AP.rho_inputs(m, w)
+    assert set(json.loads(exact)) == set(AP.DIAL) and len(exact) <= console.CELL_MAX
+    monkeypatch.setattr(console, "CELL_MAX", len(exact) - 1)
+    small = json.loads(AP.rho_inputs(m, w))
+    assert small["u_in_k_bits"] == list(AP.U_IN_KS) and set(small) == set(AP.DIAL) | {"u_in_k_bits"}
+    assert len(AP.profile(small["u_in_points"])) < len(AP.profile(json.loads(exact)["u_in_points"]))
+    assert 65_536 in AP.U_IN_KS and set(panels.K_LEVELS) <= set(AP.U_IN_KS)
+    for k in AP.U_IN_KS:
+        for c in (AP.default(w)[0], AP.CONSOLE[0], 1e3 * w):
+            (rho, basis), (want, wanted) = AP.page_rho(small, c, k), AP.page_rho(json.loads(exact), c, k)
+            assert basis == wanted and rho == pytest.approx(want, rel=1e-4), (c, k)
+
+
+def served_as(p: dict, version: str | None, rows: list | None = None, source: str = "") -> dict:
+    """`p` as the route would serve it, its rows (or `rows`) priced at te_core `version`; with None, from before the
+    te_core cell (its version in `source` alone)."""
+    te = AP.COLUMNS.index("te_core")
+    rows = p["rows"] if rows is None else rows
+    if version is None:
+        return p | {"columns": AP.COLUMNS[:te] + AP.COLUMNS[te + 1:], "rows": [r[:te] + r[te + 1:] for r in rows],
+                    "source": source}
+    return p | {"rows": [r[:te] + [version] + r[te + 1:] for r in rows]}
+
+
+def test_a_version_switch_never_empties_a_populated_panel():
+    """A data's served rows stay where they are at a newer te_core, or at an older one whose coverage cells there this
+    build fills fewer of (coordinator 07:58Z); the same te_core's are replaced, and a data with no served rows takes
+    this build's. A panel from before the te_core cell is at the version its source names."""
+    p = AP.build(info(runs=RUNS + DOMINATED), "test")
+    mine = tuple(map(int, VERSION.split(".")))
+    newer, older = f"{mine[0] + 1}.0", f"{mine[0] - 1}.9"
+    one = [r for r in p["rows"] if r[AP.COLUMNS.index("record")] == "never@1"][:1]
+    assert one and AP.filled(p, "v2.3-pilot") > AP.filled({"columns": AP.COLUMNS, "rows": one}, "v2.3-pilot") > 0
+    sparse = p | {"rows": one}
+    assert AP.kept_data(p, None) == AP.kept_data(p, served_as(p, VERSION)) == []
+    assert AP.kept_data(sparse, served_as(p, VERSION)) == []
+    assert AP.kept_data(p, served_as(sparse, newer)) == ["v2.3-pilot"]
+    assert AP.kept_data(sparse, served_as(p, older)) == ["v2.3-pilot"]
+    assert AP.kept_data(p, served_as(sparse, older)) == AP.kept_data(p, served_as(p, older)) == []
+    legacy = served_as(p, None, source=f"python -m te_core.algorithm_policy (te_core {older}; pin x)")
+    assert AP.version_of(legacy, "v2.3-pilot") == tuple(map(int, older.split("."))) and not AP.version_of(legacy, "v3")
+    assert AP.kept_data(sparse, legacy) == ["v2.3-pilot"]
+    fp = {"id": FF.PANEL, "columns": ["row", "data", "E_bpb"], "rows": [["fit", "v3", 1.0], ["fit", "v2.3-pilot", 0.9]]}
+    fit = fp | {"rows": [["fit", "v2.3-pilot", 0.8]]}
+    served = {AP.PANEL: served_as(sparse, newer), FF.PANEL: fit}
+    v3 = [r[:AP.COLUMNS.index("data")] + ["v3"] + r[AP.COLUMNS.index("data") + 1:] for r in p["rows"][:2]]
+    pub, fpub, held = AP.guarded(p | {"rows": v3 + p["rows"]}, fp, served)
+    assert held == f"v2.3-pilot (te_core {newer})"
+    assert pub["rows"][:2] == v3 and pub["rows"][2:] == [[d.get(c) for c in AP.COLUMNS]
+                                                         for d in plots.frame(served_as(sparse, newer))]
+    assert fpub["rows"] == [["fit", "v3", 1.0], ["fit", "v2.3-pilot", 0.8]]
+    assert AP.guarded(p, fp, {AP.PANEL: served_as(p, VERSION)}) == (p, fp, "")
+    assert AP.cut(pub, "art:x", held)["note"].endswith(f" Kept as served: v2.3-pilot (te_core {newer}). Tables art:x.")
+
+
+def test_publish_puts_nothing_without_the_routes_panels_and_keeps_what_a_newer_te_core_serves(tmp_path, monkeypatch,
+                                                                                             capsys):
+    """--publish GETs the route's panels first: when that fails it stores and PUTs nothing, and when the route serves
+    the pilot at a newer te_core both PUTs keep its rows there, which the note and the board line name."""
+    sent, stored = [], []
+    monkeypatch.setattr(console, "put", lambda q: sent.append(q) or "200")
+    monkeypatch.setattr(AP, "store", lambda path, meta: stored.append(path) or "art:" + "a" * 64)
+
+    def down():
+        raise OSError("the route is down")
+
+    monkeypatch.setattr(console, "served", down)
+    assert AP.main(args(tmp_path / "down", monkeypatch) + ["--publish"]) == 1 and not sent and not stored
+    assert "not PUT: GET " in capsys.readouterr().err
+    _, dry = run(tmp_path / "dry", monkeypatch)
+    capsys.readouterr()
+    mine = tuple(map(int, VERSION.split(".")))
+    newer = f"{mine[0] + 1}.0"
+    ap = served_as(dry["panel"], newer, dry["panel"]["rows"][:3])
+    monkeypatch.setattr(console, "served", lambda: {AP.PANEL: ap, FF.PANEL: dry["fit"]})
+    code, got = run(tmp_path / "kept", monkeypatch, "--publish")
+    assert code == 0 and [q["id"] for q in sent] == [FF.PANEL, AP.PANEL] and len(stored) == 1
+    assert sent[1]["rows"] == [AP.rounded(r) for r in ap["rows"]] and got["console"] == json.loads(console.body(sent[1]))
+    assert f" Kept as served: v2.3-pilot (te_core {newer}). Tables art:" in sent[1]["note"]
+    assert len(got["panel"]["rows"]) == len(dry["panel"]["rows"])
+    board = next(x for x in capsys.readouterr().out.splitlines() if x.startswith("board: "))
+    assert board.endswith(f" Kept as served: v2.3-pilot (te_core {newer}).")
 
 
 def test_v3_rows_come_with_v3s_fit_from_the_ladder_and_lead_the_figure(tmp_path, monkeypatch):
@@ -402,6 +531,49 @@ def test_v3_rows_come_with_v3s_fit_from_the_ladder_and_lead_the_figure(tmp_path,
     assert {d["start"] for d in ds} == {plots.start_label(V3_SHAPE)} and {d["start_loss"] for d in ds} == {1.5}
     assert {(d["record"], d["gain_target"]) for d in ds if d["reached"] == "yes"} >= {("v3-qat@1", 1.1)}
     assert any(c["state"] != "empty" for c in got["coverage"] if c["data"] == "v3")
+    assert not any("gain:provisional" in d["estimated"] for d in plots.frame(got["panel"]))
+
+
+def test_without_ladder_points_v3_reads_the_manifests_and_a_fit_on_four_from_scratch_is_provisional(tmp_path,
+                                                                                                   monkeypatch):
+    """With no --ladder-points v3 reads te_core.frontier_fit's LADDER, the ladder's starts built from its manifest:
+    t1's start and three of them on v3's frontier are four from scratch, under five, so v3's fit is provisional, its
+    status, the fit panel's note (its points with their residuals, the ladder's runs it doesn't read with theirs, and
+    where the points come from) and every v3 row's `estimated` say so; the pilot's fit, on its many, isn't."""
+    v3_law = LAW | {"E": 1.2}
+    tree = tmp_path / "ladder"
+    tree.mkdir()
+    near = 16 * (1 - 1e-4)
+    assert math.floor(FF.PER_DECADE * math.log10(near * C0)) == math.floor(FF.PER_DECADE * math.log10(16 * C0))
+    annealed = [{"branch": f"x{f:g}", "macs": f * C0 / per_mac("gemm/bf16"), "bpb": law(f * C0, v3_law)}
+                for f in (2, 4, 16)]
+    annealed += [{"branch": "over", "macs": 8 * C0 / per_mac("gemm/bf16"), "bpb": law(4 * C0, v3_law) + 0.01},
+                 {"branch": "binned", "macs": near * C0 / per_mac("gemm/bf16"), "bpb": law(16 * C0, v3_law) + 0.01}]
+    (tree / FF.LADDER_FILE).write_text(json.dumps({"schema": "te-ladder/F/v1", "annealed": annealed}))
+    v3 = [r | {"id": f"v3-{r['id']}", "run_id": f"v3-{r['run_id']}", "data": "v3", "start": "t1", "start_bpb": 1.5,
+               "val_bpb": 1.5 + 0.001 * r["checkpoint_step"]} for r in ledger_rows() if r["start"] == "s1"]
+    a = args(tmp_path, monkeypatch, index=ledger_rows() + v3)
+    monkeypatch.setattr(FF, "LADDER", "art:" + "b" * 64)
+    monkeypatch.setattr(panels, "fetch", lambda art: {FF.LADDER: tree}[art])
+    assert AP.main(a) == 0
+    tables = tmp_path / "out" / "tables"
+    fp, p = (json.loads((tables / f"{name}.json").read_text()) for name in (FF.NAME, AP.NAME))
+    fits = {d["data"]: d for d in plots.frame(fp) if d["row"] == "fit"}
+    assert fits["v3"]["status"].startswith("provisional fit: 4 of its points from scratch, under 5; ")
+    assert fits["v2.3-pilot"]["status"].startswith("fit; ")
+    assert f"; 5 ladder points, {FF.LADDER} from its manifest)" in fp["source"]
+    assert fp["note"].startswith(FF.note() + " ") and len(fp["note"]) <= console.NOTE_MAX
+    f, gates = fitted(fp, "v3"), per_mac("gemm/bf16")
+    assert f["E"] == pytest.approx(1.2, abs=1e-3)
+    off = {p["branch"]: f"{round(100 * (p['bpb'] / FF.loss_at(f, p['macs'] * gates) - 1), 2):+.2f}%"
+           for p in annealed[3:]}
+    assert fp["note"][len(FF.note()) + 1:] == (
+        "v3 provisional (4 from scratch, 5 the target): t1 +0.00%, x2 +0.00%, x4 +0.00%, x16 +0.00%; off it over "
+        f"{off['over']}, binned {off['binned']}. Ladder points built from its manifest.")
+    assert float(off["over"][:-1]) > 3 and float(off["binned"][:-1]) > 0.5
+    ds = plots.frame(p)
+    assert {d["data"] for d in ds} == {"v3", "v2.3-pilot"}
+    assert all(("gain:provisional" in d["estimated"]) == (d["data"] == "v3") for d in ds)
 
 
 def test_the_rows_te_core_refuses_are_listed_and_counted_never_scored(tmp_path, monkeypatch, capsys):
