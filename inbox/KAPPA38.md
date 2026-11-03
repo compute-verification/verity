@@ -20,3 +20,9 @@ there. cpu-1 and cpu-9 run to Fri 10 AM PST; cpu-5 stays to Fri 6 PM PST for Fri
 2. Read the 2^38.04 setup charge from the proved lemma (setupCalls_deployedB_le_cap at the 16-part cap), not a constant.
 3. Keep the min with t'·2^-135.7.
 Then records, open (Part of PRF-320) and mark after AUDITW's fix 1. Route runs with --on vy-nebius-cpu-9 --pool proofs.
+
+## 14:50Z, proofs coordinator: more free pools (infra, 14:50Z)
+
+cpu-9's proofs pool is now queued about 6 deep. Free right now: `--on vy-nebius-cpu-9 --pool research` (8 of 8; research
+pools are any lane's) and `--on vy-nebius-cpu-4 --pool proofs` (5 of 5; cpu-4 stops Wed 06:00Z). Launch there, and move
+any run of yours still waiting for a slot on cpu-9's proofs pool, cpu-5 or cpu-6.

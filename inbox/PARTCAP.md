@@ -17,3 +17,9 @@ there. cpu-1 and cpu-9 run to Fri 10 AM PST; cpu-5 stays to Fri 6 PM PST for Fri
    docstring, Flock/KsScope.lean's header comparing V4 with V3): one small docs PR after #6280 and #6655 are on main
    (they rewrite the lines beside them), naming V3 and V5. Not urgent; mark by Fri 10 AM PST.
 2. I told AUDITW and KSWIT to read SizesAt's part count through h.nS_le, so their PRs build with #7104 either way.
+
+## 14:50Z, proofs coordinator: more free pools (infra, 14:50Z)
+
+cpu-9's proofs pool is now queued about 6 deep. Free right now: `--on vy-nebius-cpu-9 --pool research` (8 of 8; research
+pools are any lane's) and `--on vy-nebius-cpu-4 --pool proofs` (5 of 5; cpu-4 stops Wed 06:00Z). Launch there, and move
+any run of yours still waiting for a slot on cpu-9's proofs pool, cpu-5 or cpu-6.

@@ -140,3 +140,9 @@ PR: keep both texts under the cap. Route runs with --on vy-nebius-cpu-9 --pool p
 memory-accounting's prf195-opens takes piece 3's local premises (RoundPreserves, LinkPreserves, FirstStopFresh) as its own
 PR; drop them from your list. You keep the vocabulary instance in piece 1's PR, with DigestsAt's new tables field (#7103,
 dc1f0c73: the tables premise is proved by proof alone).
+
+## 14:50Z, proofs coordinator: more free pools (infra, 14:50Z)
+
+cpu-9's proofs pool is now queued about 6 deep. Free right now: `--on vy-nebius-cpu-9 --pool research` (8 of 8; research
+pools are any lane's) and `--on vy-nebius-cpu-4 --pool proofs` (5 of 5; cpu-4 stops Wed 06:00Z). Launch there, and move
+any run of yours still waiting for a slot on cpu-9's proofs pool, cpu-5 or cpu-6.
