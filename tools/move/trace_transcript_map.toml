@@ -2,7 +2,8 @@
 # tools/move/trace_transcript_map.toml` renames. Core's `Verity.Circuit.Transcript`, one run's value for every gate, is a
 # trace, so it becomes `Verity.Circuit.Trace`; the claims layer's `Claims.Trace`, a run's messages, each party's oracle
 # calls and the decision, is a transcript, so it becomes `Claims.Transcript`, with `Trace.seen`, its fields and
-# `Claims.Recursion.abortTrace`. Both in one move, so no namespace holds both meanings at once. Declarations keep their
+# `Claims.Recursion.abortTrace`. `Accounting.PeriodRun.transcript`, the trace a node committed in the period, becomes
+# `Accounting.PeriodRun.trace`. All in one move, so no namespace holds both meanings at once. Declarations keep their
 # place in the locks' records: `rename.py --moves` prints the renames that `check.py --update --moved` takes.
 #
 # Each word is renamed only in the files that use that name and no other `Transcript` or `Trace`, so `Flock.Transcript`,
@@ -11,7 +12,8 @@
 #   `Flock.Transcript`;
 # - `Transcript` where it names `Verity.Circuit.Transcript` (as `C.Transcript` and `Circuit.Transcript`), and in the two
 #   `TileCheck` modules, where `(τ : Transcript)` is `Pouw.PearlC.Transcript` ([keep]);
-# - `Trace` where it names `Claims.Trace`.
+# - `Trace` where it names `Claims.Trace`;
+# - `transcript` in the modules that declare, build or read `PeriodRun.transcript`, where every `transcript` is that trace.
 # A module under `Population` is listed under `SampledProofs` too, its name after the Security areas move.
 
 [words]
@@ -165,6 +167,17 @@ files = [
     "Security/Proofs/Flock/Recursive/LinksOuter.lean",
 ]
 words = { "Trace" = "Transcript", "abortTrace" = "abortTranscript" }
+
+[[words_in]]
+files = [
+    "Security/Definitions/Accounting/JointPeriod.lean",
+    "Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean",
+    "Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityPeriod.lean",
+    "Security/Proofs/Accounting/JointBridge/HonestH200.lean",
+    "Security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityBlock.lean",
+    "Security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityPeriod.lean",
+]
+words = { "transcript" = "trace" }
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
