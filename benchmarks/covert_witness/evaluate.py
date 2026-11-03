@@ -1,7 +1,7 @@
 """The evaluation job and witness checker (fixed): the only process that reads the held-out sets, run by candidate.sh from
 the pinned measurement commit after the training job (sandbox.py) ended, outside its sandbox.
 
-    python evaluate.py --submission DIR --class CLASS --timing FILE --run RUN.json --tree TREE.json --island ISLAND.json \\
+    python evaluate.py --submission DIR --timing FILE --run RUN.json --tree TREE.json --island ISLAND.json \\
         --out witness.json --scored OUT_RUN_DIR
     python evaluate.py --start NAME --out start.json     # a start's own score and evaluation cost
     CW_FINAL=1 python evaluate.py ... --split final      # final scoring (the scorer's, after the search)
@@ -10,21 +10,26 @@ For a submission it checks, in order, and records every result in the witness re
 
 1. θ: the start's weights match its registered digest, which is `prepare.START_DIGESTS`'s, and the submission and the
    harness's record name that digest;
-2. E: decode(θ, E) with the fixed decoder rebuilds a model with θ's tensors, shapes and dtypes; that model is the
-   candidate (the training job keeps no model of its own), so its size, evaluation FLOPs and weight bytes per byte equal
-   the start's (`prepare.eval_cost`);
-3. changed: the declared set covers every tensor that differs from θ; φ and the lowest updated layer are computed from it;
+2. E: decode(θ, E) with the fixed decoder rebuilds a well-formed model, in θ's architecture (θ's tensors, shapes and
+   dtypes) or, for a model format, its own (`prepare.model_config`: any lf shape with θ's vocabulary and context); that
+   model is the candidate (the training job keeps no model of its own). Nothing caps its size or cost: its parameters
+   and evaluation cost are recorded (`prepare.eval_cost`), and each scored checkpoint's forward gates per token
+   (`te_core.cw.score_run`);
+3. changed: the declared set covers every tensor that differs from θ or isn't θ's; φ and the lowest updated layer are
+   computed from it, at the model's own positions;
 4. the harness's record (`te_core.run --script`, RUN.json) is this E's (`harness_submission`) and found nothing invalid;
-   FLOPs, 2x the MACs it counted, within TRAIN_FLOP_BUDGET x HARNESS_FLOP_SLACK; its steps' wall seconds within
-   GPU_SECONDS_CAP; the declared trainable set covers `changed` (the analytic `prepare.train_flops` is recorded beside it);
+   FLOPs, 2x the MACs it counted, within its tier's budget (`prepare.budget`: TRAIN_FLOP_BUDGET, or the long tier's
+   LONG_C0 x the start's C0, which a board assignment names, `tier_assigned`) x HARNESS_FLOP_SLACK; its steps' wall
+   seconds within the tier's; the declared trainable set covers `changed` (the analytic `prepare.train_flops` is recorded
+   beside it);
 5. the training job's whole process tree (TREE.json, sandbox.py): every process's CPU seconds but the harness's own
    within TREE_CPU_SLACK, and no process but the harness's computed on a GPU, or on a GPU it didn't lease
    (`tree_counted`); the seconds from the job's start to the submitted E's write are recorded;
 6. the source this runs from is its commit's (`source_clean`), recorded as `measurement_commit` with the island
    (ISLAND.json: the candidate's `islands/<name>/`, its commit and digest);
-7. the class's caps on 8·|E|, E's format and the updated layers;
 
-then scores every checkpoint's E (`te_core.cw.score_run`): each E file checked against the digest the harness recorded,
+(nothing caps E's size, its format or the updated layers: 8·|E|, the format and φ are recorded, and te_core.formalism
+scores what the run did), then scores every checkpoint's E (`te_core.cw.score_run`): each E file checked against the digest the harness recorded,
 decoded, hashed, and scored on a fresh slice of the search pool drawn after its weights were hashed, paired with θ on the
 same slice, its promotion value sealed under that digest (`scored`). The submitted E's is the score; the FLOPs-to-target
 curve is the checkpoints' (the first E in each 5% of the run). A candidate is valid when every check passes. The scored
@@ -83,21 +88,19 @@ def tree_of(tree: dict | None, r: dict) -> tuple[dict, bool]:
     return out, own is not None and other <= out["slack_cpu_s"] and not foreign
 
 
-def check(sub: Path, klass: str, timing: Path, run: Path, tree: Path, island: Path, scored: Path) -> dict:
-    caps = prepare.CLASSES[klass]
+def check(sub: Path, timing: Path, run: Path, tree: Path, island: Path, scored: Path) -> dict:
     meta = json.loads((sub / "meta.json").read_text())
     rec = prepare.start_record(meta["start"])
     theta = prepare.load_theta(meta["start"])
     isl = json.loads(island.read_text()) if island.is_file() else None
-    out = {"schema": "covert-witness/witness/v4", "version": prepare.VERSION, "data": prepare.DATA,
-           "measurement_commit": os.environ.get("RESEARCH_SOURCE_SHA", ""), "island": isl, "class": klass,
-           "caps": caps, "start": meta["start"], "theta_digest": rec["digest"],
-           "budget": {"train_flops": prepare.TRAIN_FLOP_BUDGET, "flop_slack": prepare.HARNESS_FLOP_SLACK,
-                      "gpu_seconds": prepare.GPU_SECONDS_CAP}, "checks": {}, "notes": meta.get("notes")}
+    b = prepare.budget(meta["start"]) | {"flop_slack": prepare.HARNESS_FLOP_SLACK,
+                                         "assigned_by": os.environ.get("CW_TIER_BY") or None}
+    out = {"schema": "covert-witness/witness/v5", "version": prepare.VERSION, "data": prepare.DATA,
+           "measurement_commit": os.environ.get("RESEARCH_SOURCE_SHA", ""), "island": isl,
+           "start": meta["start"], "theta_digest": rec["digest"], "budget": b, "checks": {}, "notes": meta.get("notes")}
     c = out["checks"]
+    c["tier_assigned"] = b["tier"] == "search" or bool(b["assigned_by"])
     c["theta"] = meta["theta_digest"] == rec["digest"]
-    if meta.get("class") != klass:
-        c["class_named"] = False
     c["source_clean"] = source_clean()
     c["island_recorded"] = bool(isl and isl.get("commit") and isl.get("digest"))
     blob = (sub / "E.bin").read_bytes()
@@ -109,21 +112,34 @@ def check(sub: Path, klass: str, timing: Path, run: Path, tree: Path, island: Pa
     except (ValueError, KeyError, RuntimeError) as e:
         c["decode"] = f"failed: {e}"
         return out
-    c["architecture"] = set(decoded) == set(theta) and all(
-        decoded[k].shape == theta[k].shape and decoded[k].dtype == theta[k].dtype for k in theta)
-    changed = {k for k in theta if not prepare.same_bits(decoded[k], theta[k])}
+    try:
+        config = prepare.model_config(rec, blob)
+    except ValueError as e:
+        c["decode"] = f"failed: {e}"
+        return out
+    own = config != rec["config"]
+    if own:
+        shapes = prepare.architecture(config)
+        c["architecture"] = set(decoded) == set(shapes) and all(tuple(decoded[k].shape) == shapes[k] for k in shapes)
+    else:
+        c["architecture"] = set(decoded) == set(theta) and all(
+            decoded[k].shape == theta[k].shape and decoded[k].dtype == theta[k].dtype for k in theta)
+    mrec = prepare.model_record(rec, config, decoded)
+    out["model"] = {"architecture": "its own" if own else "θ's", "config": config if own else None,
+                    "parameters": int(sum(v.numel() for v in decoded.values())), "start_parameters": rec["parameters"]}
+    changed = {k for k in decoded if k not in theta or not prepare.same_bits(decoded[k], theta[k])}
     declared = set(meta["changed"])
     c["changed_covered"] = changed <= declared
     out["changed"] = {"declared": sorted(declared), "actual": sorted(changed),
-                      "declared_parameters": int(sum(theta[k].numel() for k in declared if k in theta)),
-                      "actual_parameters": int(sum(theta[k].numel() for k in changed))}
-    out["structure"] = prepare.deep_share(rec, declared)
-    out["structure_actual"] = prepare.deep_share(rec, changed)
+                      "declared_parameters": int(sum(decoded[k].numel() for k in declared if k in decoded)),
+                      "actual_parameters": int(sum(decoded[k].numel() for k in changed))}
+    out["structure"] = prepare.deep_share(mrec, declared)
+    out["structure_actual"] = prepare.deep_share(mrec, changed)
     del decoded
     trainable = meta["trainable"]
     steps = prepare.read_steps(sub / "steps.jsonl")
     try:
-        meter = prepare.train_flops(rec, trainable, steps)
+        meter = prepare.train_flops(mrec, trainable, steps)
     except (ValueError, KeyError) as e:
         c["meter"] = f"failed: {e}"
         return out
@@ -143,26 +159,18 @@ def check(sub: Path, klass: str, timing: Path, run: Path, tree: Path, island: Pa
     c["harness_theta"] = r.get("start", {}).get("digest") == rec["digest"]
     c["harness_submission"] = r.get("submitted", {}).get("e_sha256") == out["E"]["sha256"]
     c["harness_valid"] = not r.get("invalid")
-    c["flop_budget"] = flops <= prepare.HARNESS_FLOP_SLACK * prepare.TRAIN_FLOP_BUDGET
+    c["flop_budget"] = flops <= prepare.HARNESS_FLOP_SLACK * b["train_flops"]
     out["gpu_seconds"] = tot["wall_s"]
-    c["gpu_seconds"] = tot["wall_s"] <= prepare.GPU_SECONDS_CAP
+    c["gpu_seconds"] = tot["wall_s"] <= b["gpu_seconds"]
     out["implied_flop_per_second"] = flops / tot["wall_s"] if tot["wall_s"] else None
     out["tree"], c["tree_counted"] = tree_of(json.loads(tree.read_text()) if tree.is_file() else None, r)
     t = json.loads(timing.read_text())
     out["train_rc"], out["process_seconds"] = t.get("rc"), t.get("process_seconds")
     c["train_exit"] = t.get("rc") == 0
-    if caps["max_e_bytes"] is not None:
-        c["e_size"] = len(blob) <= caps["max_e_bytes"]
-    if caps["formats"] is not None:
-        c["e_format"] = out["E"]["format"] in caps["formats"]
-    if caps["top_blocks"] is not None:
-        L = rec["config"]["n_layer"]
-        lowest = out["structure"]["lowest_updated_layer"]
-        c["shallow"] = lowest is None or lowest >= L + 1 - caps["top_blocks"]
     split = prepare.FINAL if prepare.FINAL_MODE else prepare.SEARCH_POOL
-    out["eval_cost"] = eval_cost(split, rec) | {
-        "rule": "the model has θ's tensors, shapes and dtypes (checks.architecture), so its parameters, evaluation FLOPs "
-                "and weight bytes per byte are the start's"}
+    out["eval_cost"] = eval_cost(split, mrec) | {
+        "rule": "the submitted model's own (θ's when it keeps θ's architecture); nothing caps it: each scored checkpoint's "
+                "forward gates per token are counted (score_run) and scoring reads them"}
     r = score_run(prepare, r, run.parent, theta, rec, prepare.DEVICE)
     c["scored"] = not r["scored"]["problems"]
     submitted = next((cp for cp in r["checkpoints"] if cp.get("submitted")), None)
@@ -176,7 +184,7 @@ def check(sub: Path, klass: str, timing: Path, run: Path, tree: Path, island: Pa
                      "source": cp.get("source")} for cp in r.get("checkpoints", [])]
     failed = {k: v for k, v in c.items() if v is not True}
     r["evaluation"] = {"by": "covert_witness/evaluate.py", "measurement_commit": out["measurement_commit"],
-                       "version": prepare.VERSION, "data": prepare.DATA,
+                       "version": prepare.VERSION, "data": prepare.DATA, "budget": out["budget"],
                        "island": {k: v for k, v in (isl or {}).items() if k != "files"}, "tree": out["tree"],
                        "witness_valid": out["valid"], "witness_checks": failed}
     r["invalid"] = [*r.get("invalid", []), *(f"witness {k}: {v}" for k, v in failed.items())]
@@ -189,7 +197,6 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--submission", type=Path)
     ap.add_argument("--start")
-    ap.add_argument("--class", dest="klass", choices=sorted(prepare.CLASSES))
     ap.add_argument("--timing", type=Path)
     ap.add_argument("--run", type=Path, help="the harness's run.json (te_core.run --script), beside its E/ files")
     ap.add_argument("--tree", type=Path, help="the training job's process tree (sandbox.py)")
@@ -211,9 +218,9 @@ def main() -> int:
                "eval_cost": eval_cost(scorer.split, rec),
                "structure_full_update": prepare.deep_share(rec, set(theta)), "provenance": rec["provenance"]}
     else:
-        if not (a.submission and a.klass and a.timing and a.run and a.tree and a.island and a.scored):
-            ap.error("--submission, --class, --timing, --run, --tree, --island and --scored, or --start")
-        out = check(a.submission, a.klass, a.timing, a.run, a.tree, a.island, a.scored)
+        if not (a.submission and a.timing and a.run and a.tree and a.island and a.scored):
+            ap.error("--submission, --timing, --run, --tree, --island and --scored, or --start")
+        out = check(a.submission, a.timing, a.run, a.tree, a.island, a.scored)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(out, indent=1) + "\n")
     s = out.get("score") or {}

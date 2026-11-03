@@ -1,6 +1,6 @@
-"""Island `ref-data` (class `reference`, no cap on the update): ref-optim's train.py (cursor/te-ref-optim-4207 at 0788f9d17e6:
-every optimizer knob a flag, the seed's shape by default) with the data it trains on and their order as the variable. Every
-FLOP spent choosing data is in the step log. The launcher runs `islands/reference/train.py`, a symlink to this file.
+"""Island `ref-data` (the honest frontier, no cap on the update): ref-optim's train.py (cursor/te-ref-optim-4207 at
+0788f9d17e6: every optimizer knob a flag, the seed's shape by default) with the data it trains on and their order as the
+variable. Every FLOP spent choosing data is in the step log.
 
 Optimizer (ref-optim's): Muon or AdamW on the block matrices, AdamW on the embedding and norms, `--sched linear|wsd|cosine|const`
 with warmup and `--final-frac`, EMA (`--ema-frac`) chosen against raw weights on held-back training-stream windows (priced
@@ -9,7 +9,7 @@ toward 0 on windows after the plan, snapshotted, then rolled back; their passes 
 
 What trains (default every tensor): `--freeze-embed`, `--freeze-norms`, `--top-blocks K` (only the top K blocks' matrices
 and gains and the final norm, the embedding frozen, so the backward stops below block L-K) and `--block-lr-decay D` (block
-i at D^(L-1-i) of its rate). `--class` is the Delta bin the submission declares (default reference).
+i at D^(L-1-i) of its rate).
 
 Data (all off by default: TrainData's stream permuted by `--data-seed`, the seed's):
 
@@ -29,7 +29,7 @@ since it reads windows by id rather than through `TrainData.next`, it marks its 
 (`hooks.step()`): each chunk of θ's scoring pass, each training step with its snapshots and forks, and the final
 validation and submit.
 
-    launch.py reference m100 --island ref-data --note "MECHANISM ..." -- [--mat-lr 0.004] [--top-blocks 2] [--windows fresh]
+    launch.py m100 --island ref-data --note "MECHANISM ..." -- [--mat-lr 0.004] [--top-blocks 2] [--windows fresh]
 """
 from __future__ import annotations
 
@@ -47,7 +47,6 @@ from te_core import hooks
 
 import prepare
 
-KLASS = "reference"
 CTX = prepare.EVAL_CTX
 
 
@@ -111,20 +110,37 @@ def lr_mult(step: int, n: int, a: argparse.Namespace) -> float:
     return ramp * (a.final_frac + (1 - a.final_frac) * d)
 
 
-def seen_windows(rec: dict, n_windows: int) -> np.ndarray:
-    """The 1024-token windows the start read: its run's seed-0 order, the first step x batch (starts.py)."""
+def seen_windows(rec: dict, data: prepare.TrainData) -> np.ndarray | None:
+    """The 1024-token windows of `data` the start read, or None when its provenance doesn't say. An lf start of
+    learning_frontier's stream (starts.py): its seed-0 order's first step x batch. A start trained on data v3's parts (the
+    ladder's provenance lists them under data.parts, by sha256): every window of every part it drew from."""
     p = rec["provenance"]
-    if rec["config"]["family"] != "lf" or "step" not in p or "batch" not in p:
-        return np.zeros(0, dtype=np.int64)
-    return np.random.default_rng(p.get("data_seed", 0)).permutation(n_windows)[: int(p["step"]) * int(p["batch"])]
+    n_windows = len(data.order)
+    if rec["config"]["family"] == "lf" and "step" in p and "batch" in p:
+        return np.random.default_rng(p.get("data_seed", 0)).permutation(n_windows)[: int(p["step"]) * int(p["batch"])]
+    parts = (p.get("data") or {}).get("parts")
+    manifest = prepare.data_v3.TRAIN / "manifest.json"
+    if rec["tokenizer"] != prepare.data_v3.TOKENIZER or not parts or not manifest.is_file():
+        return None
+    where = {q["sha256"]: i for i, q in enumerate(json.loads(manifest.read_text())["parts"])}
+    if len(where) != len(data.parts) or any(q.get("sha256") not in where for q in parts):
+        return None
+    return np.concatenate([np.arange(data.starts[where[q["sha256"]]], data.starts[where[q["sha256"]] + 1])
+                           for q in parts]).astype(np.int64)
 
 
 class Windows:
     """Rows of ctx + 1 tokens from TrainData's stream, drawn from a list of 1024-window ids in the given order (cycled when
     a run needs more): each id gives its 1024 // ctx consecutive sub-windows, in the same step."""
 
-    def __init__(self, tokens: np.memmap, ids: np.ndarray):
-        self.tokens, self.ids, self.at = tokens, ids, 0
+    def __init__(self, data: prepare.TrainData, ids: np.ndarray):
+        self.parts, self.starts, self.ids, self.at = data.parts, data.starts, ids, 0
+
+    def span(self, j: int, off: int, n: int) -> np.ndarray:
+        """n tokens of 1024-window j from its offset `off` (a window lies inside one part)."""
+        q = int(np.searchsorted(self.starts, j, side="right")) - 1
+        b = (j - int(self.starts[q])) * CTX + off
+        return self.parts[q][b: b + n]
 
     def take(self, n_ids: int) -> np.ndarray:
         pos = (self.at + np.arange(n_ids)) % len(self.ids)
@@ -134,11 +150,9 @@ class Windows:
     def rows(self, ids: np.ndarray, ctx: int, length: int | None = None) -> torch.Tensor:
         """Each id's 1024 // ctx sub-windows of ctx + 1 tokens, or (`length`) only its first length + 1 tokens."""
         if length is not None:
-            r = np.stack([self.tokens[j * CTX: j * CTX + length + 1] for j in ids])
+            r = np.stack([self.span(int(j), 0, length + 1) for j in ids])
         else:
-            k = CTX // ctx
-            sub = (ids[:, None] * k + np.arange(k)[None, :]).reshape(-1)
-            r = np.stack([self.tokens[j * ctx: j * ctx + ctx + 1] for j in sub])
+            r = np.stack([self.span(int(j), s * ctx, ctx + 1) for j in ids for s in range(CTX // ctx)])
         return torch.from_numpy(r.astype(np.int64)).to(prepare.DEVICE, non_blocking=True)
 
 
@@ -165,8 +179,6 @@ def main() -> int:
                          "blocks below stay frozen, so the backward stops below block L-K (0: every block)")
     ap.add_argument("--block-lr-decay", type=float, default=1.0,
                     help="block i's matrices and gains train at D^(L-1-i) times their rate (the top block at 1)")
-    ap.add_argument("--class", dest="klass", choices=sorted(prepare.CLASSES), default=KLASS,
-                    help="the Delta bin the submission declares (the launch's CLASS)")
     ap.add_argument("--clip", type=float, default=1.0)
     ap.add_argument("--sched", choices=("linear", "wsd", "cosine", "const"), default="linear")
     ap.add_argument("--warmup", type=float, default=50, help="steps, or a fraction of the steps when below 1")
@@ -278,7 +290,13 @@ def main() -> int:
 
     data = prepare.TrainData(rec["tokenizer"], seed=a.data_seed)
     n_windows = len(data.order)
-    seen = seen_windows(rec, n_windows)
+    seen = seen_windows(rec, data)
+    if seen is None:
+        if a.windows != "random":
+            raise SystemExit(f"train: --windows {a.windows} needs the start's provenance to say what it read (an lf "
+                             "start's step x batch, or data v3's parts under data.parts); this start's says neither, so "
+                             "launch with --windows random")
+        seen = np.zeros(0, dtype=np.int64)
     if a.fresh:
         prov = rec["provenance"]
         if rec["config"]["family"] != "lf" or prov.get("data_seed") != 0:
@@ -294,7 +312,7 @@ def main() -> int:
     elif a.windows == "seen":
         keep_mask &= ~unseen
     ids = ids[keep_mask]
-    win = Windows(data.tokens, ids)
+    win = Windows(data, ids)
 
     def seq_loss(x: torch.Tensor) -> torch.Tensor:
         with torch.autocast(dev, dtype=torch.bfloat16):
@@ -340,7 +358,8 @@ def main() -> int:
         return "raw", {"val_raw": raw, "val_ema": ev}
 
     info = {"steps": n_steps, "short_steps": n_short, "flops_per_step_long": step_long, "flops_per_step_short": step_short,
-            "tokens_per_step": tokens, "val_flops": val_flops, "trained": len(trained), "stream_tokens": len(data.tokens),
+            "tokens_per_step": tokens, "val_flops": val_flops, "trained": len(trained),
+            "stream_tokens": int(sum(len(p) for p in data.parts)),
             "windows_total": n_windows,
             "windows_seen_by_start": int(len(seen)), "windows_drawable": int(len(ids))}
     t0 = time.perf_counter()
@@ -470,7 +489,7 @@ def main() -> int:
         model = vinfo.pop("model", None) or model_of(params, theta, trained)
         final = {"step": n_steps, "weights": which, **vinfo}
         print(json.dumps({"final": final, "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        prepare.submit(out, a.start, a.klass, prepare.encode_full(model), {**theta, **model}, trainable, steps,
+        prepare.submit(out, a.start, prepare.encode_full(model), {**theta, **model}, trainable, steps,
                        changed=sorted(trained), notes={"direction": "ref-data", "args": vars(a), "steps": n_steps,
                                                        "data": info, "snapshots": snap_log, "final": final})
     return 0

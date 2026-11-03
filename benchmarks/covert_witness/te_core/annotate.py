@@ -15,6 +15,8 @@ least D_min updated MACs upstream.
 """
 from __future__ import annotations
 
+import math
+import re
 from dataclasses import dataclass
 
 
@@ -76,6 +78,42 @@ def _step(rec: dict, struct: dict) -> StepAnnotation:
         step=rec["step"], tokens=rec["tokens"], macs=rec["macs"], updated_macs=updated, updated_per_token=per_token,
         depth=max((n[1] for n in nodes), default=0), profile=tuple(sorted((n[1], n[2]) for n in nodes)),
         bits=min((n[4] for n in nodes), default=0), weights=rec.get("weights", {}), shapes=rec.get("shapes", {}))
+
+
+#: the first te_core whose counter prices a lookup of an updated table (`flops.gather_macs`)
+LOOKUPS_FROM = (3, 6)
+
+_BITS = {"float64": 64, "float32": 32, "bfloat16": 16, "float16": 16}
+
+
+def with_lookups(record: dict, tables: list[str]) -> dict:
+    """A record counted before te_core 3.6 with its token lookups added as 3.6's counter has them: in each step whose
+    updated weights include a table `tables` names (regexes: the start's lookup), a node at position 0 of
+    `flops.gather_selects(rows) · cols` MACs per token, with every other updated node downstream of it (each reads the
+    lookup's output) and the lookup's MACs in the step's count. A lookup of an updated table the record doesn't list (an
+    untied lookup that nothing else reads, or an adapter's own table) can't be seen here."""
+    from .flops import gather_selects
+
+    out = dict(record, structures=dict(record["structures"]), steps=[dict(s) for s in record["steps"]])
+    for key in ("setup", "tail"):
+        if key in record:
+            out[key] = dict(record[key])
+    for s in [out["setup"], *out["steps"], *([out["tail"]] if "tail" in out else [])]:
+        struct = out["structures"].get(s.get("struct"))
+        names = [n for n in s.get("weights", {}) if any(re.fullmatch(t, n) for t in tables)]
+        if not struct or not names or not s.get("tokens"):
+            continue
+        lk, bits = 0, []
+        for n in names:
+            dtype, shape = s["shapes"][n]
+            lk += gather_selects(shape[0]) * math.prod(shape[1:])
+            bits.append(_BITS.get(dtype, 32))
+        nodes = [[n[0], n[1] + lk, *n[2:]] for n in struct["updated"]]
+        sid = f"{s['struct']}+lookup{lk}x{s['tokens']}"
+        out["structures"][sid] = dict(struct, updated=[[lk, 0, lk * s["tokens"], s["tokens"], min(bits)], *nodes])
+        s["struct"], s["macs"] = sid, s["macs"] + lk * s["tokens"]
+        s["by"] = dict(s.get("by", {}), **{"fwd/updated": s.get("by", {}).get("fwd/updated", 0) + lk * s["tokens"]})
+    return out
 
 
 def annotate(record: dict, through: int | None = None) -> Annotation:
