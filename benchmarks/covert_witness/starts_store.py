@@ -1,12 +1,14 @@
-"""The registered starts on every node, from one preserved artifact in the evidence store (`starts_store.json`).
+"""The registered starts on every node, from preserved artifacts in the evidence store (`starts_store.json`).
 
     python starts_store.py export --from DIR --out OUT   # DIR's starts to OUT/starts/<name>/, the manifest to OUT
-    python3 starts_store.py pack --out starts.tar        # where the store's remote is: the artifact as one checked tar
+    python3 starts_store.py pack --out starts.tar        # where the store's remote is: the artifacts as one checked tar
     python3 starts_store.py install [--to DIR] [--tar starts.tar] [--keep]   # on a node: check each file, install in DIR
 
 `STARTS` (`$CW_STARTS`, default /workspace/research/te/starts, which the run user owns on every node) is the one directory
-`prepare` reads starts from; nothing reads a run's directory. `install` fetches `starts_store.json`'s artifact (`research
-data fetch`; a node holds no store key, so there it unpacks `pack`'s tar, sent with the run), checks every file's sha256
+`prepare` reads starts from; nothing reads a run's directory. A start is in the manifest's `art` under its `path`, or in
+its entry's own `art` and `path` (one another export published, as the v3 ladder's starts). `install` fetches each start's
+artifact (`research data fetch`; a node holds no store key, so there it unpacks `pack`'s tar, sent with the run), checks
+every file's sha256
 and each start.json's digest against the manifest, and moves each start into place whole, through a directory beside
 it. It leaves a start whose files already match and refuses one that differs (remove it with `research retention rm`).
 `--keep` records the directory's retention (`research keep`, owned by the training lane, the artifact as its copy). `export` checks
@@ -113,38 +115,60 @@ def store_fetch(art: str, tmp: Path) -> Path:
 
 
 def from_tar(tar: Path):
-    """A fetch that unpacks `pack`'s tar instead: for a node with no store remote, which gets the tar with its run."""
+    """A fetch that unpacks `pack`'s tar instead, once, for every artifact (the tar holds every start): for a node with
+    no store remote, which gets the tar with its run."""
+    root: list[Path] = []
+
     def fetch(art: str, tmp: Path) -> Path:
-        with tarfile.open(tar) as tf:
-            tf.extractall(tmp / "tar", filter="data")
-        return tmp / "tar"
+        if not root:
+            with tarfile.open(tar) as tf:
+                tf.extractall(tmp / "tar", filter="data")
+            root.append(tmp / "tar")
+        return root[0]
     return fetch
 
 
-def checked(man: dict, names, tmp: Path, fetch) -> Path:
-    """The fetched tree's starts directory, every file of `names` checked against the manifest."""
-    if not (man.get("art") or "").startswith("art:"):
-        raise SystemExit("starts_store: the manifest names no artifact (export, then `research data put --tree`)")
-    root = fetch(man["art"], tmp) / man.get("path", "starts")
+def sources(man: dict, names) -> dict[tuple[str, str], list[str]]:
+    """`names` by the artifact and path holding each: its entry's own `art` and `path`, else the manifest's."""
+    by: dict[tuple[str, str], list[str]] = {}
     for name in names:
-        want, src = man["starts"][name], root / name
-        for f, h in want["files"].items():
-            if not (src / f).is_file() or sha256(src / f) != h:
-                raise SystemExit(f"starts_store: the artifact's {name}/{f} is not the manifest's (sha256 {h})")
-        if json.loads((src / "start.json").read_text())["digest"] != want["digest"]:
-            raise SystemExit(f"starts_store: the artifact's {name}/start.json names another digest")
-    return root
+        want = man["starts"][name]
+        art = want.get("art") or man.get("art") or ""
+        if not art.startswith("art:"):
+            raise SystemExit(f"starts_store: the manifest names no artifact for {name} (export, then `research data put "
+                             "--tree`)")
+        by.setdefault((art, want.get("path") or man.get("path", "starts")), []).append(name)
+    return by
+
+
+def checked(man: dict, names, tmp: Path, fetch) -> dict[str, Path]:
+    """Each of `names`' directory in its fetched artifact, every file checked against the manifest."""
+    dirs = {}
+    for i, ((art, path), group) in enumerate(sources(man, names).items()):
+        (tmp / str(i)).mkdir()
+        root = fetch(art, tmp / str(i)) / path
+        for name in group:
+            want, src = man["starts"][name], root / name
+            for f, h in want["files"].items():
+                if not (src / f).is_file() or sha256(src / f) != h:
+                    raise SystemExit(f"starts_store: {art}'s {name}/{f} is not the manifest's (sha256 {h})")
+            if json.loads((src / "start.json").read_text())["digest"] != want["digest"]:
+                raise SystemExit(f"starts_store: {art}'s {name}/start.json names another digest")
+            dirs[name] = src
+    return dirs
 
 
 def pack(man: dict, out: Path, fetch=store_fetch) -> Path:
-    """The artifact's starts as one tar (`<path>/<name>/<file>`, the manifest's path), checked against the manifest."""
+    """Every start the manifest lists as one tar (`PATH/<name>/<file>`, each under its artifact's path), checked against
+    the manifest."""
     tmp = Path(tempfile.mkdtemp(prefix="starts-pack-"))
     try:
-        root = checked(man, man["starts"], tmp, fetch)
+        dirs = checked(man, man["starts"], tmp, fetch)
+        paths = {name: path for (_, path), group in sources(man, man["starts"]).items() for name in group}
         with tarfile.open(out, "w") as tf:
             for name, want in man["starts"].items():
                 for f in want["files"]:
-                    tf.add(root / name / f, arcname=f"{man.get('path', 'starts')}/{name}/{f}")
+                    tf.add(dirs[name] / f, arcname=f"{paths[name]}/{name}/{f}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return out
@@ -164,12 +188,12 @@ def install(to: Path, man: dict, fetch=store_fetch) -> list[str]:
         return []
     tmp = Path(tempfile.mkdtemp(prefix=".fetch-", dir=to))
     try:
-        root = checked(man, todo, tmp, fetch)
+        dirs = checked(man, todo, tmp, fetch)
         for name in todo:
             stage = tmp / f"stage-{name}"
             stage.mkdir()
             for f in man["starts"][name]["files"]:
-                shutil.move(str(root / name / f), stage / f)
+                shutil.move(str(dirs[name] / f), stage / f)
             os.rename(stage, to / name)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
