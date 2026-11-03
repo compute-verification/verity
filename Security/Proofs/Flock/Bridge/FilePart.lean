@@ -185,7 +185,7 @@ theorem why_eq_none {strata : Array (String × Array (ℕ × ℕ))} {indices : A
       split at h
       · cases h
       · rename_i hne
-        exact ⟨ns, by first | rfl | exact hs, by simpa using hne⟩
+        exact ⟨ns, rfl, by simpa using hne⟩
   · rintro ⟨ns, hs, rfl⟩
     rw [hs]
     simp
@@ -211,7 +211,6 @@ theorem check_ok {program : ByteArray} {query : Lean.Json} {pubB : ByteArray}
         | some w => simp [hp, hs, hi, hw, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
         | none =>
           obtain ⟨ns, hns, rfl⟩ := why_eq_none.1 hw
-          exact ⟨p, strata, ns, by first | rfl | exact hp, by first | rfl | exact hs, hns,
-            by first | rfl | exact hi⟩
+          exact ⟨p, strata, ns, rfl, hs, hns, rfl⟩
 
 end Flock.Bridge
