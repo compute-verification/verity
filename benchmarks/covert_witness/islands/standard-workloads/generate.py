@@ -12,8 +12,10 @@ and the last) a round generates `--generate` tokens after a prompt of `--prompt-
 
 Every matrix the round's forward multiplies by (with `--head fp4` the tied embedding too, its lookup and the head) is
 read from its NVFP4 codes (fp4.py), W4A4 with each activation row coded; attention runs in bf16. Each step is explicit
-(hooks.step()): a training step, a round's coding of the weights it serves (`pack`: θ' to codes, or a LoRA to bf16),
-its prefill (the prompts, whose length follows the stream's windows) and its decode (every generated token).
+(hooks.step()): a training step, or a round, which codes the weights it serves (θ' to codes, or θ to codes and a LoRA
+to bf16), prefills the prompts (whose length follows the stream's windows; the head at the last position only) and
+decodes every generated token, in one step so the counter follows the prompts' tokens through the KV cache and each
+sampled token into the next.
 """
 from __future__ import annotations
 
@@ -149,7 +151,7 @@ def main() -> int:
                 served["lora/" + n] = (la.to(torch.bfloat16), lb.to(torch.bfloat16))
 
     def reader():
-        """The served model as a step reads it: its matrices decoded from their codes (once a step), (lin, emb)."""
+        """The served model as a round reads it: its matrices decoded from their codes (once a round), (lin, emb)."""
         weights = {n: (fp4.unpack(v[0], v[1]), v[2]) for n, v in served.items()
                    if isinstance(v, tuple) and len(v) == 3}
 
@@ -176,12 +178,10 @@ def main() -> int:
     gen = torch.Generator(device=dev)
     gen.manual_seed(a.sample_seed)
     rounds_at = sorted({1, a.steps} | set(range(a.every, a.steps, a.every)))
-    hooks.plan(a.steps + 3 * len(rounds_at))
+    hooks.plan(a.steps + len(rounds_at))
     tokens = a.batch * prepare.EVAL_CTX
     steps_log: list[dict] = []
     log: dict = {"rounds": []}
-    if a.update == "lora":
-        pack_base(params)
     t0 = time.perf_counter()
     print(json.dumps({"update": a.update, "steps": a.steps, "rounds_after": rounds_at, "lr": lr}), flush=True)
     for step in range(a.steps):
@@ -203,20 +203,16 @@ def main() -> int:
                   flush=True)
         if step + 1 not in rounds_at:
             continue
-        with hooks.step():
-            if a.update == "lora":
-                pack_lora()
-            else:
-                pack_base(params)
         cache = [None] * cfg["n_layer"]
         with hooks.step(), torch.no_grad():
+            pack_base(params)
+            if a.update == "lora":
+                pack_lora()
             rows = data.next(a.gen_batch)
             n_prompt = max(16, int(a.prompt_share * (rows.shape[1] - 1)))
             lin, emb = reader()
             out = [gumbel(forward(served, cfg, rows[:, :n_prompt], lin, emb, cos, sin, cache, 0, last=True)[:, -1],
                           gen)]
-        with hooks.step(), torch.no_grad():
-            lin, emb = reader()
             for i in range(a.generate - 1):
                 logits = forward(served, cfg, out[-1], lin, emb, cos, sin, cache, n_prompt + i)
                 out.append(gumbel(logits[:, -1], gen))
