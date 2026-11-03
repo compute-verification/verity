@@ -1,32 +1,49 @@
 {
  "id": "te_core.workloads",
  "te_core": "4.3",
+ "reading": "B",
  "spec": "note:training-20261103T0600Z-draft-workload-models",
  "policies": {
   "default": {
-   "c": 341247298437120.0,
+   "c": 340992000000000.0,
    "k": 65536.0,
-   "session": {
-    "inputs": 4096,
-    "outputs": 1024
-   }
+   "what": "the console default as the console defines it (dashboard, 05:34Z): one 4,096-in, 1,024-out session of the 45M reference a block, c = 5,120 x 2 x 45e6 x 740 gates (attention left out), k = 65,536 bits"
   },
-  "tighter": {
-   "c": 341247298437120.0,
-   "k": 32768.0,
-   "session": {
-    "inputs": 2048,
-    "outputs": 3072
-   }
+  "default_full": {
+   "c": 536326224989482.56,
+   "k": 65536.0,
+   "what": "the console default with c the session's full cost, attention at te_core.flops' count (1.5728 c)"
   },
-  "looser": {
-   "c": 1160240814686208.0,
-   "k": 262144.0,
-   "session": {
-    "inputs": 16384,
-    "outputs": 1024
-   }
+  "served": {
+   "c": 30087822237972.0,
+   "k": 145568.0,
+   "what": "the registered serving policy: the served demo's measured block (te_core.panels.SERVED, one slot's 35-step session of Llama-3.2-1B int8 under vLLM): c a lower bound, its linear layers still to be counted and its 133 BitAtx32_v1 activations a block unpriced; k its fresh bits"
   }
+ },
+ "kinds": {
+  "fresh_products": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+  "token": "A1 at reading B: te_core.formalism's token form, a token's work lumped (reading A's entry-point cut replaces it)",
+  "reduction": "the counting lemma: every partial gradient a step sums but one is read by some block, at its passed width",
+  "update": "the counting lemma: each step's update reads \u0394_t + \u0394_g, the weights and the gradient (05:18Z; a block keeping a coordinate across steps reads its weight once, so this may overstate)",
+  "decoding": "Fit's construction: a block computing tokens from their inputs reads the code and runs its decoder"
+ },
+ "fit": "Fit's construction (te_core.formalism): every block reads \u0394 and its tokens' ids, and runs the decoder",
+ "widths": {
+  "gemm/bf16": [
+   16.0,
+   16.0,
+   32.0
+  ],
+  "gemm/e4m3": [
+   8.0,
+   8.0,
+   32.0
+  ],
+  "gemm/fp4": [
+   4.5,
+   4.5,
+   32.0
+  ]
  },
  "gates_per_mac": {
   "gemm/bf16": 1480.125,
@@ -80,7 +97,7 @@
       10000.0,
       10000000.0
      ],
-     "why": "sets the optimizer's share, 1 - sigma; the pilot's 64 x 1,024"
+     "why": "sets the optimizer's share, 1 - sigma, and b, a step's token blocks; the pilot's 64 x 1,024"
     },
     {
      "name": "optimizer",
@@ -91,7 +108,7 @@
       "muon",
       "sgd"
      ],
-     "why": "sets Delta_grad (the state) and the optimizer's gates"
+     "why": "sets Delta_grad (the state), the optimizer's gates and Muon's fresh Newton-Schulz products"
     },
     {
      "name": "t",
@@ -101,7 +118,7 @@
       0.0,
       0.9
      ],
-     "why": "A1's free share: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread"
+     "why": "A1's free share, the token kind's: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread, which overcharges a block"
     },
     {
      "name": "tokens_per_param",
@@ -112,6 +129,16 @@
       2000.0
      ],
      "why": "sets |C| only (Chinchilla's 20 by default)"
+    },
+    {
+     "name": "vocab",
+     "unit": "ids",
+     "default": 50304,
+     "range": [
+      1000,
+      262144
+     ],
+     "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
     }
    ],
    "points": {
@@ -123,14 +150,15 @@
       "batch_tokens": 65536,
       "optimizer": "adamw",
       "t": null,
-      "tokens_per_param": 20.0
+      "tokens_per_param": 20.0,
+      "vocab": 50304
      },
      "inputs": {
       "C_gates": 2.1076908801314062e+20,
       "w_gates": 233962973207.04,
       "w_fwd_gates": 75962004288.0,
       "sigma": 0.9997031897773526,
-      "tau_bits": 16,
+      "tau_bits": 16.0,
       "a_bits": 8192.0,
       "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
       "u_in_points": "0:0;1:7.20478e8",
@@ -142,33 +170,222 @@
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 720478208.0,
+      "delta_bits": 720478208,
+      "decoder_gates": 0.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 3211264.0,
+        "entries": 5376.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 25755648.0,
+        "entries": 50304.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 27392.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 687.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3145728.0,
+        "entries": 49152.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 9437184.0,
+        "entries": 9216.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.9736105866652403,
+      "steps": [
+       {
+        "count": 13742.03125,
+        "delta_g": 1440956416,
+        "delta_t": 720478208,
+        "tokens": 65536,
+        "w": 233962973207.04,
+        "partials": 0.0
+       }
+      ]
+     },
      "rho": {
       "default": {
-       "rho": 263.1190814852731,
-       "basis": "target",
-       "s": 1458.552581032304,
+       "rho": 4682839.142792734,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 4682839.142792734,
+       "terms": {
+        "fresh_products": 4682839.142792734,
+        "token": 262.9222333619699,
+        "reduction": 21491.892531177793,
+        "update": 733.2471423814515
+       },
+       "te_core": {
+        "rho": 262.9222333619699,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 1457.4613894064646,
        "x0": 9.096180741111325e-05,
        "s_star": 5.541168,
-       "fit_delta_bits": 42199.15870348313,
+       "b": [
+        44.965856712464145
+       ],
+       "fresh_share": 0.9736105866652403,
+       "fresh_charged_share": 0.9419511412400156,
+       "fit_delta_bits": 42216.617769496566,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 526.2620989350211,
-       "basis": "target",
-       "s": 1458.552581032304,
-       "x0": 4.548090370555663e-05,
-       "s_star": 2.770584,
-       "fit_delta_bits": 9431.158703483135,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 7365361.767100143,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 7365361.767100143,
+       "terms": {
+        "fresh_products": 7365361.767100143,
+        "token": 413.5348890438166,
+        "reduction": 21211.869808684143,
+        "update": 1153.281226121931
+       },
+       "te_core": {
+        "rho": 413.5348890438166,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 2292.355143370799,
+       "x0": 9.096180741111325e-05,
+       "s_star": 5.541168,
+       "b": [
+        28.58893840665214
+       ],
+       "fresh_share": 0.9736105866652403,
+       "fresh_charged_share": 0.9419511412400156,
+       "fit_delta_bits": 28858.317706067217,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 223.59018255307126,
-       "basis": "target",
-       "s": 4959.078775509834,
-       "x0": 0.000363847229644453,
-       "s_star": 22.164672,
-       "fit_delta_bits": 182798.73959184266,
-       "fit_delta_grad_bits": 131072.0
+      "served": {
+       "rho": 122760.70741115791,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 122760.70741115791,
+       "terms": {
+        "fresh_products": 122760.70741115791,
+        "token": 10.443345432313976,
+        "reduction": 9876.497492775723,
+        "update": 29.128019657125655
+       },
+       "te_core": {
+        "rho": 10.443345432313976,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 128.60078595148684,
+       "x0": 0.00020204358491853234,
+       "s_star": 12.3079947421875,
+       "b": [
+        509.6080829919866
+       ],
+       "fresh_share": 0.9736105866652403,
+       "fresh_charged_share": 0.926426419333659,
+       "fit_delta_bits": 143510.3874247762,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -180,68 +397,258 @@
       "optimizer_gates_per_step": 4552341557248.0
      }
     },
-    "evenly spread": {
+    "FP8 GEMMs": {
      "dials": {
       "n_params": 45029888,
-      "precision": "bf16",
+      "precision": "e4m3",
       "seq_len": 1024,
       "batch_tokens": 65536,
       "optimizer": "adamw",
-      "t": 0.0,
-      "tokens_per_param": 20.0
+      "t": null,
+      "tokens_per_param": 20.0,
+      "vocab": 50304
      },
      "inputs": {
-      "C_gates": 2.1076908801314062e+20,
-      "w_gates": 233962973207.04,
-      "w_fwd_gates": 75962004288.0,
-      "sigma": 0.9997031897773526,
-      "tau_bits": 16,
+      "C_gates": 1.3545684928718062e+20,
+      "w_gates": 150338249639.04,
+      "w_fwd_gates": 48087096432.0,
+      "sigma": 0.9995381671708032,
+      "tau_bits": 16.0,
       "a_bits": 8192.0,
-      "u_points": "0:0;1:7.20478e8",
-      "u_in_points": "0:0;1:7.20478e8",
+      "u_points": "0:0;0.692646:0;0.692646:2.49518e8;1:3.60239e8",
+      "u_in_points": "0:0;1:3.60239e8",
       "delta_bits": 720478208,
-      "delta_t_bits": 720478208,
+      "delta_t_bits": 1440956416,
       "d_gates": 0.0,
       "delta_grad_bits": 4322869248.0,
-      "w_fit_gates": 233962973207.04,
+      "w_fit_gates": 150338249639.04,
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 360239104.0,
+      "delta_bits": 720478208,
+      "decoder_gates": 0.0,
+      "fresh": [
+       {
+        "kind": "gemm/e4m3",
+        "macs": 3211264.0,
+        "entries": 5376.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/e4m3",
+        "macs": 25755648.0,
+        "entries": 50304.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/e4m3",
+        "macs": 45023232.0,
+        "entries": 27392.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/e4m3",
+        "macs": 45023232.0,
+        "entries": 687.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3145728.0,
+        "entries": 49152.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 9437184.0,
+        "entries": 9216.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.959020599639083,
+      "steps": [
+       {
+        "count": 13742.03125,
+        "delta_g": 1440956416,
+        "delta_t": 1440956416,
+        "tokens": 65536,
+        "w": 150338249639.04,
+        "partials": 0.0
+       }
+      ]
+     },
      "rho": {
       "default": {
-       "rho": 8014281.356163215,
-       "basis": "target",
-       "s": 1458.552581032304,
-       "x0": 9.096180741111325e-05,
-       "s_star": 0.0001819236148222265,
-       "fit_delta_bits": 42199.15870348313,
+       "rho": 3982459.067087055,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 3982459.067087055,
+       "terms": {
+        "fresh_products": 3982459.067087055,
+        "token": 409.0663443640616,
+        "reduction": 21216.480249385146,
+        "update": 1521.2306334821951
+       },
+       "te_core": {
+        "rho": 409.0663443640616,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 2268.1652927230225,
+       "x0": 0.0001819236148222265,
+       "s_star": 5.541168,
+       "b": [
+        28.893837768464145
+       ],
+       "fresh_share": 0.959020599639083,
+       "fresh_charged_share": 0.9057298849369351,
+       "fit_delta_bits": 29245.35531643164,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 32058583.544320576,
-       "basis": "target",
-       "s": 1458.552581032304,
-       "x0": 4.548090370555663e-05,
-       "s_star": 4.548090370555663e-05,
-       "fit_delta_bits": 9431.158703483135,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 6263775.213570807,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 6263775.213570807,
+       "terms": {
+        "fresh_products": 6263775.213570807,
+        "token": 643.3963501871741,
+        "reduction": 20780.76855113195,
+        "update": 2392.654029988577
+       },
+       "te_core": {
+        "rho": 643.3963501871741,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 3567.463544887573,
+       "x0": 0.0001819236148222265,
+       "s_star": 5.541168,
+       "b": [
+        18.370475037906893
+       ],
+       "fresh_share": 0.959020599639083,
+       "fresh_charged_share": 0.9057298849369351,
+       "fit_delta_bits": 8456.583281798834,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 1702570.0125405984,
-       "basis": "target",
-       "s": 4959.078775509834,
-       "x0": 0.000363847229644453,
-       "s_star": 0.002910777837155624,
-       "fit_delta_bits": 182798.73959184266,
-       "fit_delta_grad_bits": 131072.0
+      "served": {
+       "rho": 102948.78842761835,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 102948.78842761835,
+       "terms": {
+        "fresh_products": 102948.78842761835,
+        "token": 16.246425257934238,
+        "reduction": 9864.067425758934,
+        "update": 60.430424114820234
+       },
+       "te_core": {
+        "rho": 16.246425257934238,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 200.13417949332543,
+       "x0": 0.0004040871698370647,
+       "s_star": 12.3079947421875,
+       "b": [
+        327.460307709137
+       ],
+       "fresh_share": 0.959020599639083,
+       "fresh_charged_share": 0.879597919742034,
+       "fit_delta_bits": 142365.8531281068,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
       "d_model": 512.0,
       "n_layer": 6.0,
-      "w_gates": 233962973207.04,
-      "t": 0.0,
-      "t_counted": 0.43025289803425626,
+      "w_gates": 150338249639.04,
+      "t": 0.692646,
+      "t_counted": 0.4841638077721656,
       "optimizer_gates_per_step": 4552341557248.0
      }
     },
@@ -253,14 +660,15 @@
       "batch_tokens": 65536,
       "optimizer": "adamw",
       "t": null,
-      "tokens_per_param": 20.0
+      "tokens_per_param": 20.0,
+      "vocab": 50304
      },
      "inputs": {
       "C_gates": 4.669996929659712e+24,
       "w_gates": 33346322708367.36,
       "w_fwd_gates": 10826728152067.324,
       "sigma": 0.9996762844791867,
-      "tau_bits": 16,
+      "tau_bits": 16.0,
       "a_bits": 57941.493304682495,
       "u_points": "0:0;0.692646:0;0.692646:7.75764e10;1:1.12e11",
       "u_in_points": "0:0;1:1.12e11",
@@ -272,33 +680,222 @@
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 112000000000.0,
+      "delta_bits": 112000000000.0,
+      "decoder_gates": 0.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 160648062.18012866,
+        "entries": 38024.10498119789,
+        "layers": 42.4376171665155,
+        "count": 140000000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 182168054.94992176,
+        "entries": 50304.0,
+        "layers": 1.0,
+        "count": 140000000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3708255.5714996797,
+        "entries": 57941.493304682495,
+        "layers": 42.4376171665155,
+        "count": 140000000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3708255.5714996797,
+        "entries": 3621.343331542656,
+        "layers": 42.4376171665155,
+        "count": 140000000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 6999689016.292799,
+        "entries": 1348331.6852411018,
+        "layers": 1.0,
+        "count": 140000000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 6999689016.292799,
+        "entries": 106806.77820270995,
+        "layers": 1.0,
+        "count": 140000000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 157369530.29890156,
+        "entries": 2458898.910920337,
+        "layers": 1.0,
+        "count": 140000000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 472108590.8967047,
+        "entries": 461043.54579756316,
+        "layers": 1.0,
+        "count": 140000000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.9736692697141801,
+      "steps": [
+       {
+        "count": 2136230.46875,
+        "delta_g": 224000000000.0,
+        "delta_t": 112000000000.0,
+        "tokens": 65536,
+        "w": 33346322708367.36,
+        "partials": 0.0
+       }
+      ]
+     },
      "rho": {
       "default": {
-       "rho": 13.058065152315848,
-       "basis": "target",
-       "s": 10.23343117685037,
+       "rho": 4797339.417500298,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 4797339.417500298,
+       "terms": {
+        "fresh_products": 4797339.417500298,
+        "token": 13.048295980104182,
+        "reduction": 3416329.1573721245,
+        "update": 799.7146407683657
+       },
+       "te_core": {
+        "rho": 13.048295980104182,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 10.22577520712463,
        "x0": 5.851428571428571e-07,
        "s_star": 0.7834324879633638,
-       "fit_delta_bits": 65372.26510117039,
+       "b": [
+        6408.902862869402
+       ],
+       "fresh_share": 0.9736692697141801,
+       "fresh_charged_share": 0.9649828237608812,
+       "fit_delta_bits": 65372.38759668601,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 26.11613794546972,
-       "basis": "target",
-       "s": 10.23343117685037,
-       "x0": 2.9257142857142857e-07,
-       "s_star": 0.3917162439816819,
-       "fit_delta_bits": 32604.265101170393,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 7545452.502642813,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 7545452.502642813,
+       "terms": {
+        "fresh_products": 7545452.502642813,
+        "token": 20.52289592000609,
+        "reduction": 3416023.75110733,
+        "update": 1257.8240379601802
+       },
+       "te_core": {
+        "rho": 20.52289592000609,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 16.08351930376137,
+       "x0": 5.851428571428571e-07,
+       "s_star": 0.7834324879633638,
+       "b": [
+        4074.730086261247
+       ],
+       "fresh_share": 0.9736692697141801,
+       "fresh_charged_share": 0.9649828237608812,
+       "fit_delta_bits": 65278.66369113982,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 11.099335895331512,
-       "basis": "target",
-       "s": 34.79366600129126,
-       "x0": 2.3405714285714285e-06,
-       "s_star": 3.1337299518534554,
-       "fit_delta_bits": 261587.30134397934,
-       "fit_delta_grad_bits": 131072.0
+      "served": {
+       "rho": 1387962.305158405,
+       "basis": "reduction",
+       "binding_kind": "reduction",
+       "rests_on": "the counting lemma: every partial gradient a step sums but one is read by some block, at its passed width",
+       "bound": 1387962.305158405,
+       "terms": {
+        "fresh_products": 127305.3828594681,
+        "token": 0.5183392177677183,
+        "reduction": 1387962.305158405,
+        "update": 31.768420809302015
+       },
+       "te_core": {
+        "rho": 1.0,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 0.9022830643458708,
+       "x0": 1.2997142857142858e-06,
+       "s_star": 1.7401535096412806,
+       "b": [
+        65536.0
+       ],
+       "fresh_share": 0.9736692697141801,
+       "fresh_charged_share": 0.9607232842784835,
+       "fit_delta_bits": 145553.56347097046,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -322,7 +919,8 @@
       "batch_tokens": 65536,
       "optimizer": "adamw",
       "t": null,
-      "tokens_per_param": 20.0
+      "tokens_per_param": 20.0,
+      "vocab": 50304
      },
      "differs": "w 0.9% below the model's; u(1) the fp32 embedding with the bf16 matrices, 25 bits a parameter; u_in all of it at x = 0; Delta the submitted code, 32 N",
      "record_inputs": {
@@ -344,7 +942,7 @@
       "w_gates": 233962973207.04,
       "w_fwd_gates": 75962004288.0,
       "sigma": 0.9997031897773526,
-      "tau_bits": 16,
+      "tau_bits": 16.0,
       "a_bits": 8192.0,
       "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
       "u_in_points": "0:0;1:7.20478e8",
@@ -357,16 +955,16 @@
      },
      "rho": {
       "default": {
-       "record": 264.2411807015765,
-       "model": 263.1190814852731
+       "record": 264.0434930985836,
+       "model": 262.9222333619699
       },
-      "tighter": {
-       "record": 528.482361403153,
-       "model": 526.2620989350211
+      "default_full": {
+       "record": 415.29845241706505,
+       "model": 413.5348890438166
       },
-      "looser": {
-       "record": 224.60500359634008,
-       "model": 223.59018255307126
+      "served": {
+       "record": 10.489047434037735,
+       "model": 10.443345432313976
       }
      }
     },
@@ -380,7 +978,8 @@
       "batch_tokens": 65536,
       "optimizer": "muon",
       "t": null,
-      "tokens_per_param": 20.0
+      "tokens_per_param": 20.0,
+      "vocab": 50304
      },
      "differs": "as adamw-rewarm-mild; sigma the trace's 0.99339 against the model's 0.98774, five bf16 Newton-Schulz iterations on every matrix",
      "record_inputs": {
@@ -402,7 +1001,7 @@
       "w_gates": 233962973207.04,
       "w_fwd_gates": 75962004288.0,
       "sigma": 0.9877386374084287,
-      "tau_bits": 16,
+      "tau_bits": 16.0,
       "a_bits": 8192.0,
       "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
       "u_in_points": "0:0;1:7.20478e8",
@@ -415,16 +1014,16 @@
      },
      "rho": {
       "default": {
-       "record": 260.9022289364151,
-       "model": 259.9700447892966
+       "record": 260.70703931412754,
+       "model": 259.7755525649282
       },
-      "tighter": {
-       "record": 521.8044578728302,
-       "model": 519.9637390749408
+      "default_full": {
+       "record": 410.0507408488487,
+       "model": 408.58566022576736
       },
-      "looser": {
-       "record": 221.76689459595283,
-       "model": 220.91423185521538
+      "served": {
+       "record": 10.356507822491361,
+       "model": 10.318358381547926
       }
      }
     }
@@ -473,7 +1072,7 @@
       256,
       10000000.0
      ],
-     "why": "B, an inner step's tokens, all workers"
+     "why": "B, an inner step's tokens, all workers'"
     },
     {
      "name": "optimizer",
@@ -484,7 +1083,7 @@
       "muon",
       "sgd"
      ],
-     "why": "sets Delta_grad (the state) and the optimizer's gates"
+     "why": "sets Delta_grad (the state), the optimizer's gates and Muon's fresh Newton-Schulz products"
     },
     {
      "name": "t",
@@ -494,7 +1093,7 @@
       0.0,
       0.9
      ],
-     "why": "A1's free share: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread"
+     "why": "A1's free share, the token kind's: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread, which overcharges a block"
     },
     {
      "name": "inner_steps",
@@ -524,7 +1123,27 @@
       100.0,
       1500000000.0
      ],
-     "why": "b, one compressed outer delta; None is 32 N, uncompressed"
+     "why": "b, one worker's compressed outer delta; None is 32 N, uncompressed"
+    },
+    {
+     "name": "workers",
+     "unit": "workers",
+     "default": 4,
+     "range": [
+      1,
+      1024
+     ],
+     "why": "M, the workers each inner step's tokens split over and each sync sums (the island's 4)"
+    },
+    {
+     "name": "vocab",
+     "unit": "ids",
+     "default": 50304,
+     "range": [
+      1000,
+      262144
+     ],
+     "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
     }
    ],
    "points": {
@@ -538,14 +1157,16 @@
       "t": null,
       "inner_steps": 500,
       "syncs": 28,
-      "sync_bits": null
+      "sync_bits": null,
+      "workers": 4,
+      "vocab": 50304
      },
      "inputs": {
-      "C_gates": 2.147256965511535e+20,
+      "C_gates": 2.1491692676294882e+20,
       "w_gates": 233962973207.04,
       "w_fwd_gates": 75962004288.0,
-      "sigma": 0.9997031897773526,
-      "tau_bits": 16,
+      "sigma": 0.9988136672274399,
+      "tau_bits": 16.0,
       "a_bits": 8192.0,
       "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
       "u_in_points": "0:0;1:7.20478e8",
@@ -557,33 +1178,233 @@
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 720478208.0,
+      "delta_bits": 720478208,
+      "decoder_gates": 0.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 3211264.0,
+        "entries": 5376.0,
+        "layers": 6.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 25755648.0,
+        "entries": 50304.0,
+        "layers": 1.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 6.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 27392.0,
+        "layers": 1.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 2748.0,
+        "layers": 1.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3145728.0,
+        "entries": 49152.0,
+        "layers": 1.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 9437184.0,
+        "entries": 9216.0,
+        "layers": 1.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.9727442809651801,
+      "steps": [
+       {
+        "count": 56000,
+        "delta_g": 1440956416,
+        "delta_t": 720478208,
+        "tokens": 16384.0,
+        "w": 233962973207.04,
+        "partials": 0.0
+       },
+       {
+        "count": 28,
+        "delta_g": 1440956416,
+        "delta_t": 720478208,
+        "tokens": 0.0,
+        "w": 0.0,
+        "partials": 4
+       }
+      ]
+     },
      "rho": {
       "default": {
-       "rho": 263.1190814852731,
-       "basis": "target",
-       "s": 1458.552581032304,
+       "rho": 4677207.44220644,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 4677207.44220644,
+       "terms": {
+        "fresh_products": 4677207.44220644,
+        "token": 262.6882886693447,
+        "reduction": 20010.5102932761,
+        "update": 2931.8440248765564
+       },
+       "te_core": {
+        "rho": 262.6882886693447,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 1457.4613894064646,
        "x0": 9.096180741111325e-05,
        "s_star": 5.541168,
-       "fit_delta_bits": 42199.15870348313,
+       "b": [
+        11.241464178116036,
+        4
+       ],
+       "fresh_share": 0.9727442809651801,
+       "fresh_charged_share": 0.9408183270150069,
+       "fit_delta_bits": 42216.617769496566,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 526.2620989350211,
-       "basis": "target",
-       "s": 1458.552581032304,
-       "x0": 4.548090370555663e-05,
-       "s_star": 2.770584,
-       "fit_delta_bits": 9431.158703483135,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 7356503.997077038,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 7356503.997077038,
+       "terms": {
+        "fresh_products": 7356503.997077038,
+        "token": 413.16693122119324,
+        "reduction": 18893.09468659167,
+        "update": 4611.324717647376
+       },
+       "te_core": {
+        "rho": 413.16693122119324,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 2292.355143370799,
+       "x0": 9.096180741111325e-05,
+       "s_star": 5.541168,
+       "b": [
+        7.147234601663035,
+        4
+       ],
+       "fresh_share": 0.9727442809651801,
+       "fresh_charged_share": 0.9408183270150069,
+       "fit_delta_bits": 28858.317706067217,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 223.59018255307126,
-       "basis": "target",
-       "s": 4959.078775509834,
-       "x0": 0.000363847229644453,
-       "s_star": 22.164672,
-       "fit_delta_bits": 182798.73959184266,
-       "fit_delta_grad_bits": 131072.0
+      "served": {
+       "rho": 122593.28097230905,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 122593.28097230905,
+       "terms": {
+        "fresh_products": 122593.28097230905,
+        "token": 10.434053082991133,
+        "reduction": 9809.621721720163,
+        "update": 116.46661194051322
+       },
+       "te_core": {
+        "rho": 10.434053082991133,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 128.60078595148684,
+       "x0": 0.00020204358491853234,
+       "s_star": 12.3079947421875,
+       "b": [
+        127.40202074799664,
+        4
+       ],
+       "fresh_share": 0.9727442809651801,
+       "fresh_charged_share": 0.9251629183363482,
+       "fit_delta_bits": 143510.3874247762,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -591,7 +1412,7 @@
       "n_layer": 6.0,
       "w_gates": 233962973207.04,
       "tokens": 917504000,
-      "code_bits": 40871067648,
+      "code_bits": 40871067648.0,
       "compressed": false,
       "phase_tokens": 32768000,
       "phase_gates": 7.666498706048287e+18
@@ -607,14 +1428,16 @@
       "t": null,
       "inner_steps": 500,
       "syncs": 28,
-      "sync_bits": 45029888
+      "sync_bits": 45029888,
+      "workers": 4,
+      "vocab": 50304
      },
      "inputs": {
-      "C_gates": 2.147256965511535e+20,
+      "C_gates": 2.1491692676294882e+20,
       "w_gates": 233962973207.04,
       "w_fwd_gates": 75962004288.0,
-      "sigma": 0.9997031897773526,
-      "tau_bits": 16,
+      "sigma": 0.9988136672274399,
+      "tau_bits": 16.0,
       "a_bits": 8192.0,
       "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
       "u_in_points": "0:0;1:7.20478e8",
@@ -626,33 +1449,233 @@
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 720478208.0,
+      "delta_bits": 720478208,
+      "decoder_gates": 0.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 3211264.0,
+        "entries": 5376.0,
+        "layers": 6.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 25755648.0,
+        "entries": 50304.0,
+        "layers": 1.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 6.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 27392.0,
+        "layers": 1.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 2748.0,
+        "layers": 1.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3145728.0,
+        "entries": 49152.0,
+        "layers": 1.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 9437184.0,
+        "entries": 9216.0,
+        "layers": 1.0,
+        "count": 917504000,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.9727442809651801,
+      "steps": [
+       {
+        "count": 56000,
+        "delta_g": 1440956416,
+        "delta_t": 720478208,
+        "tokens": 16384.0,
+        "w": 233962973207.04,
+        "partials": 0.0
+       },
+       {
+        "count": 28,
+        "delta_g": 45029888.0,
+        "delta_t": 720478208,
+        "tokens": 0.0,
+        "w": 0.0,
+        "partials": 4
+       }
+      ]
+     },
      "rho": {
       "default": {
-       "rho": 263.1190814852731,
-       "basis": "target",
-       "s": 1458.552581032304,
+       "rho": 4677207.44220644,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 4677207.44220644,
+       "terms": {
+        "fresh_products": 4677207.44220644,
+        "token": 262.6882886693447,
+        "reduction": 20007.67148877925,
+        "update": 2930.8977567109396
+       },
+       "te_core": {
+        "rho": 262.6882886693447,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 1457.4613894064646,
        "x0": 9.096180741111325e-05,
        "s_star": 5.541168,
-       "fit_delta_bits": 42199.15870348313,
+       "b": [
+        11.241464178116036,
+        4
+       ],
+       "fresh_share": 0.9727442809651801,
+       "fresh_charged_share": 0.9408183270150069,
+       "fit_delta_bits": 42216.617769496566,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 526.2620989350211,
-       "basis": "target",
-       "s": 1458.552581032304,
-       "x0": 4.548090370555663e-05,
-       "s_star": 2.770584,
-       "fit_delta_bits": 9431.158703483135,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 7356503.997077038,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 7356503.997077038,
+       "terms": {
+        "fresh_products": 7356503.997077038,
+        "token": 413.16693122119324,
+        "reduction": 18888.62969826561,
+        "update": 4609.836388205357
+       },
+       "te_core": {
+        "rho": 413.16693122119324,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 2292.355143370799,
+       "x0": 9.096180741111325e-05,
+       "s_star": 5.541168,
+       "b": [
+        7.147234601663035,
+        4
+       ],
+       "fresh_share": 0.9727442809651801,
+       "fresh_charged_share": 0.9408183270150069,
+       "fit_delta_bits": 28858.317706067217,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 223.59018255307126,
-       "basis": "target",
-       "s": 4959.078775509834,
-       "x0": 0.000363847229644453,
-       "s_star": 22.164672,
-       "fit_delta_bits": 182798.73959184266,
-       "fit_delta_grad_bits": 131072.0
+      "served": {
+       "rho": 122593.28097230905,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 122593.28097230905,
+       "terms": {
+        "fresh_products": 122593.28097230905,
+        "token": 10.434053082991133,
+        "reduction": 9809.50895107517,
+        "update": 116.42902172551493
+       },
+       "te_core": {
+        "rho": 10.434053082991133,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 128.60078595148684,
+       "x0": 0.00020204358491853234,
+       "s_star": 12.3079947421875,
+       "b": [
+        127.40202074799664,
+        4
+       ],
+       "fresh_share": 0.9727442809651801,
+       "fresh_charged_share": 0.9251629183363482,
+       "fit_delta_bits": 143510.3874247762,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -676,14 +1699,16 @@
       "t": null,
       "inner_steps": 2,
       "syncs": 32,
-      "sync_bits": 1024
+      "sync_bits": 1024,
+      "workers": 4,
+      "vocab": 50304
      },
      "inputs": {
-      "C_gates": 4124599212688015.5,
+      "C_gates": 5035067524137616.0,
       "w_gates": 233962973207.04,
       "w_fwd_gates": 75962004288.0,
-      "sigma": 0.9293628678472258,
-      "tau_bits": 16,
+      "sigma": 0.7613104163246918,
+      "tau_bits": 16.0,
       "a_bits": 8192.0,
       "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
       "u_in_points": "0:0;1:7.20478e8",
@@ -695,33 +1720,223 @@
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 720478208.0,
+      "delta_bits": 40960.0,
+      "decoder_gates": 119789042282004.48,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 19267584.0,
+        "entries": 32256.0,
+        "layers": 1.0,
+        "count": 16384,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 25755648.0,
+        "entries": 50304.0,
+        "layers": 1.0,
+        "count": 16384,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3145728.0,
+        "entries": 49152.0,
+        "layers": 1.0,
+        "count": 16384,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3145728.0,
+        "entries": 3072.0,
+        "layers": 1.0,
+        "count": 16384,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 27392.0,
+        "layers": 1.0,
+        "count": 16384,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 703488.0,
+        "layers": 1.0,
+        "count": 16384,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3145728.0,
+        "entries": 49152.0,
+        "layers": 1.0,
+        "count": 16384,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 9437184.0,
+        "entries": 9216.0,
+        "layers": 1.0,
+        "count": 16384,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.7414399480282954,
+      "steps": [
+       {
+        "count": 256,
+        "delta_g": 1440956416,
+        "delta_t": 40960.0,
+        "tokens": 64.0,
+        "w": 233962973207.04,
+        "partials": 0.0
+       },
+       {
+        "count": 32,
+        "delta_g": 1024.0,
+        "delta_t": 40960.0,
+        "tokens": 0.0,
+        "w": 0.0,
+        "partials": 4
+       }
+      ]
+     },
      "rho": {
       "default": {
-       "rho": 1.5409102571371325,
+       "rho": 1.5415345414807684,
        "basis": "fit",
-       "s": 1458.552581032304,
+       "binding_kind": "decoding",
+       "rests_on": "Fit's construction (te_core.formalism): every block reads \u0394 and its tokens' ids, and runs the decoder",
+       "bound": 1.5415345414807684,
+       "terms": {
+        "token": 0.0,
+        "decoding": 1.5415345414807684
+       },
+       "te_core": {
+        "rho": 1.5415345414807684,
+        "basis": "fit"
+       },
+       "fit": true,
+       "fit_fails": [],
+       "rho_fit": 1.5415345414807684,
+       "s": 1457.4613894064646,
        "x0": 1.0,
        "s_star": 5.541168,
-       "fit_delta_bits": 42199.15870348313,
+       "b": [
+        0.04391196944576577,
+        4
+       ],
+       "fresh_share": 0.0,
+       "fresh_charged_share": 0.0,
+       "fit_delta_bits": 42216.617769496566,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 489.2336630580104,
-       "basis": "target",
-       "s": 1458.552581032304,
-       "x0": 4.548090370555663e-05,
-       "s_star": 2.770584,
-       "fit_delta_bits": 9431.158703483135,
-       "fit_delta_grad_bits": 16384.0
-      },
-      "looser": {
-       "rho": 1.1151317585871416,
-       "basis": "fit",
-       "s": 4959.078775509834,
+      "default_full": {
+       "rho": 2.1836226742892615,
+       "basis": "update",
+       "binding_kind": "update",
+       "rests_on": "the counting lemma: each step's update reads \u0394_t + \u0394_g, the weights and the gradient (05:18Z; a block keeping a coordinate across steps reads its weight once, so this may overstate)",
+       "bound": 2.1836226742892615,
+       "terms": {
+        "token": 0.0,
+        "reduction": 0.15977726885043378,
+        "update": 2.1836226742892615
+       },
+       "te_core": {
+        "rho": 1.0,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute"
+       ],
+       "rho_fit": 1.2875830712239893,
+       "s": 2292.355143370799,
        "x0": 1.0,
-       "s_star": 27.0,
-       "fit_delta_bits": 182798.73959184266,
-       "fit_delta_grad_bits": 131072.0
+       "s_star": 5.541168,
+       "b": [
+        0.02791888516274623,
+        4
+       ],
+       "fresh_share": 0.0,
+       "fresh_charged_share": 0.0,
+       "fit_delta_bits": 28858.317706067217,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "served": {
+       "rho": 78360.83206272579,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 78360.83206272579,
+       "terms": {
+        "fresh_products": 78360.83206272579,
+        "token": 7.9529881870920445,
+        "reduction": 0.0040354384710544495,
+        "update": 0.05515099243774414
+       },
+       "te_core": {
+        "rho": 7.9529881870920445,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "update"
+       ],
+       "rho_fit": null,
+       "s": 128.60078595148684,
+       "x0": 0.00020204358491853234,
+       "s_star": 12.3079947421875,
+       "b": [
+        0.4976641435468619,
+        4
+       ],
+       "fresh_share": 0.7414399480282954,
+       "fresh_charged_share": 0.5913581519267044,
+       "fit_delta_bits": 143510.3874247762,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -804,7 +2019,7 @@
       "e4m3",
       "fp4"
      ],
-     "why": "the rollouts' weight GEMMs"
+     "why": "the rollouts' weight GEMMs (fp4: W4A4)"
     },
     {
      "name": "prompt_tokens",
@@ -831,10 +2046,10 @@
      "unit": "sequences",
      "default": 1.0,
      "range": [
-      1.0,
+      0.01,
       16.0
      ],
-     "why": "rollouts generated for each one trained on (1: each once; 4: one in four kept)"
+     "why": "rollouts generated for each one trained on (1: each once; 4: one in four kept; 0.01: rounds every 100 steps, as the island's)"
     },
     {
      "name": "optimizer",
@@ -845,7 +2060,7 @@
       "muon",
       "sgd"
      ],
-     "why": "sets Delta_grad (the state) and the optimizer's gates"
+     "why": "sets Delta_grad (the state), the optimizer's gates and Muon's fresh Newton-Schulz products"
     },
     {
      "name": "batch_tokens",
@@ -855,7 +2070,7 @@
       10000.0,
       10000000.0
      ],
-     "why": "sets the optimizer's share, 1 - sigma"
+     "why": "sets the optimizer's share, 1 - sigma, and b, a step's token blocks"
     },
     {
      "name": "t",
@@ -865,7 +2080,7 @@
       0.0,
       0.999
      ],
-     "why": "A1's free share: None is the larger of the two kinds' (the learner's te_core literal t, or a LoRA's modelled one); 0 is evenly spread"
+     "why": "A1's free share, the token kind's: None is the larger of the two kinds' (the learner's te_core literal t, or a LoRA's modelled one); 0 is evenly spread"
     },
     {
      "name": "tokens",
@@ -876,6 +2091,16 @@
       100000000000.0
      ],
      "why": "sets |C| only"
+    },
+    {
+     "name": "vocab",
+     "unit": "ids",
+     "default": 50304,
+     "range": [
+      1000,
+      262144
+     ],
+     "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
     }
    ],
    "points": {
@@ -893,7 +2118,8 @@
       "optimizer": "adamw",
       "batch_tokens": 65536,
       "t": null,
-      "tokens": 100000000.0
+      "tokens": 100000000.0,
+      "vocab": 50304
      },
      "inputs": {
       "C_gates": 2.5596603614788248e+19,
@@ -912,33 +2138,270 @@
       "alpha_ratio": 0.5468740831521882
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 202634496.0,
+      "delta_bits": 720478208,
+      "decoder_gates": 0.0,
+      "fresh": [
+       {
+        "kind": "gemm/fp4",
+        "macs": 3211264.0,
+        "entries": 5376.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/fp4",
+        "macs": 25755648.0,
+        "entries": 50304.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 278528.0,
+        "entries": 4352.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 278528.0,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3211264.0,
+        "entries": 5376.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 25755648.0,
+        "entries": 50304.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 27392.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 687.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3145728.0,
+        "entries": 49152.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 9437184.0,
+        "entries": 9216.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.9684041714377684,
+      "steps": [
+       {
+        "count": 1525.87890625,
+        "delta_g": 1440956416,
+        "delta_t": 720478208,
+        "tokens": 65536,
+        "w": 233962973207.04,
+        "partials": 0.0
+       }
+      ]
+     },
      "rho": {
       "default": {
-       "rho": 263.0646042726356,
-       "basis": "target",
-       "s": 2667.072048148983,
+       "rho": 4668985.970498238,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 4668985.970498238,
+       "terms": {
+        "fresh_products": 4668985.970498238,
+        "token": 262.8677969055444,
+        "reduction": 19650.263168447513,
+        "update": 670.4155669122925
+       },
+       "te_core": {
+        "rho": 262.8677969055444,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 2665.0767229736707,
        "x0": 0.00032341975968395824,
        "s_star": 5.541168,
-       "fit_delta_bits": 3303.2059719332683,
+       "b": [
+        44.965856712464145
+       ],
+       "fresh_share": 0.9684041714377684,
+       "fresh_charged_share": 0.9269504426143864,
+       "fit_delta_bits": 3349.7643919581096,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 526.2143163619161,
-       "basis": "target",
-       "s": 2667.072048148983,
-       "x0": 0.00016170987984197912,
-       "s_star": 2.770584,
-       "fit_delta_bits": -29464.79402806673,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 7343572.928649867,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 7343572.928649867,
+       "terms": {
+        "fresh_products": 7343572.928649867,
+        "token": 413.4492691489907,
+        "reduction": 19394.235450918077,
+        "update": 1054.4571432064497
+       },
+       "te_core": {
+        "rho": 413.4492691489907,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 4191.7421468533275,
+       "x0": 0.00032341975968395824,
+       "s_star": 5.541168,
+       "b": [
+        28.58893840665214
+       ],
+       "fresh_share": 0.9684041714377684,
+       "fresh_charged_share": 0.9269504426143864,
+       "fit_delta_bits": -32273.065872418258,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 223.387888699296,
-       "basis": "target",
-       "s": 9068.044963706543,
-       "x0": 0.001293679038735833,
-       "s_star": 22.164672,
-       "fit_delta_bits": 50552.50030457313,
-       "fit_delta_grad_bits": 131072.0
+      "served": {
+       "rho": 121617.69414596743,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 121617.69414596743,
+       "terms": {
+        "fresh_products": 121617.69414596743,
+        "token": 10.438217645073683,
+        "reduction": 9030.18543546194,
+        "update": 26.632054436709232
+       },
+       "te_core": {
+        "rho": 10.438217645073683,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 235.15611712705507,
+       "x0": 0.0007183771908214482,
+       "s_star": 12.3079947421875,
+       "b": [
+        509.6080829919866
+       ],
+       "fresh_share": 0.9684041714377684,
+       "fresh_charged_share": 0.9066229351890109,
+       "fit_delta_bits": 140080.92580874797,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -967,16 +2430,16 @@
      },
      "sensitivity": {
       "default": {
-       "tokens_worth": 481.0332257040384,
-       "per_kind": 773.5082446564106
+       "tokens_worth": 480.67334877230155,
+       "per_kind": 772.9295574496119
       },
-      "tighter": {
-       "tokens_worth": 962.222077390852,
-       "per_kind": 1547.2107919171633
+      "default_full": {
+       "tokens_worth": 756.0227882182029,
+       "per_kind": 1215.695358629357
       },
-      "looser": {
-       "tokens_worth": 408.481395592356,
-       "per_kind": 656.9865363168767
+      "served": {
+       "tokens_worth": 19.087058550859975,
+       "per_kind": 30.694972672601665
       }
      }
     },
@@ -994,7 +2457,8 @@
       "optimizer": "adamw",
       "batch_tokens": 65536,
       "t": null,
-      "tokens": 100000000.0
+      "tokens": 100000000.0,
+      "vocab": 50304
      },
      "inputs": {
       "C_gates": 1.9321194269701997e+19,
@@ -1013,33 +2477,294 @@
       "alpha_ratio": 0.5688045535989597
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 15138816.0,
+      "delta_bits": 15138816.0,
+      "decoder_gates": 4382720262144.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 71680.0,
+        "entries": 112.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 0.6571428571428571,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 86016.0,
+        "entries": 5376.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 278528.0,
+        "entries": 4352.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 278528.0,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 71680.0,
+        "entries": 112.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 0.6571428571428571,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 86016.0,
+        "entries": 5376.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 516096.0,
+        "entries": 672.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 516096.0,
+        "entries": 7.875,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 405504.0,
+        "entries": 25344.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 405504.0,
+        "entries": 6.1875,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3145728.0,
+        "entries": 49152.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 9437184.0,
+        "entries": 9216.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.19843406816793702,
+      "steps": [
+       {
+        "count": 1525.87890625,
+        "delta_g": 30277632.0,
+        "delta_t": 15138816.0,
+        "tokens": 65536,
+        "w": 169839079083.52,
+        "partials": 0.0
+       }
+      ]
+     },
      "rho": {
       "default": {
-       "rho": 254.25886776442803,
-       "basis": "target",
-       "s": 3532.3890600590203,
+       "rho": 809611.558338832,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 809611.558338832,
+       "terms": {
+        "fresh_products": 809611.558338832,
+        "token": 254.06864826126585,
+        "reduction": 393.6703379969658,
+        "update": 18.662229542685584
+       },
+       "te_core": {
+        "rho": 254.06864826126585,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0130202003508553,
+       "s": 3529.7463624890675,
        "x0": 0.004329004329004329,
        "s_star": 7.868067230740335,
-       "fit_delta_bits": 7131.755590365465,
+       "b": [
+        32.641744928964805
+       ],
+       "fresh_share": 0.19843406816793702,
+       "fresh_charged_share": 0.16285302742292468,
+       "fit_delta_bits": 7175.449745270846,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 509.62320886696233,
-       "basis": "target",
-       "s": 3532.3890600590203,
-       "x0": 0.0021645021645021645,
-       "s_star": 3.9340336153701676,
-       "fit_delta_bits": -25636.244409634535,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 1273390.3164640754,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 1273390.3164640754,
+       "terms": {
+        "fresh_products": 1273390.3164640754,
+        "token": 399.609606706742,
+        "reduction": 386.5433435331733,
+        "update": 29.35272123837438
+       },
+       "te_core": {
+        "rho": 399.609606706742,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0082390709223725,
+       "s": 5551.7300750871555,
+       "x0": 0.004329004329004329,
+       "s_star": 7.868067230740335,
+       "b": [
+        20.753364963713715
+       ],
+       "fresh_share": 0.19843406816793702,
+       "fresh_charged_share": 0.16285302742292468,
+       "fit_delta_bits": -26255.870795877534,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 213.30108058759305,
-       "basis": "target",
-       "s": 12010.12280420067,
-       "x0": 0.017316017316017316,
-       "s_star": 31.47226892296134,
-       "fit_delta_bits": 63569.56900724259,
-       "fit_delta_grad_bits": 131072.0
+      "served": {
+       "rho": 19983.29532393343,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 19983.29532393343,
+       "terms": {
+        "fresh_products": 19983.29532393343,
+        "token": 10.039211756068015,
+        "reduction": 182.34089791930154,
+        "update": 0.7413513910189196
+       },
+       "te_core": {
+        "rho": 10.039211756068015,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.1705000145988655,
+       "s": 311.451239617643,
+       "x0": 0.009615547213203464,
+       "s_star": 17.47648331671767,
+       "b": [
+        369.9361754660445
+       ],
+       "fresh_share": 0.19843406816793702,
+       "fresh_charged_share": 0.15080601215039935,
+       "fit_delta_bits": 140418.48956639884,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -1068,16 +2793,16 @@
      },
      "sensitivity": {
       "default": {
-       "tokens_worth": 447.0056826297761,
-       "per_kind": 457.3312018282698
+       "tokens_worth": 446.6712628331014,
+       "per_kind": 456.98905716776204
       },
-      "tighter": {
-       "tokens_worth": 895.9548682275079,
-       "per_kind": 916.6508001862278
+      "default_full": {
+       "tokens_worth": 702.5429107033663,
+       "per_kind": 718.7711614709104
       },
-      "looser": {
-       "tokens_worth": 374.99889766702313,
-       "per_kind": 383.6611104033247
+      "served": {
+       "tokens_worth": 17.649668401118756,
+       "per_kind": 18.057363419335644
       }
      }
     },
@@ -1095,7 +2820,8 @@
       "optimizer": "adamw",
       "batch_tokens": 65536,
       "t": null,
-      "tokens": 100000000.0
+      "tokens": 100000000.0,
+      "vocab": 50304
      },
      "inputs": {
       "C_gates": 1.47132279631785e+19,
@@ -1114,33 +2840,289 @@
       "alpha_ratio": 0.5629790276600861
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 16384.0,
+      "delta_bits": 16384.0,
+      "decoder_gates": 9938141184.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 512.0,
+        "entries": 1.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 0.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 512.0,
+        "entries": 512.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 278528.0,
+        "entries": 4352.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 278528.0,
+        "entries": 512.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 512.0,
+        "entries": 1.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 0.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 512.0,
+        "entries": 512.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 512.0,
+        "entries": 1.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 512.0,
+        "entries": 0.0078125,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 0.0,
+        "entries": 0.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 0.0,
+        "entries": 0.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 0.0,
+        "entries": 0.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 0.0,
+        "entries": 0.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 256,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 2.0602521809531924e-05,
+      "steps": [
+       {
+        "count": 1525.87890625,
+        "delta_g": 32768.0,
+        "delta_t": 16384.0,
+        "tokens": 65536,
+        "w": 125197122265.6,
+        "partials": 0.0
+       }
+      ]
+     },
      "rho": {
       "default": {
        "rho": 1.0,
-       "basis": "target",
-       "s": 4638.64629780481,
+       "basis": "none",
+       "binding_kind": null,
+       "rests_on": "nothing: no kind's term exceeds 1 and Fit fails (compute, reduction, update), so rho >= 1 is all the menu gives",
+       "bound": 1.0,
+       "terms": {
+        "token": 0.0,
+        "reduction": 0.4077759060278901,
+        "update": 0.026522689376974596
+       },
+       "te_core": {
+        "rho": 1.0,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0000291456422365,
+       "s": 4635.175972455407,
        "x0": 1.0,
        "s_star": 7.999738768544032,
-       "fit_delta_bits": 3307.6207247167404,
+       "b": [
+        24.061909384379582
+       ],
+       "fresh_share": 0.0,
+       "fresh_charged_share": 0.0,
+       "fit_delta_bits": 3354.1758419184043,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
+      "default_full": {
        "rho": 1.0,
-       "basis": "target",
-       "s": 4638.64629780481,
+       "basis": "none",
+       "binding_kind": null,
+       "rests_on": "nothing: no kind's term exceeds 1 and Fit fails (compute, reduction, update), so rho >= 1 is all the menu gives",
+       "bound": 1.0,
+       "terms": {
+        "token": 0.0,
+        "reduction": 0.3976470487055519,
+        "update": 0.04171597536048188
+       },
+       "te_core": {
+        "rho": 1.0,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.000018530373639,
+       "s": 7290.395174869093,
        "x0": 1.0,
-       "s_star": 3.999869384272016,
-       "fit_delta_bits": -29460.37927528326,
-       "fit_delta_grad_bits": 16384.0
+       "s_star": 7.999738768544032,
+       "b": [
+        15.298372935165089
+       ],
+       "fresh_share": 0.0,
+       "fresh_charged_share": 0.0,
+       "fit_delta_bits": -32266.127362705607,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 1.0000085656582538,
-       "basis": "fit",
-       "s": 15771.397412536357,
+      "served": {
+       "rho": 1.0,
+       "basis": "none",
+       "binding_kind": null,
+       "rests_on": "nothing: no kind's term exceeds 1 and Fit fails (reduction), so rho >= 1 is all the menu gives",
+       "bound": 1.0,
+       "terms": {
+        "token": 0.0,
+        "reduction": 0.19084241203628724,
+        "update": 0.001053605766567658
+       },
+       "te_core": {
+        "rho": 1.0,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "reduction"
+       ],
+       "rho_fit": 1.0003304135740407,
+       "s": 408.99009566487564,
        "x0": 1.0,
-       "s_star": 31.998955074176127,
-       "fit_delta_bits": 50567.510464036925,
-       "fit_delta_grad_bits": 131072.0
+       "s_star": 17.768951004934962,
+       "b": [
+        272.69898565285445
+       ],
+       "fresh_share": 0.0,
+       "fresh_charged_share": 0.0,
+       "fit_delta_bits": 140081.31505812102,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -1172,13 +3154,13 @@
        "tokens_worth": 1.0,
        "per_kind": 1.0
       },
-      "tighter": {
+      "default_full": {
        "tokens_worth": 1.0,
        "per_kind": 1.0
       },
-      "looser": {
-       "tokens_worth": 1.0000085656582538,
-       "per_kind": 1.0000085656582538
+      "served": {
+       "tokens_worth": 1.0,
+       "per_kind": 1.0
       }
      }
     }
@@ -1208,7 +3190,7 @@
       "e4m3",
       "fp4"
      ],
-     "why": "the served weights' format"
+     "why": "the served weights' format (fp4: W4A4)"
     },
     {
      "name": "prompt_tokens",
@@ -1238,7 +3220,7 @@
       0.0,
       0.95
      ],
-     "why": "A1's free share: None is attention's modelled share; 0 is evenly spread"
+     "why": "A1's free share, the token kind's: None is attention's modelled share; 0 is evenly spread"
     },
     {
      "name": "tokens",
@@ -1249,6 +3231,16 @@
       10000000000000.0
      ],
      "why": "sets |C| only"
+    },
+    {
+     "name": "vocab",
+     "unit": "ids",
+     "default": 50304,
+     "range": [
+      1000,
+      262144
+     ],
+     "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
     }
    ],
    "points": {
@@ -1259,7 +3251,8 @@
       "prompt_tokens": 4096,
       "generated_tokens": 1024,
       "t": null,
-      "tokens": 1000000000.0
+      "tokens": 1000000000.0,
+      "vocab": 50304
      },
      "inputs": {
       "C_gates": 5.6052509476672e+19,
@@ -1278,33 +3271,150 @@
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 202634496.0,
+      "delta_bits": 202634496.0,
+      "decoder_gates": 0.0,
+      "fresh": [
+       {
+        "kind": "gemm/fp4",
+        "macs": 3211264.0,
+        "entries": 5376.0,
+        "layers": 6.0,
+        "count": 1000000000.0,
+        "positions": 5120,
+        "inputs": 4096,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/fp4",
+        "macs": 25755648.0,
+        "entries": 50304.0,
+        "layers": 1.0,
+        "count": 1000000000.0,
+        "positions": 5120,
+        "inputs": 4096,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 2149580.8,
+        "entries": 33587.2,
+        "layers": 6.0,
+        "count": 1000000000.0,
+        "positions": 5120,
+        "inputs": 4096,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 2149580.8,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 1000000000.0,
+        "positions": 5120,
+        "inputs": 4096,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       }
+      ],
+      "fresh_share": 0.950088126801239,
+      "steps": []
+     },
      "rho": {
       "default": {
-       "rho": 1040.6801808382133,
-       "basis": "target",
-       "s": 6087.993233900451,
+       "rho": 4195592.689817776,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 4195592.689817776,
+       "terms": {
+        "fresh_products": 4195592.689817776,
+        "token": 1039.9016134329136
+       },
+       "te_core": {
+        "rho": 1039.9016134329136,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 6083.438603973913,
        "x0": 0.00032341975968395824,
        "s_star": 5.848121611857556,
-       "fit_delta_bits": -12390.313393925768,
+       "b": [],
+       "fresh_share": 0.950088126801239,
+       "fresh_charged_share": 0.7881653649191078,
+       "fit_delta_bits": -12332.014130866082,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 2081.6970471011405,
-       "basis": "target",
-       "s": 6087.993233900451,
-       "x0": 0.00016170987984197912,
-       "s_star": 2.924060805928778,
-       "fit_delta_bits": -45158.31339392577,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 6599000.530579712,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 6599000.530579712,
+       "terms": {
+        "fresh_products": 6599000.530579712,
+        "token": 1635.5999750520443
+       },
+       "te_core": {
+        "rho": 1635.5999750520443,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 9568.282133963894,
+       "x0": 0.00032341975968395824,
+       "s_star": 5.848121611857556,
+       "b": [],
+       "fresh_share": 0.950088126801239,
+       "fresh_charged_share": 0.7881653649191078,
+       "fit_delta_bits": -56938.01131473784,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 883.7196058794615,
-       "basis": "target",
-       "s": 20699.176995261532,
-       "x0": 0.001293679038735833,
-       "s_star": 23.392486447430223,
-       "fit_delta_bits": -2805.4655393476132,
-       "fit_delta_grad_bits": 131072.0
+      "served": {
+       "rho": 100681.97155738794,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 100681.97155738794,
+       "terms": {
+        "fresh_products": 100681.97155738794,
+        "token": 41.29345434570835
+       },
+       "te_core": {
+        "rho": 41.29345434570835,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 536.7792186091863,
+       "x0": 0.0007183771908214482,
+       "s_star": 12.989797466962901,
+       "b": [],
+       "fresh_share": 0.950088126801239,
+       "fresh_charged_share": 0.7087639156907389,
+       "fit_delta_bits": 138697.22600180242,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -1314,66 +3424,184 @@
       "t_counted": 0.7310152014821945
      }
     },
-    "evenly spread": {
+    "bf16": {
      "dials": {
       "n_params": 45029888,
-      "precision": "fp4",
+      "precision": "bf16",
       "prompt_tokens": 4096,
       "generated_tokens": 1024,
-      "t": 0.0,
-      "tokens": 1000000000.0
+      "t": null,
+      "tokens": 1000000000.0,
+      "vocab": 50304
      },
      "inputs": {
-      "C_gates": 5.6052509476672e+19,
-      "w_gates": 56052509476.672,
-      "w_fwd_gates": 53257052347.2,
+      "C_gates": 1.07625099484672e+20,
+      "w_gates": 107625099484.672,
+      "w_fwd_gates": 104829642355.2,
       "sigma": 1.0,
       "tau_bits": 12.8,
       "a_bits": 8192.0,
-      "u_points": "0:0;1:2.02634e8",
-      "u_in_points": "0:0;1:2.02634e8",
-      "delta_bits": 202634496.0,
-      "delta_t_bits": 202634496.0,
+      "u_points": "0:0;0.380722:0;0.380722:2.74302e8;1:7.20478e8",
+      "u_in_points": "0:0;1:7.20478e8",
+      "delta_bits": 720478208.0,
+      "delta_t_bits": 720478208.0,
       "d_gates": 0.0,
       "delta_grad_bits": 0.0,
-      "w_fit_gates": 56052509476.672,
+      "w_fit_gates": 107625099484.672,
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 720478208.0,
+      "delta_bits": 720478208.0,
+      "decoder_gates": 0.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 3211264.0,
+        "entries": 5376.0,
+        "layers": 6.0,
+        "count": 1000000000.0,
+        "positions": 5120,
+        "inputs": 4096,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 25755648.0,
+        "entries": 50304.0,
+        "layers": 1.0,
+        "count": 1000000000.0,
+        "positions": 5120,
+        "inputs": 4096,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 2149580.8,
+        "entries": 33587.2,
+        "layers": 6.0,
+        "count": 1000000000.0,
+        "positions": 5120,
+        "inputs": 4096,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 2149580.8,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 1000000000.0,
+        "positions": 5120,
+        "inputs": 4096,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       }
+      ],
+      "fresh_share": 0.9739344367168596,
+      "steps": []
+     },
      "rho": {
       "default": {
-       "rho": 9408862.746263513,
-       "basis": "target",
-       "s": 6087.993233900451,
-       "x0": 0.00032341975968395824,
-       "s_star": 0.0006468395193679165,
-       "fit_delta_bits": -12390.313393925768,
+       "rho": 4397601.997289,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 4397601.997289,
+       "terms": {
+        "fresh_products": 4397601.997289,
+        "token": 1040.143425039189
+       },
+       "te_core": {
+        "rho": 1040.143425039189,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 3168.3315660819826,
+       "x0": 9.096180741111325e-05,
+       "s_star": 3.0457755081198474,
+       "b": [],
+       "fresh_share": 0.9739344367168596,
+       "fresh_charged_share": 0.8845758083407838,
+       "fit_delta_bits": 24981.35595415062,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 37641538.97828795,
-       "basis": "target",
-       "s": 6087.993233900451,
-       "x0": 0.00016170987984197912,
-       "s_star": 0.00016170987984197912,
-       "fit_delta_bits": -45158.31339392577,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 6916729.067579939,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 6916729.067579939,
+       "terms": {
+        "fresh_products": 6916729.067579939,
+        "token": 1635.9803062796168
+       },
+       "te_core": {
+        "rho": 1635.9803062796168,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 4983.282036973786,
+       "x0": 9.096180741111325e-05,
+       "s_star": 3.0457755081198474,
+       "b": [],
+       "fresh_share": 0.9739344367168596,
+       "fresh_charged_share": 0.8845758083407838,
+       "fit_delta_bits": 1749.9899267355431,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 1997442.7857376905,
-       "basis": "target",
-       "s": 20699.176995261532,
-       "x0": 0.001293679038735833,
-       "s_star": 0.010349432309886664,
-       "fit_delta_bits": -2805.4655393476132,
-       "fit_delta_grad_bits": 131072.0
+      "served": {
+       "rho": 111408.70532657288,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 111408.70532657288,
+       "terms": {
+        "fresh_products": 111408.70532657288,
+        "token": 41.31479087156435
+       },
+       "te_core": {
+        "rho": 41.31479087156435,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 279.56138839395095,
+       "x0": 0.00020204358491853234,
+       "s_star": 6.765250384002532,
+       "b": [],
+       "fresh_share": 0.9739344367168596,
+       "fresh_charged_share": 0.8407573574222866,
+       "fit_delta_bits": 141989.61422855742,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
       "d_model": 512.0,
       "n_layer": 6.0,
       "span": 4198.4,
-      "t_counted": 0.7310152014821945
+      "t_counted": 0.38072193851498093
      }
     },
     "7B": {
@@ -1383,7 +3611,8 @@
       "prompt_tokens": 4096,
       "generated_tokens": 1024,
       "t": null,
-      "tokens": 1000000000.0
+      "tokens": 1000000000.0,
+      "vocab": 50304
      },
      "inputs": {
       "C_gates": 4.581018076435386e+21,
@@ -1402,33 +3631,150 @@
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 31500000000.0,
+      "delta_bits": 31500000000.0,
+      "decoder_gates": 0.0,
+      "fresh": [
+       {
+        "kind": "gemm/fp4",
+        "macs": 160648062.18012866,
+        "entries": 38024.10498119789,
+        "layers": 42.4376171665155,
+        "count": 1000000000.0,
+        "positions": 5120,
+        "inputs": 4096,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/fp4",
+        "macs": 182168054.94992176,
+        "entries": 50304.0,
+        "layers": 1.0,
+        "count": 1000000000.0,
+        "positions": 5120,
+        "inputs": 4096,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 15203847.843148684,
+        "entries": 237560.1225491982,
+        "layers": 42.4376171665155,
+        "count": 1000000000.0,
+        "positions": 5120,
+        "inputs": 4096,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 15203847.843148684,
+        "entries": 3621.343331542656,
+        "layers": 42.4376171665155,
+        "count": 1000000000.0,
+        "positions": 5120,
+        "inputs": 4096,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       }
+      ],
+      "fresh_share": 0.9285470175866124,
+      "steps": []
+     },
      "rho": {
       "default": {
-       "rho": 134.85564956981023,
-       "basis": "target",
-       "s": 74.4915852204307,
+       "rho": 4802486.022514204,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 4802486.022514204,
+       "terms": {
+        "fresh_products": 4802486.022514204,
+        "token": 134.754759579678
+       },
+       "te_core": {
+        "rho": 134.754759579678,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 74.43585559158831,
        "x0": 2.0805079365079367e-06,
        "s_star": 0.5523790102804312,
-       "fit_delta_bits": 64582.507709178484,
+       "b": [],
+       "fresh_share": 0.9285470175866124,
+       "fresh_charged_share": 0.8439340186637652,
+       "fit_delta_bits": 64583.22104842767,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 269.71157970845337,
-       "basis": "target",
-       "s": 74.4915852204307,
-       "x0": 1.0402539682539683e-06,
-       "s_star": 0.2761895051402156,
-       "fit_delta_bits": 31814.507709178488,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 7553547.294422737,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 7553547.294422737,
+       "terms": {
+        "fresh_products": 7553547.294422737,
+        "token": 211.94782137039581
+       },
+       "te_core": {
+        "rho": 211.94782137039581,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 117.07577137674438,
+       "x0": 2.0805079365079367e-06,
+       "s_star": 0.5523790102804312,
+       "b": [],
+       "fresh_share": 0.9285470175866124,
+       "fresh_charged_share": 0.8439340186637652,
+       "fit_delta_bits": 64037.43012637767,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 114.6265866838147,
-       "basis": "target",
-       "s": 253.27138974946433,
-       "x0": 8.322031746031747e-06,
-       "s_star": 2.209516041121725,
-       "fit_delta_bits": 258902.12621120687,
-       "fit_delta_grad_bits": 131072.0
+      "served": {
+       "rho": 122354.30165498353,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 122354.30165498353,
+       "terms": {
+        "fresh_products": 122354.30165498353,
+        "token": 5.353078227572909
+       },
+       "te_core": {
+        "rho": 5.353078227572909,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 6.567933532666641,
+       "x0": 4.621206349206349e-06,
+       "s_star": 1.2269395106277743,
+       "b": [],
+       "fresh_share": 0.9285470175866124,
+       "fresh_charged_share": 0.8024426640207224,
+       "fit_delta_bits": 145483.93045078186,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -1526,7 +3872,7 @@
       10000.0,
       10000000.0
      ],
-     "why": "sets the optimizer's share, 1 - sigma; the pilot's 64 x 1,024"
+     "why": "sets the optimizer's share, 1 - sigma, and b, a step's token blocks; the pilot's 64 x 1,024"
     },
     {
      "name": "t",
@@ -1536,7 +3882,7 @@
       0.0,
       0.9999
      ],
-     "why": "A1's free share: None is the modelled share reading no adapter value; 0 is evenly spread"
+     "why": "A1's free share, the token kind's: None is the modelled share reading no adapter value; 0 is evenly spread"
     },
     {
      "name": "tokens",
@@ -1547,6 +3893,16 @@
       100000000000.0
      ],
      "why": "sets |C| only"
+    },
+    {
+     "name": "vocab",
+     "unit": "ids",
+     "default": 50304,
+     "range": [
+      1000,
+      262144
+     ],
+     "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
     }
    ],
    "points": {
@@ -1561,14 +3917,15 @@
       "seq_len": 1024,
       "batch_tokens": 65536,
       "t": null,
-      "tokens": 100000000.0
+      "tokens": 100000000.0,
+      "vocab": 50304
      },
      "inputs": {
       "C_gates": 1.6768310239219e+19,
       "w_gates": 167682372605.44,
       "w_fwd_gates": 75962004288.0,
       "sigma": 0.9999956478217568,
-      "tau_bits": 16,
+      "tau_bits": 16.0,
       "a_bits": 8192.0,
       "u_points": "0:0;0.991648:0;0.991648:7.50619e6;1:7.56941e6",
       "u_in_points": "0:0;1:7.56941e6",
@@ -1580,33 +3937,246 @@
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 7569408.0,
+      "delta_bits": 7569408.0,
+      "decoder_gates": 2434844590080.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 35840.0,
+        "entries": 56.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 0.6571428571428571,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 43008.0,
+        "entries": 5376.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 258048.0,
+        "entries": 336.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 258048.0,
+        "entries": 3.9375,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 202752.0,
+        "entries": 25344.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 202752.0,
+        "entries": 3.09375,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3145728.0,
+        "entries": 49152.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 9437184.0,
+        "entries": 9216.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.17880483070902717,
+      "steps": [
+       {
+        "count": 1525.87890625,
+        "delta_g": 15138816.0,
+        "delta_t": 7569408.0,
+        "tokens": 65536,
+        "w": 167682372605.44,
+        "partials": 0.0
+       }
+      ]
+     },
      "rho": {
       "default": {
-       "rho": 254.30554669375854,
-       "basis": "target",
-       "s": 2035.0815242821127,
+       "rho": 758226.8716575073,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 758226.8716575073,
+       "terms": {
+        "fresh_products": 758226.8716575073,
+        "token": 254.11529226853904,
+        "reduction": 223.83117715148362,
+        "update": 10.751726243013328
+       },
+       "te_core": {
+        "rho": 254.11529226853904,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0071918272917078,
+       "s": 2033.5590122067335,
        "x0": 0.008658008658008658,
        "s_star": 7.933185165250718,
-       "fit_delta_bits": 32974.6956114862,
+       "b": [
+        32.227242783027506
+       ],
+       "fresh_share": 0.17880483070902717,
+       "fresh_charged_share": 0.15251701911987867,
+       "fit_delta_bits": 32999.05580469227,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 510.8321025289473,
-       "basis": "target",
-       "s": 2035.0815242821127,
-       "x0": 0.004329004329004329,
-       "s_star": 3.966592582625359,
-       "fit_delta_bits": 206.69561148619687,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 1192570.3704534292,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 1192570.3704534292,
+       "terms": {
+        "fresh_products": 1192570.3704534292,
+        "token": 399.68297031744027,
+        "reduction": 219.72515684801982,
+        "update": 16.91075669820902
+       },
+       "te_core": {
+        "rho": 399.68297031744027,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0045605617162399,
+       "s": 3198.4651496521283,
+       "x0": 0.008658008658008658,
+       "s_star": 7.933185165250718,
+       "b": [
+        20.48982775601849
+       ],
+       "fresh_share": 0.17880483070902717,
+       "fresh_charged_share": 0.15251701911987867,
+       "fit_delta_bits": 14360.557605565948,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 210.49614137904774,
-       "basis": "target",
-       "s": 6919.277182559183,
-       "x0": 0.03463203463203463,
-       "s_star": 31.73274066100287,
-       "fit_delta_bits": 151435.56507905308,
-       "fit_delta_grad_bits": 131072.0
+      "served": {
+       "rho": 18766.176926911237,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 18766.176926911237,
+       "terms": {
+        "fresh_products": 18766.176926911237,
+        "token": 9.986988893984446,
+        "reduction": 103.71304938349164,
+        "update": 0.4271090540324323
+       },
+       "te_core": {
+        "rho": 9.986988893984446,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0880499966796744,
+       "s": 179.4334238624429,
+       "x0": 0.019231094426406928,
+       "s_star": 17.62112271324488,
+       "b": [
+        365.2385301984827
+       ],
+       "fresh_share": 0.17880483070902717,
+       "fresh_charged_share": 0.1416209018472967,
+       "fit_delta_bits": 142697.0652182009,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -1615,6 +4185,568 @@
       "adapter_values": 473088.0,
       "w_gates": 167682372605.44,
       "t_counted": 0.9916481456563397
+     }
+    },
+    "top layer": {
+     "dials": {
+      "n_params": 45029888,
+      "rank": 8,
+      "targets": "all",
+      "layers": 1,
+      "adapter_bits": 16,
+      "optimizer": "adamw",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 1.25552026780565e+19,
+      "w_gates": 125551905149.44,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.999999031229299,
+      "tau_bits": 16.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.997495:0;0.997495:1.25841e6;1:1.26157e6",
+      "u_in_points": "0:0;1:1.26157e6",
+      "delta_bits": 1261568.0,
+      "delta_t_bits": 1261568.0,
+      "d_gates": 405807431680.0,
+      "delta_grad_bits": 7569408.0,
+      "w_fit_gates": 125551905149.44,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 1261568.0,
+      "delta_bits": 1261568.0,
+      "decoder_gates": 405807431680.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 35840.0,
+        "entries": 56.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 0.6571428571428571,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 43008.0,
+        "entries": 5376.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 43008.0,
+        "entries": 56.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 43008.0,
+        "entries": 0.65625,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 23552.0,
+        "entries": 2944.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 23552.0,
+        "entries": 0.359375,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 1572864.0,
+        "entries": 1536.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.03943880591154657,
+      "steps": [
+       {
+        "count": 1525.87890625,
+        "delta_g": 2523136.0,
+        "delta_t": 1261568.0,
+        "tokens": 65536,
+        "w": 125551905149.44,
+        "partials": 0.0
+       }
+      ]
+     },
+     "rho": {
+      "default": {
+       "rho": 167598.22721118943,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 167598.22721118943,
+       "terms": {
+        "fresh_products": 167598.22721118943,
+        "token": 322.66494623296256,
+        "reduction": 36.904446344395275,
+        "update": 2.3932745368990993
+       },
+       "te_core": {
+        "rho": 322.66494623296256,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0011914970146614,
+       "s": 2715.9444501788266,
+       "x0": 0.05194805194805195,
+       "s_star": 7.979961760359353,
+       "b": [
+        24.130095884577056
+       ],
+       "fresh_share": 0.03943880591154657,
+       "fresh_charged_share": 0.03371231352978607,
+       "fit_delta_bits": 22080.888797138774,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "default_full": {
+       "rho": 263605.3764167687,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 263605.3764167687,
+       "terms": {
+        "fresh_products": 263605.3764167687,
+        "token": 507.5006819795161,
+        "reduction": 35.99046903338847,
+        "update": 3.7642405034093063
+       },
+       "te_core": {
+        "rho": 507.5006819795161,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.000757215844713,
+       "s": 4271.748997764012,
+       "x0": 0.05194805194805195,
+       "s_star": 7.979961760359353,
+       "b": [
+        15.34172537625781
+       ],
+       "fresh_share": 0.03943880591154657,
+       "fresh_charged_share": 0.03371231352978607,
+       "fit_delta_bits": -2811.983964224186,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "served": {
+       "rho": 4146.105001039585,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 4146.105001039585,
+       "terms": {
+        "fresh_products": 4146.105001039585,
+        "token": 11.960071116243439,
+        "reduction": 17.269642034961294,
+        "update": 0.0950721028782815
+       },
+       "te_core": {
+        "rho": 11.960071116243439,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0136718290294087,
+       "s": 239.64448968065858,
+       "x0": 0.11538656655844155,
+       "s_star": 17.725022484313815,
+       "b": [
+        273.47175846743175
+       ],
+       "fresh_share": 0.03943880591154657,
+       "fresh_charged_share": 0.031289011698423616,
+       "fit_delta_bits": 141733.68816510946,
+       "fit_delta_grad_bits": 72784.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "adapter_values": 78848.0,
+      "w_gates": 125551905149.44,
+      "t_counted": 0.9974952200449191
+     }
+    },
+    "MLP, top layer": {
+     "dials": {
+      "n_params": 45029888,
+      "rank": 8,
+      "targets": "mlp",
+      "layers": 1,
+      "adapter_bits": 16,
+      "optimizer": "adamw",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0,
+      "vocab": 50304
+     },
+     "inputs": {
+      "C_gates": 1.25402593965685e+19,
+      "w_gates": 125402522882.56,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9999994331606488,
+      "tau_bits": 16.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.998534:0;0.998534:736199;1:737280",
+      "u_in_points": "0:0;1:737280",
+      "delta_bits": 737280.0,
+      "delta_t_bits": 737280.0,
+      "d_gates": 273298882560.0,
+      "delta_grad_bits": 4423680.0,
+      "w_fit_gates": 125402522882.56,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 737280.0,
+      "delta_bits": 737280.0,
+      "decoder_gates": 273298882560.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 19456.0,
+        "entries": 24.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 0.5789473684210527,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 26624.0,
+        "entries": 3328.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 26624.0,
+        "entries": 24.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 26624.0,
+        "entries": 0.40625,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 11264.0,
+        "entries": 1408.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 11264.0,
+        "entries": 0.171875,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 0.0,
+        "entries": 0.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 0.0,
+        "entries": 0.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.0013415745454678244,
+      "steps": [
+       {
+        "count": 1525.87890625,
+        "delta_g": 1474560.0,
+        "delta_t": 737280.0,
+        "tokens": 65536,
+        "w": 125402522882.56,
+        "partials": 0.0
+       }
+      ]
+     },
+     "rho": {
+      "default": {
+       "rho": 4395.276530867283,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 4395.276530867283,
+       "terms": {
+        "fresh_products": 4395.276530867283,
+        "token": 310.1389044628674,
+        "reduction": 21.566431497403094,
+        "update": 1.4003336230672585
+       },
+       "te_core": {
+        "rho": 310.1389044628674,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0008021246901437,
+       "s": 2719.1797434517366,
+       "x0": 0.08888888888888889,
+       "s_star": 7.9882705374472325,
+       "b": [
+        24.10138577923075
+       ],
+       "fresh_share": 0.0013415745454678244,
+       "fresh_charged_share": 0.0008841080417395704,
+       "fit_delta_bits": 22029.124104772214,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "default_full": {
+       "rho": 6913.071478465532,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 6913.071478465532,
+       "terms": {
+        "fresh_products": 6913.071478465532,
+        "token": 487.7992089343546,
+        "reduction": 21.031652415609273,
+        "update": 2.2025022457579877
+       },
+       "te_core": {
+        "rho": 487.7992089343546,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0005098356323596,
+       "s": 4276.837599924161,
+       "x0": 0.08888888888888889,
+       "s_star": 7.9882705374472325,
+       "b": [
+        15.323471716850348
+       ],
+       "fresh_share": 0.0013415745454678244,
+       "fresh_charged_share": 0.0008841080417395704,
+       "fit_delta_bits": -2893.4015987865714,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "served": {
+       "rho": 116.48544955685429,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 116.48544955685429,
+       "terms": {
+        "fresh_products": 116.48544955685429,
+        "token": 10.852340440961985,
+        "reduction": 10.092607874892662,
+        "update": 0.055627827156287474
+       },
+       "te_core": {
+        "rho": 10.852340440961985,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0091666359814668,
+       "s": 239.92995951245234,
+       "x0": 0.1974392361111111,
+       "s_star": 17.743477868577862,
+       "b": [
+        273.1463804402413
+       ],
+       "fresh_share": 0.0013415745454678244,
+       "fresh_charged_share": 0.0008790695346516021,
+       "fit_delta_bits": 141729.12064780077,
+       "fit_delta_grad_bits": 72784.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "adapter_values": 46080.0,
+      "w_gates": 125402522882.56,
+      "t_counted": 0.9985338171809041
      }
     },
     "rank 1 on W_q": {
@@ -1628,14 +4760,15 @@
       "seq_len": 1024,
       "batch_tokens": 65536,
       "t": null,
-      "tokens": 100000000.0
+      "tokens": 100000000.0,
+      "vocab": 50304
      },
      "inputs": {
       "C_gates": 1.6555368478015e+19,
       "w_gates": 165553675302.4,
       "w_fwd_gates": 75962004288.0,
       "sigma": 0.9999999427511987,
-      "tau_bits": 16,
+      "tau_bits": 16.0,
       "a_bits": 8192.0,
       "u_points": "0:0;0.99989:0;0.99989:98293.2;1:98304",
       "u_in_points": "0:0;1:98304",
@@ -1647,33 +4780,244 @@
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 98304.0,
+      "delta_bits": 98304.0,
+      "decoder_gates": 59628847104.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 512.0,
+        "entries": 1.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 0.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 512.0,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3072.0,
+        "entries": 6.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3072.0,
+        "entries": 0.046875,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 2560.0,
+        "entries": 2560.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 2560.0,
+        "entries": 0.0390625,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 2621440.0,
+        "entries": 40960.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 7864320.0,
+        "entries": 7680.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.1407722304879458,
+      "steps": [
+       {
+        "count": 1525.87890625,
+        "delta_g": 196608.0,
+        "delta_t": 98304.0,
+        "tokens": 65536,
+        "w": 165553675302.4,
+        "partials": 0.0
+       }
+      ]
+     },
      "rho": {
       "default": {
-       "rho": 85.89479412148668,
-       "basis": "target",
-       "s": 2061.248702656697,
+       "rho": 531142.6013103381,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 531142.6013103381,
+       "terms": {
+        "fresh_products": 531142.6013103381,
+        "token": 85.8305333733536,
+        "reduction": 2.905713947388251,
+        "update": 0.14142882129801657
+       },
+       "te_core": {
+        "rho": 85.8305333733536,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0001748993411872,
+       "s": 2059.706614046138,
        "x0": 0.6666666666666666,
        "s_star": 7.999121117621012,
-       "fit_delta_bits": 32556.02075749285,
+       "b": [
+        31.81812378184264
+       ],
+       "fresh_share": 0.12199985324894258,
+       "fresh_charged_share": 0.10683911281374706,
+       "fit_delta_bits": 32580.694175261793,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 343.57917648594673,
-       "basis": "target",
-       "s": 2061.248702656697,
-       "x0": 0.3333333333333333,
-       "s_star": 3.999560558810506,
-       "fit_delta_bits": -211.97924250715005,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 835402.9018037592,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 835402.9018037592,
+       "terms": {
+        "fresh_products": 835402.9018037592,
+        "token": 134.99778866649228,
+        "reduction": 2.8517031217199578,
+        "update": 0.22244505980045676
+       },
+       "te_core": {
+        "rho": 134.99778866649228,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0001111925440311,
+       "s": 3239.5911719255414,
+       "x0": 0.6666666666666666,
+       "s_star": 7.999121117621012,
+       "b": [
+        20.229713109462157
+       ],
+       "fresh_share": 0.12199985324894258,
+       "fresh_charged_share": 0.10683911281374706,
+       "fit_delta_bits": 13702.541249191338,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 1.0,
-       "basis": "target",
-       "s": 7008.245589032769,
+      "served": {
+       "rho": 1.3468809560664068,
+       "basis": "reduction",
+       "binding_kind": "reduction",
+       "rests_on": "the counting lemma: every partial gradient a step sums but one is read by some block, at its passed width",
+       "bound": 1.3468809560664068,
+       "terms": {
+        "token": 0.0,
+        "reduction": 1.3468809560664068,
+        "update": 0.005618216899520709
+       },
+       "te_core": {
+        "rho": 1.0,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0019857620579378,
+       "s": 181.74058765541537,
        "x0": 1.0,
-       "s_star": 31.99648447048405,
-       "fit_delta_bits": 150012.0705754757,
-       "fit_delta_grad_bits": 131072.0
+       "s_star": 17.767579084012688,
+       "b": [
+        360.60189331101907
+       ],
+       "fresh_share": 0.0,
+       "fresh_charged_share": 0.0,
+       "fit_delta_bits": 142660.15059751336,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -1695,14 +5039,15 @@
       "seq_len": 1024,
       "batch_tokens": 65536,
       "t": null,
-      "tokens": 100000000.0
+      "tokens": 100000000.0,
+      "vocab": 50304
      },
      "inputs": {
       "C_gates": 1.25197123845225e+19,
       "w_gates": 125197122265.6,
       "w_fwd_gates": 75962004288.0,
       "sigma": 0.9999999873828971,
-      "tau_bits": 16,
+      "tau_bits": 16.0,
       "a_bits": 8192.0,
       "u_points": "0:0;0.999967:0;0.999967:16383.5;1:16384",
       "u_in_points": "0:0;1:16384",
@@ -1714,33 +5059,240 @@
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 16384.0,
+      "delta_bits": 16384.0,
+      "decoder_gates": 9938141184.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 512.0,
+        "entries": 1.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 0.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 512.0,
+        "entries": 512.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 512.0,
+        "entries": 1.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 512.0,
+        "entries": 0.0078125,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 0.0,
+        "entries": 0.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 0.0,
+        "entries": 0.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 0.0,
+        "entries": 0.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 0.0,
+        "entries": 0.0,
+        "layers": 1.0,
+        "count": 100000000.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 1.815913920523111e-05,
+      "steps": [
+       {
+        "count": 1525.87890625,
+        "delta_g": 32768.0,
+        "delta_t": 16384.0,
+        "tokens": 65536,
+        "w": 125197122265.6,
+        "partials": 0.0
+       }
+      ]
+     },
      "rho": {
       "default": {
        "rho": 1.0,
-       "basis": "target",
-       "s": 2725.6800496834053,
+       "basis": "none",
+       "binding_kind": null,
+       "rests_on": "nothing: no kind's term exceeds 1 and Fit fails (reduction, update), so rho >= 1 is all the menu gives",
+       "bound": 1.0,
+       "terms": {
+        "token": 0.0,
+        "reduction": 0.4792202631345695,
+        "update": 0.031169595835318663
+       },
+       "te_core": {
+        "rho": 1.0,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0000291456422365,
+       "s": 2723.640877915716,
        "x0": 1.0,
        "s_star": 7.999738768544032,
-       "fit_delta_bits": 21925.119205065515,
+       "b": [
+        24.061909384379582
+       ],
+       "fresh_share": 0.0,
+       "fresh_charged_share": 0.0,
+       "fit_delta_bits": 21957.745953348545,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
+      "default_full": {
        "rho": 1.0,
-       "basis": "target",
-       "s": 2725.6800496834053,
+       "basis": "none",
+       "binding_kind": null,
+       "rests_on": "nothing: no kind's term exceeds 1 and Fit fails (compute, reduction, update), so rho >= 1 is all the menu gives",
+       "bound": 1.0,
+       "terms": {
+        "token": 0.0,
+        "reduction": 0.4673167798744981,
+        "update": 0.04902482072542569
+       },
+       "te_core": {
+        "rho": 1.0,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.000018530373639,
+       "s": 4283.85425546516,
        "x0": 1.0,
-       "s_star": 3.999869384272016,
-       "fit_delta_bits": -10842.880794934485,
-       "fit_delta_grad_bits": 16384.0
+       "s_star": 7.999738768544032,
+       "b": [
+        15.298372935165089
+       ],
+       "fresh_share": 0.0,
+       "fresh_charged_share": 0.0,
+       "fit_delta_bits": -3005.6680874425656,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 1.0000085656582538,
-       "basis": "fit",
-       "s": 9267.312168923578,
+      "served": {
+       "rho": 1.0,
+       "basis": "none",
+       "binding_kind": null,
+       "rests_on": "nothing: no kind's term exceeds 1 and Fit fails (reduction), so rho >= 1 is all the menu gives",
+       "bound": 1.0,
+       "terms": {
+        "token": 0.0,
+        "reduction": 0.22427894723875702,
+        "update": 0.0012382027119084357
+       },
+       "te_core": {
+        "rho": 1.0,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "reduction"
+       ],
+       "rho_fit": 1.0003304135740407,
+       "s": 240.32359285497037,
        "x0": 1.0,
-       "s_star": 31.998955074176127,
-       "fit_delta_bits": 113867.00529722276,
-       "fit_delta_grad_bits": 131072.0
+       "s_star": 17.768951004934962,
+       "b": [
+        272.69898565285445
+       ],
+       "fresh_share": 0.0,
+       "fresh_charged_share": 0.0,
+       "fit_delta_bits": 141722.82251432046,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -1766,7 +5318,8 @@
       "seq_len": 1024,
       "batch_tokens": 65536,
       "t": null,
-      "tokens": 100000000.0
+      "tokens": 100000000.0,
+      "vocab": 50304
      },
      "differs": "48,512 trained values against the model's 49,152; u_in front-loaded (a token's forward reads every adapter value in dependency order before most of its work), where the model's A1' is even; d 0, te_core 4.1's stub, where the model's is the harness's decoder (2.4e11 gates, 0.07% of c)",
      "record_inputs": {
@@ -1788,7 +5341,7 @@
       "w_gates": 165749739527.68,
       "w_fwd_gates": 75962004288.0,
       "sigma": 0.9999995425515266,
-      "tau_bits": 16,
+      "tau_bits": 16.0,
       "a_bits": 8192.0,
       "u_points": "0:0;0.999122:0;0.999122:785742;1:786432",
       "u_in_points": "0:0;1:786432",
@@ -1801,16 +5354,16 @@
      },
      "rho": {
       "default": {
-       "record": 254.86673185228332,
-       "model": 236.11252762591502
+       "record": 254.6760575858092,
+       "model": 235.93588400246824
       },
-      "tighter": {
-       "record": 510.8057480155866,
-       "model": 493.6898304905497
+      "default_full": {
+       "record": 400.56496504375804,
+       "model": 371.0896502164281
       },
-      "looser": {
-       "record": 195.58346842570947,
-       "model": 145.96047162329293
+      "served": {
+       "record": 9.716709329833996,
+       "model": 8.33197271257287
       }
      }
     }
@@ -1879,7 +5432,7 @@
       10000.0,
       10000000.0
      ],
-     "why": "sets the optimizer's share, 1 - sigma; the pilot's 64 x 1,024"
+     "why": "sets the optimizer's share, 1 - sigma, and b, a step's token blocks; the pilot's 64 x 1,024"
     },
     {
      "name": "optimizer",
@@ -1890,7 +5443,7 @@
       "muon",
       "sgd"
      ],
-     "why": "sets Delta_grad (the state) and the optimizer's gates"
+     "why": "sets Delta_grad (the state), the optimizer's gates and Muon's fresh Newton-Schulz products"
     },
     {
      "name": "t",
@@ -1900,7 +5453,7 @@
       0.0,
       0.9
      ],
-     "why": "A1's free share: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread"
+     "why": "A1's free share, the token kind's: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread, which overcharges a block"
     },
     {
      "name": "tokens_per_param",
@@ -1911,6 +5464,16 @@
       2000.0
      ],
      "why": "sets |C| only (Chinchilla's 20 by default)"
+    },
+    {
+     "name": "vocab",
+     "unit": "ids",
+     "default": 50304,
+     "range": [
+      1000,
+      262144
+     ],
+     "why": "the vocabulary: the embedding's size and tau's bits an id; 32,000 is the v3 starts' (s-t20)"
     }
    ],
    "points": {
@@ -1924,14 +5487,15 @@
       "batch_tokens": 65536,
       "optimizer": "adamw",
       "t": null,
-      "tokens_per_param": 20.0
+      "tokens_per_param": 20.0,
+      "vocab": 50304
      },
      "inputs": {
       "C_gates": 8.899433411742946e+20,
       "w_gates": 988100151120.023,
       "w_fwd_gates": 75962004288.0,
       "sigma": 0.9999297051654347,
-      "tau_bits": 16,
+      "tau_bits": 16.0,
       "a_bits": 8192.0,
       "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
       "u_in_points": "0:0;1:7.20478e8",
@@ -1943,33 +5507,222 @@
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 720478208.0,
+      "delta_bits": 720478208,
+      "decoder_gates": 0.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 3211264.0,
+        "entries": 5376.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 25755648.0,
+        "entries": 50304.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 27392.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 687.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3145728.0,
+        "entries": 49152.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 9437184.0,
+        "entries": 9216.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.23058435962967883,
+      "steps": [
+       {
+        "count": 13742.03125,
+        "delta_g": 1440956416,
+        "delta_t": 720478208,
+        "tokens": 65536,
+        "w": 988100151120.023,
+        "partials": 0.0
+       }
+      ]
+     },
      "rho": {
       "default": {
-       "rho": 62.3156174979964,
-       "basis": "target",
-       "s": 345.356994481088,
+       "rho": 1109056.8239280295,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 1109056.8239280295,
+       "terms": {
+        "fresh_products": 1109056.8239280295,
+        "token": 62.26899711498306,
+        "reduction": 21869.93237188405,
+        "update": 173.65805702198332
+       },
+       "te_core": {
+        "rho": 62.26899711498306,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 345.09862144387046,
        "x0": 9.096180741111325e-05,
        "s_star": 5.541168,
-       "fit_delta_bits": 60010.288088302594,
+       "b": [
+        189.9051341491936
+       ],
+       "fresh_share": 0.23058435962967883,
+       "fresh_charged_share": 0.22308631775380894,
+       "fit_delta_bits": 60014.422056898075,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 124.63690385283981,
-       "basis": "target",
-       "s": 345.356994481088,
-       "x0": 4.548090370555663e-05,
-       "s_star": 2.770584,
-       "fit_delta_bits": 27242.288088302594,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 1744370.1309008577,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 1744370.1309008577,
+       "terms": {
+        "fresh_products": 1744370.1309008577,
+        "token": 97.93923657024165,
+        "reduction": 21803.613392784693,
+        "update": 273.1365256710087
+       },
+       "te_core": {
+        "rho": 97.93923657024165,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 542.7852878896441,
+       "x0": 9.096180741111325e-05,
+       "s_star": 5.541168,
+       "b": [
+        120.74019223108417
+       ],
+       "fresh_share": 0.23058435962967883,
+       "fresh_charged_share": 0.22308631775380894,
+       "fit_delta_bits": 56851.43539376569,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 52.95381928833704,
-       "basis": "target",
-       "s": 1174.2137812356993,
-       "x0": 0.000363847229644453,
-       "s_star": 22.164672,
-       "fit_delta_bits": 243356.5795002288,
-       "fit_delta_grad_bits": 131072.0
+      "served": {
+       "rho": 29073.943416168913,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 29073.943416168913,
+       "terms": {
+        "fresh_products": 29073.943416168913,
+        "token": 2.4733421676829246,
+        "reduction": 9893.559406370889,
+        "update": 6.898513483634049
+       },
+       "te_core": {
+        "rho": 2.4733421676829246,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 30.45017471545481,
+       "x0": 0.00020204358491853234,
+       "s_star": 12.3079947421875,
+       "b": [
+        2152.237240423372
+       ],
+       "fresh_share": 0.23058435962967883,
+       "fresh_charged_share": 0.21940953146138864,
+       "fit_delta_bits": 145080.7972045527,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -1990,14 +5743,15 @@
       "batch_tokens": 65536,
       "optimizer": "adamw",
       "t": null,
-      "tokens_per_param": 20.0
+      "tokens_per_param": 20.0,
+      "vocab": 50304
      },
      "inputs": {
       "C_gates": 2.1076908801314062e+20,
       "w_gates": 233962973207.04,
       "w_fwd_gates": 75962004288.0,
       "sigma": 0.9997031897773526,
-      "tau_bits": 16,
+      "tau_bits": 16.0,
       "a_bits": 8192.0,
       "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
       "u_in_points": "0:0;1:7.20478e8",
@@ -2009,33 +5763,222 @@
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 720478208.0,
+      "delta_bits": 720478208,
+      "decoder_gates": 0.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 3211264.0,
+        "entries": 5376.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 25755648.0,
+        "entries": 50304.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 27392.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 687.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3145728.0,
+        "entries": 49152.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 9437184.0,
+        "entries": 9216.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.9736105866652403,
+      "steps": [
+       {
+        "count": 13742.03125,
+        "delta_g": 1440956416,
+        "delta_t": 720478208,
+        "tokens": 65536,
+        "w": 233962973207.04,
+        "partials": 0.0
+       }
+      ]
+     },
      "rho": {
       "default": {
-       "rho": 263.1190814852731,
-       "basis": "target",
-       "s": 1458.552581032304,
+       "rho": 4682839.142792734,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 4682839.142792734,
+       "terms": {
+        "fresh_products": 4682839.142792734,
+        "token": 262.9222333619699,
+        "reduction": 21491.892531177793,
+        "update": 733.2471423814515
+       },
+       "te_core": {
+        "rho": 262.9222333619699,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 1457.4613894064646,
        "x0": 9.096180741111325e-05,
        "s_star": 5.541168,
-       "fit_delta_bits": 42199.15870348313,
+       "b": [
+        44.965856712464145
+       ],
+       "fresh_share": 0.9736105866652403,
+       "fresh_charged_share": 0.9419511412400156,
+       "fit_delta_bits": 42216.617769496566,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 526.2620989350211,
-       "basis": "target",
-       "s": 1458.552581032304,
-       "x0": 4.548090370555663e-05,
-       "s_star": 2.770584,
-       "fit_delta_bits": 9431.158703483135,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 7365361.767100143,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 7365361.767100143,
+       "terms": {
+        "fresh_products": 7365361.767100143,
+        "token": 413.5348890438166,
+        "reduction": 21211.869808684143,
+        "update": 1153.281226121931
+       },
+       "te_core": {
+        "rho": 413.5348890438166,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 2292.355143370799,
+       "x0": 9.096180741111325e-05,
+       "s_star": 5.541168,
+       "b": [
+        28.58893840665214
+       ],
+       "fresh_share": 0.9736105866652403,
+       "fresh_charged_share": 0.9419511412400156,
+       "fit_delta_bits": 28858.317706067217,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 223.59018255307126,
-       "basis": "target",
-       "s": 4959.078775509834,
-       "x0": 0.000363847229644453,
-       "s_star": 22.164672,
-       "fit_delta_bits": 182798.73959184266,
-       "fit_delta_grad_bits": 131072.0
+      "served": {
+       "rho": 122760.70741115791,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 122760.70741115791,
+       "terms": {
+        "fresh_products": 122760.70741115791,
+        "token": 10.443345432313976,
+        "reduction": 9876.497492775723,
+        "update": 29.128019657125655
+       },
+       "te_core": {
+        "rho": 10.443345432313976,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 128.60078595148684,
+       "x0": 0.00020204358491853234,
+       "s_star": 12.3079947421875,
+       "b": [
+        509.6080829919866
+       ],
+       "fresh_share": 0.9736105866652403,
+       "fresh_charged_share": 0.926426419333659,
+       "fit_delta_bits": 143510.3874247762,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {
@@ -2056,14 +5999,15 @@
       "batch_tokens": 65536,
       "optimizer": "adamw",
       "t": null,
-      "tokens_per_param": 20.0
+      "tokens_per_param": 20.0,
+      "vocab": 50304
      },
      "inputs": {
       "C_gates": 6.692350313161534e+21,
       "w_gates": 7430939817951.128,
       "w_fwd_gates": 75962004288.0,
       "sigma": 0.9999906522496562,
-      "tau_bits": 16,
+      "tau_bits": 16.0,
       "a_bits": 8192.0,
       "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
       "u_in_points": "0:0;1:7.20478e8",
@@ -2075,33 +6019,222 @@
       "alpha_ratio": 1.0
      },
      "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "menu": {
+      "u1_bits": 720478208.0,
+      "delta_bits": 720478208,
+      "decoder_gates": 0.0,
+      "fresh": [
+       {
+        "kind": "gemm/bf16",
+        "macs": 3211264.0,
+        "entries": 5376.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 25755648.0,
+        "entries": 50304.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 8192.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 524288.0,
+        "entries": 512.0,
+        "layers": 6.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": false
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 27392.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 45023232.0,
+        "entries": 687.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 3145728.0,
+        "entries": 49152.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       },
+       {
+        "kind": "gemm/bf16",
+        "macs": 9437184.0,
+        "entries": 9216.0,
+        "layers": 1.0,
+        "count": 900597760.0,
+        "positions": 1024,
+        "inputs": 1024,
+        "tau": 16.0,
+        "lowest": 1.0,
+        "sequence": true
+       }
+      ],
+      "fresh_share": 0.030662921967458935,
+      "steps": [
+       {
+        "count": 13742.03125,
+        "delta_g": 1440956416,
+        "delta_t": 720478208,
+        "tokens": 65536,
+        "w": 7430939817951.128,
+        "partials": 0.0
+       }
+      ]
+     },
      "rho": {
       "default": {
-       "rho": 8.286680500636798,
-       "basis": "target",
-       "s": 45.922495242494016,
+       "rho": 147481.48098248523,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 147481.48098248523,
+       "terms": {
+        "fresh_products": 147481.48098248523,
+        "token": 8.280480959745443,
+        "reduction": 21971.649196536557,
+        "update": 23.092908209548135
+       },
+       "te_core": {
+        "rho": 8.280480959745443,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 45.888139098671765,
        "x0": 9.096180741111325e-05,
        "s_star": 5.541168,
-       "fit_delta_bits": 64801.2400761201,
+       "b": [
+        1428.1686136602768
+       ],
+       "fresh_share": 0.030662921967458935,
+       "fresh_charged_share": 0.029665838412799034,
+       "fit_delta_bits": 64801.78977442125,
        "fit_delta_grad_bits": 32768.0
       },
-      "tighter": {
-       "rho": 16.57411484128002,
-       "basis": "target",
-       "s": 45.922495242494016,
-       "x0": 4.548090370555663e-05,
-       "s_star": 2.770584,
-       "fit_delta_bits": 32033.240076120095,
-       "fit_delta_grad_bits": 16384.0
+      "default_full": {
+       "rho": 231964.93158547554,
+       "basis": "fresh_products",
+       "binding_kind": "fresh_products",
+       "rests_on": "no A1: the amortized Loomis-Whitney cap for products computed by the standard algorithm, at the widths as passed (the Lean lane's sum_card_le_cap at training-lw-lean 0aa80a2a75, word-level; the 06:57Z obligations of a bit-level cap and recomputed operands are open)",
+       "bound": 231964.93158547554,
+       "terms": {
+        "fresh_products": 231964.93158547554,
+        "token": 13.023880602001105,
+        "reduction": 21962.830152242528,
+        "update": 36.32147465059468
+       },
+       "te_core": {
+        "rho": 13.023880602001105,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 72.17475018353188,
+       "x0": 9.096180741111325e-05,
+       "s_star": 5.541168,
+       "b": [
+        908.0183836223842
+       ],
+       "fresh_share": 0.030662921967458935,
+       "fresh_charged_share": 0.029665838412799034,
+       "fit_delta_bits": 64381.20399706349,
+       "fit_delta_grad_bits": 32768.0
       },
-      "looser": {
-       "rho": 7.041756133524891,
-       "basis": "target",
-       "s": 156.13648382447965,
-       "x0": 0.000363847229644453,
-       "s_star": 22.164672,
-       "fit_delta_bits": 259645.81625880834,
-       "fit_delta_grad_bits": 131072.0
+      "served": {
+       "rho": 9898.150149161791,
+       "basis": "reduction",
+       "binding_kind": "reduction",
+       "rests_on": "the counting lemma: every partial gradient a step sums but one is read by some block, at its passed width",
+       "bound": 9898.150149161791,
+       "terms": {
+        "fresh_products": 3866.229520892269,
+        "token": 0.32890304445751223,
+        "reduction": 9898.150149161791,
+        "update": 0.9173587531255439
+       },
+       "te_core": {
+        "rho": 1.0,
+        "basis": "target"
+       },
+       "fit": false,
+       "fit_fails": [
+        "compute",
+        "reduction",
+        "update"
+       ],
+       "rho_fit": 1.0,
+       "s": 4.048992856231726,
+       "x0": 0.00020204358491853234,
+       "s_star": 12.3079947421875,
+       "b": [
+        16185.753427333126
+       ],
+       "fresh_share": 0.030662921967458935,
+       "fresh_charged_share": 0.02917690234030665,
+       "fit_delta_bits": 145503.2161143003,
+       "fit_delta_grad_bits": 72784.0
       }
      },
      "derived": {

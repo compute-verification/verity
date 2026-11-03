@@ -11,8 +11,9 @@ te_core's counter) and as non-embedding FLOPs 6 N D (N non-embedding parameters,
 main runs' un-annealed evaluations kept apart, and F's lower envelopes in both. The fit is L(N, D) = E + A N^-alpha +
 B D^-beta (L nats a token on the search pool) over the annealed points of every size but the screens (`--screen`: s, the
 cheap screen, whose points are checked against the fit and never enter it), least squares in relative error with E, A,
-B >= 0, alpha and beta on a grid. Each fitted point is checked against the fit made without it (leave one out), and a
-screen's against the fit; a start more than FLAG_PCT off is flagged.
+B >= 0, alpha and beta on a grid (one at the grid's edge is flagged, `alpha_at_bound` or `beta_at_bound`: the points
+don't fix it, and the compute-optimal model moves with it). Each fitted point is checked against the fit made without it
+(leave one out), and a screen's against the fit; a start more than FLAG_PCT off is flagged.
 
 FIT.json is the fit's compute-optimal model at each loss, between the least and the greatest fitted size (te_core.policy's
 `ladder_fit` reads its points' loss and forward_gates_per_token; outside them the cap keeps a start's own forward), with
@@ -136,7 +137,8 @@ def fit(points: list[dict]) -> dict | None:
     err, al, be, (e, a, b) = best
     return {"E": float(e), "A": float(a), "alpha": float(al), "B": float(b), "beta": float(be),
             "rms_rel_pct": 100 * math.sqrt(err / len(y)), "points": len(y),
-            "sizes": len({p["non_embedding_params"] for p in points}), "E_at_bound": bool(e == 0)}
+            "sizes": len({p["non_embedding_params"] for p in points}), "E_at_bound": bool(e == 0),
+            "alpha_at_bound": bool(al in (GRID[0], GRID[-1])), "beta_at_bound": bool(be in (GRID[0], GRID[-1]))}
 
 
 def predict(f: dict, n: float, d: float) -> float:
@@ -291,7 +293,8 @@ def main(argv=None) -> int:
         print(f"fit: L = {f['E']:.3f} + {f['A']:.4g} N^-{f['alpha']:.3f} + {f['B']:.4g} D^-{f['beta']:.3f}, "
               f"rms {f['rms_rel_pct']:.2f}% over {f['points']} points, {f['sizes']} sizes"
               + (f", screens {','.join(f['screens'])} not in it" if f["screens"] else "")
-              + (" (E at its bound 0)" if f["E_at_bound"] else ""))
+              + (" (E at its bound 0)" if f["E_at_bound"] else "")
+              + "".join(f" ({k} at its grid's edge: the data don't fix it)" for k in ("alpha", "beta") if f[f"{k}_at_bound"]))
         worst = max((c for c in rep["checks"] if c["pct"] is not None), key=lambda c: abs(c["pct"]), default=None)
         if worst:
             print(f"checks: largest {worst['branch']} {worst['pct']:+.2f}% against {worst['against']}")
