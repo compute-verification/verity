@@ -1502,6 +1502,10 @@
    "owner": "@training",
    "digest": "9d4f1c66392a1ec467c2639f37f73730f0a6f33872d24d8576561bc7123c17fa"
   },
+  "Nci.Products.Standard.Chained": {
+   "owner": "@training",
+   "digest": "f1c559f1a7ed29d2bea09eab7b2560881448bcc2e5b07c20c2e44bd177b928da"
+  },
   "Nci.Products.Standard.Passed": {
    "owner": "@training",
    "digest": "e091b3c484c0707c735b6b3d3e4dd632f2f2fa2c792d9e9dc8d07e0a2bf1f953"
@@ -2238,9 +2242,9 @@
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
   },
-  "Nci.Products.Standard.Chained": {
+  "Nci.Products.Standard.Received": {
    "owner": "@training",
-   "digest": "f1c559f1a7ed29d2bea09eab7b2560881448bcc2e5b07c20c2e44bd177b928da"
+   "digest": "8aa903eb410e5eed87b1da7d442faee5af2d2571f509a492f223a85cc432be29"
   }
  },
  "meaning": [
@@ -9244,22 +9248,40 @@
    "owner": "@training"
   },
   "Nci.Products.SecurityProofs.NoCellBound": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.NoCellBound : Nci.Products.Guarantees.NoCellBound"],
+   "assumptions": [],
+   "type_hash": "fe717754fb1b849ea771de965331dbfefb41a8cb1f7e14367817ad371d8a6394"
   },
   "Nci.Products.SecurityProofs.NoCellBound_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.NoCellBound_honest : Nci.Products.Guarantees.NoCellBound_honest"],
+   "assumptions": [],
+   "type_hash": "5ef07e3d2a4ba77fc9f5cbd5883ed0caabd7f41e9ba31325c51b668b8eeb2b5c"
   },
   "Nci.Products.SecurityProofs.NoCellBound_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.NoCellBound_nontrivial : Nci.Products.Guarantees.NoCellBound_nontrivial"],
+   "assumptions": [],
+   "type_hash": "ebd8a4177ba6b0e78628474eaaaf84a373ce250a7413849e31c271ddef7b11cb"
   },
   "Nci.Products.SecurityProofs.NoCellCap": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.NoCellCap : Nci.Products.Guarantees.NoCellCap"],
+   "assumptions": [],
+   "type_hash": "0b4d3acc77c478873f6bb7ea772d6d21be071fd0c1556beb1f823b354574f22c"
   },
   "Nci.Products.SecurityProofs.NoCellCap_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.NoCellCap_honest : Nci.Products.Guarantees.NoCellCap_honest"],
+   "assumptions": [],
+   "type_hash": "95b7235b2bb5e7c3d5bb97df5431c3cdc62d211f1311e2e41c4f80762e8c9c75"
   },
   "Nci.Products.SecurityProofs.NoCellCap_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.NoCellCap_nontrivial : Nci.Products.Guarantees.NoCellCap_nontrivial"],
+   "assumptions": [],
+   "type_hash": "785bba7b61bac83edc955fea04335b4afba1b81ffb506b0ed0deff50707c42c1"
   },
   "Nci.Products.SecurityProofs.WholeBound": {
    "owner": "@training"
@@ -22815,6 +22837,12 @@
     "Nci.Products.SecurityProofs.ChainCap",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellBound",
+    "Nci.Products.SecurityProofs.NoCellBound_honest",
+    "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellCap",
+    "Nci.Products.SecurityProofs.NoCellCap_honest",
+    "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial",
@@ -22978,6 +23006,12 @@
     "Nci.Products.SecurityProofs.ChainCap",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellBound",
+    "Nci.Products.SecurityProofs.NoCellBound_honest",
+    "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellCap",
+    "Nci.Products.SecurityProofs.NoCellCap_honest",
+    "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial",
@@ -23243,6 +23277,12 @@
     "Nci.Products.SecurityProofs.ChainCap",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellBound",
+    "Nci.Products.SecurityProofs.NoCellBound_honest",
+    "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellCap",
+    "Nci.Products.SecurityProofs.NoCellCap_honest",
+    "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial",
@@ -24148,6 +24188,12 @@
     "Nci.Products.SecurityProofs.ChainCap",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellBound",
+    "Nci.Products.SecurityProofs.NoCellBound_honest",
+    "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellCap",
+    "Nci.Products.SecurityProofs.NoCellCap_honest",
+    "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial",
@@ -27638,6 +27684,12 @@
     "Nci.Products.SecurityProofs.ChainCap",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellBound",
+    "Nci.Products.SecurityProofs.NoCellBound_honest",
+    "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellCap",
+    "Nci.Products.SecurityProofs.NoCellCap_honest",
+    "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial"
@@ -27689,6 +27741,12 @@
     "Nci.Products.SecurityProofs.ChainCap",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellBound",
+    "Nci.Products.SecurityProofs.NoCellBound_honest",
+    "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellCap",
+    "Nci.Products.SecurityProofs.NoCellCap_honest",
+    "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial"
@@ -28112,6 +28170,29 @@
     "Nci.Products.SecurityProofs.WordCap"
    ]
   },
+  "Definitions.Nci.Guarantees.Products.NoCell": {
+   "digest": "11aa5b81a2ecaf905393d1e37d82a354b4859210f24d0038d424a5333a9b8fb1",
+   "definitions": {
+    "Nci.Products.Guarantees.NoCellBound": "ea1cb614181b501ed0f8fd8c1f81939284492577d5b8496b5e2782457ee444e4",
+    "Nci.Products.Guarantees.NoCellCap": "b7ee981955e955ce9506f28a01100ae99e105cf466cf0e5e67ce51b812315c3d"
+   },
+   "guarantees": ["Nci.Products.SecurityProofs.NoCellBound", "Nci.Products.SecurityProofs.NoCellCap"]
+  },
+  "Definitions.Nci.Guarantees.Products.NoCellWitnesses": {
+   "digest": "6a1b41f296d739ce5d403af273685df89c52c5191b70da7aca1bbe149af6d2b7",
+   "definitions": {
+    "Nci.Products.Guarantees.NoCellBound_honest": "2c5fd79ff7340b3359a2abbd9e893b2e0482e6303f1f304e3be884e9a239811d",
+    "Nci.Products.Guarantees.NoCellBound_nontrivial": "98cb26a1a9807a8830bfe2ddce3b631e6af15ba75f295eedfb166d1bc9d0c35b",
+    "Nci.Products.Guarantees.NoCellCap_honest": "930e8b04690767426c1d087aec9bac4d9d985ee6de95c42c5105c3973e665687",
+    "Nci.Products.Guarantees.NoCellCap_nontrivial": "31158bb9b403e9da71df6509f0dbd13f4e8194bbabafd41b762ee02a370bc07c"
+   },
+   "guarantees": [
+    "Nci.Products.SecurityProofs.NoCellBound_honest",
+    "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellCap_honest",
+    "Nci.Products.SecurityProofs.NoCellCap_nontrivial"
+   ]
+  },
   "Definitions.Nci.Guarantees.Products.Witnesses": {
    "digest": "57e0b8889fabfce66e08fbd7de359243bf4ecd8fe3d3f29df5a602d58b0fc44b",
    "definitions": {
@@ -28360,6 +28441,12 @@
     "Nci.Products.SecurityProofs.ChainCap",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellBound",
+    "Nci.Products.SecurityProofs.NoCellBound_honest",
+    "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellCap",
+    "Nci.Products.SecurityProofs.NoCellCap_honest",
+    "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial"
@@ -28390,8 +28477,35 @@
     "Nci.Products.SecurityProofs.Cap_nontrivial",
     "Nci.Products.SecurityProofs.ChainCap_honest",
     "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellBound_honest",
+    "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellCap_honest",
+    "Nci.Products.SecurityProofs.NoCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WordCap_honest",
     "Nci.Products.SecurityProofs.WordCap_nontrivial"
+   ]
+  },
+  "Definitions.Nci.Products.NoCellInstances": {
+   "digest": "a5016510d1277f09b3a425f30551a0e9eadc62e46fd6ee42c1318cada0cb18e5",
+   "definitions": {
+    "Nci.Products.Pair.P1": "12054976c9c2596ca15b50b49377943755e85351259eac5b105ec58f9e2c5f5d"
+   },
+   "guarantees": ["Nci.Products.SecurityProofs.NoCellCap_nontrivial"]
+  },
+  "Definitions.Nci.Products.Received": {
+   "digest": "f5df8bb53b0da9dce1872baa2a6e27805a1d48807b1037ef5c4c1085a86ab3c8",
+   "definitions": {
+    "Nci.Products.Standard.Received": "8aa903eb410e5eed87b1da7d442faee5af2d2571f509a492f223a85cc432be29",
+    "Nci.Products.chainBlocks": "0704dad3f0ae1d596fd600f962d093a24b7e65db1e643e9e7ef4ecc0310c155d",
+    "Nci.Products.noCellBound": "f07f711ba2db385a93dc2689e1cf4f2871ab47ebd275664b946feb7c2e56ba7d"
+   },
+   "guarantees": [
+    "Nci.Products.SecurityProofs.NoCellBound",
+    "Nci.Products.SecurityProofs.NoCellBound_honest",
+    "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.NoCellCap",
+    "Nci.Products.SecurityProofs.NoCellCap_honest",
+    "Nci.Products.SecurityProofs.NoCellCap_nontrivial"
    ]
   },
   "Definitions.Nci.Reads": {
