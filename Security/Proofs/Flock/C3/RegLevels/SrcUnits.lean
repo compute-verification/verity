@@ -6,7 +6,7 @@ import Proofs.Flock.C3.RegLevels.SrcConss
 
 `levelTie_of_units` is `levelTie_of_run` at the messages w holds with R's openings' consistency sums (`msgsO`), its
 `Opened` given by `opened_of_units` with the run's contexts its levels (`conssAt_of_lig`, from the run's own
-hypotheses). `levelTie_of_reads` takes the proof and its cap as G's lig lane builds them: `ligOfRead` at no salts on R's
+hypotheses). `levelTie_of_reads` takes the proof and its cap as Lig.lean builds them: `ligOfRead` at no salts on R's
 openings' rows (`readR`), with the messages, OOD values and `yr` w holds and a nonce per query and claim (`proofR`), and
 a `capArr` cap. There the caps' shape (`CapsAt`, `capsAt_ligOfRead`), the openings' siblings and salts, and the proof's
 fields hold by construction. Left: R's openings' read (`q` rows of the level's lanes, the level's `q`, the run's `α`)
@@ -93,13 +93,13 @@ theorem levelTie_of_units (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : F
 
 end Units
 
-/-! ## The proof as G's lig lane builds it -/
+/-! ## The proof as Lig.lean builds it -/
 
 local instance lawfulBEqByteArray : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
-/-- R's openings as G's lig lane's read: level `ℓ`'s opening `j`'s row is `ops.rows ℓ`'s `j`-th, its siblings `sb`, no
+/-- R's openings as Lig.lean's read: level `ℓ`'s opening `j`'s row is `ops.rows ℓ`'s `j`-th, its siblings `sb`, no
 salts, and the recursive caps' entries `e`. -/
 def readR (ops : FlockVBridge.AccChain.Openings) (sb : ℕ → ℕ → ℕ → ByteArray) (e : ℕ → ℕ → ByteArray) :
     FlockVBridge.Family.LigRead :=
@@ -166,7 +166,7 @@ theorem openAt_proofR_eq {sh : Flock.Shape} {cap : Array ByteArray} {M : Flock.R
   rw [hrows]
   rfl
 
-/-- The level-0 cap, as G's lig lane's (`capArr` of the level's `2^cap` entries `e0`). -/
+/-- The level-0 cap, as Lig.lean's (`capArr` of the level's `2^cap` entries `e0`). -/
 abbrev capR (sh : Flock.Shape) (e0 : ℕ → ByteArray) : Array ByteArray :=
   FlockVBridge.Family.capArr 64 (sh.sched.levels.getD 0 default).cap e0
 
@@ -184,7 +184,7 @@ section Reads
 
 variable {nS : ℕ} {Vs : Fin nS → VStmt} {Reg' : Type}
 
-/-- **(n7's levels) `LevelTie` from R's units, at the proof G's lig lane builds** (`pR`, `capR`): `levelTie_of_units`
+/-- **(n7's levels) `LevelTie` from R's units, at the proof Lig.lean builds** (`pR`, `capR`): `levelTie_of_units`
 with the proof's fields, its caps' shape and its openings' siblings and salts by construction. Left: R's openings' read
 (`hrs hwd hq`, and the run's `α`), each opening's units, the cap's digests, and `levelTie_of_run`'s other ties. -/
 theorem levelTie_of_reads (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits)

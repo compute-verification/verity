@@ -10,8 +10,8 @@
 #      ZK=1 (selftest: C-Flock ZK's --zk statement, and zkaudit on the device's proofs)  MODES="m0 zk" (bench: each point in each mode;
 #      zkseq: --zk with the host's zk work not overlapped, FC_ZK_SEQUENTIAL)  FC_COINS=tree (bench: m0's sessions on the
 #      challenger's keyed coin tree, as every --zk session is: each point's server on its own challenger, bounded to WARM + RUNS
-#      sessions, its records audited against the challenger's release log, out/<set>/challenger-N-MODE/audit.json; os: per-round
-#      OS coins, no seed and no PRF; seed: the binary's default; a selftest build always seeds)
+#      sessions, its records audited against the challenger's release log, out/<set>/challenger-N-MODE/audit.json; empty: the
+#      binary's default, seed coins; a selftest build always seeds)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 export FC_COINS=${FC_COINS:-tree}
@@ -27,7 +27,7 @@ F=${FLOCK_WORK:-/workspace}/flock-gpu-link/flock; FEAT="--features sha512 --feat
 # after the circuit prover is generated (it widens both provers' trees)
 (cd $F && rm -f crates/flock-merkle/src/hm96.rs && git apply $REPO/verity/ml/flock/flock-sha512-b684b12.patch \
   && git apply $REPO/verity/ml/flock/flock-glue-b684b12.patch) || exit 1
-# C-Flock ZK (lane flock-zk): Ligerito level 0's hiding (flock-circuit --zk)
+# C-Flock ZK: Ligerito level 0's hiding (flock-circuit --zk)
 (cd $F && git apply $REPO/verity/ml/flock/flock-zk-b684b12.patch) || exit 1
 # the session verifier's phase timers in the opening (session_verify.rs): clocks only, no check changes
 (cd $F && git apply $REPO/verity/ml/flock/flock-vtime-b684b12.patch) || exit 1

@@ -28,14 +28,14 @@ def vecOf (n : ℕ) (a : Array F128) : Fin n → 𝔽 := fun i => fOf a[i.val]!
 /-- A pair of words as a pair of model field elements. -/
 def pairOf (p : F128 × F128) : 𝔽 × 𝔽 := (fOf p.1, fOf p.2)
 
-/-- **The zerocheck's messages** (PROTOCOL.md §9.2), in the model's order: `(round1_ab, round1_c)` (Z4), the `m − 6`
+/-- **The zerocheck's messages** (`Flock.Piop`), in the model's order: `(round1_ab, round1_c)` (Z4), the `m − 6`
 residual rounds' `(G(1), G(∞))` (Z6), then `(final_a_eval, final_b_eval)` (Z7). -/
 def zcMsgs (m : ℕ) (p : ZerocheckProof) : List Msg :=
   ⟨(Fin 64 → 𝔽) × (Fin 64 → 𝔽), (vecOf 64 p.round1ab, vecOf 64 p.round1c)⟩ ::
     ((List.range (m - 6)).map fun i => ⟨𝔽 × 𝔽, pairOf p.rounds[i]!⟩) ++
     [⟨𝔽 × 𝔽, (fOf p.finalA, fOf p.finalB)⟩]
 
-/-- **The lincheck's messages** (PROTOCOL.md §10), in the model's order: the `k_log − 6` rounds' `(q(1), q(∞))` (L3),
+/-- **The lincheck's messages** (`Flock.Piop`), in the model's order: the `k_log − 6` rounds' `(q(1), q(∞))` (L3),
 then `z_partial` (L4). -/
 def lcMsgs (kLog : ℕ) (p : LincheckProof) : List Msg :=
   ((List.range (kLog - 6)).map fun j => ⟨𝔽 × 𝔽, pairOf p.rounds[j]!⟩) ++ [⟨Fin 64 → 𝔽, vecOf 64 p.zPartial⟩]
@@ -48,11 +48,11 @@ structure ClaimRel (m : ℕ) (c : Flock.Claim) (c' : Model.Claim 𝔽 m) : Prop 
   x_size : c.x.size = m - 6
   x : ∀ i, c'.x i = fOf c.x[i.val]!
 
-/-- **The ring switches** (PROTOCOL.md §12.2): one `ŝ` of 128 words per claim, in claim order (O3). -/
+/-- **The ring switches** (`Flock.Opening`): one `ŝ` of 128 words per claim, in claim order (O3). -/
 def opMsgs (n : ℕ) (rs : Array (Array F128)) : List Msg :=
   (List.range n).map fun k => ⟨Fin 128 → 𝔽, vecOf 128 rs[k]!⟩
 
-/-- The executable's opening output is the model's (§12.5): the batched value `T`, and the batched basis `b`, which
+/-- The executable's opening output is the model's (`Flock.Opening`): the batched value `T`, and the batched basis `b`, which
 the executable keeps as each switched claim's batching coin, ring-switch coins `r''` and suffix point `x[1 …]`. -/
 structure OpenRel (m n : ℕ) (T : F128) (sws : Array Switched) (op : Model.OpenOut 𝔽) : Prop where
   T : op.T = fOf T
@@ -62,7 +62,7 @@ structure OpenRel (m n : ℕ) (T : F128) (sws : Array Switched) (op : Model.Open
   b : ∀ y, op.b y = ∑ k : Fin n, fOf (sws[k.val]!).gamma *
     Model.phi execArith (vecOf 7 (sws[k.val]!).rpp) (Model.eqAt (vecOf (m - 7) (sws[k.val]!).z) y)
 
-/-- The executable's zerocheck output is the model's (§9.2): the skip point, the residual challenges, the zerocheck
+/-- The executable's zerocheck output is the model's (`Flock.Piop`): the skip point, the residual challenges, the zerocheck
 vector and the three claimed values. -/
 structure ZcRel (m : ℕ) (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 m) : Prop where
   z : zc'.z = fOf zc.z

@@ -57,7 +57,7 @@ of trailing zeros (`FlockDeploy.deployPlainTrim`, `FlockDeploy.deployZkTrim`):
   the statements the verifier can accept against `H` (`FlockComplete.ready H`, `ZkTables.ready H`, at any number of
   tables), and `1` elsewhere (`FlockComplete.δc`, `ZkTables.δc`, in `Complete.Ready`, which states that set).
 
-One run opens fewer level-0 columns than `nMin` of every trace (`cols_length_lt_nMin_plain`, `_zk`): ruling 2's count
+One run opens fewer level-0 columns than `nMin` of every trace (`cols_length_lt_nMin_plain`, `_zk`): that count
 is reached only by `E^rep`'s columns, gathered over its accepted reruns.
 -/
 
@@ -696,8 +696,8 @@ theorem cols_nodup_plain (rel : Readable.Parsed → Readable.Relation) (s : Clai
 theorem cols_nodup_zk (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) (j : ℕ) :
     (((deployZk rel).cols s j).map Prod.fst).Nodup := cols_nodup true s j
 
-/-- **A plain run opens fewer level-0 columns than `nMin`** of every trace, at every table: ruling 2's count is never
-reached by one run. -/
+/-- **A plain run opens fewer level-0 columns than `nMin`** of every trace, at every table: one run never reaches
+it. -/
 theorem cols_length_lt_nMin_plain (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) (j : ℕ)
     (M : Claims.Flock.PlainTrace) :
     ((deployPlain rel).cols s j).length < Claims.Flock.plainNMinD Claims.Flock.Numbers.agree₀ M := by
@@ -711,8 +711,8 @@ theorem cols_length_lt_nMin_plain (rel : Readable.Parsed → Readable.Relation) 
     · exact Claims.one_le_johnsonCount _ _
   · exact Claims.one_le_johnsonCount _ _
 
-/-- **A masked run opens fewer level-0 columns than `nMin`** of every trace, at every table: ruling 2's count is never
-reached by one run. -/
+/-- **A masked run opens fewer level-0 columns than `nMin`** of every trace, at every table: one run never reaches
+it. -/
 theorem cols_length_lt_nMin_zk (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) (j : ℕ)
     (M : Claims.Flock.ZkTrace) : ((deployZk rel).cols s j).length < Claims.Flock.zkNMinD Claims.Flock.zkAgree M := by
   show (cols true s j).length < Claims.Flock.zkNMinD Claims.Flock.zkAgree M

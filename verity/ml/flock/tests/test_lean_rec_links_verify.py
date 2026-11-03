@@ -54,8 +54,8 @@ def _inner(plain: Path) -> list[str]:
     return ["--rec-inner", str(v / "rec-inner.json"), "--rec-rows", str(v / "rows.json"),
             "--rec-inner-circuit", str(plain / "inner" / "circuit.txt"), "--rec-inner-public", str(i / "pub.bin"),
             "--rec-inner-partition", str(i / "partition.json"), "--rec-inner-program", str(i / "program.json"),
-            "--rec-inner-statement", "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os",
-            "--rec-inner-draw", str(i / "draw.json"), "--rec-inner-session", str(i / "session"),
+            "--rec-inner-statement", "verity/flock-circuit+plain-leaves", "--rec-inner-draw", str(i / "draw.json"),
+            "--rec-inner-session", str(i / "session"),
             "--rec-inner-transcript", str(i / "public.json")]
 
 

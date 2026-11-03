@@ -1,15 +1,13 @@
-"""M0 on per-round OS coins (`FC_COINS=os`): a proving build's identity then names the coin mode and no coin commitment or
-derivation, and the identity is in the statement digest, so such a session passes the Lean verifier's checks only under
-`--coins os` (`Tags.withCoins`), and a seeded one only under `--coins seed`. The sessions are the fixture's: one live session
-per coin mode, recorded from a proving build of main (`record.sh`), both accepted by its server.
-Neither has a draw, which `verify` refuses after every check has passed (§16.15, D12), so passing is that refusal
-(`DRAWLESS`). The seeded session, edited one field at a time, is also each of the record's checks' control: every edit is
-refused by the check that names it, so deleting any one of them fails a test."""
+"""The session record's checks (`Record.decode`), each with its control: a seeded loopback session of a proving build of
+main (`record.sh`, accepted by its server), edited one field at a time, is refused by the check that names it, so deleting
+any one of them fails a test. The session has no draw, which `verify` refuses after every check has passed
+(`Flock.ProvedScope`, D12), so passing is that refusal (`DRAWLESS`); on seed coins it would be refused after that too
+(`ProvedScope.servedForm`), and verified as a session on the challenger's coin tree (`--coins tree`) it is refused at its
+`Hello` (S2/R7)."""
 from __future__ import annotations
 
 import hashlib
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -21,31 +19,12 @@ from verity_flock.record_text import session_text
 FLOCK = Path(__file__).resolve().parents[1]
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-#: RoPE d64 (4 instances) with a seeded and an FC_COINS=os loopback session of a proving build; the circuit is the session tables' fixture's
+#: RoPE d64 (4 instances) with a seeded loopback session of a proving build (`seed`); the circuit is the session tables' fixture's
 FIXTURE = "art:12f95e2a"
 CIRCUIT = "art:425f6860/stage/circuit.txt"
 STATEMENT = "verity/flock-circuit@967b8d06"
 DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 
-
-def _os_identity_rust() -> dict[str, str]:
-    src = (FLOCK / "live" / "src" / "bin" / "flock-circuit.rs").read_text()
-    block = src[src.index("if !zk_mode() && coin_mode() == CoinMode::Os {"):]
-    block = block[:block.index("}")]
-    return dict(re.findall(r'id(?:\["\w+"\])*\["(\w+)"\] = json!\("([^"]*)"\)', block))
-
-
-def _os_identity_lean() -> dict[str, str]:
-    src = (LEAN / "Flock" / "Tags.lean").read_text()
-    body = src[src.index("def liveOsIdentity"):]
-    body = body[:body.index("\n\n")]
-    return dict(re.findall(r'setObjVal! "(\w+)" \(s "([^"]*)"\)', body))
-
-
-def test_the_live_os_identity_is_the_provers():
-    rust = _os_identity_rust()
-    assert set(rust) == {"coins", "coin_commitment", "coin_derivation"}, rust
-    assert _os_identity_lean() == rust
 
 
 @pytest.fixture(scope="module")
@@ -77,40 +56,35 @@ def _session(root: Path, mode: str) -> Path:
 
 @pytest.fixture(scope="module")
 def verdicts(sessions):
-    """{(session's coins, --coins): verdict}, each flag's statement set up once over both sessions."""
+    """{coins flags: the seeded session's verdict}: on its own seed (no `--coins`), and as one on the coin tree."""
     root, circuit = sessions
     out = {}
-    for coins in ("seed", "os"):
+    for flags in ((), ("--coins", "tree")):
         p = subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(circuit),
-                            "--public", str(root / "stage" / "pub-4.bin"), "--coins", coins,
-                            "--session", str(_session(root, "seed")), str(_session(root, "os"))],
+                            "--public", str(root / "stage" / "pub-4.bin"), *flags,
+                            "--session", str(_session(root, "seed"))],
                            capture_output=True, text=True, check=False)
-        vs = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
-        assert len(vs) == 2, p.stdout + p.stderr
-        out.update({("seed", coins): vs[0], ("os", coins): vs[1]})
+        (v,) = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
+        out[flags] = v
     return out
 
 
 @pytest.mark.slow
-def test_the_fixture_is_one_session_per_coin_mode(sessions):
+def test_the_fixture_session_is_seeded(sessions):
     root, _ = sessions
-    seed, os_ = _live(root, "seed"), _live(root, "os")
-    assert seed["accepted"] and os_["accepted"]
-    assert seed["coin_seed"] and "coins" not in seed["identity"]
-    assert os_["coin_seed"] is None and os_["identity"]["coins"].startswith("live-os")
+    seed = _live(root, "seed")
+    assert seed["accepted"] and seed["coin_seed"] and "coins" not in seed["identity"]
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("mode", ["seed", "os"])
-def test_a_session_passes_every_check_on_its_own_coins(verdicts, mode):
-    v = verdicts[(mode, mode)]
+def test_the_session_passes_every_check_on_its_own_coins(verdicts):
+    v = verdicts[()]
     assert (v["accepted"], v["why"]) == (False, DRAWLESS), v["why"]
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("mode,coins", [("seed", "os"), ("os", "seed")])
-def test_a_session_is_refused_on_the_other_coins(verdicts, mode, coins):
-    v = verdicts[(mode, coins)]
+def test_the_session_is_refused_on_the_coin_tree(verdicts):
+    v = verdicts[("--coins", "tree")]
     assert not v["accepted"]
     assert v["why"].startswith("S2/R7"), v["why"]
 
@@ -176,7 +150,7 @@ def edited(sessions, tmp_path_factory):
         (d / "session.json").write_text(session_text(record))
         dirs.append(str(d))
     p = subprocess.run([str(BIN), "verify", "--statement", STATEMENT, "--circuit", str(circuit),
-                        "--public", str(root / "stage" / "pub-4.bin"), "--coins", "seed", "--session", *dirs],
+                        "--public", str(root / "stage" / "pub-4.bin"), "--session", *dirs],
                        capture_output=True, text=True, check=False)
     vs = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
     assert len(vs) == len(RECORD_EDITS), p.stdout + p.stderr

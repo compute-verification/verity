@@ -7,7 +7,7 @@ work sample's law derives from, so a work sample sets up there, where any other 
 is read. Each session is a record that names its sample and no proof files: a sample that passes the law check sets up and
 meets the session's files, which it has none of, and so does a session without a sample, in either mode, since its
 refusal comes after every check (its own refusal shows on the statements whose form is covered: `test_lean_zk.py`,
-`test_lean_live_os.py`, `test_lean_hidden_outputs.py`). Each sample is its own setup (about 10 s), and staging composes the
+`test_lean_record_checks.py`, `test_lean_hidden_outputs.py`). Each sample is its own setup (about 10 s), and staging composes the
 circuit (about 30 s), so the module is slow; it is the only test that reaches the law check with a work sample."""
 from __future__ import annotations
 

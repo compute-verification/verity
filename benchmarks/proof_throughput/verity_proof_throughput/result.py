@@ -39,8 +39,7 @@ from .workloads import Workload
 
 SECURITY = {"target": -100, "profile": "fast100", "reps": 2}
 #: a point's coins, as its sweep record names them (`verity_flock.circuit.coins`)
-COINS = {"coin-tree": "coin-tree: every round's coins the challenger's keyed coin tree's (serve --tree-from)",
-         "live-os": "live-os: the verifier's OS draws, round by round"}
+COINS = {"coin-tree": "coin-tree: every round's coins the challenger's keyed coin tree's (serve --tree-from)"}
 PREPROCESSING = ("the population is lowered and staged once for every B (fixed.setup_seconds); every timed session builds "
                  "its drawn statement and witness and proves both reps afresh")
 CONFIGS = {"plain": "C-Flock native prover, ZK off (flock-circuit prove --gpu), live coins and the stratified draw of B units "
@@ -103,7 +102,7 @@ def prover_measurements(w: Workload, B: int, rec: Mapping[str, Any], gpu_peak_mi
 
 
 #: The Lean verifier's refusal of a session without a sample, issued only once every check has passed and the statement's form is
-#: covered (verity/ml/flock/verifier/PROTOCOL.md §16.15, D12). A session counts toward throughput only when the Lean verifier
+#: covered (``Flock.ProvedScope``, D12). A session counts toward throughput only when the Lean verifier
 #: accepts it (the proofs ruling of 17 Oct): a point whose sessions meet this refusal fails, labelled ``D12_LABEL``, and gives
 #: no headline. Its result still counts them (``verify.lean_drawless``).
 DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"

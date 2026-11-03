@@ -17,9 +17,9 @@ from verity_bench.settings import direct_uses
 HERE = Path(__file__).resolve().parents[1]
 #: The files of this member that still use the environment directly, and how often.  It only shrinks.
 BASELINE: dict[str, int] = {}
-#: declared but not read by name in job.sh: REPEAT_<STEP> through ``${!v:-$REPEAT}``, 85's OPROVE_MEM_GB under the job's
-#: prefix, and run.py's own
-NOT_IN_JOB = {*(f"REPEAT_{s.upper()}" for s in RS.REPEATED), "OPROVE_MEM_GB", "RESEARCH_RUNS_DIR"}
+#: declared but not read by name in job.sh: REPEAT_<STEP> through ``${!v:-$REPEAT}``, 85's OPROVE_MEM_GB and
+#: TREE_SECRET_FILE under the job's prefix, and run.py's own
+NOT_IN_JOB = {*(f"REPEAT_{s.upper()}" for s in RS.REPEATED), "OPROVE_MEM_GB", "TREE_SECRET_FILE", "RESEARCH_RUNS_DIR"}
 
 
 def test_every_variable_job_sh_reads_is_declared_and_every_declared_one_is_read() -> None:

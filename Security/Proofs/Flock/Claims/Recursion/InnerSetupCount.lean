@@ -144,7 +144,7 @@ theorem innerSetup_calls {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
     (hrows0 t ht r hrt).trans (by norm_num [RecBudget.MAX_INNER_ROWS])
   obtain ⟨hs1, hs2, hs3, b, d, D, hb, hjd, hD, hpr⟩ := checkForm_ok hform
   have hs1 : r.innerRaw.statement = Tags.circuitPlainLeaves.name := hs1
-  have hs2 : r.innerRaw.osCoins = true := hs2
+  have hs2 : r.innerRaw.osCoins = false := hs2
   have hs3 : r.innerRaw.tables = [] := hs3
   have hb : r.innerRaw.draw = some b := hb
   obtain ⟨hdec, -, hok⟩ := readX_inner hr

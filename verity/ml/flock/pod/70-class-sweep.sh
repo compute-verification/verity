@@ -30,7 +30,7 @@
 #      for a prover in another pod that runs with FC_VERIFIERS=DIR; give SM)  SERVE_POINTS=1 (with SERVE_ONLY: that many provers'
 #      sessions, one prover after another, on the same verifier processes)
 #      BUILD_ONLY=1 (build, print BINARY= and SELFTEST_BINARY= and stop; give SM without a GPU)
-#      FC_COINS=tree (M0's sessions on the keyed coin tree; os: per-round OS coins, no seed, no PRF; seed: M0's step-0 seed). A
+#      FC_COINS=tree (M0's sessions on the keyed coin tree; empty: M0's step-0 seed, which the Lean verifier refuses). A
 #      verifier pod runs this script too, so both sides agree; a selftest build seeds whatever it says
 #      FLOCK_CHALLENGER=1 (with FC_COINS=tree or FLOCK_ZK=1, the default: each verifier process takes its sessions' coin trees
 #      from its own challenger, pod/challenger.sh, and its records are held to the challenger's release log; class_statement's

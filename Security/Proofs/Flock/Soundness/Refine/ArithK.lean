@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.Refine.Opening
 
 /-!
-# Element seams over `K = GF(2^256)` (PROTOCOL.md §2.4, §13)
+# Element seams over `K = GF(2^256)` (`Flock.Field`, `Flock.Ligerito`)
 
 The model's Ligerito computes in `K` through `execArith.embed` and `execArith.u`; the executable computes on `F256`
 words. `gOf` (`GF256.of`) maps a word to its field element and is a ring homomorphism (`gOf_add`, `gOf_mul`). On top of

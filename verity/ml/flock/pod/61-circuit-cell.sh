@@ -5,8 +5,8 @@
 #   ROLE=prover   TEMPLATE POINTS PER RUNS VERIFIER=host:port RTT_TARGET=host:22 LOOPBACK=1 OPERATOR [ART]   (GPU build)
 #   ROLE=verifier TEMPLATE POINTS PER RUNS OPERATOR                                                        (CPU build; serves on :7501)
 #   FC_COINS=tree (both roles: the challenger's keyed coin tree, every server the verifier pod or LOOPBACK=1 runs on its own
-#   challenger, pod/challenger.sh, its records audited against the challenger's release log; os: per-round OS coins, no seed
-#   and no PRF; seed: the binary's default)
+#   challenger, pod/challenger.sh, its records audited against the challenger's release log; empty: the binary's default,
+#   seed coins)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 export FC_COINS=${FC_COINS:-tree}

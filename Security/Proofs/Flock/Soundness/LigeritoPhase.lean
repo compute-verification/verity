@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.LigeritoMid
 
 /-!
-# Ligerito is sound (PROTOCOL.md §13)
+# Ligerito is sound (`Flock.Ligerito`)
 
 From a claim `Σ_y f(y)·b(y) = T` false for every message near the committed level-0 table,
 Ligerito accepts with probability at most `εLig`:

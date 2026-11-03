@@ -4,14 +4,14 @@ import Definitions.Flock.Game.Interleave
 /-!
 # One rep, and one table's session
 
-A table's session (PROTOCOL.md §5, §16): the prover commits the level-0 table (`Commit`, whose
-`root_B` is the table's Merkle cap, §14), the verifier draws the two link points, and the prover
+A table's session (`Flock.Record`, `Flock.Statement`): the prover commits the level-0 table (`Commit`, whose
+`root_B` is the table's Merkle cap, `Flock.Merkle`), the verifier draws the two link points, and the prover
 then runs the table's two reps, each on its own stream of live coins, in any interleaving it
 likes (S15). The verifier accepts the table only if both reps accept (S18: both on the one
 committed root).
 
 The link points are drawn once, before either rep (R5), and give the region claims both reps
-open (§16.2). `y` is pinned to zero for these statements (S10) and carries no information.
+open (`Flock.Statement`). `y` is pinned to zero for these statements (S10) and carries no information.
 -/
 
 namespace FlockSoundness.Model
@@ -20,7 +20,7 @@ open FlockSoundness.Game FlockSoundness.Accounting
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- The point of a region claim at link point `r` (§16.2): free bits from `r`, the other in-block
+/-- The point of a region claim at link point `r` (`Flock.Statement`): free bits from `r`, the other in-block
 bits fixed, the block bits from `r[PT_LOCAL …]`. -/
 def regionPoint (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (r : Fin mPts → F) :
     Fin S.m → F :=
@@ -33,7 +33,7 @@ def regionPoint (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (
       let i := ptLocal + (j.val - S.kLog)
       if hi : i < mPts then r ⟨i, hi⟩ else 0
 
-/-- The value of a region claim (§16.2):
+/-- The value of a region claim (`Flock.Statement`):
 `Σ_b eq(r[PT_LOCAL …], b)·Σ_i eq(r[… |free|], i)·bit_i(bytes(region, b))`. -/
 def regionValue (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (r : Fin mPts → F) : F :=
   ∑ b : Fin (2 ^ S.nbl), (∏ i : Fin S.nbl,
@@ -53,11 +53,11 @@ def regionClaim (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (
       else 1 + (if h : j.val < S.m then p ⟨j.val, h⟩ else 0)),
     fun i => if h : i.val + 6 < S.m then p ⟨i.val + 6, h⟩ else 0⟩
 
-/-- The extra claims (§11, §16.2): region-major, point 0 before point 1. -/
+/-- The extra claims (`Flock.Piop`, `Flock.Statement`): region-major, point 0 before point 1. -/
 def extraClaims (S : Statement) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → F) : List (Claim F S.m) :=
   S.regions.flatMap fun R => [regionClaim S R ptLocal mPts (pts 0), regionClaim S R ptLocal mPts (pts 1)]
 
-/-- **One rep** (§9–§13) on the committed level-0 table `C₀`, opening the region claims
+/-- **One rep** (`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`) on the committed level-0 table `C₀`, opening the region claims
 `extra` alongside `ab` and `c`. -/
 def rep (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) : Game Bool := do

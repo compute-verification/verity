@@ -43,11 +43,14 @@ inputs = [
     "verity/core/protocols/sampled_proofs", "verity/core/primitives/randomness", "verity/ml/randomness/tests",
     # the Lean decoder's width refusals against the codec, on the NCI difftest's mistyped descriptors
     "verity/core/protocols/network/nci/lean/scripts",
-    # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's
-    "verity/core/service/flock/Flock/Zk.lean",
+    # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
+    # tree to RecVStar's
+    "verity/core/service/flock/Flock/Zk.lean", "verity/core/service/flock/Flock/RecVStar.lean",
     # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
     # the flock-verify artifact
     "verity/core/service/flock/Flock/Test/RecCap.lean",
+    # `flock-firewall live` starts from this directory, where the guard reads its argument `live` as the crate's directory
+    "verity/ml/flock/live/PROTOCOL.md",
 ]
 parallel = true
 # an xdist worker peaked at 15.6 GB (38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this

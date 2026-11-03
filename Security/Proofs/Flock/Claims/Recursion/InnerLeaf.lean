@@ -16,7 +16,7 @@ cannot both pass.
   walks `parse` as `Exec.parse_leafScheme_pre` does, keeping the reads of the META line.
 * `innerOf_metaLeaf`: a circuit file `RecVStar.innerOf` sets up (`Stmt.setupTables` at `RecVStar.innerTags`, through
   `Stmt.setupHidden` and `HmOut.parse`) has `flock-leaf/sha512-unsalted` as its META id, the inner tags' plain leaves
-  (§16.16).
+  (`Tags.withPlainLeaves`).
 * `check_metaLeaf_tags`, `check_metaLeaf`: a circuit file `ProvedScope.check` passes, whatever its public-input and
   registered flags, has the tags' leaf scheme as its META id, one `ProvedScope.leafOk` covers: `hm96-sha512/v1`, or
   `flock-leaf/sha512-unsalted` at hidden outputs without `--zk`. The check requires those leaves and an untyped

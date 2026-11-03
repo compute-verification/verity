@@ -4,7 +4,7 @@ import Proofs.Flock.Verifier.Registered
 /-!
 # Registered reads: the model's objects
 
-A session reads some of its rows from values registered once before (PROTOCOL.md §16.10): each such row's leaf opens the
+A session reads some of its rows from values registered once before (`Flock.HmRow`): each such row's leaf opens the
 registered root the verifier holds, at the position the verifier's own program reads (`Flock.Registered.check_ok`).
 
 * `TwoOpenings`: two openings of one position under one registered root. They conflict (`Conflict`) when the verifier

@@ -28,7 +28,7 @@ open Flock Refine Exec Game Model DecodeZL Transcript
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **A `--zk` rep's Ligerito verdict accepts** (live PROTOCOL.md §7, PROTOCOL.md §13). Under `ZkRepAccepts`'s
+/-- **A `--zk` rep's Ligerito verdict accepts** (live PROTOCOL.md §7, `Flock.Ligerito`). Under `ZkRepAccepts`'s
 hypotheses, every result of the compiled rep, played with the rep's messages and the rounds' coins, has a Ligerito
 verdict that accepts the openings whose rep-`r` rows are the proof's. -/
 def ZkLigAccepts : Prop :=
