@@ -53056,9 +53056,9 @@
    "guarantees": ["Flock.Guarantees.recursiveKS_nontrivial", "Flock.SecurityProofs.RecursiveKS"]
   },
   "Proofs.Flock.Claims.Recursion.KappaEpsCap": {
-   "digest": "94ce43444546d470d87fd351d37d7185de6d83eba37b4acba1e7e6f09c0d7f4d",
+   "digest": "9ad6880f14386c9d8702813e3ef9b06357f46690d5b26643d6f41eef4006c2af",
    "definitions": {
-    "RecDeploy.OneTableAt": "1ba2cd51584fbf0476f8268b8d16f9edb1389dc48b85f7ec5b17c4b4e7ea9688"
+    "RecDeploy.OneTableAt": "a783319eac5fbc748d8a76699c52c3d982b64b49c2f06d345dabafadec30450f"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
