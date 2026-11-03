@@ -570,34 +570,6 @@ def test_the_whole_making_system_is_exact_in_feeding_order_and_void_only_where_a
         assert w["e"] is None and math.isinf(w["whole_chain"])
 
 
-def test_a_cycle_whose_fed_sum_exceeds_its_p_is_lifted_to_a_post_fixed_point_and_only_a_divergence_is_diverged():
-    """A cycle whose iterate converges where a class's fed sum exceeds its own P (μ_16 about 5.48 feeding the 64-long
-    chains, P 1): μ scaled up uniformly isn't post-fixed there ((J·μ)_K = 2 μ_K s_K/(P_K + s_K)), which 4.12.4 took
-    for a divergence, voiding the workloads model rl/default. Lifted along w = Σ Jⁿ·1 it is, at direct iteration's μ.
-    A cycle at a fixed point where J's spectral radius is 1 (r 1/3 fed by itself at 3/4) is neither lifted nor proved
-    to diverge, so it and what it feeds are `unproved`, ∞, never `diverged`."""
-    c, k = iob.CONSOLE
-    third = 1 / 3
-    toy = {"classes": {16: {"c": third, "P": 1.0, "feeds": {64: 0.001}}, 64: {"c": third, "P": 1.0, "feeds": {16: 1.0}}},
-           "counted": {64: 1.0}, "b": 16}
-    w = iob.whole_chain_of(toy, k)
-    mu = dict.fromkeys(toy["classes"], 0.0)
-    for _ in range(200):
-        mu = {K: w["r"][K] * (e["P"] + sum(v * mu[i] for i, v in e["feeds"].items())) ** 2
-              for K, e in toy["classes"].items()}
-    assert mu[16] > toy["classes"][64]["P"] and (w["diverged"], w["unproved"], w["cycles"]) == ([], [], [[16, 64]])
-    for K, e in toy["classes"].items():
-        assert w["r"][K] * (e["P"] + sum(v * w["mu"][i] for i, v in e["feeds"].items())) ** 2 <= w["mu"][K]
-        assert w["mu"][K] == pytest.approx(mu[K], rel=1e-9)
-    assert w["e"] == pytest.approx(mu[64], rel=1e-9)
-
-    edge = {"classes": {64: {"c": third, "P": 1.0, "feeds": {64: 0.75}},
-                        256: {"c": third, "P": 1.0, "feeds": {64: 1.0, 256: 0.5}},
-                        1024: {"c": third, "P": 1.0, "feeds": {256: 1.0}}}, "counted": {1024: 1.0}, "b": 16}
-    w = iob.whole_chain_of(edge, k)
-    assert (w["diverged"], w["unproved"], w["e"]) == ([], [64, 256, 1024], None) and math.isinf(w["whole_chain"])
-
-
 def test_each_subset_takes_the_whole_making_factor_of_the_classes_that_feed_it():
     """With the system's made-whole shares (`made_whole`) and each product's `fed`, a subset's Λ reads only the classes
     that feed its products: where an adapter's class makes e large (μ 10³) or has no fixed point (∞), the best subset

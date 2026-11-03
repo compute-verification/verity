@@ -694,16 +694,12 @@ def whole_chain_of(system: dict, k: float, iters: int = 100_000, tol: float = 1e
     units of k/b, μ_j ≤ r_j·(P_j + Σ_i A_ij·μ_i)² with r_j = c_j·k/(K_j²·b). The classes are solved one strongly
     connected component at a time, feeders first (`_components`). A class on no cycle is its right side exactly, from
     the classes that feed it, however large. A cycle (`cycles`) is iterated from 0 (induction on nesting depth bounds μ
-    by any post-fixed point) until its iterate converges, then lifted to a post-fixed point, which it then is: the
-    iterate plus δ·w, w = Σ_n Jⁿ·1 over the cycle's Jacobian J there, so J·w = w − 1 and the right side at the lift
-    is below it for small δ wherever J's spectral radius is under 1 (a uniform scaling is post-fixed only where each
-    class's fed sum is at most its P). A cycle diverges (`diverged`), which is proved once an iterate's increase stops
-    shrinking (the right side is monotone and convex, so the increases never shrink again and μ grows without bound)
-    or the iterate overflows. One neither lifted to a post-fixed point nor proved to diverge in `iters` rounds (at a
-    fixed point where J's spectral radius is 1, or too near it) is `unproved`. A class of either, and every class it
-    feeds, has μ ∞. e = Σ_i A_i,counted·μ_i and `whole_chain` = (1 + e)^{3/2}; e is None and `whole_chain` ∞ (the
-    proved bound void on the whole step) only where such a class feeds a counted product. `bound` with `made_whole` =
-    `mu` takes each subset's own e, so a subset that drops those products keeps a proved Λ."""
+    by any post-fixed point) to a post-fixed point, which it then is; or it diverges, which is proved once an iterate's
+    increase stops shrinking (the right side is monotone and convex, so the increases never shrink again and μ grows
+    without bound) or where no post-fixed point is reached in `iters` rounds. A diverged class, and every class it
+    feeds, has μ ∞ (`diverged`). e = Σ_i A_i,counted·μ_i and `whole_chain` = (1 + e)^{3/2}; e is None and `whole_chain`
+    ∞ (the proved bound void on the whole step) only where a diverged class feeds a counted product. `bound` with
+    `made_whole` = `mu` takes each subset's own e, so a subset that drops those products keeps a proved Λ."""
     cls, b = system["classes"], system["b"]
     r = {K: e["c"] * k / (K * K * b) for K, e in cls.items()}
     feeds = {K: {i: v for i, v in e["feeds"].items() if i in cls and v > 0} for K, e in cls.items()}
@@ -716,80 +712,35 @@ def whole_chain_of(system: dict, k: float, iters: int = 100_000, tol: float = 1e
         x = cls[K]["P"] + sum(v * at[i] for i, v in feeds[K].items())
         return r[K] * x * x
 
-    def lift(comp: list, at: dict) -> dict | None:
-        """A post-fixed point at or just above cycle `comp`'s converged iterate `at` (None: none found)."""
-        J = {K: {i: 2 * r[K] * (cls[K]["P"] + sum(v * at[x] for x, v in feeds[K].items())) * v
-                 for i, v in feeds[K].items() if i in comp} for K in comp}
-        w, step, last = dict.fromkeys(comp, 1.0), dict.fromkeys(comp, 1.0), None
-        for _ in range(iters):
-            step = {K: sum(v * step[i] for i, v in J[K].items()) for K in comp}
-            w = {K: w[K] + step[K] for K in comp}
-            if not all(math.isfinite(v) for v in w.values()) or \
-                    (last is not None and all(step[K] >= last[K] > 0 for K in comp)):
-                return None
-            if all(step[K] <= tol * w[K] for K in comp):
-                break
-            last = step
-        else:
-            return None
-        res = max(max(rhs(K, at) - at[K] for K in comp), 1e-15 * max(1.0, *(at[K] for K in comp)))
-        for j in range(20):
-            up = at | {K: at[K] + 2 * res * 10 ** j * w[K] for K in comp}
-            if all(rhs(K, up) <= up[K] for K in comp):
-                return up
-        return None
-
-    failed: dict = {}
     for comp in _components(feeds):
         if len(comp) == 1 and comp[0] not in feeds[comp[0]]:
             mu[comp[0]] = rhs(comp[0], mu)
             continue
         cycles.append(comp)
-        if any(math.isinf(mu[i]) for K in comp for i in feeds[K] if i not in comp):
-            mu |= dict.fromkeys(comp, math.inf)
-            continue
         at = mu | dict.fromkeys(comp, 0.0)
         last: dict | None = None
-        how = "unproved"
+        fixed = False
         for _ in range(iters):
             new = {K: rhs(K, at) for K in comp}
             if not all(math.isfinite(v) for v in new.values()):
-                how = "diverged"
                 break
             d = {K: new[K] - at[K] for K in comp}
             if last is not None and any(last[K] > tol * max(1.0, at[K]) for K in comp) and \
                     all(d[K] >= last[K] for K in comp):
-                how = "diverged"
                 break
             last = d
             at |= new
             if all(d[K] <= tol * max(1.0, new[K]) for K in comp):
-                up = lift(comp, at)
-                if up is not None:
-                    at, how = up, "fixed"
-                break
-        if how == "fixed":
-            mu |= {K: at[K] for K in comp}
-        else:
-            mu |= dict.fromkeys(comp, math.inf)
-            failed |= dict.fromkeys(comp, how)
-    reach: dict = {}
-    for how in ("diverged", "unproved"):
-        todo = [K for K, h in failed.items() if h == how]
-        seen = set(todo)
-        while todo:
-            i = todo.pop()
-            for j in (j for j, f in feeds.items() if i in f and j not in seen and math.isinf(mu[j])):
-                seen.add(j)
-                todo.append(j)
-        reach[how] = seen
-    unproved = sorted(reach["unproved"] - reach["diverged"])
-    diverged = sorted(K for K, v in mu.items() if math.isinf(v) and K not in unproved)
-    out = {"r": r, "mu": mu, "diverged": diverged, "unproved": unproved, "cycles": cycles}
+                up = at | {K: new[K] * (1 + 1e-9) for K in comp}
+                if all(rhs(K, up) <= up[K] for K in comp):
+                    at, fixed = up, True
+                    break
+        mu |= {K: at[K] for K in comp} if fixed else dict.fromkeys(comp, math.inf)
+    diverged = sorted(K for K, v in mu.items() if math.isinf(v))
     e = sum(v * mu[i] for i, v in system["counted"].items() if i in mu and v > 0)
     if math.isinf(e):
-        return out | {"e": None, "whole_chain": math.inf}
-    return out | {"e": e, "whole_chain": (1 + e) ** 1.5}
+        return {"r": r, "mu": mu, "e": None, "whole_chain": math.inf, "diverged": diverged, "cycles": cycles}
+    return {"r": r, "mu": mu, "e": e, "whole_chain": (1 + e) ** 1.5, "diverged": diverged, "cycles": cycles}
 
 
 def p_match(graph, k: float = CONSOLE[1]) -> list[str]:

@@ -94,8 +94,7 @@ most that. The kinds:
   every product with an operand that reads an embedding's rows before any op makes them token-specific (tokens that
   share an id share its row, so a block that pays for it gets their products free), named the same way (`gathered`),
   and each token-indexed product's share at the positions sequences can share (`SHARED_PREFIX`, `shared_prefix`).
-  Where every subset is fed by a cycle that diverges, or one with no proved fixed point (io_bound's `unproved`), the
-  term is unmeasured (`FRESH_VOID`), never 0, and so it is
+  Where every subset is fed by a cycle that diverges the term is unmeasured (`FRESH_VOID`), never 0, and so it is
   where an op breaks P-match,
   on a trace whose product rows predate what the term reads (`FRESH_RETRACE`). Products that come without one (a model's, a hand-written set) take io_bound's
   one-class rule, named in `inputs` (`ONE_CLASS`). It is unmeasured, with io_bound's chain figure in `inputs`,
@@ -668,8 +667,7 @@ FRESH_UNMEASURED = (f"unmeasured: the record has no product rows (a step capture
 #: why the fresh-products kind is unmeasured where every subset of the counted products voids the proved Λ
 FRESH_VOID = ("unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed "
               "point at this k (the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, "
-              "and that compounds), or is so near having none that no fixed point is proved, so Λ has no proved value "
-              "on any subset; a void is never a measured 0")
+              "and that compounds), so Λ has no proved value on any subset; a void is never a measured 0")
 #: the first te_core whose capture writes everything the term reads: the whole-making system's rows (each product's
 #: `fed` and `P`, the trace's `p_match`) and which operands read a gather's rows (`gathered`)
 SYSTEM_FROM = "4.12.1"
@@ -980,7 +978,7 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
     else:
         w = whole_chain(p["system"], k)
         got["whole_making"] = {"e": w["e"], "whole_chain": w["whole_chain"] if math.isfinite(w["whole_chain"]) else None,
-                               "diverged": w["diverged"], "unproved": w["unproved"]}
+                               "diverged": w["diverged"]}
         own = all("fed" in x for x in p["products"])
         got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, w["whole_chain"],
                                          made_whole=w["mu"] if own else None)
