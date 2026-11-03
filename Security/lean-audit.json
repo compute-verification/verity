@@ -864,19 +864,19 @@
   },
   "Claims.ZKServer.LeanRelease.FillRoundEq": {
    "owner": "@proofs",
-   "digest": "a099cbfc181b00444232d8e37864c21b96af6da9ea08db49ade10c46e2ca43ec"
+   "digest": "4fb9b4cb9aa9fe2d981bd12d58c3605088f8d8d5be05e5552f2ce08fc63e1244"
   },
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs",
-   "digest": "9f94b100c9b3c5071003589888c4c81af38178164ceb8a904ebb426429949605"
+   "digest": "99db779260884384c3f7b8ee0abce1c550ddd3380d40f57f5b60388c91b5220f"
   },
   "Claims.ZKServer.LeanRelease.LinkRoundEq": {
    "owner": "@proofs",
-   "digest": "8f9226dcbf8d0aa7faba44e78430f006328f1f7cd42be160f502502e5fe39897"
+   "digest": "0d9feb5b0caf3437961e3f564f6d62f1a1f5dc515fd07817154a80671a29e5eb"
   },
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
    "owner": "@proofs",
-   "digest": "c7d03e251d4aed43855e07cc67e1d6350085bc6b94282f0f69e92dda43165267"
+   "digest": "383bbd42b4cec8dec5586d186ec9be87d3be57327af44c25f1a5db741ecb2d13"
   },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
@@ -14946,8 +14946,7 @@
    "Flock.SecurityProofs.RanRegisteredRun": {
     "com.Opens rt p op₀": "com.Opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (b : β), acc b → com.Opens rt (prog b) (op b)": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "ENNReal.instLE.le (FlockSoundness.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "ENNReal.instLE.le (Verity.Game.prob (fun b => And (acc b) (Q b)) G σ) B": "a bound that is no plain range, printed so since #6403 renamed `FlockSoundness.Game` to `Verity.Game`, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.RecursiveCircuitIndist": {
     "honest o P w": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
