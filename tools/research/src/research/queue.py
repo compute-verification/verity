@@ -2027,6 +2027,23 @@ class Queue:
         ruled = lambda path: any(path == r or (r.endswith("/") and path.startswith(r)) for r in PREFLIGHT_RULES)  # noqa: E731
         return not any(meta.endswith(" D") for meta, _ in [*change, *between]) and not any(ruled(p) for _, p in between)
 
+    def _read_priority(self, state: dict) -> frozenset[int]:
+        """Drive's priority list from `priority_file` (`priority_list`), logged when it changes (the state's `priority`); one it
+        can't read is empty, its error logged once while it stays the same (`priority_error`)."""
+        try:
+            got = priority_list(self.priority_file)
+        except QueueError as e:
+            if state.get("priority_error") != str(e):
+                self.log(f"research queue: {e}; drive's priority list is empty until the file is fixed")
+            state["priority_error"], state["priority"] = str(e), []
+            return frozenset()
+        state.pop("priority_error", None)
+        if sorted(got) != state.get("priority", []):
+            self.log(f"research queue: drive's priority list ({self.priority_file}): "
+                     + (" ".join(f"#{n}" for n in sorted(got)) or "empty"))
+            state["priority"] = sorted(got)
+        return got
+
     def _unmerged(self, r: subprocess.CompletedProcess, files: list[str], members: list[Member]) -> str:
         if not files:
             return f"doesn't merge onto `{self.branch}`: {(r.stderr or r.stdout).strip()[-200:]}"
@@ -2062,23 +2079,6 @@ class Queue:
                               {a: h["handle"] for h in reg if isinstance(h, dict) and "handle" in h
                                for a in AGENT_RE.findall(str(h.get("holder", "")))})
         return self._registry
-
-    def _read_priority(self, state: dict) -> frozenset[int]:
-        """Drive's priority list from `priority_file` (`priority_list`), logged when it changes (the state's `priority`); one it
-        can't read is empty, its error logged once while it stays the same (`priority_error`)."""
-        try:
-            got = priority_list(self.priority_file)
-        except QueueError as e:
-            if state.get("priority_error") != str(e):
-                self.log(f"research queue: {e}; drive's priority list is empty until the file is fixed")
-            state["priority_error"], state["priority"] = str(e), []
-            return frozenset()
-        state.pop("priority_error", None)
-        if sorted(got) != state.get("priority", []):
-            self.log(f"research queue: drive's priority list ({self.priority_file}): "
-                     + (" ".join(f"#{n}" for n in sorted(got)) or "empty"))
-            state["priority"] = sorted(got)
-        return got
 
     def sync(self, dry_run: bool = False) -> tuple[list[Member], dict[int, Entry]]:
         """Rebuild `next` (see the module's `next`).  Off drive it refuses before anything (`_drive_only`)."""
