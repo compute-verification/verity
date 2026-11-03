@@ -28,12 +28,25 @@ Definition, so its proof fails.
 credit's (`commit_of`) and one-stage's, and R1-R7 (`registration.check` with the log [W] and each table an output value of
 W's) accept it. With the flipped row they accept W' and an R' written by hand after it: the records can't see a row, and
 only the reader's proof refuses it.
+
+**Lean** (opt-in as the records, and a Lean toolchain): `served_cases.py --serve-dir` on a serve dir under H1's tie (V3c's
+audit's v1 case of R, H1's log of W then R, and PoUW's period case of one window naming R) writes the three cases, and
+`sampled-proofs-one-stage check` (whose log record reader takes W and whose R1-R7 accept R) and `inference-only check`
+accept theirs, each naming R's digest; `composite.py remote` composes them and the tie holds, so remote's reason is the
+period's alone. The v1 case's verdict of record is an accepting stand-in reporting R's tables' roots as their readers
+opened them (the proof blocks' proofs aren't run here), and its period has no H1 window's proofs, so PoUW's period Lean
+refuses it and remote rejects: remote accepting all three is a served window's. A period naming W instead breaks the tie,
+and remote rejects on the record. With the flipped row, one-stage's Lean accepts R' on the log [W'] and refuses it on [W].
 """
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import importlib.util
+import io
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -48,13 +61,14 @@ from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_class import Tables, WindowClass
+from verity_vllm.pipeline import serve_tie as TIE
 from verity_vllm.protocols.pouw.h1 import commit as CT
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import served as SV
 from verity_vllm.protocols.pouw.h1.words import chunk_words, ids_words
 
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as G, registration as REG
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registered as G, registration as REG
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.windows import interface as IF, rows as CS
@@ -85,6 +99,9 @@ FLIP = ("row-table/1/k2048", M * 1)
 REMOTETIE = "VERITY_PROVE_PATH_REMOTETIE"
 RECORDS = pytest.mark.skipif(not os.environ.get(REMOTETIE), reason=f"{REMOTETIE}=1 records, commits and writes the toy's "
                              "11,252 proof blocks, a few minutes")
+LEAN = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+ROOT = HERE.parents[2]
+ONE_STAGE = ROOT / "benchmarks" / "one_stage"
 
 
 def _bf16(x) -> np.ndarray:
@@ -273,19 +290,29 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
                            leaf_layer=CS.leaf_layer(publics))
 
 
+def _by_hand(toy, written, W: dict) -> dict:
+    """The window's record R chained after ``W`` instead and registering ``W``'s tables, written by hand."""
+    return {**written.R, "previous": REG.digest(W), "registered": [
+        {**{e["value"]: e for e in W["registered"]}[_names()[p]], "value": p} for p in toy.low.circuit.registered.values]}
+
+
 def _rounds(run) -> list[dict]:
     table = "cd" * 64
     return [{"request_table": table, "requests": CR.requests_root(bytes.fromhex(table), run.tables[TABLES.ids(0)].root).hex()},
             *({} for _ in range(ROUNDS - 1))]
 
 
+def _words(c) -> dict[str, int]:
+    """Each table the circuit registers, -> the words of the row its readers hold to it."""
+    words = {r.param: dict(c.layouts[r.reader][0].outs)[r.port] for r in c.registered.reads if r.param in c.registered.values}
+    return {p: words[p] for p in c.registered.values}
+
+
 def _check(written, toy, W: dict, R: dict):
     """R1-R7 on ``R`` against the verifier's own window, with the log [W] and each table an output value reusing W's."""
-    c, mine, dW = toy.low.circuit, written.mine, REG.digest(W)
-    words = {r.param: dict(c.layouts[r.reader][0].outs)[r.port] for r in c.registered.reads if r.param in c.registered.values}
+    mine, dW, words = written.mine, REG.digest(W), _words(toy.low.circuit)
     return REG.check(R, mine.program, mine.query, LAW, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (), [W],
-                     registered={p: words[p] for p in c.registered.values},
-                     outputs={p: {"record": dW, "value": _names()[p]} for p in c.registered.values}, window_root=OPEN)
+                     registered=words, outputs={p: {"record": dW, "value": _names()[p]} for p in words}, window_root=OPEN)
 
 
 @pytest.mark.slow
@@ -320,8 +347,7 @@ def test_the_records_accept_a_flipped_table_row_so_only_its_readers_proof_refuse
     vacuous."""
     flipped = _flipped(toy.h1)
     W2 = flipped.W
-    R2 = {**written.R, "previous": REG.digest(W2), "registered": [
-        {**{e["value"]: e for e in W2["registered"]}[_names()[p]], "value": p} for p in toy.low.circuit.registered.values]}
+    R2 = _by_hand(toy, written, W2)
     assert canonical_json(R2) != canonical_json(written.R)
     assert CR._arow(_rounds(flipped), W2["registered"], R2["registered"], _layout(), SV.PREFIX) is None
     assert CT.reused(flipped, W2, R2) is None
@@ -329,3 +355,155 @@ def test_the_records_accept_a_flipped_table_row_so_only_its_readers_proof_refuse
     assert CR._arow(_rounds(toy.h1), toy.h1.W["registered"], R2["registered"], _layout(), SV.PREFIX) is not None
     assert CT.reused(toy.h1, toy.h1.W, R2) is not None
     assert list(_check(written, toy, toy.h1.W, R2).codes) != []
+
+
+def _one_stage() -> SimpleNamespace:
+    """`served_cases`, `composite` and `replay` of ``benchmarks/one_stage``, which make a served window's cases and compose
+    them (`replay` under the name its own tests load it by)."""
+    if str(ONE_STAGE) not in sys.path:
+        sys.path.insert(0, str(ONE_STAGE))
+    import composite
+    import served_cases
+    replay = sys.modules.get("one_stage_replay")
+    if replay is None:
+        spec = importlib.util.spec_from_file_location("one_stage_replay", ONE_STAGE / "replay.py")
+        replay = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = replay
+        spec.loader.exec_module(replay)
+    return SimpleNamespace(SC=served_cases, C=composite, RP=replay)
+
+
+def _v1_case(one, toy, written, W: dict, R: dict) -> dict:
+    """a5's v1 case of an audit of ``R`` (``window/case.json``: R, the evidence its record was handed and the verifier's
+    params): `_check`'s params, the log [W] and each table an output value of W's; a stratified sample's first proof
+    blocks of each stratum, the verifier's receipt of R, and a verdict of record that accepted, reporting R's tables'
+    roots as the ones its readers opened against, standing in for their proofs."""
+    mine, words = written.mine, _words(toy.low.circuit)
+    program, query = mine.program, mine.query
+    drawn = D.derive(program, query, LAW)
+    units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])
+    draw = {**drawn, "population": P.units(program, query), "units": units}
+    proved = D.proved(draw)
+    opened = {e["value"]: {"root": e["root"], "value": e["value"]} for e in R["registered"]}
+    evidence = {"draw": draw, "instances": len(proved), "proved_units": proved,
+                "receipt": REG.receipt(R, "v", received="2000-01-01T00:00:00Z"), "served": None, "session_roots": None,
+                "sessions": [], "statement": {},
+                "verdicts": {"lean": {"accepted": True, "of_record": True, "registered": opened}}}
+    params = one.RP.params(program, query, LAW, CS.expected_ports(mine), written.leaf_layer, "1/20", log=[W],
+                           registered=words, scheme=CS.SCHEME)
+    params |= {"outputs": {p: {"record": REG.digest(W), "value": _names()[p]} for p in words}, "window_root": OPEN,
+               "parameters": [[n, t.to_json()] for n, t in program.fn.signature()[0]]}
+    return {"commitment": canonical_json(R).hex(), "evidence": canonical_json(evidence).hex(),
+            "params": json.loads(json.dumps(params))}
+
+
+def _period(one, exe: Path, d: Path, commits: list[dict]) -> None:
+    """PoUW's period case in ``d`` beside its Lean answer (``exe``), as `pouw_piece.py period` writes them: the auditor's
+    ledger empty and a window a record of ``commits`` names as its Commit record each, carrying none of an H1 window's
+    proofs."""
+    evidence = {"pins": [], "windows": [{"commit": canonical_json(r).hex()} for r in commits]}
+    case = {"blobs": [], "commitment": canonical_json([]).hex(), "evidence": canonical_json(evidence).hex(),
+            "params": {"key": None, "main": [], "name": "toy"}}
+    _answer, line = one.SC.lean_answer(exe, case, d.parent / "scratch")
+    one.SC.write(d, case, line)
+
+
+def _serve(one, root: Path, v1: dict, W: dict, R: dict, period_exe: Path) -> Path:
+    """A serve dir under H1's tie as `served_cases.py --serve-dir` reads it: V3c's audit's v1 case, H1's log of W then R
+    (`serve_tie`'s, each record in its window's file), and PoUW's period case of one window naming R."""
+    audit = root / f"v3c-w0-{CLASS.slots}-{CLASS.prompt}-{CLASS.outputs}" / "audit" / "window"
+    audit.mkdir(parents=True)
+    (audit / "case.json").write_text(json.dumps(v1, sort_keys=True))
+    (root / "h1" / "w0").mkdir(parents=True)
+    lines = []
+    for kind, name, r in (("registration", TIE.W_FILE, W), ("record", TIE.R_FILE, R)):
+        (root / "h1" / "w0" / name).write_text(json.dumps(r, indent=1) + "\n")
+        lines.append({"window": 0, "kind": kind, "file": f"w0/{name}", "digest": REG.digest(r)})
+    (root / "h1" / TIE.LOG).write_text("".join(json.dumps(x) + "\n" for x in lines))
+    _period(one, period_exe, root / one.SC.PERIOD_PIECE, [R])
+    return root
+
+
+@pytest.fixture(scope="module")
+def lean(toy, written, tmp_path_factory) -> SimpleNamespace:
+    """The Lean verifiers, and the toy's cases as `served_cases.py --serve-dir` writes them from its serve dir under H1's
+    tie (α and Γ read off the division): its exit and its CASE and NOT_WRITTEN lines."""
+    one = _one_stage()
+    SC = one.SC
+    exes = SimpleNamespace(v1=SC.build(*SC.V1_LEAN), policy=SC.build(*SC.INFERENCE_ONLY_LEAN),
+                           period=SC.build(ROOT / "verity/core/protocols/pouw/lean/check", "pouw-period"),
+                           remote=SC.build(ROOT / "verity/core/protocols/remote", "remote"))
+    W, R = toy.h1.W, written.R
+    serve = _serve(one, tmp_path_factory.mktemp("serve"), _v1_case(one, toy, written, W, R), W, R, exes.period)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        rc = SC.main(["--serve-dir", str(serve), "--private", str(serve / "private"), "--from-division",
+                      "--v1-exe", str(exes.v1), "--inference-only-exe", str(exes.policy)])
+    lines = [(head, json.loads(body)) for head, _, body in (x.partition(" ") for x in out.getvalue().splitlines())
+             if head in ("CASE", "NOT_WRITTEN")]
+    return SimpleNamespace(one=one, exes=exes, private=serve / "private", rc=rc, lines=lines)
+
+
+def _answer(lean, id: str) -> dict:
+    return json.loads((lean.private / lean.one.SC.DIRS[id] / "answer.json").read_text())
+
+
+def _remote(lean, out: Path, period: Path) -> tuple[int, dict]:
+    """`composite.py remote` on the policy's case, ``period`` and one-stage's case: its exit and remote's Lean answer."""
+    SC = lean.one.SC
+    cases = [lean.private / SC.DIRS[SC.INFERENCE_ONLY], period, lean.private / SC.DIRS[SC.V1]]
+    with contextlib.redirect_stdout(io.StringIO()):
+        rc = lean.one.C.main(["remote", *(x for c in cases for x in ("--cases", str(c))), "--private-out",
+                              str(out / "private"), "--public-out", str(out / "public"), "--exe", str(lean.exes.remote)])
+    return rc, json.loads((out / "private" / "answer.json").read_text())
+
+
+@pytest.mark.slow
+@RECORDS
+@LEAN
+def test_one_stage_and_the_policy_accept_r_on_the_log_w_and_remote_s_tie_holds(toy, written, lean, tmp_path):
+    """`served_cases` writes the three cases from the serve dir. One-stage's Lean accepts R on the log [W] (its log record
+    reader takes W, and its R1-R7 accept R chained right after W with each table an output value of W's), and the
+    policy's Lean accepts its case, whose log is H1's through W; both name R's digest. The period names R as its window's
+    Commit record, and its Lean refuses it for want of an H1 window's proofs. Composed, the tie holds: remote rejects
+    with the period's refusal alone."""
+    SC, d = lean.one.SC, REG.digest(written.R)
+    assert (lean.rc, [(c["protocol"], c["verdict"]) for _, c in lean.lines]) == (0, [
+        (SC.V1, "accept"), (SC.INFERENCE_ONLY, "accept"), (SC.PERIOD, "reject")]), lean.lines
+    for id in (SC.V1, SC.INFERENCE_ONLY):
+        got = _answer(lean, id)
+        assert (got["protocol"], got["commitment"], got["verdict"]) == (id, d, "accept"), got
+    policy = json.loads((lean.private / SC.DIRS[SC.INFERENCE_ONLY] / "case.json").read_text())
+    assert policy["params"]["log"] == [toy.h1.W] and policy["commitment"] == canonical_json(written.R).hex()
+    period = _answer(lean, SC.PERIOD)
+    rc, got = _remote(lean, tmp_path, lean.private / SC.DIRS[SC.PERIOD])
+    assert (rc, got["verdict"], got["reason"]) == (1, "reject", f"{SC.PERIOD} reject: {period['reason']}"), got
+
+
+@pytest.mark.slow
+@RECORDS
+@LEAN
+def test_a_period_naming_w_breaks_remote_s_tie(toy, written, lean, tmp_path):
+    """A period whose window names H1's W as its Commit record is refused by `served_cases` before any composite; handed to
+    remote anyway, beside the policy's and one-stage's cases on R, it rejects remote on the record."""
+    SC = lean.one.SC
+    period = tmp_path / "pouw-period"
+    _period(lean.one, lean.exes.period, period, [toy.h1.W])
+    with pytest.raises(SC.Refused, match="remote's record tie rejects it"):
+        SC.period_case(period, REG.digest(written.R))
+    rc, got = _remote(lean, tmp_path / "remote", period)
+    assert (rc, got["verdict"]) == (1, "reject") and got["reason"].startswith(f"record: {SC.INFERENCE_ONLY} committed "), got
+
+
+@pytest.mark.slow
+@RECORDS
+@LEAN
+def test_one_stage_s_lean_accepts_a_flipped_w_s_record_only_on_its_own_log(toy, written, lean, tmp_path):
+    """The R' written by hand after W' (the flipped row's) is accepted by one-stage's Lean on the log [W'], as R1-R7 accept
+    it: no record holds a row. On the log [W] its registration is refused."""
+    SC, W2 = lean.one.SC, _flipped(toy.h1).W
+    R2 = _by_hand(toy, written, W2)
+    got, _ = SC.lean_answer(lean.exes.v1, _v1_case(lean.one, toy, written, W2, R2), tmp_path)
+    assert (got["verdict"], got["commitment"]) == ("accept", REG.digest(R2)), got
+    got, _ = SC.lean_answer(lean.exes.v1, _v1_case(lean.one, toy, written, toy.h1.W, R2), tmp_path)
+    assert got["verdict"] == "reject" and got["reason"].startswith("registration: "), got
