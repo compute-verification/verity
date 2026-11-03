@@ -823,7 +823,9 @@ def main() -> int:
     regrow = a.mech == "lora" and a.regrow < 1
     if regrow:
         spent += a.probe * prepare.train_flops(rec, {"full": sorted(theta)}, [{"op": "train", "tokens": tokens}])["flops"]
-    n_steps = int((a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - spent) // per_step)
+    budget = prepare.budget(a.start)
+    notes["budget"] = budget
+    n_steps = int((a.budget_fraction * budget["train_flops"] - spent) // per_step)
     if a.max_steps:
         n_steps = min(n_steps, a.max_steps)
     grow_at = round(n_steps * a.regrow_at) if regrow else -1
