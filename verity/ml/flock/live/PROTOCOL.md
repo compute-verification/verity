@@ -1142,7 +1142,8 @@ neither stopped nor released its last statement, on a stream that had not stoppe
 outer session of the stream and every open, and `rec_live` closes the next connection before anything is served. A
 recursive session is unended while it has neither stopped nor released its last statement, and the ZK server refuses an
 open while the stream's unended recursive sessions and its failures together reach b, so at most b of a stream's recursive
-sessions ever have a statement not released: each is unended, or stopped and so a failure. A recursive session the worker
+sessions ever have a statement not released: each is unended, or stopped and so a failure (`card_unreleased_le_budget`,
+`Proofs.Flock.Recursive.StopCountBudget`, over `StopCount.run`'s ops). A recursive session the worker
 abandons, asking for no statement after some release, ends where it stands for the challenger (its next proof never
 comes, `late`); the ZK server records no stop until a request comes, but the session stays unended and holds one of the
 b. b is the challenger's stream's `budget` (`Stream(budget=...)`,

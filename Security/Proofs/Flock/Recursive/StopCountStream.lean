@@ -16,7 +16,7 @@ tuple's entries are stops.
 * `streamStopIn`, `card_streamStops`: the joint stop as a `Pattern` at `B` where at most `B` sessions are not released,
   and how many there are, `Σ_{|S| ≤ B} Π_{i ∈ S} Σ_p (M_p + 1)`, each factor session `ss i`'s `RecStops` less its none.
 
-Nothing here bounds `B`: the firewall's rules let every session of a stream stop.
+Nothing here bounds `B`; `StopCountBudget` bounds it by the stream's failure budget, where the stream has one.
 -/
 
 namespace Flock.StopCount
