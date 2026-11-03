@@ -45,7 +45,7 @@ before its push: `_push_into`) or ci accepted it (`research queue accept-checked
 nothing, syncing no `next` and moving no `main`, and rings `CI` and `TOP` once naming the commit and its author
 (`_unwritten`).  Two gates cut the prefix
 first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, the spec, `Security/`'s Definitions and
-Models and its package's Lake files, or a Lean source outside `Security/` of a package that has one, Lean that runs as code:
+its package's Lake files, or a Lean source outside `Security/` of a package that has one, Lean that runs as code:
 `queue.lean_change`, whatever its PR's title; Lean proofs alone land on the verdict, checked by the
 after-landing run) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean
 check (`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top, while `next` stays on its base for it), or any

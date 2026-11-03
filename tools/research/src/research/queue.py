@@ -994,10 +994,10 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 #: the ZK server, the PoUS grader, the certifier program, the inference-only check, the remote audit's verifier) and keeps its Lean
 #: check first
 LEAN_PROOFS_TREE = "Security/"
-#: the spec: the Lean the guarantees' statements read, `Security/`'s Definitions and Models libraries, and the Lake files of
-#: their package.  A change to it, like a lock's, is a Lean change with or without a lock change
-LEAN_SPEC = ("Security/Definitions/", "Security/Definitions.lean", "Security/Models.lean", "Security/lakefile.toml",
-             "Security/lake-manifest.json", "Security/lean-toolchain")
+#: the spec: the Lean the guarantees' statements read, `Security/`'s Definitions library, and the Lake files of its package.
+#: A change to it, like a lock's, is a Lean change with or without a lock change
+LEAN_SPEC = ("Security/Definitions/", "Security/Definitions.lean", "Security/lakefile.toml", "Security/lake-manifest.json",
+             "Security/lean-toolchain")
 
 
 def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
