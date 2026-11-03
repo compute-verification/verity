@@ -81,6 +81,8 @@ theorem foldlM_single {α β ε : Type} {f : β → α → Except ε β} {b r : 
   rw [← Array.foldlM_toList] at h
   simpa only [List.foldlM_cons, List.foldlM_nil, bind_pure] using h
 
+theorem ok_toOption {ε α : Type} (a : α) : (Except.ok a : Except ε α).toOption = some a := rfl
+
 theorem eq_single {α : Type} {xs : Array α} (h : xs.size = 1) : xs = #[xs[0]] := by
   apply Array.ext
   · simp [h]
@@ -400,7 +402,7 @@ theorem sessionProofs_of {p : _root_.SampledProofs.OneStageZk.Params} {e : _root
     sessionProofs p e bs = some proofs := by
   obtain ⟨rs, tags0, circuitB, pubB, rd, hs, ht, hc, hp, hrd, hrec, hst, hf, -⟩ := h
   have h0 : (#[rs] : Array _root_.SampledProofs.OneStageZk.RunFiles)[0]? = some rs := rfl
-  simp only [sessionProofs, hs, h0, ht, hc, hp, hrd, hrec, hst, hf, Except.toOption, Option.bind_eq_bind,
+  simp only [sessionProofs, hs, h0, ht, hc, hp, hrd, hrec, hst, hf, ok_toOption, Option.bind_eq_bind,
     Option.bind_some]
 
 /-- **Where v2's check accepts, it verified the session's record and proof files** (`V2Verified`). -/
@@ -434,8 +436,8 @@ theorem sent_verified {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
     obtain ⟨_, _, _, _, _, _, _, _, _, _, h, -⟩ := hv
     exact h
   refine ⟨record, spec, tabs, rest, proofs, hcs, ?_, ?_, hv⟩
-  · simp only [sentRecord, hcs, Except.toOption, Option.bind_some, hrec]
-  · simp only [sentProofs, hcs, Except.toOption, Option.bind_some, sessionProofs_of hv]
+  · simp only [sentRecord, hcs, ok_toOption, Option.bind_some, hrec]
+  · simp only [sentProofs, hcs, ok_toOption, Option.bind_some, sessionProofs_of hv]
 
 /-! ## The messages against the record v2 decodes -/
 
@@ -480,10 +482,11 @@ theorem rootBOf_linkMsg {spec : SessionSpec} {record : String} {sess : RunRecord
   rw [ht] at hroot
   obtain ⟨rb, u, hrb, hnil, hu'⟩ := List.forall₂_cons_left_iff.1 hroot
   rw [List.forall₂_nil_left_iff.1 hnil] at hu'
-  have hB : sess.rootB = #[rb] := Array.toList_inj.1 (ys := #[rb]) (by rw [hu']; rfl)
+  have hB : sess.rootB = #[rb] :=
+    Array.toList_inj.1 (show sess.rootB.toList = (#[rb] : Array ByteArray).toList from hu'.trans rfl)
   have hm : linkMsg record spec.tables = some (sess.rootF ++ rb).data.toList := by
     rw [ht]
-    simp only [linkMsg, hp, hl, hs, hu, Except.toOption, Option.bind_some, ok_bind, qsort_single,
+    simp only [linkMsg, hp, hl, hs, hu, ok_toOption, Option.bind_some, ok_bind, qsort_single,
       mapM_single (rootBAt_of hrb), Option.map_some] <;> rfl
   rw [hm, Option.bind_some, hσ, rootBOf_append, hB]
 
@@ -517,7 +520,7 @@ theorem roundMsg_decode {spec : SessionSpec} {record : String} {sess : RunRecord
   refine ⟨b, hb, ?_⟩
   have hx' : recs.find? (fun x => (Flock.Record.str x "stream").toOption == some name) = some x := by
     rw [← Array.find?_toList]; exact hx
-  simp only [roundMsg, hp, hrecs, hx', hrs, Array.getElem?_eq_getElem hrk, hnull, hs, hu, Except.toOption,
+  simp only [roundMsg, hp, hrecs, hx', hrs, Array.getElem?_eq_getElem hrk, hnull, hs, hu, ok_toOption,
     Option.bind_some, ok_bind, Option.map_some, Bool.false_eq_true, ↓reduceIte]
 
 /-- A recorded round is `roundOf` of its bytes, its digest, its coin count and its coins. -/
