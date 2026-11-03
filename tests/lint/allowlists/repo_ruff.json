@@ -366,7 +366,6 @@
     {"file": "tools/agent-guard/shell_hook.py", "rule": "BLE001", "count": 6},
     {"file": "tools/move/layout.py", "rule": "F841", "count": 1},
     {"file": "tools/move/lean.py", "rule": "F841", "count": 1},
-    {"file": "tools/move/security_layout.py", "rule": "RUF100", "count": 1},
     {"file": "tools/move/tests/test_restack.py", "rule": "B006", "count": 1},
     {"file": "tools/research/console/util_collect.py", "rule": "UP017", "count": 7},
     {"file": "tools/research/console/verity_console.py", "rule": "RUF100", "count": 4},
