@@ -374,6 +374,20 @@ theorem enc_piop_all (vs : finS.SwVals) (w : Flock.Wit) {x : Msg} (hx : Masked.L
   rw [enc_finS_of C (by omega) (finS.swCutOf x C (finS.wt x w) (vs x w ν C) t) hsx hN
     (by rw [← hsrc]; exact hrc.1), ← hsrc, hrc.2, hcj] <;> rfl
 
+/-- The first `n` openings' coins are the padded coins' first `n`, at most `K` openings. -/
+theorem map_take_pad (S : RefSession) {K n : ℕ} (ops : List (Msg × Msg)) (hK : ops.length ≤ K)
+    (hn : n ≤ ops.length) :
+    (ops.take n).map (fun p => S.decOf p.2) = (List.ofFn (S.pad (K := K) (ops.map fun p => S.decOf p.2))).take n := by
+  have e1 := S.ofFn_pad_take (K := K) (ops.map fun p => S.decOf p.2) (by simpa using hK)
+  simp only [List.length_map, Nat.min_eq_left hK] at e1
+  calc (ops.take n).map (fun p => S.decOf p.2) = (ops.map fun p => S.decOf p.2).take n := by
+        simp [List.map_take]
+    _ = ((List.ofFn (S.pad (K := K) (ops.map fun p => S.decOf p.2))).take ops.length).take n := by
+        rw [e1]
+    _ = (List.ofFn (S.pad (K := K) (ops.map fun p => S.decOf p.2))).take n := by
+        rw [List.take_take, Nat.min_eq_left hn]
+
+set_option maxHeartbeats 1000000 in
 /-- **A scheduled round of the worker's own history is the switched session's at the opened coins**: on a live history
 of fewer than `refK x` openings whose openings pass, the release's own run (`ZkServer.OwnHist`), where `LiveSchedOwn`
 holds and `vs` is causal, message `n + 1` (`1 ≤ n`), whose round the loop schedules (`schedOf`), is the switched
@@ -435,21 +449,8 @@ theorem msg_liveSchedOwn (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     have := hok i (by simp only [List.length_map]; omega)
     simpa [List.getElem_map, List.getElem_take] using this
   · congr 1
-    have hcs : (ops.map fun p => finS.decOf p.2).length ≤ refK x := by
-      simp only [List.length_map]
-      omega
-    have e1 := finS.ofFn_pad_take (K := refK x) (ops.map fun p => finS.decOf p.2) hcs
-    simp only [List.length_map] at e1
-    rw [Nat.min_eq_left hlt.le] at e1
-    have e : (ops.take n).map (fun p => finS.decOf p.2) =
-        (List.ofFn (finS.pad (K := refK x) (ops.map fun p => finS.decOf p.2))).take n := by
-      calc (ops.take n).map (fun p => finS.decOf p.2) = (ops.map fun p => finS.decOf p.2).take n := by
-            simp [List.map_take]
-        _ = ((List.ofFn (finS.pad (K := refK x) (ops.map fun p => finS.decOf p.2))).take ops.length).take n := by
-            rw [e1]
-        _ = (List.ofFn (finS.pad (K := refK x) (ops.map fun p => finS.decOf p.2))).take n := by
-            rw [List.take_take, Nat.min_eq_left hn.le]
-    rw [e, finS.swMsgAt_take vs x w ν hcaus t _ n (by omega), ite_eq_left (by omega : n < refK x)] <;> rfl
+    rw [map_take_pad finS ops hlt.le hn.le, finS.swMsgAt_take vs x w ν hcaus t _ n (by omega),
+      ite_eq_left (by omega : n < refK x)] <;> rfl
 
 variable (L₁ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
@@ -1039,6 +1040,7 @@ theorem eq_of_add_eq_zero' {d f : F128} (h : d + f = 0) : f = d := by
   apply FlockSoundness.Discharge.Composed.Zerocheck.eq_of_of
   rw [FlockLevel3.of_add, ← FlockLevel3.GF128.zero_eq, zero_add]
 
+set_option maxHeartbeats 1000000 in
 /-- **The finish accepts the request only at `vs`'s `final_c`**: at a history `InnerHist` holds at, on the worker's own
 values (`innerReq_own`), where `finInner` returns at the request with `final_c = a`, its `zerocheck c_eval` constraint
 holds on the pads (`consWhy`): `a` is the c_eval of the request's round-1c values at the replay's zerocheck point, the
@@ -1196,6 +1198,7 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
         .ok (fc', tc) := by
   sorry
 
+set_option maxHeartbeats 1000000 in
 /-- **The finish's `τ` commitment at a rep's inner round 2**: at a history `InnerHist` holds at with `e = 2`, where the
 rows hold (`Loop.RowsOK`), where `finInner` returns at the request, its `τ` commitment is `vs`'s (`Loop.vsTau`): it
 accepts only at `vs`'s `final_c` (`finInner_accepts_own`), and its inner proof commits to `InZ.tau` over its constraints
@@ -1339,8 +1342,8 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
     intro k hk
     rw [getElem?_pos Q.coins k (by omega), ← getElem!_pos Q.coins k (by omega), hQk k hk]
   have hcQ : ∀ k < Q.coins.size, ∀ i < (Q.coins[k]!).size,
-      Masked.ligCoin (finS.pad (ops.map fun p => finS.decOf p.2)) (Masked.repBase x (2 * j.val + r.val) + k) i =
-        (Q.coins[k]!)[i]! := by
+      Masked.ligCoin (finS.pad (K := refK x) (ops.map fun p => finS.decOf p.2))
+        (Masked.repBase x (2 * j.val + r.val) + k) i = (Q.coins[k]!)[i]! := by
     intro k hk i hi
     rw [hQsz] at hk
     rw [hQk k hk] at hi ⊢
@@ -1349,8 +1352,8 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
   have hrunOf := repCons_ofPad Q.coins tr.st hms tr.sch tr.tPad _ _ tr.g tr.cm0 _ _ ic Q.vals tr.extra tr.lanePad _ _
     hrun (by omega)
   have hcut := _root_.Flock.Firewall.Finish.repCons_cut Q.coins (Masked.repBase x (2 * j.val + r.val)) ops.length
-    (Masked.ligCoin (finS.pad (ops.map fun p => finS.decOf p.2))) (by omega) hcQ tr.st hms tr.sch tr.tPad _ _ tr.g
-    tr.cm0 _ _ ic Q.vals tr.extra tr.lanePad _ hm13 hxb hn6' hq6' _ hrunOf
+    (Masked.ligCoin (finS.pad (K := refK x) (ops.map fun p => finS.decOf p.2))) (by omega) hcQ tr.st hms tr.sch
+    tr.tPad _ _ tr.g tr.cm0 _ _ ic Q.vals tr.extra tr.lanePad _ hm13 hxb hn6' hq6' _ hrunOf
     (Array.replicate (Masked.repBase x (2 * j.val + r.val)) default) (by simp)
   have hgo := go_of_fst hcut.1
   rw [hmod, htsch] at hgo
