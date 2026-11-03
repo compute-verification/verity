@@ -5,18 +5,26 @@ reference vocabulary's arithmetic is its own (sequential sums, a correctly round
 which is refused at its one op with no Definition (`_log_softmax`: `F32LogRn`)."""
 from __future__ import annotations
 
+import bisect
+import functools
+
 import numpy as np
 import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
 
 from tests.program.train_step_lf import ADAMW, loss_fn, meta_step
+from verity.ml.circuits.boundary import gate_width
+from verity.ml.circuits.parts import Part, n_members
+from verity.ml.circuits.program import is_input
+from verity.ml.circuits.query_ast import GateSet, evaluate, parse
+from verity.ml.circuits.refs import runs as ref_runs
 from verity.ml.definitions.numerics.serve3_reference import materialize
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.rules.training import training_rules
 from verity_vllm.program.frontend.rules.training_survey import holes
-from verity_vllm.program.frontend.train_step import AdamW, export_step, step_program, step_report
+from verity_vllm.program.frontend.train_step import AdamW, export_step, in_bits_beyond_theta, step_program, step_report
 
 aten = torch.ops.aten
 
@@ -176,17 +184,60 @@ def test_derive_graph_names_inputs_and_theta() -> None:
         derive_graph(gm, (ROW, X), mode="reference", rules=training_rules(), input_names=["w", "class"])
 
 
-def test_tiny_step_survey_has_one_hole_and_theta_is_the_parameters() -> None:
+@functools.cache
+def _tiny_survey():
     model, batch = meta_step("tiny", 2, ctx=16, vocab=64)
     opt = AdamW(**ADAMW)
     ex = export_step(model, loss_fn, opt, batch)
-    rep = step_report(model, loss_fn, opt, batch, survey=True, exported=ex)
+    return model, ex[2], step_report(model, loss_fn, opt, batch, survey=True, exported=ex)
+
+
+def test_tiny_step_survey_has_one_hole_and_theta_is_the_parameters() -> None:
+    model, layout, rep = _tiny_survey()
     assert [(h["op"], h["reason"]) for h in holes(rep)] == [("aten._log_softmax.default", "numerics_unregistered")]
-    layout = ex[2]
     prog = rep.program
     assert prog.theta == tuple(f"param_{n}".replace(".", "_") for n in layout.params)
     nodes = prog.root.body.nodes
     assert sum(nodes[i].n * nodes[i].fn.ret.w for i in prog.root.theta) == 32 * sum(p.numel() for p in model.parameters())
+
+
+def _sources(node) -> set[int]:
+    return {k for a in node.args for _s, k, _a, _b in ref_runs(a.refs)}
+
+
+def _walk_in_bits(prog, S: GateSet, structure: set[int]) -> int:
+    """`in_bits_beyond_theta` by brute force: every operand of every gate of S, less S, theta's input nodes and `structure`."""
+    offs = prog.root.body.offsets
+    skip = structure | set(prog.root.theta)
+    reads = {o for lo, hi in S.intervals() for g in range(lo, hi) for o in prog.circuit.gate(g).operands if o not in S}
+    return sum(gate_width(prog, o) for o in reads if bisect.bisect_right(offs, o) - 1 not in skip)
+
+
+def test_witness_block_in_bits_beyond_theta() -> None:
+    """A witness block is a GateSet over the step Program (`query_ast`): its gates are `size()`, and `in_bits_beyond_theta` is its
+    reads less the start's weights and structure (constants and what is computed from them alone), as a walk over its gates'
+    operands finds them. A forward projection's row reads its input row and not its weight; the optimizer's update of one parameter
+    reads the gradient, the two moments and the step's three scalars, and not the parameter, the constants or its own values."""
+    prog = _tiny_survey()[2].program
+    nodes = prog.root.body.nodes
+    structure: set[int] = set()
+    while more := {j for j, nd in enumerate(nodes) if j not in structure and not is_input(nd.fn) and _sources(nd) <= structure}:
+        structure |= more
+    lin = evaluate(prog, parse('instances("//LinearRef_v1{*}")')).by_index(0)
+    assert in_bits_beyond_theta(prog, lin) == _walk_in_bits(prog, lin, structure) == 64 * 32
+    names = [n for n, _ in prog.fn.signature()[0]]
+    p, decay = names.index("param_norm"), names.index("decay")
+    first = [j for j, nd in enumerate(nodes) if nd.fn.id == "F32Mul_v1" and len(_sources(nd) & set(prog.root.theta)) == 1
+             and decay in _sources(nd)]
+    start = next(j for j in first if p in _sources(nodes[j]))
+    end = min([j for j in first if j > start] + [len(nodes)])
+    root = prog.circuit.root_scope
+    update = GateSet((Part(root, frozenset((j, m) for j in range(start, end) for m in range(n_members(nodes[j])))),))
+    assert in_bits_beyond_theta(prog, update) == _walk_in_bits(prog, update, structure) == 3 * 64 * 32 + 3 * 32
+    iota = {j for j in structure if _sources(nodes[j])}
+    reader = next(j for j, nd in enumerate(nodes) if j not in structure and _sources(nd) & iota)
+    one = GateSet((Part(root, frozenset((reader, m) for m in range(n_members(nodes[reader])))),))
+    assert in_bits_beyond_theta(prog, one) == _walk_in_bits(prog, one, structure)
 
 
 def test_s_step_reference_mode() -> None:

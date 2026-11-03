@@ -16,6 +16,9 @@ are the Program's theta (`Program.theta`: the start's weights); the optimizer st
 A node no rule lowers is `Unsupported`, as for any derivation. `step_report(..., survey=True)` instead lowers every node it can and
 takes each refused one's output as a field of the Program's `run` input (a hole), recording the refusal: the list of what is
 missing, and a Program whose census counts everything else (`rules.training_survey.holes`).
+
+A witness block is a `query_ast.GateSet` over the step Program: its gates are `GateSet.size()`, and its reads beyond the start's
+weights are `in_bits_beyond_theta(program, gates)`.
 """
 
 from __future__ import annotations
@@ -28,7 +31,10 @@ from typing import Callable
 import torch
 from torch.func import functional_call, grad_and_value
 
-from verity.ml.circuits.program import Program
+from verity.ml.circuits import parts
+from verity.ml.circuits.boundary import gate_width, in_gates
+from verity.ml.circuits.program import Program, is_input
+from verity.ml.circuits.query_ast import GateSet
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.report import DeriveReport
@@ -195,4 +201,41 @@ def step_program(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | t
     return step_report(model, loss_fn, optimizer, example_batch, mode=mode).result
 
 
-__all__ = ["AdamW", "StepLayout", "export_step", "step_report", "step_program"]
+def in_bits_beyond_theta(program: Program, gates: GateSet) -> int | parts.Unsupported:
+    """The bits a witness block `gates` reads beyond theta: the summed widths of the distinct gates outside it with a wire into it
+    (`boundary.in_gates`), less theta's input gates (the start's weights, `Program.root.theta`) and structure (a constant, or a gate
+    of constants alone, which a statement hardwires, as `partition_v2`'s units carry it). `Unsupported` where `boundary.in_gates` is:
+    a read its compact index cannot resolve exactly."""
+    offs = program.root.body.offsets
+    theta = [(offs[j], offs[j + 1]) for j in sorted(program.root.theta)]
+    reads: set[int] = set()
+    for part in gates.parts:
+        r = in_gates(part)
+        if isinstance(r, parts.Unsupported):
+            return r
+        reads |= r
+    memo: dict[int, bool] = {}
+    return sum(gate_width(program, g) for g in sorted(reads)
+               if g not in gates and not any(lo <= g < hi for lo, hi in theta) and not _structure(program.circuit, g, memo))
+
+
+def _structure(circuit, g: int, memo: dict[int, bool]) -> bool:
+    """Whether root gate `g` is a constant (no operands and no input) or computed from constants alone."""
+    if g in memo:
+        return memo[g]
+    seen, stack = set(), [g]
+    while stack:
+        h = stack.pop()
+        if h in seen or memo.get(h) is True:
+            continue
+        seen.add(h)
+        gate = circuit.gate(h)
+        if memo.get(h) is False or is_input(gate.prim):
+            memo[g] = False
+            return False
+        stack.extend(gate.operands)
+    memo.update(dict.fromkeys(seen, True))
+    return True
+
+
+__all__ = ["AdamW", "StepLayout", "export_step", "in_bits_beyond_theta", "step_report", "step_program"]
