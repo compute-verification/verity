@@ -86,7 +86,7 @@ def SHA512CRExpected {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Str
     expect cost g s / 2 ^ (256 : ℝ)
 
 /-- **Assumption 3 (`uniform/io-getrandombytes`): the operating system's randomness is independent uniform bytes**, for
-the verifier's unit draw and the proof service's epoch salt (`Stream.salt`). Its per-test form,
+the verifier's unit draw and the proof system's epoch salt (`Stream.salt`). Its per-test form,
 `UniformRandomBytesTest`, is the one the zero-knowledge theorems take.
 
 The verifier draws the units it audits from `IO.getRandomBytes`: `Flock.Draw.drawOS` is `Flock.Draw.drawWith` with every

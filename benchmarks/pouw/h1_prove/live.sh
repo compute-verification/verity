@@ -12,7 +12,8 @@
 #      live-proofs/, outside out/) and live.py evidence over them: out/<window>/live-evidence.json, credit's live evidence
 # env: H1_LIVE (a dump DIR, or one window's, or a .tgz of either: --send it, then H1_LIVE=inputs/NAME.tgz; relative: the
 #      run dir's)  H1_MEM_GB (128, the job's --mem-gb)  H1_PAR (sessions and Lean checks at a
-#      time; H1_MEM_GB / 60)  H1_FIREWALL (1)  HZ_CACHE: hidden_zk's
+#      time; H1_MEM_GB / 60)  H1_FIREWALL (1)  H1_LIVE_UNITS (u,...: stage only these units, u = s·P + j, a round
+#      past live.PIECE_ROWS rows being P pieces; default every one)  HZ_CACHE: hidden_zk's
 set -uo pipefail
 export HZ_CONFIGS=live HZ_MEM_GB=${H1_MEM_GB:-128} HZ_RUNS=${HZ_RUNS:-1} HZ_WARM=${HZ_WARM:-0}
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -41,7 +42,7 @@ for L in "${WINDOWS[@]}"; do
   name=$(basename "$L") WK=$W/$name O=$OUT/$name
   mkdir -p "$WK" "$O/lean"
   log "live $name: prepare"
-  "$PY" "$H/live.py" prepare --live "$L" --work "$WK" 2>&1 | tee -a "$OUT/job.log"
+  "$PY" "$H/live.py" prepare --live "$L" --work "$WK" ${H1_LIVE_UNITS:+--units "$H1_LIVE_UNITS"} 2>&1 | tee -a "$OUT/job.log"
   [ "${PIPESTATUS[0]}" = 0 ] || { log "live $name: prepare FAILED"; cp "$WK/record.json" "$O/" 2>/dev/null; rc=1; continue; }
   cp "$WK/record.json" "$WK/plan.tsv" "$O/" && mkdir -p "$O/verifier" && cp "$WK"/verifier/* "$O/verifier/"
   if [ "$FW" = 1 ]; then
