@@ -10,7 +10,8 @@ start at C0 + |C|, as te_core.panels draws it. From scratch on the pilot is lear
 pretraining runs, their loss converted as te_core.panels converts it (`panels.scratch`); on v3 it is the ladder's
 runs: `--ladder-points` reads the ladder report's annealed runs (its F.json or report.json, each at its counted MACs)
 and the compute-optimal points of its FIT.json, which `--ladder-fit` names as well once the ladder has three sizes
-(`ladder_points`). Every C is in te_core's gates: a start's C0 is te_core.panels' `c0`, a ladder point's MACs are at
+(`ladder_points`); without `--ladder-points` it reads `LADDER`'s, each start of the ladder's manifest at its counted
+C0 and held-out bpb. Every C is in te_core's gates: a start's C0 is te_core.panels' `c0`, a ladder point's MACs are at
 the bf16 GEMM price, as a v3 start's counted C0 is.
 
 The fit (`fit`) reads the frontier from the least C0 of the data's starts in the manifest up: gains are read at no
@@ -19,7 +20,9 @@ less compute, and the from-scratch runs' first evaluations below it are warm-up,
 A and γ by least squares in relative loss, E in [0, the least loss) and A > 0, γ on a grid refined by golden section.
 A data with fewer than `FIT_MIN` such points, or spanning less than a factor `FIT_SPAN` in C, has no fit, and so does
 one with neither a start that has a scored checkpoint nor a ladder point: the pilot's from-scratch losses are converted
-through its starts' (`panels.scratch`), and its starts' C0 rest on the dense rate their checkpoints give. Effective
+through its starts' (`panels.scratch`), and its starts' C0 rest on the dense rate their checkpoints give. A fit on
+fewer than `FIT_TARGET` points from scratch is provisional: its status and the note say so, the note with its points'
+residuals, and te_core.algorithm_policy's rows that read it carry gain:provisional in `estimated`. Effective
 compute C_eff(l) = (A/(l − E))^(1/γ) is the compute at which the fit reaches loss l, and a point's gain C_eff(l)/C its
 residual in compute (1 on the fit).
 
@@ -52,7 +55,14 @@ COLUMNS = ["row", "data", "form", "E_bpb", "A", "gamma", "points", "C_lo_gates",
 #: the fit's points per decade of compute, the least loss in each
 PER_DECADE = 20
 #: the fewest points a fit takes, and the least factor in C they span
-FIT_MIN, FIT_SPAN = 5, 10.0
+FIT_MIN, FIT_SPAN = 3, 10.0
+#: the from-scratch points a fit is to read (coordinator 07:58Z: the target, not a gate); a fit on fewer is provisional
+FIT_TARGET = 5
+#: the v3 ladder's points read when no `--ladder-points` names any: each start of its manifest
+#: (islands/ladder-v3/ladder_store.json) at its counted C0 MACs and held-out bpb on the v3 search pool, built from the
+#: manifest and each start's start.json, sha256-checked, as `ladder-points.json` (te-ladder/F/v1); None reads none
+LADDER = "art:b5d21639ddaa436e761f5571fb7810555a62ed80b26926b1521579c10525cd82"
+LADDER_FILE = "ladder-points.json"
 #: γ's grid, refined about its best by golden section
 GAMMAS = np.linspace(0.01, 2.0, 399)
 DIGITS = 6
@@ -80,10 +90,13 @@ class Start:
 
 
 def starts(scored: list[dict], shapes: dict[str, dict], rate: float) -> list[Start]:
-    """Each start with scored checkpoints and an l0 on a data, the headline data first (te_core.panels' `DATA`)."""
-    out = [Start(s, shapes[s], d, [r for r in scored if (r["start"], panels.data_of(r)) == (s, d)], rate)
-           for s, d in sorted({(r["start"], panels.data_of(r)) for r in scored},
-                              key=lambda sd: (panels.DATA.index(sd[1]), sd[0]))]
+    """Each start with scored checkpoints and an l0, on its data (`data_of_shape`), the headline data first
+    (te_core.panels' `DATA`). A checkpoint is on its start's data whether or not its record carries `data`: the scorer's
+    measured copy of a traced record need not, and te_core.frontier scores no v3 record from a start of another
+    tokenizer."""
+    out = [Start(s, shapes[s], data_of_shape(shapes[s]), [r for r in scored if r["start"] == s], rate)
+           for s in sorted({r["start"] for r in scored},
+                           key=lambda s: (panels.DATA.index(data_of_shape(shapes[s])), s))]
     return [s for s in out if s.l0 is not None]
 
 
@@ -93,22 +106,25 @@ def data_of_shape(shape: dict) -> str:
 
 
 def ladder_points(path: Path) -> list[tuple[float, float, dict]]:
-    """The v3 ladder's from-scratch points in `path`, at C in gates: its annealed runs (te-ladder/F/v1, or report/v2's
-    F), each at its counted MACs, and FIT.json's compute-optimal models (te-ladder/fit/v1) at c(N)·D MACs."""
+    """The v3 ladder's from-scratch points in `path`, at C in gates: its annealed runs (te-ladder/F/v*, or a report's
+    F), each at its counted MACs, and FIT.json's compute-optimal models (te-ladder/fit/v*) at c(N)·D MACs. Each
+    point's `ladder` is its run's name."""
     doc = json.loads(path.read_text())
     gates = per_mac("gemm/bf16")
     schema = doc.get("schema", "")
-    f = doc if schema == "te-ladder/F/v1" else doc.get("F") or {}
+    f = doc if schema.startswith("te-ladder/F/") else doc.get("F") or {}
     out = [(p["macs"] * gates, p["bpb"], {"data": panels.DATA[0], "method_key": panels.SCRATCH,
+                                          "ladder": p.get("branch") or p.get("size"),
                                           "source": f"ladder {p.get('branch') or p.get('size')}, annealed"})
            for p in f.get("annealed", []) if p.get("bpb") and p.get("macs")]
-    co = doc if schema == "te-ladder/fit/v1" else doc.get("compute_optimal") or {}
+    co = doc if schema.startswith("te-ladder/fit/") else doc.get("compute_optimal") or {}
     per = co.get("costs", {}).get("gates_per_mac", gates)
     out += [(q["train_macs"] * per, q["loss"], {"data": panels.DATA[0], "method_key": panels.SCRATCH,
+                                                "ladder": f"N {q['non_embedding_params']:.3g}",
                                                 "source": f"ladder fit, N {q['non_embedding_params']:.3g} optimal"})
             for q in co.get("points", [])]
     if not out:
-        raise SystemExit(f"frontier_fit: {path} holds no ladder point (te-ladder/F/v1, report/v2 or fit/v1)")
+        raise SystemExit(f"frontier_fit: {path} holds no ladder point (te-ladder/F/*, a report's F or te-ladder/fit/*)")
     return out
 
 
@@ -143,7 +159,8 @@ def fit(pts: list[tuple]) -> dict | None:
     """L(C) = E + A·C^(−γ) by least squares in relative loss over `pts` (C, loss, ...; by C): for each γ of `GAMMAS`
     and then by golden section about the best, (E, A) by weighted linear least squares, E held in [0, the least loss)
     and A > 0; None with fewer than `FIT_MIN` points or a span under `FIT_SPAN`. E, A and γ are kept to `DIGITS`
-    significant digits, the values the panel shows and every gain reads, and the residuals are theirs."""
+    significant digits, the values the panel shows and every gain reads, and the residuals are theirs. `scratch` counts
+    the points from scratch (method key `panels.SCRATCH`), and a fit on fewer than `FIT_TARGET` is `provisional`."""
     if len(pts) < FIT_MIN or pts[-1][0] < FIT_SPAN * pts[0][0]:
         return None
     c, l = np.array([p[0] for p in pts], float), np.array([p[1] for p in pts], float)
@@ -174,8 +191,9 @@ def fit(pts: list[tuple]) -> dict | None:
         else:
             lo = m1
     _, g, e, a = min(tried)
+    scratch = sum(isinstance(p[2], dict) and p[2].get("method_key") == panels.SCRATCH for p in pts if len(p) > 2)
     out = {"form": FORM, "E": num(e), "A": num(a * float(c.max()) ** g), "gamma": num(g), "points": len(pts),
-           "C_lo": float(c.min()), "C_hi": float(c.max())}
+           "C_lo": float(c.min()), "C_hi": float(c.max()), "scratch": scratch, "provisional": scratch < FIT_TARGET}
     res = [100 * (y / loss_at(out, x) - 1) for x, y in zip(c, l)]
     return out | {"rms_pct": math.sqrt(sum(v * v for v in res) / len(res)), "max_abs_pct": max(map(abs, res))}
 
@@ -234,7 +252,9 @@ def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source:
         rows.append(row(row="fit", data=d, form=FORM, E_bpb=f["E"], A=f["A"], gamma=f["gamma"], points=f["points"],
                         C_lo_gates=num(f["C_lo"]), C_hi_gates=num(f["C_hi"]), rms_pct=num(f["rms_pct"], 3),
                         max_abs_pct=num(f["max_abs_pct"], 3),
-                        status=f"fit; its points' gains {min(spread):.3g} to {max(spread):.3g}"))
+                        status=(f"provisional fit: {f['scratch']} of its points from scratch, under {FIT_TARGET}"
+                                if f["provisional"] else "fit")
+                        + f"; its points' gains {min(spread):.3g} to {max(spread):.3g}"))
         for x, y, r in read[d]:
             rows.append(row(row="point", data=d, C_gates=num(x), loss_bpb=round(y, 5), fit_bpb=round(loss_at(f, x), 5),
                             residual_pct=num(100 * (y / loss_at(f, x) - 1), 3), gain=num(gain(f, y, x), 4),
@@ -245,17 +265,44 @@ def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source:
                             gain=num(gain(f, s.l0, s.c0), 4), source=f"start {s.name} ({s.label})"))
     p = {"id": PANEL, "title": "The frontier's fit: L(C) = E + A C^-gamma per data", "kind": "table",
          "updated_at": stamp or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "source": source,
-         "note": note(), "columns": COLUMNS, "rows": rows}
+         "note": note(fits, read, pts), "columns": COLUMNS, "rows": rows}
     return checked(p), {"rate": rate, "rate_how": rate_how, "ratio": ratio, "starts": sts, "points": pts,
                         "read": read, "fits": fits}
 
 
-def note() -> str:
-    return ("Per data, held-out bits/byte L against total training gates C: E + A*C^-gamma by least squares in relative "
-            "loss over its unconstrained frontier (the least loss at each C: from scratch, the starts at C0 and every "
-            "scored checkpoint from a start at C0 + |C|), from the least start's C0 up, one point per 1/"
-            f"{PER_DECADE} decade. gain = C_eff(L)/C, C_eff = (A/(L - E))^(1/gamma): 1 on the fit; a start's row "
-            "is its own. training/algorithm-policy's gains read it.")
+def note(fits: dict | None = None, read: dict | None = None, pts: dict | None = None) -> str:
+    """The panel's note, and each provisional fit's points (`provisional`)."""
+    out = ("Per data, held-out bpb L against training gates C: E + A*C^-gamma, least squares in relative loss over its "
+           "frontier (the least L at each C: from scratch, starts at C0, checkpoints from a start at C0 + |C|), from "
+           f"the least start's C0 up, a point per 1/{PER_DECADE} decade. gain = C_eff(L)/C, C_eff = "
+           "(A/(L - E))^(1/gamma).")
+    for d, f in (fits or {}).items():
+        if f and f.get("provisional"):
+            out += " " + provisional(d, f, read[d], pts[d])
+    return out
+
+
+def provisional(data: str, f: dict, read: list[tuple], every: list[tuple]) -> str:
+    """A provisional fit in a sentence: its from-scratch points' residuals in loss, how many other points it reads, the
+    ladder's runs it doesn't read (off its frontier, or sharing a point's 1/`PER_DECADE` decade) and theirs, and
+    whether the ladder's points are `LADDER`'s, built from its manifest."""
+    def res(x, y):
+        return f"{round(100 * (y / loss_at(f, x) - 1), 2) or 0.0:+.2f}%"
+
+    def name(r):
+        return r.get("ladder") or r.get("start") or r["source"]
+
+    on = [(x, y, r) for x, y, r in read if r.get("method_key") == panels.SCRATCH]
+    mine = {name(r) for _, _, r in on}
+    off = sorted({name(r): (x, y, r) for x, y, r in every if r.get("ladder") and name(r) not in mine}.values(),
+                 key=lambda p: p[0])
+    out = (f"{data} provisional ({len(on)} from scratch, {FIT_TARGET} the target): "
+           + ", ".join(f"{name(r)} {res(x, y)}" for x, y, r in on)
+           + (f" and {len(read) - len(on)} checkpoints" if len(read) > len(on) else "")
+           + (f"; off it {', '.join(f'{name(r)} {res(x, y)}' for x, y, r in off)}" if off else "") + ".")
+    if any(r.get("manifest") for _, _, r in every):
+        out += " Ladder points built from its manifest."
+    return out
 
 
 def checked(p: dict) -> dict:
@@ -294,21 +341,25 @@ def arguments(ap: argparse.ArgumentParser) -> argparse.ArgumentParser:
     ap.add_argument("--pretraining", type=Path, default=None,
                     help=f"the pilot's pretraining runs, a directory per run id (default {panels.PRETRAINING}, fetched)")
     ap.add_argument("--ladder-points", type=Path, action="append", default=[],
-                    help="the v3 ladder's report.json, F.json or FIT.json, repeated: its from-scratch points")
+                    help="the v3 ladder's report.json, F.json or FIT.json, repeated: its from-scratch points (default "
+                         f"{LADDER}'s {LADDER_FILE}, fetched, built from the ladder's manifest)")
     return ap
 
 
 def inputs(a, scored: list[dict], shapes: dict[str, dict], d: dict, command: str = "te_core.frontier_fit"
            ) -> tuple[list[dict], list[tuple], str]:
-    """The pretraining runs, the ladder's points (`--ladder-points`, and `--ladder-fit`'s FIT.json) and the panels'
-    source for a loaded ledger `d` (te_core.rescore's `load`)."""
+    """The pretraining runs, the ladder's points (`--ladder-points`, else `LADDER`'s, and `--ladder-fit`'s FIT.json)
+    and the panels' source for a loaded ledger `d` (te_core.rescore's `load`)."""
     runs = panels.pretraining(a.pretraining or panels.fetch(panels.PRETRAINING))
     extra = [p for path in [*a.ladder_points, *([a.ladder_fit] if a.ladder_fit else [])] for p in ladder_points(path)]
+    built = not a.ladder_points and LADDER
+    if built:
+        extra += [(x, y, r | {"manifest": LADDER}) for x, y, r in ladder_points(panels.fetch(LADDER) / LADDER_FILE)]
     pin = d["pin"] if a.pin else frontier.pinned(pilot=True)
     source = a.source or (f"python -m {command} (te_core {VERSION}; pin {' + '.join(c[:12] for c in pin)}; "
                           f"{len(scored)} valid checkpoints, quantities {d['quantities']}; "
                           f"{len(d.get('refused', {}))} refused (te_core.formalism.refusal); "
-                          f"{len(extra)} ladder points)")
+                          f"{len(extra)} ladder points" + (f", {LADDER} from its manifest" if built else "") + ")")
     return runs, extra, source
 
 

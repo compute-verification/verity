@@ -117,7 +117,7 @@ def with_structures(record: dict, traced: dict[str, dict]) -> dict:
         rows = [[r[0], r[1], round(r[0] * n), n, r[4]] for r in t["updated"]]
         new = f"{sid}+traced{n}"
         f = t.get("formalism")
-        measured = {k: f[k] for k in TRACED_STRUCTURE} if f else {}
+        measured = {k: f[k] for k in TRACED_STRUCTURE if k in f} if f else {}
         out["structures"][new] = dict(struct, updated=rows, beta=t.get("beta"), cut_bits=t.get("cut_bits"), **measured)
         s["struct"] = new
         if f:
