@@ -140,7 +140,7 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
   θ doesn't give it in E. Nothing in the harness caps its cost: the evaluation job records each model's parameters and
   forward MACs and gates per token (`te_core.cw.forward_cost`), and scoring admits a checkpoint only within the cap
   (`te_core.policy.eligible`: at most the greater of the start's forward and the compute-optimal model's at its loss
-  under the v3 ladder's fit).
+  under the v3 ladder's fit, and twice the start's forward until that fit exists).
 - **Training job** (`candidate.sh`, `sandbox.py`, the harness `te_core/` and its README): the island's program runs as
   `python -m te_core.run --script islands/<island>/train.py`, which counts every multiply-accumulate it computes through
   torch, times its steps (a step is one `TrainData.next` to the next), writes the first E in each 5% of the run to its

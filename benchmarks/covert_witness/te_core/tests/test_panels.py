@@ -118,16 +118,19 @@ def test_v3_is_the_headline_once_it_has_points(tmp_path, monkeypatch):
 
 
 def test_the_scoring_cap(tmp_path, monkeypatch):
-    """A checkpoint whose model's forward is over its start's is left out (`over-cap`) unless the ladder's fit at its
-    loss allows it; one with no count has the start's."""
-    grown = [r | ({"model": {"forward_gates_per_token": 1.5 * W}} if r["id"] == "r1" else {}) for r in ledger_rows()]
+    """With no ladder fit a checkpoint whose model's forward is over twice its start's is left out (`over-cap`), so a
+    grown model up to that is scored; where the fit has a value at its loss the cap is the greater of the start's and
+    the fit's, and outside the fit's span it is twice the start's again. One with no count has the start's."""
+    grown = [r | ({"model": {"forward_gates_per_token": 2.5 * W}} if r["id"] == "r1" else {}) for r in ledger_rows()]
     fit = tmp_path / "fit.json"
-    fit.write_text(json.dumps({"points": [{"loss": 1.0, "forward_gates_per_token": 4 * W},
+    fit.write_text(json.dumps({"points": [{"loss": 1.0, "forward_gates_per_token": 8 * W},
                                           {"loss": 1.3, "forward_gates_per_token": W}]}))
     ladder = policy.ladder_fit(fit)
-    assert ladder(1.15) == pytest.approx(2 * W) and ladder(0.9) is None and ladder(1.31) is None
-    assert policy.eligible(None, W, 1.15) and policy.eligible(W, W, 1.15) and not policy.eligible(1.5 * W, W, 1.15)
-    assert policy.eligible(1.5 * W, W, 1.15, ladder) and not policy.eligible(1.5 * W, W, 1.29, ladder)
+    assert ladder(1.15) == pytest.approx(8 ** 0.5 * W) and ladder(0.9) is None and ladder(1.31) is None
+    assert policy.CAP_FALLBACK == 2
+    assert policy.eligible(None, W, 1.15) and policy.eligible(2 * W, W, 1.15) and not policy.eligible(2.5 * W, W, 1.15)
+    assert policy.eligible(2.5 * W, W, 1.15, ladder) and not policy.eligible(1.5 * W, W, 1.29, ladder)
+    assert policy.eligible(2 * W, W, 0.9, ladder) and not policy.eligible(2.5 * W, W, 0.9, ladder)
     _, skipped = frontier.formalism_rows(grown, {"s1": SHAPE})
     assert skipped == {"r1": "over-cap"}
     assert frontier.formalism_rows(grown, {"s1": SHAPE}, ladder)[1] == {}

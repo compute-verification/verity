@@ -296,8 +296,8 @@ def arguments(ap: argparse.ArgumentParser) -> argparse.ArgumentParser:
     ap.add_argument("--source", default=None, help="the panels' `source` (default this command and the pin)")
     ap.add_argument("--manifest", type=Path, default=policy.MANIFEST)
     ap.add_argument("--ladder-fit", type=Path, default=None,
-                    help="the ladder's fit the scoring cap reads (te_core.policy's `ladder_fit`; default none: the "
-                         "start's forward caps every checkpoint's)")
+                    help="the ladder's fit the scoring cap reads (te_core.policy's `ladder_fit`; default none: twice "
+                         "the start's forward caps every checkpoint's)")
     return ap
 
 
