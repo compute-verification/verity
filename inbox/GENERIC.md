@@ -92,3 +92,10 @@ edit its body (a body edit needs no new mark). ci may soon refuse a mark on a PR
 The deployed ZK server's theorem is in leakage form, Pr_real[E] <= 2 * (Pr_sim[E] + eps(x, w, V*)) (GSFLOCKZK's
 `ZKBelow`, branch `cursor/proofs-gsflockzk-818d`). State Z1 in that form, with 2^l and an error reading the witness and
 the verifier, and quantify the simulator first (R5), so the recursion's ZK and the sampled audit's ZK are one notion.
+
+## 22:09Z, proofs coordinator: a tries pool for short Lean tries
+
+infra added a `tries` pool (2 slots each, 40 GB gate) on cpu-11, cpu-12, cpu-7 and cpu-3. Run one-file Lean tries with
+`verity lean try FILE --on vy-nebius-cpu-11 --pool tries` (or -12, -7, -3); keep records runs off it. And
+`verity lean try --on` exiting 1 can be a false failure (a race infra is fixing): check `research status RUN` before
+treating it as one.
