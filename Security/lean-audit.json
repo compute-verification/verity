@@ -14276,8 +14276,8 @@
     "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (g : Accounting.Gates.Gate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.Op.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → Eq (x t i) (Accounting.Gates.byte (Accounting.Gates.nibbles s t) (slot i)).cast": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (t : Fin s → Fin 16), SetLike.instMembership.mem G t → ∀ (t' : Fin s → Fin 16), SetLike.instMembership.mem G t' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x t i) (x t' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Gates.UnitsFooling": {
     "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → Ne s s' → Exists fun o => And (List.instMembership.mem out o) (Not ((instHPow.hPow 2 j).ModEq (Accounting.Gates.val C (x s) o) (Accounting.Gates.val C (x s') o)))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -14285,8 +14285,8 @@
     "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.IntOp.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (g : Accounting.Gates.Gate ι), List.instMembership.mem C g → ∀ (cls : Accounting.Gates.Budget) (f : List Int → Int), Eq g.op (Accounting.Gates.Op.budgeted cls f) → instLENat.le g.size (instHPow.hPow 2 w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.coin i))) → (instHPow.hPow 2 j).ModEq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (s : κ), SetLike.instMembership.mem F s → ∀ (s' : κ), SetLike.instMembership.mem F s' → ∀ (i : ι), (Exists fun g => And (List.instMembership.mem C g) (Eq g.op (Accounting.Gates.Op.input Accounting.Gates.Binding.registered i))) → Eq (x s i) (x s' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.HMu.PersistentOneWord": {
     "∀ (n : Nat) (x : W), Function.Injective fun s => step n s x": "an injectivity, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -38390,7 +38390,7 @@
    ]
   },
   "Flock.Firewall": {
-   "digest": "4102fa60637ea332111b6d72f74ba38d6148fc92c12485fcb2bbcc7d31a86133",
+   "digest": "16e45eafed7c1dad69ac4671ccc7ee2246fc73a5fdb88d49aa66d614a64e6b57",
    "definitions": {
     "Flock.Firewall.Fw": "82d8f5b8d95b5e8545ec95750b2245f570ddb77667f77694923143b06eb308a2",
     "Flock.Firewall.LABEL_R1CS": "719c0cf04f627c77669c987b24a8017dbf1391c083fa918012da048eacd9dd8d",
@@ -38444,13 +38444,19 @@
     "Flock.Firewall.State.sent": "56fbba3846cd497da70b61ae27bd7550e22fb257ef1891780854afa96333cb5e",
     "Flock.Firewall.State.stopped": "10365da93d5f38e608793520fcd4ca7a3c6bc84ecc4dc4672c75e8a05ceb7207",
     "Flock.Firewall.State.streams": "782016dafcb8f9f60b1e7ee57d54f143008e8b34d2d96df5e457c9c811a4d920",
+    "Flock.Firewall.arr": "eb54f560d6b10d7e938b982194d18f17eea34ed2713f77fe2e0369b1f392c525",
+    "Flock.Firewall.arr._sparseCasesOn_1": "57f76ed5598ed911bb035fc45805fc69f21d1dce402d8412fb68181326d6056f",
     "Flock.Firewall.decode": "a07911ff253c4f9630edd04c08f46af9735751bb31a71e3cdd3d0970ffe92420",
+    "Flock.Firewall.field": "ea6024f25c545f8e5f0b7cd90b1fda73b625a7db596b7a2604788a278006eb40",
     "Flock.Firewall.fractional": "619bd67c8904f4c8bda0cc0b2db91dbfd2dd2d56bfd724dfb8243d186e558b41",
     "Flock.Firewall.frames": "4fc6619bbe16742f4b983ecb241191e1e1f589f515d9c1c6915f8c82ee06517e",
     "Flock.Firewall.isCap": "23d033ffe15dee7880b25080bd4c3c91c4bc740da123ca8710770eae87ab9596",
     "Flock.Firewall.jnat": "36c4619b8d2d06c71e024e54f20af2ae74b959e24aa57362d3f873de89e7cabf",
     "Flock.Firewall.le": "6a6cf3714d142283e46af74e08395f184670a81e83a22095a6b9c380dcb2b905",
     "Flock.Firewall.messageRows": "46de633e08b0d86a0f3dc06c63b328e3cafdbb5eb99b87242b20ef903f1dfdfd",
+    "Flock.Firewall.nat": "a5ba9458909ec1ddfe10e43d8c4b0879d5c823798359066a523f818840ea5bf2",
+    "Flock.Firewall.natOf?": "75402fe5bbf818760f72dc9438215506cef448c7602b982e6b6033c3541ce0f0",
+    "Flock.Firewall.natOf?._sparseCasesOn_1": "413ac5730e3aece7ad615ec6c8de30cff885a6de3277b541edb9afa83bf6be3d",
     "Flock.Firewall.need": "d7a9c75e50517344ed8c14474c9ecc4c69569fad80557654ed01f746eb264568",
     "Flock.Firewall.nodes": "8bfb30c3e51e2a53b2867dc5b9766f7d2d849a7aeb6fc63ba740e820ef11e34f",
     "Flock.Firewall.obj._sparseCasesOn_1": "c0ed1a4f813daa31c78cc62895312c438a47b4102d415ac07c07892d3c74e020",
@@ -38461,6 +38467,7 @@
     "Flock.Firewall.rdStr": "871cdbae0af81cd03ef292069ab5f5a12a15e5e854db0fb946e8d856ee86db38",
     "Flock.Firewall.rdU32": "b4a806c9658658cb590f163eb5a9819f2bf5eab67d6417c47e22eb194528d5a9",
     "Flock.Firewall.rdU64": "61cce060ee43e6e994099efa7757a5188f7103424c9ed1dbb3d56e481337c143",
+    "Flock.Firewall.roundSpec": "d88b4c06217c68f39cce8ad94c614a92066212761e61775e346ec3b0f56c8221",
     "Flock.Firewall.rowDigest": "f6d5cd75c6818b5266d0da6e553d55b7405ee436619452b8153cc15117b161c1",
     "Flock.Firewall.run": "8db9d93a95a645940c0e45a28ea2b081328d29e16e90b4cb93718b258f19d278",
     "Flock.Firewall.salt": "41f910c7c00827465073a830a9cb4dac2fa6f4e8a8ea6336a0e709c87084413c",
@@ -38469,8 +38476,9 @@
     "Flock.Firewall.send": "d73809912744932ca667b891857cbd3002bd92fbd19ab4fae92e1e1e623b4e8f",
     "Flock.Firewall.split": "b6f5267344f2d979e96346725a537140612be350dfb04dae0a4485db13fd7b0f",
     "Flock.Firewall.split._sparseCasesOn_3": "a79dbe6b9d0ad1ec4316088e9b5b54afa1a2458b1375418d18e49a9beb03e166",
-    "Flock.Firewall.step": "b3d46884525263df1e3e9ca28929d23df0d08d229e8ecc38bdb9e518225a7de3",
+    "Flock.Firewall.step": "2fd19abcad59ead38e82d8b887ee91b6ce48333e4b63b34070e86d5a4cdfe59c",
     "Flock.Firewall.step._sparseCasesOn_3": "931f34e2aa929df41cecb89dfce375d10584d7a160852407196fd7b183ea44c9",
+    "Flock.Firewall.str": "3adef17ad5d5fdcab38be18dccd83710baab2e668e5c69f01df07a63d5a09825",
     "Flock.Firewall.str._sparseCasesOn_1": "0c2414bdc195a04e4c6e74844b7c178bd3d528cb997c0149103c780eab1bc940",
     "Flock.Firewall.topRows": "d371b0de7b93cc1a8b65c31148ce8a7c3f3a65e10557f16566ceec78fdce7b91",
     "Flock.Firewall.withField": "01df28778990720c0c30488fd37c7ab025edd9638ca863221989a8f69c62ebe5",
@@ -39082,7 +39090,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "1e7d5750ebd35587882e978441f02f1af07424998463da5e5e90ee718e32034e",
+   "digest": "5fe41277bfd269df16ed1d3becc45d88fa30fa0b06893cf90a25ce4c0b5aa801",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -39108,10 +39116,8 @@
     "Flock.HmLinks.checkUnit": "e3eddb50e371062bb91323a0240ec03ab0c3c8bea0d01da42c587cc520d85963",
     "Flock.HmLinks.nodes": "acaf71fb35384bcdee20761533d524428afa5cd8ae1950dbe58d7725f0fe30ef",
     "Flock.HmLinks.outGates": "4563decd71db435dda9331914bf32888a9b2e5b7a185676d9a163797342e38de",
-    "Flock.HmLinks.owner": "3e07ff7b6700cdfa380613201ad3c1152fdfbccf6a6f7264c3b334ad3dfc9dc6",
     "Flock.HmLinks.parse": "8cf4f21597bf6e6345b2565ee1c502501d21cffa2af0dea49024950f025e8f68",
     "Flock.HmLinks.readersOf": "94e8e166862be1f6db0938a0c50f53bf7551cfee15891e78cbe8aa5725a1410c",
-    "Flock.HmLinks.units": "2183e2c819d868883dcac2198a85a462e54dcb5025f9a13ec2d3e65b9b6dc142",
     "Flock.HmOut.checkPinned": "be695fb6208f54d0549abc4562a07a5a6a0e9141cdbfec833fc24bcee6fc732b",
     "Flock.HmOut.checkPublic": "2adeefd817818e4305440a2fe4b13fac2f3b0809948a4944f110a07052092c0c",
     "Flock.HmOut.checkRows": "098f24c4033c2c7f98461e63d948ae97698a038872521e9bb334da3a4d1926a0",
@@ -39451,9 +39457,11 @@
     "Flock.SecurityProofs.EndToEndRegisteredFlat",
     "Flock.SecurityProofs.EndToEnd_refSetup",
     "Flock.SecurityProofs.IntegrityBlock",
+    "Flock.SecurityProofs.IntegrityBlockCarried",
     "Flock.SecurityProofs.IntegrityBlocks",
     "Flock.SecurityProofs.IntegrityHorizon",
     "Flock.SecurityProofs.IntegrityHorizonBlocks",
+    "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
     "Flock.SecurityProofs.JointStratified",
@@ -39467,6 +39475,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -43873,7 +43882,7 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "dc9686c77663c71ecdab4682b45cf9d34af467140da18552e1f3f3a828885252",
+   "digest": "ba1a1ae6cc85b492b4babe05b09a92acff1bc4c5248d7de2af3bf0d3e79df0f5",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.CLAIM_VALUE": "14791ba5dbace24801878ebd6c2418a152a92342a8c3c5872a822d765fda9def",
@@ -43967,7 +43976,6 @@
     "Flock.RecVStar.checkOpeningShape": "72cd792f3f66f1cebda2a556ca99a9e5c530191650429c4f9ed19f843c5e78b6",
     "Flock.RecVStar.checkOwn": "c28596d89612209625d3eee35b662d12581db87e46b2f30ebbacc66882641aac",
     "Flock.RecVStar.checkOwnBindings": "ad28948caf14e13a8a967cdeb9119951cfa5357bea51f3bc4652db2744613a27",
-    "Flock.RecVStar.checkOwnBindings._sparseCasesOn_3": "b34af140f0b48801762d540c7186d39a2f42a3e25d1179ece5789df6802dbeb0",
     "Flock.RecVStar.checkParsed": "e6d3b73699fb8bb1b48b38560379c2fd426b9171dec58413a41d1ba9ebf7927e",
     "Flock.RecVStar.checkPart": "5c4416d63af56dbaeb089282242bd701d42dab2dfbe4395d83d69c83d71ebae1",
     "Flock.RecVStar.checkPubRows": "811eadfee32ba65232e45371ba6ebd9afaecb75624b24cb3b0759612c0af07ad",
