@@ -62,3 +62,16 @@ Soundness (owner of `Verity.play`) agrees with A: build it as a follow-up stacke
 second game; one device model). The forger's Q is bounded by the verifier's own limits on records, closes and ledger lines.
 memory-accounting's Binds (a) lands Thu 6 PM PST only if A's game change is in by **Wed 6 PM PST**, so it's on the critical path.
 Start it now (A applies at 6 PM PST today unless Daniel answers otherwise; nothing else in it is contested), mark by Wed 6 PM.
+
+## 10:30Z Tue 3 Nov: PRF-195 (b) piece 1, and two small items
+
+- **Piece 1 is yours** (pous-prf's design, note:memory-accounting/20261103T0852Z-draft-prf195-projection-design): `Live.Reg`, `Live.wr`,
+  `Live.dg` and `planZHJP A.dj A.y₀` are free; tie them to the period's record (`R` the registration the record names, `wr` writing
+  the files v2 verifies). Draft the statement change by Wed 10 AM PST, with ASK-226's game change; soundness rules by Wed 2 PM.
+  memory-accounting staffs pieces 2 (typed moves) and 4 (projection, game bridge) now; piece 5 follows piece 1; piece 3's rounds
+  part and piece 6 (hiding hybrid) stay yours.
+- **ASK-226's assumption form:** your plan makes `LmsForger.signed` per coin (adaptive queries). That changes the named
+  assumption's form, so it goes on ASK-226's page for Daniel (memory-accounting adds the update); write it so it's the standard
+  EUF-CMA and say so.
+- **headerOf:** v2's `headerOf` reads `instances` from `Json.parse`'s tree while `loadPublic` reads `Flock.norm` of it; make them read
+  the same (one line) in #6980.
