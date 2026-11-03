@@ -1375,8 +1375,10 @@ def _certified(lw: LinkWindows, opening, syncs: Sequence[ClockSync]) -> dict:
             "reference": len(out) > w and ref[w].accepted and ref[len(out) + w].accepted}
 
 
-def _no_coins(n: int) -> bytes:
-    raise AssertionError("Selection All draws every link-window and reads no coins")
+def _window_coins(n: int) -> bytes:
+    """The stream's coins: `rate:1/1` draws each execution phase's proof blocks as `subset:N` of its N, every one
+    whatever the coins read, so the offline check reads fixed bytes."""
+    return bytes(n)
 
 
 def _refusal(err: Exception) -> str:
@@ -1402,7 +1404,7 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
                      occupancy=(profile.get("egress"), profile.get("ingress")), served=served)
     remote = CertifierClient(*deployment["reveal"], key, challenger, deployment["links"]["ingress"],
                              bytes.fromhex(deployment["run_id"]), timeout=timeout)
-    stream = lw.stream(budget=windows, delta=DELTA, challenger=CHALLENGER, coins=_no_coins, clock=clock)
+    stream = lw.stream(budget=windows, delta=DELTA, challenger=CHALLENGER, coins=_window_coins, clock=clock)
     certified, refused = read_certified(run / "certified.jsonl")
     rows, salts, previous, again = [], {}, None, None
     for w in range(windows):

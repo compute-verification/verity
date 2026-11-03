@@ -27,7 +27,7 @@ then runs this. The README says what the report establishes and what it doesn't.
   (``PENDING``): on the advice profile, where the tie is required (`chain.tie`, `chain.tie_gate`), token is a negative
   it must refuse at the link-windows its changed ids fall in; on the others, where the tie doesn't run, a row pending
   it. An honest run is required: the tampered head is its window 0's egress head one count off (`n2_zk.one_count`).
-* **N2.** Per run, each link-window committed under fresh salts, registered on N2's stream, selected (Selection All) and
+* **N2.** Per run, each link-window committed under fresh salts, registered on N2's stream, selected (Selection `rate:1/1`) and
   decided in the clear, with the Lean audit (`n2_zk.link_windows` with a clock: `LinkWindows.unproved_outcome`, as for
   any run that proves nothing), then `network_verdict`. A summary `n2_zk.prove` wrote before N2's registered unit was
   proved (adopted) carries honest's, tampered's and extra's verdicts on the roots it proved under; any other run's are
@@ -114,7 +114,7 @@ CLAIM = {
     "statement": (
         "Counts only. A report marked OK establishes, for the rehearsal's one link: on every link-window of the honest "
         "run N2's verdict of record accepted (LinkWindows.unproved_outcome, in the clear, on the stream with Selection "
-        "All), and the link's network verdict, the AND over its link-windows with no epsilon and no share credit "
+        "rate:1/1), and the link's network verdict, the AND over its link-windows with no epsilon and no share credit "
         "(LinkWindows.network_verdict), accepted, so each window's per-bucket frame counts are the planned occupancy "
         "profile's on egress (on a served link, the ones its ingress head's counts derive under the declared sync), "
         "which puts the link's timing at the profile; and late, extra and a tampered head were each refused. Where "
