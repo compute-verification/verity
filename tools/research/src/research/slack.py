@@ -1319,7 +1319,8 @@ def _broker_notes_token(oidc: str, now: float) -> str | None:
         out = http_json("POST", NOTES_TOKEN_URL, json.dumps({"scope": "notes"}).encode(),
                         {"Authorization": f"Bearer {oidc}", "Content-Type": "application/json"}) or {}
     except (urllib.error.URLError, OSError, ValueError) as e:
-        why = f"the broker refused ({getattr(e, 'code', '') or getattr(e, 'reason', e)})"
+        said = _refusal(e)
+        why = f"the broker refused ({getattr(e, 'code', '') or getattr(e, 'reason', e)}{': ' + said if said else ''})"
         _notes_token.update(why=why, refused=why)
         print(f"research msg: the broker gave no notes token ({getattr(e, 'code', '') or getattr(e, 'reason', e)}): using "
               "RESEARCH_NOTES_TOKEN if set, else reading the notes unauthenticated", file=sys.stderr)
@@ -1333,6 +1334,19 @@ def _broker_notes_token(oidc: str, now: float) -> str | None:
     until = (_iso_epoch(expires) if expires else now + NOTES_TOKEN_TTL_S) - NOTES_TOKEN_MARGIN_S
     _notes_token.update(oidc=oidc, token=token, until=until)
     return token
+
+
+def _refusal(e: Exception) -> str:
+    """What an HTTP refusal's JSON body says it refused (the broker's `error` and the claim it names), or ""."""
+    if not isinstance(e, urllib.error.HTTPError):
+        return ""
+    try:
+        body = json.loads(e.read(4096) or b"{}")
+    except (OSError, ValueError):
+        return ""
+    if not isinstance(body, dict):
+        return ""
+    return " ".join(str(body[k]) for k in ("error", "reason", "claim", "message") if body.get(k))[:160]
 
 
 def http_get(url: str, timeout: float = 10) -> bytes | None:
