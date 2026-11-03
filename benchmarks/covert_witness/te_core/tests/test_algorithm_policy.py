@@ -367,7 +367,7 @@ def test_publish_stores_the_tables_and_puts_both_panels_the_cut_naming_their_art
     capsys.readouterr()
     code, got = run(tmp_path / "fits", monkeypatch, "--publish", runs=runs)
     assert code == 0 and stored == [["algorithm-policy.json", "coverage.json", "coverage.md", "frontier-fit.json",
-                                     "frontier-points.json"]]
+                                     "frontier-points.json", "refused.json"]]
     puts = [x for x in capsys.readouterr().out.splitlines() if x.startswith("PUT ")]
     assert puts == [f"PUT {console.PANELS_URL}/{FF.PANEL}: 200", f"PUT {console.PANELS_URL}/{AP.PANEL}: 200"]
     assert [q["id"] for q in sent] == [FF.PANEL, AP.PANEL] and console.body(sent[1]) == console.body(got["console"])
@@ -401,6 +401,32 @@ def test_v3_rows_come_with_v3s_fit_from_the_ladder_and_lead_the_figure(tmp_path,
     assert {d["start"] for d in ds} == {plots.start_label(V3_SHAPE)} and {d["start_loss"] for d in ds} == {1.5}
     assert {(d["record"], d["gain_target"]) for d in ds if d["reached"] == "yes"} >= {("v3-qat@1", 1.1)}
     assert any(c["state"] != "empty" for c in got["coverage"] if c["data"] == "v3")
+
+
+def test_the_rows_te_core_refuses_are_listed_and_counted_never_scored(tmp_path, monkeypatch, capsys):
+    """te_core.formalism's refusals: mezo's capture lists a clip on a read-back loss (data-dependent) and never's was
+    traced before te_core 4.2 (no read-back lists). Neither has a row, so no coverage cell holds them; refused.json gives
+    each checkpoint's reason, and the coverage table, the board line, both panels' source and the output count them."""
+    trace = {"affected_share": 0.5, "u1_bits": 1e9}
+    clip = {"kind": "a comparison of a read-back float", "where": "train.py:399", "steps": [0, 4], "count": 5}
+    traced = {"mezo": trace | {"data_dependent": [clip], "carried_scalars": []}, "never": trace}
+    rows = [r | {"formalism": r["formalism"] | {"trace": traced[r["run_id"]]}} if r["run_id"] in traced else r
+            for r in ledger_rows()]
+    code, got = run(tmp_path, monkeypatch, index=rows)
+    refused = json.loads((got["out"] / "tables" / "refused.json").read_text())
+    assert code == 0 and refused == {r["id"]: formalism.refusal(r) for r in rows if r["run_id"] in traced}
+    assert refused["mezo-1"].startswith("data-dependent") and refused["never-1"].startswith("read-backs unchecked")
+    assert not {d["record"].split("@")[0] for d in plots.frame(got["panel"])} & set(traced)
+    assert not {c.get("record", "").split("@")[0] for c in got["coverage"]} & set(traced)
+    kinds = "2 data-dependent, 1 read-backs unchecked"
+    assert f"3 valid checkpoints are refused by te_core.formalism, never scored, so in no cell ({kinds}; " in \
+        (got["out"] / "tables" / "coverage.md").read_text()
+    assert "; 3 refused (te_core.formalism.refusal); " in got["panel"]["source"] and \
+        "; 3 refused (te_core.formalism.refusal); " in got["fit"]["source"]
+    out = capsys.readouterr().out
+    assert f"3 valid checkpoints refused, never scored: {kinds}" in out
+    assert f" 3 valid checkpoints refused by te_core.formalism, never scored ({kinds})." in \
+        next(x for x in out.splitlines() if x.startswith("board: "))
 
 
 def test_a_record_its_columns_cant_reproduce_is_refused():

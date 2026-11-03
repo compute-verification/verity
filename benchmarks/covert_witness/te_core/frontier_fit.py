@@ -17,7 +17,9 @@ The fit (`fit`) reads the frontier from the least C0 of the data's starts in the
 less compute, and the from-scratch runs' first evaluations below it are warm-up, not a frontier. It takes one point per
 1/`PER_DECADE` decade of C (the least loss there, so a stretch of checkpoints close in compute counts once) and fits E,
 A and γ by least squares in relative loss, E in [0, the least loss) and A > 0, γ on a grid refined by golden section.
-A data with fewer than `FIT_MIN` such points, or spanning less than a factor `FIT_SPAN` in C, has no fit. Effective
+A data with fewer than `FIT_MIN` such points, or spanning less than a factor `FIT_SPAN` in C, has no fit, and so does
+one with neither a start that has a scored checkpoint nor a ladder point: the pilot's from-scratch losses are converted
+through its starts' (`panels.scratch`), and its starts' C0 rest on the dense rate their checkpoints give. Effective
 compute C_eff(l) = (A/(l − E))^(1/γ) is the compute at which the fit reaches loss l, and a point's gain C_eff(l)/C its
 residual in compute (1 on the fit).
 
@@ -217,10 +219,13 @@ def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source:
     rows, fits, read = [], {}, {}
     for d in panels.DATA:
         lo = c_lo(shapes, d, rate)
-        read[d] = used(pts[d], lo) if lo is not None else []
+        anchored = any(s.data == d for s in sts) or any(p[2]["data"] == d for p in extra)
+        read[d] = used(pts[d], lo) if lo is not None and anchored else []
         fits[d] = f = fit(read[d])
         if f is None:
-            why = (f"no fit: {len(read[d])} frontier points from the least start's C0 up"
+            why = ("no fit: no start has a scored checkpoint on this data and no ladder point is given, so nothing "
+                   "converts its from-scratch losses or prices its starts" if not anchored else
+                   f"no fit: {len(read[d])} frontier points from the least start's C0 up"
                    + (f" ({lo:.4g} gates)" if lo is not None else " (no start)")
                    + f"; a fit takes {FIT_MIN} spanning {FIT_SPAN:g}x in C")
             rows.append(row(row="fit", data=d, form=FORM, points=len(read[d]), status=why))
@@ -302,6 +307,7 @@ def inputs(a, scored: list[dict], shapes: dict[str, dict], d: dict, command: str
     pin = d["pin"] if a.pin else frontier.pinned(pilot=True)
     source = a.source or (f"python -m {command} (te_core {VERSION}; pin {' + '.join(c[:12] for c in pin)}; "
                           f"{len(scored)} valid checkpoints, quantities {d['quantities']}; "
+                          f"{len(d.get('refused', {}))} refused (te_core.formalism.refusal); "
                           f"{len(extra)} ladder points)")
     return runs, extra, source
 
@@ -309,13 +315,25 @@ def inputs(a, scored: list[dict], shapes: dict[str, dict], d: dict, command: str
 def scored_rows(a) -> tuple[dict, list[dict]]:
     """te_core.rescore's loading for `a` and its scored rows (te_core.plots' `load`, the pin's and the pilot's unless
     `--pin` names the commits), each with its record's family where it has none: the analysis classifies every record
-    it has (`rescore.analysed`), whichever quantities score it."""
+    it has (`rescore.analysed`), whichever quantities score it. The valid rows te_core.formalism refuses are never
+    scored; `d["refused"]` holds each one's reason by row id (te_core.frontier's `formalism_rows`)."""
     d = rescore.load(a)
     family = {run: f for (run, _), (_, f) in d["blocks"].items()}
     rows = [r | {"family": family[r["run_id"]]} if not r.get("family") and r.get("run_id") in family else r
             for r in d["rows"]]
     pin = d["pin"] if a.pin else frontier.pinned(pilot=True)
-    return d, plots.load(rows, pin, d["shapes"], d["keep"], d["ladder"])[0]
+    keep = [r for r in frontier.valid(rows, pin) if d["keep"] is None or d["keep"](r)]
+    scored, skipped = frontier.formalism_rows(keep, d["shapes"], d["ladder"])
+    d["refused"] = {i: v[len(frontier.REFUSED):] for i, v in skipped.items() if v.startswith(frontier.REFUSED)}
+    return d, scored
+
+
+def refusals(refused: dict[str, str]) -> str:
+    """How many rows each kind of refusal refuses (a reason up to its first colon), the most first."""
+    kinds: dict[str, int] = {}
+    for why in refused.values():
+        kinds[why.split(":", 1)[0]] = kinds.get(why.split(":", 1)[0], 0) + 1
+    return ", ".join(f"{n} {k}" for k, n in sorted(kinds.items(), key=lambda kn: (-kn[1], kn[0])))
 
 
 def write(p: dict, info: dict, tables: Path, out: Path) -> None:
@@ -336,6 +354,8 @@ def main(argv=None) -> int:
     p, info = build(scored, d["shapes"], runs, source, extra)
     write(p, info, a.out, a.out)
     print(summary(info))
+    if d["refused"]:
+        print(f"{len(d['refused'])} valid checkpoints refused, never scored: {refusals(d['refused'])}")
     print(f"{PANEL}: {len(p['rows'])} rows, {len(console.body(p))} bytes -> {a.out}: {NAME}.json, "
           f"frontier-points.json, console/{NAME}.json")
     if a.publish:

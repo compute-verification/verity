@@ -31,7 +31,8 @@ an infinite ρ there), the reached row with the least p, else the failed attempt
 The console's copy (`cut`) is the whole table when it fits the panels route (te_core.console), else the coverage's
 rows and, at the first tier of `TIERS` that fits, per data, start and target (and family, at the first tier) the
 reached rows on the lower-left (p, rho_default) front and the failed attempt with the greatest gain. DIR gets the
-uncut tables in `tables/` (`algorithm-policy.json`, `coverage.json`, `coverage.md` and te_core.frontier_fit's
+uncut tables in `tables/` (`algorithm-policy.json`, `coverage.json`, `coverage.md`, `refused.json`, each valid
+checkpoint te_core.formalism refuses with its reason, which no row holds, and te_core.frontier_fit's
 `frontier-fit.json` and `frontier-points.json`), both panels' console copies in `console/` and `algorithm-policy.png`
 (p against ρ at the default on the headline data, v3 once it has rows, else the pilot: a panel per gain target, with
 iso-S diagonals). `--publish` puts `tables/` in the evidence store, whose art id the cut's note names, and PUTs
@@ -304,8 +305,9 @@ def cell_text(c: dict, short: bool = False) -> str:
     return head if short else f"{head}, rho {rho} ({c['start']}, {c['method_key']}, {c['record']})"
 
 
-def coverage_md(cov: list[dict], fits: dict, stamp: str) -> str:
-    """The coverage table in Markdown, a row per gain target and data, a column per decade of ρ."""
+def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str] | None = None) -> str:
+    """The coverage table in Markdown, a row per gain target and data, a column per decade of ρ, and how many valid
+    checkpoints te_core.formalism refused (`refused`, row id -> reason), which no cell can hold."""
     lines = [f"# training/algorithm-policy coverage, {stamp}", "",
              "Per gain target, data and decade of rho_default: the reached row with the least p, else the failed "
              f"attempt with the greatest gain (p a lower bound), else **{EMPTY}**.", "",
@@ -319,10 +321,13 @@ def coverage_md(cov: list[dict], fits: dict, stamp: str) -> str:
     n = sum(c["state"] == "empty" for c in cov)
     lines += ["", f"{n} of {len(cov)} cells {EMPTY}; {sum(c['state'] == 'failed' for c in cov)} hold only failed "
                   "attempts."]
+    if refused:
+        lines.append(f"{len(refused)} valid checkpoints are refused by te_core.formalism, never scored, so in no cell "
+                     f"({frontier_fit.refusals(refused)}; refused.json has each one's reason).")
     return "\n".join(lines) + "\n"
 
 
-def board_line(cov: list[dict], fits: dict, stamp: str, art: str | None) -> str:
+def board_line(cov: list[dict], fits: dict, stamp: str, art: str | None, refused: dict[str, str] | None = None) -> str:
     """The coverage as one board line's text, after its time and tag."""
     parts = []
     for g in GAINS:
@@ -335,7 +340,9 @@ def board_line(cov: list[dict], fits: dict, stamp: str, art: str | None) -> str:
     n = sum(c["state"] == "empty" for c in cov)
     return (f"coverage at {stamp} ({art or 'unpublished'}), gain target x data x decade of rho_default (1, 10, 100, "
             f"1e3, 1e4, 1e5+): the least-p reached row, else the failed attempt with the greatest gain, else {EMPTY}. "
-            + "; ".join(parts) + f". {n} of {len(cov)} cells {EMPTY}.")
+            + "; ".join(parts) + f". {n} of {len(cov)} cells {EMPTY}."
+            + (f" {len(refused)} valid checkpoints refused by te_core.formalism, never scored "
+               f"({frontier_fit.refusals(refused)})." if refused else ""))
 
 
 def headline(p: dict) -> str:
@@ -446,7 +453,8 @@ def figure(p: dict, out: Path) -> Path:
             ax.text(0.5, 0.5, f"best gain {top['gain']:.3g}\n({top['start']}, {top['method_key']}, {top['record']})",
                     transform=ax.transAxes, ha="center", va="center", fontsize=8, color="0.3")
         else:
-            ax.set_title(f"gain {g:g}: no attempts (every start's own loss meets it)", fontsize=8)
+            ax.set_title(f"gain {g:g}: no attempts" + (" (every start's own loss meets it)" if every else
+                                                       f", no scored row on {data}"), fontsize=8)
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlim(xlo, xhi)
@@ -512,7 +520,8 @@ def main(argv=None) -> int:
     frontier_fit.write(fp, info, tables, a.out)
     (tables / f"{NAME}.json").write_text(json.dumps(p, allow_nan=False) + "\n")
     (tables / "coverage.json").write_text(json.dumps(cov, allow_nan=False, indent=1) + "\n")
-    md = coverage_md(cov, info["fits"], p["updated_at"])
+    (tables / "refused.json").write_text(json.dumps(d["refused"], indent=1, sort_keys=True) + "\n")
+    md = coverage_md(cov, info["fits"], p["updated_at"], d["refused"])
     (tables / "coverage.md").write_text(md)
     art = store(tables, {"what": f"{PANEL} uncut, its coverage and {frontier_fit.PANEL} (te_core.algorithm_policy)",
                          "rows": len(p["rows"]), "source": source}) if a.publish else None
@@ -522,6 +531,8 @@ def main(argv=None) -> int:
     # first: the scorer's refresh posts the first Markdown table under the first line that names coverage
     print(md)
     print(frontier_fit.summary(info))
+    if d["refused"]:
+        print(f"{len(d['refused'])} valid checkpoints refused, never scored: {frontier_fit.refusals(d['refused'])}")
     print(summary(p, info))
     reached = {dd: sum(r[COLUMNS.index("reached")] == "yes" for r in p["rows"] if r[COLUMNS.index("data")] == dd)
                for dd in panels.DATA}
@@ -531,7 +542,7 @@ def main(argv=None) -> int:
           + f"){f' ({art})' if art else ''}; console {len(q['rows'])} rows, {len(console.body(q))} bytes, note "
           f"{len(q['note'])} characters -> {a.out}: tables/, console/{NAME}.json, console/{frontier_fit.NAME}.json, "
           f"{png.name}")
-    print("board: " + board_line(cov, info["fits"], p["updated_at"], art))
+    print("board: " + board_line(cov, info["fits"], p["updated_at"], art, d["refused"]))
     if a.publish:
         status = []
         for panel in (fp, q):

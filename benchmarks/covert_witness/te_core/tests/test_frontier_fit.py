@@ -1,8 +1,9 @@
 """te_core.frontier_fit builds `training/frontier-fit`: per data, L(C) = E + A·C^(−γ) by least squares in relative
 loss over its unconstrained frontier from the least start's C0 up, one point per 1/20 decade of C; a data with too few
-points, or too short a span, has no fit; effective compute inverts the fit, so a point on it has gain 1; the ladder's
-three files give v3's from-scratch points; each row carries its record's family whichever quantities score it; and
-the panel has a fit row per data, its points with their residuals and the starts with their own gains."""
+points, or too short a span, has no fit, and so has one with no scored start and no ladder point; effective compute
+inverts the fit, so a point on it has gain 1; the ladder's three files give v3's from-scratch points; each row carries
+its record's family whichever quantities score it; and the panel has a fit row per data, its points with their
+residuals and the starts with their own gains."""
 import json
 import math
 
@@ -10,10 +11,10 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from te_core import console, plots, rescore
+from te_core import console, frontier, plots, rescore
 from te_core import frontier_fit as FF
 from te_core.gates import per_mac
-from test_algorithm_policy import C0, LAW, SCRATCH, args, law
+from test_algorithm_policy import C0, LAW, SCRATCH, args, law, ledger_rows
 
 
 def on(f: dict, shares) -> list[tuple]:
@@ -75,13 +76,20 @@ def test_the_ladders_files_give_v3s_from_scratch_points(tmp_path):
 
 
 def test_a_row_takes_its_records_family_from_the_analysis_whatever_the_quantities(monkeypatch):
+    """A row without a family takes its record's from the analysis; the rows te_core.formalism refuses are `refused`,
+    with their reasons, and a row left out for any other reason isn't."""
     rows = [{"id": "a-1", "run_id": "a"}, {"id": "b-1", "run_id": "b", "family": "full"}, {"id": "c-1", "run_id": "c"}]
     monkeypatch.setattr(rescore, "load", lambda a: {"rows": rows, "pin": ("pin",), "shapes": {}, "keep": None,
                                                     "ladder": None, "blocks": {("a", 7): ({}, "adapter"),
                                                                                ("b", 5): ({}, "seed")}})
-    monkeypatch.setattr(plots, "load", lambda rows, *rest: (rows, {}))
-    _, got = FF.scored_rows(type("A", (), {"pin": ["pin"]})())
+    monkeypatch.setattr(frontier, "valid", lambda rows, pin: rows)
+    monkeypatch.setattr(frontier, "formalism_rows", lambda rows, *rest: (
+        rows, {"d-1": f"{frontier.REFUSED}data-dependent: not measured", "e-1": "unmeasured"}))
+    d, got = FF.scored_rows(type("A", (), {"pin": ["pin"]})())
     assert [r.get("family") for r in got] == ["adapter", "full", None]
+    assert d["refused"] == {"d-1": "data-dependent: not measured"}
+    assert FF.refusals({"x": "data-dependent: a", "y": "read-backs unchecked: b", "z": "data-dependent: c"}) == \
+        "2 data-dependent, 1 read-backs unchecked"
 
 
 def test_the_panel_is_each_datas_fit_its_points_and_the_starts(tmp_path, monkeypatch):
@@ -98,7 +106,7 @@ def test_the_panel_is_each_datas_fit_its_points_and_the_starts(tmp_path, monkeyp
     assert "training/algorithm-policy" in p["note"]
     ds = plots.frame(p)
     fits = {d["data"]: d for d in ds if d["row"] == "fit"}
-    assert fits["v3"]["E_bpb"] is None and fits["v3"]["status"].startswith("no fit: 0 frontier points")
+    assert fits["v3"]["E_bpb"] is None and fits["v3"]["status"].startswith("no fit: no start has a scored checkpoint")
     pilot = fits["v2.3-pilot"]
     f = {"E": pilot["E_bpb"], "A": pilot["A"], "gamma": pilot["gamma"]}
     assert (f["E"], f["gamma"]) == pytest.approx((LAW["E"], LAW["gamma"]), rel=0.05)
@@ -116,3 +124,16 @@ def test_the_panel_is_each_datas_fit_its_points_and_the_starts(tmp_path, monkeyp
     assert starts == [("start s1", pytest.approx(C0, rel=1e-5), 1.2), ("start s2", pytest.approx(2 * C0, rel=1e-5), 1.3)]
     every = json.loads((out / "frontier-points.json").read_text())
     assert set(every) == {"v3", "v2.3-pilot"} and every["v3"] == [] and len(every["v2.3-pilot"]) >= len(pts)
+
+
+def test_a_data_with_no_scored_start_has_no_fit(tmp_path, monkeypatch):
+    """Every row refused (traced before te_core 4.2's read-back lists): the pilot's from-scratch run is still there, but
+    with no start nothing converts its losses or prices C0, so the pilot has no fit rather than one on stubs."""
+    rows = [r | {"formalism": r["formalism"] | {"trace": {"affected_share": 0.5, "u1_bits": 1e9}}}
+            for r in ledger_rows()]
+    assert FF.main(args(tmp_path, monkeypatch, index=rows)) == 0
+    p = json.loads((tmp_path / "out" / f"{FF.NAME}.json").read_text())
+    fits = [d for d in plots.frame(p) if d["row"] == "fit"]
+    assert len(fits) == 2 and all(d["E_bpb"] is None and d["points"] == 0 for d in fits)
+    assert all(d["status"].startswith("no fit: no start has a scored checkpoint") for d in fits)
+    assert f"; {len(rows)} refused (te_core.formalism.refusal); " in p["source"]
