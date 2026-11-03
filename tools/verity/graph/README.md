@@ -8,7 +8,7 @@ tasks.py`, tasks/v1) is the coarse graph `check` runs today.
 ~~~sh
 verity graph [--json] [--family F ...] [--root DIR]   # the graph; --json prints its canonical bytes
 verity graph run ID --work DIR [--graph FILE]          # run task ID in DIR, print its result/v1 (exit 0 pass, 1 fail, 3 error);
-                                                       # FILE: this commit's listing, so that no lister runs
+                                                       # FILE: a listing of this checkout or ID's part of it: no lister runs
 verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events FILE]
                                                        # every task, serially, in order, uncached (exit 0: all passed);
                                                        # events/v1 to FILE (default DIR/events.jsonl), DIR/results.json
@@ -30,7 +30,7 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 | path | what |
 | --- | --- |
 | `verity_graph/contract.py` | schema names, `canonical`, `file_digest`, `env_digest`, `key`, `result_errors` |
-| `verity_graph/graph.py` | the listing: `tasks.toml`, the tree's files, each family's tasks completed and checked, digests, keys |
+| `verity_graph/graph.py` | the listing: `tasks.toml`, the tree's files, each family's tasks completed and checked, digests, keys; a task's part (`part`, `given`) |
 | `verity_graph/families/<family>.py` | a family's lister, `tasks(root: Path, files: list[str]) -> list[dict]` |
 | `verity_graph/runners/<kind>.py` | a kind's runner, `run(task: dict, work: Path) -> dict` |
 | `verity_graph/runners/__init__.py` | dispatch by kind, `call` (a command, logged and bounded by the task's timeout) and `execute` |
@@ -97,11 +97,14 @@ it from the cases in that file, which is a change to the contract.
 
 The executor makes a fresh work directory, puts each artifact the task reads there at the path its producer's output
 declares (two reads or a read and an output that would land on one path are refused when listing), and runs the task's
-argv with `--work DIR` appended, from the checkout's root. `verity graph run` finds the task with `graph.task_graph`, which
-runs the family's lister but completes, digests and keys only the task and what it reads. An executor that listed the
-commit once appends `--graph FILE` too, FILE holding that listing or the part of it with the task and what it reads, and no
-lister runs (`graph.given`): FILE is taken when it names this checkout's commit, so a dirty checkout, or one at another
-commit, refuses it (exit 2) rather than key a result from another tree's digests. Then it runs the task's kind's runner
+argv with `--work DIR` appended, from the checkout's root. An executor lists the graph once and appends `--graph FILE` too,
+FILE holding that listing or the task's part of it, `graph.part(doc, id)`: the task, its env, the digests of its inputs and
+its env's spec files, and of each task it reads the id and the outputs it reads. A part grows with its task's own reads, not
+with the tree or with what lies under the task. Given FILE, `verity graph run` runs no lister (`graph.given`): it takes FILE
+when it holds the task, the outputs it reads and its env, and each file the task's key reads (its inputs and its env's spec
+files) has here the digest FILE names, whatever commit FILE names, so a checkout whose bytes differ refuses it (exit 2) rather
+than key a result from another tree's digests. Without FILE it finds the task with `graph.task_graph`, which runs the
+family's lister but completes, digests and keys only the task and what it reads. Then it runs the task's kind's runner
 through `runners.execute` and prints result/v1 as one canonical line:
 
 ~~~json
@@ -138,12 +141,14 @@ The executor writes one JSON line per event; the dashboard reads only these and 
 
 ## The reference executor
 
-`verity graph check --local` runs the graph serially in `graph.order` (every task after the tasks it reads, ties by id), each
-task in a fresh work directory under `--work` with its reads copied from the run's artifact store (by digest), as its argv
-with `--work DIR`. It takes a result only when it is result/v1 of that task, its key is the one computed here from the
-reads' digests, it reports no undeclared read, and each output's bytes are the digest it names; anything else is an error.
-An error is retried `--retries` times (default 1) and never becomes a result; a fail is never retried; a task whose read
-didn't pass is cancelled. Each task's last result/v1 (its pass or fail, else its last error) is in `--work`'s `results.json`.
+`verity graph check --local` lists the graph once and runs it serially in `graph.order` (every task after the tasks it reads,
+ties by id), each task in a fresh work directory under `--work` with its reads copied from the run's artifact store (by
+digest), as its argv with `--work DIR --graph PART`, PART its part of that listing written beside DIR, so that no task's run
+lists again, on a dirty working tree too. It takes a result only when it is result/v1 of that task, its key is the one
+computed here from the reads' digests, it reports no undeclared read, and each output's bytes are the digest it names;
+anything else is an error. An error is retried `--retries` times (default 1) and never becomes a result; a fail is never
+retried; a task whose read didn't pass is cancelled. Each task's last result/v1 (its pass or fail, else its last error) is in
+`--work`'s `results.json`.
 
 ## The build family
 
@@ -186,5 +191,8 @@ Each has a test: `test_invariants.py` on the whole tree (slow), `test_graph.py` 
 2. It opens nothing outside the tree but the interpreter's own files (an audit hook on `open`, `os.listdir`, `os.scandir`).
 3. Keys reproduce `tests/key_vectors.json`.
 4. No `owner` field.
-5. It lists the whole graph in under 60 CPU seconds of one core.
+5. It lists the whole graph in under 60 CPU seconds of one core, as the tree is and with its Lean families at their size once
+   its modules are `module` files (`tests/ported_listing.py`: of each module a task reads, `olean` and `ir`; seven outputs a
+   module).
 6. Errors never become results; a fail is never retried.
+7. The reference executor lists once: no task's run calls a lister, on a clean tree or a dirty one.

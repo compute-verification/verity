@@ -3,7 +3,7 @@ module
 public import SampledProofs.Fleet
 
 /-!
-# The proof service's halt: detection is terminal (`SampledProofs.Stream.run`, `SampledProofs.Fleet.run`)
+# The proof system's halt: detection is terminal (`SampledProofs.Stream.run`, `SampledProofs.Fleet.run`)
 
 The properties of R5-all as the service's Lean of record runs it: when a stream of an operator reaches its failure budget,
 the fleet halts the operator (`Fleet.failures`), and each of the operator's streams then takes a `halt` op
