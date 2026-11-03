@@ -37,7 +37,8 @@ open scoped ENNReal
 def InferenceBlock (d : Declaration) (c k : ℕ) (I : Finset (Fin d.D.N)) : Prop :=
   GateSet d.D I ∧ I.card ≤ c ∧ (d.unregistered I).card ≤ k
 
-instance (d : Declaration) (c k : ℕ) : DecidablePred (InferenceBlock d c k) := fun I =>
+instance instDecidablePredFinsetFinNDInferenceBlock (d : Declaration) (c k : ℕ) :
+    DecidablePred (InferenceBlock d c k) := fun I =>
   inferInstanceAs (Decidable (I ⊆ d.D.computed ∧ I.card ≤ c ∧ (d.unregistered I).card ≤ k))
 
 /-- `|𝓘| c / |C|`: the gates of a partition into `B` blocks of at most `c` gates, priced at `c` a block, against `|C|`. -/
