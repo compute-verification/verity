@@ -278,8 +278,8 @@ def placement(node: str, host: str, *, verifier: str | None = None) -> dict[str,
     machine the developer doesn't control, which is never the developer's node."""
     held = host != node
     return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
-            PREMISE: (f"holds: the memory challenger ran on {host}, not the developer's {node}" if held else
-                      f"unmet: the memory challenger ran on the developer's node {node}")}
+            PREMISE: (f"holds: the memory challenger ran on {host}, not the prover's {node}" if held else
+                      f"unmet: the memory challenger ran on the prover's node {node}")}
 
 
 def session(side: Side, request: Mapping[str, Any], respond: Callable[[int], bytes]) -> dict[str, Any]:
