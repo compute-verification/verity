@@ -2565,6 +2565,16 @@
   "Pous.SecurityProofs.ObligationWide320": {
    "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
    "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
+  },
+  "Verity.SecurityProofs.ExpandSize": {
+   "honest": ["Verity.SecurityProofs.ExpandSize_honest"],
+   "nontrivial": "Verity.SecurityProofs.ExpandSize_nontrivial",
+   "kind": "exclusion"
+  },
+  "Verity.SecurityProofs.ExpandAndSize": {
+   "honest": ["Verity.SecurityProofs.ExpandAndSize_honest"],
+   "nontrivial": "Verity.SecurityProofs.ExpandAndSize_nontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -2928,8 +2938,6 @@
   "Verity.SecurityProofs.BlockDescription": "80baa463fd43086b3ca137b50dc78ace3b4400bfbabdb344ddc3c090d1f6dbeb",
   "Verity.SecurityProofs.Counting": "34e0729bbd40c2fd7311fc30725f7d8bb1f2fb2daed521891c0dada5afd70f77",
   "Verity.SecurityProofs.CountingSum": "1b2f164ab74dfac250ebe357db6363a1d52294716405d3ed10596cb21004e4ef",
-  "Verity.SecurityProofs.ExpandAndSize": "03966908eadf7f2df4b6715764c0a881097cb6d8a2ea801f44df28194c7d2e60",
-  "Verity.SecurityProofs.ExpandSize": "ba20fed6329ddf69ec6358b50a84b4245f08fbbd3cd9543a994231dcfd64ab9f",
   "Verity.SecurityProofs.InferenceCap": "0035c5e37498f2d808d066ae0a6d0bd50791b4ad147383f0feba37bf8362c9fc",
   "Verity.SecurityProofs.PrivateFitsOfLocal": "64f42467cd87ee1d655ab157a39ee9412d15a923c2cbbd93d790f98f69f9029b",
   "Verity.SecurityProofs.PrivateOutBitsLe": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
@@ -12052,6 +12060,12 @@
    "assumptions": [],
    "type_hash": "03966908eadf7f2df4b6715764c0a881097cb6d8a2ea801f44df28194c7d2e60"
   },
+  "Verity.SecurityProofs.ExpandAndSize_honest": {
+   "owner": "@lean"
+  },
+  "Verity.SecurityProofs.ExpandAndSize_nontrivial": {
+   "owner": "@lean"
+  },
   "Verity.SecurityProofs.ExpandBits": {
    "owner": "@lean",
    "signature": ["Verity.SecurityProofs.ExpandBits : Verity.Guarantees.ExpandBits"],
@@ -12075,6 +12089,12 @@
    "signature": ["Verity.SecurityProofs.ExpandSize : Verity.Guarantees.ExpandSize"],
    "assumptions": [],
    "type_hash": "ba20fed6329ddf69ec6358b50a84b4245f08fbbd3cd9543a994231dcfd64ab9f"
+  },
+  "Verity.SecurityProofs.ExpandSize_honest": {
+   "owner": "@lean"
+  },
+  "Verity.SecurityProofs.ExpandSize_nontrivial": {
+   "owner": "@lean"
   },
   "Verity.SecurityProofs.HopperStepComplete": {
    "owner": "@proofs",
@@ -13455,6 +13475,10 @@
    "Verity.SecurityProofs.AndSizeLe": "frozen (no-function): It is about an arbitrary circuit and set of its gates (Verity.Circuit.andSize, Security/Definitions/Core/Formalism.lean): its AND gates are operation gates, so the AND count is at most the size; not about a function's code.",
    "Verity.SecurityProofs.CreditSizeLe": "frozen (no-function): It is about an arbitrary lowering from declarations to circuits and an arbitrary declaration (Verity.creditSize, Security/Definitions/Core/Formalism.lean): the credit, the lowered circuit's AND count, is at most its size; not about a function's code.",
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary declaration, a partition of it and their expansions (Verity.Circuit.andSize, Verity.Declaration.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
+   "Verity.SecurityProofs.ExpandAndSize_honest": "completeness: ExpandAndSize's honest lemma: at AndPair (as ExpandSize_honest's) the expansion's AND counts are at most the widths of the computed gates and of the unit. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
+   "Verity.SecurityProofs.ExpandAndSize_nontrivial": "lemma: ExpandAndSize's nontrivial lemma: at AndPair both bits of gate 2 are AND gates, each the AND of a bit of gate 0 and one of gate 1, so the expansion's AND count 2 is above the bound's right-hand side lowered by one (gate 2's width 2, less 1), and the bound is tight there. A counterexample at an instance, not a property of a Lean function.",
+   "Verity.SecurityProofs.ExpandSize_honest": "completeness: ExpandSize's honest lemma: at AndPair (Verity.Expand.AndPair, Security/Definitions/Core/Expand/Instances.lean), a declaration whose two-bit input gates 0 and 1 feed a bitwise AND at gate 2, its one unit, with gate 0 registered, its conclusion holds: the expansion's computed bits and its unit's bits are as many as their widths, and its unit's unregistered reads at most the width of the unit's. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
+   "Verity.SecurityProofs.ExpandSize_nontrivial": "lemma: ExpandSize's nontrivial lemma: at AndPair the unit's expansion reads gate 1's two unregistered bits, above the bound's right-hand side lowered by one (gate 1's width 2, less 1), so the bound is tight there. A counterexample at an instance, not a property of a Lean function.",
    "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
    "Accounting.SecurityProofs.AccelRate": "frozen (no-function): It shows the instructions of runs of the machine model 𝓜 back to back (Verity.Accel.Machine.run) meet a rate at their seconds summed, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.AccelAdditive": "frozen (no-function): It bounds the resource units of disjoint sets of the instructions a period issues on the machine model 𝓜 by the period's rate, not a Lean function's acceptance.",
