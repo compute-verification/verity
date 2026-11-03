@@ -13,7 +13,8 @@ window's advice committed by the server, its public line out before any coin of 
   request, so on at most that request's token cap, and the windows are committed in order. Each gets a line of
   ``advice.jsonl`` (`LINES`, public, mirrored): the compiler's digest, the root of the advice's hiding commitment and ℓ_a,
   the registered width, where the advice's own length stays a value (``registration.json`` holds it, in the serve dir); a
-  window the advice refuses is a line naming it refused, its reason in ``advice/windows.json``.
+  window the advice refuses is a line naming it refused, its reason in ``advice/windows.json``, and one with no step a line
+  naming it empty, so every closed window has its line.
 * **Coins.** A draw of a window through ``--draws-dir`` before its line is out is refused, and the window's release with it
   (`serve_release.DrawDir`): no coin of a window is drawn before its advice is committed. At the stop the windows left are
   committed (`stop`), a request with no Commit record refused as `write_served` refuses it, before ``summary.json``'s
@@ -80,9 +81,10 @@ def refusal(opts: Any) -> str | None:
     return None
 
 
-def register(out: Path, serve: Mapping[str, Any], cap_bits: int, composite: str = "onsite") -> tuple[AW.Capped, dict[str, Any]]:
+def register(out: Path, serve: Mapping[str, Any], cap_bits: int, composite: str = "onsite", *,
+             t: float | None = None) -> tuple[AW.Capped, dict[str, Any]]:
     """B registered for the run whose ``serve.json`` is ``serve``: ``out/advice_registration.json``, written once (an existing one
-    is a `UsageError`). -> B and the document."""
+    is a `UsageError`), at ``t`` (unix seconds, default now). -> B and the document."""
     doc = SC.compiler_doc(serve, cap_bits=cap_bits)
     compiler = ADV.registered_compiler(doc["inner"]["name"], doc["inner"]["digest"], cap_bits)
     if compiler.digest != doc["digest"]:
@@ -90,7 +92,8 @@ def register(out: Path, serve: Mapping[str, Any], cap_bits: int, composite: str 
     log = REG.chain(composite, [REG.Information((ADV.builder_item(compiler),))])
     body = {"schema": SCHEMA, "compiler": doc, "advice": WA.SCHEMA, "cap_bits": int(cap_bits), "row_bits": AW.ROW_BITS,
             "registration": {"composite": composite, "head": REG.head(composite, log),
-                             "log": json.loads(REG.committed(composite, log))}}
+                             "log": json.loads(REG.committed(composite, log))},
+            "t": time.time() if t is None else float(t)}
     try:
         with open(Path(out) / REGISTRATION, "x") as fh:
             fh.write(json.dumps(body, indent=1) + "\n")
@@ -113,8 +116,9 @@ class ServedAdvice:
     in order; `stop` commits the rest. `committed` is what the draw gate reads."""
 
     def __init__(self, out: Path, trace: Any, *, weights: str | None = None, tau: float = 0.1, T: int = 600,
-                 wall: Callable[[], float] = time.time) -> None:
+                 wall: Callable[[], float] = time.time, poll_s: float = 1.0) -> None:
         self.out, self.trace, self.weights, self.tau, self.T, self.wall = Path(out), trace, weights, float(tau), int(T), wall
+        self.poll_s = float(poll_s)
         self.compiler: AW.Capped | None = None
         self.serve: Mapping[str, Any] | None = None
         self.index = ADV.TraceIndex()
@@ -122,7 +126,7 @@ class ServedAdvice:
         self.commits: dict[int, dict[str, Any]] = {}
         self.carry: tuple[ADV.Left, ...] = ()
         self.gone: int | None = None
-        self.done: set[int] = set()                     # every window settled: committed, refused or with no step
+        self.done: set[int] = set()                     # every window settled: committed, refused or empty
         self.lines: dict[int, dict[str, Any]] = {}
         self.refused: dict[int, str] = {}
         self.reports: dict[int, dict[str, Any]] = {}
@@ -136,7 +140,7 @@ class ServedAdvice:
     def register(self, serve: Mapping[str, Any], cap_bits: int, composite: str) -> dict[str, Any]:
         """B registered (`register`) from the run's ``serve.json``, and the committer started under it (`start`)."""
         self.serve = serve
-        compiler, body = register(self.out, serve, cap_bits, composite)
+        compiler, body = register(self.out, serve, cap_bits, composite, t=self.wall())
         self.start(compiler)
         return body
 
@@ -166,6 +170,10 @@ class ServedAdvice:
             self.commits[int(rec["window"])] = {"run_id": rec.get("run_id"), "run_root": rec.get("run_root")}
         self._wake.set()
 
+    def wake(self) -> None:
+        """The trace has grown (a close mark): the committer looks again."""
+        self._wake.set()
+
     def committed(self, window: int) -> bool:
         """Whether window ``window``'s advice line is out (refused or committed): what a draw of it waits for."""
         with self._lock:
@@ -174,7 +182,7 @@ class ServedAdvice:
     # -- the committer
     def _run(self) -> None:
         while True:
-            self._wake.wait()
+            self._wake.wait(self.poll_s)                # also unwoken: async scheduling records a last step after the close
             self._wake.clear()
             if self._stopping:
                 return
@@ -207,8 +215,7 @@ class ServedAdvice:
                 return
             sub = idx.window(w)
             if sub is None:
-                with self._lock:
-                    self.done.add(w)
+                self._settle(w, {"window": w, "empty": True, "t": self.wall()})
                 continue
             ids = {r["request"] for r in sub if r["kind"] == "arrive"}
             with self._lock:
@@ -269,5 +276,6 @@ class ServedAdvice:
     def summary(self) -> dict[str, Any]:
         with self._lock:
             lines, refused, waiting = dict(self.lines), dict(self.refused), sorted(self._closed - self.done)
-        return {"committed": sorted(w for w in lines if w not in refused), "refused": sorted(refused), "waiting": waiting,
+        return {"committed": sorted(w for w, x in lines.items() if w not in refused and not x.get("empty")),
+                "empty": sorted(w for w, x in lines.items() if x.get("empty")), "refused": sorted(refused), "waiting": waiting,
                 "error": self.error, "passed": self.error is None and not waiting}

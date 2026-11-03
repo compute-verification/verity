@@ -468,6 +468,8 @@ class CommitWindows:
         self._write_window(rec)
         if self.marks is not None:
             self.marks(self.window, "close")
+        if self.advice is not None:                      # its line came before the close mark the committer waits on
+            self.advice.wake()
         if self.mirror is not None:
             self.mirror()
         if isinstance(job, tuple):
