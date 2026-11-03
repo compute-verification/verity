@@ -47,7 +47,7 @@ zeros), is refused ``FIREWALL-REFUSED`` before the challenger sees it. A refusal
 is a **stop**: the challenger's record says so (``end``: ``stop``, not why), and `serve` writes that record and counts the
 session.
 
-**Live coins.** Each round's coins are flipped by the challenger when the round's commitments reach it, never before
+**Live coins.** Each round's coins are flipped by the coin server when the round's commitments reach it, never before
 (`RecursiveKS`'s game and `RecursiveZK` draw them so, and `Flock.Firewall.Contract`'s ``coins`` rule lets coins out only
 after the commitments the schedule owes); `serve`'s challenger commits to none. A challenger may instead commit to every
 coin before the session (`CoinServer.commit_coins`, from the schedule alone: one hm96-sha512 commitment a round, the link
