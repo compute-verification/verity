@@ -610,7 +610,8 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
     composed, whatever their pieces left, and composes accept from sampled proofs' and PoUW's accepts on its node. The
     same pieces composed for onsite reject on the wipe's answer. The report and the line say they were composed on the
-    served node, from the answer files it wrote, and the published line keeps that."""
+    served node, from the answer files it wrote, and the published line keeps that. A certifier front's kept fetch and
+    session in the serve dir leave remote's record as it was."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
@@ -648,6 +649,14 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     where = {"host": "vy-dc-h200", "served_node": True, "from": S.COMPOSED_FROM}
     assert report["composed_on"] == line["composed_on"] == where
     assert json.loads(S.public_line("RECORD " + json.dumps(line)).removeprefix("RECORD "))["composed_on"] == where
+    front = tmp_path / "serve" / "private"
+    (front / "certifier" / "c20260101T000000Z-ab12").mkdir(parents=True)
+    (front / "certifier" / "c20260101T000000Z-ab12" / "fetch.tar.gz").write_bytes(b"the front's kept fetch")
+    (front / "certifier-front").mkdir()
+    (front / "certifier-front" / "session.json").write_text(json.dumps({"run": "c20260101T000000Z-ab12", "rc": 0}))
+    assert S.main(argv) == 0
+    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD ")) == line
+    assert json.loads((tmp_path / "record" / "block-record.json").read_text()) == rec
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
     assert S.main(argv) == 0
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
@@ -1084,16 +1093,21 @@ def test_settings_are_read_before_the_defaults_and_an_unreadable_file_is_refused
     ("remote", {"POUS_CMD": "true"}, "PREFLIGHT: PRODUCT=remote runs no onsite piece, and POUS_CMD is set: unset it"),
     ("remote", {"CERTIFIER_CHAIN_CMD": "true"},
      "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CHAIN_CMD is set: unset it"),
-    ("remote", {"CERTIFIER_FRONT": FRONT},
-     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_FRONT is set: unset it"),
+    ("remote", {"CERTIFIER_CMD": "true"},
+     "PREFLIGHT: PRODUCT=remote runs no onsite piece, and CERTIFIER_CMD is set: unset it"),
+    ("remote", {"LOAD": "front", "CERTIFIER_FRONT": FRONT, "SERVE_ARGS": IDS}, None),
     ("onsite", {}, None),
     ("offsite", {}, "PREFLIGHT: PRODUCT is onsite or remote, not offsite"),
 ])
 def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_command(tmp_path, product, extra, line):
     """PRODUCT=remote drops the onsite pieces: in a tree that has the wipe's piece its default WIPE_CMD isn't set, and
-    the preflight refuses any onsite piece's command set, before anything runs."""
+    the preflight refuses any onsite piece's command set, before anything runs. The certifier's front is how a run's
+    requests are served, not a piece, so remote takes it."""
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
+    (tree / "benchmarks" / "network_traces").mkdir(parents=True)
+    (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
+        "print('usage: certifier_piece.py front PORT [--gate --warmup --bucket-ms]')\n")
     _script(venv / "python", f'exec {sys.executable} "$@"')
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
            "PRODUCT": product, **extra}
