@@ -79,6 +79,8 @@ CAPTURE_FINAL = "4.8"
 #: coordinator 15:08Z: `--on auto` misplaces runs until #7113 lands; auto spread shards over the CPU pool, 07:48Z)
 TRACE_NODE = os.environ.get("TE_TRACE_NODE", "vy-nebius-cpu-9")
 TRACE_POOL = os.environ.get("TE_TRACE_POOL", "research")
+#: the lane a pool slot names (`research run --pool` refuses a run without one)
+TRACE_LANE = os.environ.get("RESEARCH_LANE", "te-scorer")
 TRACE_SHARD = 6
 #: the most shards a refresh launches, so the pool (about 27 free slots at 08:50Z) keeps room for other lanes' runs;
 #: the next refresh launches the rest, v3's first
@@ -358,7 +360,7 @@ def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, 
         runs = [r["run_id"] for r in json.loads(subprocess.run(["tar", "-xOf", str(pack), "./runs.json"],
                                                                capture_output=True, check=True).stdout)]
         workers, gb = trace_resources(len(runs))
-        r = subprocess.run(["research", "run", "--on", TRACE_NODE, *(["--pool", TRACE_POOL] if TRACE_POOL else []),
+        r = subprocess.run(["research", "run", "--on", TRACE_NODE, *(["--pool", TRACE_POOL, "--as", TRACE_LANE] if TRACE_POOL else []),
                             "--project", "verity", "--source", str(HERE.parents[2]),
                             "--cwd", "source", "--send", str(pack), "--cpus", str(workers), "--mem-gb", str(gb),
                             "--env", f"WORKERS={workers}", "--timeout", "150m", "--custody-ttl", TRACE_CUSTODY_TTL, "--",
