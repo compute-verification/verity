@@ -150,10 +150,13 @@ class MoE(nn.Module):
         top, idx = probs.topk(self.topk, -1)
         w = top / top.sum(-1, keepdim=True)
         out = torch.zeros(x.shape, dtype=torch.float32, device=x.device)
+        # one zero row under every expert's tokens: te_core refuses a product op that computes nothing, which an
+        # expert no token chose would otherwise run
+        pad = x.new_zeros(1, x.shape[1])
         for e in range(n_exp):
             tok, slot = (idx == e).nonzero(as_tuple=True)
-            xe = x.index_select(0, tok)
-            ye = F.linear(F.silu(F.linear(xe, self.w_gate[e])) * F.linear(xe, self.w_up[e]), self.w_down[e])
+            xe = torch.cat([x.index_select(0, tok), pad])
+            ye = F.linear(F.silu(F.linear(xe, self.w_gate[e])) * F.linear(xe, self.w_up[e]), self.w_down[e])[:-1]
             out.index_add_(0, tok, ye * w[tok, slot].unsqueeze(1))
         self.aux = n_exp * (F.one_hot(idx, n_exp).float().mean((0, 1)) * probs.mean(0)).sum()
         return out.view(h.shape)
