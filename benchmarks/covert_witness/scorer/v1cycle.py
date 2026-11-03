@@ -59,7 +59,9 @@ RESCORE_WT = Path(os.environ.get("TE_RESCORE_WT", "/tmp/scorer/rescore"))
 RESCORE_PATHS = ("benchmarks/covert_witness/te_core", "benchmarks/covert_witness/analysis/rescore_v1.py",
                  "benchmarks/covert_witness/pinned.json", "benchmarks/covert_witness/pin.py",
                  "benchmarks/covert_witness/starts_store.json")
-RESCORE_REFS = ("cursor/covert-witness-4207", "cursor/training-efficiency-4207")
+#: the integrator's branch, where the scorer's te_core is merged (training-efficiency-4207's te_core lacks
+#: formalism.published, the integrator's 10:24Z)
+RESCORE_REFS = ("cursor/covert-witness-4207",)
 #: the refresh runs on te_core 4.0 or later (coordinator 01:22Z): formalism v2's quantities measured on traced steps
 TE_MAJOR = 4
 # the scorer's te_core change awaiting the integrator's merge (Delta_t, coordinator 00:47Z), used while it holds theirs
