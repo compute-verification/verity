@@ -18,8 +18,10 @@ written; its preflight refuses the split beside the certifier's whole piece, or 
 serve-openai the tie's command, which, run as `serve_tie` runs it at an H1 window's close, writes the window's advice and
 commits it chained after H1's W, its registration the window's record R, and writes no R when the advice is pending or the
 commit refused; its V3c then audits the commit H1 bound and makes none, and has none for a window H1 bound no R for or bound
-another; its preflight refuses H1_TIE without H1's prover state, without V3c, on a tree whose window-commit takes no
---window-registration, past the sample session's time, or for onsite on a node short of V3c's audit's memory. There
+another, its audit tied to W at stratified:1 on a port for each proof block of R's sample; its preflight refuses H1_TIE
+without H1's prover state, without V3c, on a tree whose window-commit takes no --window-registration or whose records_audit
+takes no --tie, at a sampling design other than stratified:K, past the sample session's time, or for onsite on a node short
+of V3c's audit's memory. There
 step 6 defers the audit and the composite, leaving the follow-on's settings and its every input, listed and hashed, and
 nothing in $OUT but a line; the follow-on holds the copy to those sums, refuses another setting, a node short of the
 memory or another tree, and audits, records about the served node and composes, each saying it composed elsewhere, as
@@ -929,6 +931,8 @@ a = sys.argv[1:]
 open(os.environ["ORDER"], "a").write(a[0] + "\\n")
 out = Path(a[a.index("--out") + 1])
 if a[0] == "audit":
+    assert ("--tie" in a) == ("--tie-prefix" in a)
+    open(os.environ["ORDER"] + ".audit", "w").write(json.dumps(a))
     out.mkdir(parents=True)
     (out / "summary.json").write_text("{}")
     print("RECORDS " + json.dumps({"verdict": "accept", "population": 37, "window": 7}))
@@ -945,18 +949,18 @@ PERIOD = 'echo period-check >> "$ORDER"; cp "$4/period.json" "$3/"; echo \'{"ver
 
 
 def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = FAKE_V3C_PROVE_PATH,
-         **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
+         records_audit: str = FAKE_RECORDS_AUDIT, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
     """`served_verdicts.sh v3c` (or ``args``) on window 7 of a toy serve dir at the certifier's class, in a toy tree whose
-    prove_path.py (``prove_path``) and records_audit.py note each step they run, its builds stubbed and the split
-    certifier's two commands set (``extra`` adds to the environment, None unsetting): the exit status, the verdict lines,
-    the steps in order and the limits."""
+    prove_path.py (``prove_path``) and records_audit.py (``records_audit``) note each step they run, its builds stubbed and
+    the split certifier's two commands set (``extra`` adds to the environment, None unsetting): the exit status, the
+    verdict lines, the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
               tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)
-    (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(FAKE_RECORDS_AUDIT)
+    (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(records_audit)
     (tree / "verity" / "ml" / "flock" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
@@ -1095,7 +1099,7 @@ def test_under_h1_tie_each_h1_windows_close_writes_its_advice_and_commits_it_cha
         == {"format": "toy", "after": W_OF_7}
     assert (tmp_path / "order.commit").read_text().split() == [
         "--window-registration", str(d / "h1" / "w7" / "registration.json"), "--h1-key", str(d / "private" / "h1" / "w7" / "key"),
-        "--law", "subset:1"]
+        "--law", "stratified:1"]
     assert (d / "advice" / "w7" / "private" / "advice.bin").exists() and (d / "advice" / ".w7" / "windows.json").exists()
     assert json.loads((d / "h1" / "w7" / "window-commit.json").read_text())["population"] == 37
     assert not (tmp_path / "tie-out" / "verdicts.txt").exists()
@@ -1116,14 +1120,20 @@ def test_a_tie_whose_advice_is_pending_or_whose_commit_is_refused_writes_no_reco
     assert not (tmp_path / "serve" / "h1" / "w7" / "record.json").exists()
 
 
-def _tied_commit(tmp_path: Path, bound: str | None) -> None:
-    """Window 7's commit as the tie left it in the toy serve dir: its registration R and circuit, its answer, and H1's log
-    naming W and, unless ``bound`` is None, the record H1 bound (``same``: R; ``other``: another)."""
+#: R's sample in `_tied_commit`: stratified:1 over three tables' readers, a proof block of each
+TIED_LAW = {"law": "stratified", "k": 1, "strata": [{"template": t, "units": [[3 * i, 3 * i + 3]], "k": 1}
+                                                   for i, t in enumerate(("a@0", "ids@0", "ids@1"))]}
+
+
+def _tied_commit(tmp_path: Path, bound: str | None, law: dict | None = TIED_LAW) -> None:
+    """Window 7's commit as the tie left it in the toy serve dir: its registration R (its sample ``law``; None, none) and
+    circuit, its answer, and H1's log naming W and, unless ``bound`` is None, the record H1 bound (``same``: R; ``other``:
+    another)."""
     d = tmp_path / "serve"
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     vw.mkdir(parents=True)
     (d / "h1" / "w7").mkdir(parents=True)
-    r = {"format": "toy", "after": W_OF_7}
+    r = {"format": "toy", "after": W_OF_7, **({"law": law} if law else {})}
     (vw / "registration.json").write_text(json.dumps(r))
     (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
     (d / "h1" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
@@ -1144,6 +1154,36 @@ def test_under_h1_tie_v3c_audits_the_commit_h1_bound_and_makes_none_of_its_own(t
                                "before the sample coin (R ") and '"run": "ab"' in lines[1] and "population" not in lines[1]
     assert lines[2] == (f"WINDOW-CIRCUIT-HELD class {W63K4}: the committed circuit.json less its run fields is the "
                         "verifier's own window-circuit record: PASS")
+
+
+def _audited(tmp_path: Path) -> dict[str, str | None]:
+    """The sampling design's, the tie's and the ports' flags the toy records_audit.py's audit got."""
+    a = json.loads((tmp_path / "order.audit").read_text())
+    return {f: a[a.index(f) + 1] if f in a else None for f in ("--law", "--tie", "--tie-prefix", "--ports")}
+
+
+@pytest.mark.parametrize("tied, extra, ports", [(False, {}, "16"), (True, {}, "3"), (True, {"V3C_PORTS": "40"}, "40")])
+def test_under_h1_tie_v3cs_audit_is_tied_to_h1s_w_at_a_stratum_of_each_tables_readers_on_a_port_a_sampled_block(
+        tmp_path, tied, extra, ports):
+    """Under H1_TIE the tables the window circuit reads are H1's W's, so V3c's audit is tied to W (records_audit's --tie,
+    with H1's names' prefix h1/) at stratified:1, a stratum of each table's readers, so every table has a sampled reader,
+    on as many ports as R's sample has proof blocks (its strata's k summed) unless V3C_PORTS says; an untied window's
+    audit is at subset:1 on 16 ports."""
+    if tied:
+        _tied_commit(tmp_path, "same")
+    rc, lines, order, _limits = _v3c(tmp_path, **({"H1_TIE": "1"} if tied else {}), **extra)
+    assert rc == 0 and "audit" in order, (lines, order)
+    w = str(tmp_path / "serve" / "h1" / "w7" / "registration.json")
+    assert _audited(tmp_path) == ({"--law": "stratified:1", "--tie": w, "--tie-prefix": "h1/", "--ports": ports} if tied
+                                  else {"--law": "subset:1", "--tie": None, "--tie-prefix": None, "--ports": ports})
+
+
+def test_under_h1_tie_v3c_runs_no_audit_whose_ports_rs_sample_cannot_size(tmp_path):
+    """A tied audit's ports default to the size of R's sample, so an R with no strata gets no audit, and V3c says why."""
+    _tied_commit(tmp_path, "same", law=None)
+    rc, lines, order, _limits = _v3c(tmp_path, H1_TIE="1")
+    assert rc == 1 and "audit" not in order, (lines, order)
+    assert "V3C-AUDIT: R, the window's registration, has no strata to size the audit's ports by: set V3C_PORTS" in lines
 
 
 @pytest.mark.parametrize("bound, why", [
@@ -1189,6 +1229,30 @@ def test_the_preflight_refuses_h1_tie_without_h1s_prover_or_v3c_or_window_commit
     audit needs (V3C_AUDIT_MEM_GB) the audit and the composite go to a follow-on, which onsite's PoUS case can't: each
     refused before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), prove_path=prove_path, **extra)
+    assert (rc, lines, order) == (3, [line], [])
+
+
+NO_TIE = ("PREFLIGHT: under H1_TIE V3c's audit is tied to H1's W, whose tables the circuit reads, with records_audit's "
+          "--tie, which this tree's records_audit.py doesn't take")
+
+
+def _no_reader(law: str) -> str:
+    return ("PREFLIGHT: under H1_TIE every table H1's W registers needs a sampled reader, which only stratified:K, a "
+            f"stratum of each table's readers, gives: V3C_LAW is {law}")
+
+
+@pytest.mark.parametrize("args, extra, records_audit, line", [
+    ((), TIES, "import sys\n", NO_TIE),
+    (("v3c",), {"H1_TIE": "1"}, "import sys\n", NO_TIE),
+    ((), {**TIES, "V3C_LAW": "subset:1"}, FAKE_RECORDS_AUDIT, _no_reader("subset:1")),
+    (("v3c",), {"H1_TIE": "1", "V3C_LAW": "work:4"}, FAKE_RECORDS_AUDIT, _no_reader("work:4")),
+])
+def test_the_preflight_refuses_h1_tie_on_a_tree_whose_audit_takes_no_tie_or_at_a_design_other_than_stratified(
+        tmp_path, args, extra, records_audit, line):
+    """Under H1_TIE the audit reads the tables H1's W registered, so a tree whose records_audit.py can't tie it to W is
+    refused, not run untied, and so is a sampling design that can leave a table with no sampled reader, which Record.checks
+    refuses: in the serve's run and in `served_verdicts.sh v3c` alike, before anything runs."""
+    rc, lines, order, _limits = _v3c(tmp_path, args, records_audit=records_audit, **extra)
     assert (rc, lines, order) == (3, [line], [])
 
 
@@ -1265,7 +1329,7 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     said = subprocess.run(["bash", "-c", f'. "$1"; for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done', "_",
                            str(dd / "deferred.env")], check=True, capture_output=True, text=True).stdout
     assert dict(x.split("=", 1) for x in said.splitlines()) == {
-        "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "subset:1", "H1_TIE": "1", "COMPOSITE": "1",
+        "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "H1_TIE": "1", "COMPOSITE": "1",
         "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200", "DEFERRED_TREE": SHA}
     listed = (dd / "inputs.txt").read_text().splitlines()
     window = [f"v3c-w7-{VTAG}/window/{f}" for f in ("circuit.json", "registration.json", "values/a.bin")]
@@ -1319,6 +1383,8 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close") and lines[3].endswith("PASS")
     assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-AUDIT", "V3C-PERIOD", "RECORD", "COMPOSITE:"]
     assert lines[-1] == "COMPOSITE: composed on cpu-6" and limits == ["180m"]
+    assert _audited(tmp_path) == {"--law": "stratified:1", "--tie": str(d / "h1" / "w7" / "registration.json"),
+                                  "--tie-prefix": "h1/", "--ports": "3"}
     assert json.loads((tmp_path / "order.record").read_text()) == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"), "--pieces",
         str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
