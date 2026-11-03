@@ -79,7 +79,8 @@ def test_expansion_equals_the_tree_and_gf2s_own_adder(adder):
 
 def test_the_digest_is_sha512_over_rfc8785_json_and_ignores_names():
     fa = _full_adder()
-    assert fa.canonical() == json.dumps(fa.content(), sort_keys=True, separators=(",", ":")).encode()
+    for t in (fa, _adder(fa), _ex2_read()):
+        assert t.canonical() == json.dumps(t.content(), sort_keys=True, separators=(",", ":")).encode()
     assert fa.digest() == hashlib.sha512(b"verity/circuit-type/v1\0" + fa.canonical()).hexdigest()
     assert _full_adder(("x", "y", "z")).digest() == fa.digest()
     assert CT.from_content(json.loads(fa.canonical())) == fa
@@ -119,6 +120,7 @@ def test_validate_refuses_each_broken_rule(adder):
     CT.validate(one, {}.__getitem__)
     _refused(CT.CircuitType(**{**base, "label": "public"}, items=one.items, outputs=one.outputs), match="label")
     _refused(CT.CircuitType(items=((CT.AND, ((2,), 0), ((1,), 0)),), outputs=(((2,), 0),), **base), match="earlier wires")
+    _refused(CT.CircuitType(items=((CT.AND, ((-1, 0), 0), ((1,), 0)),), outputs=(((2,), 0),), **base), match="earlier wires")
     _refused(CT.CircuitType(items=((CT.AND, ((1, 0), 0), ((1,), 0)),), outputs=(((2,), 0),), **base), match="ascending")
     _refused(CT.CircuitType(items=one.items, outputs=(((2,), 0), ((0,), 1)), **base), match="output forms")
     _refused(CT.CircuitType(items=one.items + ((CT.AND, ((0,), 0), ((2,), 1)),), outputs=(((2,), 0),), **base), match="dead")

@@ -59,10 +59,10 @@ The other claims are in `Sampling` (the sampling compiler's, sampled proofs' one
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
 
-The named assumptions: `StrictBirthday` and `ExpectedCR` (Core's), hm96's hiding, `Hm96Hiding`
-(`Definitions/Claims/Hm96.lean`, which the soundness proofs read), and the JSON library's specification, `JsonSpec`
-(`Definitions/Claims/Json.lean`, which only completeness reads). What the claims rest on and no Lean statement can say
-is `trustedBase`.
+The named assumptions: `StrictBirthday` and `ExpectedCR` (Core's) and hm96's hiding, `Hm96Hiding`
+(`Definitions/Claims/Hm96.lean`, which the soundness proofs read). What the claims rest on and no Lean statement can say
+is `trustedBase`. The texts the canonical printer prints are ASCII without DEL, `Json.Ascii`
+(`Definitions/Claims/Json.lean`), which only completeness reads.
 
 The lock records the text of `Flock.Guarantees.ClaimsStated` and `Flock.Guarantees.MaskedZK` under `reads`, with
 every claim here and the shared forms of `Definitions.Core.Interaction` they instantiate, so a changed claim is a
