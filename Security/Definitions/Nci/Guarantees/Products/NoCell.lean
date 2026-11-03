@@ -25,7 +25,7 @@ The premises, beside the training formalism's: `Standard.Wiring` is the standard
 connectivity, which the cells' takes the place of; `Standard.Passed` is the operand side of `P-width`, each operand a
 block uses paid at its width, with the side that hands partial sums on, which the bit-level cap reads;
 `Standard.Received` is `P-width`'s read side with `P-chain`, each entry's chain started once. Neither theorem reads
-`P-cell` (`Standard.Unsplit`) or the chains' order (`Standard.Chained`).
+`P-cell` (`Standard.Unsplit`) or `P-chain`'s order of each chain's MACs (`Standard.Chained`).
 
 Each has an honest and a nontrivial lemma (`Definitions.Nci.Guarantees.Products.NoCellWitnesses`).
 -/

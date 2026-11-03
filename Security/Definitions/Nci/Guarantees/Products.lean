@@ -4,7 +4,7 @@ import Definitions.Nci.Products
 /-!
 # Products of two fresh operands: the amortized cap and the bound on `ρ` it gives
 
-The theorems about a product `C = A · B` by the standard algorithm with its widths as passed
+The theorems about a product `C = A · B` by the standard algorithm with its widths as passed, io_bound's P-width
 (`Definitions.Nci.Products`), proved in `Nci.Products.SecurityProofs`. Each is about every partition `𝓘` of the
 declaration into `m` inference blocks, each block reading at most `k` bits beyond `θ`, and charges only those reads.
 `N = ni nl nj` is the number of products and `E = Σ_ij |out_ij|` the bits of `C`'s final values.
@@ -20,8 +20,8 @@ declaration into `m` inference blocks, each block reading at most `k` bits beyon
   for each entry it touches would do at most `(k/3)^{3/2} / √(b_A b_B b_C)`; only reads are charged, so one block can do
   the products and another read their partial sums, and the amortized cap is `3√3/4` times that, attained
   (`Verity.Combinatorics.split_attains`).
-* **The cap along chains** (`ChainCap`): when no MAC is split and each entry's partial sum runs along its MACs in
-  order, `b_C` bits from each to the next (`Standard.Chained`), `N ≤ m α + β √(m O)`, with
+* **The cap along chains** (`ChainCap`): when no MAC is split (P-cell) and each entry's partial sum runs along its MACs
+  in order, `b_C` bits from each to the next (`Standard.Chained`, P-chain), `N ≤ m α + β √(m O)`, with
   `α = (k/3)^{3/2} / √(b_A b_B b_C)`, `β = (k/2) / √(b_A b_B)` and `O = ni nj` the entries of `C`. Each entry a block
   touches either starts its chain there or has its first MAC there after a MAC in another block, whose partial sum the
   block reads, so a block that starts `s` chains does at most `α + β √s` (`Verity.Combinatorics.sqrt_mul_le_chain`),
@@ -56,8 +56,9 @@ def WordCap : Prop :=
     ((ni * nl * nj : ℕ) : ℝ) ≤ m * ((k : ℝ) * √(k : ℝ) / (4 * √((bA : ℝ) * bB * bC))) +
       √(k : ℝ) / (4 * √((bA : ℝ) * bB * bC)) * S.outBits
 
-/-- **The cap along chains**: when every MAC lies in one block (`Standard.Unsplit`) and each entry's partial sum runs
-along its MACs (`Standard.Chained`), `ni nl nj ≤ m (k/3) √(k/3) / √(b_A b_B b_C) + (k/2) / √(b_A b_B) · √(m ni nj)`. -/
+/-- **The cap along chains**: when every MAC lies in one block (`Standard.Unsplit`, P-cell) and each entry's partial
+sum runs along its MACs (`Standard.Chained`, P-chain),
+`ni nl nj ≤ m (k/3) √(k/3) / √(b_A b_B b_C) + (k/2) / √(b_A b_B) · √(m ni nj)`. -/
 def ChainCap : Prop :=
   ∀ (d : Declaration) (ni nl nj : ℕ) (S : Standard d ni nl nj) (c k bA bB bC m : ℕ) (P : Partition d.D m),
     S.Algorithm → S.Passed c k bA bB bC → S.Chained bC → P.IsCK d c k → S.Unsplit P → 0 < bA → 0 < bB → 0 < bC →
