@@ -234,7 +234,8 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_r
 # (`MODES=firewall`, `--modes firewall`, `(firewall)`, `dials firewall`, `listen: firewall`, `GATE_ABSENT=firewall`), a5's
 # coin family (`need 26 draw coins`), the module `verity_flock.firewall` (`python -m` runs it), the refusal
 # `FIREWALL-REFUSED`, the stored label `C-Flock`, the audit record's `wrong_units`, `proof_unit` and the `"proof-unit"`
-# kind, the package directory `verity/core/service/firewall`; the structure `Accounting.TS.DrawnLayer` and its projection
+# kind, the public items' reasons `Spec.digest` hashes (`N, the window's proof units` and three more), the package
+# directory `verity/core/service/firewall`; the structure `Accounting.TS.DrawnLayer` and its projection
 # (names under it are renamed here, so `check.py --moved` reads each back only if the prefix is renamed in a move of its
 # own); `law` where it touches a name (GLOSSARY.md keeps `law` identifiers); the other senses of law and draw (a power
 # law, the law of large numbers, nvidia-smi's `power.draw`, a game's coin `Game.draw` and `Plays.drawVec`, which beside
@@ -259,6 +260,8 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
             '\bGATE_(?:ABSENT|PEERS|ROLE)=[^\x22\x27\n]*',
             '\b(?:FC|H1S?)_[A-Z0-9_]*FIREWALL[A-Z0-9_]*', 'FIREWALL-REFUSED', '[\x22\x27]C-Flock[\x22\x27]',
             '\bwrong_units\b', '\bproof_unit\b', '[\x22\x27]proof-unit[\x22\x27]', '\bservice/firewall\b',
+            'N, the (?:window|round)\x27s proof units', 'one proof unit per registration: the link-window',
+            'T proof units per registration, unit t the link-window\x27s bucket row t',
             '\bRemote\.Draw\b', '\bRemoteDraw\b', '\bRemote(?:Held|Audit)[./]Draw(?:Meets)?\b', '\b(?:to)?DrawnLayer\b',
             '\bGame\.draw\b', '\bdrawVec\b',
             '(?<=\.update\()(?:draw|draws|drawn|firewall)(?==)', '\b(draw|draws|drawn)(?==\w+\[\x22\1\x22\])',
