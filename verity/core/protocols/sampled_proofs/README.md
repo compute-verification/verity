@@ -280,7 +280,8 @@ is `verity/registration/v2`: the same keys and `registered` (below), so v1's byt
 The verifier holds the record to its own copies with R1 to R7 (`check`):
 
 - R1: the format, the protocol, the sampling design and the window's kind;
-- R2: the program, query and partition digests and the population;
+- R2: the program, query and partition digests and the population, and, given the window's day and the registration
+  log's declarations (`day`, `declarations`), the program the day's one declared circuit;
 - R3: the scheme, and each port's root, leaf count and domain;
 - R4: the leaf layer;
 - R5: the anchors;
@@ -295,7 +296,8 @@ challenger's `service.WindowCommitmentRecord` is a record it admitted, with its 
 stream. The format, each check's codes and the window domains (`window_domain`) are in `one_stage.registration`'s
 docstring.
 
-Pinned by `tests/test_one_stage.py`, and the window domain also by `integrations/vllm/tests/commit/test_serving_rows.py`.
+Pinned by `tests/test_one_stage.py` (the registration, receipt, window, served-domain, R1 and declared-day tests) and
+`tests/test_verifier.py`, and the window domain also by `integrations/vllm/tests/commit/test_serving_rows.py`.
 
 ### Registered values
 
