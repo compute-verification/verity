@@ -1,10 +1,14 @@
 module
 
 public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.SamplingGeneric.Wait
 public import Proofs.Flock.SamplingGeneric.Split
 
 /-!
 # The sampled compiler in the claims core, at Flock
+
+The compiled extractor's waits, the failure event's probability and `Compiled.KS` from the split are in
+`SamplingGeneric/Wait.lean`.
 
 `Arg.ofFlock` is Flock's `E^rep` at a decoder with Flock's errors, so its knowledge soundness is `Flock.KS`'s
 (`flockArgKS`, by unfolding: its coins, extractor, `κ` and `γ` are `Flock.E`'s, `Flock.κ`'s and `Flock.γ`'s), and its
