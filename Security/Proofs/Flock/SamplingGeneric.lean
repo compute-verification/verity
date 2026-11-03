@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.SamplingGeneric.Fails
 
 /-!
 # The sampled compiler in the claims core, at Flock
