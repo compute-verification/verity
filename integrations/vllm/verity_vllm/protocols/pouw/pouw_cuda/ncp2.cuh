@@ -111,8 +111,8 @@ struct Sha512 {
 
 // Not sx::compress, whose round constants come from constant memory: that adds a uniform load a round to this file's
 // kernels on sm_90 and spills registered rows' leaves on sm_120. Here they are immediates (SX_K_LIST, as dither's h1sha.cuh
-// has them). Maj keeps its xor form, and the schedule and the sums keep this order: ptxas schedules sx::maj's LOP3s, and
-// the other orders' instructions, differently.
+// has them), Ch and Maj are written out, and the schedule and the sums keep this order: with sx::ch, sha::ch or sx::maj, or
+// in another order, ptxas schedules the rounds differently.
 HD void sha512_compress(uint64_t h[8], const uint64_t blk[16]) {
   const uint64_t K[80] = {SX_K_LIST};
   uint64_t w[16];
@@ -129,7 +129,7 @@ HD void sha512_compress(uint64_t h[8], const uint64_t blk[16]) {
       uint64_t s0 = sx::s0<0>(w15), s1 = sx::s1<0>(w2);
       wi = w[i & 15] = w[i & 15] + s0 + w[(i + 9) & 15] + s1;
     }
-    uint64_t t1 = hh + sx::S1<0>(e) + sha::ch(e, f, g) + K[i] + wi;
+    uint64_t t1 = hh + sx::S1<0>(e) + ((e & f) ^ (~e & g)) + K[i] + wi;
     uint64_t t2 = sx::S0<0>(a) + ((a & b) ^ (a & c) ^ (b & c));
     hh = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
   }
