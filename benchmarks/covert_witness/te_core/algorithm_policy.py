@@ -224,7 +224,9 @@ def kinds(one: dict) -> str:
     `sensitivity`, those it leaves out; null where unmeasured, "inf" where infinite."""
     def cell(x: float | None) -> str:
         return "null" if x is None else '"inf"' if math.isinf(x) else num(x, DIGITS)
-    part = lambda d: "{" + ",".join(f'"{k}":{cell(x)}' for k, x in d.items()) + "}"
+
+    def part(d: dict) -> str:
+        return "{" + ",".join(f'"{k}":{cell(x)}' for k, x in d.items()) + "}"
     return f'{{"bound":{part(one["terms"])},"sensitivity":{part(one["sensitivities"])}}}'
 
 
