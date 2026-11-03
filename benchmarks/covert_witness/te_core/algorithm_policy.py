@@ -27,7 +27,8 @@ columns don't give formalism.at's ρ and basis at every cell of te_core.panels' 
 data's fit is provisional (te_core.frontier_fit's `FIT_TARGET`), which the note names. The dashboard's cells, from
 te_core.formalism's `published` at the console's default policy (`CONSOLE`, te_core.policy's: one full session of the
 45M reference, attention included; coordinator 08:26Z and the dashboard's ruling): `rho_console`, the
-one bound's ρ there ("inf" where infinite), `reading` (A where formalism.READING_A and the row's token kind is
+one bound's ρ there ("inf" where infinite, null under reading A where Fit fails and no kind is measured, never 1;
+coordinator 09:46Z), `reading` (A where formalism.READING_A and the row's token kind is
 measured, its trace's entries and an op log, else B, whose ρ is Slowdown's token form, a target), `te_core` the VERSION
 that priced it, `binding_kind` and `rests_on`, and `kinds`, a JSON cell of the terms its max takes and the
 sensitivities it leaves out.
@@ -83,7 +84,8 @@ SPLIT = ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")
 COLUMNS = ["start", "start_compute_gates", "start_effective_gates", "start_loss", "end_loss", "gain_target", "gain",
            "reached", "C_gates", "H_gates", "p", "rho_default", "basis_default", "method_key", "family", "record", "data",
            "estimated", "rho_inputs", "reading", "te_core", "rho_console", "binding_kind", "rests_on", "kinds"]
-#: the console's default policy, at which `rho_console` is ρ (null in no row: "inf" where infinite): te_core.policy's
+#: the console's default policy, at which `rho_console` is ρ ("inf" where infinite, null where no kind is measured,
+#: coordinator 09:46Z): te_core.policy's
 #: `CONSOLE`, one full session of the 45M reference with 4,096 input and 1,024 output tokens (`policy.session_gates`)
 #: and k = 65,536 bits
 CONSOLE = policy.CONSOLE
@@ -279,7 +281,7 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
                     consoles[r["id"]] = formalism.published(r["measured"])
                 one = consoles[r["id"]]
                 cols = {"rho_inputs": rho_inputs(r["measured"], st.w), "reading": one["reading"], "te_core": VERSION,
-                        "rho_console": "inf" if math.isinf(one["rho"]) else one["rho"],
+                        "rho_console": None if one["rho"] is None else "inf" if math.isinf(one["rho"]) else one["rho"],
                         "binding_kind": one["binding_kind"], "rests_on": one["rests_on"], "kinds": kinds(one)}
                 row += [cols[c] for c in COLUMNS[len(row):]]
                 d = dict(zip(COLUMNS, rounded(row)))
