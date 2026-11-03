@@ -189,7 +189,7 @@ ARM_KEYS = {"lr": float, "muon_lr": float, "lora_lr": float, "opt": str, "wd": f
             "warmup": int, "batch": int, "micro": int, "fresh": lambda v: v.lower() in ("1", "true", "on", "yes"),
             "data_seed": int, "seed": int, "share": float, "full": str, "store": str, "mom_dtype": str,
             "grad_dtype": str, "mom_fold": lambda v: v.lower() in ("1", "true", "on", "yes"), "gain_opt": str,
-            "gain_momentum": float}
+            "gain_momentum": float, "wsd_decay": float}
 ARM_CHOICES = {"opt": ("adamw", "muon"), "schedule": ("linear", "cosine", "wsd", "constant"), "mom_dtype": ("fp32", "bf16"),
                "grad_dtype": ("fp32", "bf16"), "gain_opt": ("adamw", "sgd")}
 DTYPES = {"fp32": torch.float32, "bf16": torch.bfloat16}
@@ -248,6 +248,7 @@ def main() -> int:
     ap.add_argument("--fresh", action=argparse.BooleanOptionalAction, default=False)
     ap.add_argument("--ema", type=float, default=0.0)
     ap.add_argument("--schedule", choices=ARM_CHOICES["schedule"], default="linear")
+    ap.add_argument("--wsd-decay", type=float, default=0.2, help="wsd: the last share of the steps, decayed linearly to 0")
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--micro", type=int, default=32)
@@ -379,7 +380,7 @@ def main() -> int:
 
         for step in range(n_steps):
             g += 1
-            frac = min(1.0, (step + 1) / arm.warmup) * decay(arm.schedule, step, n_steps)
+            frac = min(1.0, (step + 1) / arm.warmup) * decay(arm.schedule, step, n_steps, arm.wsd_decay)
             for o, lr in opts:
                 for grp in o.param_groups:
                     grp["lr"] = lr * frac
@@ -449,12 +450,12 @@ def main() -> int:
     return 0
 
 
-def decay(schedule: str, step: int, n: int) -> float:
+def decay(schedule: str, step: int, n: int, wsd_decay: float = 0.2) -> float:
     t = step / n
     if schedule == "cosine":
         return 0.5 * (1 + math.cos(math.pi * t))
     if schedule == "wsd":
-        return min(1.0, (1 - t) / 0.2)
+        return min(1.0, (1 - t) / wsd_decay)
     if schedule == "constant":
         return 1.0
     return 1 - t
