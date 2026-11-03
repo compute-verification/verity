@@ -20,8 +20,10 @@ algorithm_policy's cell of the terms the max takes, its `partial` and `why` wher
 them, the sensitivities `SENSITIVITIES`: published's (reduction, update and fresh_cell, the fresh-products term under
 P-cell) and reading B's token and decoding forms. `rho_inputs` holds
 `KEYS` (C_gates beside algorithm_policy's `rho_inputs`), from which algorithm_policy.page_rho gives the dial's ρ at
-any (c, k); `build` refuses a row whose rho_inputs miss formalism.at's ρ at either point or whose token dials miss its
-measured tokens (`token_dials`).
+any (c, k), and beside them te_core.panels' `FRESH`, the fresh-products term over c at each k of the dial its products
+are classified at (null for a run with no product rows), which the console's port multiplies by c; `build` refuses a
+row whose rho_inputs miss formalism.at's ρ at either point or whose token dials miss its measured tokens
+(`token_dials`).
 `input_status` gives each input's source, "measured" or "assumed: " and why, from te_core's labels: a count, a trace's
 quantity, E's size and the harness's decoder are measured, and a stub, an assumption or an unmeasured quantity is
 assumed. An unmeasured Δ_grad names the steps te_core has none for and why (`untraced`), and whether Fit's verdict at
@@ -76,7 +78,8 @@ POINTS = {"console": algorithm_policy.CONSOLE, "served": panels.SERVED}
 READING = "A"
 #: the kinds cell's sensitivities, beside the terms the bound's max takes: published's and reading B's two forms
 SENSITIVITIES = (*formalism.CELL_SENSITIVITIES, "token_form", "decoding_form")
-#: the `rho_inputs` cell's keys, algorithm_policy.rho_inputs' in its order
+#: the `rho_inputs` cell's keys, algorithm_policy.rho_inputs' in its order, each with its `input_status`; the cell holds
+#: te_core.panels' `FRESH` beside them, whose input is `products`
 KEYS = ("C_gates", *panels.PACKED, *algorithm_policy.SPLIT)
 #: the first te_core whose traces this one's formalism reads whole: their entries and partial and gradient cuts
 TRACED_SINCE = "4.4"

@@ -43,12 +43,13 @@ PRODUCT = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m":
            "gates_per_mac": 1480.0, "cell_gates": 23682.0, "fed": [[1024, 1.0]], "P": 1.0, "gathered": [False, False]}
 
 
-def products_rows(*rows, steps: float = 1.0, p_match: tuple = ()) -> dict:
+def products_rows(*rows, steps: float = 1.0, p_match: tuple = (), dial: tuple = ()) -> dict:
     """`rows` as a run's products (formalism.products_of_trace): a traced step's, times `steps`, with the ops that
-    break P-match `p_match`."""
-    return formalism.products_of_trace({"capture": formalism.SYSTEM_FROM, "k": float(policy.CONSOLE[1]),
-                                        "order": "unknown", "tokens": 8, "gates": None, "rows": list(rows),
-                                        "p_match": list(p_match)}, steps)
+    break P-match `p_match`, and the same rows at each k of `dial` (a trace's `at`)."""
+    block = {"capture": formalism.SYSTEM_FROM, "k": float(policy.CONSOLE[1]), "order": "unknown", "tokens": 8,
+             "gates": None, "rows": list(rows), "p_match": list(p_match)}
+    at = {f"{k:.0f}": {"k": float(k), "rows": list(rows), "p_match": list(p_match)} for k in dial}
+    return formalism.products_of_trace(block | ({"at": at} if at else {}), steps)
 
 
 def record(round_tokens: int = 6, round_log=ROUND_LOG) -> dict:
@@ -85,7 +86,8 @@ def test_the_pinned_row_is_its_runs_quantities_priced_as_algorithm_policy_prices
     assert cells["te_core"] == VERSION
     assert p["source"] == f"python -m te_core.standard_workloads (te_core {VERSION}; islands/standard-workloads)"
     inputs, st = json.loads(cells["rho_inputs"]), json.loads(cells["input_status"])
-    assert list(inputs) == list(SW.KEYS) and list(st) == [*SW.KEYS, "products"]
+    assert [k for k in inputs if k != panels.FRESH] == list(SW.KEYS) and list(st) == [*SW.KEYS, "products"]
+    assert inputs[panels.FRESH] == formalism.fresh_per_c(m) is None
     assert {st[k] for k in SW.KEYS} == {"measured"}
     bounds = {name: formalism.bound(m, c, k) for name, (c, k) in SW.POINTS.items()}
     assert st["products"] == SW.products(bounds) == f"assumed: {bounds['console']['unmeasured']['fresh_products']}"
@@ -266,8 +268,8 @@ def test_an_unmeasured_delta_grad_names_its_steps_and_whether_fits_verdict_at_ei
 
 def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed_with_te_cores_reason():
     """`products`, the fresh-products kind's input: measured where te_core prices a trace's product rows at the
-    console's default, with its reason where the serving block's k leaves them unmeasured (they were classified at
-    the console's); assumed where the dominant traced step's stand in for steps of another shape, or with te_core's
+    console's default and at the serving block, whose k the trace keeps them at too, with its reason where the serving
+    block's k leaves them unmeasured (they were classified at the console's alone); assumed where the dominant traced step's stand in for steps of another shape, or with te_core's
     reason where unmeasured (an op log's, a round untraced, rows captured before te_core 4.12.1 that don't give all
     the term reads, the step's whole-making system and which operands read an embedding's rows, a step that breaks
     P-match, and a void: a system with no fixed point at the k, which voids every subset of the products, never a
@@ -287,6 +289,9 @@ def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed
     assert "fresh_products" not in b["console"]["unmeasured"]
     assert off.startswith(f"unmeasured: the products were classified at k = {policy.CONSOLE[1]:g}")
     assert SW.products(b) == f"measured at the console's default; at the serving block, {off}"
+    both = bounds(products_rows(PRODUCT, dial=(panels.SERVED[1],)))
+    assert not {*both["console"]["unmeasured"], *both["served"]["unmeasured"]} & {"fresh_products"}
+    assert SW.products(both) == "measured"
     for since in (("gathered",), ("fed", "P", "gathered")):
         old = {x: v for x, v in PRODUCT.items() if x not in since}
         assert unmeasured(products_rows(old)) == formalism.FRESH_RETRACE
