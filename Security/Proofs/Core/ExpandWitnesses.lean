@@ -88,7 +88,7 @@ end Verity
 
 namespace Verity.SecurityProofs
 
-open Verity.Expand
+open Finset Verity.Expand
 
 theorem ExpandSize_honest : Guarantees.ExpandSize_honest := ExpandSize AndPair.d 1 AndPair.P
 
