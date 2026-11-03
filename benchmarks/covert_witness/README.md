@@ -63,11 +63,11 @@ scores by the formalism. `pinned.json` names v3's commit, and v2.3's two as its 
   checkpoints (the coordinator's 19:50Z rule), and Security's S = W*/H. **Plots** (`python -m te_core.plots --out
   DIR`): P1-P4 of the experiments draft and the A2 curve (the least compute to each target against Δ, per start; Δ's
   bins, never caps), as five panels, each `<name>.json` and a PNG made from it, off the console; `python -m
-  te_core.console DIR` cuts each to the panels route's limits. The console's two training panels are
-  `training/frontier-branches` (loss against total training compute: the frontier and each start's honest and throttled
-  branches), `python -m te_core.panels frontier-branches --out DIR --publish`, and `training/algorithm-policy` (per run
-  and end loss, its algorithm's inefficiency p = C/H against its policy's slowdown ρ), `python -m
-  te_core.algorithm_policy --out DIR --publish`.
+  te_core.console DIR` cuts each to the panels route's limits. The console's training panels are
+  `training/algorithm-policy` (per run, start and gain target, a gain being effective compute over the start's own, its
+  algorithm's inefficiency p = C/H against its policy's slowdown ρ, reached or not) and `training/frontier-fit` (per
+  data, the scaling law fitted to its unconstrained frontier, which turns a loss into effective compute), both `python
+  -m te_core.algorithm_policy --out DIR --publish`; `training/frontier-branches` is retired.
   **Re-scoring v2.3's records** (`python -m te_core.rescore --out DIR`): the same score and panels over the pin's
   valid records, on the quantities measured on each record's traced step (te_core 4.0's default; `--charge-context`
   charges earlier tokens' affected keys and values), or `analysis/rescore_v1.py`'s per-record quantities with
@@ -133,8 +133,8 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
   `starts_store.json`. Each node installs them into one fixed directory, `/workspace/research/te/starts` (`CW_STARTS`,
   `prepare.STARTS`), with `python3 starts_store.py install --keep`, which checks every file against the manifest; no run
   reads another run's directory. Each start's manifest entry has its `shape` (`starts_store.shape`), which the policy
-  grid reads. These four are GPT-2 starts on v2.2's data, the pilot's. v3's starts are the v3 ladder
-  (`islands/ref-optim/ladder.py`, dense lf models at vocabulary 32,000 on bpe32k's stream, at several tokens per
+  grid reads. These four are GPT-2 starts on v2.2's data, the pilot's. v3's starts are the v3 starts ladder's
+  (`islands/ladder-v3/ladder.py`, dense lf models at vocabulary 32,000 on bpe32k's stream, at several tokens per
   parameter with C0 counted), which join the store with tokenizer `bpe32k` in their `shape` when it publishes, each
   batch in a commit that changes only `starts_store.json` on the pin, pinned with it as `same_version`. At v3 a branch
   starts only from v3's starts: launch.py refuses a pilot start, and scoring leaves out a v3 record from one
@@ -179,8 +179,8 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
   checkout holds, and the witness and ledger records name it (`measurement_commit`); te_core's frontier leaves out a
   record of any other commit than it and the earlier commits of its version (`same_version`) (`other-version`), and
   one whose E an earlier record at the pin, or another agent's at any commit, submitted (`duplicate-e`). `pilot` names
-  an earlier version's commits, whose records only `te_core.panels` shows beside the pin's, each curve labelled by its
-  data.
+  an earlier version's commits, whose records only the console's training panels (`te_core.panels`,
+  `te_core.algorithm_policy`) show beside the pin's, each labelled by its data.
 - **Nodes** (`nodes.txt`, `prep.sh`): a node is listed (`NODE pool=GPU_POOL cpu=CPU_POOL`) once `prep.sh`, run there
   in its CPU pool, has installed the starts, built the held-out sets (checked against `prepare.SET_SHA256`, left
   read-only) and registered the sealed start; on a prepared node it only checks. vy-nebius-1, -2 and -3 are listed.

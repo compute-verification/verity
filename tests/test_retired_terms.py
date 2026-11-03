@@ -17,10 +17,12 @@ The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (`
 their names, and "leg", the dampener and NCI are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too. The training
-formalism's retired terms (`GLOSSARY.md`, Training: the older definitions, covers, (Γ, α), counted products, the
-earlier statement's bound, and v1's Dep and dependent share) are the scan's `training` group: they stay under the prefixes ``TRAINING_PENDING`` names, each
-with its owner, until it restates them, and the program format's input nodes and out(S) keep their names in its own docs
-(``CIRCUITS_HOME``).
+formalism's retired terms (`GLOSSARY.md`'s older names: the older definitions, covers, (Γ, α), counted products, the
+earlier statement's bound, and v1's Dep, dependent share, w_dep, Θ, φ in the slowdown and bottom share) are the scan's
+`training` group: they stay under the prefixes ``TRAINING_PENDING`` names, each with its owner, until it restates them,
+and the program format's input nodes and out(S) keep their names in its own docs (``CIRCUITS_HOME``). v1's N and x₀
+are symbols in other senses too (x₀ is now the reachable share), so the scan finds the old x₀ by its words and N not at
+all; ``DOC_TERMS`` names both.
 """
 from __future__ import annotations
 
@@ -82,8 +84,10 @@ DOC_TERMS = {
     "receiver form, input node": "in(S), the values S reads that no gate of S computes (the sender form); inputs are values, "
                                  "not nodes",
     "out(S)": "the values meant, in words (a proof block's out(S) stays in the program format's docs)",
+    "Θ(k), Θ_C(k)": "the counting lemma's max_I |I ∩ B| at B = A ∖ R (in tokens, s*)",
     "(Γ, α), width(θ)": "the policy (c, k, n): |I| ≤ c and |in(I) ∖ θ| ≤ k",
-    "covering bound, covering argument, covering form, (c, k) cover": "a (c, k)-partition, and the theorem Slowdown under A1",
+    "covering bound, covering argument, covering form, (c, k) cover":
+        "a (c, k)-partition, and the theorem Slowdown (the counting lemma at A ∖ R) on A1's and A1′'s bounds",
     "multiplication block": "a token block (MAC blocks only measure the cut cost a)",
     "counted product, updated multiplication, updated product": "the affected gates A, every gate downstream of the update",
     "deep share, per MAC β, r sweep": "the token share σ, the update profiles u(x) and u_in(x) and the reachable share x₀",
@@ -92,7 +96,14 @@ DOC_TERMS = {
     "pricing argument, bounding strategy, inference block yield, server block yield, straddle term":
         "A1, A1′ and A2, and the theorems Fit, Slowdown and Security",
     "reference training algorithm": "the honest cost H(ℓ*), the least compute of any method",
-    "Dep, dependent share": "the affected gates A; the token share σ (the training formalism v2)",
+    "Dep, dependent gates, dependent work, w_dep, dependent share":
+        "the affected gates A, those depending on a value in θ′ (a token's, |T ∩ A|, for w_dep); for the dependent "
+        "share, the token share σ",
+    "φ in the slowdown": "the token share σ, the share of C's gates in token blocks",
+    "bottom share, largest x with u(x)": "the reachable share x₀ = |T ∩ R|/|T ∩ A|, which A1′ bounds: "
+                                         "x₀ ≤ max{x : u_in(x) ≤ k}",
+    "N (the tokens' worth one block does)":
+        "s*, the unreachable capacity: the most tokens' worth of unreachable work any inference block does",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
@@ -111,7 +122,10 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|per-MAC{_SPACE}β|r{_SPACE}sweeps?|(?:slowdown|overhead){_SPACE}lower{_SPACE}bounds?"
                        rf"|necessary{_SPACE}subcomputations?|pricing{_SPACE}arguments?|bounding{_SPACE}strateg(?:y|ies)"
                        rf"|(?:inference|server)-block{_SPACE}yields?|straddle{_SPACE}terms?"
-                       rf"|reference{_SPACE}training{_SPACE}algorithms?|(?-i:Dep)|dependent{_SPACE}shares?)\b)"
+                       rf"|reference{_SPACE}training{_SPACE}algorithms?|(?-i:(?<!\.)Dep(?!\(|\.\w))"
+                       rf"|(?<!-)(?:update-)?dependent{_SPACE}(?:shares?|gates?|work)|bottom{_SPACE}shares?)\b)"
+                       rf"|(?i:\blargest{_SPACE}x{_SPACE}with{_SPACE}u\(x\))|\bw_dep\b|Θ(?:_C)?(?:\(k\)|(?!\s*\())"
+                       rf"|φ(?=\s?\(1\s?[−-]|\s?·\s?s\s?·\s?a)"
                        rf"|\bout\([A-Z]\)|\(Γ,{_SPACE}?α\)|width\(θ\)|\(c,{_SPACE}?k\)-covers?\b|\bslowdown\(𝒢|\bT_𝒢)")
 #: The commitments' own docs, where hm96 rows keep their name.
 HM96_HOME = "verity/ml/commitments/"
@@ -122,7 +136,6 @@ CIRCUITS_HOME = "verity/ml/circuits/"
 TRAINING_PENDING: dict[str, str] = {
     "Security/": "@training's Lean worker restates the Lean and its docs in the formalism",
     "benchmarks/covert_witness/": "@training's harness workers rewrite it on the formalism",
-    "benchmarks/learning_frontier/te_core/": "@training's harness workers rewrite it on the formalism",
     "benchmarks/rho/": "@training: the earlier statement's calculator, restated or retired with the harness",
     "benchmarks/nci/": "@training: the earlier statement's board and covering calculators, restated or retired with the "
                        "harness",
@@ -442,7 +455,7 @@ def test_the_doc_scan_reads_the_training_terms():
 def test_the_doc_scan_reads_the_formalism_terms():
     """The training formalism's retired terms, on toy files: under a TRAINING_PENDING prefix they stay and the older terms
     don't, the program format keeps its input nodes and out(S), and covers, MAC blocks, wires and sweeps in other senses,
-    a Lean name in a code span and αΓ stay."""
+    a Lean name in a code span, αΓ, and dep, dependent, Θ and φ in other senses stay."""
     docs = {
         "a.md": "The receiver form of in(S), out(S) and input\nnodes; a (c, k)-cover and the covering bound's forms.\n"
                 "Policy (Γ, α), block size width(θ); multiplication blocks; counted products and updated multiplications.\n"
@@ -450,10 +463,13 @@ def test_the_doc_scan_reads_the_formalism_terms():
                 "A necessary subcomputation, a pricing argument, the bounding strategy, inference-block yields, the straddle\n"
                 "term and the reference training algorithm.\n"
                 "A MAC block measures a; tests cover it; a wire, a sweep over r, the `Nci.Cover` module and αΓ stay.\n"
-                "Dep and the dependent shares; a package's dep stays.\n",
+                "Dep and the dependent shares; dependent gates, update-dependent work and w_dep; the bottom share, "
+                "the largest x\nwith u(x) ≤ k; Θ_C(k), Θ(k) and Θ; φ(1 − x₀) and 4φ·s·a.\n"
+                "A package's dep, data-dependent gates, a dependent chain, Dep(, P.Dep, Dep.Loader, `Dep`, Θ(n) and φ8 "
+                "stay; Dep.\n",
         "Security/Definitions/Nci/README.md": "The covering bound.\n",
         "benchmarks/covert_witness/README.md": "Counted products.\n",
-        "benchmarks/learning_frontier/te_core/README.md": "The r sweep.\n",
+        "benchmarks/covert_witness/te_core/README.md": "The r sweep, Dep and Θ_C(k).\n",
         "benchmarks/nci/x.md": "A covering bound and a leg.\n",
         "verity/ml/circuits/PROTOCOL.md": "An input node, and out(S) for a proof block; a pricing argument.\n",
     }
@@ -465,6 +481,9 @@ def test_the_doc_scan_reads_the_formalism_terms():
         ("a.md", 4, "T_𝒢"), ("a.md", 5, "necessary subcomputation"), ("a.md", 5, "pricing argument"),
         ("a.md", 5, "bounding strategy"), ("a.md", 5, "inference-block yields"), ("a.md", 5, "straddle term"),
         ("a.md", 6, "reference training algorithm"), ("a.md", 8, "Dep"), ("a.md", 8, "dependent shares"),
+        ("a.md", 8, "dependent gates"), ("a.md", 8, "update-dependent work"), ("a.md", 8, "w_dep"),
+        ("a.md", 8, "bottom share"), ("a.md", 8, "largest x with u(x)"), ("a.md", 9, "Θ_C(k)"), ("a.md", 9, "Θ(k)"),
+        ("a.md", 9, "Θ"), ("a.md", 9, "φ"), ("a.md", 9, "φ"), ("a.md", 10, "Dep"),
         ("benchmarks/nci/x.md", 1, "leg"),
         ("verity/ml/circuits/PROTOCOL.md", 1, "pricing argument")]
 
