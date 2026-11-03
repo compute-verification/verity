@@ -67,7 +67,10 @@ index (gather, mul and `index_add`). A value's entries are its sources' (`produc
 source and a lookup of a module tensor's rows by the step's data are their own), so a broadcast is found whatever map,
 scaling, copy in place or multiplication by a value outside the update it passes through, and an embedding's rows are
 no broadcast; two broadcasts along the same dims (a token's code over lanes times its scale) are elementwise
-(`products._flats`), and dims the capture can't tell never exempt one. The formalism leaves the fresh-products term
+(`products._flats`), and dims the capture can't tell never exempt one. The dims are compared on the grid both operands'
+shapes share (`products._grid`), an operand that is a view regrouping its argument's dims read by its argument's, so a
+coded message's levels whose lanes a view merges into their group, times the group's scale, are elementwise, and two
+broadcasts each flattened by a view are still a product. The formalism leaves the fresh-products term
 unmeasured where the list has any, and on a trace captured before this check (`formalism.ELEMENTWISE_FROM`).
 
 A Python number the program reads from a tensor has no value in the trace, so whatever Python decides from it is the
