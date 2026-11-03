@@ -70,7 +70,7 @@ POUW_H1_ROUND_A = "verity/pouw/h1/round-a/v1"
 POUW_H1_COMMIT = "verity/pouw/h1/commit/v1"
 POUW_H1_REQUEST_IDS = "verity/pouw/h1/requests/ids/v1"
 POUW_H1_WEIGHTS = "verity/pouw/h1/weights/v1"
-POUW_H1_OK_ROW_SALT = "verity/pouw/h1-prove/ok-row-salt/v0"
+POUW_H1_OK_ROW_SALT = "verity/pouw/h1-prove/ok-row-salt/v1"
 
 # PoUW: noise, seeds and receipts
 POUW_SEED = "verity/pouw/seed/v2"
