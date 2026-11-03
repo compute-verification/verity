@@ -2,7 +2,7 @@
 `f32_log_rn_bits`, `f32_exp_rn_bits`) against MPFR's correctly rounded result at 24 bits (gmpy2, emin -148, emax 128,
 subnormalized, nearest even), NaN canonical 0x7FC00000.
 
-    uv run --with gmpy2 python benchmarks/numerical/exhaustive_rn.py log --out DIR [--procs N] [--lo U --hi U]
+    uv run --with gmpy2 benchmarks/f32_exhaustive/run.py log --out DIR [--procs N] [--lo U --hi U]
 
 Writes DIR/exhaustive-<fn>.json: the inputs checked, the mismatches (up to 1000, each input, evaluator and MPFR word) and their
 count. A pass is a mismatch count of 0 over [0, 2^32).

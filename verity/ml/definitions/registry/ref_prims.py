@@ -4,8 +4,8 @@ evaluator's own fully specified arithmetic, for programs derived from ordinary `
     Gate -> exactly one Value<w>.  Every evaluator is total on encodings.  Nothing in `prims.py`/`b1.py` changes.
 
 **What a reference kind is.**  A composite whose body is explicit dataflow over IEEE primitives (`F32Add/Sub/Mul/Fma/
-Div/Sqrt`, the aten conversions `Bf16ToF32_v1` / `F32ToBf16Rn_v1`) plus the three correctly-rounded transcendental
-primitives below.  Every reduction is **sequential, ascending index, from +0** (stated per kind).  The body *is* the
+Div/Sqrt`, the aten conversions `Bf16ToF32_v1` / `F32ToBf16Rn_v1`) plus the correctly-rounded transcendental primitives
+below.  Every reduction is **sequential, ascending index, from +0** (stated per kind).  The body *is* the
 definition; torch CPU is only the conformance oracle over a tested domain (`tests/program/test_ref_prims.py`,
 records under `docs/data/ref-prims/`): torch's reductions are vectorised/blocked (`RowwiseMoments`, oneDNN/MKL GEMM,
 `vec::reduce_all`) and its transcendentals are not correctly rounded (MKL VML for `torch.exp/erf/tanh`, ATen vectorised
@@ -20,10 +20,11 @@ where the torch op materialises a `DT` tensor.  With `DT="f32"` the widen/narrow
 **New primitives** (all `Name_v1`, total, NaN outputs canonical `0x7FC00000`):
   `F32Sub`      RN(a - b)                       `F32Sqrt`    RN(sqrt x) (IEEE; negative -> NaN, -0 -> -0)
   `F32MaxRef`   NaN-propagating max             `F32GtStrict` a > b on f32 values (NaN false) -> bit
-  `F32ExpRn`, `F32ErfRn`, `F32TanhRn`  RN32 of the value computed by the stated `decimal` algorithm at 100 digits
-      (`_DEC_PREC`); this coincides with correct rounding unless the exact value lies within 10^-90 relative of a
+  `F32ExpRn`, `F32LogRn`, `F32ErfRn`, `F32TanhRn`  RN32 of the value computed by the stated `decimal` algorithm at 100
+      digits (`_DEC_PREC`); this coincides with correct rounding unless the exact value lies within 10^-90 relative of a
       rounding boundary — no binary32 argument is known to (Lefèvre/Muller worst cases for exp are ~2^-60), and the
-      evaluator, not the mathematical function, is the registered definition.
+      evaluator, not the mathematical function, is the registered definition.  `F32LogRn`'s is MPFR's correctly rounded
+      log on all 2^32 words (`benchmarks/f32_exhaustive/run.py log`, which takes `exp` too).
   `GatherF32x{V}` the f32 twin of `prims.gather_bf16` (out-of-range token -> 0x7FC00000, documented extension).
   `I64ToI32`    range-checked int64 -> int32 (out of range -> 0x80000000 sentinel, torch wraps).
 
