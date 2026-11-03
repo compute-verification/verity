@@ -799,6 +799,24 @@ def test_the_pouw_piece_gives_credit_the_declared_program_the_period_and_the_pro
                                                             {"met": True, "why": S.SALT_MET})
 
 
+def test_the_pouw_piece_hands_the_verifiers_memo_to_the_check_and_records_what_it_took(tmp_path, monkeypatch):
+    """``--lean-answers`` reaches the challenger check as its own flag, never among credit's inputs, and the piece's
+    document carries the check's counts of answers it ran and took by key."""
+    monkeypatch.setattr(S, "_gate_out", _gate([]))
+    d = _h1_serve_dir(tmp_path)
+    memo, got = tmp_path / "verifier" / "answers", []
+    counts = {"ran": 1, "taken": {"the fill": 33}, "unkeyed": 0}
+
+    def check(*a):
+        got.append(a[-1])
+        return {"ok": True, "reason": None, "manifest": None, "credit": {"credit": [3]}, "lean_answers": counts}
+
+    doc = S.pouw(d, 1, tmp_path / "pieces" / "pouw", gate=GATE, key="ff" * 64, main=None, check=check,
+                 lean_answers=memo)
+    assert got[0]["--lean-answers"] == str(memo) and "--lean-answers" not in doc["credit_inputs"]
+    assert doc["lean_answers"] == counts
+
+
 def test_a_record_that_isnt_one_manifest_under_its_salt_coin_doesnt_meet_salt_is_live_coin(tmp_path, monkeypatch):
     """Coins the challenger check accepts with a record that isn't one manifest under them: ``SaltIsLiveCoin`` isn't
     met, and names the manifest's refusal."""

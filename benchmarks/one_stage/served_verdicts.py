@@ -10,7 +10,7 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py pieces --serve-run DIR --window K --out DIR [--node NAME] [--only COMPONENT]... [--skip COMPONENT]...
                               [--product P]
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
-                                [--statements FILE] [--live-evidence FILE]
+                                [--statements FILE] [--live-evidence FILE] [--lean-answers DIR]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
                               [--product P] [--deferred WHY]
     served_verdicts.py public-registration REGISTRATION
@@ -84,7 +84,8 @@ H1's tables are tied to the window's Commit, its coins are the session the ledge
 is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`). Credit reads the
 declared Program serve-openai wrote (``h1/window-program.json.gz``), the period ``period open`` opened, and, when given,
 the drawn calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
-``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`). The verdict says whether the
+``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`); with ``--lean-answers`` its
+verifier runs take the answers another step kept there by key (`answers.Answers`). The verdict says whether the
 window meets the two premises of `Security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
 (`premises`): each ``{met, why}``, met only where this run's checks show it.
 
@@ -730,10 +731,12 @@ def premises(doc: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str | None, main: Path | None,
-         check: Check, statements: Path | None = None, live: Path | None = None) -> dict[str, Any]:
+         check: Check, statements: Path | None = None, live: Path | None = None,
+         lean_answers: Path | None = None) -> dict[str, Any]:
     """PoUW's development piece on window `window` (module docstring), its document written to ``out/development.json``;
     `check` is `check_challenger` with its Python bound, given credit's inputs (`credit_inputs` of `serve_dir`, the drawn
-    calls' `statements` and the `live` evidence), its document's ``credit_inputs``."""
+    calls' `statements` and the `live` evidence), its document's ``credit_inputs``, and `lean_answers`, the verifier's
+    memo of its runs' answers (``--lean-answers``, `answers.Answers`), whose counts are its ``lean_answers``."""
     out.mkdir(parents=True, exist_ok=True)
     inputs = credit_inputs(serve_dir, statements, live)
     line = next((w for w in _lines(serve_dir / "windows.jsonl") if int(w["window"]) == window), {})
@@ -742,7 +745,7 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
     doc: dict[str, Any] = {"window": window, "credited": False, "why": DEV_WHY, "coin_source": h1.get("coin_source"),
                            "tied": h1.get("tied"), "steps_served": h1.get("steps_served"), "session": h1.get("session"),
                            "gate_passed": (h1.get("gate") or {}).get("gate_passed"), "check": None, "credit": None,
-                           "credit_inputs": inputs}
+                           "credit_inputs": inputs, "lean_answers": None}
     reasons = []
     if not h1 or "error" in h1:
         reasons.append(f"H1's window: {h1.get('error') or 'its line has no pouw_h1 (served without --protocols)'}")
@@ -764,12 +767,14 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
             (out / "ledger.jsonl").write_bytes(_gate_out(gate, "ledger"))
             (out / "pins.jsonl").write_bytes(_gate_out(gate, "pins"))
             got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check",
-                        {**inputs, **({"--draw-dir": str(tree / dsid)} if dsid else {})})
+                        {**inputs, **({"--draw-dir": str(tree / dsid)} if dsid else {}),
+                         **({"--lean-answers": str(lean_answers)} if lean_answers is not None else {})})
         except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
             reasons.append(f"coins: {type(e).__name__}: {e}"[:600])
         else:
             doc["check"] = {k: got.get(k) for k in ("ok", "reason", "manifest", "rounds", "coin_source")}
             doc["credit"] = {k: (got.get("credit") or {}).get(k) for k in ("window", "manifest", "k", "drawn", "eps", "calls", "credit")}
+            doc["lean_answers"] = got.get("lean_answers")
             reasons += [f"{k}: {got[r]}" for k, r in (("coins", "reason"), ("manifest", "manifest")) if got.get(r)]
     doc.update(verdict="reject" if reasons else "accept", reasons=reasons)
     doc.update(premises(doc))
@@ -1046,6 +1051,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     o.add_argument("--python", default=os.environ.get("PY") or sys.executable)
     o.add_argument("--statements", type=Path)
     o.add_argument("--live-evidence", type=Path)
+    o.add_argument("--lean-answers", type=Path, help="the verifier's memo of its runs' answers, in its own scratch")
     rg = sub.add_parser("public-registration")
     rg.add_argument("registration", type=Path)
     pl = sub.add_parser("public-lines")
@@ -1160,7 +1166,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.cmd == "pouw":
         doc = pouw(a.serve_dir, a.window, a.out, gate=a.gate, key=a.key_sha512, main=a.main,
                    check=lambda *x: check_challenger(*x, python=a.python), statements=a.statements,
-                   live=a.live_evidence)
+                   live=a.live_evidence, lean_answers=a.lean_answers)
         print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
         return 0
     if a.cmd == "pieces":
