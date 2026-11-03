@@ -49,6 +49,10 @@ import Proofs.Flock.SessionLoop.RoundLig
 import Proofs.Flock.SessionLoop.RoundOffCap
 import Proofs.Flock.SessionLoop.RoundOffOpenBind
 import Proofs.Flock.SessionLoop.RoundLigLock
+import Proofs.Flock.SessionLoop.RoundLigFrameBind
+import Proofs.Flock.SessionLoop.RoundLigFrameShape
+import Proofs.Flock.SessionLoop.RoundLigFramePast
+import Proofs.Flock.SessionLoop.RoundLigFrameOff
 import Proofs.Flock.SessionLoop.RoundLigFrame
 import Proofs.Flock.SessionLoop.RoundLigCoin
 import Proofs.Flock.SessionLoop.RoundLigCut
