@@ -66,7 +66,7 @@ theorem break_iff : Break dev key label coins ↔ findBreak dev key label coins 
   · intro h
     cases hf : findBreak dev key label coins with
     | none => exact absurd hf h
-    | some w => exact ⟨w, rfl, findBreak_valid hf⟩
+    | some w => exact ⟨w, hf, findBreak_valid hf⟩
 
 /-- Two different strings of `xs` with one SHA-512 digest: `collisionIn` outputs a collision. -/
 theorem collisionIn_ne_none {xs : List ByteArray} {x y : ByteArray} (hx : x ∈ xs) (hy : y ∈ xs) (hne : x ≠ y)
