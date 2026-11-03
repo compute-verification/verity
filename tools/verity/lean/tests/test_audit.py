@@ -1737,10 +1737,10 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
     """On a real build: a guarantee whose statement is a `def G : Prop` of a proofs-tree module under `trees`' `except`
     and outside `meaning` (`Control.Guarantees.Loop`, as C-Flock's `SessionLoopZKDeployed` is in
     `Proofs.Flock.SessionLoop`) is recorded through `G`'s body. A premise added to it that no named assumption stands for
-    (`n ≠ 5`), or dropped from it while another guarantee still takes it (`Hyp`, whose assumption entry stays, and whose
-    module's readers lose the guarantee), changes the record, which the audit refuses until `--update` records it, and
-    the review prints `G` as it is now. A walk that stopped at `G` would record its name alone, and neither change would
-    move the lock. What `G` reads under `meaning` (`twice`) is recorded too."""
+    (`n ≠ 5`), or dropped from it while another guarantee still takes it (`Hyp`, whose assumption entry and module record
+    stay, though the build no longer has `G` read it), changes the record, which the audit refuses until `--update`
+    records it, and the review prints `G` as it is now. A walk that stopped at `G` would record its name alone, and
+    neither change would move the lock. What `G` reads under `meaning` (`twice`) is recorded too."""
     pkg, build, audit, lock = excepted_toy(
         tmp_path, "Control.Loop", LOOP,
         "theorem doubles : Guarantees.Loop := by\n  unfold Guarantees.Loop\n  intros\n  unfold twice double\n  omega\n",
@@ -1748,28 +1748,29 @@ def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_p
         claims_not={"Control.twice": "the toy Prop the statement reads"})
     loop = pkg / "Control" / "Loop.lean"
     build()
-    assert unshaped(audit(True)) == []
+    rep = audit(True)
+    assert unshaped(rep) == []
     first = lock()
     assert first["guarantees"]["Control.doubles"]["signature"] == ["Control.doubles : Control.Guarantees.Loop"]
     assert list(first["reads"]["Control.Loop"]["definitions"]) == ["Control.Guarantees.Loop"]
-    assert first["reads"]["Control.Loop"]["guarantees"] == ["Control.doubles"]
-    assert "Control.doubles" in first["reads"]["Control.Defs"]["guarantees"], "and through it, what it reads under `meaning`"
+    assert rep["readers"]["Control.Loop"] == ["Control.doubles"]
+    assert "Control.doubles" in rep["readers"]["Control.Defs"], "and through it, what it reads under `meaning`"
     assert "Control.twice" in first["reads"]["Control.Defs"]["definitions"]
     seen = {first["reads"]["Control.Loop"]["digest"]}
-    for text, shows, codes, hyp_readers in (
-            (LOOP.replace("Control.Hyp →", "Control.Hyp → n ≠ 5 →"), "n ≠ 5", ["guarantees.reads-changed"],
-             ["Control.doubles", "Control.main_thm"]),
-            (LOOP.replace("Control.Hyp → ", ""), "∀ n : Nat, Control.twice n",
-             ["guarantees.readers", "guarantees.reads-changed"], ["Control.main_thm"])):
+    for text, shows, hyp_readers in (
+            (LOOP.replace("Control.Hyp →", "Control.Hyp → n ≠ 5 →"), "n ≠ 5", ["Control.doubles", "Control.main_thm"]),
+            (LOOP.replace("Control.Hyp → ", ""), "∀ n : Nat, Control.twice n", ["Control.main_thm"])):
         before = lock()
         loop.write_text(text)
         build()
-        assert sorted(f.code for f in audit(False)["failures"] if not f.code.startswith("shape")) == codes
+        codes = sorted(f.code for f in audit(False)["failures"] if not f.code.startswith("shape"))
+        assert codes == ["guarantees.reads-changed"], codes
         rep = audit(True)
         after = lock()
         assert unshaped(rep) == [] and after["guarantees"] == before["guarantees"]
         assert after["assumptions"] == before["assumptions"] and set(after["assumptions"]) == {"Control.Hyp"}
-        assert after["reads"]["Control.Assumptions"]["guarantees"] == hyp_readers
+        assert rep["readers"]["Control.Assumptions"] == hyp_readers
+        assert after["reads"]["Control.Assumptions"] == before["reads"]["Control.Assumptions"]
         assert after["reads"]["Control.Loop"]["digest"] not in seen
         seen.add(after["reads"]["Control.Loop"]["digest"])
         changes = A.statement_changes(rep["review"])
