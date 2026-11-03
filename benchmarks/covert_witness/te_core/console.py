@@ -9,7 +9,8 @@ and its note is the panel's short note (`SHORT`), the cut's, and `COMMON`; the u
 it. The console's training panels are `training/algorithm-policy` and `training/frontier-fit` (te_core.algorithm_policy
 PUTs both with `put`): te_core.plots' five panels are off it, so nothing here PUTs them. `put` PUTs one panel to
 `PANELS_URL`/<id> with a
-Cursor OIDC token (research.slack's `oidc_token`, imported only there) and returns its HTTP status.
+Cursor OIDC token (research.slack's `oidc_token`, imported only there) and returns its HTTP status; `served` GETs the
+panels the route serves for a producer.
 """
 from __future__ import annotations
 
@@ -182,6 +183,17 @@ def put(p: dict) -> str:
             return str(r.status)
     except urllib.error.HTTPError as e:
         return f"{e.code} {e.read()[:400].decode(errors='replace')}"
+
+
+def served(producer: str = "training") -> dict[str, dict]:
+    """The panels the route serves for `producer`, by id (GET `PANELS_URL`?producer=, the same token as `put`)."""
+    import urllib.request
+
+    from research.slack import oidc_token
+    req = urllib.request.Request(f"{PANELS_URL}?producer={producer}",  # noqa: S310 (a fixed https URL)
+                                 headers={"Authorization": f"Bearer {oidc_token(PANELS_URL)}"})
+    with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310
+        return {x["panel"]["id"]: x["panel"] for x in json.loads(r.read())["panels"]}
 
 
 def main(argv=None) -> int:
