@@ -16,7 +16,8 @@ covered.
   extractor is `Π`'s `E^rep`, each rerun served by `E_O` (`Comp.E`); its error is `Comp.err`: `κ_Π + N_I·κ_O`,
   `√(N_I²·γ_O·Pr[B])`, `Π`'s own terms with its finders run on the composite's reruns, a rejecting judged run (`B_I`,
   `forkPlan`) and the deviation finder (`linkPlan`) at weight `β = (N_I + Σ_i w_i·d_i)·k_Π`.
-* **L2, the compiler** (`GenericRecursiveKSCompiled`): L1 at `compile(Π, A, S)` for any outer argument `A` (`Arg`) and
+* **L2, the compiler** (`GenericRecursiveKSCompiled`): L1 at `compile(Π, A, S)` for any outer argument `A`
+  (`Claims.SamplingGeneric.Arg`, the sampled audit's proof system for proof blocks) and
   compiler, its outer extraction session by session (`Compiled.EO`) and knowledge sound by `A`'s (`OuterSessionsKS`).
 * **Zero knowledge** (`GenericRecursiveZK`, `Proofs.Flock.RecGeneric.ZK`): generic in the server's leaves and the outer
   sessions' simulator.
@@ -55,6 +56,7 @@ end Claims.RecGeneric
 namespace Flock.Guarantees
 
 open Claims Claims.RecGeneric
+open Claims.SamplingGeneric (Arg)
 
 /-- **L1: the recursion's knowledge soundness, generic in the outer extraction, over inner protocols with repetition
 extractors.** For every oracle `H`, inner protocol `Π` that is well formed and knowledge sound against aborting provers
@@ -74,7 +76,8 @@ def GenericRecursiveKS : Prop :=
 
 /-- **L2: the recursion as a compiler, generic in the outer argument and the server, over inner protocols with
 repetition extractors.** For every
-`Π` as in L1, outer argument `A` that is well formed and knowledge sound (`Arg.WF`, `Arg.KS`), server `S` and compiler
+`Π` as in L1, outer argument `A` that is well formed and knowledge sound at nonnegative errors (`Arg.WF`, `Arg.KS`; the
+sampled audit's proof system for proof blocks, `Claims.SamplingGeneric.Arg`), server `S` and compiler
 `C` whose compiled verifier `compile(Π, A, S)` meets the outer sessions' contract (`Compiled.Sessions`), and statement
 `x` where it meets the composition's (`Comp.Contract`): on every prover and at every loop bound,
 `Pr[run = acc ∧ ¬R(x, E*(x))] ≤ Comp.err` at `compile(Π, A, S)`, with `κ_O = Σ_s κ_A(sh_s)` and
@@ -84,7 +87,8 @@ repetition extractors.** For every
 def GenericRecursiveKSCompiled : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) (I : Proto Coin W) (S : Server)
     (A : Arg Coin) (C : Compiler Coin A),
-    I.WF → I.KSAbortLin H → I.LastCoinFree H → A.WF → A.KS H → (compile C I S).Sessions H →
+    I.WF → I.KSAbortLin H → I.LastCoinFree H → A.WF → (∀ s, 0 ≤ A.κ s) → (∀ s, 0 ≤ A.γ s) → A.KS H →
+    (compile C I S).Sessions H →
     ∀ x : Msg, (compile C I S).toComp.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x →
     ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (m : Fin I.nT → ℕ) (M : ℕ),
       PrBad H (compile C I S).V ((compile C I S).toComp.R I) ((compile C I S).toComp.E I S) x P ≤

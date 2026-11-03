@@ -5,8 +5,8 @@ public import Proofs.Flock.RecGeneric.Outer
 /-!
 # A toy outer argument at which L2's hypotheses hold together
 
-`Arg.echo` is a one-round public-coin argument: the prover sends a message, and the verifier accepts where it is the
-statement or where its coin is `default`. The witness of `x` is `x`; the extractor reruns the judged run and returns
+`echoArg` is a one-round public-coin argument (a `Claims.SamplingGeneric.Arg`): the prover sends a message, and the
+verifier accepts where it is the statement or where its coin is `default`. The witness of `x` is `x`; the extractor reruns the judged run and returns
 its message unchecked, so on an accepted run it gives a non-witness with probability `1/|Coin|` (`κ = 1/|Coin|`,
 `γ = 0`).
 
@@ -16,7 +16,8 @@ session per inner round (round `k+3+s` proves the inner round `s`'s message, its
 that accepts where `IV`'s run on the inner messages at the inner coins (`Comp.replayOC`) accepts.
 
 `EchoHolds` says that, at every oracle, inner protocol, server and statement, the echo argument and the echo compiler at
-`Open(Π, S)` meet L2's hypotheses on them: `Arg.WF`, `Arg.KS`, `Compiled.Sessions` and `Comp.Contract`. Under the outer
+`Open(Π, S)` meet L2's hypotheses on them: `Arg.WF`, nonnegative errors, `Arg.KS`, `Compiled.Sessions` and
+`Comp.Contract`. Under the outer
 relation the extracted witnesses are the staged statements, the compiled run's inner messages. So forks at an inner
 round `j` show one round-`j` message (`ForksBind` holds with no collision), and the last round's replay is the inner
 view (`InnerAcceptsColl`). Off the outer relation a session accepted on its coin gives a witness whose inner view the
@@ -30,6 +31,7 @@ Statements only: definitions, no proofs.
 namespace Claims.RecGeneric
 
 open Claims Claims.Recursion
+open Claims.SamplingGeneric (Arg)
 
 /-- **The echo verifier**: one round; it accepts where the prover's message is the statement or its coin is
 `default`. -/
@@ -38,7 +40,7 @@ def echoV (Coin : Type) [Inhabited Coin] [DecidableEq Coin] : Verifier Coin :=
 
 /-- **The echo argument**: `echoV`, the witness of `x` being `x`, and the extractor that reruns the judged run and
 returns its message unchecked, at `κ = 1/|Coin|` and `γ = 0`. -/
-noncomputable def Arg.echo (Coin : Type) [Fintype Coin] [Inhabited Coin] [DecidableEq Coin] : Arg Coin where
+noncomputable def echoArg (Coin : Type) [Fintype Coin] [Inhabited Coin] [DecidableEq Coin] : Arg Coin where
   Sh := Unit
   shape _ := ()
   V := echoV Coin
@@ -77,7 +79,7 @@ def echoCV (IV : Verifier Coin) : Verifier Coin where
 inner statement; `k` sessions after `k + 3` rounds, session `s`'s statement the inner round `s`'s message and its view
 the message of round `k+3+s`, accepted where the run accepts or that round did not reject; the inner messages are the
 witnesses; a rerun's searched evaluations are `IV`'s calls in its run on them, and the compiled verifier makes none. -/
-noncomputable def Compiled.echo : Compiler Coin (Arg.echo Coin) := fun IV =>
+noncomputable def Compiled.echo : Compiler Coin (echoArg Coin) := fun IV =>
   { V := echoCV IV
     parses := fun _ => True
     xI := id
@@ -100,7 +102,8 @@ outer extractor that may give a non-witness on an accepted run. -/
 def EchoHolds : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin] (H : Msg → Msg)
     (I : Proto Coin W) (S : Server),
-    (Arg.echo Coin).WF ∧ (Arg.echo Coin).KS H ∧ (compile Compiled.echo I S).Sessions H ∧
+    (echoArg Coin).WF ∧ (∀ s, 0 ≤ (echoArg Coin).κ s) ∧ (∀ s, 0 ≤ (echoArg Coin).γ s) ∧ (echoArg Coin).KS H ∧
+      (compile Compiled.echo I S).Sessions H ∧
       ∀ x, (compile Compiled.echo I S).toComp.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x
 
 end Claims.RecGeneric
