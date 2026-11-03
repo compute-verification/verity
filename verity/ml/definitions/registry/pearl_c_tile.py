@@ -57,7 +57,7 @@ __all__ = ["PearlCChain", "PearlCChainV2", "PearlCTileRead", "PearlCTileReadCell
 E4M3, BF16, F32 = Value(8), Value(16), Value(32)
 SLICE, PEEL, K16 = 32, 64, 16
 ONE_BITS = 0x3F800000
-CONFORMANCE = ("protocol-defined; equal to verity.core.protocols.pouw.schemes.pearl_c_u, the pin of the H100 kernel's gate "
+CONFORMANCE = ("protocol-defined; equal to verity.core.protocols.pouw.schemes.pearl_c_u, the pin of the Hopper kernel's gate "
                "problem, on its vectors (verity/core/protocols/pouw/tests/test_pearl_c_tile.py)")
 UNSCALE_CONFORMANCE = ("protocol-defined; the Pearl-C kernels' store_y, the order their check fixtures' glue_y states "
                        "(verity/core/protocols/pouw/tests/test_pearl_c_tile.py)")
