@@ -897,7 +897,7 @@ end AtFlock
 The deployed V* never reads the inner session's framed transcript. It binds what the firewall's coin server records
 (`rec/inner-transcript/v1`, the run's inner rounds) and what its parts hold:
 
-* round 0: each table's level-0 top as salted commitments, one hm96 `b ‖ c` a cap node (`link.roots`), answered by the
+* round 0: each table's level-0 top as hiding commitments, one hm96 `b ‖ c` a cap node (`link.roots`), answered by the
   link points;
 * each later round: the salted tops of the caps it absorbs, then the commitment `c_k` to its free elements `F_k` as one
   registered row (none where `F_k` is empty), answered by its coins;
