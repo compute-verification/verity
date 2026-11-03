@@ -18,7 +18,9 @@ from circuit_check import shard as SH
 from circuit_check import targets as TG
 from test_cache import _bindings, _tree
 from test_units import BINDINGS as UNIT_BINDINGS
+from test_units import FORKED as UNITS_FORKED
 from test_units import HARNESS as UNITS
+from test_units import _copied, _fresh, _records_only
 from test_units import _run as _run_units
 
 
@@ -147,6 +149,7 @@ def test_combining_three_shards_gives_the_unsharded_run_s_report_verdict_and_out
     assert json.dumps(got["summary"]) == json.dumps(rep["summary"])
     assert _untimed(got) == _untimed(rep) and got["schema"] == rep["schema"] and got["options"] == rep["options"]
     assert got["combined"]["shards"] == 3 and sum(w["targets"] for w in got["combined"]["walls"]) == len(ids)
+    assert all(0 <= w["prologue_s"] <= w["wall_s"] for w in got["combined"]["walls"]), got["combined"]["walls"]
 
 
 def test_a_shard_fails_on_its_own_new_failures_and_only_the_combine_on_the_joined_ones(stub, tmp_path, capsys, monkeypatch):
@@ -246,7 +249,14 @@ def test_the_shard_options_are_refused_where_they_mean_nothing(stub, tmp_path, c
                       (["--all", "--shard-dir", "d"], "give --shard K/N"),
                       (["--all", "--shard", "1/3", "--shard-dir", "d", "--update-pins"], "--update-pins"),
                       (["--combine", "d", "--all"], "--combine joins"),
-                      (["--combine", "d", "--batch"], "four modes")):
+                      (["--combine", "d", "--batch"], "five modes"),
+                      (["--combine", "d", "--records-only"], "five modes"),
+                      (["--records-only", "--cache", "c"], "--records-only stores"),
+                      (["--all", "--records-only"], "--records-only stores"),
+                      (["--all", "--records-only", "--cache", "c", "SynPass_v1"], "--records-only stores"),
+                      (["--all", "--records-only", "--cache", "c", "--no-cache"], "--records-only stores"),
+                      (["--all", "--records-only", "--cache", "c", "--update-pins"], "--records-only stores"),
+                      (["--all", "--records-only", "--cache", "c", "--shard", "1/3", "--shard-dir", "d"], "--records-only stores")):
         with pytest.raises(SystemExit) as e:
             cli.main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err, argv
@@ -333,3 +343,20 @@ def test_a_shard_describes_only_its_own_targets_before_its_checks(tmp_path):
     _bindings(whole, *UNIT_BINDINGS)
     out = _run_units(whole, SHARDED.replace("SHARD)", "None)"))
     assert sorted(out["before"]) == sorted(out["checks"]) == UNIT_IDS and out["stats"]["units"] == {"stored": 5}
+
+
+@pytest.mark.slow
+def test_every_shard_from_a_copy_of_one_records_only_run_s_cache_builds_no_binding(tmp_path):
+    """One ``--records-only`` run's cache, copied to three trees (three machines), gives each forked shard its targets with
+    no binding built and no body built in its own process, and the shards' verdicts are together the full build's."""
+    assert UNITS_FORKED.count("fork=True)") == 1
+    root = _tree(tmp_path / "t")
+    _bindings(root, *UNIT_BINDINGS)
+    assert _records_only(root)["stored"] == 5
+    got: dict = {}
+    for k in (1, 2, 3):
+        out = _run_units(_copied(root, tmp_path / f"s{k}"), UNITS_FORKED.replace("fork=True)", f"fork=True, shard=({k}, 3))"))
+        assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and out["here"] == [], out["stats"]["units"]
+        assert sorted(out["values"]) == sorted(t for t in UNIT_IDS if SH.shard_of("definition", t, 3) == k)
+        got.update(out["values"])
+    assert got == _fresh(root)["values"]

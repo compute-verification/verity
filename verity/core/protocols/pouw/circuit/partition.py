@@ -234,8 +234,8 @@ class WidthRule:
 
 
 def width_rule(shape: Shape, kind: str = "shift24") -> WidthRule:
-    """The width rule by reachability, with the separator pinned (X-SPC-60, X-SPC-66), on the protocol's own Program
-    (`ncp2.linear`, which the verifier builds; X-SPC-73): remove the pinned ports' values, find every unit from which a
+    """The width rule by reachability, with the separator pinned, on the protocol's own Program
+    (`ncp2.linear`, which the verifier builds): remove the pinned ports' values, find every unit from which a
     served output (y's m·n entries, the protocol's designation) is still reachable, and hold each such unit to
     `cut.WIDTH_RULE`; every other unit is behind the separator and exempt. The ports are the protocol's
     (`SEPARATOR_PORTS`), so a wide unit cannot name its own output a separator: a pinned tile whose word leaf reaches a

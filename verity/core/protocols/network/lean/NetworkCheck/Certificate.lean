@@ -259,7 +259,7 @@ def saltBytes : Nat := 64
 def certificateInput (salt record : ByteArray) : ByteArray := certificateTag ++ salt ++ record
 
 /-- `certificate_digest`: the digest a certificate signs, the record digest `R` hidden under `salt_c`, the 64 bytes the
-certifier drew for the record. -/
+certifier sampled for the record. -/
 def certificateDigest (salt record : ByteArray) : ByteArray := Sha512.hash (certificateInput salt record)
 
 /-- `[x] = u64be len(x) ‖ x` (`lms._field`). -/

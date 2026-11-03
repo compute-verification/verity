@@ -125,6 +125,21 @@ def test_the_sass_gate_refuses_an_unsigned_or_other_shaped_atom():
     assert _gate(igmma="IGMMA.64x128x32.S8.S8 R24, gdesc[UR4], R24 ;")
 
 
+@pytest.mark.parametrize("report, why", [
+    (PTXAS.replace("Used 66 registers, ", ""), "no ptxas resource line"),
+    (PTXAS.replace("'sm_90a'", "'sm_100a'"), "compiled for sm_100a, want sm_90a"),
+    (PTXAS + "ptxas info    : (C7515) Potential Performance Loss: wgmma.mma_async instructions are serialized\n", "C7515"),
+])
+def test_the_sass_gate_refuses_the_report(report, why):
+    _, problems = SG.gate(report, LISTING.format(igmma="\n".join(["IGMMA.64x64x32.S8.S8 R24, gdesc[UR4], R24 ;"] * 4), extra=""))
+    assert any(why in p for p in problems), problems
+
+
+def test_sass_functions_takes_each_functions_lines_and_a_repeated_header_starts_over():
+    listing = "code for sm_90a\n  Function : a\n  /*0000*/ X ;\n  Function : b\n  /*0000*/ Y ;\n  Function : a\n  /*0000*/ Z ;\n"
+    assert SG.sass_functions(listing) == {"a": ["  /*0000*/ Z ;"], "b": ["  /*0000*/ Y ;"]}
+
+
 def test_the_kernel_order_is_a_permutation_within_each_32_bytes():
     assert sorted(W.KERNEL_ORDER) == list(range(32))
     assert W.KERNEL_ORDER[:8] == (0, 1, 2, 3, 8, 9, 10, 11) and W.KERNEL_ORDER[16:20] == (4, 5, 6, 7)

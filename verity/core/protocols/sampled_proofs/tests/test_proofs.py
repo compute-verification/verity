@@ -1,7 +1,8 @@
 """The proof system's own run of C-Flock's Lean verifier (`one_stage.proofs`), on a pinned `--zk --registered`
-session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, proved by C-Flock in
-one loopback session under a subset sample of 16 (`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The
-verifier's own program, partition and `--registered` file are the fixture's `stage/`, the ones
+session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, its `x` row and
+output row registered too, proved by C-Flock in one loopback session under a subset sample of 16
+(`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The verifier's own program, partition and `--registered`
+file are the fixture's `stage/`, the ones
 `verity/ml/flock/tests/test_lean_served_registered.py` holds to `register_served`.
 
 Each verify sets up an m = 25 table (about 10 s), so the fixture's tests are slow. They are the one test that a protocol's
@@ -32,15 +33,22 @@ from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
-FIXTURE = "art:48ed507aa908f8a220405467097af6ce986fab36ba32d2d7aede8b7cbc5213d5"
+FIXTURE = "art:891ffb0bfc8ae3032e5b113d766ffe594c6e8446d293f0bfe5cba62286437edf"
 VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
            "9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0")
-CS_ROOT = ("8c31089e5864c2e01b73d983ea3bcfa704e49e961466476987a2a4d908a87ef3"
-           "d65628f58e1ac7eb5f3d86da77250db500a01d1a4c9cf77e0be83ca3aae5413a")
+#: the fixture's registered roots: every port of the circuit is registered (`Flock.Registered.checkComplete`)
+REGISTERED_ROOTS = {
+    "cs": {"value": "cs_table", "root": "a12d3a9dfc856e14a2595969f2224d439db201d2c4e25c69636cc1c54627279e"
+                                        "a44a29c073f3ccb8c576410d686a6ae6bcffc5a3df7bbdef591182855573a75c"},
+    "x": {"value": "x", "root": "2278fcc015f932e276fc0118791059365fdf46c90875e6d0c62c9e79491c4985"
+                                "c7e3e2616108e2d1fc8e6117f3accc5871388cbffa0057dfc30047c7de523635"},
+    "out": {"value": "rope_out", "root": "64503de14223fb026b06891a19f82b95e5fec73f31c75fbce2a3aeef473af979"
+                                         "2ace4062a9f029364afd57712349daedf9b69baa46a6970727f0914ce44b4327"},
+}
 #: the instances the session's own draw drew, which are the proof blocks, the public file's indices being 0..31
-DRAWN = (0, 3, 4, 5, 8, 11, 12, 13, 17, 18, 23, 26, 28, 29, 30, 31)
+DRAWN = (1, 3, 5, 6, 8, 9, 12, 13, 14, 16, 17, 23, 26, 29, 30, 31)
 
 #: a test that runs Lean on the fixture
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -145,9 +153,9 @@ def test_the_honest_session_is_accepted_by_cores_own_verifier_run_at_its_shared_
     assert (f.accepted, f.why) == (True, ""), f
     assert PF.ks_form_why(fx / "stage" / "circuit.txt", fx / "stage" / "pub-32.bin") is None
     assert f.program == partition["program"]
-    port = json.loads((fx / "stage" / "registered.json").read_text())["ports"]["cs"]
-    assert f.registered == {"cs": {"value": "cs_table", "root": CS_ROOT, "domain": port["domain"], "leaves": port["leaves"],
-                                   "words": port.get("words"), "word_bits": port.get("word_bits", 16)}}
+    ports = json.loads((fx / "stage" / "registered.json").read_text())["ports"]
+    assert f.registered == {p: {**r, "domain": ports[p]["domain"], "leaves": ports[p]["leaves"], "words": ports[p].get("words"),
+                                "word_bits": ports[p].get("word_bits", 16)} for p, r in REGISTERED_ROOTS.items()}
     assert f.units == DRAWN
     draw = json.loads((fx / "session" / "session.json").read_text())["unit_draw"]
     assert tuple(draw["units"]) == DRAWN, draw

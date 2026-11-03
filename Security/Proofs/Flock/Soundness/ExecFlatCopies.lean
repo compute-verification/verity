@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.ExecFlatClass
 import Proofs.Flock.Soundness.Types.ProgramPlaces
+import Properties.Flock.Circuit.Keys
 
 /-!
 # A typed flat class's input copies and forced-zero rows (1e for flat classes)
@@ -244,9 +245,6 @@ theorem delta_flat (c : Circuit) (pin : ℕ) (ht : c.typed = none) : FlatDelta c
 
 /-! ## A net's input port bits -/
 
-/-- A net's input port bits, port by port: each port's columns. -/
-def portBits (gs : Array Group) : List ℕ := (portCols gs).toList.flatMap fun q => List.range' q.1 q.2
-
 /-- Distinct input port bits are distinct columns. -/
 theorem portBits_inj {gs : Array Group} (hnd : (portBits gs).Nodup) {p p' t t' : ℕ} (hp : p < (portCols gs).size)
     (hp' : p' < (portCols gs).size) (ht : t < (portCols gs)[p]!.2) (ht' : t' < (portCols gs)[p']!.2)
@@ -269,10 +267,6 @@ theorem portBits_inj {gs : Array Group} (hnd : (portBits gs).Nodup) {p p' t t' :
   · exact absurd he (key p p' hp hp' h t t' ht ht')
   · exact ⟨rfl, by omega⟩
   · exact absurd he.symm (key p' p hp' hp h t' t ht' ht)
-
-/-- The port a column of the input rows is a bit of: the first whose columns hold it. -/
-def portOf (pc : Array (ℕ × ℕ)) (off : ℕ) : ℕ :=
-  ((List.range pc.size).find? fun p => decide (pc[p]!.1 ≤ off ∧ off < pc[p]!.1 + pc[p]!.2)).getD 0
 
 theorem portOf_eq {gs : Array Group} (hnd : (portBits gs).Nodup) {p t : ℕ} (hp : p < (portCols gs).size)
     (ht : t < (portCols gs)[p]!.2) : portOf (portCols gs) ((portCols gs)[p]!.1 + t) = p := by

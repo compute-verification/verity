@@ -30,7 +30,7 @@ targets read them:
   and at registrations whose ports each have one name (`Registered.dupName`) and whose equal roots have one domain
   (`PortRoots.RootFixesDomain`), which `TransportsLiveC` also takes, and whose descriptor and query evaluate to a
   population of the game's `n` units in order (`Bridge.PopMatches`);
-* `Bridge.AssemblyTargetC`: those, `PartRusTarget`, `CountTarget` and `EndToEndHiddenC` give `SampledKSLiveV2`.
+* `Bridge.AssemblyTargetC`: those, `PartBlocksTarget`, `CountTarget` and `EndToEndHiddenC` give `SampledKSLiveV2`.
 
 `SampledKSLiveV3` (`Refused`) reads V2's file preconditions off the verifiers' acceptance, which refuses files that fail
 them.
@@ -78,7 +78,7 @@ constant nor transported). -/
 def FaultyRightTargetC : Prop :=
   ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
-    (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool)
+    (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool)
     (roots : List Claims.Msg) (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n),
     (∀ g b, κ g = some b → (C.op g).isInput = true) →
     (∃ op : Pos → Opn, ∀ g ∈ P.io u, com (op (pos g)) = cs (pos g) ∧ bit (val (op (pos g))) g = C.eval Xr g ∧
@@ -87,7 +87,7 @@ def FaultyRightTargetC : Prop :=
       ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C g, bit (val o) g, d⟩ = true) →
     (∀ g ∈ P.io u, ∀ b, κ g = some b → C.eval Xr g = b) →
     ∀ (kd : ℕ) (desc : Claims.Msg) (q : Claims.Sampling.Query),
-      u.val ∉ Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) (witDep C Cm H roots Xr)
+      u.val ∉ Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) (witDep C Cm H roots Xr)
 
 end Flock.Bridge
 
@@ -300,7 +300,7 @@ def SampledKSLiveV2 : Prop :=
     FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
       k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P)
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
           (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
@@ -319,7 +319,7 @@ theorem sampledKSLiveV2_of (h : SampledKSLive) : SampledKSLiveV2 := by
 /-- **The assembly, with canonical openings**: canonical transport, M1's core over `RightRegZc`, the slot count and the
 count lemma turn `EndToEndHiddenC` into `SampledKSLive` at `RowsOk` circuit files (`SampledKSLiveV2`). -/
 def _root_.Flock.Bridge.AssemblyTargetC : Prop :=
-  Bridge.TransportsLiveC → Bridge.FaultyRightTargetC → Bridge.PartRusTarget → Bridge.CountTarget →
+  Bridge.TransportsLiveC → Bridge.FaultyRightTargetC → Bridge.PartBlocksTarget → Bridge.CountTarget →
     Bridge.EndToEndHiddenC → SampledKSLiveV2
 
 end Flock.Guarantees

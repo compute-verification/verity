@@ -192,9 +192,9 @@ def ownJ {R : Type} (D : Claims.Recursion.Deploy Coin) (L : LayoutB) (ownR : Msg
 /-- `ownJ`'s owners are among the statement's parts wherever `ownR`'s are. -/
 theorem ownJ_lt {H : Msg → Msg} {rd : Msg → Option FinalJ} {R : Type} (LJ : LastSplitJ H rd R)
     (ownR : Msg → R → Option ℕ) (D : Claims.Recursion.Deploy Coin) (L : LayoutB) (shape : Claims.Recursion.Form → Prop)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
       ∀ r ∈ LJ.checks (Claims.Recursion.xI D x), ∀ s, ownR x r = some s → s < D.nS x) :
-    ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+    ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
       ∀ r ∈ LJ.toLast.checks (Claims.Recursion.xI D x), ∀ s, ownJ D L ownR x r = some s → s < D.nS x := by
   intro x st hx hf r hr s ho
   cases r with
@@ -221,10 +221,10 @@ theorem decompB_nextJ (H : Msg → Msg) (rd : Msg → Option FinalJ)
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
     (DO : Claims.Flock.Deploy Coin Col' T') (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ r ∈ LJ.checks (Claims.Recursion.xI (recBound rel' b L IV) x), ∀ s, ownR x r = some s →
         s < (recBound rel' b L IV).nS x)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ q ∈ ivChecks (bdDeployed rel (nextJ rd) colsE wE join rowIn final w)
           (deploySplit H rel (nextJ rd) colsE wE join rowIn final w (nextJ_coin rd H) LJ.toLast)
           (Claims.Recursion.xI (recBound rel' b L IV) x),

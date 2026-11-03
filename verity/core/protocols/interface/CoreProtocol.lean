@@ -3,7 +3,10 @@ import CoreProtocol.Profile
 import CoreProtocol.Protocol
 import CoreProtocol.Protocol.Canonical
 import CoreProtocol.Live
+import CoreProtocol.Record
 import CoreProtocol.Cli
 import CoreProtocol.Example
 import CoreProtocol.Blobs
 import CoreProtocol.BlobsExample
+import CoreProtocol.Site
+import CoreProtocol.Registration

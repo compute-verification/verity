@@ -20,7 +20,7 @@ def FORMAT_V0 : String := "verity/registered-reads/v0"
 /-- A `FORMAT` port's first unit: unit `reads_from + i` reads `reads[i]`, and every other unit reads nothing. -/
 def READS_FROM_KEY : String := "reads_from"
 
-def REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v0"
+def REGISTERED_DOMAIN : String := "verity/one-stage/registered-domain/v1"
 /-- The default leaf width, which the domain and the entry name only by leaving `word_bits` out. -/
 def WORD_BITS : Nat := 16
 def WIDTHS : List Nat := [16, 32]
@@ -29,10 +29,8 @@ def WIDTH_KEY : String := "word_bits"
 def SCHEMA_KEY : String := "row_schema"
 def SCHEMAS : List String := [HmRow.ROW_SCHEMA, HmRow.ROW_SCHEMA_V2, HmRow.ROW_SCHEMA_SEG]
 
-/-- The key of a `--registered` file that names every port of the statement (`checkComplete`); absent, false. -/
-def COMPLETE_KEY : String := "complete"
 /-- The keys a `FORMAT` file holds. -/
-def FILE_KEYS : List String := ["format", "ports", COMPLETE_KEY]
+def FILE_KEYS : List String := ["format", "ports"]
 /-- The keys a `FORMAT` file's port holds; `known` is `RegKnown.KNOWN_KEY`, `param` `PARAM_KEY`. -/
 def PORT_KEYS : List String :=
   ["value", "root", "leaves", "words", WIDTH_KEY, "domain", SCHEMA_KEY, "reads", READS_FROM_KEY, "known", "param"]
@@ -49,8 +47,8 @@ private def tagged (frame : String) (H : ByteArray → ByteArray) (tag : String)
   return H (frame.toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t ++ Flock.be64 m.size.toUInt64 ++ m)
 
 /-- `registered.domain(program, value, words, leaves, word_bits, ...).domain_id` (one-stage `registered.py`), `leaves`
-the value's rows: `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512").domain_id`, `B` the bytes of
-`identity_digest("verity/one-stage/registered-domain/v0", {"program", "value", "schema", "words", "leaves"})` with
+the value's rows: `CommitmentDomain(B, -2, RangeIndexedDomain(0, leaves), hash="sha512").domain_id`, `B` the 64 bytes of
+`identity_digest_sha512("verity/one-stage/registered-domain/v1", {"program", "value", "schema", "words", "leaves"})` with
 `"word_bits"` beside them when it is not 16, and `extra` after them (a per-window value's `"window"`, a produced value's
 `"produced"`). -/
 def domainWith (program value : String) (words leaves wordBits : Nat) (extra : List (String × Json)) :
@@ -59,7 +57,7 @@ def domainWith (program value : String) (words leaves wordBits : Nat) (extra : L
   let manifest := Json.mkObj ([("program", Json.str program), ("value", Json.str value), ("schema", Json.str HmRow.ROW_SCHEMA),
     ("words", Lean.toJson words), ("leaves", Lean.toJson leaves)] ++
     (if wordBits == WORD_BITS then [] else [(WIDTH_KEY, Lean.toJson wordBits)]) ++ extra)
-  let binding ← tagged "veritor/tagged-sha256/v1" Flock.Sha256.hash REGISTERED_DOMAIN manifest
+  let binding ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash REGISTERED_DOMAIN manifest
   let positions ← tagged "verity/tagged-sha512/v1" Flock.Sha512.hash "veritor/indexed-domain/range/v1"
     (Json.mkObj [("start", Lean.toJson (0 : Nat)), ("step", Lean.toJson (1 : Nat)), ("stop", Lean.toJson leaves)])
   return FV3.hash "domain" [binding, FV3.uint 0, positions, FV3.uint leaves] Flock.Sha512.hash
@@ -157,31 +155,11 @@ def Port.fits (reg : Port) (p : Flock.Port) : Bool :=
   if reg.schema == HmRow.ROW_SCHEMA then reg.words.all fun w => p.words == rowWords w reg.wordBits
   else reg.words.any fun w => p.bits == w * reg.wordBits
 
-/-- The frame-v3-sha512 node over `l` and `r` at index `idx` of level `d`. -/
-def node (dom : ByteArray) (d idx : Nat) (l r : ByteArray) : ByteArray :=
-  FV3.hash "node" [dom, FV3.uint d, FV3.uint idx, l, r] Sha512.hash
-
-/-- The root a digest `cur` at index `idx` of level `d` climbs to through the siblings `sibs`, lowest first. -/
-def climbL (dom : ByteArray) : ByteArray → Nat → Nat → List ByteArray → ByteArray
-  | cur, _, _, [] => cur
-  | cur, idx, d, sib :: rest =>
-    climbL dom (if idx % 2 = 0 then node dom d (idx / 2) cur sib else node dom d (idx / 2) sib cur) (idx / 2) (d + 1) rest
-
-/-- A path's `depth` siblings, 64 bytes each, leaf level first. -/
-def sibs (path : ByteArray) (depth : Nat) : List ByteArray :=
-  (List.range depth).map fun d => path.extract (64 * d) (64 * d + 64)
-
-/-- The frame-v3-sha512 root a leaf at `i` climbs to through `path` (the siblings, leaf level first, 64 bytes each). -/
-def climb (dom leaf : ByteArray) (i depth : Nat) (path : ByteArray) : ByteArray := climbL dom leaf i 0 (sibs path depth)
+export FV3.Sha512 (node climbL sibs climb leafAs)
 
 /-- The frame-v3-sha512 leaf at `pos` of a registered value's row whose `hm96-sha512/row/v1` leaf is `payload`. -/
 def rowLeaf (dom : ByteArray) (pos : Nat) (payload : ByteArray) : ByteArray :=
   FV3.leaf dom pos HmRow.ROW_SCHEMA payload Sha512.hash
-
-/-- The frame-v3-sha512 leaf at `pos` of a row whose hm96 leaf of schema `schema` is `payload`, as the plain verifier
-frames a port's rows of that schema (`HmRow.checkPublic`); `rowLeaf` at `hm96-sha512/row/v1`. -/
-def leafAs (schema : String) (dom : ByteArray) (pos : Nat) (payload : ByteArray) : ByteArray :=
-  FV3.leaf dom pos schema payload Sha512.hash
 
 /-- A row whose hm96 leaf of `reg`'s schema is `payload` opens `reg`'s registered root at `pos` through `path`: a
 position among its leaves, one 64-byte sibling per level, and the climb ends at the root. -/
@@ -332,21 +310,14 @@ theorem checkProgram_ok {b : ByteArray} {registered : Bool} (h : checkProgram (s
         exact Array.eq_empty_of_size_eq_zero (by omega)
       · cases h
 
-/-- The file's `complete` (`COMPLETE_KEY`), false when absent. -/
-def completeOf (j : Json) : V Bool :=
-  match j.getObjVal? COMPLETE_KEY with
-  | .error _ => .ok false
-  | .ok (.bool b) => .ok b
-  | .ok _ => .error s!"registered reads: {COMPLETE_KEY} is true or false"
-
 /-- Every port of the circuit, each input port and each output row, is a port of `own`. -/
 def complete (c : Circuit) (own : Array Port) : Bool := c.ports.all fun p => own.any (·.name == p.name)
 
-/-- **Every port a statement's outputs read is registered** (PROTOCOL.md §16.10, a `--registered` file that sets
-`complete`): every port of the circuit is a port of the verifier's own registered reads (`checkComplete_ok`), so no
-output's cone reads a row the statement commits afresh and its public file states (a lane's index, say), and `check`
-opens each of them at its registered root. It reads the circuit's ports, not its gates: whatever an output's cone reads
-is a port's row. -/
+/-- **Every port a statement's outputs read is registered** (PROTOCOL.md §16.10; `flock-verify` runs it on every
+statement whenever `--registered F` is given): every port of the circuit is a port of the verifier's own registered
+reads (`checkComplete_ok`), so no output's cone reads a row the statement commits afresh and its public file states (a
+lane's index, say), and `check` opens each of them at its registered root. It reads the circuit's ports, not its gates:
+whatever an output's cone reads is a port's row. -/
 def checkComplete (c : Circuit) (own : Array Port) : V Unit :=
   if complete c own then .ok ()
   else

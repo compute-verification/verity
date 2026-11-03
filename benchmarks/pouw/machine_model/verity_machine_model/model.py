@@ -29,7 +29,6 @@ STATUSES = ("measured", "ASSUMED", "provisional", "joint", "datasheet")
 class Model:
     cycle_u: float                      # u in one SMSP-cycle (R*)
     honest_real: float                  # u of real time a MAC for the honest kernel
-    honest_real_600w: float             # the same at the 600 W cap
     cuda: tuple[str, ...]               # the CUDA lane kinds ρ binds, in constraint order
     honest: dict[str, float]            # the honest GEMM's program a MMA
     adopted: str                        # the design whose cheapest attack is the margin
@@ -119,8 +118,7 @@ def model(data: Path = DATA) -> Model:
     honest kernel's u a MAC, the price LP's `[lp]`, `[honest]` and `adopted` (NaN and empty here)."""
     t = tomllib.loads((data / "model.toml").read_text())
     c, lp = t["constants"], t.get("lp", {})
-    return Model(cycle_u=c["cycle_u"], honest_real=c.get("honest_real", math.nan),
-                 honest_real_600w=c.get("honest_real_600w", math.nan), cuda=tuple(t["cuda"]),
+    return Model(cycle_u=c["cycle_u"], honest_real=c.get("honest_real", math.nan), cuda=tuple(t["cuda"]),
                  honest=dict(t.get("honest", {})), adopted=t.get("adopted", ""), rho=lp.get("rho", math.nan),
                  tie=lp.get("tie", math.nan), x_min=lp.get("x_min", math.nan), epochs=tuple(t["epochs"]),
                  current=t["current"],

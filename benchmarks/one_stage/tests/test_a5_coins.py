@@ -78,7 +78,7 @@ def stream_of(coins) -> S.Stream:
     return S.Stream(SPEC, WINDOW, budget=1, delta=0.5, challenger=name, coins=coins, clock=Clock())
 
 
-def register(stream: S.Stream) -> S.Registration:
+def register(stream: S.Stream) -> S.WindowCommitmentRecord:
     return stream.register(_record(), _ports(), window_root=ROOT, counts=COUNTS)
 
 

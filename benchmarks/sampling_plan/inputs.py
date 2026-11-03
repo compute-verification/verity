@@ -37,9 +37,9 @@ I = {
                           "sm_120 (0.101 at R = 64), the leaves the Commit holds and PoUW's "
                           "seeds read under compile: Llama-3.1-8B's 26,624 B a token a layer, which the "
                           "serve-time total prices with every other scale's bytes", "M"),
-    "remote_receipts": Input(268e6, 268e6, 268e6, "the remote audit's receipts a GPU a pass: 64 B a 4 KiB block over the "
+    "remote_receipts": Input(268e6, 268e6, 268e6, "PoUB's receipts a GPU a pass: 64 B a 4 KiB block over the "
                              "registered store, 128 GiB on the 8-GPU Llama-3.1-8B node", "D"),
-    "passes_per_s": Input(65, 1, 82, "remote-audit passes a GPU-second: about 60-70 at 12.1 ms a pass; 82 back to back; "
+    "passes_per_s": Input(65, 1, 82, "PoUB passes a GPU-second: about 60-70 at 12.1 ms a pass; 82 back to back; "
                           "whether every served step is a pass is open", "A"),
     "decode_tokens": Input(32, 32, 32, "tokens a decode step (B32, the scales table's decode)", "A"),
     "compress_latency": Input(4.3e-6, 2.0e-6, 6.0e-6, "seconds a dependent SHA-512 compression on decode's critical path: "
@@ -118,7 +118,7 @@ def serve_rows(m: Model, scheme: str, *, kv: bool = False) -> list[Row]:
       K = 4,096 and 3 at 12,288, taken as 3 at 14,336); `h1-bf16` the same with the A rows BF16;
     - `kv`: the remote KV append's payload, one 4 KiB block a token-layer, when live KV is credited (not for chat).
 
-    The remote audit's receipts are a GPU's, not a token's (`I['remote_receipts']`), and `floor` is the measured term
+    PoUB's receipts are a GPU's, not a token's (`I['remote_receipts']`), and `floor` is the measured term
     alone (`I['commit_floor']`)."""
     if scheme not in SCHEMES:
         raise ValueError(f"no PoUW scheme {scheme!r}: one of {', '.join(SCHEMES)}")
@@ -200,7 +200,7 @@ ZK: dict[tuple[int, int, int], tuple[float, float, float]] = {
     (14336, 512, 512): (131.07, 119.78, 41.6)}
 
 
-#: the remote bandwidth audit's opening unit (`verity.ml.commitments.gates.block_check`): a drawn receipt opened in
+#: PoUB's opening unit (`verity.ml.commitments.gates.block_check`): a drawn receipt opened in
 #: circuit, its 4 KiB block decoded to its payload, its sketch receipt recomputed, and the receipt leaf and the payload
 #: opened to their roots (its ANDs are the whole unit's, every opening included)
 OPENING = "BlockOpeningCheck_v1{N=512,C=569,K=2,MASKED=0,BYTES=4096,ROWS=16,LEAF=16,P=64,DR=2,DP=12,DV=1}"
