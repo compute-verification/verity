@@ -85,6 +85,10 @@ TRACE_SHARD = 6
 #: the most shards a refresh launches, so the pool (about 27 free slots at 08:50Z) keeps room for other lanes' runs;
 #: the next refresh launches the rest, v3's first
 TRACE_MAX_SHARDS = 30
+#: on a named machine's pool, the most shards in flight there at once across every capture's cache, so the rest of
+#: the pool's line stays other lanes' (infra 15:08Z: vy-nebius-cpu-9's research pool had 8 free); ON_POOL names them
+TRACE_POOL_SHARDS = int(os.environ.get("TE_TRACE_POOL_SHARDS", "8"))
+ON_POOL = trace40.STATE / "trace40" / "on-pool.json"
 #: a shard's custody key lifetime: `--on auto` adds its 4 h queue wait to the 150 min timeout (23,400 s), past the
 #: default key's 6 h, so `research run` refuses the launch without it
 TRACE_CUSTODY_TTL = "8h"
@@ -348,7 +352,11 @@ def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, 
 
     # the ended node runs taken first, so the runs they failed (under an older CODE) are traced again in this one
     settle()
-    todo = to_trace(te, {r for runs in pending.values() for r in runs})[:TRACE_SHARD * TRACE_MAX_SHARDS] if launch else []
+    on_pool = json.loads(ON_POOL.read_text()) if ON_POOL.exists() else []
+    flying = set(on_pool) & {run for f in ON_POOL.parent.glob("*/pending.json") for run in
+                             (pending if f == pf else json.loads(f.read_text()))}
+    cap = max(0, TRACE_POOL_SHARDS - len(flying)) if TRACE_POOL and TRACE_NODE != "auto" else TRACE_MAX_SHARDS
+    todo = to_trace(te, {r for runs in pending.values() for r in runs})[:TRACE_SHARD * cap] if launch else []
     packed = {"runs": len(todo)}
     for i in range(0, len(todo), TRACE_SHARD):
         shard, pack = todo[i:i + TRACE_SHARD], out / f"trace40-pack-{i // TRACE_SHARD}.tar"
@@ -374,6 +382,10 @@ def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, 
         # a refused launch traces nothing, so its runs stay out of pending and the next refresh packs them again
         if run and not r.returncode and " refused" not in said:
             pending[run] = runs
+            if TRACE_POOL:
+                on_pool = [*(x for x in on_pool if x in flying), run]
+                flying.add(run)
+                ON_POOL.write_text(json.dumps(on_pool, indent=1))
         else:
             log.setdefault("launch_refused", []).append(run)
         pack.unlink(missing_ok=True)
