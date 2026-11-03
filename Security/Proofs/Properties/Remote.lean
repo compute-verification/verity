@@ -270,6 +270,27 @@ theorem stage_registered {p : SampledProofs.OneStage.Params} {c : SampledProofs.
   · exact stage_registered_at h
   · cases h
 
+/-- One-stage v2's check at the coins it read accepts only where v1's check accepts at them, on the verdicts its own
+run of the verifier computed. -/
+theorem stage_zk_at {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment} {ξ : ByteArray}
+    {e : SampledProofs.OneStageZk.Evidence} {bs : Blobs} {pub : SampledProofs.OneStage.Public} {prof : Integrity}
+    (h : SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    ∃ r : SampledProofs.OneStageZk.Run,
+      SampledProofs.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof := by
+  unfold SampledProofs.OneStageZk.checkBlobsAt at h
+  split at h
+  · cases h
+  · rename_i r _
+    refine ⟨r, ?_⟩
+    generalize SampledProofs.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = o at h ⊢
+    cases o with
+    | accept pub' prof' =>
+      cases hr : r.all <;> simp [hr] at h
+      obtain ⟨rfl, rfl⟩ := h
+      rfl
+    | reject s => simp at h
+    | undecided s => simp at h
+
 /-- One-stage v2 accepts only where v1's check accepts at the coins it read, on the verdicts its own run of the
 verifier computed, so its record keeps R2 against the v1 part of its params' verifier. -/
 theorem stage_zk_registered {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
@@ -278,14 +299,8 @@ theorem stage_zk_registered {p : SampledProofs.OneStageZk.Params} {c : SampledPr
     Properties.SampledProofs.R2 c.record p.base.verifier := by
   unfold SampledProofs.OneStageZk.checkBlobs Core.atCoins at h
   split at h
-  · unfold SampledProofs.OneStageZk.checkBlobsAt at h
-    split at h
-    · cases h
-    · split at h <;> (try split at h) <;>
-        first
-          | exact stage_registered_at (by assumption)
-          | (subst_vars; exact stage_registered_at (by assumption))
-          | simp at h
+  · obtain ⟨_, hr⟩ := stage_zk_at h
+    exact stage_registered_at hr
   · cases h
 
 /-- The recursive audit accepts only where one-stage v1 accepts on the inner statement's params, with the verdicts
