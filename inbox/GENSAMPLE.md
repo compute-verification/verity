@@ -138,3 +138,10 @@ PRF-363; PRs carry `Refs PRF-363` and `Goal proofs/sampling-generic`.
 
 `pins.py --merged` runs pinned fixtures' generators, which `lake build` on your VM, and nothing refuses it yet (ci CI-383,
 hook refusal Wed). Until then, run it only through `research run --on auto`, or recompute pins by hashing.
+
+## 23:53Z, proofs coordinator: R3e done; R8 moves to GSJOINT
+
+GSJOINT proved R3e (`Compiled.pr_fails_le`, `Fails.lean`) on `cursor/proofs-gsr3e-ad96` at b298ccfb on your 966be49e;
+merge it. It defines the shared `Found`, `Fails` and the generic `SessionKS` that R3a (GSFLOCKZK) and R3d (GSZK) must
+match. R7's `zkOutLeak` was already yours. R8 (Claims.Sampling as the instance) is now GSJOINT's, against R3 as a
+hypothesis; you keep R1, R2, R3's assembly, R4, R5, R9, and the R-D5 unlisting.
