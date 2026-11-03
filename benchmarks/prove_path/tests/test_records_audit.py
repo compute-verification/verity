@@ -509,7 +509,8 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
         free = RA.declared_count(ldoc, 0, pins=p, roots=r)
         assert (free["registered"], free["free"], free["unpinned"]) == (0, count["free"] + 8 * 8 * K, ["w"])
     base = ["audit", "--window", str(listed.dir), "--law", LAW, "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath",
-            ".", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o")]
+            ".", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o"), "--challenger", "local",
+            "--main", "m.txt"]
     assert RA.main(base) == 1
     assert "didn't pin" in json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
     for pins_, want in (([f"--pin=w={pin['w']}"], count), ([], RA.declared_count(ldoc, 0))):
@@ -821,6 +822,7 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     (`WINDOW_PREMISE`). The sessions (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass; its leak count
     is the records' alone."""
     import a5 as A5
+    import a5_coins as AC
 
     mine, stated, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
     ingress = [{"reader": TID, "port": p, "at": 0, "units": 5, "step": 0} for p in ("x", "sx")]
@@ -831,12 +833,14 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     rec = {**written.rec, "window": {**written.rec["window"], "circuit": hashlib.sha512(body).hexdigest()}}
     (written.dir / "registration.json").write_text(json.dumps(rec))
     assert "cap" not in doc and IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)[0].members == mine.members
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
     monkeypatch.setattr(A5, "audit", lambda *a, **kw: ({"audit": {"accepted": True}}, True))
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     capsys.readouterr()
     assert RA.main(["audit", "--window", str(written.dir), "--law", LAW, "--circuit", rec["window"]["circuit"], "--run", RUN,
                     "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
-                    "--skip-negatives"]) == 1
+                    "--skip-negatives", "--challenger", "local", "--main", "m.txt"]) == 1
     rows = dict(IF.layout(COORD).rows)
     inputs, window = 5 * 16 * sum(rows.values()), 5 * 16 * (rows["x"] + rows["sx"])
     figure = {"ingress": window, "free": inputs - window, "other_inputs": inputs - window, "bound": "vacuous",
@@ -853,6 +857,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     statement under the stager's label, which a5's cache keys), with ``--compose-cache`` and ``--jobs``; the audit hands a5
     that cache, and none without ``--compose-cache``."""
     import a5 as A5
+    import a5_coins as AC
 
     seen = {}
 
@@ -876,11 +881,13 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
         seen["audit"] = a.compose_cache
         raise Opened
 
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(A5, "audit", audit)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     args = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
-            "--skip-negatives"]
+            "--skip-negatives", "--challenger", "local", "--main", "m.txt"]
     for extra, want in ((["--compose-cache", cache], cache), ([], None)):
         with pytest.raises(Opened):
             RA.main([*args, *extra])
