@@ -1218,13 +1218,12 @@ def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None =
 # --- reports ------------------------------------------------------------------------------------------------------------------
 
 def summarize(entries: Iterable[dict]) -> dict:
-    """Totals over entries: failures by name, new (`ok` is no new failure) and known (`circuit_check.known`, with the cause),
+    """Totals over entries: failures by name (`ok` is none: whether one may stay red is drive's policy, never the runner's),
     warnings' counts by check and by Definition (a finding two entries share, such as a template's Definition checked on its own
     too, once), ``unchecked``: how many warnings (each a property no check enforces: it never fails) on how many Definitions,
     ``recomputed_across``: each Boolean Call (`Q_word` v2) that computes a value in two proof blocks, with its count, and
     ``q_call_refused``: each Definition `Q_call` v1 does not apply to, with why; ``by_calls``: each root checked by its calls
     (`circuit_check.by_calls`), not lowered whole, with the targets its callees rely on."""
-    from .known import known
     entries = list(entries)
     fails: dict[str, dict] = {}
     warns: dict[str, dict] = {}
@@ -1238,7 +1237,6 @@ def summarize(entries: Iterable[dict]) -> dict:
         k = f"{w['check']}/{w['code']}"
         by_check[k] += w["count"]
         by_def.setdefault(k, Counter())[w["definition"]] += w["count"]
-    new = [f["name"] for f in fails if known(f) is None]
     across, refused, by_calls = {}, {}, {}
     for e in entries:
         p = e.get("partition") or {}
@@ -1249,10 +1247,9 @@ def summarize(entries: Iterable[dict]) -> dict:
         if e.get("mode") == "by-calls":
             by_calls[e.get("definition") or e.get("target")] = sorted({c["binding"] for c in (e.get("by_calls") or {}).get("callees", [])
                                                                      if c.get("binding")})
-    return {"ok": not new, "failures": len(fails), "failure_names": [f["name"] for f in fails], "new_failures": new,
+    return {"ok": not fails, "failures": len(fails), "failure_names": [f["name"] for f in fails],
             "recomputed_across": dict(sorted(across.items())), "q_call_refused": dict(sorted(refused.items())),
             "by_calls": dict(sorted(by_calls.items())),
-            "known_failures": {f["name"]: known(f) for f in fails if known(f) is not None},
             "unchecked": {"items": len(warns), "definitions": len({w["definition"] for w in warns})},
             "warnings": {k: {"total": v, "definitions": len(by_def[k]), "by_definition": dict(by_def[k].most_common())}
                          for k, v in by_check.most_common()}}

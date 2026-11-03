@@ -175,7 +175,7 @@ def test_a_change_no_key_reads_plans_as_the_checked_commit_and_one_a_suite_reads
 
 
 def test_a_job_off_the_merge_gate_is_planned_and_required_of_no_check(P, tmp_path):
-    """circuit-check and ratchet-gate are off the merge gate (ci.toml's `gate = false`): their parts are listed, none required, so
+    """circuit-check and ratchet-gate are off the merge gate (policy.toml's `off_gate`): their parts are listed, none required, so
     `research merge --verdicts` admits a commit whose targets no check passed."""
     root = tmp_path / "tree"
     _tree(root)
