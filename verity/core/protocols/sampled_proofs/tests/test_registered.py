@@ -1091,8 +1091,8 @@ def _pearl_plus(rows, y: bool = False):
 def test_one_stage_reads_open_a_pearl_plus_tree_under_its_own_domain():
     """A value committed outside one-stage, under PoUW's rows domain: Pearl+'s A (a call's x widened to FP32, K words a
     row, zero rows up to 16) and y (its served y widened to FP32, N words a row). One-stage's `row-seg/v1` leaves of
-    32-bit words under that domain are Pearl+'s leaves, so its reads open Pearl+'s root at every row. A row with one word
-    flipped opens nothing, nor does a row read as `row/v2`, nor any row under one-stage's own domain for the value
+    32-bit words under that domain are Pearl+'s leaves, so its reads open Pearl+'s root at every row. A row with one
+    word flipped opens nothing, nor does a row read as `row/v2`, nor any row under one-stage's own domain for the value
     (`registered.domain`, whichever binding it takes)."""
     rnd = random.Random(7)
 
@@ -1125,7 +1125,8 @@ def test_r7_reuses_a_pearl_plus_entry_under_its_own_domain():
     own = G.domain(P.program_digest(prog), "W", 2, 16, 32).domain_id.hex()
     kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "schemas": {"W": G.SCHEMA_SEG}}
     for y, name in ((False, "pearl-a/0/0"), (True, "pearl-y/0/0")):
-        tree, dom, _ = _pearl_plus([[(2 * r + j + 1) << 16 for j in range(2)] if r < 5 else [0, 0] for r in range(16)], y)
+        rows = [[(2 * r + j + 1) << 16 for j in range(2)] if r < 5 else [0, 0] for r in range(16)]
+        tree, dom, _ = _pearl_plus(rows, y)
         theirs = {"value": name, "root": tree.commitment.root.hex(), "leaves": 16, "words": 2, G.WIDTH_KEY: 32,
                   "domain": dom.domain_id.hex()}
         assert theirs["domain"] != own
