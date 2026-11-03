@@ -1,6 +1,7 @@
 {
  "traces": [
-  "art:1a6b80484f90b72fc043321db540a73351cc0fd64f2ccefb19c59ff6d1f7f8b6"
+  "art:1a6b80484f90b72fc043321db540a73351cc0fd64f2ccefb19c59ff6d1f7f8b6",
+  "art:62f0cc6357ee761f63b80f65389b61b554448a83836a5994f6aacce6c0ba445c"
  ],
  "rows": [
   {"workload": "standard", "model": "20M", "run": "r20261103-053241-99bf",
@@ -23,6 +24,11 @@
    "about": "the rollouts alone: s-t20 fully fine-tuned 200 AdamW steps and served NVFP4 W4A4 with an NVFP4 head; 3 rounds (after steps 1, 100 and 200) of 64 sequences, 147,264 tokens; the learner's steps are not in the row",
    "dials": {"n_params": 35658240, "update": "full", "rollout_precision": "fp4", "prompt_tokens": 256,
              "generated_tokens": 512, "vocab": 32000}},
+  {"workload": "rl", "model": "60M", "run": "r20261103-091516-fb8d",
+   "art": "art:efad94ff3f0da20922096d1813946cc85b3a5b7312a8ee6ddb1549413794c0e1", "rounds": true,
+   "about": "the rollouts alone: m-t20 fully fine-tuned 200 AdamW steps and served NVFP4 W4A4 with an NVFP4 head; 3 rounds (after steps 1, 100 and 200) of 64 sequences, 98,112 tokens; the learner's steps are not in the row",
+   "dials": {"n_params": 81212160, "update": "full", "rollout_precision": "fp4", "prompt_tokens": 256,
+             "generated_tokens": 256, "vocab": 32000}},
   {"workload": "inference", "model": "20M", "run": "r20261103-073641-d1f4",
    "art": "art:9cc81ba658eb834ce70646a83f13c5c60c15c39eec9091bcf5644d9e6513225e", "rounds": true,
    "about": "an unregistered model of s-t20's shape (fresh init, 600 AdamW steps from scratch), served NVFP4 W4A4 with an NVFP4 head; the rounds alone, 3 (after steps 1, 300 and 600) of 64 sequences",
@@ -44,6 +50,12 @@
    "about": "a half-width student (d_model 256, 6 layers) from scratch on the teacher's logits",
    "dials": {"student_params": 13012224, "teacher_params": 35658240, "teacher_share": 1.0,
              "teacher_precision": "bf16", "seq_len": 1024, "batch_tokens": 32768, "optimizer": "adamw",
-             "tokens_per_param": 1.51094, "vocab": 32000, "student_d_model": 256}}
+             "tokens_per_param": 1.51094, "vocab": 32000, "student_d_model": 256}},
+  {"workload": "distill", "model": "60M", "run": "r20261103-091446-973e",
+   "art": "art:2300104f21439871fcfb191b7e02f1f60738be9cea7bc125f5a0eb74d6184e36",
+   "about": "a half-width student (d_model 384, 8 layers) from scratch on the teacher's logits",
+   "dials": {"student_params": 26450304, "teacher_params": 81212160, "teacher_share": 1.0,
+             "teacher_precision": "bf16", "seq_len": 1024, "batch_tokens": 32768, "optimizer": "adamw",
+             "tokens_per_param": 0.743311, "vocab": 32000, "student_d_model": 384}}
  ]
 }
