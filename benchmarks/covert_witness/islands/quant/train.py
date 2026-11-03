@@ -92,8 +92,8 @@ class Schedule:
 
 
 #: what an arm may set (`--arms`); the rest is the run's
-ARM_KEYS = {"qat", "qat_group", "qat_mult", "qat_keep", "qat_block", "qat_norm_bits", "muon_lr", "adam_lr", "warmup", "data_seed", "targets", "rank", "qbits", "pow2",
-            "norms", "lr", "norm_lr", "seed"}
+ARM_KEYS = {"qat", "qat_group", "qat_mult", "qat_keep", "qat_block", "qat_norm_bits", "muon_lr", "adam_lr", "opt", "warmup",
+            "data_seed", "targets", "rank", "qbits", "pow2", "norms", "lr", "norm_lr", "seed"}
 
 
 def parse_arms(a) -> list[argparse.Namespace]:
@@ -228,13 +228,29 @@ def select(params: dict, rec: dict, spec: str) -> list[str]:
     return sorted(n for n in params if any(re.search(p, n) for p in pats))
 
 
-def delta_grad(adam: int, muon: int, latent: int) -> dict:
-    """Δ_grad in islands/lowrank's keys: the fp32 gradient of each of the `adam` + `muon` trained values and its
-    optimizer's fp32 state (AdamW's m and v, Muon's one buffer); `bits`/`bytes` are their sum. `latent_bits`, beside it
-    and not in `bits`, are the fp32 latents a straight-through run reads and writes (the update application's Δ_t)."""
-    bits = 32 * (adam + muon) + 64 * adam + 32 * muon
-    return {"trainable": adam + muon, "grad_bits": 32 * (adam + muon), "adam_bits": 64 * adam, "muon_bits": 32 * muon,
+def delta_grad(adam: int, muon: int, latent: int, stateless: int = 0) -> dict:
+    """Δ_grad in islands/lowrank's keys: the fp32 gradient of each of the `adam` + `muon` + `stateless` trained values and
+    its optimizer's fp32 state (AdamW's m and v, Muon's one buffer, none for `--opt sign`); `bits`/`bytes` are their sum.
+    `latent_bits`, beside it and not in `bits`, are the fp32 latents a straight-through run reads and writes (the update
+    application's Δ_t)."""
+    n = adam + muon + stateless
+    bits = 32 * n + 64 * adam + 32 * muon
+    return {"trainable": n, "grad_bits": 32 * n, "adam_bits": 64 * adam, "muon_bits": 32 * muon,
             "latent_bits": 32 * latent, "bits": bits, "bytes": bits // 8}
+
+
+class SignSGD(torch.optim.Optimizer):
+    """p -= lr · sign(grad), with no state."""
+
+    def __init__(self, params, lr: float):
+        super().__init__(params, {"lr": lr})
+
+    @torch.no_grad()
+    def step(self) -> None:
+        for grp in self.param_groups:
+            for p in grp["params"]:
+                if p.grad is not None:
+                    p.add_(p.grad.sign(), alpha=-grp["lr"])
 
 
 def flop_budget(start: str) -> float:
@@ -447,10 +463,10 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
             mod = net.inner.get_submodule(n.removesuffix(".weight"))
             handles.append(mod.register_forward_hook(
                 lambda m, inp, out, A=A, B=B, s=s, fq=fq: out + s * F.linear(F.linear(inp[0], fq(A)), fq(B, B_ROWS))))
-        opt = torch.optim.AdamW(
-            [{"params": [p for A, B, _ in factors.values() for p in (A, B)], "lr": x.lr, "weight_decay": 0.0},
-             {"params": [params[n] for n in norms], "lr": x.norm_lr, "weight_decay": 0.0}],
-            betas=(0.9, 0.95), fused=dev.startswith("cuda"))
+        groups = [{"params": [p for A, B, _ in factors.values() for p in (A, B)], "lr": x.lr},
+                  {"params": [params[n] for n in norms], "lr": x.norm_lr}]
+        opt = SignSGD(groups, x.lr) if x.opt == "sign" else torch.optim.AdamW(
+            [grp | {"weight_decay": 0.0} for grp in groups], betas=(0.9, 0.95), fused=dev.startswith("cuda"))
         data = train_data(rec, x)
         n_k, first, ema = sched.counts[k], g, None
         print(json.dumps({"arm": k, "spec": getattr(x, "arm", ""), "steps": n_k, "rank": x.rank, "bits": x.qbits,
@@ -486,7 +502,9 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
                         "n_entries": sum(A.numel() + B.numel() for A, B, _ in factors.values())
                         + sum(params[n].numel() for n in norms)})
         n_fac = sum(A.numel() + B.numel() for A, B, _ in factors.values())
-        results[-1]["delta_grad"] = delta_grad(results[-1]["n_entries"], 0, n_fac if x.qbits else 0)
+        n_all = results[-1]["n_entries"]
+        results[-1]["delta_grad"] = (delta_grad(0, 0, n_fac if x.qbits else 0, n_all) if x.opt == "sign" else
+                                     delta_grad(n_all, 0, n_fac if x.qbits else 0))
         for h in handles:
             h.remove()
         del factors, opt
@@ -563,6 +581,9 @@ def main() -> int:
                     help="E's format: encode_full, CWQUAN1, or (qlora --pow2) the bf16 lora format")
     ap.add_argument("--muon-lr", type=float, default=0.01)
     ap.add_argument("--adam-lr", type=float, default=3e-4)
+    ap.add_argument("--opt", choices=("adamw", "sign"), default="adamw",
+                    help="the optimizer of what Muon doesn't train (qat: the norms; qlora: factors and norms): AdamW, or "
+                         "sign: p -= lr · sign(grad) with no state, so Δ_grad is the gradient alone (rates as AdamW's)")
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--micro", type=int, default=32)
@@ -632,11 +653,13 @@ def main() -> int:
         quantized = [n for n in names if params[n].ndim == 2] if coded else []
         quantized += [n for n in names if params[n].ndim == 1] if coded and x.qat_norm_bits else []
         latent = {n: torch.zeros_like(params[n], dtype=torch.float32, device=dev) for n in quantized}
-        dgrad = delta_grad(*(sum(params[n].numel() for n in ns) for ns in (rest, mats, quantized)))
+        n_rest, n_mats, n_q = (sum(params[n].numel() for n in ns) for ns in (rest, mats, quantized))
+        dgrad = delta_grad(0, n_mats, n_q, n_rest) if x.opt == "sign" else delta_grad(n_rest, n_mats, n_q)
         opt_of = {n: latent.get(n, params[n]) for n in names}
         muon = Muon([opt_of[n] for n in mats], lr=x.muon_lr) if mats else None
-        adam = torch.optim.AdamW([opt_of[n] for n in rest], lr=x.adam_lr, betas=(0.9, 0.95), weight_decay=0.0,
-                                 fused=dev.startswith("cuda")) if rest else None
+        adam = (SignSGD([opt_of[n] for n in rest], x.adam_lr) if x.opt == "sign" else
+                torch.optim.AdamW([opt_of[n] for n in rest], lr=x.adam_lr, betas=(0.9, 0.95), weight_decay=0.0,
+                                  fused=dev.startswith("cuda"))) if rest else None
         opts = [(o, lr) for o, lr in ((muon, x.muon_lr), (adam, x.adam_lr)) if o is not None]
         data = train_data(rec, x)
         qarrays, first, ema = {}, g, None
