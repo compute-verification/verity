@@ -148,8 +148,9 @@ theorem prob_play_eq_one (fs : List (String × ℕ)) (D : Signer) (θ : ByteArra
   refine (Game.prob_send p ByteArray (fun a => (releases (frames fs) fs []).bind (finish D θ F c a)) σ).trans <|
     (Game.prob_bind_of_const (finish D θ F c σ.1) p (fun _ => True) (fun log t => ?_)
       (releases (frames fs) fs []) σ.2).trans (Game.prob_true _ _)
-  rw [prob_finish, Game.prob_true]
-  refine (congrArg Game.avg (funext fun ρ => if_pos ?_)).trans (Game.avg_const 1)
+  rw [prob_finish]
+  refine ((congrArg Game.avg (funext fun ρ => ite_eq_left ?_)).trans (Game.avg_const 1)).trans
+    (Game.prob_true _ _).symm
   exact hp _ rfl rfl rfl
 
 /-- **Its hypotheses hold at the honest deployment**: at registered files, where each of composite `k`'s subprotocols'
@@ -201,8 +202,9 @@ theorem prob_play_eq_zero (fs : List (String × ℕ)) (D : Signer) (θ : ByteArr
   refine (Game.prob_send p ByteArray (fun a => (releases (frames fs) fs []).bind (finish D θ F c a)) σ).trans <|
     (Game.prob_bind_of_const (finish D θ F c σ.1) p (fun _ => False) (fun log t => ?_)
       (releases (frames fs) fs []) σ.2).trans (Game.prob_false _ _)
-  rw [prob_finish, Game.prob_false]
-  refine (congrArg Game.avg (funext fun ρ => if_neg ?_)).trans (Game.avg_const 0)
+  rw [prob_finish]
+  refine ((congrArg Game.avg (funext fun ρ => ite_eq_right ?_)).trans (Game.avg_const 0)).trans
+    (Game.prob_false _ _).symm
   exact hp _ rfl rfl rfl
 
 /-- **One subprotocol's failing instance is the theorem's**: at files that pass the commit phase's check, a strategy at
@@ -282,7 +284,7 @@ theorem sent_reachable (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray)
     (prob_bind_strategy (finish D θ F c .empty) _ t (fun log => ?_) (releases (frames fs) fs []) s).trans
       (Game.prob_true _ _)
   rw [prob_finish]
-  refine (congrArg Game.avg (funext fun ρ => if_pos ?_)).trans (Game.avg_const 1)
+  refine (congrArg Game.avg (funext fun ρ => ite_eq_left ?_)).trans (Game.avg_const 1)
   exact ⟨rfl, rfl, rfl⟩
 
 /-- **The event of `Vocab.SoundnessAt` holds every acceptance of the compiled verifier**: if composite `k`'s compiled
