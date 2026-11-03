@@ -23,9 +23,11 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    most the simulator's, given the outcome, plus an error that reads the statement, the witness, the verifier and the
    outcome; the leak form over `n` outcomes is its corollary (`ZKOutLeak`).
 2. **The compiled sampled verifier** (`Compiled`, `Sampling.Deploy` without Flock): its verifier, parser, scope check,
-   partition and commitment; the rounds after the draw (`stage2`); the sampled proof blocks (`checked`); each one's
-   session (`session`: its statement and view), public shape (`sh`) and coins (`place`, `coinsOf`); and what a
-   session's witness reveals (`reveal`), each opening checked at most `openCalls` SHA-512 calls.
+   partition and commitment; the second stage (`stage2`: the sample and the sessions); the sampled proof blocks
+   (`checked`); each one's public shape (`sh`), its session's rounds (`rounds`) and their order embedding of `A`'s
+   (`emb`, from which `coinsOf` reads a session's coins and `place` replaces them), and its session (`session`: its
+   statement and view); the roots a run shows for a proof block's interior values (`iroots`); and what a session's
+   witness reveals (`reveal`), each opening checked at most `openCalls` SHA-512 calls.
 3. **The extractor** (`Compiled.E`): `Sampling.E` with each sampled proof block's extraction `Arg`'s extractor at its
    session (`Compiled.unitExt`), each rerun the judged run's coins with the session's rounds replaced (`place`), seen as
    the session's view, then what its witness reveals that passes its opening check. Every SHA-512 call of the
@@ -35,10 +37,12 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    largest of `Arg`'s `κ` at the proof blocks' shapes (`κs`); `γ = c⁴·k(x)·γ_s`, with `γ_s` the largest of
    `Arg`'s `γ` per round at the proof blocks' shapes (a session's fork finder is the compiled verifier's `B` at a round
    guess among `k(x)`); `ε_bind = Pr[B_ext]`.
-5. **The contract** (`Compiled.Sessions`): the code facts the compiler theorems read: the draw is the design's and fixed
-   before the sessions; each sampled proof block's session on an accepted run accepts at the block's shape; a fork on
-   its rounds is a run of a prover against `Arg`'s verifier; and a witness in `Arg`'s relation reveals openings under
-   which its proof block is correct.
+5. **The contract** (`Compiled.Sessions`): the code facts the compiler theorems read, the generic forms of those
+   `Claims.Sampling`'s proofs take at Flock: the second stage draws the sample by the design (`draws`); the verifier
+   refuses what is out of scope (`refuses`); the interior roots precede the second stage (`interior`); the sample
+   precedes its sessions (`fixed`); each sampled proof block's session, at the block's shape, decides the run and is a
+   run of a prover against `Arg`'s verifier on the session's coins (`runs`); and a witness in `Arg`'s relation reveals
+   openings under which its proof block is correct (`opens`).
 6. **The claims** of a compiled verifier (`Compiled.KS`, `Compiled.KSCount`, `Compiled.Bits`, `Compiled.Efficient`,
    and `ZkCompiled.ZK`, zero knowledge per public outcome relative to the published leaf layer).
 7. **The compiler's statements** (`CompilerKS`, `CompilerKSCount`, `CompilerBits`, `CompilerEfficient`): each claim of
@@ -189,13 +193,13 @@ def ZkArg.ZK (H : Msg → Msg) {Coin : Type} (A : ZkArg Coin) : Prop :=
 /-! ## 2. The compiled sampled verifier -/
 
 /-- **A compiled sampled verifier over the proof system `A`** (`Sampling.Deploy` with its Flock parts replaced by `A`):
-the verifier, its parser, scope check and partition, the trace's commitment; the rounds after the draw (`stage2`), so
-runs that keep the other rounds make the same draw; the slots of the proof blocks a run samples (`checked`); each one's
-public shape (`sh x u`, fixed by the statement); its session as a run shows it (`session`: its statement in `A` and its
-view); a run's coins with the session's rounds replaced by `A`'s coins (`place`) and the session's coins (`coinsOf`);
-what a session's witness reveals (`reveal`: committed values, each with the roots it is committed under); the SHA-512
-calls of checking what one session's witness reveals (`openCalls`); and the reference prover on its tapes with its
-completeness error. -/
+the verifier, its parser, scope check and partition, the trace's commitment; the second stage (`stage2`: the sample
+and the sessions, after the registration); the slots of the proof blocks a run samples (`checked`); each one's public
+shape (`sh x u`, fixed by the statement); its session's rounds (`rounds`), the order embedding of `A`'s rounds at the
+session's statement onto them (`emb`), and the session as a run shows it (`session`: its statement in `A` and its
+view); the roots a run shows for a proof block's interior values (`iroots`); what a session's witness reveals
+(`reveal`: committed values, each with the roots it is committed under); the SHA-512 calls of checking what one
+session's witness reveals (`openCalls`); and the reference prover on its tapes with its completeness error. -/
 structure Compiled (Coin : Type) (A : Arg Coin) where
   V : Verifier Coin
   parse : Msg → Option AuditStatement
@@ -205,9 +209,10 @@ structure Compiled (Coin : Type) (A : Arg Coin) where
   stage2 : (x : Msg) → Finset (Fin (V.k x))
   checked : (x : Msg) → (Fin (V.k x) → Coin) → List ℕ
   sh : Msg → ℕ → A.Sh
+  rounds : (x : Msg) → ℕ → Finset (Fin (V.k x))
+  emb : (x : Msg) → ℕ → (xS : Msg) → Fin (A.V.k xS) → Fin (V.k x)
   session : Msg → ℕ → Seen → Option (Msg × Seen)
-  place : (x : Msg) → ℕ → (xS : Msg) → (Fin (V.k x) → Coin) → (Fin (A.V.k xS) → Coin) → Fin (V.k x) → Coin
-  coinsOf : (x : Msg) → ℕ → (xS : Msg) → (Fin (V.k x) → Coin) → Fin (A.V.k xS) → Coin
+  iroots : Msg → Seen → ℕ → List Msg
   reveal : AuditStatement → ℕ → Seen → A.W → List (List Msg × Opening Bool)
   openCalls : Msg → ℕ
   Tape : Type
@@ -239,13 +244,24 @@ def cap (L : Compiled Coin A) (x : Msg) : ℕ := 2 ^ 128 * L.k x
 /-- Session `u`'s view of a run. -/
 def view (L : Compiled Coin A) (x : Msg) (u : ℕ) (v : Seen) : Seen := ((L.session x u v).map Prod.snd).getD ⟨[], .rej⟩
 
+/-- A run's coins on session `u`'s rounds, as `A`'s coins at the session's statement `xS`. -/
+def coinsOf (L : Compiled Coin A) (x : Msg) (u : ℕ) (xS : Msg) (r : Fin (L.V.k x) → Coin) : Fin (A.V.k xS) → Coin :=
+  fun i => r (L.emb x u xS i)
+
+/-- The run's coins `r` with session `u`'s rounds replaced by `A`'s coins `d` at the session's statement `xS`. -/
+def place (L : Compiled Coin A) (x : Msg) (u : ℕ) (xS : Msg) (r : Fin (L.V.k x) → Coin) (d : Fin (A.V.k xS) → Coin) :
+    Fin (L.V.k x) → Coin :=
+  fun t => match (List.finRange (A.V.k xS)).find? (fun i => L.emb x u xS i = t) with
+    | some i => d i
+    | none => r t
+
 /-! ## 3. The extractor -/
 
 open Classical in
 /-- **A sampled proof block's extraction at an accepted run** `(r, v)`: `A`'s extractor at the block's session, its
 judged coins the session's coins of `r`, each rerun `r` with the session's rounds replaced (`place`), seen as the
 session's view; then what its witness reveals that passes its opening check. At a session whose shape is not the
-block's, which no accepted run shows (`Sessions.shows`), nothing. -/
+block's, which no sampled proof block's session has (`Sessions.runs`), nothing. -/
 noncomputable def unitExt (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (u : ℕ) (r : Fin (L.V.k x) → Coin)
     (v : Seen) (c : A.EC (L.sh x u)) : RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
   match L.session x u v with
@@ -333,34 +349,52 @@ def Scope (L : Compiled Coin A) (x : Msg) : Prop :=
 
 /-! ## 5. The contract -/
 
-/-- **The compiler's contract** at `H`: the code facts the compiler's statements read.
+/-- **The compiler's contract** at `H`: the code facts the compiler's statements read, each the generic form of a fact
+`Claims.Sampling`'s proofs take of the deployed sampled verifier (named in brackets).
 
-* `draws`: the draw misses a set `B` of slots with probability at most the design's `P_a(B)`.
-* `stages`: the draw is fixed before the second stage: a fork on it keeps the sampled proof blocks.
-* `places`: `place` replaces only rounds of the second stage, and `coinsOf` reads back what it placed.
-* `shows`: an accepted run shows each sampled proof block's session accepting, at the block's shape.
-* `staged`: a fork on the second stage keeps each session's statement.
-* `runs`: a run with a session's rounds replaced shows the run of a prover against `A`'s verifier at the session's
-  statement on those coins, and `A`'s verifier's SHA-512 calls there are among the compiled verifier's.
-* `reveals`: a witness in `A`'s relation at a session reveals openings under which its proof block is correct. -/
+* `draws` (`DrawLaw`): on a statement in scope, for each set `B` of proof blocks, a weight of the coins bounds, at each,
+  the probability over fresh second-stage coins that the sample misses `B`, and averages at most `P_a(B)`.
+* `refuses` (`Refuses`): an accepted run's statement is in scope.
+* `interior` (`InteriorFixed`): the roots a run shows for a proof block's interior values are the same at fresh
+  second-stage coins.
+* `fixed` (`DrawFixed`): a sampled proof block's session's rounds are in the second stage, and fresh coins on them keep
+  the sample.
+* `runs` (`SessionRuns`, with `InnerNumbers` as the shape's equation): at coins `r` that sample `u`, the session's
+  statement `xS` is at the block's shape, `emb` embeds `A`'s rounds at `xS` onto the session's in order, and a prover
+  against `A`'s verifier (the sampled prover with `r`'s coins off the session's rounds) is such that, at coins agreeing
+  with `r` off the session's rounds, the run accepts exactly when that prover's run on the session's coins does, and at
+  coins agreeing with `r` on the rounds outside the session's before its first, the session is that prover's run and
+  its SHA-512 calls are among the compiled verifier's.
+* `opens` (`SessionOpens`): on a statement in scope, at an accepted run that samples `u` and shows its session, a witness
+  in `A`'s relation at the session's statement reveals openings such that any values and interior values agreeing with
+  those that pass (under the statement's roots and the interior roots the run showed for `u`) make proof block `u`
+  correct. -/
 structure Sessions (H : Msg → Msg) (L : Compiled Coin A) : Prop where
-  draws : ∀ x s P, L.parse x = some s → L.partition s = some P → ∀ B : Finset ℕ,
-    Pr (fun r : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x r, u ∉ B) ≤ s.design.Pa P B
-  stages : ∀ x r d, L.checked x (forkOn (L.stage2 x) r d) = L.checked x r
-  places : ∀ x u xS r d, (∀ i ∉ L.stage2 x, L.place x u xS r d i = r i) ∧
-    L.coinsOf x u xS (L.place x u xS r d) = d ∧ L.place x u xS r (L.coinsOf x u xS r) = r
-  shows : ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) r, (run H P L.V x ω r).out = .acc → ∀ u ∈ L.checked x r,
-    ∃ xS vS, L.session x u (run H P L.V x ω r).seen = some (xS, vS) ∧ vS.out = .acc ∧ A.shape xS = L.sh x u
-  staged : ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) r d u xS vS xS' vS',
-    L.session x u (run H P L.V x ω r).seen = some (xS, vS) →
-    L.session x u (run H P L.V x ω (forkOn (L.stage2 x) r d)).seen = some (xS', vS') → xS' = xS
-  runs : ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) r u xS vS, L.session x u (run H P L.V x ω r).seen = some (xS, vS) →
-    ∃ Ps : Prover Unit, ∀ d,
-      L.session x u (run H P L.V x ω (L.place x u xS r d)).seen = some (xS, (run H Ps A.V xS () d).seen) ∧
-      ∀ e ∈ (run H Ps A.V xS () d).vLog, e ∈ (run H P L.V x ω (L.place x u xS r d)).vLog
-  reveals : ∀ x s P u v xS vS w, L.parse x = some s → L.partition s = some P → L.session x u v = some (xS, vS) →
-    A.R xS w → ∃ blk, P.blocks[u]? = some blk ∧
-      ∃ ι : ℕ → Bool, s.prog.Correct (s.prog.refIn blk (Sampling.Wit.val H L.commit s (assemble s (L.reveal s u v w))) ι) blk
+  draws : ∀ x s P, L.parse x = some s → L.partition s = some P → InScope P s →
+    ∀ B ⊆ Finset.range P.blocks.length, ∃ esc : (Fin (L.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
+      (∀ r, Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B) ≤ esc r) ∧
+      Ex esc ≤ s.design.Pa P B
+  refuses : ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P L.V x ω r).out = .acc → L.Scope x
+  interior : ∀ x (Ω : Type) (P : Prover Ω) ω r d u,
+    L.iroots x (run H P L.V x ω (forkOn (L.stage2 x) r d)).seen u = L.iroots x (run H P L.V x ω r).seen u
+  fixed : ∀ x r u, u ∈ L.checked x r →
+    L.rounds x u ⊆ L.stage2 x ∧ ∀ d, L.checked x (forkOn (L.rounds x u) r d) = L.checked x r
+  runs : ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) r u, u ∈ L.checked x r →
+    ∃ (xS : Msg) (P' : Prover Unit), A.shape xS = L.sh x u ∧ StrictMono (L.emb x u xS) ∧
+      (∀ t, t ∈ L.rounds x u ↔ ∃ i, L.emb x u xS i = t) ∧
+      (∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, r' t = r t) →
+        ((run H P L.V x ω r').out = .acc ↔ (run H P' A.V xS () (L.coinsOf x u xS r')).out = .acc)) ∧
+      ∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, (∀ i, t < L.emb x u xS i) → r' t = r t) →
+        L.session x u (run H P L.V x ω r').seen = some (xS, (run H P' A.V xS () (L.coinsOf x u xS r')).seen) ∧
+          ∀ q ∈ (run H P' A.V xS () (L.coinsOf x u xS r')).vLog, q ∈ (run H P L.V x ω r').vLog
+  opens : ∀ x s P (Ω : Type) (Pv : Prover Ω) ω r u xS vS w,
+    L.parse x = some s → L.partition s = some P → InScope P s → (run H Pv L.V x ω r).out = .acc →
+    u ∈ L.checked x r → L.session x u (run H Pv L.V x ω r).seen = some (xS, vS) → A.R xS w →
+    ∃ b, P.blocks[u]? = some b ∧ ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
+      (∀ q ∈ L.reveal s u (run H Pv L.V x ω r).seen w, L.commit.Opens H q.1 q.2 = true →
+        (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
+        (q.1 = L.iroots x (run H Pv L.V x ω r).seen u → ι q.2.pos = q.2.val)) →
+      s.prog.Correct (s.prog.refIn b val ι) b
 
 /-! ## 6. The claims of a compiled verifier -/
 
