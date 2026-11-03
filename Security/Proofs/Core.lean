@@ -18,6 +18,7 @@ import Proofs.Core.Game.BatchInduced
 import Proofs.Core.Game.Rewinding
 import Proofs.Core.Game.Unambiguous
 import Proofs.Core.Game.TwoRun
+import Proofs.Core.Game.InterleaveBridge
 import Proofs.Core.Challenger
 import Proofs.Core.UnionBound
 import Proofs.Core.Scalar.Vectors
