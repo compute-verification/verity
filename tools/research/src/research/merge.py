@@ -20,8 +20,8 @@ the verdict passed and no step listed twice.  A sharded check (`check.py --shard
 `check-shard/v1`) passes only through the Attempt of `check.py --combine RUN...` on the same commit, and only when the gate,
 reading the shards itself (`shard_set`), finds them a passing check of that clean commit (one plan, K = 1..N once each, the
 commit's own `tools/verity/check/`, every part once, every job its `ci.toml` puts on the gate, no step failed) and the combine's
-steps theirs; a shard alone passes nothing.  A job off the gate (`gate = false`: circuit-check, ratchet-gate) is required of no
-check, whole or sharded, and a recorded check doesn't run it: it runs after landing, in drive's after-landing run, and its red
+steps theirs; a shard alone passes nothing.  A job off the gate (drive's policy, policy.toml's `off_gate`: circuit-check,
+ratchet-gate) is required of no check, whole or sharded, and a recorded check doesn't run it: it runs after landing, in drive's after-landing run, and its red
 there reverts its culprit.  With a usable remote the catalog's attempts are refreshed first, so an attempt
 recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
@@ -192,10 +192,9 @@ def unlike(argv, command) -> str | None:
 SHARD_KIND = "check-shard/v1"
 
 
-def declared_jobs(repo: Path, commit: str) -> list[str] | str:
-    """The names of the jobs ``commit``'s own `tools/verity/check/ci.toml` puts on the merge gate (every job but those with
-    `gate = false`), or why they can't be read.  A job off the gate (circuit-check, ratchet-gate) runs after landing, in drive's
-    after-landing run, whose red reverts its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
+def declared(repo: Path, commit: str) -> list[dict] | None:
+    """The `[[job]]` tables of ``commit``'s own `tools/verity/check/ci.toml`, in its order (each a name, an owner, a group, and
+    `after` when it has one; `gate` where it sets one), or None when it can't be read."""
     import tomllib
 
     from .store import tools_registry
@@ -204,11 +203,27 @@ def declared_jobs(repo: Path, commit: str) -> list[str] | str:
                                   lambda p: _git(repo, "cat-file", "-e", f"{commit}:{p}", check=False).returncode == 0)
     r = _git(repo, "show", f"{commit}:{path or 'tools/verity/check/ci.toml'}", check=False)
     try:
-        jobs = [t["name"] for t in tomllib.loads(r.stdout).get("job", []) if t.get("gate", True) is not False] \
-            if r.returncode == 0 else None
-    except (tomllib.TOMLDecodeError, TypeError, KeyError, AttributeError):
+        jobs = tomllib.loads(r.stdout).get("job", []) if r.returncode == 0 else None
+    except (tomllib.TOMLDecodeError, TypeError, AttributeError):
         jobs = None
-    if not jobs or not all(isinstance(j, str) for j in jobs):
+    if not isinstance(jobs, list) or not all(isinstance(t, dict) and isinstance(t.get("name"), str) for t in jobs):
+        return None
+    return jobs
+
+
+def declared_jobs(repo: Path, commit: str) -> list[str] | str:
+    """The names of the jobs ``commit``'s own `tools/verity/check/ci.toml` declares that are on the merge gate (every job but
+    those ``commit``'s drive policy, `policy.toml`, names in `off_gate`, or its ci.toml marks `gate = false`), or why they
+    can't be read.  A job off the gate (circuit-check, ratchet-gate) runs after landing, in drive's after-landing run, whose red
+    reverts its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
+    from . import policy
+
+    pol = policy.at(repo, commit)
+    if isinstance(pol, str):
+        return pol
+    jobs = [t["name"] for t in declared(repo, commit) or ()
+            if t.get("gate", True) is not False and t["name"] not in pol.off_gate]
+    if not jobs:
         return f"{commit[:12]}'s tools/verity/check/ci.toml can't be read for the jobs a check runs"
     return jobs
 
@@ -534,8 +549,32 @@ def _ran_on(store, rid: str, commit: str, fetch) -> bool:
     return got is not None and got[1].get("tree_sha") == commit
 
 
+#: what a Lean check reads whatever drive.toml's `lowrisk_excludes` say: its sources, Lake files, toolchain, locks and its own code
+LEAN_READS, LEAN_TOOLING = (".lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json", LOCK), "tools/verity/lean/"
+
+
+def rekey_refusal(repo: Path, ran: str, onto: str, excludes: Iterable[str]) -> str | None:
+    """Why the records a Lean check of ``ran`` regenerated don't hold on ``onto``, or None when they do: the two trees differ
+    only in files the low-risk rule allows (`queue.lowrisk` with drive.toml's ``excludes``), none of them a file a Lean check
+    reads (`LEAN_READS`, `LEAN_TOOLING`) whatever ``excludes`` say, so what the check read is identical in both.  Trees that
+    can't be compared refuse."""
+    from .queue import lowrisk
+
+    r = _git(repo, "diff", "--name-only", "--no-renames", ran, onto, check=False)
+    if r.returncode:
+        return f"the trees of {ran[:12]} and {onto[:12]} can't be compared"
+    excludes = tuple(excludes)
+    bad = sorted(f for f in set(r.stdout.split())
+                 if f.endswith(LEAN_READS) or f.startswith(LEAN_TOOLING) or not lowrisk([f], excludes))
+    if bad:
+        return (f"the trees of {ran[:12]} and {onto[:12]} differ in {', '.join(bad[:3])}, which a Lean check reads or "
+                "`lowrisk_excludes` names")
+    return None
+
+
 def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: frozenset[str], command: tuple[str, ...],
-                       maps=None, deferred: str | None = None, fetch=None, ran: str | None = None) -> str | None:
+                       maps=None, deferred: str | None = None, fetch=None, ran: str | None = None,
+                       rekeyed_from: str | None = None, excludes: Iterable[str] = ()) -> str | None:
     """The passing ``tool`` attempt of ``commit``'s one parent that vouches for ``commit``, or None: ``commit`` changes only Lake
     packages' locks, names exactly those in its `Regenerated:` trailer, and they are byte for byte the locks that attempt
     regenerated, one for each package it regenerated, so the tree that lands is the one that check audited.
@@ -545,7 +584,10 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
     digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard never do.
     With it, ``ran`` is the commit that check ran on when it isn't the parent (`Driver._carry` rebuilt the parent above a lock
     commit drive landed): ``commit``'s files are then taken against ``ran``, so what lands is still the tree it checked with its
-    records, whatever the parent holds."""
+    records, whatever the parent holds.  And ``rekeyed_from`` is the commit that check ran on when drive moved it to the parent
+    (`Driver._rekey_lean`, the low-risk lane's `Driver._move_lean`): it vouches only when the check ran on ``rekeyed_from``
+    and that commit's tree and the parent's differ in no file but those the low-risk rule allows (`rekey_refusal`, with
+    drive.toml's ``excludes``), so what lands is the parent's tree with the records of a check that read the same Lean."""
     parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).stdout.split()[1:]
     if len(parents) != 1:
         return None
@@ -557,7 +599,9 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
         return None
     if deferred is not None:
         checked = re.findall(r"^Checked: (\S+)", _git(repo, "log", "-1", "--format=%B", commit).stdout, re.M)
-        ids = [deferred] if checked == [deferred] and _ran_on(store, deferred, parent, fetch) else []
+        on = rekeyed_from or parent
+        moved_ok = not rekeyed_from or rekey_refusal(repo, rekeyed_from, parent, excludes) is None
+        ids = [deferred] if checked == [deferred] and moved_ok and _ran_on(store, deferred, on, fetch) else []
     else:
         tree = _git(repo, "rev-parse", f"{parent}^{{tree}}").stdout.strip()
         ids = passing(store, parent, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo)

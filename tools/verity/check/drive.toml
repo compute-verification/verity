@@ -37,7 +37,10 @@ land_into = "checked"
 # either way. The nightly `audit-main` (`--no-cache`, no circuit cache) checks every part cold, so it checks that reuse daily
 after_landing_no_cache = false
 # after_landing_shards = N runs the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`train.sh
-# --deferred STEPS --shard K/N`), so it takes about its longest shard; 1 (absent) is one run of every step
+# --deferred STEPS --shard K/N`), so it takes about its longest shard, after one run of circuit-check's records step that every
+# shard's circuit-check starts from (`train.sh --cc-records`); 1 (absent) is one run of every step; "auto" (or "auto:MAX", at
+# most MAX shards) takes N and each shard's parts from the shard planner (`check.py --shard-plan`, made once a tip beside the
+# records step), each shard `train.sh --shard auto:K/N --shard-plan-file PLAN`, and runs unsharded when no plan is made
 after_landing_shards = 3
 # the task executor (`research.executor`): "off"; "shadow", each tip the after-landing run checks has its task graph (`verity tasks
 # list --json --kind after-landing`) enqueued too, at priority 1, and its verdicts compared with the run's, a record per tip
@@ -69,11 +72,14 @@ lowrisk_per_tick = 20
 # Lean, its locks and Lake files, the trusted hashes, the verifiers, and the soundness-path Python (AGENTS.md's SOUNDNESS_PATH
 # under verity/ml/); and the guards that hold everything else to those rules: the Lean check (tools/verity/lean/), the
 # whole-tree invariants (root tests/: the import boundaries, SOUNDNESS_PATH, verifier cost), the check and this file
-# (tools/verity/check/), the merge drivers (.gitattributes), and the landing rules themselves (drive.py, queue.py)
+# (tools/verity/check/), the merge drivers (.gitattributes), and the landing rules themselves (drive.py, queue.py); and what
+# runs with the control pod's or every agent's credentials once it is on main: infra/, the research tool (tools/research/),
+# the agent guard and its hooks (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock)
 lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
                     "verity/core/", "verity/ml/circuits/", "verity/ml/kernels/", "verity/ml/commitments/",
                     "verity/ml/crypto/", "verity/ml/randomness/",
-                    "tools/verity/lean/", "tests/", "tools/verity/check/", ".gitattributes", "drive.py", "queue.py"]
+                    "tools/verity/lean/", "tests/", "tools/verity/check/", ".gitattributes", "drive.py", "queue.py",
+                    "infra/", "tools/research/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"]
 # days an open PR not marked ready at its head stays idle (its head commit, and its ready, eject and review labels there) before
 # it is stale: `research queue status` says so and drive rings its owner once a day (`research.stale`); 0 is off
 stale_days = 3

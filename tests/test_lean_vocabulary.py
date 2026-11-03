@@ -41,10 +41,12 @@ except:
 from __future__ import annotations
 
 import functools
+import io
 import json
 import re
 import subprocess
 import sys
+import tokenize
 import tomllib
 from collections import defaultdict
 from dataclasses import dataclass
@@ -281,11 +283,30 @@ def lean_definitions(text: str) -> tuple[list[tuple[str, Hit]], list[tuple[str, 
     return out, fields
 
 
+def _python_code(text: str) -> str:
+    """`text` with its string literals and comments blanked to spaces, newlines and offsets kept, so prose that wraps to
+    begin a line with `class X` isn't read as a header.  Every tracked file compiles, so one that doesn't tokenize raises."""
+    lines = text.splitlines(keepends=True)
+    tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    prose = {tokenize.STRING, tokenize.COMMENT, getattr(tokenize, "FSTRING_MIDDLE", tokenize.STRING)}
+    chars = [list(line) for line in lines]
+    for t in tokens:
+        if t.type in prose:
+            (r0, c0), (r1, c1) = t.start, t.end
+            for r in range(r0, r1 + 1):
+                row = chars[r - 1]
+                for c in range(c0 if r == r0 else 0, c1 if r == r1 else len(row)):
+                    if row[c] != "\n":
+                        row[c] = " "
+    return "".join("".join(row) for row in chars)
+
+
 def python_definitions(text: str) -> list[tuple[str, Hit]]:
     """The Python source `text`'s ``(concept, Hit)`` pairs: classes at module or class level (not local to a function),
-    keyed by their qualified name (`Outer.Inner`)."""
+    keyed by their qualified name (`Outer.Inner`). Strings and comments are not code (`_python_code`)."""
     if not _PY_CANDIDATE.search(text):
         return []
+    text = _python_code(text)
     out, stack = [], []  # stack: (indent, keyword, name) of the enclosing `class` and `def` headers
     for m in _PY_HEADER.finditer(text):
         indent, keyword, name = len(m.group(1).expandtabs()), m.group(2), m.group(3)
@@ -771,8 +792,6 @@ KNOWN: dict[str, str] = {
     "infra/cluster/src/cluster/route.py::Placement": "homonym, a routed job's node: rename (infra)",
     "infra/ops/verity_ops/deploy.py::Node": "homonym, a deploy target: rename (infra)",
     # integrations/
-    "integrations/vllm/tools/migrate/superseded_quarantine.py::Site":
-        "homonym, a migration step's source site: rename (vllm)",
     "integrations/vllm/verity_vllm/acquire/committer_api.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a client of it (circuits)",
     "integrations/vllm/verity_vllm/acquire/plan.py::Site": "homonym, a quantisation site: rename (circuits)",
@@ -790,15 +809,6 @@ KNOWN: dict[str, str] = {
         "homonym, one CUDA device's build of a kernel library: rename (circuits)",
     "integrations/vllm/verity_vllm/commit/served_record.py::Record":
         "duplicate of the execution block (no canonical yet: LEAN-93): becomes an execution block's committed values (circuits)",
-    "integrations/vllm/verity_vllm/observe/fold/resolver.py::Witness":
-        "homonym, a request's witness leaves a row consumes: rename (vllm)",
-    "integrations/vllm/verity_vllm/pipeline/c2_replay.py::Site": "homonym, what one C2 replay reads: rename (vllm)",
-    "integrations/vllm/verity_vllm/pipeline/commit_coins.py::Gate":
-        "homonym, infra's challenger gate (an SSH host): rename (vllm)",
-    "integrations/vllm/verity_vllm/pipeline/commit_coins.py::Session":
-        "homonym, the old word for a run, here the commit's challenge phase: rename (vllm)",
-    "integrations/vllm/verity_vllm/pipeline/report.py::Card": "homonym, a report's summary card: rename (vllm)",
-    "integrations/vllm/verity_vllm/pipeline/serve_commit.py::Ledger": "homonym, one request as served: rename (vllm)",
     "integrations/vllm/verity_vllm/program/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
     "integrations/vllm/verity_vllm/protocols/pouw/h1/challenger.py::Ledger":
@@ -1017,16 +1027,12 @@ KNOWN: dict[str, str] = {
         "duplicate of the registration log (`Verity.Registration`): becomes a reading of it: the service's admitted log entry (proofs)",
     "verity/core/protocols/sampled_proofs/service.py::Session":
         "homonym, the old word for a run, kept as one protocol's run type: rename (proofs)",
-    "verity/core/service/flock/Flock/Firewall/Coins.lean::Flock.Firewall.Coins.Session":
-        "homonym, a firewall release: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
         "duplicate of `Flock.Transcript`: becomes a reading of it (proofs)",
     "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Verdict":
         "homonym, the firewall's release decision: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Registry":
         "homonym, the firewall loop's frames: rename (proofs)",
-    "verity/core/service/flock/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Session":
-        "homonym, a firewall release: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Level0.lean::Flock.Firewall.Level0.Registry":
         "homonym, the firewall loop's tables: rename (proofs)",
     "verity/core/service/flock/Flock/Layout.lean::Flock.Layout": "homonym, C-Flock's block-type layout: rename (proofs)",
@@ -1038,7 +1044,6 @@ KNOWN: dict[str, str] = {
         "homonym, a polynomial-commitment opening: rename (proofs)",
     "verity/core/service/flock/Flock/RecRecord.lean::Flock.RecRecord.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes the challenger's live-coin entries (proofs)",
-    "verity/core/service/flock/Flock/Record.lean::Flock.Session": "homonym, a proof's session record: rename (proofs)",
     "verity/core/service/flock/VStar/In.lean::VStar.In.Opening": "homonym, a Ligerito opening: rename (proofs)",
     "verity/core/service/flock/VStar/Stage.lean::VStar.Stmt": "homonym, one of V*'s statements: rename (proofs)",
     "verity/core/service/sampled_proofs/SampledProofs/Program.lean::SampledProofs.Program":
@@ -1272,6 +1277,21 @@ class CoinsFor: ...
 """
     assert [(c, h.key, h.line) for c, h in python_definitions(src)] == [
         ("Coins", "Coins", 1), ("Draw", "Coins.Draw", 2), ("Window", "Window", 13)]
+
+
+def test_the_scan_reads_no_class_in_a_string_or_comment():
+    """Prose that wraps to begin a line with `class X` (a docstring, a comment, a string) declares nothing."""
+    src = '''"""The census. ``key_blocks`` is the
+class Coins's attention cut, which the cost reads."""
+# class Window: a comment, not a header
+NOTE = """
+class Draw
+"""
+
+class Witness:
+    pass
+'''
+    assert [(c, h.key, h.line) for c, h in python_definitions(src)] == [("Witness", "Witness", 8)]
 
 
 def test_readings_and_slots_are_exempt():
