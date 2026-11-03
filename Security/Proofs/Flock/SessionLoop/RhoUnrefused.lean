@@ -705,9 +705,10 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128)
 open Loop
 
-/-- **The frame refuses dependent `ρ₀, ρ₁` at `ρ₁`'s coins** (`rho_unrefused_sched`): the round past `ρ₁`'s is the
-rep's, whose state takes `ρ₁`'s coins, where `ρ₀`'s and `ρ₁`'s are independent (`RhoKeep.repState_rho`), and those are
-the opened coins (`wordsAt_slot`). -/
+set_option maxHeartbeats 800000 in
+/-- **The frame refuses dependent `ρ₀, ρ₁` at `ρ₁`'s coins** (`rho_unrefused_sched`): the opening past `ρ₀`'s is the
+rep's `ρ₁` round, whose coins the frame took (`coins_taken_of_live`) at the rep's state there, which takes them only
+independent of `ρ₀`'s (`RhoKeep.repState_rho`); both are the opened coins (`wordsAt_slot`). -/
 theorem rho_unrefused_sched_pf (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -722,6 +723,223 @@ theorem rho_unrefused_sched_pf (T : ZKMal.CoinLayer.TableData)
     {j r : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (hN : Masked.rhoSlot x j r + 1 < ops.length) :
     _root_.Flock.Zk.rhoIndependent (Masked.rhoAt (x := x) ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x)
       (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) j r) = true := by
-  sorry
+  obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
+  obtain ⟨y⟩ := hx.2 j hj
+  obtain ⟨-, -, hspec, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
+  have hq2 : 2 * j + r < spec.repStreams.size := by rw [FlockDeploy.repStreams_size, hspec]; omega
+  have hjj : (2 * j + r) / 2 = j := by omega
+  have hst : (Masked.stsOf x)[(2 * j + r) / 2]! = (Masked.stsOf x)[j] := by
+    rw [hjj]
+    exact getElem!_pos _ j hj
+  have hstj : (Masked.stsOf x)[j]! = (Masked.stsOf x)[j] := getElem!_pos _ j hj
+  have hm14 : 14 ≤ (Masked.stsOf x)[j].m := by have := (hall j hj).1; omega
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+    rw [hst]; exact y.hz
+  have hk6 : 6 ≤ (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog := by rw [hst]; exact y.wf.1.hk6
+  obtain ⟨N, hNd⟩ : ∃ N, N = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j + r) / 2]! +
+      (y.sch.k0 + 7 + 11 * (y.sch.levels.size - 1)) := ⟨_, rfl⟩
+  have hrR : ∀ q, q / 2 = (2 * j + r) / 2 → FlockDeploy.repRounds true spec (Masked.stsOf x)[q / 2]! = N + 4 := by
+    intro q hq'
+    rw [hq']
+    have e1 : (Masked.stsOf x)[(2 * j + r) / 2]!.m + (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog - 6 =
+        (Masked.stsOf x)[(2 * j + r) / 2]!.m + ((Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog - 6) := by omega
+    rw [repRounds_true]
+    simp only [hz]
+    rw [hNd]
+    unfold FlockComplete.piopRoundsZk
+    rw [e1]
+  have hrq : ∀ q, q / 2 = (2 * j + r) / 2 → q < spec.repStreams.size →
+      (roundsOf spec (Masked.stsOf x)).getD q 0 = N + 4 := by
+    intro q hq' hq
+    simp only [roundsOf, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hq, Option.map_some,
+      Option.getD_some]
+    exact hrR q hq'
+  have hrsl : (roundsOf spec (Masked.stsOf x)).length = spec.repStreams.size := by simp [roundsOf]
+  have hs1 : 1 ≤ FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) := by
+    unfold FlockComplete.repStartZk; omega
+  obtain ⟨P', hP'⟩ : ∃ P', P' = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j + r) / 2]! + (y.sch.k0 + 3) :=
+    ⟨_, rfl⟩
+  obtain ⟨s, hs⟩ : ∃ s, s = FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) + P' := ⟨_, rfl⟩
+  have hbs : Masked.rhoSlot x j r + 1 = s := by
+    unfold Masked.rhoSlot
+    rw [Masked.repSlot_eq hsx hz]
+    omega
+  rw [hbs] at hN
+  have hlast : (ofLoop T L₀ real).last x = refK x + 1 := loop_last loopNr T (withFrames T L₀ real) x
+  obtain ⟨-, m, ha⟩ := coins_taken_of_live (ofLoop T L₀ real) wk x w ρ κ ((m₀, ρ₀) :: ops) hlive
+    (by rw [hlast, List.length_cons]; omega) hr (i := s + 2) (by omega) (by simp only [List.length_cons]; omega)
+  obtain ⟨⟨dm, da⟩, hd⟩ : ∃ d, ops[s]? = some d := ⟨ops[s]'(by omega), List.getElem?_eq_getElem _⟩
+  have htk : ops.take (s + 1) = ops.take s ++ [(dm, da)] := by rw [List.take_add_one, hd]; rfl
+  have hh : ((m₀, ρ₀) :: ops).take (s + 2) = (m₀, ρ₀) :: (ops.take s ++ [(dm, da)]) := by
+    rw [List.take_succ_cons, htk]
+  have hts : (ops.take s).length = s := by rw [List.length_take]; omega
+  rw [hh] at ha
+  change (progOf x ((ops.take s ++ [(dm, da)]).map fun p => ZKMal.CoinLayer.rd p.2)).answer
+    ((ofLoop T L₀ real).cfgAt x ρ (s + 1))
+    (coinsAt x ((m₀, ρ₀) :: (ops.take s ++ [(dm, da)]))) = .ok m at ha
+  have hca : coinsAt x ((m₀, ρ₀) :: (ops.take s ++ [(dm, da)])) =
+      (ZKMal.CoinLayer.rd da).vals (min (loopNr x s) _root_.Flock.Firewall.Frames.COIN_MAX) := by
+    unfold coinsAt
+    simp only [List.tail_cons, List.getLast?_append, List.getLast?_singleton, List.length_append,
+      hts, List.length_singleton, Nat.add_sub_cancel]
+    exact feedOf_rd _ _
+  rw [hca, List.map_append, List.map_cons, List.map_nil] at ha
+  have hloc : ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (s - 1) = (2 * j + r, P') := by
+    have e := locate_take_sum (roundsOf spec (Masked.stsOf x)) 0 (2 * j + r) P' (by rw [hrsl]; exact hq2)
+      (by rw [hrq _ rfl hq2]; omega)
+    rw [Nat.zero_add] at e
+    rw [← e, hs, repStartZk_eq spec _ hq2.le]
+    congr 1
+    omega
+  have hlay : ((ofLoop T L₀ real).cfgAt x ρ (s + 1)).lay =
+      ((startOf x (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (s - 1)).1).toOption.map
+        (·.1)).getD default := by
+    show ((startOf x (repOf x (s + 1))).toOption.map (·.1)).getD default = _
+    rw [show s + 1 = s - 1 + 2 by omega, repOf_add_two hsx]
+  rw [progOf_snoc x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) (ZKMal.CoinLayer.rd da) hsx (q := s - 1)
+    (by rw [List.length_map, hts]; omega), hloc] at ha
+  rw [hloc] at hlay
+  dsimp only at ha
+  rcases hph : placeholder spec (Masked.stsOf x) (2 * j + r)
+      (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0) with e' | ⟨c', t, dom, xs, hi⟩
+  · rw [hph] at ha
+    exact absurd ha (answer_owed_none _ rfl)
+  rw [hph] at ha
+  dsimp only at ha
+  obtain ⟨CR0, CR, -, hCR, ha⟩ := repState_args ha
+  obtain ⟨alg, -, hal, -⟩ := repState_ok ha
+  obtain ⟨hts', ⟨tp, htp⟩, hxs⟩ := Count.placeholder_tab hph
+  rw [hz, Except.ok.injEq, Prod.mk.injEq] at htp
+  obtain ⟨htsch, -⟩ := htp
+  have hzt : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (t.sch, y.tPad) := htsch ▸ hz
+  obtain ⟨hm36, -, -, -⟩ := Count.sched_facts hzt
+  obtain ⟨⟨hmp, hmp0, hpc⟩, hdom', -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
+  obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph
+  have hls : (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0).size =
+      min (loopNr x 0) _root_.Flock.Firewall.Frames.COIN_MAX := by
+    obtain ⟨p0, rest, hpr⟩ : ∃ p0 rest, ops.take s = p0 :: rest := by
+      cases h' : ops.take s with
+      | nil => rw [h', List.length_nil] at hts; omega
+      | cons p0 rest => exact ⟨p0, rest, rfl⟩
+    rw [hpr]
+    simp [wordsAt, FlockDeploy.Coin.vals]
+  have hl0 : loopNr x 0 = spec.points * spec.mPts := by
+    show (reqOf x 0).2 = _
+    rw [reqOf_eq hsx]
+    rfl
+  have hpts : (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0).size /
+      (Masked.stsOf x)[(2 * j + r) / 2]!.mPts = spec.points := by
+    rw [hls, hl0, Nat.min_eq_left hpc, hmp, Nat.mul_div_cancel _ hmp0]
+  have hxn : xs.size = spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size := by
+    rw [hxs, Count.extras_size, Count.linkPoints_size, hpts, Nat.mul_comm]
+  have hxb : xs.size + 2 < 2 ^ 64 := by
+    rw [hxs, Loop.extras_size]
+    have := Nat.mul_le_mul_left (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size
+      ((linkPoints_size_le (Masked.stsOf x)[(2 * j + r) / 2]! _).trans (hls ▸ Nat.min_le_right _ _))
+    omega
+  have hdg : t.st.digest.size < 2 ^ 64 := by
+    rw [hts']
+    simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]
+    omega
+  have hmb : t.st.m < 2 ^ 64 := by rw [hts']; exact Nat.lt_trans hm36 (by decide)
+  have hA : alg.size = ((_root_.Flock.Firewall.Session.replayCoins (Masked.stsOf x)[(2 * j + r) / 2]!.m
+      (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog).toList.filter (· != 0)).length := by
+    have eA := congrArg List.length (Count.rounds_counts hmb hal)
+    rw [Count.piop_counts, hts', List.length_map, Array.length_toList] at eA
+    exact eA
+  have hplan := congrArg List.length (Count.repPlan_list (spec := spec) hzt)
+  rw [Array.length_toList, repPlan_size] at hplan
+  simp only [repRounds_true, hz, List.length_append] at hplan
+  have h4 : ([1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0)).length = 4 := by
+    decide
+  have hFO : alg.size + (Count.openList (2 + spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size)
+      t.sch).length = N := by
+    rw [h4] at hplan
+    have e1 : (Masked.stsOf x)[(2 * j + r) / 2]!.m + (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog - 6 =
+        (Masked.stsOf x)[(2 * j + r) / 2]!.m + ((Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog - 6) := by omega
+    rw [hA, hNd]
+    unfold FlockComplete.piopRoundsZk
+    rw [e1]
+    exact (Nat.add_right_cancel hplan).symm
+  have hx2 : xs.size + 2 = 2 + spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size := by omega
+  have hkk : y.sch.k0 = t.sch.k0 := by rw [htsch]
+  have hOL := Count.openList_length hzt
+    (c := (2 + spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size)) (by omega)
+  have hAP : alg.size + (2 + spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size) + 1 =
+      FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j + r) / 2]! := by
+    rw [hOL] at hFO
+    omega
+  have hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by
+    rw [hts']
+    show (Masked.stsOf x)[(2 * j + r) / 2]!.merkle = _
+    rw [hst]
+    exact (hall j hj).2.2
+  have htm : t.st.m = (Masked.stsOf x)[j]!.m := by rw [hts', hst, hstj]; rfl
+  have hm14t : 14 ≤ t.st.m := by rw [htm, hstj]; exact hm14
+  have hzT : _root_.Flock.Zk.schedule t.st.m = .ok (t.sch, y.tPad) := by rw [hts']; exact hzt
+  obtain ⟨sch', tp', hz', hlay0, -⟩ := start_eq hds
+  rw [hz, Except.ok.injEq, Prod.mk.injEq] at hz'
+  have hlayT : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0 := by
+    rw [hlay0, hts', ← hz'.1, htsch]
+    all_goals rfl
+  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by rw [hc']; exact ofDraws_order _ _ _
+  have hlay' : ((ofLoop T L₀ real).cfgAt x ρ (s + 1)).lay = lay := by
+    rw [hlay]
+    unfold startOf
+    rw [hsx]
+    dsimp only
+    rw [hds]
+    all_goals rfl
+  have hord : ((ofLoop T L₀ real).cfgAt x ρ (s + 1)).order.size = c'.order.size := by
+    rw [hc']
+    show (_root_.Flock.Firewall.Frame.absorbed ((ofLoop T L₀ real).cfgAt x ρ (s + 1)).lay).size = _
+    rw [hlay']
+    all_goals rfl
+  have hCRs : CR.size = alg.size + (xs.size + 2) + 1 + (t.sch.k0 + 3) + 1 := by
+    rw [hCR, Array.size_push, Array.size_map, Array.size_range]
+    omega
+  rw [show P' + 1 = alg.size + (xs.size + 2) + 1 + (t.sch.k0 + 3) + 1 by omega] at ha
+  have hR := RhoKeep.repState_rho hcc hal hm14t hdg (placeholder_cap hph) (hdm ▸ hdom') hmk hxb hzT hlayT hc'
+    hord hCRs ha
+  have hW' : CR.getD (alg.size + (xs.size + 2) + 1 + (t.sch.k0 + 2)) #[] =
+      wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) (s - 1) := by
+    rw [hCR, crAt_getD _ _ _ (show alg.size + (xs.size + 2) + 1 + (t.sch.k0 + 2) < P' by omega)]
+    rw [show s - 1 - P' + (alg.size + (xs.size + 2) + 1 + (t.sch.k0 + 2)) + 1 = s - 1 by omega]
+  have hplv : ∀ e < 2, loopNr x (FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) +
+      (alg.size + ((2 + spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size) + 1 +
+        (t.sch.k0 + 2 + e)))) = 2 := by
+    intro e he
+    rw [loopNr_rep hsx hq2 (by rw [hrq _ rfl hq2]; omega), hA]
+    exact Count.repPlan_rho hzt he
+  have hl2 : ∀ e < 2, loopNr x (s - 1 + e) = 2 := by
+    intro e he
+    rw [show s - 1 + e = FlockComplete.repStartZk spec (Masked.stsOf x) (2 * j + r) + (alg.size +
+      ((2 + spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size) + 1 + (t.sch.k0 + 2 + e))) by omega]
+    exact hplv e he
+  have hsz0 : ∀ e < 2, e < (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) (s - 1)).size := by
+    intro e he
+    have h0 := hl2 0 (by decide)
+    rw [Nat.add_zero] at h0
+    rw [wordsAt_size x ops (s := s) (p := s - 1) (by omega) (by omega), h0]
+    exact lt_of_lt_of_le he (by decide)
+  have hsz1 : ∀ e < 2, e < (wordsAt x ((ops.take (s + 1)).map fun p => ZKMal.CoinLayer.rd p.2) s).size := by
+    intro e he
+    have h1 := hl2 1 (by decide)
+    rw [show s - 1 + 1 = s by omega] at h1
+    rw [wordsAt_size x ops (s := s + 1) (p := s) (by omega) (by omega), h1]
+    exact lt_of_lt_of_le he (by decide)
+  have hw1 : wordsAt x ((ops.take (s + 1)).map fun p => ZKMal.CoinLayer.rd p.2) s =
+      (ZKMal.CoinLayer.rd da).vals (min (loopNr x s) _root_.Flock.Firewall.Frames.COIN_MAX) := by
+    unfold wordsAt
+    rw [List.getElem?_map, List.getElem?_take_of_lt (Nat.lt_succ_self s), hd]
+    rfl
+  unfold Masked.rhoAt
+  rw [hbs, show Masked.rhoSlot x j r = s - 1 by omega,
+    ← wordsAt_slot T x ops hl (s := s) (p := s - 1) (e := 0) (by omega) (by omega) (hsz0 0 (by decide)),
+    ← wordsAt_slot T x ops hl (s := s) (p := s - 1) (e := 1) (by omega) (by omega) (hsz0 1 (by decide)),
+    ← wordsAt_slot T x ops hl (s := s + 1) (p := s) (e := 0) (by omega) (by omega) (hsz1 0 (by decide)),
+    ← wordsAt_slot T x ops hl (s := s + 1) (p := s) (e := 1) (by omega) (by omega) (hsz1 1 (by decide)),
+    hw1, ← hW']
+  exact hR
 
 end Claims.ZKServer.LeanRelease
