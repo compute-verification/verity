@@ -1416,7 +1416,7 @@
   },
   "Nci.Formalism.Assumptions.CutCost": {
    "owner": "@training",
-   "digest": "ba18d0c25417b4a28d1ec1e413dba1a1408aff384f362d2152c79d3d5a05e5a3"
+   "digest": "7123181c18ade145bf6fc07ca2929c7723b35ca10ec2311d931f6575e2436231"
   },
   "Nci.Formalism.Assumptions.EfficiencyFloor": {
    "owner": "@training",
@@ -1497,6 +1497,18 @@
   "Nci.Ldl.ReadCap": {
    "owner": "@training",
    "digest": "dc4f188e7f069c705d437d426cb8590cf8dce1c8a077fd0605245aead3b834aa"
+  },
+  "Nci.Products.Standard.Algorithm": {
+   "owner": "@training",
+   "digest": "9d4f1c66392a1ec467c2639f37f73730f0a6f33872d24d8576561bc7123c17fa"
+  },
+  "Nci.Products.Standard.Passed": {
+   "owner": "@training",
+   "digest": "e091b3c484c0707c735b6b3d3e4dd632f2f2fa2c792d9e9dc8d07e0a2bf1f953"
+  },
+  "Nci.Products.Standard.Unsplit": {
+   "owner": "@training",
+   "digest": "4f85d64a194b810cb5e0d4253454e15bcc8437807c363b74a688b7b9933a4d50"
   },
   "Nci.Small": {
    "owner": "@lean",
@@ -2666,6 +2678,26 @@
   "Verity.SecurityProofs.CKSize": {
    "honest": ["Verity.SecurityProofs.CKSize_honest"],
    "nontrivial": "Verity.SecurityProofs.CKSize_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Products.SecurityProofs.Cap": {
+   "honest": ["Nci.Products.SecurityProofs.Cap_honest"],
+   "nontrivial": "Nci.Products.SecurityProofs.Cap_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Products.SecurityProofs.WordCap": {
+   "honest": ["Nci.Products.SecurityProofs.WordCap_honest"],
+   "nontrivial": "Nci.Products.SecurityProofs.WordCap_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Products.SecurityProofs.Bound": {
+   "honest": ["Nci.Products.SecurityProofs.Bound_honest"],
+   "nontrivial": "Nci.Products.SecurityProofs.Bound_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Products.SecurityProofs.ChainCap": {
+   "honest": ["Nci.Products.SecurityProofs.ChainCap_honest"],
+   "nontrivial": "Nci.Products.SecurityProofs.ChainCap_nontrivial",
    "kind": "exclusion"
   }
  },
@@ -9119,6 +9151,69 @@
    "assumptions": [],
    "type_hash": "cbe091114f7d58bb20b6bfda7500d46b00512a6e5ac0977029fb70e0b4a46905"
   },
+  "Nci.Products.SecurityProofs.Bound": {
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.Bound : Nci.Products.Guarantees.Bound"],
+   "assumptions": [],
+   "type_hash": "4cf32db6d34da159b83a39ffc86b16efd7d4f60edca6597b15d65c50bbfa7dd6"
+  },
+  "Nci.Products.SecurityProofs.Bound_honest": {
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.Bound_honest : Nci.Products.Guarantees.Bound_honest"],
+   "assumptions": [],
+   "type_hash": "5dcd475c924b2c8b6012b49b1902ee8672e0a00ff1579d18b374f365aa144e96"
+  },
+  "Nci.Products.SecurityProofs.Bound_nontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.Bound_nontrivial : Nci.Products.Guarantees.Bound_nontrivial"],
+   "assumptions": [],
+   "type_hash": "4c78013e963a070eeaf61142e52f038eee49fd8075d407912ad9cccec18a1524"
+  },
+  "Nci.Products.SecurityProofs.Cap": {
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.Cap : Nci.Products.Guarantees.Cap"],
+   "assumptions": [],
+   "type_hash": "295c3b9312227eda31c1f24bdf479282832ef72823d230ea0ab8a96493527520"
+  },
+  "Nci.Products.SecurityProofs.Cap_honest": {
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.Cap_honest : Nci.Products.Guarantees.Cap_honest"],
+   "assumptions": [],
+   "type_hash": "27ea50fa89582d1514ba8155e4e568f4a07442e480e0042eb0d679675b63d575"
+  },
+  "Nci.Products.SecurityProofs.Cap_nontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.Cap_nontrivial : Nci.Products.Guarantees.Cap_nontrivial"],
+   "assumptions": [],
+   "type_hash": "ddb910ea051953c4c5b44d02843ce1ebebebab2d10ad587dc4e74a153b90a58d"
+  },
+  "Nci.Products.SecurityProofs.ChainCap": {
+   "owner": "@training"
+  },
+  "Nci.Products.SecurityProofs.ChainCap_honest": {
+   "owner": "@training"
+  },
+  "Nci.Products.SecurityProofs.ChainCap_nontrivial": {
+   "owner": "@training"
+  },
+  "Nci.Products.SecurityProofs.WordCap": {
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.WordCap : Nci.Products.Guarantees.WordCap"],
+   "assumptions": [],
+   "type_hash": "0ef005871e017a0defedb1823ae4fb087ea79398082a6c9d79af2722dd919927"
+  },
+  "Nci.Products.SecurityProofs.WordCap_honest": {
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.WordCap_honest : Nci.Products.Guarantees.WordCap_honest"],
+   "assumptions": [],
+   "type_hash": "48dab8782f890ea00b2e20c71d0bedd529a59796050234b14bf04956d2078263"
+  },
+  "Nci.Products.SecurityProofs.WordCap_nontrivial": {
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.WordCap_nontrivial : Nci.Products.Guarantees.WordCap_nontrivial"],
+   "assumptions": [],
+   "type_hash": "9a91fca4162468d8ad7ad5ff4477ddea4057e1100045cf6643c0bebd0e500ea7"
+  },
   "Nci.SecurityProofs.ActivationsBoundOn": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ActivationsBoundOn : Nci.Guarantees.ActivationsBoundOn"],
@@ -13724,7 +13819,19 @@
    "Nci.Formalism.SecurityProofs.FitTraining_honest": "completeness: Fit's honest lemma for training: at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), its two blocks of one gate are compute blocks that fit at k = 2, with Δ = Δ_t = Δ_grad = s = τ = 1 and no decoder. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's partition into training blocks, which no check reads yet, would supply the deployed premises.",
    "Nci.Formalism.SecurityProofs.FitTraining_nontrivial": "lemma: Fit's nontrivial lemma for training: at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), at k = 1 its blocks don't fit, no partition into inference blocks exists, and ρ = ⊤, above c / (c - d) = 1. A counterexample at an instance, not a property of a Lean function.",
    "Verity.SecurityProofs.CKSize_honest": "completeness: CKSize's honest lemma: at Honest (Verity.Formalism.Honest, Security/Definitions/Core/Formalism/Instances.lean), the proof blocks {1, 2} and {3} of a chain of three gates after a registered input, its premise holds at (c, k) = (2, 1), the second proof block having one gate, under c. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound and rests on no run and no art:.",
-   "Verity.SecurityProofs.CKSize_nontrivial": "lemma: CKSize's nontrivial lemma: at Counter (Verity.Formalism.Counter, Security/Definitions/Core/Formalism/Instances.lean), the same chain's three operation gates in one proof block, its premise fails at (c, k) = (2, 1), and so does the bound, |C| = 3 > 2 * 1. A counterexample at an instance, not a property of a Lean function."
+   "Verity.SecurityProofs.CKSize_nontrivial": "lemma: CKSize's nontrivial lemma: at Counter (Verity.Formalism.Counter, Security/Definitions/Core/Formalism/Instances.lean), the same chain's three operation gates in one proof block, its premise fails at (c, k) = (2, 1), and so does the bound, |C| = 3 > 2 * 1. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Products.SecurityProofs.Cap": "frozen (no-function): The fresh-products cap at the bit level: it is about an arbitrary declaration, a product in it by the standard algorithm with its widths as passed (Nci.Products.Standard, Standard.Algorithm and Standard.Passed, Security/Definitions/Nci/Products.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and declared products, is what would give it an acceptance.",
+   "Nci.Products.SecurityProofs.WordCap": "frozen (no-function): The fresh-products cap at word level, every MAC within one block: it is about an arbitrary declaration, a product in it by the standard algorithm with its widths as passed (Nci.Products.Standard, Standard.Algorithm and Standard.Passed, Security/Definitions/Nci/Products.lean) and its partitions into inference blocks that split no MAC (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean, and Standard.Unsplit), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and declared products, is what would give it an acceptance.",
+   "Nci.Products.SecurityProofs.Bound": "frozen (no-function): The products kind's bound, a partition-level bound (Nci.Formalism.PartitionBound, Security/Definitions/Nci/Formalism/Inference.lean) that the counting lemma, Slowdown and Security take as a kind's Λ_J: it is about an arbitrary declaration and a product in it by the standard algorithm with its widths as passed (Nci.Products.Standard, Standard.Algorithm and Standard.Passed, Security/Definitions/Nci/Products.lean), its value Nci.Products.Standard.bound, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and declared products, is what would give it an acceptance.",
+   "Nci.Products.SecurityProofs.Cap_honest": "completeness: The fresh-products cap's honest lemma: at Single (Nci.Products.Single, Security/Definitions/Nci/Products/Instances.lean), one product of one-bit operands (gates 0 and 1, and gate 2 their AND) with the operands fresh, at (c, k) = (1, 2), b_A = b_B = b_C = 1 and μ = 1/2, the product is by the standard algorithm, its widths are as passed (gate 2's block reads both operands beyond θ and holds C's final bit), and the partition of one block, gate 2, is a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's circuit, its products and its partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Products.SecurityProofs.Cap_nontrivial": "lemma: The fresh-products cap's nontrivial lemma: at Single (Nci.Products.Single, Security/Definitions/Nci/Products/Instances.lean) with the operands registered, at (c, k) = (1, 0), b_A = b_B = b_C = 1 and μ = 1/2, the product is by the standard algorithm and the partition of one block, gate 2, is one into inference blocks, but the block reads both operands free, none of either cone beyond θ, so widths as passed fail, and the cap 1 ≤ 0 + 1/2 fails. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Products.SecurityProofs.WordCap_honest": "completeness: The word-level cap's honest lemma: at Single (Nci.Products.Single, Security/Definitions/Nci/Products/Instances.lean) with the operands fresh, at (c, k) = (1, 2) and b_A = b_B = b_C = 1, the product is by the standard algorithm, its widths are as passed, and the partition of one block, gate 2, is a partition into inference blocks that holds the one MAC whole. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's circuit, its products and its partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Products.SecurityProofs.WordCap_nontrivial": "lemma: The word-level cap's nontrivial lemma: at Single (Nci.Products.Single, Security/Definitions/Nci/Products/Instances.lean) with the operands registered, at (c, k) = (1, 1) and b_A = b_B = b_C = 1, the product is by the standard algorithm and the partition of one block, gate 2, is one into inference blocks that holds the MAC whole, but the block reads both operands free, so widths as passed fail, and the cap 1 ≤ 1/4 + 1/4 fails. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Products.SecurityProofs.Bound_honest": "completeness: The products kind's bound's honest lemma: at Single (Nci.Products.Single, Security/Definitions/Nci/Products/Instances.lean) with the operands fresh, at (c, k) = (1, 2), b_A = b_B = b_C = 1 and μ = 1/2, the product is by the standard algorithm, its widths are as passed, and the partition of one block, gate 2, is a partition into inference blocks, so the partition-level bound is over at least one partition. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's circuit, its products and its partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Products.SecurityProofs.Bound_nontrivial": "lemma: The products kind's bound's nontrivial lemma: at Single (Nci.Products.Single, Security/Definitions/Nci/Products/Instances.lean) with the operands registered, at (c, k) = (1, 0), b_A = b_B = b_C = 1 and μ = 1/2, the product is by the standard algorithm, but gate 2's block reads both operands free, so widths as passed fail, and the bound fails at the partition of that one block, a partition into inference blocks: the products kind's bound (1/2) / 0 = ⊤ is above its price 1. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Products.SecurityProofs.ChainCap": "frozen (no-function): The fresh-products cap along chains, every MAC within one block and each entry's partial sum running along its MACs: it is about an arbitrary declaration, a product in it by the standard algorithm with its widths as passed and its chains (Nci.Products.Standard, Standard.Algorithm, Standard.Passed and Standard.Chained, Security/Definitions/Nci/Products.lean) and its partitions into inference blocks that split no MAC (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean, and Standard.Unsplit), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and declared products, is what would give it an acceptance.",
+   "Nci.Products.SecurityProofs.ChainCap_honest": "completeness: The cap along chains' honest lemma: at Pair (Nci.Products.Pair, Security/Definitions/Nci/Products/Instances.lean), one entry's chain of two MACs (gates 0 to 3 the operands' bits, gate 4 a₀ ∧ b₀ and gate 5 (a₁ ∧ b₁) ⊕ g₄) with the operands fresh, at (c, k) = (1, 3) and b_A = b_B = b_C = 1, the product is by the standard algorithm, its widths are as passed, gate 5 reads gate 4's partial sum, and the partition of two blocks, gate 4 and gate 5, is a partition into inference blocks that splits no MAC, its second block reading the first's partial sum. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's circuit, its products and its partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Products.SecurityProofs.ChainCap_nontrivial": "lemma: The cap along chains' nontrivial lemma: at Pair (Nci.Products.Pair, Security/Definitions/Nci/Products/Instances.lean) with the operands registered, at (c, k) = (1, 1) and b_A = b_B = b_C = 1, the product is by the standard algorithm, gate 5 reads gate 4's partial sum, and the partition of two blocks, gate 4 and gate 5, is one into inference blocks that splits no MAC, but the blocks read the operands free, so widths as passed fail, and the cap 2 ≤ (2/3) √(1/3) + √2 / 2 fails. A counterexample at an instance, not a property of a Lean function."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -22601,6 +22708,15 @@
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.Counting",
     "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Products.SecurityProofs.Bound",
+    "Nci.Products.SecurityProofs.Bound_honest",
+    "Nci.Products.SecurityProofs.Bound_nontrivial",
+    "Nci.Products.SecurityProofs.Cap",
+    "Nci.Products.SecurityProofs.Cap_honest",
+    "Nci.Products.SecurityProofs.Cap_nontrivial",
+    "Nci.Products.SecurityProofs.WordCap",
+    "Nci.Products.SecurityProofs.WordCap_honest",
+    "Nci.Products.SecurityProofs.WordCap_nontrivial",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -22752,6 +22868,15 @@
     "Nci.Formalism.SecurityProofs.TokenCapClean",
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Products.SecurityProofs.Bound",
+    "Nci.Products.SecurityProofs.Bound_honest",
+    "Nci.Products.SecurityProofs.Bound_nontrivial",
+    "Nci.Products.SecurityProofs.Cap",
+    "Nci.Products.SecurityProofs.Cap_honest",
+    "Nci.Products.SecurityProofs.Cap_nontrivial",
+    "Nci.Products.SecurityProofs.WordCap",
+    "Nci.Products.SecurityProofs.WordCap_honest",
+    "Nci.Products.SecurityProofs.WordCap_nontrivial",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsChain",
     "Nci.SecurityProofs.ActivationsReads",
@@ -23005,6 +23130,15 @@
     "Nci.Formalism.SecurityProofs.TokenCapClean",
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Products.SecurityProofs.Bound",
+    "Nci.Products.SecurityProofs.Bound_honest",
+    "Nci.Products.SecurityProofs.Bound_nontrivial",
+    "Nci.Products.SecurityProofs.Cap",
+    "Nci.Products.SecurityProofs.Cap_honest",
+    "Nci.Products.SecurityProofs.Cap_nontrivial",
+    "Nci.Products.SecurityProofs.WordCap",
+    "Nci.Products.SecurityProofs.WordCap_honest",
+    "Nci.Products.SecurityProofs.WordCap_nontrivial",
     "Nci.SecurityProofs.CompliesCK",
     "Nci.SecurityProofs.PartitionCovers",
     "Verity.SecurityProofs.AndSizeLe",
@@ -23898,6 +24032,15 @@
     "Nci.Ldl.SecurityProofs.BlockDescription",
     "Nci.Ldl.SecurityProofs.Counting",
     "Nci.Ldl.SecurityProofs.FanOutBound",
+    "Nci.Products.SecurityProofs.Bound",
+    "Nci.Products.SecurityProofs.Bound_honest",
+    "Nci.Products.SecurityProofs.Bound_nontrivial",
+    "Nci.Products.SecurityProofs.Cap",
+    "Nci.Products.SecurityProofs.Cap_honest",
+    "Nci.Products.SecurityProofs.Cap_nontrivial",
+    "Nci.Products.SecurityProofs.WordCap",
+    "Nci.Products.SecurityProofs.WordCap_honest",
+    "Nci.Products.SecurityProofs.WordCap_nontrivial",
     "Nci.SecurityProofs.ActivationsBoundOn",
     "Nci.SecurityProofs.ActivationsTrainingOn",
     "Nci.SecurityProofs.CompliesCK",
@@ -26975,9 +27118,9 @@
    ]
   },
   "Definitions.Nci.Assumptions.Formalism": {
-   "digest": "612e82937a5e6e4674bfc8b75b4618e57c0436101e532e5d22411f450a91c173",
+   "digest": "778a009e7883d6e23d4feaa25371729e987cb30c2456e171310da88786f75cf7",
    "definitions": {
-    "Nci.Formalism.Assumptions.CutCost": "ba18d0c25417b4a28d1ec1e413dba1a1408aff384f362d2152c79d3d5a05e5a3",
+    "Nci.Formalism.Assumptions.CutCost": "7123181c18ade145bf6fc07ca2929c7723b35ca10ec2311d931f6575e2436231",
     "Nci.Formalism.Assumptions.EfficiencyFloor": "bd5eea2adbee733740c70a5ab6a7fc532e1f330183420e4bf1553b1d386c940d"
    },
    "guarantees": [
@@ -27375,7 +27518,16 @@
     "Nci.Formalism.SecurityProofs.Slowdown_honest",
     "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
     "Nci.Formalism.SecurityProofs.TokenCap",
-    "Nci.Formalism.SecurityProofs.TokenCapClean"
+    "Nci.Formalism.SecurityProofs.TokenCapClean",
+    "Nci.Products.SecurityProofs.Bound",
+    "Nci.Products.SecurityProofs.Bound_honest",
+    "Nci.Products.SecurityProofs.Bound_nontrivial",
+    "Nci.Products.SecurityProofs.Cap",
+    "Nci.Products.SecurityProofs.Cap_honest",
+    "Nci.Products.SecurityProofs.Cap_nontrivial",
+    "Nci.Products.SecurityProofs.WordCap",
+    "Nci.Products.SecurityProofs.WordCap_honest",
+    "Nci.Products.SecurityProofs.WordCap_nontrivial"
    ]
   },
   "Definitions.Nci.Formalism.Inference": {
@@ -27414,7 +27566,16 @@
     "Nci.Formalism.SecurityProofs.Slowdown_honest",
     "Nci.Formalism.SecurityProofs.Slowdown_nontrivial",
     "Nci.Formalism.SecurityProofs.TokenCap",
-    "Nci.Formalism.SecurityProofs.TokenCapClean"
+    "Nci.Formalism.SecurityProofs.TokenCapClean",
+    "Nci.Products.SecurityProofs.Bound",
+    "Nci.Products.SecurityProofs.Bound_honest",
+    "Nci.Products.SecurityProofs.Bound_nontrivial",
+    "Nci.Products.SecurityProofs.Cap",
+    "Nci.Products.SecurityProofs.Cap_honest",
+    "Nci.Products.SecurityProofs.Cap_nontrivial",
+    "Nci.Products.SecurityProofs.WordCap",
+    "Nci.Products.SecurityProofs.WordCap_honest",
+    "Nci.Products.SecurityProofs.WordCap_nontrivial"
    ]
   },
   "Definitions.Nci.Formalism.Instances": {
@@ -27470,7 +27631,7 @@
    ]
   },
   "Definitions.Nci.Formalism.Training": {
-   "digest": "4d6f009228e1b421ef7d1736505846a14f3510d9962fc701548befce1bc244e7",
+   "digest": "04e618ed226ab250396beea333a06a263d5c72acebfe12f643befd783711dcb3",
    "definitions": {
     "Nci.Formalism.Annotation": "413c74d61b9251d9879712b9e07bfd9186289901b61c3a4950a853895d5f58f2",
     "Nci.Formalism.Annotation.Enters": "48c7ea367937a34bfe38d531fd4eb898f7945d30d4d22b481f26fd1c2a9aabd4",
@@ -27478,13 +27639,16 @@
     "Nci.Formalism.Annotation.Valid": "246e1e97b20a35f0482768b887e35db751f75d91eefa28de51d10c469bc0025b",
     "Nci.Formalism.Annotation.WorkPerBit": "823359fd4535528cd6172830eb96a05ae03c6ce4aa186a7545e5a8cfa1d71cfb",
     "Nci.Formalism.Annotation.blockShared": "930f5d19690342bdbf314ac7343d6f9731965eedc578214797f73c86a95222c8",
-    "Nci.Formalism.Annotation.entryWork": "193ea3c3da9a54e142b5f4c74723ce997b8b273e81186f5ead72051fa33a6105",
+    "Nci.Formalism.Annotation.blockUpdate": "08093006979791fa5d0888261e3490a07ff3c9e1770a055ce6e06e8446a4adc1",
+    "Nci.Formalism.Annotation.entryWork": "c816328d856228aa401a6ca3d4ff1c72bc874a46df9d4f52d679d07cd56b5d02",
     "Nci.Formalism.Annotation.readsAt": "d1ba9dcca8ecc2fd0408c7c9b6cbd8859ed992098a9618816391bd652488451c",
-    "Nci.Formalism.Annotation.stateAt": "3e8f2f0331792e3fc4745b4ac6d05830765fbd8c84f49d40cdb4fbf9ae07db5b",
-    "Nci.Formalism.Annotation.stateReads": "55e05f0459e27fc751323525915cfa8aa7f5f57fb4a759fb641bdc501f99357b",
+    "Nci.Formalism.Annotation.stateAt": "069e9970f21bfffac6b04520cd59206ef3ab41bdbe53387ce50870da9d07c5f2",
+    "Nci.Formalism.Annotation.stateReads": "ed7a7b1d1ad0c5733c46ae93d1cfce06659a19c1b5fbdebcb38ae8afdafb7582",
     "Nci.Formalism.Annotation.tokenGates": "062342d7a6d25499cd7ec04883e976d4ff53484c5bd10bba094541cf9a2b6564",
     "Nci.Formalism.Annotation.tokens": "5d45b499998b10099781ad5cbb87f5c491502db1631c6698c8fdca07e34c0f23",
     "Nci.Formalism.Annotation.totalUpdate": "c1f388b2f958cc3dad57fa00206f16e63c3976096bb098c73f3adb49eb3072eb",
+    "Nci.Formalism.Annotation.updateAt": "8694fdc392b242970409de89f2826997d02f08b1f7a4341ae41073691b514d20",
+    "Nci.Formalism.Annotation.updateReads": "beac4b2461573bdabc81da894f4c981aecb7eca9a707d629cd29f328821e3604",
     "Nci.Formalism.Annotation.worksOn": "942d6e373a730e2ba113eb2d38e53c99c9a0b2a640877b7c5fd0a16b3a86a161",
     "Nci.Formalism.Annotation.θ'": "c36bb29467369ba299bc1f820857190375b35ce280264dc04de6ff3752a7ece7",
     "Nci.Formalism.PeakAtMost": "d846aaf90484906bcd76942d72dc6be57f5601ddaff436fd6e475ca537f48dce"
@@ -27820,6 +27984,38 @@
    },
    "guarantees": ["Nci.SecurityProofs.PartitionCovers"]
   },
+  "Definitions.Nci.Guarantees.Products": {
+   "digest": "72bb0a2d560ba40da4b6e8e4d8fa2d474eb8c31bb04d4c717f0bc560a9d7bb5a",
+   "definitions": {
+    "Nci.Products.Guarantees.Bound": "30d0849102fcac9eb3829c101af510317ef8bdb9d143aaad82c66f46efa589a6",
+    "Nci.Products.Guarantees.Cap": "3d6b0aeb63b19a0ba2ba6481a753f580a11fbf532fe93a758793e1399153106d",
+    "Nci.Products.Guarantees.WordCap": "e2d8468d48769dba93d6000b99c164c1fd00d65bf8847a6630f80172642aaf28"
+   },
+   "guarantees": [
+    "Nci.Products.SecurityProofs.Bound",
+    "Nci.Products.SecurityProofs.Cap",
+    "Nci.Products.SecurityProofs.WordCap"
+   ]
+  },
+  "Definitions.Nci.Guarantees.Products.Witnesses": {
+   "digest": "af94ea424df30618a9265e9ef82929c1e92840094d6f4a11cb49aa22c1d510b7",
+   "definitions": {
+    "Nci.Products.Guarantees.Bound_honest": "21119e66aacbbc5efa651a4369ebd30c5ea1e57287de40179f1ce298c57b1171",
+    "Nci.Products.Guarantees.Bound_nontrivial": "c78e4933be982ddfb31a3d32a96f5c4a2714c3a758266cbee186898c73133a8b",
+    "Nci.Products.Guarantees.Cap_honest": "1be41214a95480ce2333eaf2852cd18b5f8b1d58754d4b073c972ccb0e73f5af",
+    "Nci.Products.Guarantees.Cap_nontrivial": "46b330945ca63eb0a82a25c4eacab8b2304ddaf3d2f8b1a79a2eb24933b15169",
+    "Nci.Products.Guarantees.WordCap_honest": "c182125aad92c0e08ccfb244124db38f834905cf964d54be5f82b586d667d05d",
+    "Nci.Products.Guarantees.WordCap_nontrivial": "9ae14c1ebbbc2804d2aca82ed208272e907d9d181c34dee7a99d1163884e8850"
+   },
+   "guarantees": [
+    "Nci.Products.SecurityProofs.Bound_honest",
+    "Nci.Products.SecurityProofs.Bound_nontrivial",
+    "Nci.Products.SecurityProofs.Cap_honest",
+    "Nci.Products.SecurityProofs.Cap_nontrivial",
+    "Nci.Products.SecurityProofs.WordCap_honest",
+    "Nci.Products.SecurityProofs.WordCap_nontrivial"
+   ]
+  },
   "Definitions.Nci.Guarantees.Reads": {
    "digest": "016cca93308e9ac6c0ad97c73b18da826f0fc8fbd33eb77535c28f63f61b3f72",
    "definitions": {
@@ -28011,6 +28207,59 @@
     "Nci.SecurityProofs.PackedContainedFanOutOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn"
+   ]
+  },
+  "Definitions.Nci.Products": {
+   "digest": "04c05d02c7ac9172bea8f5e075a69ba8f7683ced8abf858e633cfeb4e1c31967",
+   "definitions": {
+    "Nci.Products.Standard": "ceabbc516980d388d8172c9be42708b18208429fff809c79ba30e76dc473f281",
+    "Nci.Products.Standard.Algorithm": "9d4f1c66392a1ec467c2639f37f73730f0a6f33872d24d8576561bc7123c17fa",
+    "Nci.Products.Standard.Passed": "e091b3c484c0707c735b6b3d3e4dd632f2f2fa2c792d9e9dc8d07e0a2bf1f953",
+    "Nci.Products.Standard.Unsplit": "4f85d64a194b810cb5e0d4253454e15bcc8437807c363b74a688b7b9933a4d50",
+    "Nci.Products.Standard.bound": "663f46ef89b5012d3c12152e745a92f72cbfc7671a390b86b620c19ecaa64b47",
+    "Nci.Products.Standard.coneA": "a322cc06b270080daee387940617fa3febb1b4309fc7dc8b97ca062bcfa57304",
+    "Nci.Products.Standard.coneB": "af7b95e7f44373a8c870d9035bd95581ab291afafd24a96179670e20deeced49",
+    "Nci.Products.Standard.cones": "449085fd7aba6a6863d0082fd9d03036356d22a2d430e015bd0b7a41a06bddb6",
+    "Nci.Products.Standard.entry": "978ce727abeac55ca3cab8bceb310e5abff64aa349a277dc991bd51a921ad93e",
+    "Nci.Products.Standard.mac": "045b527a6ee746c7cb3f3b6add8a859508bbcda7fee5a21867a00cb253a3c58e",
+    "Nci.Products.Standard.macs": "cb68bdc1b55fbc68477b3291681ccbee592d350332494978631a29f3ecafd527",
+    "Nci.Products.Standard.opA": "4ea816d9be1032938f86bcc3e0b727b420e139e6f2912926f276014ec6d45086",
+    "Nci.Products.Standard.opB": "06c1f264062a8a6dc1f1f8483fca948bea77b5b12df2e9aac416ff653bf0b26f",
+    "Nci.Products.Standard.out": "42f649c73ab928c6c83b9a193c6b51bbe1e2530c5a90ffb95c1eb168a868972c",
+    "Nci.Products.Standard.outBits": "3f7b34ad5b63557066d495c84f53e058898bbdd6ccac8c8525bb013ed8029f51",
+    "Nci.Products.capAt": "173fcde7a53c8ce6c89ee3a8a13126164bebcc7afd2f8ea9a8be7167ad940edc",
+    "Nci.Products.handed": "c85da8d55a5408b09c7ea81a7797fe66bc5242f55544b6860dcc73d977b4e263"
+   },
+   "guarantees": [
+    "Nci.Products.SecurityProofs.Bound",
+    "Nci.Products.SecurityProofs.Bound_honest",
+    "Nci.Products.SecurityProofs.Bound_nontrivial",
+    "Nci.Products.SecurityProofs.Cap",
+    "Nci.Products.SecurityProofs.Cap_honest",
+    "Nci.Products.SecurityProofs.Cap_nontrivial",
+    "Nci.Products.SecurityProofs.WordCap",
+    "Nci.Products.SecurityProofs.WordCap_honest",
+    "Nci.Products.SecurityProofs.WordCap_nontrivial"
+   ]
+  },
+  "Definitions.Nci.Products.Instances": {
+   "digest": "a0f27f74fa6669d94e86794dc3a659feef1655991f75084bf5e3925256086d59",
+   "definitions": {
+    "Nci.Products.Single.C": "ea4fe280133db50ed34211318a492b55858b3e08768479da338ca7121f6360b5",
+    "Nci.Products.Single.P": "d11763fc023c05b95225002c13cdbaf01816ed9ca3da1577a56657328bc5d5bb",
+    "Nci.Products.Single.fresh": "0c0ff63989b0bdc32703c24c81d07ab0da4deeed396723f8511d66464ad6012c",
+    "Nci.Products.Single.freshProduct": "ece4e3352968807aa542195dfe8bcdeb010c31640bdf37bac4dbe90bacada171",
+    "Nci.Products.Single.product": "fb128b9522564bf09dbaf0d38503051c9d0663029c7b941817a583b9bb55fd9f",
+    "Nci.Products.Single.registered": "53b224663640b58b0ea69e4483ae92a3fb8b692ed752318db740e574031c7960",
+    "Nci.Products.Single.registeredProduct": "d814a8741e47b0512cedff3bb989d73b52f7afd58f97db17addc3a6e736dc7c7"
+   },
+   "guarantees": [
+    "Nci.Products.SecurityProofs.Bound_honest",
+    "Nci.Products.SecurityProofs.Bound_nontrivial",
+    "Nci.Products.SecurityProofs.Cap_honest",
+    "Nci.Products.SecurityProofs.Cap_nontrivial",
+    "Nci.Products.SecurityProofs.WordCap_honest",
+    "Nci.Products.SecurityProofs.WordCap_nontrivial"
    ]
   },
   "Definitions.Nci.Reads": {
