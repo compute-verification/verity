@@ -18,7 +18,7 @@ from verity.core.protocols.pouw.protocol import Matmul
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.serving import Schedule, SchemeId
 
-from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _zeros, joined, staged, write_behind, write_manifest
+from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _zeros, joined, write_behind, write_manifest
 from verity_vllm.protocols.pouw.pearl_c.host import behind as host_behind
 from verity_vllm.protocols.pouw.pearl_c.manifest import MANIFEST_SCHEMA, session_head
 from verity_vllm.protocols.pouw.pearl_c.screen import excluded, excluded_host
@@ -171,12 +171,11 @@ class PassEnds:
                 for t in kept:
                     t.record_stream(side)
                 rows, a_tree, held, *ys = kept
-                held = staged(held, fresh=True)
 
-                def record(host: Any) -> None:
+                def record(host: Any, flags: Any) -> None:
                     words = host.numpy().view("<u2").reshape(-1, mm.shape.k)
-                    cur.records[rec] = PW.UnitRecord(*unit, excluded_host(held.numpy(), words), ex)
-                out = [(paths[0], rows.view(torch.uint8), False, record), (paths[1], a_tree, True)]
+                    cur.records[rec] = PW.UnitRecord(*unit, excluded_host(flags.numpy().reshape(-1, 2), words), ex)
+                out = [(paths[0], rows.view(torch.uint8), False, record, held), (paths[1], a_tree, True)]
                 if ys:
                     out += [(paths[2], ys[0], False), (paths[3], SY.y_tree(self, ys[0], mm.index), True, y_root)]
                 got = write_behind(tuple(out), cur.writes, fresh=True)

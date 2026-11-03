@@ -2,7 +2,7 @@
 process or a live session's (`epoch_of`), device byte buffers and their uploads, the current stream's
 handle, each call's keys by native SHA-512 (`_Keys`, byte for byte `call_keys`), the pinned upload ring (`_Uploads`), the keys
 kept on the device by call (`_KeyTable`), the streams a run owns (`_Lane`) and the driver calls a lane graph's replay makes on
-their handles (`_Driver`), and a retained pass's files (`_write`, `staged`, `write_behind`, `write_manifest`) and its
+their handles (`_Driver`), and a retained pass's files (`_write`, `write_behind`, `write_manifest`) and its
 completion behind its step (`behind`).
 """
 from __future__ import annotations
@@ -389,32 +389,17 @@ def _copies(device: Any) -> _Copies:
     return _copiers[key]
 
 
-def staged(t: Any, fresh: bool = False) -> Any:
-    """`t`'s bytes as they are now on the current stream, in host memory of their own: from a device, a copy behind the
-    stream, done once the next `write_behind`'s copies are (its writes read them after those); `fresh` as
-    `_Copies.start`'s."""
-    import torch
-    if not t.is_cuda:
-        return t.clone()
-    cp = _copies(t.device)
-    src = t.contiguous() if fresh else t.contiguous().clone()
-    cp.stream.wait_stream(torch.cuda.current_stream(t.device))
-    with torch.cuda.stream(cp.stream):
-        host = torch.empty(src.shape, dtype=src.dtype, pin_memory=True)
-        host.copy_(src, non_blocking=True)
-        src.record_stream(cp.stream)
-    return host
-
-
 def write_behind(files: tuple[tuple, ...], pending: list[Future], fresh: bool = False) -> list[dict]:
-    """`_write`'s entries for tensors' bytes, each file (path, tensor, digest[, then]), with the files written behind the
-    caller: the bytes are copied as they are now on the current stream (a device's to the host on a stream of its own, through
-    `_Copies`' arena, with no wait on the caller's), and `WRITE_THREADS` threads write the files, each write's future appended
-    to `pending`, which the pass's end joins (`joined`) before its manifest names them; a digest's ``sha256`` lands in its
-    entry with its write, and a file's ``then`` is called with its bytes (a uint8 host tensor) once they are written.
-    `fresh`: nothing writes the tensors after this (`_Copies.start`)."""
+    """`_write`'s entries for tensors' bytes, each file (path, tensor, digest[, then, *also]), with the files written
+    behind the caller: the bytes are copied as they are now on the current stream (a device's to the host on a stream of its
+    own, through `_Copies`' arena, with no wait on the caller's), and `WRITE_THREADS` threads write the files, each write's
+    future appended to `pending`, which the pass's end joins (`joined`) before its manifest names them; a digest's
+    ``sha256`` lands in its entry with its write, and a file's ``then`` is called with its bytes and those of its `also`
+    tensors (uint8 host tensors, copied with it) once they are written.  `fresh`: nothing writes the tensors after this
+    (`_Copies.start`)."""
     import torch
-    srcs = [t.contiguous().reshape(-1).view(torch.uint8) for _, t, *_ in files]
+    files = [(path, t, digest, (more or (None,))[0], tuple(more[1:])) for path, t, digest, *more in files]
+    srcs = [s.contiguous().reshape(-1).view(torch.uint8) for _, t, _, _, also in files for s in (t, *also)]
     if srcs and srcs[0].is_cuda:
         hosts, gives, done = _copies(srcs[0].device).start(srcs, fresh)
     else:
@@ -422,30 +407,38 @@ def write_behind(files: tuple[tuple, ...], pending: list[Future], fresh: bool = 
     global _writers
     if _writers is None or _writers[0] != os.getpid():    # a forked child has none of its parent's threads
         _writers = (os.getpid(), ThreadPoolExecutor(WRITE_THREADS, thread_name_prefix="pearl-c-retain"))
-    entries = []
-    for (path, _, digest, *then), host, give in zip(files, hosts, gives, strict=True):
-        entry = _entry(path, host.numel())
-        pending.append(_writers[1].submit(_landed, path, host, digest, entry, done, give, then[0] if then else None))
+    entries, at = [], 0
+    for path, _, digest, then, also in files:
+        k = 1 + len(also)
+        entry = _entry(path, hosts[at].numel())
+        pending.append(_writers[1].submit(_landed, path, hosts[at:at + k], digest, entry, done, gives[at:at + k], then))
         entries.append(entry)
+        at += k
     return entries
 
 
-def _landed(path: Path, host: Any, digest: bool, entry: dict, done: Any, give: Callable[[], None],
-            then: Callable[[Any], None] | None) -> None:
+def _landed(path: Path, hosts: list[Any], digest: bool, entry: dict, done: Any, gives: list[Callable[[], None]],
+            then: Callable[..., None] | None) -> None:
     try:
         if done is not None:
             done.synchronize()
-        _write_host(path, host, digest, entry)
+        _write_host(path, hosts[0], digest, entry)
         if then is not None:
-            then(host)
+            then(*hosts)
     finally:
-        give()
+        for give in gives:
+            give()
 
 
 def _write_host(path: Path, host: Any, digest: bool, entry: dict) -> None:
     data = memoryview(host.numpy())
-    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
-        f.write(data)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        left = data
+        while left:
+            left = left[os.write(fd, left):]
+    finally:
+        os.close(fd)
     if digest:
         entry["sha256"] = hashlib.sha256(data).hexdigest()
 

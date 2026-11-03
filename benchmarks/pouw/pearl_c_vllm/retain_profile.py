@@ -44,7 +44,6 @@ PARTS = {
     "excluded_host": ("verity_vllm.protocols.pouw.pearl_c.ends", "excluded_host"),
     "y_tree": ("verity_vllm.protocols.pouw.pearl_c.served_y", "y_tree"),
     "write_behind": ("verity_vllm.protocols.pouw.pearl_c.ends", "write_behind"),
-    "staged": ("verity_vllm.protocols.pouw.pearl_c.ends", "staged"),
     "copies": ("verity_vllm.protocols.pouw.pearl_c.host", "_Copies.start"),
     "arena_take": ("verity_vllm.protocols.pouw.pearl_c.host", "_Arena.take"),
     "stream_sync": ("torch.cuda.streams", "Stream.synchronize"),
