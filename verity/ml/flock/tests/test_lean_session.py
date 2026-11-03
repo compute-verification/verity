@@ -895,7 +895,8 @@ def test_an_outer_coin_of_one_stops_the_session_as_its_round_opens(zk, at, why):
     or `Finish`, is refused for the same reason without reaching the auditor, which saw the schedule's rounds up to that
     one and nothing after. A coin `1` anywhere else (a skip coin of round 0, round 2's) is a coin like any other, which the
     prover receives once the frame took it. The prover is one whose device stopped, each round sent empty (the first its
-    domain frame alone), so every round that leaves is the frame's scheduled one."""
+    domain frame alone), so every round that leaves is the frame's scheduled one; its `Open` and `Link` are at the honest
+    prover's places."""
     stream, (k1, j) = "circuit/rep0", at
     tree = TreeAuditor(lambda s, k, b: b.__setitem__(j, 1) if (s, k) == (stream, k1) else None)
     auditor = Auditor(tree)
@@ -903,10 +904,12 @@ def test_an_outer_coin_of_one_stops_the_session_as_its_round_opens(zk, at, why):
     s = lp.connect()
     call(s, REGISTER)
     name = _name(call(s, hello("")))
+    assert call(s, open_(stream)) == b"\x01"
     f = TcpFrame(lp)
     assert isinstance(f.ask(f"rep {name} 0 0"), tuple)
     _, _, root = level0(lp, 25, _zeros(25), name)
     assert call(s, commit([("circuit", root)]))[:1] == b"\x02"
+    assert call(s, LINK) == b"\x01"
     got = []
     for k in range(3):
         n = _place(lp, name)
@@ -924,4 +927,4 @@ def test_an_outer_coin_of_one_stops_the_session_as_its_round_opens(zk, at, why):
     s.close()
     f.close()
     lp.close()
-    assert [x[0] for x in auditor.got[0]] == [10, 1, 7] + [4] * (3 if stop is None else stop + 1)
+    assert [x[0] for x in auditor.got[0]] == [10, 1, 3, 7, 2] + [4] * (3 if stop is None else stop + 1)
