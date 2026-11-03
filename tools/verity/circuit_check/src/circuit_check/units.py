@@ -13,7 +13,8 @@ body unbuilt, so with no gates and no calls.  Its reads (`cache.unit_reads`) are
 and ran while they made its roots, the build of every Definition they reach, the bindings that made those, those modules' import
 closures, its units by digest and what the process read outside every recording; and the units of every binding that makes no
 root (one run for what it sets, as `syn.knob`'s), whose reads every record holds.  The registered primitives and static-free
-composites are one more record, ``<registered>``.
+composites are `REGISTERED_RECORDS` more, ``<registered>:i``, each of a run of them in their order (`registered_entries`), so
+that their builds run apart from each other.
 
 A record counts only when its every read is unchanged where it was (never through a move; a module whose source `inspect`
 looked for only by whether it is there, `_unchanged`) and the roots its binding made now are the ones it lists; else its
@@ -103,6 +104,9 @@ REGISTERED = ("<registered>",)
 ROOTS = ("<roots>",)
 #: the version of what `write_slices` writes
 SLICE = "circuit-check-slice/v1"
+#: how many records the registered roots take (`registered_entries`): the longest of their builds bounds a ``--records-only``
+#: run, and one of them all took as long as the longest binding's
+REGISTERED_RECORDS = 8
 
 
 class Stale(Exception):
@@ -151,7 +155,16 @@ class Entry:
 
     @property
     def name(self) -> str:
-        return ",".join(self.units)
+        return ",".join(self.units) + (f":{self.label}" if self.units == REGISTERED else "")
+
+
+def registered_entries(roots: list[Any]) -> list[Entry]:
+    """The registered roots (`targets._registered`) as at most `REGISTERED_RECORDS` entries, each of a run of them in their order
+    (so `derive` meets them in the order `targets.reachable` does), entry i keyed and labelled by i; one entry when there are
+    none."""
+    k = max(1, -(-len(roots) // REGISTERED_RECORDS))
+    return [Entry(REGISTERED, "registered", str(i), key(REGISTERED, i), roots[j:j + k], n=i)
+            for i, j in enumerate(range(0, max(1, len(roots)), k))]
 
 
 def _kind(fn: Any) -> str | None:
@@ -524,8 +537,8 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
     ahead = CC.lookup(cache, key(ROOTS, 0), repo, moved=False) if stored and binding is not None else None
     want = deque(ahead[0]["entries"] if ahead is not None else ())
     raised = {label: (err, fx) for label, err, fx in ahead[0]["root_errors"]} if ahead is not None else {}
-    registered = TG._registered()
-    entries = [Entry(REGISTERED, "registered", "", first, registered)]
+    registered = registered_entries(TG._registered())
+    entries = list(registered)
     TG.ROOT_ERRORS.clear()
     effects: dict[str, Any] = {"raised": {}, "at": []}
     seen: Counter = Counter()
@@ -574,13 +587,13 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
                 effects["raised"][label] = noted
                 continue
         entries.append(entry)
-    hit = _lookup(cache, repo, entries[0]) if stored else None
-    if ahead is not None and (want or hit is None):
+    hits = [_lookup(cache, repo, e) if stored else None for e in registered]
+    if ahead is not None and (want or None in hits):
         return plan(cache, repo, log, apart)
-    if hit is not None:
-        rec, entries[0].reads = hit
-        entries[0].nodes, entries[0].reused, entries[0].words, entries[0].seconds = (rec["nodes"], True, rec.get("words"),
-                                                                                     rec.get("seconds"))
+    for e, hit in zip(registered, hits):
+        if hit is not None:
+            rec, e.reads = hit
+            e.nodes, e.reused, e.words, e.seconds = rec["nodes"], True, rec.get("words"), rec.get("seconds")
     if not any(e.reused for e in entries) and apart is None:
         return None
     pinned = TG.pinned()
@@ -745,9 +758,6 @@ def _key(at: list) -> str:
     return json.dumps(at)
 
 
-_REGISTERED_AT = _key([list(REGISTERED), "registered", "", 0])
-
-
 def _canonical(doc: dict) -> bytes:
     return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()
 
@@ -788,7 +798,6 @@ def slices(plan: Plan, owners: dict[str, str], name: Callable[[tuple[str, ...]],
         words.append(w)
     shared = {"schema": SLICE, "replay": replay, "families": plan.effects["families"], "calls": sorted(plan.calls),
               "words": words, "owners": dict(sorted(owners.items()))}
-    reg = plan.entries[0]
     groups: dict[str, list[Entry]] = {}
     for e in plan.entries:
         groups.setdefault(name(e.units), []).append(e)
@@ -799,7 +808,7 @@ def slices(plan: Plan, owners: dict[str, str], name: Callable[[tuple[str, ...]],
     per: dict[str, dict] = {}
     for b, own in groups.items():
         mine = {id(e) for e in own}
-        stand = [e for e in plan.entries if e is reg or id(e) in mine]
+        stand = [e for e in plan.entries if e.units == REGISTERED or id(e) in mine]
         targets = []
         for e in own:
             for fid in taken.get(id(e), ()):
@@ -874,13 +883,11 @@ def sliced(mine: dict, shared: dict, repo: Path, log: Callable[[str], None] | No
     own, its suite the Definitions they give, as `derive` took them.  `Stale` where the catalog, a record's reads, the roots
     or what making them did differ from the slice's: the slice is not of this tree."""
     TG.load_registries()
-    registered = TG._registered()
+    regs = {_key(_at(e)): e for e in registered_entries(TG._registered())}
     TG.ROOT_ERRORS.clear()
     own = {_key(x["at"]): x for x in mine["entries"]}
     replay = {_key(r[0]): r for r in shared["replay"]}
-    entries: dict[str, Entry] = {}
-    if _REGISTERED_AT in own:
-        entries[_REGISTERED_AT] = Entry(REGISTERED, "registered", "", key(REGISTERED, 0), registered)
+    entries: dict[str, Entry] = {k: e for k, e in regs.items() if k in own}
     makes: dict[str, Callable[[], list[Any]]] = {}
     produced: dict[str, list[Any]] = {}
     met: list[str] = []
@@ -913,7 +920,7 @@ def sliced(mine: dict, shared: dict, repo: Path, log: Callable[[str], None] | No
                         "than the slice notes")
         if x is not None:
             entries[k] = Entry(units, kind, label, key(units, n), roots, effects=noted, n=n)
-    if gone := (own.keys() - {*met, _REGISTERED_AT}) | (replay.keys() - set(met)):
+    if gone := (own.keys() - {*met, *regs}) | (replay.keys() - set(met)):
         raise Stale(f"the catalog no longer lists {len(gone)} of the slice's bindings ({sorted(gone)[0]})")
     if [k for k in met if k in replay] != [_key(r[0]) for r in shared["replay"]]:
         raise Stale("the catalog lists the bindings the shared part notes in another order")
@@ -929,9 +936,9 @@ def sliced(mine: dict, shared: dict, repo: Path, log: Callable[[str], None] | No
 
     def top(k: str) -> dict[str, Any]:
         if k not in tops:
-            if k != _REGISTERED_AT and k not in entries:
+            if k not in regs and k not in entries:
                 raise Stale(f"{k}: a root the slice names stands for a target, of no binding of its own")
-            tops[k] = {fn.id: fn for fn in (registered if k == _REGISTERED_AT else entries[k].made) if _kind(fn) is not None}
+            tops[k] = {fn.id: fn for fn in (regs[k] if k in regs else entries[k]).made if _kind(fn) is not None}
         return tops[k]
 
     ids: list[str] = []
@@ -969,8 +976,8 @@ def sliced(mine: dict, shared: dict, repo: Path, log: Callable[[str], None] | No
         on = {p: {**({"c": [path[i + 1]]} if i + 1 < len(path) else {}), **({"i": 1} if m else {})}
               for i, (p, m) in enumerate(zip(path, marks))}
         e = Entry(tuple(a[0]), a[1], a[2], {}, None, on, reused=True, ids=[path[0]], n=a[3])
-        if k == _REGISTERED_AT:
-            e.made = [_first(registered, path[0], "the registered roots")]
+        if k in regs:
+            e.made = [_first(regs[k].made, path[0], "the registered roots")]
         else:
             e.make = lambda: [_first(produce(k), path[0], e.name)]
         return e
@@ -1016,7 +1023,7 @@ def made_entries() -> list[Entry]:
     """Every binding as the catalog makes it (`targets.catalog_units`, in catalog order), its roots made now and no body built,
     the registered roots first; a model that raises is named in `targets.ROOT_ERRORS`, as the catalog names it."""
     TG.load_registries()
-    entries = [Entry(REGISTERED, "registered", "", key(REGISTERED, 0), TG._registered())]
+    entries = registered_entries(TG._registered())
     TG.ROOT_ERRORS.clear()
     seen: Counter = Counter()
     for units, make, kind, label in TG.catalog_units():
@@ -1316,7 +1323,7 @@ def built_entries() -> list[Entry] | None:
     registered, made = TG.CATALOGS[0]
     if any([fn.id for fn in c[0]] != [fn.id for fn in registered] for c in TG.CATALOGS[1:]):
         return None
-    entries = [Entry(REGISTERED, "registered", "", key(REGISTERED, 0), registered)]
+    entries = registered_entries(registered)
     seen: Counter = Counter()
     for units, kind, label, roots in made:
         n, seen[units] = seen[units], seen[units] + 1
@@ -1327,6 +1334,7 @@ def built_entries() -> list[Entry] | None:
     return entries
 
 
-__all__ = ["APART_GB", "REQUEST", "ROOTS", "SLICE", "Derived", "Entry", "Plan", "Stale", "built_apart", "built_entries",
-           "built_here", "call_families", "derive", "from_manifest", "key", "made_entries", "make", "manifest", "merged", "plan",
-           "planned", "read_slice", "sliced", "slices", "store", "store_roots", "write_slices"]
+__all__ = ["APART_GB", "REGISTERED_RECORDS", "REQUEST", "ROOTS", "SLICE", "Derived", "Entry", "Plan", "Stale", "built_apart",
+           "built_entries", "built_here", "call_families", "derive", "from_manifest", "key", "made_entries", "make", "manifest",
+           "merged", "plan", "planned", "read_slice", "registered_entries", "sliced", "slices", "store", "store_roots",
+           "write_slices"]

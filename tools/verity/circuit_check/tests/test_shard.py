@@ -778,6 +778,26 @@ def test_each_binding_from_its_slice_alone_checks_what_it_checks_from_every_reco
 
 
 @pytest.mark.slow
+def test_the_registered_roots_slice_holds_each_of_their_records(tmp_path):
+    """Two registered roots take a record each (`units.registered_entries`), and the ``<registered>`` binding's slice holds both,
+    each at its place: its ``--binding --slice`` run in a tree with no record holds each to its reads and checks what its run
+    from every record checks, with the same keys.  The one-record tree of the test above can't tell a slice that holds only the
+    first."""
+    from test_units import TWO_REGISTERED
+
+    root = _tree(tmp_path / "t")
+    _bindings(root, *UNIT_BINDINGS)
+    _edit(root, "syn/catalog.py", "BINDINGS = [", TWO_REGISTERED + "BINDINGS = [")
+    _, cut = _slices(root)
+    piece = json.loads((cut / json.loads((cut / "index.json").read_text())["bindings"]["<registered>"]).read_text())
+    assert [x["at"] for x in piece["entries"]] == [[["<registered>"], "registered", str(i), i] for i in range(2)], piece
+    out = _run_units(_bare(root, tmp_path / "s"), _sliced("<registered>", cut))
+    full = _run_units(Path(shutil.copytree(root, tmp_path / "r")), _forked("<registered>"))
+    assert out["stats"]["units"] == {"reused": 2, "rebuilt": [], "stored": 0} and out["values"], out["stats"]
+    assert (out["values"], out["keys"]) == (full["values"], full["keys"]), (out["values"], full["values"])
+
+
+@pytest.mark.slow
 def test_a_binding_from_its_slice_registers_and_imports_what_it_does_from_every_record(tmp_path):
     """From its slice and the shared part alone, in a copy of the tree with no record, a binding's run does in each other
     binding's place what making its roots did beyond them where the shared part notes it, and makes them where that can't be
