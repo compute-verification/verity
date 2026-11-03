@@ -38,8 +38,9 @@ at the draws on the server's tape (`LeanRelease.draws`):
   the scheduled round in its place, and the device round passes where it equals the scheduled round byte for byte
   outside the algebraic phase's masked values and the frame takes it. A round that passes leaves as the frame's release
   of it, and one that fails as the frame's release of the scheduled round, as a stopped rep's
-  (`LeanRelease.check_release`). Rust's own checks run first and can only fail a round more (`LeanRelease.cross`). The
-  inner proof's rounds, which the firewall sends alone, are `check`'s against themselves (`check_self`).
+  (`LeanRelease.check_release`). Rust's own checks run first and can only fail a round more (`LeanRelease.cross`). At
+  the inner proof's rounds the scheduled round is the frame's own (`Frame.innerSched`, on the finish's rounds), which
+  Rust relays; relayed as the frame computed it, it is `check`'s against itself (`check_self`).
 
 `LeanRelease.toSrv` is it as a `ZkServer` with one slot per round, of the deployed session's kinds
 (`LeanRelease.kindAt`):
@@ -75,8 +76,9 @@ firewall computes:
 * `LeanRelease.HelloRefine`: at every tape, the server's `Hello` is the prover's first message;
 * `LeanRelease.OwnRefine`: at the link and the `Finish`, on every history where the deferred release releases a frame,
   the firewall's own message is the prover's;
-* `LeanRelease.LiveRefine`: on every history at a frame round whose rounds all passed and whose last coins the frame
-  takes, the frame's release of the worker's round is the prover's message;
+* `LeanRelease.LiveRefine`: on every history of the deferred release's own run (`ZkServer.OwnHist`) at a frame round
+  whose rounds all passed and whose last coins the frame takes, the frame's release of the worker's round is the
+  prover's message;
 * `LeanRelease.FillRefine`: on every history at a frame round below the last round on which a round failed and whose
   last coins the frame takes, the frame's release of the firewall's scheduled round, at the values the release log
   reports there, is the prover's message;
@@ -215,8 +217,8 @@ theorem check_some {c : Cfg} {s : Masker} {v r : ByteArray} {n : Nat} {out : Byt
     | error e => simp only [hr] at h; cases h
     | ok x => simp only [hr] at h; cases h; rfl
 
-/-- A round checked against itself passes wherever the frame takes it: the inner proof's rounds, which the firewall sends
-alone (`round N LEN`), are `check`'s with the round in its own place. -/
+/-- A round checked against itself passes wherever the frame takes it: an inner proof's round relayed as the frame
+computed it (`Frame.innerSched`) is `check`'s with the round in its own place. -/
 theorem check_self {c : Cfg} {s : Masker} {v : ByteArray} {n : Nat} {out : ByteArray} {s' : Masker}
     (hs : s.stopped = false) (h : _root_.Flock.Firewall.Frame.round c s v n = .ok (out, s')) :
     check c s v v n = .ok (out, s', none) := by
@@ -315,9 +317,9 @@ structure LeanRelease (W R : Type) where
   the frame fails: any decision at all -/
   cross : Msg → ℕ → W → R → List (Msg × Msg) → Msg → Bool
   /-- the device round the firewall sends in the device's place once a round failed: the skeleton's round with zero
-  values in the algebraic phase, the Lean finish's round in the opening, and at the inner proof's rounds, which the firewall
-  sends alone, the firewall's own round itself (`check_self`), given the values the firewall fixes by its own
-  computation, by name -/
+  values in the algebraic phase, the Lean finish's round in the opening, and at the inner proof's rounds the frame's own
+  round (`Frame.innerSched` on the finish's rounds, `LeanRelease.withInner`), given the values the firewall fixes by its
+  own computation, by name -/
   scheduled : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg
   /-- round `j`'s coin count -/
   coins : Msg → ℕ → ℕ
@@ -747,11 +749,13 @@ def OwnRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Pr
   ∀ ρ κ h, L.kindAt x h.length = .recomputed → (h.length + 1 < n x ∨ L.toSrv.live wk x w ρ κ h = true) →
     L.toSrv.OwnHist L.fillOf wk x w ρ κ h → (((P w).next x h ρ).eval H).1 = L.ownMsg x w ρ h
 
-/-- **The frame rounds the worker passed**: after every history at a frame round on which every round so far passed and
-whose last coins the frame takes, the Lean frame's release of the worker's round is `P`'s message. -/
+/-- **The frame rounds the worker passed**: after every history of the deferred release's own run (`ZkServer.OwnHist`)
+at a frame round on which every round so far passed and whose last coins the frame takes, the Lean frame's release of
+the worker's round is `P`'s message. -/
 def LiveRefine {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Prover R) (wk : L.toSrv.Worker)
     (x : Msg) (w : W) : Prop :=
   ∀ ρ κ h v, L.kindAt x h.length = .masked → L.toSrv.live wk x w ρ κ h = true → L.refusesCoins x ρ h = false →
+    L.toSrv.OwnHist L.fillOf wk x w ρ κ h →
     wk x w ρ h 0 = some (v, false) → (((P w).next x h ρ).eval H).1 = L.release x ρ h false v
 
 /-- **The stand-in rounds**: after every history at a frame round below the last round `n x - 1` on which a round failed
@@ -809,7 +813,7 @@ theorem refD {W R : Type} (L : LeanRelease W R) (H : Msg → Msg) (P : W → Pro
       | true =>
         rw [L.release_of_refusesCoins x ρ h _ _ hs]
         exact hI.2.2.2.2 ρ κ h hk hcond hs
-      | false => exact hI.2.2.1 ρ κ h v hk hl hs hv
+      | false => exact hI.2.2.1 ρ κ h v hk hl hs hown hv
     | false =>
       have hlt : h.length + 1 < n x := hcond.resolve_right (by rw [hl]; exact Bool.false_ne_true)
       have hu : L.toSrv.wkD L.fillOf wk κ x w ρ h 0 = some (L.fillOf x h.length 0 w ρ h) := by
