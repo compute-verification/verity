@@ -1,5 +1,5 @@
 """The inner session's proxy and coin server (`verity_flock.rec_live`): the wire codec, how a round's frames are sorted into
-caps and the private free message, the message rows' and tops' salted commitments, that the coin server is shown nothing
+caps and the private free message, the message rows' and tops' hiding commitments, that the coin server is shown nothing
 of the hidden statement or a tree top while the proxy's session record keeps what the live server's would, and the ZK server's
 refusals (a session off its pinned schedule, a nonzero ``y``)."""
 from __future__ import annotations
