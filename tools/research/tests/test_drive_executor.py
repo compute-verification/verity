@@ -1,6 +1,7 @@
 """Drive's side of the task executor (`research.executor`, drive.toml's `executor`), on the file-backed fake transport: off
-changes nothing; shadow enqueues each checked tip's task graph beside its after-landing run and records how their verdicts
-compare; on verifies a tip, and moves `main`, only once every task's verdict is pass."""
+changes nothing; shadow enqueues each checked tip's check with no graph beside its after-landing run, reads the graph the
+executor listed, and records how their verdicts compare by its keys; on verifies a tip, and moves `main`, only once every
+task's verdict is pass.  `QueueTransport` reads the executor's graph through the store's remote."""
 from __future__ import annotations
 
 import json
@@ -8,8 +9,9 @@ import json
 import pytest
 
 from research.drive import AFTER_LANDING
-from research.executor import (AFTER_LANDING_PRIORITY, SHADOW_WAIT_S, Executor, FileTransport, Shadowed, agrees, compare, keyed,
-                               shadow_records, shadow_report)
+from research.executor import (AFTER_LANDING_PRIORITY, SHADOW_WAIT_S, TASKS_GRAPH_KIND, Executor, FileTransport, QueueTransport,
+                               Shadowed, agrees, compare, keyed, shadow_records, shadow_report)
+from research.store.local import LocalStore
 from research.store import vocab
 from test_drive_review import Review, _main
 from test_queue import World, _git
@@ -74,6 +76,16 @@ def _keys(fake: FileTransport, i: int) -> dict[str, str]:
     return {t["id"]: t["key"] for t in fake.enqueued()[i]["graph"]["tasks"]}
 
 
+def _list(fake: FileTransport, tip: str, graph: dict | None = None) -> dict[str, str]:
+    """The fake executor lists ``tip``'s graph on its worker (``graph``, else `_graph`); {task id: the key its verdict is under}."""
+    fake.list_graph(f"after-landing:{tip}", g := graph or _graph(tip))
+    return {t["id"]: t["key"] for t in keyed(g)["tasks"]}
+
+
+def _graph_id(fake: FileTransport, tip: str) -> str:
+    return fake.graph(f"after-landing:{tip}")[0]
+
+
 def test_the_executor_enqueues_a_graph_with_a_key_for_each_task_and_folds_each_keys_verdicts(tmp_path):
     fake = FileTransport(tmp_path)
     ex = Executor(fake)
@@ -134,14 +146,13 @@ def test_off_changes_nothing(world, monkeypatch, tmp_path):
     assert world.store.labels(f"commit:{tip}") == []
 
 
-def test_shadow_enqueues_each_tips_graph_and_records_agreement_and_a_disagreement(world, monkeypatch, tmp_path):
+def test_shadow_enqueues_each_tips_check_without_a_graph_and_compares_by_the_executors_graph(world, monkeypatch, tmp_path):
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "shadow")
     one = _land(h, 1)
-    assert h.listings == [one] and len(h.posted) == 1           # the run launches as before, and the tip's graph is listed
-    h.tick()
-    assert [(r["check"], r["priority"]) for r in fake.enqueued()] == [(f"after-landing:{one}", 1)]
-    for k in _keys(fake, 0).values():
+    assert len(h.posted) == 1 and h.listings == [], "the run launches as before, and drive's host lists no graph"
+    assert fake.enqueued() == [{"check": f"after-landing:{one}", "priority": AFTER_LANDING_PRIORITY, "graph": None}]
+    for k in _list(fake, one).values():
         fake.finish(k, "pass")
     h.tick()
     assert world.store.labels(f"commit:{one}") == [], "the run hasn't ended: nothing to compare yet"
@@ -150,14 +161,14 @@ def test_shadow_enqueues_each_tips_graph_and_records_agreement_and_a_disagreemen
     assert _main(world) == one                                  # the run alone moves `main`
     (rec,) = world.store.labels(f"commit:{one}", key=vocab.EXECUTOR_SHADOW)
     n = len(AFTER_LANDING) + 2                                  # every step, suite `pkg` and the Lake package `Security`
-    assert rec.value == {"check": f"after-landing:{one}", "run": "r-post-0", "units": n, "agree": n, "pending": [],
-                         "disagree": [], "missing": [], "executor_only": []}
-    assert "executor" not in h.q.load_state()["drive"] or one not in h.q.load_state()["drive"]["executor"]
+    assert rec.value == {"check": f"after-landing:{one}", "graph": _graph_id(fake, one), "run": "r-post-0", "units": n,
+                         "agree": n, "pending": [], "disagree": [], "missing": [], "executor_only": []}
+    assert one not in h.q.load_state()["drive"].get("executor", {})
 
     two = _land(h, 2)
     h.tick()
-    keys = _keys(fake, 1)
-    assert keys["pytest:pkg"] == K_SUITE and keys["flock-rust-tests"] != _keys(fake, 0)["flock-rust-tests"]
+    keys = _list(fake, two)
+    assert keys["pytest:pkg"] == K_SUITE and keys["flock-rust-tests"] != _list(fake, one)["flock-rust-tests"]
     for t, k in keys.items():
         if t not in ("pytest:pkg", "lean-audit:Security"):
             fake.finish(k, "fail" if t == "flock-rust-tests" else "pass")
@@ -170,12 +181,72 @@ def test_shadow_enqueues_each_tips_graph_and_records_agreement_and_a_disagreemen
     text, ok = shadow_report(shadow_records(world.store, pull=False), 10)
     assert not ok and f"{two[:12]}" in text and "flock-rust-tests: run pass, executor fail" in text, text
     assert f"agree {n}/{n}, disagree 0" in text and "the newest 0 agree" in text
+    assert h.listings == [] and [r["graph"] for r in fake.enqueued()] == [None, None]
+
+
+def test_a_shadow_tip_is_pending_until_the_executor_labels_its_graph_then_agrees_by_its_keys(world, monkeypatch, tmp_path):
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "shadow")
+    one = _land(h, 1)
+    _passed_run(h, tmp_path)
+    for _ in range(2):
+        h.clock += SHADOW_WAIT_S // 3
+        h.tick()
+        assert world.store.labels(f"commit:{one}") == [], "no graph from the executor yet: the tip's shadow is pending"
+        assert "keys" not in h.q.load_state()["drive"]["executor"][one]
+    # the executor's worker lists the graph with keys of its own environment, none of them a key `_graph` has
+    worker = {**_graph(one), "tasks": [{**t, "key": f"{i:x}" * 128} for i, t in enumerate(_graph(one)["tasks"][:3], 1)]
+              + _graph(one)["tasks"][3:]}
+    keys = _list(fake, one, worker)
+    assert not {K_SUITE, K_LEAN} & set(keys.values())
+    h.tick()
+    assert world.store.labels(f"commit:{one}") == [] and h.q.load_state()["drive"]["executor"][one]["keys"] == keys
+    for k in keys.values():
+        fake.finish(k, "pass")
+    fake.finish(K_SUITE, "fail")                                # a verdict under a key not in the executor's graph is unread
+    h.tick()
+    (rec,) = world.store.labels(f"commit:{one}", key=vocab.EXECUTOR_SHADOW)
+    assert agrees(rec.value) and rec.value["graph"] == _graph_id(fake, one), rec.value
+    assert h.listings == []
+
+
+def test_a_graph_the_executor_never_labels_is_recorded_incomplete_after_the_wait(world, monkeypatch, tmp_path):
+    h = Review(world, monkeypatch, land_into="checked")
+    _executor(h, tmp_path, "shadow")
+    one = _land(h, 1)
+    _passed_run(h, tmp_path)
+    h.clock += SHADOW_WAIT_S
+    h.tick()
+    assert world.store.labels(f"commit:{one}") == [] and one in h.q.load_state()["drive"]["executor"]
+    h.clock += 1
+    h.tick()
+    (rec,) = world.store.labels(f"commit:{one}", key=vocab.EXECUTOR_SHADOW)
+    assert rec.value["incomplete"] == (f"the executor labelled no task graph of it (tasks_graph on commit:{one}) "
+                                       f"{SHADOW_WAIT_S // 3600} h after its enqueue") and not agrees(rec.value)
+    assert rec.value["check"] == f"after-landing:{one}" and rec.value["run"] == "r-post-0"
+    assert one not in h.q.load_state()["drive"].get("executor", {}) and _main(world) == one
+    text, ok = shadow_report(shadow_records(world.store, pull=False), 10)
+    assert not ok and "incomplete: the executor labelled no task graph" in text, text
+    assert h.listings == []
+
+
+def test_a_graph_of_another_commit_is_refused_and_the_tip_recorded_incomplete(world, monkeypatch, tmp_path):
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "shadow")
+    one = _land(h, 1)
+    _passed_run(h, tmp_path)
+    _list(fake, one, _graph("9" * 40))
+    h.tick()
+    (rec,) = world.store.labels(f"commit:{one}", key=vocab.EXECUTOR_SHADOW)
+    assert rec.value["incomplete"].startswith("ValueError: the executor's graph ") and rec.value["incomplete"].endswith(
+        f" of after-landing:{one} is of after-landing:{'9' * 40}"), rec.value
 
 
 def test_a_shadow_tip_still_pending_is_recorded_pending_once_it_waited_long_enough(world, monkeypatch, tmp_path):
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "shadow")
     one = _land(h, 1)
+    _list(fake, one)
     h.tick()
     _passed_run(h, tmp_path)
     fake.finish(K_SUITE, "pass")
@@ -187,13 +258,28 @@ def test_a_shadow_tip_still_pending_is_recorded_pending_once_it_waited_long_enou
     assert rec.value["pending"] == sorted({*AFTER_LANDING, "lean-audit:Security"} - {"pytest"}) and rec.value["agree"] == 2
 
 
+def test_an_enqueue_that_fails_in_shadow_is_recorded_incomplete_and_the_tip_still_lands(world, monkeypatch, tmp_path):
+    h = Review(world, monkeypatch, land_into="checked")
+    fake = _executor(h, tmp_path, "shadow")
+
+    def refused(graph_file, priority, check):
+        raise RuntimeError("research executor enqueue exited 2: no command")
+
+    fake.enqueue = refused
+    one = _land(h, 1)
+    assert len(h.posted) == 1
+    (rec,) = world.store.labels(f"commit:{one}", key=vocab.EXECUTOR_SHADOW)
+    assert rec.value["incomplete"] == "enqueueing its check: RuntimeError: research executor enqueue exited 2: no command"
+    assert one not in h.q.load_state()["drive"].get("executor", {})
+
+
 def test_a_transport_error_in_shadow_is_logged_marks_the_tip_incomplete_and_the_tick_still_lands(world, monkeypatch, tmp_path):
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "shadow")
     one = _land(h, 1)
-    h.tick()
-    for k in _keys(fake, 0).values():
+    for k in _list(fake, one).values():
         fake.finish(k, "pass")
+    h.tick()
     _passed_run(h, tmp_path)
 
     def down(keys):
@@ -258,20 +344,66 @@ def test_on_refuses_main_on_a_failed_task_and_tells_ci(world, monkeypatch, tmp_p
     assert h.listings == [tip] and h.posted == [], "a failed tip isn't checked again"
 
 
-def test_research_executor_enqueue_runs_the_command_its_variable_names_and_refuses_without_one(tmp_path, monkeypatch, capsys):
-    """Drive's default transport runs `research executor enqueue`; research imports nothing from `infra/`, so the command is
-    the one `RESEARCH_EXECUTOR_ENQUEUE` names where drive runs, run with drive's arguments and its exit passed back."""
+def test_drive_runs_the_enqueue_command_drive_toml_names(world, monkeypatch, tmp_path):
+    """Drive's default transport runs drive.toml's `executor_enqueue`, infra's command (research imports nothing from `infra/`),
+    with drive's arguments."""
     import sys
 
-    from research.cli import main
-    from research.executor import ENQUEUE_ENV
+    from research.queue import DriveFlags
 
-    seen = tmp_path / "argv.txt"
-    stub = tmp_path / "enqueue.py"
-    stub.write_text(f"import sys\nopen({str(seen)!r}, 'w').write(' '.join(sys.argv[1:]))\nsys.exit(3)\n")
-    monkeypatch.setenv(ENQUEUE_ENV, f"{sys.executable} {stub} --db 'q b.db'")
-    assert main(["executor", "enqueue", "--graph", "g.json", "--priority", "1", "--check", "after-landing:abc"]) == 3
-    assert seen.read_text() == "--db q b.db --graph g.json --priority 1 --check after-landing:abc"
-    monkeypatch.delenv(ENQUEUE_ENV)
-    assert main(["executor", "enqueue", "--graph", "g.json"]) == 2
-    assert f"{ENQUEUE_ENV} names no command" in capsys.readouterr().err
+    assert DriveFlags.parse('executor_enqueue = ["python3", "enqueue.py"]\n').executor_enqueue == ("python3", "enqueue.py")
+    assert DriveFlags.parse("").executor_enqueue == ()
+    for bad in ("executor_enqueue = []", 'executor_enqueue = "python3 enqueue.py"', 'executor_enqueue = [""]'):
+        with pytest.raises(Exception, match="executor_enqueue = .*: a command as a non-empty list of its words"):
+            DriveFlags.parse(bad + "\n")
+    seen, stub = tmp_path / "argv.txt", tmp_path / "enqueue.py"
+    stub.write_text(f"import sys\nopen({str(seen)!r}, 'w').write(' '.join(sys.argv[1:]))\n")
+    h = Review(world, monkeypatch, land_into="checked")
+    h.d.executor, h.d.executor_enqueue = "shadow", (sys.executable, str(stub), "--db", "q b.db")
+    one = _land(h, 1)
+    assert seen.read_text() == f"--db q b.db --priority 1 --check after-landing:{one}"
+    assert one in h.q.load_state()["drive"]["executor"]
+
+
+def test_with_no_enqueue_command_a_shadowed_tip_is_recorded_incomplete_and_lands(world, monkeypatch):
+    h = Review(world, monkeypatch, land_into="checked")
+    h.d.executor = "shadow"
+    tip = _land(h, 1)
+    assert len(h.posted) == 1
+    (rec,) = world.store.labels(f"commit:{tip}", key=vocab.EXECUTOR_SHADOW)
+    assert rec.value["incomplete"] == ("enqueueing its check: RuntimeError: drive.toml names no `executor_enqueue` command: "
+                                       "set it to infra's enqueue command, the words of its argv")
+
+
+def test_the_queue_transport_enqueues_a_check_with_no_graph_and_reads_the_graph_the_executor_labelled(tmp_path):
+    """Drive's store reads the executor's graph only through the remote: the executor's store put the `tasks-graph/v1`
+    artifact and its `tasks_graph` label on `commit:<sha>` there, and drive's pulls the label, then fetches the graph."""
+    import sys
+
+    (tmp_path / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
+    executor_store = LocalStore(tmp_path / "executor-store", config_path=tmp_path / "store.toml")
+    drive_store = LocalStore(tmp_path / "drive-store", config_path=tmp_path / "store.toml")
+    seen, stub = tmp_path / "argv.txt", tmp_path / "enqueue.py"
+    stub.write_text(f"import sys\nopen({str(seen)!r}, 'w').write(' '.join(sys.argv[1:]))\n")
+    tip = "1" * 40
+    ex = Executor(QueueTransport(drive_store, command=(sys.executable, str(stub))))
+    ex.enqueue_check(f"after-landing:{tip}", AFTER_LANDING_PRIORITY)
+    assert seen.read_text() == f"--priority 1 --check after-landing:{tip}"
+    assert ex.graph(f"after-landing:{tip}") is None
+
+    (f := tmp_path / "graph.json").write_text(json.dumps(_graph(tip)))
+    art = executor_store.put_artifact(TASKS_GRAPH_KIND, {}, file=f)
+    executor_store.push(art)
+    executor_store.add_label(f"commit:{tip}", vocab.TASKS_GRAPH, art, "executor")
+    executor_store.push_labels([f"commit:{tip}"])
+    assert drive_store.labels(f"commit:{tip}") == []
+    gid, keys = ex.graph(f"after-landing:{tip}")
+    assert gid == art and keys == {t["id"]: t["key"] for t in keyed(_graph(tip))["tasks"]} and keys["pytest:pkg"] == K_SUITE
+
+    (g := tmp_path / "other.json").write_text("{}")
+    other = executor_store.put_artifact("fixture/v1", {}, file=g)
+    executor_store.push(other)
+    executor_store.add_label(f"commit:{'2' * 40}", vocab.TASKS_GRAPH, other, "executor")
+    executor_store.push_labels([f"commit:{'2' * 40}"])
+    with pytest.raises(ValueError, match=f"names {other}, a fixture/v1, not a tasks-graph/v1"):
+        ex.graph(f"after-landing:{'2' * 40}")

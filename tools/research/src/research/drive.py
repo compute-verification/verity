@@ -170,6 +170,7 @@ from .executor import (AFTER_LANDING_PRIORITY, FAIL, PENDING, SHADOW_WAIT_S, Exe
 from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels,
                     _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, move_of, unreviewed)
 from .queue_stats import ts
+from .store import vocab
 
 #: who hears what drive can't settle
 CI = "@ci"
@@ -397,7 +398,7 @@ def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None 
     return {"dir": d, "pid": p.pid}
 
 
-#: a tip's task graph (`list_tasks`): a worktree of the tip ($2) in the queue's clone, synced as a worker syncs (AGENTS.md),
+#: a tip's task graph in "on" mode (`list_tasks`): a worktree of the tip ($2) in the queue's clone, synced as a worker syncs,
 #: `verity tasks list` there to `graph.json` in the listing's directory ($1), the worktree removed after
 LIST_JOB = ('set -e; r=$PWD; t="$1/tree"; git worktree add -q --detach "$t" "$2"; trap \'cd "$r"; git worktree remove --force "$t"\' '
             'EXIT; cd "$t"; uv run -q --frozen --all-packages --extra torch-cpu verity tasks list --json --kind after-landing '
@@ -1041,11 +1042,12 @@ class Driver:
                  ready_by: Callable[[int, str], str | None] | None = None, max_lean_checks: int = 2,
                  stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = (),
                  after_landing_shards: int | str = 1, lowrisk_lane: bool = False, lowrisk_per_tick: int = 20,
-                 lowrisk_excludes: tuple[str, ...] = ()):
+                 lowrisk_excludes: tuple[str, ...] = (), executor_enqueue: tuple[str, ...] = ()):
         self.q, self.on = q, on
         #: drive.toml's `executor`: "off", "shadow" (beside the after-landing run: `_follow_shadow`) or "on" (in its place:
-        #: `_follow_tasks`); ``tasks``, the executor (default: infra's queue, `QueueTransport`), and how a tip's graph is listed
-        self.executor, self._tasks = executor, tasks
+        #: `_follow_tasks`); ``tasks``, the executor (default: infra's queue, `QueueTransport` running ``executor_enqueue``), and
+        #: how "on" lists a tip's graph (shadow reads the graph the executor listed on a worker: `_shadow_tip`)
+        self.executor, self._tasks, self.executor_enqueue = executor, tasks, executor_enqueue
         self.list_tasks: Callable[[Path, str], dict] = list_tasks
         self.listed_tasks: Callable[[dict], tuple[dict | None, str | None]] = listed_tasks
         #: drive.toml's low-risk lane (`land_lowrisk`): on, its most landings a tick, and what keeps a change off it (`lowrisk`)
@@ -1099,7 +1101,7 @@ class Driver:
     @property
     def tasks(self) -> Executor:
         if self._tasks is None:
-            self._tasks = Executor(QueueTransport(self.q.store))
+            self._tasks = Executor(QueueTransport(self.q.store, self.executor_enqueue))
         return self._tasks
 
     # -- what the store says of a commit
@@ -1358,9 +1360,9 @@ class Driver:
             self._shadow_old(drive, run)
         pl["run"] = None
 
-    # -- the task executor (`research.executor`): `drive["executor"]` {tip: {"at", "listing": a `list_tasks` record while it
-    #    lists, "keys": {task id: key}, "check", "enqueued", "old": the run's verdicts by part, "run": its ids}}, in shadow mode;
-    #    in "on" mode the after-landing run's record is {"tip", "at", "tasks": {"listing" | "keys", "check"}, ...}
+    # -- the task executor (`research.executor`): `drive["executor"]` {tip: {"at": its check's enqueue, "check", "graph": the
+    #    executor's graph's id and "keys": {task id: key} once labelled, "old": the run's verdicts by part, "run": its ids}}, in
+    #    shadow mode; in "on" mode the after-landing run's record is {"tip", "at", "tasks": {"listing" | "keys", "check"}, ...}
 
     def _listed(self, tip: str, listing: dict) -> tuple[dict | None, str | None]:
         """`listed_tasks`, a graph of another commit than ``tip`` refused."""
@@ -1369,13 +1371,17 @@ class Driver:
             return None, f"it lists commit {graph.get('commit')}, not {tip}"
         return graph, why
 
-    def _shadow_list(self, drive: dict, tip: str) -> None:
-        """`executor = "shadow"`: list ``tip``'s task graph beside its after-landing run, once."""
+    def _shadow_enqueue(self, drive: dict, tip: str) -> None:
+        """`executor = "shadow"`: put ``tip``'s after-landing check on the executor's queue beside its run, once, with no graph:
+        the executor lists the graph on a worker, where its keys are those its verdicts come under (`_shadow_tip` reads it)."""
         if self.executor == "shadow" and tip not in (tips := drive.setdefault("executor", {})):
+            tips[tip] = {"at": self.now(), "check": f"after-landing:{tip}"}
             try:
-                tips[tip] = {"at": self.now(), "listing": self.list_tasks(self.repo, tip)}
+                self.tasks.enqueue_check(tips[tip]["check"], AFTER_LANDING_PRIORITY)
             except Exception as e:  # noqa: BLE001  (a shadow never stops drive: recorded incomplete)
-                self._shadow_incomplete(tips, tip, f"listing its task graph: {type(e).__name__}: {e}")
+                self._shadow_incomplete(tips, tip, f"enqueueing its check: {type(e).__name__}: {e}")
+            else:
+                self.q.log(f"research queue drive: shadow: enqueued {tips[tip]['check']}; the executor lists its task graph")
 
     def _shadow_old(self, drive: dict, run: dict) -> None:
         """The after-landing run of a shadowed tip ended: its verdicts by part (`executor.old_verdicts`)."""
@@ -1399,39 +1405,32 @@ class Driver:
                 self._shadow_incomplete(tips, tip, f"{type(e).__name__}: {e}")
 
     def _shadow_tip(self, tips: dict, tip: str, rec: dict) -> None:
-        """A shadowed tip: its graph, once listed, enqueued at `AFTER_LANDING_PRIORITY`; once its after-landing run ended and
-        every task has a verdict, or `SHADOW_WAIT_S` after the enqueue, how they compare (`executor.compare`) is recorded as an
-        `executor_shadow` label on `commit:<tip>` (`_shadow_record`), and the tip leaves the state.  A listing or an enqueue that
-        fails, or a run that never ends within `SHADOW_WAIT_S`, is recorded as its error.  Nothing here lands, launches a check,
-        reverts or tells anyone."""
-        if "listing" in rec:
-            graph, why = self._listed(tip, rec["listing"])
-            if graph is None and why is None:
-                if self.now() - rec["at"] <= SHADOW_WAIT_S:
-                    return
-                why = f"still listing {SHADOW_WAIT_S // 3600} h after it began"
-            del rec["listing"]
-            if graph is not None:
-                try:
-                    rec["keys"], rec["check"], rec["enqueued"] = (self.tasks.enqueue(graph, AFTER_LANDING_PRIORITY),
-                                                                  check_id(graph), self.now())
-                except Exception as e:  # noqa: BLE001  (a shadow never stops drive: the error is its record)
-                    why = f"enqueueing its task graph failed: {type(e).__name__}: {e}"
-                else:
-                    self.q.log(f"research queue drive: shadow: enqueued {len(rec['keys'])} tasks of {rec['check']}")
-            if why is not None:
-                self._shadow_record(tip, {"error": f"listing its task graph: {why}", "run": rec.get("run", "")})
-                del tips[tip]
+        """A shadowed tip, its check enqueued with no graph: pending until the executor labels the graph it listed
+        (`Executor.graph`), whose tasks' keys are then the tip's; once its after-landing run ended and every task has a verdict,
+        or `SHADOW_WAIT_S` after the enqueue, how they compare (`executor.compare`) is recorded as an `executor_shadow` label on
+        `commit:<tip>` (`_shadow_record`), and the tip leaves the state.  No graph within `SHADOW_WAIT_S` is recorded
+        incomplete, and a run that never ends within it as its error.  Nothing here lands, launches a check, reverts or tells
+        anyone."""
+        if "keys" not in rec:
+            if (got := self.tasks.graph(rec["check"])) is None:
+                if self.now() - rec["at"] > SHADOW_WAIT_S:
+                    self._shadow_incomplete(tips, tip, f"the executor labelled no task graph of it ({vocab.TASKS_GRAPH} on "
+                                                       f"commit:{tip}) {SHADOW_WAIT_S // 3600} h after its enqueue")
                 return
+            rec["graph"], rec["keys"] = got
+            self.q.log(f"research queue drive: shadow: the executor listed {len(rec['keys'])} tasks of {rec['check']} "
+                       f"({rec['graph']})")
         if "old" not in rec:
             if self.now() - rec["at"] > SHADOW_WAIT_S:
-                self._shadow_record(tip, {"error": "its after-landing run never ended", "check": rec.get("check", "")})
+                self._shadow_record(tip, {"error": "its after-landing run never ended", "check": rec["check"],
+                                          "graph": rec["graph"]})
                 del tips[tip]
             return
         v = self.tasks.verdicts(rec["keys"].values())
-        if PENDING in v.values() and self.now() - rec["enqueued"] <= SHADOW_WAIT_S:
+        if PENDING in v.values() and self.now() - rec["at"] <= SHADOW_WAIT_S:
             return
-        self._shadow_record(tip, {"check": rec["check"], "run": rec["run"], **compare(rec["keys"], rec["old"], v)})
+        self._shadow_record(tip, {"check": rec["check"], "graph": rec["graph"], "run": rec["run"],
+                                  **compare(rec["keys"], rec["old"], v)})
         del tips[tip]
 
     def _shadow_incomplete(self, tips: dict, tip: str, why: str) -> None:
@@ -1444,7 +1443,6 @@ class Driver:
     def _shadow_record(self, tip: str, value: dict) -> None:
         """``value`` as ``tip``'s `executor_shadow` label, written through to the store's remote; a store that refuses it is
         logged, never raised: a shadow never stops drive."""
-        from .store import vocab
         from .store.cli import _label_write_through
 
         target = f"commit:{tip}"
@@ -2256,7 +2254,7 @@ class Driver:
                      **({"skip": skip} if skip else {}), **({"baseline": True} if base else {}),
                      **({"plan": plan["digest"]} if plan else {}), **({"ratchet_base": ratchet} if ratchet else {}),
                      "as": {"steps": [s for s in AFTER_LANDING if s not in skip], "no_cache": extra["no_cache"]}}
-        self._shadow_list(drive, main)
+        self._shadow_enqueue(drive, main)
         q.log(f"research queue drive: post-landing run of `{self.q.into}` {main[:12]} ({steps}): {_ids(rec)}; "
               f"{len(pl['pending'])} landing(s) since {pl['verified'][:12]}"
               + (f"; ratchet-gate judges those above {ratchet[:12]}" if rb else "")
