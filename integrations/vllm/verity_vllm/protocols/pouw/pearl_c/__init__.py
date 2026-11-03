@@ -35,9 +35,9 @@ torch's current stream, in the device's primary context:
 * **Each pass** (`begin`, `end`; `end_pass` ends one and begins the next, which the PoUW option does at each engine step's
   end, `pouw_pass`, holding a step to what one pass takes): the transcript is every call's A root and one tile tree over
   every leaf, in call order, under `audit.transcript_domain` (the audit `Prover`'s layout).  With a retain directory, the
-  pass also writes what the prover opens from: A's rows (BF16, exact) and tree levels per call (in pinned host memory when
-  the call returns, its files written behind the pass's later calls by `host.write_behind`'s threads, which the pass's end
-  joins first), B's rows and tree levels per
+  pass also writes what the prover opens from: A's rows (BF16, exact) and tree levels per call, and its real rows of y and
+  their tree (`served_y`, the tree built on the device; all in pinned host memory when the call returns, their files written
+  behind the pass's later calls by `host.write_behind`'s threads, which the pass's end joins first), B's rows and tree levels per
   weight (linked to the first retained pass's), the leaves, the tile tree and the manifest (`write_manifest`) that the reference verifier reads
   (``benchmarks/pouw/pearl_c_vllm/verify_run.py``).  A retained pass starts from poisoned outputs (`poison`): a replay of an
   earlier pass's calls finds that pass's bytes still in the buffers, and they would be right for it, so a skipped write

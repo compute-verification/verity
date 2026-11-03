@@ -20,6 +20,9 @@ from typing import ClassVar
 
 import numpy as np
 import pytest
+from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
+from verity_vllm.protocols.pouw.pearl_c import host as PH
+from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
 torch = pytest.importorskip("torch")
 
@@ -50,14 +53,11 @@ from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
 from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.serving import SchemeId
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.pearl_c import host as PH
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
@@ -359,9 +359,9 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
 def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_them(device_run, tmp_path, monkeypatch,
                                                                                     request):
     """`host.write_behind`: when a retained call returns, its entries name its files and sizes and its bytes are a copy of
-    their own, which the call's buffers no longer reach; the files are written behind it (here only once the buffers have
-    changed), each digest landing in its entry, and the pass's end joins them before its manifest names them.  A write
-    that fails fails the pass's end, which then writes no manifest."""
+    their own, which the call's buffers no longer reach; the files (A's rows and tree, y's rows and tree) are written behind
+    it (here only once the buffers have changed), each digest landing in its entry, and the pass's end joins them before
+    its manifest names them.  A write that fails fails the pass's end, which then writes no manifest."""
     make, _, weights, *_ = device_run
     gate, write = threading.Event(), PH._write_host
     request.addfinalizer(gate.set)
@@ -373,17 +373,19 @@ def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_th
     run = make()
     run.begin(retain=str(tmp_path / "ok"))
     x = torch.randn(32, 1024).to(torch.bfloat16)
-    run.gemm(0, x, weights[0], None)
+    y = run.gemm(0, x, weights[0], None)
+    served = y.contiguous().view(torch.uint8).numpy().tobytes()
     (sh,) = run.shapes.values()
     index = run.cur.matmuls[0].index
     (f,) = run.cur.files
     assert {k: f[k] for k in ("rows", "tree")} == {"rows": {"path": f"calls/{index}.rows.bf16", "bytes": 2 * 32 * 1024},
                                                    "tree": {"path": f"calls/{index}.tree", "bytes": f["tree"]["bytes"]}}
     assert f["y"]["rows"] == {"path": f"y/{index}.rows.bf16", "bytes": 2 * 32 * 256}
-    assert len(run.cur.writes) == 2 and not (tmp_path / "ok" / f["rows"]["path"]).exists()
+    assert len(run.cur.writes) == 4 and not any((tmp_path / "ok" / g["path"]).exists() for g in (f["rows"], f["y"]["rows"]))
     with torch.inference_mode():                              # the call's buffers are made as vLLM's calls make them
         sh.xa.fill_(7.0)
         sh.buf("tree_a").fill_(7)
+        y.fill_(7.0)
     gate.set()
     man = json.loads(Path(run.end()["manifest"]).read_text())
     (u,) = man["matmuls"]
@@ -391,6 +393,10 @@ def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_th
     assert (tmp_path / "ok" / u["rows"]["path"]).read_bytes() == x.view(torch.uint8).numpy().tobytes()
     tree = (tmp_path / "ok" / u["tree"]["path"]).read_bytes()
     assert u["tree"]["sha256"] == hashlib.sha256(tree).hexdigest() and tree != bytes([7]) * len(tree)
+    assert (tmp_path / "ok" / u["y"]["rows"]["path"]).read_bytes() == served
+    ytree = (tmp_path / "ok" / u["y"]["tree"]["path"]).read_bytes()
+    assert u["y"]["tree"]["sha256"] == hashlib.sha256(ytree).hexdigest()
+    assert u["y"]["root"] == ytree[-64:].hex() == SY.commit_y(served, 256, run.salt, index, run.salt_key)[0].hex()
 
     def fails(path, *_):
         raise OSError(f"no space left for {path.name}")

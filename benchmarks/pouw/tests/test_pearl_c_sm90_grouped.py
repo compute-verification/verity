@@ -407,19 +407,25 @@ def test_each_calls_table_is_its_layouts_with_its_keys_leaves_and_pass_offsets(s
     assert len(g.calls) == len(g.sets) == (2 if split else 1)
 
 
-def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_path, monkeypatch):
+def zero_y(run):
+    """`run`'s retained calls commit zeros of their y's shape in its place."""
+    real = run._retained
+    run._retained = lambda *a, y=None: real(*a, y=None if y is None else torch.zeros_like(y))
+    return run
+
+
+def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_path):
     """grouped_check's `_same` over a grouped call's retained pass under ``deferred-a`` and its units called alone under the
     serial schedule: their manifests differ in the schedule they ran under alone, which it doesn't count, and a changed A
     rows file it does.  The recording device runs no GEMM, so each path's y is whatever its buffer held, and both commit
-    zeros of its length."""
-    real = SY.retain_y
-    monkeypatch.setattr(SY, "retain_y", lambda d, index, y, *a: real(d, index, bytes(len(y)), *a))
+    zeros of its shape (`zero_y`)."""
     C = load("pearl_c_sm90_grouped_check", HERE / "grouped_check.py")
     ws, counts, n, k = (1, 3), [3, 20], 128, 1024
     x = torch.randn(sum(counts), k).to(torch.bfloat16)
     run, weights = device_run(4, n, k, tmp_path / "grouped", "deferred-a")
+    zero_y(run)
     PG.gemm_grouped(run, ws, x, counts)
-    alone, _ = device_run(4, n, k, tmp_path / "alone")
+    alone = zero_y(device_run(4, n, k, tmp_path / "alone")[0])
     for u in G.units(counts, n, R.PD_MAX_ROWS):
         alone.gemm(ws[u.pos], x[u.src:u.src + u.m], weights[ws[u.pos]], None)
     run.end_pass()
