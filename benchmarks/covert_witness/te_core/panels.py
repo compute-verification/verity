@@ -1,6 +1,7 @@
-"""One of the console's training panels, `training/frontier-branches`: held-out bits per byte against total training
-compute in Boolean gates, every line a frontier (at each loss, the least compute anything reached under that line's
-rules).
+"""`training/frontier-branches`, a retired console training panel (the console's are now `training/algorithm-policy`
+and `training/frontier-fit`, both PUT by te_core.algorithm_policy, and no refresh PUTs this one): held-out bits per byte
+against total training compute in Boolean gates, every line a frontier (at each loss, the least compute anything
+reached under that line's rules).
 
     python -m te_core.panels frontier-branches --out DIR [--publish] [--pretraining DIR]
                                                [te_core.rescore's ledger and quantities options]
@@ -33,7 +34,7 @@ profiles in `u_points` and `u_in_points`, and the other scalars in `rho_inputs`,
 at the dial's k (`K_LEVELS`, `through`): x0 is exact there and linear between. `build` refuses a candidate whose
 columns don't give te_core.formalism.at's ρ and basis at every cell, so the throttled rows are the page's check set.
 Every row's `method_key` is its method's key in the console's `training/methods`: the record's direction/mechanism,
-and `SCRATCH` for a from-scratch point.
+and `SCRATCH` for a from-scratch point; and its `te_core_version`, the te_core VERSION whose ρ it carries.
 
 It reads the valid records of the pin and of the pilot (pin.py's `pilot`, `frontier.pinned(pilot=True)`) unless `--pin`
 names the commits, and only checkpoints the scoring cap admits are scored (te_core.policy's `eligible`, the ladder's fit
@@ -84,13 +85,13 @@ DEFAULT = (policy.SESSION_TOKENS, policy.REFERENCE_K_BITS)
 #: the served demo's measured block, (c gates, k bits): one slot's 35-step session of Llama-3.2-1B int8 under vLLM, c
 #: in one-bit gates (a lower bound: its 133 BitAtx32_v1 activations a block are unpriced), k its fresh bits
 SERVED = (30_087_822_237_972, 145_568)
-#: the dial's k, where a candidate's `u_in_points` give x0 exactly (`through`)
-K_LEVELS = tuple(sorted({8 * kb for kb in K_BYTES} | {DEFAULT[1], SERVED[1]}))
+#: the dial's k and the console default's, where a candidate's `u_in_points` give x0 exactly (`through`)
+K_LEVELS = tuple(sorted({8 * kb for kb in K_BYTES} | {DEFAULT[1], SERVED[1], int(policy.CONSOLE[1])}))
 #: the data a record's held-out loss is on, the headline first: harness v3's, else the v2.3 harness's (`data_of`)
 DATA = ("v3", "v2.3-pilot")
 COLUMNS = ["curve", "data", "start", "start_compute_gates", "start_loss", "on_frontier", "c_tokens_per_block", "c_gates",
            "k_bits", "mark", "compute_total_gates", "compute_after_gates", "loss", "S", "run", "method", "delta_bits",
-           "basis", "method_key", "w_fwd_gates", "rho_inputs", "u_points", "u_in_points"]
+           "basis", "method_key", "w_fwd_gates", "rho_inputs", "u_points", "u_in_points", "te_core_version"]
 LOSSES = ("start_loss", "loss")
 #: the inputs of ρ a candidate's `rho_inputs` holds: te_core.algorithm_policy's `INPUTS` but those with columns of
 #: their own (Δ, w_fwd and the profiles), and te_core 4.x's two terms its `page_rho` reads
@@ -261,9 +262,10 @@ def rho_columns(m: formalism.Measured, w: float) -> dict:
 
 
 def page_inputs(d: dict) -> dict:
-    """The inputs of ρ the console's dial reads from a candidate's columns `d`, as te_core.algorithm_policy's
-    `page_rho` takes them."""
-    return json.loads(d["rho_inputs"]) | {k: d[k] for k in ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")}
+    """The inputs of ρ the console's dial reads from a candidate's columns `d` (its `rho_inputs`, and the split columns
+    where it has them: te_core.algorithm_policy's rows hold them in `rho_inputs`), as `page_rho` takes them."""
+    return json.loads(d["rho_inputs"]) | {k: d[k] for k in ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")
+                                          if k in d}
 
 
 def mismatches(d: dict, dial: dict, w: float) -> list[str]:
@@ -279,7 +281,8 @@ def mismatches(d: dict, dial: dict, w: float) -> list[str]:
 
 
 def row(**values) -> list:
-    return [values.get(c) for c in COLUMNS]
+    """One row of COLUMNS; every row carries the te_core VERSION that priced it (`te_core_version`)."""
+    return [({"te_core_version": VERSION} | values).get(c) for c in COLUMNS]
 
 
 def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source: str,

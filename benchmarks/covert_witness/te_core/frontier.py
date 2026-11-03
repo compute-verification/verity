@@ -7,11 +7,16 @@ measuring the same version (`same_version`; covert_witness's `pin.py`; `--pin`, 
 out, each marked with its reason (`status`): an invalid record, one whose read-outs `cw.readout_leaks` lists
 (`read-out-leak`, invalid: the coordinator's 14:22Z rule), an unscored one, one measured by any other commit
 (`other-version`), one whose E digest (`output.e_sha256`) equals an earlier record's (`duplicate-e`: the first to submit
-an E is the one its compute is counted for), and one a later ingest of its run supersedes (`re-ingested`). A row
+an E is the one its compute is counted for), one a later ingest of its run's checkpoint supersedes (`re-ingested`:
+by another agent or at another te_core), and the same ingest's copies but the lowest id (`copy`: coordinator 07:48Z,
+records counted once per run and checkpoint). A row
 ingested before 3.13 carries no read-outs; `--facts` gives them by run id (`with_facts`). Under 4.0 an update of the
 tied embedding alone is deep (its lookup's rows are update-dependent and reach every later layer), so the scorer's
 tied-lookup rule (coordinator 13:32Z) is retired. `measured(r)` says whether a row's quantities were measured on its
-record's traced step (te_core.rescore scores only those by default); any other row's are stubs, labelled.
+record's traced step (te_core.rescore scores only those by default); any other row's are stubs, labelled. A row whose
+quantities te_core.formalism refuses (a trace before 4.2's read-back lists, a data-dependent capture, a Python number
+folded over steps, a nonempty E with no update in its trace or prefix: `formalism.refusal`) is never scored: it is
+skipped with its reason (`refused: ...`).
 
 Each valid submission is scored by the formalism (`formalism_rows`): |C| in Boolean gates, ρ at every (c, k) of its
 start's policy grid and at its reference shapes (te_core.policy's `cells`; c/(c − d) where Fit holds for the training,
@@ -49,22 +54,37 @@ def bin_of(x: float, edges: tuple[float, ...]) -> int:
 
 #: the first te_core whose ingest measures the formalism's quantities from the traced step circuit (a row's `te_core`)
 MEASURED_FROM = (4, 0)
+#: a skipped row's reason when te_core.formalism refuses its quantities
+REFUSED = "refused: "
 
 
 def _run_key(r: dict):
     return (r["run_id"], r.get("measurement_commit"), r.get("checkpoint_step")) if r.get("run_id") else None
 
 
+def ingest(r: dict) -> tuple:
+    """Who ingested a row and at which te_core: a run's checkpoint ingested again by another, or at another te_core,
+    supersedes it; the same ingest's copies are one record."""
+    return r.get("agent"), r.get("te_core")
+
+
 def with_facts(rows: list[dict], facts: dict[str, dict]) -> list[dict]:
-    """The rows with what the rules read beyond the price, by run id (`facts`: run id -> any of `args` and
-    `readout_leaks`, as `ledger.facts` gives them), for rows ingested before te_core 3.13."""
-    return [r | facts.get(r.get("run_id"), {}) for r in rows]
+    """The rows with what the rules read beyond the price, by run id (`facts`: run id -> any of `args`,
+    `readout_leaks` and `changed`, as `ledger.facts` gives them), for rows ingested before te_core 3.13; and with each
+    checkpoint's E facts the row's `output` lacks (`checkpoints`: step -> `rebuild_macs`, `decoder_gates`), for rows
+    ingested before 4.2."""
+    out = []
+    for r in rows:
+        f = dict(facts.get(r.get("run_id"), {}))
+        cp = f.pop("checkpoints", {}).get(str(r.get("checkpoint_step")))
+        out.append(r | f | ({"output": cp | (r.get("output") or {})} if cp else {}))
+    return out
 
 
 def pinned(pilot: bool = False) -> tuple[str, ...]:
     """The pin's commit, then the earlier commits that measure the same version (`same_version`), and with `pilot` the
-    pilot's (`pilot`: an earlier version's commits, whose records te_core.panels shows beside the pin's, labelled by
-    their data)."""
+    pilot's (`pilot`: an earlier version's commits, whose records te_core.panels and te_core.algorithm_policy show
+    beside the pin's, labelled by their data)."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from pin import pinned as read
 
@@ -77,21 +97,26 @@ def commits(pin: str | tuple[str, ...] | list[str]) -> tuple[str, ...]:
 
 
 def status(rows: list[dict], pin: str | tuple[str, ...]) -> dict[str, str]:
-    """Each left-out record's reason: re-ingested, invalid, read-out-leak, unscored, other-version, duplicate-e.
-    `pin` is a commit or the commits of one version. A later ingest of the same run's checkpoint (its run id; a row
-    without one is never superseded) supersedes an earlier one (`re-ingested`), which then seeds no duplicate. An E
+    """Each left-out record's reason: re-ingested, copy, invalid, read-out-leak, unscored, other-version,
+    duplicate-e. `pin` is a commit or the commits of one version. A later ingest of the same run's checkpoint (its run
+    id; a row without one is never superseded) by another agent or at another te_core (`ingest`) supersedes an earlier
+    one (`re-ingested`), and of one ingest's copies the lowest id stands (`copy`); neither seeds a duplicate. An E
     repeats an earlier
     record's when that record was measured at the pin or is another agent's: an agent's own relaunch at a new pin of an
     E it had at an old one counts."""
     pins = set(commits(pin))
     out, first = {}, {}
     ordered = sorted(rows, key=lambda r: (r.get("written_ts", 0), r["id"]))
-    latest = {_run_key(r): r["id"] for r in ordered}
+    kept: dict = {}
+    for r in ordered:
+        key, k = _run_key(r), kept.get(_run_key(r))
+        if key is not None and (k is None or ingest(k) != ingest(r) or r["id"] < k["id"]):
+            kept[key] = r
     for r in ordered:
         e = (r.get("output") or {}).get("e_sha256")
         key = _run_key(r)
-        if key is not None and latest[key] != r["id"]:
-            out[r["id"]] = "re-ingested"
+        if key is not None and kept[key]["id"] != r["id"]:
+            out[r["id"]] = "copy" if ingest(kept[key]) == ingest(r) else "re-ingested"
             continue
         if e and any(at_pin or agent != r.get("agent") for at_pin, agent in first.get(e, ())):
             out[r["id"]] = "duplicate-e"
@@ -195,7 +220,8 @@ def formalism_rows(rows: list[dict], shapes: dict[str, dict], ladder=None) -> tu
     `cells`: the grid's and the reference shapes'), whether Fit holds there for the training (`fit`) and Slowdown's terms
     there (`terms`: x0, s* and the attack side's); and each row left out, with why (`no-shape`; `pilot-start`, a record
     on data v3 from a start whose shape has another tokenizer, as the pilot's FineWeb-Edu starts do, since v3's branch
-    points are v3's starts; `over-cap` or `unmeasured`)."""
+    points are v3's starts; `over-cap`, `unmeasured`, or `refused: ` and te_core.formalism's reason,
+    `formalism.refusal`)."""
     out, skipped, cells = [], {}, {}
     for r in rows:
         shape = shapes.get(r["start"])
@@ -213,6 +239,9 @@ def formalism_rows(rows: list[dict], shapes: dict[str, dict], ladder=None) -> tu
             cells[r["start"]] = policy.cells(shape)
         try:
             m = formalism.measure(r, shape)
+        except formalism.Refused as e:
+            skipped[r["id"]] = f"{REFUSED}{e}"
+            continue
         except ValueError:
             skipped[r["id"]] = "unmeasured"
             continue
@@ -329,7 +358,7 @@ def main(argv=None) -> int:
     ap.add_argument("--pin", action="append", default=None,
                     help="a measurement commit, repeated for one version's (default covert_witness's pin.py)")
     ap.add_argument("--facts", type=Path, default=None,
-                    help="JSON, run id -> args, readout_leaks, for rows ingested before 3.13")
+                    help="JSON, run id -> args, readout_leaks, changed, checkpoints (ledger.facts)")
     ap.add_argument("--formalism", action="store_true",
                     help="accepted for te_core 3.14-3.18's command lines: the formalism is the only score")
     ap.add_argument("--promote", type=int, choices=(1, 2), default=None, help=argparse.SUPPRESS)
@@ -349,8 +378,9 @@ def main(argv=None) -> int:
         a.json.write_text(json.dumps({"pin": list(pin), "left_out": left_out} | rep, indent=1, default=str) + "\n")
     print(formalism_markdown(rep))
     reasons = sorted(set(left_out.values()))
+    refused = sum(v.startswith(REFUSED) for v in rep["skipped"].values())
     print(f"pin {' + '.join(c[:12] for c in pin)}: {rep['scored']} scored of {len(rows)} submissions, "
-          f"{len(rep['skipped'])} without a start shape or measurement; left out: "
+          f"{refused} refused, {len(rep['skipped']) - refused} without a start shape or measurement; left out: "
           + (", ".join(f"{sum(v == x for v in left_out.values())} {x}" for x in reasons) or "none"))
     return 0
 

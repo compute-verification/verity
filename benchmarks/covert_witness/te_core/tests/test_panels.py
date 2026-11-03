@@ -69,6 +69,7 @@ def test_the_frontier_and_its_branches(tmp_path, monkeypatch, beaten):
     assert (p["id"], p["kind"], p["columns"]) == (panels.PANEL, "table", panels.COLUMNS) and p["source"]
     assert all(len(r) == len(p["columns"]) for r in p["rows"])
     ds = plots.frame(p)
+    assert {d["te_core_version"] for d in ds} == {panels.VERSION}
     assert {d["curve"] for d in ds} == {"frontier", "honest", "throttled", "candidate"}
     assert {d["data"] for d in ds} == {"v2.3-pilot"}
     fr = [d for d in ds if d["curve"] == "frontier"]
@@ -136,8 +137,8 @@ def test_a_v3_record_from_a_pilot_start_is_no_v3_branch_point(tmp_path, monkeypa
 
 def test_the_scoring_cap(tmp_path, monkeypatch):
     """With no ladder fit a checkpoint whose model's forward is over twice its start's is left out (`over-cap`), so a
-    grown model up to that is scored; where the fit has a value at its loss the cap is the greater of the start's and
-    the fit's, and outside the fit's span it is twice the start's again. One with no count has the start's."""
+    grown model up to that is scored; where the fit has a value at its loss the cap is the greater of twice the start's
+    and the fit's, and outside the fit's span it is twice the start's. One with no count has the start's."""
     grown = [r | ({"model": {"forward_gates_per_token": 2.5 * W}} if r["id"] == "r1" else {}) for r in ledger_rows()]
     fit = tmp_path / "fit.json"
     fit.write_text(json.dumps({"points": [{"loss": 1.0, "forward_gates_per_token": 8 * W},
@@ -146,7 +147,8 @@ def test_the_scoring_cap(tmp_path, monkeypatch):
     assert ladder(1.15) == pytest.approx(8 ** 0.5 * W) and ladder(0.9) is None and ladder(1.31) is None
     assert policy.CAP_FALLBACK == 2
     assert policy.eligible(None, W, 1.15) and policy.eligible(2 * W, W, 1.15) and not policy.eligible(2.5 * W, W, 1.15)
-    assert policy.eligible(2.5 * W, W, 1.15, ladder) and not policy.eligible(1.5 * W, W, 1.29, ladder)
+    assert policy.eligible(2.5 * W, W, 1.15, ladder) and not policy.eligible(3 * W, W, 1.15, ladder)
+    assert policy.eligible(2 * W, W, 1.29, ladder) and not policy.eligible(2.1 * W, W, 1.29, ladder)
     assert policy.eligible(2 * W, W, 0.9, ladder) and not policy.eligible(2.5 * W, W, 0.9, ladder)
     _, skipped = frontier.formalism_rows(grown, {"s1": SHAPE})
     assert skipped == {"r1": "over-cap"}
@@ -254,7 +256,7 @@ def test_the_cut_thins_the_unmarked_cells_first():
 
 
 def test_the_cut_fits_the_route_and_says_how_many_points(monkeypatch):
-    p = {"id": panels.PANEL, "note": "", "columns": panels.COLUMNS,
+    p = {"id": panels.PANEL, "title": "t", "source": "s", "note": "", "columns": panels.COLUMNS,
          "rows": curve("frontier", 10) + [r for kb in panels.K_BYTES for r in curve("throttled", 60, "s", 1, 8 * kb)]}
     whole = panels.cut(p, RATIO, "v2.3-pilot")
     assert len(whole["rows"]) == len(p["rows"]) and whole["note"] == panels.note(RATIO, None, "v2.3-pilot")
@@ -275,7 +277,7 @@ def test_the_cut_fits_the_route_and_says_how_many_points(monkeypatch):
 def test_the_cut_coarsens_the_fine_curves_last(monkeypatch):
     """When the unmarked cells at two points each don't fit, the cut keeps the other curves' points further apart in
     loss (`STEPS`), and its note says how far."""
-    p = {"id": panels.PANEL, "note": "", "columns": panels.COLUMNS,
+    p = {"id": panels.PANEL, "title": "t", "source": "s", "note": "", "columns": panels.COLUMNS,
          "rows": curve("frontier", 200, step=1.01 * panels.FRONTIER_STEP) + curve("throttled", 60, "s", 1, 80_000)}
     finest = p | {"rows": [panels.rounded(r) for r in panels.thinned(p["rows"], 1)]}
     monkeypatch.setattr(console, "BODY_MAX", len(console.body(finest)) - 1)
@@ -292,7 +294,8 @@ def test_the_cut_keeps_the_most_candidates_that_fit(monkeypatch):
                        run=f"r{i}", rho_inputs="{}") for i in range(40)]
     on = [panels.row(curve="throttled", data="v2.3-pilot", start="s", c_tokens_per_block=float(n), k_bits=8e4,
                      compute_total_gates=1.0, loss=1.1, run="r39") for n in range(3)]
-    p = {"id": panels.PANEL, "note": "", "columns": panels.COLUMNS, "rows": curve("frontier", 5) + on + cand}
+    p = {"id": panels.PANEL, "title": "t", "source": "s", "note": "", "columns": panels.COLUMNS,
+         "rows": curve("frontier", 5) + on + cand}
     assert panels.ranked(p["rows"])[0] is cand[-1] and panels.ranked(p["rows"])[1:] == cand[:-1]
     whole = panels.cut(p, RATIO, "v2.3-pilot")
     monkeypatch.setattr(console, "BODY_MAX", len(console.body(whole)) - 2000)
@@ -313,7 +316,7 @@ def test_a_candidate_from_parts_that_differ_gives_rho_at_every_cell():
     steps = tuple(p for i in range(200) for p in ((i / 200, 3e3 * i), (i / 200, 3e3 * (i + 1))))
     for dg in (None, 2e4):
         m = Measured((Part(4e15, 1e4, 3e15, 2e15, delta_grad_bits=1e4), Part(1e15, 1e4, 5e14, 1e14, delta_grad_bits=dg)),
-                     16.0, 12288.0, ((0.0, 0.0), (0.4, 0.0), (1.0, 6e5)), steps + ((1.0, 6e5),), 5e5)
+                     16.0, 12288.0, ((0.0, 0.0), (0.4, 0.0), (1.0, 6e5)), steps + ((1.0, 6e5),), 5e5, 0.0)
         assert m.w_fit == 5e10 and m.alpha_ratio == pytest.approx(0.525) and m.fit_delta_grad_bits == (dg and 2e4)
         d = {"run": "r", "delta_bits": m.delta_bits, "w_fwd_gates": W, **panels.rho_columns(m, W)}
         assert all(len(v) <= console.CELL_MAX for v in d.values() if isinstance(v, str))

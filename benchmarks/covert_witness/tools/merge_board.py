@@ -5,15 +5,16 @@
     python3 benchmarks/covert_witness/tools/merge_board.py --out FILE  # written to FILE
     python3 benchmarks/covert_witness/tools/merge_board.py --push      # committed on the digest branch and pushed
 
-Each search agent appends entries, one line each, `HH:MMZ <agent> [TAG] text (record ids)`, to
-`benchmarks/covert_witness/islands/<island>/BOARD.md` on its own branch, `cursor/te-<island>-NNNN`. This fetches every
-`cursor/te-*` branch, the integrator's `cursor/covert-witness-*` while there is one, and the integration branch, and
-reads each `BOARD.md` or `board.md` under `benchmarks/covert_witness/` on each, the digest branch's own
-`benchmarks/covert_witness/BOARD.md` among them (where the coordinator may write its lines). The digest is that file again: its text through `## Entries`, then every entry once, oldest first, under a
-`### YYYY-MM-DD` heading per UTC day, then the sections after its entries. An entry's day is the last one on which its
-HH:MM is at most two hours after the commit that added the line to its board (its author time, from `git blame`), so a
-search that runs past midnight stays in order and an entry stamped a little ahead of its commit keeps its day; the
-digest's own commits date only the lines no other board has.
+Each search agent appends entries, one line each, `HH:MMZ <agent> [TAG] text (record ids)`, or with its date,
+`YYYY-MM-DDTHH:MMZ ...` (or a space for the T), to `benchmarks/covert_witness/islands/<island>/BOARD.md` on its own
+branch, `cursor/te-<island>-NNNN`. This fetches every `cursor/te-*` branch, the integrator's `cursor/covert-witness-*`
+while there is one, and the integration branch, and reads each `BOARD.md` or `board.md` under
+`benchmarks/covert_witness/` on each, the digest branch's own `benchmarks/covert_witness/BOARD.md` among them (where the
+coordinator may write its lines). The digest is that file again: its text through `## Entries`, then every entry once,
+oldest first, under a `### YYYY-MM-DD` heading per UTC day, then the sections after its entries. An entry's day is its
+own date where it gives one, else the last one on which its HH:MM is at most two hours after the commit that added the
+line to its board (its author time, from `git blame`), so a search that runs past midnight stays in order and an entry
+stamped a little ahead of its commit keeps its day; the digest's own commits date only the lines no other board has.
 
 `--push` commits the digest on the digest branch's head (on the integration branch's, when there is no digest branch yet)
 without a worktree, and pushes it, never forced: when the branch moved meanwhile, the push is refused; run it again.
@@ -23,6 +24,7 @@ Stdlib only; git on the PATH.
 from __future__ import annotations
 
 import argparse
+import calendar
 import fnmatch
 import os
 import re
@@ -36,7 +38,7 @@ HERE = Path(__file__).resolve().parent
 BOARDS = "benchmarks/covert_witness"
 DIGEST = f"{BOARDS}/BOARD.md"
 ENTRIES = "## Entries"
-ENTRY = re.compile(r"^(\d{2}):(\d{2})Z ")
+ENTRY = re.compile(r"^(?:(20\d\d)-(\d\d)-(\d\d)[T ])?(\d{2}):(\d{2})Z ")
 #: the search agents' branches, and the integrator's own while it has one (a glob that matches nothing fetches nothing)
 BRANCHES = ("cursor/te-*", "cursor/covert-witness-*")
 #: how far an entry's HH:MM may run ahead of the commit that added it
@@ -52,10 +54,13 @@ def git(repo: Path, *args: str, stdin: str | None = None, env: dict[str, str] | 
     return r.stdout
 
 
-def when(hh: int, mm: int, added: datetime) -> datetime:
-    """The last time at HH:MM no later than AHEAD after `added`; `added` itself for an HH:MM that is no time of day."""
+def when(hh: int, mm: int, added: datetime, day: tuple[int, int, int] | None = None) -> datetime:
+    """HH:MM on the entry's own date `day` (year, month, day) where it is one, else the last time at HH:MM no later than
+    AHEAD after `added`; `added` itself for an HH:MM that is no time of day."""
     if hh > 23 or mm > 59:
         return added
+    if day and 1 <= day[1] <= 12 and 1 <= day[2] <= calendar.monthrange(day[0], day[1])[1]:
+        return datetime(*day, hh, mm, tzinfo=UTC)
     t = (added + AHEAD).replace(hour=hh, minute=mm, second=0, microsecond=0)
     return t if t <= added + AHEAD else t - timedelta(days=1)
 
@@ -67,7 +72,7 @@ def entries(repo: Path, ref: str, path: str) -> set[tuple[datetime, str]]:
         if row.startswith("author-time "):
             added = datetime.fromtimestamp(int(row.split()[1]), UTC)
         elif row.startswith("\t") and (m := ENTRY.match(row[1:])):
-            out.add((when(int(m[1]), int(m[2]), added), row[1:]))
+            out.add((when(int(m[4]), int(m[5]), added, tuple(map(int, m.group(1, 2, 3))) if m[1] else None), row[1:]))
     return out
 
 

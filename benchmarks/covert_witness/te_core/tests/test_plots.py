@@ -24,7 +24,8 @@ def rows(unbounded=False):
                        "other param _fused_adamw_ [[1]]": [1, macs / 30]}}
         out.append({"id": f"r{i}", "start": "s1", "start_bpb": 1.2, "val_bpb": bpb, "direction": direction,
                     "mechanism": direction, "run_id": f"run{i}", "checkpoint_step": 9, "measurement_commit": "pin",
-                    "macs_log": log, "output": {"e_bytes": e}, "annotation": {"steps": 10}, "written_ts": i})
+                    "macs_log": log, "output": {"e_bytes": e, "rebuild_macs": 0}, "annotation": {"steps": 10},
+                    "written_ts": i})
     if unbounded:
         jump = [[0.0, 0.0], [0.0, 1e12], [1.0, 1e12]]
         out[-1]["formalism"] = {"u": jump, "u_in": jump}

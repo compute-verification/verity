@@ -25,11 +25,12 @@ before 4.0) and no cut; its MAC count stays |C|.
 """
 from __future__ import annotations
 
+import json
 import math
 import re
 from dataclasses import dataclass
 
-from .formalism import TRACED_STRUCTURE, of_trace
+from .formalism import READ_BACKS, TRACED_STRUCTURE, of_trace
 
 
 @dataclass(frozen=True)
@@ -104,7 +105,8 @@ def with_structures(record: dict, traced: dict[str, dict]) -> dict:
     θ only), and |C| stays the runtime count. A traced structure's `formalism` (te_core.capture.circuit.measure) gives
     its steps' σ, affected share, token factor and Δ_grad (te_core.formalism's `TRACED_STRUCTURE`), and the record's
     `formalism` block the per-token quantities of the traced structure its steps spend the most MACs in
-    (`formalism.of_trace`)."""
+    (`formalism.of_trace`), with its `trace`'s read-back lists (`formalism.READ_BACKS`) those of every traced structure
+    its steps take, and none (unchecked) where one of them has none."""
     out = dict(record, structures=dict(record["structures"]), steps=[dict(s) for s in record["steps"]])
     weight: dict[str, int] = {}
     for s in out["steps"]:
@@ -115,13 +117,19 @@ def with_structures(record: dict, traced: dict[str, dict]) -> dict:
         rows = [[r[0], r[1], round(r[0] * n), n, r[4]] for r in t["updated"]]
         new = f"{sid}+traced{n}"
         f = t.get("formalism")
-        measured = {k: f[k] for k in TRACED_STRUCTURE} if f else {}
+        measured = {k: f[k] for k in TRACED_STRUCTURE if k in f} if f else {}
         out["structures"][new] = dict(struct, updated=rows, beta=t.get("beta"), cut_bits=t.get("cut_bits"), **measured)
         s["struct"] = new
         if f:
             weight[sid] = weight.get(sid, 0) + s.get("macs", 0)
     if weight:
         f = of_trace(traced[max(weight, key=weight.get)]["formalism"])
+        trace = {k: v for k, v in f["trace"].items() if k not in READ_BACKS}
+        for k in READ_BACKS:
+            lists = [traced[sid]["formalism"].get(k) for sid in weight]
+            if all(x is not None for x in lists):
+                trace[k] = list({json.dumps(e, sort_keys=True): e for x in lists for e in x}.values())
+        f["trace"] = trace
         own = dict(record.get("formalism") or {})
         out["formalism"] = own | f | {"labels": own.get("labels", {}) | f["labels"]}
     return out
