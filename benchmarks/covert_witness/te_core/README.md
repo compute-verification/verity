@@ -72,12 +72,12 @@ other quantity bits.
   token form): the counting lemma over the kinds of block work that are lower bounds on their own, ρ ≥ max over the
   kinds (fresh products, token, decoding) of each kind's share of |C| over its cap a block. It returns each kind's
   term (None, with the reason, where unmeasured), the max, the kind it binds on and what each kind rests on: fresh
-  products a theorem for the run's circuit (Loomis-Whitney, `io_bound`, unmeasured until that module is in the
-  tree), token A1 under reading A with its witness family, decoding assumption (D). Where Fit fails ρ is max(1, that
-  max). Gradient reduction, update application, reading B's token form and the per-gate token term come out beside it
-  as labelled sensitivities, never in the max: (R) and (U) hold only for partitions split by tokens, and per_gate only
-  for blocks that are no union of witnesses. `rho_vectors.json` holds its
-  test vectors, which the console's rho.ts runs (null unmeasured, "inf" ∞).
+  products Loomis-Whitney's cap (`io_bound`, a theorem under its premises, P-width among them, an assumption on a
+  reference circuit; unmeasured until `bound` reads that module), token A1 under reading A with its witness family,
+  decoding assumption (D). Where Fit fails ρ is max(1, that max). Gradient reduction, update application, reading B's
+  token form and the per-gate token term come out beside it as labelled sensitivities, never in the max: (R) and (U)
+  hold only for partitions split by tokens, and per_gate only for blocks that are no union of witnesses.
+  `rho_vectors.json` holds its test vectors, which the console's rho.ts runs (null unmeasured, "inf" ∞).
 - **Reading A** (A1's approved reading): a block reads at least the update bits its work reads, once, plus
   each token's computed state where its work on the token begins, the context it reads and doesn't compute included.
   A1's values are the least reads of the default packer's witness family: the runs of one traced token's path in
