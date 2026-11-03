@@ -2,3 +2,7 @@ import PouwPearlPlus.Records
 import PouwPearlPlus.Run
 import PouwPearlPlus.Load
 import PouwPearlPlus.Words
+import PouwPearlPlus.Rule
+import PouwPearlPlus.Tile
+import PouwPearlPlus.Check
+import PouwPearlPlus.Open

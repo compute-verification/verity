@@ -37,7 +37,7 @@ def hex (b : ByteArray) : String :=
 
 /-- A refusal: Python's (code, why) where it has one (`passes_distinct`'s and `AFTER_COIN`), and the reason it rejects with. -/
 structure Refusal where
-  code : Option String := none
+  refused : Option (String × String) := none
   reason : String
   deriving Repr
 
@@ -166,7 +166,7 @@ def workloadReason (us : List Matmul) : Option String := Id.run do
 
 def throwRefusal {α : Type} (why : Option (String × String)) (k : Unit → Except Refusal α) : Except Refusal α :=
   match why with
-  | some (c, w) => throw { code := some c, reason := s!"Refused: {c}: {w}" }
+  | some (c, w) => throw { refused := some (c, w), reason := s!"Refused: {c}: {w}" }
   | none => k ()
 
 /-- `load(path, coins)`: the retained pass `man` held to what it published under the verifier's coin commitment `coins`. -/
