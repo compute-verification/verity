@@ -1774,6 +1774,22 @@
    "owner": "@compute-accounting",
    "digest": "933eb6b182a96758dd6a00b6a416628b77478886d52063e30857f9084fd7eaff"
   },
+  "Pouw.Dimension.Pointwise.Apart": {
+   "owner": "@compute-research",
+   "digest": "60142398b6002e4294b81648d962817764c388662a808ed42f33cac09efa959c"
+  },
+  "Pouw.Dimension.Pointwise.Far": {
+   "owner": "@compute-research",
+   "digest": "f5a945b56f8751ac39da824309a7b16bb0f794de1ba64d861bac36940fc5bc75"
+  },
+  "Pouw.Dimension.Pointwise.Held": {
+   "owner": "@compute-research",
+   "digest": "620bd02d4073d1bac062b155cf1a374e693fd9904acc0fdf11fd1ed773af1c3a"
+  },
+  "Pouw.Dimension.Ssn.FreeInputs": {
+   "owner": "@compute-research",
+   "digest": "9fcf97acac6d794c95735271aef7e3546d4a98edb1f61430980a1968a2d0fff8"
+  },
   "Pouw.Dither.Accel.G1": {
    "owner": "@compute-research",
    "digest": "4653da5027854c6fcc140db720f6a2dedbae2c9b3ec44e4c96c63aafd4278963"
@@ -1854,6 +1870,10 @@
    "owner": "@compute-accounting",
    "digest": "0427ba67394e82cf31436889163c6c201b6395d3685492c16b6fe58bcbb2b274"
   },
+  "Pouw.Guarantees.Lead.LlamaForward": {
+   "owner": "@compute-research",
+   "digest": "c39dfc52a153e903c1527f06213a41c7bc2b012fdbb499fd02b3664138cabc13"
+  },
   "Pouw.Gγ": {
    "owner": "@compute-accounting",
    "digest": "52a074b5b07458c9e84c0872dbde1ffa97003d0abb95fcb8d5b3c59e5144ef2e"
@@ -1873,6 +1893,10 @@
   "Pouw.Lead.Forward.Accepted": {
    "owner": "@compute-research",
    "digest": "98407f08b716f4ad3cb2e88b349f6cfbedd91a922de31bfaf77e9f2e4eb0023b"
+  },
+  "Pouw.Lead.Game.FixedGapBelow": {
+   "owner": "@compute-accounting",
+   "digest": "9520b85dc0101c1d0788a506593e7584326d898e8978c4f5ea6a664dfd4f5a79"
   },
   "Pouw.Lead.Layout.Admits": {
    "owner": "@compute-research",
@@ -2229,30 +2253,6 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
-  },
-  "Pouw.Dimension.Pointwise.Apart": {
-   "owner": "@compute-research",
-   "digest": "60142398b6002e4294b81648d962817764c388662a808ed42f33cac09efa959c"
-  },
-  "Pouw.Dimension.Pointwise.Far": {
-   "owner": "@compute-research",
-   "digest": "f5a945b56f8751ac39da824309a7b16bb0f794de1ba64d861bac36940fc5bc75"
-  },
-  "Pouw.Dimension.Pointwise.Held": {
-   "owner": "@compute-research",
-   "digest": "620bd02d4073d1bac062b155cf1a374e693fd9904acc0fdf11fd1ed773af1c3a"
-  },
-  "Pouw.Dimension.Ssn.FreeInputs": {
-   "owner": "@compute-research",
-   "digest": "9fcf97acac6d794c95735271aef7e3546d4a98edb1f61430980a1968a2d0fff8"
-  },
-  "Pouw.Guarantees.Lead.LlamaForward": {
-   "owner": "@compute-research",
-   "digest": "c39dfc52a153e903c1527f06213a41c7bc2b012fdbb499fd02b3664138cabc13"
-  },
-  "Pouw.Lead.Game.FixedGapBelow": {
-   "owner": "@compute-accounting",
-   "digest": "9520b85dc0101c1d0788a506593e7584326d898e8978c4f5ea6a664dfd4f5a79"
   }
  },
  "meaning": [
