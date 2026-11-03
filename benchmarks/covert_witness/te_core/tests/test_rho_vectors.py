@@ -1,7 +1,8 @@
 """te_core.rho_vectors: the one bound's published test vectors are what te_core.formalism makes from the capture's
 fixtures, their inputs reproduce through `from_json` (the console's route), and they say what reading A, with its
-matrix-product tiles, says of wildcard's grown adapter, a dense step and a LoRA step on the tiny start; and the
-console's c, te_core.policy's session at every stated size, is its rule."""
+matrix-product tiles, says of wildcard's grown adapter, a dense step and a LoRA step on the tiny start; the
+fresh-products term at every k of the console's grid is c times two captured steps' fresh_per_c; and the console's c,
+te_core.policy's session at every stated size, each of the console's reference sizes and each start, is its rule."""
 from __future__ import annotations
 
 import json
@@ -269,6 +270,71 @@ def test_the_dial_vectors_are_c_times_a_rows_fresh_per_c_with_and_without_p_cell
     assert [dense[str(k)] is None for k in DIAL_K] == [False] * 3 + [True] * 4
 
 
+def test_the_grid_vectors_are_c_times_each_steps_fresh_per_c_at_every_k_of_the_consoles_grid(built):
+    """The console's dial moves k over its grid, a session's input ids at 16 bits for 1,024 to 32,768 input tokens,
+    with the serving block's 145,568 bits beside it: at each the term is c times the step's fresh_per_c entry, without
+    P-cell and with it, each cell `formalism.fresh_products` at the console's c and at the k's own (the 45M reference's
+    session of k/16 input tokens and 1,024 output, the serving block's c at its k). At the console's c the 45M start's
+    dense step falls from 709,375 at 16,384 bits to 64,340 at 145,568 and is void from 262,144 up; s-t20's at full size
+    falls from 1,083,180 to 56,556 at 262,144 and is void at 524,288, where a cycle of its whole-making system that
+    feeds a counted product has no fixed point. The 45M fixture's rows at the console's k and the serving block's are
+    its dial fixture's (`DENSE_45M`), one capture."""
+    from dataclasses import replace
+
+    from te_core import panels
+
+    g = built["grid"]
+    assert policy.K_GRID == (16_384, 32_768, 65_536, 131_072, 262_144, 524_288)
+    assert policy.K_GRID == tuple(n * policy.id_bits(50_304) for n in policy.DIAL_IN_TOKENS)
+    assert g["k"] == list(rho_vectors.grid_k()) == sorted({*policy.K_GRID, panels.SERVED[1]})
+    assert panels.SERVED[1] == 145_568 and policy.CONSOLE[1] in g["k"]
+    own = {k: policy.session_gates(policy.REFERENCE_PARAMS, n, 1024)
+           for n, k in zip(policy.DIAL_IN_TOKENS, policy.K_GRID)} | {panels.SERVED[1]: panels.SERVED[0]}
+    want = {"the 45M start's dense step": [709_375, 343_662, 163_341, 73_559, 64_340, None, None],
+            "s-t20's dense step at full size": [1_083_180, 530_550, 257_407, 122_897, 109_643, 56_556, None]}
+    assert [v["name"] for v in g["vectors"]] == list(rho_vectors.GRID_STEPS) == list(want)
+    base = formalism.from_json(built["measured"]["dense"])
+    for v in g["vectors"]:
+        rows = json.loads((rho_vectors.GRID_FIXTURES / rho_vectors.GRID_STEPS[v["name"]][0]).read_text())
+        assert sorted(rows["at"], key=int) == [str(k) for k in g["k"] if k != policy.CONSOLE[1]]
+        C = rows["gates"]
+        m = replace(base, parts=(formalism.Part(gates=C, tokens=1.0, token_gates=C, affected_gates=C),),
+                    products=formalism.products_of_trace(rows))
+        per = v["fresh_per_c"]
+        assert v["C_gates"] == C and list(per) == [str(k) for k in g["k"]] and not differences(
+            per, formalism.fresh_per_c(m))
+        assert [(cell["k"], cell["c"]) for cell in v["cells"]] == [
+            (k, c) for k in g["k"] for c in dict.fromkeys((policy.CONSOLE[0], own[k]))]
+        for cell in v["cells"]:
+            term, why, got = formalism.fresh_products(m, cell["c"], cell["k"])
+            assert (cell["term"], cell["fresh_cell"], cell["why"]) == (term, got.get("fresh_cell"), why)
+            entry = per[str(cell["k"])]
+            if entry is None:
+                assert (term, why) == (None, formalism.FRESH_VOID)
+            else:
+                assert term == pytest.approx(cell["c"] * entry[0], rel=1e-12) and why is None
+                assert got["fresh_cell"] == pytest.approx(cell["c"] * entry[1], rel=1e-12)
+        at_console = [cell["term"] for cell in v["cells"] if cell["c"] == policy.CONSOLE[0]]
+        assert [None if t is None else round(t) for t in at_console] == want[v["name"]]
+    dense = json.loads((rho_vectors.FIXTURES / rho_vectors.DENSE_45M).read_text())
+    grid = json.loads((rho_vectors.GRID_FIXTURES / rho_vectors.GRID_STEPS["the 45M start's dense step"][0]).read_text())
+    assert {x: v for x, v in grid.items() if x != "at"} == {x: v for x, v in dense.items() if x != "at"}
+    assert grid["at"]["145568"] == dense["at"]["145568"]
+
+
+@pytest.mark.slow
+def test_the_grid_fixtures_are_each_steps_product_rows_at_every_k_of_the_grid():
+    """Each step of `GRID_STEPS`, captured again, gives its fixture: its product rows at every k of the grid
+    (`grid_rows`). Only a capture classifies rows at a k, and a trace keeps them at the dial's k alone, so no cheaper
+    test can check the rows the grid vectors read (about 35 s on a CPU, s-t20's full step most of it)."""
+    from te_core import io_bound
+
+    for fixture, args in rho_vectors.GRID_STEPS.values():
+        got = json.loads(json.dumps(rho_vectors.grid_rows(io_bound.capture("dense", **args))))
+        assert got == json.loads((rho_vectors.GRID_FIXTURES / fixture).read_text()), (
+            f"{fixture} is stale; run `python -m te_core.rho_vectors --fixtures --write` from benchmarks/covert_witness")
+
+
 def test_the_published_vectors_take_each_case_of_the_rule(built):
     """The console's port of `published` tests against these: each vector is `published` under reading A on its
     case's `measured`, and together they take every case of the rule: Fit; the measured max above 1, partial where a
@@ -319,6 +385,76 @@ def test_the_session_vectors_are_their_rule_at_every_stated_size(built):
     assert s["console"] == {"params": 45_029_888, "in_tokens": 4096, "out_tokens": 1024, "c": console["gates"],
                             "k": float(console["k_bits"])}
     assert (s["console"]["c"], s["console"]["k"]) == policy.CONSOLE
+
+
+def test_each_reference_size_and_start_has_its_session_and_the_products_terms_inputs_at_every_k_of_the_grid(built):
+    """The console's dials move its reference model over its sizes, 20M to 1B at vocab 50,304, and k over its grid,
+    and a start's rows read its own shape. Each size and each start (the ladder's six among them) has its shape, the c
+    of its session at the console's 4,096 in and 1,024 out as session_gates prices it, and that session's k; and at
+    each k of the grid the c of a session of k/16 input tokens and 1,024 output, and that session's input ids: k at
+    50,304, and 15/16 of it at bpe32k's 32,000, which puts the ladder's starts' own k off the grid."""
+    s = built["sessions"]
+    assert s["dial"] | {"about": None} == {"about": None, "k": list(policy.K_GRID),
+                                           "in_tokens": list(policy.DIAL_IN_TOKENS), "out_tokens": 1024}
+    assert [e["name"] for e in s["sizes"]] == list(policy.REFERENCE_SIZES) == ["20M", "45M", "95M", "200M", "400M",
+                                                                               "1B"]
+    starts = policy.starts()
+    assert [e["name"] for e in s["starts"]] == list(starts)
+    assert {"s-t20", "s-t200", "m-t20", "m-t200", "l16-t20", "xl-t20"} <= set(starts)
+    for e in s["sizes"] + s["starts"]:
+        p, sh = e["params"], e["shape"]
+        assert sh == policy.SHAPES[p] and policy.parameters(sh) == p and sh["d_model"] == 64 * sh["n_head"]
+        bits = math.ceil(math.log2(sh["vocab"]))
+        assert (e["c"], e["k_bits"]) == (policy.session_gates(p, 4096, 1024), 4096 * bits)
+        assert [(x["k"], x["in_tokens"]) for x in e["dial"]] == list(zip(policy.K_GRID, policy.DIAL_IN_TOKENS))
+        for x in e["dial"]:
+            assert x["c"] == policy.session_gates(p, x["in_tokens"], 1024) and x["k"] == 16 * x["in_tokens"]
+            assert x["k_bits"] == x["in_tokens"] * bits == x["k"] * bits / 16
+    sizes = {e["name"]: e for e in s["sizes"]}
+    assert (sizes["45M"]["c"], sizes["45M"]["k_bits"]) == policy.CONSOLE
+    assert {e["name"]: round(e["c"] / 1e12) for e in s["sizes"]} == {
+        "20M": 242, "45M": 537, "95M": 1113, "200M": 2340, "400M": 4318, "1B": 10322}
+    for e in s["starts"]:
+        shape = starts[e["name"]]
+        assert (e["params"], e["shape"]["d_model"], e["shape"]["n_layer"], e["shape"]["vocab"]) == (
+            shape["parameters"], shape["d_model"], shape["n_layer"], shape["vocab"])
+    st20 = next(e for e in s["starts"] if e["name"] == "s-t20")
+    assert st20["k_bits"] == 61_440 and [x["k_bits"] for x in st20["dial"]] == [15 * n for n in policy.DIAL_IN_TOKENS]
+
+
+def test_each_reference_size_is_the_familys_shape_near_it_else_the_nearest_lf_shape_in_the_familys_form():
+    """The console's sizes at vocab 50,304: 45M, 95M and 200M are the lf family's s, m and l (model.py), each within 5%
+    of its size, s and m the 45M and 95M starts' own shapes; the family (model.py's sizes and the ladder's l16 and xl)
+    has no shape within 5% of 20M, 400M or 1B, so each is the lf shape nearest it in the family's form: heads of 64,
+    the SwiGLU width the multiple of 64 nearest 2.75 d (halves up; every family shape's but m's, 8/3 d), and
+    d/n_layer from l16's 64 to m's 96."""
+    import model
+
+    v = 50_304
+
+    def shape(d, n, h, f):
+        return {"d_model": d, "n_layer": n, "n_head": h, "d_ff": f, "vocab": v}
+
+    family = {(s.d_model, s.n_layer, s.n_head, s.d_ff) for s in model.SIZES.values()} | {
+        (sh["d_model"], sh["n_layer"], sh["n_head"], sh["d_ff"]) for sh in policy.SHAPES.values() if sh["vocab"] == 32_000}
+    form = [shape(d, n, d // 64, 64 * math.floor(2.75 * d / 64 + 0.5))
+            for d in range(64, 4097, 64) for n in range(1, 65) if 64 <= d / n <= 96]
+    assert all(64 * math.floor(2.75 * d / 64 + 0.5) == f for d, _, _, f in family if (d, f) != (768, 2048))
+    sizes = {"20M": 20e6, "45M": 45e6, "95M": 95e6, "200M": 200e6, "400M": 400e6, "1B": 1e9}
+    assert list(sizes) == list(policy.REFERENCE_SIZES)
+    named = {"45M": model.SIZES["s"], "95M": model.SIZES["m"], "200M": model.SIZES["l"]}
+    for name, n in sizes.items():
+        sh = policy.SHAPES[policy.REFERENCE_SIZES[name]]
+        assert policy.parameters(sh) == policy.REFERENCE_SIZES[name] and sh["vocab"] == v
+        near = [shape(*f) for f in family if abs(policy.parameters(shape(*f)) / n - 1) <= 0.05]
+        if name in named:
+            s = named[name]
+            assert near == [sh] == [shape(s.d_model, s.n_layer, s.n_head, s.d_ff)], name
+        else:
+            best, second = sorted(form, key=lambda x: abs(policy.parameters(x) - n))[:2]
+            assert not near and sh == best and abs(policy.parameters(best) - n) < abs(policy.parameters(second) - n)
+    assert (policy.REFERENCE_SIZES["45M"], policy.REFERENCE_SIZES["95M"]) == (policy.REFERENCE_PARAMS, 95_269_632)
+    assert {policy.starts()[x]["parameters"] for x in ("s50", "m50")} == {45_029_888, 95_269_632}
 
 
 def test_the_tiny_starts_forward_is_the_counters():
