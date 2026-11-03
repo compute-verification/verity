@@ -124,6 +124,8 @@ class _Graph:
     side_cut: int = 0
     ev_tree: Any = None
     execs: tuple = ()
+    #: the byte a poison left in `y` and `leaves`, until a call takes the graph (`GraphCalls._poison_graphs`)
+    poisoned: int | None = None
 
 
 @dataclass(frozen=True)
@@ -155,7 +157,7 @@ class _Slots:
 class GraphCalls:
     """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``driver``, ``fork``, ``order``, ``nb`` (its
     trees' node bytes), ``key_slots``, ``offs``, ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and
-    ``_graphs``, its `_call_steps` and `_call_cuts`, and its pass and the pass's buffers (``roots_buf``, ``flag_buf``, whose
+    ``_graphs``, ``shapes``, its `_call_steps` and `_call_cuts`, and its pass and the pass's buffers (``roots_buf``, ``flag_buf``, whose
     lengths bound it)."""
 
     #: while vLLM captures forwards (`whole_capture_begin`), the calls made inside its stream capture, in order; None otherwise
@@ -165,6 +167,8 @@ class GraphCalls:
     #: each (weight, m₁₆)'s stage, (A words, A tree, y's m₁₆ rows) as its call's steps leave them, made at its first retained
     #: warm-up; y is copied in the capture right after the call, ahead of the forward's next op, which may change it in place
     _stages: dict[tuple[int, int], tuple[Any, Any, Any]] | None = None
+    #: the byte a poison left in every stage, until a replay or a new stage (`_poison_graphs`)
+    _stages_poisoned: int | None = None
     #: the slots the last `whole_replay` uploaded, and those `whole_replayed` staged for the forward after it
     _uploaded: _Slots | None = None
     _next: _Slots | None = None
@@ -222,6 +226,7 @@ class GraphCalls:
             import torch
             self._stages[w, sh.m16] = (*(t.new_empty(t.shape) for t in self._kept(sh, pipe)),
                                        sh.xa.new_empty((sh.m16, sh.n), dtype=torch.bfloat16))
+            self._stages_poisoned = None
         if self._whole is not None and self._statement_on():
             self.statement.prepare(w, sh)
         if self.hashing:
@@ -326,13 +331,28 @@ class GraphCalls:
             self._retained(cur, mm, c.m, self.flag_buf[flags_at:flags_at + c.m], xa, tree, y=y[:c.m])
             flags_at += c.m
 
-    def _graph_buffers(self):
-        """Every buffer the graphs write, as bytes: each graph's y and leaves, and each stage."""
+    def _poison_graphs(self, value: int) -> None:
+        """Every buffer the graphs write at `value`: each graph's y and leaves, and each stage, skipping those that hold it
+        from an earlier poison, which no call has taken since (a graph's call marks it, a forward replayed whole marks all)."""
         import torch
         for g in self._graphs.values():
-            yield from (g.y.view(torch.uint8), g.leaves)
-        for stage in (self._stages or {}).values():
-            yield from (t.view(torch.uint8) for t in stage)
+            if g.poisoned != value:
+                g.y.view(torch.uint8).fill_(value)
+                g.leaves.fill_(value)
+                g.poisoned = value
+        if self._stages and self._stages_poisoned != value:
+            for stage in self._stages.values():
+                for t in stage:
+                    t.view(torch.uint8).fill_(value)
+            self._stages_poisoned = value
+
+    def _unpoisoned(self) -> None:
+        """Every shape, graph and stage marked written (a forward replayed whole writes them without a call's Python)."""
+        for sh in self.shapes.values():
+            sh.poisoned = None
+        for g in self._graphs.values():
+            g.poisoned = None
+        self._stages_poisoned = None
 
     def _slots(self, calls: tuple[WholeCall, ...], at: tuple[int, int, int]) -> _Slots:
         import numpy as np
@@ -354,6 +374,7 @@ class GraphCalls:
         whether `whole_replayed` had staged them, for these calls from where the pass is."""
         cur = self.cur
         call_index(self, len(calls))
+        self._unpoisoned()
         if not self.hashing or not calls:
             return False
         at, s = (len(cur.matmuls), cur.tiles, cur.flag_rows), self._next
@@ -442,6 +463,7 @@ class GraphCalls:
                                                                      self.roots_buf, g.offs))
                 g.side_cut += 1
             self._graphs[key] = g
+        g.poisoned = None
         return g, rows > 0
 
     def _main_steps(self, pipe: Any, steps: list, screen: Any, aside: bool) -> tuple[list, int]:
@@ -589,6 +611,7 @@ class GraphCalls:
             self._graphs[key] = g
         else:
             g.graph.replay()
+        g.poisoned = None
         return g.y.clone(), screen
 
     def _graph_key(self, w: int, sh: Any, m: int) -> tuple[tuple, bool]:

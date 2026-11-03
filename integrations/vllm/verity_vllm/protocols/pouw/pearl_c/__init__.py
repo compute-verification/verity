@@ -216,6 +216,7 @@ class _Shape:
     dirty: int = 0                 # xa's rows an eager call may have left nonzero (`PearlCDeviceRun.eager_only`)
     j: int = 0                     # the set the last call wrote, and the buffers it took from it (its schedule's `rotated`)
     rot: tuple = ()
+    poisoned: int | None = None    # the byte a poison left in every set's buffers, until a call takes the shape (`_shape`)
 
     def buf(self, name: str) -> Any:
         """The last call's buffer `name` (``keys`` among them): its set's where it took it from one (set 0's keys are the
@@ -467,7 +468,9 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
                 for t in self._buffers(sh):
                     t.fill_(self.cur.poison)
             self.shapes[key] = sh
-        return self._ring(self.shapes[key])
+        sh = self._ring(self.shapes[key])
+        sh.poisoned = None
+        return sh
 
     def _ring(self, sh: _Shape) -> _Shape:
         """`sh` with the schedule's ring of per-call buffers: set 0 is its own (its keys too); each further set holds the
@@ -644,17 +647,19 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
 
     def poison(self, value: int = 0xA5) -> None:
         """Every buffer a call of this pass writes (each shape's, those created later in the pass too, and the leaves) filled
-        with `value`.  Under inference mode: buffers made during a vLLM forward are inference tensors, which torch writes only
-        there."""
+        with `value`, but for a shape's (or graph's) that hold `value` from an earlier poison and no call has taken since: their
+        bytes are the fill's already.  Under inference mode: buffers made during a vLLM forward are inference tensors, which
+        torch writes only there."""
         import torch
         self.cur.poison = value
         with torch.inference_mode():
             self.leaves.fill_(value)
             for sh in self.shapes.values():
-                for t in self._buffers(sh):
-                    t.fill_(value)
-            for t in self._graph_buffers():
-                t.fill_(value)
+                if sh.poisoned != value:
+                    for t in self._buffers(sh):
+                        t.fill_(value)
+                    sh.poisoned = value
+            self._poison_graphs(value)
 
 
 class PearlCExecutor:

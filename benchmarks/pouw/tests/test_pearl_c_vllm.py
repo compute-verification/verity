@@ -802,6 +802,32 @@ def test_a_step_completed_behind_it_retains_the_bytes_a_waiting_end_retains(monk
     assert hashlib.sha256(json.dumps(got[True], sort_keys=True).encode()).hexdigest() == RETAINED_DIGEST
 
 
+def test_a_pass_poisons_again_only_the_shapes_a_call_took_since_the_last_poison(monkeypatch, tmp_path):
+    """`PearlCDeviceRun.poison`: each retained pass begins with every shape's buffers at the poison byte, but a shape no call
+    took since the last poison holds it already and isn't filled again; one a call took is."""
+    rng = np.random.default_rng(37)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    steps = [[(0, 200), (1, 200)], [(0, 3), (1, 3)], [(0, 3), (1, 3)]]
+    (runner,) = _runners(monkeypatch)
+    model, comp, option = _served(monkeypatch, PPD.Kernel(R, F, RecordingDev(), "0" * 64), weights,
+                                  {"transcript_dir": str(tmp_path)}, capacity=32, flag_rows=512)
+    run, core, fills, fill = option.end_pass.__self__, _Core(runner(), _Engine(model, steps)), [], torch.Tensor.fill_
+    monkeypatch.setattr(torch.Tensor, "fill_", lambda t, v: (fills.append(t.data_ptr()), fill(t, v))[1])
+
+    def buffers(rows):
+        return [t for (m16, _, _), sh in run.shapes.items() if (m16 > 16) == rows for t in run._buffers(sh)]
+    core.step()
+    big = buffers(True)
+    assert big and {t.data_ptr() for t in big} <= set(fills)
+    fills.clear()
+    core.step()
+    assert not {t.data_ptr() for t in big} & set(fills) and all(bool((t == 0xA5).all()) for t in big)
+    assert {t.data_ptr() for t in buffers(False)} <= set(fills)
+    core.step()
+    comp.close()
+
+
 def test_the_record_decided_from_the_rows_bytes_is_the_devices(monkeypatch):
     """`screen.excluded_host`, which a device's retained call decides its record by from the bytes its rows' write lands
     (the flags and A's rows as BF16), excludes the rows `screen.excluded` does from the flags and A's FP32 words."""

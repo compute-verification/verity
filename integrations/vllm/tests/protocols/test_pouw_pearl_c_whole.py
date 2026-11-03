@@ -287,6 +287,7 @@ class Calls(PG.GraphCalls, PP.EpochCalls, PassEnds):
         self.roots_buf, self.flag_buf = torch.zeros(64 * 8, dtype=torch.uint8), torch.zeros((256, 2), dtype=torch.uint8)
         self.salt, self.salt_key = bytes(range(64)), bytes(range(32))
         self.cur = PPD._Pass(None)
+        self.shapes, self._graphs = {}, {}
 
 
 def test_a_replay_uploads_every_calls_slot_once_and_appends_its_records():
@@ -445,7 +446,8 @@ def test_a_retained_kinds_capture_copies_each_calls_a_words_tree_and_y_to_the_st
     run.whole_capture_end()
     assert float(xa[0, 0]) == 1.5 and float(y[0, 0]) == 3.0  # an unretained kind's capture leaves the stages alone
     run._graphs = {}
-    assert [t.dtype for t in run._graph_buffers()] == [torch.uint8] * 3
+    run._poison_graphs(0xA5)
+    assert all(bool((t.view(torch.uint8) == 0xA5).all()) for t in (xa, tree, y))
 
 
 def test_an_enabled_statement_is_in_the_key_stages_each_captured_call_and_commits_after_each_replay(monkeypatch):
