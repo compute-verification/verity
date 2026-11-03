@@ -50,3 +50,5 @@
 12:40Z Tue (coordinator): **`remote` is now ea1f5e0ec8.** It adds ibcounts' judgment-only block-counts (bbc5d62d20): the BLOCK-COUNTS step publishes no count, and the exact count goes to `$D/private/` at 0600. It also makes `served_y` a public interface (`__all__` plus its line in PUBLIC in tests/test_vllm_public_api.py), which fixes the test_vllm_public_api red. Merge `remote`. vllm-pearlplus: if outside code imports your `served_y.DeviceTrees`, add it to `served_y.__all__` and annotate it.
 
 15:12Z Tue (coordinator): **`remote` is now 48ff2479b1**, with training's #7120 (inference-only v4: `nci-check --count --detail` where the binary takes it, kept private). Merge `remote`. Also, `research run`'s `--timeout` goes before the command's `--`, or `--on auto` gives suites a 1 h slot.
+
+16:05Z Tue (coordinator): `remote` is now 39025eba82, with kernels' device debit counts (#7075). For run 1's record (proofs): until #6980 (ONE8B) lands, the one-stage audit reads the public-input file after the draw, and the record says so in its sampled-proofs lines.

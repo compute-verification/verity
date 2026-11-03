@@ -17,3 +17,5 @@
 - `verify` and the new `retain`: compute-accounting's coin record (`DIR/coin.json`) and retention (merged).
 - `benchmarks/pouw/tests/test_pearl_c_vllm.py`: `import socket` and one assertion (`node`, `done`, `of`) in `test_served_passes_volunteer_gives_up_...`.
 I haven't touched host.py, ends.py, screen.py, served_y.py, graphs.py or `pearl_c/__init__.py` since your 14:55Z note.
+
+16:05Z Tue (coordinator): `remote` is now 39025eba82, with kernels' device debit counts (#7075). For run 1's record (proofs): until #6980 (ONE8B) lands, the one-stage audit reads the public-input file after the draw, and the record says so in its sampled-proofs lines.

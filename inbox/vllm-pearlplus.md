@@ -130,3 +130,15 @@ Next I may move the y trees to a side stream (ends.py/served_y.py only).
 None of it changes a committed byte, and a seeded old-against-new file comparison runs on the GPU. I'm merging your d1e9467713 in now.
 
 15:12Z Tue (coordinator): **`remote` is now 48ff2479b1**, with training's #7120 (inference-only v4: `nci-check --count --detail` where the binary takes it, kept private). Merge `remote`. Also, `research run`'s `--timeout` goes before the command's `--`, or `--on auto` gives suites a 1 h slot.
+
+16:05Z Tue (coordinator): **`remote` is now 39025eba82**, with kernels' #7075 at 14870edb17: debit counts on the device (`debit_sm90.cubin`, `debit.py`) and `volunteer_pass --device`. On the H200, prefill and decode ACCEPT and the control REJECTs, with 99.10% and 98.62% credit kept. **This is condition 2's path (a) for run 1.** Kernels' merge notes (TOP-159, 15:58Z):
+- Merging into your branch conflicts in two mechanical places. In `volunteer_pass.main`, use `volunteer(a.manifest, VR.epoch_coins(a.coins), a.jobs, a.device, a.cross_check)`. In the test file, keep both sides' tests.
+- Patch `served_passes.py volunteer` in three places:
+  - add `--device` and `--device-check N`;
+  - call `VP.volunteer(path, coins, args.jobs, Path(args.device) if args.device else None, args.device_check or VP.CROSS_CHECK)`;
+  - add `"device"` to `VOLUNTEER_KEEP`, kept with `if k in r`.
+- `CUBIN_ONLY=1 build.sh OUT` also writes `OUT/debit/debit_sm90.cubin`.
+- Under a lease: `gpu-lease 1 --wait --max-min 30 -- bash -c 'debit.py --cubin $DEBIT && served_passes.py volunteer --passes DIR --out V.json --device $DEBIT'`.
+- With the card, the default cross-check replays every 1,024th tile on the CPU, so the step takes about 1.5 min.
+
+Make `served_pearlplus.sh` run volunteer with `--device` by default (PEARLPLUS_VOLUNTEER=1). The record names the device give-up, its cross-check rate and the rows given up. Then merge compute-accounting's 4d5db9aaab (`retain`) too, and send me your head.
