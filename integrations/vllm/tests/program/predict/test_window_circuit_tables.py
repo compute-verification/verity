@@ -58,8 +58,8 @@ def test_the_tables_are_named_as_the_commit_record_registers_them():
 
 
 def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_of_h1s_tables():
-    """Each quantizer at K = 64 is `Int8RowQuant_v5{K, R}` (q/k/v's and gate/up's R = 1, o_proj's R = 4) and down_proj's at
-    K = 128 stays `Int8RowQuant_v3`. The circuit registers each round's A table, 6 calls of 8 rows of H1's 34-word leaf,
+    """Each quantizer at K = 64 is `Int8RowQuant_v5{K, R, ROUND}` at its position's round (q/k/v's and gate/up's R = 1,
+    o_proj's R = 4) and down_proj's at K = 128 stays `Int8RowQuant_v3`. The circuit registers each round's A table, 6 calls of 8 rows of H1's 34-word leaf,
     and its input-ids table, 8 rows of one u32. Slot k's position p is round 0's row 4k + p below the prompt and round 1's
     row k past it: each quantizer's leaf row ``o2`` is held to row 8c + i of its round's A table, c its index among its
     position's 6 in node order, and each position's token row (its lane's of the scan proof block at position 0, its
@@ -69,7 +69,8 @@ def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_
     low = _lowered()
     c = low.circuit
     assert {t: k for fn, k in c.templates if (t := _label(fn)).startswith("Int8RowQuant")} == {
-        "Int8RowQuant_v5{K=64,R=1}": 40, "Int8RowQuant_v5{K=64,R=4}": 20, "Int8RowQuant_v3{K=128,R=1}": 20}
+        "Int8RowQuant_v5{K=64,R=1,ROUND=0}": 32, "Int8RowQuant_v5{K=64,R=4,ROUND=0}": 16,
+        "Int8RowQuant_v5{K=64,R=1,ROUND=1}": 8, "Int8RowQuant_v5{K=64,R=4,ROUND=1}": 4, "Int8RowQuant_v3{K=128,R=1}": 20}
     assert {p: n for p, n in c.registered.params.items() if p.startswith(("row-table/", "input-ids/"))} == {
         "row-table/0/k64": 6 * 8 * LEAF, "row-table/1/k64": 6 * 8 * LEAF, "input-ids/0": 8 * 2, "input-ids/1": 8 * 2}
     pos, want = WR.positions(low.fn), {}
@@ -91,6 +92,24 @@ def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_
     doc = json.loads(json.dumps(c.description()))
     assert IF.input_count(doc, **held(c)) == {
         "units": 1568, "inputs": 10547104, "wired": 0, "registered": 9161856, "ingress": 0, "free": 1385248}
+
+
+def test_each_tables_readers_are_templates_of_their_own():
+    """A sample stratified by template draws a unit from every template, so each table has a drawn reader when its readers
+    are templates of their own: each template that holds a table row holds one on each of its units, all of one table, and
+    every table has one. Round s's quantizers bind ROUND = s; round 0's token rows are its `ScanSlots_v2` and `TokenFeed_v1`
+    units' and round 1's its selects', `SelectCollect_v2{..., ROUND=1}`. Without the tables no template binds a round."""
+    c = _lowered().circuit
+    units, tables, held_units = {IF.descriptor_id(fn): n for fn, n in c.templates}, {}, {}
+    for (tid, _port, u), (table, _row) in _held_rows(c).items():
+        tables.setdefault(tid, set()).add(table)
+        held_units.setdefault(tid, set()).add(u)
+    assert all(len(ts) == 1 and held_units[t] == set(range(units[t])) for t, ts in tables.items())
+    readers = sorted((t.split("{")[0], *ts, "ROUND=1" in t) for t, ts in tables.items())
+    assert readers == [("Int8RowQuant_v5", "row-table/0/k64", False)] * 2 + [("Int8RowQuant_v5", "row-table/1/k64", True)] * 2 + [
+        ("ScanSlots_v2", "input-ids/0", False), ("SelectCollect_v2", "input-ids/1", True), ("TokenFeed_v1", "input-ids/0", False)]
+    assert {s for t, ts in tables.items() for s in ts} == set(c.registered.values)
+    assert not any("ROUND=" in IF.descriptor_id(fn) for fn, _ in _lowered(None).circuit.templates)
 
 
 def test_a_fixed_load_window_is_the_class_circuit_with_the_tables_and_any_other_window_is_refused():
