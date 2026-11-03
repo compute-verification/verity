@@ -248,13 +248,6 @@ theorem all_replicate {n v B : ℕ} (h : v ≤ B) : ∀ c ∈ Array.replicate n 
 theorem all_lit {l : List ℕ} {B : ℕ} (h : ∀ c ∈ l, c ≤ B) : ∀ c ∈ l.toArray, c ≤ B :=
   fun c hc => h c (by simpa using hc)
 
-theorem splitAt_le {s B : ℕ} (hs : s ≤ B) (hB : 1 ≤ B) : ∀ i, _root_.Flock.Firewall.Session.splitAt s i ≤ B
-  | 0 => hs
-  | i + 1 => by
-    have := splitAt_le hs hB i
-    show _root_.Flock.Firewall.Session.splitAt s i - 4 + 1 ≤ B
-    omega
-
 theorem queryCoins_le {sch : _root_.Flock.Schedule} (hq : ∀ i, (sch.levels.getD i default).q + 1 ≤ 65536) (i : ℕ) :
     ∀ c ∈ _root_.Flock.Firewall.Session.queryCoins sch i, c ≤ 65536 := by
   have h1 := hq i
@@ -269,8 +262,12 @@ theorem queryCoins_le {sch : _root_.Flock.Schedule} (hq : ∀ i, (sch.levels.get
 theorem ligeritoCoins_le {sch : _root_.Flock.Schedule} (hn : sch.n + 1 ≤ 65536)
     (hq : ∀ i, (sch.levels.getD i default).q + 1 ≤ 65536) :
     ∀ c ∈ _root_.Flock.Firewall.Session.ligeritoCoins sch, c ≤ 65536 := by
-  have hs : ∀ i, _root_.Flock.Firewall.Session.splitAt (sch.n - sch.k0 + 1) i ≤ 65536 :=
-    splitAt_le (by omega) (by omega)
+  have hs : ∀ i, _root_.Flock.Firewall.Session.splitAt (sch.n - sch.k0 + 1) i ≤ 65536
+    | 0 => show sch.n - sch.k0 + 1 ≤ 65536 by omega
+    | i + 1 => by
+      have := Count.splitAt_le (sch.n - sch.k0 + 1) i
+      show _root_.Flock.Firewall.Session.splitAt (sch.n - sch.k0 + 1) i - 4 + 1 ≤ 65536
+      omega
   unfold _root_.Flock.Firewall.Session.ligeritoCoins
   dsimp only
   refine all_append (all_append (all_append (all_append (all_lit ?_) (all_replicate (by omega))) (all_lit ?_))
