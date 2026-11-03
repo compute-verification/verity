@@ -164,10 +164,10 @@ loss (`policy.CAP_FALLBACK`), so a grown model is still scored; the rest are lef
 `training/standard-workloads` is `standard_workloads`'s, PUT by `python -m te_core.standard_workloads --out DIR
 --publish`: the standard covert workloads (dense, DiLoCo, RL, inference, LoRA, distillation), each a small real run from a
 registered start named in `islands/standard-workloads/rows.json`, measured by this te_core (its traced structures where
-the island traced them; a generation run's rounds alone, priced as NVFP4) and priced as `training/algorithm-policy`
-prices a run (`formalism.at` under its `READING` over its `IN_RHO` kinds, every other kind's term a sensitivity) at the
-dial's default and the console's default session, each input labelled measured or assumed and why. It is not scored
-against H.
+the island traced them, from te_core 4.4 on; a generation run's rounds alone, priced as NVFP4) and priced as
+`training/algorithm-policy` prices a run (`formalism.published` under the builder's `READING`, with its binding kind,
+what it rests on and its kinds) at the dial's default and the console's default session, each input labelled measured
+or assumed and why. It is not scored against H.
 
 ## What the integrator calls
 
@@ -269,7 +269,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `panels.py` | `training/frontier-branches`, retired from the console: the frontier, each branch point's honest and throttled curves and ρ's candidates, its cut and figure; the dial the training panels use (`dial`, `rho_columns`, `page_inputs`, `mismatches`) |
 | `frontier_fit.py` | a console training panel, `training/frontier-fit`: per data, L(C) = E + A·C^(−γ) fitted to the unconstrained frontier (`fit`, `used`; provisional under `FIT_TARGET` points from scratch), its effective compute (`loss_at`, `c_eff`, `gain`) and the v3 ladder's points (`ladder_points`, `LADDER`'s by default) |
 | `algorithm_policy.py` | the other, `training/algorithm-policy`: per run, start and gain target, p = C/H against ρ with ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`) and the dashboard's cells (`published`'s), the coverage, its console cut, figure, and the PUT of both panels over what the route serves (`guarded`) |
-| `standard_workloads.py` | a third, `training/standard-workloads`: the standard covert workloads' real runs, each row's ρ priced as `algorithm_policy` prices a run (its `READING` over `IN_RHO`, `binding`, `rho_terms`) at the dial's default and the console's, its inputs (`priced`, refused unless `page_rho` gives `formalism.at`'s ρ at both) and their status (`status`), a generation run as its rounds (`rounds`, `round_formalism`), and its PUT |
+| `standard_workloads.py` | a third, `training/standard-workloads`: the standard covert workloads' real runs, each row's ρ and the dashboard's cells `formalism.published`'s under its `READING` at the dial's default and the console's (`cells`: under reading A, null and `unmeasured` where no kind is), its inputs (`priced`, refused unless `page_rho` gives `formalism.at`'s ρ at both) and their status (`status`), a generation run as its rounds (`rounds`, `round_formalism`), and its PUT, refused where it would drop a served run (`emptied`) |
 | `tiles.py` | reading A's matrix-product tiles: a record's ops as products (`of_log` from a `macs_log`, `of_graph` from a traced step, `products`), the most MACs a tile reading k bits holds (`volume`) and each op's tile cap (`cap`, `caps`), and the most a block's tiles hold beside each other (`held`) |
 | `workloads.py` | the covert workloads of the console's *Standard training under the policy* plot, each a model: one function per workload from its dials (`Dial`) to the inputs of the one bound's menu (`KINDS`: the fresh products, `Fresh`, priced here by the Loomis-Whitney cap, and four of `formalism.bound`'s sensitivities, `TE_CORE`: reading B's token form and decoding, reduction and update; the token kind's inputs as the console's columns, `columns`, the others as `menu`), every kind's term, their max and the binding kind at the three policies (`rho`, `POLICIES`: the console default, it with attention counted, and the registered serving policy), reading A's verdict on the token kind (`reading_a`), measured records beside the model with every kind's term on each (`Check`, `recorded`), and each input's source, measured with its record or assumed with why (`input_status`); `python -m te_core.workloads --json te_core/workloads.json`, and `--records TABLES ART` to rewrite `workloads_records.json` from the island's panel |
 | `workloads.json` | `workloads.py`'s reference points and checks, which the console's tests pin (`tests/test_workloads.py` fails while it's stale) |

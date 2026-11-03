@@ -1,9 +1,11 @@
 """te_core.standard_workloads builds `training/standard-workloads`: a row per workload and measured dial setting, whose
-ρ is priced as te_core.algorithm_policy prices a run (formalism.at under its `READING` over its `IN_RHO` kinds, its
-`binding` and `rho_terms`) at the dial's default and the console's, whose rho_inputs give that ρ there
-(algorithm_policy.page_rho) and whose input_status says which inputs te_core measured; a generation run's row is its
-rounds alone, each GEMM on the served codes priced as NVFP4; and the panel keeps to the panels route's limits, a cell
-up to 4,096 characters."""
+ρ is priced as te_core.algorithm_policy prices a run (formalism.published under the builder's `READING`, with its
+binding kind, what it rests on and its kinds; under reading A null and "unmeasured" where no kind is measured) at the
+dial's default and the console's, whose rho_inputs give the dial's ρ there (algorithm_policy.page_rho) and whose
+input_status says which inputs te_core measured; a generation run's row is its rounds alone, each GEMM on the served
+codes priced as NVFP4; it reads traces from te_core 4.4 on; and the panel keeps to the panels route's limits, a cell up
+to 4,096 characters, and never replaces a served panel with one that drops its runs."""
+import dataclasses
 import json
 import math
 from pathlib import Path
@@ -54,30 +56,86 @@ def build(m: formalism.Measured, fx: dict, monkeypatch) -> tuple[dict, list, dic
 
 
 def at(m: formalism.Measured, w_fwd: float) -> dict[str, dict]:
-    return {name: formalism.at(m, c, k, algorithm_policy.READING, algorithm_policy.IN_RHO)
-            for name, (c, k) in SW.points(w_fwd).items()}
+    return {name: formalism.at(m, c, k) for name, (c, k) in SW.points(w_fwd).items()}
 
 
 def test_the_pinned_row_is_its_runs_quantities_priced_as_algorithm_policy_prices_a_run_at_both_dial_points(monkeypatch):
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
     p, details, cells = build(m, fx, monkeypatch)
-    assert list(cells.values())[:-1] == fx["cells"][:-1] and cells["te_core"] == VERSION
-    assert cells["reading"] == algorithm_policy.READING
-    assert p["source"].endswith(f"reading {algorithm_policy.READING}; islands/standard-workloads)")
+    pinned = dict(zip(SW.COLUMNS, fx["cells"]))
+    assert {k: v for k, v in cells.items() if k != "te_core"} == {k: v for k, v in pinned.items() if k != "te_core"}
+    assert cells["te_core"] == VERSION
+    assert p["source"] == f"python -m te_core.standard_workloads (te_core {VERSION}; islands/standard-workloads)"
     inputs = json.loads(cells["rho_inputs"])
     assert list(inputs) == list(SW.KEYS) == list(json.loads(cells["input_status"]))
     assert set(json.loads(cells["input_status"]).values()) == {"measured"}
-    pts, got = SW.points(policy.w_fwd(fx["shape"])), at(m, policy.w_fwd(fx["shape"]))
+    w_fwd = policy.w_fwd(fx["shape"])
+    pts, got = SW.points(w_fwd), at(m, w_fwd)
     assert pts["console"] == algorithm_policy.CONSOLE
+    one = {name: formalism.published(m, c, k, SW.READING) for name, (c, k) in pts.items()}
     for name, (c, k) in pts.items():
         assert math.isclose(algorithm_policy.page_rho(inputs, c, k)[0], got[name]["rho"], rel_tol=1e-4)
-        assert cells[f"rho_{name}"] == SW.rho_cell(got[name]["rho"])
-    assert cells["binding_kind"] == algorithm_policy.binding(got["default"])
-    assert cells["rho_terms"] == algorithm_policy.rho_terms(m, {n: (*pts[n], v) for n, v in got.items()})
-    assert json.loads(cells["rho_terms"])["max_over"] == list(algorithm_policy.IN_RHO)
-    assert details[0]["reading"] == algorithm_policy.READING and details[0]["at"] == SW.finite(got)
-    assert not SW.refused(p) and not SW.refused(p | {"note": SW.note("art:" + "0" * 64)})
+        assert cells[f"rho_{name}"] == SW.rho_cell(one[name]["rho"])
+    assert (cells["reading"], cells["binding_kind"], cells["rests_on"]) == \
+        (SW.READING, one["console"]["binding_kind"], one["console"]["rests_on"])
+    assert cells["kinds"] == algorithm_policy.kinds(one["console"])
+    assert list(json.loads(cells["kinds"])["sensitivity"]) == list(formalism.CELL_SENSITIVITIES)
+    assert details[0]["at"] == SW.finite(got) and details[0]["published"] == SW.finite(one)
+    assert details[0]["bound"]["console"]["terms"] == formalism.bound(m, *pts["console"])["terms"]
+    assert not SW.refused(p) and not SW.refused(p | {"note": SW.note(p, "art:" + "0" * 64)})
+
+
+def test_under_reading_a_a_row_takes_the_kinds_valid_on_their_own_and_is_null_and_unmeasured_where_none_is(
+        monkeypatch):
+    """The pinned row's token kind under reading A (its trace's entries and its macs_log's tiles) is at most 1 at the
+    console's, so its ρ is 1 there, binding none, measured; without an op log no kind is measured: null, never 1."""
+    fx = json.loads(PINNED.read_text())
+    m = formalism.from_json(fx["measured"])
+    monkeypatch.setattr(SW, "READING", "A")
+    c, k = algorithm_policy.CONSOLE
+    b = formalism.bound(m, c, k)
+    assert b["terms"]["token"] is not None and b["terms"]["token"] <= 1 and b["terms"]["fresh_products"] is None
+    p, _, cells = build(m, fx, monkeypatch)
+    one = formalism.published(m, c, k, "A")
+    assert (cells["reading"], cells["rho_console"], cells["binding_kind"], cells["rests_on"]) == \
+        ("A", 1.0, "none", formalism.RESTS_ON_CELL["none"])
+    kinds = json.loads(cells["kinds"])
+    assert cells["kinds"] == algorithm_policy.kinds(one) and list(kinds["bound"]) == list(formalism.KINDS)
+    assert "reading A, the one bound over the kinds valid on their own" in p["note"]
+    _, _, cells = build(dataclasses.replace(m, ops=None), fx, monkeypatch)
+    assert (cells["rho_default"], cells["rho_console"], cells["binding_kind"], cells["rests_on"]) == \
+        (None, None, "none", "unmeasured")
+    assert json.loads(cells["kinds"])["bound"] == {"fresh_products": None, "token": None, "decoding": None}
+    monkeypatch.setattr(formalism, "published", lambda *a: one | {"rho": math.inf})
+    with pytest.raises(SystemExit, match="reading A's rho is infinite at default and console"):
+        build(m, fx, monkeypatch)
+
+
+def test_traces_from_te_core_4_4_to_this_one_are_read_and_others_refused(tmp_path, monkeypatch):
+    (tmp_path / "traces").mkdir()
+    (tmp_path / "manifest.json").write_text(json.dumps({"te_commit": "c0ffee"}))
+    (tmp_path / "traces" / "a.json").write_text(json.dumps({"run": "r1", "step": 1, "trace": {"structure": {}}}))
+    (tmp_path / "traces" / "b.json").write_text(json.dumps({"run": "r1", "step": 2, "trace": None}))
+    monkeypatch.setattr(SW, "fetch", lambda art, *paths: tmp_path)
+    for v in (SW.TRACED_SINCE, VERSION):
+        monkeypatch.setattr(SW, "version_at", lambda commit, v=v: v)
+        assert SW.traces(["art:t"]) == {"r1": {1: {"run": "r1", "step": 1, "trace": {"structure": {}}, "from": "art:t",
+                                                   "te_core": v}}}
+    for v in ("4.3", "9.0"):
+        monkeypatch.setattr(SW, "version_at", lambda commit, v=v: v)
+        with pytest.raises(SystemExit, match=f"traced by te_core {v}, not {SW.TRACED_SINCE} to {VERSION}"):
+            SW.traces(["art:t"])
+
+
+def test_a_publish_never_drops_a_served_runs_row_nor_replaces_a_newer_te_cores():
+    def panel(runs, te=VERSION):
+        return {"columns": SW.COLUMNS, "rows": [[None, None, None, f"{r} art:x (about)", *[None] * 5, te]
+                                                for r in runs]}
+    mine = panel(["r1", "r2"])
+    assert SW.emptied(mine, None) == [] and SW.emptied(mine, panel(["r2", "r1"], "4.4")) == []
+    assert SW.emptied(mine, panel(["r1", "r3"])) == ["it drops the served row of r3"]
+    assert SW.emptied(mine, panel(["r1"], "9.0")) == [f"the route serves te_core 9.0, newer than {VERSION}"]
 
 
 def test_a_row_whose_inputs_dont_give_te_cores_rho_is_refused(monkeypatch):
@@ -170,7 +228,7 @@ def test_a_rounds_delta_is_the_served_update_and_its_tau_the_prompts_ids_over_th
 
 
 def test_the_route_takes_a_cell_of_4096_characters_and_refuses_a_longer_one_a_long_note_or_a_long_body():
-    p = {"note": "n", "columns": ["a", "b"], "rows": [["x" * console.CELL_MAX, 1.5]]}
+    p = {"note": "n", "source": "s", "columns": ["a", "b"], "rows": [["x" * console.CELL_MAX, 1.5]]}
     assert not SW.refused(p)
     long = "x" * (console.CELL_MAX + 1)
     assert SW.refused(p | {"rows": [[long, 1.5]]}) == [f"row 0's a is {long!r:.40}"]
