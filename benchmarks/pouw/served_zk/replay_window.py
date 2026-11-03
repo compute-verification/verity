@@ -7,7 +7,7 @@ Without ``--runs`` it fetches every served_zk `job.sh` attempt's ``out/`` from t
 ``--add`` names more).  Each run's ``request`` and ``other`` sides with an ``advice.json`` are a window.  For a window whose
 entries are the 336-byte entry rows:
 
-* **the statement**: `window_problem` on the advice's rows at the registered work, the check's bound and the pass's -h3
+* **the statement**: `window_problem` on the advice's rows at the registered circuit, the check's bound and the pass's -h3
   root, with the calls' records and the side indices their keeps give, holds (the committer held it before committing),
   and so does each entry's `layout_problem` and each call's `record_problem`;
 * **the root**: each entry's leaf (`entry_bc` of its row under its recorded salt, `entry_leaf` in the window's served
