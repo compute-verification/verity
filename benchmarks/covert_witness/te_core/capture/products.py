@@ -10,7 +10,8 @@ and their paid factor (`P`, `_reach`), and whether each operand reads a gather's
 every token that shares an id) before any op makes them token-specific (`gathered`, `_gathered`), which the bound drops
 (te_core.formalism). The block's `p_match` lists the ops that break P-match. Identical rows of the step (a layer's GEMMs
 repeated over the layers) are one row with their count, so `gathered` puts layer 0's products of the embedding's rows in
-rows of their own.
+rows of their own. A trace keeps the rows at each k of the console's dial too (`rows_on_dial`, `DIAL_K`), since a
+row's rates, kind and feeds move with k.
 
 A recorded program reads θ′ through storage versions: a weight's view in the measured step reads the version the
 previous step's optimizer wrote, not the attribute's entry value. So the rates and chains here are keyed by the
@@ -33,6 +34,9 @@ from te_core.capture.structure import _GATHERS, _WALK, _closure, _dtype_name, _F
 #: distinguishable from one traced before them
 CAPTURE = "4.12.1"
 ORDER = "unknown"
+#: the console's dial's k levels in bits (te_core.panels' `K_LEVELS`, which a test holds this to): each of its block
+#: sizes, the reference's, the served demo's block and the console's default
+DIAL_K = (65_536, 80_000, 145_568, 800_000, 8_000_000, 80_000_000, 800_000_000)
 
 
 class _Values:
@@ -371,10 +375,31 @@ def rows(graph, k: float = io_bound.CONSOLE[1], gemm_dtype: str | None = "bfloat
     None (the circuit's count is the trace's), and `p_match` [{"op", "fan_out", "count"}] the ops that break P-match
     (`_reach`)."""
     vs = _Values(graph)
-    rate, chain, made_by = _rates_and_chains(vs, k)
     made = _made(vs)
-    reach, paid, broken = _reach(vs, made, made_by, rate)
+    return _rows(vs, graph, k, gemm_dtype, made, _gathered(vs, made))
+
+
+def rows_on_dial(graph, gemm_dtype: str | None = "bfloat16") -> dict:
+    """`rows` at the console's k, and under "at" each other k of the console's dial (`DIAL_K`, by its integer as a
+    string) the rows and P-match check there ({"k", "rows", "p_match"}): a product's rates, kind and feeds move with k
+    (a block of k bits pays an output made whole at 4K²·b²/k, and makes one whole by itself from K ≥ 3^1.5·√(k/b_c)),
+    so the dial's term at a k reads that k's rows, which only the captured step gives. A trace keeps these (te_core.
+    capture.script) so the dial needs no retrace."""
+    vs = _Values(graph)
+    made = _made(vs)
     gathered = _gathered(vs, made)
+    out = _rows(vs, graph, io_bound.CONSOLE[1], gemm_dtype, made, gathered)
+    out["at"] = {}
+    for k in DIAL_K:
+        if k != io_bound.CONSOLE[1]:
+            b = _rows(vs, graph, float(k), gemm_dtype, made, gathered, gates=False)
+            out["at"][str(k)] = {x: b[x] for x in ("k", "rows", "p_match")}
+    return out
+
+
+def _rows(vs: _Values, graph, k: float, gemm_dtype, made: dict, gathered: set, gates: bool = True) -> dict:
+    rate, chain, made_by = _rates_and_chains(vs, k)
+    reach, paid, broken = _reach(vs, made, made_by, rate)
     by_name = {n.name: n for n in vs.nodes}
     merged: dict = {}
     for m in graph.matmuls:
@@ -411,7 +436,8 @@ def rows(graph, k: float = io_bound.CONSOLE[1], gemm_dtype: str | None = "bfloat
             merged[key]["count"] += 1
         else:
             merged[key] = {"count": 1} | row
-    gates = io_bound.step_gates(graph, gemm_dtype) if vs.region is None else (graph.formalism or {}).get("gates")
+    gates = None if not gates else io_bound.step_gates(graph, gemm_dtype) if vs.region is None else \
+        (graph.formalism or {}).get("gates")
     return {"capture": CAPTURE, "k": k, "order": ORDER, "tokens": graph.tokens, "gates": gates,
             "rows": list(merged.values()),
             "p_match": [{"op": op, "fan_out": round(f, 6), "count": c} for op, (f, c) in sorted(broken.items())]}

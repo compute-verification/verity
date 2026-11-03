@@ -47,7 +47,7 @@ def recorded(tmp_path, monkeypatch):
 def test_a_recorded_steps_rows_are_the_captured_steps_and_io_bounds(recorded):
     """The forward's head product is fresh and its fc product an expansion (io_bound's rule pays a lookup at the token
     ids at no rate); in the backward three products are fresh and one an expansion. The trace keeps the rows with the
-    capture's version, and the order is unknown."""
+    capture's version, and the order is unknown, and at each other k of the console's dial the rows there."""
     k = policy.CONSOLE[1]
     model = Toy()
     ref = capture_step(model, torch.optim.SGD(model.parameters(), lr=1e-3),
@@ -55,7 +55,14 @@ def test_a_recorded_steps_rows_are_the_captured_steps_and_io_bounds(recorded):
                        (torch.zeros(B, CTX, dtype=torch.long), torch.zeros(B, CTX, dtype=torch.long)))
     got, want = products.rows(recorded, k), products.rows(ref, k)
     assert comparable(got) == comparable(want)
-    assert recorded.formalism["products"] == got and (got["capture"], got["order"]) == (products.CAPTURE, "unknown")
+    kept = dict(recorded.formalism["products"])
+    at = kept.pop("at")
+    assert kept == got and (got["capture"], got["order"]) == (products.CAPTURE, "unknown")
+    assert sorted(map(int, at)) == sorted(set(products.DIAL_K) - {k})
+    for x, block in at.items():
+        there = products.rows(recorded, float(x))
+        assert block == {"k": float(x), "rows": there["rows"], "p_match": there["p_match"]}
+    assert at[str(800_000_000)]["rows"] != got["rows"]
     assert got["gates"] == recorded.formalism["gates"] and want["gates"] == io_bound.step_gates(ref, "bfloat16")
     dims = ("batch", "m", "k", "n")
     by_dims = {(r.phase, *(r.dims[x] for x in dims)): r for r in io_bound.rows_of(ref, "bfloat16", k)}
@@ -69,6 +76,16 @@ def test_a_recorded_steps_rows_are_the_captured_steps_and_io_bounds(recorded):
         kinds.append((r["phase"], o.kind))
     assert sorted(kinds) == sorted([("forward", "fresh"), ("forward", "expansion"), ("backward", "expansion")]
                                    + [("backward", "fresh")] * 3)
+
+
+def test_the_capture_keeps_rows_at_the_consoles_dial_levels():
+    """The capture's dial is te_core.panels' `K_LEVELS` (products can't import panels, which imports formalism, which
+    imports products); a trace has no rows at a level added after it was captured, so a new level means a retrace."""
+    from te_core import panels
+
+    assert products.DIAL_K == panels.K_LEVELS, (
+        f"set te_core.capture.products.DIAL_K to te_core.panels.K_LEVELS {panels.K_LEVELS}, bump products.CAPTURE and "
+        "say on the board that traces need a retrace for the new levels")
 
 
 class Fan(nn.Module):
