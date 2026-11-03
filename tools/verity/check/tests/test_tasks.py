@@ -244,6 +244,126 @@ def test_run_with_the_graph_runs_any_id_it_lists_as_listed_and_refuses_another_c
     assert r.returncode == 2 and f"a graph of commit {doc['commit']}, not of this tree's HEAD" in r.stderr, r.stderr
 
 
+def _files(tree: Path, n: int) -> None:
+    for k in range(2, n + 1):
+        (tree / "a" / "tests" / f"test_a{k}.py").write_text(f"def test_a{k}():\n    assert True\n")
+
+
+def _split(doc: dict, suite: str) -> int:
+    return doc["splits"][suite]["m"] if suite in doc["splits"] else 1
+
+
+def test_executor_seconds_split_a_suite_in_proportionally_more_parts_than_the_listers_record(tree):
+    """The lister's own record under-counts what a suite takes on the executor's worker slots: given the executor's seconds
+    (3x the record here) the listing cuts it in 3x the parts, so each part fits `--split-s` on the executor."""
+    _files(tree, 8)
+    cache = tree.parent / "test-cache"
+    cache.mkdir()
+    (cache / "durations.json").write_text(json.dumps({"a": 1000}))
+    assert _split(_graph(tree)[0], "a") == 2, "the tree's own record: ceil(1000 / 900)"
+    costs = tree.parent / "costs.json"
+    costs.write_text(json.dumps({"pytest:a": 3000}))
+    doc, _ = _graph(tree, "--costs", str(costs))
+    by = {t["id"]: t for t in doc["tasks"]}
+    assert _split(doc, "a") == 4 and [f"pytest:a:{k}/4" for k in range(1, 5)] == [i for i in by if i.startswith("pytest:a:")]
+    assert sum(by[f"pytest:a:{k}/4"]["cost_s"] for k in range(1, 5)) == pytest.approx(3000)
+    costs.write_text(json.dumps({"pytest:a": 6000}))
+    assert _split(_graph(tree, "--costs", str(costs))[0], "a") == 7
+
+
+def test_circuit_checks_shard_count_is_sized_from_its_recorded_seconds_never_under_ci_tomls(tree):
+    costs = tree.parent / "costs.json"
+
+    def shards(*args: str) -> tuple[int, list[str]]:
+        doc = _graph(tree, "--costs", str(costs), *args)[0]
+        return doc["circuit_shards"], [t["id"] for t in doc["tasks"] if t["kind"] == "circuit-check"]
+
+    costs.write_text(json.dumps({"circuit-check": 9000}))
+    n, ids = shards()
+    assert n == 10 and ids == [f"circuit-check:{k}/10" for k in range(1, 11)], "ceil(9000 / 900)"
+    assert shards("--split-s", "3000")[0] == 4, "ceil(9000 / 3000) = 3, under ci.toml's 4"
+    assert shards("--circuit-shards", "2")[0] == 2, "a count given wins"
+    costs.write_text(json.dumps({"circuit-check": 100}))
+    assert shards()[0] == 4
+
+
+def test_costs_reads_the_executors_runs_and_folds_parts_back_to_whole_jobs(tree, tmp_path, monkeypatch):
+    """`costs` prices each task the executor passed from the run its newest `pass` label names (the result's own steps, not a
+    dep's build beside them; else the run's wall seconds), takes the queue's seconds over them, and sums a split suite's parts
+    and circuit-check's slices back to the whole over the share they cover; `list --costs` then splits them anew."""
+    import importlib.util
+
+    import research.store.local as local
+    from research.executor import keyed
+    from research.store.model import Label
+
+    spec = importlib.util.spec_from_file_location("tasks_costs_under_test", tree / "tools" / "verity" / "check" / "tasks.py")
+    T = importlib.util.module_from_spec(spec)
+    monkeypatch.syspath_prepend(str(tree / "tools" / "verity" / "check"))
+    spec.loader.exec_module(T)
+    _files(tree, 6)
+    doc = {"schema": "tasks/v1", "commit": "0" * 40, "kind": "after-landing",
+           "splits": {"a": {"m": 2, "shares": [0.75, 0.25]}},
+           "tasks": [{"id": "pytest:a:1/2", "key": "1" * 128}, {"id": "pytest:a:2/2", "key": "2" * 128},
+                     {"id": "lean-suites:b", "key": "3" * 128}, {"id": "lean-audit:lean/P", "key": "4" * 128},
+                     *({"id": f"circuit-check:{k}/4", "key": None} for k in range(1, 5))]}
+    graph = tmp_path / "graph.json"
+    graph.write_text(json.dumps(doc))
+    keys = {t["id"]: t["key"] for t in keyed(doc)["tasks"]}
+    #: task id -> (verdict, its run's result steps or None for a run with no result, the run's wall seconds)
+    ran = {"pytest:a:1/2": ("pass", [("pytest", 2400.0)], 2500.0), "pytest:a:2/2": ("pass", [("pytest", 600.0)], 700.0),
+           "lean-suites:b": ("pass", [("lean-build", 90.0), ("lean-suites", 1200.0)], 1400.0),
+           "lean-audit:lean/P": ("fail", [("lean-audit", 50.0)], 60.0),
+           "circuit-check:1/4": ("pass", None, 3000.0), "circuit-check:2/4": ("pass", [("circuit-check", 2000.0)], 2100.0)}
+    runs = {f"r20261101-000000-{i:04x}": (p, *v) for i, (p, v) in enumerate(ran.items())}
+    by_key = {keys[p]: (rid, v) for rid, (p, v, _, _) in runs.items()}
+
+    class Store:
+        remote = None
+
+        def labels(self, target, key=None):
+            rid, v = by_key.get(target.removeprefix("task:"), (None, None))
+            return [Label(target, "verdict", v, "executor", "2026-11-01T00:00:00Z", rid)] if rid else []
+
+        def get_attempt(self, rid):
+            _p, _v, steps, wall = runs[rid]
+            return {"outputs": {"run_record": f"art:{rid}" if steps else None}, "execution": {"wall_s": wall}}
+
+        def listing(self, art):
+            return [{"path": "job.json"}, {"path": T.RESULT}]
+
+        def fetch(self, art, to, paths=None):
+            _p, _v, steps, _w = runs[art.removeprefix("art:")]
+            (to / T.RESULT).parent.mkdir(parents=True, exist_ok=True)
+            (to / T.RESULT).write_text(json.dumps({"seconds": sum(s for _, s in steps) + 5,
+                                                   "steps": [{"step": n, "seconds": s} for n, s in steps]}))
+            return to
+
+    monkeypatch.setattr(local, "LocalStore", Store)
+    got, notes = T.costs([str(graph)])
+    assert got == {"pytest:a": 3000.0, "lean-suites:b": 1200.0, "circuit-check": 10000.0}, got
+    assert "5 of 8 tasks priced (4 by their result's steps, 1 by their run's wall seconds, 0 given)" in notes[0], notes
+    assert "none for lean-audit:lean/P" in notes[0], "a failed run prices nothing"
+
+    got, notes = T.costs([str(graph)], {"pytest:a:2/2": 1000.0, "lean-audit:lean/P": 70.0, "pytest:elsewhere": 5.0})
+    assert (got["pytest:a"], got["lean-audit:lean/P"], "pytest:elsewhere" in got) == (3400.0, 70.0, False), got
+    assert "2 given" in notes[0]
+
+    del ran["pytest:a:2/2"]
+    runs.clear()
+    runs.update({f"r20261101-000000-{i:04x}": (p, *v) for i, (p, v) in enumerate(ran.items())})
+    by_key.clear()
+    by_key.update({keys[p]: (rid, v) for rid, (p, v, _, _) in runs.items()})
+    got, _ = T.costs([str(graph)])
+    assert got["pytest:a"] == 3200.0, "part 1 alone, three quarters of the suite: 2400 / 0.75"
+    assert T.costs([str(graph), str(graph)], {"pytest:a:1/2": 3000.0})[0]["pytest:a"] == 4000.0
+
+    out = tmp_path / "costs.json"
+    assert T.main(["costs", "--graph", str(graph), "--out", str(out)]) == 0
+    listing = _graph(tree, "--costs", str(out))[0]
+    assert (_split(listing, "a"), listing["circuit_shards"]) == (4, 12), "ceil(3200 / 900) parts, ceil(10000 / 900) shards"
+
+
 def test_a_graph_given_by_art_id_is_fetched_from_the_store_and_must_be_a_tasks_graph(tree, tmp_path, monkeypatch):
     import importlib.util
 
