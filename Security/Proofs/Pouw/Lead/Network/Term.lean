@@ -194,11 +194,11 @@ theorem llama_padCols {c : ℕ × ℕ} (hc : c ∈ llamaCalls) : padCols c.1 = c
 
 /-! ## A forward's network term -/
 
-/-- **A forward's network term** (`Pouw.Guarantees.Lead.NetworkFwd`): each call's `β` is at most `B`, the calls'
+/-- A forward's network term at any `B ≥ 0` at least each of its calls' `β`: each call's `β` is at most `B`, the calls'
 exchanged bits are at most the certifier's count and release (`SerialForwards`), and those are at most the forward's
 bits (`Forward.Accepted`). -/
-theorem networkFwd : Pouw.Guarantees.Lead.NetworkFwd := by
-  intro F B hser hacc hB hβ
+theorem networkFwd_le (F : Forward) (B : ℚ) (hser : Pouw.Assumptions.Lead.SerialForwards F) (hacc : F.Accepted)
+    (hB : 0 ≤ B) (hβ : ∀ c ∈ F.calls, betaLead c.L c.C ≤ B) : F.networkRegs ≤ B * F.bits / 32 := by
   have h1 : (F.calls.map fun c => betaLead c.L c.C * c.egress).sum ≤
       (F.calls.map fun c => B * (c.egress : ℚ)).sum :=
     List.sum_le_sum fun c hc => mul_le_mul_of_nonneg_right (hβ c hc) (Nat.cast_nonneg _)
@@ -210,6 +210,26 @@ theorem networkFwd : Pouw.Guarantees.Lead.NetworkFwd := by
   unfold Forward.networkRegs
   rw [h2] at h1
   exact div_le_div_of_nonneg_right (h1.trans (mul_le_mul_of_nonneg_left h3 hB)) (by norm_num)
+
+theorem le_foldr_max {α : Type} (f : α → ℚ) : ∀ l : List α, ∀ c ∈ l, f c ≤ (l.map f).foldr max 0
+  | [], _, hc => by simp at hc
+  | d :: l, c, hc => by
+    simp only [List.map_cons, List.foldr_cons]
+    rcases List.mem_cons.1 hc with rfl | hc
+    · exact le_max_left _ _
+    · exact (le_foldr_max f l c hc).trans (le_max_right _ _)
+
+theorem foldr_max_nonneg {α : Type} (f : α → ℚ) : ∀ l : List α, 0 ≤ (l.map f).foldr max 0
+  | [] => le_refl 0
+  | _ :: l => (foldr_max_nonneg f l).trans (le_max_right _ _)
+
+/-- Each call's `β` is at most the forward's largest. -/
+theorem le_betaMax (F : Forward) : ∀ c ∈ F.calls, betaLead c.L c.C ≤ F.betaMax :=
+  le_foldr_max (fun c : FwdCall => betaLead c.L c.C) F.calls
+
+/-- **A forward's network term** (`Pouw.Guarantees.Lead.NetworkFwd`): `networkFwd_le` at the forward's largest `β`. -/
+theorem networkFwd : Pouw.Guarantees.Lead.NetworkFwd := fun F hser hacc =>
+  networkFwd_le F F.betaMax hser hacc (foldr_max_nonneg _ F.calls) (le_betaMax F)
 
 /-- **A call of Llama-3.2-1B**, at the lead or at cap 320, at any number of rows: `β ≤ 256 / 3 · 129.25`, and its bits
 are `1,024 / fwdMacs · cap / 32` of its served stock. -/
@@ -234,11 +254,11 @@ theorem llama_call {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L)
     push_cast
     ring
 
-/-- **Llama-3.2-1B's forward** (`Pouw.Guarantees.Lead.NetworkLlama`): `networkFwd` at `B = 256 / 3 · 129.25`
+/-- **Llama-3.2-1B's forward** (`Pouw.Guarantees.Lead.NetworkLlama`): `networkFwd_le` at `B = 256 / 3 · 129.25`
 (`llama_call`), and `B · 32 / fwdMacs ≤ 0.0363%`. -/
 theorem networkLlama : Pouw.Guarantees.Lead.NetworkLlama := by
   intro F hser hacc hcalls
-  have h := networkFwd F (256 / 3 * (12925 / 100)) hser hacc (by norm_num) fun c hc =>
+  have h := networkFwd_le F (256 / 3 * (12925 / 100)) hser hacc (by norm_num) fun c hc =>
     (llama_call c.C (hcalls c hc).1 (hcalls c hc).2).1
   have hbits : F.bits = 1024 / 973078528 * (F.calls.map fun c => (c.L.cap / 32 : ℚ) * servedRegs c.L).sum := by
     unfold Forward.bits

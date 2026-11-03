@@ -1,6 +1,6 @@
 {
   "schema": "verity-vllm/cublas-default-routes/v1",
-  "run": "r20261017-191356-49a9",
+  "run_record": "art:25d1b501ceb55aaf04ef28d0b34431bcc02a9b3038d5575bb813dca7f22eaa49",
   "m_max": 2048,
   "conditions": {"device": "NVIDIA H200", "compute_capability": [9, 0], "multiprocessors": 132, "torch": "2.13.0+cu129",
                  "cublas_version": 120901, "allow_fp16_reduced_precision_reduction": "True",

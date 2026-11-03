@@ -109,7 +109,7 @@ def validate (c : Cut) : List String := Id.run do
     com.toList.any (fun g => !boundary.contains g || !(g < n))]
   return (codes.zip problem).filterMap fun (k, b) => if b then some k else none
 
-/-! ### One Call's cut against its graph (`verity.ir.cut.check_cut`, PR #111) -/
+/-! ### One Call's cut against its graph (`verity.ir.cut.check_cut`) -/
 
 /-- A Call's computing graph (`verity.ir.cut.CallGraph`): its computing gates' declared widths, the reads between them, the
 returned gates, the Call's parameters (`inputs` of them) and the gates that read them, the parameters returned as they are,
