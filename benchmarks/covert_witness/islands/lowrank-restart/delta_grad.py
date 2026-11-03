@@ -30,7 +30,8 @@ sign` or `adamw`), coded, reduced and stored like the matrices, for a state smal
 Otherwise the trainable set's norm gains train by AdamW in fp32 with fp32 messages (counted). Every
 record's notes carry the accounting: n, the message, state and store bits, Δ_grad and Δ_t in bits (`delta_grad`, in the
 keys the other directions use), and Fit's three clauses (compute Δ + sτ ≤ k with Δ = 8|E|, reduction 2 Δ_grad ≤ k,
-update application Δ_t + Δ_grad ≤ k) at k = 10 kB, 1 MB and 10 MB, with sτ = a block's tokens × ⌈log₂ V⌉ bits.
+update application Δ_t + Δ_grad ≤ k) at k = 8 KiB (the console's default), 10 kB, 1 MB and 10 MB, with sτ = a block's
+tokens × ⌈log₂ V⌉ bits. Fit's blocks are about 1,250 training tokens at the console's default: `--leaf 1` (1,024).
 
     python benchmarks/covert_witness/launch.py s-t20 --island lowrank-restart --program delta_grad.py --note "dgrad ..." \\
         -- --blocks 5-5 --opt adafactor --msg-bits 8 --store q8 --lr 3e-3 --budget-fraction 0.15
@@ -58,7 +59,7 @@ from lowrank_restart import newton_schulz, ns_flops, schedule, targets_of  # noq
 DEV = prepare.DEVICE
 #: the harness scores the first E encoded in each 1/CHECKPOINTS of the planned steps
 CHECKPOINTS = 20
-KS = {"10kB": 8 * 10 ** 4, "1MB": 8 * 10 ** 6, "10MB": 8 * 10 ** 7}
+KS = {"8KiB": 2 ** 16, "10kB": 8 * 10 ** 4, "1MB": 8 * 10 ** 6, "10MB": 8 * 10 ** 7}
 #: elementwise work an entry per coding (scale, grid search, random draw, select), for the step log
 CODE_FLOPS = 16
 #: a sticky store scale, when a value outgrows it, becomes this × its group's absmax (so it is rarely re-fit)
