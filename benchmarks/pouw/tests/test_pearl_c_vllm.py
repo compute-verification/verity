@@ -1222,6 +1222,23 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_root_and_
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
 
 
+def test_the_window_record_the_install_writes_is_the_one_the_run_verdict_ties_to(tmp_path):
+    """W as the install writes it at the window's close (`pearl_c.window.write` over the run's ended passes): two passes of
+    one epoch with a pass without calls between them are rounds 0 and 1, and ``served_passes.py verify --tie W`` accepts
+    the run tied to W's digest on its 8 tables.  W's rounds counted over every pass, the empty one included, name calls the
+    run doesn't hold, and the run is rejected before the coin."""
+    from verity_vllm.protocols.pouw.pearl_c import window as PWR
+
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+    wfile = tmp_path / "w.json"
+    w = PWR.write(wfile, [{"units": 2, "manifest": str(a)}, {"units": 0}, {"units": 2, "manifest": str(b)}])
+    rc, doc, answer = served_verify(_serve_dir(tmp_path, [a, b]), tmp_path / "verify.json", "--tie", str(wfile))
+    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 8}, doc["line"]
+    every = {**w, "registered": [{**e, "value": e["value"].replace("/1/", "/2/")} for e in w["registered"]]}
+    r = VR.verify_passes([a, b], 3, 1, "test", published(a), b"verifier" * 4, window=every)
+    assert r["answer"]["verdict"] == "reject" and "W registers pearl-a/2/0, no call of the run's" in r["answer"]["reason"]
+
+
 def test_volunteer_words_gives_up_a_b_row_for_a_row_the_a_count_leaves_over():
     """V-EX allows ⌈m/64⌉ = 1 A row of a 16-row unit: of two credited rows over their row caps the one further over is
     given up as an A row, and the other gives up the B row holding its flagged atom-word.  A third row over its cap in the

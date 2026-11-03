@@ -23,7 +23,8 @@ commitment and its salt coin's opening and, once closed,
 the transcript root with its unit and tile counts.  Pearl-C's also says what it claims of the weights (``registration``,
 `weights_claim`): the executor applies no keyed rotation and reads no curated list, so it claims nothing about which
 weights were served.  Pearl-C commits one pass per engine step, a step held to what one pass takes (`pouw_pass`), each
-retained in its own directory under ``transcript_dir`` when given.  The audit (sampling tiles, opening
+retained in its own directory under ``transcript_dir`` when given, and with ``window_record`` writes its window record W
+over them at release (`pearl_c.window`).  The audit (sampling tiles, opening
 them) is `verity.core.protocols.pouw.audit`'s, after the run.  Beside sampled proofs the composition asks
 `verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
@@ -84,6 +85,7 @@ from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw import native as PN
 from verity_vllm.protocols.pouw.operands import Operands, ncp_tiles, quantize, stack_y
 from verity_vllm.protocols.pouw.pearl_c import passes as PP
+from verity_vllm.protocols.pouw.pearl_c import window as PWR
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw import lead as PL
 from verity_vllm.protocols.interface import Context, Option, Target
@@ -107,7 +109,7 @@ QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
         "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs", "period", "unit", "ks",
-        "backend", "draw_session", "commit_record")
+        "backend", "draw_session", "commit_record", PWR.KEY)
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -203,6 +205,9 @@ class Settings:
     draw_session: Mapping[str, Any] | None = None
     #: H1's Commit record named at the window's close in place of its tap's (`pouw_h1_commit.CommitRecord`), or None
     commit_record: Any = None
+    #: Pearl-C's: where its window record W goes at the window's close, over every retained pass (`pearl_c.window`), or
+    #: None, which writes none
+    window_record: str | None = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -245,7 +250,7 @@ class Settings:
                              f"{', '.join(PL.BACKEND)}")
         *h1, draw_session, commit_record = PHS.of(raw)
         return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, *h1, backend, draw_session,
-                   commit_record)
+                   commit_record, PWR.setting(raw))
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -275,6 +280,9 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
         if settings.start_forward and scheme not in pouw_circuit.SCHEMES:
             out.append(f"{scheme}: the pouw setting 'start_forward' anchors the circuit-backed executor's forward indices "
                        f"({', '.join(pouw_circuit.SCHEMES)}); this executor counts its own from 0")
+        if settings.window_record is not None and scheme not in PPD.SCHEMES:
+            out.append(f"{scheme}: the pouw setting '{PWR.KEY}' is Pearl-C's window record (`pearl_c.window`); this "
+                       "executor writes none")
     return tuple(out)
 
 
@@ -688,8 +696,9 @@ def install(scheme: str, target: Target) -> Option:
             h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
         if device:
             PP.hook_steps(h, run, PPD.CALL_CAPACITY, settings.transcript_dir)
+    release = run.finish if session is None else lambda: PHW.finish(run, session)
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, end_pass=run.end_pass if device else None,
-                  release=run.finish if session is None else lambda: PHW.finish(run, session))
+                  release=PWR.at_close(release, run, settings.window_record) if device else release)
 
 
 #: The live H1 runs by entry, for the Commit and its checks before the composition closes.

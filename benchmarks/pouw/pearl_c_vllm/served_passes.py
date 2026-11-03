@@ -19,9 +19,9 @@ is within its caps.
 ``verify`` is Pearl+'s PoUW verdict on the run (`verify_run.verify_passes`): the passes ``--manifest`` names (a capture's
 ``prefill/`` and ``decode/`` beside its ``coins.json``), else those with calls that ``DIR/served.json`` names, else every
 ``DIR/pass-NNNNN/manifest.json`` (a transcript dir a served engine retained), in order, each epoch re-started against
-``DIR/coins.json``.  It first holds the passes together to distinct call indices of
-one salt (`credit.passes_distinct`: the device numbers calls across the epoch, and a run whose passes share an index is
-refused before any replay), then reads every pass, holds the window record ``--tie W`` to them where one is named
+``DIR/coins.json``.  It first holds the passes together to distinct call indices of one salt (`credit.passes_distinct`:
+the device numbers calls across the epoch, and a run whose passes share an index is refused before any replay), then
+reads every pass, holds the window record ``--tie W`` (``serve --window-record W`` writes it) to them where one is named
 (`verify_run.tie`: each call's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>`` entry its root and its domain recomputed from
 the salt and the call's index), takes the verifier's coin, and replays ``--draws`` work-weighted tiles
 over all of them and each pass's exclusion tiles.  It writes the details to ``--out`` and the core answer (`answer_of`'s
@@ -71,6 +71,8 @@ def serve(args: argparse.Namespace) -> int:
     if args.max_num_batched_tokens:
         engine["max_num_batched_tokens"] = args.max_num_batched_tokens
     config = A.protocols_config(arm, os.environ)
+    if args.window_record:
+        config["pouw"]["window_record"] = str(Path(args.window_record).resolve())
     passes = Path(args.passes)
     passes.mkdir(parents=True, exist_ok=True)
     config["pouw"]["transcript_dir"] = str(passes)
@@ -148,6 +150,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--arm", default=ARM, help=f"the spec's Pearl-C arm ({ARM}; the H200's pouw:pearl-c-h100-v1-h3)")
     s.add_argument("--passes", required=True)
     s.add_argument("--out", required=True)
+    s.add_argument("--window-record", metavar="W", help="where Pearl+'s window record W goes at the window's close, over "
+                   "every retained pass (the pouw setting window_record, pearl_c.window; unset, none is written), for "
+                   "verify --tie W")
     s.add_argument("--requests", type=int, default=32)
     s.add_argument("--prompt-tokens", type=int, default=512)
     s.add_argument("--output-tokens", type=int, default=16)
