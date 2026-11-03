@@ -84,6 +84,10 @@
 #     unless COMPOSITE is set empty,
 #     remote's and onsite's Lean verdicts on the run's cases (`served_composite.sh`'s docstring). Their verdicts gate
 #     nothing, but a composite that didn't run (a tree without composite.py) or whose Lean didn't answer fails the run.
+#     With the network certifier's piece in the run, `onsite_record.py` then writes the onsite demo's record
+#     ($OUT/record/onsite.json: every verdict its run of record needs, the network bound term by term and over each
+#     monitoring period, and beside it ADVICE_CHARGE's measured advice charge, a test run's advice-charge.json, below);
+#     its ONSITE line gates nothing.
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
 #     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
 #     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's.
@@ -149,7 +153,8 @@
 # then set to the run of record's), then every closed window's advice under the prove path's registered compiler,
 # unpadded, at ADVICE_T buckets of ADVICE_TAU seconds (default `verity-vllm advice`'s 600 and 0.1) in the serve dir, and
 # `advice_charge.py`'s record of it, $OUT/advice-charge.json, which names each window and counts its requests: its
-# inputs being public, the run publishes $OUT as it is, with no `publish`.
+# inputs being public, the run publishes $OUT as it is, with no `publish`. Its record is what a served run's
+# ADVICE_CHARGE names.
 # Defaults are vy-dc-h200's: the int8 B4 row's traced Build (r20261030-210701-a20f's, traced after the required manifest stopped
 # naming the FlashAttention M1 stream, as `predict row` doesn't) and taps under $H, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
 # The serve dir D (row dirs, advice, the window circuits' records) stays on the node under `research keep`; $OUT keeps the
@@ -780,6 +785,8 @@ rec=${PIPESTATUS[0]}
 private_pieces
 comp=0
 [ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+[ -z "${CERTIFIER_CMD:-}" ] \
+  || "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} 2>&1 | publish_lines
 measure
 # V3c after the record, each step within its limit: it gates nothing
 if [ -n "$SPLIT" ]; then :

@@ -203,6 +203,14 @@ negatives.
 - `served_composite.sh`: `served_verdicts.sh`'s step after its record. It writes PoUS's and the wipe's composite cases
   (PoUS's `served_case.sh`), then gets remote's and onsite's Lean verdicts on the run's cases (soundness's composite
   reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
+- `onsite_record.py OUT [--advice-charge FILE]`: the onsite demo's record of a served run (`record/onsite.json`), which
+  `served_verdicts.sh` writes after its composite step when the network certifier's piece ran. It holds every verdict
+  the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
+  with its why where the run has no answer. Beside them are the network certifier's bound term by term in the notation
+  table's symbols, with its overcount and the connections it counts, and that bound over the run's own certification
+  period (proved) and each monitoring period for the node, the census's reference datacenter and the world (scaled,
+  each naming its rule and parameters, beside its figure over one execution phase). The realized advice charge is
+  private, and `--advice-charge` states a test run's measurement beside the bound as that run's.
 - `advice_charge.py ADVICE --run RUN --to FILE`: honest serving's advice charge from `verity-vllm advice`'s output
   over a test run with public inputs: each execution phase's advice bits, unpadded, beside its requests' prompt and
   output lengths and finishes, labelled as that run's. `served_verdicts.sh advice-charge` serves such a run
