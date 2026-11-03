@@ -25,7 +25,7 @@ Each cut linear is a unit `LinearARow_v1{K, R, ROUND, CALL}` (`registry.linear_c
 held to row i of its call's A rows, i its position's row (`FixedLoad.at`), and a unit `LinearOut_v1{N, W, ROUND, CALL}`
 that reads row i of its call's y and hands its BF16 words on to its readers in rows of W (`PearlTables.words`, doubled
 where a unit of N / W rows would be no proof block). The circuit's program takes them as its values, round by round and
-call by call the A rows then the y. Its census (`window_circuit.census`) counts each cut linear by shape, and none is tied
+call by call the A rows then the y. Its census (`window_cut.census`) counts each cut linear by shape, and none is tied
 to PoUW's credited product yet.
 """
 from __future__ import annotations
@@ -155,8 +155,8 @@ class PearlTables(FixedLoad):
     call of it commits them: round s's call c, the c-th cut linear of the round's forward, has its A rows (x widened to FP32,
     K words a row; `linear_cut.LinearARow`), its `rows` rows then zero rows up to `a_rows`, and its y (each BF16 word widened
     to FP32, N words a row; `linear_cut.LinearOut`), its `rows` rows. A cut linear hands its y on to its readers in rows of
-    ``words``, doubled where its unit would be no proof block (`window_circuit.linears`). ``scheme`` is the PoUW scheme the
-    window's Pearl+ serves under, whose credited product a tie would hold y to (`window_circuit.census`): the deployment
+    ``words``, doubled where its unit would be no proof block (`window_cut.linears`). ``scheme`` is the PoUW scheme the
+    window's Pearl+ serves under, whose credited product a tie would hold y to (`window_cut.census`): the deployment
     states it, since it names the device."""
     WHAT = "Pearl+'s tables"
     scheme: str

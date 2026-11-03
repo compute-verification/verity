@@ -21,6 +21,7 @@ from tests.program.predict.test_window_circuit_tables import FIXED
 from tests.program.predict.test_window_rows import KEY, LAW, PROGRAM, RUN, _read, _registered, _served, _weights
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
+from verity_vllm.program.predict import window_cut as WK
 from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
@@ -93,12 +94,12 @@ def test_a_calls_y_is_handed_on_in_the_fewest_doublings_of_words_its_unit_fits(l
     """Each call's W is the least of ``words`` doubled that divides its N and leaves its `LinearOut_v1` (its y row and
     N / W output rows) within the grain's rows: 16 for every call of TINY at 256 rows, gate/up's 256 words in rows of 32 at
     12 rows and of 128 at 3, and a call no W fits is refused by name."""
-    assert WC.linears(low.fn, 16, 256, provable=False).calls == tuple((K, N, 16) for K, N in CALLS)
-    assert WC.linears(low.fn, 16, 12, provable=False).calls == tuple((K, N, 32 if N == 256 else 16) for K, N in CALLS)
-    assert WC.linears(low.fn, 16, 3, provable=False).calls == tuple((K, N, N // 2) for K, N in CALLS)
+    assert WK.linears(low.fn, 16, 256, provable=False).calls == tuple((K, N, 16) for K, N in CALLS)
+    assert WK.linears(low.fn, 16, 12, provable=False).calls == tuple((K, N, 32 if N == 256 else 16) for K, N in CALLS)
+    assert WK.linears(low.fn, 16, 3, provable=False).calls == tuple((K, N, N // 2) for K, N in CALLS)
     with pytest.raises(Unexpressible, match=r"linears \(K, N\) \[\(64, 64\), \(64, 128\), \(64, 256\), \(128, 64\)\], whose "
                                             r"y no rows of Pearl\+'s 16 words doubled hand on in one unit within 1 rows$"):
-        WC.linears(low.fn, 16, 1, provable=False)
+        WK.linears(low.fn, 16, 1, provable=False)
 
 
 def test_the_cut_replaces_every_linear_but_the_lm_head(low):
@@ -169,18 +170,18 @@ def test_the_census_counts_each_cut_linear_by_shape_and_ties_none(low):
     value and rows (m₁₆) and its y's (m), and PoUW's scheme; none is tied (`UNTIED`). Its multiply-adds are the circuit
     description's own, each call's `LinearARow_v1` units times its K and its `LinearOut_v1`'s N, and an uncut circuit has
     no census."""
-    cen = WC.census(low)
+    cen = WK.census(low)
     assert [(r["round"], r["call"], r["k"], r["n"], r["w"], r["rows"]) for r in cen] == [
         (s, ci, K, N, 16, M[s]) for s in M for ci, (K, N) in enumerate(CALLS)]
     for r in cen:
         s, ci, m = r["round"], r["call"], r["rows"]
-        assert r["macs"] == m * r["n"] * r["k"] and (r["scheme"], r["tied"], r["untied"]) == (PEARL.scheme, False, WC.UNTIED)
+        assert r["macs"] == m * r["n"] * r["k"] and (r["scheme"], r["tied"], r["untied"]) == (PEARL.scheme, False, WK.UNTIED)
         assert (r["a"], r["y"]) == ({"value": PEARL.a(s, ci), "rows": 16}, {"value": PEARL.y(s, ci), "rows": m})
     fns = {(fn.name, fn.bindings["ROUND"], fn.bindings["CALL"]): (fn, n) for fn, n in low.circuit.templates
            if fn.name in ("LinearARow", "LinearOut")}
     assert sum(r["macs"] for r in cen) == sum(n * fn.bindings["K"] * fns[("LinearOut", s, ci)][0].bindings["N"]
                                               for (name, s, ci), (fn, n) in fns.items() if name == "LinearARow") == 737280
-    assert WC.census(WC.lower(_registered(), CLASS, None, GRAIN, wired=False)) == []
+    assert WK.census(WC.lower(_registered(), CLASS, None, GRAIN, wired=False)) == []
 
 
 def test_a_fixed_load_window_is_the_cut_class_circuit_and_any_other_window_is_refused():
