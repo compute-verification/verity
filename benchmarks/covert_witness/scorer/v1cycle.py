@@ -325,39 +325,36 @@ FIT = "frontier-fit"
 
 
 def policy_panels(out: Path, commit: str, put: bool, root: Path | None) -> dict:
-    """Once the re-score's te_core holds the builder's v2 (AP_V2 in te_core.algorithm_policy): its training/
-    algorithm-policy and the frontier-fit panel on the same ledger, each with `--publish` under `put`; {panel: its PUT
-    status or why there is none} and `coverage`, its coverage table's rows (gain size by decade of rho) when it writes
-    one."""
+    """Once the re-score's te_core holds the builder's v2 (AP_V2 in te_core.algorithm_policy): its run on the same
+    ledger, with `--publish` under `put`, which builds and PUTs training/algorithm-policy and training/frontier-fit
+    both; {panel: its PUT status or why there is none} and `coverage`, the coverage (gain size by decade of rho) as
+    the board line it prints, else its table's rows."""
     src = lambda p: subprocess.run(["git", "-C", str(RESCORE_WT), "show", f"{commit}:benchmarks/covert_witness/te_core/{p}"],
                                    capture_output=True, text=True, check=False).stdout
     if AP_V2 not in src("algorithm_policy.py"):
         return {"algorithm-policy": "not run (the builder's v2 isn't on this te_core yet)"}
-    fit = (["te_core.panels", FIT] if f'"{FIT}"' in src("panels.py") else
-           ["te_core.frontier_fit"] if src("frontier_fit.py") else None)
-    res = {}
-    for name, mod in (("algorithm-policy", ["te_core.algorithm_policy"]), (FIT, fit)):
-        if mod is None:
-            res[name] = "not on this te_core"
-            continue
-        d = out / name
-        r = subprocess.run([sys.executable, "-m", *mod, *ledger_args(d, root), *(["--publish"] if put else [])],
-                           cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True, check=False)
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "run.log").write_text(r.stdout + r.stderr)
-        done = next((x for x in reversed(r.stdout.splitlines()) if x.startswith("PUT ")), None)
-        res[name] = (done.split(": ", 1)[-1][:200] if done else
-                     f"not PUT: {(r.stderr.strip().splitlines() or [f'rc {r.returncode}'])[-1][:200]}" if r.returncode
-                     else "not PUT (--no-put)")
-        if name == "algorithm-policy":
-            res["coverage"] = coverage(d, r.stdout)
+    d = out / "algorithm-policy"
+    r = subprocess.run([sys.executable, "-m", "te_core.algorithm_policy", *ledger_args(d, root),
+                        *(["--publish"] if put else [])],
+                       cwd=RESCORE_WT / "benchmarks" / "covert_witness", capture_output=True, text=True, check=False)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "run.log").write_text(r.stdout + r.stderr)
+    why = (f"not PUT: {(r.stderr.strip().splitlines() or [f'rc {r.returncode}'])[-1][:200]}" if r.returncode
+           else "not PUT (--no-put)")
+    res = {"algorithm-policy": why, FIT: why}
+    for x in r.stdout.splitlines():
+        if x.startswith("PUT ") and ": " in x:
+            url, status = x[4:].rsplit(": ", 1)
+            res[url.rstrip("/").rsplit("/", 1)[-1]] = status[:200]
+    board = next((x.removeprefix("board: ") for x in r.stdout.splitlines() if x.startswith("board: coverage")), None)
+    res["coverage"] = [board] if board else coverage(d, r.stdout)
     return res
 
 
 def coverage(d: Path, stdout: str) -> list[str]:
-    """The builder's coverage table (gain size by decade of rho) as one line a row: a `*coverage*.md` it wrote in `d`,
+    """The builder's coverage table (gain size by decade of rho) as one line a row: a `coverage.md` it wrote under `d`,
     else the Markdown table under a line naming coverage in its output; [] when it has none."""
-    files = sorted(d.glob("*coverage*.md"))
+    files = sorted(d.rglob("*coverage*.md"))
     lines = files[0].read_text().splitlines() if files else stdout.splitlines()
     if not files:
         at = next((i for i, x in enumerate(lines) if "coverage" in x.lower()), None)
@@ -532,9 +529,12 @@ def main() -> int:
     line = digest(json.loads((rs / "p2-slowdown-vs-gain.json").read_text()),
                   meta | {"version_cell": bool(fb and "te_core_version" in fb["columns"])}, ids, put, fb_rows)
     (out / "digest.txt").write_text(line + "\n")
-    cov = (f"coverage (te_core.algorithm_policy, te_core {meta['te_core_version']}: gain size by decade of ρ, the "
+    said = policy.get("coverage") or []
+    cov = (f"training/algorithm-policy (te_core {meta['te_core_version']}; tables art {ids.get('tables', '–')[:16]}) "
+           + said[0] if said[:1] and said[0].startswith("coverage at ") else
+           f"coverage (te_core.algorithm_policy, te_core {meta['te_core_version']}: gain size by decade of ρ, the "
            f"frontier point or the best failed attempt in each cell; tables art {ids.get('tables', '–')[:16]}): "
-           + "; ".join(policy["coverage"]) + ".") if policy.get("coverage") else None
+           + "; ".join(said) + "." if said else None)
     print(json.dumps(summary))
     print(line)
     if not args.no_post and not args.no_publish:
