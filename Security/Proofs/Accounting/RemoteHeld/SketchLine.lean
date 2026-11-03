@@ -17,7 +17,7 @@ open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote
 /-- The sketch outcomes whose prover's coins carry the openings coins are the line's coins whose other coins are a
 sketch outcome, reordered. -/
 def lineCoinsEquiv {β Hs : Type} {n κ N m : ℕ} :
-    Outcome (β × (Fin n → Pous.Bits κ)) Hs N m ≃ Accounting.Remote.Draw.Coins n κ (Outcome β Hs N m) where
+    Outcome (β × (Fin n → Pous.Bits κ)) Hs N m ≃ Accounting.Remote.Draw.DrawCoins n κ (Outcome β Hs N m) where
   toFun := lineCoins
   invFun ω := ((ω.1.1, ω.2), ω.1.2.1, ω.1.2.2)
   left_inv _ := rfl

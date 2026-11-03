@@ -28,11 +28,13 @@ advantages named with their claim and priced in neither."""
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
 from verity.core.protocols.profile import IntegrityProfile
+from verity.core.site import Site
+from verity.hardware import node as hardware
 
 from . import audit, coins, line, receipts, timing
 
@@ -57,6 +59,21 @@ def _rate(x: object, what: str) -> float:
     return float(x)
 
 
+def figures(site: Site, h: str, host: str, placeholders: Sequence[str] = ()) -> hardware.NodeFigures:
+    """The figures of host `h`'s node as `site` registers it (`Site.node h`): for each of its devices, in the log's
+    order, the GPU card its sheet names (`Sheet.sku`), on the host of host card `host` (a host carries no sheet in the
+    Site, so its card is named), reading the placeholders `placeholders` names as open figures.  An `h` the site
+    registers as no host and a node without a device are refused, as `verity.hardware.node` refuses a placeholder
+    figure it isn't told to read."""
+    n = site.node(h)
+    if n is None:
+        raise ValueError(f"{h} is no host the Site registers")
+    skus = [n.sheet(d).sku for d in n.units]
+    if not skus:
+        raise ValueError(f"host {h} holds no device the Site registers")
+    return hardware.node(skus, host, placeholders)
+
+
 @dataclass(frozen=True, slots=True)
 class Node:
     """The verifier's capacities for the node a session audits, each protocol structure, never the prover's report: its
@@ -69,21 +86,21 @@ class Node:
     maximal rebuild batch, one maximal disk read and one link window.  A burst of 0 states the rate down to one
     nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
     and the host DRAM's (bytes a second), how fast a fill can write labels into each tier, which a wipe's timing reads;
-    the node states no DPU's (`timing.HOST_WRITE_BYTES_PER_S`).  `stated` takes `timing`'s, which a reported read rate
-    can only raise."""
+    the node states no DPU's.  `of_site` reads them off the Site's node (`Site.node h`, `figures`), and `stated` off
+    the node's figures (`verity.hardware.node`), which a reported read rate can only raise."""
 
     spec_bytes_per_s: float
     read_bytes_per_s: float
     chip_bytes: int
     squarings_per_s: Mapping[str, float]
-    sha512_per_s: float = timing.SHA512_PER_S
+    sha512_per_s: float
+    gpu_write_bytes_per_s: float
+    host_write_bytes_per_s: float
     disk_bytes_per_s: float = 0.0
     link_bytes_per_s: float = 0.0
     rebuild_burst_bytes: float = 0.0
     disk_burst_bytes: float = 0.0
     link_burst_bytes: float = 0.0
-    gpu_write_bytes_per_s: float = timing.GPU_WRITE_BYTES_PER_S
-    host_write_bytes_per_s: float = timing.HOST_WRITE_BYTES_PER_S
     sketch_outside: int = timing.SKETCH_OUTSIDE
 
     def __post_init__(self) -> None:
@@ -103,26 +120,39 @@ class Node:
         object.__setattr__(self, "squarings_per_s", MappingProxyType(squarings))
 
     @classmethod
-    def stated(cls, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
+    def of_site(cls, site: Site, h: str, host: str, placeholders: Sequence[str] = (), **stated) -> Node:
+        """The node of host `h` as `site` registers it on host card `host` (`figures`), stated (`stated`)."""
+        return cls.stated(figures(site, h, host, placeholders), **stated)
+
+    @classmethod
+    def stated(cls, figures: hardware.NodeFigures, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
                link_bytes_per_s: float = 0.0, disk_burst_bytes: float | None = None,
                link_burst_bytes: float | None = None, sketch_outside: int = timing.SKETCH_OUTSIDE) -> Node:
-        """`timing`'s node: R measured is the larger of `timing.READ_BYTES_PER_S` and the prover's reported read, R
-        at spec the larger of `timing.SPEC_BYTES_PER_S` and that, so a prover reporting a slower read can't shrink
-        a term.  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
-        second at the disks' ceiling, which is a one-second peak; its link burst `timing.LINK_WINDOW_BYTES` when the
-        links are charged."""
-        measured = max(timing.READ_BYTES_PER_S, _rate(reported_read_bytes_per_s, "a reported read"))
+        """The node of the Site's `figures` (`Site.node h`): R measured is the larger of its devices' and host DRAM's
+        measured reads and the prover's reported read, R at spec the larger of their ceilings and that, so a prover
+        reporting a slower read can't shrink a term.  Its rebuild burst is S_chip, what a batch in flight
+        holds on the chips; its disk burst one second at the disks' ceiling, which is a one-second peak; its link
+        burst the host's link window when the links are charged."""
+        measured = max(figures.read_bytes_per_s, _rate(reported_read_bytes_per_s, "a reported read"))
         disk = disk_bytes_per_s if disk_burst_bytes is None else disk_burst_bytes
-        link = (timing.LINK_WINDOW_BYTES if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
-        return cls(max(timing.SPEC_BYTES_PER_S, measured), measured, timing.CHIP_BYTES, timing.SQUARINGS_PER_S,
-                   timing.SHA512_PER_S, disk_bytes_per_s, link_bytes_per_s, float(timing.CHIP_BYTES), disk, link,
-                   timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S, sketch_outside)
+        window = float(figures.host.link_window_bytes)
+        link = (window if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
+        return cls(max(figures.spec_bytes_per_s, measured), measured, figures.chip_bytes, figures.squarings_per_s,
+                   figures.sha512_per_s, figures.device_write_bytes_per_s, figures.host_write_bytes_per_s,
+                   disk_bytes_per_s, link_bytes_per_s, float(figures.chip_bytes), disk, link, sketch_outside)
 
     def rebuild(self, codec: audit.Codec) -> audit.Rebuild:
         """μ_rebuild's model at the record's codec: the node's squaring ceiling at its width."""
         if codec.field.name not in self.squarings_per_s:
             raise ValueError(f"the node states no squaring ceiling at {codec.field.name}, the record's codec's width")
         return audit.Rebuild(codec, self.squarings_per_s[codec.field.name])
+
+    def rates(self, codec: audit.Codec) -> line.Rates:
+        """The node's ways back into its memory as the line reads them (`line.Rates`): its squaring ceiling at the
+        codec's width over the codec's encode, and its disks' and links' ceilings and bursts."""
+        return line.Rates(self.rebuild(codec).squarings_per_s, codec.encode_squarings, self.disk_bytes_per_s,
+                          self.link_bytes_per_s, self.rebuild_burst_bytes, self.disk_burst_bytes,
+                          self.link_burst_bytes)
 
     def to_json(self) -> dict:
         return {"chip_bytes": self.chip_bytes, "disk_burst_bytes": self.disk_burst_bytes,
@@ -212,7 +242,7 @@ def binding(record: audit.Record, node: Node) -> float:
     L_t a set holding every receipt window t opens at every outcome, s_t the session's sample cap and split_t the chance
     that the two runs' roots differ.  Both are the session's bounds, not one outcome's U_t and s'_t, which follow the
     prover's play: this charges them at `window_receipts` and the record's `samples`.  At `groups_per_coin` g > 1 the
-    term's t is a sample, one openings coin over g windows (`LineHeld`'s `Receipts` over `Node.draws`): ⌈W/g⌉ of them,
+    term's t is a sample, one openings coin over g windows (`LineHeld`'s `Receipts` over `Setup.draws`): ⌈W/g⌉ of them,
     each opening at most g·|L_t| receipts, its windows' together, at the cap s over them.  Where the cut fixes the
     roots, split_t = 0 and the term is Σ_t √(|L_t|·s_t)·q_t/2^256.5 (`Binding.binding_le_of_fixed`), this charge.  The
     prover is sent no coin commitment before the session's end (`coins.Released`, `audit.AuditRun.disclose`), so

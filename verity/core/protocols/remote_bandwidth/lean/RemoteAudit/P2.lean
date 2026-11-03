@@ -66,6 +66,13 @@ def Registration.make? (node : ByteArray) (w c0 : Nat) (expander : String) (bloc
   if !Kind.sketch.rowsOk rows then throw "sketch-sha512's rows are 16 or 64"
   pure { node, blocksPerSegment, segments, commitment, salt, root, rows }
 
+/-- `p2.register`'s registration of a node's P2 store: `make?` for a node the Site `S` registers as a host
+(`RemoteAudit.hostOf`), refused for any other. -/
+def Registration.register (S : Core.Site) (node : ByteArray) (w c0 : Nat) (expander : String)
+    (blocksPerSegment segments : Nat) (commitment salt root : ByteArray) (rows : Nat) : Except String Registration := do
+  let _ ← RemoteAudit.hostOf S node
+  make? node w c0 expander blocksPerSegment segments commitment salt root rows
+
 /-- N, the store's blocks. -/
 def Registration.blocks (r : Registration) : Nat := r.blocksPerSegment * r.segments
 

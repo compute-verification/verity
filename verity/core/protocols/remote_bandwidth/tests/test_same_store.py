@@ -14,6 +14,7 @@ from types import ModuleType
 
 import pytest
 
+from test_registrations import hosts
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period as pous
 from verity.core.protocols.pous import run as R
@@ -78,7 +79,7 @@ def _committed() -> p2.Store:
     commitment, salt, n = bytes.fromhex(doc["commitment"]), bytes.fromhex(doc["salt"]), params.blocks_per_segment
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt,
                                           [blocks[n * s:n * (s + 1)] for s in range(params.segments)])
-    return p2.Store(p2.register(SOURCE, b"n0", commitment, vk), blocks)
+    return p2.Store(p2.register(SOURCE, b"n0", commitment, vk, site=hosts("n0")), blocks)
 
 
 def _root(pous_case: dict) -> bytes:
@@ -100,10 +101,10 @@ def cases(tmp_path_factory) -> dict[str, dict]:
     store = _committed()
     reg, q = store.registration, store.registration.params
     n = q.blocks_per_segment
-    held = pous.Store(R.Point(q, 8, pous.LIMIT_NS), R.Setup(q.blocks, reg.commitment, reg.root, reg.salt), store.blocks,
-                      b"".join(mc.block_digest(b) for b in store.blocks),
-                      pous.setup_case(q, reg.commitment, reg.salt,
-                                      [list(store.blocks[n * s:n * (s + 1)]) for s in range(q.segments)]))
+    held = pous.EncodedStore(R.Point(q, 8, pous.LIMIT_NS), R.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
+                             store.blocks, b"".join(mc.block_digest(b) for b in store.blocks),
+                             pous.setup_case(q, reg.commitment, reg.salt,
+                                             [list(store.blocks[n * s:n * (s + 1)]) for s in range(q.segments)]))
     space = pous.audit("n0", held, COINS, **kw)
     other = pous.run("n0", OTHER_POUS_STORE, COINS, point=pous.point_for(len(OTHER_POUS_STORE), pous.W, pous.C0, k=8),
                      **kw)

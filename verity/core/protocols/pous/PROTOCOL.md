@@ -247,7 +247,7 @@ The lifecycle above is written once, in `protocol`, for any `protocol.Scheme`.
   - `dense-chain/v1`;
   - `p3/v1`;
   - `p2-16448/v4` and `p2-16448/v2`, **experimental** (one module, two key expanders).
-- **`protocol.Certificate`** is what an audit at the scheme's parameters establishes, Lean's
+- **`protocol.CapacityBound`** is what an audit at the scheme's parameters establishes, Lean's
   `Meets S .sequential D Q k ε`. It holds:
   - `k`, `rounds` (D), `work` (Q), `call_ns`, `rho`, `delta`, `eps_log2`;
   - `cliff`: the most rounds the structure tolerates at any `k`;
@@ -483,7 +483,7 @@ and the Python's alike, rejects such a session however it ran (`batch size B is 
 
 **What is public.** The commitment (protocol structure, with the server's declared tiers: the model's size), the
 verdict and the certified egress in whole MiB, rounded up and saturating at `2^15 − 1` (`Verdict.public()`, the
-protocol's outputs, 16 bits in all), and the coins once the session is signed (`Challenger.coins()`, the verifier's draws). The
+protocol's outputs, 16 bits in all), and the coins once the session is signed (`WipeMemoryChallenger.coins()`, the verifier's draws). The
 signed session (its times, its batch records and the exact egress) is witness, as a memory-challenger session is: the
 prover proves `verdict` of it through the proof system, and only the verdict is published. The labels and `K` are the
 auditor's; nothing of the prover's is committed, opened or read.
@@ -627,7 +627,7 @@ which was not measured. The node's load average was about 930 during the run, wh
 | `band` | `BandParams(blocks_per_segment, m, d, segments)`, `SECURE_FIRST`; `codec_for(d)`, `BAND12`; `reference`, `ideal`; `effective_rounds`, `check_deployment` (the cliff) |
 | `dense` | `DenseParams(blocks_per_segment, m, segments)`, `POINT_64K`; `encode_segment` and `decode_segment` on bytes (reading each row's parents from the parameters, so the band shares them); `DENSE`, the two as a codec; `DenseChain` (the chain `H` of both), `reference`, `ideal`; the `*_prog` oracle programs |
 | `scheme` | P3's `encode_segment(params, prims, salt, s, w_seg) -> blocks` and `decode_segment(params, prims, salt, s, blocks) -> w_seg` on bytes; `P3`, the two as a codec; `encode` and `decode` over all of `W`, segment by segment; the `*_prog` oracle programs |
-| `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
+| `layout` | `TensorLayout.of(params, [(name, size)], align)`, `TensorLayout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
 | `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
@@ -635,7 +635,7 @@ which was not measured. The node's load average was about 930 during the run, wh
 | `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `draw_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1, the only size `verdict` accepts), `WipeCommitment`; `Challenger(secret, server, session, params, signer, log=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close(egress_bits)` (one signature, `SignedWipe`) and `coins()`; `Prover`, the honest server; `verdict` (its public output `Verdict.public`: the verdict and `egress_mib`), the reference of the Lean verdict that decides it (`MemoryChallenger.StreamedWipe`, `wipe_verdict.judge`), with `to_json` on the records it reads; the bound, `log2_error`, `retained_bits`, `challenges_for` |
 | `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-challenger keys (never the run's record), the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests, one `Session` (signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
 | `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
-| `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
+| `protocol` | the generic protocol: `Scheme` (abstract), `CapacityBound`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
 | `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
 
 **Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the

@@ -58,6 +58,7 @@
   "Proofs.Properties.RemoteAudit.Schedule",
   "Proofs.Properties.RemoteAudit.Live",
   "Proofs.Properties.RemoteAudit.Component",
+  "Proofs.Properties.RemoteAudit.ComponentWitnesses",
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon",
   "Proofs.Properties.Pouw.LiveSalt.Coin",
@@ -65,7 +66,8 @@
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Composition",
   "Proofs.Properties.Pous.WipeSigned",
-  "Proofs.Properties.Challenger"
+  "Proofs.Properties.Challenger",
+  "Proofs.Properties.Core.Site"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",

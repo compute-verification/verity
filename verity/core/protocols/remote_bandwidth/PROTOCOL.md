@@ -63,8 +63,8 @@ codec than the record's, or a bare fraction. The stated ceiling is the node's, t
 `kv.cu`'s 1.499·10^10 squarings a second at 1,024 bits for each RTX PRO 6000 with its share of the host
 (`kv.cu`'s FOLD 6; 1.567 × 5.13·10^10 at 512 bits),
 2.003·10^11 for the node's eight. There, and at the node's measured \(R\) of 12.92 TB/s, \(\mu_{\text{rebuild}}\) is
-0.065% under the default codec, 0.097% at k = 2 and 0.31% under p512/k2 (`timing.SQUARINGS_PER_S`,
-`timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
+0.065% under the default codec, 0.097% at k = 2 and 0.31% under p512/k2 (the node's `squarings_per_s` and
+`read_bytes_per_s`, `verity.hardware.node`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
 receipt, plus the deployed draw's terms beyond \(\delta\) (`ledger.draw`, `PooledDraw`'s): \(\sum_t s'_t/2^{64}\) for
 a rejected first word (`ledger.rejection`) and the receipts' binding term, \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\)
@@ -103,8 +103,8 @@ same \(W\delta\); read over the horizon, every window's \(f_t\) holds on the ses
 charged \(A\) and the rest of the pass in flight at its challenge, where the session is charged them once, so its
 \(\mu_{\text{timing}}\) is up to about \((A + t_{\text{pass}})/(T + A)\) (§10).
 
-The window is stated: \(T\) = 60 s (`Params.window_ns`, §2), with 33,273 openings a window (`Params.samples`), 555 a
-second. There, on one node whose store spans every tier (94 GB of each GPU's HBM and host DRAM's share, 789 GB,
+The window is stated: \(T\) = 60 s (`Params.window_ns`, §2), with `SAMPLES` openings a window (`Params.samples`).
+There, on one node whose store spans every tier (94 GB of each GPU's HBM and host DRAM's share, 789 GB,
 `timing.spanning`), every window's whole \(\gamma_t\) is under 1% at the measured \(R\): 0.896–0.927% in the worst
 window at RTT 1–20 ms. The horizon's 0.15% over 10 minutes is stated for its pooled \(\mu_{\text{sample}}\)
 (0.0083%), with its whole γ (0.67%) reported beside it: \(\mu_{\text{chip}}\) exceeds 0.15% by itself, and λ with
@@ -117,14 +117,18 @@ window's \(\mu_{\text{sample}}\) is 0.25% and its whole \(\gamma_t\) 1.27–1.36
 the node's, the sum over its devices, whatever share of the node the store is on:
 
 - \(R\) is the node's read capacity over every registered tier: its 8 GPUs' HBM plus its host's DRAM. Measured, that
-  is 8 × 1,539 + 606.8 = 12,918.8 GB/s (`timing.READ_BYTES_PER_S`); specified, 8 × 1,597 + 819.2 = 13,595.2 GB/s
-  (`timing.SPEC_BYTES_PER_S`).
+  is 8 × 1,539 + 606.8 = 12,918.8 GB/s (`read_bytes_per_s`); specified, 8 × 1,597.568 + 819.2 = 13,599.744 GB/s
+  (`spec_bytes_per_s`). The host's 819.2 is DDR5-6400's, a placeholder on its card: the installed DIMMs aren't on
+  record, and the part takes MRDIMMs up to 8,800 MT/s (1,126.4 GB/s), so the node is read with it named open
+  (`NodeFigures.placeholders`).
 - \(S_{\text{chip}}\) is every GPU's on-chip storage and the host's: 8 × 263,163,904 + 1,000,341,504 =
-  3,105,652,736 B (`timing.CHIP_BYTES`). The host's part bounds the whole host, two Xeon 6776P sockets of 64 cores,
+  3,105,652,736 B (`chip_bytes`). The host's part bounds the whole host, two Xeon 6776P sockets of 64 cores,
   whatever share its VM gets: their caches at the guest's CPUID sizes, with allowances for registers and buffers.
-- \(C_{\text{sq}}\) is the sum of the devices' ceilings, 8 × one GPU's share (`timing.SQUARINGS_PER_S`).
+- \(C_{\text{sq}}\) is the sum of the devices' ceilings, 8 × one GPU's share (`squarings_per_s`).
 
-One device's own values are `timing`'s `GPU_` and `HOST_` constants. A device the store isn't on can still hold store
+Each is the node's (`verity.hardware.node`, the value of the Site's `node h`), the exact sum over its devices' and
+host's cards: one device's own values are its card's (`verity/hardware/cards/rtx-pro-6000-server.toml`), and the
+host's its host card's (`verity/hardware/cards/xeon-6776p-2s.toml`). A device the store isn't on can still hold store
 bytes on chip and re-encode blocks, which is why \(S_{\text{chip}}\) and \(C_{\text{sq}}\) are the node's in every
 session (as the red team found). A session over part of the node, as on one GPU, establishes its certified bytes,
 \((1 - \gamma) R \Sigma\), in which \(R\) cancels, so they are the same at either \(R\). Its γ is the node's only once
@@ -135,9 +139,9 @@ DRAM holding its share.
 
 **Which \(R\) is the headline.** γ is reported twice: against the node's specified read bandwidth,
 which is the headline, and against the measured one beside it. The figures above are at the measured \(R\) = 12.92
-TB/s. The node is specified at 13.60 TB/s (the RTX PRO 6000 Server Edition's 1.597 TB/s a GPU and 16 channels of
-DDR5-6400), which no measured kernel reaches, so at spec every reading also carries that gap:
-\(\gamma_{\text{spec}} = 1 - (1 - \gamma_{\text{meas}})\,R_{\text{meas}}/R_{\text{spec}}\), 5.82–5.85% for the worst
+TB/s. The node is specified at 13.60 TB/s (the RTX PRO 6000 Server Edition's 1.598 TB/s a GPU, its card's
+`memory.bandwidth`, and 16 channels of DDR5-6400), which no measured kernel reaches, so at spec every reading also carries that gap:
+\(\gamma_{\text{spec}} = 1 - (1 - \gamma_{\text{meas}})\,R_{\text{meas}}/R_{\text{spec}}\), 5.86–5.89% for the worst
 stated window. The 1% per window holds at the measured \(R\) only. The two-machine sessions so far are one GPU's, over
 an 85 GiB store: both honest sessions accepted and a prover dropping 1/16 of its blocks rejected in its first window.
 As the verifier recorded them, at one
@@ -148,9 +152,9 @@ against the node's \(R\) is 0.898 at spec and 0.893 measured, nearly all of it t
 is the verifier's, never the prover's: a node's own calibration can only raise it, because every term but the timing
 term is a fixed byte count over \(R\Sigma\), and a prover reporting a slower read would shrink them all with no more
 bytes read (0.066 read as 0.0057 at the slowest calibration still accepted). The measured reading takes each
-tier's fastest measured read: 1,539 GB/s a GPU (an honest session's, `timing.GPU_READ_BYTES_PER_S`) and
-606.8 GB/s of host DRAM (`timing.HOST_READ_BYTES_PER_S`), which
-`benchmarks/remote_session/verifier.py`'s ledgers take as `timing.READ_BYTES_PER_S`. \(R\) is the rate of plain, incompressible reads,
+tier's fastest measured read: 1,539 GB/s a GPU (an honest session's, the card's `memory.read`) and
+606.8 GB/s of host DRAM (the host card's `memory.read`), which
+`benchmarks/remote_session/verifier.py`'s ledgers take as the node's `read_bytes_per_s`. \(R\) is the rate of plain, incompressible reads,
 which the store's encoded blocks are: the GPU's compression engine reads a compressible buffer faster
 (7.55 TB/s against 1.536 TB/s plain), but the encoded store reads at 1.515 TB/s under a
 compressible allocation, since the hardware compresses 128-byte units, one codec word, and no encoded word is constant
@@ -181,7 +185,7 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 | `blocks` | \(N\), the registered store's blocks |
 | `deadline_ns` | \(A\): window \(t\)'s roots are due by \(b_t + A\) |
 | `windows` | \(W\), the windows in a session |
-| `samples` | \(s\), the openings per window: 33,273 (`SAMPLES`, 555 a second of the stated window) unless another count is named |
+| `samples` | \(s\), the openings per window: `SAMPLES` unless another count is named |
 | `delta` | δ of each window's profile: \(2^{-40}\) (`DELTA`) unless another is named |
 | `min_passes` | the fewest passes a window may certify |
 | `window_ns` | \(T\), the stated window: no boundary message leaves sooner than this after its window's challenge (`AuditRun.boundary` refuses one). 60 s (`WINDOW_NS`) unless another is named; 20 s at 11,091 openings and 1 s at 2,773 are options, read in §10 |
@@ -329,8 +333,10 @@ Three properties of registration matter:
 **One live registration per node.** Each registration draws a fresh codec seed, so a prover that registered \(R\)
 times and kept the registration whose key suits it would choose \(\log_2 R\) bits of the seed: a retry that redraws,
 which live coins rule out (a red-team finding). The verifier draws
-through its `Registry`, which holds at most one live registration per node:
+through its `Registry`, which holds at most one live registration per node, each node a host the Site registers:
 
+- a node whose id isn't, in UTF-8, the id of a host the Site registers (`audit.host_of`, `RemoteAudit.hostOf`) is
+  refused (ValueError) and draws nothing, as P2's `p2.register` refuses it (`P2.Registration.register`);
 - a second `register` for a node while it has a live registration is refused (`RegistryError`), counted (`refused`),
   and draws nothing;
 - each session over the registration is the registry's (`Registry.session`, its coins' session number its count so
@@ -824,12 +830,12 @@ last leaf re-rolls the draws for the price of a leaf and its path, so a prover w
 and keeps one whose draws miss them. By the union bound the window's δ becomes \(Q\delta\), so \(s\) must rise to the
 count at \(\delta/Q\) (`timing.samples_for`). A try reads no block and costs a few to a few tens of compressions (§4
 counts a seed's), so the stated 60 s window affords one node of 8 GPUs about \(2^{35.6}\) to \(2^{39.3}\) of them.
-At the stated window's 33,273 openings (\(\varepsilon_s = \ln(2^{40})/s\) = 0.083%) and δ = \(2^{-40}\), the count at
+At the stated window's `SAMPLES` openings (\(\varepsilon_s = \ln(2^{40})/s\) = 0.083%) and δ = \(2^{-40}\), the count at
 \(\delta/Q\) is \(\lceil s\,(40 + \log_2 Q)/40 \rceil\):
 
 | grinding \(Q\) | \(s\) | × the coin's |
 | --- | --- | --- |
-| none (the coin) | 33,273 | 1.00 |
+| none (the coin) | `SAMPLES` | 1.00 |
 | \(2^{20}\) | 49,910 | 1.50 |
 | \(2^{40}\) | 66,546 | 2.00 |
 | \(2^{64}\) (λ's budget) | 86,510 | 2.60 |
@@ -1006,20 +1012,24 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   windows' PRF advantages, \(\sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which have no numeric value: the ledger names
   them by their claim (prf/sha-512, `ledger.PRF_CLAIM`) and puts them in no δ.
 
-  Every form, the link-charged one included, is conditional on `NoOutsideCompute`, statement C in full: no device
-  outside the node computes on a registered block or a receipt during the session. Identity is only its links clause:
-  a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the receipts, sends no
-  block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement
-  takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the receipts' sketch wherever
-  computed, which `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
-  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins), and the line of record says it is
-  conditional on it (`auditor_line.json`'s `conditional_on`, `credit.md`; the `memory-line-of-record` label names the
-  field's names, and `research data label` holds it to the file) until certifiers cover the gate node's boundary
-  (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the credited span.
-  `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records of the boundary
-  links over its span show other ingress. `auditor_line.py --lockdown`, infra's record of the provider's lockdown of
-  the gate node, grounds C for a session whose signed span lies inside an applied interval: the line is then
-  conditional on `ProviderLockdown` (`trusted-host`), which names what the lockdown doesn't close, in C's place.
+  Statement C in full is that no device outside the node computes for it during the session. Identity is only its
+  links clause: a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the
+  receipts, sends no block over the links, so neither Identity nor the links' charge sees it, and only C excludes it.
+  The line's statement (`LineHeld`) assumes nothing of the prover here: it reads C from what the network certifiers
+  observe. Its event is that the certifiers counted no ingress into the node over the credited passes and yet the
+  passes read fewer bits than the line credits, and its error carries δ_net, the certifiers' miscount
+  (`IngressCounted`, `trusted-host`), beside `SketchBoundAt` (the receipts' sketch wherever computed, which
+  `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
+  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins). `Covered` (`certifier-coverage`) is
+  the deployment's half: every uplink of the prover's server passes through an active certifier, so an outside device
+  computing for the node sends its result over a counted link. Memory held follows from the bits read under the
+  device model (`heldAt_of_read`). `auditor_line.py --boundary`, off by default, refuses a session's credit when the
+  certifiers' records of the boundary links over its span show other ingress; without it the line of record says it
+  is conditional on C, under the label vocabulary's name `NoOutsideCompute` (`auditor_line.json`'s `conditional_on`,
+  `credit.md`; the `memory-line-of-record` label names the field's names, and `research data label` holds it to the
+  file). `auditor_line.py --lockdown`, infra's record of the provider's lockdown of the gate node, grounds C for a
+  session whose signed span lies inside an applied interval: the line is then conditional on `ProviderLockdown`
+  (`trusted-host`), that label's name for what the lockdown doesn't close, in C's place.
 
 \(R\), \(S_{\text{chip}}\), the squaring ceiling, the disks' and links' ceilings and the bursts are the verifier's: the
 node's stated or measured capacities, protocol structure, never the prover's report (§1).
@@ -1423,7 +1433,7 @@ before, and its own chain starts only when that pass ends. So a window is charge
 (20 ms passes) and 0.25–0.33% (50 ms). At the 20 s option it is 0.41–0.65% (20 ms) and 0.50–0.75% (50 ms), and at
 the 1 s option 4.03–8.42% (20 ms) and 9.62–13.65% (50 ms).
 
-**Openings** at the stated \(T\) = 60 s and δ = \(2^{-40}\): \(s = 33{,}273\) per window (555 a second,
+**Openings** at the stated \(T\) = 60 s and δ = \(2^{-40}\): \(s\) = `SAMPLES` per window (555 a second,
 \(\varepsilon_s = \ln(2^{40})/s\) = 0.083%), each about 8.5–9.1 KB (block, leaf, both salts, both paths). That is
 282–303 MB a window per node, or 38–40 Mb/s. The 20 s option's \(\varepsilon_s\) = 0.25% takes 11,091 a window at the
 same rate: 94–101 MB, the same 38–40 Mb/s. The 1 s option's 1% takes 2,773: 23–25 MB, or 0.19–0.20 Gb/s. Under a
@@ -1441,9 +1451,9 @@ correct receipts. The same event bounds every window's share by itself: \(f_t < 
 
 The stated claim is that hybrid: short by under 0.15% over a 10-minute horizon (for \(\mu_{\text{sample}}\),
 below) and by under 1% in every window (for the whole \(\gamma_t\)), at \(2^{-40}\), with the window stated at
-\(T\) = 60 s and 33,273 openings. For \(\mu_{\text{sample}}\) it
+\(T\) = 60 s and `SAMPLES` openings. For \(\mu_{\text{sample}}\) it
 needs \(d \ge 2{,}773\) openings a window and \(d \cdot n \ge 18{,}470\) over the horizon's \(n\) windows. The stated
-window's 33,273 give each window a floor of 0.083%, and the horizon's 10 windows \(\ln(2^{40})/(d\,n)\) = 0.0083%.
+window's `SAMPLES` give each window a floor of 0.083%, and the horizon's 10 windows \(\ln(2^{40})/(d\,n)\) = 0.0083%.
 The 20 s option's 11,091 give each window 0.25%, and over its 30 windows the same 0.0083%. The 1 s option's 2,773
 give each window 1%, and over its 600 windows 0.0017%.
 
@@ -1466,19 +1476,19 @@ a GPU, 789 GB over every tier with 61 ms passes, is best except at \(T\) = 1 s. 
 
 | \(T\) | openings a window | store, GB a GPU | \(\mu_{\text{timing}}\) | \(\mu_{\text{sample}}\) | \(\mu_{\text{chip}}\) | λ | \(\mu_{\text{rebuild}}\) | worst \(\gamma_t\) | at spec | \(W\) | pooled \(\mu_{\text{sample}}\) | horizon γ |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 60 s | 33,273 | 789 GB, 94, every tier | 0.24–0.27% | 0.083% | 0.39% | 0.115% | 0.065% | 0.896–0.927% | 5.827–5.856% | 10 | 0.0083% | 0.668–0.671% |
-| 60 s | 33,273 | 520 GB, 62, every tier | 0.23–0.26% | 0.083% | 0.595% | 0.117% | 0.065% | 1.088–1.119% | 6.009–6.038% | 10 | 0.0083% | 0.911–0.914% |
-| 60 s | 33,273 | 252 GB, 30, every tier | 0.29–0.33% | 0.083% | 1.23% | 0.120% | 0.065% | 1.792–1.823% | 6.678–6.708% | 10 | 0.0083% | 1.680–1.684% |
-| 60 s | 33,273 | 752 GB, 94, HBM | 4.93–4.96% | 0.079% | 0.39% | 0.110% | 0.065% | 5.573–5.602% | 10.271–10.299% | 10 | 0.0079% | 5.355–5.358% |
-| 20 s | 11,091 | 789 GB, 94, every tier | 0.45–0.54% | 0.25% | 0.39% | 0.115% | 0.065% | 1.267–1.360% | 6.179–6.268% | 30 | 0.0083% | 0.668–0.671% |
-| 20 s | 11,091 | 520 GB, 62, every tier | 0.50–0.59% | 0.25% | 0.59% | 0.117% | 0.065% | 1.522–1.616% | 6.422–6.511% | 30 | 0.0083% | 0.911–0.914% |
-| 20 s | 11,091 | 252 GB, 30, every tier | 0.40–0.49% | 0.25% | 1.23% | 0.120% | 0.065% | 2.057–2.150% | 6.930–7.019% | 30 | 0.0083% | 1.680–1.684% |
-| 1 s | 2,773 | 252 GB, 30, every tier | 2.60–4.38% | 0.95–0.97% | 1.18–1.20% | 0.115–0.118% | 0.065% | 4.948–6.687% | 9.677–11.329% | 600 | 0.0017% | 1.674–1.677% |
-| 1 s | 2,773 | 789 GB, 94, every tier | 8.00–9.62% | 0.90–0.92% | 0.356–0.362% | 0.105–0.106% | 0.065% | 9.448–11.040% | 13.953–15.466% | 600 | 0.0017% | 0.661–0.664% |
-| 90 s | 11,091 | 789 GB, 94, every tier | 0.17–0.19% | 0.25% | 0.39% | 0.116% | 0.065% | 0.994–1.015% | 5.920–5.940% | 6 | 0.042% | 0.707–0.710% |
+| 60 s | `SAMPLES` | 789 GB, 94, every tier | 0.24–0.27% | 0.083% | 0.39% | 0.115% | 0.065% | 0.896–0.927% | 5.858–5.888% | 10 | 0.0083% | 0.668–0.671% |
+| 60 s | `SAMPLES` | 520 GB, 62, every tier | 0.23–0.26% | 0.083% | 0.595% | 0.117% | 0.065% | 1.088–1.119% | 6.040–6.070% | 10 | 0.0083% | 0.911–0.914% |
+| 60 s | `SAMPLES` | 252 GB, 30, every tier | 0.29–0.33% | 0.083% | 1.23% | 0.120% | 0.065% | 1.792–1.823% | 6.709–6.739% | 10 | 0.0083% | 1.680–1.684% |
+| 60 s | `SAMPLES` | 752 GB, 94, HBM | 4.93–4.96% | 0.079% | 0.39% | 0.110% | 0.065% | 5.573–5.602% | 10.301–10.329% | 10 | 0.0079% | 5.355–5.358% |
+| 20 s | 11,091 | 789 GB, 94, every tier | 0.45–0.54% | 0.25% | 0.39% | 0.115% | 0.065% | 1.267–1.360% | 6.210–6.299% | 30 | 0.0083% | 0.668–0.671% |
+| 20 s | 11,091 | 520 GB, 62, every tier | 0.50–0.59% | 0.25% | 0.59% | 0.117% | 0.065% | 1.522–1.616% | 6.453–6.542% | 30 | 0.0083% | 0.911–0.914% |
+| 20 s | 11,091 | 252 GB, 30, every tier | 0.40–0.49% | 0.25% | 1.23% | 0.120% | 0.065% | 2.057–2.150% | 6.961–7.050% | 30 | 0.0083% | 1.680–1.684% |
+| 1 s | 2,773 | 252 GB, 30, every tier | 2.60–4.38% | 0.95–0.97% | 1.18–1.20% | 0.115–0.118% | 0.065% | 4.948–6.687% | 9.707–11.359% | 600 | 0.0017% | 1.674–1.677% |
+| 1 s | 2,773 | 789 GB, 94, every tier | 8.00–9.62% | 0.90–0.92% | 0.356–0.362% | 0.105–0.106% | 0.065% | 9.448–11.040% | 13.982–15.495% | 600 | 0.0017% | 0.661–0.664% |
+| 90 s | 11,091 | 789 GB, 94, every tier | 0.17–0.19% | 0.25% | 0.39% | 0.116% | 0.065% | 0.994–1.015% | 5.951–5.971% | 6 | 0.042% | 0.707–0.710% |
 
 At the stated \(T\) = 60 s, then, every window is under 1% for the whole \(\gamma_t\) at the measured \(R\):
-0.896–0.927% with 94 GB a GPU over every tier, and 1.09–1.12% at 62 GB a GPU. At spec it is 5.8% at best, the
+0.896–0.927% with 94 GB a GPU over every tier, and 1.09–1.12% at 62 GB a GPU. At spec it is 5.9% at best, the
 measured kernels' shortfall from the datasheets. The same 94 GB a GPU in HBM alone is 5.57–5.60%, host DRAM's idle
 4.7% of \(R\) in \(\mu_{\text{timing}}\). At the 20 s option, every window under 1% holds for \(\mu_{\text{sample}}\)
 (0.25%) and not for the whole \(\gamma_t\), which is 1.27% at best. At \(T\) = 90 s with 11,091 a window it is
@@ -1533,7 +1543,7 @@ into the next pass. That needs three things:
 - **An assumption.** A bandwidth-hard function on \(S_{\text{chip}}\): evaluating it while holding \(X\) bytes of
   the store on chip costs at least \(X\) bytes more of device-memory traffic, with \(R\) bounding reads and writes
   together. Spilling the held bytes instead costs \(2X\).
-- **The verifier's work.** It recomputes the flush for every pass whose seed it uses, which at 33,273 openings is
+- **The verifier's work.** It recomputes the flush for every pass whose seed it uses, which at `SAMPLES` openings is
   nearly every pass.
 - **The GPU's time.** At least one write and one read of \(S_{\text{chip}}\): 26–105 µs at 5–20 TB/s on chip
   (unmeasured). That adds 0.04–0.17% to the steady state.

@@ -3,9 +3,9 @@
 `rtx_node` is one of our two RTX PRO 6000 nodes as both read with `nvidia-smi topo -m`, `lspci -tv` and `lsmem`:
 two sockets, each an Intel Xeon 6776P with its host DRAM and a PCIe root complex (a switch); eight RTX PRO 6000 GPUs,
 GPUs 0–3 on socket 0 and 4–7 on socket 1, each on a root port of its own; one NIC, on socket 1. Its device model is
-`Accounting.Device`'s one Python mirror, `verity.core.protocols.remote_bandwidth.timing`: a GPU's S_chip, read and write
-rates, SHA-512 oracle and squaring ceilings, and half the host's on each socket, so the node sums to
-`ledger.Node.stated()`. Beside them: each GPU's memory and its rate for each kind of work (`logical.work`: tensor-core
+`Accounting.Device`'s one Python mirror, the remote audit's node read off its cards (`verity.hardware.node`'s
+`VY_NEBIUS`): a GPU's S_chip, read and write rates, SHA-512 oracle and squaring ceilings, and half the host's on each
+socket, so the node sums to `ledger.Node.stated(NODE)`. Beside them: each GPU's memory and its rate for each kind of work (`logical.work`: tensor-core
 multiply-adds by precision at the dense datasheet peaks `benchmarks/census/hardware.json` names; CUDA-core word
 operations, `cuda:op`, and Boolean gates, `cuda:gate`, at its integer rate times 32 lanes), each socket's host DRAM
 (half the node's online memory) and each PCIe link at PCIe 5.0 x16's rate. A capacity not measured yet is `math.inf`,
@@ -21,18 +21,20 @@ from __future__ import annotations
 
 import math
 
-from verity.core.protocols.remote_bandwidth import timing as T
+from verity.hardware import node as hardware
 
 from .physical import Assumption, Cadence, Datacenter, DeviceEntry, Fleet, LinkEntry, Zone
 
 GB = 8e9
 INF = math.inf
 US = Assumption("hop", 1e-6, "s", "measured")
+NODE = hardware.node(*hardware.VY_NEBIUS)
+GPU, HOST = NODE.devices[0], NODE.host
 
-S_CHIP = Assumption("rtx-pro-6000/S_chip", T.GPU_CHIP_BYTES * 8, "bits", "measured")
+S_CHIP = Assumption("rtx-pro-6000/S_chip", GPU.chip_bytes * 8, "bits", "measured")
 GPU_MEMORY = Assumption("rtx-pro-6000/memory", 103_079_215_104 * 8, "bits", "datasheet")
-GPU_READ = Assumption("rtx-pro-6000/memory-read", T.GPU_READ_BYTES_PER_S * 8, "bit/s", "measured")
-GPU_WRITE = Assumption("rtx-pro-6000/memory-write", T.GPU_WRITE_BYTES_PER_S * 8, "bit/s", "datasheet")
+GPU_READ = Assumption("rtx-pro-6000/memory-read", GPU.read_bytes_per_s * 8, "bit/s", "measured")
+GPU_WRITE = Assumption("rtx-pro-6000/memory-write", NODE.device_write_bytes_per_s * 8, "bit/s", "datasheet")
 GPU_RESIDUAL = Assumption("rtx-pro-6000/residual", 1 * GB, "bits", "declared")
 GPU_RATE = {
     "mac:bf16": Assumption("rtx-pro-6000-server/bf16", 250_000_000_000_000, "multiply-adds/s", "datasheet"),
@@ -40,14 +42,14 @@ GPU_RATE = {
     "mac:fp4": Assumption("rtx-pro-6000-server/e2m1", 1_000_000_000_000_000, "multiply-adds/s", "datasheet"),
     "cuda:op": Assumption("rtx-pro-6000/cuda-ops", INF, "ops/s", "measured"),
     "cuda:gate": Assumption("rtx-pro-6000/gates", 2.6e13 * 32, "gate/s", "datasheet"),
-    "oracle": Assumption("rtx-pro-6000/sha512", T.GPU_SHA512_PER_S, "compressions/s", "measured"),
+    "oracle": Assumption("rtx-pro-6000/sha512", GPU.sha512_per_s, "compressions/s", "measured"),
     **{f"square-{w[1:]}": Assumption(f"rtx-pro-6000/squarings-{w}", r, "squarings/s", "declared")
-       for w, r in T.GPU_SQUARINGS_PER_S.items()},
+       for w, r in GPU.squarings_per_s.items()},
 }
-HOST_CHIP = Assumption("xeon-6776p/caches", T.HOST_CHIP_BYTES // 2 * 8, "bits", "declared")
+HOST_CHIP = Assumption("xeon-6776p/caches", HOST.chip_bytes // 2 * 8, "bits", "declared")
 HOST_DRAM = Assumption("host-dram/socket-capacity", 1_872_605_741_056 // 2 * 8, "bits", "measured")
-HOST_READ = Assumption("host-dram/socket-read", T.HOST_READ_BYTES_PER_S / 2 * 8, "bit/s", "measured")
-HOST_WRITE = Assumption("host-dram/socket-write", T.HOST_WRITE_BYTES_PER_S / 2 * 8, "bit/s", "datasheet")
+HOST_READ = Assumption("host-dram/socket-read", HOST.read_bytes_per_s / 2 * 8, "bit/s", "measured")
+HOST_WRITE = Assumption("host-dram/socket-write", NODE.host_write_bytes_per_s / 2 * 8, "bit/s", "datasheet")
 HOST_RESIDUAL = Assumption("host-dram/socket-residual", 4 * GB, "bits", "declared")
 PCIE5_X16 = 32e9 * 16 * 128 / 130          # 32 GT/s a lane, 16 lanes, 128b/130b coding: one direction's bits a second
 PCIE_GPU = Assumption("pcie/gpu", PCIE5_X16, "bit/s", "datasheet")

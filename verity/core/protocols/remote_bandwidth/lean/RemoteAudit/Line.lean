@@ -1,3 +1,4 @@
+import CoreProtocol.Site
 import RemoteAudit.Pooled
 import RemoteAudit.Shared
 
@@ -15,8 +16,10 @@ given. The wrong receipts W are the pooled bound of the record's windows
 (`RemoteAudit.Pooled.pooled`: their receipts and draws at δ). A record drawn g > 1 windows a coin (`Shared`) has the
 same groups, and its pooled bound reads its draws, each its g windows' receipts and draws summed (`ofSummaryAt`,
 `lineOfRecordAt`); at one window in flight it has no line (`SHARED`). `line.py`'s docstring has the form;
-`tests/test_line.py` holds the two together through `RemoteAudit.Difftest`'s `line` and `line_record`. Code: Lean core
-only.
+`tests/test_line.py` holds the two together through `RemoteAudit.Difftest`'s `line` and `line_record`. The node's
+inputs, its `Rates`, on-chip bytes and memory bytes, are read off the Site's `node h` (`ofSite`): each device by the SKU
+its sheet names, with the card figures the sheet doesn't carry beside it, and the run's statements (`Stated`), held to
+`line.node_run_json` through `node`. Code: Lean core and the core Site (`Core.Site`).
 -/
 
 namespace RemoteAudit.Line
@@ -48,6 +51,7 @@ structure Rates where
   rebuildBurstBytes : Rat
   diskBurstBytes : Rat
   linkBurstBytes : Rat
+  deriving DecidableEq
 
 /-- The rates by `line.RATES`' names, in its order. -/
 def Rates.named (r : Rates) : List (String × Rat) :=
@@ -329,7 +333,7 @@ def lineOfRegistered (onRecord : Bool) (g : Nat) (reg : Registration) (digest : 
 
 /-- The record `Shared.run g` makes of a session drawn `g` windows a coin from `s` over `events`, none where the run
 fails or doesn't accept (`Session.State.summary`): `LineHeld`'s `Record.summary` at a node of `g` windows a draw
-(`Node.groupsPerCoin`), at g = 1 `Session.run`'s (`Shared.run_one`). -/
+(`Setup.groupsPerCoin`), at g = 1 `Session.run`'s (`Shared.run_one`). -/
 def summaryOfRun (g : Nat) (s : Session.State) (events : Array Session.Event) : Option Session.Summary :=
   match Shared.run g s events with
   | .ok (_, s') => s'.summary
@@ -347,6 +351,75 @@ at a node of `g` windows a draw: `lineOfRecordOn` of the run's own record (`summ
 def lineOfRun (onRecord : Bool) (g : Nat) (s : Session.State) (events : Array Session.Event) (samples : Nat)
     (seen : Array Seen) (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) : Except String Line :=
   lineOfSummary? onRecord g (summaryOfRun g s events) samples seen per blockBytes chipBytes nodeBytes δ rates
+
+/-! ## The node off the Site -/
+
+/-- A GPU card's figures beyond its sheet (`verity.hardware.node.GpuFigures`): its on-chip bytes (`store.chip`) and its
+squarings a second at each width it states. -/
+structure GpuFigures where
+  chipBytes : Nat
+  squaringsPerS : List (String × Rat)
+
+/-- The host card's figures the line reads (`verity.hardware.node.HostFigures`): its on-chip bytes and one link window,
+in bytes. The Site registers no sheet for a host, so its card is named beside it. -/
+structure HostFigures where
+  chipBytes : Nat
+  linkWindowBytes : Nat
+
+/-- What the run states of the node beside its cards (`ledger.Node.stated`): its codec's width and a block's encode in
+squarings, its disks' and boundary links' read ceilings (bytes a second), and their bursts where stated. -/
+structure Stated where
+  field : String
+  encodeSquarings : Nat
+  diskBytesPerS : Rat := 0
+  linkBytesPerS : Rat := 0
+  diskBurstBytes : Option Rat := none
+  linkBurstBytes : Option Rat := none
+
+/-- What the line reads of a node: its ways back into memory, its on-chip bytes `S_chip` and its memory's bytes. -/
+structure Inputs where
+  rates : Rates
+  chipBytes : Nat
+  nodeBytes : Nat
+  deriving DecidableEq
+
+/-- Host `h`'s devices' card figures, in the log's order, each by the SKU its sheet names (`Core.Site.sheetOf`): refused
+for an `h` the Site registers as no host, a node with no device, and an SKU `gpus` has no figures for. -/
+def devicesOf (S : Core.Site) (digest : Core.Site.Sheet → String) (h : String) (gpus : String → Option GpuFigures) :
+    Except String (List GpuFigures) := do
+  let some n := S.node digest h | throw s!"{h} is no host the Site registers"
+  if n.units.isEmpty then throw s!"host {h} holds no device the Site registers"
+  n.units.mapM fun d => do
+    let some k := n.sheetOf digest d | throw s!"device {d} names no registered sheet"
+    let some f := gpus k.sku | throw s!"no card figures for {k.sku}"
+    pure f
+
+/-- **Host `h`'s inputs off the Site's `node h`**: its devices' squarings a second at the run's width summed, refused
+unless every device states one; `S_chip` its devices' on-chip bytes and its host's; its memory the bytes of its HBM and
+DRAM leaves (`Core.Site.tiers`); and the run's encode, disks and links. A rebuild's burst is `S_chip`, what a batch in
+flight holds on the chips; the disks' one second at their ceiling unless stated; the links' one host link window
+where they are charged unless stated (`ledger.Node.stated`). -/
+def ofSite (S : Core.Site) (digest : Core.Site.Sheet → String) (h : String) (gpus : String → Option GpuFigures)
+    (host : HostFigures) (st : Stated) : Except String Inputs := do
+  let fs ← devicesOf S digest h gpus
+  let some sq := fs.mapM fun f => (f.squaringsPerS.find? (·.1 == st.field)).map (·.2)
+    | throw s!"the node states no squaring ceiling at {st.field}, the record's codec's width"
+  for (name, q) in [("disk_bytes_per_s", st.diskBytesPerS), ("link_bytes_per_s", st.linkBytesPerS),
+      ("disk_burst_bytes", st.diskBurstBytes.getD 0), ("link_burst_bytes", st.linkBurstBytes.getD 0)] do
+    if q < 0 then throw s!"{name} is nonnegative"
+  let chip := (fs.map (·.chipBytes)).sum + host.chipBytes
+  let mem := (((S.tiers digest h).filter (·.1 != .disk)).map (·.2)).sum
+  pure
+    { rates :=
+        { squaringsPerS := sq.foldl (· + ·) 0
+          encodeSquarings := st.encodeSquarings
+          diskBytesPerS := st.diskBytesPerS
+          linkBytesPerS := st.linkBytesPerS
+          rebuildBurstBytes := chip
+          diskBurstBytes := st.diskBurstBytes.getD st.diskBytesPerS
+          linkBurstBytes := st.linkBurstBytes.getD (if st.linkBytesPerS = 0 then 0 else host.linkWindowBytes) }
+      chipBytes := chip
+      nodeBytes := mem }
 
 private def digits? (s : String) : Option Nat :=
   if !s.isEmpty && s.all Char.isDigit then s.toNat? else none

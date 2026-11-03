@@ -145,8 +145,10 @@ def registration_json(r: audit.Registration) -> dict:
 
 
 def register_request(node: bytes, blocks: int, payload_root: bytes, c: codec.Codec, receipt: str, rows: int | None,
-                     nonce: bytes, bind: bool = False) -> dict:
-    return {"op": "register", "node": node.hex(), "blocks": blocks, "payload_root": payload_root.hex(),
+                     nonce: bytes, bind: bool, site: dict) -> dict:
+    """`Verifier.lean`'s register request: the node held to the Site of `site`, `{"log", "auditor"}`, which the Lean
+    checks itself (`Difftest.siteOf`)."""
+    return {"op": "register", "site": site, "node": node.hex(), "blocks": blocks, "payload_root": payload_root.hex(),
             "codec": codec_json(c), "receipt": receipt, "bind": bind, "rows": receipts.sketch_rows(receipt, rows),
             "layout": receipts.LAYOUT, "nonce": nonce.hex()}
 

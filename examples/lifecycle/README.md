@@ -152,6 +152,10 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `Challenger`, `theta_reach(layout, store)` | memory challenger, verifier | an open round; the layout | PoUS and bandwidth report; rate and latency | missing: written in the example |
 | `Developer`, `Verifier`, manifests | runtime | params, capabilities, messages | actions | `verity/core/deploy/` (`party`, `manifest`, `runtime.run`) |
 
+The code Site, `verity/core/site/`, mirrors `Core/Site.lean` for the first three rows: `Sheet`, `Loc`, `Link`, `Entry`
+and `Registration`; `Site`, `of_log`, `device` and `boundary`; and `check_registration`, with the same refusals in the
+same order.
+
 ## (c) What this exposes
 
 - **The registered circuit has no one digest, and Lean's `Declaration` holds one circuit.** Each execution block has its

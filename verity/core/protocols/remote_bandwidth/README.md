@@ -41,9 +41,9 @@ the Lean verifier of record beside the books (below). Not all of it is zero know
 The verifier's definition is the Lean package `lean/` (`RemoteAudit`), the verifier of record; the Python mirrors it.
 `audit.py` and what it calls here (`receipts.py`, `codec.py`, `coins.py`) are held to it by `lean/tests/`' difftest:
 every event's result, the session's outcome and its record, the registry (`Registry`: one live registration a node,
-each session's index `k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec
-seed, codec, plans, receipts, openings, draws). Where the two differ, the Python is what is wrong. The properties of
-the Lean's verdicts are `Security/Properties/RemoteAudit.lean`.
+each node a host the Site registers, each session's index `k`, the outcomes `close` counts, and `registry/v0`), and the
+pieces (registration and its codec seed, codec, plans, receipts, openings, draws). Where the two differ, the Python is
+what is wrong. The properties of the Lean's verdicts are `Security/Properties/RemoteAudit.lean`.
 
 `benchmarks/remote_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
 decides each registration, event and window, an accepted session's record is the one it returns, and the ledger reads
@@ -174,7 +174,8 @@ A transcript that doesn't name its session's pace replays only with the pace its
   `Binding.hold` decides a hello against it, the reference beside `lean/RemoteAudit/Store.lean`'s `bind` and `hold`,
   which decide it in the verifier.
   `benchmarks/remote_session/store_layout.py` writes pins and synthetic checkpoints.
-- `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound.
+- `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound. It holds
+  no hardware figure: each takes the node's (`verity.hardware.node`, the Site's `node h`), read off its cards.
 - `monitoring.py`: one accepted session's `q_bytes` and `eps` over a week, a month and a year of a deployment's
   sessions, at δ = 1% and 10⁻⁶: pooled by the count bound (all but M − 1 sessions certify), with each session at
   δ/T beside it. The deployment's machines and window are parameters.

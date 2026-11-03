@@ -12,10 +12,13 @@ from fractions import Fraction
 import pytest
 
 from remote_bandwidth_fakes import Clock, Entropy
-from test_remote_bandwidth import A, N, SCHEDULE, challenger, drive, finish, params, partial, store  # noqa: F401
+from test_remote_bandwidth import A, N, RTX, SCHEDULE, challenger, drive, finish, params, partial, store  # noqa: F401
 from verity.core import claims
 from verity.core.protocols.remote_bandwidth import audit, codec, ledger, line, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import AuditRun, Pace
+from verity.core.site import Auditor, Entry, Loc, Registration, Sheet, Site, check
+from verity.hardware import load
+from verity.hardware import node as hardware
 
 PASS_NS, DOWN_NS, UP_NS = 300, 20, 30
 B = codec.BLOCK_BYTES
@@ -23,10 +26,11 @@ B = codec.BLOCK_BYTES
 
 def node(*, chip_blocks: int = 1, squarings: float = 0.0, disk: float = 0.0, link: float = 0.0,
          bursts: tuple[int, int, int] = (0, 0, 0)) -> ledger.Node:
-    """A node sized to the small store: `timing`'s R, `chip_blocks` blocks on chip, the given ceilings, and bursts of
-    the given blocks (rebuild, disk, link)."""
-    return ledger.Node(timing.SPEC_BYTES_PER_S, timing.READ_BYTES_PER_S, chip_blocks * B,
-                       {codec.FALLBACK.field.name: squarings}, disk_bytes_per_s=disk, link_bytes_per_s=link,
+    """A node sized to the small store: a vy-nebius node's R, SHA-512 rate and write ceilings, `chip_blocks` blocks on
+    chip, the given ceilings, and bursts of the given blocks (rebuild, disk, link)."""
+    return ledger.Node(RTX.spec_bytes_per_s, RTX.read_bytes_per_s, chip_blocks * B,
+                       {codec.FALLBACK.field.name: squarings}, RTX.sha512_per_s, RTX.device_write_bytes_per_s,
+                       RTX.host_write_bytes_per_s, disk_bytes_per_s=disk, link_bytes_per_s=link,
                        rebuild_burst_bytes=bursts[0] * B, disk_burst_bytes=bursts[1] * B,
                        link_burst_bytes=bursts[2] * B)
 
@@ -128,7 +132,7 @@ def test_a_pace_has_a_closing_window_and_a_record_of_one_window_has_no_time_held
     one = dataclasses.replace(r, windows=r.windows[:1])
     snap, held, links = ledger.memory(one, node())
     assert "one window" in held.refused and links.refused == held.refused and snap.refused is None
-    assert [w.window for w in ledger.gamma(one, node(), timing.SPEC_BYTES_PER_S).windows] == [0]
+    assert [w.window for w in ledger.gamma(one, node(), RTX.spec_bytes_per_s).windows] == [0]
 
 
 def test_arrivals_are_one_a_pass_and_out_of_order_ones_have_no_time_held_line(k1) -> None:
@@ -144,11 +148,11 @@ def test_arrivals_are_one_a_pass_and_out_of_order_ones_have_no_time_held_line(k1
         odd = dataclasses.replace(r, windows=(dataclasses.replace(w, arrived_ns=bad), *r.windows[1:]))
         assert "not in order" in ledger.memory(odd, node())[1].refused
         with pytest.raises(ValueError, match="not in order"):
-            ledger.gamma(odd, node(), timing.SPEC_BYTES_PER_S)
+            ledger.gamma(odd, node(), RTX.spec_bytes_per_s)
     bare = dataclasses.replace(r, windows=tuple(dataclasses.replace(x, arrived_ns=()) for x in r.windows))
     assert "has none" in ledger.memory(bare, node())[1].refused
     with pytest.raises(ValueError, match="has none"):
-        ledger.gamma(bare, node(), timing.SPEC_BYTES_PER_S)
+        ledger.gamma(bare, node(), RTX.spec_bytes_per_s)
 
 
 def test_gamma_is_the_ledger_at_both_r_and_per_window(store) -> None:
@@ -313,15 +317,90 @@ def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
 
 def test_the_stated_node_has_a_burst_for_each_way_back() -> None:
     """`Node.stated`: a rebuild batch is at most S_chip, a disk read a second of the disks' ceiling, and a link window
-    `timing.LINK_WINDOW_BYTES` when the links are charged; each may be stated instead."""
-    n = ledger.Node.stated(disk_bytes_per_s=4.32e9, link_bytes_per_s=50e9)
+    the host's (its host card's `link.window`) when the links are charged; each may be stated instead."""
+    n = ledger.Node.stated(RTX, disk_bytes_per_s=4.32e9, link_bytes_per_s=50e9)
     assert (n.rebuild_burst_bytes, n.disk_burst_bytes, n.link_burst_bytes) == (
-        timing.CHIP_BYTES, 4.32e9, timing.LINK_WINDOW_BYTES)
-    assert (ledger.Node.stated().disk_burst_bytes, ledger.Node.stated().link_burst_bytes) == (0, 0)
-    m = ledger.Node.stated(disk_bytes_per_s=4.32e9, disk_burst_bytes=4 << 20, link_burst_bytes=0)
+        RTX.chip_bytes, 4.32e9, RTX.host.link_window_bytes) == (3_105_652_736, 4.32e9, 6_291_456)
+    assert (ledger.Node.stated(RTX).disk_burst_bytes, ledger.Node.stated(RTX).link_burst_bytes) == (0, 0)
+    m = ledger.Node.stated(RTX, disk_bytes_per_s=4.32e9, disk_burst_bytes=4 << 20, link_burst_bytes=0)
     assert (m.disk_burst_bytes, m.link_burst_bytes) == (4 << 20, 0) and m.to_json()["disk_burst_bytes"] == 4 << 20
     with pytest.raises(ValueError, match="link_burst_bytes"):
         dataclasses.replace(n, link_burst_bytes=-1.0)
+
+
+def test_the_line_reads_the_rates_of_the_stated_node() -> None:
+    """`Node.rates` is the node as the memory line reads it (`line.Rates`): its squaring ceiling at the codec's width
+    over the codec's encode, and its disks' and links' ceilings and bursts; a width it states no ceiling at is
+    refused."""
+    n = ledger.Node.stated(RTX, disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    assert n.rates(codec.DEFAULT) == line.Rates(RTX.squarings_per_s["p1024"], codec.DEFAULT.encode_squarings, 4.4e9,
+                                                5e10, RTX.chip_bytes, 4.4e9, RTX.host.link_window_bytes)
+    with pytest.raises(ValueError, match="no squaring ceiling at p512"):
+        dataclasses.replace(n, squarings_per_s={"p1024": 1.0}).rates(codec.Codec(codec.P512, 2, False))
+
+
+def _site(*skus: str) -> Site:
+    """A site of one host, node0, holding a device of each card in `skus`, each with its device memory, and the host's
+    DRAM; a second host, node1, with DRAM alone."""
+    sheets = {sku: Sheet.of_file(load(sku)) for sku in dict.fromkeys(skus)}
+    devices = [x for i, sku in enumerate(skus) for x in (
+        Loc(f"gpu{i}", "device", "node0", sheet=sheets[sku].digest()),
+        Loc(f"hbm{i}", "memory", f"gpu{i}", tier="hbm", bytes=sheets[sku].mem))]
+    return Site.of_log([Entry("", tuple(sheets.values()), (
+        Loc("site0", "site"), Loc("node0", "host", "site0"), *devices,
+        Loc("dram0", "memory", "node0", tier="dram", bytes=1 << 40),
+        Loc("node1", "host", "site0"), Loc("dram1", "memory", "node1", tier="dram", bytes=1 << 40)))])
+
+
+def test_the_node_is_the_sites_node_h_read_off_its_devices_cards() -> None:
+    """`Node.of_site` reads host h's node off the Site (`Site.node h`): a device of the GPU card each device's sheet
+    names, on the host card named, so eight RTX PRO 6000s registered under node0 on two Xeon 6776Ps are a vy-nebius
+    node.  A host with no device, an id the Site registers as no host, and a card with a placeholder figure the
+    caller doesn't name are each refused."""
+    devices, host, open_ = hardware.VY_NEBIUS
+    site = _site(*devices)
+    assert ledger.figures(site, "node0", host, open_) == RTX
+    assert ledger.Node.of_site(site, "node0", host, open_, disk_bytes_per_s=4.4e9) == ledger.Node.stated(
+        RTX, disk_bytes_per_s=4.4e9)
+    with pytest.raises(ValueError, match="holds no device"):
+        ledger.figures(site, "node1", host, open_)
+    for h in ("gpu0", "site0", "node9"):
+        with pytest.raises(ValueError, match="is no host the Site registers"):
+            ledger.figures(site, h, host, open_)
+    with pytest.raises(ValueError, match="xeon-6776p-2s memory.bandwidth is a placeholder"):
+        ledger.figures(site, "node0", host)
+    with pytest.raises(ValueError, match="h200-sxm-141gb memory.read is a placeholder"):
+        ledger.figures(_site("rtx-pro-6000-server", "h200-sxm-141gb"), "node0", host, open_)
+    with pytest.raises(ValueError, match="placeholder"):
+        ledger.Node.of_site(_site("h200-sxm-141gb"), "node0", "xeon-platinum-8468-2s")
+
+
+def test_the_lines_reading_of_the_site_is_the_ledgers_on_the_cards() -> None:
+    """The line's inputs off the Site (`line.node_run_json`, which the Lean's `RemoteAudit.Line.ofSite` is held to)
+    are the ledger's on the vy-nebius cards: `Node.of_site`'s rates at the record's codec and its S_chip, and as its
+    memory the HBM and DRAM node0 registers, from a checked log that carries each card's figures beside its sheet."""
+    devices, host, open_ = hardware.VY_NEBIUS
+    sheets = {sku: Sheet.of_file(load(sku)) for sku in dict.fromkeys(devices)}
+    locs = (Loc("site0", "site"), Loc("node0", "host", "site0"), *(x for i, sku in enumerate(devices) for x in (
+        Loc(f"gpu{i}", "device", "node0", sheet=sheets[sku].digest()),
+        Loc(f"hbm{i}", "memory", f"gpu{i}", tier="hbm", bytes=sheets[sku].mem))),
+        Loc("dram0", "memory", "node0", tier="dram", bytes=1 << 40))
+    reg = Registration("remote")
+    reg = reg.append(reg.entry(tuple(sheets.values()), locs))
+    auditor = Auditor.of_files([load(sku) for sku in sheets])
+    figures = hardware.node(devices, host, open_)
+    n = ledger.Node.of_site(check(reg, auditor), "node0", host, open_, disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    rates = n.rates(codec.DEFAULT)
+    j = {"log": reg.to_json(), "auditor": auditor.to_json(), "host": "node0",
+         "gpus": [{"sku": d.sku, "chip_bytes": d.chip_bytes,
+                   "squarings_per_s": {w: line.text(line.number(q)) for w, q in d.squarings_per_s.items()}}
+                  for d in figures.devices],
+         "host_card": {"chip_bytes": figures.host.chip_bytes, "link_window_bytes": figures.host.link_window_bytes},
+         "stated": {"field": codec.DEFAULT.field.name, "encode_squarings": codec.DEFAULT.encode_squarings,
+                    "disk_bytes_per_s": line.text(line.number(4.4e9)), "link_bytes_per_s": line.text(line.number(5e10)),
+                    "disk_burst_bytes": None, "link_burst_bytes": None}}
+    assert line.node_run_json(j) == {"chip_bytes": n.chip_bytes, "node_bytes": 8 * sheets[devices[0]].mem + (1 << 40),
+                                     "rates": rates.to_json()}
 
 
 def test_the_sketch_charges_the_outside_factor_the_node_states(store) -> None:
@@ -331,13 +410,13 @@ def test_the_sketch_charges_the_outside_factor_the_node_states(store) -> None:
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
-    assert n.sketch_outside == ledger.Node.stated().sketch_outside == timing.SKETCH_OUTSIDE == 2 ** 20
+    assert n.sketch_outside == ledger.Node.stated(RTX).sketch_outside == timing.SKETCH_OUTSIDE == 2 ** 20
     assert n.to_json()["sketch_outside"] == 2 ** 20
     c = ledger.compressions(r, n)
     assert c == math.ceil(n.sha512_per_s * r.span_ns / 1e9)
     assert ledger.sketch(r, n) == float(timing.sketch_failure(2 ** 20 * c, r.passes, r.rows, blocks=r.blocks,
                                                               outside=1))
-    assert ledger.Node.stated(sketch_outside=1).to_json()["sketch_outside"] == 1
+    assert ledger.Node.stated(RTX, sketch_outside=1).to_json()["sketch_outside"] == 1
     near = dataclasses.replace(n, sketch_outside=1)
     assert ledger.sketch(r, near) == float(timing.sketch_failure(c, r.passes, r.rows, blocks=r.blocks, outside=1))
     assert ledger.memory(r, n)[0].delta - ledger.memory(r, near)[0].delta == pytest.approx(
@@ -348,17 +427,17 @@ def test_the_sketch_charges_the_outside_factor_the_node_states(store) -> None:
 
 
 def test_the_node_carries_a_write_ceiling_per_tier() -> None:
-    """Beside its read ceilings a node has one GPU's and the host DRAM's write ceilings, `timing`'s in `Node.stated`
-    and by default, each a positive finite rate, and no DPU's."""
-    for n in (ledger.Node.stated(), ledger.Node.stated(reported_read_bytes_per_s=2e13), node()):
+    """Beside its read ceilings a node has one GPU's and the host DRAM's write ceilings, its cards' bandwidth ceilings
+    in `Node.stated`, each a positive finite rate, and no DPU's."""
+    for n in (ledger.Node.stated(RTX), ledger.Node.stated(RTX, reported_read_bytes_per_s=2e13), node()):
         assert (n.gpu_write_bytes_per_s, n.host_write_bytes_per_s) == (
-            timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S) == (1.597e12, 819.2e9)
-        assert (n.to_json()["gpu_write_bytes_per_s"], n.to_json()["host_write_bytes_per_s"]) == (1.597e12, 819.2e9)
+            RTX.device_write_bytes_per_s, RTX.host_write_bytes_per_s) == (1.597568e12, 819.2e9)
+        assert (n.to_json()["gpu_write_bytes_per_s"], n.to_json()["host_write_bytes_per_s"]) == (1.597568e12, 819.2e9)
     assert not [f.name for f in dataclasses.fields(ledger.Node) if "dpu" in f.name]
     for name in ("gpu_write_bytes_per_s", "host_write_bytes_per_s"):
         for bad in (0.0, -1.0, math.inf):
             with pytest.raises(ValueError, match=name):
-                dataclasses.replace(ledger.Node.stated(), **{name: bad})
+                dataclasses.replace(ledger.Node.stated(RTX), **{name: bad})
 
 
 def test_wrong_receipts_fill_the_groups_at_their_rates(store) -> None:

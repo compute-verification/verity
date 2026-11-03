@@ -102,8 +102,10 @@ from fractions import Fraction
 from typing import Any, Protocol
 
 from verity.core.protocols.profile import WINDOW_DELTA, IntegrityProfile, Subset
+from verity.core.site import Site
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
 from verity.ml.commitments import verify_opening
+from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.ml.randomness import derive, frame
 
 from . import codec, coins, receipts
@@ -123,13 +125,13 @@ REGISTRATION_DOMAIN = b"verity/remote-bandwidth/registration/v0\0"
 TILE_DOMAIN = b"verity/remote-bandwidth/stub-tile/v0\0"
 PAYLOAD_SCHEMA = receipts.SCHEMA
 NONCE_BYTES = 32
-NODE_BYTES = 64
+NODE_BYTES = _DIGEST_BYTES["sha512"]
 QUERIES_LOG2 = 64
 SLACK_LOG2 = 67
 """AuditRO's slack, the bits a pass is charged beyond `named_bits`: its last term C(q, k)/2^λ is then at most 2^-67 a
 pass, which γ's error and the memory line's δ add once a pass.  Up to 2^17 passes they add at most 2^-50, 2^-10 of
 `DELTA`: an hour, six times the stated 10-minute horizon, of the node's 41.2 ms passes over 130,023,424 blocks
-(532.6 GB, eight GPUs' 62 GiB shards) at `timing.READ_BYTES_PER_S` is 87,326 passes."""
+(532.6 GB, eight GPUs' 62 GiB shards) at an RTX PRO 6000 node's R measured (`verity.hardware.node`) is 87,326 passes."""
 WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
 DELTA = float(WINDOW_DELTA)
@@ -196,10 +198,9 @@ class Pace:
 @dataclass(frozen=True, slots=True)
 class Params:
     """A session's parameters: the store's size `N`, the allowance `A` from a window's boundary message to its roots'
-    deadline, the windows `W`, the openings `s` per window at `delta` (33,273 at 2^-40 by default, 555 a second of the
-    stated window), the fewest passes a window may certify, the stated window `T` (`window_ns`, 60 s by default: no
-    boundary message leaves sooner after its window's challenge), the store's codec, receipt kind, whether its
-    receipts bind z, its block layout and its sketch rows (None for the kind's default, `receipts.sketch_rows`), the
+    deadline, the windows `W`, the openings `s` per window at `delta` (`SAMPLES` at `DELTA` by default), the fewest
+    passes a window may certify, the stated window `T` (`window_ns`, 60 s by default: no boundary message leaves sooner
+    after its window's challenge), the store's codec, receipt kind, whether its receipts bind z, its block layout and its sketch rows (None for the kind's default, `receipts.sketch_rows`), the
     registration's, the lifetime cap L on an appended block, in windows (None: `lifetime_windows` of the stated
     window, `LIFETIME_NS`), and whether the prover defers an
     appended block's residency to its encode (`deferred`, memory-map/v1's deferred residency), which needs L ≥ 2: a
@@ -283,6 +284,19 @@ def _node(node: bytes) -> bytes:
     if type(node) is not bytes or not 1 <= len(node) <= NODE_BYTES:
         raise ValueError(f"a node's id is 1 to {NODE_BYTES} bytes")
     return node
+
+
+def host_of(site: Site, node: bytes) -> str:
+    """The host a node's id names: its bytes read as UTF-8 the id of a location `site` registers as a host
+    (`Site.kind`); ValueError for any other id.  The verifier registers a store only for such a node
+    (`Registry.register`, `p2.register`), as `RemoteAudit.hostOf` does."""
+    try:
+        h = _node(node).decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("a node's id is a host's id in UTF-8") from None
+    if site.kind(h) != "host":
+        raise ValueError(f"{h} is no host the Site registers")
+    return h
 
 
 def _bind(bind: object) -> bool:
@@ -1401,11 +1415,11 @@ def _outcomes(value: object) -> list[str]:
 
 
 class Registry:
-    """The verifier's registrations, at most one live a node.  `register` draws a codec seed
-    (`register`) only for a node with none live: a second while one is live is refused (`RegistryError`) and counted
-    (`refused`), and draws nothing, so a retry never redraws.  A registration ends only when the verifier closes it
-    (`close`), which counts each of its sessions as it stands: accepted, the failure that rejected it, or `UNENDED`,
-    counted as failed.  So a failed session stays on its registration's record, and every codec seed a node has been
+    """The verifier's registrations, at most one live a node, each of a host the Site registers (`host_of`).
+    `register` draws a codec seed (`register`) only for a node with none live: a second while one is live is
+    refused (`RegistryError`) and counted (`refused`), and draws nothing, so a retry never redraws.  A registration
+    ends only when the verifier closes it (`close`), which counts each of its sessions as it stands: accepted, the
+    failure that rejected it, or `UNENDED`, counted as failed.  So a failed session stays on its registration's record, and every codec seed a node has been
     given is in `closed` or live: `drawn(node)` is R, what an advice form charges as log₂ R.  `to_json` and `from_json`
     keep it across the verifier's processes (never the verifier's secret); a registration read back is live, closable,
     and runs no session: its sessions' outcomes are as they stood."""
@@ -1426,11 +1440,13 @@ class Registry:
         return sum(c.node == node for c in self.closed) + (node in self._live)
 
     def register(self, source: bytes, node: bytes, blocks: int, payload_root: bytes, codec: Codec = codec.DEFAULT,
-                 receipt: str = receipts.DEFAULT, **kw) -> Registration:
-        """`register`'s draw for a node with no live registration, which it makes live; refused, and counted, for one
-        with.  One that would bind PoUW's tile outputs (`bind`) draws nothing either (ValueError): the verifier's
-        definition, `RemoteAudit.Registry.register`, covers receipts of a block alone and refuses it."""
+                 receipt: str = receipts.DEFAULT, *, site: Site, **kw) -> Registration:
+        """`register`'s draw for a node `site` registers as a host (`host_of`, ValueError for any other) with no live
+        registration, which it makes live; refused, and counted, for one with.  One that would bind PoUW's tile
+        outputs (`bind`) draws nothing either (ValueError): the verifier's definition, `RemoteAudit.Registry.register`,
+        covers receipts of a block alone and refuses it."""
         node = _node(node)
+        host_of(site, node)
         if node in self._live:
             self.refused[node] = self.refused.get(node, 0) + 1
             raise RegistryError(f"node {node.hex()} has a live registration, {self._live[node].digest.hex()[:16]}…: a "

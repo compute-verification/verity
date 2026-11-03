@@ -256,9 +256,10 @@ def refused() -> dict:
     registry after it."""
     registry = audit.Registry()
     reg = M.Run().store.registration
-    registry.register(M.SOURCE, reg.node, reg.blocks, reg.payload_root, reg.codec, nonce=bytes(32))
+    hosts = M.site_of(M.site_json(reg.node))
+    registry.register(M.SOURCE, reg.node, reg.blocks, reg.payload_root, reg.codec, nonce=bytes(32), site=hosts)
     with pytest.raises(audit.RegistryError) as e:
-        registry.register(M.SOURCE, reg.node, reg.blocks, reg.payload_root, reg.codec, nonce=bytes(32))
+        registry.register(M.SOURCE, reg.node, reg.blocks, reg.payload_root, reg.codec, nonce=bytes(32), site=hosts)
     return {"schema": "verity/remote-session/verifier/v0", "refused": str(e.value), "registry": registry.to_json()}
 
 

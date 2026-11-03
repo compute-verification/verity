@@ -1,8 +1,10 @@
 # The NVIDIA RTX PRO 6000 Blackwell Server Edition: the one source of its numbers (verity/hardware/README.md).
 # Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU and firmware exceeds it, what the
 # model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
-# (neither, open). Per-SM rates are a SM-clock's. Security/Definitions/Core/Accel/Sm120.lean is held to this file.
+# (neither, open). Per-SM rates are a SM-clock's. Security/Definitions/Core/Accel/Sm120.lean is held to this file. The
+# host the card sits in is its own card (xeon-6776p-2s.toml on our node).
 
+kind = "gpu"
 sku = "rtx-pro-6000-server"
 name = "NVIDIA RTX PRO 6000 Blackwell Server Edition"
 die = "GB202"
@@ -26,6 +28,7 @@ reg_extra = { value = 3371, unit = "word/SM", mark = "ceiling", source = "the un
 smem = { value = 131072, unit = "B/SM", mark = "ceiling", source = "whitepaper v1.1: 128 KB of L1 and shared memory an SM" }
 l2 = { value = 134217728, unit = "B", mark = "ceiling", source = "whitepaper v1.1, Table 4: L2 128 MB, taken as 128 MiB" }
 dram = { value = 103079215104, unit = "B", mark = "ceiling", source = "product page, 'GPU Memory 96 GB GDDR7', taken as 96 GiB" }
+chip = { value = 263163904, unit = "B", mark = "ceiling", source = "all of the card's on-chip storage, S_chip's device term: 188 SMs' registers, L1 and shared memory, L1.5, instruction caches, uniform registers and warp state, the L2, the TLB and 1 MiB of buffers (chip.cu's enumeration, runs art:2b6cac05 to art:90de6479)" }
 
 # The resources' rates, each a SM-clock (the Lean's rho is SMs x this x the SM clock).
 [rate]
@@ -43,6 +46,18 @@ l2 = { value = 5, unit = "word/SM-clock", mark = "measurement", source = "measur
 bus = { value = 512, unit = "bit", mark = "ceiling", source = "product page: 512-bit GDDR7" }
 transfers = { value = 2, unit = "transfer/clock", mark = "ceiling", source = "the product page's 1597 GB/s over 512 bits is 24.96 Gb/s a pin: two transfers a clock of the 12481 MHz nvidia-smi reports" }
 bandwidth = { value = 1.597568e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8; the product page's 'Memory Bandwidth 1597 GB/s'" }
+read = { value = 1.539e12, unit = "B/s", mark = "measurement", source = "the fastest bare read of an encoded store measured on the card, 1,539.26 GB/s in the honest remote session of 14 Oct (the prover's art:661a9041cf81), rounded down; ra-word-codec's 1.488e12 (#1840, art:e9e71daec22d) is a slower kernel's. memory.bandwidth bounds every write too: labels written at 1,528.98 GB/s by TMA bulk stores at most (art:c79e348a98dd)" }
+
+# The card's SHA-512 compressions a second.
+[hash]
+sha512 = { value = 7.0e9, unit = "compression/s", mark = "measurement", source = "block-sha512's 33 compressions a block over 2,097,152 blocks in 9.87 ms (#1916, art:dea3a309)" }
+
+# The squaring ceiling at each codec width (the remote audit's Assumption 5): one card's share of a node of eight with
+# its host, s x (1 + h) times the reference, s the card's best form over the reference and h the host's 128 cores at
+# their IFMA bound over eight reference cards, 12.5%.
+[squaring]
+p1024 = { value = 2.50333e10, unit = "squaring/s", mark = "ceiling", source = "1.67 x kv.cu's reference 1.499e10: s = 1.364 x 2463/2262, about 1.485, for kv.cu's FOLD 6 at ILP 1 (2.044e10 a second) less its MOV and SEL, modeled and not built, and s x (1 + h) = 1.67; below Karatsuba's own model (s = 1.68, 1.885 with the host)" }
+p512 = { value = 8.03871e10, unit = "squaring/s", mark = "ceiling", source = "1.567 x codec-mix's reference 5.13e10, the host's h = 12.5% as at p1024" }
 
 # The tensor units a MAC of each operand format uses (rate.tensor counts s8 MACs).
 [weight]
@@ -63,15 +78,3 @@ f64 = { value = 32, unit = "tensor unit/MAC", mark = "measurement", source = "no
 [model]
 exact = { value = 31, unit = "bit", mark = "ceiling", source = "PTX ISA 9.0 mma: integer MMAs accumulate in .s32, so a dot is exact at most while |C| + sum |a*b| < 2^31 (P1, Card.Exact); captured exact within it (models.BLACKWELL_SM120_S8_M16N8K32, _WRAP)" }
 instruction_bytes = { value = 16, unit = "B/instruction", mark = "ceiling", source = "an instruction is 128 bits from Volta on (CUDA Binary Utilities 12.9), so code fits in store.dram / 16 instructions" }
-
-# The node's host CPUs (benchmarks/rho's host_ops): the server's, not the card's.
-[host]
-cpu = "Intel Xeon 6776P (Granite Rapids)"
-source = "lscpu on an RTX PRO 6000 node, art:1f22137354a4: the VM sees 2 x 48 cores of the physical 2 x 64"
-sockets = { value = 2, unit = "socket", mark = "measurement", source = "lscpu on an RTX PRO 6000 node's VM, art:1f22137354a4; the server's own socket count is not attested" }
-cores = { value = 64, unit = "core/socket", mark = "ceiling", source = "Intel ARK 243691 (Xeon 6776P: 64 cores)" }
-amx = { value = 1024, unit = "INT8 MAC/cycle/core", mark = "ceiling", source = "Intel Optimization Reference Manual 248966-049 section 20.3 Table 20-2 (TDPBSSD, 16,384 MACs, 16-cycle throughput); measured 1,024.1, art:1f22137354a4" }
-turbo = { value = 3.9, unit = "GHz", mark = "ceiling", source = "Intel ARK 243691: max turbo 3.9 GHz (all-core turbo 3.6); Intel publishes no AMX clock, so the ceiling takes max turbo on every core" }
-priority_turbo = { value = 4.6, unit = "GHz", mark = "ceiling", source = "Intel ARK 243691: Priority Core Turbo 4.6 GHz, which the operator may enable in the BIOS" }
-priority_cores = { value = 8, unit = "core/socket", mark = "ceiling", source = "Intel ARK 243691: Priority Core Turbo on at most 8 cores a socket" }
-ops = { value = 1.0452992e15, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x amx x sockets x (priority_cores x priority_turbo + (cores - priority_cores) x turbo), 1.0453e15 (1.0224e15 without Priority Core Turbo)" }
