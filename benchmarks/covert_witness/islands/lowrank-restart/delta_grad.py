@@ -23,15 +23,17 @@ outgrows them; E is the store itself as CWQUAN1 delta entries) or `bf16` (stocha
 E codes Δ once at `--e-bits`). `--support P` trains only a fixed share P of each matrix, drawn from `--seed` (`Support`:
 entries or whole rows), so the messages, the store and an elementwise optimizer's state hold only those entries (Adafactor
 keeps its row and column factors); E codes the scattered Δ once at `--e-bits`. `--lora R` trains each target as
-W + B A instead (B zero, A drawn from `--seed`): a block's message is its factor gradients Bᵀ G and G Aᵀ, computed from
-its own G, the factors are the optimizer's tensors and the store's, and E is CWLORA2 at `--e-bits` (4 or 8).
+W + B A instead (B zero, A drawn from `--seed`), as a forward hook adding B (A x) to the frozen W x, so no weight
+gradient of W is formed: a block's message is its factor gradients, the factors are the optimizer's tensors and the
+store's, and E is CWLORA2 at `--e-bits` (4 or 8).
 `--targets gains` makes the norm gains of `--blocks` and the final norm the trained set instead (elementwise: `--opt
 sign` or `adamw`), coded, reduced and stored like the matrices, for a state small enough for Fit at the default dial
 (`gains:mlp_norm+norm --blocks 5-5`, 1,024 values on s-t20, is Fit at 8 KiB).
 Otherwise the trainable set's norm gains train by AdamW in fp32 with fp32 messages (counted). Every
 record's notes carry the accounting: n, the message, state and store bits, Δ_grad and Δ_t in bits (`delta_grad`, in the
-keys the other directions use; Δ_grad prices each message entry at te_core's 32-bit accumulator, whatever its coded
-width, which `coded_delta_grad_bits` keeps), and Fit's three clauses (compute Δ + sτ ≤ k with Δ = 8|E|, reduction 2 Δ_grad ≤ k,
+keys the other directions use; grad_bits is one partial message at the width a block passes, which the coordinator's
+04:41Z ruling prices when the coding runs in the circuit and the trace shows it: messages wait between blocks, and a
+coded momentum between steps, as torch.bool bit planes and f16 scales), and Fit's three clauses (compute Δ + sτ ≤ k with Δ = 8|E|, reduction 2 Δ_grad ≤ k,
 update application Δ_t + Δ_grad ≤ k) at k = 8 KiB (the console's default), 10 kB, 1 MB and 10 MB, with sτ = a block's
 tokens × ⌈log₂ V⌉ bits. Fit's blocks are about 1,250 training tokens at the console's default: `--leaf 1` (1,024).
 
@@ -66,9 +68,6 @@ KS = {"8KiB": 2 ** 16, "10kB": 8 * 10 ** 4, "1MB": 8 * 10 ** 6, "10MB": 8 * 10 *
 CODE_FLOPS = 16
 #: a sticky store scale, when a value outgrows it, becomes this × its group's absmax (so it is rarely re-fit)
 STICKY_HEADROOM = 1.125
-#: te_core 4.x's capture prices Δ_grad's gradient cut at the accumulator's width, 32 bits an element at least, so a
-#: coded message counts at 32 bits an entry in `delta_grad_bits` (its coded width is `coded_message_bits`)
-ACCUMULATOR_BITS = 32
 
 
 # ---- codes ------------------------------------------------------------------------------------------------------------
@@ -128,26 +127,43 @@ class Code:
         return lo + (u < p).long(), s
 
     def values(self, codes: torch.Tensor, s: torch.Tensor, shape) -> torch.Tensor:
-        return (self.grid[codes] * s.float()[:, None]).reshape(shape)
+        return (self.grid[codes.long()] * s.float()[:, None]).reshape(shape)
+
+    def pack(self, x: torch.Tensor) -> tuple:
+        """x as it passes between blocks: `bits` bit planes (torch.bool, so a trace prices each at one bit an entry) and
+        the f16 scales, coded in the rotated basis with `rotate`."""
+        y = x.float().reshape(-1, self.group) @ self.rot if self.rot is not None else x
+        codes, s = self.encode(y)
+        return tuple(((codes >> b) & 1).bool() for b in range(self.bits)), s, tuple(x.shape)
+
+    def unpack(self, payload: tuple) -> torch.Tensor:
+        planes, s, shape = payload
+        codes = sum(p.long() << b for b, p in enumerate(planes))
+        y = self.values(codes, s, codes.shape)
+        return (y @ self.rot.T).reshape(shape) if self.rot is not None else y.reshape(shape)
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        if self.rot is None:
-            return self.values(*self.encode(x), x.shape)
-        y = x.float().reshape(-1, self.group) @ self.rot
-        return (self.values(*self.encode(y), y.shape) @ self.rot.T).reshape(x.shape)
+        return self.unpack(self.pack(x))
 
 
 class Vote:
-    """One bit an entry, no scale: the sign, a zero drawn ±1 at random (a majority vote's tie)."""
+    """One bit an entry, no scale: the sign as a torch.bool, a zero drawn ±1 at random (a majority vote's tie)."""
 
     bits = 1
 
     def __init__(self, gen: torch.Generator):
         self.gen = gen
 
+    def pack(self, x: torch.Tensor) -> torch.Tensor:
+        coin = torch.randint(0, 2, x.shape, generator=self.gen, device=x.device, dtype=torch.int8).bool()
+        return torch.where(x == 0, coin, x > 0)
+
+    @staticmethod
+    def unpack(b: torch.Tensor) -> torch.Tensor:
+        return torch.where(b, 1.0, -1.0)
+
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        coin = torch.randint(0, 2, x.shape, generator=self.gen, device=x.device, dtype=torch.int8).float() * 2 - 1
-        return torch.where(x == 0, coin, x.float().sign())
+        return self.unpack(self.pack(x))
 
 
 def sr_bf16(x: torch.Tensor, gen: torch.Generator) -> torch.Tensor:
@@ -170,7 +186,7 @@ class Store:
         else:
             self.code = Code(int(kind[1:]), group, gen)
             zero = 0 if self.code.bits == 1 else self.code.n_grid // 2
-            self.codes = torch.full((n // group, group), zero, dtype=torch.long, device=DEV)
+            self.codes = torch.full((n // group, group), zero, dtype=torch.uint8, device=DEV)
             self.scales = torch.zeros(n // group, dtype=torch.float16, device=DEV)
 
     def value(self) -> torch.Tensor:
@@ -185,9 +201,11 @@ class Store:
         elif self.sticky:
             need = new.float().reshape(-1, self.code.group).abs().amax(1)
             s = torch.where(need > self.scales.float(), (need * STICKY_HEADROOM).to(torch.float16), self.scales)
-            self.codes, self.scales = self.code.encode_at(new, s)
+            codes, self.scales = self.code.encode_at(new, s)
+            self.codes = codes.to(torch.uint8)
         else:
-            self.codes, self.scales = self.code.encode(new)
+            codes, self.scales = self.code.encode(new)
+            self.codes = codes.to(torch.uint8)
 
     def entry(self, theta_w: torch.Tensor) -> dict:
         if self.kind == "bf16" and self.e_code is None:
@@ -205,37 +223,42 @@ class Tree:
     `heap`: node i is a block whose children are 2i+1 and 2i+2; it sends code(its gradient + its children's messages),
     so a node reads two messages (2 Δ_grad) beside its tokens, and the root's sum, the optimizer's, isn't coded.
     `leaves`: the blocks are leaves of a binary tree whose inner nodes hold no tokens; every sum is coded, the root's
-    too. A `Vote` code makes either a majority vote: a block's own gradient enters as its sign."""
+    too. A `Vote` code makes either a majority vote: a block's own gradient enters as its sign. A message waits between
+    blocks in its packed form (`Code.pack`, `Vote.pack`) and is unpacked by the block that sums it, so the step's trace
+    holds the coded width a block passes."""
 
     def __init__(self, code, shape: str, n_blocks: int):
         self.code, self.shape, self.n, self.i = code, shape, n_blocks, 0
         self.stack, self.pending, self.codings, self.out = [], {}, 0, None
 
-    def _c(self, g: dict) -> dict:
+    def _pack(self, g: dict) -> dict:
         if self.code is None:
             return g
         self.codings += 1
-        return {n: self.code(t) for n, t in g.items()}
+        return {n: self.code.pack(t) for n, t in g.items()}
+
+    def _unpack(self, m: dict) -> dict:
+        return m if self.code is None else {n: self.code.unpack(t) for n, t in m.items()}
 
     @staticmethod
     def _sum(*gs: dict) -> dict:
         return {n: sum(g[n] for g in gs) for n in gs[0]}
 
     def push(self, g: dict) -> None:
-        own = self._c(g) if isinstance(self.code, Vote) else g
         if self.shape == "heap":
+            own = self._unpack(self._pack(g)) if isinstance(self.code, Vote) else g
             j = self.n - 1 - self.i
-            kids = [self.pending.pop(k) for k in (2 * j + 1, 2 * j + 2) if k in self.pending]
+            kids = [self._unpack(self.pending.pop(k)) for k in (2 * j + 1, 2 * j + 2) if k in self.pending]
             total = self._sum(own, *kids)
             if j:
-                self.pending[j] = self._c(total)
+                self.pending[j] = self._pack(total)
             else:
                 self.out = total
         else:
-            node = (0, own if isinstance(self.code, Vote) else self._c(own))
+            node = (0, self._pack(g))
             while self.stack and self.stack[-1][0] == node[0]:
                 lvl, left = self.stack.pop()
-                node = (lvl + 1, self._c(self._sum(left, node[1])))
+                node = (lvl + 1, self._pack(self._sum(self._unpack(left), self._unpack(node[1]))))
             self.stack.append(node)
         self.i += 1
 
@@ -245,8 +268,8 @@ class Tree:
         while len(self.stack) > 1:
             _, right = self.stack.pop()
             lvl, left = self.stack.pop()
-            self.stack.append((lvl + 1, self._c(self._sum(left, right))))
-        return self.stack.pop()[1]
+            self.stack.append((lvl + 1, self._pack(self._sum(self._unpack(left), self._unpack(right)))))
+        return self._unpack(self.stack.pop()[1])
 
 
 class Support:
@@ -301,13 +324,18 @@ class Opt:
                 self.r[n] = torch.zeros(sh[0], device=DEV)
                 self.c[n] = torch.zeros(sh[1], device=DEV)
             elif mom_bits:
-                self.m[n] = torch.zeros((mom_rank, max(sh)) if mom_rank else sh, device=DEV)
+                self._set_m(n, torch.zeros((mom_rank, max(sh)) if mom_rank else sh, device=DEV))
+
+    def n_m(self) -> int:
+        """The momentum's entries (muon, sign)."""
+        return sum(self.mom_rank * max(sh) if self.mom_rank else math.prod(sh) for sh in self.shapes.values()) \
+            if self.mom_bits else 0
 
     def state_bits(self) -> int:
         if self.kind in ("muon", "sign"):
             if not self.mom_bits:
                 return 0
-            n_m = sum(t.numel() for t in self.m.values())
+            n_m = self.n_m()
             basis = sum(16 * min(sh) * self.mom_rank for sh in self.shapes.values())
             return basis + (32 * n_m if self.mom_bits >= 32 else n_m * self.mom_bits + 16 * (n_m // self.group))
         return 32 * sum(t.numel() for d in (self.m, self.v, self.r, self.c) for t in d.values())
@@ -315,10 +343,16 @@ class Opt:
     def tick(self) -> None:
         self.t += 1
 
+    def _m(self, n: str) -> torch.Tensor:
+        return self.mom_code.unpack(self.m[n]) if self.mom_code else self.m[n]
+
+    def _set_m(self, n: str, m: torch.Tensor) -> None:
+        """A coded momentum is kept between steps in its packed form (bit planes and scales), as a trace prices it."""
+        self.m[n] = self.mom_code.pack(m) if self.mom_code else m
+
     def _momentum(self, n: str, x: torch.Tensor, keep: float) -> torch.Tensor:
-        m = self.b1 * self.m[n] + keep * x
-        self.m[n] = self.mom_code(m) if self.mom_code else m
-        return self.m[n]
+        self._set_m(n, self.b1 * self._m(n) + keep * x)
+        return self._m(n)
 
     def step(self, n: str, g: torch.Tensor, lr: float) -> torch.Tensor:
         b1, b2, t = self.b1, self.b2, self.t
@@ -333,15 +367,14 @@ class Opt:
             self.c[n].mul_(b2).add_(g2.mean(0), alpha=1 - b2)
             r, c = self.r[n] / (1 - b2 ** t), self.c[n] / (1 - b2 ** t)
             u = g / torch.outer(r / r.mean(), c).sqrt()
-            return lr * u / max(1.0, float(u.pow(2).mean().sqrt()))
+            return lr * u / torch.clamp(u.pow(2).mean().sqrt(), min=1.0)
         if self.kind == "muon" and self.mom_rank:
             tall = g.shape[0] > g.shape[1]
             h = g.T if tall else g
             if (t - 1) % self.proj_every == 0:
                 p = torch.linalg.svd(h.float(), full_matrices=False)[0][:, :self.mom_rank]
                 if n in self.p:
-                    m = (p.T @ self.p[n].float()) @ self.m[n]
-                    self.m[n] = self.mom_code(m) if self.mom_code else m
+                    self._set_m(n, (p.T @ self.p[n].float()) @ self._m(n))
                 self.p[n] = p.bfloat16()
             p = self.p[n].float()
             m = self._momentum(n, p.T @ h, 1.0)
@@ -362,8 +395,7 @@ class Opt:
         if y is not None:
             p = torch.linalg.qr(y.float())[0]
             if n in self.p:
-                m = (p.T @ self.p[n].float()) @ self.m[n]
-                self.m[n] = self.mom_code(m) if self.mom_code else m
+                self._set_m(n, (p.T @ self.p[n].float()) @ self._m(n))
             self.p[n] = p.bfloat16()
         return out
 
@@ -371,12 +403,12 @@ class Opt:
         n = sum(math.prod(s) for s in shapes.values())
         mom = (2 + (self.code_flops if self.mom_code else 0)) * n if self.mom_bits else 0
         if self.kind == "muon" and self.msg_proj:
-            r, nm, k = self.mom_rank, sum(t.numel() for t in self.m.values()), self.proj_every
+            r, nm, k = self.mom_rank, self.n_m(), self.proj_every
             lift = sum(2 * r * math.prod(s) + ns_flops((r, max(s))) for s in shapes.values())
             redraw = sum(4 * min(s) * r * r + 2 * r * r * max(s) for s in shapes.values()) // k
             return lift + redraw + (3 + self.code_flops) * nm
         if self.kind == "muon" and self.mom_rank:
-            r, nm = self.mom_rank, sum(t.numel() for t in self.m.values())
+            r, nm = self.mom_rank, self.n_m()
             proj = sum(4 * r * math.prod(s) + 2 * min(s) * max(s) ** 2 // self.proj_every for s in shapes.values())
             return sum(ns_flops(s) for s in shapes.values()) + 2 * n + proj + (3 + self.code_flops) * nm
         if self.kind == "muon":
@@ -390,16 +422,14 @@ def accounting(a, shapes: dict, n_norm: int, opt: Opt, tau_bits: int) -> dict:
     """Formalism v2's training quantities for this run's configuration, in bits (`fit` adds Δ once E exists)."""
     n = sum(math.prod(s) for s in shapes.values())
     nm = sum(a.mom_rank * (max(s) + min(s)) for s in shapes.values()) if a.msg_proj else n
-    coded = 32 * nm if a.msg_bits >= 32 else nm if a.vote else nm * a.msg_bits + 16 * (nm // a.group)
-    coded += 32 * n_norm
-    msg = ACCUMULATOR_BITS * (nm + n_norm)
+    msg = 32 * nm if a.msg_bits >= 32 else nm if a.vote else nm * a.msg_bits + 16 * (nm // a.group)
+    msg += 32 * n_norm
     state = opt.state_bits() + 64 * n_norm
     store = 16 * n if a.store == "bf16" else n * int(a.store[1:]) + 16 * (n // a.group)
     store += 32 * n_norm
     s_tau = a.leaf * prepare.EVAL_CTX * tau_bits
     return {"n_matrix_entries": n, "n_message_entries": nm, "n_norm_entries": n_norm, "message_bits": msg,
-            "coded_message_bits": coded, "state_bits": state, "delta_grad_bits": msg + state,
-            "coded_delta_grad_bits": coded + state, "delta_t_bits": store, "tau_bits": tau_bits,
+            "state_bits": state, "delta_grad_bits": msg + state, "delta_t_bits": store, "tau_bits": tau_bits,
             "s_tau_bits": s_tau, "leaf_tokens": a.leaf * prepare.EVAL_CTX, "tree": a.tree}
 
 
@@ -532,8 +562,18 @@ def main() -> int:
         raise SystemExit(f"delta_grad: --group {a.group} doesn't divide every projected momentum's entries")
     if a.msg_proj and a.msg_bits < 32 and any(a.mom_rank * min(s) % a.group for s in opt_shapes.values()):
         raise SystemExit(f"delta_grad: --group {a.group} doesn't divide every range message's entries (R × short side)")
-    for n in targets + norms:
+    for n in ([] if lora else targets) + norms:
         params[n].requires_grad_(True)
+    factors = {}
+    for n in targets if lora else ():
+        fa = torch.zeros(trained[n + "#A"], device=DEV, requires_grad=True)
+        fb = torch.zeros(trained[n + "#B"], device=DEV, requires_grad=True)
+        factors[n] = (fa, fb)
+
+        def adapter(mod, inp, out, fa=fa, fb=fb):
+            return out + F.linear(F.linear(inp[0], fa), fb)
+
+        net.inner.get_submodule(n.removesuffix(".weight")).register_forward_hook(adapter)
     nopt = torch.optim.AdamW([params[n] for n in norms], lr=a.norm_lr, betas=(0.9, 0.95), weight_decay=0.0) \
         if norms else None
     tau_bits = math.ceil(math.log2(rec["config"].get("vocab", VOCAB)))
@@ -553,14 +593,13 @@ def main() -> int:
 
     tokens = a.batch * prepare.EVAL_CTX
     leaves = a.batch // a.leaf
-    trainable = {"full": sorted(targets + norms)}
+    trainable = {"full": sorted(norms), "adapters": {n: a.lora for n in targets}} if lora \
+        else {"full": sorted(targets + norms)}
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     n_entries = acct["n_message_entries"]
     codings = 0 if msg is None else (leaves - 1 + (leaves if a.vote else 0)) if a.tree == "heap" else 2 * leaves - 1
     code_flops = msg.entry_flops if isinstance(msg, Code) else CODE_FLOPS
     extra = code_flops * n_entries * (codings + 1) + opt.flops(opt_shapes)
-    if lora:
-        extra += sum(2 * a.lora * math.prod(shapes[n]) for n in targets) * (2 * leaves + 1)
     if a.msg_proj:
         extra += sum(2 * a.mom_rank * math.prod(shapes[n]) for n in targets) * leaves * (a.proj_every + 1) // a.proj_every
     n_steps = int(a.budget_fraction * prepare.TRAIN_FLOP_BUDGET // (per_step + extra))
@@ -595,9 +634,9 @@ def main() -> int:
         if not lora:
             return {n: sup[n].gather(params[n].grad) if sparse else params[n].grad for n in targets}
         out = {}
-        for n in targets:
-            gw = params[n].grad.float()
-            out[n + "#A"], out[n + "#B"] = fac[n + "#B"].T @ gw, gw @ fac[n + "#A"].T
+        for n, (fa, fb) in factors.items():
+            out[n + "#A"], out[n + "#B"] = fa.grad, fb.grad
+            fa.grad = fb.grad = None
         return out
 
     steps, log, losses, used = [], [], [], set()
@@ -606,11 +645,21 @@ def main() -> int:
     def bucket(k: int) -> int:
         return math.ceil(k * CHECKPOINTS / n_steps)
 
+    def load_weights() -> None:
+        """θ′ = θ + Δ from the store, at the start of each step, so the store is the one copy of θ′ a step carries (LoRA:
+        the factors the adapters' hooks read, the weights staying θ)."""
+        with torch.no_grad():
+            for n, (fa, fb) in factors.items():
+                fa.copy_(stores[n + "#A"].value())
+                fb.copy_(stores[n + "#B"].value())
+            for n in [] if lora else targets:
+                params[n].data.copy_((theta_dev[n].float() + delta(n)).to(theta_dev[n].dtype))
+
     for step in range(n_steps):
         frac = schedule(step, n_steps, a.warmup)
         rows = data.next(a.batch)
+        load_weights()
         tree, total = Tree(msg, a.tree, leaves), torch.zeros((), device=DEV)
-        fac = {k: st.value() for k, st in stores.items()} if lora else {}
         basis, omega = {}, {}
         if a.msg_proj:
             basis = {n: opt.p[n].float() for n in targets if n in opt.p}
@@ -634,7 +683,7 @@ def main() -> int:
             if a.opt == "adamw" and a.clip:
                 norm = torch.sqrt(sum(t.pow(2).sum() for t in g.values()) +
                                   sum(params[n].grad.pow(2).sum() for n in norms))
-                f = min(1.0, a.clip / (float(norm) + 1e-6))
+                f = torch.clamp(a.clip / (norm + 1e-6), max=1.0)
                 g = {n: t * f for n, t in g.items()}
                 for n in norms:
                     params[n].grad.mul_(f)
@@ -650,8 +699,6 @@ def main() -> int:
                 else:
                     s = opt.step(k, g[k], a.lr * frac)
                 stores[k].add_(-s)
-            for n in targets:
-                params[n].data.copy_((theta_dev[n].float() + delta(n)).to(theta_dev[n].dtype))
         if nopt:
             for grp in nopt.param_groups:
                 grp["lr"] = a.norm_lr * frac
@@ -669,6 +716,7 @@ def main() -> int:
             encode()
             used.add(b)
 
+    load_weights()
     blob = encode()
     model = prepare.decode(theta, blob)
     changed = sorted(n for n in theta if not prepare.same_bits(model[n], theta[n]))
