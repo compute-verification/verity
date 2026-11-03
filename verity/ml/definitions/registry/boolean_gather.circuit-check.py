@@ -13,10 +13,10 @@ def _boolean_gather_roots() -> list[Any]:
     `circuit-check --all`, and its tests pin it and hold it to its word (`integrations/vllm/tests/program/test_boolean_gather.py`).
     The bf16 widening (`verity.ml.circuits.ops.boolean.cast`) is static-free.
 
-    The chunked gather at V = 100 in V-chunks of at most 40 (three, 34, 33 and 33 words: its split, both widths and the
-    three-way select), and the levels of the training vocabulary's at `W_MAX` that it doesn't reach: its split, the 576-word
-    partial chunk and 25 chunk words of each 25,152-word V-chunk, and the two-way select. The V-chunks' whole chunks are V =
-    1100's, and the gathers themselves, 2.4M gates a V-chunk, are held to their word by the same tests."""
+    The chunked gather at V = 100 in V-chunks of at most 40 (three, 34, 33 and 33 words: its offsets, both widths and the
+    three-word XOR), and the levels of the training vocabulary's at `W_MAX` that it doesn't reach: its offsets, the 576-word
+    partial chunk and 25 chunk words of each 25,152-word V-chunk, and the two-word XOR with the fill. The V-chunks' whole
+    chunks are V = 1100's, and the gathers themselves, 2.4M gates a V-chunk, are held to their word by the same tests."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_gather as BGA
 
@@ -28,8 +28,8 @@ def _boolean_gather_roots() -> list[Any]:
         bind(BGA.gather_index(128, 10, "F32")),
         bind(BGA.gather_index(50, 22, "F32")),
         bind(BGA.GatherF32Chunked, V=100, W=40),
-        bind(BGA.GatherChunkSplit, V=50304, W=BGA.W_MAX),
+        bind(BGA.GatherChunkOffsets, V=50304, W=BGA.W_MAX),
         bind(BGA.gather_index(576, 10, "F32")),
         bind(BGA.gather_index(25, 22, "F32")),
-        bind(BGA.gather_index(2, 1, "F32")),
+        bind(BGA.GatherChunkXor, C=2),
     ]

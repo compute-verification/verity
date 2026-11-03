@@ -15,8 +15,10 @@ bits (`verity.ml.circuits.boolean.trace`).
     GatherF32x{N}u{k}_v1    the f32 levels, 0x7FC00000 past N
     GatherF32Chunked_v1{V, W}  (token: Array<32, Value<1>>, column: Array<V, Array<32, Value<1>>>) -> Array<32, Value<1>>
                             word view: GatherF32x{V}_v1, its column cut into V-chunks of at most W words, a gather each
-    GatherChunkSplit_v1{V, W}  (token: Array<32, Value<1>>) -> Array<32 + k, Value<1>>
-                            the token's offset in its V-chunk, then the V-chunk's index (k bits): no word Definition
+    GatherChunkOffsets_v1{V, W}  (token: Array<32, Value<1>>) -> Array<c - 1, Array<32, Value<1>>>
+                            token - start_j mod 2^32 for each V-chunk j past the first: no word Definition
+    GatherChunkXor_v1{C}    (words: Array<C, Array<32, Value<1>>>) -> Array<32, Value<1>>
+                            the C words' XOR, and 0x7FC00000's once more for an even C: no word Definition
 
 A gather of at most `CHUNK` (1024) words is traced from `verity.ml.circuits.boolean.gather.gather`: the multiplexer tree over the
 token's 32 bits, a word past the end standing for the constant 0x7FFF, so a token outside [0, V) (a negative one is at least
@@ -35,22 +37,21 @@ the end, each made on demand as its word primitive is (`verity.ml.definitions.bo
 Definition at every V: the vocabulary's and `boolean_fp8_moe`'s expert gathers (`boolean_fp8_moe.gather_f32`) alike.
 
 `GatherF32Chunked_v1{V, W}` is that gather with its column cut so that each part is one proof block: c = ceil(V / W)
-V-chunks, as even as whole words allow, the wider first (`chunk_widths`). `GatherChunkSplit_v1{V, W}` writes the token as
-start_h + lo, h the number of V-chunk starts past the first that are at most the token (unsigned; one constant subtraction
-each, whose borrow is the comparison, and h's bits are XORs of those comparisons). Each V-chunk is `GatherF32x{W_j}_v2` over
-its row by lo (one batch node per width), and `GatherF32x{c}u{k}_v1` takes V-chunk h's word by the high part. A token
-outside [0, V), a negative one included, has h = c - 1 and an lo that the last V-chunk's gather reads as an i32 outside its
-width (V <= 2^31), so it selects 0x7FC00000: the chunked gather is `GatherF32x{V}_v1` at every token, and a larger
-vocabulary takes more V-chunks, not another Definition.
+V-chunks, as even as whole words allow, the wider first (`chunk_widths`). V-chunk j, from start_j, is `GatherF32x{W_j}_v2`
+over its row by token - start_j mod 2^32 (one batch node per width), which `GatherChunkOffsets_v1{V, W}` computes for j >= 1
+with one constant addition each and no carry out, and `GatherChunkXor_v1{c}` sums their words. As u32, token - start_j is in
+[0, W_j) exactly when the token is in V-chunk j (start_j + W_j <= V <= 2^31, so nothing wraps), and otherwise it is an i32
+outside the V-chunk, which then selects 0x7FC00000. So a token in V-chunk h leaves its word and c - 1 fills in the sum, a
+token outside [0, V), a negative one included, leaves c fills, and the fill once more for an even c makes the sum the word
+or the fill: the chunked gather is `GatherF32x{V}_v1` at every token, and a larger vocabulary takes more V-chunks, not
+another Definition. The offsets and the sum read only the token and the V-chunks' words, so in the block that holds the
+V-chunks they add no fresh input, and only whole 32-bit words pass between blocks.
 
 `W_MAX` is the most words whose `GatherF32x{W}_v2`, with each of its three rows a ``hm96-sha512/row/v2`` row opened in the
 block, fits one C-Flock block of 2^27 bits (`verity_flock.circuit.compose`, `benchmarks/unit_block`). In slots of 2^18 the
 block holds 512: the gather's unit takes a range of 2^22 (16), the rows' four hm96 slots a range of 2^20 (4), the mask
 aligns the packed sha512x3 range up by one, and the column row's 4W bytes take ceil((4W + 17) / 128) - 1 compressions, three
-to a sha512x3 slot. So 491 slots, 1,473 compressions, hold 4W + 17 <= 1,474 * 128 bytes: W <= 47,163. Neither the split nor
-the select is a block alone: their rows are shorter than one SHA-512 block, and `compose` refuses a statement with no
-compression before a row's last block; the select's index row of k bits is not whole u16 words, which `UnitStager` refuses
-first.
+to a sha512x3 slot. So 491 slots, 1,473 compressions, hold 4W + 17 <= 1,474 * 128 bytes: W <= 47,163.
 """
 from __future__ import annotations
 
@@ -62,15 +63,15 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll, concat, strided_view
 from verity.ml.circuits.types import Array
-from verity.ml.circuits.boolean.forms import NOT, const_bits, mux, sub
+from verity.ml.circuits.boolean.forms import add, const, const_bits
 from verity.ml.circuits.boolean.gather import gather
 from verity.ml.circuits.boolean.trace import definition, part
 
 from . import b1
 from . import prims as P
 
-__all__ = ["CHUNK", "CHUNK_BITS", "Embedding", "F32_FILL", "FILL", "GatherChunkSplit", "GatherF32Chunked", "I32_FILL", "W_MAX",
-           "chunk_widths", "gather_bf16", "gather_f32", "gather_i32", "gather_index"]
+__all__ = ["CHUNK", "CHUNK_BITS", "Embedding", "F32_FILL", "FILL", "GatherChunkOffsets", "GatherChunkXor", "GatherF32Chunked",
+           "I32_FILL", "W_MAX", "chunk_widths", "gather_bf16", "gather_f32", "gather_i32", "gather_index"]
 
 BIT = BL.BIT
 WORD = Array(16, BIT)
@@ -201,51 +202,51 @@ def chunk_widths(V: int, W: int) -> list[int]:
     return [q + 1] * r + [q] * (c - r)
 
 
-def _high_bits(c: int) -> int:
-    return max(1, (c - 1).bit_length())
-
-
-def _split_type(S):
+def _offsets_type(S):
     c = len(chunk_widths(S.V, S.W))
     if c < 2:
-        raise ValueError(f"a column of V = {S.V} words is one V-chunk of at most W = {S.W}: nothing to split")
-    return (("token", TOKEN),), Array(32 + _high_bits(c), BIT)
+        raise ValueError(f"a column of V = {S.V} words is one V-chunk of at most W = {S.W}: no offsets")
+    return (("token", TOKEN),), Array(c - 1, TOKEN)
 
 
-def _split(C, S, token):
-    """The token's offset lo in its V-chunk h, then h's bits: lo = token - start_h, h the number of V-chunk starts past the
-    first at most the token (unsigned), so h = c - 1 past the column and for a negative token."""
+def _offsets(C, S, token):
+    """token - start_j mod 2^32 for each V-chunk j past the first: the token plus -start_j, with no carry out."""
     widths = chunk_widths(S.V, S.W)
-    lo, ge = list(token), []
-    for j in range(1, len(widths)):
-        d, borrow = sub(C, token, const_bits(sum(widths[:j]), 32), 32)
-        ge.append(NOT(borrow))
-        lo = mux(C, ge[-1], d, lo)
-    return lo + [reduce(xor, (ge[j - 1] for j in range(1, len(widths)) if (j ^ (j - 1)) >> b & 1))
-                 for b in range(_high_bits(len(widths)))]
+    return [add(C, token, const_bits(-sum(widths[:j]) % (1 << 32), 32), width=32) for j in range(1, len(widths))]
 
 
-GatherChunkSplit = part(
-    "GatherChunkSplit", ("V", "W"), _split_type, _split,
-    "A token as its V-chunk's start plus its offset (`chunk_widths`): the offset's 32 bits, then the V-chunk's index, the "
-    "number of V-chunk starts past the first at most the token (unsigned); a level of `GatherF32Chunked_v1`")
+GatherChunkOffsets = part(
+    "GatherChunkOffsets", ("V", "W"), _offsets_type, _offsets,
+    "token - start_j mod 2^32 for each V-chunk j past the first (`chunk_widths`), the index each V-chunk's gather reads; a "
+    "level of `GatherF32Chunked_v1`")
+
+
+def _xor(C, S, *words):
+    return [reduce(xor, bits, const(F32_FILL >> b & 1 if S.C % 2 == 0 else 0)) for b, bits in enumerate(zip(*words))]
+
+
+GatherChunkXor = part(
+    "GatherChunkXor", ("C",), lambda S: ((("words", Array(S.C, I32)),), I32), _xor,
+    "The C words' XOR, and 0x7FC00000's once more for an even C: C - 1 fills and a word sum to the word, C fills to the fill; "
+    "a level of `GatherF32Chunked_v1`")
 
 
 def _chunked(B, S, token, column):
-    """`GatherF32x{V}_v1` on bits by V-chunks: `GatherChunkSplit_v1` splits the token, each V-chunk's `GatherF32x{W_j}_v2`
-    gathers by the offset, and `GatherF32x{c}u{k}_v1` takes the V-chunk the token is in by its index."""
+    """`GatherF32x{V}_v1` on bits by V-chunks: each V-chunk's `GatherF32x{W_j}_v2` gathers by token - start_j
+    (`GatherChunkOffsets_v1`), so only the V-chunk holding the token returns other than 0x7FC00000, and `GatherChunkXor_v1`
+    sums the words."""
     widths = chunk_widths(S.V, S.W)
     if len(widths) == 1:
         return B.call(gather_f32(S.V), token, column)
-    k = _high_bits(len(widths))
-    split = B.call(bind(GatherChunkSplit, V=S.V, W=S.W), token)
-    words, at = [], 0
+    offsets = B.call(bind(GatherChunkOffsets, V=S.V, W=S.W), token)
+    index = [token.refs] + [offsets.refs.slice((j - 1) * TOKEN.leaves, j * TOKEN.leaves) for j in range(1, len(widths))]
+    words, j, at = [], 0, 0
     for w in sorted(set(widths), reverse=True):
         n = widths.count(w)
         rows = Coll(Array(n, Array(w, I32)), column.refs.slice(at * I32.leaves, (at + n * w) * I32.leaves))
-        words.append(B.batch(gather_f32(w), split[0:32], rows, axes=(None, 0)).refs)
-        at += n * w
-    return B.call(gather_index(len(widths), k, "F32"), split[32:32 + k], Coll(Array(len(widths), I32), concat(words)))
+        words.append(B.batch(gather_f32(w), Coll(Array(n, TOKEN), concat(index[j:j + n])), rows, axes=(0, 0)).refs)
+        j, at = j + n, at + n * w
+    return B.call(bind(GatherChunkXor, C=len(widths)), Coll(Array(len(widths), I32), concat(words)))
 
 
 def _chunked_type(S):
