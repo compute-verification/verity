@@ -6,8 +6,8 @@ import Proofs.Flock.SessionLoop.FinL0Vals
 # A pad-blind worker meets `TakesVals` at its own values
 
 * **`Loop.takesVals_vsOf`**: at `SessionLoopZKDeployed`'s release with the loop's own inner rounds (`withInner`), at
-  its premises on the statement and the loop's inputs, `phased bx post` meets `TakesVals` at `vsOf bx`, at every `bx`
-  and whatever `post` reads.
+  every statement the loop serves, `phased bx post` meets `TakesVals` at `vsOf bx`, at every witness, every `bx` and
+  whatever `post` reads.
 * `Loop.freedAt_unique`: two rounds that free pad `i` of rep stream `2j + r` along one coin vector free it as one word.
   At the same prefix the worker's round (`bwOf` hands `bx` the answers after `Hello`'s), the frame's state and the free
   list are the same (`frameAnswer_congr`, `Free.roundFree_agree`), so the place in the absorbed order is the same; at a
@@ -228,14 +228,6 @@ section Takes
 variable (L : LeanRelease Flock.Wit
   ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
 
-/-- The pad-blind worker's round is `bx`'s at the nonce, what the workers see of the tape and the answers read as
-coins. -/
-theorem blind_eq (bx : AlgWorker L) (x : Msg) (w : Flock.Wit) (ν : (CoinLayer.session loopNr Masked.dataE).Nonce)
-    (t : (CoinLayer.session loopNr Masked.dataE).Tape) (h : List (Msg × Msg)) (n : ℕ) :
-    blind L (bwOf L bx) x w (ν, t) h n =
-      bx x w ν ((CoinLayer.session loopNr Masked.dataE).seenOf x t) (h.map fun m => CoinLayer.rd m.2) n :=
-  rfl
-
 theorem vsOfWord_of_free (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : CoinLayer.Nonce}
     {c : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
     {j : Fin (jOf x)} {r : Fin 2} {i : ℕ} {a : F128}
@@ -440,9 +432,9 @@ theorem freedAt_unique
     omega
 
 /-- **A pad-blind worker of the algebraic phase meets `TakesVals` at its own values**: at `SessionLoopZKDeployed`'s
-release with the loop's own inner rounds (`withInner`), at its premises on the statement and the loop's inputs, at
-every algebraic phase's worker `bx` and any worker `post` after the phase, `phased bx post` meets `TakesVals` at
-`vsOf bx`. Each word the frame frees in the worker's round is at a pad
+release with the loop's own inner rounds (`withInner`), its tables `realOf src`, at every statement the loop serves, every
+witness, every algebraic phase's worker `bx` and any worker `post` after the phase, `phased bx post` meets `TakesVals`
+at `vsOf bx`. Each word the frame frees in the worker's round is at a pad
 below `n_E` other than `final_c`'s (`absorbed_lt_hab`, at the rep's layout: `lay_ofLoopLink`), where `vsOf` is the word
 some round frees there along the coins (`freeWord`), and that round frees it as this word (`freedAt_unique`). -/
 theorem takesVals_vsOf
@@ -457,10 +449,7 @@ theorem takesVals_vsOf
     (fin : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       List (Msg × Msg) → Array ByteArray)
-    (hreal : real = Loop.realOf src) (x : Msg) (w : Flock.Wit)
-    (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Serves x)
-    (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
-    (hSrc : Loop.Src (LeanRelease.withInner Masked.dataE L₁ real fin) src x w)
+    (hreal : real = Loop.realOf src) (x : Msg) (w : Flock.Wit) (hSv : Serves x)
     (bx : AlgWorker (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real))
     (post : (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real).toSrv.Worker) :
     TakesVals (vsOf _ bx) (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real)
