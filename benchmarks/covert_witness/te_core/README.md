@@ -73,24 +73,14 @@ other quantity bits. A gate is any of AND, XOR and NOT, so a count is about 3x i
   token form): the counting lemma over the kinds of block work that are lower bounds on their own, ρ ≥ max over the
   kinds (fresh products, token, decoding) of each kind's share of |C| over its cap a block. It returns each kind's
   term (None, with the reason, where unmeasured), the max, the kind it binds on and what each kind rests on: fresh
-  products Loomis-Whitney's cap (a theorem under `io_bound`'s premises P-width and P-chain, each true of the
-  reference circuit as `gates` prices it, every output entry summed along one chain of whole dot cells
-  (`formalism.ORDER`): `io_bound`'s bound on the products `formalism.products_of` takes from captured steps or a
-  model, or `formalism.products_of_trace` from the product rows a trace keeps from te_core 4.8 on (`capture.products`),
-  measured whether or not the trace gives the order, and unmeasured only for a circuit that declares another; the
-  term is the figure without P-cell, a premise on the partition, which the attacker chooses (`formalism.P_CELL`, one
-  constant), with the whole-cell figure beside it as the sensitivity `fresh_cell`; where a record's traced steps
-  differ in shape, the dominant step's products stand in for all of them, scaled by tokens, labelled so
-  (`formalism.STAND_IN`); a record with only an op log, a ledger
-  row traced before 4.8, has its log's product rows, `formalism.products_of_ops`, but no operand's freshness, so the
-  term is unmeasured there with the share of MACs it leaves unknown), token A1 under reading A with its witness
-  family, decoding assumption
-  (D). Where Fit fails ρ is max(1, that max). Gradient reduction, update application, reading B's token form and the
-  per-gate token term come out beside it as labelled sensitivities, never in the max: (R) and (U) hold only for
-  partitions split by tokens, and per_gate only for blocks that are no union of witnesses. `rho_vectors.json` holds
-  its test vectors, which the console's rho.ts runs (null unmeasured, "inf" ∞): the bound on the fixtures' cases,
-  the fresh-products term on `io_bound`'s product sets and the 45M start's dense step (`dense_45m.products.json`),
-  and `formalism.published` at a cell for each case of its rule.
+  products a theorem under `io_bound`'s premises, P-width among them, an assumption on a reference circuit
+  (Loomis-Whitney: `io_bound`'s bound on the products `formalism.products_of` takes from captured steps, measured where
+  the capture says they're summed in a chain, since `io_bound` has the chain constant only and the tree constant
+  applies where the trace doesn't give the order), token A1 under reading A with its witness family, decoding
+  assumption (D). Where Fit fails ρ is max(1, that max). Gradient reduction, update application, reading B's token
+  form and the per-gate token term come out beside it as labelled sensitivities, never in the max: (R) and (U) hold
+  only for partitions split by tokens, and per_gate only for blocks that are no union of witnesses.
+  `rho_vectors.json` holds its test vectors, which the console's rho.ts runs (null unmeasured, "inf" ∞).
 - **Reading A** (A1's approved reading): a block reads at least the update bits its work reads, once, plus
   each token's computed state where its work on the token begins, the context it reads and doesn't compute included.
   A1's values are the least reads of the default packer's witness family: the runs of one traced token's path in
