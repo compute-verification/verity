@@ -596,6 +596,52 @@ def test_the_figure_draws_the_reference_runs_black_and_labels_each_panels_least_
     assert {"adapter", "seed", "update-code", "partial"} <= set(legends[0])
 
 
+def test_a_reference_run_with_rho_unmeasured_is_labelled_at_its_p_and_a_panel_says_how_many_reached(tmp_path,
+                                                                                                    monkeypatch):
+    """A reference run whose ρ is unmeasured (te_core 4.12's traces captured before it) has no point to draw, so the
+    panel marks its p with a dashed line labelled `REFERENCE_RUN` and saying why; and where no reached row is drawn the
+    panel says how many reached, never that none did. A stand-in `published` leaves the reference runs' ρ
+    unmeasured, then every row's."""
+    real = formalism.published
+    off = {"reading": "A", "rho": None, "binding_kind": "unmeasured", "rests_on": formalism.RESTS_ON_CELL["unmeasured"],
+           "partial": False, "why": "no kind is measured"}
+    every = False
+
+    def published(m, c=None, k=None, reading=None):
+        one = real(m, c, k, reading)
+        return one | off if every or m.delta_bits == 9e8 else one
+
+    notes, lines, titles = [], [], []
+    real_note, real_line, real_title = AP.plt.Axes.annotate, AP.plt.Axes.axvline, AP.plt.Axes.set_title
+    monkeypatch.setattr(formalism, "published", published)
+    monkeypatch.setattr(AP.plt.Axes, "annotate", lambda ax, text, xy, *a, **k: (notes.append((text, tuple(xy))),
+                                                                                real_note(ax, text, xy, *a, **k))[1])
+    monkeypatch.setattr(AP.plt.Axes, "axvline", lambda ax, x=0, *a, **k: (lines.append((x, k.get("color"), k.get("ls"))),
+                                                                         real_line(ax, x, *a, **k))[1])
+    monkeypatch.setattr(AP.plt.Axes, "set_title", lambda ax, text, *a, **k: (titles.append(text),
+                                                                              real_title(ax, text, *a, **k))[1])
+    for every in (False, True):
+        notes.clear(), lines.clear(), titles.clear()
+        p = AP.build(info(), "test")
+        ds = plots.frame(p)
+        AP.figure(p, tmp_path)
+        want = []
+        for g in AP.GAINS:
+            if refs := [d for d in ds if d["gain_target"] == g and d["reached"] == "yes" and AP.reference(d)]:
+                assert all(d["rho_default"] is None and d["basis_default"] == AP.UNMEASURED for d in refs)
+                best = min(refs, key=lambda d: d["p"])
+                want.append((f"{AP.REFERENCE_RUN} ({best['method_key']}):\np {best['p']:.3g}, rho unmeasured",
+                             (best["p"], 1.0)))
+        assert want and [x for x in notes if x[0].startswith(AP.REFERENCE_RUN)] == want
+        assert lines == [(x[1][0], "k", "--") for x in want]
+        reached = {g: sum(d["gain_target"] == g and d["reached"] == "yes" for d in ds) for g in AP.GAINS}
+        if every:
+            assert titles == [f"gain {g:g}: {reached[g]} reached, none plotted (rho infinite, unmeasured or on a stub, "
+                              f"or no p),\nso no least S; 0 not reached plotted" if reached[g] else titles[i]
+                              for i, g in enumerate(AP.GAINS)]
+            assert any(reached.values()) and not any("none of" in t for t, g in zip(titles, AP.GAINS) if reached[g])
+
+
 def test_a_partial_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_never_the_least_s(tmp_path, monkeypatch):
     """A row `published` marks partial (a measured kind's term over 1 with a valid kind unmeasured, so ρ is only a lower
     bound; coordinator 12:20Z) has basis_default `partial`: no decade holds it, the cut picks the partial rows among

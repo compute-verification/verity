@@ -744,10 +744,11 @@ def store(path: Path, meta: dict) -> str:
 def figure(p: dict, out: Path) -> Path:
     """p against ρ at the console's default on the headline data, log-log, one panel per gain target: a colour per
     family or method direction (`group`), the reference runs' black, each panel's least-p reached one labelled
-    `REFERENCE_RUN` so the covert methods read against it (coordinator 15:29Z), a marker per start, filled where
-    reached and open at a failed attempt's lower bound on p, a caret up from a partial row's (`PARTIAL`, ρ a lower
-    bound, never the least S) and a cross on a void row's (`VOID`, the same), the coverage's decades of ρ dotted and
-    the iso-S diagonals S = p ρ at `LEVELS`."""
+    `REFERENCE_RUN` so the covert methods read against it (coordinator 15:29Z), at its point where its ρ is drawn,
+    else as a dashed line at its p saying why it isn't, a marker per start, filled where reached and open at a failed
+    attempt's lower bound on p, a caret up from a partial row's (`PARTIAL`, ρ a lower bound, never the least S) and a
+    cross on a void row's (`VOID`, the same), the coverage's decades of ρ dotted and the iso-S diagonals S = p ρ at
+    `LEVELS`. A panel whose reached rows are none of them drawn says how many reached."""
     data = headline(p)
     every = [d for d in plots.frame(p) if d["data"] == data]
     rows = [d for d in every if d["p"] is not None and d["rho_default"] is not None and d["basis_default"] != STUB]
@@ -778,13 +779,21 @@ def figure(p: dict, out: Path) -> Path:
                 ax.plot(d["p"], d["rho_default"], marker=LOWER[d["basis_default"]], ms=9, color=c, mew=1.0)
         reached = [d for d in mine if d["reached"] == "yes"]
         whole = [d for d in reached if d["basis_default"] not in LOWER]
-        if refs := [d for d in whole if reference(d)]:
-            ref = min(refs, key=lambda d: (d["p"], d["rho_default"]))
-            ax.annotate(f"{REFERENCE_RUN} ({ref['method_key']}):\np {ref['p']:.3g}, rho {ref['rho_default']:.3g}",
-                        (ref["p"], ref["rho_default"]), xytext=(-10, -24), textcoords="offset points", ha="right",
-                        fontsize=6.5, arrowprops={"arrowstyle": "-", "lw": 0.5})
         at = [d for d in every if d["gain_target"] == g]
         unplotted = len(at) - len(mine)
+        drawn = {id(d) for d in mine}
+        if refs := [d for d in at if d["reached"] == "yes" and reference(d) and d["p"] is not None]:
+            ref = min(refs, key=lambda d: (d["p"], id(d) not in drawn, d["rho_default"] or 0))
+            label = f"{REFERENCE_RUN} ({ref['method_key']}):\np {ref['p']:.3g}, rho "
+            if id(ref) in drawn:
+                ax.annotate(label + (">= " if ref["basis_default"] in LOWER else "") + f"{ref['rho_default']:.3g}",
+                            (ref["p"], ref["rho_default"]), xytext=(-10, -24), textcoords="offset points", ha="right",
+                            fontsize=6.5, arrowprops={"arrowstyle": "-", "lw": 0.5})
+            else:
+                ax.axvline(ref["p"], color="k", lw=0.8, ls="--", zorder=1)
+                ax.annotate(label + ("unmeasured" if ref["rho_default"] is None else
+                                     "infinite" if math.isinf(ref["rho_default"]) else "on a stub"),
+                            (ref["p"], 1.0), xytext=(-4, 6), textcoords="offset points", ha="right", fontsize=6.5)
         if reached:
             least = ";\nno least S: every reached row is partial or void"
             if whole:
@@ -797,6 +806,9 @@ def figure(p: dict, out: Path) -> Path:
                          + f", {len(mine) - len(reached)} not"
                          + (f" ({unplotted} more: rho infinite, unmeasured or on a stub, or no p)" if unplotted else "")
                          + least, fontsize=8)
+        elif reached_at := [d for d in at if d["reached"] == "yes"]:
+            ax.set_title(f"gain {g:g}: {len(reached_at)} reached, none plotted (rho infinite, unmeasured or on a stub, "
+                         f"or no p),\nso no least S; {len(mine)} not reached plotted", fontsize=8)
         elif at:
             top = max(at, key=lambda d: d["gain"])
             ax.set_title(f"gain {g:g}: none of {len(at)} attempts reached it, so no H and no p", fontsize=8)
