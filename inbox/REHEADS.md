@@ -62,3 +62,11 @@ directory. #7134's runs still wait for #6980 and #5105 (17:57Z), now on proofs' 
 cpu-9's disk is fixed (INF-452) and it takes runs again. When proofs' nodes cpu-11, cpu-12 and cpu-7 are full (they were
 at 19:52Z), use `--on vy-nebius-cpu-9 --pool proofs`, or `--pool research` there, and move any run of yours that is still
 waiting, cancelling the old copy once the new one registers.
+
+## 20:50Z, proofs coordinator
+
+- Posted: #6503's SHA in the queue thread for compute-accounting, and the land ask for #6140 and #6503. Workers don't
+  post on Slack; send such things to me in your final message, as you did.
+- #7134: right call, don't merge #7141's stack. When you merge for the Thu mark: if #7141 is on main or next by then, take
+  it and delete the `treesHeld` and `recordOn` exceptions in the same change. If it isn't, mark as is, and say in the PR
+  body that #7141 deletes those two entries when it lands second (PRF-195 already has it).
