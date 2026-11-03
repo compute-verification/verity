@@ -22,7 +22,8 @@ before the verifier's first coin.
 * `GenericSampledKSJoint`: the same for an extractor in the textbook form (`JointExtractor`), with the knowledge error
   `κ` of its definition, no slack, and the committed trace the plurality of its trials;
 * `GenericSampledZK`: the audit's view is `(ε_zk + ε_hide)`-close to a simulator's that knows no trace, from the proof
-  system's zero knowledge and the commitment's hiding.
+  system's zero knowledge and the commitment's hiding; `FlockZk.lean` gives the leakage form (`ZKBelow`,
+  `audit_below`) the ZK server's theorem has.
 
 Flock is an instance (`SampledGeneric/Flock.lean`), at a bound no worse than `zk_flock_countC_regC`'s, the count curve
 `SampledKSLiveV5` runs through.
