@@ -17,6 +17,16 @@ the region below the floor of about 300 down to Fit. A run counts once it beats 
 attempt, including runs that never reach, which the panel marks not reached; runs may go to p ≈ 100 on the long tier.
 The builder's coverage table on the board (gain size by decade of ρ) shows where the gaps are.
 
+## Tonight's rulings (Tue 3 Nov), in force
+
+- **Launch:** s-t20 is open, at pin 5df3bc39426 (`python benchmarks/covert_witness/launch.py s-t20 --island NAME --note TEXT [--program FILE] -- ARGS`, from a checkout with origin/cursor/covert-witness-4207 merged). m-t20 (60M) and the rest join as ladder-v3 publishes them. Prefer m-t20 for headline runs; the 20M start's embedding is a large share of the model, so use it for screens.
+- **Gains:** exactly 1.1×, 2× and 11× effective compute (+10%, +100%, +1000%).
+- **Δ_t:** Fit's update application reads the weights in the form the update rule acts on, a straight-through run's fp32 latents.
+- **Coded messages** are priced at the width the circuit passes, if the encoding, decoding and summing run in the circuit and the trace shows them.
+- **Gradient reductions:** each partial gradient must be read to be summed, so ρ ≥ 1 + (1 − 1/b)·Δ_g/k with b the compute blocks a step. Compress gradients to get near ρ = 1.
+- **Capture:** keep update logic in tensor ops (torch.clamp, torch.where), never Python branches on read-back values. A trace that shows no update beside a nonzero update is refused.
+- **Every attempt is published,** including runs that never reach (not-reached rows). Give each new mechanism a label and a description of at most 200 characters in your DIGEST.
+
 ## The spec
 
 - The formalism is v2: note:training-20261102T2215Z-report-training-formalism-v2 (research-notes repo,
