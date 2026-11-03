@@ -1,5 +1,5 @@
 """One training step as a Program: the forward, the backward and the optimizer of an ordinary `nn.Module`, derived through the same
-front door as a served model (`derive.derive_report`), with the training rules (`rules/training.py`) added to the default ones.
+front door as a served model (`derive.derive_graph`), with the training rules (`rules/training.py`) added to the default ones.
 
     step_program(model, loss_fn, optimizer, example_batch, mode="reference") -> Program | Unsupported
 
@@ -8,13 +8,14 @@ The step is one function of everything a step reads,
     (params, exp_avg, exp_avg_sq, decay, neg_step_size, bc2_sqrt, buffers, batch) -> (loss, params', exp_avg', exp_avg_sq')
 
 built with `torch.func.functional_call` and `grad_and_value`, the optimizer a function (`AdamW.update`), and traced as one joint ATen
-graph on fake tensors (`make_fx` of the functionalized step, SDPA's math backend), which `torch.export` hands to the derivation. No
-value is read: the parameters, the optimizer state, the step's three host scalars (`AdamW.scalars`), the module's buffers and the
-batch are the Program's inputs, in that order, each tensor one parameter named after it (`param_<fqn>`, `exp_avg_<fqn>`, ...).
+graph on fake tensors (`make_fx` of the functionalized step, SDPA's math backend), which `derive_graph` derives. No value is read:
+the parameters, the optimizer state, the step's three host scalars (`AdamW.scalars`), the module's buffers and the batch are the
+Program's inputs, in that order, each tensor one parameter named after it (`param_<fqn>`, `exp_avg_<fqn>`, ...). The parameters
+are the Program's theta (`Program.theta`: the start's weights); the optimizer state, the scalars and the batch are not.
 
 A node no rule lowers is `Unsupported`, as for any derivation. `step_report(..., survey=True)` instead lowers every node it can and
 takes each refused one's output as a field of the Program's `run` input (a hole), recording the refusal: the list of what is
-missing, and a Program whose census counts everything else (`rules.training.HOLES`).
+missing, and a Program whose census counts everything else (`rules.training.holes`).
 """
 
 from __future__ import annotations
@@ -22,15 +23,16 @@ from __future__ import annotations
 import keyword
 import re
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Callable
 
 import torch
 from torch.func import functional_call, grad_and_value
 
 from verity.ml.circuits.program import Program
-from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.program.frontend.derive import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.report import DeriveReport
+from verity_vllm.program.frontend.rules.base import RuleSet
 
 
 @dataclass(frozen=True)
@@ -112,7 +114,7 @@ def _ident(s: str) -> str:
 
 
 def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor):
-    """The step's joint ATen graph as a `torch.export.ExportedProgram` over meta tensors, and its `StepLayout`."""
+    """The step's joint ATen graph (a `make_fx` `GraphModule`), its example inputs (meta tensors) and its `StepLayout`."""
     from torch.fx.experimental.proxy_tensor import make_fx
     from torch.nn.attention import SDPBackend, sdpa_kernel
 
@@ -154,26 +156,26 @@ def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, exa
     outputs = ["loss"] + [f"param:{n}" for n in short] + [f"exp_avg:{n}" for n in short] + [f"exp_avg_sq:{n}" for n in short]
     with sdpa_kernel(SDPBackend.MATH):
         gm = make_fx(torch.func.functionalize(step, remove="mutations"), tracing_mode="fake")(*metas)
-    ns: dict[str, Any] = {"gm": gm}
-    exec(f"def forward(self, {', '.join(inputs)}):\n    return gm({', '.join(inputs)})\n", ns)
-    holder = type("TrainStep", (torch.nn.Module,), {"forward": ns["forward"]})()
-    with torch.no_grad(), torch.device("meta"):
-        ep = torch.export.export(holder, tuple(metas), strict=False)
-    return ep, metas, StepLayout(short, bshort, scalars, inputs, outputs)
+    return gm, metas, StepLayout(short, bshort, scalars, inputs, outputs)
 
 
 def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor, *, mode: str = "reference",
-                survey: bool = False, name: str = "TrainStep", exported=None) -> DeriveReport:
-    """`step_program`'s derivation report. `survey`: every node a rule refuses becomes a hole (`rules.training.HOLES`), recorded in
-    the provenance's `holes`, so the report lists every refusal at once and its Program counts everything else."""
-    from verity_vllm.program.frontend.rules.training import training_rules
+                survey: bool = False, rules: RuleSet | None = None, name: str = "TrainStep", exported=None) -> DeriveReport:
+    """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules()`). `survey`: when the
+    step is `Unsupported`, derive it again with every refused node a hole (`rules.training.with_holes`), so the report lists every
+    refusal at once (`rules.training.holes(report)`) and its Program counts everything else. `exported`: `export_step`'s result."""
+    from verity_vllm.program.frontend.rules.training import training_rules, with_holes
 
-    ep, metas, layout = exported if exported is not None else export_step(model, loss_fn, optimizer, example_batch)
+    gm, metas, layout = exported if exported is not None else export_step(model, loss_fn, optimizer, example_batch)
+    ruleset = rules if rules is not None else training_rules()
+    theta = layout.inputs[:len(layout.params)]
 
-    def train_step(*inputs):
-        raise RuntimeError("derived from its exported graph only")
+    def run(rs: RuleSet) -> DeriveReport:
+        return derive_graph(gm, metas, mode=mode, rules=rs, name=name, input_names=layout.inputs, theta=theta)
 
-    rep = derive_report(train_step, metas, mode=mode, rules=training_rules(survey=survey), exported=ep, name=name)
+    rep = run(ruleset)
+    if survey and rep.program is None:
+        rep = run(with_holes(ruleset))
     rep.provenance["train_step"] = layout.to_json()
     if rep.program is not None:
         rep.program.annotations["train_step"] = layout.to_json()

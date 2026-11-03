@@ -2,6 +2,8 @@
 a `Program`, or an `Unsupported` outcome. Never a partial program, never an opaque gate.
 
     derive(source, example_inputs, *, mode, profile, config, rules, allowed_dims, name) -> Program | Unsupported
+    derive_graph(graph, example_inputs, *, mode, rules, name, input_names, theta) -> DeriveReport   (a functional ATen graph,
+                                                                    `make_fx` of a `torch.func` transform, derived without step 1)
 
 How it works
 ------------
@@ -493,10 +495,42 @@ def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | N
                          name=name, check_registry=check_registry, rank=rank, registered_values=registered_values).result
 
 
+def derive_graph(graph: torch.fx.GraphModule, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None,
+                 rules: RuleSet | None = None, name: str | None = None, input_names: Sequence[str] | None = None,
+                 theta: Sequence[str] = (), check_registry: bool = True) -> DeriveReport:
+    """Derive from an already functional ATen graph (`make_fx` of a `torch.func` transform: a joint forward-backward graph), which
+    `derive` would not re-export.  Its placeholders are the inputs, in order, named `input_names` (default: the placeholder names);
+    its output node's tuple is the outputs.  No module owns a tensor of the graph: there is no `weights` record, and `theta` names
+    the inputs that are the model's weights (`Program(theta=...)`).  Otherwise exactly `derive_report`'s derivation."""
+    from types import SimpleNamespace
+
+    phs = [n for n in graph.graph.nodes if n.op == "placeholder"]
+    names = list(input_names) if input_names is not None else [n.name for n in phs]
+    if len(names) != len(phs) or len(set(names)) != len(names):
+        raise ValueError(f"input_names must name the graph's {len(phs)} placeholders once each, got {len(names)} names")
+    if not set(theta) <= set(names):
+        raise ValueError(f"theta names inputs the graph does not have: {sorted(set(theta) - set(names))}")
+    out = next(n for n in graph.graph.nodes if n.op == "output")
+    if not isinstance(out.args[0], (tuple, list)):
+        raise ValueError("the graph must return a tuple of tensors")
+    sig = SimpleNamespace(user_inputs=[n.name for n in phs], inputs_to_parameters={}, inputs_to_buffers={},
+                          inputs_to_lifted_tensor_constants={}, inputs_to_lifted_custom_objs={},
+                          output_specs=[SimpleNamespace(kind=SimpleNamespace(name="USER_OUTPUT"), arg=None)] * len(out.args[0]))
+    ep = SimpleNamespace(graph=graph.graph, graph_module=graph, graph_signature=sig, constants={})
+
+    def source(*inputs):
+        return graph(*inputs)
+
+    source.__name__ = source.__qualname__ = name or "Graph"
+    return derive_report(source, example_inputs, mode=mode, profile=profile, rules=rules, name=name, check_registry=check_registry,
+                         exported=ep, input_names=names, theta=tuple(theta))
+
+
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
                   check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None,
-                  registered_values: bool = False, session: list | None = None, dead_free: bool = False) -> DeriveReport:
+                  registered_values: bool = False, session: list | None = None, dead_free: bool = False,
+                  input_names: Sequence[str] | None = None, theta: Sequence[str] = ()) -> DeriveReport:
     """`registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter
     (before `weights`), read by the Definitions that take them as inputs (`TargetProfile.registered_values`); the provenance's
     `supplied` states every field's bits.  `rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
@@ -504,7 +538,9 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.
     `session`: a list that receives the derivation's `DerivationTail` when it succeeds (`relabel.rank_report` reads it).
     `dead_free`: the flat body in the registered compiler's form (`program.prune.dead_free`: without the units no output reads, each
-    Definition with dead gates swapped for its version without them), and the correspondence's Calls with it."""
+    Definition with dead gates swapped for its version without them), and the correspondence's Calls with it.
+    `input_names`: the Program's names for the graph inputs (default: their placeholder names); `theta`: inputs that are the model's
+    weights besides the `weights` record (`derive_graph`)."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
     if rank is not None and not (len(rank) == 2 and 0 <= int(rank[1]) < int(rank[0])):
@@ -524,9 +560,10 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     try:
         flat_sd, ctx = _derive_flat(source, example_inputs, mode=mode, profile=profile, config=config, allowed_dims=allowed_dims,
                                     name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported,
-                                    registered_values=registered_values)
+                                    registered_values=registered_values, input_names=input_names)
         head = (dict(prov), dict(ctx.unresolved_module_paths)) if session is not None else None
-        rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free)
+        rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free,
+                             theta=tuple(theta))
         if session is not None:
             session.append(DerivationTail(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family, dead_free))
         return rep
@@ -542,7 +579,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
 
 
 def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode: str, ruleset: RuleSet, rank: tuple[int, int] | None,
-                   check_registry: bool, dead_free: bool = False) -> DeriveReport:
+                   check_registry: bool, dead_free: bool = False, theta: tuple[str, ...] = ()) -> DeriveReport:
     """The derivation's tail over the finished flat body: provenance, runtime correspondence, the flat Program and its digest, the
     family claims, `prov["result"]`.  Raises `Refuse` / `FrontendError` (the caller reports them)."""
     prov["weights"] = [w.to_json() for w in ctx.weights]
@@ -568,7 +605,7 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     corr_digest = correspondence_digest(corr_doc)
     flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in hints.items()}, _CORR: corr_doc},
                            registered=ctx.registered_inputs.names if ctx.registered_values else (),
-                           theta=() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],))
+                           theta=(() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],)) + theta)
     check_identity(flat_program, check_registry=check_registry)
     flat_digest = program_digest(flat_desc := encode_program(flat_program))
     program, family_report = flat_program, None
@@ -685,7 +722,8 @@ def _weights_of(module: torch.nn.Module | None) -> tuple[list[WeightLeaf], dict[
 
 
 def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims, name, ruleset, vocab,
-                 _ctx_holder: list | None = None, exported=None, registered_values: bool = False) -> tuple[SpecializedDefinition, Ctx]:
+                 _ctx_holder: list | None = None, exported=None, registered_values: bool = False,
+                 input_names: Sequence[str] | None = None) -> tuple[SpecializedDefinition, Ctx]:
     module = source if isinstance(source, torch.nn.Module) else None
     ep = exported if exported is not None else _export(source, example_inputs)
     sig = ep.graph_signature
@@ -718,11 +756,11 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
         refuse("shape", None, None, f"{len(example_inputs)} example inputs vs {len(user_names)} graph inputs")
     ph_nodes = {n.name: n for n in ep.graph.nodes if n.op == "placeholder"}
     params: list[tuple[str, Type]] = []
-    for un in user_names:
+    for i, un in enumerate(user_names):
         v = ph_nodes[un].meta.get("val")
         if not isinstance(v, torch.Tensor):
             refuse("dynamic_control_flow", ph_nodes[un], None, f"input {un} is not a tensor (symbolic scalar inputs are not static structure)")
-        params.append((un, type_of_tensor(v)))
+        params.append((input_names[i] if input_names is not None else un, type_of_tensor(v)))
     run_inputs = (RunInputs.declare(params) if any(r.run_inputs(ep, mode) for r in ruleset.rules if r.modes is None or mode in r.modes)
                   else None)
     registered_inputs = RegisteredInputs.declare(params, ruleset, ep, mode) if registered_values else None
@@ -1016,5 +1054,5 @@ def _no_rule(ctx: Ctx, node, reasons: list[str]) -> NoReturn:
     refuse("custom_op_without_binding", node, mp, f"Python callable {t!r} in the graph")
 
 
-__all__ = ["derive", "derive_report", "DeriveReport", "DerivationTail", "Unsupported", "Refuse", "refuse", "Ctx", "StaticIndex", "Alloc", "WeightLeaf",
+__all__ = ["derive", "derive_report", "derive_graph", "DeriveReport", "DerivationTail", "Unsupported", "Refuse", "refuse", "Ctx", "StaticIndex", "Alloc", "WeightLeaf",
            "REASONS", "DERIVE_VERSION"]
