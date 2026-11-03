@@ -24,6 +24,13 @@ Data (all off by default: TrainData's stream permuted by `--data-seed`, the seed
 - `--trunc Q`: in each micro-batch the Q of the sequences with the highest loss get no gradient (loss truncation; no extra
   FLOPs, their pass is still priced).
 
+Growth (`--grow-d D`, `--grow-ff F`, `--grow-layers N`; `grow`): θ's function in a wider or deeper lf model, every tensor
+trained, E in the model format (`prepare.encode_model`, CWMODL1). The harness checkpoints only the encoders it wraps
+(te_core.cw.ENCODERS, which lacks encode_model), so a grown run is scored at its submission alone: aim each at a target.
+
+The budget is `--budget-fraction` of the run's tier's (`prepare.budget`: the search tier's TRAIN_FLOP_BUDGET, or the long
+tier's LONG_C0 x the start's C0).
+
 E is the trained tensors in full (`prepare.encode_full`). It runs inside the harness (candidate.sh's script mode), and
 since it reads windows by id rather than through `TrainData.next`, it marks its steps itself
 (`hooks.step()`): each chunk of θ's scoring pass, each training step with its snapshots and forks, and the final
@@ -91,6 +98,54 @@ class Muon(torch.optim.Optimizer):
                 if g["wd"]:
                     p.mul_(1 - g["lr"] * g["wd"])
                 p.add_(u, alpha=-g["lr"] * s)
+
+
+def grow(config: dict, theta: dict[str, torch.Tensor], a: argparse.Namespace) -> tuple[dict, dict[str, torch.Tensor]]:
+    """θ's function in a larger lf shape. Width first (`--grow-d`, heads of θ's head size; `--grow-ff`): each matrix keeps
+    θ's block, the new rows and columns it reads with are Gaussian at θ's RMS times `--grow-noise`, the new ones it writes
+    with (wo, w_down, the embedding's new columns) zero, and every RMSNorm gain is scaled by sqrt(d/D) for the zero new
+    coordinates (new gains at the old mean). Then depth (`--grow-layers N`): block j is a copy of block ⌊jL/N⌋, a repeated
+    copy with wo and w_down zeroed. So the grown model computes θ's function at step 0."""
+    gen = torch.Generator().manual_seed(a.data_seed + 7)
+    d, L, ff, hd = config["d_model"], config["n_layer"], config["d_ff"], config["d_model"] // config["n_head"]
+    D, FF, N = a.grow_d or d, a.grow_ff or ff, a.grow_layers or L
+    if D < d or FF < ff or N < L or D % hd:
+        raise SystemExit(f"train: growth only widens and deepens, in heads of {hd} (d_model {d}, d_ff {ff}, layers {L})")
+
+    def wide(t: torch.Tensor, rows: int, cols: int, fill: str) -> torch.Tensor:
+        t = t.float()
+        if fill == "zero":
+            out = torch.zeros(rows, cols)
+        else:
+            out = torch.randn(rows, cols, generator=gen) * float(t.pow(2).mean().sqrt()) * a.grow_noise
+        out[: t.shape[0], : t.shape[1]] = t
+        return out
+
+    def gain(t: torch.Tensor) -> torch.Tensor:
+        t = t.float()
+        return torch.cat([t, torch.full((D - d,), float(t.mean()))]) * math.sqrt(d / D)
+
+    shapes = {"wq": (D, D, "rand"), "wk": (D, D, "rand"), "wv": (D, D, "rand"), "wo": (D, D, "zero"),
+              "w_gate": (FF, D, "rand"), "w_up": (FF, D, "rand"), "w_down": (D, FF, "zero")}
+    w = {"embed": wide(theta["embed"], theta["embed"].shape[0], D, "zero"), "norm": gain(theta["norm"])}
+    for n, t in theta.items():
+        m = re.fullmatch(r"blocks\.(\d+)\.(\w+?)(?:\.weight)?", n)
+        if m and m[2] in shapes:
+            w[n] = wide(t, *shapes[m[2]])
+        elif m:
+            w[n] = gain(t)
+    out = {"embed": w["embed"], "norm": w["norm"]}
+    for j in range(N):
+        i = j * L // N
+        for n, t in w.items():
+            if n.startswith(f"blocks.{i}."):
+                rest = n[len(f"blocks.{i}."):]
+                repeat = j > 0 and (j - 1) * L // N == i
+                out[f"blocks.{j}.{rest}"] = torch.zeros_like(t) if repeat and rest in ("wo.weight", "w_down.weight") \
+                    else t.clone()
+    dtype = theta["embed"].dtype
+    grown = {**config, "name": f"{config['name']}+grown", "d_model": D, "n_head": D // hd, "d_ff": FF, "n_layer": N}
+    return grown, {n: t.to(dtype) for n, t in out.items()}
 
 
 def lr_mult(step: int, n: int, a: argparse.Namespace) -> float:
@@ -194,7 +249,11 @@ def main() -> int:
     ap.add_argument("--snap-at", default="0.25,0.5,0.75", help="fractions of the steps (comma-separated; empty: none)")
     ap.add_argument("--forks", default="", help="fractions of the steps where a cooldown branch forks (comma-separated)")
     ap.add_argument("--fork-len", type=float, default=0.15, help="a branch's steps, as a fraction of the steps before it")
-    ap.add_argument("--budget-fraction", type=float, default=0.98)
+    ap.add_argument("--budget-fraction", type=float, default=0.98, help="of the tier's budget (prepare.budget)")
+    ap.add_argument("--grow-d", type=int, default=0, help="grown d_model, in heads of θ's head size (0: θ's)")
+    ap.add_argument("--grow-ff", type=int, default=0, help="grown d_ff (0: θ's)")
+    ap.add_argument("--grow-layers", type=int, default=0, help="grown block count (0: θ's)")
+    ap.add_argument("--grow-noise", type=float, default=1.0, help="new read weights' std, in θ's RMS of their matrix")
     ap.add_argument("--no-compile", action="store_true")
     ap.add_argument("--windows", choices=("random", "fresh", "seen"), default="random")
     ap.add_argument("--short-ctx", type=int, default=CTX)
@@ -217,11 +276,23 @@ def main() -> int:
     torch.backends.cuda.matmul.allow_tf32 = True
     dev = prepare.DEVICE.split(":")[0]
     net, rec, theta = prepare.load_start(a.start)
+    config, mrec = rec["config"], rec
+    grown = bool(a.grow_d or a.grow_ff or a.grow_layers)
+    if grown:
+        if config["family"] != "lf" or a.top_blocks or a.freeze_norms or (a.freeze_embed and a.grow_d):
+            raise SystemExit("train: growth trains every tensor it changes: an lf start, no --top-blocks or "
+                             "--freeze-norms, and --freeze-embed only at θ's d_model")
+        config, start_state = grow(config, theta, a)
+        with torch.device(prepare.DEVICE):
+            net = prepare.Net(config)
+        net.load(start_state)
+        mrec = prepare.model_record(rec, config, start_state)
+        del start_state
     params = net.params()
     for p in params.values():
         p.data = p.data.float()
-    embed = "embed" if rec["config"]["family"] == "lf" else "model.embed_tokens.weight"
-    n_layer = rec["config"]["n_layer"]
+    embed = "embed" if config["family"] == "lf" else "model.embed_tokens.weight"
+    n_layer = config["n_layer"]
     if (a.top_blocks or a.block_lr_decay != 1.0) and rec["config"]["family"] != "lf":
         raise SystemExit("train: --top-blocks and --block-lr-decay name lf blocks (blocks.N.*)")
     if not 0 <= a.top_blocks <= n_layer:
@@ -264,7 +335,7 @@ def main() -> int:
     extra = sum(ns_flops(tuple(params[n].shape), a.ns_steps) for n in mats) if a.mat_opt == "muon" else 0
 
     def flops(op: str, ctx: int, n_tokens: int) -> int:
-        return prepare.train_flops(rec, trainable, [{"op": op, "tokens": n_tokens, "ctx": ctx}])["flops"]
+        return prepare.train_flops(mrec, trainable, [{"op": op, "tokens": n_tokens, "ctx": ctx}])["flops"]
 
     step_long = flops("train", CTX, tokens) + extra
     step_short = flops("train", a.short_ctx, tokens) + extra
@@ -276,7 +347,8 @@ def main() -> int:
     val_flops = n_val * flops("forward", CTX, val_tokens)
     score_per_window = flops("forward", a.score_len, a.score_len) if a.score_len else 0
     pool_per_step = a.batch / a.keep if a.score_len else 0
-    room = a.budget_fraction * prepare.TRAIN_FLOP_BUDGET - val_flops
+    tier = prepare.budget(a.start)
+    room = a.budget_fraction * tier["train_flops"] - val_flops
     main_step = per_step + pool_per_step * score_per_window
 
     def fork_lens(n: int) -> dict[int, int]:
@@ -361,7 +433,11 @@ def main() -> int:
             "tokens_per_step": tokens, "val_flops": val_flops, "trained": len(trained),
             "stream_tokens": int(sum(len(p) for p in data.parts)),
             "windows_total": n_windows,
-            "windows_seen_by_start": int(len(seen)), "windows_drawable": int(len(ids))}
+            "windows_seen_by_start": int(len(seen)), "windows_drawable": int(len(ids)), "tier": tier,
+            "model": config if grown else None}
+
+    def encode(model: dict) -> bytes:
+        return prepare.encode_model(config, model) if grown else prepare.encode_full(model)
     t0 = time.perf_counter()
     if a.score_len:
         pool = win.take(int(round(n_steps * pool_per_step)))
@@ -438,7 +514,7 @@ def main() -> int:
     def snapshot(model: dict, entry: dict) -> None:
         d = out / "snap" / f"{len(snap_log):03d}"
         d.mkdir(parents=True, exist_ok=True)
-        (d / "E.bin").write_bytes(prepare.encode_full(model))
+        (d / "E.bin").write_bytes(encode(model))
         (d / "meta.json").write_text(json.dumps({"steps_prefix": len(steps)}) + "\n")
         snap_log.append(entry)
         print(json.dumps({"snapshot": len(snap_log) - 1, **entry}), flush=True)
@@ -489,14 +565,16 @@ def main() -> int:
         model = vinfo.pop("model", None) or model_of(params, theta, trained)
         final = {"step": n_steps, "weights": which, **vinfo}
         print(json.dumps({"final": final, "s": round(time.perf_counter() - t0, 1)}), flush=True)
-        prepare.submit(out, a.start, prepare.encode_full(model), {**theta, **model}, trainable, steps,
+        prepare.submit(out, a.start, encode(model), {**theta, **model}, trainable, steps,
                        changed=sorted(trained), notes={"direction": "ref-data", "args": vars(a), "steps": n_steps,
                                                        "data": info, "snapshots": snap_log, "final": final})
     return 0
 
 
 def model_of(params: dict, theta: dict, trained: list[str]) -> dict:
-    return {n: params[n].detach().to(theta[n].dtype).cpu() for n in trained}
+    """The trained tensors in θ's dtypes (a grown model's new tensors in its embedding's)."""
+    first = next(iter(theta.values())).dtype
+    return {n: params[n].detach().to(theta[n].dtype if n in theta else first).cpu() for n in trained}
 
 
 if __name__ == "__main__":
