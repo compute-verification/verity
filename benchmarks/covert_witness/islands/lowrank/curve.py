@@ -3,7 +3,7 @@ optimizer's fp32 state; the straight-through fp32 latents beside it as `+lat`), 
 target drop (-0.5, -1, -2, -5% of the start's bpb), the least training FLOPs (2 x MACs) of a checkpoint reaching it, marked
 `c` when that checkpoint ends the run's schedule (a complete schedule) and `k` when it is inside one (an upper bound).
 
-    python curve.py [--state ~/.research/lowrank/night2/state.jsonl ...] [--json]
+    python curve.py [--state ~/.research/lowrank/v3/state.jsonl ~/.research/lowrank/night2/state.jsonl ...] [--json]
 
 Reads each run's fetched `out/` under ~/.research/runs (launch.py --collect puts it there), and keeps the fields it reads
 in ~/.research/lowrank/cache/RUN.json, so a run whose big local files `research data custody RUN --publish` removed
@@ -31,10 +31,11 @@ def load(run: str) -> tuple[dict, dict] | None:
         c = json.loads(cached.read_text())
         return c["run"], c["meta"]
     keep = ("step", "macs", "val_bpb", "e_bytes")
+    island = rj.get("island") or meta.get("class")
     rj = {"invalid": rj.get("invalid"),
           "checkpoints": [{**{k: c.get(k) for k in keep}, "score": {"start_bpb": (c.get("score") or {}).get("start_bpb")}}
                           for c in rj.get("checkpoints", [])]}
-    meta = {"start": meta["start"], "class": meta["class"],
+    meta = {"start": meta["start"], "island": island,
             "notes": {"delta_grad": meta.get("notes", {}).get("delta_grad", {})}}
     if not cached.exists():
         CACHE.mkdir(parents=True, exist_ok=True)
@@ -62,7 +63,8 @@ def point(run: str, note: str) -> dict | None:
     fin = max(cks, key=lambda c: c["step"])
     dg = notes.get("delta_grad", {})
     state = sum(dg.get(k, 0) for k in ("grad_bits", "adam_bits", "muon_bits")) // 8 if dg else None
-    return {"run": run, "start": meta["start"], "class": meta["class"], "mechanism": note.split(":")[0].split()[0],
+    return {"run": run, "start": meta["start"], "island": meta.get("island") or meta.get("class"),
+            "mechanism": note.split(":")[0].split()[0],
             "E_bytes": max(c.get("e_bytes", 0) for c in cks), "delta_grad_bytes": state,
             "latent_bytes": dg.get("latent_bits", 0) // 8 if dg else None,
             "l0": l0, "final_bpb": fin["val_bpb"], "final_drop_pct": 100 * (1 - fin["val_bpb"] / l0),
@@ -73,11 +75,11 @@ def point(run: str, note: str) -> dict | None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--state", type=Path, nargs="*",
-                    default=[Path.home() / ".research" / "lowrank" / "night2" / "state.jsonl"])
+                    default=[Path.home() / ".research" / "lowrank" / n / "state.jsonl" for n in ("v3", "night2")])
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
     pts, runs = [], set()
-    for st in a.state:
+    for st in (s for s in a.state if s.exists()):
         for x in st.read_text().splitlines():
             s = json.loads(x)
             if "row" in s and s.get("run") and s["run"] not in runs:
@@ -94,7 +96,7 @@ def main() -> int:
                                       else "-") for t in TARGETS)
         dg = f"{p['delta_grad_bytes'] / 1e6:.1f}MB" if p["delta_grad_bytes"] else "?"
         lat = f"{p['latent_bytes'] / 1e6:.1f}MB" if p["latent_bytes"] else "-"
-        print(f"{p['run']} {p['start']} {p['class']:6} E {p['E_bytes'] / 1e3:7.1f}kB dgrad {dg:>7} +lat {lat:>6} "
+        print(f"{p['run']} {p['start']} {p['island']:6} E {p['E_bytes'] / 1e3:7.1f}kB dgrad {dg:>7} +lat {lat:>6} "
               f"final {p['final_bpb']:.4f} ({-p['final_drop_pct']:+.2f}%) at {p['final_flops']:.2e} "
               f"best {-p['best_drop_pct']:+.2f}%  {cells}  {p['mechanism']}")
     return 0

@@ -1,10 +1,10 @@
 """The lowrank direction's candidate queue: keeps at most `--max` candidates in flight through `launch.py`.
 
-    python drive.py [--queue ~/.research/lowrank/night2/queue.txt] [--stop 2026-11-03T12:30Z] [--max 2]
+    python drive.py [--queue ~/.research/lowrank/v3/queue.txt] [--stop 2026-11-04T08:00Z] [--max 2]
 
-Each queue line is `CLASS START ; NOTE ; TRAIN_ARGS` (`#` comments). A line launches once (keyed by its text), with
-`launch.py --no-wait --island ISLAND --node NODE` from this checkout, whose island must be clean (the run ships HEAD's);
-`--class CLASS` is added to TRAIN_ARGS when they lack it, and NODE is whichever of `--nodes` holds fewer of the queue's
+Each queue line is `ISLAND START ; NOTE ; TRAIN_ARGS` (`#` comments; the note's first word is the mechanism tag). A line
+launches once (keyed by its text), with `launch.py START --island ISLAND --note NOTE --node NODE --no-wait` from this
+checkout, whose island must be clean (the run ships HEAD's); NODE is whichever of `--nodes` holds fewer of the queue's
 runs in flight, ties going to the one launched to longer ago. An ended run is collected with `launch.py --collect`,
 retried on the next passes (its slot held) when that yields no row, up to twenty tries; once collected, its points are
 cached by `curve.py` and `research data custody RUN --publish` drops its local files of 1 MiB and more. Every
@@ -39,11 +39,11 @@ def parse(line: str) -> tuple[str, str, str, list[str]] | None:
     line = line.strip()
     if not line or line.startswith("#"):
         return None
-    # a note may hold `;`: the class and start end at the first, the train args start after the last
+    # a note may hold `;`: the island and start end at the first, the train args start after the last
     head, rest = line.split(";", 1)
     note, args = rest.rsplit(";", 1)
-    klass, start = head.split()
-    return klass, start, note.strip(), shlex.split(args)
+    island, start = head.split()
+    return island, start, note.strip(), shlex.split(args)
 
 
 def utc() -> dt.datetime:
@@ -52,12 +52,11 @@ def utc() -> dt.datetime:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--queue", type=Path, default=Path.home() / ".research" / "lowrank" / "night2" / "queue.txt")
+    ap.add_argument("--queue", type=Path, default=Path.home() / ".research" / "lowrank" / "v3" / "queue.txt")
     ap.add_argument("--stop", type=lambda s: dt.datetime.fromisoformat(s.replace("Z", "+00:00")),
-                    default=dt.datetime(2026, 11, 3, 12, 30, tzinfo=dt.timezone.utc))
+                    default=dt.datetime(2026, 11, 4, 8, 0, tzinfo=dt.timezone.utc))
     ap.add_argument("--max", type=int, default=2, help="candidates in flight at once")
     ap.add_argument("--nodes", default="vy-nebius-1,vy-nebius-3")
-    ap.add_argument("--island", default="e1mb")
     a = ap.parse_args()
     nodes = a.nodes.split(",")
     state_path = a.queue.parent / "state.jsonl"
@@ -88,8 +87,8 @@ def main() -> int:
             state = json.loads(st.read_text()).get("state") if st.exists() else None
             if state not in DONE:
                 continue
-            klass, start, note, _ = parse(key)
-            r = subprocess.run([sys.executable, str(LAUNCH), klass, start, "--note", note, "--collect", s["run"]],
+            _, start, note, _ = parse(key)
+            r = subprocess.run([sys.executable, str(LAUNCH), start, "--note", note, "--collect", s["run"]],
                                capture_output=True, text=True, env=env, cwd=REPO)
             rows = [json.loads(y) for y in r.stdout.splitlines() if y.startswith("{")]
             if not rows and tries.get(key, 0) < 19:
@@ -106,9 +105,11 @@ def main() -> int:
         flying = {k: s for k, s in flying.items()
                   if not any(json.loads(x).get("key") == k and "row" in json.loads(x)
                              for x in state_path.read_text().splitlines())}
-        clean = not subprocess.run(["git", "status", "--porcelain", "--untracked-files=all", "--",
-                                    f"benchmarks/covert_witness/islands/{a.island}"], capture_output=True, text=True,
-                                   cwd=REPO).stdout.strip()
+        def clean(island: str) -> bool:
+            return not subprocess.run(["git", "status", "--porcelain", "--untracked-files=all", "--",
+                                       f"benchmarks/covert_witness/islands/{island}"], capture_output=True, text=True,
+                                      cwd=REPO).stdout.strip()
+
         lines = a.queue.read_text().splitlines() if a.queue.exists() else []
         for line in lines:
             key = line.strip()
@@ -117,15 +118,13 @@ def main() -> int:
             except ValueError as e:
                 print(f"{utc():%H:%M}Z skipped, unparsable ({e}): {key}", flush=True)
                 continue
-            if p is None or key in seen or utc() >= a.stop or not clean or len(flying) >= a.max:
+            if p is None or key in seen or utc() >= a.stop or len(flying) >= a.max or not clean(p[0]):
                 continue
-            klass, start, note, args = p
-            if "--class" not in args:
-                args = [*args, "--class", klass]
+            island, start, note, args = p
             load = {n: sum(1 for s in flying.values() if s.get("node") == n) for n in nodes}
             node = min(nodes, key=lambda n: (load[n], last.get(n, "")))
-            r = subprocess.run([sys.executable, str(LAUNCH), klass, start, "--note", note, "--no-wait", "--island",
-                                a.island, "--node", node, "--", *args], capture_output=True, text=True, env=env, cwd=REPO)
+            r = subprocess.run([sys.executable, str(LAUNCH), start, "--island", island, "--note", note, "--node", node,
+                                "--no-wait", "--", *args], capture_output=True, text=True, env=env, cwd=REPO)
             rows = [json.loads(y) for y in r.stdout.splitlines() if y.startswith("{")]
             run = rows[0].get("run") if rows else None
             if not run:
@@ -138,7 +137,7 @@ def main() -> int:
             seen.add(key)
             flying[key] = rec
             last[node] = rec["launched"]
-            print(f"{utc():%H:%M}Z launched {klass} {start} on {node} {run}: {note}", flush=True)
+            print(f"{utc():%H:%M}Z launched {island} {start} on {node} {run}: {note}", flush=True)
         if not flying and utc() >= a.stop:
             return 0
         time.sleep(60)
