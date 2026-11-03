@@ -1,0 +1,10 @@
+# pilot.sh s 256 s2 pilots-s2.txt: round 2 at s, 20 tokens per parameter (5 and 10 as extras), Muon 0.02: the embedding's
+# and norms' rate, Muon's weight decay, batch 128 and a 60% cooldown (round 1: Muon 0.02 best, embedding 0.012 > 0.006)
+e012wd --branches 20 --extra 5,10 --micro 64 --embed-lr 0.012 --norm-lr 0.012 --wd 0.025
+e020wd --branches 20 --extra 5,10 --micro 64 --embed-lr 0.02 --norm-lr 0.02 --wd 0.025
+e030wd --branches 20 --extra 5,10 --micro 64 --embed-lr 0.03 --norm-lr 0.03 --wd 0.025
+e012wd05 --branches 20 --extra 5,10 --micro 64 --embed-lr 0.012 --norm-lr 0.012 --wd 0.05
+e012wd10 --branches 20 --extra 5,10 --micro 64 --embed-lr 0.012 --norm-lr 0.012 --wd 0.1
+e020n006wd --branches 20 --extra 5,10 --micro 64 --embed-lr 0.02 --norm-lr 0.006 --wd 0.025
+e012b128 --branches 20 --extra 5,10 --micro 64 --embed-lr 0.012 --norm-lr 0.012 --wd 0.025 --batch 128
+e012c06 --branches 20 --extra 5,10 --micro 64 --embed-lr 0.012 --norm-lr 0.012 --wd 0.025 --cool 0.6
