@@ -3,6 +3,7 @@
   "public": {
     "advice": "benchmarks/network_e2e/e2e.py",
     "advice-windows": "benchmarks/one_stage/a5_tp.sh",
+    "block-counts": "benchmarks/one_stage/served_verdicts.sh",
     "build": "benchmarks/stacked_share/job.sh",
     "epoch": "examples/vllm/commit.sh",
     "int8-checkpoint": "benchmarks/hash/dither/pin_glm53.sh",
