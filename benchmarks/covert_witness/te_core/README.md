@@ -41,16 +41,19 @@ other quantity bits.
   program order, computing the token from its inputs; u(1) its per-token update. **t**: the share of that work in ops
   that read no θ' value at all. **u(x)** (A1's): the update bits for any share x, 0 up to t (a block handed the cut
   values does those ops), then u_in. Where Δ counts, both are at most Δ (a block can read the update code instead).
-- **Δ**: the bits that describe θ' given θ, 8 |E| for the submitted E, by a decoder of **d** gates (a stub at 0 until
-  measured). **Δ_t**: the weights in the form the update rule reads and writes, a straight-through run's fp32 latents
-  at 32 bits a value (`delta_t_bits`, which only `rescore --quantities analysis` gives so far), else Δ.
+- **Δ**: the bits that describe θ' given θ, 8 |E| for the submitted E, by a decoder of **d** gates: the record's
+  measured d (a submission's `notes.decoder` or its checkpoint's, `ledger.notes_decoder`), else the witness's rebuild,
+  `prepare.rebuild_macs` multiply-adds at F32Fma_v4's gates each, and 0 only where E has no decoder (a dense update
+  stored directly); a row with none of these has d unmeasured, and Fit refused (`formalism.decoder`). **Δ_t**: the
+  weights in the form the update rule reads and writes, a straight-through run's fp32 latents at 32 bits a value
+  (`delta_t_bits`, which only `rescore --quantities analysis` gives so far), else Δ.
 - **Δ_grad**: the gradient and optimizer state a step's blocks pass between them: the gradient's narrowest cut at
   32 bits or more an element, plus the carried state the token ops don't read.
 - **(c, k)**: a block's gates and the bits it imports; `policy.cells` gives each start's grid in decades, from one
   token's inference block to the start's server block, and its reference shapes at their exact (c, k): the inference
   block, the reference policy (c = 4096 w, k = 10 kB) and the server block.
 - **Fit** (checked): for training, three kinds of block, compute Δ + sτ ≤ k, reduction 2Δ_grad ≤ k and update
-  application Δ_t + Δ_grad ≤ k (a part with no token blocks has only the compute kind); where every part fits,
+  application Δ_t + Δ_grad ≤ k (a part with no token blocks has only the compute kind), and d < c; where all hold,
   ρ = c/(c − d).
 - **Slowdown** (the counting lemma at A \ R, a target until Lean proves it): its token form ρ ≥ σ(1 − x₀)·s/s\*
   (with the largest per-token affected count where token blocks vary), at the assumptions' upper bounds
@@ -68,6 +71,12 @@ other quantity bits.
   bounds from that witness. A row without a trace gets labelled stubs (`formalism.STUBS`, and `formalism.V23` for a row
   ingested before 4.0), and `rescore --quantities analysis` the per-record quantities of covert_witness's
   `analysis/rescore_v1.py` instead, which has no formula of its own; every row's `labels` name each quantity's source.
+- **Refused rows**: a trace the capture can't vouch for is refused, never scored (`formalism.refusal`,
+  `formalism.Refused`; `frontier.formalism_rows` and `rescore` list each with its reason): one with a data-dependent
+  read-back (Python control flow on a value read from a tensor, which the trace's stand-in decides), one with a Python
+  number carried across steps (its Δ_grad grows with the step; a program keeps such state as a device tensor), one
+  traced before 4.2 (it has no read-back lists: trace it again), and one whose E is nonempty while its traced step
+  shows no update (an affected share of 0 or u(1) = 0) or no step through its checkpoint reads θ'.
 - **Counterexample family X**: a decoder from `codecs/` (a `codecs.Plan`) plus per-step encodings E_t, each rebuilding
   its step's updated weights from θ bit for bit within c (`prepare.declare_step` for a covert_witness script, decoded by
   `prepare.decode`). Families are checked and recorded with each run; the formalism doesn't read them.
@@ -187,8 +196,9 @@ A script may call `te_core.hooks` (`plan`, `output`, `step`, `tokens`, `family`;
 5. **Ingest**: `python -m te_core.ledger --agent A ingest OUT --direction D --mechanism M --parent ID --run-id R`
    writes one submission record per checkpoint, with the program's arguments; `--structures TRACED.json` (structure
    id -> traced structure, `capture.script`) gives its steps their U, D and the formalism's measured quantities
-   (`frontier.measured`); `--readouts` judges its read-outs against the start's tensors. Reference (honest) runs add
-   `--reference`.
+   (`frontier.measured`); `--readouts` judges its read-outs against the start's tensors; `--meta META.json` (else the
+   run's own or its parent directory's `meta.json`, checked to be this run's submission) gives each checkpoint its
+   measured decoder. Reference (honest) runs add `--reference`.
 6. **The frontier**: `python -m te_core.frontier`. Its promotion candidates (`frontier.candidates`) are promoted only
    on the sealed promotion set, one bit each: covert_witness's `promote.py --tier T`, run as the scorer.
 

@@ -54,7 +54,7 @@ def block(gates, delta, dgrad, delta_t=None, tail=0.0, sigma=0.8) -> dict:
     return {"parts": [{"gates": gates, "tokens": sigma * gates / W, "token_gates": sigma * gates,
                        "affected_gates": 0.5 * sigma * gates, "steps": 1, "delta_grad_bits": dgrad}],
             "tau_bits": 16, "a_bits": 8192, "delta_bits": delta, "delta_t_bits": delta_t, "u1_bits": delta,
-            "u": [list(x) for x in u], "u_in": [list(x) for x in u_in], "tail_share": tail, "decoder_gates": None,
+            "u": [list(x) for x in u], "u_in": [list(x) for x in u_in], "tail_share": tail,
             "labels": rescore.LABELS | (rescore.TAIL if tail else rescore.EVEN)}
 
 
@@ -65,7 +65,7 @@ def ledger_rows(runs=RUNS) -> list[dict]:
         for step, share, bpb in cps:
             out.append({"id": f"{run}-{step}", "run_id": run, "checkpoint_step": step, "start": start,
                         "start_bpb": L0[start], "val_bpb": bpb, "direction": direction, "mechanism": mechanism,
-                        "family": family, "measurement_commit": "pin", "output": {"e_bytes": delta / 8},
+                        "family": family, "measurement_commit": "pin", "output": {"e_bytes": delta / 8, "rebuild_macs": 0},
                         "written_ts": len(out), "formalism": block(share * C0, delta, dgrad, delta_t, tail)})
     return out
 
@@ -120,9 +120,13 @@ def dial(d: dict, c: float, k: float) -> tuple[float, str]:
     and u_in's points."""
     s, dg = c / d["w_gates"], d["delta_grad_bits"]
     s_fit = c / d.get("w_fit_gates", d["w_gates"])
-    if d["delta_bits"] + s_fit * d["tau_bits"] <= k and dg is not None and 2 * dg <= k and d["delta_t_bits"] + dg <= k:
+    counts = d["d_gates"] is not None and d["d_gates"] < c
+    if counts and d["delta_bits"] + s_fit * d["tau_bits"] <= k and dg is not None and 2 * dg <= k \
+            and d["delta_t_bits"] + dg <= k:
         return c / (c - d["d_gates"]), "fit"
     u, u_in = AP.profile(d["u_points"]), AP.profile(d["u_in_points"])
+    if counts:
+        u, u_in = formalism.capped(u, d["delta_bits"]), formalism.capped(u_in, d["delta_bits"])
     x0 = 0.0
     for (xa, ua), (xb, ub) in zip(u_in, u_in[1:]):
         if ub <= k:
@@ -210,11 +214,13 @@ def test_the_dial_formula_on_a_rows_columns_is_te_cores_at_every_cell(tmp_path, 
 
 
 @pytest.mark.parametrize("u1, dgrad, delta_t, tail, decoder", [
-    (1e9, 3e9, None, 0.0, None), (1e9, 3e9, None, 0.3, None), (1e3, 3e4, None, 0.0, None), (1e3, 3e4, 6e4, 0.0, None),
-    (2e4, 1e4, 3e4, 0.05, 1e9), (5e5, None, None, 0.2, None), (5e4, 2e4, None, 0.0, None)])
+    (1e9, 3e9, None, 0.0, 0.0), (1e9, 3e9, None, 0.3, 0.0), (1e3, 3e4, None, 0.0, 0.0), (1e3, 3e4, 6e4, 0.0, 0.0),
+    (2e4, 1e4, 3e4, 0.05, 1e9), (5e5, None, None, 0.2, 0.0), (5e4, 2e4, None, 0.0, 0.0), (1e3, 3e4, None, 0.3, None),
+    (2e4, 1e4, None, 0.3, 1e13)])
 def test_te_core_at_is_the_dial_formula(u1, dgrad, delta_t, tail, decoder):
     """Over decades of c and k, te_core.formalism.at's rho and basis are the draft note's formula on the inputs this
-    panel publishes for the record (te_core's ρ is the score; the dial reruns it in the page)."""
+    panel publishes for the record (te_core's ρ is the score; the dial reruns it in the page), with d = 0, d below
+    some c and above others, and d unmeasured (None: no block fits)."""
     m = formalism.from_json(block(1e15, u1, dgrad, delta_t, tail) | {"decoder_gates": decoder, "labels": {}})
     d = dict(zip(AP.INPUTS, AP.inputs(m, policy.w_fwd(SHAPE))))
     for c in (1e10, 1e12, 1e14, 1e16):
@@ -244,7 +250,7 @@ def test_estimated_names_the_inputs_that_arent_measured():
     m = formalism.from_json(block(1e15, 1e6, 3e6, None, 0.3))
     text = AP.estimated(m)
     assert text == ("w_gates:est tau_bits:stub a_bits:bound u_points:A1 u_in_points:A1' delta_bits:bound "
-                    "delta_t_bits:bound d_gates:stub delta_grad_bits:est")
+                    "delta_t_bits:bound d_gates:est delta_grad_bits:est")
     latent = formalism.from_json(block(1e15, 1e6, 3e6, 4e6, 0.3))
     assert "delta_t_bits:est" in AP.estimated(latent)
     counted = formalism.from_json(block(1e15, 1e6, 3e6) | {"labels": {
