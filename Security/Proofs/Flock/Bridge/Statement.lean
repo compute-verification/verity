@@ -21,7 +21,10 @@ faulty slot, and `δ` bounds those slots with the rest. An input no unit reads i
 `Slots.layout` still lays a separate input class, which the claims' design reads `all`, so `partOf` is not yet its
 partition.
 
-`SampledKSLiveStated` freezes the statement and the definitions it reads; no proof of `SampledKSLive` exists yet.
+`SampledKSLive` itself is neither proved nor a guarantee. Its versions at the files the verifier of record accepts are
+proved: the headline `SampledKSLiveV5` (`Bridge.V5.KSLive`), at flock-verify `--zk --public-inputs` with or without
+shared rows, and `SampledKSLiveV3` (`Bridge.KSLive`), the no-shared-rows form, which V5 doesn't imply, from the lemma
+`Bridge.sampledKSLiveV2`, `SampledKSLive` at `RowsOk` circuit files (`Bridge.Canon`).
 `SampledKSLive` holds at `kd = 0` (`δ = 1`), and elsewhere follows from `EndToEndHidden` at
 `min K₀ (n − kd + 1)` by `Bridge.TransportsLive`, `Bridge.FaultyRightTarget` and `Bridge.CountTarget`
 (`Bridge.AssemblyTarget`).
@@ -154,10 +157,5 @@ def _root_.Flock.Bridge.TransportsLive : Prop :=
     let Cd := Bridge.commitDep Cc rows D.unroll n roots
     ∀ u, ∀ g ∈ P.io u, ∀ o : vb.Opening, vb.com o = vb.cs (reg σ) (vb.pos g) →
       ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
-
-/-- **`SampledKSLive` is stated**: it, and the definitions it reads, equal to itself. -/
-def SampledKSLiveStated : Prop :=
-  let s := SampledKSLive
-  s = s
 
 end Flock.Guarantees

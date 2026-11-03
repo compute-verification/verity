@@ -79,12 +79,15 @@ What doesn't change:
 Each guarantee below is listed in the lock (`Security/lean-audit.json`), which records its statement, the definitions it
 reads and its named assumptions.
 
-**A `--zk` session's acceptance, read in the sampling relation.** `Flock.SecurityProofs.SampledKSLiveV3`
-(`Security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `flock-verify verify --zk` accepts the transcript and the
+**A `--zk` session's acceptance, read in the sampling relation.** The headline is
+`Flock.SecurityProofs.SampledKSLiveV5` (`Security/Proofs/Flock/Bridge/V5/KSLive.lean`), at `flock-verify verify --zk
+--public-inputs` with or without shared rows. The no-shared-rows form, which V5 doesn't imply, is
+`Flock.SecurityProofs.SampledKSLiveV3` (`Security/Proofs/Flock/Bridge/KSLive.lean`): on the event that `flock-verify verify --zk` accepts the transcript and the
 files (their ports `sha512/row/v1`, `row/v2` or `row-seg/v1` rows of distinct names, no root registered under two domains)
 and the sampled-proofs run passes the registration's population, the committed transcript, read as the sampling witness, is
 outside the sampling relation `RelS` at δ with probability at most δ + ε_ks + δ_link. It takes no hypothesis on the files.
-It follows from `SampledKSLiveV2`, the same bound at the circuit files the verifier of record reads. Its named assumptions
+It follows from the lemma `Flock.Bridge.sampledKSLiveV2`, the same bound at the circuit files the verifier of record
+reads. Its named assumptions
 are the coins (A3, `FlockSoundness.Assumptions.UniformRandomBytes`), the live verifier, and SHA-512's collision resistance.
 
 **The property.** `NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`, at any
@@ -139,7 +142,7 @@ history would discharge, and doesn't discharge them yet.
 reads or shared rows (`a5.PLAIN_SCOPE`). `flock_verify_sound`'s plain part covers each session at one table (`SoundExec`,
 `SoundExecH` at hidden outputs, `SoundExecHR` with registered reads), in the game form
 (`Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`). No theorem carries a plain session's acceptance to the
-sampling relation, as `SampledKSLiveV3` does under `--zk`, so a plain audit shows each session's soundness, not the audit
+sampling relation, as `SampledKSLiveV5` and `SampledKSLiveV3` do under `--zk`, so a plain audit shows each session's soundness, not the audit
 guarantee above.
 
 **The named assumptions.**

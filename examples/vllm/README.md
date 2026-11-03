@@ -17,8 +17,8 @@ run is a development run. And an H1 commitment's served execution blocks aren't 
 remote's PoUW component reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
 
 `example.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
-is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
-session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
+is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV5` (with `SampledKSLiveV3` for the no-shared-rows
+form), is proved: when the verifier accepts a `--zk` session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
 errors. But the remote protocol has no guarantee in Lean for the demo to instantiate: `Verity.Soundness` is not in Lean
 yet, and remote's verifier reads one-stage v1, which takes the sessions' verdicts as evidence
 (`verity/core/protocols/remote/README.md`, "The open gap"). PoUW's proof layer needs `AcceptedLive`, which no served path

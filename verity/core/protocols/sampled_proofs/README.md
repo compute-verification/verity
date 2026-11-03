@@ -18,23 +18,26 @@ component accepts.
 
 The guarantee is knowledge soundness of the sampled audit: except with a bounded probability, when the verifier
 accepts, at most the profile's count of proof blocks are incorrect. Its top statement is C-Flock's
+`Flock.Guarantees.SampledKSLiveV5`, stated in `Security/Proofs/Flock/Bridge/V5/Statement.lean` and proved in
+`Security/Proofs/Flock/Bridge/V5/KSLive.lean`, which bounds the probability that `flock-verify --zk --public-inputs`
+accepts, with or without shared rows, while the claim fails. The no-shared-rows form, which V5 doesn't imply, is
 `Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
-`Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
-that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
-and the V5 guarantees cover sessions of non-templated statements only: knowledge soundness for a templated statement
-(`Flock.Tags.templated`), whose acceptance `flock_verify_sound` covers, is open until the V5 guarantees are restated
-over the statement circuit. It rests on these named assumptions:
+`Security/Proofs/Flock/Bridge/KSLive.lean`, which bounds the probability that `flock-verify --zk` accepts the files and
+the run passes the registration's population while the claim fails. Both cover sessions of non-templated statements
+only: knowledge soundness for a templated statement (`Flock.Tags.templated`), whose acceptance `flock_verify_sound`
+covers, is open until they are restated over the statement circuit. They rest on these named assumptions:
 
 - `UniformRandomBytes`: the bytes the verifier's draw reads from its operating system are uniform (the CSPRNG
   idealized; its docstring says what that leaves out).
-- `RecordCustodyZKJ`: the record `flock-verify --zk` reads is the one the challenger wrote for the live session, and its
-  draw file is the one `flock-verify draw` printed for the verifier's own draw.
+- `RecordCustodyZKJ` (V5: `RecordCustodyZKJP`, at the verifier's own public inputs): the record `flock-verify --zk`
+  reads is the one the challenger wrote for the live session, and its draw file is the one `flock-verify draw` printed
+  for the verifier's own draw.
 - `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
   (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
 
 On `main`, both composites' sampled-proofs component is one-stage v1 (`verity/sampled-proofs/one-stage/v1`), which
 takes the sessions' verdicts as evidence: the verifier's run of `flock-verify --zk` produces them, and the link from a
-composite's acceptance to that run, and so to `SampledKSLiveV3`, comes with one-stage v2 (under "Where things are").
+composite's acceptance to that run, and so to these guarantees, comes with one-stage v2 (under "Where things are").
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
 before any coin. In the remote protocol the coins come from the auditor's challenger (or, until proofs retires it, the

@@ -16,20 +16,18 @@ import Proofs.Flock.Bridge.Honest
 import Proofs.Flock.Bridge.V5
 import Proofs.Flock.Bridge.Public
 
-/-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
-of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
-the sampled statement at `RowsOk` circuit files (row/v1, row/v2 and row-seg/v1 ports) and the constants `κ` and
-`canonAt`, proved (`Flock.Bridge.assemblyTargetC` with every target it takes), and
-`Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`, V2 with its file preconditions read off the
-verifiers' acceptance (`Refused`). `Lowers`: the claims program `progOf C κ` lowers every unit of every circuit
-(`Flock.Bridge.lowers`).
-`FaultyRightC`: a unit right on its shaped openings is not faulty (`Flock.Bridge.faultyRightC`). `Public`:
-`Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub`, `SampledKSLiveV2` with its error
+/-! The sampled audit's knowledge soundness, live. Its headline is `V5`:
+`Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5`, at flock-verify `--zk --public-inputs` with or
+without shared rows, beside its honest witness `Flock.SecurityProofs.SampledKSLiveV5Honest`. `KSLive`:
+`Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`, the no-shared-rows form, which V5 doesn't
+imply: the sampled statement on the event that the verifiers accept the files (`Refused`), from the lemma
+`Flock.Bridge.sampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`, the statement at `RowsOk` circuit files (row/v1, row/v2
+and row-seg/v1 ports) and the constants `κ` and `canonAt` (`Flock.Bridge.assemblyTargetC` with every target it takes).
+`Lowers`: the claims program `progOf C κ` lowers every unit of every circuit (`Flock.Bridge.lowers`).
+`FaultyRightC`: a unit right on its shaped openings is not faulty (`Flock.Bridge.faultyRightC`). `Public`: the lemma
+`Flock.Bridge.sampledKSLivePub : Flock.Guarantees.SampledKSLivePub`, `SampledKSLiveV2` with its error
 `Flock.Bridge.deltaPub`, a function of the public parameters. `PublicDeployed`:
 `Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed`, `deltaPub < 1` at the deployment's
-parameters. `Honest`: `Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarantees.SampledKSLiveHonest`, the file
-hypotheses of V2, V3 and Pub at the deployed session, from the named premise that its files parse
+parameters. `Honest`: `Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarantees.SampledKSLiveHonest`, V3's honest
+witness: the file hypotheses of V2, V3 and Pub at the deployed session, from the named premise that its files parse
 (`Bridge.Assumptions.ServedFilesParse`). -/
-
-/-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
-theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl

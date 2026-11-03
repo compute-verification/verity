@@ -22,7 +22,8 @@ $$\binom{n-K_0}{k_d}\Big/\binom{n}{k_d} + \frac{\mathrm{ksClosedM1}(k,q_F,q_S)}{
 at the knowledge finders' budgets `q_F = 2(t' + v)` and `q_S = t' + v` (`SampledKSLiveV2`'s: the prover's per-run time `t'`
 and one opening's verification `v`), a function of `n`, `k_d`, `K₀`, the analysis' `k`, `R_w`, `M`, `t'`, `v`, `ρ` and the
 circuit's partition. Its rate hypothesis reads only `k` (`rateM1 k ≤ ρ`) where `SampledKSLiveV2`'s reads the plan, and every other
-hypothesis, named assumption included, is `SampledKSLiveV2`'s.
+hypothesis, named assumption included, is `SampledKSLiveV2`'s. Its proof `Flock.Bridge.sampledKSLivePub` is a lemma:
+its event is `SampledKSLiveV2`'s, not a form the verifier accepts of its own.
 -/
 
 namespace Flock.Guarantees
@@ -159,5 +160,5 @@ theorem sampledKSLivePub_of (h : SampledKSLiveV2) : SampledKSLivePub := by
 end Flock.Guarantees
 
 /-- **The sampled audit's knowledge soundness, live, with a public error** (`Flock.Guarantees.SampledKSLivePub`). -/
-theorem Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub :=
-  Flock.Guarantees.sampledKSLivePub_of Flock.SecurityProofs.SampledKSLiveV2
+theorem Flock.Bridge.sampledKSLivePub : Flock.Guarantees.SampledKSLivePub :=
+  Flock.Guarantees.sampledKSLivePub_of Flock.Bridge.sampledKSLiveV2
