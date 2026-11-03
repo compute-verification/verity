@@ -3,7 +3,7 @@ import Definitions.Accounting.Remote.Fork
 /-!
 # The receipts' binding bound (trusted)
 
-The bound on the receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`), the probability that some window
+The bound on the receipts' binding term (`Accounting.Remote.Sample.Receipts.binding`), the probability that some window
 opens a receipt presented with an accepted row other than the one its root holds, which `PooledDraw` and the memory
 line's drawn guarantees charge. It is the forking argument: the held row is by definition the plurality of the rows the
 receipt shows over the window's continuations (`Receipts.held`), so a receipt moves with probability at most the
@@ -29,7 +29,7 @@ the roots then read only the cut is not stated here, so `split_t` is not bounded
 
 namespace Accounting.Guarantees.Remote
 
-open Accounting.Remote.Draw
+open Accounting.Remote.Sample
 
 /-- **The receipts' binding term, in its fork form.** For a session `D` on the first blocks `prf` and fallbacks `rest`,
 its receipts `R`, and sets `L_t` holding every receipt window `t` opens, the binding term is at most

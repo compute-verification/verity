@@ -129,15 +129,15 @@
    "owner": "@compute-research",
    "digest": "6bd040fc0a366e05c261a269bc43845578fdb319ae9e5df7eda4df4416dc261e"
   },
-  "Accounting.Remote.Draw.Assumptions.Counted": {
+  "Accounting.Remote.Sample.Assumptions.Counted": {
    "owner": "@memory-accounting",
    "digest": "a8ae94ed79b221dba199d5216232dfcbfdba8e97ead1d4501176191e60b12c62"
   },
-  "Accounting.Remote.Draw.Assumptions.Live": {
+  "Accounting.Remote.Sample.Assumptions.Live": {
    "owner": "@memory-accounting",
    "digest": "8dbfee2935ed0fb5a3386fde91c2bbde338f00ce3f6301fa27cb1e10c3b554d9"
   },
-  "Accounting.Remote.Draw.Assumptions.Refused": {
+  "Accounting.Remote.Sample.Assumptions.Refused": {
    "owner": "@memory-accounting",
    "digest": "d1684ab2095265ddc42a1b96006579547569610dbf78f7dcd917e70c29cdbf5f"
   },
@@ -786,7 +786,7 @@
   "Properties.RemoteAudit.Pooled": {
    "imports": ["Definitions.Accounting", "RemoteAudit"],
    "except": [],
-   "why": "the pooled bound the verifier computes (`RemoteAudit.Pooled`) and the W the memory line reads (`RemoteAudit.Line`) are stated against the draw's model they cover (`Definitions.Accounting.Remote.Draw`), never a proof"
+   "why": "the pooled bound the verifier computes (`RemoteAudit.Pooled`) and the W the memory line reads (`RemoteAudit.Line`) are stated against the draw's model they cover (`Definitions.Accounting.Remote.Sample`), never a proof"
   },
   "Properties.RemoteAudit.Line": {
    "imports": [
