@@ -1241,6 +1241,25 @@ def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_pa
     assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
 
 
+def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_and_refuses_an_unretained_serve(tmp_path):
+    """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
+    each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
+    record's zero key) is left with none and its records' root is rewritten, so every tile then passes the verifier's check;
+    a serve that retained no pass is refused."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    d, out = _serve_dir(tmp_path, [path]), tmp_path / "volunteer.json"
+    before = json.loads(path.read_text())["records_root"]
+    assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 0
+    doc = json.loads(out.read_text())
+    assert doc["ok"] and [p["manifest"] for p in doc["passes"]] == [str(path)] and doc["over"] and not doc["left"]
+    assert doc["voluntary_a"] + doc["voluntary_b"] > 0
+    assert json.loads(path.read_text())["records_root"] == doc["passes"][0]["records_root"]["after"] != before
+    assert _replay_every_tile(VR.load(path, published(path))) == {}
+    (d / "served.json").write_text(json.dumps({**json.loads((d / "served.json").read_text()), "retained": False}))
+    assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 1
+
+
 def test_volunteer_words_gives_up_a_b_row_for_a_row_the_a_count_leaves_over():
     """V-EX allows ⌈m/64⌉ = 1 A row of a 16-row unit: of two credited rows over their row caps the one further over is
     given up as an A row, and the other gives up the B row holding its flagged atom-word.  A third row over its cap in the

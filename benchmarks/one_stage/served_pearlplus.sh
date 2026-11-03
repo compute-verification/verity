@@ -12,17 +12,20 @@
 #      a prefill-heavy load, 8 prompts a step), each engine step one pass retained in passes/; before it, unless
 #      PEARLPLUS_UNRETAINED is set empty, the same load under its own lease with no pass retained (`serve --no-retain`,
 #      unretained/), whose wall is the option's without writing the passes;
-#   3. `served_passes.py verify` takes Pearl+'s verdict over every pass on the CPU in PEARLPLUS_JOBS processes (default
+#   3. after the lease and before the verifier's coin, `served_passes.py volunteer` replays every tile of every retained
+#      pass on the CPU in PEARLPLUS_JOBS processes and gives up, in the passes' records, the rows over a debit cap (V-EX),
+#      which the serve's screen can't see; PEARLPLUS_VOLUNTEER set empty skips it, and the verdict may then draw such a tile;
+#   4. `served_passes.py verify` takes Pearl+'s verdict over every pass on the CPU in PEARLPLUS_JOBS processes (default
 #      nproc): one draw of PEARLPLUS_DRAWS work-weighted tiles (default its own, 459) over all the passes, and each pass's
 #      exclusion tiles, replayed on fast_tile's batch forms, the first and every 256th after it on the scalar reference
 #      too (a scalar replay takes minutes a tile at the 1B's K), or with PEARLPLUS_FAST set empty on the scalar reference
 #      alone. Its document goes to PIECE_DIR/verify.json and its core answer to PIECE_DIR/pearlplus-answer.json, not
 #      answer.json, which the record would compose as the window's PoUW answer;
-#   4. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, Pearl+'s verdict's credit,
+#   5. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, Pearl+'s verdict's credit,
 #      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.PEARLPLUS_WHY: its
 #      passes are not the window sampled proofs audited, so WINDOW names nothing here).
 # The passes hold the run's activations, so they stay in SERVE_DIR/private, under served_verdicts.sh's `research keep`.
-# env: served_verdicts.sh's (VENV, HF_HOME, CUDA_HOME), PEARLPLUS_* above. Its lines name no window. Exit 0 once step 4
+# env: served_verdicts.sh's (VENV, HF_HOME, CUDA_HOME), PEARLPLUS_* above. Its lines name no window. Exit 0 once step 5
 # wrote the piece.
 set -uo pipefail
 mkdir -p "${3:?PIECE_DIR}" && SD=$(cd "${1:?SERVE_DIR}" && pwd) && P=$(cd "$3" && pwd) || exit 1
@@ -73,6 +76,14 @@ if [ -n "${PEARLC_CUBIN:-}" ]; then
   serve serve.log --passes "$Q/passes" --out "$Q/served.json"
   rc=$?
   say "serve: served_passes.py serve exit $rc after $(took "$t"): $(grep -m1 '^served ' "$Q/serve.log" | cut -c1-300)"
+fi
+
+if [ -s "$Q/served.json" ] && [ -n "${PEARLPLUS_VOLUNTEER-1}" ]; then
+  t=$(date +%s)
+  "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py volunteer --passes "$Q/passes" --out "$Q/volunteer.json" \
+    --jobs "${PEARLPLUS_JOBS:-$(nproc)}" > "$Q/volunteer.log" 2>&1
+  rc=$?
+  say "volunteer: served_passes.py volunteer exit $rc after $(took "$t"): $(tail -1 "$Q/volunteer.log" | cut -c1-400)"
 fi
 
 if [ -s "$Q/served.json" ]; then

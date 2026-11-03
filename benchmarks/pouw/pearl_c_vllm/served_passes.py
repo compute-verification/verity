@@ -4,6 +4,7 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
 
   served_passes.py serve --passes DIR --out served.json [--spec SPEC] [--arm ARM] [--requests 32] [--prompt-tokens 512]
                          [--output-tokens 16] [--max-num-batched-tokens N] [--no-retain]
+  served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J]
   served_passes.py verify --passes DIR --out verify.json [--answer answer.json] [--draws 459] [--delta 1/100] [--jobs J] [--fast]
 
 ``serve`` builds the spec's preset with its Pearl-C arm (`pearl_c_arm`: ``--arm``, else the spec's one; `verity_bench`'s
@@ -19,6 +20,12 @@ and exits non-zero unless the timed call's passes hold calls in at least three (
 within its caps.  ``--no-retain`` serves the same with no ``transcript_dir``: each pass is committed and none is written,
 so its walls are the option's without retention, its passes have no manifest or MACs, and ``verify`` refuses it
 (``retained`` false).
+
+``volunteer`` is the prover's step between the serve and the verifier's coin (`volunteer_pass.volunteer`, V-EX's remedy): on
+each pass with calls, as ``verify`` reads them, it replays every tile word by word on ``--jobs`` processes and gives up, in
+the pass's records, the rows that leave a tile or one of its credited rows over its debit cap, which the serve's screen
+can't see (the debit reads the noised codes); the transcript is the serve's.  It writes each pass's outcome and seconds to
+``--out``, prints one line and exits 0 only when no pass has a tile left over a cap; it refuses a serve that retained none.
 
 ``verify`` is Pearl+'s PoUW verdict on the run (`verify_run.verify_passes`): the passes with calls that
 ``DIR/served.json`` names, else every ``DIR/pass-NNNNN/manifest.json`` (a transcript dir a served engine retained), in
@@ -56,7 +63,9 @@ SCHEMA = "verity-pouw/pearl-plus-served-verify/v1"
 DRAWS = 459
 KEEP = ("units", "base", "tiles", "screened_rows", "failing_rows", "unsure_rows", "excluded_rows", "transcript_root",
         "activation_roots", "schedule", "manifest")
-#: why `verify` refuses a serve run with ``--no-retain``
+#: what `volunteer` keeps of each pass's `volunteer_pass.volunteer`
+VOLUNTEER_KEEP = ("manifest", "ok", "line", "tiles", "over", "voluntary_a", "voluntary_b", "left", "records_root", "credit_kept")
+#: why `verify` and `volunteer` refuse a serve run with ``--no-retain``
 UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so there is nothing to replay")
 
 
@@ -178,6 +187,38 @@ def timed_credit(served: dict, work: dict, coins) -> dict:
             "credited": max(0, work["credited"] - math.ceil((1 - Fraction(work["rho"])) * warm))}
 
 
+def volunteer(args: argparse.Namespace) -> int:
+    from verity.core.protocols.pouw.coins import CoinCommitment
+    sys.path.insert(0, str(HERE))
+    import volunteer_pass as VP
+
+    passes = Path(args.passes)
+    served = json.loads((passes / "served.json").read_text()) if (passes / "served.json").exists() else None
+    if served is not None and served.get("retained") is False:
+        print(f"volunteer FAIL: {UNRETAINED[1]}", flush=True)
+        return 1
+    paths, _ = manifests(passes)
+    coins = CoinCommitment.from_json(json.loads((passes / "coins.json").read_text()))
+    got = []
+    for path in paths:
+        t = time.perf_counter()
+        r = VP.volunteer(path, coins, args.jobs)
+        got.append({**{k: r[k] for k in VOLUNTEER_KEEP}, "s": time.perf_counter() - t})
+        print(f"{path.parent.name}: {r['line']}", flush=True)
+    total = {k: sum(len(r[k]) for r in got) for k in ("over", "left")}
+    given = {k: sum(len(rows) for r in got for rows in r[k].values()) for k in ("voluntary_a", "voluntary_b")}
+    doc = {"schema": "verity-pouw/pearl-plus-served-volunteer/v1", "passes_dir": str(passes), "served_run": (served or {}).get("run"),
+           "jobs": args.jobs, "passes": got, "tiles": sum(r["tiles"] for r in got), **total, **given,
+           "s": sum(r["s"] for r in got), "ok": bool(got) and all(r["ok"] for r in got)}
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(doc, indent=1) + "\n")
+    print(f"volunteer {'PASS' if doc['ok'] else 'FAIL'}: {len(got)} passes, {doc['tiles']} tiles replayed in {doc['s']:.0f} s on "
+          f"{args.jobs} processes, {doc['over']} over a cap; gave up {doc['voluntary_a']} A rows and {doc['voluntary_b']} B rows; "
+          f"{doc['left']} tiles left over a cap", flush=True)
+    return 0 if doc["ok"] else 1
+
+
 def verify(args: argparse.Namespace) -> int:
     from verity.core.protocols.pouw.coins import CoinCommitment
     sys.path.insert(0, str(HERE))
@@ -216,6 +257,10 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--output-tokens", type=int, default=16)
     s.add_argument("--max-num-batched-tokens", type=int)
     s.add_argument("--no-retain", dest="retain", action="store_false")
+    o = sub.add_parser("volunteer")
+    o.add_argument("--passes", required=True)
+    o.add_argument("--out", required=True)
+    o.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     v = sub.add_parser("verify")
     v.add_argument("--passes", required=True)
     v.add_argument("--out", required=True)
@@ -227,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--fast", action="store_true")
     v.add_argument("--cross-check", type=int, default=256)
     args = p.parse_args(argv)
-    return serve(args) if args.cmd == "serve" else verify(args)
+    return {"serve": serve, "volunteer": volunteer, "verify": verify}[args.cmd](args)
 
 
 if __name__ == "__main__":

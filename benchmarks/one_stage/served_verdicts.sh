@@ -178,8 +178,8 @@
 # POUW=pearlplus (default h1) makes Pearl+ PoUW's piece instead: H1_GATE defaults empty (set, the preflight refuses
 # it), and POUW_CMD to 'bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"' within POUW_TIMEOUT 120m, which
 # once the window is audited serves Pearl+ (pouw:pearl-c-h100-v1-h3, Llama 3.2 1B's BF16 checkpoint) on this card under
-# its own lease, every pass retained in the serve dir's private/, and takes Pearl+'s verdict over them (verify.json in
-# the piece's dir): a development piece, since its passes are not the window sampled proofs audited (its header has the
+# its own lease, every pass retained in the serve dir's private/, gives up the passes' rows over a debit cap before the
+# verifier's coin (V-EX) and takes Pearl+'s verdict over them (verify.json in the piece's dir): a development piece, since its passes are not the window sampled proofs audited (its header has the
 # rest).
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).

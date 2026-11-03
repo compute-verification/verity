@@ -215,8 +215,9 @@ negatives.
   the tensor and boost clock readings.
 - `served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR`: PoUW's piece with Pearl+ (`served_verdicts.sh`'s `POUW=pearlplus`).
   After the window's serve, it serves Llama-3.2-1B's BF16 checkpoint on the same card through `pouw:pearl-c-h100-v1-h3`
-  (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, takes Pearl+'s verdict over
-  all of them (`served_passes.py verify`), and writes the piece through `served_verdicts.py pearlplus`: the verdict, the
+  (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, gives up the passes' rows
+  over a debit cap before the verifier's coin (`served_passes.py volunteer`), takes Pearl+'s verdict over all of them
+  (`served_passes.py verify`), and writes the piece through `served_verdicts.py pearlplus`: the verdict, the
   linears' declared and credited shares (`served_shares.pearlplus_shares`), and why it credits nothing.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
