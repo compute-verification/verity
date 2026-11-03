@@ -13996,7 +13996,7 @@
 "fresh_converged_share": null,
 "fresh_subset": null,
 "k": 80000000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "Fit's construction",
@@ -14021,7 +14021,7 @@
 "fresh_converged_share": null,
 "fresh_subset": null,
 "k": 80000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
@@ -14046,7 +14046,7 @@
 "fresh_converged_share": null,
 "fresh_subset": null,
 "k": 100000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "partial": true,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
@@ -14071,7 +14071,7 @@
 "fresh_converged_share": null,
 "fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
@@ -14096,7 +14096,7 @@
 "fresh_converged_share": null,
 "fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and matrix-product tiles",
@@ -14121,7 +14121,7 @@
 "fresh_converged_share": null,
 "fresh_subset": null,
 "k": 100000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "unmeasured",
@@ -14146,7 +14146,7 @@
 "fresh_converged_share": null,
 "fresh_subset": null,
 "k": 65536.0,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "no kind exceeds 1",
@@ -15042,7 +15042,7 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 11.065531262155444,
 "rho": 11.065531262155444,
 "rho_fit": 1.0,
@@ -15215,7 +15215,7 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15388,7 +15388,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15561,7 +15561,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15734,7 +15734,7 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15903,7 +15903,7 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -16076,7 +16076,7 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -16249,7 +16249,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -16422,7 +16422,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -16595,7 +16595,7 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -16770,7 +16770,7 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 8.35335685982954,
 "rho": 8.35335685982954,
 "rho_fit": 1.0,
@@ -16945,7 +16945,7 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -17120,7 +17120,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -17295,7 +17295,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.9996631800490919,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -17470,7 +17470,7 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -17646,7 +17646,7 @@
 }
 },
 "k": 80000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 2.7344655410785834,
 "rho": 2.7344655410785834,
 "rho_fit": 1.000266918292764,
@@ -17822,7 +17822,7 @@
 }
 },
 "k": 800000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": 1.000266918292764,
@@ -17998,7 +17998,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.9999300519868622,
 "rho": 1.000266918292764,
 "rho_fit": 1.000266918292764,
@@ -18174,7 +18174,7 @@
 }
 },
 "k": 8000000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0110508421616675,
 "rho_fit": 1.0110508421616675,
@@ -18350,7 +18350,7 @@
 }
 },
 "k": 80000000,
-"label": "training's slowdown code 4.12.12, reading A",
+"label": "training's slowdown code 4.12.13, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": "inf",
@@ -18372,6 +18372,6 @@
 "unmeasured": {}
 }
 ],
-"version": "4.12.12",
+"version": "4.12.13",
 "w_fwd_gates": 4925098176.0
 }
