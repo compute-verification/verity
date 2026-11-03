@@ -2713,6 +2713,21 @@
    "honest": ["Nci.Products.SecurityProofs.NoCellBound_honest"],
    "nontrivial": "Nci.Products.SecurityProofs.NoCellBound_nontrivial",
    "kind": "exclusion"
+  },
+  "Nci.Products.SecurityProofs.ClassBound": {
+   "honest": ["Nci.Products.SecurityProofs.ClassBound_honest"],
+   "nontrivial": "Nci.Products.SecurityProofs.ClassBound_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Products.SecurityProofs.WholeCap": {
+   "honest": ["Nci.Products.SecurityProofs.WholeCap_honest"],
+   "nontrivial": "Nci.Products.SecurityProofs.WholeCap_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Products.SecurityProofs.WholeBound": {
+   "honest": ["Nci.Products.SecurityProofs.WholeBound_honest"],
+   "nontrivial": "Nci.Products.SecurityProofs.WholeBound_nontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -9219,6 +9234,15 @@
    "assumptions": [],
    "type_hash": "12892bc2a15725cd543a126548a6c60e9e122dd8289a85f846be4e6e67937ee8"
   },
+  "Nci.Products.SecurityProofs.ClassBound": {
+   "owner": "@training"
+  },
+  "Nci.Products.SecurityProofs.ClassBound_honest": {
+   "owner": "@training"
+  },
+  "Nci.Products.SecurityProofs.ClassBound_nontrivial": {
+   "owner": "@training"
+  },
   "Nci.Products.SecurityProofs.NoCellBound": {
    "owner": "@training"
   },
@@ -9235,6 +9259,24 @@
    "owner": "@training"
   },
   "Nci.Products.SecurityProofs.NoCellCap_nontrivial": {
+   "owner": "@training"
+  },
+  "Nci.Products.SecurityProofs.WholeBound": {
+   "owner": "@training"
+  },
+  "Nci.Products.SecurityProofs.WholeBound_honest": {
+   "owner": "@training"
+  },
+  "Nci.Products.SecurityProofs.WholeBound_nontrivial": {
+   "owner": "@training"
+  },
+  "Nci.Products.SecurityProofs.WholeCap": {
+   "owner": "@training"
+  },
+  "Nci.Products.SecurityProofs.WholeCap_honest": {
+   "owner": "@training"
+  },
+  "Nci.Products.SecurityProofs.WholeCap_nontrivial": {
    "owner": "@training"
   },
   "Nci.Products.SecurityProofs.WordCap": {
@@ -13878,7 +13920,16 @@
    "Nci.Products.SecurityProofs.NoCellCap_nontrivial": "lemma: The cap without the word level's nontrivial lemma: at Pair (Nci.Products.Pair, Security/Definitions/Nci/Products/Instances.lean) with the operands registered, at (c, k) = (2, 1) and b_A = b_B = b_C = 1, the product is by the standard algorithm, its partial sums are received with the start at gate 4, and the partition of one block holding both MACs (Nci.Products.Pair.P1, Security/Definitions/Nci/Products/NoCellInstances.lean) is one into inference blocks, but the block reads the operands free, so widths as passed fail, and the cap 2 ≤ (1/3) √(1/3) + 1 + 1/2 fails. A counterexample at an instance, not a property of a Lean function.",
    "Nci.Products.SecurityProofs.NoCellBound": "frozen (no-function): The products kind's bound without the word level, a partition-level bound (Nci.Formalism.PartitionBound, Security/Definitions/Nci/Formalism/Inference.lean) that the counting lemma, Slowdown and Security take as a kind's Λ_J: it is about an arbitrary declaration and a product in it by the standard algorithm with its widths as passed (Nci.Products.Standard, Standard.Algorithm and Standard.Passed, Security/Definitions/Nci/Products.lean) and its partial sums received at their width (Standard.Received, Security/Definitions/Nci/Products/Received.lean), its value Nci.Products.noCellBound, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and declared products, is what would give it an acceptance.",
    "Nci.Products.SecurityProofs.NoCellBound_honest": "completeness: The products kind's bound without the word level's honest lemma: at Pair (Nci.Products.Pair, Security/Definitions/Nci/Products/Instances.lean) with the operands fresh, as in the cap's honest lemma, the product is by the standard algorithm, its widths are as passed and its partial sums are received, and the partition of two blocks, gate 4 and gate 5, is a partition into inference blocks at (c, k) = (1, 3), so the partition-level bound is over at least one partition. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's circuit, its products and its partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Products.SecurityProofs.NoCellBound_nontrivial": "lemma: The products kind's bound without the word level's nontrivial lemma: at Pair (Nci.Products.Pair, Security/Definitions/Nci/Products/Instances.lean) with the operands registered, at (c, k) = (2, 1) and b_A = b_B = b_C = 1, the product is by the standard algorithm and its partial sums are received, but widths as passed fail, and the bound fails at the partition of one block holding both MACs (Nci.Products.Pair.P1, Security/Definitions/Nci/Products/NoCellInstances.lean), a partition into inference blocks: its value chainBlocks 2 ((1/3) √(1/3) + 1) (1/2) > 1 is above its price 1. A counterexample at an instance, not a property of a Lean function."
+   "Nci.Products.SecurityProofs.NoCellBound_nontrivial": "lemma: The products kind's bound without the word level's nontrivial lemma: at Pair (Nci.Products.Pair, Security/Definitions/Nci/Products/Instances.lean) with the operands registered, at (c, k) = (2, 1) and b_A = b_B = b_C = 1, the product is by the standard algorithm and its partial sums are received, but widths as passed fail, and the bound fails at the partition of one block holding both MACs (Nci.Products.Pair.P1, Security/Definitions/Nci/Products/NoCellInstances.lean), a partition into inference blocks: its value chainBlocks 2 ((1/3) √(1/3) + 1) (1/2) > 1 is above its price 1. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Products.SecurityProofs.ClassBound": "frozen (no-function): The class bound of a whole-making system, the whole chains a block holds of one class's products, by induction on nesting depth: it is about an arbitrary declaration and a whole-making system in it (Nci.Products.System, Security/Definitions/Nci/Products/System.lean), its products by the standard algorithm (Standard.Algorithm, Security/Definitions/Nci/Products.lean) with values, P-share, P-width extended and P-match (System.Values, System.Shared, System.WidthExtended, System.Matched) at a post-fixed point (System.PostFixed), and an inference block (Nci.Formalism.InferenceBlock, Security/Definitions/Nci/Formalism/Inference.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and declared products, is what would give it an acceptance.",
+   "Nci.Products.SecurityProofs.ClassBound_honest": "completeness: The class bound's honest lemma: at Pair's product alone as a whole-making system (Nci.Products.Pair.system, Security/Definitions/Nci/Products/WholeInstances.lean), one entry's chain of two MACs in one class of chain length 2 with no value made from an output entry, with the operands fresh, at (c, k) = (1, 3), b = 1, P-share's c = 1/4, fan-outs A = 0 and μ = 3/16, the product is by the standard algorithm, its four operand bits are its values, P-share, P-width extended (a block pays each value it has at its width) and P-match hold, μ is a post-fixed point, and gate 4 is an inference block. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's circuit, its products and its partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Products.SecurityProofs.ClassBound_nontrivial": "lemma: The class bound's nontrivial lemma: at Pair's product alone as a whole-making system (Nci.Products.Pair.system, Security/Definitions/Nci/Products/WholeInstances.lean) with the operands registered, at (c, k) = (2, 1), b = 1, c = 1/4, A = 0 and μ = 1/16, every premise but P-width extended holds, and the block of gates 4 and 5, an inference block reading its values free from θ, so that P-width extended fails, holds the whole chain of the one output entry, above the bound 1/16. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Products.SecurityProofs.WholeCap": "frozen (no-function): The fresh-products cap with operands made whole, the cap without the word level at k' = k (1 + e) for e a class's whole-making factor: it is about an arbitrary declaration, a whole-making system in it (Nci.Products.System, Security/Definitions/Nci/Products/System.lean) with the class bound's premises, a product of it with its partial sums received at their width (Standard.Received, Security/Definitions/Nci/Products/Received.lean), and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and declared products, is what would give it an acceptance.",
+   "Nci.Products.SecurityProofs.WholeCap_honest": "completeness: The cap with operands made whole's honest lemma: at Pair's product alone as a whole-making system (Nci.Products.Pair.system, Security/Definitions/Nci/Products/WholeInstances.lean) with the operands fresh, as in the class bound's honest lemma, with b_C = 1, its partial sums are received with the start at gate 4, and the partition of two blocks, gate 4 and gate 5, is a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's circuit, its products and its partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Products.SecurityProofs.WholeCap_nontrivial": "lemma: The cap with operands made whole's nontrivial lemma: at Pair's product alone as a whole-making system (Nci.Products.Pair.system, Security/Definitions/Nci/Products/WholeInstances.lean) with the operands registered, as in the class bound's nontrivial lemma, with b_C = 1, its partial sums are received and the partition of one block holding both MACs (Nci.Products.Pair.P1, Security/Definitions/Nci/Products/NoCellInstances.lean) is one into inference blocks, but P-width extended fails, and the cap 2 ≤ (1/3) √(1/3) + 1 + 1/2 fails, the whole-making factor 0. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Products.SecurityProofs.WholeBound": "frozen (no-function): The products kind's bound with operands made whole, a partition-level bound (Nci.Formalism.PartitionBound, Security/Definitions/Nci/Formalism/Inference.lean) that the counting lemma, Slowdown and Security take as a kind's Λ_J, over any set of a whole-making system's products: it is about an arbitrary declaration and a whole-making system in it (Nci.Products.System, Security/Definitions/Nci/Products/System.lean) with the class bound's premises and the set's partial sums received at their width (Standard.Received, Security/Definitions/Nci/Products/Received.lean), its value Nci.Products.wholeBound, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and declared products, is what would give it an acceptance.",
+   "Nci.Products.SecurityProofs.WholeBound_honest": "completeness: The products kind's bound with operands made whole's honest lemma: at Pair's product alone as a whole-making system (Nci.Products.Pair.system, Security/Definitions/Nci/Products/WholeInstances.lean) with the operands fresh, as in the cap's honest lemma, the system's premises hold, its partial sums are received, and the partition of two blocks, gate 4 and gate 5, is a partition into inference blocks at (c, k) = (1, 3), so that the partition-level bound is over at least one partition. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's circuit, its products and its partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Products.SecurityProofs.WholeBound_nontrivial": "lemma: The products kind's bound with operands made whole's nontrivial lemma: at Pair's product alone as a whole-making system (Nci.Products.Pair.system, Security/Definitions/Nci/Products/WholeInstances.lean) with the operands registered, at (c, k) = (2, 1), b = b_C = 1 and μ = 1/16, every premise but P-width extended holds, and the bound over its one product fails at the partition of one block holding both MACs (Nci.Products.Pair.P1, Security/Definitions/Nci/Products/NoCellInstances.lean), a partition into inference blocks: its value chainBlocks 2 ((1/3) √(1/3) + 1) (1/2) > 1 is above its price 1. A counterexample at an instance, not a property of a Lean function."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
