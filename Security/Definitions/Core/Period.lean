@@ -70,9 +70,9 @@ structure MonitoringPeriod where
   /-- the cut of its span into its execution blocks' spans -/
   executionCut : span.Cut executionBlocks
   /-- the number of execution phases of each execution block -/
-  samplingBlocks : Fin executionBlocks → ℕ
+  executionPhases : Fin executionBlocks → ℕ
   /-- the cut of each execution block's span into its execution phases' spans -/
-  samplingCut : (j : Fin executionBlocks) → (executionCut.part j).Cut (samplingBlocks j)
+  phaseCut : (j : Fin executionBlocks) → (executionCut.part j).Cut (executionPhases j)
 
 namespace MonitoringPeriod
 
@@ -80,8 +80,8 @@ namespace MonitoringPeriod
 def executionSpan (m : MonitoringPeriod) (j : Fin m.executionBlocks) : TickSpan := m.executionCut.part j
 
 /-- **Execution phase `t`'s span** in execution block `j`. -/
-def samplingSpan (m : MonitoringPeriod) (j : Fin m.executionBlocks) (t : Fin (m.samplingBlocks j)) : TickSpan :=
-  (m.samplingCut j).part t
+def phaseSpan (m : MonitoringPeriod) (j : Fin m.executionBlocks) (t : Fin (m.executionPhases j)) : TickSpan :=
+  (m.phaseCut j).part t
 
 end MonitoringPeriod
 
