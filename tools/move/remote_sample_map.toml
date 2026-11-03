@@ -1,0 +1,29 @@
+# The remote audit's sample: what `tools/move/rename.py --map tools/move/remote_sample_map.toml` renames (a draw is a
+# sample; the coins stay coins). The namespace `Accounting.Remote.Draw`, the session that samples receipts at each
+# window's coin, becomes `Accounting.Remote.Sample` (its `Session`, `Coins` and `Receipts` with it), and its module
+# moves with it. The proofs' own `Accounting.SecurityProofs.Remote.Draw` and `Remote.DrawMeets` stand: their module
+# opens them as `namespace Draw` inside `Accounting.SecurityProofs.Remote`, where no word matches, so [keep] holds every
+# qualified reference to them too. Declarations keep their place in the locks' records: `rename.py --moves` prints the
+# renames that `check.py --update --moved` takes.
+[words]
+"Remote.Draw" = "Remote.Sample"
+"Remote/Draw" = "Remote/Sample"
+
+[[words_in]]
+files = ["Security/Definitions/Accounting/Remote/Draw.lean", "Security/Definitions/Accounting/Remote/SketchLine.lean"]
+[words_in.words]
+"Draw.pooled" = "Sample.pooled"
+"Draw.Coins" = "Sample.Coins"
+
+[rewrite]
+# host_map.toml's: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            'SecurityProofs\.Remote\.Draw']
+strings = []
+
+[keep_in]
