@@ -68,19 +68,19 @@ theorem ZkAnyOutcome : Flock.Guarantees.ZkAnyOutcome := by
 
 /-- **Check-then-release, generic** (`Flock.Guarantees.ZkAnyGate`). -/
 theorem ZkAnyGate : Flock.Guarantees.ZkAnyGate := by
-  intro Wt Ω Ωf Ωc V P _ _ _ Pub view d cut go simFull simCut εf εc hcut hd hgo w hw E
-  have h1 : prCoin (fun ω => go w ω = true ∧ E (.inl (view w ω))) ≤ prCoin (fun σ => E (.inl (simFull σ))) + εf :=
+  intro Ω Ωf Ωc V P _ _ _ view d cut go simFull simCut εf εc hcut hd hgo E
+  have h1 : prCoin (fun ω => go ω = true ∧ E (.inl (view ω))) ≤ prCoin (fun σ => E (.inl (simFull σ))) + εf :=
     (prCoin_mono fun ω h => by
       obtain ⟨hg, hE⟩ := h
-      rw [hgo w hw ω hg] at hE
-      exact hE).trans (hd w hw fun v => E (.inl v))
-  have h2 : prCoin (fun ω => go w ω = false ∧ E (.inr (cut w ω))) ≤ prCoin (fun σ => E (.inr (simCut σ))) + εc :=
-    (prCoin_mono fun ω h => h.2).trans (hcut w hw fun v => E (.inr v))
-  have hor : prCoin (fun ω => E (if go w ω then .inl (view w ω) else .inr (cut w ω))) ≤
-      prCoin (fun ω => (go w ω = true ∧ E (.inl (view w ω))) ∨ (go w ω = false ∧ E (.inr (cut w ω)))) := by
-    refine prCoin_mono fun ω (h : E (if go w ω then .inl (view w ω) else .inr (cut w ω))) => ?_
-    show (go w ω = true ∧ E (.inl (view w ω))) ∨ (go w ω = false ∧ E (.inr (cut w ω)))
-    by_cases hg : go w ω = true
+      rw [hgo ω hg] at hE
+      exact hE).trans (hd fun v => E (.inl v))
+  have h2 : prCoin (fun ω => go ω = false ∧ E (.inr (cut ω))) ≤ prCoin (fun σ => E (.inr (simCut σ))) + εc :=
+    (prCoin_mono fun ω h => h.2).trans (hcut fun v => E (.inr v))
+  have hor : prCoin (fun ω => E (if go ω then .inl (view ω) else .inr (cut ω))) ≤
+      prCoin (fun ω => (go ω = true ∧ E (.inl (view ω))) ∨ (go ω = false ∧ E (.inr (cut ω)))) := by
+    refine prCoin_mono fun ω (h : E (if go ω then .inl (view ω) else .inr (cut ω))) => ?_
+    show (go ω = true ∧ E (.inl (view ω))) ∨ (go ω = false ∧ E (.inr (cut ω)))
+    by_cases hg : go ω = true
     · exact Or.inl ⟨hg, by rwa [ite_eq_left hg] at h⟩
     · exact Or.inr ⟨by simpa using hg, by rwa [ite_eq_right hg] at h⟩
   exact ⟨h1, h2, hor.trans ((prCoin_or_le _ _).trans ((add_le_add h1 h2).trans_eq (add_add_add_comm _ _ _ _)))⟩

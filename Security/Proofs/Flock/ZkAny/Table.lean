@@ -73,8 +73,9 @@ theorem release_any (T : Table F K W Salt Seed D Hi VL) (hrank : T.Rank) (hpad :
     · exact Or.inr ⟨by simpa using hg, by rwa [release, ite_eq_right hg] at h⟩
   exact ⟨h1, h2, hor.trans ((prCoin_or_le _ _).trans (add_le_add h1 h2))⟩
 
-/-- **At a worker's clear values**: `release_any` at `onVals`, for any values `v` a worker supplies, valid or not, behind a
-check that passes only where they pass the inner constraint; the simulators read the dummy at the honest values. -/
+/-- **At a worker's clear values**: `release_any` at `onVals`, for any values `v` a worker supplies, valid or not,
+behind a check that passes only where they pass the inner constraint; the simulators read the dummy at the honest
+values. -/
 theorem worker_release_any (T : Table F K W Salt Seed D Hi VL) (hrank : T.Rank) (hpad : T.PadOnto)
     (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0)
     (go : T.Rand → Bool) (w w₀ : W) (hreg : T.sReg w = T.pubReg) (hreg₀ : T.sReg w₀ = T.pubReg) (v : T.Vals)
@@ -90,7 +91,8 @@ namespace Flock.SecurityProofs
 
 /-- **One table's release behind the ZK server's check, at any values** (`Flock.Guarantees.TableReleaseAny`). -/
 theorem TableReleaseAny : Flock.Guarantees.TableReleaseAny := by
-  intro F K W Salt Seed D Hi VL _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ T hrank hpad hW hpads hβ go w w₀ hreg hreg₀ hgo E
+  intro F K W Salt Seed D Hi VL _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ T go w w₀ hsim hreg hreg₀ hgo E
+  obtain ⟨hrank, hpad, hW, hpads, hβ⟩ := hsim
   exact T.release_any hrank hpad hW hpads hβ go w w₀ hreg hreg₀ hgo E
 
 end Flock.SecurityProofs

@@ -6,13 +6,13 @@ public import Proofs.Flock.Soundness.ZK.Session
 /-!
 # A session's release behind the ZK server's checks, at any values
 
-A session of `J` tables stops at some outcome `s` (where it stopped), and the tables whose files left by then (`full s j`)
-show their views, the others their pre-final views (`Session.releaseAt`). A file leaves only behind its table's check,
-so where it left the constraint holds at that table's drawn pads, and the view is the derived view there
-(`psi_realCore_at`). At each outcome the release is then a tuple of independent per-table branches (`branch`): the
-derived view, distributed as `S_shvzk(x, e)` at any witness (`derived_sim`), or the pre-final view, distributed as the
-dummy's (Lemma A). `prCoin_pi_close` bounds the tuple by the simulator's (`Session.simAt`), and `ZkAnyOutcome` sums over
-outcomes.
+A session of `J` tables stops at some outcome `s` (where it stopped), and the tables whose files left by then
+(`full s j`) show their views, the others their pre-final views (`Session.releaseAt`). A file leaves only behind its
+table's check (`Session.Gated`), so where it left the constraint holds at that table's drawn pads, and the view is the
+derived view there (`psi_realCore_at`). At each outcome the release is then a tuple of independent per-table branches
+(`branch`): the derived view, distributed as `S_shvzk(x, e)` at any witness (`derived_sim`), or the pre-final view,
+distributed as the dummy's (Lemma A). `prCoin_pi_close` bounds the tuple by the simulator's (`Session.simAt`), and
+`ZkAnyOutcome` sums over outcomes.
 
 * `prCoin_snd`: an event of the second factor of a product space has its probability on that factor (`prCoin_fst`'s
   twin).
@@ -119,8 +119,8 @@ namespace Flock.SecurityProofs
 
 /-- **A session's release behind the ZK server's checks, at any values** (`Flock.Guarantees.SessionReleaseAny`). -/
 theorem SessionReleaseAny : Flock.Guarantees.SessionReleaseAny := by
-  intro F K W Salt Seed D Hi VL _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ J T hrank hpad hW hpads hβ St _ out full w w₀ hreg hreg₀
-    hgo E
-  exact FlockSoundness.ZK.Session.release_any T hrank hpad hW hpads hβ out full w w₀ hreg hreg₀ hgo E
+  intro F K W Salt Seed D Hi VL _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ J T St _ out full w w₀ hsim hreg hreg₀ hgo E
+  exact FlockSoundness.ZK.Session.release_any T (fun j => (hsim j).1) (fun j => (hsim j).2.1)
+    (fun j => (hsim j).2.2.1) (fun j => (hsim j).2.2.2.1) (fun j => (hsim j).2.2.2.2) out full w w₀ hreg hreg₀ hgo E
 
 end Flock.SecurityProofs
