@@ -13,7 +13,7 @@ top tree is its identity (`Identity.init`, made on the device from its own coins
 the deployment configuration). Each party on the device gets a short-lived lower tree (`Identity.issue`), whose public key
 the identity signs once (`party_key_message`, binding the deployment's hash and the party's name). The lower key signs
 the party's messages (`PartyKey`): one root per certification period (`period_root_message`), which goes to the prover
-only, and one public liveness record per sampling block (`liveness_message`). An `HssSignature` is the lower key, its
+only, and one public liveness record per execution phase (`liveness_message`). An `HssSignature` is the lower key, its
 certificate and the signature; `hss_verify` checks both levels, and `verify_liveness` a liveness record in the clear. Both
 levels are at ``DEPLOYED`` and both trees' states are `LeafState`s, so neither ever signs twice at a leaf, as long as its
 host never restores an earlier copy of the state (`faithful`, `verity.core.claims`).
@@ -228,8 +228,8 @@ def period_root_message(I: bytes, deployment: bytes, party: str, attachment: byt
 
 def liveness_message(I: bytes, deployment: bytes, party: str, attachment: bytes, link: str, period: int,
                      block: int) -> bytes:
-    """The message of a party's one public record per sampling block (or per run, for a party that runs in runs): "block
-    ``block`` of the period was certified", with no content. The tag ``verity/liveness/v1``, the context as
+    """The message of a party's one public record per execution phase (or per run, for a party that runs in runs):
+    "block ``block`` of the period was certified", with no content. The tag ``verity/liveness/v1``, the context as
     `period_root_message`'s with the block's index (u64) in the place of the count, the record empty."""
     return _digest("liveness", I, _period_context(deployment, party, attachment, link, period)
                    + _u64(block, "a sampling block's index"), b"")
@@ -555,7 +555,7 @@ def hss_verify(params: Params, identity: bytes, deployment: bytes, party: str, s
 
 def verify_liveness(params: Params, identity: bytes, deployment: bytes, party: str, attachment: bytes, link: str,
                     period: int, block: int, sig: HssSignature) -> bool:
-    """Whether ``sig`` is the party's public liveness record of sampling block ``block`` of the period: checked in the
+    """Whether ``sig`` is the party's public liveness record of execution phase ``block`` of the period: checked in the
     clear, as the verifier reads it."""
     if len(sig.lower) != 16 + params.N:
         return False
@@ -657,7 +657,7 @@ class Identity:
 
 class PartyKey:
     """One party's lower tree on its device, certified by the device's identity for the party in one deployment: it signs
-    the party's `period_root_message` once per certification period and its `liveness_message` once per sampling block,
+    the party's `period_root_message` once per certification period and its `liveness_message` once per execution phase,
     each at the next leaf of its `LeafState`, into an `HssSignature`. The signed roots go to the prover only, as witness;
     the liveness records, and with them the lower key and its certificate, are public.
 
