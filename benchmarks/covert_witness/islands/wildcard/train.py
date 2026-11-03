@@ -29,7 +29,12 @@ Codes (witnesses for the cut cost a, `adamw` / `muon`):
   tokens, comes from frozen copies of the trained blocks (the receiving side recomputes it from the token's data), and
   its products are counted and declared as the code's. `dq2p64` hands on only 64 of the 512 rotated coordinates of
   the effect (a fixed subspace, both ways: 64·2 + 16 bits forward); `--cut-leak λ` adds λ times the share it leaves
-  out to the loss, so the uncoded model the evaluator scores stays near the coded one.
+  out to the loss, so the uncoded model the evaluator scores stays near the coded one (a statistic of the uncoded
+  effect, so a trace then sees the uncoded state). `--confine` instead projects each trained wo and w_down's update
+  onto the cut's span after every step, which puts the whole effect in the span when everything trained is in the
+  block below the cut and that block is new (`--grow n`: n zero-output top blocks, E the grown model) or trains
+  w_down alone; it refuses any other set (an existing block's trained wo reaches its MLP, whose frozen w_down maps
+  that change out of the span).
 - `--lora-rank r --lora-fix B --z-bits q`: a rank-r update whose B is r seeded orthonormal columns, so its whole effect
   on a token is r coefficients z = A·h, handed on (and their gradient back) at q bits each. `--lora-fix A` trains only
   B over a frozen random A.
@@ -648,6 +653,31 @@ def frozen_blocks(net, theta: dict, lo: int, hi: int) -> dict:
     return out
 
 
+#: With --grow: the grown model's config and the start's block count (blocks from it on are new).
+GROWN: dict = {}
+
+
+def grow(net, rec: dict, theta: dict, n: int, seed: int) -> tuple[dict, dict]:
+    """θ's model grown in place by n new top blocks, each in model.py's own init with its output matrices (wo, w_down)
+    zeroed in place, so the grown model computes θ's function and θ's tensors are never rewritten: (the grown model's
+    record, its starting tensors, θ's and the new blocks')."""
+    from model import Block
+
+    L = rec["config"]["n_layer"]
+    torch.manual_seed(seed)
+    with torch.device(prepare.DEVICE):
+        new = [Block(net.inner.size, 0.02, 0.02) for _ in range(n)]
+    with torch.no_grad():
+        for blk in new:
+            blk.wo.weight.zero_()
+            blk.w_down.weight.zero_()
+    net.inner.blocks.extend(new)
+    config = net.config = {**rec["config"], "n_layer": L + n}
+    start = {**theta, **{k: p.detach().cpu().clone() for k, p in net.params().items() if k not in theta}}
+    GROWN.update(config=config, start=L)
+    return {**rec, **prepare.model_record(rec, config, start)}, start
+
+
 def frozen_flops(rec: dict, lo: int, hi: int) -> int:
     """Forward FLOPs per token of blocks lo..hi-1."""
     names = tuple(f"blocks.{j}." for j in range(lo, hi))
@@ -655,10 +685,11 @@ def frozen_flops(rec: dict, lo: int, hi: int) -> int:
     return mm + (hi - lo) * prepare.attention_flops(rec, prepare.EVAL_CTX)
 
 
-def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | None = None):
+def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | None = None, grown_from: int = 10 ** 6):
     """Each boundary's code as a forward hook on the block below it (boundary B: block B - 1's output), active while
     CUT["on"]. A delta code's hook adds h_frozen back after coding h - h_frozen; h_frozen is carried up from block
-    `low`'s input through frozen copies of blocks low.. (frozen_blocks). An `m` code's hook codes about CUT_MEAN, then
+    `low`'s input through frozen copies of blocks low.. (frozen_blocks), except blocks from `grown_from` on, new blocks
+    whose θ outputs are zero, which pass it through. An `m` code's hook codes about CUT_MEAN, then
     moves CUT_MEAN toward this batch's coded mean only in a training forward or with CUT["calibrate"] (never a
     probe's), so a token's code reads no later token, and the mean reads nothing the receiving side lacks. An `e`
     code's model learns on the same terms (`ecode`). While CUT["leak"] is a list, a `p<keep>` code's training forward
@@ -669,17 +700,19 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
     RCODE.clear()
     by_block = {c["boundary"] - 1: c for c in cuts}
     top = max((c["boundary"] for c in cuts if c["delta"]), default=None)
-    frozen = frozen_blocks(net, theta, low, top) if top is not None else {}
+    carried = set(range(low, top)) if top is not None else set()
+    frozen = frozen_blocks(net, theta, low, min(top, grown_from)) if top is not None and low < grown_from else {}
     state = {}
     handles = []
-    for j in sorted(set(by_block) | set(frozen)):
+    for j in sorted(set(by_block) | carried):
         def hook(m, inp, out, j=j, c=by_block.get(j)):
             if not CUT["on"]:
                 return out
             f = None
-            if j in frozen:
+            if j in carried:
                 with torch.no_grad():
-                    f = state[j + 1] = frozen[j](state.pop(j) if j > low else inp[0].detach(), inp[1], inp[2])
+                    below = state.pop(j) if j > low else inp[0].detach()
+                    f = state[j + 1] = frozen[j](below, inp[1], inp[2]) if j in frozen else below
             if c is None:
                 return out
             seed = 1000 + c["boundary"]
@@ -874,6 +907,8 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
     def encode(src: dict) -> bytes:
         if factors:
             return prepare.encode_lora(factors, "bf16", {n: src[n] for n in gains})
+        if GROWN:
+            return prepare.encode_model(GROWN["config"], delta_of(src, theta, tuned))
         return prepare.encode_full(delta_of(src, theta, tuned))
 
     tokens = a.batch * prepare.EVAL_CTX
@@ -882,21 +917,38 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
     cuts = parse_cut(a.cut, rec["config"]["n_layer"], d, low) if a.cut else []
     crossed = [c for c in cuts if low is not None and low < c["boundary"]]
     top_delta = max((c["boundary"] for c in cuts if c["delta"]), default=None)
-    refresh = frozen_flops(rec, low, top_delta) if top_delta is not None else 0
+    grown_from = GROWN.get("start", 10 ** 6)
+    refresh = frozen_flops(rec, low, min(top_delta, grown_from)) if top_delta is not None and low < grown_from else 0
     code_fwd = sum(4 * d * (c["keep"] or d) for c in cuts) + refresh
     leaky = [c for c in cuts if c["keep"]] if a.cut_leak else []
     code_train = code_fwd + sum(4 * d * (c["keep"] or d) for c in crossed) + sum(12 * d * c["keep"] for c in leaky)
     if a.cut_leak and not leaky:
         raise SystemExit("wildcard: --cut-leak penalizes what a p<keep> cut leaves out, and no cut has p<keep>")
+    confine, confine_flops = {}, 0
+    if a.confine:
+        kept = [c for c in cuts if c["keep"]]
+        confine = {n: theta[n].to(prepare.DEVICE).float() for n in tuned
+                   if re.fullmatch(r"blocks\.\d+\.(wo|w_down)\.weight", n)}
+        if len(kept) != 1 or not confine or factors:
+            raise SystemExit("wildcard: --confine needs one p<keep> cut, full-trained wo or w_down, and no adapters")
+        below = kept[0]["boundary"] - 1
+        exact = ({n for n in tuned if n.startswith(f"blocks.{below}.")} == set(tuned)
+                 and (below >= grown_from or tuned == [f"blocks.{below}.w_down.weight"]))
+        if not exact:
+            raise SystemExit(f"wildcard: --confine keeps the effect in the cut's span only if every trained tensor is "
+                             f"in block {below} (the one below the cut) and that block is grown (--grow) or trains "
+                             f"w_down alone: an existing block's frozen w_down carries a trained wo's effect out of it")
+        span = fresh_rotation(d, 1000 + kept[0]["boundary"], prepare.DEVICE)[: kept[0]["keep"]]
+        confine_flops = sum(4 * kept[0]["keep"] * d * w.shape[1] for w in confine.values())
     if cuts:
-        install_cuts(net, cuts, theta, low)
+        install_cuts(net, cuts, theta, low, grown_from)
         CUT["leak"] = [] if leaky else None
         print(json.dumps({"cuts": cuts, "gradient_crosses": [c["boundary"] for c in crossed],
                           "code_flops_per_token": {"forward": code_fwd, "train": code_train,
                                                    "frozen_recompute": refresh}}), flush=True)
     cut_probe = probe_rows(rec, a)[: a.cut_probe_rows] if cuts and a.cut_probe_rows else None
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"] + extra
-    per_step += code_train * tokens
+    per_step += code_train * tokens + confine_flops
     alphas = [1.0] + a.extrapolate if a.extrapolate else []
     reserve = probe_flops(a, rec, trainable, len(alphas)) if alphas else 0
     if cut_probe is not None:
@@ -973,7 +1025,13 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
             for o, _ in opts:
                 o.step()
                 o.zero_grad(set_to_none=True)
+            if confine:
+                with torch.no_grad():
+                    for n, w0 in confine.items():
+                        params[n].copy_(w0 + span.T @ (span @ (params[n] - w0)))
             steps.append({"op": "train", "tokens": tokens})
+            if confine:
+                steps.append({"op": "extra", "flops": confine_flops, "what": "confine the output updates to the cut's span"})
             if extra:
                 steps.append({"op": "extra", "flops": extra, "what": "muon newton-schulz"})
             if cuts:
@@ -982,7 +1040,7 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
                 with torch.no_grad():
                     for n in tuned:
                         ema[n].lerp_(params[n].detach(), 1 - a.ema)
-            if step + 1 in marks:
+            if step + 1 in marks and not GROWN:
                 snaps.append((encode(ema if ema is not None else params), len(steps)))
                 if getattr(a, "probe", None) is not None:
                     print(json.dumps({"step": step + 1, "flops": prepare.train_flops(rec, trainable, steps)["flops"],
@@ -991,6 +1049,10 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
             print(json.dumps({"step": step + 1, "loss": float(loss.detach()) * a.batch / len(x),
                               "s": round(time.perf_counter() - t0, 1)}), flush=True)
     info = {"steps": n_steps, "lora_rank": a.lora_rank}
+    if GROWN:
+        info["grown"] = {"config": GROWN["config"], "new_from_block": GROWN["start"],
+                         "snapshots": "none: te_core takes checkpoints from the encoders it wraps, and encode_model "
+                                      "isn't one, so only the submission is scored"}
     if cuts:
         if cut_probe is not None:
             cut_probes("end")
@@ -1376,6 +1438,13 @@ def main() -> int:
     ap.add_argument("--z-bits", type=int, default=0, help="with --lora-fix B: hand z = A·h on at this many bits per coefficient")
     ap.add_argument("--cut", default="", help="B:[d]q<bits>[m][e|r][p<keep>][o<k>][b<bits>[s|e]][g<group>],...: block "
                                             "boundaries handed on coded (parse_cut)")
+    ap.add_argument("--grow", type=int, default=0,
+                    help="train a model of θ's plus this many new top blocks (zero output matrices, so θ's function at "
+                         "the start); E is the grown model (`encode_model`)")
+    ap.add_argument("--confine", action="store_true",
+                    help="after every step, project each trained wo and w_down's update onto the p<keep> cut's span, so "
+                         "the whole effect lies in what the cut hands on; everything trained must be in the block "
+                         "below the cut, a grown block or that block's w_down alone")
     ap.add_argument("--cut-leak", type=float, default=0.0,
                     help="add this times the share of h - h_frozen a p<keep> cut leaves out (its mean square over "
                          "h_frozen's) to the training loss")
@@ -1418,6 +1487,9 @@ def main() -> int:
     if a.suite and a.lora_rank:
         raise SystemExit("wildcard: a suite trains full tensors (adapters' hooks would outlive their config)")
     net, rec, theta = prepare.load_start(a.start)
+    start_theta = theta
+    if a.grow:
+        rec, theta = grow(net, rec, start_theta, a.grow, 7919 + a.data_seed)
     params = net.params()
     tuned = resolve_set(a.tset, rec, params)
     shape = prepare.deep_share(rec, set(tuned))
@@ -1464,8 +1536,8 @@ def main() -> int:
     if best is None:
         raise SystemExit("wildcard: every config of the suite was skipped")
     c, blob, trainable, snaps, info, _ = best
-    model = prepare.decode(theta, blob)
-    changed = [n for n in tuned if not prepare.same_bits(model[n], theta[n])]
+    model = prepare.decode(start_theta, blob)
+    changed = [n for n in tuned if n not in start_theta or not prepare.same_bits(model[n], start_theta[n])]
     notes = {"direction": "wildcard", "mechanism": a.mechanism, "method": c.method, "set": tuned,
              "args": {k: v for k, v in vars(c).items() if k != "probe"}, "info": info, "E_bytes": len(blob),
              "suite": results if a.suite else None, "source": Path(__file__).read_text()}
