@@ -178,7 +178,7 @@ returned value depends on it. -/
 def Prog.Unread (C : Prog) (g : ℕ) : Prop :=
   C.gates[g]? = some .input ∧ g ∉ C.outs ∧ ∀ x ∈ C.gates, g ∉ x.reads
 
-instance (C : Prog) (g : ℕ) : Decidable (C.Unread g) :=
+instance instDecidableUnread (C : Prog) (g : ℕ) : Decidable (C.Unread g) :=
   inferInstanceAs (Decidable (C.gates[g]? = some .input ∧ g ∉ C.outs ∧ ∀ x ∈ C.gates, g ∉ x.reads))
 
 /-- **A partition** `P = Q(C)`, as the verifier evaluates it: its classes, each its strata, each its proof units (each
