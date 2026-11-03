@@ -54,6 +54,10 @@ PUBLIC = {
                                           "its digest",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
+    "verity_vllm.protocols.pouw.h1.commit": "I1: H1's Commit of a served window's tables, and their tie to the audited "
+                                            "circuit: its tables of H1's window (shape), registered as the window's "
+                                            "registration's (reuse), and the record checked against it (reused), which "
+                                            "prove_path's window-commit registers",
     "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
                                            "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
     "verity_vllm.protocols.pouw.h1.receipts": "I1: served H1's receipt producer, the zy receipts serve-openai's "
