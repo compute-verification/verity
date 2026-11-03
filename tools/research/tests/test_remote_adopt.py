@@ -97,6 +97,36 @@ def test_a_run_no_machine_holds_names_each_machines_answer_and_the_store_attempt
     assert f"the store has its attempt: `research data show {gone}`" in capsys.readouterr().err
 
 
+def test_the_machines_are_asked_at_once_and_the_first_that_holds_the_run_answers(machines, monkeypatch, capsys):
+    """One at a time, a run on a late machine waited behind every machine before it, a stopped one costing its whole connect
+    timeout. vy-a's probe here returns only once vy-b's has started, which a walk one machine at a time never reaches; the
+    probes connect with ADOPT_CONNECT_S, and one line says what the wait is and how to skip it."""
+    import threading
+
+    both = threading.Barrier(2)
+    seen = []
+    real = remote.ssh_run
+
+    def ssh_run(ssh, argv, **kw):
+        seen.append(kw.get("timeout"))
+        both.wait()
+        return real(ssh, argv, **kw)
+
+    argvs = []
+    monkeypatch.setattr(remote, "ssh_run", ssh_run)
+    monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **kw: argvs.append(kw) or ["sh", "-c"])
+    local = remote.adopt(machines["local"], RUN)
+    assert json.loads((local / "remote.json").read_text())["machine"] == "vy-b"
+    assert seen == [remote.ADOPT_PROBE_S] * 2 and [kw.get("connect_timeout") for kw in argvs[:2]] == [remote.ADOPT_CONNECT_S] * 2
+    assert f"research: looking for {RUN} on 2 machines (--on NAME skips this)" in capsys.readouterr().err
+
+
+def test_a_cancel_asks_every_machine_and_refuses_a_run_two_hold(machines):
+    _run_on(machines["tmp"] / "a", RUN, "running")
+    with pytest.raises(remote.Refused, match="vy-a and vy-b each hold a run"):
+        remote.adopt(machines["local"], RUN, unique=True)
+
+
 def test_a_prefix_is_never_looked_up_on_the_machines(machines, capsys):
     assert cli.main(["inspect", "r20261002", "--runs-dir", str(machines["local"])]) == 1
     assert "no run matching 'r20261002'" in capsys.readouterr().err and machines["probed"] == []
