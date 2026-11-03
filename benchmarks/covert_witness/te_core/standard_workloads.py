@@ -23,7 +23,9 @@ any (c, k); `build` refuses a row whose rho_inputs miss formalism.at's ρ at eit
 measured tokens (`token_dials`).
 `input_status` gives each input's source, "measured" or "assumed: " and why, from te_core's labels: a count, a trace's
 quantity, E's size and the harness's decoder are measured, and a stub, an assumption or an unmeasured quantity is
-assumed.
+assumed. An unmeasured Δ_grad names the steps te_core has none for and why (`untraced`), and whether Fit's verdict at
+`POINTS` rests on it (`held`). Beside `KEYS`, `products` is the fresh-products kind's input (`products`): measured at
+the console's default, or assumed with te_core's reason, and where the serving block's k leaves it unmeasured.
 
 A `rounds` row is the run's generation rounds alone (`rounds`), its setup and training steps dropped: a round is one
 counted step that codes the served weights, prefills its prompts and decodes. The capture can't trace a round (its
@@ -204,6 +206,30 @@ def start(name: str) -> tuple[dict, dict]:
     return s["shape"], json.loads((fetch(s["art"], path) / path).read_text())["tensors"]
 
 
+def untraced(record: dict, traced: dict[int, dict]) -> list[str]:
+    """The steps with tokens that take no traced structure, so no Δ_grad (te_core.annotate.with_structures gives one
+    only to a step whose structure a traced step shares and updates something), each with why."""
+    by = {s["step"]: s["struct"] for s in record["steps"]}
+    have = {by[step]: t for step, t in traced.items()}
+    last, out = record["steps"][-1]["step"], []
+    for s in record["steps"]:
+        sid = s["struct"]
+        if not s.get("tokens") or (sid in have and record["structures"][sid].get("updated")):
+            continue
+        if sid in have:
+            dg = have[sid].get("measured", {}).get("delta_grad_bits")
+            why = ("before the run's first update: its structure updates nothing, so te_core.annotate leaves out its "
+                   "trace" + (f", which measures {algorithm_policy.num(dg)} bits" if dg is not None else ""))
+        elif s["step"] == last:
+            alone = sum(x["struct"] == sid for x in record["steps"]) == 1
+            why = (f"the program's last{', its structure having no other step' if alone else ''}, which "
+                   f"te_core.capture refuses to trace, the program ending before the step does")
+        else:
+            why = "no traced step shares its structure"
+        out.append(f"step {s['step']}: {why}")
+    return out
+
+
 def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, dict, dict]:
     """A row's quantities: its run's last checkpoint ingested with the run's `traced` steps' structures, or its rounds
     (`rounds`); the start's shape and what the row read."""
@@ -228,6 +254,7 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
                                 for sid, st in record["structures"].items() for r in st["log"] if r[3].endswith(FP4))}
     else:
         record["checkpoints"] = record["checkpoints"][-1:]
+        read["untraced"] = untraced(record, traced)
     with tempfile.TemporaryDirectory(prefix="sw-ingest-") as tmp:
         d = Path(tmp) / "run"
         d.mkdir()
@@ -248,20 +275,54 @@ def _measured(label: str | None) -> bool:
                                   or label in algorithm_policy.COUNTED)
 
 
-def status(m: formalism.Measured, override: dict[str, str] | None = None) -> dict[str, str]:
-    """Each of `KEYS`' source (module docstring), `override`'s where it names one."""
-    out = {}
+def held(m: formalism.Measured) -> list[str]:
+    """The points of `POINTS` where Fit holds once every part with token blocks and no Δ_grad has 0 (the least any
+    could have): where Fit's verdict rests on those parts' Δ_grad."""
+    zero = dataclasses.replace(m, parts=tuple(dataclasses.replace(p, delta_grad_bits=0.0)
+                                              if p.tokens and p.delta_grad_bits is None else p for p in m.parts))
+    return [name for name, (c, k) in POINTS.items() if formalism.at(zero, c, k)["fit"]]
+
+
+def status(m: formalism.Measured, override: dict[str, str] | None = None,
+           read: dict | None = None) -> dict[str, str]:
+    """Each of `KEYS`' source (module docstring), `override`'s where it names one; an unmeasured Δ_grad's steps are
+    the row's `read`'s `untraced`, where it has them, which must number te_core's, out of its `steps`."""
+    out, gaps = {}, (read or {}).get("untraced")
     for key in KEYS:
         keys = LABELLED["delta_bits"] if key == "delta_t_bits" and m.delta_t_bits is None else LABELLED[key]
         bad = [m.labels.get(k) for k in keys if not _measured(m.labels.get(k))]
         out[key] = "measured" if not bad else f"assumed: {bad[0] or 'no label from te_core'}"
         if key == "delta_grad_bits" and m.fit_delta_grad_bits is None:
             n = sum(p.steps for p in m.parts if p.tokens and p.delta_grad_bits is None)
+            if gaps is not None and len(gaps) != n:
+                raise ValueError(f"te_core has no Delta_grad for {n} steps, `untraced` names {len(gaps)}: bring "
+                                 f"untraced() to te_core.annotate.with_structures' rule")
+            where = (f"{n} of {read['steps']} steps ({'; '.join(gaps[:3])}{f'; and {n - 3} more' if n > 3 else ''})"
+                     if gaps else f"{n} of {sum(p.steps for p in m.parts)} steps in structures with no traced "
+                                  f"Delta_grad")
+            on = held(m)
+            then = (f"Fit's verdict at {' and '.join(on)} rests on it, Fit holding there with it at 0" if on else
+                    "with it at 0, Fit still fails at both points, so neither rho_console nor rho_served rests on it")
             have = m.delta_grad_bits
-            out[key] = (f"assumed: unmeasured, {n} of {sum(p.steps for p in m.parts)} steps in structures with no "
-                        f"traced Delta_grad, so te_core fails Fit at every k"
+            out[key] = (f"assumed: unmeasured on {where}, so te_core fails Fit at every k; {then}"
                         + (f" (the traced steps' largest {algorithm_policy.num(have)} bits)" if have is not None else ""))
     return out | (override or {})
+
+
+def products(b: dict[str, dict], rounds: bool = False) -> str:
+    """The fresh-products kind's input, the run's products of two fresh operands, as the one bound `b` read them at
+    each of `POINTS`: measured at the console's default, or assumed with te_core's reason (where unmeasured, or where
+    the dominant traced step's stand in for steps of another shape, formalism.STAND_IN); and where unmeasured at the
+    serving block, te_core's reason."""
+    con = b["console"]
+    if (why := con["unmeasured"].get("fresh_products")) is not None:
+        return f"assumed: {why}" + (_UNTRACED if rounds else "")
+    stand = con["inputs"]["fresh_products"].get("stand_in")
+    out = (f"assumed: {formalism.STAND_IN.removeprefix('approximated: ')} ({len(stand['structures'])} traced "
+           f"structures)" if stand else "measured")
+    if (off := b["served"]["unmeasured"].get("fresh_products")) is None:
+        return out
+    return out + ("" if stand else " at the console's default") + f"; at the serving block, {off}"
 
 
 def token_dials(dials: dict, tokens: float) -> list[str]:
@@ -333,6 +394,7 @@ def build(spec: dict, stamp: str | None = None) -> tuple[dict, list[dict]]:
         at = {name: formalism.at(m, c, k) for name, (c, k) in POINTS.items()}
         try:
             cell = priced(m, w_fwd, at)
+            st = status(m, ROUNDS if r.get("rounds") else None, read)
         except ValueError as e:
             raise SystemExit(f"{PANEL}: {r['workload']} {r['run']}: {e}") from None
         one = {name: formalism.published(m, c, k, READING) for name, (c, k) in POINTS.items()}
@@ -341,7 +403,7 @@ def build(spec: dict, stamp: str | None = None) -> tuple[dict, list[dict]]:
                    and math.isinf(v["rho"])]:
             raise SystemExit(f"{PANEL}: {r['workload']} {r['run']}: reading A's rho is infinite at "
                              f"{' and '.join(inf)}, which no row publishes")
-        st = status(m, ROUNDS if r.get("rounds") else None)
+        st["products"] = products(bound, bool(r.get("rounds")))
         said = "; ".join(r[x] for x in ("about", "note") if r.get(x))
         run = f"{r['run']} {r['art']}" + (f" ({said})" if said else "")
         con = one["console"]
