@@ -6,7 +6,7 @@ import Std.Tactic.Do
 # The device's log as v2's check reads it, and the draw it shows
 
 A read of the device's log from what the prover sent (`readLog`) that shows the draw wherever v2's case accepts in an
-accepted composition (`drawRead_readLog`, `DrawRead`). It reads the challenger session's release log in v2's evidence
+accepted composition (`drawRead_readLog`, `DrawRead`), as does any read that agrees with it (`drawRead_of_eq`). It reads the challenger session's release log in v2's evidence
 as v2's check does (`SampledProofs.Challenger.releasedRootsOf`): the head aside, a coin tree's line (`treeLine`) its
 own release (`treeRelease`), and the other lines in pairs, a root's line and its coin's release, of the family and
 after the root the root's line shows (`rootOf`). The draw's coins `ξ` (`SampledProofs.OneStageZk.coinsOf`) are placed in
@@ -673,5 +673,11 @@ theorem drawRead_readLog (k : Verity.Registration.Composite) : DrawRead k readLo
   unfold ShowsDraw
   rw [hafter]
   exact hf ▸ List.prefix_refl _
+
+/-- Any read that agrees with `readLog` shows the draw. -/
+theorem drawRead_of_eq (k : Verity.Registration.Composite) {read : Verity.Sent → Option (List Verity.Release)}
+    (h : ∀ s, read s = readLog s) : DrawRead k read := by
+  rw [show read = readLog from funext h]
+  exact drawRead_readLog k
 
 end Verity.Sampled
