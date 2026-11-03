@@ -282,7 +282,7 @@ class VoteSGD(torch.optim.Optimizer):
 
     def __init__(self, params, lr: float, hooks: bool = True, margin: int = 1):
         super().__init__(params, {"lr": lr})
-        self.handles, self.word, self.margin = [], None, margin
+        self.handles, self.word, self.margin, self.moved, self.steps = [], None, margin, None, 0
         for grp in self.param_groups:
             for p in grp["params"]:
                 self.state[p] = self.init_state(p)
@@ -308,15 +308,28 @@ class VoteSGD(torch.optim.Optimizer):
         v = st["votes"]
         return torch.sign(v) * (v.abs() >= self.margin) if self.margin > 1 else torch.sign(v)
 
-    def move(self, p: torch.Tensor, grp: dict, st: dict) -> None:
-        p.add_(self.push(st).to(p.dtype), alpha=-grp["lr"])
+    def move(self, p: torch.Tensor, grp: dict, st: dict) -> torch.Tensor:
+        """Moves p; returns how many of its values moved (a device tensor)."""
+        push = self.push(st)
+        p.add_(push.to(p.dtype), alpha=-grp["lr"])
+        return push.abs().sum()
 
     @torch.no_grad()
     def step(self) -> None:
         for grp in self.param_groups:
             for p in grp["params"]:
-                self.move(p, grp, self.state[p])
+                n = self.move(p, grp, self.state[p])
+                self.moved = n if self.moved is None else self.moved + n
                 self.state[p]["votes"].zero_()
+        self.steps += 1
+
+    def log(self) -> dict:
+        """The share of the voted values a step moved, averaged since the last call: a read-back, so only for the log
+        lines."""
+        size = sum(st["votes"].numel() for st in self.state.values())
+        out = {"moved": round(float(self.moved) / (size * self.steps), 6)} if self.steps else {}
+        self.moved, self.steps = None, 0
+        return out
 
     def close(self) -> None:
         for h in self.handles:
@@ -348,9 +361,18 @@ class VoteCodes(VoteSGD):
         self.add_votes(p, p.grad.reshape(1, -1)[:, :: self.stride(p)])
         p.grad = None
 
-    def move(self, p: torch.Tensor, grp: dict, st: dict) -> None:
+    def move(self, p: torch.Tensor, grp: dict, st: dict) -> torch.Tensor:
         draw = torch.rand(st["code"].shape, generator=self.gen, device=p.device) < grp["lr"]
-        st["code"] = torch.clamp(st["code"] - self.push(st) * draw, -self.qmax, self.qmax).to(torch.int8)
+        code = torch.clamp(st["code"] - self.push(st) * draw, -self.qmax, self.qmax).to(torch.int8)
+        moved = (code != st["code"]).sum()
+        st["code"] = code
+        return moved
+
+    def log(self) -> dict:
+        """VoteSGD's, and the share of codes at the end of their range."""
+        codes = [st["code"] for st in self.state.values()]
+        at_max = sum((c.abs() == self.qmax).sum() for c in codes)
+        return super().log() | {"at_max": round(float(at_max) / sum(c.numel() for c in codes), 6)}
 
     def full_code(self, p: torch.Tensor) -> torch.Tensor:
         """p's code at p's shape, zero off the support."""
@@ -741,7 +763,8 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
             ema = total if ema is None else 0.98 * ema + 0.02 * total
             if (step + 1) % 100 == 0:
                 print(json.dumps({"arm": k, "step": step + 1, "loss": float(total), "ema": float(ema),
-                                  "s": round(time.perf_counter() - t0, 1)}), flush=True)
+                                  "s": round(time.perf_counter() - t0, 1),
+                                  **(opt.log() if isinstance(opt, VoteSGD) else {})}), flush=True)
             if sched.due(g, step == n_k - 1):
                 emit(*pieces(x, factors, norms))
             g += 1
@@ -1026,7 +1049,8 @@ def main() -> int:
             ema = total if ema is None else 0.98 * ema + 0.02 * total
             if (step + 1) % 100 == 0:
                 print(json.dumps({"arm": k, "step": step + 1, "loss": float(total), "ema": float(ema),
-                                  "s": round(time.perf_counter() - t0, 1)}), flush=True)
+                                  "s": round(time.perf_counter() - t0, 1),
+                                  **(voter.log() if voter is not None else {})}), flush=True)
             if sched.due(g, step == n_arm - 1):
                 if quantized and a.emit == "quan":
                     codes()
