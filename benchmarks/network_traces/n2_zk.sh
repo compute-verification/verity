@@ -10,7 +10,8 @@
 # its honest and tampered members on the network certifier's grid, `NetworkLinkWindow`).
 # env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_RUNS (the tarball's name under the run's inputs/)
 #      N2_WARDEN_RUN (a warden run's directory: scan_zk.sh's $OUT/warden after SC_REHEARSE, or warden_serve.py's --out)
-#      N2_REQUESTS (virtual's --requests)  N2_ROUNDS (n2_zk.py's --rounds, proved one after another: one firewalled
+#      N2_REQUESTS (virtual's --requests)  N2_PROFILE (virtual's --profile: planned, or served for
+#      NetworkServedLinkWindow)  N2_ROUNDS (n2_zk.py's --rounds, proved one after another: one firewalled
 #      session at a time)  N2_DEBUG_CLEAR=1 (each verdict also carries the in-the-clear comparison)  N2_CACHE (the build cache,
 #      kept across runs where writable)  N2_DRY=1 (the execution phases and their references only)
 # Kept in $OUT/n2zk: n2_zk's records and logs, the public files and everything the verifier received; never a prover's
@@ -41,8 +42,9 @@ else
     mkdir -p "$RUNS" && tar -xzf "${RESEARCH_RUN_DIR:?}/inputs/$N2_RUNS" -C "$RUNS" || { log "n2zk: no runs in $N2_RUNS"; exit 7; }
     log "n2zk: runs from $N2_RUNS: $(ls "$RUNS" | tr '\n' ' ')"
   else
-    log "n2zk: virtual runs (requests ${N2_REQUESTS:-40})"
-    "$PY" benchmarks/network_traces/n2_zk.py virtual --out "$RUNS" --requests "${N2_REQUESTS:-40}" 2>&1 | tee -a "$OUT/n2zk.log" \
+    log "n2zk: virtual runs (requests ${N2_REQUESTS:-40}, profile ${N2_PROFILE:-planned})"
+    "$PY" benchmarks/network_traces/n2_zk.py virtual --out "$RUNS" --requests "${N2_REQUESTS:-40}" \
+      --profile "${N2_PROFILE:-planned}" 2>&1 | tee -a "$OUT/n2zk.log" \
       || { log "n2zk: virtual FAILED"; exit 7; }
   fi
   mkdir -p "$OUT/runs"
