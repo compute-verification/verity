@@ -9,10 +9,11 @@ import Mathlib.Tactic.NormNum
 The proofs of `Security/Definitions/Nci/Guarantees/Formalism/Witnesses.lean`, at the instances of
 `Security/Definitions/Nci/Formalism/Instances.lean`. Their gates, reads and token blocks are small finite sets, which
 `decide` computes. At `Chain`, the inference blocks at `(c, k) = (1, 1)` are the empty block and the blocks of one gate
-(`ib_cases`), so A1 is five counts and every block holds at most one gate (`entryWork_le`); at twice the state, A1's
-budget admits only entries where the work reads none of the token's state, and no block entering there holds a gate of
-`{3, 4}`. Each bound is compared with its price in `ℝ`. The `example`s at the end apply each guarantee to its lemmas, so
-the lemmas are the premises as the guarantee states them.
+(`ib_cases`), so A1 is five counts and every block holds at most one gate (`entryWork_le`). Each family of witness
+blocks has one, so A1's values are its reads (`stateAt_singleton`, `updateAt_singleton`), and `u_I` is its one update
+bit for a block that works on the token (`blockUpdate_eq`). At `skipping`, A1's budget admits no block that works on
+the token, so none it admits holds a gate of `{3, 4}`. Each bound is compared with its price in `ℝ`. The `example`s at
+the end apply each guarantee to its lemmas, so the lemmas are the premises as the guarantee states them.
 -/
 
 namespace Nci.Formalism
@@ -37,22 +38,42 @@ theorem natCast_div_natCast {a b : ℕ} (hb : b ≠ 0) :
     (a : ℝ≥0∞) / (b : ℝ≥0∞) = (((a : ℝ≥0) / (b : ℝ≥0) : ℝ≥0) : ℝ≥0∞) := by
   rw [← coe_div_coe (by exact_mod_cast hb), ENNReal.coe_natCast, ENNReal.coe_natCast]
 
-/-- `W_T(x, ν) ≤ n` when every inference block whose work on `T` begins at `x` holds at most `n` gates of `X` in `T`. -/
-theorem entryWork_le_of {d : Declaration} {L : Type} (A : Annotation d L) {c k : ℕ} {E : Type}
-    {e : Finset (Fin d.D.N) → L → E} {u : Finset (Fin d.D.N) → ℝ≥0} {X : Finset (Fin d.D.N)} {T : L} {x : E}
-    {ν : ℝ≥0} {n : ℕ} (h : ∀ I, InferenceBlock d c k I → e I T = x → (I ∩ A.tokens.holds T ∩ X).card ≤ n) :
-    A.entryWork c k e u X T x ν ≤ n := by
+/-- `W_T(x, ν) ≤ n` when every inference block whose work on `T` begins at `x` with at most `ν` update bits holds at
+most `n` gates of `X` in `T`. -/
+theorem entryWork_le_of {d : Declaration} {L : Type} [Fintype L] (A : Annotation d L) {c k : ℕ} {E : Type}
+    {e : Finset (Fin d.D.N) → L → E} {𝒲 : Finset (Finset (Fin d.D.N))} {X : Finset (Fin d.D.N)} {T : L} {x : E}
+    {ν n : ℕ}
+    (h : ∀ I, InferenceBlock d c k I → e I T = x → A.blockUpdate e 𝒲 I ≤ ν → (I ∩ A.tokens.holds T ∩ X).card ≤ n) :
+    A.entryWork c k e 𝒲 X T x ν ≤ n := by
   classical
   unfold Annotation.entryWork
   refine Finset.sup_le fun I hI => ?_
   rw [mem_filter] at hI
-  exact h I hI.2.1 hI.2.2.1
+  exact h I hI.2.1 hI.2.2.1 hI.2.2.2
 
 /-- A block of at most `c` gates holds at most `c` gates of any token's work, so `W_T(x, ν) ≤ c`. -/
-theorem entryWork_le {d : Declaration} {L : Type} (A : Annotation d L) {c k : ℕ} {E : Type}
-    (e : Finset (Fin d.D.N) → L → E) (u : Finset (Fin d.D.N) → ℝ≥0) (X : Finset (Fin d.D.N)) (T : L) (x : E)
-    (ν : ℝ≥0) : A.entryWork c k e u X T x ν ≤ c :=
-  entryWork_le_of A fun _ hI _ => (card_le_card (inter_subset_left.trans inter_subset_left)).trans hI.2.1
+theorem entryWork_le {d : Declaration} {L : Type} [Fintype L] (A : Annotation d L) {c k : ℕ} {E : Type}
+    (e : Finset (Fin d.D.N) → L → E) (𝒲 : Finset (Finset (Fin d.D.N))) (X : Finset (Fin d.D.N)) (T : L) (x : E)
+    (ν : ℕ) : A.entryWork c k e 𝒲 X T x ν ≤ c :=
+  entryWork_le_of A fun _ hI _ _ => (card_le_card (inter_subset_left.trans inter_subset_left)).trans hI.2.1
+
+/-- The witness blocks entering `T` at `x` of a family of one witness `W` that enters there: `W` alone. -/
+theorem enters_singleton {d : Declaration} {L : Type} (A : Annotation d L) {E : Type}
+    {e : Finset (Fin d.D.N) → L → E} {W : Finset (Fin d.D.N)} {T : L} {x : E} (hW : A.Enters e {W} T x W) :
+    {W' | A.Enters e {W} T x W'} = {W} :=
+  Set.ext fun _ => ⟨fun h => Finset.mem_singleton.1 h.1, fun h => (Set.mem_singleton_iff.1 h) ▸ hW⟩
+
+/-- At a family of one witness `W` entering `T` at `x`, `a_T(x)` is the state bits `W` reads. -/
+theorem stateAt_singleton {d : Declaration} {L : Type} (A : Annotation d L) {E : Type}
+    {e : Finset (Fin d.D.N) → L → E} {W : Finset (Fin d.D.N)} {T : L} {x : E} (hW : A.Enters e {W} T x W) :
+    A.stateAt e {W} T x = A.stateReads W := by
+  rw [Annotation.stateAt, enters_singleton A hW, Set.image_singleton, csInf_singleton]
+
+/-- At a family of one witness `W` entering `T` at `x`, `u_T(x)` is the update bits `W` reads. -/
+theorem updateAt_singleton {d : Declaration} {L : Type} (A : Annotation d L) {E : Type}
+    {e : Finset (Fin d.D.N) → L → E} {W : Finset (Fin d.D.N)} {T : L} {x : E} (hW : A.Enters e {W} T x W) :
+    A.updateAt e {W} T x = A.updateReads W := by
+  rw [Annotation.updateAt, enters_singleton A hW, Set.image_singleton, csInf_singleton]
 
 namespace SecurityProofs
 
@@ -79,50 +100,87 @@ theorem ib_cases {I : Finset (Fin d.D.N)} (hI : InferenceBlock d 1 1 I) :
 
 theorem ib_three : InferenceBlock d 1 1 {3} := by decide
 
-theorem le_of_card {a b c : ℕ} (h : a + b ≤ c) : (a : ℝ≥0) + (b : ℝ≥0) ≤ (c : ℝ≥0) := by exact_mod_cast h
+/-- The token's three gates enter it, the witness block of `witnesses`. -/
+theorem enters_witnesses (T : Fin 1) (x : Unit) : A.Enters entry witnesses T x {2, 3, 4} := by
+  obtain rfl : T = 0 := Subsingleton.elim T 0
+  exact ⟨mem_singleton_self _, by unfold GateSet; decide, by decide, fun T' h => absurd (Subsingleton.elim T' 0) h,
+    rfl⟩
 
-theorem not_le_of_card {a b c : ℕ} (h : ¬ a + 2 * b ≤ c) : ¬ (a : ℝ≥0) + 2 * (b : ℝ≥0) ≤ (c : ℝ≥0) := by
-  exact_mod_cast h
+/-- Gates `2` and `4` enter it, the witness block of `skipping`. -/
+theorem enters_skipping (T : Fin 1) (x : Unit) : A.Enters entry skipping T x {2, 4} := by
+  obtain rfl : T = 0 := Subsingleton.elim T 0
+  exact ⟨mem_singleton_self _, by unfold GateSet; decide, by decide, fun T' h => absurd (Subsingleton.elim T' 0) h,
+    rfl⟩
 
-/-- **A1 holds** at `Chain`: gate `2`'s block reads the new weight, one update bit, and gates `3` and `4`'s each read
-one value of the token's state. -/
-theorem cutCost : CutCost d 1 1 entry state update := by
+/-- The token's three gates read the new weight alone: no state, one update bit. -/
+theorem stateAt_witnesses (T : Fin 1) (x : Unit) : A.stateAt entry witnesses T x = 0 := by
+  rw [stateAt_singleton A (enters_witnesses T x)]
+  decide
+
+theorem updateAt_witnesses (T : Fin 1) (x : Unit) : A.updateAt entry witnesses T x = 1 := by
+  rw [updateAt_singleton A (enters_witnesses T x)]
+  decide
+
+/-- Gates `2` and `4` read the new weight and gate `3`'s value: one bit of state, one update bit. -/
+theorem stateAt_skipping (T : Fin 1) (x : Unit) : A.stateAt entry skipping T x = 1 := by
+  rw [stateAt_singleton A (enters_skipping T x)]
+  decide
+
+theorem updateAt_skipping (T : Fin 1) (x : Unit) : A.updateAt entry skipping T x = 1 := by
+  rw [updateAt_singleton A (enters_skipping T x)]
+  decide
+
+/-- At a family whose witnesses read one update bit, `u_I` is `1` for a block that works on the token and `0` for one
+that doesn't. -/
+theorem blockUpdate_eq {𝒲 : Finset (Finset (Fin d.D.N))} (hu : ∀ T x, A.updateAt entry 𝒲 T x = 1)
+    (I : Finset (Fin d.D.N)) : A.blockUpdate entry 𝒲 I = (A.worksOn I).sup fun _ => 1 := by
+  simp only [Annotation.blockUpdate, hu]
+
+/-- **A1 holds** at `witnesses`: it prices every block that works on the token at the witness's one update bit, and
+each reads one bit. -/
+theorem cutCost : CutCost A 1 1 entry witnesses := by
   intro I hI
-  rw [Fin.sum_univ_one]
-  rcases ib_cases hI with rfl | rfl | rfl | rfl | rfl <;> exact le_of_card (by decide)
+  rw [blockUpdate_eq updateAt_witnesses]
+  simp only [stateAt_witnesses, sum_const_zero, add_zero]
+  rcases ib_cases hI with rfl | rfl | rfl | rfl | rfl <;> decide
 
-/-- **A1 fails at twice the state**: the block of gate `3` reads one value of the token's state and no update bit. -/
-theorem not_cutCost_two : ¬ CutCost d 1 1 entry (fun T x => 2 * state T x) update := by
+/-- **A1 fails at `skipping`**: it prices the block of gate `3` at two bits, an update bit and a bit of state, and that
+block reads one. -/
+theorem not_cutCost_skipping : ¬ CutCost A 1 1 entry skipping := by
   intro h
   have h3 := h {3} ib_three
-  rw [Fin.sum_univ_one] at h3
-  exact not_le_of_card (by decide) h3
+  rw [blockUpdate_eq updateAt_skipping] at h3
+  simp only [stateAt_skipping] at h3
+  exact absurd h3 (by decide)
 
 /-- Every block holds at most one gate, so the cap `1` bounds the token work at any budget. -/
-theorem tokenCapAt_one : A.TokenCapAt 1 1 entry state update {3, 4} 1 := by
-  refine ⟨by decide, fun ν f _ => ?_⟩
-  rw [Fin.sum_univ_one]
-  exact_mod_cast entryWork_le A entry update {3, 4} 0 (f 0) ν
+theorem tokenCapAt_one : A.TokenCapAt 1 1 entry witnesses {3, 4} 1 := by
+  refine ⟨by decide, fun S f ν _ => ?_⟩
+  calc ∑ T ∈ S, (A.entryWork 1 1 entry witnesses {3, 4} T (f T) ν : ℝ≥0)
+      ≤ ∑ T, (A.entryWork 1 1 entry witnesses {3, 4} T (f T) ν : ℝ≥0) := sum_le_sum_of_subset (subset_univ S)
+    _ ≤ 1 := by
+        rw [Fin.sum_univ_one]
+        exact_mod_cast entryWork_le A entry witnesses {3, 4} 0 (f 0) ν
 
-/-- At twice the state, A1's budget admits only entries where the work reads none of the token's state, and no block
-entering there holds a gate of `{3, 4}`: gates `3` and `4`'s blocks each read one value of it. -/
-theorem tokenCapAt_zero : A.TokenCapAt 1 1 entry (fun T x => 2 * state T x) update {3, 4} 0 := by
-  refine ⟨by decide, fun ν f hbud => ?_⟩
-  rw [Fin.sum_univ_one] at hbud ⊢
-  have h2 : 2 * ((d.D.into (f 0) ∩ A.tokens.holds 0).card : ℝ≥0) ≤ ((1 : ℕ) : ℝ≥0) := le_add_self.trans hbud
-  have hn : (d.D.into (f 0) ∩ A.tokens.holds 0).card = 0 := by
-    have : 2 * (d.D.into (f 0) ∩ A.tokens.holds 0).card ≤ 1 := by exact_mod_cast h2
+/-- At `skipping`, A1's budget admits no block that works on the token, whose update bit and the token's one bit of
+state are two, so no block it admits holds a gate of `{3, 4}`. -/
+theorem tokenCapAt_zero : A.TokenCapAt 1 1 entry skipping {3, 4} 0 := by
+  refine ⟨by decide, fun S f ν hbud => le_of_eq (sum_eq_zero fun T hT => ?_)⟩
+  simp only [stateAt_skipping, sum_const, smul_eq_mul, mul_one] at hbud
+  have hν : ν = 0 := by
+    have := card_pos.2 ⟨T, hT⟩
     omega
-  suffices h : A.entryWork 1 1 entry update {3, 4} 0 (f 0) ν = 0 by
-    rw [h, Nat.cast_zero]
-  refine Nat.eq_zero_of_le_zero (entryWork_le_of A fun I hIB hentry => ?_)
-  rw [← hentry] at hn
+  subst hν
+  suffices h : A.entryWork 1 1 entry skipping {3, 4} T (f T) 0 = 0 by rw [h, Nat.cast_zero]
+  refine Nat.eq_zero_of_le_zero (entryWork_le_of A fun I hIB _ hu => ?_)
+  rw [blockUpdate_eq updateAt_skipping] at hu
+  obtain rfl : T = 0 := Subsingleton.elim T 0
   rcases ib_cases hIB with rfl | rfl | rfl | rfl | rfl
   · decide
   · decide
-  · decide
-  · exact absurd hn (by decide)
-  · exact absurd hn (by decide)
+  · exact absurd hu (by decide)
+  · exact absurd hu (by decide)
+  · exact absurd hu (by decide)
 
 theorem gate_three_four : GateSet d.D {3, 4} := by
   unfold GateSet
@@ -247,7 +305,7 @@ theorem Slowdown_honest : Guarantees.Slowdown_honest :=
   ⟨Chain.valid, Chain.cutCost, Chain.tokenCapAt_one, Chain.caps_weight, Chain.partitionBound_one, Chain.blocks_isCK⟩
 
 theorem Slowdown_nontrivial : Guarantees.Slowdown_nontrivial :=
-  ⟨Chain.valid, Chain.not_cutCost_two, Chain.tokenCapAt_zero, Chain.caps_weight, Chain.partitionBound_one,
+  ⟨Chain.valid, Chain.not_cutCost_skipping, Chain.tokenCapAt_zero, Chain.caps_weight, Chain.partitionBound_one,
     Chain.blocks_isCK, Chain.not_slowdown⟩
 
 theorem Security_honest : Guarantees.Security_honest :=
@@ -255,8 +313,8 @@ theorem Security_honest : Guarantees.Security_honest :=
     Chain.caps_weight, Chain.partitionBound_one, Chain.blocks_isCK, le_rfl⟩
 
 theorem Security_nontrivial : Guarantees.Security_nontrivial := by
-  refine ⟨floor_one, Set.mem_singleton _, Chain.valid, le_top, le_rfl, Chain.not_cutCost_two, Chain.tokenCapAt_zero,
-    Chain.caps_weight, Chain.partitionBound_one, Chain.blocks_isCK, le_rfl, ?_⟩
+  refine ⟨floor_one, Set.mem_singleton _, Chain.valid, le_top, le_rfl, Chain.not_cutCost_skipping,
+    Chain.tokenCapAt_zero, Chain.caps_weight, Chain.partitionBound_one, Chain.blocks_isCK, le_rfl, ?_⟩
   rw [show kindBound Chain.r.d 1 {3, 4} 0 = ⊤ from Chain.kindBound_zero ⟨3, by decide⟩, max_eq_left le_top,
     ENNReal.ofReal_one, mul_one, Chain.honestCost_eq, ENNReal.top_mul (by norm_num), top_le_iff]
   exact ENNReal.natCast_ne_top _
@@ -288,28 +346,25 @@ example (h3 : Chain.whole.IsCK Chain.d 1 1) : False := by
 example : max (kindBound Chain.d 1 {3, 4} 1) (max (⨆ _K : Unit, kindBound Chain.d 1 {1} 1) (⨆ _J : Unit, (1 : ℝ≥0∞))) ≤
     partitionSlowdown Chain.d 4 1 := by
   obtain ⟨h1, h2, h3, h4, h5, h6⟩ := Slowdown_honest
-  exact Slowdown Chain.d (Fin 1) Chain.A 1 1 (Finset (Fin Chain.d.D.N)) Chain.entry Chain.state Chain.update {3, 4} 1
-    Unit (fun _ => {1}) (fun _ => 1) Unit (fun _ => 1) 4 Chain.blocks h1 h2 h3 h4 (fun _ => h5) h6
+  exact Slowdown Chain.d (Fin 1) Chain.A 1 1 Unit Chain.entry Chain.witnesses {3, 4} 1 Unit (fun _ => {1})
+    (fun _ => 1) Unit (fun _ => 1) 4 Chain.blocks h1 h2 h3 h4 (fun _ => h5) h6
 
-example (h2 : CutCost Chain.d 1 1 Chain.entry (fun T x => 2 * Chain.state T x) Chain.update) : False := by
+example (h2 : CutCost Chain.A 1 1 Chain.entry Chain.skipping) : False := by
   obtain ⟨h1, -, h3, h4, h5, h6, hlt⟩ := Slowdown_nontrivial
-  exact hlt (Slowdown Chain.d (Fin 1) Chain.A 1 1 (Finset (Fin Chain.d.D.N)) Chain.entry
-    (fun T x => 2 * Chain.state T x) Chain.update {3, 4} 0 Unit (fun _ => {1}) (fun _ => 1) Unit (fun _ => 1) 4
-    Chain.blocks h1 h2 h3 h4 (fun _ => h5) h6)
+  exact hlt (Slowdown Chain.d (Fin 1) Chain.A 1 1 Unit Chain.entry Chain.skipping {3, 4} 0 Unit (fun _ => {1})
+    (fun _ => 1) Unit (fun _ => 1) 4 Chain.blocks h1 h2 h3 h4 (fun _ => h5) h6)
 
 example : max (kindBound Chain.r.d 1 {3, 4} 1)
     (max (⨆ _K : Unit, kindBound Chain.r.d 1 {1} 1) (⨆ _J : Unit, (1 : ℝ≥0∞))) * ENNReal.ofReal 1 *
       honestCost Chain.methods (fun _ => 0) 0 ≤ ((1 * 4 * 1 : ℕ) : ℝ≥0∞) := by
   obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11⟩ := Security_honest
-  exact Security Chain.methods silent (fun _ => 0) 0 ⊤ 1 Chain.r 1 1 4 1 (Finset (Fin Chain.d.D.N)) Chain.entry
-    Chain.state Chain.update {3, 4} 1 Unit (fun _ => {1}) (fun _ => 1) Unit (fun _ => 1) 4 Chain.blocks h1 h2 h3 h4 h5
-    h6 h7 h8 (fun _ => h9) h10 h11
+  exact Security Chain.methods silent (fun _ => 0) 0 ⊤ 1 Chain.r 1 1 4 1 Unit Chain.entry Chain.witnesses {3, 4} 1
+    Unit (fun _ => {1}) (fun _ => 1) Unit (fun _ => 1) 4 Chain.blocks h1 h2 h3 h4 h5 h6 h7 h8 (fun _ => h9) h10 h11
 
-example (h6 : CutCost Chain.r.d 1 1 Chain.entry (fun T x => 2 * Chain.state T x) Chain.update) : False := by
+example (h6 : CutCost Chain.r.A 1 1 Chain.entry Chain.skipping) : False := by
   obtain ⟨h1, h2, h3, h4, h5, -, h7, h8, h9, h10, h11, hlt⟩ := Security_nontrivial
-  exact hlt (Security Chain.methods silent (fun _ => 0) 0 ⊤ 1 Chain.r 1 1 4 1 (Finset (Fin Chain.d.D.N)) Chain.entry
-    (fun T x => 2 * Chain.state T x) Chain.update {3, 4} 0 Unit (fun _ => {1}) (fun _ => 1) Unit (fun _ => 1) 4
-    Chain.blocks h1 h2 h3 h4 h5 h6 h7 h8 (fun _ => h9) h10 h11)
+  exact hlt (Security Chain.methods silent (fun _ => 0) 0 ⊤ 1 Chain.r 1 1 4 1 Unit Chain.entry Chain.skipping {3, 4} 0
+    Unit (fun _ => {1}) (fun _ => 1) Unit (fun _ => 1) 4 Chain.blocks h1 h2 h3 h4 h5 h6 h7 h8 (fun _ => h9) h10 h11)
 
 example : slowdown Honest.d 1 2 ≤ ((1 : ℕ) : ℝ≥0∞) / ((1 - 0 : ℕ) : ℝ≥0∞) := by
   obtain ⟨h1, h2, h3⟩ := FitServing_honest

@@ -20,11 +20,12 @@ of work, its factors explicit, and it reads the upper bounds A1 gives, never bes
   application and decoding; the token kind's cap is a theorem here, and the others' caps are premises. The bound is a
   maximum: kinds whose work shares blocks are not added, which would need a joint cap, `Σ_K |I ∩ B_K| / cap_K ≤ 1` for
   every block;
-* **the token kind's cap from A1** (`TokenCap`): under A1, an inference block holds at most `cap` gates of a set `X` of
-  token gates, for any `cap` that bounds the token work within A1's budget (`TokenCapAt`): a block with update reads `u`
-  whose work on the tokens begins at the entries `e_T` holds at most the token work reachable from them, and
-  `u + Σ_T a_T(e_T) ≤ k`. Its clean form (`TokenCapClean`): with at most `r(ν)` gates of token work a bit of state,
-  `cap = max_ν (k - ν) r(ν)`, the bound `(k - u) max (W / a)`;
+* **the token kind's cap from A1** (`TokenCap`): under A1 at a family `𝒲` of witness blocks, an inference block holds
+  at most `cap` gates of a set `X` of token gates, for any `cap` that bounds the token work within A1's budget
+  (`TokenCapAt`): a block with update bits `u_I` whose work on its tokens begins at the entries `e_T` holds at most the
+  token work reachable from them, and `u_I + Σ_T a_T(e_T) ≤ k`, at the values `𝒲` sets. Its clean form
+  (`TokenCapClean`): with at most `r(ν)` gates of token work a bit of state, `cap = max_ν (k - ν) r(ν)`, the bound
+  `(k - u) max (W / a)`;
 * **Slowdown** (`Slowdown`), the one bound: under A1,
   `ρ ≥ max((|X| / |C|) / (cap_X / c), max_K (|B_K| / |C|) / (cap_K / c), max_J Λ_J)`, the counting lemma over the kinds
   with the token kind's cap from A1;
@@ -57,31 +58,29 @@ def Counting : Prop :=
     Caps d c k B cap → (∀ J, PartitionBound d c k (Λ J)) → P.IsCK d c k →
     max (⨆ K, kindBound d c (B K) (cap K)) (⨆ J, Λ J) ≤ partitionSlowdown d m c
 
-/-- **The token kind's cap from A1**: under A1, every inference block holds at most `cap` gates of `X`, for any `cap`
-that bounds the token work within A1's budget. -/
+/-- **The token kind's cap from A1**: under A1 at the witness blocks `𝒲`, every inference block holds at most `cap`
+gates of `X`, for any `cap` that bounds the token work within A1's budget. -/
 def TokenCap : Prop :=
   ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
-    (e : Finset (Fin d.D.N) → L → E) (a : L → E → ℝ≥0) (u : Finset (Fin d.D.N) → ℝ≥0) (X : Finset (Fin d.D.N))
-    (cap : ℝ≥0),
-    CutCost d c k e a u → A.TokenCapAt c k e a u X cap → ∀ I, InferenceBlock d c k I → ((I ∩ X).card : ℝ≥0) ≤ cap
+    (e : Finset (Fin d.D.N) → L → E) (𝒲 : Finset (Finset (Fin d.D.N))) (X : Finset (Fin d.D.N)) (cap : ℝ≥0),
+    CutCost A c k e 𝒲 → A.TokenCapAt c k e 𝒲 X cap → ∀ I, InferenceBlock d c k I → ((I ∩ X).card : ℝ≥0) ≤ cap
 
 /-- **The token cap's clean form**: with at most `r(ν)` gates of token work a bit of state, `max_ν (k - ν) r(ν)` bounds
 the token work within A1's budget, the bound `(k - u) max (W / a)`. -/
 def TokenCapClean : Prop :=
   ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
-    (e : Finset (Fin d.D.N) → L → E) (a : L → E → ℝ≥0) (u : Finset (Fin d.D.N) → ℝ≥0) (X : Finset (Fin d.D.N))
-    (r : ℝ≥0 → ℝ≥0) (M : ℝ≥0),
-    A.WorkPerBit c k e a u X r → PeakAtMost k r M → A.TokenCapAt c k e a u X M
+    (e : Finset (Fin d.D.N) → L → E) (𝒲 : Finset (Finset (Fin d.D.N))) (X : Finset (Fin d.D.N)) (r : ℕ → ℝ≥0)
+    (M : ℝ≥0),
+    A.WorkPerBit c k e 𝒲 X r → PeakAtMost k r M → A.TokenCapAt c k e 𝒲 X M
 
 /-- **Slowdown**, the one bound: under A1, for kinds `K` of work with caps `cap_K`, kinds `J` with partition-level
 bounds `Λ_J` and a set `X` of token gates with a cap `cap_X` within A1's budget, every partition `𝓘` into inference
 blocks has `|𝓘| c / |C| ≥ max((|X| / |C|) / (cap_X / c), max_K (|B_K| / |C|) / (cap_K / c), max_J Λ_J)`. -/
 def Slowdown : Prop :=
   ∀ (d : Declaration) (L : Type) [Fintype L] (A : Annotation d L) (c k : ℕ) (E : Type)
-    (e : Finset (Fin d.D.N) → L → E) (a : L → E → ℝ≥0) (u : Finset (Fin d.D.N) → ℝ≥0) (X : Finset (Fin d.D.N))
-    (capX : ℝ≥0) (κ : Type) (B : κ → Finset (Fin d.D.N)) (cap : κ → ℝ≥0) (ι : Type) (Λ : ι → ℝ≥0∞) (m : ℕ)
-    (P : Partition d.D m),
-    A.Valid → CutCost d c k e a u → A.TokenCapAt c k e a u X capX → Caps d c k B cap →
+    (e : Finset (Fin d.D.N) → L → E) (𝒲 : Finset (Finset (Fin d.D.N))) (X : Finset (Fin d.D.N)) (capX : ℝ≥0)
+    (κ : Type) (B : κ → Finset (Fin d.D.N)) (cap : κ → ℝ≥0) (ι : Type) (Λ : ι → ℝ≥0∞) (m : ℕ) (P : Partition d.D m),
+    A.Valid → CutCost A c k e 𝒲 → A.TokenCapAt c k e 𝒲 X capX → Caps d c k B cap →
     (∀ J, PartitionBound d c k (Λ J)) → P.IsCK d c k →
     max (kindBound d c X capX) (max (⨆ K, kindBound d c (B K) (cap K)) (⨆ J, Λ J)) ≤ partitionSlowdown d m c
 
@@ -108,11 +107,11 @@ def FitTraining : Prop :=
 partition into inference blocks that fit in `N` periods of `n` blocks has `N n c ≥ ρ̲ p H(ℓ*)`, `ρ̲` Slowdown's bound. -/
 def Security : Prop :=
   ∀ (methods : Set Run) (dec : Verity.Decoder (List Bool)) (ℓ : List Bool → ℝ) (ℓstar : ℝ) (D : ℕ∞) (p : ℝ) (r : Run)
-    (c k n N : ℕ) (E : Type) (e : Finset (Fin r.d.D.N) → Fin r.numTokens → E) (a : Fin r.numTokens → E → ℝ≥0)
-    (u : Finset (Fin r.d.D.N) → ℝ≥0) (X : Finset (Fin r.d.D.N)) (capX : ℝ≥0) (κ : Type)
-    (B : κ → Finset (Fin r.d.D.N)) (cap : κ → ℝ≥0) (ι : Type) (Λ : ι → ℝ≥0∞) (m : ℕ) (P : Partition r.d.D m),
+    (c k n N : ℕ) (E : Type) (e : Finset (Fin r.d.D.N) → Fin r.numTokens → E) (𝒲 : Finset (Finset (Fin r.d.D.N)))
+    (X : Finset (Fin r.d.D.N)) (capX : ℝ≥0) (κ : Type) (B : κ → Finset (Fin r.d.D.N)) (cap : κ → ℝ≥0) (ι : Type)
+    (Λ : ι → ℝ≥0∞) (m : ℕ) (P : Partition r.d.D m),
     EfficiencyFloor methods dec c ℓ ℓstar D p → r.Among methods → r.A.Valid → r.Within dec c D → r.Reaches ℓ ℓstar →
-    CutCost r.d c k e a u → r.A.TokenCapAt c k e a u X capX → Caps r.d c k B cap →
+    CutCost r.A c k e 𝒲 → r.A.TokenCapAt c k e 𝒲 X capX → Caps r.d c k B cap →
     (∀ J, PartitionBound r.d c k (Λ J)) → P.IsCK r.d c k → InPeriods m N n →
     max (kindBound r.d c X capX) (max (⨆ K, kindBound r.d c (B K) (cap K)) (⨆ J, Λ J)) * ENNReal.ofReal p *
       honestCost methods ℓ ℓstar ≤ ((N * n * c : ℕ) : ℝ≥0∞)
