@@ -90,6 +90,7 @@ def args(tmp_path, monkeypatch, runs=RUNS, index=None) -> list[str]:
     rows = ledger_rows(runs) if index is None else index
     monkeypatch.setattr(rescore, "Ledger", lambda root: type("L", (), {"index": staticmethod(lambda: rows),
                                                                       "root": tmp_path})())
+    monkeypatch.setattr(FF, "LADDER", None)
     return ["--out", str(tmp_path / "out"), "--pin", "pin", "--manifest", str(man), "--stubs",
             "--pretraining", str(pretraining(tmp_path / "lf"))]
 
