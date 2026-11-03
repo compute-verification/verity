@@ -627,12 +627,14 @@ def whole_chain_of(system: dict, k: float, iters: int = 100_000, tol: float = 1e
 
 def p_match(graph, k: float = CONSOLE[1]) -> list[str]:
     """P-match's check within one op: the nodes on the way into a class's operand (`chain_classes`) that hand one entry
-    to several, a gather by token data (its rows repeat over the tokens that share an index) or a repeating view of a
-    value some chain's outputs reach whose result is carried on. The system prices a gather's rows at their width
-    (P-width, extended), as if no row repeated, and carries made-whole entries through an op at factor 1 by its
-    same-size arguments, charging a smaller one (a row's statistic, a gain) nothing, which a same-size argument bounds.
-    A value read by several ops is matched through the other arguments of the ops that read it (a residual add's), by
-    structure, and isn't checked here."""
+    made whole to several, a gather by token data of a table some chain's outputs reach (its rows repeat over the
+    tokens that share an index) or a repeating view of a value some chain's outputs reach whose result is carried on,
+    as te_core.capture.products' check has them. A gather of a table no chain reaches (an embedding of θ′, read at its
+    width) hands on no entry made whole: its rows' repeats are the bound's to drop, every product reading them before
+    an op makes them token-specific (te_core.capture.products' `gathered`, te_core.formalism). The system carries
+    made-whole entries through an op at factor 1 by its same-size arguments, charging a smaller one (a row's
+    statistic, a gain) nothing, which a same-size argument bounds. A value read by several ops is matched through the
+    other arguments of the ops that read it (a residual add's), by structure, and isn't checked here."""
     from te_core.capture.structure import _GATHERS, _gemms, _pk
 
     st = _Step(graph)
@@ -655,6 +657,7 @@ def p_match(graph, k: float = CONSOLE[1]) -> list[str]:
         name = _pk(n.target)
         a = n.args[0] if n.args and hasattr(n.args[0], "op") else None
         if name in _GATHERS and len(n.args) > 1 and hasattr(n.args[1], "op") and not st.reads_affected(n, n.args[1]) \
+                and a is not None and feeds.get(a) \
                 or name in _REPEATS and a is not None and _numel(n) > _numel(a) and feeds.get(n):
             bad.append(n.name)
     return bad
