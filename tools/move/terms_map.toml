@@ -248,7 +248,8 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_r
 # deployment's party and the recursion runs' mode `firewall` where shell, a flag's value or a message spells it bare
 # (`MODES=firewall`, `--modes firewall`, `(firewall)`, `dials firewall`, `listen: firewall`, `GATE_ABSENT=firewall`), a5's
 # coin family (`need 26 draw coins`), the module `verity_flock.firewall` (`python -m` runs it), the refusal
-# `FIREWALL-REFUSED`, the stderr line tag `FIREWALL\t` and its timing keys (`t.firewall_recheck`), the stored label `C-Flock`, the audit record's `wrong_units`, `proof_unit` and the `"proof-unit"`
+# `FIREWALL-REFUSED`, a line tag or reply that starts a string (`FIREWALL\t` with its timing keys `t.firewall_recheck`,
+# Lean's `DRAW {…}`, which `grep '^DRAW '` reads, the served-ZK reply `DRAWN`), the stored label `C-Flock`, the audit record's `wrong_units`, `proof_unit` and the `"proof-unit"`
 # kind, the public items' reasons `Spec.digest` hashes (`N, the window's proof units` and three more), the package
 # directory `verity/core/service/firewall`; the structure `Accounting.TS.DrawnLayer` and its projection
 # (names under it are renamed here, so `check.py --moved` reads each back only if the prefix is renamed in a move of its
@@ -274,7 +275,8 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
             '\binner\.draw\b', '\b(?:every|need \d+) draw coins?\b', '(?<=listen: )firewall\b',
             '\bGATE_(?:ABSENT|PEERS|ROLE)=[^\x22\x27\n]*',
             '\b(?:FC|H1S?)_[A-Z0-9_]*FIREWALL[A-Z0-9_]*', 'FIREWALL-REFUSED', '[\x22\x27]C-Flock[\x22\x27]',
-            '\bFIREWALL(?=\\t)', '(?<=\^)FIREWALL\b', '`FIREWALL` lines', '\b(?:t|cpu)\.firewall_\w+',
+            '\bFIREWALL(?=\\t)', '(?<=[\x22\x27^`])(?:DRAWN?|DRAWS|FIREWALL)(?=[\x22\x27 \\])', '`FIREWALL` lines',
+            '\b(?:t|cpu)\.firewall_\w+',
             '\bwrong_units\b', '\bproof_unit\b', '[\x22\x27]proof-unit[\x22\x27]', '\bservice/firewall\b',
             'N, the (?:window|round)\x27s proof units', 'one proof unit per registration: the link-window',
             'T proof units per registration, unit t the link-window\x27s bucket row t',
@@ -296,7 +298,7 @@ strings = []
 # `sampled`, with the keyword its test passes); PoUB's remote audit, whose `draws` (the coins' draws) and `samples` (a
 # window's sample cap), and `draw` (the pooled-draw term) and `sample`, are two things each, so its `draw` and `draws`
 # and their modules wait for a name of its owner's; a vector file Rust includes by name; the vLLM pouw-serve options
-# whose field is its flag's attribute; a versioned schema's file
+# whose field is its flag's attribute; a versioned schema's file; the served-ZK reply `DRAWN`, where it is named
 "verity/core/service/firewall/**" = ["firewall"]
 "verity/ml/flock/python/verity_flock/firewall.py" = ["firewall"]
 "benchmarks/numerical/python/verity_numerical/bench/placement.py" = ["firewall"]
@@ -319,3 +321,5 @@ strings = []
 "integrations/vllm/verity_vllm/pipeline/pouw_serve.py" = ["draws"]
 "integrations/vllm/tests/check/test_pouw_ncp_v2_end_to_end.py" = ["draws"]
 "**/drawn-unit-bundle*" = ["drawn"]
+"benchmarks/pouw/served_zk/**" = ["DRAWN"]
+"benchmarks/pouw/tests/test_served_zk.py" = ["DRAWN"]
