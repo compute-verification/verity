@@ -78,10 +78,14 @@ most that. The kinds:
 - fresh_products: products of two fresh operands, the Loomis-Whitney cap amortized over the partition, a theorem for
   the run's circuit given the standard algorithm and the widths it passes: te_core.io_bound's bound with Λ proved
   (`fresh_products`) on the run's products (`Measured.products`, which `products_of` takes from steps captured by
-  capture_step or capture_fn, at the k it classifies them at). io_bound's cap has the chain order's constant (its
-  premise P-chain) and the tree order's is the one where the trace doesn't give the order, so the term is measured
-  only on products the capture says are summed in a chain; unmeasured, with io_bound's chain figure in `inputs`,
-  elsewhere, and on a record with no product rows (a recorded program's);
+  capture_step or capture_fn, and `products_of_trace` from the product rows a recorded program's trace keeps from
+  te_core 4.8 on (te_core.capture.products), each at the k it classifies them at). io_bound's cap has the chain
+  order's constant (its premise P-chain) and the tree order's is the one where the trace doesn't give the order, so
+  the term is measured only on products the capture says are summed in a chain; unmeasured, with io_bound's chain
+  figure in `inputs`, elsewhere (a trace's order is unknown: a GEMM's summation is its kernel's), and on a record with
+  no product rows. A record with an op log and no product rows (a ledger row traced before 4.8) has its log's
+  (`products_of_ops`: dims, widths, θ or attention's where the log's class says so), but a log doesn't keep whether an
+  operand is fresh (`LOG_UNKNOWN`), so the term is unmeasured there with the share of MACs whose freshness is unknown;
 - token: A1's cap on a block's affected token work under reading A (below), A1's values from a witness family with
   matrix-product and weight-gradient tiles; unmeasured (never ∞) for a record without an op log or entries;
 - decoding: a block reading the update code runs the whole decoder, so it holds at most c − d affected gates: the
@@ -203,7 +207,8 @@ class Measured:
     #: the record's ops as reading A's tiles read them (te_core.tiles' `of_log` or `of_graph`; None: no op log)
     ops: list | None = None
     #: the fresh-products kind's inputs, the run's products of two fresh operands as te_core.io_bound reads them
-    #: (`products_of`: {"k", "order", "products"}; None: no step captured by capture_step or capture_fn)
+    #: (`products_of` or `products_of_trace`: {"k", "order", "products"}; None: no captured step and no trace product
+    #: rows)
     products: dict | None = None
 
     @property
@@ -602,9 +607,45 @@ SENSITIVITIES = {
 #: the orders a product's output entries are summed in, each with its cap's constant: the tree's where the trace
 #: doesn't give the order (coordinator 08:28Z)
 ORDERS = ("chain", "tree")
+#: the first te_core whose capture writes a traced step's product rows (te_core.capture.products' `CAPTURE`)
+PRODUCTS_FROM = "4.8"
 #: why the fresh-products kind is unmeasured on a record with no product rows
 FRESH_UNMEASURED = ("unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, "
-                    "and a recorded program's has none)")
+                    f"and a recorded program's trace has them from te_core {PRODUCTS_FROM} on)")
+#: an op log's class (te_core.tiles' ops: a macs_log's role, or a traced step's weight class) as what it says of a
+#: product: its non-token operand is θ (the product is never fresh), or it is attention's, which io_bound doesn't count
+LOG_KIND = {"theta": "theta", "registered": "theta"}
+#: what an op log doesn't keep, which decides whether a product's operands are fresh (`products_of_ops`): a weight
+#: decoded from a code or merged from a low-rank update, or an activation read from an embedding's rows, is passed
+#: below its op's dtype, and the log's updated class says only that an operand depends on the run's state
+LOG_UNKNOWN = ("the record's capture keeps each product's dims, its op's dtype and its op log's class, not its "
+               "operands' θ′-dependence or the widths and rates they're passed at (P-width's dataflow side, which "
+               "te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn)")
+
+
+def products_of_ops(ops: list[dict]) -> dict:
+    """A record's matrix products from its op log (te_core.tiles' ops: a ledger row's macs_log by `tiles.of_log`, or a
+    traced step's by `tiles.of_graph`), for a capture that keeps no step `io_bound.rows_of` reads: each product
+    (b, m, K, n) of an op tiles places, its MACs and output entries, its operands' widths as the log gives them and
+    its partial sums' (`io_bound.ACC_BITS`), and its kind where the log decides it (`LOG_KIND`: θ where its non-token
+    operand is θ, attention for a scaled-dot-product op), else unknown (`LOG_UNKNOWN`). The order is unknown: a log
+    keeps a matmul as one op. No product is counted (`products` is empty): a log never says both operands are fresh."""
+    rows = []
+    for op in ops:
+        if not op["products"]:
+            continue
+        total = sum(math.prod(p) for p in op["products"])
+        name = op["op"].removesuffix("_backward")
+        kind = "attention" if name in tiles.SDPA else LOG_KIND.get(op["class"], "unknown")
+        for b, m, K, n in op["products"]:
+            macs = op["macs"] * b * m * K * n / total
+            rows.append({"phase": op["phase"], "class": op["class"], "op": op["op"], "dims": [b, m, K, n],
+                         "macs": macs, "outputs": macs / K, "widths": op["widths"], "b_c": io_bound.ACC_BITS,
+                         "gates_per_mac": op["gates"] / op["macs"], "kind": kind})
+    macs = {kind: sum(r["macs"] for r in rows if r["kind"] == kind) for kind in ("theta", "attention", "unknown")}
+    total = sum(macs.values())
+    return {"k": None, "order": "unknown", "source": "op log", "products": [], "rows": rows, "macs": macs,
+            "unknown_share": macs["unknown"] / total if total else 0.0}
 
 
 def products_of(segments, k: float | None = None, gemm_dtype: str | None = "bfloat16", order: str | None = None) -> dict:
@@ -625,20 +666,63 @@ def products_of(segments, k: float | None = None, gemm_dtype: str | None = "bflo
     return {"k": k, "order": order, "products": out}
 
 
+def product_kind(row: dict) -> str:
+    """A trace's product row's kind (te_core.capture.products' rows), as te_core.io_bound.rows_of classifies a GEMM:
+    unaffected, attention (two token-indexed dims among m, k and n), self (both operands one array), theta (one
+    operand doesn't depend on θ′), fresh (both do and both are paid at their width) or expansion."""
+    if not any(row["affected"]):
+        return "unaffected"
+    if sum(x in row["token_dims"] for x in ("m", "k", "n")) >= 2:
+        return "attention"
+    if row["self"]:
+        return "self"
+    if not all(row["affected"]):
+        return "theta"
+    return "fresh" if all(row["paid"]) else "expansion"
+
+
+def products_of_trace(block: dict, steps: float = 1.0) -> dict:
+    """`Measured.products` from a trace's product rows (te_core.capture.products' `rows`, the trace's `products`) over
+    `steps` traced steps: its fresh rows (`product_kind`) as exactly the products te_core.io_bound's bound reads, each
+    row's MACs and output entries times its count and `steps`, at the k and in the order the capture gives (``unknown``:
+    a GEMM's summation is its kernel's), and each kind's MACs."""
+    out, kinds = [], dict.fromkeys(io_bound.KINDS, 0.0)
+    for r in block["rows"]:
+        n = r["count"] * steps
+        kinds[product_kind(r)] += n * r["macs"]
+        if product_kind(r) == "fresh":
+            out.append({"macs": n * r["macs"], "outputs": n * r["outputs"], "k_dim": r["dims"]["k"],
+                        "k_whole": r["k_whole"], "b_a": r["widths"][0], "b_b": r["widths"][1], "b_c": r["b_c"],
+                        "gates_per_mac": r["gates_per_mac"], "cell_gates": r["cell_gates"]})
+    return {"k": float(block["k"]), "order": block["order"], "capture": block["capture"], "products": out,
+            "kinds_macs": kinds}
+
+
 def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str | None, dict]:
     """The fresh-products kind's term at (c, k), te_core.io_bound's bound with Λ proved (`io_bound.bound`) on the run's
     products (`Measured.products`) and the record's |C|; its reason where unmeasured (None: measured); and what it read.
     The products are io_bound's at the k `rows_of` classified them at, and its cap's constant is the chain's (its
     premise P-chain), so a term at another k, or for products summed in a tree or in an order the trace doesn't give,
-    is unmeasured, with io_bound's chain figure in what it read."""
+    is unmeasured, with io_bound's chain figure in what it read. A record with an op log and no captured products has
+    its log's (`products_of_ops`), none of which a log can count, so the term is unmeasured with what the log leaves
+    unknown."""
     p = m.products
+    if p is None and m.ops is not None:
+        p = products_of_ops(m.ops)
+        got = {"source": p["source"], "order": p["order"], "rows": len(p["rows"]), "macs": p["macs"],
+               "unknown_share": p["unknown_share"]}
+        return None, (f"unmeasured: {LOG_UNKNOWN}; {p['unknown_share']:.0%} of its products' MACs have operands of "
+                      f"unknown freshness (the rest a θ operand or attention's), and the order is unknown; a trace "
+                      f"with te_core {PRODUCTS_FROM} or later keeps them (te_core.capture.products)"), got
     if p is None:
         return None, FRESH_UNMEASURED, {}
     order = p.get("order")
-    got = {"k_classified": p["k"], "order": order, "products": len(p["products"])}
+    got = {"k_classified": p["k"], "order": order, "products": len(p["products"])} | {
+        x: p[x] for x in ("capture", "kinds_macs") if x in p}
     if not math.isclose(p["k"], k, rel_tol=1e-12):
         return None, (f"unmeasured: the products were classified at k = {p['k']:g} (te_core.io_bound.rows_of), not at "
-                      f"this k; take them again at it (formalism.products_of)"), got
+                      f"this k; take them again at it (formalism.products_of, or a trace's by "
+                      f"te_core.capture.products.rows)"), got
     got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates)
     if order == "chain":
         return got["io_bound"]["proved"]["rho"], None, got
@@ -767,35 +851,35 @@ def at(m: Measured, c: float, k: float, reading: str | None = None, kinds: tuple
 
 
 #: what a published ρ rests on, by its binding kind, short (a console cell on every row; `RESTS_ON` has each kind's in
-#: full): Fit's c/(c − d), a kind of the one bound, reading B's token form (a target, not a bound), `none` where Fit
-#: fails and no measured kind exceeds 1, or `unmeasured` (binding `none`, ρ None) where none is measured
+#: full): Fit's c/(c − d), a kind of the one bound (the measured kind its max takes, where that exceeds 1), `none`
+#: where every kind is measured and none exceeds 1 (ρ is the floor's 1, not any kind's), reading B's token form (a
+#: target, not a bound), or `unmeasured` (ρ None) where Fit fails, no measured term exceeds 1 and a kind is unmeasured
 RESTS_ON_CELL = {
     "fit": "Fit's construction",
     "fresh_products": "theorem for this circuit (Loomis-Whitney, chain order)",
     "token": "A1 (reading A), its family: runs and tiles",
     "decoding": "assumption (D), with A1 (reading A)",
     "target": "target: A1 at reading B, not a bound",
-    "none": "no measured kind > 1",
+    "none": "no kind exceeds 1",
     "unmeasured": "unmeasured",
 }
 #: the sensitivities a published ρ carries beside it (the coordinator's 08:28Z: reduction and update), on every console
 #: row, so the others (`SENSITIVITIES`) stay in `bound`
 CELL_SENSITIVITIES = ("reduction", "update")
-#: whether a row whose token kind is measured (its trace's `entries` and an op log) publishes reading A: not until the
-#: bound's fresh-products kind is measured too (coordinator 09:02Z: reading B "until te_core 4.5 lands, with
-#: matrix-product tiles in the packer and the fresh-products kind wired in"), since until then a reading-A row
-#: publishes 1 wherever its weak token term is at most 1 (the algorithm-policy builder's 10:47Z SMELL)
-READING_A = False
+#: whether a row whose token kind is measured (its trace's `entries` and an op log) publishes reading A (`published`)
+READING_A = True
 
 
 def published(m: Measured, c: float | None = None, k: float | None = None, reading: str | None = None) -> dict:
     """The published ρ at (c, k), by default the console's policy (te_core.policy's `CONSOLE`, one full session of the
     reference model) (coordinator 08:26Z), `at`'s: under reading A (`reading`, else where `READING_A` and
-    the row's token kind is measured), Fit's c/(c − d) where it holds, else max(1, the one bound's max over `KINDS`),
-    and None (binding none, resting on `unmeasured`) where no kind is measured, never 1, which would read as no
-    slowdown (coordinator 09:46Z); under reading B Slowdown's token form, a target. Beside it the binding kind (fit, a
-    kind, target, or none), what it rests on (`RESTS_ON_CELL`), the terms its max takes (None: unmeasured; under
-    reading B the token form) and the bound's `CELL_SENSITIVITIES`."""
+    the row's token kind is measured): Fit's c/(c − d) where it holds; else the max of the measured terms where it
+    exceeds 1, binding that kind, `partial` where a kind is unmeasured (ρ is then only a lower bound); else, where a
+    kind is unmeasured, None (binding `unmeasured`), with `why` saying so, never 1, which would read as no slowdown
+    (coordinator 12:20Z); else 1, binding `none` (every kind measured, none above 1: the floor sets that 1, not any
+    kind). Under reading B, Slowdown's token form, a target. Beside it what it rests on (`RESTS_ON_CELL`), the terms
+    its max takes (None: unmeasured; under reading B the token form) and the bound's `CELL_SENSITIVITIES`. This is
+    the one place that rule lives: nothing downstream relabels its output."""
     if (c is None) != (k is None):
         raise ValueError("published: give both c and k, or neither for the console's policy")
     if c is None:
@@ -808,15 +892,24 @@ def published(m: Measured, c: float | None = None, k: float | None = None, readi
 
     v = at(m, c, k, "A") if reading == "A" else at(m, c, k)
     b = v["bound"] if reading == "A" else bound(m, c, k)
+    rho, partial, why = v["rho"], False, None
+    off = [kind for kind in b["kinds"] if b["terms"][kind] is None]
     if v["fit"]:
         binding = "fit"
     elif reading == "B":
         binding = "target"
+    elif b["binding"] is not None and b["max"] > 1:
+        rho, binding, partial = b["max"], b["binding"], bool(off)
+    elif off:
+        rho, binding = None, "unmeasured"
+        why = (f"the measured kinds give at most 1; {', '.join(kind.replace('_', ' ') for kind in off)} unmeasured"
+               if b["binding"] is not None else "no kind is measured")
     else:
-        binding = b["binding"] if b["max"] is not None and b["max"] > 1 else "none"
+        rho, binding = 1.0, "none"
     terms = dict(b["terms"]) if reading == "A" else {"token_form": v["slowdown"]}
-    return {"reading": reading, "label": f"te_core {VERSION}, reading {reading}", "rho": v["rho"],
-            "binding_kind": binding, "rests_on": RESTS_ON_CELL["unmeasured" if v["rho"] is None else binding],
+    return {"reading": reading, "label": f"te_core {VERSION}, reading {reading}", "rho": rho,
+            "binding_kind": binding, "rests_on": RESTS_ON_CELL["unmeasured" if rho is None else binding],
+            "partial": partial, "why": why,
             "terms": terms,
             "sensitivities": {name: b["sensitivities"][name] for name in CELL_SENSITIVITIES}}
 
@@ -905,6 +998,9 @@ OPS = ("counted: the row's macs_log ops as matrix products, each op's gates at i
        "reading A's tiles")
 PRODUCTS = ("measured: the captured steps' products of two fresh operands, each at its passed widths and gates a MAC, "
             "by te_core.io_bound.rows_of at the block's k (formalism.products_of)")
+TRACED_PRODUCTS = ("measured (trace): the traced step's products of two fresh operands (te_core.capture.products, "
+                   "formalism.products_of_trace), each at its passed widths and gates a MAC, times the traced steps' "
+                   "tokens over the traced step's")
 #: the capture's lists of read-backs that decide what the graph can't carry (te_core.capture.script), which `refusal`
 #: reads under a row's `trace`
 READ_BACKS = ("data_dependent", "carried_scalars")
@@ -1137,6 +1233,8 @@ def of_record(record: dict, through: int | None = None) -> dict:
     traced = any("affected_share" in (st or {}) for st in record["structures"].values())
     if traced:
         labels |= {k: TRACED[k] for k in ("tokens", "token_gates", "affected_gates", "delta_grad_bits")}
+    rows = (own.get("trace") or {}).get("products") if traced else None
+    traced_steps = 0.0
     parts = []
     for gid, ss in groups.items():
         st = record["structures"].get(gid[1] if isinstance(gid, tuple) else ss[0].get("struct")) or {}
@@ -1154,6 +1252,8 @@ def of_record(record: dict, through: int | None = None) -> dict:
         if traced:
             affected, dg = st.get("affected_share", 0.0) * gates, st.get("delta_grad_bits")
             partial, grad = st.get("partial_cut_bits"), st.get("grad_cut_bits")
+            if rows and st.get("affected_share"):
+                traced_steps += tokens / rows["tokens"]
             tokens *= st.get("token_factor", 1.0)
             token_gates = st["sigma"] * gates if "sigma" in st else token_gates
         else:
@@ -1171,4 +1271,7 @@ def of_record(record: dict, through: int | None = None) -> dict:
     labels.setdefault("gates", "counted MACs in gates (te_core.gates)")
     labels.setdefault("tokens", "measured: the steps' token counts")
     labels.setdefault("token_gates", "counted: the steps' forward and backward in gates (te_core.gates)")
+    if rows and "products" not in own:
+        own["products"] = products_of_trace(rows, traced_steps)
+        labels.setdefault("products", TRACED_PRODUCTS)
     return own | {"parts": own.get("parts") or parts, "labels": labels}

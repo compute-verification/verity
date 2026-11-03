@@ -25,6 +25,8 @@ def test_prices():
     assert gates.per_mac("elementwise/bf16") == 2053 + 1894
     assert gates.per_mac("elementwise/f32") == gates.per_mac("gemm/f32") == 12637
     assert gates.per_mac("gather") == 48
+    assert gates.per_and("gemm/bf16") == pytest.approx((7872 + 15049 + 761) / 7872)
+    assert gates.UNIT == "gates: AND + XOR + NOT, 3.0x a bf16 GEMM's AND count"
 
 
 def test_kinds_and_assumptions():

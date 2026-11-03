@@ -48,13 +48,16 @@ def test_the_vectors_are_the_bound_on_their_inputs():
 
 
 def test_each_vectors_term_solves_its_cap():
-    """What a port of the bound checks without this module: N·Γ + B·√N = G and N·Γ + Λ·L = G at each Λ, the blocks the
-    larger, ρ = N·c/|C|."""
-    forms = Counter()
+    """What a port of the bound checks without this module: N·Γ + B·√N = G and N·Γ = Σ_P (G_P − Λ·L_P)⁺ at each Λ, the
+    blocks the larger, ρ = N·c/|C|."""
+    forms, subsets = Counter(), 0
     for v in json.loads(iob.VECTORS.read_text())["vectors"]:
         i, cap, term = v["inputs"], v["cap"], v["term"]
         G = term["share"] * i["C_gates"]
         assert 0 <= term["share"] < 1, v["name"]
+        lin = [(p["gates_per_mac"] * p["macs"], p["gates_per_mac"] * m * p["b_c"] * p["outputs"])
+               for p, m in zip(i["products"], cap["mu"])]
+        assert sum(x for _, x in lin) == pytest.approx(cap["L"], rel=1e-12)
         for lam in ("proved", "numerical"):
             n, lv = term[f"{lam}_blocks"], cap[f"lam_{lam}"]
             if not i["products"] or lv is None:   # nothing counted, or Λ void
@@ -63,14 +66,16 @@ def test_each_vectors_term_solves_its_cap():
             gamma, B = lv * cap["gamma0"], lv * i["k"] / 2 * math.sqrt(cap["Q"])
             root, linear = term[f"{lam}_blocks_root"], term[f"{lam}_blocks_linear"]
             assert root * gamma + B * math.sqrt(root) == pytest.approx(G, rel=1e-9), v["name"]
-            assert linear == pytest.approx(max(0.0, (G - lv * cap["L"]) / gamma), rel=1e-12), v["name"]
+            net = sum(max(0.0, g - lv * x) for g, x in lin)
+            assert linear == pytest.approx(net / gamma, rel=1e-12), v["name"]
+            subsets += net > max(0.0, G - lv * cap["L"]) * (1 + 1e-9)
             assert n == max(root, linear)
             forms["linear" if linear > root else "root"] += 1
             assert term[f"{lam}_rho"] == pytest.approx(n * i["c"] / i["C_gates"], rel=1e-12)
             assert term[f"{lam}_rho_main"] == pytest.approx(G / gamma * i["c"] / i["C_gates"], rel=1e-12)
             assert term[f"{lam}_rho_no_cell"] <= term[f"{lam}_rho"] <= term[f"{lam}_rho_main"]
         assert term["proved_rho"] <= term["numerical_rho"]
-    assert forms["linear"] and forms["root"]   # the vectors exercise both forms
+    assert forms["linear"] and forms["root"] and subsets   # both forms, and a linear form that drops a product
     void = [v for v in json.loads(iob.VECTORS.read_text())["vectors"] if v["cap"]["lam_proved"] is None]
     assert [v["cap"]["whole_chain"] for v in void] == [None]
 
@@ -198,6 +203,25 @@ def test_products_splitting_one_blocks_bits():
         rhs = max(g * iob.alpha(k, a, b) for a, b, g in ps) + sum(
             g * iob.mu(k, a, b) * s * 32 for (a, b, g), s in zip(ps, ss))
         assert lhs <= rhs * (1 + 1e-12)
+
+
+def test_the_linear_form_is_its_best_subsets():
+    """Products of one width, none made whole (Γ₀ and Λ the same on every subset): the linear form on the set is at
+    least on any subset, so chains shorter than Λ·μ·b_C (48 at the console's k and Λ = SHARE·feed) don't lower it."""
+    rng = random.Random(7)
+    bf16 = {"b_a": 16, "b_b": 16, "b_c": 32, "gates_per_mac": 23682 / 16, "cell_gates": 23682.0, "k_whole": None}
+    for _ in range(300):
+        ps = []
+        for _ in range(rng.randint(1, 5)):
+            macs, K = 10 ** rng.uniform(10, 15), rng.choice((4, 16, 48, 64, 512, 65536))
+            ps.append({"macs": macs, "outputs": macs / K, "k_dim": K} | bf16)
+        whole = iob.bound(ps, *iob.CONSOLE, 1e18)
+        for r in range(1, len(ps)):
+            for sub in itertools.combinations(ps, r):
+                part = iob.bound(list(sub), *iob.CONSOLE, 1e18)
+                for lam in ("proved", "numerical"):
+                    assert part[lam]["blocks_linear"] <= whole[lam]["blocks_linear"] * (1 + 1e-12)
+    assert iob.SHARE * iob.feed(16) * iob.mu(65536, 16, 16) * 32 == pytest.approx(48)
 
 
 def test_a_linear_layers_three_products_do_at_most_share_of_one():
