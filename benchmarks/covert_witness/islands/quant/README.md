@@ -20,6 +20,8 @@ entropy code E.
   the submitted E; `--mode qlora`: LoRA with k-bit factors; its docstring has the rest). The notes' `delta_grad` has
   islands/lowrank's keys: `bits` is the fp32 gradient plus optimizer state (Muon's buffer, AdamW's m and v) and
   `latent_bits`, apart from it, the fp32 latents a straight-through code trains (the update application's Δ_t).
+  `--grad-code sign` passes the matrices' gradient at about 1 bit a weight (signs and one f16 scale a row per
+  micro-batch, no error feedback), which `grad_bits` then counts.
 - `test_qformat.py`: CPU round trips (`python islands/quant/test_qformat.py` from `benchmarks/covert_witness/`).
 
 Run: `python benchmarks/covert_witness/launch.py s100 --island quant --note "MECHANISM ..." -- --mode qat --qat sparse
