@@ -1050,7 +1050,7 @@ def test_a_window_in_no_period_has_no_committed_k(auditor):
     _y, run = _serve(ZyArm(), remote=True, n=64, served=_served())
     assert auditor.ended() is None
     out = _credit(auditor, _record(run))
-    assert out["window"][0] == "budget" and "in no credit period" in out["window"][1]
+    assert out["window"][0] == "budget" and "in no period" in out["window"][1]
     assert out["credit"] is None
 
 
