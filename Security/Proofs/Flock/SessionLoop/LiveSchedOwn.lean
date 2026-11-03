@@ -1,4 +1,5 @@
 import Proofs.Flock.SessionLoop.L0Fixed
+import Proofs.Flock.SessionLoop.L0FixedHonest
 import Proofs.Flock.SessionLoop.RoundOff
 import Proofs.Flock.SessionLoop.RoundSwitch
 import Proofs.Flock.SessionLoop.RoundLig
@@ -30,7 +31,8 @@ equation is asked there only, as `FinalRoundEq` asks its own:
   sends, and the switched message's is `vs`'s: `L0Fixed` is what equates them.
 * **`LeanRelease.liveSchedOwn_ofLoopLink`**: for every worker `wk` and every `vs` it takes at its own histories
   (`TakesValsOwn`), `LiveSchedOwn` holds: `liveSchedAt_ofLoopLink` at each. A worker that takes no such `vs`'s values
-  is outside it.
+  is outside it. `LeanRelease.liveSchedOwn_honestVals`: its premises on the worker and the values hold at the honest
+  worker and values; `LeanRelease.liveSched_honestVals`: there `LiveSched` holds after every history.
 -/
 
 namespace Claims.ZKServer
@@ -271,6 +273,50 @@ theorem liveSchedOwn_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.data
   fun ν t κ m₀ ρ₀ ops v r hpos hlt hl hok href hown hv hsc =>
     liveSchedAt_ofLoopLink vs L₀ src real hreal wk hTab hTape hR hSv hSc hS hRows hL0 ν t κ m₀ ρ₀ ops
       (hTV ν t κ m₀ ρ₀ ops hown) v r hpos hlt hl hok href hv hsc
+
+/-- **At the honest worker and values**: `liveSchedOwn_ofLoopLink` at `valsWk honestVals`, whose premises on the worker
+and the values hold there (`Loop.takesValsOwn_honestVals`, `Loop.rowsOK_honestVals`, `Loop.l0Fixed_honestVals`). -/
+theorem liveSchedOwn_honestVals
+    (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    (hreal : real = Loop.realOf src) {x : Msg} {w : Flock.Wit}
+    (hTab : (CoinLayer.session Loop.loopNr Masked.dataE).Tables)
+    (hTape : (CoinLayer.session Loop.loopNr Masked.dataE).TapeOK)
+    (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
+    (hSc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) (hS : Loop.Src L₀ src x w) :
+    LiveSchedOwn (CoinLayer.session Loop.loopNr Masked.dataE).honestVals L₀ src real
+      (Loop.valsWk (CoinLayer.session Loop.loopNr Masked.dataE).honestVals (ofLoopLink L₀ src real)) x w :=
+  liveSchedOwn_ofLoopLink _ L₀ src real hreal _ hTab hTape hR hSv hSc hS (Loop.rowsOK_honestVals hR)
+    (Loop.l0Fixed_honestVals x w (Masked.live_of hSc hR) hR) (Loop.takesValsOwn_honestVals L₀ src real x w)
+
+/-- **`LiveSched` at the honest worker and values**: `liveSchedAt_ofLoopLink` after every history, at which the honest
+worker takes the honest values (`Loop.takes_honestVals_ofLoopLink`), where the rows hold (`Loop.rowsOK_honestVals`) and
+the level-0 words are the firewall's own (`Loop.l0Fixed_honestVals`). -/
+theorem liveSched_honestVals
+    (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    (hreal : real = Loop.realOf src) {x : Msg} {w : Flock.Wit}
+    (hTab : (CoinLayer.session Loop.loopNr Masked.dataE).Tables)
+    (hTape : (CoinLayer.session Loop.loopNr Masked.dataE).TapeOK)
+    (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
+    (hSc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) (hS : Loop.Src L₀ src x w) :
+    LiveSched (CoinLayer.session Loop.loopNr Masked.dataE).honestVals L₀ src real
+      (Loop.valsWk (CoinLayer.session Loop.loopNr Masked.dataE).honestVals (ofLoopLink L₀ src real)) x w :=
+  fun ν t κ m₀ ρ₀ ops => liveSchedAt_ofLoopLink _ L₀ src real hreal _ hTab hTape hR hSv hSc hS
+    (Loop.rowsOK_honestVals hR) (Loop.l0Fixed_honestVals x w (Masked.live_of hSc hR) hR) ν t κ m₀ ρ₀ ops
+    ((Loop.takes_honestVals_ofLoopLink L₀ src real).1 ν t κ m₀ ρ₀ ops)
 
 end LeanRelease
 
