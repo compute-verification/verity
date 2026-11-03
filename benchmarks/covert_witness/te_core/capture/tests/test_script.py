@@ -1,12 +1,16 @@
 """te_core.capture.script: a program recorded from its start and measured at one step of its history (`Trace.region`),
 on recorded/islands/toy/train.py: the update's dependence and cut are the same however the program writes it (in place,
 rebound, by an optimizer), a compressed update's cut is its bits, a MeZO update depends on its losses through a Python
-float, and a buffer rewritten from θ and this step's tokens is not the run's."""
+float, and a buffer rewritten from θ and this step's tokens is not the run's; a read-back that decides what the graph
+can't carry (a Python clip, a branch, a float folded over steps) is listed."""
 from __future__ import annotations
 
+import io
 import json
+import math
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 from torch._subclasses.fake_tensor import FakeTensorMode
@@ -56,12 +60,83 @@ def test_a_sign_update_with_error_feedback_cuts_at_its_bits(starts):
     assert g.cut_bits == VALUES + 3 * 32 and sorted(b for _, b in g.cut) == [32] * 3 + [H * H, V * H, V * H]
 
 
-def test_a_mezo_update_depends_on_its_losses_through_a_float(starts):
+@pytest.mark.parametrize("update", ["mezo", "mezo-quant"])
+def test_a_mezo_update_depends_on_its_losses_through_a_float(starts, update):
     """The update is z · lr · float(L₊ − L₋): every forward GEMM of both perturbed passes is updated, and the cut is the
-    one fp32 difference."""
-    g = recorded(starts, "--update", "mezo")
+    one fp32 difference; so it is with the coefficient quantized through a tensor (``mezo-quant``, as the seed
+    island's `prepare.quantize_coefficient` does), which decides nothing and cuts at the fp16 value."""
+    g = recorded(starts, "--update", update)
     assert fwd_roles(g) == ["updated"] * 4 and g.updated_macs() == 2 * T * FWD
-    assert g.cut_bits == 32
+    assert g.cut_bits == (16 if update == "mezo-quant" else 32)
+    assert g.formalism["data_dependent"] == [] and g.formalism["carried_scalars"] == []
+
+
+def line_of(text: str) -> int:
+    return next(i for i, s in enumerate(PROGRAM.read_text().splitlines(), 1) if text in s)
+
+
+def test_a_python_clip_on_a_read_back_estimate_is_listed_where_it_drops_the_update(starts):
+    """seed-mezo's 04:15Z LOOPHOLE: max(−m, min(m, c)) on the stand-in returns the bound, so the step's update reads no
+    loss and the trace shows no update (affected share 0, u(1) 0); the comparison is listed at the program's line."""
+    g = recorded(starts, "--update", "mezo-clip")
+    f = g.formalism
+    assert f["affected_share"] == 0 and f["u1_bits"] == 0
+    assert [(e["kind"], e["where"]) for e in f["data_dependent"]] == [
+        ("a comparison of a read-back float", f"train.py:{line_of('max(-CLIP / LR')}")]
+    assert f["data_dependent"][0]["steps"] == [0, 2]
+
+
+@pytest.mark.parametrize("update, kind", [("mezo-branch", "bool() of a tensor (a branch on its value)")])
+def test_a_branch_on_a_loss_comparison_is_listed_though_the_update_still_reads_the_loss(starts, update, kind):
+    f = recorded(starts, "--update", update).formalism
+    assert f["affected_share"] > 0 and [e["kind"] for e in f["data_dependent"]] == [kind]
+
+
+def test_the_same_clip_as_a_tensor_op_is_measured(starts):
+    g = recorded(starts, "--update", "mezo-clamp")
+    assert g.formalism["data_dependent"] == [] and fwd_roles(g) == ["updated"] * 4 and g.formalism["u1_bits"] > 0
+
+
+def test_integer_reads_numpy_and_math_on_read_backs_are_listed(starts, monkeypatch):
+    rec = script._Recorder(stop=1, wall=[])
+    monkeypatch.setattr(script, "_ACTIVE", rec)
+    rec.step = 0
+    s = script.Scalar(2.5, ("node",))
+    assert isinstance(s * 2 + 1, script.Scalar) and (s * 2).deps == {"node"}
+    assert float(round(s, 1)) == 2.5 and round(s, 1).deps == {"node"} and isinstance(np.sqrt(s), script.Scalar)
+    assert rec.listed("data_dependent") == []
+    int(s), round(s), bool(s), np.clip(s, 0, 1) > 0, script._lift_math(math.isfinite)(s)
+    with FakeTensorMode(allow_non_fake_inputs=True):
+        t = torch.empty((), dtype=torch.int64)
+        rec.stand_in(t, "item()")
+    assert [e["kind"] for e in rec.listed("data_dependent")] == [
+        "int() of a read-back float", "round() of a read-back float", "a truth test of a read-back float",
+        "a comparison of a read-back float", "math.isfinite of a read-back float", "item() of a int64 tensor"]
+    assert script.Scalar(1.0) < 2  # a float no tensor was read for decides nothing
+    assert len(rec.listed("data_dependent")) == 6
+
+
+def test_a_python_float_folded_over_steps_is_listed_and_grows_delta_grad(starts):
+    """seed-mezo's 04:15Z TOOL: an EMA kept as a Python float carries every earlier step's read-back as a value of its
+    own, so Δ_grad grows with the step; kept as a 0-dim tensor it is one carried value at every step."""
+    def at(step, update):
+        return script.record(PROGRAM, ["--batch", str(B), "--steps", "6", "--update", update], step=step, starts=starts,
+                             wall=[0.1] * 8, step_tokens=T).formalism
+
+    floats, tensor = [at(s, "mezo-ema") for s in (1, 3)], [at(s, "mezo-ema-tensor") for s in (1, 3)]
+    assert floats[1]["delta_grad_bits"] > floats[0]["delta_grad_bits"]
+    assert tensor[1]["delta_grad_bits"] == tensor[0]["delta_grad_bits"]
+    assert [e["kind"] for e in floats[1]["carried_scalars"]] == ["a Python number read back in several earlier steps"]
+    assert floats[1]["carried_scalars"][0]["earlier_steps"] == 4 and floats[1]["data_dependent"] == []
+    assert tensor[1]["carried_scalars"] == [] and tensor[1]["data_dependent"] == []
+
+
+def test_the_stub_session_has_the_runs_step_and_progress_bucket(starts):
+    log = io.StringIO()
+    script.record(PROGRAM, ["--batch", str(B), "--update", "inplace", "--session"], step=1, starts=starts,
+                  wall=[0.1] * 8, step_tokens=T, log=log)
+    seen = [json.loads(s) for s in log.getvalue().splitlines() if s.startswith("{")]
+    assert seen[:3] == [{"step": 0, "bucket": 5}, {"step": 1, "bucket": 10}, {"step": 2, "bucket": 15}]
 
 
 @pytest.mark.parametrize("source", ["theta", "trained"])
