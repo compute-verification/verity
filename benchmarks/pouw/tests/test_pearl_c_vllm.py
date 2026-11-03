@@ -1419,6 +1419,45 @@ def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_an
     assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 1
 
 
+def test_served_passes_volunteer_on_the_device_gives_up_the_cpus_rows_and_names_its_cubin_and_cross_check(tmp_path):
+    """``served_passes.py volunteer --device`` (a stand-in for the card, `_StandInDebit`) gives up the rows the CPU replay
+    gives up, to the same records root, and its document names the debit cubin, the cross-check rate (``--device-check``,
+    else `volunteer_pass.CROSS_CHECK`) and the tiles it replayed on the CPU too; the CPU's document has no ``device``."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    VP = load("volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    d, out, before = _serve_dir(tmp_path, [path]), tmp_path / "volunteer.json", path.read_text()
+    cubin = tmp_path / "debit_sm90.cubin"
+    cubin.write_bytes(b"stand-in")
+    device = VP.VR.load(path, published(path)).scheme.device
+    got = {}
+    try:
+        for check in ("2", None):
+            path.write_text(before)
+            VP._DEBIT[str(cubin.resolve())] = _StandInDebit(VP.FT, device)
+            VP._B_CODES.clear()
+            more = ["--device-check", check] if check else []
+            assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1", "--device", str(cubin),
+                            *more]) == 0
+            got[check] = json.loads(out.read_text()), json.loads(path.read_text())["records_root"]
+    finally:
+        VP._DEBIT.clear()
+        VP._B_CODES.clear()
+    path.write_text(before)
+    assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 0
+    cpu, root = json.loads(out.read_text()), json.loads(path.read_text())["records_root"]
+    assert cpu["device"] is None and cpu["voluntary_a"] + cpu["voluntary_b"] > 0
+    for check, (doc, dev_root) in got.items():
+        rate = int(check) if check else VP.CROSS_CHECK
+        assert doc["ok"] and dev_root == root and doc["tiles"] == cpu["tiles"]
+        assert {k: doc[k] for k in ("voluntary_a", "voluntary_b", "over", "left")} == {
+            k: cpu[k] for k in ("voluntary_a", "voluntary_b", "over", "left")}
+        assert {k: doc["device"][k] for k in ("cubin", "cubin_sha256", "cross_check", "replayed", "bad_tiles")} == {
+            "cubin": str(cubin), "cubin_sha256": hashlib.sha256(b"stand-in").hexdigest(), "cross_check": rate,
+            "replayed": len(range(0, doc["tiles"], rate)), "bad_tiles": 0}
+        assert doc["passes"][0]["device"]["replayed"] == doc["device"]["replayed"]
+
+
 def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_and_refuses_a_retention_after_it(tmp_path):
     """``retain`` drops passes before the coin (one ``--drop``, and with ``--volunteer`` each pass that step didn't finish or
     left over a cap): ``verify`` then reads the retained passes alone, each at its round, credits only them, and records

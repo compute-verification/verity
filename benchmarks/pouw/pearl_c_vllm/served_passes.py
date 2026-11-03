@@ -4,7 +4,7 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
 
   served_passes.py serve --passes DIR --out served.json [--spec SPEC] [--arm ARM] [--requests 32] [--prompt-tokens 512]
                          [--output-tokens 16] [--max-num-batched-tokens N] [--no-retain]
-  served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J]
+  served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J] [--device DEBIT_CUBIN [--device-check N]]
   served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...]
   served_passes.py verify --passes DIR [--manifest M ...] [--tie W] --out verify.json [--answer answer.json]
                           [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R]
@@ -31,10 +31,13 @@ so its walls are the option's without retention, its passes have no manifest or 
 ``volunteer`` is the prover's step between the serve and the verifier's coin (`volunteer_pass.volunteer`, V-EX's remedy): on
 each pass with calls, as ``verify`` reads them, it replays every tile word by word on ``--jobs`` processes and gives up, in
 the pass's records, the rows that leave a tile or one of its credited rows over its debit cap, which the serve's screen
-can't see (the debit reads the noised codes); the transcript is the serve's.  It writes each pass's outcome and seconds to
-``--out`` as each pass ends (``done`` once all have), with the node it ran on, prints one line and exits 0 only when no
-pass has a tile left over a cap; it refuses a serve that retained none, and any once the verifier's coin is drawn
-(``DIR/coin.json``).
+can't see (the debit reads the noised codes); the transcript is the serve's.  With ``--device`` (pearl_c_sm90's
+debit_sm90.cubin, on this node's H100 or H200) the words' counts are the card's (`volunteer_pass.words_device`), and
+every ``--device-check``-th tile (default `volunteer_pass.CROSS_CHECK`) and each tile with a word the card marks
+non-finite are replayed on the CPU too and held equal.  It writes each pass's outcome and seconds to ``--out`` as each
+pass ends (``done`` once all have), with the node it ran on and, on the device, the cubin, that rate and what it
+replayed (``device``), prints one line and exits 0 only when no pass has a tile left over a cap; it refuses a serve that
+retained none, and any once the verifier's coin is drawn (``DIR/coin.json``).
 
 ``retain`` is the prover's last step before the coin: it writes ``DIR/retention.json``, the rounds (places among
 ``served.json``'s passes with calls) the verdict is to read, dropping each ``--drop`` round and, with ``--volunteer``, each
@@ -84,8 +87,11 @@ SCHEMA = "verity-pouw/pearl-plus-served-verify/v1"
 DRAWS = 459
 KEEP = ("units", "base", "tiles", "screened_rows", "failing_rows", "unsure_rows", "excluded_rows", "transcript_root",
         "activation_roots", "schedule", "manifest")
-#: what `volunteer` keeps of each pass's `volunteer_pass.volunteer`
-VOLUNTEER_KEEP = ("manifest", "ok", "line", "tiles", "over", "voluntary_a", "voluntary_b", "left", "records_root", "credit_kept")
+#: what `volunteer` keeps of each pass's `volunteer_pass.volunteer` (``device`` on the device alone)
+VOLUNTEER_KEEP = ("manifest", "ok", "line", "tiles", "over", "voluntary_a", "voluntary_b", "left", "records_root",
+                  "credit_kept", "device")
+#: what `volunteer`'s document sums of its passes' ``device``
+DEVICE_SUMS = ("replayed", "bad_tiles", "form_s", "device_s", "replay_s")
 #: why `verify` and `volunteer` refuse a serve run with ``--no-retain``
 UNRETAINED = ("unretained", "the serve retained no pass (serve --no-retain), so there is nothing to replay")
 #: the verifier's record of its coin (`verify_run.verify_passes`' ``record``) and the prover's retention, in DIR
@@ -259,13 +265,17 @@ def volunteer(args: argparse.Namespace) -> int:
     coins = VR.epoch_coins(passes / "coins.json")
     out, got = Path(args.out), []
     out.parent.mkdir(parents=True, exist_ok=True)
+    device, check = (Path(args.device) if args.device else None), args.device_check or VP.CROSS_CHECK
 
     def written(done: bool) -> dict:
         total = {k: sum(len(r[k]) for r in got) for k in ("over", "left")}
         given = {k: sum(len(rows) for r in got for rows in r[k].values()) for k in ("voluntary_a", "voluntary_b")}
+        on = None if device is None else {
+            "cubin": str(device), "cubin_sha256": hashlib.sha256(device.read_bytes()).hexdigest(), "cross_check": check,
+            **{k: sum(r["device"][k] for r in got) for k in DEVICE_SUMS}}
         doc = {"schema": "verity-pouw/pearl-plus-served-volunteer/v1", "passes_dir": str(passes),
                "served_run": (served or {}).get("run"), "node": socket.gethostname().split(".")[0], "jobs": args.jobs,
-               "done": done, "of": len(paths), "passes": got,
+               "device": on, "done": done, "of": len(paths), "passes": got,
                "tiles": sum(r["tiles"] for r in got), **total, **given, "s": sum(r["s"] for r in got),
                "ok": done and bool(got) and all(r["ok"] for r in got)}
         tmp = out.with_name(out.name + ".tmp")
@@ -274,14 +284,15 @@ def volunteer(args: argparse.Namespace) -> int:
         return doc
     for path in paths:
         t = time.perf_counter()
-        r = VP.volunteer(path, coins, args.jobs)
-        got.append({**{k: r[k] for k in VOLUNTEER_KEEP}, "s": time.perf_counter() - t})
+        r = VP.volunteer(path, coins, args.jobs, device, check)
+        got.append({**{k: r[k] for k in VOLUNTEER_KEEP if k in r}, "s": time.perf_counter() - t})
         print(f"{path.parent.name}: {r['line']}", flush=True)
         written(False)
     doc = written(True)
-    print(f"volunteer {'PASS' if doc['ok'] else 'FAIL'}: {len(got)} passes, {doc['tiles']} tiles replayed in {doc['s']:.0f} s on "
-          f"{args.jobs} processes, {doc['over']} over a cap; gave up {doc['voluntary_a']} A rows and {doc['voluntary_b']} B rows; "
-          f"{doc['left']} tiles left over a cap", flush=True)
+    how = "replayed" if device is None else f"counted on the device ({doc['device']['replayed']} replayed on the CPU too)"
+    print(f"volunteer {'PASS' if doc['ok'] else 'FAIL'}: {len(got)} passes, {doc['tiles']} tiles {how} in {doc['s']:.0f} s "
+          f"on {args.jobs} processes, {doc['over']} over a cap; gave up {doc['voluntary_a']} A rows and "
+          f"{doc['voluntary_b']} B rows; {doc['left']} tiles left over a cap", flush=True)
     return 0 if doc["ok"] else 1
 
 
@@ -367,6 +378,9 @@ def main(argv: list[str] | None = None) -> int:
     o.add_argument("--passes", required=True)
     o.add_argument("--out", required=True)
     o.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
+    o.add_argument("--device", help="pearl_c_sm90's debit_sm90.cubin: the words' counts on this node's H100 or H200")
+    o.add_argument("--device-check", type=int, metavar="N",
+                   help="with --device, replay every Nth tile on the CPU too (default volunteer_pass.CROSS_CHECK)")
     r = sub.add_parser("retain")
     r.add_argument("--passes", required=True)
     r.add_argument("--volunteer", help="volunteer's document: drop each pass it didn't finish or left over a cap")

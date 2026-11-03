@@ -184,7 +184,7 @@
 # it), and POUW_CMD to 'bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"' within POUW_TIMEOUT 120m, which
 # once the window is audited serves Pearl+ (pouw:pearl-c-h100-v1-h3, Llama 3.2 1B's BF16 checkpoint) on this card under
 # its own lease, every pass retained in the serve dir's private/, and takes Pearl+'s verdict over them (verify.json in
-# the piece's dir; with PEARLPLUS_VOLUNTEER=1 it first gives up the passes' rows over a debit cap, V-EX): a development
+# the piece's dir; first, by default, it gives up the passes' rows over a debit cap from the card's counts, V-EX): a development
 # piece, since its passes are not the window sampled proofs audited (its header has the rest). Its epoch's salt coin is
 # a live session's of its own on vy-challenger-1: PEARLC_CHALLENGER_GATE defaults to the lane's gate command (H1_GATE's
 # default under h1), PEARLC_CHALLENGER_PEER to H1_PEER and PEARLC_CHALLENGER_LANE to H1_LANE's, `served_verdicts.py gate`
