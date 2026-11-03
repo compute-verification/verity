@@ -1,6 +1,8 @@
 import Proofs.Flock.SessionLoop.RoundPiop
 import Proofs.Flock.SessionLoop.FinRepPads
 import Proofs.Flock.SessionLoop.L0Fixed
+import Proofs.Flock.SessionLoop.RoundOffOpenBind
+import Proofs.Flock.SessionLoop.RoundLig
 
 /-!
 # A rep's scheduled rounds outside its masked phase
@@ -18,13 +20,14 @@ round's place in the rep given by the coins before it:
   the pads commitment's root, and `r_skip`'s squeeze (`Loop.enc_zcBind`). The two caps are one tree of `linkIn`
   (`Loop.cap_zcBind`), and the two roots one tree of the frame's draws (`Loop.root_zcBind`), where the rows fix the
   switched views' pads leaves (`Loop.swSrcE_padLeaf`).
-* **`LeanRelease.release_sched_openBind`**: the opening's binding after the algebraic phase
-  (`LeanRelease.release_openBind`), at `Masked.repSlot` `0`.
+* **`LeanRelease.release_sched_openBind`**: the opening's binding after the algebraic phase, at `Masked.repSlot` `0`
+  (`LeanRelease.release_sched_openBind_pf`).
 * **`LeanRelease.release_sched_l0`**: level 0's rounds `1` to `k0 + 3` (`LeanRelease.L0Sent.release`, and at `k0 + 3`
   `ρ_1`'s squeeze alone, `LeanRelease.release_on` at no frames), at `Masked.repSlot` `i`, where `vs`'s level-0 values
   are the firewall's (`Loop.L0Fixed`).
-* **`LeanRelease.release_sched_close`**: level 0's closing round (`LeanRelease.release_close`), at `Masked.repSlot`
-  `k0 + 4`.
+* **`LeanRelease.release_sched_close`**: level 0's closing round, at `Masked.repSlot` `k0 + 4`: `release_sched_lig`
+  there, the cut opening's body from that round on being the frame's scheduled round, its closing label ending level
+  0's phase.
 -/
 
 set_option synthInstance.maxSize 100000
@@ -245,21 +248,6 @@ theorem root_zcBind (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
       (ic := icT) (by rw [hlay]; exact hT)
     rw [hlay] at hroot
     exact hroot.symm
-
-/-- **The loop's level-0 cap at rep stream `2j + r` is the switched source's**: the recheck's tree of `linkIn`
-(`Level0Src.realOf_cm0`), whose leaves are the switched cut's level-0 leaves (`Masked.leafAt_linkIn`). -/
-theorem cap_zcBind {src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg}
-    {w : Flock.Wit} (hS : Level0Src src x w) (ν : finS.Nonce) (t : finS.Tape) (C : Fin (refK x) → finS.Coin)
-    (v : ∀ j, ((Masked.tabC Masked.PE x j).T (Masked.czExe Masked.PE x C j)).tab.Vals) (j : Fin (Masked.jOf x))
-    (r : Fin 2) {tb : Tab} {hi : Array ByteArray} (h : realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tb, hi)) :
-    tb.cm0.cap = FlockComplete.layerOf (fun a b => _root_.Flock.Sha512.hash (a ++ b)) (Masked.lv0 x j).d
-      (Masked.swSrcE x C w v t j.val).leaf0 ((Masked.lv0 x j).d - (Masked.lv0 x j).cap) := by
-  rw [(Level0Src.realOf_cm0 hS ν t j r h).2, _root_.Flock.Firewall.Link.layer_eq]
-  refine _root_.Flock.Firewall.Link.layerOf_congr _ _ (fun q hq => ?_) _
-  rw [show Masked.swSrcE x C w v t j.val =
-      Masked.tabSrcCut Masked.PE x (Masked.czExe Masked.PE x C) (Masked.swCutE x C w v t) j.val from rfl,
-    Masked.tabSrcCut_leaf0 _ _ j.isLt]
-  exact (Masked.leafAt_linkIn x w t (Masked.czExe Masked.PE x C) v j hq).symm
 
 set_option maxHeartbeats 1000000 in
 /-- **The switched session's first round of rep stream `2j + r`**: where the coins show no refusal by it, the session
@@ -621,8 +609,8 @@ theorem release_sched_openBind (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock
     (hv : wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false)) (j : Fin (Masked.jOf x)) (r : Fin 2)
     (hn : ops.length = Masked.repSlot x (2 * j.val + r.val) fun _ => 0) :
     (ofLoopLink L₀ src real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
-      dropDom (Loop.finS.swMsgAt x (Loop.finS.wt x w) (vs x w ν) t (ops.map fun p => Loop.finS.decOf p.2)) := by
-  sorry
+      dropDom (Loop.finS.swMsgAt x (Loop.finS.wt x w) (vs x w ν) t (ops.map fun p => Loop.finS.decOf p.2)) :=
+  release_sched_openBind_pf vs L₀ src real hreal wk hR hSv hSc hS ν t κ m₀ ρ₀ ops hTV hpos hlt hl hok href hv j r hn
 
 /-- **Level 0's rounds**: at rep stream `2j + r`'s level-0 round `i`, `1 ≤ i ≤ k0 + 3` (`Masked.repSlot` `i`; at
 `k0 + 3`, `ρ_1`'s squeeze alone), where `vs`'s level-0 values are the firewall's (`Loop.L0Fixed`), the release of the
@@ -647,7 +635,7 @@ theorem release_sched_l0 (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit L
   sorry
 
 /-- **Level 0's closing round**: at rep stream `2j + r`'s round `k0 + 4` past its PIOP (`Masked.repSlot`), the release of
-the worker's round is the switched session's message without its leading domain frame. -/
+the worker's round is the switched session's message without its leading domain frame (`release_sched_lig` there). -/
 theorem release_sched_close (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)
@@ -664,7 +652,16 @@ theorem release_sched_close (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
     (hn : ops.length = Masked.repSlot x (2 * j.val + r.val) fun sch => sch.k0 + 4) :
     (ofLoopLink L₀ src real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
       dropDom (Loop.finS.swMsgAt x (Loop.finS.wt x w) (vs x w ν) t (ops.map fun p => Loop.finS.decOf p.2)) := by
-  sorry
+  have hj := Masked.lt_of_jOf j
+  obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+      .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
+    rw [Masked.stsOf_half x j r]
+    exact (Masked.zkTab x j).hz
+  have hn' : ops.length = Masked.repSlot x (2 * j.val + r.val) fun _ => (Masked.zkTab x j).sch.k0 + 4 :=
+    (hn.trans (Masked.repSlot_eq hsx hz _)).trans (Masked.repSlot_eq hsx hz _).symm
+  exact release_sched_lig vs L₀ src real hreal wk hR hSv hSc hS ν t κ m₀ ρ₀ ops hTV hpos hlt hl hok href hv j r hn'
+    le_rfl (by omega)
 
 end LeanRelease
 
