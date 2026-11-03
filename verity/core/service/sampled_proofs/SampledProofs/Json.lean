@@ -52,6 +52,27 @@ def entries : Json → Array (String × Json)
   | .obj kvs => kvs.toArray
   | _ => #[]
 
+def increasing : List String → Bool
+  | a :: b :: t => decide (a < b) && increasing (b :: t)
+  | _ => true
+
+/-- Every object in `j` holds its keys in strictly increasing order, as every object `Json.parse` builds does. Proofs
+can't see inside `Json.parse`; this is what tells them a field read, a search of the object's tree, finds the field
+the object's canonical text prints. -/
+def sortedKeys : Json → Bool
+  | .arr a => a.attach.all fun x => sortedKeys x.1
+  | .obj kvs => increasing (kvs.toArray.toList.map (·.1)) && kvs.toArray.attach.all fun p => sortedKeys p.1.2
+  | _ => true
+termination_by j => sizeOf j
+decreasing_by
+  · have := Array.sizeOf_lt_of_mem x.2
+    simp only [Json.arr.sizeOf_spec]
+    omega
+  · exact Flock.sizeOf_lt_of_mem_toArray p.2
+
+example : sortedKeys (Json.mkObj [("b", .arr #[Json.mkObj [("y", 1), ("x", 2)]]), ("a", .null)]) = true := by
+  decide +kernel
+
 /-- A failure code, kept once, in the order first found (`verdict._Collect`). -/
 def addCode (cs : Array String) (code : String) : Array String := if cs.contains code then cs else cs.push code
 
