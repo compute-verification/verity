@@ -775,65 +775,65 @@
 "cells": [
 {
 "c": 536681984163840.0,
-"fresh_cell": 2870251.009582324,
+"fresh_cell": 2869160.60653161,
 "k": 65536,
-"term": 163707.77135211992,
+"term": 163340.76087159815,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 26.340120274356924,
+"fresh_cell": 26.330113711374292,
 "k": 65536,
-"term": 1.5023363367405456,
+"term": 1.4989683037125565,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 107889.13264376596,
+"fresh_cell": 107848.1457617891,
 "k": 65536,
-"term": 6153.569635289275,
+"term": 6139.7741720066315,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 2042201.2097620713,
+"fresh_cell": 2089282.287393043,
 "k": 80000,
-"term": 131294.38780855556,
+"term": 130996.04587383587,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 18.741157240250534,
+"fresh_cell": 19.173217447983582,
 "k": 80000,
-"term": 1.2048806723453307,
+"term": 1.2021428064175195,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 76763.78005606619,
+"fresh_cell": 78533.49866694075,
 "k": 80000,
-"term": 4935.1912339264745,
+"term": 4923.97693508616,
 "why": null
 },
 {
 "c": 536681984163840.0,
-"fresh_cell": 643669.0334671999,
+"fresh_cell": 778359.9495035381,
 "k": 145568,
-"term": 64497.323533301984,
+"term": 64339.65605317526,
 "why": null
 },
 {
 "c": 4925098176.0,
-"fresh_cell": 5.906911870008293,
+"fresh_cell": 7.142962276894736,
 "k": 145568,
-"term": 0.5918880451812829,
+"term": 0.5904411402325421,
 "why": null
 },
 {
 "c": 20173202128896.0,
-"fresh_cell": 24194.711019553968,
+"fresh_cell": 29257.57348616084,
 "k": 145568,
-"term": 2424.373433062535,
+"term": 2418.4469103924926,
 "why": null
 },
 {
@@ -841,98 +841,98 @@
 "fresh_cell": null,
 "k": 800000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (te_core.io_bound.whole_chain_of: the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
 "k": 800000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (te_core.io_bound.whole_chain_of: the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
 "k": 800000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (te_core.io_bound.whole_chain_of: the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": null,
 "k": 8000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (te_core.io_bound.whole_chain_of: the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
 "k": 8000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (te_core.io_bound.whole_chain_of: the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
 "k": 8000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (te_core.io_bound.whole_chain_of: the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": null,
 "k": 80000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (te_core.io_bound.whole_chain_of: the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
 "k": 80000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (te_core.io_bound.whole_chain_of: the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
 "k": 80000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (te_core.io_bound.whole_chain_of: the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 536681984163840.0,
 "fresh_cell": null,
 "k": 800000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (te_core.io_bound.whole_chain_of: the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 4925098176.0,
 "fresh_cell": null,
 "k": 800000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (te_core.io_bound.whole_chain_of: the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "c": 20173202128896.0,
 "fresh_cell": null,
 "k": 800000000,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (te_core.io_bound.whole_chain_of: the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 }
 ],
 "fresh_per_c": {
 "145568": [
-1.2017791809015156e-10,
-1.1993490604497329e-09
+1.198841361396127e-10,
+1.4503187594721232e-09
 ],
 "65536": [
-3.0503683034409944e-10,
-5.348141160456924e-09
+3.043529794019189e-10,
+5.346109411520143e-09
 ],
 "80000": [
-2.446409450712502e-10,
-3.805235260400732e-09
+2.4408504428917995e-10,
+3.89296147260874e-09
 ],
 "800000": null,
 "8000000": null,
@@ -1144,7 +1144,7 @@
 "share": 0.7400625,
 "subset": null,
 "term": null,
-"why": "unmeasured: the step's whole-making system has no fixed point at this k (te_core.io_bound.whole_chain_of: its classes' chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
+"why": "unmeasured: every counted product is fed by a cycle of the step's whole-making system that has no fixed point at this k (te_core.io_bound.whole_chain_of: the cycle's chains, r = c k/(K^2 b), make more operand entries whole than they read, and that compounds), so \u039b has no proved value on any subset; a void is never a measured 0"
 },
 {
 "fresh_cell": 4138401.093369211,
@@ -1286,7 +1286,7 @@
 "why": null
 },
 {
-"fresh_cell": 2870251.009582324,
+"fresh_cell": 2869160.60653161,
 "inputs": {
 "C_gates": 277159456773655.0,
 "c": 536681984163840.0,
@@ -1315,10 +1315,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+256.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 256.0,
-"macs": 805306368.0,
+"macs": 802160640.0,
 "outputs": 1572864.0
 },
 {
@@ -1326,10 +1332,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 512.0,
-"macs": 738197504.0,
+"macs": 735313920.0,
 "outputs": 1441792.0
 },
 {
@@ -1337,10 +1349,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 1408,
 "k_whole": 512.0,
-"macs": 2214592512.0,
+"macs": 2205941760.0,
 "outputs": 1572864.0
 },
 {
@@ -1348,10 +1366,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+1408.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 1408.0,
-"macs": 2013265920.0,
+"macs": 2005401600.0,
 "outputs": 3932160.0
 },
 {
@@ -1359,10 +1383,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 1408.0,
-"macs": 3690987520.0,
+"macs": 3676569600.0,
 "outputs": 7208960.0
 },
 {
@@ -1370,10 +1400,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+1408.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 1408.0,
-"macs": 8388608000.0,
+"macs": 8355840000.0,
 "outputs": 16384000.0
 },
 {
@@ -1381,10 +1417,20 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+],
+[
+1408.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 512.0,
-"macs": 8388608000.0,
+"macs": 8355840000.0,
 "outputs": 16384000.0
 },
 {
@@ -1392,10 +1438,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 32000,
 "k_whole": 512.0,
-"macs": 8388608000.0,
+"macs": 8355840000.0,
 "outputs": 262144.0
 },
 {
@@ -1403,10 +1455,24 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+],
+[
+1408.0,
+1.0
+],
+[
+32000.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 512.0,
-"macs": 2214592512.0,
+"macs": 2205941760.0,
 "outputs": 4325376.0
 },
 {
@@ -1414,10 +1480,20 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+1408.0,
+1.0
+],
+[
+32000.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 32000.0,
-"macs": 369098752.0,
+"macs": 367656960.0,
 "outputs": 720896.0
 },
 {
@@ -1425,10 +1501,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 512.0,
-"macs": 4429185024.0,
+"macs": 4411883520.0,
 "outputs": 8650752.0
 },
 {
@@ -1436,10 +1518,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 1408,
 "k_whole": 512.0,
-"macs": 4429185024.0,
+"macs": 4411883520.0,
 "outputs": 3145728.0
 },
 {
@@ -1447,10 +1535,28 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+256.0,
+1.0
+],
+[
+512.0,
+1.0
+],
+[
+1408.0,
+1.0
+],
+[
+32000.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 256.0,
-"macs": 805306368.0,
+"macs": 802160640.0,
 "outputs": 1572864.0
 },
 {
@@ -1458,10 +1564,24 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+],
+[
+1408.0,
+1.0
+],
+[
+32000.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 32000.0,
-"macs": 805306368.0,
+"macs": 802160640.0,
 "outputs": 1572864.0
 },
 {
@@ -1469,10 +1589,20 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+256.0,
+1.0
+],
+[
+1408.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 256.0,
-"macs": 2013265920.0,
+"macs": 2005401600.0,
 "outputs": 3932160.0
 },
 {
@@ -1480,10 +1610,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+256.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 256.0,
-"macs": 2415919104.0,
+"macs": 2406481920.0,
 "outputs": 4718592.0
 },
 {
@@ -1491,10 +1627,24 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+],
+[
+1408.0,
+1.0
+],
+[
+32000.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 32000.0,
-"macs": 1845493760.0,
+"macs": 1838284800.0,
 "outputs": 3604480.0
 },
 {
@@ -1502,6 +1652,12 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 512.0,
@@ -1513,6 +1669,16 @@
 "b_b": 16,
 "b_c": 32,
 "cell_gates": 23682.0,
+"fed": [
+[
+512.0,
+1.0
+],
+[
+1408.0,
+1.0
+]
+],
 "gates_per_mac": 1480.125,
 "k_dim": 512,
 "k_whole": 512.0,
@@ -1520,6 +1686,12 @@
 "outputs": 64880640.0
 }
 ],
+"shared_prefix": {
+"kept": 0.99609375,
+"length": 1,
+"sequence": 256,
+"trimmed_macs_share": 0.002040692007797271
+},
 "system": {
 "b": 16,
 "classes": [
@@ -1619,9 +1791,9 @@
 },
 "name": "the 45M start's dense step, its trace's order unknown",
 "order": "chain",
-"share": 0.5515529347520451,
+"share": 0.5504273850862195,
 "subset": null,
-"term": 163707.77135211992,
+"term": 163340.76087159815,
 "why": null
 },
 {
@@ -2931,6 +3103,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -2995,6 +3173,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -3059,6 +3243,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -3123,6 +3313,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -3187,6 +3383,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -3251,6 +3453,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -3315,6 +3523,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -4656,6 +4870,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -4720,6 +4940,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -4784,6 +5010,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -4848,6 +5080,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -4912,6 +5150,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -4976,6 +5220,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -5040,6 +5290,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -7090,6 +7346,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -7192,6 +7454,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -7294,6 +7562,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -7396,6 +7670,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -7498,6 +7778,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -7600,6 +7886,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -7702,6 +7994,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -11232,6 +11530,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -11361,6 +11665,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -11490,6 +11800,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -11619,6 +11935,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -11748,6 +12070,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -11877,6 +12205,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -12006,6 +12340,12 @@
 "order": "chain",
 "p_match": [],
 "products": [],
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "system": {
 "b": 16,
 "classes": [
@@ -12408,7 +12748,7 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 80000000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "Fit's construction",
@@ -12431,7 +12771,7 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 80000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "A1 (reading A), its family: runs and tiles",
@@ -12454,7 +12794,7 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 100000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "partial": true,
 "reading": "A",
 "rests_on": "A1 (reading A), its family: runs and tiles",
@@ -12477,7 +12817,7 @@
 "case": "dense",
 "fresh_subset": null,
 "k": 65536.0,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "A1 (reading A), its family: runs and tiles",
@@ -12500,7 +12840,7 @@
 "case": "lora",
 "fresh_subset": null,
 "k": 65536.0,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "A1 (reading A), its family: runs and tiles",
@@ -12523,7 +12863,7 @@
 "case": "adapter-live",
 "fresh_subset": null,
 "k": 100000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "unmeasured",
@@ -12546,7 +12886,7 @@
 "case": "adapter-live",
 "fresh_subset": null,
 "k": 65536.0,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "partial": false,
 "reading": "A",
 "rests_on": "no kind exceeds 1",
@@ -13259,8 +13599,15 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
+"diverged": [],
 "e": 0,
 "whole_chain": 1.0
 }
@@ -13316,7 +13663,7 @@
 }
 },
 "k": 80000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 11.065531262155444,
 "rho": 11.065531262155444,
 "rho_fit": 1.0,
@@ -13418,10 +13765,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -13475,7 +13833,7 @@
 }
 },
 "k": 800000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -13577,10 +13935,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -13634,7 +14003,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -13736,10 +14105,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -13793,7 +14173,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -13895,10 +14275,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -13952,7 +14343,7 @@
 }
 },
 "k": 80000000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14054,8 +14445,15 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
+"diverged": [],
 "e": 0,
 "whole_chain": 1.0
 }
@@ -14111,7 +14509,7 @@
 }
 },
 "k": 80000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14213,10 +14611,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -14270,7 +14679,7 @@
 }
 },
 "k": 800000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14372,10 +14781,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -14429,7 +14849,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14531,10 +14951,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -14588,7 +15019,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14690,10 +15121,21 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+64,
+192,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -14747,7 +15189,7 @@
 }
 },
 "k": 80000000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.6520858971202714,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -14849,10 +15291,23 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -14906,7 +15361,7 @@
 }
 },
 "k": 80000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 8.35335685982954,
 "rho": 8.35335685982954,
 "rho_fit": 1.0,
@@ -15008,10 +15463,23 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -15065,7 +15533,7 @@
 }
 },
 "k": 800000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15167,10 +15635,23 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -15224,7 +15705,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15326,10 +15807,23 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -15383,7 +15877,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.9996631800490919,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15485,10 +15979,23 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -15542,7 +16049,7 @@
 }
 },
 "k": 80000000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.999663180049092,
 "rho": 1.0,
 "rho_fit": 1.0,
@@ -15644,10 +16151,24 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+4,
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -15701,7 +16222,7 @@
 }
 },
 "k": 80000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 2.7344655410785834,
 "rho": 2.7344655410785834,
 "rho_fit": 1.000266918292764,
@@ -15803,10 +16324,24 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+4,
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -15860,7 +16395,7 @@
 }
 },
 "k": 800000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": 1.000266918292764,
@@ -15962,10 +16497,24 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+4,
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -16019,7 +16568,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.9999300519868622,
 "rho": 1.000266918292764,
 "rho_fit": 1.000266918292764,
@@ -16121,10 +16670,24 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+4,
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -16178,7 +16741,7 @@
 }
 },
 "k": 8000000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0110508421616675,
 "rho_fit": 1.0110508421616675,
@@ -16280,10 +16843,24 @@
 },
 "order": "chain",
 "products": 0,
+"shared_prefix": {
+"kept": 0.9990234375,
+"length": 1,
+"sequence": 1024,
+"trimmed_macs_share": 0.0
+},
 "trace_order": "unknown",
 "whole_making": {
-"e": null,
-"whole_chain": null
+"diverged": [
+4,
+32,
+64,
+192,
+1024,
+2048
+],
+"e": 0,
+"whole_chain": 1.0
 }
 },
 "per_gate": {
@@ -16337,7 +16914,7 @@
 }
 },
 "k": 80000000,
-"label": "te_core 4.12.3, reading A",
+"label": "te_core 4.12.4, reading A",
 "max": 0.9999300519868622,
 "rho": 1.0,
 "rho_fit": "inf",
@@ -16358,6 +16935,6 @@
 "unmeasured": {}
 }
 ],
-"version": "4.12.3",
+"version": "4.12.4",
 "w_fwd_gates": 4925098176.0
 }
