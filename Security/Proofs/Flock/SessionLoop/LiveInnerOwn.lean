@@ -143,7 +143,8 @@ theorem finOf_finalC_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVa
   obtain ⟨fc', tc, hfi⟩ :=
     Loop.finInner_returns_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC hrows (by decide) hH hs hrt hq
   rw [hfin _ fc' tc hfi fun a' ha' =>
-    Loop.finInner_accepts_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC (by decide) hH hs hrt hq a' ha']
+    Loop.finInner_accepts_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC (by decide) hH hs hrt hq hlayT
+      a' ha']
   show Loop.inner0 fc'.toBytes = _
   have hfv : (Masked.layE x j).fc < q₀.vals.size := by
     rw [hsz]
@@ -207,12 +208,13 @@ theorem finOf_tau_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
         (ops.map fun p => (CoinLayer.session Loop.loopNr Masked.dataE).decOf p.2)) t j r) := by
   have hH : Loop.InnerHist (Loop.relIn L₁ src real) wk real x w ν t κ m₀ ρ₀ ops j r 2 :=
     ⟨h0, hlt, hl, hok, hr, hown, ⟨v, hv⟩, hI, hrep, hslot⟩
-  obtain ⟨s0, spec, sts, tr, hi, q₀, hs, hrt, hq, -, -, -, hfin⟩ :=
+  obtain ⟨s0, spec, sts, tr, hi, q₀, hs, hrt, hq, hlayT, -, -, hfin⟩ :=
     Loop.innerHist_fin L₁ src real hreal x w hR hSv hsc hSrc wk (by decide) hH
   obtain ⟨fc', tc, hfi⟩ :=
     Loop.finInner_returns_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC hrows (by decide) hH hs hrt hq
   rw [hfin _ fc' tc hfi fun a' ha' =>
-    Loop.finInner_accepts_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC (by decide) hH hs hrt hq a' ha']
+    Loop.finInner_accepts_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC (by decide) hH hs hrt hq hlayT
+      a' ha']
   exact congrArg Loop.inner2
     (Loop.finInner_tau_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC hrows hH hs hrt hq hfi)
 
