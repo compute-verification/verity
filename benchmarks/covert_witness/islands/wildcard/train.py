@@ -277,27 +277,35 @@ def e_side_bits() -> int:
     return 16 + math.ceil(math.log2(E_LEVELS + 1)) + math.ceil(16 * E_LEVELS * E_BINS / SESSION)
 
 
-def symbol_probs(step: float, stochastic: bool) -> torch.Tensor:
-    """P(|j| in each bin) for a unit Gaussian rounded onto step·j, nearest (mid-tread) or stochastically."""
-    x = torch.linspace(0, 12, 240001, dtype=torch.float64)
-    w = torch.exp(-x ** 2 / 2)
+def symbol_probs(step: float, stochastic: bool) -> np.ndarray:
+    """P(|j| in each bin) for a unit Gaussian rounded onto step·j, nearest (mid-tread) or stochastically. The code
+    tables are numpy, so a re-trace on fake tensors (te_core.capture.script) builds the same ones."""
+    x = np.linspace(0, 12, 240001)
+    w = np.exp(-x ** 2 / 2)
     w = w / w.sum()
     u = x / step
-    p = torch.zeros(E_BINS, dtype=torch.float64)
     if stochastic:
-        f = torch.floor(u)
+        f = np.floor(u)
         r = u - f
-        p.index_add_(0, f.clamp(max=E_BINS - 1).long(), w * (1 - r))
-        p.index_add_(0, (f + 1).clamp(max=E_BINS - 1).long(), w * r)
-    else:
-        p.index_add_(0, torch.floor(u + 0.5).clamp(max=E_BINS - 1).long(), w)
-    return p
+        return (np.bincount(np.minimum(f, E_BINS - 1).astype(np.int64), w * (1 - r), E_BINS)
+                + np.bincount(np.minimum(f + 1, E_BINS - 1).astype(np.int64), w * r, E_BINS))
+    return np.bincount(np.minimum(np.floor(u + 0.5), E_BINS - 1).astype(np.int64), w, E_BINS)
 
 
-def bin_bits(p: torch.Tensor) -> torch.Tensor:
-    """Code lengths per |j| bin under model p, held as 16-bit probabilities (each at least 2^-16), sign included."""
+def bin_bits(p):
+    """Code lengths per |j| bin under model p (a tensor or an array), held as 16-bit probabilities (each at least
+    2^-16), sign included."""
+    if isinstance(p, np.ndarray):
+        q = np.maximum(np.round(p / p.sum() * 2 ** 16), 1)
+        return -np.log2(q / q.sum()) + (np.arange(len(p)) > 0)
     q = (p / p.sum() * 2 ** 16).round().clamp_min(1)
     return -torch.log2(q / q.sum()) + (torch.arange(len(p), device=p.device) > 0).to(p.dtype)
+
+
+def counts(idx: torch.Tensor, n: int) -> torch.Tensor:
+    """torch.bincount(idx, minlength=n) for idx < n, at a fixed size (a fake tensor's bincount has none)."""
+    idx = idx.flatten()
+    return torch.zeros(n, dtype=torch.long, device=idx.device).scatter_add_(0, idx, torch.ones_like(idx))
 
 
 def symbol_bits(j: torch.Tensor, lb: torch.Tensor) -> torch.Tensor:
@@ -316,7 +324,7 @@ def e_step(d: int, bits: int, stochastic: bool) -> float:
         p = symbol_probs(s, stochastic)
         lb = bin_bits(p)
         mean = float((p * lb).sum())
-        var = float((p * lb ** 2).sum()) - mean ** 2
+        var = max(0.0, float((p * lb ** 2).sum()) - mean ** 2)
         lo, hi = (lo, s) if d * mean + (d * var) ** 0.5 + 2 <= d * bits else (s, hi)
     return hi
 
@@ -329,7 +337,7 @@ def ecode(y: torch.Tensor, bits: int, key, stochastic: bool, learn: bool) -> tor
     st = ECODE.get(key)
     if st is None:
         steps = [e_step(d, bits, stochastic) * 2 ** (m / 4) for m in range(E_LEVELS)]
-        p = torch.stack([symbol_probs(s, stochastic) for s in steps]).float().to(y.device)
+        p = torch.tensor(np.stack([symbol_probs(s, stochastic) for s in steps]), dtype=torch.float32, device=y.device)
         st = ECODE[key] = {"steps": steps, "p": p, "lb": torch.stack([bin_bits(q) for q in p]),
                            "count": torch.zeros(E_LEVELS + 2, device=y.device), "length": torch.zeros((), device=y.device)}
     rms = y.pow(2).mean(-1, keepdim=True).sqrt().to(torch.bfloat16).float().clamp_min(1e-30)
@@ -363,13 +371,14 @@ def ecode(y: torch.Tensor, bits: int, key, stochastic: bool, learn: bool) -> tor
     out = torch.where(coded[:, None], sym * step[:, None] * rms, quantize(y, bits, d, stochastic, not stochastic))
     if learn:
         with torch.no_grad():
+            pair = torch.where(coded, level, E_LEVELS)[:, None] * E_BINS + sym.abs().clamp(max=E_BINS - 1).long()
+            hists = counts(pair, (E_LEVELS + 1) * E_BINS).reshape(E_LEVELS + 1, E_BINS)
             for m in range(E_LEVELS):
-                rows = coded & (level == m)
-                hist = torch.bincount(sym[rows].abs().clamp(max=E_BINS - 1).long().flatten(), minlength=E_BINS)
+                hist = hists[m]
                 if hist.sum() > 0:
                     st["p"][m] = E_DECAY * st["p"][m] + (1 - E_DECAY) * hist.float() / hist.sum()
                     st["lb"][m] = bin_bits(st["p"][m])
-            st["count"] += torch.bincount(torch.where(drawn_over, E_LEVELS + 1, level), minlength=E_LEVELS + 2)
+            st["count"] += counts(torch.where(drawn_over, E_LEVELS + 1, level), E_LEVELS + 2)
             st["length"] += torch.where(coded, length, 0.0).sum()
     return out.reshape(shape)
 
@@ -386,6 +395,117 @@ def ecode_report() -> dict:
     return out
 
 
+#: Rice-coded forward codes (`r`), which a traced step holds at their width: a token's rotated coordinates over its
+#: bf16 RMS are rounded onto step·j for any integer j (nearest), zigzagged (z = 2|j| - [j < 0]) and Rice-coded with
+#: parameter k (z's k low bits at fixed offsets, then every z >> k in unary) in one d·bits-bit field held as bytes. A
+#: token takes the finest step step_0·2^(m/4), m < E_LEVELS, whose code fits (step_0 and each step's k set on a unit
+#: Gaussian), else the fixed-rate Gaussian grid at the same width in the same bytes. Its level (uint8) and RMS (bf16)
+#: travel beside the bytes, and the decoder reads only those three tensors, so a = d·bits + 24.
+RCODE: dict = {}
+R_TABLES: dict = {}
+R_SIDE_BITS = 16 + 8
+
+
+def zigzag_rice_bits(j: torch.Tensor, k) -> torch.Tensor:
+    return k + torch.floor((2 * j.abs() - (j < 0).to(j.dtype)) / 2 ** k) + 1
+
+
+def r_tables(d: int, bits: int) -> dict:
+    """Each level's step (in units of the token's RMS) and Rice parameter: step_0 is the finest step at which a
+    unit-Gaussian token's mean code length plus one standard deviation fits d·bits under its best parameter, and each
+    level takes the parameter with the least mean length at its step. Numpy, like symbol_probs."""
+    erf = np.vectorize(math.erf)
+
+    def stats(s: float, k: int) -> tuple[float, float]:
+        j = np.arange(-int(9 / s) - 2, int(9 / s) + 3, dtype=np.float64)
+        p = 0.5 * (erf((j + 0.5) * s / 2 ** 0.5) - erf((j - 0.5) * s / 2 ** 0.5))
+        n = k + np.floor((2 * np.abs(j) - (j < 0)) / 2 ** k) + 1
+        mean = float((p * n).sum())
+        return mean, max(0.0, float((p * n * n).sum()) - mean ** 2)
+
+    best = None
+    for k in range(8):
+        lo, hi = 1e-3, 16.0
+        for _ in range(50):
+            s = (lo * hi) ** 0.5
+            mean, var = stats(s, k)
+            lo, hi = (lo, s) if d * mean + (d * var) ** 0.5 <= d * bits else (s, hi)
+        best = (hi, k) if best is None else min(best, (hi, k))
+    steps = [best[0] * 2 ** (m / 4) for m in range(E_LEVELS)]
+    return {"steps": steps, "k": [min(range(8), key=lambda k: stats(s, k)[0]) for s in steps]}
+
+
+def rcode(y: torch.Tensor, bits: int, key, count: bool = False) -> torch.Tensor:
+    """Each token (a row of y) through the Rice code above: encoded to bytes, a level and an RMS, then decoded from
+    those alone. With `count`, RCODE[key] counts the tokens at each level and the coded tokens' bits, read on the
+    decoded side."""
+    shape, d = y.shape, y.shape[-1]
+    y = y.reshape(-1, d)
+    T, n, dev = len(y), d * bits, y.device
+    tab = R_TABLES.get((d, bits))
+    if tab is None:
+        tab = R_TABLES[(d, bits)] = r_tables(d, bits)
+    steps, ks = torch.tensor(tab["steps"], device=dev), torch.tensor(tab["k"], device=dev)
+    half, gstep = 2 ** (bits - 1), GAUSS_STEP[bits]
+    i = torch.arange(d, device=dev)
+    lanes = torch.arange(8, device=dev)
+    kmax = max(max(tab["k"]), bits)
+
+    rms = y.pow(2).mean(-1, keepdim=True).sqrt().to(torch.bfloat16)
+    w = y / rms.float().clamp_min(1e-30)
+    level = torch.full((T,), E_LEVELS, dtype=torch.long, device=dev)
+    z = torch.floor(w / gstep).clamp(-half, half - 1).long() + half
+    for m in reversed(range(E_LEVELS)):
+        jm = torch.floor(w / tab["steps"][m] + 0.5)
+        fits = zigzag_rice_bits(jm, tab["k"][m]).sum(-1) <= n
+        level = torch.where(fits, m, level)
+        z = torch.where(fits[:, None], (2 * jm.abs() - (jm < 0).float()).long(), z)
+    k = torch.where(level == E_LEVELS, bits, ks[level.clamp(max=E_LEVELS - 1)])[:, None]
+    pos = torch.arange(n, device=dev)
+    ends = d * k + torch.cumsum((z >> k) + 1, -1) - 1
+    k1 = k.clamp_min(1)
+    low = (z.gather(1, (pos // k1).clamp(max=d - 1)) >> (pos % k1)) & 1
+    nxt = torch.searchsorted(ends, pos.expand(T, n).contiguous()).clamp(max=d - 1)
+    field = torch.where(pos < d * k, low, (ends.gather(1, nxt) == pos).long())
+    packed = (field.reshape(T, n // 8, 8) << lanes).sum(-1).to(torch.uint8)
+    lev = level.to(torch.uint8)
+
+    bit = ((packed.long().unsqueeze(-1) >> lanes) & 1).reshape(T, n)
+    L = lev.long()
+    fixed = L == E_LEVELS
+    k = torch.where(fixed, bits, ks[L.clamp(max=E_LEVELS - 1)])[:, None]
+    low = torch.zeros(T, d, dtype=torch.long, device=dev)
+    for b in range(kmax):
+        on = b < k
+        low = low | ((bit.gather(1, torch.where(on, i * k + b, 0)) & on.long()) << b)
+    cs = torch.cumsum((bit == 1) & (pos >= d * k), -1)
+    at = torch.searchsorted(cs, (i + 1).expand(T, d).contiguous()).clamp(max=n - 1)
+    q = at - torch.cat([d * k - 1, at[:, :-1]], -1) - 1
+    zz = (q << k) | low
+    j = torch.where((zz & 1).bool(), -(zz + 1) // 2, zz // 2).float()
+    r = rms.float()
+    out = torch.where(fixed[:, None], ((low - half).float() + 0.5) * gstep * r,
+                      j * steps[L.clamp(max=E_LEVELS - 1)][:, None] * r)
+    if count:
+        st = RCODE.setdefault(key, {"count": torch.zeros(E_LEVELS + 1, device=dev), "length": torch.zeros((), device=dev)})
+        st["count"] += counts(L, E_LEVELS + 1)
+        st["length"] += torch.where(fixed, 0, at[:, -1] + 1).sum()
+    return out.reshape(shape)
+
+
+def rcode_report() -> dict:
+    """Per r code: its steps (in units of the token's RMS) and Rice parameters, how many tokens took each step and the
+    fixed-rate code (`fixed`), and the mean bits of a Rice-coded token."""
+    out = {}
+    for key, st in RCODE.items():
+        c = [int(x) for x in st["count"].tolist()]
+        out[f"{key[0]}{key[1]}"] = {"tokens_by_step": c[:E_LEVELS], "fixed": c[E_LEVELS],
+                                    "mean_bits": float(st["length"]) / max(1, sum(c[:E_LEVELS]))}
+    out["tables"] = {f"{d}x{b}": {"steps": [round(s, 4) for s in t["steps"]], "k": t["k"]}
+                     for (d, b), t in R_TABLES.items()}
+    return out
+
+
 class Coded(torch.autograd.Function):
     """A token's d-vector handed across a cut as a code: rotated by R, quantized per group, rotated back (forward,
     nearest rounding); the backward passes the gradient straight through the quantizer and hands it across the cut in
@@ -394,7 +514,7 @@ class Coded(torch.autograd.Function):
     and codes the rest. With a `mean` (d,) the forward codes x − mean on the GAUSS_STEP grid at every width and adds the
     mean back. With `grad_gauss` the gradient goes on quantize's RMS-scaled stochastic grid (STOCH_STEP). An `ekeys`
     entry (forward, back) codes that direction in the entropy-coded code of ECODE[key] (`ecode`); the forward's model
-    learns only with `learn`."""
+    learns only with `learn`. A forward key ending in "r" codes the forward in the Rice code (`rcode`)."""
 
     @staticmethod
     def forward(ctx, x, bits_f, bits_b, group, seed, rotate, outliers=0, mean=None, grad_gauss=False, ekeys=(None, None),
@@ -409,8 +529,12 @@ class Coded(torch.autograd.Function):
             if rotate:
                 r = fresh_rotation(x.shape[-1], seed, x.device)
                 z = y @ r.T
-                z = ecode(z, bits_f, ekeys[0], False, learn) if ekeys[0] else quantize(z, bits_f, group, False,
-                                                                                       mean is not None)
+                if ekeys[0] and ekeys[0][1] == "r":
+                    z = rcode(z, bits_f, ekeys[0], learn)
+                elif ekeys[0]:
+                    z = ecode(z, bits_f, ekeys[0], False, learn)
+                else:
+                    z = quantize(z, bits_f, group, False, mean is not None)
                 y = z @ r
             else:
                 y = quantize(y, bits_f, group, False, mean is not None)
@@ -432,18 +556,21 @@ class Coded(torch.autograd.Function):
         return out.to(g.dtype), None, None, None, None, None, None, None, None, None, None
 
 
-CUT_RE = re.compile(r"(?P<delta>d?)q(?P<bf>\d+)(?P<mean>m?)(?P<fe>e?)(?:o(?P<k>\d+))?(?:b(?P<bb>\d+)(?P<bs>[se]?))?"
+CUT_RE = re.compile(r"(?P<delta>d?)q(?P<bf>\d+)(?P<mean>m?)(?P<fe>[er]?)(?:o(?P<k>\d+))?(?:b(?P<bb>\d+)(?P<bs>[se]?))?"
                     r"(?:g(?P<group>\d+))?")
 
 
 def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
     """`B:CODE,...`: boundary B (1..L; the input of block B, L the input of the final norm; `all` every one) handed on
-    as CODE = [d]q<forward bits>[m][e][o<k>][b<backward bits>[s|e]][g<group>] in a randomized-DCT basis (group d
+    as CODE = [d]q<forward bits>[m][e|r][o<k>][b<backward bits>[s|e]][g<group>] in a randomized-DCT basis (group d
     unless given); `o<k>` sends each token's k largest coordinates apart, a bf16 value and a ceil(log2 d)-bit index
     each. `m` codes the forward about the boundary's running mean (CUT_MEAN; earlier batches' coded states only, so
     causal and computed on the receiving side, no bits sent) on the Gaussian grid. `b<bits>s` rounds the gradient onto the
     RMS-scaled grid (STOCH_STEP) at the same bits. `e` (after q's bits, or b's) codes that direction entropy-coded in
-    d·bits bits plus e_side_bits (`ecode`; whole tokens, no o<k>). With the `d` prefix the forward codes only the update's effect h - h_frozen, where h_frozen is θ's residual at
+    d·bits bits plus e_side_bits (`ecode`; whole tokens, no o<k>); no coder runs, so a traced step holds a forward `e`
+    code at the uncoded state's width. `r` (after q's bits) codes the forward in the Rice code, d·bits bits plus
+    R_SIDE_BITS, which the step holds as bytes (`rcode`; whole tokens, no o<k>, d a multiple of 8, 2-8 bits). With the `d` prefix
+    the forward codes only the update's effect h - h_frozen, where h_frozen is θ's residual at
     B for the same tokens, which the receiving side recomputes from the token's data; it needs B above the lowest
     trained block `low` (at or below it the effect is 0)."""
     out = []
@@ -451,7 +578,7 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
         where, code = part.split(":")
         m = CUT_RE.fullmatch(code)
         if not m:
-            raise SystemExit(f"wildcard: --cut code {code!r} is not [d]q<bits>[m][e][o<k>][b<bits>[s|e]][g<group>]")
+            raise SystemExit(f"wildcard: --cut code {code!r} is not [d]q<bits>[m][e|r][o<k>][b<bits>[s|e]][g<group>]")
         delta = m.group("delta") == "d"
         mean = m.group("mean") == "m"
         bf = int(m.group("bf"))
@@ -466,12 +593,15 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
                              f"{min(GAUSS_STEP)}-{max(GAUSS_STEP)} bits")
         if grad_gauss and bb not in STOCH_STEP:
             raise SystemExit(f"wildcard: --cut {part!r}: `b<bits>s` at {min(STOCH_STEP)}-{max(STOCH_STEP)} bits")
-        ecode_f, ecode_b = m.group("fe") == "e", m.group("bs") == "e"
-        if (ecode_f or ecode_b) and (group != d or (ecode_f and k) or not (bf <= 8 and bb <= 8)):
-            raise SystemExit(f"wildcard: --cut {part!r}: an `e` code takes whole tokens (no g<group>), no o<k>, at "
-                             f"most 8 bits")
+        ecode_f, ecode_b, rcode_f = m.group("fe") == "e", m.group("bs") == "e", m.group("fe") == "r"
+        if (ecode_f or ecode_b or rcode_f) and (group != d or ((ecode_f or rcode_f) and k) or not (bf <= 8 and bb <= 8)):
+            raise SystemExit(f"wildcard: --cut {part!r}: an `e` or `r` code takes whole tokens (no g<group>), no o<k>, "
+                             f"at most 8 bits")
+        if rcode_f and (d % 8 or bf < 2):
+            raise SystemExit(f"wildcard: --cut {part!r}: an `r` code needs d = {d} a multiple of 8 and at least 2 bits "
+                             f"(at 1 bit a Gaussian token's every coordinate rounds to 0)")
         side = k * (16 + math.ceil(math.log2(d)))
-        fwd = (d * bf + e_side_bits() if ecode_f else code_bits(d, bf, group)) + side
+        fwd = (d * bf + e_side_bits() if ecode_f else d * bf + R_SIDE_BITS if rcode_f else code_bits(d, bf, group)) + side
         bwd = d * bb + e_side_bits() if ecode_b else code_bits(d, bb, group)
         for b in (range(1, L + 1) if where == "all" else [int(where)]):
             if not 1 <= b <= L:
@@ -481,7 +611,7 @@ def parse_cut(spec: str, L: int, d: int, low: int | None = None) -> list[dict]:
                                  f"the lowest below boundary {b} (lowest trained block: {low})")
             out.append({"boundary": b, "bits_fwd": bf, "bits_bwd": bb, "group": group, "delta": delta, "outliers": k,
                         "mean": mean, "grad_gauss": grad_gauss, "ecode_fwd": ecode_f, "ecode_bwd": ecode_b,
-                        "a_fwd_bits": fwd, "a_bwd_bits": bwd})
+                        "rcode_fwd": rcode_f, "a_fwd_bits": fwd, "a_bwd_bits": bwd})
     return sorted(out, key=lambda c: c["boundary"])
 
 
@@ -517,6 +647,7 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
     code's model learns on the same terms (`ecode`)."""
     CUT_MEAN.clear()
     ECODE.clear()
+    RCODE.clear()
     by_block = {c["boundary"] - 1: c for c in cuts}
     top = max((c["boundary"] for c in cuts if c["delta"]), default=None)
     frozen = frozen_blocks(net, theta, low, top) if top is not None else {}
@@ -534,7 +665,8 @@ def install_cuts(net, cuts: list[dict], theta: dict | None = None, low: int | No
                 return out
             seed = 1000 + c["boundary"]
             learn = torch.is_grad_enabled() or bool(CUT.get("calibrate"))
-            ekeys = ((c["boundary"], "f") if c["ecode_fwd"] else None, (c["boundary"], "b") if c["ecode_bwd"] else None)
+            fkey = (c["boundary"], "f") if c["ecode_fwd"] else (c["boundary"], "r") if c["rcode_fwd"] else None
+            ekeys = (fkey, (c["boundary"], "b") if c["ecode_bwd"] else None)
             if CUT.get("spectrum") is not None:
                 with torch.no_grad():
                     acc = CUT["spectrum"].setdefault(c["boundary"], {"of": "h - h_frozen" if c["delta"] else "h"})
@@ -823,6 +955,9 @@ def train_iterative(a, net, rec, theta, params, tuned, data, fwd=None):
         if ECODE:
             info["cuts"]["ecode"] = ecode_report()
             print(json.dumps({"ecode": info["cuts"]["ecode"]}), flush=True)
+        if RCODE:
+            info["cuts"]["rcode"] = rcode_report()
+            print(json.dumps({"rcode": info["cuts"]["rcode"]}), flush=True)
     if a.z_bits:
         info["z_code"] = {"bits": a.z_bits, "rank": a.lora_rank, "a_bits_per_direction": a.lora_rank * a.z_bits + 16}
     if alphas:
