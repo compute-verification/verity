@@ -755,7 +755,7 @@ class Options:
                                   help="started beside the derives: load each component as its derive finishes, waiting up to this many seconds")
     follow_done: str | None = option("--follow-done", default=None, help="with --follow: a file whose existence means every derive has ended")
     follow_stop: str | None = option("--follow-stop", default=None, help="with --follow: a file whose existence means the Build failed: compose nothing")
-    theta_registered: bool = option("--theta-registered", default=False, action="store_true", help="bind the weights at registration (RegisteredInput), as NCI's baseline reads theta; moves the workload digest")
+    theta_registered: bool = option("--theta-registered", default=False, action="store_true", help="bind the weights at registration (RegisteredInput), as the inference-only check reads theta; moves the workload digest")
 
 
 def main(a: Options) -> int:

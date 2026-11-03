@@ -10,7 +10,7 @@ The records, every one in the window's directory but the advice's opening:
 * **the values**, committed before any coin: the registration (``registration.json``) and the files `rows.write` writes;
 * **on a sample, the sampled proof blocks' openings** (``m<k>-private.bin``), which reach only the prover behind the ZK server.
 
-The verifier's window is `interface.of_records`'s, each template resolved in Verity's catalog (`interface.resolve`), or, for a
+The verifier's window is `interface.of_records`'s, each template resolved in Verity's catalog (`catalog_resolve`), or, for a
 template the verifier lowers from its own input set (``--template-sets``), that set's Definition; a window with row tables
 is refused until its records carry their segment roots. Before the sample the audit holds the registration to that circuit,
 to the run root the run published (``--run``) and, for a compiled circuit, to the compiler and advice it was compiled from
@@ -54,6 +54,15 @@ them out of an audit (its summary says so), for a run of several audits of one c
         --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
+    records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
+
+``period``: a window's audit as one compute audit of the network certifier's period (`NetworkCheck.Period`'s rows form),
+the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in that shape): the window's
+registration (``--window``'s ``registration.json``), the population Program's descriptor the audit sampled (``--audit``'s
+``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`), and its
+terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
+values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
+the scan's state tree (``stateTied``), so its reads count registered. Refused where the window commits no scan state.
 
 ``count``: a stated record that declares its inputs (cuts, registered reads, ingress: `interface.Circuit.declared`) counted
 from its description alone (`declared_count`), before the committer writes its members' rows. A registered read counts as
@@ -118,7 +127,9 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
+from verity.core.protocols.certifier.ingress_scan import SCAN_STATE  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+from verity.ml.circuits.codec import program_digest  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
 
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
@@ -127,6 +138,20 @@ PORTS = range(10000, 32000)
 #: a compile command's exit code for advice it refuses (not advice it compiles: malformed, over its cap, or a choice it can't
 #: compile), the reason on stderr; any other nonzero exit is an error. Either fails the compile check (``compiles``).
 REFUSED = 2
+
+
+def catalog_resolve(tid: str) -> Any:
+    """`interface.resolve` over the whole of Verity's catalog, the registry's Definitions loaded too (a window's io shell and
+    its blocks, which `interface`'s own walk can't import); a refusal names the registry modules that failed to import."""
+    from verity.ml.definitions.registry.catalog import load
+
+    _, errors = load()
+    try:
+        return IF.resolve(tid)
+    except ValueError as e:
+        if errors:
+            raise ValueError(f"{e} (registry modules that failed to import: {'; '.join(errors)})") from e
+        raise
 
 
 def free_ports(span: int, bases: Iterable[int] | None = None) -> int:
@@ -547,16 +572,49 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
     return compose
 
 
+#: the window value the network certifier's period ties to its scan's state tree (``stateTied``): the scan's state rows
+TIED = SCAN_STATE
+
+
+def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]:
+    """The window's audit as one compute audit of the network certifier's period (module docstring's ``period``):
+    ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ValueError where the
+    circuit isn't the one the registration binds, the window commits no `TIED` value its circuit reads, the audit wrote no
+    Program or another than the registration names, or its answer commits to another registration."""
+    import served_integrity as SI
+
+    rec = json.loads((window / "registration.json").read_text())
+    body, own = (window / "circuit.json").read_bytes(), rec.get("window") or {}
+    if hashlib.sha512(body).hexdigest() != own.get("circuit"):
+        raise ValueError(f"{window / 'circuit.json'} is not the circuit record the registration binds")
+    doc = json.loads(body)
+    ties, untied = window_pins(own, doc, catalog_resolve)
+    if TIED not in ties | untied:
+        raise ValueError(f"the window commits no {TIED} its circuit reads: the period has no state to tie to its scan's")
+    count = declared_count(doc, 0, catalog_resolve, pins={**pins, **pin_roots({**ties, **untied})},
+                           roots=window_roots(own), untied=set(untied) - {TIED})
+    try:
+        program = json.loads((audit / "window" / "program.json").read_text())
+    except OSError:
+        raise ValueError(f"the audit under {audit} wrote no Program: it stopped before staging its members") from None
+    if program_digest(program) != rec.get("program"):
+        raise ValueError(f"the audit's Program ({program_digest(program)[:16]}…) isn't the one the registration names")
+    answer = SI.answer(audit, rec)
+    if answer["commitment"] != R.digest(rec):
+        raise ValueError("the audit's answer commits to another registration than the window's")
+    return {"answer": answer, "free": count["free"], "program": program, "registration": rec, "steps": 0}
+
+
 def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Path | None) -> tuple[Any, dict, dict]:
     """The verifier's window and circuit record from the records (`interface.of_records`), and a5's template sets: each
     statement's template composed from its Definition (`composer`), every other template lowered from the verifier's own
-    input set, whose Definition it resolves to; any other template from Verity's catalog (`interface.resolve`). A window
+    input set, whose Definition it resolves to; any other template from Verity's catalog (`catalog_resolve`). A window
     with row tables is refused: a5 checks their segment roots against the ones recorded before each coin (``step_roots``),
     which the records don't carry yet."""
     import a5 as A5
 
     own = A5.template_sets(template_sets) if template_sets else {}
-    resolve = lambda t: own[t][1] if t in own else IF.resolve(t)  # noqa: E731
+    resolve = lambda t: own[t][1] if t in own else catalog_resolve(t)  # noqa: E731
     mine, doc = IF.of_records(window_dir, law, resolve)
     if mine.row_tables:
         raise ValueError(f"the window has {len(mine.row_tables)} row tables, and its records don't carry the segment roots "
@@ -648,7 +706,7 @@ def audit(a: argparse.Namespace) -> int:
         mine, doc, sets = verifier_window(wdir, law, Path(a.template_sets) if a.template_sets else None)
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
         def resolve(t: str) -> Any:
-            return sets[t][1] if t in sets else IF.resolve(t)
+            return sets[t][1] if t in sets else catalog_resolve(t)
         own = json.loads((wdir / "registration.json").read_text()).get("window") or {}
         ties, untied = window_pins(own, doc, resolve)
         if twice := sorted((set(ties) | set(untied)) & set(pins)):
@@ -815,7 +873,25 @@ def main(argv: list[str] | None = None) -> int:
                    "window_weights.weights_registration), with --pin's (repeatable)")
     p.add_argument("--registration", help="the window's registration, whose roots for its parameters (`registration_roots`) are held "
                    "to the pins (none: no root is the window's, and every registered read is free)")
+    p = sub.add_parser("period", help="a window's audit as one compute audit of the network certifier's period (`period`)")
+    p.add_argument("--window", required=True, type=Path, help="the window's directory: circuit.json, registration.json")
+    p.add_argument("--audit", required=True, type=Path, help="the audit's --out: summary.json, window/program.json, "
+                   "window/audit.json")
+    p.add_argument("--out", required=True, type=Path, help="the period's audit entry, JSON")
+    p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="as count's")
+    p.add_argument("--pins", action="append", default=[], metavar="FILE", help="as count's")
     a = ap.parse_args(argv)
+    if a.cmd == "period":
+        try:
+            got = period(a.window, a.audit, pins_of(a.pin, a.pins))
+        except (ValueError, RuntimeError) as e:
+            print(f"records_audit.py period: {e}", file=sys.stderr)
+            return 1
+        a.out.write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
+        print("PERIOD " + json.dumps({"verdict": got["answer"]["verdict"], "reason": got["answer"]["reason"],
+                                      "free": got["free"], "commitment": got["answer"]["commitment"],
+                                      "program": got["registration"]["program"]}, sort_keys=True))
+        return 0
     if a.cmd == "count":
         for m in a.catalog:
             importlib.import_module(m)

@@ -35,13 +35,10 @@ from typing import Any
 
 from verity_vllm.commit.native_ranges import DROPPED
 from verity_vllm.commit.opened import meta_by_name
+from verity_vllm.errors import Refused
 
 Read = tuple[int, str, int, int]
 FILE = re.compile(r"w(\d+)\.([A-Za-z0-9_:\-]+)\.json")
-
-
-class DrawRefused(RuntimeError):
-    """A draw the gate can't take: a protocol not named, a second draw, a draw after the release, a read of a dropped leaf."""
 
 
 def protocols_of(spec: str) -> tuple[str, ...]:
@@ -99,14 +96,14 @@ class Draws:
     def put(self, window: int, protocol: str, reads: Iterable[Read]) -> None:
         """``protocol``'s draw of ``window``: the reads its drawn blocks make."""
         if protocol not in self.protocols:
-            raise DrawRefused(f"window {window}: {protocol!r} is not a protocol the release waits for ({', '.join(self.protocols)})")
+            raise Refused(f"window {window}: {protocol!r} is not a protocol the release waits for ({', '.join(self.protocols)})")
         reads = reads_of(reads)
         with self._cv:
             if window in self._kept:
-                raise DrawRefused(f"window {window} was released: a draw after its release can't be kept ({protocol})")
+                raise Refused(f"window {window} was released: a draw after its release can't be kept ({protocol})")
             got = self._got.setdefault(window, {})
             if protocol in got:
-                raise DrawRefused(f"window {window} was drawn by {protocol} already: a draw is never redrawn")
+                raise Refused(f"window {window} was drawn by {protocol} already: a draw is never redrawn")
             got[protocol] = reads
             self._cv.notify_all()
 
@@ -127,9 +124,9 @@ class Draws:
         with self._cv:
             while True:
                 if self.failure:
-                    raise DrawRefused(f"window {window}: no release: {self.failure}")
+                    raise Refused(f"window {window}: no release: {self.failure}")
                 if window in self._refused:
-                    raise DrawRefused(f"window {window}: no release: {self._refused[window]}")
+                    raise Refused(f"window {window}: no release: {self._refused[window]}")
                 got = self._got.get(window, {})
                 if all(p in got for p in self.protocols):
                     return dict(got)
@@ -209,7 +206,7 @@ class DrawDir:
                     raise ValueError(f"its body names window {body.get('window') if isinstance(body, Mapping) else None!r} and "
                                      f"protocol {body.get('protocol') if isinstance(body, Mapping) else None!r}, not its name's")
                 self.draws.put(window, protocol, body["reads"])
-            except (OSError, ValueError, KeyError, TypeError, DrawRefused) as e:
+            except (OSError, ValueError, KeyError, TypeError) as e:
                 self.draws.refuse(window, f"draw file {f.name}: {type(e).__name__}: {e}"[:500])
             n += 1
         return n

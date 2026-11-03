@@ -2,8 +2,9 @@
 
 `committer` builds the server's committer: ``--scheme rows-sha512`` (the default) the declared Commit of record's
 (`pipeline.commit.make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots) with its
-acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_record`) over the bench row's required manifest
-(``--required-manifest``): the attention hidden tap (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the hook sets of
+acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_record`) over the row's required manifest
+(``--required-manifest``, the one ``verity-vllm predict row`` wrote with the row's Build of record, `serve_row`): the attention
+hidden tap (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the hook sets of
 the acquisition plan, so its name is the Commit's (``...+hidden_m1+norm_scale+plan``) and a part the manifest names that did not
 attach is refused (`parts_missing`); ``--scheme vllm-v1`` `NativeHostCommitter` (SHA-256, 32-byte roots), which only a recorded
 run's readers take, so a run under it names the recorded vllm-v1 run it serves again (``--of-record``, `scheme_refusal`). Then
@@ -36,13 +37,13 @@ with the pinned blocks its values sit in lent out of the committer's pool until 
 the window was detached into at its close (`NativeHostCommitter.detach`), finalized on the sealer's thread before its seal,
 or, for a committer that detaches no window, the committer frozen after a finalize at the close (`freeze`). The registered
 tensors' bytes (`extras_of`) are read once for each weights root, and `seal_window` runs over the view on the sealer's
-thread while the engine serves the next window; the bytes it writes are the ones an inline seal writes. `DiskFloor` keeps
-the serve dir's filesystem above a floor: a window whose seal would take it under is not sealed.
+thread while the engine serves the next window; the bytes it writes are the ones an inline seal writes. `serve_guard.DiskFloor`
+keeps the serve dir's filesystem above a floor: a window whose seal would take it under is not sealed.
 
 A seal on the sealer's thread shares the engine's GIL, so it holds it only briefly: its binding map is encoded a chunk of
 entries at a time (`commit.json_chunks`), built with no cyclic collection running (`gc_paused`) and freed a chunk at a time
 (`drop`). By default its Python runs in a spawned process (`seal_process.ProcessSealer`), over a view it is handed (`SealView`,
-`seal_view`), the thread here writing only the store's files. `Watchdog` records what still stalls the process (``pauses.jsonl``),
+`seal_view`), the thread here writing only the store's files. `serve_guard.Watchdog` records what still stalls the process (``pauses.jsonl``),
 and each seal's line its phases.
 """
 from __future__ import annotations
@@ -52,7 +53,6 @@ import copy
 import functools
 import gc
 import json
-import shutil
 import threading
 import time
 from collections import deque
@@ -66,6 +66,7 @@ from verity_vllm.commit import json_chunks as JC
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 from verity_vllm.config import UsageError, option
+from verity_vllm.pipeline.serve_row import programs_root_of, row_refusal
 
 ROWS, V1 = step_rows.NAME, "vllm-v1"
 #: the token budget's floor under rows-sha512: the step-input port's ids fill whole ``step_rows.ROW_BYTES`` rows
@@ -153,21 +154,24 @@ def recorded_scheme(rec: Mapping[str, Any]) -> str | None:
 
 
 def scheme_refusal(opts: Any) -> str | None:
-    """Why ``opts`` can't commit under its scheme (None: it can). rows-sha512 needs the GPU tree, the bench row's manifest and
-    a token budget of whole step-input port rows (`PORT_IDS`). vllm-v1 commits SHA-256, which only a recorded run's readers
-    take, so it only serves again a recorded vllm-v1 run of the same model, the one ``--of-record`` names."""
+    """Why ``opts`` can't commit under its scheme (None: it can). rows-sha512 needs the GPU tree, the row's manifest and a token
+    budget of whole step-input port rows (`PORT_IDS`); a row's manifest, which the engine's scheduler follows too (`serve_row`),
+    is predict's (`serve_row.row_refusal`), committing or not. vllm-v1 commits SHA-256, which only a recorded run's readers take,
+    so it only serves again a recorded vllm-v1 run of the same model, the one ``--of-record`` names."""
     if why := retention_refusal(opts):
         return why
     if opts.of_record and opts.scheme != V1:
         return f"--of-record names a recorded {V1} run to serve again under --scheme {V1}, not under --scheme {opts.scheme}"
+    if opts.required_manifest and (why := row_refusal(opts.required_manifest)):
+        return why
     if not opts.commit:
         return None
     if opts.scheme == ROWS and not opts.gpu_tree:
         return f"--scheme {ROWS} (the default) is the windowed collector's, which hashes its rows on the GPU: drop --no-gpu-tree"
     if opts.scheme == ROWS and not opts.required_manifest:
-        return (f"--scheme {ROWS} (the default) commits with the Commit of record's parts, which its bench row's manifest names: "
-                "pass --required-manifest ROW_DIR/manifest.json (and the row's --hidden-so, --norm-tap-so), or --no-commit to serve "
-                "without a Commit")
+        return (f"--scheme {ROWS} (the default) commits with the Commit of record's parts, which its row's manifest names: pass "
+                "--required-manifest DIR/manifest.json, DIR the row's Build of record (`verity-vllm predict row --row ROW --out DIR`), "
+                "and the row's --hidden-so, --norm-tap-so, or --no-commit to serve without a Commit")
     if opts.scheme == ROWS and int(opts.max_num_batched_tokens) % PORT_IDS:
         return (f"--scheme {ROWS} starts each step's stream with its step-input port, the step's ids in whole "
                 f"{step_rows.ROW_BYTES}-byte rows: pass --max-num-batched-tokens a multiple of {PORT_IDS}, not "
@@ -194,7 +198,7 @@ def scheme_refusal(opts: Any) -> str | None:
 
 def committer_args(opts: Any) -> SimpleNamespace:
     """What `pipeline.commit.make_committer` and `pipeline.commit_attach.attach_of_record` read of a Commit's options, for
-    `DECLARED_COMMITTER` under ``opts.scheme`` and the bench row's manifest ``opts.required_manifest``."""
+    `DECLARED_COMMITTER` under ``opts.scheme`` and the row's manifest ``opts.required_manifest``."""
     from verity_vllm.acquire.sources.taps import TapSources
 
     return SimpleNamespace(layout="chunk-leaf-v1", arena_mb=0, profile_hooks=False, pinned_populate_threads=None,
@@ -205,16 +209,8 @@ def committer_args(opts: Any) -> SimpleNamespace:
                            required_classes=None)
 
 
-def programs_root_of(opts: Any) -> str | None:
-    """The Build's row dir the manifest's partition and the attention record are read from: ``--programs-root``, else the
-    manifest's own directory."""
-    if opts.programs_root:
-        return opts.programs_root
-    return str(Path(opts.required_manifest).resolve().parent) if opts.required_manifest else None
-
-
 def manifest_of_record(opts: Any) -> dict[str, Any]:
-    """The bench row's required manifest, held to its partition of record (`commit.partition.require_partition`), as the Commit
+    """The row's required manifest, held to its partition of record (`commit.partition.require_partition`), as the Commit
     loads it."""
     from verity_vllm.commit.partition import require_partition
 
@@ -231,17 +227,17 @@ def parts_missing(com: Any, manifest: Mapping[str, Any], hidden_required: bool |
     return [p for p in want if not any(h == p or (p == "hidden_m1" and h.startswith(p)) for h in have)]
 
 
-def target_of(model: Any = None) -> dict[str, Any]:
+def target_of(model: Any = None, async_scheduling: bool = False) -> dict[str, Any]:
     """What the compiler's φ reads of the serving device: its target profile (`TargetProfile.from_device`) with, given the served
     ``model``, the int8 scope its layers run read back from them (`kernel_readback.int8_exact_of`: ``linears`` under
     ``--precision verity_int8``, which predict's Build of an exact-int8 checkpoint requires; a mixed scope is refused), and the
-    execution, bi-eager where vLLM runs batch-invariant (`vllm.envs.VLLM_BATCH_INVARIANT`)."""
+    execution, bi-eager where vLLM runs batch-invariant (`vllm.envs.VLLM_BATCH_INVARIANT`). The profile declares ``async_scheduling`` (LAG 1) only under it."""
     import vllm.envs as envs
 
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
     from verity_vllm.program.frontend.target_profile import TargetProfile
 
-    target = TargetProfile.from_device()
+    target = TargetProfile.from_device().with_overrides(**({"async_scheduling": True} if async_scheduling else {}))
     if model is not None:
         target = target.with_overrides(int8_exact=int8_exact_of(model))
     return {"target": target.to_json(), "execution": "bi-eager" if envs.VLLM_BATCH_INVARIANT else "eager"}
@@ -781,64 +777,3 @@ class Sealer:
 
     def summary(self) -> dict[str, Any]:
         return {"hold_bytes": self.hold_bytes, "held": self.held, "errors": self.errors[:10], "errors_n": len(self.errors)}
-
-
-class DiskFloor:
-    """The serve dir's filesystem kept above ``floor`` bytes free: a closed window is sealed only when its committed bytes (about
-    its bundle's size) and the bytes the seals still pending will write leave the floor free (`short`)."""
-
-    def __init__(self, path: str | Path, floor: int, usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
-        self.path, self.floor, self.usage = Path(path), int(floor), usage
-
-    def free(self) -> int:
-        return int(self.usage(self.path).free)
-
-    def short(self, nbytes: int, pending: int = 0) -> dict[str, Any] | None:
-        """None when a window of ``nbytes`` fits above the floor; else what was seen, for the window's record."""
-        free = self.free()
-        if free - int(pending) - int(nbytes) >= self.floor:
-            return None
-        return {"free_gb": round(free / GB, 1), "pending_gb": round(pending / GB, 1), "window_gb": round(nbytes / GB, 1),
-                "floor_gb": round(self.floor / GB, 1), "path": str(self.path)}
-
-    def refusal(self, window: int) -> str | None:
-        """Before serving: why the filesystem can't take one window of ``window`` bytes above the floor, else None."""
-        free = self.free()
-        if free >= self.floor + int(window):
-            return None
-        return (f"{self.path} has {free / GB:.0f} GB free, under the disk floor ({self.floor / GB:.0f} GB, --disk-floor-gb) plus one "
-                f"sealed window ({int(window) / GB:.0f} GB, --window-gb): free space there or lower them")
-
-
-class Watchdog:
-    """A thread that sleeps ``period_s`` at a time beside the engine: each wake ``min_s`` or more late is a pause, a line of
-    ``path`` (pauses.jsonl: when it ended, unix seconds as the step trace's ``t_end``, and how late). The engine's thread waits
-    as long for the GIL (or a core), so a pause is a stall of the step then running; the window's ``gc`` and the seals'
-    ``phases_s`` say what ran."""
-
-    def __init__(self, path: str | Path, *, period_s: float = 0.05, min_s: float = 0.2, clock: Callable[[], float] = time.perf_counter,
-                 sleep: Callable[[float], Any] = time.sleep, wall: Callable[[], float] = time.time) -> None:
-        self.path, self.period_s, self.min_s = Path(path), float(period_s), float(min_s)
-        self.clock, self.sleep, self.wall = clock, sleep, wall
-        self.late: list[float] = []
-        self.stopped = threading.Event()
-        self.thread = threading.Thread(target=self.run, name="serve-watchdog", daemon=True)
-
-    def run(self) -> None:
-        while not self.stopped.is_set():
-            t0 = self.clock()
-            self.sleep(self.period_s)
-            late = self.clock() - t0 - self.period_s
-            if late >= self.min_s:
-                self.late.append(late)
-                with open(self.path, "a") as fh:
-                    fh.write(json.dumps({"t_end": round(self.wall(), 3), "late_s": round(late, 3)}) + "\n")
-
-    def stop(self) -> None:
-        self.stopped.set()
-        if self.thread.is_alive():
-            self.thread.join()
-
-    def summary(self) -> dict[str, Any]:
-        return {"period_s": self.period_s, "min_s": self.min_s, "pauses": len(self.late),
-                "late_s": {"max": round(max(self.late, default=0.0), 3), "total": round(sum(self.late), 3)}}

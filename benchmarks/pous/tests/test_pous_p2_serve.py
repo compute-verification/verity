@@ -1,4 +1,4 @@
-"""The toy served from its P2 store under the remote bandwidth audit (`p2_v1/serve.py`): the decode-then-matmul engine
+"""The toy served from its P2 store under PoUB (`p2_v1/serve.py`): the decode-then-matmul engine
 gives the plaintext model's tokens, its receipts from the labels' partials are the reference's, an honest session is
 accepted with each window's openings answered before the next step, a step that skips a label's read is caught, and
 the kernel fixture keeps its pinned bytes and checks by hand."""

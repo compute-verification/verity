@@ -7,7 +7,7 @@
 gpu = "H200 SXM 141 GB (sm_90a)"
 sms = 132
 sms_source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'SMs 132'; the H200 data sheet states none (its peaks are H100 SXM5's); the device reports 132 (sheet.toml)"
-# Duo (provisional), LI (provisional), and RT-HOPPER's measured LI loop that folds its own wgmma accumulators.
+# Duo (provisional), LI (provisional), and the measured LI loop that folds its own wgmma accumulators.
 honest = ["dc90-l32", "dc90-li-l32", "dc90-licpw-redux-l32"]
 documents = [
   "DS: NVIDIA H200 data sheet (nvidia.com/en-us/data-center/h200), Technical Specifications, H200 SXM column; footnote 1 'Preliminary specifications', footnote 2 'With sparsity'",
@@ -555,7 +555,7 @@ native = "none on sm_90"
 exact = "–"
 isa = "PTX §9.7.14.5 kind::f8f6f4 and kind::mxf4nvf4 are sm_100a/sm_120a"
 
-# ---- FP8 atom semantics (PEARLC-MODEL) -----------------------------------------------------------------------------
+# ---- FP8 atom semantics --------------------------------------------------------------------------------------------
 
 [[fp8]]
 form = "wgmma m64nNk32 .f32.e4m3.e4m3 (QGMMA), and .e5m2"
@@ -696,12 +696,12 @@ name = "JI90_0"
 other = 0.981
 source = "census JI90_0: IGMMA.64x256x32 62.741 + every other warp instruction 0.981 SMSP-cycles (the DC census runs)"
 
-# ---- the units RT-UNITS lists outside the rates above: their rates, then a verdict a unit ---------------------
+# ---- the units outside the rates above: their rates, then a verdict a unit ----------------------------------
 # A reduction unit is an adding route d reads, at an upper bound where no run has timed it. Every 32-bit add it makes
 # moves a word through a shared-memory or L1 port (CPG 'Shared Memory': 32 banks, each 32 bits a clock), so 32 a
 # SM-clock bounds each. Every add moves more than one word (a read-modify-write, and a bulk reduction's source read),
 # so the true rate is lower: 32 over-allows the route, the safe side, and costs γ and ε at most what these routes
-# lower d by (RT-UNITS U12). Only TMA's bulk reduction takes no lane: one instruction moves a whole bulk.
+# lower d by. Only TMA's bulk reduction takes no lane: one instruction moves a whole bulk.
 
 [[rate]]
 key = "tensor.s8.sp"

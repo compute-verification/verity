@@ -11,14 +11,15 @@ import Proofs.Flock.Claims.Bridge.Custody
 /-!
 # (P2) and (P4) at the intended choice
 
-`KSBoundRoute` takes (P2, `Bound.Binds`) and (P4, `Bound.LastBinds`) at the deployed bound record, at every choice the
-code side makes. Here both are read at the intended choice.
+`KSBoundRouteCols` takes (P2, `Bound.Binds`) and (P4, `Bound.LastBindsEC` with `Bound.LastCoinFree`) at the deployed
+bound record, at every choice the code side makes. Here (P2) and (P4) as first stated are read at the intended choice.
 
 **(P2) holds** where the rows' digest input is the deployed one (`rowInDeployed`): `hm96-sha512/row/v1`'s
 `sha512_row_prefix(1, 16, n_words) ‖ row`, its first block `Flock.HmRow.rowPrefix` of a fixed 128 bytes, so the row is
 the rest (`binds_deployed`).
 
-**(P4) failed before S0** where the element-level verifier's steps are the deployed plain verifier's (`FlockDeploy.V
+**(P4) as first stated** (a collision wherever `final` reads two accepted last messages apart, retired for
+`LastBindsEC`) **failed before S0** where the element-level verifier's steps are the deployed plain verifier's (`FlockDeploy.V
 false`) and `final` keeps `DE`'s last message as it is. That last message is `Final.encode` of the statement, the
 record's text and the proof files, and the verifier read the record's text only through `Json.parse`
 (`Record.decodeWith`, `liveOf`, `recordDraw`: `LastGap.decodeWith_congr`, `liveOf_congr`, `recordDraw_congr`). The
@@ -26,8 +27,7 @@ text with one trailing space parses alike (`JsonTrailingSpace`, Lean's parser en
 `eof`), so it was another last message that `final` reads differently and `IVStar` decided alike, with the same calls.
 S0 closes that: the checks end with `RecordText.check`, which accepts a record only as `printT` of what it parses to,
 so the checks accept one text per record (`LastGap.checks_record_eq`) and refuse the trailing-space one
-(`LastGap.check_space`). `lastBinds_self` is what (P4) asks of a decision wherever the element-level verifier takes
-another last message alike.
+(`LastGap.check_space`).
 
 `JsonTrailingSpace` is a hypothesis, not a lemma: `Json.parse`'s `anyCore` is `partial`, so the kernel doesn't see its
 body. The rest is proved. -/
@@ -178,50 +178,6 @@ theorem ivstar_congr_snoc (Bd : Bound Coin Col T) {x : Msg} {as as' : List Msg} 
     Bd.IVStar.next x as' cs = Bd.IVStar.next x as cs := by
   simp only [Bound.IVStar, hlen, hfin, hfin', hdrop, hag]
 
-/-- **(P4) asks a collision of one decision** wherever `final` is free in the last element-level message
-(`hfree`) and the element-level verifier, at each last message it accepts, takes another one alike (`hnext`): the
-second last message gives a second accepted decision that `final` reads differently, with the same calls. -/
-theorem lastBinds_self [Fintype Coin] [Nonempty Coin] [DecidableEq Col] (Bd : Bound Coin Col T) (H : Msg → Msg)
-    (hfree : ∀ a os last, Bd.final a = some (os, last) → ∀ last', ∃ a', Bd.final a' = some (os, last'))
-    (hP4 : Bd.LastBinds H) {x : Msg} {as : List Msg} {cs : List Coin}
-    (hk : as.length = Bd.DE.V.k x) (hcs : cs.length = as.length)
-    (hnext : ∀ os last, Bd.final (as.getLastD []) = some (os, last) →
-      ((Bd.DE.V.next x (Bd.opened os last) (cs.take (os.length + 1))).eval H).1 = .acc →
-      ∃ last', last' ≠ last ∧
-        Bd.DE.V.next x (Bd.opened os last') (cs.take (os.length + 1)) =
-          Bd.DE.V.next x (Bd.opened os last) (cs.take (os.length + 1)))
-    (hacc : ((Bd.IVStar.next x as cs).eval H).1 = .acc) :
-    ∃ q ∈ ((Bd.IVStar.next x as cs).eval H).2.map Prod.fst,
-      ∃ q' ∈ ((Bd.IVStar.next x as cs).eval H).2.map Prod.fst, Collision H q q' := by
-  obtain ⟨os, last, hfin, hlen, hag⟩ := ivstar_acc Bd H hk hacc
-  have hl := agrees_last Bd H (ms₀ := os.map (fun o => Bd.join (o.map Prod.fst))) (l := last) hag
-  rw [List.length_map] at hl
-  obtain ⟨last', hne, hn⟩ := hnext os last hfin hl
-  have hag' : Bd.agrees x (Bd.opened os last') cs = Bd.agrees x (Bd.opened os last) cs := by
-    apply agrees_snoc Bd
-    rw [List.length_map]
-    exact hn
-  obtain ⟨a', ha'⟩ := hfree _ os last hfin last'
-  have hlen' : (as.dropLast ++ [a']).length = as.length := by
-    rw [List.length_append, List.length_dropLast, List.length_singleton]
-    omega
-  have hdrop : (as.dropLast ++ [a']).dropLast = as.dropLast := List.dropLast_concat
-  have hfin' : Bd.final ((as.dropLast ++ [a']).getLastD []) = some (os, last') := by
-    rw [List.getLastD_concat]
-    exact ha'
-  have hIV := ivstar_congr_snoc Bd hlen' hdrop hfin hfin' hag'
-  have hne' : Bd.final (as.getLastD []) ≠ Bd.final ((as.dropLast ++ [a']).getLastD []) := by
-    rw [hfin, hfin']
-    intro h
-    exact hne (Prod.ext_iff.1 (Option.some.inj h)).2.symm
-  have hacc' : ((Bd.IVStar.next x (as.dropLast ++ [a']) cs).eval H).1 = .acc := by
-    rw [hIV]
-    exact hacc
-  obtain ⟨q, hq, q', hq', hc⟩ :=
-    hP4 x as (as.dropLast ++ [a']) cs cs hk hlen' hcs hcs hdrop.symm rfl hne' hacc hacc'
-  rw [hIV, List.map_append, List.mem_append, or_self] at hq hq'
-  exact ⟨q, hq, q', hq', hc⟩
-
 end Claims.Recursion.LastGap
 
 namespace RecDeploy.LastGap
@@ -276,7 +232,8 @@ theorem checks_record_eq {zk : Bool} {s : FlockDeploy.Ins} {spec : _root_.Flock.
 
 /-- **S0 refuses the trailing-space record**: where the record's text is accepted, the same text with one trailing
 space, which `Json.parse` reads alike (`JsonTrailingSpace`), is refused. Before S0 the deployed verifier decided the two
-alike, which refuted `Bound.LastBinds` at the deployed bound record. -/
+alike, which refuted (P4) as first stated (a collision wherever `final` reads two accepted last messages apart) at the
+deployed bound record. -/
 theorem check_space (hws : JsonTrailingSpace) {r : String} (hc : _root_.Flock.RecordText.check r = .ok ()) :
     _root_.Flock.RecordText.check (r ++ " ") ≠ .ok () := by
   intro h'

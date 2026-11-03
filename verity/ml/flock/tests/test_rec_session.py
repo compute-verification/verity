@@ -82,7 +82,7 @@ def test_the_holo_schedule_gives_h_a_round_after_z_partials_coinless_one(shape):
     assert holo[:k] + holo[k + 2:] == plain[:k] + plain[k + 1:]
     hs = A.Shape(m, k_log, claims, holo=True)
     assert [e for *_, e in holo if e] == [len(r) for r in A.rounds(hs)] and A.h_round(hs) == sum(1 for *_, e in holo[:k + 1] if e)
-    c = A.Coins([[1], [], [2, 3]])
+    c = A.CoinSource([[1], [], [2, 3]])
     assert (c.vec(1), c.vec(0), c.vec(2)) == ([1], [], [2, 3])
     sch = RL.schedule_for({"dense_m": m, "k_log": k_log, "nbl": 3, "regions": (claims - 2) // 2}, holo=True)
     assert sch["streams"]["circuit/rep0"]["rounds"] == len(plain) + 1

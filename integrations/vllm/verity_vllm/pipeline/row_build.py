@@ -16,8 +16,8 @@ from verity_vllm.program import prefix_plan as PP
 
 
 def required_manifest(row: Any, stage: str, digest: Callable[[], str] | None = None) -> int | None:
-    """Build the required-value manifest of record (the query of record over the Build's request Programs, under the tap and
-    guarded-max policies the row runs: all by default, NORM_TAP=0 etc. for A/B only) -> 0 | 3 | 1.  `digest`: the workload digest,
+    """Build the required-value manifest of record (the query of record over the Build's request Programs, under the tap
+    policies the row runs: all by default, NORM_TAP=0 etc. for A/B only) -> 0 | 3 | 1.  `digest`: the workload digest,
     asked for once a batch's manifest has started (`build-global --workload-digest -`), so its components build while the workload
     Program composes; "" (no workload Program) -> None, and no manifest."""
     wd = ""

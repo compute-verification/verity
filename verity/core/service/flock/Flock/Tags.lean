@@ -246,7 +246,16 @@ def outRowsV2Identity (id : Json) : Json :=
       "the circuit; the public file has no output word"))
   else id
 
-/-- `verity/flock-circuit` (PR #83 from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
+/-- A hidden-output statement with pinned outputs (META `pinned_outputs`): `outputs` names them, as the prover's does; a
+statement without them keeps its identity. -/
+def pinnedIdentity (id : Json) : Json :=
+  if (id.getObjVal? "outputs").toOption.isSome then
+    id.setObjVal! "outputs" (s ("hidden: each output port an hm96-sha512/row/v2 row (each run of output ports in META " ++
+      "out_row_ports one bit row of their words), hashed in the circuit, but the last output ports, META pinned_outputs, " ++
+      "which have no row: each of their bits a copy of a forced-zero row; the public file has no output word"))
+  else id
+
+/-- `verity/flock-circuit` (the circuit prover from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
 every identity and binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. -/
 def circuitEb90718f : Tags :=
   { circuit631567f7 with
@@ -422,18 +431,50 @@ def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit6315
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)
 
+/-- The templated statement's name (`circuitTmpl`, `isTmpl`). -/
+def tmplName : String := "verity/flock-circuit/tmpl"
+
 /-- `verity/flock-circuit/tmpl`: `verity/flock-circuit`'s statement with its unit a `flock-ir-tmpl/v2` template
 and a layout mode in META (`HmOut.parseTmpl`), which the verifier unrolls and folds from the template
 (`Stmt.partialRangesT`). The identity and the statement digest's leading tag name it, with its own Σ tag and domain. -/
 def circuitTmpl : Tags :=
   { circuit with
-    name := "verity/flock-circuit/tmpl", statement := "verity/flock-circuit/tmpl", fileFormat := "flock-circuit/tmpl",
+    name := tmplName, statement := "verity/flock-circuit/tmpl", fileFormat := "flock-circuit/tmpl",
     sigmaTag := "verity/flock-circuit/tmpl/sigma", domainPrefix := "flock-circuit-tmpl/fast100x2/rep",
     identity := identityHidden false "verity/flock-circuit/tmpl" (leafScheme := leafSchemeHm96Os) }
 
-/-- The templated statements, which no soundness theorem covers yet: `verify` runs every check of a session and then
-refuses it, so they are outside `all` and `find?`, which the proofs read. -/
+/-- The templated statements: a circuit file whose unit `HmOut.parseTmpl` reads from its template. `verify` reads them by
+name (`isTmpl`), beside `all` and `find?`; its statement check passes them only in the form `ProvedScope.scopeOkT`
+covers. -/
 def templated : List Tags := [circuitTmpl]
+
+/-- A templated statement's tags (`templated`, by name, as `verify` reads them). It compares the name alone: building
+`circuitTmpl` would hash its identity's default key (`leafSchemeHm96Os`) inside the compiled verifier. -/
+def isTmpl (t : Tags) : Bool := t.name == tmplName
+
+/-- The tags `--statement` names, as `verify` and `statement` read them: a statement of `all` (`find?`), else a templated
+one (`templated`). -/
+def byName? (name : String) : Option Tags := find? name <|> templated.find? (·.name == name)
+
+theorem byName?_of_find? {name : String} {t : Tags} (h : find? name = some t) : byName? name = some t := by
+  unfold byName?
+  rw [h]
+  rfl
+
+/-- The tags a name names carry that name. -/
+theorem byName?_name {name : String} {t : Tags} (h : byName? name = some t) : t.name = name := by
+  unfold byName? at h
+  cases hf : find? name with
+  | some t' =>
+    rw [hf] at h
+    change some t' = some t at h
+    cases h
+    unfold find? at hf
+    simpa using List.find?_some hf
+  | none =>
+    rw [hf] at h
+    change templated.find? (·.name == name) = some t at h
+    simpa using List.find?_some h
 
 end Tags
 

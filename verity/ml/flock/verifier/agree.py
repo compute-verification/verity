@@ -4,7 +4,7 @@
         --public F [--registered F] [--tables DIR] [--stratified K] [--zk] [--session-tables J] [--expect FILE]... [--lean-refuses WHY] \
         [--lean-refuses-drawn WHY] [--lean-refuses-drawless WHY] [--jobs J] --out DIR --sessions DIR...
 
-`--upstream` is PR #83's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
+`--upstream` is M0's binary built with the vectors patch (`netlist-vectors.patch` at 9294e161, `flock-netlist`;
 `circuit-vectors.patch` at 19c7269a, `flock-circuit`): its `replay` subcommand is upstream's offline verdict. Each
 `--expect` file is a list of `{"name", "expect": {"accepted", "why"}}` (`redigest.py`'s `mutants.json`); a session's name
 is its directory's basename, and `why` is a prefix of the Lean verifier's reason. An expectation may add
@@ -48,7 +48,7 @@ def groups(a):
 
 
 def drawn(s):
-    """The session's record carries a unit draw (PR #83 from eb90718f)."""
+    """The session's record carries a unit draw (M0 from eb90718f)."""
     try:
         return bool(json.loads((Path(s) / "session.json").read_text()).get("unit_draw"))
     except (OSError, ValueError):

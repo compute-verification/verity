@@ -1,7 +1,7 @@
-// DC-DESIGN r2 on Hopper (sm_90a, H200): the rows the H200 design reads (JI90_0..2, JPA90_0/1, JPI90_0/1, issue, M)
-// against FACET-BREAK r3's sm_120 break (few accumulators, one-read lanes by an immediate, 2 warps a SMSP, note:
-// 20261017T0524Z-draft-eps1-facet-break) moved beside wgmma, and the wgmma kinds the design's menu clause reads (f16,
-// tf32, s8 RS) in honest's shape. Built and gated like sm90_wgmma.cu (run.sh sm90jb).
+// Hopper (sm_90a, H200): the rows the H200 design reads (JI90_0..2, JPA90_0/1, JPI90_0/1, issue, M) against
+// facet_break's sm_120 break (few accumulators, one-read lanes by an immediate, 2 warps a SMSP) moved beside wgmma, and
+// the wgmma kinds the design's menu clause reads (f16, tf32, s8 RS) in honest's shape. Built and gated like
+// sm90_wgmma.cu (run.sh sm90jb).
 //   jb_<form>_s<NS>u<U>p<P>_<lane>c<C>_r<R>_w<W>
 //       W warpgroups (W warps a SMSP), each: U x NS commit groups an iteration, group g 4 wgmma of <form> into accumulator
 //       set g mod NS, then R lane ops (P 0) or R/4 after each wgmma (P 1), then wait_group NS-1 (NS = 1: honest's shape)

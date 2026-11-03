@@ -1,4 +1,4 @@
-"""A seed is minted only by PoUW's `seeds.py` (circuits' condition for dropping the seed-confinement rule, CIR-77).
+"""A seed is minted only by PoUW's `seeds.py` (the condition for dropping the seed-confinement rule).
 
 `ml.circuits.ports` gives a Definition the seed role (`ports._coin_role`) when it has a coin port and an
 `In(kind="position")` port and no sink in its return, and no port rule follows a seed's output: what it reaches is the

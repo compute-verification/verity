@@ -2,7 +2,7 @@ import Proofs.Pous.P2.Count
 import Proofs.Pous.TrackA.A3Prime
 
 /-!
-# The certificate in model M1 (`Pous.m1`), from `p2/P2Meets.lean`
+# The certificate in model M1 (`Pous.m1`)
 
 `m1`'s correctness and sizes; `gammaA2`, A2's bound at a domain of `2^ℓ` points; the certificate `P2Row`, `A7Row`'s log
 form, which closes the history union at `λ' = 128` (`hist_gamma_le`); and `meets_m1_of_row`, `Meets` for `m1` given the

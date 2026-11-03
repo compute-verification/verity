@@ -1,6 +1,6 @@
 # DS-80: the sm_80 rows the data sheet and the ISA documents imply alone: issue, the tensor peak, the Programming
-# Guide's pipe throughputs and shared memory's bandwidth, at their exact values. No measured row, no joint row: what
-# EPS1's ε is with the measured facets replaced by the axioms.
+# Guide's pipe throughputs and shared memory's bandwidth, at their exact values. No measured row, no joint row: it
+# reads ε with the measured facets replaced by the axioms.
 name = "DS-80"
 epoch = "AMPERE-80"
 summary = "sm_80 on the data sheet alone: DS_issue, DS_tensor, DS_alu, DS_fma, DS_xu, DS_shfl, DS_smem"

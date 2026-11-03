@@ -36,7 +36,8 @@ def test_the_declaration_names_check_pys_jobs_in_their_groups_and_order(tmp_path
 def test_check_runs_the_groups_order_and_halts_as_they_were_before_ci_toml_held_them(tmp_path):
     runs = [[name for name, _argv, _cwd in g] for g in CHECK.groups(tmp_path, 2)]
     assert runs == [["pytest"], ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
-                    ["lean-build", "lean-unit-cut", "lean-agreement"], ["lean-audit"], ["lean-changed"], ["lean-suites"]]
+                    ["lean-build", "lean-unit-cut", "lean-agreement"], ["lean-audit"], ["lean-changed"], ["lean-suites"],
+                    ["ratchet-gate"]]
     assert CHECK.HALTS == {"lean-changed"} and CHECK.HALTS_ON == {"flock-circuit-build": "error: could not compile"}
     assert CHECK.AFTER == {"lean-suites": "lean-build"}
 
@@ -68,6 +69,14 @@ def test_a_well_formed_job_parses_with_its_defaults():
     assert j == D.Job("a", "ci", 1)
 
 
+def test_a_sharded_job_s_parts_are_its_shards_and_without_shards_it_runs_whole():
+    (j,) = _parse('[[job]]\nname = "circuit-check"\nowner = "ci"\ngroup = 1\nshards = 3\n')
+    assert j.shards == 3 and D.job_parts(j, {}) == ["1/3", "2/3", "3/3"]
+    assert D.all_parts([j], {}) == ["circuit-check:1/3", "circuit-check:2/3", "circuit-check:3/3"]
+    (whole,) = _parse('[[job]]\nname = "circuit-check"\nowner = "ci"\ngroup = 1\n')
+    assert D.job_parts(whole, {}) is None and D.all_parts([whole], {}) == ["circuit-check"]
+
+
 @pytest.mark.parametrize("body, why", [
     ('[[job]]\nname = "a"\nowner = "ci"\n', "missing group"),
     ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\nshape = "big"\n', "unknown keys ['shape']"),
@@ -82,9 +91,35 @@ def test_a_well_formed_job_parses_with_its_defaults():
     ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 1\nafter = "a"\n', "in its own group"),
     ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\nafter = "c"\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\nafter = "a"\n'
      '[[job]]\nname = "c"\nowner = "ci"\ngroup = 3\n', "which itself waits on 'c'"),
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\nshards = 4\n', "shards is N >= 1, for circuit-check alone"),
+    ('[[job]]\nname = "circuit-check"\nowner = "ci"\ngroup = 1\nshards = 0\n', "shards is N >= 1"),
+    ('[[job]]\nname = "circuit-check"\nowner = "ci"\ngroup = 1\nshards = "4"\n', "shards must be int"),
 ])
 def test_a_malformed_declaration_is_refused_with_the_reason(body, why):
     with pytest.raises(D.DeclarationError, match=why.replace("[", r"\[").replace("]", r"\]").replace("(", r"\(")):
+        _parse(body)
+
+
+def test_a_job_off_the_gate_parses_and_ci_toml_takes_circuit_check_and_ratchet_gate_off_it():
+    """circuit-check runs after landing, off the gate, until `circuit-check --all` fits inside the rest of the check; ratchet-gate
+    runs there too, reporting without blocking a merge, and no plan names it."""
+    a, b = _parse('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\n')
+    assert (a.gate, b.gate) == (False, True) and D.gated([a, b]) == [b]
+    assert [j.name for j in D.load() if not j.gate] == ["circuit-check", "ratchet-gate"]
+    assert CHECK.OFF_GATE == ("circuit-check", "ratchet-gate")
+    assert not any("ratchet-gate" in shard for plan in D.plans().values() for shard in plan)
+
+
+@pytest.mark.parametrize("body, why", [
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = "no"\n', "gate must be bool"),
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\nmerge_requires = ["x/"]\n', "merge_requires on a job off the gate"),
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 1\nneeds = ["a"]\n',
+     "job b is on the gate and waits on a, which is off it"),
+    ('[[job]]\nname = "a"\nowner = "ci"\ngroup = 1\ngate = false\n[[job]]\nname = "b"\nowner = "ci"\ngroup = 2\nafter = "a"\n',
+     "job b is on the gate and waits on a, which is off it"),
+])
+def test_a_job_off_the_gate_that_a_merge_or_a_job_on_it_would_need_is_refused(body, why):
+    with pytest.raises(D.DeclarationError, match=why):
         _parse(body)
 
 
@@ -134,7 +169,7 @@ def test_a_step_declared_after_a_step_that_failed_is_stopped_without_starting(tm
 def test_each_part_runs_its_jobs_and_what_they_need_and_the_parts_cover_every_job():
     assert all(j.part in D.PARTS for j in D.load())
     jobs = CHECK.JOBS
-    assert D.select(jobs, ["tests"]) == {"pytest", "lean-suites", "lean-build"}
+    assert D.select(jobs, ["tests"]) == {"pytest", "lean-suites", "lean-build", "ratchet-gate"}
     assert D.select(jobs, ["circuits"]) == {"flock-circuit-build", "circuit-check", "flock-rust-tests"}
     assert D.select(jobs, ["lean"]) == {"lean-build", "lean-unit-cut", "lean-agreement", "lean-audit", "lean-changed"}
     assert D.select(jobs, list(D.PARTS)) == {j.name for j in jobs}

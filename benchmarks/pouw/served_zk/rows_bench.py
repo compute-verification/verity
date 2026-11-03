@@ -90,9 +90,7 @@ def slots(heads: list[bytes]) -> bytes:
 def node_head(dom: MK.CommitmentDomain, level: int, index: int) -> bytes:
     """The bytes of a frame-v3-sha512 node's message before its left child: the node is SHA-512(head ‖ left ‖ u64be 64 ‖
     right) (merkle's `_message`)."""
-    parts = (dom.domain_id, MK._uint(level), MK._uint(index))
-    return (MK._FRAME + len(MK._NODE).to_bytes(4, "big") + MK._NODE + b"".join(len(p).to_bytes(8, "big") + p for p in parts)
-            + (64).to_bytes(8, "big"))
+    return MK._message(MK._NODE, dom.domain_id, MK._uint(level), MK._uint(index)) + (64).to_bytes(8, "big")
 
 
 def constants(h) -> dict:

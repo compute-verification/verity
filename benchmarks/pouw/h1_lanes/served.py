@@ -1,6 +1,6 @@
 """served.py extract|prepare|summarize: one unit a served H1 window's own draw selected (`h1_prove/served.py`, core's
 `credit.drawn` on the window's signed draw coin), proved as its 32 lanes (`h1zy.PouwH1LaneZy_v1`, option A, run.py's lane
-statement) from the window's committed values, each lane one C-Flock --zk statement whose rows open the window's own
+statement) from the window's trace, each lane one C-Flock --zk statement whose rows open the window's own
 registered tables at the rows the verifier reads them.
 
 * **extract** (the H1 venv: it unpickles the prover's saved window, whose classes import torch). From the window's record
@@ -312,7 +312,7 @@ def statement(ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dict) -> d
     kr = L.known_rows(ctx, sw, LL.LANE, ln, ln)
     vk = {p: PR.known_port(ctx.prog, v, row, salt, sw.registration, schema=V2) for p, (v, row, salt) in kr.items()}
     reads = {"format": G.READS, "ports": {**{p: PR.port(v, e, e["root"], [row], V2) for p, (v, e, row) in entries.items()},
-                                          **{p: kp for p, (kp, _) in vk.items()}}, LL.COMPLETE: True}
+                                          **{p: kp for p, (kp, _) in vk.items()}}}
     want = expected(sw, ln, ins)
     v_ok, row_ok, salt_ok = kr[LL.OK]
     outs = {LL.OK: L.known_opening(ctx, sw, v_ok, row_ok, salt_ok)}
