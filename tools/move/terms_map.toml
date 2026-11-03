@@ -220,24 +220,28 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_r
 
 [keep]
 # A domain tag or format id, a note, an artifact, a branch, a lane. Then what recorded data or another system reads: a
-# quoted lowercase token (a record key or a key path, a reason code, a role, a run's output file, a line of a server's
-# protocol: `"draws"`, `"public.draw.units"`, `"draw-outside-the-partition"`, `"firewall"`, `"draw.json"`, `b"draw\n"`;
-# a capitalized one is a Lean name and follows it, and so do a path, a dotted Python module, a tracked source file's
-# name, an f-string's code, and an attribute set or read by name or a keyword passed as a dict, which follow their
-# Python names),
-# the recursion runs' mode and the deployment's party `firewall` where shell, a flag's value or a message spells it
-# bare (`MODES=firewall`, `--modes firewall`, `(firewall)`, `dials firewall`), a coin's label (`"pouw/draw"`), an upper-case snake-case name (an environment variable
-# or a constant: `FC_FIREWALL`, `CR_N2_DRAW`, `FLOCK_DRAW_LAW`), a run's output file after a path, the systemd slice
-# `firewall.slice`, a kebab-case name or a CLI flag (`--draw`, `--firewall-state`, `flock-firewall`, `core-firewall`,
-# `verity-core-firewall`, `drawn-unit-bundle`) and the attribute argparse makes of a flag (`a.draw`; not the profile's
-# `a.draws`; a compound one such as `replay_draw` or `draw_k`, also a record's field, everywhere), the refusal `FIREWALL-REFUSED`, the stored label `C-Flock`, the audit record's
-# `wrong_units`, `proof_unit` and the `"proof-unit"` kind, the package directory `verity/core/service/firewall`, the
-# namespace `Accounting.Remote.Draw` and the structure `Accounting.TS.DrawnLayer` (names under them are renamed here, so
-# `check.py --moved` reads each back only if the prefix is renamed in a move of its own), `law`
-# where it touches a name (GLOSSARY.md keeps `law` identifiers), the other senses of law and draw (a power law, the law
-# of large numbers, nvidia-smi's `power.draw`), the `round_digest` strings and the label `replay_set=warden/re-verify`,
-# and the names PoUB's kept `draw` shares with the rest of the tree: `draw_salt` (PoUS's and the bandwidth audit's) and the
-# guarantee `drawIsSubset` (`--moves` renames a guarantee by its lock's path, not its file's)
+# quoted lowercase token, escaped inside a string too (a record key or a key path, a reason code, a role, a run's output
+# file, a line of a server's protocol: `"draws"`, `"public.draw.units"`, `\"drawn\"`, `"firewall"`, `"draw.json"`,
+# `b"draw\n"`; a capitalized one is a Lean name and follows it, and so do a path, a dotted Python module, a tracked source
+# file's name, an f-string's code, pytest's argnames, an attribute set or read by name and a keyword passed as a dict,
+# which follow their Python names), a two-part id (`"pouw/draw"`, the claim `uniform/flock-coin-server`), an upper-case
+# snake-case name (an environment variable or a constant: `FC_FIREWALL`, `CR_N2_DRAW`, `FLOCK_DRAW_LAW`), a run's output
+# file after a path, the systemd slice `firewall.slice`, a kebab-case name or a CLI flag (`--draw`, `--firewall-state`,
+# `flock-firewall`, `verity-core-firewall`, `drawn-unit-bundle`), the attribute argparse makes of a flag (`a.draw`,
+# `inner.draw`; not the profile's `a.draws` or a Lean `a.draw = `), a record key a Python name builds (`drawn_at`,
+# `checks_before_draw` and the rest of that list, a keyword of `.update(`, `replay_draw`, `draw_k`) everywhere; the
+# deployment's party and the recursion runs' mode `firewall` where shell, a flag's value or a message spells it bare
+# (`MODES=firewall`, `--modes firewall`, `(firewall)`, `dials firewall`, `listen: firewall`, `GATE_ABSENT=firewall`), a5's
+# coin family (`need 26 draw coins`), the module `verity_flock.firewall` (`python -m` runs it), the refusal
+# `FIREWALL-REFUSED`, the stored label `C-Flock`, the audit record's `wrong_units`, `proof_unit` and the `"proof-unit"`
+# kind, the package directory `verity/core/service/firewall`; the structure `Accounting.TS.DrawnLayer` and its projection
+# (names under it are renamed here, so `check.py --moved` reads each back only if the prefix is renamed in a move of its
+# own); `law` where it touches a name (GLOSSARY.md keeps `law` identifiers); the other senses of law and draw (a power
+# law, the law of large numbers, nvidia-smi's `power.draw`, a game's coin `Game.draw` and `Plays.drawVec`, which beside
+# Flock's `Transcript.sample` would be ambiguous), the `round_digest` strings and the label `replay_set=warden/re-verify`;
+# and what PoUB's kept `draw` names or shares with the rest of the tree: its modules (`Accounting.Remote.Draw`,
+# `RemoteDraw`, `RemoteHeld.Draw`), `draw_salt` (PoUS's and the bandwidth audit's) and the guarantee `drawIsSubset`
+# (`--moves` renames a guarantee by its lock's path, not its file's)
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
             '(?<![\w\\])(?<!parametrize\()(?<!r\(coins, )(?<!__\(self, )(?<!r\(OR, )(?<!r\(PHC, )(?<!r\(SVC, )(?<!r\(V\.D, )(?<!r\(plan_module, )(?<!\("coins", )[rbfRBF]{0,2}([\x22\x27])(?![A-Z])(?!drawn\1: tuple\()(?!(?:verity|research|circuit_check|cluster|benchmarks|tools|integrations|examples|demos|tests|infra)\w*\.)[^\s\x22\x27/{]*?(?i:draw|law|firewall|coin.server|_units?\b|faulty|δ_?link)[^\s\x22\x27/{]*(?<!\.py)(?<!\.sh)(?<!\.rs)(?<!\.lean)(?<!\.md)(?<!\.toml)\1',
             '\\[\x22\x27](?![A-Z])[^\s\x22\x27\\/{]*?(?i:draw|law|firewall|coin.server|_units?\b|faulty|δ_?link)[^\s\x22\x27\\/{]*\\[\x22\x27]',
@@ -247,7 +251,7 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
             '(?<![\w-])-{0,2}(?:\w+-)+\w*(?i:draw|law|firewall)\w*(?:-\w+)*(?![\w-])',
             '(?<![\w-])-{0,2}\w*(?i:draw|law|firewall)\w*(?:-\w+)+(?![\w-])',
             '(?<![\w-])--\w*(?i:draw|law|firewall)\w*(?![\w-])',
-            '(?<!a\.sizes, )\ba\.(?:draw|draws|drawn|undrawn|law|firewall)\b',
+            '(?<!a\.sizes, )\ba\.(?:draw|draws|drawn|undrawn|law|firewall)\b(?! = )',
             '\b(?:draw_k|draw_file|draws_dir|fresh_draws|os_draws|lean_refuses_drawn|lean_refuses_drawless|rec_inner_draw|replay_draw)\b',
             '\b(?:drawn_at|checks_before_draw|unit_draw|draw_counts|draw_coin|draw_after|served_is_lean_draw|draw_reason|draws_scan)\b',
             '\bdraw_salt\b', '\bdrawIsSubset\b', '\bverity_flock[./]firewall\b', '(?<=from verity_flock import )firewall\b',
@@ -255,7 +259,11 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
             '\bGATE_(?:ABSENT|PEERS|ROLE)=[^\x22\x27\n]*',
             '\b(?:FC|H1S?)_[A-Z0-9_]*FIREWALL[A-Z0-9_]*', 'FIREWALL-REFUSED', '[\x22\x27]C-Flock[\x22\x27]',
             '\bwrong_units\b', '\bproof_unit\b', '[\x22\x27]proof-unit[\x22\x27]', '\bservice/firewall\b',
-            '(?<!import Definitions\.Accounting\.)\bRemote\.Draw\b', '\bDrawnLayer\b',
+            '\bRemote\.Draw\b', '\bRemoteDraw\b', '\bRemote(?:Held|Audit)[./]Draw(?:Meets)?\b', '\b(?:to)?DrawnLayer\b',
+            '\bGame\.draw\b', '\bdrawVec\b',
+            '(?<=\.update\()(?:draw|draws|drawn|firewall)(?==)', '\b(draw|draws|drawn)(?==\w+\[\x22\1\x22\])',
+            '(?<=\]\}, )draw(?==union_draw\[)', '\bdrawn(?==draws, exclusion_tiles)', '(?<=subcircuit=sub\.id, )draws(?==)',
+            '(?<=rounds=len\(got\), )draws(?==)',
             '(?<=[\w.:/`-])[Ll]aws?\b|\b[Ll]aws?(?=[\w/(`-]|\.\w)',
             '\bpower[._ -]draws?\b', '(?i:\bpower draws?\b)', '(?i:power[- ]laws?|laws? of large numbers)',
             "(?:Amdahl|Moore|Little|Zipf|Kerckhoffs)'s laws?", 'round_digest[^\n]*', 'replay_set=warden/re-verify',
@@ -271,11 +279,14 @@ strings = []
 "verity/ml/flock/python/verity_flock/firewall.py" = ["firewall"]
 "benchmarks/numerical/python/verity_numerical/bench/placement.py" = ["firewall"]
 "benchmarks/numerical/tests/bench/test_placement_gate.py" = ["firewall"]
-"verity/core/protocols/remote_bandwidth/**" = ["draw", "draws"]
-"benchmarks/remote_session/**" = ["draw", "draws"]
-"Security/Properties/RemoteAudit*" = ["draw", "draws"]
-"Security/Proofs/Properties/RemoteAudit*" = ["draw", "draws"]
-"Security/*Accounting*Remote*" = ["draw", "draws"]
+"Security/Definitions/Core/Game.lean" = ["draw"]
+"Security/Definitions/Flock/Game.lean" = ["draw"]
+"benchmarks/pouw/clear/clear_audit.py" = ["drawn"]
+"verity/core/protocols/remote_bandwidth/**" = ["draw", "draws", "Draw", "Draws"]
+"benchmarks/remote_session/**" = ["draw", "draws", "Draw", "Draws"]
+"Security/Properties/RemoteAudit*" = ["draw", "draws", "Draw", "Draws"]
+"Security/Proofs/Properties/RemoteAudit*" = ["draw", "draws", "Draw", "Draws"]
+"Security/*Accounting*Remote*" = ["draw", "draws", "Draw", "Draws"]
 "benchmarks/pous/p2_v1/**" = ["draws"]
 "benchmarks/pous/held_bandwidth.py" = ["draws"]
 "benchmarks/one_stage/a7.py" = ["draws"]
