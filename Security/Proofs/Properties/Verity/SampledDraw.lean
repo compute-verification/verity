@@ -17,11 +17,12 @@ released after the registration's digest.
   `ξ` (`Drew`): under the law and population its parameters and record name (`LawOf`), `Draw.drawUnits` on `ξ` ends
   with those units (`checkBlobsAt_checkAt`, `checkAt_drew`, `coinsReason_none`, `drawnFrom_ok`).
 * **What the read log shows** (`DrawRead`): what the draw asks of the sampled check's read of the device's log
-  (`Vocab.coinsRead .sampled`). Wherever v2 accepts at `ξ` under the challenger `dr`, the log it reads holds `ξ`'s bits
-  at the start of the coins of `dr`'s family released after `dr`'s digest (`ShowsDraw`, `freshCoins`). Under `Logged`
-  that log is the play's (`shows_of_logged`). The draw reads `coinsRead` through `DrawRead` alone, so it holds at any
-  definition of `coinsRead` that meets it, and a log shows the draws of any log whose coins of the draw's family after
-  its digest start its own (`ShowsDraw.mono`).
+  (`Vocab.coinsRead .sampled`). Wherever the composite accepted what the prover sent (`Verity.SameAccepts`) and v2
+  accepts in it at `ξ` under the challenger `dr`, the log it reads holds `ξ`'s bits at the start of the coins of `dr`'s
+  family released after `dr`'s digest (`ShowsDraw`, `freshCoins`). Under `Logged` that log is the play's
+  (`shows_of_logged`). The draw reads `coinsRead` through `DrawRead` alone, so it holds at any definition of
+  `coinsRead` that meets it (`Proofs.Properties.Verity.SampledRead`'s `readLog` does), and a log shows the draws of any
+  log whose coins of the draw's family after its digest start its own (`ShowsDraw.mono`).
 * **The bytes** (`append_of_bitsOf_prefix`, `fresh_prefix_coinBytes`): bytes whose bits start another's bits are its
   prefix, and coins at the start of a sample's coins have their bits at the start of the sample's bytes (`coinBytes`).
 * **A draw reads a prefix of its bytes** (`drawUnits_append`): a draw that ends on some bytes ends the same, having read
@@ -423,11 +424,12 @@ theorem ShowsDraw.mono {log log' : List Verity.Release} {dr : Draws} {ξ : ByteA
   rw [← ht, List.flatten_append]
 
 /-- **What the draw asks of the sampled check's read of the device's log** (`read`, `Vocab.coinsRead .sampled`):
-wherever v2's case accepts in what the prover sent composite `k` at the coins `ξ` it read under the challenger `dr`,
-the read returns a log that shows the draw there (`ShowsDraw`). -/
+wherever composite `k` accepted what the prover sent as a `same` composition (`Verity.SameAccepts`) and v2's case in it
+accepts at the coins `ξ` it read under the challenger `dr`, the read returns a log that shows the draw there
+(`ShowsDraw`). -/
 def DrawRead (k : Verity.Registration.Composite) (read : Verity.Sent → Option (List Verity.Release)) : Prop :=
-  ∀ s a b e p c ev ξ dr, V2Case k s a b e → V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr →
-    ∃ log, read s = some log ∧ ShowsDraw log dr ξ
+  ∀ s a b e p c ev ξ dr, Verity.SameAccepts k s → V2Case k s a b e →
+    V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr → ∃ log, read s = some log ∧ ShowsDraw log dr ξ
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
@@ -443,9 +445,10 @@ theorem drawRead_deployed {V : Vocab d α} {K : Constructions V} {S : ByteArray 
 theorem shows_of_logged {V : Vocab d α} {k : Verity.Registration.Composite} (hR : DrawRead k (V.coinsRead .sampled))
     {o : Verity.Exchange} {a b e : ByteArray} {p : _root_.SampledProofs.OneStageZk.Params}
     {c : _root_.SampledProofs.OneStage.Commitment} {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray}
-    {dr : Draws} (hcase : V2Case k o.sent a b e) (hacc : V2Accepts (Core.Blobs.ofArray o.sent.blobs) a b e p c ev ξ dr)
-    (hl : V.Logged .sampled o) : ShowsDraw o.log dr ξ := by
-  obtain ⟨log, hlog, hs⟩ := hR o.sent a b e p c ev ξ dr hcase hacc
+    {dr : Draws} (hS : Verity.SameAccepts k o.sent) (hcase : V2Case k o.sent a b e)
+    (hacc : V2Accepts (Core.Blobs.ofArray o.sent.blobs) a b e p c ev ξ dr) (hl : V.Logged .sampled o) :
+    ShowsDraw o.log dr ξ := by
+  obtain ⟨log, hlog, hs⟩ := hR o.sent a b e p c ev ξ dr hS hcase hacc
   rw [← hl log (Option.mem_def.2 hlog)]
   exact hs
 
@@ -459,16 +462,15 @@ theorem verdict_case {V : Vocab d α} {k : Verity.Registration.Composite}
   cases hP
   exact hc
 
-/-- **The draw in a play**: where v2's case accepts and the sampled check's read of the device's log is the play's,
-v2 drew `units` from coins `ξ` read under `dr` whose bits start the play's coins of `dr`'s family released after
-`dr`'s digest. -/
+/-- **The draw in a play**: where composite `k` reads sampled proofs at v2, the sampled verdict accepts and the
+sampled check's read of the device's log is the play's, v2 drew `units` from coins `ξ` read under `dr` whose bits start
+the play's coins of `dr`'s family released after `dr`'s digest. -/
 theorem logged_draw {V : Vocab d α} {k : Verity.Registration.Composite} (hR : DrawRead k (V.coinsRead .sampled))
-    {o : Verity.Exchange} (hc : Verity.CaseAccepts k _root_.SampledProofs.OneStageZk.protocol o.sent)
-    (hl : V.Logged .sampled o) :
+    (hk : ReadsV2 k) {o : Verity.Exchange} (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧ ShowsDraw o.log dr ξ := by
-  obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hc
+  obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew (verdict_case hk hv)
   obtain ⟨L, n, units, hd⟩ := drew_of hcase hacc
-  exact ⟨dr, L, n, ξ, units, hd, shows_of_logged hR hcase hacc hl⟩
+  exact ⟨dr, L, n, ξ, units, hd, shows_of_logged hR hv.2.1 hcase hacc hl⟩
 
 /-! ## The live audit's draw -/
 
@@ -496,20 +498,21 @@ theorem draw_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr :
   rw [ht, hL, hn]
   exact drawUnits_append L n ξ t units read hdu
 
-/-- **The draw's piece of `CouplingTarget`**: in a play where v2's case accepts and the sampled check's read of the
-device's log is the play's, v2 drew `units` under the law `L` over `n` units from coins read under `dr`; at a session
-with that law and population, widened by a projection's coins, every sample whose bytes start with the play's coins of
-`dr`'s family released after `dr`'s digest draws exactly `units`. -/
+/-- **The draw's piece of `CouplingTarget`**: in a play where the sampled verdict accepts at a composite that reads
+sampled proofs at v2 and the sampled check's read of the device's log is the play's, v2 drew `units` under the law `L`
+over `n` units from coins read under `dr`; at a session with that law and population, widened by a projection's coins,
+every sample whose bytes start with the play's coins of `dr`'s family released after `dr`'s digest draws exactly
+`units`. -/
 theorem coupled_draw {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
-    (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
-    (hv : Verity.CaseAccepts k _root_.SampledProofs.OneStageZk.protocol o.sent) (hl : V.Logged .sampled o) :
+    (hR : DrawRead k (V.coinsRead .sampled)) (hk : ReadsV2 k) {o : Verity.Exchange} (hv : V.Verdict k .sampled o)
+    (hl : V.Logged .sampled o) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
       ∀ ω : A.Ω × (K.coins A θ F c σ).T, A.law = L → A.n = n →
         (freshCoins dr.label dr.after o.log).flatten <+:
           bitsOf (_root_.Properties.SampledProofs.bytesOf (A.src ω.1 0)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
-  obtain ⟨dr, L, n, ξ, units, hd, hs⟩ := logged_draw hR hv hl
+  obtain ⟨dr, L, n, ξ, units, hd, hs⟩ := logged_draw hR hk hv hl
   exact ⟨dr, L, n, ξ, units, hd, fun ω hL hn hω =>
     (extend_draw A _ ω).trans (draw_of_drew hd A ω.1 hL hn (List.IsPrefix.trans hs hω))⟩
 
@@ -518,16 +521,15 @@ coins `κ` (A3's source), every sample whose first coins are the play's coins of
 digest draws exactly `units`. -/
 theorem coupled_draw_coins {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
-    (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
-    (hv : Verity.CaseAccepts k _root_.SampledProofs.OneStageZk.protocol o.sent) (hl : V.Logged .sampled o)
-    {m B : ℕ} (κ : A.Ω → Fin m → Fin (8 * B) → Bool)
+    (hR : DrawRead k (V.coinsRead .sampled)) (hk : ReadsV2 k) {o : Verity.Exchange} (hv : V.Verdict k .sampled o)
+    (hl : V.Logged .sampled o) {m B : ℕ} (κ : A.Ω → Fin m → Fin (8 * B) → Bool)
     (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
       _root_.Properties.SampledProofs.bytesOf (coinBytes m B (κ ω) 0)) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
       ∀ ω : A.Ω × (K.coins A θ F c σ).T, A.law = L → A.n = n →
         freshCoins dr.label dr.after o.log <+: (List.ofFn fun j => List.ofFn (κ ω.1 j)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
-  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw K A θ F c σ hR hv hl
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw K A θ F c σ hR hk hv hl
   exact ⟨dr, L, n, ξ, units, hd, fun ω hL hn hp => h ω hL hn (by rw [hsrc]; exact fresh_prefix_coinBytes hp)⟩
 
 end Verity.Sampled
