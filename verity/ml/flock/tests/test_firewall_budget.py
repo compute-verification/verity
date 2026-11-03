@@ -1,10 +1,11 @@
 """A stream's failure budget on Python's ZK server (`verity_flock.firewall`, live PROTOCOL.md §10.5), driven as its callers
 drive it: `rec_live` opens a recursive session and records its inner session's finish or stop; the relay seats each outer
 session (`Firewall.seat`) and records its outcome, or ends while it holds the slot. At most b of a stream's recursive
-sessions ever have a statement not released, b its budget: the bound the Lean proves of the record's ops in its model of
-the loop (`StopCount.run`, `card_unreleased_le_budget`). It comes from the open's rule (refused while the stream's
-unended recursive sessions and its failures reach b), and from no stop being recorded of a session not yet opened, so
-that each stop counts against its stream. The worker and the challenger are `test_firewall_release`'s, on socket pairs;
+sessions ever have a statement not released, b its budget: the bound the Lean proves at every order of the record's ops
+(`card_unrel_le_budget`), and so in its model of the loop (`StopCount.run`, `card_unreleased_le_budget`), which these
+tests check over drawn histories. It comes from the open's rule (refused while the stream's unended recursive sessions
+and its failures reach b), and from no stop being recorded of a session not yet opened, so that each stop counts against
+its stream. The worker and the challenger are `test_firewall_release`'s, on socket pairs;
 the clock is never read."""
 from __future__ import annotations
 
