@@ -1,5 +1,5 @@
 import Proofs.Flock.SessionLoop.VsOfBody
-import Proofs.Flock.SessionLoop.L0Fixed
+import Proofs.Flock.SessionLoop.L0FixedHonest
 
 /-!
 # The switched session is causal at a pad-blind worker's values
@@ -15,6 +15,8 @@ along the coins up to the round that frees it:
   reads there is one at two coin vectors that agree below `t` (`freedAt_unique`).
 * `Loop.vsWord_vsOf_l0`: no round frees a pad from level 0's on (`freeWord_ligAt`), so there `vsOf` is the honest values,
   and `Loop.L0Fixed` holds at `vsOf` where it holds at them (`l0Fixed_vsOf_of`).
+* **`Loop.l0Fixed_vsOf`**: `Loop.L0Fixed (vsOf bx) x w` at every `bx`, live statement and witness of the masked relation
+  (`l0Fixed_vsOf_of` at `l0Fixed_honestVals`).
 * **`Loop.swCausal_oneTape_vsOf`**: one-tape `SwCausal` at `vsOf` on `Loop.SwOk`'s coin vectors
   (`RefSession.SwCausalOn`), at every `bx`: where `vsOf` is `vsServed` its rows hold at both (`RowsOK`,
   `rOuter_ne_one_of_swOk`), and elsewhere it is the honest values (`swCausal_rows`).
@@ -840,6 +842,12 @@ theorem l0Fixed_vsOf_of (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) 
     (h : L0Fixed (CoinLayer.session loopNr Masked.dataE).honestVals x w) : L0Fixed (vsOf _ bx) x w :=
   fun ν τ c n hR s spec hsx j r extras he k hk hk' =>
     (vsWord_vsOf_l0 L₀ src real bx x w ν c τ j r hk).trans (h ν τ c n hR s spec hsx j r extras he k hk hk')
+
+/-- **`vsOf`'s level 0 is the firewall's at every worker**: at every live statement and witness of the masked relation,
+`L0Fixed` holds at the honest values (`l0Fixed_honestVals`), so at `vsOf bx` (`l0Fixed_vsOf_of`). -/
+theorem l0Fixed_vsOf (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) (x : Msg) (w : Flock.Wit)
+    (hx : Masked.Live x) (hw : Masked.RZk x w) : L0Fixed (vsOf _ bx) x w :=
+  l0Fixed_vsOf_of L₀ src real bx (l0Fixed_honestVals x w hx hw)
 
 /-- **The switched sources agree where read**, at coins agreeing below `n`, where table `j`'s rows hold at its base at
 both: each field the honest sources' (`repOk`) or the worker's values along coins that agree up to the PIOP round that
