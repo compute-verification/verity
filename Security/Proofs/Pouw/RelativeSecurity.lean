@@ -159,7 +159,7 @@ open Claims renaming Pr → prob, Ex → expect
 
 namespace Pouw.RelativeSecurity
 
-open Finset
+open Finset hiding expect
 
 section Probability
 

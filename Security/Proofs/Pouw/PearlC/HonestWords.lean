@@ -243,13 +243,13 @@ sum on its grid `2^(E − w + 1)`. -/
 theorem normalize_le {w : ℕ} (hw : 24 ≤ w) (E total : ℤ) :
     Canon (normalize w E total) ∧ |(normalize w E total).value| ≤ |(total : ℚ)| * 2 ^ (E - w + 1) := by
   by_cases h0 : total = 0
-  · subst h0; simp [normalize, Canon, Term.zero, Term.value]
+  · subst h0; simp [Fp8Atom.normalize, Canon, Term.zero, Term.value]
   have hTq : |(total : ℚ)| = (total.natAbs : ℚ) := by rw [Nat.cast_natAbs, Int.cast_abs]
   have hn : total.natAbs ≠ 0 := by omega
   have hbl : bitLength total.natAbs = total.natAbs.log2 + 1 := by unfold bitLength; rw [ite_eq_right hn]
   have hL1 := Nat.log2_self_le hn
   have hL2 := @Nat.lt_log2_self total.natAbs
-  unfold normalize
+  unfold Fp8Atom.normalize
   rw [ite_eq_right h0, hTq]
   dsimp only
   generalize total.natAbs = T at hn hbl hL1 hL2 ⊢

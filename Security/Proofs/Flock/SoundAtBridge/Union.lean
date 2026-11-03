@@ -42,7 +42,7 @@ theorem game_prob_exists_le {α : Type} {ι : Type*} (s : Finset ι) (E : ι →
     · exact Or.inl hE
     · exact Or.inr ⟨i, hi, hE⟩
 
-theorem wprob_mono {β : Type*} [Fintype β] {p q : β → Prop} (h : ∀ b, p b → q b) :
+theorem wprob_mono {β : Type} [Fintype β] {p q : β → Prop} (h : ∀ b, p b → q b) :
     Claims.Pr p ≤ Claims.Pr q := by
   classical
   unfold Claims.Pr
@@ -51,7 +51,7 @@ theorem wprob_mono {β : Type*} [Fintype β] {p q : β → Prop} (h : ∀ b, p b
     simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hb ⊢
     exact h b hb
 
-theorem wprob_or_le {β : Type*} [Fintype β] (p q : β → Prop) :
+theorem wprob_or_le {β : Type} [Fintype β] (p q : β → Prop) :
     Claims.Pr (fun b => p b ∨ q b) ≤
       Claims.Pr p + Claims.Pr q := by
   classical
