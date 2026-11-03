@@ -587,28 +587,45 @@ class Opening:
 @dataclass(frozen=True)
 class Registered:
     """What the registration fixes that units read: the registered root parameters by name with their leaves, the tables
-    over them, and the reads (`Read`, `TableRead`, `Opening`)."""
+    over them, and the reads (`Read`, `TableRead`, `Opening`). ``values``: registered parameters the circuit's program
+    takes as parameters of its own, in order, which no unit reads but through its registered reads (`population_program`'s
+    values, `program_values`), so the window's registration registers them as the program's (one-stage's R7), as the
+    outputs of an earlier registration that registered them first; recorded only when there are some."""
     params: Mapping[str, int]
     tables: tuple[Table, ...] = ()
     reads: tuple[Read, ...] = ()
     roots: tuple[TableRead, ...] = ()
     openings: tuple[Opening, ...] = ()
+    values: tuple[str, ...] = ()
 
     def doc(self) -> dict[str, Any]:
         return {"params": dict(sorted(self.params.items())), "tables": [t.doc() for t in self.tables],
                 "reads": [r.doc() for r in self.reads], "roots": [r.doc() for r in self.roots],
-                "openings": [o.doc() for o in self.openings]}
+                "openings": [o.doc() for o in self.openings], **({"values": list(self.values)} if self.values else {})}
 
     @classmethod
     def of(cls, d: Any) -> Registered:
         try:
-            if set(d) != {"params", "tables", "reads", "roots", "openings"}:
+            if not {"params", "tables", "reads", "roots", "openings"} <= set(d) <= {"params", "tables", "reads", "roots",
+                                                                                    "openings", "values"}:
                 raise ValueError(sorted(d))
             return cls({str(k): v for k, v in d["params"].items()}, tuple(Table(**t) for t in d["tables"]),
                        tuple(Read.of(r) for r in d["reads"]), tuple(TableRead(**r) for r in d["roots"]),
-                       tuple(Opening(**{**o, "ports": tuple(o["ports"])}) for o in d["openings"]))
+                       tuple(Opening(**{**o, "ports": tuple(o["ports"])}) for o in d["openings"]),
+                       tuple(d.get("values", ())))
         except (TypeError, ValueError, KeyError, AttributeError) as e:
-            raise ValueError(f"a circuit's registered reads are {{params, tables, reads, roots, openings}}: {e}") from e
+            raise ValueError(f"a circuit's registered reads are {{params, tables, reads, roots, openings}} and its values: "
+                             f"{e}") from e
+
+
+def program_values(registered: Registered | None) -> tuple[tuple[str, int, int], ...]:
+    """``registered``'s values as its program takes them (`population_program`'s ``values``): each ``(name, leaves, 16)``, a
+    registered parameter's 16-bit leaves. Refused (ValueError) unless each is a registered parameter, once."""
+    vs = registered.values if registered is not None else ()
+    params = registered.params if registered is not None else {}
+    if len(set(vs)) != len(vs) or not all(isinstance(v, str) and v in params for v in vs):
+        raise ValueError(f"values {list(vs)}: registered parameters {sorted(params)}, each once")
+    return tuple((v, int(params[v]), 16) for v in vs)
 
 
 @dataclass(frozen=True)
@@ -1021,6 +1038,7 @@ class Circuit:
             raise ValueError(f"{self.name}: its wires are `Wire`s")
         check_wires(self.layouts, self.wires, self.cuts)
         check_inputs(self.layouts, self.cuts, self.wires, self.registered, self.ingress)
+        program_values(self.registered)
         if self.boundary is not None:
             if not isinstance(self.boundary, Mapping):
                 raise ValueError(f"{self.name}: its boundary is a JSON object, not {self.boundary!r}")
@@ -1081,8 +1099,9 @@ class Circuit:
                                       "wires": [w.doc() for w in self.wires], **self.declared()}))
 
     def program(self) -> tuple[Any, dict[str, Any]]:
-        """The verifier's population program and template query over the templates (`rows.population_program`)."""
-        return CS.population_program(list(self.templates))
+        """The verifier's population program and template query over the templates and its registered values
+        (`rows.population_program`, `program_values`)."""
+        return CS.population_program(list(self.templates), values=program_values(self.registered))
 
     def template(self, tid: str) -> Any:
         """The template of descriptor id ``tid``."""
@@ -1721,7 +1740,7 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
     if [descriptor_id(fn) for fn, _ in defs] != [t for t, _ in doc["templates"]]:
         raise ValueError(f"the catalog resolves {[t for t, _ in doc['templates']]} to {[descriptor_id(fn) for fn, _ in defs]}")
     several = len(defs) > 1 or doc["query"] != PO.template_instance_query(defs[0][0])
-    program, query = CS.population_program(defs, several=several)
+    program, query = CS.population_program(defs, several=several, values=program_values(declarations(doc)[2]))
     stated = "cap" in doc
     if (("members" in doc) == stated or ("wires" in doc) != stated
             or (not stated and ({*DECLARED, "blocks"} - {"registered"}) & set(doc)) or (stated and WINDOW_INGRESS in doc)):

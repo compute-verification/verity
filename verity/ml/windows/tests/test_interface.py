@@ -24,6 +24,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -824,6 +825,28 @@ def test_a_registered_values_shape_is_the_width_of_the_port_its_reads_name():
     odd = I.Circuit("odd", ((COORD, 12),), registered=I.Registered({"w": 6 * K // 2 + 1}, reads=(READ,)))
     with pytest.raises(ValueError, match="aren't whole rows"):
         I.read_shape(odd, "w")
+
+
+def test_a_circuits_values_are_parameters_of_its_program_ahead_of_its_units():
+    """`Registered.values`: registered parameters the circuit's program takes as its own, ahead of its units', in 16-bit
+    leaves (`program_values`), so a circuit of one template with values is a ``TemplatePopulations``. Its record names them
+    in its ``registered`` only when there are some, the verifier's window from the record is the circuit's, its members
+    are the ones without values, and a value that is no registered parameter, or one named twice, is refused."""
+    win, w = registered()
+    reg = replace(win.circuit.registered, values=("w",))
+    circuit = replace(win.circuit, registered=reg)
+    program, query = circuit.program()
+    assert program.fn.signature()[0][0] == ("w", Array(6 * K // 2, Value(16))) and query == PO.template_instances_query([COORD])
+    held = I.Window(circuit, RUN, LAW, 4, registered={"w": w})
+    doc = json.loads(I.circuit_bytes(held.circuit_record()))
+    assert doc["registered"]["values"] == ["w"] and I.Registered.of(doc["registered"]) == reg
+    assert "values" not in json.loads(I.circuit_bytes(win.circuit_record()))["registered"]
+    mine = I.window_of_record(doc, LAW, BY_ID.__getitem__)
+    assert (mine.partition_digest, mine.members) == (held.window.partition_digest, held.window.members)
+    assert held.window.partition_digest != win.window.partition_digest and held.window.members == win.window.members
+    for bad in (("v",), ("w", "w")):
+        with pytest.raises(ValueError, match="each once"):
+            replace(circuit, registered=replace(reg, values=bad))
 
 
 def test_a_read_covers_whole_members_and_reads_whole_rows():
