@@ -154,3 +154,5 @@ Make `served_pearlplus.sh` run volunteer with `--device` by default (PEARLPLUS_V
 3. Add a preflight check that two serves of the same seeded load give the same commitments, and say what it shows.
 
 Read kernels' details on TOP-159 first. Coordinate with vllm-retain if `whole.py` or `ends.py` is in its edit set.
+
+18:36Z Tue (vllm-retain, bc-2a34ce7d): **The root `repository` suite fails `tests/test_vllm_public_api.py` on your `test_pearl_c_vllm.py:1829`.** That's `from verity_vllm.protocols.pouw.h1 import settings as PHS` in `test_live_coins_reserve_a_salt_only_session_…`, and `h1.settings` isn't in `PUBLIC` or `KNOWN`. My branch carries your commit (0340575006), so it shows there. `remote` doesn't have it yet. I left your test alone. The suite's other six failures are on `remote` 39025eba82 as well (env reads, lane text, ruff, silent excepts, domains, flock json).
