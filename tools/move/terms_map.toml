@@ -221,7 +221,9 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/lint/a
 # CLI flag (`--draw`, `--firewall-state`, `flock-firewall`, `core-firewall`, `verity-core-firewall`, `drawn-unit-bundle`)
 # and the attribute argparse makes of a flag (`a.draw`; not the profile's `a.draws`), environment variables
 # `FC_*FIREWALL*` and `H1*_*FIREWALL*`, the refusal `FIREWALL-REFUSED`, the stored label `C-Flock`, the audit record's
-# `wrong_units`, `proof_unit` and the `"proof-unit"` kind, the package directory `verity/core/service/firewall`, `law`
+# `wrong_units`, `proof_unit` and the `"proof-unit"` kind, the package directory `verity/core/service/firewall`, the
+# namespace `Accounting.Remote.Draw` and the structure `Accounting.TS.DrawnLayer` (names under them are renamed here, so
+# `check.py --moved` reads each back only if the prefix is renamed in a move of its own), `law`
 # where it touches a name (GLOSSARY.md keeps `law` identifiers), the other senses of law and draw (a power law, the law
 # of large numbers, nvidia-smi's `power.draw`), the `round_digest` strings and the label `replay_set=warden/re-verify`
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
@@ -232,6 +234,7 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
             '(?<!a\.sizes, )\ba\.(?:draw|draws|drawn|undrawn|law|firewall|draw_k|draw_file|fresh_draws|os_draws|lean_refuses_drawn|lean_refuses_drawless|rec_inner_draw|replay_draw)\b',
             '\b(?:FC|H1S?)_[A-Z0-9_]*FIREWALL[A-Z0-9_]*', 'FIREWALL-REFUSED', '[\x22\x27]C-Flock[\x22\x27]',
             '\bwrong_units\b', '\bproof_unit\b', '[\x22\x27]proof-unit[\x22\x27]', '\bservice/firewall\b',
+            '(?<!import Definitions\.Accounting\.)\bRemote\.Draw\b', '\bDrawnLayer\b',
             '(?<=[\w.:/`-])[Ll]aws?\b|\b[Ll]aws?(?=[\w:/(`-]|\.\w)',
             '\bpower[._ -]draws?\b', '(?i:\bpower draws?\b)', '(?i:power[- ]laws?|laws? of large numbers)',
             "(?:Amdahl|Moore|Little|Zipf|Kerckhoffs)'s laws?", 'round_digest[^\n]*', 'replay_set=warden/re-verify']
