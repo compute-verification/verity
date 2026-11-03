@@ -11,7 +11,8 @@
 What it does, on the tree as it is (so it reruns on a later main, and `restack.py --script tools/move/rename.py` carries a
 branch across it):
 1. renames each [words] entry in every tracked text file the map doesn't exclude, except inside what [keep] keeps (a domain
-   tag, a format id, an id; never a string in a Python module's `__all__`, which names what it exports) and, in the files
+   tag, a format id, an id; a name in a Python module's `__all__` only as it keeps the name, never as a quoted string,
+   since `__all__` names what the module exports) and, in the files
    a [keep_in] glob matches, the words it lists;
 2. moves each tracked file whose path the same words rename, with `layout.py`'s machinery (`layout.Run.move`); a module's
    name is its path's, so the first step has already renamed every import of it;
@@ -123,7 +124,8 @@ class Words:
         held = [(m.start(), m.end()) for k in self.keep if protect for m in k.finditer(text)]
         if held and path.endswith(".py"):
             names = [(m.start(), m.end()) for m in EXPORTS.finditer(text)]
-            held = [(s, e) for s, e in held if not any(a <= s and e <= b for a, b in names)]
+            held = [(s, e) for s, e in held
+                    if not (text[e - 1] in "\"'" and any(a <= s and e <= b for a, b in names))]
         spans = sorted([*keep, *held])
         starts, reach, far = [], [], 0
         for s, e in spans:                                          # reach[i]: the furthest end of spans[:i + 1]

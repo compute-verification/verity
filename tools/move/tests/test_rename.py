@@ -62,6 +62,9 @@ def test_a_name_in_all_follows_what_it_exports_where_a_quoted_key_stands():
     module = '__all__ = ["draw",\n           "other"]\n\n\ndef draw():\n    return {"draw": 1}\n'
     assert words.sub(module, "m.py") == '__all__ = ["sample",\n           "other"]\n\n\ndef sample():\n    return {"draw": 1}\n'
     assert words.sub(module, "m.md") == module.replace("def draw", "def sample")
+    kept = M.Words({"words": {"draw": "sample"}, "keep": {"patterns": ['"draw"', r"\bdraw_salt\b"]}})
+    module = '__all__ = ["draw_salt", "draw"]\n\n\ndef draw_salt():\n    pass\n\n\ndef draw():\n    pass\n'
+    assert kept.sub(module, "m.py") == '__all__ = ["draw_salt", "sample"]\n\n\ndef draw_salt():\n    pass\n\n\ndef sample():\n    pass\n'
 
 
 def test_paths_and_names_are_renamed_part_by_part():
