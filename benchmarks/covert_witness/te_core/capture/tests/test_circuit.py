@@ -95,6 +95,24 @@ def test_reading_a_context_of_an_attention(starts):
     assert all(e["phase"][s] == 1 for s, b in enumerate(e["context_bwd_bits"]) if b)
 
 
+def test_reading_a_enters_an_adapter_at_its_code():
+    """wildcard's grown adapter on the tiny start (`fixtures/wildcard_adapter.npz`: islands/wildcard/train.py at
+    9460fcd228, --grow 1 --adapter 8 --adapter-z 2 --set 'blocks\\.2\\.(mlp_norm|w_gate\\.weight|w_up\\.weight|w_down\\.weight)'
+    --batch 2 --micro 2 --warmup 1, step 1). The frozen layers are θ's function of the tokens, so entering at the grown
+    block reads no computed state, and its matrices; segments start inside the code (its 2-bit words and scale), where
+    a block reaching the head reads at most 48 bits a token, but w_down's whole bf16 cast too (the program multiplies
+    every column, the dead ones zero), and the dead units' slice that only a zeros_like reads is never charged."""
+    f = measure(StepCircuit.load(Path(__file__).parent / "fixtures" / "wildcard_adapter.npz"))
+    e = f["entries"]
+    assert f["a_bits"] == 32 and f["tail_share"] == pytest.approx(0.989, abs=0.001)
+    head = max(range(e["segments"]), key=lambda s: e["gates"][s] if e["phase"][s] == 0 else -1)
+    assert e["frontier_bits"][0][head] == 0 and e["u_bits"][0][head] == 32 * 64 + 16 * 3 * 192 * 64
+    best = min(range(1, head + 1), key=lambda i: e["frontier_bits"][i][head - i])
+    assert e["frontier_bits"][best][head - best] <= 48 and e["u_bits"][best][head - best] == 16 * 64 * 192
+    assert all(e["u_bits"][i][head - i] >= 16 * 64 * 192 for i in range(head + 1))
+    assert max(e["frontier_bits"][i][0] for i in range(1, head)) < 16 * 192
+
+
 def test_a_partial_is_one_groups_gradient_at_its_code(starts):
     """With --micro 2 one token's group is its micro-batch: its partial is its own codes, half the step's cut."""
     f = recorded(starts, "vote-planes", "--micro", "2").formalism

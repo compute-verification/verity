@@ -49,10 +49,13 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
 - `entries`, reading A's inputs (A1 as Daniel read it on 3 Nov: a block reads at least the update bits its work reads,
   counted once, plus each token's computed state where its work on the token begins, the context it reads and doesn't
   compute included). One token's path (its group's affected ops in program order, as for u_in) is cut into at most
-  `segments` runs of about equal gates; for each run of segments [i, j), what a block doing that work for one of the
-  group's `tokens` reads beyond θ: `frontier_bits[i][j - i]`, per token, the computed values its ops read and don't
-  make (the token's state at the entry, a skip connection, a statistic; values computed from θ and token data alone
-  are free, the block computing them from the token's id); `ids[i][j - i]`, the token-input positions its ops read
+  `segments` runs: one starts at the forward's end, about half at the forward's narrowest boundaries (where the charged
+  bits the rest of the forward reads drop, so an entry lands inside a code), and the rest at about equal gates. For
+  each run of segments [i, j), what a block doing that work for one of the group's `tokens` reads beyond θ:
+  `frontier_bits[i][j - i]`, per token, the computed values its ops read and don't make (the token's state at the
+  entry, a skip connection, a statistic; values computed from θ and token data alone are free, the block computing
+  them from the token's id; an op none of whose values is read, such as a slice only a zeros_like reads, reads
+  nothing); `ids[i][j - i]`, the token-input positions its ops read
   per token (1, the token's id, where they read only such state); `u_bits[i][j - i]`, once a block, the narrowest cut from the carried
   values to the update values its ops read, plus 64 bits a random op it reads. Per segment: its affected `gates` per
   token, its `phase` (the least of its ops'), and, from a trace whose variant halves the context (`positions` its
@@ -277,43 +280,55 @@ def _profile(cuts: list[tuple[float, int]]) -> list[list[float]]:
     return pts
 
 
+def _cut_path(order: list[int], op_gates: np.ndarray, op_phase: np.ndarray, by_op: dict[int, list[int]],
+              reads_of: dict[int, set[int]], charged, segments: int) -> dict[int, int]:
+    """Each op of the path `order`'s segment, at most `segments` of them: one starts at the forward's end, about half at
+    the forward's narrowest boundaries (where the charged bits the rest of the forward reads and the path made before
+    drop, the least first), and the rest at about equal gates."""
+    n = len(order)
+    at = {o: t for t, o in enumerate(order)}
+    made = {v: at[o] for o in order for v in by_op.get(o, [])}
+    last: dict[int, int] = {}
+    for t, o in enumerate(order):
+        if op_phase[o] == FORWARD:
+            for p in reads_of[o]:
+                last[p] = t
+    diff = np.zeros(n + 1)
+    for p, t in last.items():
+        kind, x = charged(p)
+        lo = made.get(p, -1) + 1
+        if kind == "bits" and lo <= t:
+            diff[lo] += x
+            diff[t + 1] -= x
+    live = np.cumsum(diff)[:n]
+    fwd = [t for t in range(1, n) if op_phase[order[t - 1]] == FORWARD]
+    bounds = {0, *[t for t in fwd if op_phase[order[t]] != FORWARD][:1]}
+    drops = sorted((t for t in fwd if live[t] < live[t - 1]), key=lambda t: (live[t], t))
+    bounds |= set(drops[:max(segments // 2 - len(bounds), 0)])
+    g = op_gates[order]
+    total, rest = float(g.sum()), segments - len(bounds)
+    if total and rest > 0:
+        raw = ((np.cumsum(g) - g) * (rest + 1) / total).astype(int)
+        bounds |= {t for t in range(1, n) if raw[t] != raw[t - 1]}
+    b = np.array(sorted(bounds))
+    return {o: int(np.searchsorted(b, t, side="right")) - 1 for t, o in enumerate(order)}
+
+
 def _entries(c: StepCircuit, preds: list[list[int]], order: list[int], op_gates: np.ndarray, op_phase: np.ndarray,
              U: set[int], ucap: dict[int, int], carried: list[int], tokens: int, segments: int) -> dict | None:
-    """Reading A's inputs on one token's traced path (module docstring): its ops in program order cut into runs of about
-    equal gates, and for each run [i, j) of them what a block doing that work for one of the group's tokens reads."""
+    """Reading A's inputs on one token's traced path (module docstring): its ops in program order cut into runs
+    (`_cut_path`), and for each run [i, j) of them what a block doing that work for one of the group's tokens reads."""
     if not order or not tokens:
         return None
     tok, dep, tokdep = c.tok.astype(bool), c.dep.astype(bool), c.tokdep.astype(bool)
     mix = c.mix.astype(bool) if c.mix is not None else None
-    g = op_gates[order]
-    total = float(g.sum())
-    raw = np.minimum(((np.cumsum(g) - g) * segments / total).astype(int), segments - 1) if total else \
-        np.zeros(len(order), int)
-    seg_of = dict(zip(order, np.searchsorted(np.unique(raw), raw).tolist()))
-    n_seg = int(max(seg_of.values())) + 1
     by_op: dict[int, list[int]] = {}
     for v in np.nonzero(np.isin(c.node, order))[0].tolist():
         by_op.setdefault(int(c.node[v]), []).append(v)
-    made = [set() for _ in range(n_seg)]
-    reads = [set() for _ in range(n_seg)]
-    gates = [0.0] * n_seg
-    phase = [OTHER] * n_seg
-    ctx = {FORWARD: [0.0] * n_seg, BACKWARD: [0.0] * n_seg}
-    for o in order:
-        s, vs = seg_of[o], by_op.get(o, [])
-        gates[s] += float(op_gates[o]) / tokens
-        phase[s] = min(phase[s], int(op_phase[o]))
-        made[s].update(vs)
-        rd = {p for v in vs for p in preds[v]}
-        reads[s] |= rd
-        if mix is not None and op_phase[o] in ctx and (any(mix[x] for x in vs) or any(mix[p] for p in rd)):
-            per = [int(c.bits[p]) / tokens for p in rd if tok[p] and dep[p] and not mix[p]]
-            ctx[int(op_phase[o])][s] += min(per, default=0.0)
-
-    token_reads = [[] for _ in range(n_seg)]
-    for r in range(len(c.tr_op)):
-        if c.token_key[c.tr_key[r]] and int(c.tr_op[r]) in seg_of:
-            token_reads[seg_of[int(c.tr_op[r])]].append(r)
+    used = c.read_next.astype(bool).copy()
+    used[c.indices] = True
+    reads_of = {o: {p for v in by_op.get(o, []) for p in preds[v]} if any(used[v] for v in by_op.get(o, [])) else set()
+                for o in order}
 
     def charge(p: int) -> tuple[str, float]:
         k = c.kind[p]
@@ -330,6 +345,32 @@ def _entries(c: StepCircuit, preds: list[list[int]], order: list[int], op_gates:
         return "", 0.0
 
     charges: dict[int, tuple[str, float]] = {}
+
+    def charged(p: int) -> tuple[str, float]:
+        return charges[p] if p in charges else charges.setdefault(p, charge(p))
+
+    seg_of = _cut_path(order, op_gates, op_phase, by_op, reads_of, charged, segments)
+    n_seg = int(max(seg_of.values())) + 1
+    made = [set() for _ in range(n_seg)]
+    reads = [set() for _ in range(n_seg)]
+    gates = [0.0] * n_seg
+    phase = [OTHER] * n_seg
+    ctx = {FORWARD: [0.0] * n_seg, BACKWARD: [0.0] * n_seg}
+    for o in order:
+        s, vs, rd = seg_of[o], by_op.get(o, []), reads_of[o]
+        gates[s] += float(op_gates[o]) / tokens
+        phase[s] = min(phase[s], int(op_phase[o]))
+        made[s].update(vs)
+        reads[s] |= rd
+        if mix is not None and op_phase[o] in ctx and (any(mix[x] for x in vs) or any(mix[p] for p in rd)):
+            per = [int(c.bits[p]) / tokens for p in rd if tok[p] and dep[p] and not mix[p]]
+            ctx[int(op_phase[o])][s] += min(per, default=0.0)
+
+    token_reads = [[] for _ in range(n_seg)]
+    for r in range(len(c.tr_op)):
+        if c.token_key[c.tr_key[r]] and int(c.tr_op[r]) in seg_of:
+            token_reads[seg_of[int(c.tr_op[r])]].append(r)
+
     frontier, ids, u_bits = [], [], []
     cut_of: dict[frozenset, int] = {}
     for i in range(n_seg):
@@ -343,7 +384,7 @@ def _entries(c: StepCircuit, preds: list[list[int]], order: list[int], op_gates:
                 direct = _union_size(c, read_at) / tokens
             for p in reads[j] - seen - inside:
                 seen.add(p)
-                kind, x = charges[p] if p in charges else charges.setdefault(p, charge(p))
+                kind, x = charged(p)
                 if kind == "u":
                     targets.add(p)
                 elif kind == "seed":
