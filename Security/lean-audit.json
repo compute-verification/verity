@@ -1402,6 +1402,70 @@
    "owner": "@compute-accounting",
    "digest": "b55efab6f13247ad3c7970b4659b72724dddc239457c0e562c6ba1c697a9b5c2"
   },
+  "Nci.Formalism.Annotation.TokensLinked": {
+   "owner": "@training",
+   "digest": "e89320b5bd22ea9e68b6916a9bb181d42ac6fec719b2f8395fc9e1d694b154c3"
+  },
+  "Nci.Formalism.Annotation.Valid": {
+   "owner": "@training",
+   "digest": "246e1e97b20a35f0482768b887e35db751f75d91eefa28de51d10c469bc0025b"
+  },
+  "Nci.Formalism.Assumptions.CutCost": {
+   "owner": "@training",
+   "digest": "8ae1986ebc112dc773dd03f144af03121f4031867dc48e760bb106752f3a4205"
+  },
+  "Nci.Formalism.Assumptions.EfficiencyFloor": {
+   "owner": "@training",
+   "digest": "bd5eea2adbee733740c70a5ab6a7fc532e1f330183420e4bf1553b1d386c940d"
+  },
+  "Nci.Formalism.BottomShare": {
+   "owner": "@training",
+   "digest": "37cc810dca99f7cb6ab52723be49dbe1eb5944ac56b342ad932d9691dc6c0529"
+  },
+  "Nci.Formalism.FrozenTail": {
+   "owner": "@training",
+   "digest": "9dd8657c37d37e5e441a38b2faa0156863e4797aea9430c21526e72896b27f5e"
+  },
+  "Nci.Formalism.InPeriods": {
+   "owner": "@training",
+   "digest": "2e9c8f7af1c83a77da3bc7a6cb8c309403d4e72509733fdede069044836a1e79"
+  },
+  "Nci.Formalism.IsCKPartition": {
+   "owner": "@training",
+   "digest": "9600579c22030c88ec75257fa46b0e00a843d5351cd8203735fdcffdbe760c6a"
+  },
+  "Nci.Formalism.PeakBound": {
+   "owner": "@training",
+   "digest": "3a7b459c6624d5b6a1a32924874d3e304552c44874efd2d25c611b84cd7c60c0"
+  },
+  "Nci.Formalism.Run.Among": {
+   "owner": "@training",
+   "digest": "d5db13c72b34859a9308ac0ded9b0203e2d3efd37c51faa2a22e3b994542e247"
+  },
+  "Nci.Formalism.Run.Reaches": {
+   "owner": "@training",
+   "digest": "adc282a207f99fc85220964a134b1487df52085b85deba8bdf0de92dcf2377ef"
+  },
+  "Nci.Formalism.Run.Within": {
+   "owner": "@training",
+   "digest": "95f913d00b89c636477a1bf3d9c0a83455b5f5f0489aa40c336c351abe977792"
+  },
+  "Nci.Formalism.ServingFits": {
+   "owner": "@training",
+   "digest": "9362c658fc805110812ff7fed480889858ba419e8ac09d892301fc1e6440a7b4"
+  },
+  "Nci.Formalism.SessionBlocks": {
+   "owner": "@training",
+   "digest": "973e6c780a875090ec945732dc5d86cd92df306e9365d98d6231ec5919ba8fd7"
+  },
+  "Nci.Formalism.TreeBlocks": {
+   "owner": "@training",
+   "digest": "eb348733b4f1757fba37a6f2dd6145a5a6765d2ef5b000f6354386ce444c52b7"
+  },
+  "Nci.Formalism.TreeFits": {
+   "owner": "@training",
+   "digest": "881e443a2d3d780d57a538aa89fa46082f959f75c3285a885b1eb57a84785729"
+  },
   "Nci.Ldl.Assumptions.ActivationRate": {
    "owner": "@training",
    "digest": "ec8e2726de08ef10c2207d4da75de7ab80f2ad277437392a121f69d4732f64a2"
@@ -2120,7 +2184,7 @@
   },
   "Verity.Partition.IsCK": {
    "owner": "@lean",
-   "digest": "a78011b108a9369070c518c56ec7264ee084cb9aab661d2ab5ba77a6b4c26cd2"
+   "digest": "ba4fd6f99398650d691788850e7f35507623e4442ffb5cdef5bab12cfd052c54"
   },
   "Verity.Registered": {
    "owner": "@proofs",
@@ -2153,70 +2217,6 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
-  },
-  "Nci.Formalism.Annotation.TokensLinked": {
-   "owner": "@training",
-   "digest": "e89320b5bd22ea9e68b6916a9bb181d42ac6fec719b2f8395fc9e1d694b154c3"
-  },
-  "Nci.Formalism.Annotation.Valid": {
-   "owner": "@training",
-   "digest": "246e1e97b20a35f0482768b887e35db751f75d91eefa28de51d10c469bc0025b"
-  },
-  "Nci.Formalism.Assumptions.CutCost": {
-   "owner": "@training",
-   "digest": "8ae1986ebc112dc773dd03f144af03121f4031867dc48e760bb106752f3a4205"
-  },
-  "Nci.Formalism.Assumptions.EfficiencyFloor": {
-   "owner": "@training",
-   "digest": "bd5eea2adbee733740c70a5ab6a7fc532e1f330183420e4bf1553b1d386c940d"
-  },
-  "Nci.Formalism.BottomShare": {
-   "owner": "@training",
-   "digest": "37cc810dca99f7cb6ab52723be49dbe1eb5944ac56b342ad932d9691dc6c0529"
-  },
-  "Nci.Formalism.FrozenTail": {
-   "owner": "@training",
-   "digest": "9dd8657c37d37e5e441a38b2faa0156863e4797aea9430c21526e72896b27f5e"
-  },
-  "Nci.Formalism.InPeriods": {
-   "owner": "@training",
-   "digest": "2e9c8f7af1c83a77da3bc7a6cb8c309403d4e72509733fdede069044836a1e79"
-  },
-  "Nci.Formalism.IsCKPartition": {
-   "owner": "@training",
-   "digest": "9600579c22030c88ec75257fa46b0e00a843d5351cd8203735fdcffdbe760c6a"
-  },
-  "Nci.Formalism.PeakBound": {
-   "owner": "@training",
-   "digest": "3a7b459c6624d5b6a1a32924874d3e304552c44874efd2d25c611b84cd7c60c0"
-  },
-  "Nci.Formalism.Run.Among": {
-   "owner": "@training",
-   "digest": "d5db13c72b34859a9308ac0ded9b0203e2d3efd37c51faa2a22e3b994542e247"
-  },
-  "Nci.Formalism.Run.Reaches": {
-   "owner": "@training",
-   "digest": "adc282a207f99fc85220964a134b1487df52085b85deba8bdf0de92dcf2377ef"
-  },
-  "Nci.Formalism.Run.Within": {
-   "owner": "@training",
-   "digest": "95f913d00b89c636477a1bf3d9c0a83455b5f5f0489aa40c336c351abe977792"
-  },
-  "Nci.Formalism.ServingFits": {
-   "owner": "@training",
-   "digest": "9362c658fc805110812ff7fed480889858ba419e8ac09d892301fc1e6440a7b4"
-  },
-  "Nci.Formalism.SessionBlocks": {
-   "owner": "@training",
-   "digest": "973e6c780a875090ec945732dc5d86cd92df306e9365d98d6231ec5919ba8fd7"
-  },
-  "Nci.Formalism.TreeBlocks": {
-   "owner": "@training",
-   "digest": "eb348733b4f1757fba37a6f2dd6145a5a6765d2ef5b000f6354386ce444c52b7"
-  },
-  "Nci.Formalism.TreeFits": {
-   "owner": "@training",
-   "digest": "881e443a2d3d780d57a538aa89fa46082f959f75c3285a885b1eb57a84785729"
   }
  },
  "meaning": [
@@ -2648,6 +2648,11 @@
   "Nci.Formalism.SecurityProofs.Security": {
    "honest": ["Nci.Formalism.SecurityProofs.Security_honest"],
    "nontrivial": "Nci.Formalism.SecurityProofs.Security_nontrivial",
+   "kind": "exclusion"
+  },
+  "Verity.SecurityProofs.CKSize": {
+   "honest": ["Verity.SecurityProofs.CKSize_honest"],
+   "nontrivial": "Verity.SecurityProofs.CKSize_nontrivial",
    "kind": "exclusion"
   }
  },
@@ -12176,6 +12181,18 @@
    "assumptions": [],
    "type_hash": "d29489247f5da3d50fd1a297d4dedec5e94940fa1ff83ecab62fd5b8fae592df"
   },
+  "Verity.SecurityProofs.CKSize_honest": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.CKSize_honest : Verity.Guarantees.CKSize_honest"],
+   "assumptions": [],
+   "type_hash": "18290bcdc7e31898f7382e147bc6505e1b1dc89875723c87707b8bba853376e6"
+  },
+  "Verity.SecurityProofs.CKSize_nontrivial": {
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.CKSize_nontrivial : Verity.Guarantees.CKSize_nontrivial"],
+   "assumptions": [],
+   "type_hash": "2272ed38498bee7b4cf314d5e00e5f27ae4f5d62b35ad6bc7dfb1b8e0c808c94"
+  },
   "Verity.SecurityProofs.Compose": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.Compose : Verity.Guarantees.Compose"],
@@ -12319,12 +12336,6 @@
    "signature": ["Verity.SecurityProofs.PackSoundComplete : Verity.Guarantees.PackSoundComplete"],
    "assumptions": [],
    "type_hash": "4c3bae588a8b15087f0b98c7fee1a916e24956b95df6fd0453546703c7f048e0"
-  },
-  "Verity.SecurityProofs.Padding": {
-   "owner": "@lean",
-   "signature": ["Verity.SecurityProofs.Padding : Verity.Guarantees.Padding"],
-   "assumptions": [],
-   "type_hash": "9d099908575f929e292eacd34b28c58d0cca723ea0b2700691e5b7ecf4782e3a"
   },
   "Verity.SecurityProofs.PrivateFitsOfLocal": {
    "owner": "@proofs",
@@ -13610,19 +13621,18 @@
    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBMRAM": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on an 8xH200 server's HBM and host RAM, a 3,128 GB fill with 3.9 GB outside it, at r = 2922 and k = 261,229 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsServer8H200": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at 5 GB on a whole 8xH200 server, a 15,128 GB fill of every tier with 3.9 GB outside it, at r = 14,183 and k = 1,268,143 reads, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsDisk": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) on one session over a server's tiers and its disks, n + f labels on M + 8 D bits with the disks' 8 D - 512 f bits outside the fill in R (Security/Definitions/Pous/Model/StreamedWipeDisk.lean), at its threshold B(n + f, r, k, R), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Verity.SecurityProofs.CKSize": "frozen (no-function): It is about an arbitrary Boolean declaration and a (c,k)-partition of it (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), the working draft's |C| = c B, not about a function's code; the NCI check joined to it is what would give it an acceptance.",
+   "Verity.SecurityProofs.CKSize": "frozen (no-function): It is about an arbitrary Boolean declaration and a (c,k)-partition of it (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), the working draft's |C| <= c B, not about a function's code; the NCI check joined to it is what would give it an acceptance.",
    "Verity.SecurityProofs.BlockDescription": "frozen (no-function): It is the working draft's Lemma 1, about an arbitrary committed declaration of a (c,k)-partition, a decoder and an extraction rule that a fixed evaluator performs (Verity.Committed, Verity.Decoder, Verity.LDL, Verity.Evaluates, Security/Definitions/Core/Formalism.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
    "Verity.SecurityProofs.CountingSum": "frozen (no-function): It is the working draft's Theorem 3 summed over any partition (Verity.Partition, Security/Definitions/Core/Partition.lean) with per-block allowances, about an arbitrary circuit, not about a function's code; the serving-block bound applies it to the actual circuit's partitions.",
-   "Verity.SecurityProofs.Counting": "frozen (no-function): It is the working draft's Theorem 3, about an arbitrary (c,k)-partition, counted gates and an allowance (Verity.Partition.IsCK, Verity.slowdown, Security/Definitions/Core/Formalism.lean), not about a function's code; the NCI check joined to it is what would give it an acceptance.",
+   "Verity.SecurityProofs.Counting": "frozen (no-function): It is the working draft's Theorem 3, about an arbitrary (c,k)-partition, counted gates and an allowance, each block priced at c gates (Verity.Partition.IsCK, Verity.slowdown, Security/Definitions/Core/Formalism.lean), not about a function's code; the NCI check joined to it is what would give it an acceptance.",
    "Nci.SecurityProofs.PartitionCovers": "frozen (no-function): It is the working draft's Lemma A.1, about an arbitrary (c,k)-partition (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean) and the covering its completed blocks give (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Verity.SecurityProofs.ExpandEval": "frozen (no-function): It is about an arbitrary multi-bit circuit and its bit-level expansion (Verity.Circuit.expand, Security/Definitions/Core/Expand.lean), the expansion computing the circuit bit for bit, not about a function's code; NciCheck.Properties.LaysOut joined to it is what would give the NCI check's circuit the draft's Boolean form.",
    "Verity.SecurityProofs.ExpandBits": "frozen (no-function): It is about an arbitrary circuit's bundles (Verity.Circuit.bits) read through its bit-level expansion (Security/Definitions/Core/Expand.lean), not about a function's code.",
    "Verity.SecurityProofs.ExpandBoolean": "frozen (no-function): It is about an arbitrary circuit whose computed gates of positive width read a gate of positive width (Verity.Circuit.BitFaninPos, Security/Definitions/Core/Expand.lean): its expansion is Boolean in the working draft's sense; not about a function's code.",
    "Verity.SecurityProofs.ExpandSize": "frozen (no-function): It is about an arbitrary declaration, a partition of it and their expansions (Verity.Declaration.expand, Verity.Partition.expand, Security/Definitions/Core/Expand.lean): sizes become widths and a block's unregistered reads do not grow; not about a function's code.",
-   "Verity.SecurityProofs.Padding": "frozen (no-function): It is about an arbitrary Boolean declaration whose chosen blocks have at most c gates, padded to exactly c gates with the others unchanged and every block's unregistered reads kept (Verity.Pad, Security/Definitions/Core/Formalism.lean): the serving blocks at c_S beside the dark remainder, and a (c,k)-partition when every block is chosen; not about a function's code.",
    "Verity.SecurityProofs.ServingBlockSum": "frozen (no-function): It is the working draft's Theorem 3 at the serving blocks, the serving-block bound's per-block minimum summed over any partition with a dark remainder (Verity.Partition, Security/Definitions/Core/Partition.lean), about an arbitrary circuit, not about a function's code.",
    "Verity.SecurityProofs.InferenceCap": "frozen (no-function): It is the serving-block bound's inference cap, about an arbitrary circuit with inference blocks refining serving blocks (Verity.Partition.Refines, Security/Definitions/Core/Partition.lean), not about a function's code.",
-   "Nci.SecurityProofs.CompliesCK": "frozen (no-function): It is about an arbitrary Boolean declaration that complies with the NCI policy (Nci.Complies, Security/Definitions/Nci.lean), padded to a (c,k)-partition (Verity.Pad, Verity.Partition.IsCK), not about the NCI check's code; NciCheck.Properties.Witnesses joined to it is what would give it an acceptance.",
+   "Nci.SecurityProofs.CompliesCK": "frozen (no-function): It is about an arbitrary Boolean declaration that complies with the NCI policy (Nci.Complies, Security/Definitions/Nci.lean), whose division into IUs is a (c,k)-partition (Verity.Partition.IsCK), not about the NCI check's code; NciCheck.Properties.Witnesses joined to it is what would give it an acceptance.",
    "Nci.SecurityProofs.ExpandComplies": "frozen (no-function): It is about an arbitrary multi-bit declaration that complies with the NCI policy (Nci.Complies, Security/Definitions/Nci.lean) and its bit-level expansion (Verity.Declaration.expand, Security/Definitions/Core/Expand.lean), not about the NCI check's code.",
    "Verity.SecurityProofs.AndSizeLe": "frozen (no-function): It is about an arbitrary circuit and set of its gates (Verity.Circuit.andSize, Security/Definitions/Core/Formalism.lean): its AND gates are operation gates, so the AND count is at most the size; not about a function's code.",
    "Verity.SecurityProofs.CreditSizeLe": "frozen (no-function): It is about an arbitrary lowering from declarations to circuits and an arbitrary declaration (Verity.creditSize, Security/Definitions/Core/Formalism.lean): the credit, the lowered circuit's AND count, is at most its size; not about a function's code.",
@@ -13684,7 +13694,9 @@
    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_honest": "completeness: SlowdownFrozenTail's honest lemma: at Honest (as Slowdown_honest's) its premises hold together, A1 among them, at (c, k) = (1, 2), u(x) = x, a = 0, t = 1 and eps = 0. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, which no check reads yet, would supply the deployed premises.",
    "Nci.Formalism.SecurityProofs.SlowdownFrozenTail_nontrivial": "lemma: SlowdownFrozenTail's nontrivial lemma: at Counter (Nci.Formalism.Counter, Security/Definitions/Nci/Formalism/Instances.lean), whose new weight copies the weight and whose token copies the new weight, every premise but A1 holds at (c, k) = (2, 1), u = 2, a = 2, t = 1/2 and eps = 0, A1 fails at the block of both gates, and the bound 2 is above the slowdown, at most 1. A counterexample at an instance, not a property of a Lean function.",
    "Nci.Formalism.SecurityProofs.Security_honest": "completeness: Security's honest lemma: at Honest (as Slowdown_honest's), its run the one method, with a decoder that outputs nothing, D = top, the loss 0 and l* = 0, its premises hold together, A1 and A2 among them, at p = 1, (c, k) = (1, 2), its two blocks in one period of two, u(x) = x, a = 0, x0 = 1, eps = 0 and M = 1. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.Security_nontrivial": "lemma: Security's nontrivial lemma: at Counter (Nci.Formalism.Counter, Security/Definitions/Nci/Formalism/Instances.lean), whose new weight copies the weight and whose token copies the new weight, its run the one method, every premise but A1 holds, A2 among them, at p = 1, (c, k) = (2, 0), its one block in one period of one, u(x) = x, a = 2, x0 = eps = 0 and M = 1, A1 fails at the block of both gates, and rho p H(l*) = 4 is above N n c = 2. A counterexample at an instance, not a property of a Lean function."
+   "Nci.Formalism.SecurityProofs.Security_nontrivial": "lemma: Security's nontrivial lemma: at Counter (Nci.Formalism.Counter, Security/Definitions/Nci/Formalism/Instances.lean), whose new weight copies the weight and whose token copies the new weight, its run the one method, every premise but A1 holds, A2 among them, at p = 1, (c, k) = (2, 0), its one block in one period of one, u(x) = x, a = 2, x0 = eps = 0 and M = 1, A1 fails at the block of both gates, and rho p H(l*) = 4 is above N n c = 2. A counterexample at an instance, not a property of a Lean function.",
+   "Verity.SecurityProofs.CKSize_honest": "completeness: CKSize's honest lemma: at Honest (Verity.Formalism.Honest, Security/Definitions/Core/Formalism/Instances.lean), the proof blocks {1, 2} and {3} of a chain of three gates after a registered input, its premise holds at (c, k) = (2, 1), the second proof block having one gate, under c. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound and rests on no run and no art:.",
+   "Verity.SecurityProofs.CKSize_nontrivial": "lemma: CKSize's nontrivial lemma: at Counter (Verity.Formalism.Counter, Security/Definitions/Core/Formalism/Instances.lean), the same chain's three operation gates in one proof block, its premise fails at (c, k) = (2, 1), and so does the bound, |C| = 3 > 2 * 1. A counterexample at an instance, not a property of a Lean function."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -16204,9 +16216,6 @@
    "Verity.SecurityProofs.InferenceCap": {
     "Finset.instPartialOrder.le V C.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i : Fin nf), Real.instLE.le ((Finset.instInter.inter (Finset.instSDiff.sdiff V U) (Pf.gates i)).sum fun v => ω v) q": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Verity.SecurityProofs.Padding": {
-    "∀ (u : Fin B), SetLike.instMembership.mem S u → instLENat.le (P.gates u).card c": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Verity.SecurityProofs.ProbBatchInduced": {
     "∀ (s : g.Strategy), Cls s → ENNReal.instLE.le (Verity.Game.prob Q g s) ε": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -22640,6 +22649,8 @@
     "Verity.SecurityProofs.AndSizeLe",
     "Verity.SecurityProofs.BlockDescription",
     "Verity.SecurityProofs.CKSize",
+    "Verity.SecurityProofs.CKSize_honest",
+    "Verity.SecurityProofs.CKSize_nontrivial",
     "Verity.SecurityProofs.Compose",
     "Verity.SecurityProofs.ComposeCone",
     "Verity.SecurityProofs.ContainsImplements",
@@ -22653,7 +22664,6 @@
     "Verity.SecurityProofs.ExpandEval",
     "Verity.SecurityProofs.ExpandSize",
     "Verity.SecurityProofs.InferenceCap",
-    "Verity.SecurityProofs.Padding",
     "Verity.SecurityProofs.PrivateFitsOfLocal",
     "Verity.SecurityProofs.PrivateOutBitsLe",
     "Verity.SecurityProofs.RefineWrong",
@@ -22775,12 +22785,13 @@
     "Nci.SecurityProofs.UpdatedMatMulReads",
     "Verity.SecurityProofs.BlockDescription",
     "Verity.SecurityProofs.CKSize",
+    "Verity.SecurityProofs.CKSize_honest",
+    "Verity.SecurityProofs.CKSize_nontrivial",
     "Verity.SecurityProofs.ContainsImplements",
     "Verity.SecurityProofs.Counting",
     "Verity.SecurityProofs.CreditSizeLe",
     "Verity.SecurityProofs.ExpandAndSize",
-    "Verity.SecurityProofs.ExpandSize",
-    "Verity.SecurityProofs.Padding"
+    "Verity.SecurityProofs.ExpandSize"
    ]
   },
   "Definitions.Core.Digest": {
@@ -22911,7 +22922,7 @@
    ]
   },
   "Definitions.Core.Formalism": {
-   "digest": "6873496bfce0839d3a75aff447ea946177f4357dd67f98d5e924821d3269218a",
+   "digest": "c5bfbbbcb558e7cfd12d9428b67f29d88134f35bbf671899e30f6685e9aea8a3",
    "definitions": {
     "Verity.Circuit.Affine": "07c5e2cd229c4e65ff7121784d37106a206f5bbe952384f97c0004fb1723a144",
     "Verity.Circuit.Boolean": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede",
@@ -22931,12 +22942,11 @@
     "Verity.Decoder.run": "0d0404da4fae79570ec9d0c60b7a725829f656bdcd665fd20bf0526e45d1f3d1",
     "Verity.Evaluates": "74963e5415e5b4df8ed3d6079fbdc47d8f7ad16d03bf89bc492b06d7ecb7a485",
     "Verity.LDL": "f81389f381a8ab1600a672fd46d11b2796b1149214dd45f29f2b140fb4121a3f",
-    "Verity.Pad": "13c3f0af9ee792a76b6c5a0ac8940d4d87d8df9f5febc587d43733957b8e14fa",
-    "Verity.Partition.IsCK": "a78011b108a9369070c518c56ec7264ee084cb9aab661d2ab5ba77a6b4c26cd2",
+    "Verity.Partition.IsCK": "ba4fd6f99398650d691788850e7f35507623e4442ffb5cdef5bab12cfd052c54",
     "Verity.blockProgram": "528c99130597ba1a120be028a35d8f039600d8273b5b98a592934c4f07f94791",
     "Verity.creditSize": "0b747984e6f21e1cf881b2437ab24b27a28bb32a68c4c506e5f073cbd62d9229",
     "Verity.indexCode": "216f0f6d0fa5066656396f830b46c8cf48acaf6ba4f14be91df4018037744cc8",
-    "Verity.slowdown": "bcc17fbdb9d4847eb2dad542959451341d0437675065f525f0bb8c86b421ac7b"
+    "Verity.slowdown": "d64093141a53fcff77423fc50157649a143d4f38961afa9055c5b6eb6120bce1"
    },
    "guarantees": [
     "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound",
@@ -22964,15 +22974,26 @@
     "Verity.SecurityProofs.AndSizeLe",
     "Verity.SecurityProofs.BlockDescription",
     "Verity.SecurityProofs.CKSize",
+    "Verity.SecurityProofs.CKSize_honest",
+    "Verity.SecurityProofs.CKSize_nontrivial",
     "Verity.SecurityProofs.Counting",
     "Verity.SecurityProofs.CreditSizeLe",
     "Verity.SecurityProofs.ExpandAndSize",
     "Verity.SecurityProofs.ExpandBits",
     "Verity.SecurityProofs.ExpandBoolean",
     "Verity.SecurityProofs.ExpandSize",
-    "Verity.SecurityProofs.Padding",
     "Verity.SecurityProofs.ToCircuitAnd"
    ]
+  },
+  "Definitions.Core.Formalism.Instances": {
+   "digest": "51f05f2667c4b3aba38c940e1be08fd19c142378afdddd830252384024b0c313",
+   "definitions": {
+    "Verity.Formalism.C": "c0273911dfa0e6f04feaabe2f6804510f162edf17f03562495e86efa131f25c3",
+    "Verity.Formalism.Counter": "465a7e5f7b72f07284ed516679b3c7f9d42e0c9683f3a50d98b44af74fe28735",
+    "Verity.Formalism.Honest": "5f26844933b57cfa2006c6e9c404eb9d71d54574fd0cce64aba11fe8b276a11c",
+    "Verity.Formalism.d": "d208764bf53d0a42700c6bc127064457e10c5c6d3376d2582499f56ad93b00eb"
+   },
+   "guarantees": ["Verity.SecurityProofs.CKSize_honest", "Verity.SecurityProofs.CKSize_nontrivial"]
   },
   "Definitions.Core.Fp32": {
    "digest": "8bb886e10a4e6f80e6d59f564db9112841583eb3819c11271d0975b8d05d481a",
@@ -23198,16 +23219,15 @@
    ]
   },
   "Definitions.Core.Guarantees.Formalism": {
-   "digest": "b7e9d9851aa8902968bf7f70396f17f2a37ada0e00edcd56b25cc51bdf481451",
+   "digest": "7f669b144bddc3fc2dd04eb9a0b2deaf92fdc6db3fea69e67d4bfd0796a20127",
    "definitions": {
     "Verity.Guarantees.AndSizeLe": "9350d1ae3f31c74ddd50f1897253f464f1fa16189f0058edb6be6125a78b1aca",
     "Verity.Guarantees.BlockDescription": "05aafa32e2979c6debb18ab8accb4fb2b9b16db0cc4b8861d1fb890ee769790c",
-    "Verity.Guarantees.CKSize": "e5ae2c049103314a92e25cf1222e01ac19facf5f244deab0b45fbbbbd2db4db0",
-    "Verity.Guarantees.Counting": "c00a9fa2cdff42ac249540011e33c688fbeeac8c0a799d92139829829671facd",
+    "Verity.Guarantees.CKSize": "fc129e53304b89c7d10dd2ffd4541f9b34eec3e58643d134dd6c3eb5c4193207",
+    "Verity.Guarantees.Counting": "148dd1775f8139b18aba1e2dda74a7d95bbe9755292e034436492cbf856bdaa3",
     "Verity.Guarantees.CountingSum": "0a0b8bba8cac0cd66ec998958d7b16614b762c7e3b58e09e82bc841a787c8c76",
     "Verity.Guarantees.CreditSizeLe": "9adf46b18c65fac85cd93e56ef6b475a98367436a3e59feb813b80a8eaae6bc7",
     "Verity.Guarantees.InferenceCap": "8cb66991f9d6bf7a627c1a31de466e777ecae9a79ecc3c0385110eafda097454",
-    "Verity.Guarantees.Padding": "d499c0da2851fb11e5c6c20d8bfdfb61367bd79eeb17b9b1a045fab01d07269a",
     "Verity.Guarantees.ServingBlockSum": "74e9c171e6e3ec1a92eaaab163f8d684ca12f3c9a88ef5a5302969a1686a28cc",
     "Verity.Guarantees.ToCircuitAnd": "4a7cfceeb494bbf0a19ddc5b5cf0ad9d0a5279068b58b11249a05bb5e97a3d73"
    },
@@ -23219,10 +23239,17 @@
     "Verity.SecurityProofs.CountingSum",
     "Verity.SecurityProofs.CreditSizeLe",
     "Verity.SecurityProofs.InferenceCap",
-    "Verity.SecurityProofs.Padding",
     "Verity.SecurityProofs.ServingBlockSum",
     "Verity.SecurityProofs.ToCircuitAnd"
    ]
+  },
+  "Definitions.Core.Guarantees.Formalism.Witnesses": {
+   "digest": "a3c28bb93f7cb15a01b7d299afebe0b3b34b57db36b572c8df1a9676e0891ceb",
+   "definitions": {
+    "Verity.Guarantees.CKSize_honest": "07a924d841239e97761e0cb68b60865cf6e37d99df68e8830f938ca16529fe20",
+    "Verity.Guarantees.CKSize_nontrivial": "ccea5595556f5bbd72ed6613243186b30580a2184ae5787c0feb8ce6238e906f"
+   },
+   "guarantees": ["Verity.SecurityProofs.CKSize_honest", "Verity.SecurityProofs.CKSize_nontrivial"]
   },
   "Definitions.Core.Guarantees.Game": {
    "digest": "ecc7ed75a024d948af30f5c1fe65ee26298c9a426911af3c1ef7e90ae13b029a",
@@ -23874,6 +23901,8 @@
     "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore",
     "Verity.SecurityProofs.BlockDescription",
     "Verity.SecurityProofs.CKSize",
+    "Verity.SecurityProofs.CKSize_honest",
+    "Verity.SecurityProofs.CKSize_nontrivial",
     "Verity.SecurityProofs.Compose",
     "Verity.SecurityProofs.ComposeCone",
     "Verity.SecurityProofs.CorrectOfOpening",
@@ -23882,7 +23911,6 @@
     "Verity.SecurityProofs.ExpandAndSize",
     "Verity.SecurityProofs.ExpandSize",
     "Verity.SecurityProofs.InferenceCap",
-    "Verity.SecurityProofs.Padding",
     "Verity.SecurityProofs.PrivateFitsOfLocal",
     "Verity.SecurityProofs.PrivateOutBitsLe",
     "Verity.SecurityProofs.RefineWrong",
@@ -27475,9 +27503,9 @@
    ]
   },
   "Definitions.Nci.Guarantees.CompliesCK": {
-   "digest": "380885a79895439f02c09d141582919b20f7e16d2d8fd3082b1320e6d6ce1768",
+   "digest": "6399ffe606fa59a4a760c0e66c6ca190a12ed6b1259f4af04341bea0f44f2eac",
    "definitions": {
-    "Nci.Guarantees.CompliesCK": "f0a57f080112c5962f8e850990b0e0d50d1cba7b45100c6b32082e6844cd48e2",
+    "Nci.Guarantees.CompliesCK": "9c84a533de5ff5031c418602d7fce76497d7aa7d19c4999e471d976fafff1e10",
     "Nci.Guarantees.ExpandComplies": "9e65510b5508b7cc48fea33ebd13fd645c12e290b7f9e135187b468a7cdb0ba4"
    },
    "guarantees": ["Nci.SecurityProofs.CompliesCK", "Nci.SecurityProofs.ExpandComplies"]
