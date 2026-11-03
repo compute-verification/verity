@@ -443,10 +443,10 @@ ordinal on the wire: order[i] is its arrival order from 0 (advice v1's order per
 from 1, as `active.Requests` streams and the compact record carries it. It was admitted at bucket
 s = admitted[i], which the network certifier's FIFO makes non-decreasing in arrival order, and its output k must be released at
 s + Δ_nc + ⌊k / r⌋, Δ_nc the network certifier's latency, so advice v0's release is held to the schedule. Its `END` is
-its cell n_i, so it holds r slots of every bucket from s to s + Δ_nc + ⌊n_i / r⌋, at rank ρ among that bucket's live
-requests by stream: slot ρ·r + j is a `PAD` on q before s + Δ_nc, then its cell (b − s − Δ_nc)·r + j, an output, the
+its cell n_i, so it holds r slots of every bucket from s to s + Δ_nc + ⌊n_i / r⌋, at rank ν among that bucket's live
+requests by stream: slot ν·r + j is a `PAD` on q before s + Δ_nc, then its cell (b − s − Δ_nc)·r + j, an output, the
 `END` or a `PAD` on q. A slot past the live
-requests' is unheld. Each output's entry in its bucket's port is e = σ·P + row: σ is its step's place among the
+requests' is unheld. Each output's entry in its bucket's port is e = ψ·P + row: ψ is its step's place among the
 bucket's steps, sorted and padded to S. The proof block reads the map as 8 bytes a slot, q and e as u32be: e = 2^32 − 1
 for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream 0's `PAD`, B zero bytes).
 - **The advice is private**: it is never published; it enters the circuit builder and is proved in zero
@@ -715,9 +715,9 @@ S + 1 reads a proof block, and recomputes no root and hashes no row.
 (`release[k] // T = w`):
 - q is order[`request`] + 1, its request's ingress ordinal on the wire under advice v1's order permutation, which
   the proof block holds to the network certifier's stream ("The two ingress ties");
-- its cell is in bucket t = `release[k]` − w·T, at slot ρ·r + (`index` mod r), ρ its request's rank by stream among
+- its cell is in bucket t = `release[k]` − w·T, at slot ν·r + (`index` mod r), ν its request's rank by stream among
   the bucket's live requests;
-- e = σ·P + `row`, with σ the place of `step` among the bucket's steps;
+- e = ψ·P + `row`, with ψ the place of `step` among the bucket's steps;
 - the id is port row `step`'s `row`-th id: `runner.sampler/sampled_token_ids` of step `step` at batch row `row`.
 
 So each `release[k]` is output k's frame bucket in the network certifier's certified egress record. The unit checks
@@ -2058,8 +2058,8 @@ its grid whatever the load (the I/O tie's layout, "The I/O tie"):
   at 16 bits, which is how a Flock port of 8·S·B bits lays out the row.
 
 **The wiring** says which connection holds which slots: connection q, live in `cells`/r rows from row `first`, holds
-slots ρ·r … ρ·r + r − 1 of each, ρ its rank by ordinal among the row's live connections, so its cell k of the
-execution phase is in row first + ⌊k/r⌋ at slot ρ·r + (k mod r) (`Wiring.place`). The network certifier reads it off the
+slots ν·r … ν·r + r − 1 of each, ν its rank by ordinal among the row's live connections, so its cell k of the
+execution phase is in row first + ⌊k/r⌋ at slot ν·r + (k mod r) (`Wiring.place`). The network certifier reads it off the
 record (`wiring`, which refuses a record not laid out so) and commits it, as (q, first, cells) by q, under a 64-byte
 salt of its own.
 
