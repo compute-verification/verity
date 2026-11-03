@@ -37,7 +37,8 @@
 # under `gpu-lease 1`: the ship is pearl_c_sm90/build.sh's tree tarred as pearl-c-sm90-ship.tar, its device check runs
 # VARIANTS=h100, SCHEME defaults to pearl-c-h100-v1-h3, and the Python is VERITY_BENCH_VENV's (default /workspace/cp/venv312)
 # with no setup.sh: no ready.json and no FlashInfer build, since every request e2e.py serves samples greedily. MODEL (the
-# checkpoint's directory) is given, TAG names it in e2e.py's shape names, and WORK defaults to /workspace/pouw/pearl-c-sm90.
+# checkpoint's directory) is given, TAG names it in e2e.py's shape names, and WORK defaults to /workspace/research/pearl-c-sm90
+# (the research user's, where those nodes keep a run's data).
 set -euo pipefail
 KERNEL=${PEARLC_KERNEL:-benchmarks/pouw/pearl_c_sm120}; K=$(basename "$KERNEL")
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run, or give OUT}}
@@ -47,7 +48,7 @@ fail() { echo "WINDOW_FAIL_$1: ${*:2}" | tee "$OUT/window.fail" >&2; exit 3; }
 case $K in
   pearl_c_sm90)
     GPU_NAME="H100|H200"; GPU_CC=9.0; VARIANTS=h100; SCHEME=${SCHEME:-pearl-c-h100-v1-h3}
-    WORK=${WORK:-/workspace/pouw/pearl-c-sm90}; PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
+    WORK=${WORK:-/workspace/research/pearl-c-sm90}; PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
     MODEL=${MODEL:?on $K, MODEL names the checkpoint directory}
     [ -x "$PY" ] || fail SETUP "no Python at $PY: VERITY_BENCH_VENV names the node's pinned-vLLM environment"
     export PATH=$(dirname "$PY"):$PATH ;;
