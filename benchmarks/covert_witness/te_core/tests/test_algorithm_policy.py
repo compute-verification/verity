@@ -3,6 +3,7 @@ checkpoint whose gain (C(L1)/C(L0) under te_core.frontier_fit's fit, from the st
 its last; H the least compute from the start reaching it, every checkpoint pooled, and p = C/H; the dial's formula on a
 row's columns alone is te_core.formalism.at's at every cell; the coverage per gain target, data and decade of ρ; and
 the console's cut, which keeps the coverage's rows and each group's (p, ρ) front, naming the stored tables' art id."""
+import dataclasses
 import json
 import math
 
@@ -504,6 +505,92 @@ def test_the_kinds_cell_labels_a_measured_fresh_products_term_with_its_premises_
     assert json.loads(AP.kinds(token))["rests_on"] == label
     got = json.loads(AP.kinds(one | {"terms": one["terms"] | {"fresh_products": None}, "partial": True}))
     assert "rests_on" not in got and got["partial"] and got["bound"]["fresh_products"] is None
+
+
+#: a counted bf16 product (te_core.io_bound's vectors' square one), its operands made whole from chains of `k_whole`:
+#: at the console's k = 65,536, K = 64 voids io_bound's proved Λ (r = 1/3 > 1/4) and K = 512 doesn't
+BF16 = {"b_a": 16, "b_b": 16, "b_c": 32, "gates_per_mac": 23682 / 16, "cell_gates": 23682.0}
+
+
+def made_whole(m: formalism.Measured, k_whole: float) -> formalism.Measured:
+    square = {"macs": 5e14, "outputs": 5e14 / 512, "k_dim": 512, "k_whole": k_whole} | BF16
+    return dataclasses.replace(m, products={"k": AP.CONSOLE[1], "order": "chain", "products": [square]})
+
+
+def test_a_void_fresh_products_term_is_what_io_bound_voids_under_reading_a_where_fit_fails():
+    """te_core 4.9 measured the fresh-products term as 0 where io_bound's proved Λ is void (coordinator 13:32Z: no
+    result); from te_core 4.10 that term is unmeasured (`formalism.FRESH_VOID`), never 0, so `voided` finds no void
+    0 in a published ρ at the console's default, nor in a measured term, an unmeasured one or reading B's ρ."""
+    m = info()["starts"][0].rows[0]["measured"]
+    void, whole = made_whole(m, 64), made_whole(m, 512)
+    one = formalism.published(void, reading="A")
+    assert one["terms"]["fresh_products"] is None and not AP.voided(void, one)
+    assert formalism.published(whole, reading="A")["terms"]["fresh_products"] > 0
+    assert not AP.voided(whole, formalism.published(whole, reading="A"))
+    assert not AP.voided(m, formalism.published(m, reading="A")) and not AP.voided(void, formalism.published(void))
+    assert not AP.voided(void, one | {"binding_kind": "fit"})
+    got = json.loads(AP.kinds(one, void=True))
+    assert got["void"] == AP.VOIDED and "rests_on" not in got and got["bound"]["fresh_products"] is None
+
+
+def test_a_void_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_never_the_least_s(tmp_path, monkeypatch):
+    """A row whose ρ reads a void fresh-products term has basis_default `void` whatever it publishes: no decade holds
+    it, the cut picks the void rows among themselves alone, and the figure draws each with a cross, never the least S.
+    The adapters' traces (lora's and the dominated ones') make operands whole from K = 64 chains, and a stand-in
+    `published` measures their token kind at 0.9, so ρ is 1, binding none, which would put lora's at the least S at
+    gain 1.1."""
+    real = formalism.published
+
+    def published(m, c=None, k=None, reading=None):
+        one = real(m, c, k, reading)
+        if m.products is None:
+            return one
+        a = real(m, c, k, "A")
+        return a | {"rho": 1.0, "binding_kind": "none", "rests_on": formalism.RESTS_ON_CELL["none"],
+                    "terms": a["terms"] | {"token": 0.9, "decoding": 0.9}}
+
+    monkeypatch.setattr(formalism, "published", published)
+    # te_core 4.10 measures no void 0 (the term is unmeasured), so the void rows are stood in
+    monkeypatch.setattr(AP, "voided", lambda m, one: m.delta_bits == 8e6)
+    got = info(runs=RUNS + DOMINATED)
+    for st in got["starts"]:
+        for r in st.rows:
+            if r["measured"].delta_bits == 8e6:
+                r["measured"] = made_whole(r["measured"], 64)
+    p = AP.build(got, "test")
+    ds = plots.frame(p)
+    void = [d["record"].startswith("lora") for d in ds]
+    assert any(void) and all((d["basis_default"], d["rho_default"], d["binding_kind"]) == (AP.VOID, 1.0, "none")
+                             and json.loads(d["kinds"])["void"] == AP.VOIDED for d, x in zip(ds, void) if x)
+    assert all(d["basis_default"] != AP.VOID for d, x in zip(ds, void) if not x)
+    cov = AP.coverage(p)
+    assert sum(c["rows"] for c in cov) == len(ds) - sum(void) == len(ds) - AP.unmeasured_rows(p, AP.VOID)
+    assert not any((c.get("record") or "").startswith("lora") for c in cov)
+    rest = p | {"rows": [r for r, x in zip(p["rows"], void) if not x]}
+    rec, g = AP.COLUMNS.index("record"), AP.COLUMNS.index("gain_target")
+    for tier in AP.TIERS:
+        kept, alone = ({(r[rec], r[g]) for r in AP.kept(q["rows"], tier, {c["row"] for c in AP.coverage(q)
+                                                                            if c["row"] is not None})} for q in (p, rest))
+        assert {x for x in kept if not x[0].startswith("lora")} == alone
+        assert (("lora@1", 1.1) in kept) == (tier != "coverage")
+    fits = {"v3": None, "v2.3-pilot": LAW}
+    assert ("2 rows read a void fresh-products term (basis_default void: 0 from a void Lambda, no result, so rho is "
+            "only a lower bound), in no decade.") in AP.coverage_md(cov, fits, "T", void=2)
+    assert AP.board_line(cov, fits, "T", None, void=1).endswith(" 1 row reads a void fresh-products term (0, no "
+                                                                "result), in no decade.")
+    assert "(1, 1)" not in AP.summary(p, got)
+    calls, real_plot = [], AP.plt.Axes.plot
+
+    def plot(ax, *a, **k):
+        calls.append((a[:2], k))
+        return real_plot(ax, *a, **k)
+
+    monkeypatch.setattr(AP.plt.Axes, "plot", plot)
+    AP.figure(p, tmp_path)
+    marked = {(d["p"], d["rho_default"]) for d, x in zip(ds, void) if x and d["p"] is not None}
+    assert marked and marked <= {xy for xy, k in calls if k.get("marker") == AP.LOWER[AP.VOID]}
+    rings = {xy for xy, k in calls if k.get("mec") == "red"}
+    assert rings and not rings & {(d["p"], d["rho_default"]) for d, x in zip(ds, void) if x and d["reached"] == "yes"}
 
 
 def test_the_output_leads_with_the_coverage_table(tmp_path, monkeypatch, capsys):

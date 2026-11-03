@@ -1,5 +1,5 @@
 {
- "capture": "4.8",
+ "capture": "4.10",
  "gates": 277159456773655.0,
  "k": 65536.0,
  "order": "unknown",
@@ -61,8 +61,8 @@
    "op": "bmm",
    "outputs": 1048576,
    "paid": [
-    false,
-    false
+    true,
+    true
    ],
    "phase": "forward",
    "rates": [
@@ -101,7 +101,7 @@
    "outputs": 262144,
    "paid": [
     false,
-    false
+    true
    ],
    "phase": "forward",
    "rates": [
@@ -621,7 +621,7 @@
    "outputs": 262144,
    "paid": [
     false,
-    false
+    true
    ],
    "phase": "backward",
    "rates": [
@@ -659,8 +659,8 @@
    "op": "bmm",
    "outputs": 1048576,
    "paid": [
-    false,
-    false
+    true,
+    true
    ],
    "phase": "backward",
    "rates": [
@@ -698,7 +698,7 @@
    "op": "bmm",
    "outputs": 262144,
    "paid": [
-    false,
+    true,
     false
    ],
    "phase": "backward",
