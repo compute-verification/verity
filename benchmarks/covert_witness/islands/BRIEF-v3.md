@@ -17,6 +17,12 @@ the region below the floor of about 300 down to Fit. A run counts once it beats 
 attempt, including runs that never reach, which the panel marks not reached; runs may go to p ≈ 100 on the long tier.
 The builder's coverage table on the board (gain size by decade of ρ) shows where the gaps are.
 
+## Daniel's standing rule (Mon 10:33 PM PST)
+
+Measure the training slowdown the least smelly way: the way Daniel would expect if he read the code rather than our summary. The bound comes from the run's own circuit, every input is measured or marked assumed, a lower bound (counting lemma, caps proved or set by checked witness blocks) and an upper bound (an explicit partition) are both shown, and assumptions are few, named and refutable. Nothing is chosen because it makes a number bigger or smaller. When something is unexpected or obviously done in a dumb way, post a [SMELL] line (what it looks like versus what it is, where, the fix and its owner) and act on it.
+
+The clean bound for products of two fresh operands is the Loomis-Whitney cap: a block reading at most k bits does at most (k/3)^1.5 / sqrt(b_A b_B b_C) multiply-adds of such a product, with each b the width the value is passed at. Dense pretraining at the console default is therefore at least about 6.5e6 times its fresh-product share, not the 135-292 that reading B gives, and not infinite. What escapes: products with one operand in theta, updates small enough to fit a block, little work in fresh products.
+
 ## Tonight's rulings (Tue 3 Nov), in force
 
 - **Launch:** s-t20 is open, at pin 5df3bc39426 (`python benchmarks/covert_witness/launch.py s-t20 --island NAME --note TEXT [--program FILE] -- ARGS`, from a checkout with origin/cursor/covert-witness-4207 merged). m-t20 (60M) and the rest join as ladder-v3 publishes them. Prefer m-t20 for headline runs; the 20M start's embedding is a large share of the model, so use it for screens.
