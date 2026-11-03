@@ -28,7 +28,8 @@ square root of a two-continuation finder's success (`Core.Game.TwoRun`), one fin
   `recordFinder`, `msg_calls` and `record_calls` (`msgFinder_calls`, `recordFinder_calls`).
 * **The messages' bound** (`prob_le_messages`): an event of the period's game is at most as likely as the event on the
   tapes that miss at no round and not at the record (`NoMiss`), plus `CouplingTarget`'s messages terms, the square root
-  of each round's finder's success and of the record's.
+  of each round's finder's success and of the record's. So `CouplingTarget` holds once the sampled verdict off the
+  misses is bounded by its other terms (`couplingTarget_of_noMiss`).
 -/
 
 namespace Verity.Game
@@ -439,5 +440,23 @@ theorem prob_le_messages (rd : Readings) (K : Constructions V) (hM : K.msgFinder
           ENNReal.ofReal (Real.sqrt ((K.recordFinder A θ F c σ).Pr sha512Msg))) := by
   rw [hM, hR]
   exact prob_le_noMiss_add V θ F c (rd A θ F c) σ _ E
+
+omit θ F c in
+/-- **The coupling off the messages' misses**: at constructions whose two-continuation finders are these,
+`CouplingTarget` holds once the sampled verdict on the tapes that miss at no round and not at the record is at most as
+likely as the live audit's acceptance at the projected strategy, plus the hiding term, the read finder's collision and
+the forger's forgery. -/
+theorem couplingTarget_of_noMiss (k : Verity.Registration.Composite) (rd : Readings) (K : Constructions V)
+    (hM : K.msgFinder = msgFinder V rd) (hR : K.recordFinder = recordFinder V rd) (A : Live) (θ : ByteArray)
+    (F : Array ByteArray)
+    (h : ∀ (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
+      ENNReal.ofReal (Claims.Pr fun x : CoinTape (V.game θ F c) σ =>
+          V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) ∧ NoMiss V θ F c (rd A θ F c) σ x) ≤
+        FlockSoundness.Game.prob (fun o => LiveAcceptsZKP A.I A.own o) (K.live A θ F c σ).game
+            (K.project A θ F c σ) +
+          (A.hidingTerm + ENNReal.ofReal ((K.readFinder θ F c σ).Pr sha512Msg) +
+            ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))) :
+    CouplingTarget V k K A θ F := fun c σ =>
+  (prob_le_messages V rd K hM hR A θ F c σ _).trans <| (add_le_add (h c σ) le_rfl).trans_eq (by ring)
 
 end Verity.Sampled
