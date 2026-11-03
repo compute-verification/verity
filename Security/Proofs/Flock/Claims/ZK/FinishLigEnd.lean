@@ -149,7 +149,6 @@ macro_rules
       | (refine keepL_bind (keepL_forIn_range _ _ fun _ _ => keepL_of_endL ?_) fun _ => ?_; end_l; keep_l)
       | (split <;> keep_l))
 
--- `ligeritoCut`'s unfolded run taken a bind at a time (`endT_bind`), each branch of its last step
 set_option maxHeartbeats 4000000 in
 /-- **Ligerito from a source ends on a squeeze**: at `asksCut`, where `ligeritoCut` returns, it leaves no pending
 bytes. -/
