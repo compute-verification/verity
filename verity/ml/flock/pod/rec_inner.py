@@ -291,8 +291,8 @@ def tree_held(challenger: Path, sessions: list[Path]) -> dict:
         held.append((d.name, tree, json.loads((d / "public.json").read_text())))
     why = RL.tree_held_reason(R.log_lines(challenger / R.RELEASES), held)
     return {"sessions": [n for n, _, _ in held], "reason": why, "ok": why is None,
-            "held_by": "rec_live.tree_held_reason (Python): Lean's challenger_session_trees reads flock-circuit serve's "
-                       "records, not rec_live's coin server's"}
+            "held_by": "rec_live.tree_held_reason, the Python mirror of SampledProofs.Challenger.innerTreesReason, which "
+                       "the recursive audit reads"}
 
 
 def main(argv=None) -> int:

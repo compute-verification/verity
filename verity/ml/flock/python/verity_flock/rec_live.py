@@ -106,6 +106,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import socket
 import struct
 import subprocess
@@ -699,8 +700,10 @@ def tree_held_reason(log: list[str], sessions: list[tuple[str, dict, dict]]) -> 
     do. Each session's tree must be one the log sampled, under its key, nonce, root and spec, and no earlier session's; its
     link points that tree's ``session`` round 0, opened after `link_after` of the record's ``link.roots``; each round of
     its record its stream's round, opened after `round_after` of the round; and the log must show no tree and no opening
-    that no session records. `challenger.sessions_tree_reason` holds a `flock-circuit serve` session to the log the same
-    way, after what that server answers."""
+    that no session records, and no round read twice. `challenger.sessions_tree_reason` holds a `flock-circuit serve`
+    session to the log the same way, after what that server answers. It mirrors `SampledProofs.Challenger.innerTreesReason`,
+    the verifier of record, which the recursive audit reads (`test_challenger_inner_trees.py` in the sampled proofs
+    service's tests holds the two together)."""
     from verity.core.protocols.sampled_proofs import challenger as C
 
     trees, used = C.coin_trees_of(log), []
@@ -719,25 +722,64 @@ def tree_held_reason(log: list[str], sessions: list[tuple[str, dict, dict]]) -> 
 def _tree_held(trees: dict, tree: dict, public: dict) -> str | None:
     from verity.core.protocols.sampled_proofs import challenger as C
 
-    t = trees.get(tree.get("root")) if isinstance(tree, dict) else None
+    root = tree.get("root") if isinstance(tree, dict) else None
+    t = trees.get(root) if type(root) is str else None
     if t is None:
         return C.NO_TREE
     if canonical(tree) != canonical(t.record()):
         return "its coin tree is not the one the challenger's release log shows it sampled under that root"
     try:
-        link = public["link"]
-        asked = [(CT.SESSION, 0, link["points"], link_after({k: [bytes.fromhex(b) for b in v] for k, v in link["roots"].items()}))]
-        asked += [(r["stream"], r["k"], r["coins"], round_after(r)) for r in public["rounds"]]
-        got = [(s, k, len(cs), a.hex(), hashlib.sha512(b"".join(bytes.fromhex(c) for c in cs)).hexdigest()) for s, k, cs, a in asked]
+        got = _inner_reads(public)
     except (KeyError, TypeError, ValueError, AttributeError):
         return "its coin server's record is not one rec_live writes (link {points, roots}, rounds [{stream, k, coins, ...}])"
+    seen = set()
     for s, k, n, after, coins in got:
+        if (s, k) in seen:
+            return f"its coin server's record reads its {s} round {k} twice"
+        seen.add((s, k))
         o = t.opening(s, k)
         if o is None or (o.n, o.after, o.coins) != (n, after, coins):
             return f"its {s} round {k} is not coins the challenger opened under its tree after what the coin server recorded"
     if len(t.opened) != len(got):
         return f"the challenger's release log shows {len(t.opened)} openings of its tree and its record {len(got)}"
     return None
+
+
+_LOWER_HEX = re.compile("(?:[0-9a-f]{2})*")
+
+
+def _record_hex(s) -> bytes:
+    if type(s) is not str or _LOWER_HEX.fullmatch(s) is None:
+        raise ValueError("not lowercase hex")
+    return bytes.fromhex(s)
+
+
+def _integral(v) -> bool:
+    """Whether ``v`` holds no float: canonical JSON (`Flock.canon`) has integers alone."""
+    if isinstance(v, dict):
+        return all(_integral(x) for x in v.values())
+    if isinstance(v, list):
+        return all(_integral(x) for x in v)
+    return type(v) is not float
+
+
+def _inner_reads(public: dict) -> list[tuple[str, int, int, str, str]]:
+    """What the coin server's record ``public`` reads of its tree, in order (`SampledProofs.Challenger.innerReads`): the
+    link points as the tree's ``session`` round 0, then each round; each its stream, round, coin count, what it was
+    opened after and its coins' SHA-512, in hex. TypeError or ValueError for a record rec_live doesn't write."""
+    link, rounds = public["link"], public["rounds"]
+    roots = link["roots"]
+    if not isinstance(roots, dict) or not all(type(v) is list for v in roots.values()) or type(rounds) is not list:
+        raise TypeError("not rec_live's record")
+    asked = [(CT.SESSION, 0, link["points"], link_after({k: [_record_hex(b) for b in v] for k, v in roots.items()}))]
+    for r in rounds:
+        s, k = r["stream"], r["k"]
+        if type(s) is not str or type(k) is not int or k < 0 or not _integral(r):
+            raise TypeError("not rec_live's round")
+        asked.append((s, k, r["coins"], round_after(r)))
+    if not all(type(cs) is list for _, _, cs, _ in asked):
+        raise TypeError("coins are a list")
+    return [(s, k, len(cs), a.hex(), hashlib.sha512(b"".join(_record_hex(c) for c in cs)).hexdigest()) for s, k, cs, a in asked]
 
 
 class CoinServer:
