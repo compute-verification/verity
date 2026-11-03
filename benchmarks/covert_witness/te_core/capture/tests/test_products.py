@@ -355,30 +355,39 @@ def test_a_sparse_product_is_found_whatever_its_rows_pass_through(how):
 
 
 class Looked(nn.Module):
-    """A trained embedding of 64 rows of 32, looked up `form`, then a norm, a layer and a head."""
+    """A trained embedding of 64 rows of 32, looked up `form`, then a norm, a layer and a head: by a lookup, by
+    indexing, by a computed index, from a table the step builds of the embedding (`built`, as a grown model's copy of
+    θ's table is), or, the control, from a table the step builds as a trained vector's broadcast (`spread`)."""
 
     def __init__(self, form: str) -> None:
         super().__init__()
         self.form = form
         self.emb = nn.Embedding(64, 32)
+        if form == "spread":
+            self.lane = nn.Parameter(torch.randn(32))
         self.g = nn.Parameter(torch.ones(32))
         self.w = nn.Linear(32, 32, bias=False)
         self.head = nn.Linear(32, 64, bias=False)
 
     def forward(self, tok):
         x = (self.emb(tok) if self.form == "embedding" else self.emb.weight[tok] if self.form == "index" else
-             self.emb(tok + 0))
+             tF.embedding(tok, self.emb.weight * 1.0) if self.form == "built" else
+             tF.embedding(tok, self.lane.expand(64, 32) * 1.0) if self.form == "spread" else self.emb(tok + 0))
         h = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + 1e-6) * self.g
         return self.head(x + self.w(h))
 
 
-@pytest.mark.parametrize("form, found", (("embedding", []), ("index", []),
-                                         ("computed", [{"op": "mul", "count": 3, "macs": 3 * 16_384}])))
+@pytest.mark.parametrize("form, found", (("embedding", []), ("index", []), ("built", []),
+                                         ("computed", [{"op": "mul", "count": 3, "macs": 3 * 16_384}]),
+                                         ("spread", [{"op": "mul", "count": 3, "macs": 3 * 16_384}])))
 def test_an_embeddings_rows_are_no_broadcast(form, found):
     """512 tokens of a 64-row embedding: its rows repeat as the tokens do, which is the data and no broadcast, so the
     norm's multiplication of a token's row by its scale is elementwise (4.12.7's check took it for a product once a
-    step had more tokens than the table has rows, which every large-batch dense step does). A lookup is a module
-    tensor's rows by a graph input (`products._lookup`): an index the program computes is none, so there it is found."""
+    step had more tokens than the table has rows, which every large-batch dense step does). A lookup is a table's rows
+    by a graph input (`products._lookup`, `products._rows_by_data`): an index the program computes is none, so there
+    it is found. A table the step builds is one where its entries are its own, as a grown model's copy of θ's table
+    is (4.12.13's check took it for a broadcast, and found its norm at every micro-batch), and none where it is a
+    trained vector's broadcast, which is found."""
     torch.manual_seed(0)
     tok = torch.randint(0, 64, (8, 64))
     m = Looked(form)

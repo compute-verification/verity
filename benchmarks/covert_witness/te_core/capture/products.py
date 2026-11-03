@@ -350,11 +350,10 @@ def _sums_by_index(n) -> bool:
     return False
 
 
-def _lookup(n) -> bool:
-    """Whether node `n` looks a module tensor's rows up by the step's data (an embedding by its token ids): a gather
-    of rows (embedding, table[ids], index_select along dim 0) whose table is a module tensor and whose index a graph
-    input, each through views and casts. Its rows repeat only where the data does, so its entries are its own; an
-    index a program computes, or a table it builds, is no lookup."""
+def _rows_by_data(n):
+    """The table node `n` gathers rows of by the step's data (an embedding by its token ids): a gather of rows
+    (embedding, table[ids], index_select along dim 0) whose index is a graph input through views and casts; else
+    None."""
     name, a = _pk(n.target), n.args
     if name == "embedding" and len(a) > 1:
         index = a[1]
@@ -364,28 +363,40 @@ def _lookup(n) -> bool:
     elif name == "index_select" and len(a) > 2 and a[1] == 0:
         index = a[2]
     else:
-        return False
+        return None
     if not (hasattr(a[0], "op") and hasattr(index, "op")):
-        return False
-    table, index = io_bound._root(a[0]), io_bound._root(index)
-    return getattr(table, "op", None) == "get_attr" and getattr(index, "op", None) == "placeholder"
+        return None
+    return a[0] if getattr(io_bound._root(index), "op", None) == "placeholder" else None
+
+
+def _lookup(n) -> bool:
+    """Whether node `n` looks a module tensor's rows up by the step's data (`_rows_by_data`, its table a module
+    tensor through views and casts). Its rows repeat only where the data does, so its entries are its own; an index
+    a program computes is no lookup, and a table it builds is one only where its entries are its own (`_sources`)."""
+    table = _rows_by_data(n)
+    return table is not None and getattr(io_bound._root(table), "op", None) == "get_attr"
 
 
 def _sources(vs: _Values) -> list:
     """Each value's sources, the values that depend on θ′ whose entries it is computed from (None: it doesn't depend on
-    θ′). A graph source, a GEMM's output (a product the rows count) and a lookup's (`_lookup`) are their own sources, and
-    so is any value with at least as many entries as its sources have; any other value's are its affected
-    predecessors', storage-versioned (`_Flow`), so a view, a cast, a map, a multiplication by a value outside the
-    update or a copy in place keeps the entries of the value it broadcasts."""
+    θ′). A graph source, a GEMM's output (a product the rows count) and a lookup's (`_lookup`) are their own sources,
+    and so is a gather of rows by the step's data (`_rows_by_data`) from a table the program builds, where each version
+    of it the gather reads is its own source (a copy of θ's table, never a broadcast); and so is any value with at
+    least as many entries as its sources have; any other value's are its affected predecessors', storage-versioned
+    (`_Flow`), so a view, a cast, a map, a multiplication by a value outside the update or a copy in place keeps the
+    entries of the value it broadcasts."""
     flow, dep = vs.flow, vs.dep
     own = {n for n in vs.nodes if n.op == "call_function" and (_gemms(n) or _lookup(n))}
+    rows = {n: t for n in vs.nodes if n.op == "call_function" and (t := _rows_by_data(n)) is not None}
     size = _sizes(vs)
     src: list = [None] * len(flow.preds)
     for v, ps in enumerate(flow.preds):
         if not dep[v]:
             continue
         aff = [p for p in ps if dep[p]]
-        s = frozenset((v,)) if not aff or flow.node[v] in own else frozenset().union(*(src[p] for p in aff))
+        n = flow.node[v]
+        whole = n in rows and all(src[x] == frozenset((x,)) for x in _reads(vs, n, rows[n]) if dep[x])
+        s = frozenset((v,)) if not aff or n in own or whole else frozenset().union(*(src[p] for p in aff))
         src[v] = s if sum(size[x] for x in s) < size[v] else frozenset((v,))
     return src
 
