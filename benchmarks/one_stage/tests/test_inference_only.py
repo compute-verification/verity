@@ -8,8 +8,9 @@ accepts within (c, k, n), refuses past each, and refuses as undecided what the r
 after the serve began unless said retroactive, a primitive with no price, a closed window with no seal, a window the
 class doesn't take), its public form naming no window and publishing no count: it judges n on the exact count, which
 only the private form holds, so runs whose counts differ publish one verdict, unless n falls between them, and then
-differ in their judgment alone; and it keeps none of `nci-check --count`'s counts. The slow test runs `nci-check
---count`."""
+differ in their judgment alone. Of `nci-check --count` it takes the whole verdict, with ``--detail`` where the binary's
+usage names it, into the private form alone, and publishes its gates a block, fresh bits and ``complies``, or its
+refusal, and none of its counts, total or failure. The slow test runs `nci-check --count`."""
 from __future__ import annotations
 
 import json
@@ -190,7 +191,7 @@ def test_a_run_within_its_policy_is_accepted_and_its_public_form_holds_no_count(
     assert pub["classes"] == [[row["definition"], row["gates"], row["fresh"]]] and not {"blocks", "total"} & set(pub)
     assert (pub["slots"], pub["positions"], pub["c"], pub["k"], pub["n"]) == (2, row["positions"], row["gates"],
                                                                               row["fresh"], 6)
-    assert (pub["format"], pub["counts"]) == ("verity-bench/inference-only-verdict/v3", IO.COUNTS)
+    assert (pub["format"], pub["counts"]) == ("verity-bench/inference-only-verdict/v4", IO.COUNTS)
     assert IO.COUNTS.startswith("none published") and "exact count" in IO.COUNTS
     assert pub["registered_session"] is True and pub["serve_began_utc"] == "2025-11-01T12:26:40+00:00"
     assert SV.public_json(pub) == pub and not {"sealed", "outside_class", "retroactive"} & set(pub)
@@ -285,55 +286,125 @@ def test_a_policy_written_after_the_serve_began_is_read_only_when_said_retroacti
 
 
 def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(small, tmp_path, capsys):
-    """`verdict` writes the public verdict to --out and the full one, 0600, to --private, and prints the public line."""
+    """`verdict` writes the public verdict to --out and the full one, 0600, to --private, `nci-check --count --detail`'s
+    whole verdict in the private one alone, and prints the public line."""
     row = IO.session_row(small, None, None)
     d = _serve(tmp_path / "s", FULL)
     (tmp_path / "policy.json").write_text(json.dumps(_policy(row)))
     (tmp_path / "circuit.json").write_text(json.dumps(small))
     (tmp_path / "registration.json").write_text(json.dumps({}))
     (d / "private").mkdir(mode=0o700)
+    lean = _nci_check(tmp_path / "lean", NEW_USAGE, {"complies": False}, _whole(row))
     assert IO.main(["verdict", "--policy", str(tmp_path / "policy.json"), "--serve-run", str(d), "--circuit",
                     str(tmp_path / "circuit.json"), "--registration", str(tmp_path / "registration.json"), "--pins",
-                    str(tmp_path / "no-weights.json"), "--out", str(tmp_path / "out" / "inference-only.json"),
+                    str(tmp_path / "no-weights.json"), "--lean", str(lean), "--out", str(tmp_path / "out" / "inference-only.json"),
                     "--private", str(d / "private" / "inference-only.json")]) == 0
     pub = json.loads((tmp_path / "out" / "inference-only.json").read_text())
     full = json.loads((d / "private" / "inference-only.json").read_text())
     assert pub["verdict"] == "accept" and full["sealed"] == 3 and not {"sealed", "blocks", "total"} & set(pub)
-    assert (full["blocks"][0][3], full["total"], pub["format"]) == (6, 6, "verity-bench/inference-only-verdict/v3")
+    assert (full["blocks"][0][3], full["total"], pub["format"]) == (6, 6, "verity-bench/inference-only-verdict/v4")
     assert stat.S_IMODE((d / "private" / "inference-only.json").stat().st_mode) == 0o600
+    assert full["lean_detail"] == {"flags": ["--count", "--detail"], "out": _whole(row)} and "lean_detail" not in pub
     said = capsys.readouterr().out
     assert said.startswith("INFERENCE-ONLY accept: session ") and "(no count published: n is judged on the blocks' exact " \
-        "count, held on the node)" in said
+        "count, held on the node)" in said and said.rstrip().endswith(f"{row['gates']} gates a block (agrees)")
+    assert str(COUNT) not in (tmp_path / "out" / "inference-only.json").read_text() and str(COUNT) not in said
 
 
 def test_lean_counts_refusal_is_said_not_judged(small, tmp_path):
-    """An `nci-check` that exits non-zero or prints no JSON gives no Lean count, which the verdict says beside its own."""
+    """An `nci-check` that exits non-zero or prints no JSON object gives no Lean count, which the verdict says beside its
+    own; what it printed stays in the private verdict."""
     row = IO.session_row(small, None, None)
     d = _serve(tmp_path / "s", FULL)
-    for body, said in (("echo no >&2; exit 2", "exit 2: no"), ("echo hello", "printed no JSON: hello")):
+    for body, why, said in (("echo no >&2; exit 2", "exit 2", "no"), ("echo hello", "printed no JSON object", "hello"),
+                            ("echo '[7, 9]'", "printed no JSON object", "[7, 9]")):
         exe = tmp_path / "nci-check"
         exe.write_text(f"#!/bin/sh\n{body}\n")
         exe.chmod(0o755)
-        pub, _ = IO.verdict(_policy(row), small, d, None, None, lean=exe, scratch=tmp_path)
-        assert pub["verdict"] == "accept" and said in pub["lean"]["error"]
+        pub, full = IO.verdict(_policy(row), small, d, None, None, lean=exe, scratch=tmp_path)
+        assert pub["verdict"] == "accept" and pub["lean"] == {"error": f"nci-check --count {why}"}
+        assert full["lean_detail"] == {"flags": ["--count"], "error": f"nci-check --count {why}", "said": said}
         assert list(tmp_path.glob("tmp*.json")) == []
 
 
-def test_the_record_keeps_none_of_nci_checks_counts(small, tmp_path):
-    """`nci-check --count` prints its rows, each with its count of blocks, and their total; the verdict keeps its gates a
-    block, whether they agree, and its fresh bits, verdict and failure with θ empty, and none of its counts."""
-    row = IO.session_row(small, None, None)
-    said = {"blocks": [[row["key"], row["gates"], row["fresh"] + 5, 2]], "total": 2, "complies": False,
-            "failure": [0, "fresh"]}
-    (tmp_path / "said.json").write_text(json.dumps(said))
-    exe = tmp_path / "nci-check"
-    exe.write_text(f"#!/bin/sh\ncat '{tmp_path / 'said.json'}'\n")
+#: `nci-check`'s usage while ``--count`` printed its whole verdict, and once it prints that only with ``--detail``
+OLD_USAGE = "usage: nci-check [--unrolled] INSTANCE TRUSTED | nci-check --policy [--unrolled] INSTANCE | nci-check --count INSTANCE"
+NEW_USAGE = OLD_USAGE.replace("--count INSTANCE", "--count [--detail] INSTANCE")
+#: a count of blocks no other number in the verdict holds
+COUNT = 987654321
+
+
+def _nci_check(where: Path, usage: str, count: dict, detail: dict | None) -> Path:
+    """A stand-in `nci-check` that answers as the built one does: ``--count INSTANCE`` prints ``count``, ``--count --detail
+    INSTANCE`` prints ``detail`` where it has one, and anything else gets ``usage``, exit 2. It logs each call's
+    arguments to ``args.log`` beside it."""
+    where.mkdir(parents=True)
+    (where / "count.json").write_text(json.dumps(count))
+    if detail is not None:
+        (where / "detail.json").write_text(json.dumps(detail))
+    exe = where / "nci-check"
+    exe.write_text(f"""#!/bin/sh
+echo "$*" >> '{where}/args.log'
+if [ "$1" = --count ] && [ $# -eq 2 ]; then cat '{where}/count.json'; exit 0; fi
+if [ "$1 $2" = "--count --detail" ] && [ $# -eq 3 ] && [ -f '{where}/detail.json' ]; then cat '{where}/detail.json'; exit 0; fi
+echo '{usage}' >&2
+exit 2
+""")
     exe.chmod(0o755)
-    pub, _ = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
+    return exe
+
+
+def _whole(row: dict) -> dict:
+    """`NciCheck.Count`'s whole verdict on the session Program with θ empty: its row's fresh bits past k, and a count."""
+    return {"blocks": [[row["key"], row["gates"], row["fresh"] + 5, COUNT]], "total": COUNT, "complies": False,
+            "failure": [0, "fresh"]}
+
+
+@pytest.mark.parametrize(("usage", "public", "flags"), [
+    (OLD_USAGE, None, ["--count"]),
+    (NEW_USAGE, {"complies": False}, ["--count", "--detail"]),
+], ids=["count-prints-all", "detail-prints-all"])
+def test_the_record_takes_nci_checks_gates_fresh_bits_and_verdict_and_none_of_its_counts(small, tmp_path, usage, public,
+                                                                                         flags):
+    """An `nci-check` whose ``--count`` prints its whole verdict, and one that prints only ``{complies}`` unless given
+    ``--detail``, which its usage names: each is called for its whole verdict, rows, total and failure, which the private
+    verdict keeps whole, and the public verdict and its line take only its gates a block, whether they agree, and with θ
+    empty its fresh bits and ``complies``, and none of its counts."""
+    row = IO.session_row(small, None, None)
+    exe = _nci_check(tmp_path / "lean", usage, public or _whole(row), _whole(row) if public else None)
+    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     assert pub["verdict"] == "accept" and pub["lean"] == {
-        "gates": row["gates"], "agrees_on_gates": True,
-        "with_theta_empty": {"fresh": row["fresh"] + 5, "complies": False, "failure": [0, "fresh"]}}
+        "gates": row["gates"], "agrees_on_gates": True, "with_theta_empty": {"fresh": row["fresh"] + 5, "complies": False}}
+    assert str(COUNT) not in json.dumps(pub) and str(COUNT) not in IO.line(pub) and "lean_detail" not in pub
     assert IO.line(pub).endswith(f"; nci-check --count: {row['gates']} gates a block (agrees)")
+    assert full["lean_detail"] == {"flags": flags, "out": _whole(row)}
+    calls = (tmp_path / "lean" / "args.log").read_text().splitlines()
+    assert calls[0] == "" and len(calls) == 2 and calls[1].startswith(" ".join(flags) + " " + str(tmp_path))
+
+
+def test_a_binary_whose_usage_hides_detail_gives_no_rows_which_is_said(small, tmp_path):
+    """An `nci-check` that prints only ``{complies}`` for ``--count`` and whose usage names no ``--detail`` gives no row
+    of the block: the verdict says so beside its own, and takes nothing from it."""
+    row = IO.session_row(small, None, None)
+    exe = _nci_check(tmp_path / "lean", OLD_USAGE, {"complies": False}, _whole(row))
+    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
+    assert pub["verdict"] == "accept" and pub["lean"] == {"error": "nci-check --count printed no row of the block"}
+    assert full["lean_detail"] == {"flags": ["--count"], "out": {"complies": False}}
+
+
+@pytest.mark.parametrize(("usage", "flags"), [(OLD_USAGE, ["--count"]), (NEW_USAGE, ["--count", "--detail"])],
+                         ids=["count-prints-all", "detail-prints-all"])
+def test_an_nci_check_refusal_lands_in_lean_with_its_code_and_message_alone(small, tmp_path, usage, flags):
+    """`nci-check`'s refusal, with or without ``--detail``, lands in ``lean`` as its ``error`` and ``message``, the
+    verdict accepting beside it; anything else it carries, a count here, stays in the private verdict."""
+    row = IO.session_row(small, None, None)
+    refusal = {"error": "program", "message": "E_REINTERPRET: a reference reads a leaf at another width"}
+    said = {**refusal, "blocks": [[row["key"], row["gates"], row["fresh"], COUNT]], "total": COUNT}
+    exe = _nci_check(tmp_path / "lean", usage, said, said)
+    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
+    assert pub["verdict"] == "accept" and pub["lean"] == refusal and IO.line(pub).endswith("; nci-check --count: program")
+    assert str(COUNT) not in json.dumps(pub) and str(COUNT) not in IO.line(pub)
+    assert full["lean_detail"] == {"flags": flags, "out": said}
 
 
 @pytest.mark.slow
@@ -345,7 +416,8 @@ def test_nci_check_counts_the_verdicts_gates_on_the_session_program(small, tmp_p
 
     exe = SC.build(SC.INFERENCE_ONLY_LEAN[0], "nci-check")
     row = IO.session_row(small, None, None)
-    pub, _ = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
+    pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     assert pub["verdict"] == "accept" and pub["lean"]["agrees_on_gates"] is True and pub["lean"]["gates"] == row["gates"]
     assert set(pub["lean"]) == {"gates", "agrees_on_gates", "with_theta_empty"}
-    assert set(pub["lean"]["with_theta_empty"]) == {"fresh", "complies", "failure"}
+    assert set(pub["lean"]["with_theta_empty"]) == {"fresh", "complies"}
+    assert {"blocks", "total", "failure"} <= set(full["lean_detail"]["out"])
