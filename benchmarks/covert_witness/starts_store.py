@@ -44,9 +44,10 @@ def sha256(path: Path) -> str:
 
 
 def shape(rec: dict) -> dict:
-    """What te_core.policy sets a start's reference shapes from: its architecture, its training tokens and C0 when its
-    provenance counted it, and its forward MACs per token at full context (needs torch). torch's FLOP formulas have no
-    entry for CPU's fused attention kernel, so on CPU attention runs as its math form, whose matmuls are counted."""
+    """What te_core.policy sets a start's reference shapes from: its architecture and tokenizer (which data it is on:
+    data v3's, else the pilot's, whose entries predate the field), its training tokens and C0 when its provenance
+    counted it, and its forward MACs per token at full context (needs torch). torch's FLOP formulas have no entry for
+    CPU's fused attention kernel, so on CPU attention runs as its math form, whose matmuls are counted."""
     import torch
     from torch.nn.attention import SDPBackend, sdpa_kernel
 
@@ -60,7 +61,7 @@ def shape(rec: dict) -> dict:
     with sdpa_kernel(SDPBackend.MATH) if dev == "cpu" else contextlib.nullcontext():
         per_token = forward_macs_per_token(net, cfg["ctx"], cfg["vocab"], dev)
     out = {k: cfg[k] for k in ("family", "d_model", "n_layer", "vocab", "ctx")}
-    out.update(parameters=rec["parameters"], tokens=prov["tokens"],
+    out.update(tokenizer=rec["tokenizer"], parameters=rec["parameters"], tokens=prov["tokens"],
                tokens_per_param=round(prov["tokens"] / rec["parameters"], 2), forward_macs_per_token=per_token)
     if (prov.get("c0") or {}).get("macs"):
         out["c0_macs"] = prov["c0"]["macs"]

@@ -39,6 +39,16 @@ def test_a_large_panel_takes_the_first_cut_that_fits():
     assert ends[0]["loss"] == pytest.approx(1.2) and ends[-1]["record"] == "record-001999"
 
 
+def test_the_route_refuses_more_than_24_columns_and_a_repeated_name():
+    """The panels route answers 400 to 25 columns ("columns must be 1 to 24 distinct names of up to 60 characters")."""
+    p = p1(2, 1)
+    extra = [f"c{i}" for i in range(25 - len(P1))]
+    wide = p | {"columns": [*P1, *extra], "rows": [r + [0] * len(extra) for r in p["rows"]]}
+    assert console.refused(wide) == ["its 25 columns aren't 1 to 24 distinct names of at most 60 characters"]
+    assert not console.refused(wide | {"columns": wide["columns"][:-1], "rows": [r[:-1] for r in wide["rows"]]})
+    assert console.refused(p | {"columns": [*P1[:-1], "start"]}) and console.refused(p | {"columns": []})
+
+
 def test_write_cuts_every_panel(tmp_path):
     from te_core.plots import NAMES
     for n in NAMES:
