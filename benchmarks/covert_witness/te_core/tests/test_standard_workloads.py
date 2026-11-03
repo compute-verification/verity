@@ -89,24 +89,31 @@ def test_the_pinned_row_is_its_runs_quantities_priced_as_algorithm_policy_prices
 def test_under_reading_a_a_row_takes_the_kinds_valid_on_their_own_and_is_null_and_unmeasured_where_none_is(
         monkeypatch):
     """The pinned row's token kind under reading A (its trace's entries and its macs_log's tiles) is at most 1 at the
-    console's, so its ρ is 1 there, binding none, measured; without an op log no kind is measured: null, never 1."""
+    console's, so published's ρ is max(1, it) = 1 there, binding none, and the row's is null, never 1, its term in the
+    kinds cell; without an op log no kind is measured: null and unmeasured; a None ρ (no kind measured) is null too."""
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
     monkeypatch.setattr(SW, "READING", "A")
     c, k = algorithm_policy.CONSOLE
     b = formalism.bound(m, c, k)
     assert b["terms"]["token"] is not None and b["terms"]["token"] <= 1 and b["terms"]["fresh_products"] is None
-    p, _, cells = build(m, fx, monkeypatch)
     one = formalism.published(m, c, k, "A")
+    assert (one["rho"], one["binding_kind"]) == (1.0, "none")
+    p, _, cells = build(m, fx, monkeypatch)
     assert (cells["reading"], cells["rho_console"], cells["binding_kind"], cells["rests_on"]) == \
-        ("A", 1.0, "none", formalism.RESTS_ON_CELL["none"])
+        ("A", None, "none", formalism.RESTS_ON_CELL["none"])
     kinds = json.loads(cells["kinds"])
     assert cells["kinds"] == algorithm_policy.kinds(one) and list(kinds["bound"]) == list(formalism.KINDS)
+    assert kinds["bound"]["token"] == pytest.approx(b["terms"]["token"], rel=1e-3)
     assert "reading A, the one bound over the kinds valid on their own" in p["note"]
     _, _, cells = build(dataclasses.replace(m, ops=None), fx, monkeypatch)
     assert (cells["rho_default"], cells["rho_console"], cells["binding_kind"], cells["rests_on"]) == \
         (None, None, "none", "unmeasured")
     assert json.loads(cells["kinds"])["bound"] == {"fresh_products": None, "token": None, "decoding": None}
+    real = formalism.published
+    monkeypatch.setattr(formalism, "published", lambda *a: real(*a) | {"rho": None, "rests_on": "unmeasured"})
+    _, _, cells = build(dataclasses.replace(m, ops=None), fx, monkeypatch)
+    assert (cells["rho_default"], cells["rho_console"], cells["rests_on"]) == (None, None, "unmeasured")
     monkeypatch.setattr(formalism, "published", lambda *a: one | {"rho": math.inf})
     with pytest.raises(SystemExit, match="reading A's rho is infinite at default and console"):
         build(m, fx, monkeypatch)

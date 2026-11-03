@@ -13,9 +13,9 @@ checkpoint as te_core.ledger.ingest writes it (into a scratch ledger) with the r
 te_core.algorithm_policy prices a run, by formalism.published under `READING`: `rho_default` and `rho_console` are its
 ρ at the dial's default (`points`: c = 4,096 tokens of the start's forward, k = 80,000 bits) and at algorithm_policy's
 `CONSOLE`, the console's default session, and `binding_kind`, `rests_on` and `kinds` (algorithm_policy's `kinds`: the
-terms its max takes, the sensitivities beside it) are published's at the console's (`cells`: under reading A, null,
-none and "unmeasured" where Fit fails and the one bound measures no kind; a reading-A ρ is never infinite, so `build`
-refuses one). `rho_inputs` holds `KEYS` (C_gates beside algorithm_policy's `rho_inputs`), from which
+terms its max takes, the sensitivities beside it) are published's at the console's (`cells`: under reading A, null and
+none where Fit fails and no measured kind is above 1, never 1, resting on "unmeasured" where the one bound measures no
+kind; a reading-A ρ is never infinite, so `build` refuses one). `rho_inputs` holds `KEYS` (C_gates beside algorithm_policy's `rho_inputs`), from which
 algorithm_policy.page_rho gives the dial's ρ at any (c, k); `build` refuses a row whose rho_inputs miss formalism.at's
 ρ at either point or whose token dials miss its measured tokens (`token_dials`).
 `input_status` gives each input's source, "measured" or "assumed: " and why, from te_core's labels: a count, a trace's
@@ -299,10 +299,11 @@ def rho_cell(v: float) -> float | str:
 
 def cells(one: dict, b: dict) -> tuple[float | str | None, str, str]:
     """formalism.published's `one` as the row's cells (ρ, its binding kind and what it rests on), beside the one bound
-    `b` at its point: under reading A, where Fit fails and `b` measures no kind, null, none and "unmeasured", never
-    max(1, nothing), which reads as no slowdown."""
-    if one["reading"] == "A" and one["binding_kind"] != "fit" and b["max"] is None:
-        return None, "none", "unmeasured"
+    `b` at its point: under reading A, where Fit fails and no measured kind is above 1 (binding none), null, never
+    max(1, ...), which reads as no slowdown; resting on "unmeasured" where `b` measures no kind, else on published's
+    (no measured kind > 1), its terms in the kinds cell."""
+    if one["reading"] == "A" and one["binding_kind"] == "none":
+        return None, "none", "unmeasured" if b["max"] is None else one["rests_on"]
     return rho_cell(one["rho"]), one["binding_kind"], one["rests_on"]
 
 
@@ -338,7 +339,8 @@ def build(spec: dict, stamp: str | None = None) -> tuple[dict, list[dict]]:
             raise SystemExit(f"{PANEL}: {r['workload']} {r['run']}: {e}") from None
         one = {name: formalism.published(m, c, k, READING) for name, (c, k) in pts.items()}
         bound = {name: formalism.bound(m, c, k) for name, (c, k) in pts.items()}
-        if inf := [name for name, v in one.items() if v["reading"] == "A" and math.isinf(v["rho"])]:
+        if inf := [name for name, v in one.items() if v["reading"] == "A" and v["rho"] is not None
+                   and math.isinf(v["rho"])]:
             raise SystemExit(f"{PANEL}: {r['workload']} {r['run']}: reading A's rho is infinite at "
                              f"{' and '.join(inf)}, which no row publishes")
         (rho_default, _, _), (rho_console, binding, rests) = cells(one["default"], bound["default"]), \
