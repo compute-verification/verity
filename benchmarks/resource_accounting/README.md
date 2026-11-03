@@ -17,7 +17,7 @@ certifies beside what it did.
   over the credited rows, and each resource's covert residual split into honest overhead and soundness slack, in its weak
   form (worst case over each audit's own coins; a per-run compute residual holds only conditional on `BudgetAbort` for
   the deployed cost model, so none is shown). S_cert is the PoUS arm's storage profile when it is certified (`storage`).
-  Q_cert is `bandwidth.audit.bound` at the red team's grant (T = 1.2 ms, s = 1,849, no RTT), per
+  Q_cert is `bandwidth.audit.bound` at the granted point (`granted_params`: T = 1.2 ms, s = 1,849, no RTT), per
   window the verifier accepted within T, with S_chip as the bandwidth harness counts it (`summarize.s_chip_bytes`: the
   caches beside L2 and the SMs' registers and memory) and the side link at PCIe Gen5 x16; `window_params` also reports a
   window on time at T with the RTT at P2's cap inside it. First fetches are charged to the bandwidth account, not compute.
@@ -32,7 +32,7 @@ certifies beside what it did.
   stream, NUMA node, a second process beside them), on the host, the device and to launch, then their course around one
   co-tenant at a time (a sleeping process, CPU spinners, an idle CUDA context) with the onset and offset of any change:
   why the chain ran faster beside the harness in a process of its own.
-- `run.sh`: the recorded run on node 2: GPU 1's ship built outside the lease, `chain.py` under one `gpu-lease 1`
+- `run.sh`: the recorded run on an RTX PRO 6000 node: GPU 1's ship built outside the lease, `chain.py` under one `gpu-lease 1`
   (30 minutes at most), the retained pass verified after it. `LEASE` replaces the lease's GPU count and flags, `CHAIN_GPU`
   picks the leased GPU the chain runs on and `HOST_CPUS` pins every host thread; `PHASE` runs one of the three steps over a
   caller's `SCRATCH`, and `LEASE=held` runs the GPU step under the caller's lease. `POUS=1` (one shape, `--cwd clone`) adds the PoUS arm: P2's
@@ -57,17 +57,14 @@ certifies beside what it did.
   harness, and the probe's. No table is stored.
 
 ~~~sh
-research run --on vy-nebius-2 --project verity --campaign resource-accounting --source . --cwd source \
-  --env GPU_LEASE_WHO=<id> --env SHAPES=o,qkv,gate_up,cube8192 -- bash benchmarks/resource_accounting/run.sh
-research run --on vy-nebius-2 --project verity --campaign resource-accounting --source . --cwd clone \
-  --env GPU_LEASE_WHO=<id> --env SHAPES=o --env BATCHES=1,128 --env ARMS=native-fp8,pearl-c --env POUS=1 \
-  --env POUS_AUDITS=100 --env VERIFY_AT=o:1 -- bash benchmarks/resource_accounting/run.sh
-research run --on vy-nebius-2 --project verity --campaign resource-accounting --source . --cwd clone \
-  --env GPU_LEASE_WHO=<id> --env SHAPES=o --env BATCHES=1,128 --env ARMS=native-bf16,native-fp8 \
-  --env JOINT=separate,inproc,joint -- bash benchmarks/resource_accounting/run.sh
-research run --on vy-nebius-2 --project verity --campaign resource-accounting --source . --cwd clone --no-sampler \
-  --env GPU_LEASE_WHO=<id> --env LEGS=A,B,C,F --env AT=<the booking's start, UTC> --env RELEASE='<the booking line>' \
-  -- bash benchmarks/resource_accounting/window.sh
+# on an RTX PRO 6000 node, from the tree's root (a clone where a PoUS or joint leg builds Lean), OUT or RESEARCH_RUN_DIR set
+GPU_LEASE_WHO=<id> SHAPES=o,qkv,gate_up,cube8192 bash benchmarks/resource_accounting/run.sh
+GPU_LEASE_WHO=<id> SHAPES=o BATCHES=1,128 ARMS=native-fp8,pearl-c POUS=1 POUS_AUDITS=100 VERIFY_AT=o:1 \
+  bash benchmarks/resource_accounting/run.sh
+GPU_LEASE_WHO=<id> SHAPES=o BATCHES=1,128 ARMS=native-bf16,native-fp8 JOINT=separate,inproc,joint \
+  bash benchmarks/resource_accounting/run.sh
+GPU_LEASE_WHO=<id> LEGS=A,B,C,F AT=<the booking's start, UTC> RELEASE='<the booking line>' \
+  bash benchmarks/resource_accounting/window.sh
 python benchmarks/resource_accounting/render.py art:<id>
 ~~~
 

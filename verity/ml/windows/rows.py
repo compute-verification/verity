@@ -1,5 +1,5 @@
-"""A window's rows: the ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a window's units in C-Flock's statement row leaf
-format (``verity_flock.circuit``'s statement rows), with the registration, C-Flock's public and prover files and the
+"""A window's rows: the ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a window's units in Flock's statement row leaf
+format (``verity_flock.circuit``'s statement rows), with the registration, Flock's public and prover files and the
 labels the one-stage audit binds (``verity.core.protocols.sampled_proofs.one_stage``).
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
@@ -13,10 +13,10 @@ an instance).
 
 A population is a sequence of members (:class:`Member`), one per template in the partition's order, or a template's units in
 consecutive chunks, one member per statement (a circuit's spec shape caps its instances), each with its row ports and output
-ports in the order of C-Flock's circuit prover (``verity_flock.circuit``).  Each output port is a row too, after the member's
+ports in the order of Flock's circuit prover (``verity_flock.circuit``).  Each output port is a row too, after the member's
 input rows: its words zero-padded to whole SHA-512 blocks, committed under its own salt like an input row (an output is a
 value: no output word is ever public).  A bit-row member
-(C-Flock's ``row_schemas``) commits each row as the bits of its words under its port's schema (``hm96-sha512/row/v2`` or
+(Flock's ``row_schemas``) commits each row as the bits of its words under its port's schema (``hm96-sha512/row/v2`` or
 ``…/row-seg/v1``), each output row exactly its words.  Per row of ``hm96-sha512/row/v1``
 (``tests/commit/test_serving_rows.py`` pins it to core and to the circuit prover's vector):
 
@@ -41,7 +41,7 @@ window, and of a wired port, which its writers' own files hold) and ``m<k>-units
 ``window.json``; ``flock_inputs.flock_input_files`` wraps member ``k``'s bodies as the circuit prover's
 ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin`` (`Bodies`).
 
-A window may carry row tables (:class:`RowTable`, ``Window.row_tables``): shared tables of rows several units read, each a tree
+A window may carry row tables (:class:`RowTable`, ``Binding.row_tables``): shared tables of rows several units read, each a tree
 of ``hm96-sha512/row-seg/v1`` leaves, committed in segments, each segment's root given before that segment's live coin: a
 segment's tables in the order the integration gives them, under the ``table_domain`` of the window's ``context``, salted by
 ``segment_salts`` under the run's row key, and the segment's root the tree over their roots.  The window registers one port for
@@ -285,7 +285,7 @@ class Member:
     """One statement's units of the population: its template's descriptor id, row and output ports ``(name, words)`` in the
     circuit prover's order, its instance count and the global index of its first unit.  A template is one member, or
     consecutive chunks of its units (``name`` ``<descriptor id>/c<j>``), one per statement of at most the circuit's chunk cap.  ``schemas``: a bit-row
-    member's row schema per port (``hm96-sha512/row/v2`` or ``…/row-seg/v1``, C-Flock's ``row_schemas``), each row the bits
+    member's row schema per port (``hm96-sha512/row/v2`` or ``…/row-seg/v1``, Flock's ``row_schemas``), each row the bits
     of its u16 words and each output row exactly its words; else every row is ``hm96-sha512/row/v1``."""
     template: str
     rows: tuple[tuple[str, int], ...]
@@ -338,7 +338,7 @@ class Member:
 
     @property
     def row_schemas(self) -> list[list[Any]] | None:
-        """C-Flock META's ``row_schemas`` for a bit-row member: ``[schema, bits]`` per row, in the circuit prover's order."""
+        """Flock META's ``row_schemas`` for a bit-row member: ``[schema, bits]`` per row, in the circuit prover's order."""
         return [[self.schema(p), 16 * w] for p, w in self.all_rows] if self.schemas else None
 
     def port(self, name: str) -> str:
@@ -381,7 +381,7 @@ class RowTable:
 
 
 @dataclass(frozen=True)
-class Window:
+class Binding:
     """What the roots are bound to: the verifier's population program and query (the partition over them), the law it draws by, the
     run (the record's run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
     its row tables, grouped by segment in rising order and in the integration's order within one, every rank of each the row of
@@ -480,7 +480,7 @@ class Window:
 
 @dataclass
 class Committed:
-    window: Window
+    window: Binding
     roots: dict[str, bytes]            # by <member>/<port>
     domains: dict[str, CommitmentDomain]
     bc: dict[str, bytes]               # per row port: every row's b || c, concatenated
@@ -661,7 +661,7 @@ class _Rows(Mapping):
         return len(self._order)
 
 
-def _table_rows(window: Window, rows: Mapping[str, np.ndarray]) -> list[np.ndarray]:
+def _table_rows(window: Binding, rows: Mapping[str, np.ndarray]) -> list[np.ndarray]:
     """Each row table's rows, read off its linked members' ``x`` tables; refused when two members read one row differently."""
     out = [np.zeros((t.n, t.words), dtype=np.uint16) for t in window.row_tables]
     seen = [np.zeros(t.n, dtype=bool) for t in window.row_tables]
@@ -674,7 +674,7 @@ def _table_rows(window: Window, rows: Mapping[str, np.ndarray]) -> list[np.ndarr
     return out
 
 
-def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, salt_key: bytes | None = None,
+def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *, salt_key: bytes | None = None,
            row_salt_key: bytes | None = None, segment_roots: Mapping[int, bytes] | None = None, workers: int = 1,
            chunk: int = CHUNK, salts_of: Mapping[str, bytes] | None = None) -> Committed:
     """Commit every member's rows (``data[k]["rows"][port]``: (n, words) u16) and output words (``data[k]["outs"][port]``, each
@@ -797,7 +797,7 @@ def port_leaves(m: Member) -> dict[str, int]:
     return {p: tables.get(p, m.n) for p, _ in m.all_rows}
 
 
-def expected_ports(window: Window) -> dict[str, dict[str, Any]]:
+def expected_ports(window: Binding) -> dict[str, dict[str, Any]]:
     """The ports the verifier's own window derives, as ``registration.check`` takes them: ``{<member>/<port>: {leaves,
     domain}}``, each domain ``window_domain`` (core's ``registration.window_domain``) over the window's program, partition and run."""
     prog, part, segs = window.partition["program"], window.partition_digest, len(window.segments)

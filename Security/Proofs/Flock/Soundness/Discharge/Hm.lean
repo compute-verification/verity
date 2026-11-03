@@ -19,6 +19,7 @@ import Proofs.Flock.Soundness.Discharge.Hm.Place
 import Proofs.Flock.Soundness.Discharge.Hm.Accept
 import Proofs.Flock.Soundness.Discharge.Hm.Delta
 import Proofs.Flock.Soundness.Discharge.Hm.Copies
+import Proofs.Flock.Soundness.Discharge.Hm.SatEx
 import Proofs.Flock.Soundness.Discharge.Hm.Copy
 import Proofs.Flock.Soundness.Discharge.Hm.Flat
 import Proofs.Flock.Soundness.Discharge.Hm.Bc

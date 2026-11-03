@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# One unit a served H1 window's own draw selected, proved as its 32 lanes, each a C-Flock --zk statement under the Lean
-# firewall, and verified by the Lean verifier against the window's registered roots (served.py's docstring).
+# One unit a served H1 window's own draw selected, proved as its 32 lanes, each a Flock --zk statement under the Lean
+# ZK server, and verified by the Lean verifier against the window's registered roots (served.py's docstring).
 #   research run --on NODE --project verity --campaign C --source . --cwd source --mem-gb G --timeout 600m \
 #     --declared-output 'out/*' --env H1L_MEM_GB=G --env H1S_CALLS=... [...] -- bash benchmarks/pouw/h1_lanes/served.sh
-#   1. hidden_zk/job.sh's builds and the firewall's Lean frame (flock-firewall)
-#   2. the drawn units (h1_prove/served.py: core's draw on the window's signed coin) and served.py extract: the drawn unit's
+#   1. hidden_zk/job.sh's builds and the ZK server's Lean frame (flock-firewall)
+#   2. the sampled proof blocks (h1_prove/served.py: core's sample on the window's signed coin) and served.py extract: the sampled proof block's
 #      openings from the prover's saved window, into the job's scratch (private), never out/
 #   3. served.py prepare: the lane statements and the negatives staged (WORK/plan.tsv)
-#   4. one loopback --zk session per statement, H1L_PAR at a time, each lane's prover under the firewall (FC_FIREWALL=1:
+#   4. one loopback --zk session per statement, H1L_PAR at a time, each lane's prover under the ZK server (FC_FIREWALL=1:
 #      the Lean session loop, its level-0 draw and Lean finish) unless H1S_FIREWALL=0; the negatives first, without it
 #      (H1S_UNFIREWALLED: what they check is the verifier's refusal)
 #   5. the plan's Lean checks, each with the lane Program, its partition, its public file and registered reads: with
@@ -34,7 +34,7 @@
 #      H1L_LANES (all, or 0,5,...)  H1S_FIREWALL (1)  H1S_UNFIREWALLED ("tampered-zy other-call-a")  H1S_KEEP (tags whose sessions out/ keeps: "lane0 tampered-zy", or all;
 #      each as soon as its session ends)  H1S_KEEP_CIRCUIT (a node directory each lowered circuit is kept in after prepare,
 #      as SHA512.txt, a hard link where it can be: the scratch, the circuit's other name, goes at exit)
-#      H1S_FIREWALL_TGZ (`git archive --format=tar.gz REV verity/core/service/flock`: the firewall frame built from REV's
+#      H1S_FIREWALL_TGZ (`git archive --format=tar.gz REV verity/core/service/flock`: the ZK server frame built from REV's
 #      Lean, which must speak this tree's prover protocol; the verifier stays this tree's)
 #      H1S_FIREWALL_TGZ_DIR (a node directory of such tarballs, read again before each firewalled session: the session runs
 #      the frame of the last *.tgz by name, so a later frame dropped in mid-share serves the lanes after it. Move a tarball
@@ -78,7 +78,7 @@ if [ "$FW" = 1 ]; then
   sha256sum "$FC_FIREWALL_LEAN" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
 fi
 
-# ---- the drawn unit's openings ---------------------------------------------------------------------------------------------
+# ---- the sampled proof block's openings ---------------------------------------------------------------------------------------------
 if [ -n "${H1S_SMOKE:-}" ]; then
   K=$H1S_SMOKE
   log "h1-served: SMOKE, a stand-in window at K=$K (the harness's own check, no served window)"
@@ -147,7 +147,7 @@ VLIMIT=$(declare -f vlimit)
 if [ "$FW" = 1 ]; then
   export FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_STATEMENT=verity/flock-circuit
   export FC_FIREWALL_HELLO_ARGS="--partition $WK/verifier/lane.partition.json --program $WK/verifier/lane.program.json"
-  # the firewall's Lean processes are the prover's children, and under an address-space cap (ulimit -v) their runtime
+  # the ZK server's Lean processes are the prover's children, and under an address-space cap (ulimit -v) their runtime
   # can't create its threads: a firewalled session is bounded by the run's cgroup (--mem-gb) alone
   vlimit() { :; }
 fi
@@ -156,7 +156,7 @@ export RAYON_NUM_THREADS=$(( TH / PAR > 0 ? TH / PAR : 1 ))
 UNFW=" ${H1S_UNFIREWALLED:-tampered-zy other-call-a} "
 # H1L_SESSION_GB: a firewalled session starts only while that much is free, H1L_STAGGER seconds after the last, so
 # H1L_PAR is a cap and memory decides. A firewalled session at K=4096 holds the prover (137 GiB), its live verifier
-# (141 GiB) and the firewall's Lean process (~40 GB), ~350 GB together, and reaches that only after ~H1L_RAMP seconds
+# (141 GiB) and the ZK server's Lean process (~40 GB), ~350 GB together, and reaches that only after ~H1L_RAMP seconds
 # (900): each session younger than that is charged its whole H1L_SESSION_GB against what's free, and so is each Lean
 # check younger than that (H1L_LEAN_GB, 115: a lane's check starts as its session ends, just when the next session is
 # admitted). Free is the least of the run's cgroup (capped at
@@ -194,7 +194,7 @@ young_lean() {   # Lean checks started less than H1L_RAMP seconds ago (out/lean/
 }
 oom_kills() { awk '$1 == "oom_kill" {print $2}' /proc/vmstat; }
 live_failed() {   # live_failed O: why O's session wasn't accepted live, on stdout, or exit 1 if it was. The prover exits 0
-  # whatever the live verifier answered, and a killed live verifier or firewall leaves no session for Lean to check
+  # whatever the live verifier answered, and a killed live verifier or ZK server leaves no session for Lean to check
   "$PY" - "$1" <<'EOF'
 import json, signal, sys
 o = sys.argv[1]

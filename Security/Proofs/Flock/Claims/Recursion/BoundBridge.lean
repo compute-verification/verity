@@ -23,7 +23,8 @@ sees what `E^rep` at `IVStar` sees, off the runs that open otherwise (`Bound.Bad
 * `WeightCovers` turns `N_I · k_I · √Pr[B]` into the difference of `√γ` at the two records (`Bound.bridge_of_dec`).
 
 At the deployed bound record `ans` is a coin's bytes, which a decoder inverts, so the bridge holds there at every
-choice the code side makes (`RecDeploy.bridge_bdDeployed`), and `KSBoundRoute` holds (`RecDeploy.ksBoundRoute`).
+choice the code side makes (`RecDeploy.bridge_bdDeployed`), which `KSBoundRouteCols`' route takes
+(`RecDeploy.ksBoundRoute_of_bridge_cols`, at the deployed outer relation `RecDeploy.ksBoundRouteCols_outer`).
 -/
 
 namespace Claims.Recursion
@@ -999,18 +1000,5 @@ theorem bridge_bdDeployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.R
   Claims.Recursion.Bound.bridge_of_dec FlockDeploy.sha512 _ FlockDeploy.decCoin fun _ c =>
     (congrArg (FlockDeploy.decCoin _) (bdDeployed_ans rel nextE colsE wE join rowIn final w c)).trans
       (Function.leftInverse_invFun Claims.Bridge.coin_bytes_injective c)
-
-/-- **`KSBoundRoute`**: `ksBoundRoute_of_bridge` at the bridge, which holds at every choice the code side makes
-(`bridge_bdDeployed`); at the deployed bound record with (P3) discharged, `ksBoundRoute_cover`. Its level
-(`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, `γ`'s
-weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every weight (ASK-73). Route 2C's
-bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but
-`KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open
-(`RecDeploy.ksLin2_deployed_open`), Holo statements being candidate 3's own model, and `BitsLin2` at those statements
-follows from it (`bitsLin2On_of_ksLin2On`). -/
-theorem ksBoundRoute (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
-    (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512) : KSBoundRoute rel relO b L :=
-  ksBoundRoute_of_bridge rel relO b L hRows fun nextE colsE wE join rowIn final w =>
-    bridge_bdDeployed rel nextE colsE wE join rowIn final w
 
 end RecDeploy

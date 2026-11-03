@@ -80,6 +80,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 
+from verity.ml.commitments import domains
 from verity.ml.commitments.rowleaf import sha512_row_seg_digest
 from verity.ml.crypto.blake3 import blake3, keyed
 from verity.ml.crypto.turboshake import turboshake128
@@ -100,7 +101,7 @@ PEEL_K = 2 * R                     # the peel's BF16 depth, four k16 slices
 TILE = 64
 CHUNK = 32                         # columns per ticket message
 D_MESSAGE, D_LEAF = 0x21, 0x22     # TurboSHAKE128 domain bytes
-LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
+LABELS = {"seed-A": domains.PEARL_C_SEED_A.encode(), "seed-B": domains.PEARL_C_SEED_B.encode()}
 #: The hashing formats this scheme implements, of the one table (`verity.core.protocols.pouw.serving.HASH_FORMATS`): h0 (TurboSHAKE128
 #: messages and leaf, SHA-256 trees) and h3 (SHA-512 throughout: `s512` seeds, lines and tickets, a `sha512/row-seg/v1` tile
 #: leaf and `audit.HM96` trees, each row of A seeding its own E_A line from its row digest).  The BLAKE3 formats h1, h2 and
@@ -143,7 +144,7 @@ def s512(role: str, message: bytes) -> bytes:
 
 
 class S512Seed(bytes):
-    """A seed of -h3: its noise lines are drawn by `sample_line`'s SHA-512 rule, not Pearl's BLAKE3 one."""
+    """A seed of -h3: its noise lines are sampled by `sample_line`'s SHA-512 rule, not Pearl's BLAKE3 one."""
 
 
 def unit_seed_a(salt: bytes, root_a: bytes, root_b: bytes, index: int, hashing: str = "h0") -> bytes:
@@ -158,12 +159,12 @@ def seed_b(salt: bytes, root_b: bytes, hashing: str = "h0") -> bytes:
 
 
 def line_key(seed: bytes) -> bytes:
-    """The key a seed's noise lines are drawn under: Pearl's (`pearl_kw._line_key`), or an `S512Seed`'s H_"noise-line"(seed)."""
+    """The key a seed's noise lines are sampled under: Pearl's (`pearl_kw._line_key`), or an `S512Seed`'s H_"noise-line"(seed)."""
     return _s512_line_key(seed) if isinstance(seed, S512Seed) else P._line_key(seed)
 
 
 def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int, hashing: str = "h3") -> bytes:
-    """-h3's seed of row `row` of unit `unit`, whose E_A line is drawn from it alone: the one-row unit's seed_A over the
+    """-h3's seed of row `row` of unit `unit`, whose E_A line is sampled from it alone: the one-row unit's seed_A over the
     row's 64-byte SHA-512 digest `leaf` (`row_digest`), H_"seed-A"(salt ‖ leaf ‖ root_B ‖ (unit · 2^32 + row) u64 LE)
     (`s512`, 168 bytes after the label's block with root_B's 64), with the unit index and the row each below 2^32
     (`CALL_RANGE`). `hash_h3.cuh`'s `s512_seeds` computes it."""
@@ -457,7 +458,7 @@ def tickets(seed_a: bytes, checked: Checked, hashing: str = "h0") -> list[bytes]
 class PearlC:
     """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain), and under forming v1
     and -h3 the device record's `census_ks` below it (each row capped at 4ρ there, `row_cap_at`), and 64 x 64 tiles; smaller bounds make a test instance.  ``hashing`` h3
-    names the scheme ``…-h3``: SHA-512 throughout (the module docstring), each row of A drawing its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
+    names the scheme ``…-h3``: SHA-512 throughout (the module docstring), each row of A sampling its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
     `row_digest`), the work law checking the cap per row too.  The tree hash is `TREE_HASH[hashing]`, on the instance.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the debit read, the
     device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
     ``pearl-c-h100-v1@sm_120``)."""
@@ -465,14 +466,14 @@ class PearlC:
     def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", device: Device = H100,
                  hashing: str = "h0", prices: Prices | None = None):
         if forming not in ("v0", "v1"):
-            raise ValueError(f"forming {forming!r}: v0 (#311's, as ported) or v1 (§5's)")
+            raise ValueError(f"forming {forming!r}: v0 (the H100 port's) or v1 (§5's)")
         if forming == "v0" and device != H100:
-            raise ValueError(f"forming v0 is #311's H100 port; {device.name} takes v1")
+            raise ValueError(f"forming v0 is the H100 port's; {device.name} takes v1")
         if hashing not in HASHINGS:
             raise ValueError(f"hashing {hashing!r}: h0 (TurboSHAKE128 and SHA-256) or h3 (SHA-512, per-row seeds)")
         prices = prices or device.prices
         if forming == "v0" and prices != H100_PRICES:
-            raise ValueError(f"forming v0 is #311's H100 port, priced on the H100 only, not {prices.device}")
+            raise ValueError(f"forming v0 is the H100 port's, priced on the H100 only, not {prices.device}")
         self.name = ((NAME if forming == "v0" else f"pearl-c-{device.name}-v1") + ("" if hashing == "h0" else f"-{hashing}")
                      + ("" if prices == device.prices else f"@{prices.device}"))
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
@@ -484,8 +485,8 @@ class PearlC:
         self.cap = device.cap
         self.commitment_hash = TREE_HASH[hashing]
         self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
-        allowance = ("forming v0 is #311's as ported (FP10 decode and exact norms depend on A alone and are skippable, "
-                     "X-PC-2); pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (
+        allowance = ("forming v0 is the H100 port's (FP10 decode and exact norms depend on A alone and are skippable); "
+                     "pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (
                      "forming v1 is §5's: ρ over every 8th position depends on A alone (about 4 units per element) and is "
                      "not credited; the model adopts s, ρ and α as its own FP8 quantizer (Costs.adopted)")
         rho, honest = device.cap, f"{float(100 * (1 - device.cap)):g}%"

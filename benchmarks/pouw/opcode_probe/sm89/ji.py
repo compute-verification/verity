@@ -1,4 +1,4 @@
-"""FACET-BREAK r3's joint-issue schedule on the L40S (EPS1 ADA r3): the grid `ji.cuh` runs, its pins, and every
+"""facet_break's joint-issue schedule on the L40S: the grid `ji.cuh` runs, its pins, and every
 program's load on every sm_89 row.
 
   python ji.py emit K [--pins GATE.json] > jiK.cu  # IMMA.168{K}'s grid (K 16 or 32), pinned from the unpinned build's gate
@@ -171,7 +171,7 @@ MMA_KINDS = ("IMMA16816", "IMMA16832")
 
 def refit(outs: list[Path], form: str, margin: float = 0.02) -> list[tuple[float, float, str]]:
     """`form`'s JI89 line refitted as its own rows: the upper hull of the old line's two vertices and every measured
-    program at the margin (FACET-BREAK's per-form rule), each facet (a, b, through) with a·x_form + b·v ≤ 1."""
+    program at the margin (facet_break's per-form rule), each facet (a, b, through) with a·x_form + b·v ≤ 1."""
     from verity_machine_model.model import census, device, model
 
     d = device("sm_89")

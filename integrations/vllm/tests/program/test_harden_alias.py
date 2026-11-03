@@ -1,4 +1,4 @@
-"""Mutation / alias effects of the Bet A circuit builder (`torch.export(strict=False)` training IR ->
+"""Mutation / alias effects of the Bet A registered compiler (`torch.export(strict=False)` training IR ->
 `verity_vllm.program.frontend.derive`).
 
 What is under test. `derive` translates the pre-dispatch export graph WITH in-place ops kept in place (no functionalisation):

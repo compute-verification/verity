@@ -1,4 +1,0 @@
-order = 300
-path = "`int8_toggle.py`"
-runs_on = "RTX PRO 6000"
-what = "Sustained int8 GEMM throughput, SM clock and power by operand pattern (wide, U against a bit, bit against bit, zero): what a zero instance's narrow operands gain on the clock (SKIP)"

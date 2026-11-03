@@ -2,7 +2,7 @@
 parameters: the SHA-512 gadget, the climb and the GF(2^128) residuals as laid-out netlists, the algebra's structure and its
 parts (`rec_algebra.structure`, `rec_residuals.spec`, `rec_residuals.parts`), V*'s statements over an inner session's shape
 (`rec_vstage.stage`'s), each statement's unit (`rec_outer.lowering`, `rec_residuals.lowering`) as its lowering text, and its
-whole `flock-circuit` file (`circuit.compose`) under drawn bindings, and the prover's reading of an inner session's draw
+whole `flock-circuit` file (`circuit.compose`) under drawn bindings, and the prover's reading of an inner session's sample
 (`rec_live.inner_draw`) against the verifier's (`RecSetup.innerDrawn`). Big outputs are compared as digest and size;
 `test_*_file_is_byte_equal` compares whole files.
 
@@ -446,7 +446,7 @@ INNER = st.fixed_dictionaries({"S": rep_s(), "name": NAME, "partition": DIGEST, 
                                "program_digests": DIGESTS})
 
 
-#: an inner session's record: a draw (any JSON value), one null or absent, and text that is no JSON object
+#: an inner session's record: a sample (any JSON value), one null or absent, and text that is no JSON object
 _REST = st.dictionaries(st.sampled_from(["verdict", "streams"]), JSON, max_size=2)
 RECORDS = st.one_of(
     st.builds(lambda d, rest: json.dumps({**rest, "unit_draw": d}, ensure_ascii=False), JSON, _REST),
@@ -603,7 +603,7 @@ def test_the_verifiers_holo_part_nets_are_vstars_units(server, shape):
 
 # --- the units ------------------------------------------------------------------------------------------------------------------
 
-#: H = 0 and 17 take a minute to lower, so `test_rec_open_unit_agrees` replays them once rather than drawing them.
+#: H = 0 and 17 take a minute to lower, so `test_rec_open_unit_agrees` replays them once rather than sampling them.
 REC_OPEN = st.one_of(st.just({"LANES": 8, "H": 1}),
                      st.fixed_dictionaries({"LANES": st.sampled_from([0, 4, 7, 9, 12, -8, True]), "H": st.just(1)}),
                      st.fixed_dictionaries({"LANES": st.just(8), "H": st.sampled_from([33, -1, True])}),
@@ -615,7 +615,7 @@ def test_inner_unit_agrees(server):
     """Drawn, and replayed on an S whose GfResiduals S is in range but whose row ports repeat a name (`checkRepS`'s refusal)
     and on one whose ports are right but whose add term is past w (`checkS`'s): Lean's `residualForms` reads such a term as
     zero, so without its own check `innerUnit` would emit a unit where `unit_circuit` refuses. A drawn invalid S is
-    usually refused by `checkRepS` first, so the draws alone rarely reach `checkS`."""
+    usually refused by `checkRepS` first, so the samples alone rarely reach `checkS`."""
     p = port("inner_unit", inner_unit, st.fixed_dictionaries({"S": REPS, "name": NAME}) | JSON)
     def gf(t):
         return {"nw": 2, "nv": 0, "ops": [], "res": [{"mul": [], "add": [t]}]}
@@ -629,7 +629,7 @@ def test_inner_unit_agrees(server):
 
 @pytest.mark.slow
 def test_rec_open_unit_agrees(server):
-    """`RecOpen{LANES, H}`'s lowering, drawn at H = 1 and at parameters both refuse, and replayed at the climb's edges: H = 0
+    """`RecOpen{LANES, H}`'s lowering, sampled at H = 1 and at parameters both refuse, and replayed at the climb's edges: H = 0
     (`aux` one row the unit does not read) and 17 (the first height whose side bits are `dirs`' word 1). Lowering H = 17
     takes about a minute; no cheaper test compares V*'s builder with `rec_open` at those heights."""
     p = port("rec_open_unit", rec_open_unit, REC_OPEN)
@@ -656,7 +656,7 @@ def test_inner_draw_agrees(server):
 @pytest.mark.slow
 def test_inner_circuit_agrees(server):
     """`compose` on small InnerRepCheck units under drawn bindings: META, the zero instance's outputs and `b ‖ c`, the slot
-    ranges and the block size. A binding that is not a digest is replayed in each place, not drawn: drawn, it refused
+    ranges and the block size. A binding that is not a digest is replayed in each place, not sampled: drawn, it refused
     most of the five units, and which ones moved with the source of modules the reference loads (Hypothesis draws their
     constants too)."""
     p = port("inner_circuit", inner_circuit, INNER)

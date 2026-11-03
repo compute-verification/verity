@@ -22,7 +22,7 @@ AXES = {"run": ("moved", "runs", "placed"), "proof": ("none", "stated", "proved"
 #: the roles a placement names -> whose they are; the auditor's run only on an `auditor-host` (AGENTS.md "Auditor-trusted
 #: devices"). A new example's role goes here with its side.
 ROLES = {"prover": "prover", "endpoint": "prover", "store": "prover",
-         "verifier": "auditor", "challenger": "auditor", "certifier": "auditor"}
+         "verifier": "auditor", "challenger": "auditor", "certifier": "auditor", "memory_challenger": "auditor"}
 #: machine classes: a node the prover runs (`gpu-node`, `cpu-node`), a machine it doesn't control (`auditor-host`), or one
 #: CPU machine holding every role (`local`: a laptop or a suite)
 MACHINES = ("gpu-node", "cpu-node", "auditor-host", "local")

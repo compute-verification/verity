@@ -1,16 +1,16 @@
-"""The warden's bucket rows with reads tied to the layout (`warden_rows`), held as regressions: a unit reads only its
-connection's own cells, and a PAD cell is no content channel.
+"""The warden's bucket rows with reads tied to the layout (`warden_rows`), held as regressions: a proof block reads only
+its connection's own cells, and a PAD cell is no content channel.
 
-With the reads (the units' wiring) unconstrained, a unit could open any of the N = T·S rows of the correct link-window
-— a foreign connection's cell, a cell twice, or an empty/padding slot — an ≈ log2(N) bits a read channel. The warden
-signs the wiring in its head, and `Wiring.place`/`port` confine every read to a connection's own cells, refusing a
-foreign connection, a cell past the connection's, a read twice, an empty slot and a wiring the head didn't sign. Here
-each is run against the v2 layout, with ordinals from 1, and shown refused.
+With the reads (the proof blocks' wiring) unconstrained, a proof block could open any of the N = T·S rows of the correct
+execution phase — a foreign connection's cell, a cell twice, or an empty/padding slot — an ≈ log2(N) bits a read
+channel. The warden signs the wiring in its head, and `Wiring.place`/`port` confine every read to a connection's own
+cells, refusing a foreign connection, a cell past the connection's, a read twice, an empty slot and a wiring the head
+didn't sign. Here each is run against the v2 layout, with ordinals from 1, and shown refused.
 
 A PAD cell carries its connection's ordinal (`cell(PAD, q, b"")`) and sits in the connection's own slots, so it counts
 toward the connection's cells and `place` will open it. These cases show it is not a *content* channel — a pad's bytes
 are fixed by (PAD, q): header and zero fill, no prover-chosen bits — and that carrying the ordinal *narrows* the read
-space to a connection's own cells. Which of a connection's own cells each unit reads is the Program's
+space to a connection's own cells. Which of a connection's own cells each proof block reads is the Program's
 (`warden_rows.Units`), and the port's value names its digest, so a statement made for a pad where a data cell is
 intended is refused by the verifier's registered reads.
 """
@@ -33,7 +33,7 @@ LINK, SESSION = "responses", bytes(64)
 
 
 def _record():
-    """One clean link-window: connection 1 holds a DATA cell and then a PAD in its own two slots of bucket 0;
+    """One clean execution phase: connection 1 holds a DATA cell and then a PAD in its own two slots of bucket 0;
     connection 2 holds two DATA cells. Later buckets are idle (empty slots, B zero bytes)."""
     bucket0 = (cell(DATA, 1, bytes(P), B), cell(PAD, 1, b"", B), cell(DATA, 2, bytes(P), B), cell(DATA, 2, bytes(P), B))
     grid = (bucket0,) + ((None,) * S,) * (T - 1)
@@ -76,13 +76,13 @@ def test_my_phase8_reads_are_refused_foreign_duplicate_cell_past_and_empty():
 
 
 def test_a_pad_read_where_the_program_reads_a_data_cell_is_refused():
-    """The residual, flipped: the Program pins its units' wiring, here unit 0 on connection 1's data cell (cell 0). A
-    statement made for connection 1's pad (cell 1) opens the same bucket row at the same position, so the rows alone
-    can't tell them apart; but the verifier's port names the Program's units' wiring in its value, the statement's
-    header names the pad's, and the registered reads refuse it ("not another value"). The Program's own statement is
-    accepted; one that names no units' wiring is refused too. A pad statement that copies the Program's value (it is
-    public) is the Program's statement, byte for byte: the unit's cell is the slot the verifier places the Program's
-    read at, the data cell's, whatever the prover meant."""
+    """The residual, flipped: the Program pins its proof blocks' wiring, here proof block 0 on connection 1's data cell
+    (cell 0). A statement made for connection 1's pad (cell 1) opens the same bucket row at the same position, so the
+    rows alone can't tell them apart; but the verifier's port names the Program's proof blocks' wiring in its value, the
+    statement's header names the pad's, and the registered reads refuse it ("not another value"). The Program's own
+    statement is accepted; one that names no proof blocks' wiring is refused too. A pad statement that copies the
+    Program's value (it is public) is the Program's statement, byte for byte: the proof block's cell is the slot the
+    verifier places the Program's read at, the data cell's, whatever the prover meant."""
     cells_ = _cells()
     head, wiring = cells_.head, cells_.wiring
     program, pad = W.Units(((1, 0),)), W.Units(((1, 1),))

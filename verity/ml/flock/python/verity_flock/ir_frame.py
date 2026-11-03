@@ -337,7 +337,7 @@ def serve_args(path) -> list[str]:
 
 def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, k_max: int = K_MAX) -> Path:
     """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/frame-<n>.bin`` and the unit netlist as ``<out_dir>/net.txt``: the
-    verifier's own staging (red-team-flock-2 IR2)."""
+    verifier's own staging."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "net.txt").write_text(low.text)

@@ -134,7 +134,7 @@ def test_n2_on_a_warden_run_expects_honest_accepted_and_tampered_refused_on_its_
 
 
 def test_n2_on_a_sampled_warden_period_tampers_every_window_and_proves_another_subset(tmp_path):
-    """With ``--draw K``, K < n, the tampered member changes every window, so whichever K windows the draw holds refuse
+    """With ``--draw K``, K < n, the tampered member changes every window, so whichever K windows the sample holds refuse
     it, and other_subset (the honest records, proved on another K-subset) is a member; K outside 1 … n is refused."""
     run = gate_run(tmp_path)
     assert n2.main(["prove", "--warden-run", str(run), "--draw", "1", "--dry", "--out", str(tmp_path / "n2")]) == 0
@@ -183,6 +183,12 @@ def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_cer
     assert got["steps"]["n2"]["clocks"]["source"] == "none"
     md = cr.markdown(got)
     assert "on the warden path" in md and "| tie | accepted |" in md and "certified I/O" in md
+    ep = json.loads(Path(steps.endpoint).read_text())
+    Path(steps.endpoint).write_text(json.dumps(ep | {"at": cr.SERVED_NODE}))
+    served = cr.report(steps)
+    assert served["verdict"] == "accepted" and served["stubbed"] == list(cr.WARDEN_SERVED_STUBBED)
+    assert served["steps"]["endpoint"]["in_the_clear"] == cr.CLEAR["warden_endpoint_served"]
+    Path(steps.endpoint).write_text(json.dumps(ep))
 
     def refused(name: str, edit, why: str) -> None:
         doc = json.loads(Path(getattr(steps, name)).read_text())

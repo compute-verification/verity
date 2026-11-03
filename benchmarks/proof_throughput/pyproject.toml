@@ -19,6 +19,8 @@ verity-numerical = { workspace = true }
 verity-flock = { workspace = true }
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_cli.py"]
 # The contract (verity_numerical.bench.contract) reads the census when it is imported; verity_flock.class_statement, which
 # draws the instances, imports circuit_check without declaring it.
 inputs = ["benchmarks/census", "tools/verity/circuit_check/src/circuit_check"]
@@ -27,3 +29,10 @@ inputs = ["benchmarks/census", "tools/verity/circuit_check/src/circuit_check"]
 testpaths = ["tests"]
 addopts = "-q -p no:cacheprovider"
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_instances.py", "tests/test_workloads.py"]
+paths = ["verity/core/protocols/certifier", "verity/core/protocols/pous", "verity/ml"]
