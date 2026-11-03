@@ -11,7 +11,8 @@
 # SCRATCH_ROOT, default /workspace/tmp; /dev/shm serves into tmpfs), removed at exit.  env: SPEC, LOADS, LEASE_MIN,
 # VERITY_BENCH_VENV; PROBE=0 skips the probe and UNRETAINED=0 the unretained serves; PLAIN=1 adds each load's retained
 # `served_passes.py serve`, without the profile's timers (PYSPY=1: under `py-spy record --gil`, the stacks holding the GIL
-# to $OUT/NAME-plain-gil.txt), and PROFILE_UNRETAINED=1 a profiled serve of each load with no pass
+# to $OUT/NAME-plain-gil.txt; COPY=1: the passes then copied to SCRATCH_ROOT with `cp -a`, hard links kept,
+# synced and timed), and PROFILE_UNRETAINED=1 a profiled serve of each load with no pass
 # retained; WAIT_ENDS=1 serves with
 # `retain_profile.py serve --wait-ends`; SEED=S serves seeded (`--seed S`) and writes each load's file digests; with it,
 # OLD_SRC=DIR (another commit's source tree on the node) serves each load again with DIR's verity_vllm and compares the
@@ -68,6 +69,12 @@ for load in $LOADS; do
       --out "$OUT/$name-plain.json" > "$OUT/$name-plain.log" 2>&1
     echo "$name plain exit $?: $(grep -m1 '^served ' "$OUT/$name-plain.log" | cut -c1-400)"
     echo "$name plain bytes: $(du -sb "$R/$name-plain" | cut -f1)"
+    if [ "${COPY:-0}" != 0 ]; then
+      t0=$(date +%s.%N)
+      cp -a "$R/$name-plain" "$S/copy" && sync -f "$S/copy" &&
+        echo "$name plain copied to $SCRATCH_ROOT in $(awk "BEGIN{print $(date +%s.%N) - $t0}") s: $(du -sb "$S/copy" | cut -f1) bytes, modes $(find "$S/copy" -type f -printf '%m\n' | sort | uniq -c | tr '\n' ' ')"
+      rm -rf "${S:?}/copy"
+    fi
     rm -rf "${R:?}/$name-plain"
   fi
   retained "$name" retained
