@@ -174,7 +174,8 @@ def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_ce
     sets the term is io_bound's own vector's proved figure without P-cell and fresh_cell its figure with it, summed in
     the reference circuit's chain whether the order is declared or not, with what its best subset dropped, and where no
     subset has a proved Λ unmeasured (`FRESH_VOID`), never 0; a circuit that declares a tree is unmeasured; the 45M
-    start's dense step's term is 1.65e5, its fresh_cell 3.04e6, on all its products."""
+    start's dense step's term reads its whole-making system, attention's 64-long chains below every counted operand:
+    163,708, its fresh_cell 2,870,251, on all its products (4.11's one-class rule gave 165,021 and 3,041,057)."""
     f = built["fresh"]
     assert (f["p_cell"], f["order"]) == (formalism.P_CELL, formalism.ORDER) == (False, "chain")
     assert f["rests_on"] == formalism.RESTS_ON_CELL["fresh_products"] and "without P-cell" in f["rests_on"]
@@ -200,8 +201,8 @@ def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_ce
     dense = vs["the 45M start's dense step, its trace's order unknown"]
     assert (dense["inputs"]["c"], dense["inputs"]["k"]) == policy.CONSOLE and dense["order"] == "chain"
     assert dense["inputs"]["products"]["trace_order"] == "unknown"
-    assert dense["term"] == pytest.approx(1.650e5, rel=1e-3) and dense["fresh_cell"] == pytest.approx(3.041e6, rel=1e-3)
-    assert dense["subset"] is None
+    assert round(dense["term"]) == 163_708 and round(dense["fresh_cell"]) == 2_870_251 and dense["subset"] is None
+    assert dense["inputs"]["products"]["system"] is not None and dense["inputs"]["products"]["p_match"] == []
 
 
 def test_the_published_vectors_take_each_case_of_the_rule(built):
