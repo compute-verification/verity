@@ -1033,6 +1033,8 @@ KNOWN: dict[str, str] = {
         "homonym, the old word for a run, kept as one protocol's run type: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
         "duplicate of `Flock.Transcript`: becomes a reading of it (proofs)",
+    "verity/core/service/flock/Flock/Annot.lean::Flock.Annot.Verdict":
+        "homonym, the description-level annotation check's verdict: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Verdict":
         "homonym, the firewall's release decision: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Registry":
