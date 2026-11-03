@@ -9,9 +9,10 @@ at most `√(k_I·k(x)·Pr[Be])`. Under `ExpectedCR` each root costs half of SHA
 
 * **The deviation, linearly** (`Fdev`): guess an inner round `j`, take a draw forked at `j` (the compiled run and
   `E_O`), and if `E_O` gives witnesses there, up to `M` more draws forked at `j` until `E_O` gives witnesses again;
-  output the first collision among the two draws' recorded calls (`linkOut`). A draw departs from the plurality at most
-  as often as this link succeeds, plus `1/(M+1)`, with no root, and the link costs at most two draws in expectation.
-  Its loop reads only what a draw computes (does `E_O` give witnesses), so its declared cost is its work.
+  output the first collision among the two draws' recorded calls, and nothing where the first draw gives no witnesses
+  (`linkOut`). A draw departs from the plurality at most as often as this link succeeds, plus `1/(M+1)`, with no root,
+  and the link costs at most two draws in expectation. Its loop reads only what a draw computes (does `E_O` give
+  witnesses) and runs only where its cost charges it (`linkCost`), so its declared cost is its work.
 * **`B_I` as its own finder** (`Binner`): the inner rounds' forks only, not through `Pr[B_I] ≤ k(x)·Pr[Be]`.
 
 `KSLin`: `Pr[acc ∧ ¬R] ≤ κ + √(γ·Pr[B]) + √(γ_BI·Pr[B_I]) + β·(Pr[Fdev] + 1/(M+1))` at every `M`, with
