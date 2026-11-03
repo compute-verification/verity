@@ -15,7 +15,7 @@ square root of a two-continuation finder's success (`Core.Game.TwoRun`), one fin
   miss at none of a family of cuts, plus each cut's miss (`DigestCut.prob_le_noMiss_add_missP`), and at cuts whose
   revealed messages open one digest, plus the square root of each cut's finder's success
   (`DigestCut.prob_le_noMiss_add_sqrt`).
-* **The period's game as one game** (`relK`, `releases_bind`, `game_eq`): the device's releases and then the
+* **The period's game as one game** (`relK`, `releases_bind`, `game_eq_relK`): the device's releases and then the
   evidence, each release's continuation carrying the log after it, so a cut follows the frames the prover sends.
 * **Where the messages are fixed** (`Reading`): round `j` at the first frame the prover sends that the reading's
   `round j` picks after the device's log before it, its digest the bytes the frame answers (an opening's `after`, the
@@ -199,6 +199,10 @@ def coin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game α} (K : 
 /-- The cut on a game equal to its own. -/
 def cast {g g' : Game α} (h : g = g') (K : AgreeCut H g) : AgreeCut H g' := h ▸ K
 
+theorem cast_heq {g g' : Game α} (h : g = g') (K : AgreeCut H g) : HEq (K.cast h) K := by
+  subst h
+  rfl
+
 end AgreeCut
 
 end DigestCut
@@ -212,7 +216,7 @@ open Game
 /-! ## The period's game as one game -/
 
 /-- An option's two continuations: `n` at `none`, `y x` at `some x`. -/
-def optG {γ β : Type} : Option γ → Game β → (γ → Game β) → Game β
+def optGame {γ β : Type} : Option γ → Game β → (γ → Game β) → Game β
   | none, n, _ => n
   | some x, _, y => y x
 
@@ -222,12 +226,12 @@ def relK {β : Type} : ℕ → List (String × ℕ) → List OpenTree → (List 
   | 0, _, _, f => f []
   | k + 1, fs, ts, f => .send (Option (Frame × ByteArray)) fun
     | none => f []
-    | some (.fresh l, b) => optG (takeCoin l fs) (f []) fun fs' =>
+    | some (.fresh l, b) => optGame (takeCoin l fs) (f []) fun fs' =>
         .coin (Fin 512 → Bool) fun x => relK k fs' ts fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)
     | some (.hello spec, ν) => .coin (TreeSample spec) fun t =>
         relK k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) fun log =>
           f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩ :: log)
-    | some (.opening i s n, b) => optG ts[i]? (f []) fun T => optG (T.next s n) (f []) fun p =>
+    | some (.opening i s n, b) => optGame ts[i]? (f []) fun T => optGame (T.next s n) (f []) fun p =>
         haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
         .coin (TreeOpenable T.nonce T.spec T.sample p.1 p.2) fun d =>
           relK k fs (ts.set i (T.bump p.1)) fun log => f (⟨.opening i s n, b, TreeDraw.opened d.1 n⟩ :: log)
@@ -246,7 +250,7 @@ theorem releases_bind {β : Type} :
       cases takeCoin l fs with
       | none => rfl
       | some fs' =>
-        simp only [optG, Game.bind_coin, Game.map, Game.bind_assoc, Game.bind_ret]
+        simp only [optGame, Game.bind_coin, Game.map, Game.bind_assoc, Game.bind_ret]
         congr 1
         funext x
         exact releases_bind k fs' ts _
@@ -258,7 +262,7 @@ theorem releases_bind {β : Type} :
       cases ts[i]? with
       | none => rfl
       | some T =>
-        dsimp only [optG]
+        dsimp only [optGame]
         cases T.next s n with
         | none => rfl
         | some p =>
@@ -278,12 +282,12 @@ theorem play_eq (fs : List (String × ℕ)) (θ : ByteArray) (F : Array ByteArra
 /-! ## The cuts at the frames the prover sends -/
 
 /-- **The messages `rv` reveals that open the digest `dg`**: those whose SHA-512 is `dg`. -/
-def digestRv {β : Type} (rv : β → Option Claims.Msg) (dg : Claims.Msg) (o : β) : Option Claims.Msg :=
+def digestReveal {β : Type} (rv : β → Option Claims.Msg) (dg : Claims.Msg) (o : β) : Option Claims.Msg :=
   (rv o).filter fun w => decide (sha512Msg w = dg)
 
-theorem digestRv_spec {β : Type} (rv : β → Option Claims.Msg) (dg : Claims.Msg) (o : β) (w : Claims.Msg)
-    (h : digestRv rv dg o = some w) : sha512Msg w = dg := by
-  unfold digestRv at h
+theorem digestReveal_sha512 {β : Type} (rv : β → Option Claims.Msg) (dg : Claims.Msg) (o : β) (w : Claims.Msg)
+    (h : digestReveal rv dg o = some w) : sha512Msg w = dg := by
+  unfold digestReveal at h
   rcases hr : rv o with _ | u
   · simp [hr] at h
   · rw [hr] at h
@@ -293,14 +297,14 @@ theorem digestRv_spec {β : Type} (rv : β → Option Claims.Msg) (dg : Claims.M
     · simp [Option.filter, hu] at h
 
 /-- **The cut here, at the digest `dg`**: the messages `rv` reveals that open `dg`. -/
-def hereAt {β : Type} {g : Game β} (rv : β → Option Claims.Msg) (dg : Claims.Msg) :
+def cutAt {β : Type} {g : Game β} (rv : β → Option Claims.Msg) (dg : Claims.Msg) :
     DigestCut.AgreeCut sha512Msg g :=
-  .here (digestRv rv dg) dg (digestRv_spec rv dg)
+  .here (digestReveal rv dg) dg (digestReveal_sha512 rv dg)
 
-/-- An option's two cuts, on `optG`'s two continuations. -/
-def optC {γ β : Type} {n : Game β} {y : γ → Game β} :
+/-- An option's two cuts, on `optGame`'s two continuations. -/
+def optCut {γ β : Type} {n : Game β} {y : γ → Game β} :
     (o : Option γ) → DigestCut.AgreeCut sha512Msg n → ((x : γ) → DigestCut.AgreeCut sha512Msg (y x)) →
-      DigestCut.AgreeCut sha512Msg (optG o n y)
+      DigestCut.AgreeCut sha512Msg (optGame o n y)
   | none, cn, _ => cn
   | some x, _, cy => cy x
 
@@ -308,24 +312,24 @@ open Classical in
 /-- **The cut at the first frame the prover sends that `P` picks**, `P` reading the device's log `pre` before it and the
 frame, and its digest the bytes the frame answers: there the play reveals the messages `rv` reads that open the
 digest. A play with no such frame has no cut. -/
-noncomputable def cutK {β : Type} (P : List Release → Frame → Prop) (rv : β → Option Claims.Msg) :
+noncomputable def frameCut {β : Type} (P : List Release → Frame → Prop) (rv : β → Option Claims.Msg) :
     (k : ℕ) → (fs : List (String × ℕ)) → (ts : List OpenTree) → (f : List Release → Game β) →
       (pre : List Release) → DigestCut.AgreeCut sha512Msg (relK k fs ts f)
   | 0, _, _, _, _ => .skip
   | k + 1, fs, ts, _, pre => .send fun
     | none => .skip
     | some (.fresh l, b) =>
-      if P pre (.fresh l) then hereAt rv b.data.toList else
-        optC (takeCoin l fs) .skip fun fs' => .coin fun x =>
-          cutK P rv k fs' ts _ (pre ++ [⟨.fresh l, b, List.ofFn x⟩])
+      if P pre (.fresh l) then cutAt rv b.data.toList else
+        optCut (takeCoin l fs) .skip fun fs' => .coin fun x =>
+          frameCut P rv k fs' ts _ (pre ++ [⟨.fresh l, b, List.ofFn x⟩])
     | some (.hello spec, ν) =>
-      if P pre (.hello spec) then hereAt rv ν.data.toList else
-        .coin fun t => cutK P rv k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) _
+      if P pre (.hello spec) then cutAt rv ν.data.toList else
+        .coin fun t => frameCut P rv k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) _
           (pre ++ [⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩])
     | some (.opening i s n, b) =>
-      if P pre (.opening i s n) then hereAt rv b.data.toList else
-        optC ts[i]? .skip fun T => optC (T.next s n) .skip fun p => .coin fun d =>
-          cutK P rv k fs (ts.set i (T.bump p.1)) _ (pre ++ [⟨.opening i s n, b, TreeDraw.opened d.1 n⟩])
+      if P pre (.opening i s n) then cutAt rv b.data.toList else
+        optCut ts[i]? .skip fun T => optCut (T.next s n) .skip fun p => .coin fun d =>
+          frameCut P rv k fs (ts.set i (T.bump p.1)) _ (pre ++ [⟨.opening i s n, b, TreeDraw.opened d.1 n⟩])
 
 end Verity
 
@@ -336,7 +340,8 @@ open scoped ENNReal
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-theorem game_eq (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
+/-- **The period's game is the device's releases, then the evidence**, as one game. -/
+theorem game_eq_relK (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
     V.game θ F c = relK (frames (V.families θ)) (V.families θ) [] (evidenceG θ F c) :=
   play_eq _ θ F c
 
@@ -361,11 +366,11 @@ variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 /-- **Round `j`'s cut**: at the first frame round `j`'s reading picks, the messages the evidence reveals for it that
 open the bytes the frame answers. -/
 noncomputable def roundCut (rd : Reading R) (j : Fin R) : DigestCut.AgreeCut sha512Msg (V.game θ F c) :=
-  (cutK (rd.round j) (rd.reveal j) _ _ _ (evidenceG θ F c) []).cast (game_eq V θ F c).symm
+  (frameCut (rd.round j) (rd.reveal j) _ _ _ (evidenceG θ F c) []).cast (game_eq_relK V θ F c).symm
 
 /-- **The record's cut**: at the play's start, the records the evidence reveals that open the record's digest. -/
 noncomputable def recordCut (rd : Reading R) : DigestCut.AgreeCut sha512Msg (V.game θ F c) :=
-  hereAt rd.record rd.recordDigest
+  cutAt rd.record rd.recordDigest
 
 /-- **A tape that misses at no round and not at the record**: its play reveals, at each round's cut and the record's
 it reaches, only the most likely message there (`DigestCut.missOn_iff`). -/
