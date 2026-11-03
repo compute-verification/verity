@@ -958,11 +958,13 @@ def main() -> int:
     last = rescore(rs, args.gates, final, root)
     on = nxt or trace40.TE40_WT
     untraced = [] if final or not same_capture(capture_version(on), CAPTURE_FINAL) else reached_left(on)
-    hold = (f"{len(untraced)} of the published and reached runs not yet traced on capture {capture_version(on)}"
+    hold = (f"{len(untraced)} of the published and reached runs not yet traced on {CAPTURE_FINAL}'s capture"
             if untraced else None)
     policy = {} if final else policy_panels(out, commit, not args.no_put and not hold, root)
     if hold:
-        policy |= {k: f"not PUT ({hold})" for k in ("algorithm-policy", FIT) if k in policy}
+        policy |= {k: f"not PUT ({hold})" + (f"; its build failed: {v.removeprefix('not PUT: ')}"
+                                             if str(v).startswith("not PUT: ") else "")
+                   for k, v in policy.items() if k in ("algorithm-policy", FIT)}
     put = "not PUT (final values)" if final else branches(rs, root)
     variants = {}
     for name, extra in ({} if final else VARIANTS).items():
