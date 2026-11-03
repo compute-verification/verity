@@ -28,7 +28,8 @@
 # what is missing and each outcome; and its verdict lines), which it refuses to write when it shares bytes with any
 # case's evidence, is OUT/composite/PRODUCT. OUT/verdicts.txt gets each case's protocol and verdict (the CASE lines),
 # each case not written by its protocol, each product's NOT_ESTABLISHED and VERDICT lines, and the host it composed on
-# (the serve dir's, so the served node's), headed COMPOSITE, and nothing else. Without served_case.sh or composite.py
+# (the serve dir's: the served node's, or, where SERVED_NODE names another, the node a deferral's follow-on copied the
+# serve dir's audit inputs to), headed COMPOSITE, and nothing else. Without served_case.sh or composite.py
 # in the tree it says so and exits 1, since no product's Lean answered. It makes no verdict: exit 0 when each product's
 # Lean answered, else 1. PRODUCT=remote (`served_verdicts.sh`'s) writes neither PoUS's case nor the wipe's, needs no
 # served_case.sh, and runs remote's Lean alone.
@@ -125,5 +126,9 @@ EOF
     *) say "COMPOSITE $x: composite.py exit $r, its log on the node"; bad=1 ;;
   esac
 done
-say "COMPOSITE: composed on $(hostname -s), which holds the serve dir, from the cases the served node wrote there, not from the parties that produced them"
+if [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
+  say "COMPOSITE: composed on $(hostname -s), which holds the serve dir, from the cases the served node wrote there, not from the parties that produced them"
+else
+  say "COMPOSITE: composed on $(hostname -s), not the served node $SERVED_NODE: from a prover-side copy of its serve dir's audit inputs and the cases written here from it, not from the parties that produced them"
+fi
 exit "$bad"

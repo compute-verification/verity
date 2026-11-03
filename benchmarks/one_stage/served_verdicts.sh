@@ -96,7 +96,8 @@
 #     as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json, and a copy in $OUT/v3c-audit: the
 #     registration, the Program, its answer and its free inputs), and V3c fails where it writes none. Under H1_TIE (below)
 #     the window commit is the one made at H1's close, its registration held to the record H1 bound, and none is made here;
-#     V3c then runs before step 5's composite, whose one-stage and policy cases are its audit's.
+#     V3c then runs before step 5's composite, whose one-stage and policy cases are its audit's, unless this node has less
+#     memory than the audit needs (below: the audit and the composite are then deferred to a follow-on).
 #     `served_verdicts.sh v3c` runs only that step on an
 #     existing serve dir (D and its window K set), the build first, its limits 120m and 180m. V3C_CLASS set empty leaves
 #     V3c out of the run, for a `served_verdicts.sh v3c` started once the window's advice is written.
@@ -149,6 +150,20 @@
 # before the composite, which composes the cases on R: V3c's audit's, the policy's (its log the serve's h1/log.jsonl)
 # and PoUW's period case once each of its windows names R (`served_cases.py`). The
 # preflight refuses H1_TIE on a tree whose window-commit takes no --window-registration.
+# Under H1_TIE on a node with less memory than V3c's audit needs (its MemTotal, NODE_MEM_GB, under V3C_AUDIT_MEM_GB, default
+# 290), step 6 holds the tie (WINDOW-COMMIT, WINDOW-CIRCUIT-HELD) and defers the audit and the composite (`defer`), for
+# PRODUCT=remote alone (onsite's composite reads PoUS's case, which needs this node's card: the preflight refuses it).
+# Step 5's record says what was deferred and why (its `deferred`), a DEFERRED line says so, and the serve dir's
+# private/deferred gets the pieces the record read, the settings the follow-on runs at (deferred.env: the window, the
+# product, V3c's class and law, H1_TIE, COMPOSITE, ALPHA, GAMMA, the served node and the tree's commit), and the
+# follow-on's every input relative to the serve dir (`deferred_inputs`), listed (inputs.txt, which names inputs.sha256
+# too) and hashed (inputs.sha256). The copy is the prover's: those files alone, to the same path on a node with the
+# memory, outside any run dir. There `served_verdicts.sh v3c` with D alone (deferred.env names the window, and an
+# environment that sets one of its settings to another value is refused) holds the copy to its sums, runs at the served
+# node's tree (another only with FOLLOW_ANY_TREE=1, which its WINDOW-CIRCUIT line names, since it reads that tree's
+# window-circuit record), needs no row dir, vLLM venv, card or gpu-lease, and after V3c's audit composes the final record
+# (`record --node` the served node, so its composed_on names the host it composed on and served_node false) and the
+# composite (`served_composite.sh`, SERVED_NODE the served node); its $OUT is published as every run's is.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 6h -- \
@@ -157,6 +172,7 @@
 # publishes its launch command, so a load's counts (REQUESTS, PROMPTS, SLOTS, CERTIFIER_FRONT's) go in the file, and the
 # command names only its path.
 # `served_verdicts.sh circuits K`, in TREE with D and OUT, counts serve dir D's window K's circuits alone (its advice written).
+# `served_verdicts.sh defer WHY`, in TREE with D, K and OUT, makes step 6's deferral alone.
 # Defaults are vy-dc-h200's: the int8 B4 row's traced Build (r20261030-210701-a20f's, traced after the required manifest stopped
 # naming the FlashAttention M1 stream, as `predict row` doesn't) and taps under $H, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
 # The serve dir D (row dirs, advice, the window circuits' records) stays on the node under `research keep`; $OUT keeps the
@@ -171,6 +187,22 @@ if [ -n "${SETTINGS:-}" ]; then
 fi
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=$PWD
+ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
+D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
+# step 6's deferral (`defer`): the settings the follow-on runs at, its inputs' list and sums, and the pieces the record read
+DEFER_DIR=$D/private/deferred
+FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE" FOLLOW= CLASH=
+if [ "${1:-}" = v3c ] && [ -f "$DEFER_DIR/deferred.env" ]; then  # the follow-on of a deferral, at the settings it recorded
+  FOLLOW=1
+  declare -A given=()
+  for v in $FOLLOWS; do [ -z "${!v+x}" ] || given[$v]=${!v}; done
+  set -a
+  # shellcheck source=/dev/null
+  . "$DEFER_DIR/deferred.env"
+  set +a
+  for v in $FOLLOWS; do [ -z "${given[$v]+x}" ] || [ "${given[$v]}" = "${!v-}" ] || CLASH+=" $v"; done
+  VENV=${VENV:-$TREE/.venv}
+fi
 H=/workspace/research/vllm-composed-h200int8
 ROW=${ROW:-$H/r20261030-210701-a20f/llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager} ROW_ID=${ROW_ID:-${ROW##*/}}
 HIDDEN_SO=${HIDDEN_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so} NORM_TAP_SO=${NORM_TAP_SO:-$H/norm_tap/build/verity_norm_tap.so}
@@ -201,8 +233,6 @@ if [ "$PRODUCT" = onsite ]; then
   fi
 fi
 export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD PRODUCT
-ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
-D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
 PRED=${PRED:-$D/predicted}
 FW=${FLOCK_WORK:-$ROOT/flock-work}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
@@ -254,6 +284,13 @@ vtag=${V3C//,/-}
 if [ "${1:-}" = v3c ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-120m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-180m}
 elif [ -n "${H1_TIE:-}" ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-60m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}
 else V3C_TIMEOUT=${V3C_TIMEOUT:-15m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}; fi
+V3C_AUDIT_MEM_GB=${V3C_AUDIT_MEM_GB:-290}
+NODE_MEM_GB=${NODE_MEM_GB:-$(awk '/^MemTotal:/ {print int($2 / 1048576)}' /proc/meminfo)}
+short_of_memory() {  # 0 iff this node has less memory than V3c's audit needs, saying both
+  [ "$NODE_MEM_GB" -lt "$V3C_AUDIT_MEM_GB" ] || return 1
+  echo "this node has $NODE_MEM_GB GB, under the $V3C_AUDIT_MEM_GB GB V3c's audit needs (V3C_AUDIT_MEM_GB)"
+}
+tree_sha() { git -C "$TREE" rev-parse HEAD 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-}"; }
 window_commit() {  # window K of $D committed as V3C's class circuit's units in $VW/window, its answer in $1 and its errors
   # in $2, the rest window-commit's further arguments: 0, else why on stdout
   local json=$1 err=$2 rc
@@ -569,12 +606,72 @@ private_pieces() {
       && mv "$OUT/pieces/certifier/$f" "$D/private/pieces/certifier/$f"
   done
 }
+# What the follow-on of step 6's deferral reads, relative to the serve dir. V3c's: the weights registration, the verifier's
+# window-circuit record at the class (step 3's), windows.jsonl (the run root), H1's log and each record it names, the
+# tie's window-commit answer, and the commit's window dir (circuit.json, registration.json, every value file). The
+# record's: seals.jsonl, windows.jsonl and requests.jsonl (the pick's steps), step 3's records audit's summary, audit
+# record, registration and runs, and the pieces it read. The composite's: PoUW's period case. And deferred.env, the
+# settings the follow-on runs at. Each is listed where it exists.
+deferred_inputs() {
+  {
+    printf '%s\n' weights_registration.json "window-circuit-w$K-$vtag.json" windows.jsonl seals.jsonl requests.jsonl \
+      h1/log.jsonl "h1/w$K/window-commit.json" sampled-proofs-served/summary.json sampled-proofs-served/window/audit.json \
+      sampled-proofs-served/windows/rank0/registration.json sampled-proofs-served/runs.json private/pouw/period/case.json \
+      private/pouw/period/answer.json
+    [ ! -f "$D/h1/log.jsonl" ] || "$SAY_PY" -c 'import json, sys
+for x in open(sys.argv[1]):
+    if x.strip():
+        print("h1/" + str(json.loads(x).get("file")))' "$D/h1/log.jsonl"
+    (cd "$D" && find "v3c-w$K-$vtag/window" private/deferred/pieces private/deferred/deferred.env -type f 2>/dev/null)
+  } | (cd "$D" && while IFS= read -r f; do [ ! -f "$f" ] || echo "$f"; done) | LC_ALL=C sort -u
+}
+DEFERRED_WHAT="V3c's audit$([ -z "${COMPOSITE-1}" ] || echo " and the composite")"
+defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a follow-on: the pieces the record read
+  # copied to the serve dir's private/deferred, the settings it runs at (deferred.env), and the follow-on's every input
+  # listed (inputs.txt, what a prover-side copy takes) and hashed (inputs.sha256, what the follow-on holds the copy to)
+  (umask 077; rm -rf "$DEFER_DIR" && mkdir -p "$DEFER_DIR/pieces") || return 1
+  [ ! -d "$OUT/pieces" ] || cp -a "$OUT/pieces/." "$DEFER_DIR/pieces/" || return 1
+  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "${V3C_LAW:-subset:1}" H1_TIE "${H1_TIE:-}" \
+    COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" SERVED_NODE "$(hostname)" DEFERRED_TREE "$(tree_sha)" \
+    > "$DEFER_DIR/deferred.env" || return 1
+  deferred_inputs > "$DEFER_DIR/inputs.txt"
+  (cd "$D" && tr '\n' '\0' < "$DEFER_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$DEFER_DIR/inputs.sha256" || return 1
+  echo private/deferred/inputs.sha256 >> "$DEFER_DIR/inputs.txt"
+  say "DEFERRED $DEFERRED_WHAT: $1. A follow-on on a node with the memory runs them and composes the final record there," \
+      "from the serve dir's audit inputs copied prover-side, outside any run dir, each file its private/deferred/inputs.txt" \
+      "lists: D=$D bash benchmarks/one_stage/served_verdicts.sh v3c"
+}
+follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: the copy held to the served node's sums, then
+  # step 6's audit, the final record and the composite, here rather than on the served node
+  local rc vrc rec comp=0 TPY=$TREE/.venv/bin/python
+  (cd "$D" && sha256sum --check --strict --quiet private/deferred/inputs.sha256) > "$DEFER_DIR/check.log" 2>&1
+  rc=$?
+  say "FOLLOW-ON on $(hostname -s), $NODE_MEM_GB GB: $DEFERRED_WHAT, which the served node $SERVED_NODE deferred, from its serve" \
+      "dir's audit inputs copied here prover-side, each as it hashed them (the serve dir's private/deferred/inputs.sha256):" \
+      "$([ "$rc" = 0 ] && echo PASS || echo "FAIL (the serve dir's private/deferred/check.log)")"
+  [ "$rc" = 0 ] || return 3
+  wait "$BUILD"; rc=$?
+  [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
+  local sha
+  sha=$(tree_sha)
+  say "WINDOW-CIRCUIT class $V3C: the served node's record at the class (step 3's), from its tree's commit $DEFERRED_TREE" \
+      "$([ "$sha" = "$DEFERRED_TREE" ] && echo "(this tree's)" || echo "(this tree is $sha: FOLLOW_ANY_TREE)");" \
+      "this node holds no row dir to count it from"
+  v3c_commit && v3c_proved; vrc=$?
+  "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$D/sampled-proofs-served" \
+    --pieces "$DEFER_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" 2>&1 | publish_lines
+  rec=${PIPESTATUS[0]}
+  [ -z "${COMPOSITE-1}" ] || TPY=$TPY SERVED_NODE=$SERVED_NODE bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+  echo "---- verdicts"; cat "$OUT/verdicts.txt"
+  [ "$vrc" = 0 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ]
+}
 
 if [ "${1:-}" = serve ]; then serve; exit $?; fi
 if [ "${1:-}" = tie ]; then shift; tie "$@"; exit $?; fi
 if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; rc=$?; measure; exit "$rc"; fi
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
 if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
+if [ "${1:-}" = defer ]; then defer "${2:?served_verdicts.sh defer WHY}"; exit $?; fi
 
 # $OUT leaves the node: once the run is done, however it ends, each of its files that names a window or counts its own is
 # held in full in the serve dir's private/out, its public form in its place (`served_verdicts.py publish`)
@@ -584,10 +681,18 @@ trap 'exit 130' INT
 stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; free -g | head -2; nvidia-smi -L; echo "serve dir $D"; } \
   | tee "$OUT/machine.txt"
-for f in "$ROW/manifest.json" "$ROW/build_summary.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
-command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
+if [ -n "$FOLLOW" ]; then  # a deferral's follow-on: no serve, its venv the tree's, on a node with the audit's memory
+  [ -z "$CLASH" ] || { say "PREFLIGHT: the follow-on runs at the deferral's settings (the serve dir's private/deferred/deferred.env), and the environment sets another$CLASH: unset it"; exit 3; }
+  why=$(short_of_memory) && { say "PREFLIGHT: the follow-on runs the V3c audit the served node deferred, and $why"; exit 3; }
+  sha=$(tree_sha)
+  [ -n "$DEFERRED_TREE" ] && { [ "$sha" = "$DEFERRED_TREE" ] || [ -n "${FOLLOW_ANY_TREE:-}" ]; } \
+    || { say "PREFLIGHT: the follow-on reads the served node's window-circuit record, which its tree ${DEFERRED_TREE:-(unknown)} wrote, and this tree is ${sha:-(unknown)}: run it at that commit, or set FOLLOW_ANY_TREE=1"; exit 3; }
+else
+  for f in "$ROW/manifest.json" "$ROW/build_summary.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
+  command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
+fi
 front_ok || exit 3
-SPLIT=
+SPLIT= DEFER=
 if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split certifier: its period check writes its answer
   [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"; exit 3; }
   [ -n "$V3C" ] || { say "PREFLIGHT: the split certifier's period check reads V3c's period.json, and V3C_CLASS is empty"; exit 3; }
@@ -602,6 +707,9 @@ if [ -n "${H1_TIE:-}" ] && [ "${1:-}" != v3c ]; then  # V3c's window commit at e
   [[ $V3C_TIMEOUT =~ ^[0-9]+m$ ]] && [ "${V3C_TIMEOUT%m}" -le 90 ] \
     || { say "PREFLIGHT: under H1_TIE the window's sample coin waits for window-commit, and its session's reserve lasts the gate's 120 minutes from the serve's start: V3C_TIMEOUT is at most 90m, not $V3C_TIMEOUT"; exit 3; }
   LEASE_MIN=${LEASE_MIN:-150} LEASE_MEM_GB=${LEASE_MEM_GB:-256}
+  if DEFER=$(short_of_memory); then  # step 6's audit and the composite go to a follow-on
+    [ "$PRODUCT" = remote ] || { say "PREFLIGHT: under H1_TIE, where $DEFER, its audit and the composite are deferred to a follow-on, and onsite's composite reads PoUS's case, which needs this node's card: PRODUCT=remote, or a node with the memory"; exit 3; }
+  fi
 fi
 mkdir -p "$D" "$ROOT/cache" "$FW"
 (umask 077; mkdir -p "$D/private")
@@ -609,7 +717,7 @@ KEEP_WHY="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circu
 { "$PY" -m research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY" \
   || research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY"; } 2>&1 | tail -2
 # H1's every window open runs its Lean verifier of record; without lake each is refused and serving goes on uncredited
-if [ -n "$H1_GATE" ] || [[ " ${SERVE_ARGS:-} " == *" --protocols "* ]]; then
+if [ -z "$FOLLOW" ] && { [ -n "$H1_GATE" ] || [[ " ${SERVE_ARGS:-} " == *" --protocols "* ]]; }; then
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
     | sh -s -- -y --default-toolchain none > "$OUT/elan.log" 2>&1
   (cd "$TREE/verity/core/protocols/pouw/lean/check" && lake build pouw-check-difftest) > "$OUT/h1-lean.log" 2>&1 \
@@ -630,6 +738,7 @@ build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.
 BUILD=$!
 
 if [ "${1:-}" = v3c ]; then  # an existing serve dir's window: D and K set, its advice written (step 3); V3c alone
+  if [ -n "$FOLLOW" ]; then follow; exit $?; fi
   [ -n "${K:-}" ] && [ -f "$D/advice/w$K/private/advice.bin" ] || { say "V3C: set D and K, a serve dir and its window with advice"; exit 3; }
   [ -f "$WREG" ] || CUDA_VISIBLE_DEVICES='' weights
   [ -f "$WREG" ] || exit 13
@@ -836,18 +945,23 @@ TPY=$TREE/.venv/bin/python
 
 # 5. one record of every verdict
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
-  --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" 2>&1 | publish_lines
+  --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" \
+  ${DEFER:+--deferred "$DEFERRED_WHAT, to a follow-on on a node with the memory, which composes the final record: $DEFER"} \
+  2>&1 | publish_lines
 rec=${PIPESTATUS[0]}
 private_pieces
 # 6. V3c after the record, each step within its limit: it gates nothing. Under H1_TIE it comes before the composite,
-# whose one-stage and policy cases are its audit's of the record H1 bound.
-v3c_done=$SPLIT
-if [ -z "$v3c_done" ] && [ -n "${H1_TIE:-}" ]; then v3c_commit && v3c_proved; v3c_done=1; fi
+# whose one-stage and policy cases are its audit's of the record H1 bound; on a node short of the audit's memory, the
+# tie held here, the audit and the composite are deferred to a follow-on.
+v3c_done=$SPLIT left=0
+if [ -n "$DEFER" ]; then v3c_commit; defer "$DEFER" || left=1; v3c_done=1
+elif [ -z "$v3c_done" ] && [ -n "${H1_TIE:-}" ]; then v3c_commit && v3c_proved; v3c_done=1; fi
 comp=0
-[ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+[ -n "$DEFER" ] || [ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
 measure
 if [ -n "$v3c_done" ]; then :
 elif [ -n "$V3C" ]; then v3c_commit && v3c_proved
 else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
-[ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && grep -q '"composed": "\(pending\|accept\)"' "$OUT/verdicts.txt"
+[ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && [ "$left" = 0 ] \
+  && grep -q '"composed": "\(pending\|accept\)"' "$OUT/verdicts.txt"
