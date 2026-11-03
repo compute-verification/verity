@@ -213,10 +213,10 @@ over the monitoring period (`IntegrityHorizon`, `CircuitCreditPeriod`), not per 
 
 ## The demo
 
-**No example's remote verdict has passed yet:** the vLLM demo runs `remote check` on its served run, where PoUW's
-verdict is a development run that credits nothing, so it has no passing run of record. Lifecycle is the only example
-that steps through the whole remote composite, with a stand-in prover; h200 runs remote's sampled-proofs half for real,
-and the vLLM demo runs both halves on one served run, PoUW's as a development run:
+**No example runs the remote verifier yet:** `remote check` has no run of record; its first is due Wed 28 Oct, 11 AM
+PDT (D3). Lifecycle is the only example that steps through the whole remote composite, with a stand-in prover; h200
+runs remote's sampled-proofs half for real, and the vLLM demo runs both halves on one served run, PoUW's as a
+development run:
 
 - `verity example lifecycle` (`examples/lifecycle/README.md`): the remote composite stepped through one monitoring period
   on CPU in about 2 s: hardware registration, registration, declarations, live samples, each declaration's verdict and the
