@@ -47,11 +47,13 @@ files and at the strategy a strategy of the period's game projects to. This modu
   one-stage form is v2 and which refuses v1 (whose verdicts are the prover's). Both composites name it
   (`composite_readsV2`). The parameters fix the form before any coin; this leg covers the one-stage form, and the
   recursive form (`VStar.Recursive`) is not this leg's (`Covers`).
-* **The session v2 sets up on the parameters and the committed files** (`SetsUp`): v2's parameters in the composite's
-  (`ParamsAt`), the session's inputs as v2 hands them to flock-verify (the statement, one table, the verifier's
-  partition object and program, no recomputation of public input words), the committed circuit and public files and
-  the vocabulary's reading of them, the law the draw reads over the population (`lawAt`), the statement's descriptor
-  and the registration's query the verifier's program and query, and the claim's share.
+* **The session v2 sets up on the parameters and the committed files** (`SetsUp`): v2's parameters in the composite's,
+  the first under the sampled component's id, as v2's case finds them (`ParamsAt`, at most one), the session's inputs
+  as v2 hands them to flock-verify (the statement, one table, the verifier's partition object and program, no
+  recomputation of public input words), the committed circuit and public files and the vocabulary's reading of them,
+  the law the draw reads over the population (`lawAt`), the statement's descriptor and the registration's query the
+  verifier's program and query, the draw's bytes the coins the coin commitment gives the parameters' challenger family,
+  and the claim's share.
 * **The device's log as v2's check reads it** (`coinsRead`): the releases the signed log in v2's evidence shows, in
   order, each with the bits v2 reads of it, read with v2's own tests. A line `SampledProofs.Challenger.treeLine` passes
   is a coin tree's, its own release, told apart and its tree and stream found by the tests
@@ -530,13 +532,24 @@ def ReadsV2 (k : Verity.Registration.Composite) : Prop :=
 theorem composite_readsV2 (k : Verity.Registration.Composite) : ReadsV2 k := by
   cases k <;> rfl
 
-/-- **v2's parameters in the composite's parameters `θ`**: the component parameters the composition's format decodes
-under the sampled component's id, read by its decoder in its one-stage form, as `Verity.CaseAccepts` reads a component's
-(`Properties.Composition.DecodedAccepted`). -/
+/-- **v2's parameters in the composite's parameters `θ`**: the first component parameters the composition's format
+decodes under the sampled component's id, as `caseOf` finds them, read by its decoder in its one-stage form. The
+composition accepts only parameters that name each component once (`Properties.Composition.Fits`), so where it accepts
+they are the ones `Verity.CaseAccepts` reads (`Properties.Composition.DecodedAccepted`); at any `θ` there is at most
+one (`ParamsAt.unique`). -/
 def ParamsAt (θ : ByteArray) (p : _root_.SampledProofs.OneStageZk.Params) : Prop :=
   ∃ ps, (_root_.Core.canonicalJson θ >>= _root_.Core.Composition.decodeParams) = .ok ps ∧
-    ∃ x ∈ ps, x.id = VStar.Recursive.Sampled.PROTOCOL ∧
+    ∃ x, ps.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) = some x ∧
       (_root_.Core.canonicalJson x.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p)
+
+/-- At most one `p` is v2's parameters in `θ`. -/
+theorem ParamsAt.unique {θ : ByteArray} {p p' : _root_.SampledProofs.OneStageZk.Params} (h : ParamsAt θ p)
+    (h' : ParamsAt θ p') : p = p' := by
+  obtain ⟨ps, hps, x, hx, hp⟩ := h
+  obtain ⟨ps', hps', x', hx', hp'⟩ := h'
+  obtain rfl : ps = ps' := Except.ok.inj (hps.symm.trans hps')
+  obtain rfl : x = x' := Option.some.inj (hx.symm.trans hx')
+  exact Sum.inl.inj (Except.ok.inj (hp.symm.trans hp'))
 
 /-- **The C-Flock law the draw reads over `n` units** under the verifier `v`'s agreed law: the law
 `SampledProofs.Draw.deriveLaw` derives, or else the expanded rule's (`SampledProofs.Draw.flockLaw` at
@@ -550,16 +563,20 @@ def lawAt (v : _root_.SampledProofs.Registration.Verifier) (n : ℕ) : Flock.V F
 /-- **`A` is the session v2 sets up on the parameters `θ` and the committed files `F`**: v2's parameters in the
 composite's (`ParamsAt`), with the verifier's partition object and program as flock-verify's inputs, the law the draw
 reads over the population (`lawAt`), and the statement's descriptor and the registration's query the verifier's program
-(`SampledProofs.Program.parse`) and query, so the registration's population is the verifier's; the statement's tags,
-one table, no work, stratified or closure input and no recomputation of public input words, as
-`SampledProofs.OneStageZk.inputsOf` hands them; the committed circuit and public files, and the vocabulary's reading of
-the files (`Vocab.read`) as the session's, its lookup tables included; and the claim's share, the published
-certificate's. The device's bytes and the bound's parameters are the deployment's session's (`Deployed`). -/
+(`SampledProofs.Program.parse`) and query, so the registration's population is the verifier's, and the draw's bytes
+the coins of the parameters' challenger family, as many as the coin commitment's families give it (`Vocab.families`),
+`COIN_BYTES` bytes each; the statement's tags, one table, no work, stratified or closure input and no recomputation of
+public input words, as `SampledProofs.OneStageZk.inputsOf` hands them; the committed circuit and public files, and the
+vocabulary's reading of the files (`Vocab.read`) as the session's, its lookup tables included; and the claim's share,
+the published certificate's. The device's bytes and the bound's parameters are the deployment's session's
+(`Deployed`). -/
 structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Live) : Prop where
   params : ∃ p, ParamsAt θ p ∧ A.I.partition = some p.own.partition ∧ A.I.program = some p.own.program ∧
     lawAt p.base.verifier A.n = .ok A.law ∧
     _root_.SampledProofs.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program ∧
-    A.qr = p.base.verifier.query
+    A.qr = p.base.verifier.query ∧
+    ∃ key label m, p.base.challenger = some (key, label) ∧ (label, m) ∈ V.families θ ∧
+      A.Lb 0 = m * _root_.SampledProofs.Challenger.COIN_BYTES
   tags : Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some A.I.tags
   count : A.I.count = 1
   work : A.I.work = none
