@@ -104,6 +104,17 @@ def kind_of(phase: str, role: str, op: str, dtype: str | None = None) -> tuple[s
     return f"{group}/{dt}", note
 
 
+def split_key(key: str) -> tuple[str, str, str, str, str | None]:
+    """A `macs_log` op key "phase role op shapes [dtype]" as (phase, role, op, shapes, dtype), dtype None where the
+    key has none."""
+    phase, role, op, *rest = key.split(" ", 3)
+    rest = rest[0] if rest else ""
+    last = rest.rsplit(" ", 1)[-1]
+    if last and not last.endswith("]") and not last.endswith("}"):
+        return phase, role, op, rest[:len(rest) - len(last)].rstrip(), last
+    return phase, role, op, rest, None
+
+
 def of_log(log: dict) -> dict:
     """A `macs_log` (te_core.ledger's: `by` class -> MACs, `ops` "phase role op shapes [dtype]" -> [count, MACs]) in
     gates: the total, the MACs and gates per kind, and the assumptions made. MACs `by` counts that no op row holds are
@@ -112,9 +123,7 @@ def of_log(log: dict) -> dict:
     notes: dict[str, int] = {}
     listed = 0
     for key, (_, macs) in log.get("ops", {}).items():
-        phase, role, op, *rest = key.split(" ", 3)
-        last = rest[0].rsplit(" ", 1)[-1] if rest else ""
-        dtype = last if last and not last.endswith("]") and not last.endswith("}") else None
+        phase, role, op, _, dtype = split_key(key)
         kind, note = kind_of(phase, role, op, dtype)
         k = kinds.setdefault(kind, [0, 0.0])
         k[0] += macs

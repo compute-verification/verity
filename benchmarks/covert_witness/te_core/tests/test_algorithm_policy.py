@@ -164,7 +164,7 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
     assert set(cell["reading"]) == {"B"} and set(cell["te_core"]) == {AP.VERSION} and p["rows"]
     assert all(v == "inf" or v >= 1 for v in cell["rho_console"])
     assert set(cell["binding_kind"]) <= {"fit", "target"}
-    assert all(formalism.RESTS_ON[b] == r for b, r in zip(cell["binding_kind"], cell["rests_on"]))
+    assert all(formalism.RESTS_ON_CELL[b] == r for b, r in zip(cell["binding_kind"], cell["rests_on"]))
     assert all(set(json.loads(x)) == {"bound", "sensitivity"} for x in cell["kinds"])
     ds, rows = plots.frame(p), ledger_rows()
     assert {d["data"] for d in ds} == {"v2.3-pilot"} and {d["gain_target"] for d in ds} == set(AP.GAINS)
