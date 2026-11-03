@@ -607,7 +607,7 @@ def main() -> int:
     mats = [n for n in names if params[n].ndim == 2 and n != embed]
     rest = [n for n in names if n not in mats]
     if a.declare or a.emit == "quan":
-        check_decoder(theta, min(mats, key=lambda n: params[n].numel()))
+        check_decoder(theta, min(mats or names, key=lambda n: params[n].numel()))
     theta_dev = {n: theta[n].to(dev) for n in names}
     trainable = {"full": names}
     tokens = a.batch * prepare.EVAL_CTX
@@ -628,8 +628,9 @@ def main() -> int:
                     params[n].copy_(theta_dev[n])
         # qat: the quantized tensors (every trained matrix, and with --qat-norm-bits every trained vector) train a latent
         # delta V; their weights are θ + Q(V), rebuilt each step
-        quantized = [n for n in names if params[n].ndim == 2] if a.mode == "qat" and x.qat != QAT_FP else []
-        quantized += [n for n in names if params[n].ndim == 1] if quantized and x.qat_norm_bits else []
+        coded = a.mode == "qat" and x.qat != QAT_FP
+        quantized = [n for n in names if params[n].ndim == 2] if coded else []
+        quantized += [n for n in names if params[n].ndim == 1] if coded and x.qat_norm_bits else []
         latent = {n: torch.zeros_like(params[n], dtype=torch.float32, device=dev) for n in quantized}
         dgrad = delta_grad(*(sum(params[n].numel() for n in ns) for ns in (rest, mats, quantized)))
         opt_of = {n: latent.get(n, params[n]) for n in names}
