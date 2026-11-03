@@ -293,7 +293,7 @@ def test_profiles_are_compact_strings():
 
 
 def test_a_start_ahead_of_the_fit_has_every_target_below_its_loss_and_one_at_or_below_e_none():
-    """Gain is C(L1)/C(L0) on the fit (Daniel, TRN-40; coordinator 11:16Z): a start the fit puts ahead of the frontier
+    """Gain is Daniel's C(L1)/C(L0) on the fit (coordinator 11:16Z): a start the fit puts ahead of the frontier
     (its own gain C_eff(l0)/C0 1.5) has rows at every target, each below its l0, so a run that only holds l0 reaches
     none (ref-data's 11:09Z LOOPHOLE); a start at or below the fit's E has no rows, and a data without a fit none."""
     rich = LAW | {"A": LAW["A"] * 1.5 ** 0.3}

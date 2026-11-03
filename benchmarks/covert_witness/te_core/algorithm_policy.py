@@ -8,7 +8,7 @@ It reads what te_core.frontier_fit reads, and that fit: the valid records of the
 `pilot`) unless `--pin` names the commits, scored on their measured quantities unless `--quantities` says otherwise,
 where the scoring cap admits them (te_core.policy's `eligible`), each checkpoint on its start's data
 (te_core.frontier_fit's `data_of_shape`: `v3`, harness v3's OLMo 2 mix, else `v2.3-pilot`). A checkpoint's gain is
-Daniel's C(L1)/C(L0) (TRN-40, 7:05 PM PST; coordinator 08:09Z and 11:16Z): the compute at which its data's fit
+Daniel's C(L1)/C(L0) (coordinator 08:09Z and 11:16Z): the compute at which its data's fit
 (te_core.frontier_fit, `training/frontier-fit`) reaches L1, its held-out loss, over the compute at which it reaches L0,
 its start's l0 (te_core.frontier_fit's `gain_from`); a row carries C0 (`start_compute_gates`) and the start's own
 effective compute C_eff(l0) (`start_effective_gates`, over C0 the start's own gain, which the gain no longer reads). At
