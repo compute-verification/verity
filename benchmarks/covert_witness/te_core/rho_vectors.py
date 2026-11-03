@@ -10,6 +10,11 @@ and its ops the same trace's (te_core.tiles.of_graph, the `.ops.json` beside the
 cell (c, k) of `CELLS`: each kind's term and the inputs it reads, the max over the kinds and the kind it binds on, the
 sensitivities, Fit, ρ_fit, ρ and the label. A case's `measured` is te_core.formalism.from_json's form, reading A's
 `entries` and `ops` in it.
+
+`sessions` holds the console's c, te_core.policy's `session` at every size it states a shape for (`SHAPES`) and each
+session of `SESSIONS`: its inputs (parameters, input and output tokens, the shape) and its outputs (the tokens that run
+a forward, the positions attended, each product's MACs, the gates a MAC, the gates and the input ids' bits), and
+`console` the policy every producer reads (`policy.CONSOLE`).
 """
 from __future__ import annotations
 
@@ -20,11 +25,11 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-from . import VERSION, formalism
+from . import VERSION, formalism, policy
 from .capture.circuit import StepCircuit, measure
 from .gates import gates, per_mac
 
-SCHEMA = "te-core/rho-vectors/v2"
+SCHEMA = "te-core/rho-vectors/v3"
 OUT = Path(__file__).with_name("rho_vectors.json")
 FIXTURES = Path(__file__).parent / "capture" / "tests" / "fixtures"
 #: model.py's tiny start: its forward MACs per token at ctx 1024 (te_core.flops.forward_macs_per_token), vocab and width
@@ -61,6 +66,22 @@ CASES = {
 CELLS = ((4096, 80_000), (4096, 800_000), (4096, 8_000_000), (100, 8_000_000), (1, 80_000_000))
 OPS = ("counted (trace): the traced step's GEMMs with their dims and operand classes, and the rest of each phase's "
        "gates (te_core.tiles.of_graph)")
+#: (input tokens, output tokens): the console's session, the workload note's tighter and looser ones, a prefill alone
+#: and the least session
+SESSIONS = ((4096, 1024), (2048, 3072), (16384, 1024), (1024, 0), (1, 1))
+SESSION_RULE = ("c = (tokens·n_layer·(4·d_model² + 3·d_model·d_ff) + tokens·d_model·vocab + 2·n_layer·d_model·attended)"
+                " x gates_per_mac, tokens = in + out, attended = in² + out·in + out·(out + 1)/2 (a prompt token over "
+                "the whole prompt, the j-th output token over the prompt and the output tokens up to itself); k = in x "
+                "ceil(log2 vocab)")
+
+
+def sessions() -> dict:
+    return {"rule": SESSION_RULE,
+            "about": "te_core.policy.session: one session of the reference model, each of its tokens a forward, every "
+                     "product of two operands at the served precision's GEMM price; the elementwise ops left out",
+            "console": {"params": policy.REFERENCE_PARAMS, "in_tokens": policy.CONSOLE_SESSION[0],
+                        "out_tokens": policy.CONSOLE_SESSION[1], "c": policy.CONSOLE[0], "k": policy.CONSOLE[1]},
+            "vectors": [policy.session(p, i, o) for p in policy.SHAPES for i, o in SESSIONS]}
 
 
 def case_measured(case: dict) -> formalism.Measured:
@@ -108,7 +129,7 @@ def build() -> dict:
         "w_fwd_gates": W_FWD, "start": TINY, "program": PROGRAM,
         "cases": {name: {k: v for k, v in case.items() if k not in ("delta_bits", "decoder_gates")}
                   for name, case in CASES.items()},
-        "measured": measured, "vectors": vectors, "tolerance": {"relative": 1e-9}})
+        "measured": measured, "vectors": vectors, "sessions": sessions(), "tolerance": {"relative": 1e-9}})
 
 
 def main(argv=None) -> int:
