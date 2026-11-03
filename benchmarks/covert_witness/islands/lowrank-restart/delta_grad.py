@@ -236,7 +236,9 @@ class Tree:
     """A step's reduction tree over its token blocks, each block's message coded by `code` (None: fp32).
 
     `heap`: node i is a block whose children are 2i+1 and 2i+2; it sends code(its gradient + its children's messages),
-    so a node reads two messages (2 Δ_grad) beside its tokens, and the root's sum, the optimizer's, isn't coded.
+    so a node reads two messages (2 Δ_grad) beside its tokens. The root codes its own gradient too, so every partial
+    reaches the optimizer coded (else the step's narrowest gradient cut is the root's fp32 sum), and its sum, the
+    optimizer's, isn't coded again.
     `leaves`: the blocks are leaves of a binary tree whose inner nodes hold no tokens; every sum is coded, the root's
     too. A `Vote` code makes either a majority vote: a block's own gradient enters as its sign. A message waits between
     blocks in its packed form (`Code.pack`, `Vote.pack`) and is unpacked by the block that sums it, so the step's trace
@@ -268,8 +270,8 @@ class Tree:
 
     def push(self, g: dict) -> None:
         if self.shape == "heap":
-            own = self._unpack(self._pack(g)) if isinstance(self.code, Vote) else g
             j = self.n - 1 - self.i
+            own = self._unpack(self._pack(g)) if isinstance(self.code, Vote) or self.code is not None and not j else g
             kids = [self._unpack(self.pending.pop(k)) for k in (2 * j + 1, 2 * j + 2) if k in self.pending]
             total = self._sum(own, *kids)
             if j:
@@ -678,7 +680,7 @@ def main() -> int:
     trainable = {"full": sorted(norms), "adapters": dict(plan[-1][1])} if lora else {"full": sorted(targets + norms)}
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     n_entries = acct["n_message_entries"]
-    codings = 0 if msg is None else (leaves - 1 + (leaves if a.vote else 0)) if a.tree == "heap" else 2 * leaves - 1
+    codings = 0 if msg is None else (leaves - 1 + (leaves if a.vote else 1)) if a.tree == "heap" else 2 * leaves - 1
     code_flops = msg.entry_flops if isinstance(msg, Code) else CODE_FLOPS
     extra = code_flops * n_entries * (codings + 1) + opt.flops(opt_shapes)
     if a.msg_proj:
