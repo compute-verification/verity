@@ -43,7 +43,7 @@ cases, rc, h1 = (sys.modules[n] for n in ("pouw_credit_cases", "pouw_rounds_case
 
 SEEDS = range(3)
 #: a draw root no withheld session opened on: its draw coin was never drawn after it
-NO_DRAW_SESSION = "the draw's session is not trusted: the auditor's ledger opens no challenger session for this execution phase"
+NO_DRAW_SESSION = "the draw's session is not trusted: the auditor's ledger opens no challenger session for this window"
 
 #: each `_credited` mutation's refusal: its code and its reason's start
 CREDIT_EXPECT = {
