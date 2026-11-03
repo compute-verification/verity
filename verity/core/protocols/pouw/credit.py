@@ -513,6 +513,19 @@ def commit_ids(s: int) -> str:
     return f"input-ids/{s}"
 
 
+_COMMIT_NAME = re.compile(r"row-table/(0|[1-9][0-9]*)/k([1-9][0-9]*)|input-ids/(0|[1-9][0-9]*)")
+
+
+def window_table(name: str, prefix: str) -> str:
+    """The window's table under `prefix` (the descriptor's ``PREFIX``) that the Commit's value `name` is (ROOTS1): round
+    s's A table of K ``<prefix>a/<K>@<s>`` for `commit_rows` of (s, K), its input-ids table ``<prefix>ids@<s>`` for
+    `commit_ids` of s. ValueError for any other name."""
+    m = _COMMIT_NAME.fullmatch(name) if isinstance(name, str) else None
+    if m is None:
+        raise ValueError(f"{name!r} is no Commit name of a window's table: row-table/<round>/k<K> or input-ids/<round>")
+    return f"{prefix}a/{m[2]}@{m[1]}" if m[1] is not None else f"{prefix}ids@{m[3]}"
+
+
 def _digest(x: Any) -> bytes | None:
     return bytes.fromhex(x) if isinstance(x, str) and _DIGEST.fullmatch(x) else None
 
@@ -1531,9 +1544,10 @@ def _arow(rounds: list, entries: list, registered: list, layout: dict, prefix: s
     for e in registered:
         if type(e.get("value")) is str:
             theirs.setdefault(e["value"], []).append(e)
-    pairs = [(f"{prefix}a/{k}@{s}", commit_rows(s, k), f"round {s}'s A table of K = {k}",
+    pairs = [(window_table(commit_rows(s, k), prefix), commit_rows(s, k), f"round {s}'s A table of K = {k}",
               chunks(k) * layout["m"] * len(cs)) for s, k, cs in step_tables(layout, steps)]
-    pairs += [(f"{prefix}ids@{s}", commit_ids(s), f"round {s}'s input-ids table", None) for s in range(steps)]
+    pairs += [(window_table(commit_ids(s), prefix), commit_ids(s), f"round {s}'s input-ids table", None)
+              for s in range(steps)]
     for v, name, whose, rows in pairs:
         if v not in ours:
             return "arow", (f"the window registers no {whose} {v}, so nothing ties it to the Commit's {name}: the "
