@@ -54,14 +54,15 @@ def main() -> int:
                     default=[Path.home() / ".research" / "lowrank" / "night2" / "state.jsonl"])
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
-    pts = []
+    pts, runs = [], set()
     for st in a.state:
         for x in st.read_text().splitlines():
             s = json.loads(x)
-            if "row" in s and s.get("run"):
+            if "row" in s and s.get("run") and s["run"] not in runs:
                 p = point(s["run"], s["key"].split(";")[1].strip())
                 if p:
                     pts.append(p)
+                    runs.add(s["run"])
     pts.sort(key=lambda p: (p["start"], p["E_bytes"]))
     if a.json:
         print(json.dumps(pts, indent=1))
