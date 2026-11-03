@@ -35,13 +35,13 @@ theorem connected (θ : Finset (Fin C.N)) (hθ : ∀ g ∈ θ, C.isInput g = tru
 /-- **The product is by the standard algorithm** with its operands fresh: its one MAC is gate 2, which reads both
 operands' bits, and the cones `{0}` and `{1}` are disjoint from each other and from it. -/
 theorem algorithm_fresh : freshProduct.Algorithm :=
-  ⟨by decide, by decide, by decide, connected _ _, by decide, by decide, by decide, by decide, by decide, by decide,
-    by decide⟩
+  ⟨⟨by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide⟩,
+    connected _ _⟩
 
 /-- **The product is by the standard algorithm** with its operands registered, as with them fresh. -/
 theorem algorithm_registered : registeredProduct.Algorithm :=
-  ⟨by decide, by decide, by decide, connected _ _, by decide, by decide, by decide, by decide, by decide, by decide,
-    by decide⟩
+  ⟨⟨by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide⟩,
+    connected _ _⟩
 
 /-- Every block of computed gates is empty or gate 2. -/
 theorem gates_cases {I : Finset (Fin C.N)} (hI : I ⊆ C.computed) : I = ∅ ∨ I = {2} :=
@@ -130,13 +130,13 @@ theorem connected (θ : Finset (Fin Pair.C.N)) (hθ : ∀ g ∈ θ, Pair.C.isInp
 /-- **The product is by the standard algorithm** with its operands fresh: its MACs are gates 4 and 5, each reading
 its operands' bits, and gate 5 reads gate 4. -/
 theorem algorithm_fresh : Pair.freshProduct.Algorithm :=
-  ⟨by decide, by decide, by decide, connected _ _, by decide, by decide, by decide, by decide, by decide, by decide,
-    by decide⟩
+  ⟨⟨by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide⟩,
+    connected _ _⟩
 
 /-- **The product is by the standard algorithm** with its operands registered, as with them fresh. -/
 theorem algorithm_registered : Pair.registeredProduct.Algorithm :=
-  ⟨by decide, by decide, by decide, connected _ _, by decide, by decide, by decide, by decide, by decide, by decide,
-    by decide⟩
+  ⟨⟨by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide, by decide⟩,
+    connected _ _⟩
 
 /-- Every block of computed gates is one of four. -/
 theorem gates_cases {I : Finset (Fin Pair.C.N)} (hI : I ⊆ Pair.C.computed) :

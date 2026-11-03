@@ -18,9 +18,9 @@ For an inference block `I` with reads `U = in(I) \ θ`:
    `H ≤ (k/b) (1 + Σ_i A_ij μ_i)` by 2, 3 and the bound below `t`; the post-fixed point closes the step.
 5. **The cap** (`SecurityProofs.WholeCap`): the operand entries of a block's whole MACs of product `q` have distinct
    values (`Standard.card_add_card_le_hadCones`), each paid or made, so `b |π₁₂ T| + b |π₂₃ T| ≤ |U ∩ cones| + e k`
-   (`System.ops_le`) by 2, 3 and the class bound. With `|U ∩ cones| + |U ∩ macs| ≤ k`, the cap along chains
-   (`Verity.Combinatorics.sum_card_le_chain`) runs at `k' = k (1 + e)`; the split MACs and the received partial sums
-   are as in `NoCellCap`.
+   (`System.ops_le`) by 2, 3 and the class bound, for `T` the MACs of the block's whole cells among them. With
+   `|U ∩ cones| + |U ∩ macs| ≤ k`, the cap along chains (`Verity.Combinatorics.sum_card_le_chain`) runs at
+   `k' = k (1 + e)`; the split cells and the received partial sums are as in `NoCellCap`.
 6. **The bound** (`SecurityProofs.WholeBound`): each product's cap inverted by `chainBlocks_le`, then the max over `G`.
 -/
 
@@ -49,7 +49,7 @@ namespace Standard
 variable {ni nl nj : ℕ} (S : Standard d ni nl nj)
 
 /-- A block's whole MACs read entries of `A` it has. -/
-theorem image_whole_subset_hadA (hS : S.Algorithm) (I : Finset (Fin d.D.N)) :
+theorem image_whole_subset_hadA (hS : S.Wiring) (I : Finset (Fin d.D.N)) :
     (S.whole I).image (fun x => (x.1, x.2.1)) ⊆ S.hadA I := fun e he => by
   obtain ⟨⟨i, l, j⟩, hx, rfl⟩ := mem_image.1 he
   refine mem_filter.2 ⟨mem_univ _, fun a ha => ?_⟩
@@ -57,7 +57,7 @@ theorem image_whole_subset_hadA (hS : S.Algorithm) (I : Finset (Fin d.D.N)) :
   exact mem_union_into ((mem_filter.1 hx).2 hg) hr
 
 /-- A block's whole MACs read entries of `B` it has. -/
-theorem image_whole_subset_hadB (hS : S.Algorithm) (I : Finset (Fin d.D.N)) :
+theorem image_whole_subset_hadB (hS : S.Wiring) (I : Finset (Fin d.D.N)) :
     (S.whole I).image (fun x => (x.2.1, x.2.2)) ⊆ S.hadB I := fun e he => by
   obtain ⟨⟨i, l, j⟩, hx, rfl⟩ := mem_image.1 he
   refine mem_filter.2 ⟨mem_univ _, fun a ha => ?_⟩
@@ -65,7 +65,7 @@ theorem image_whole_subset_hadB (hS : S.Algorithm) (I : Finset (Fin d.D.N)) :
   exact mem_union_into ((mem_filter.1 hx).2 hg) hr
 
 /-- **Loomis–Whitney on whole chains**: `nl² |wholeOut I| ≤ |hadA I| |hadB I|`. -/
-theorem sq_mul_card_wholeOut_le (hS : S.Algorithm) (I : Finset (Fin d.D.N)) :
+theorem sq_mul_card_wholeOut_le (hS : S.Wiring) (I : Finset (Fin d.D.N)) :
     nl ^ 2 * (S.wholeOut I).card ≤ (S.hadA I).card * (S.hadB I).card := by
   let V : Finset (Fin ni × Fin nl × Fin nj) :=
     (S.wholeOut I ×ˢ (univ : Finset (Fin nl))).image fun y => (y.1.1, y.2, y.1.2)
@@ -119,7 +119,7 @@ theorem subset_cones_of_mem_values {v : Finset (Fin d.D.N)} (hv : v ∈ S.values
 
 /-- **Distinct entries, distinct values**: entries `X` of `A` and `Y` of `B` that `I` has number at most its had
 values, the cones being nonempty and pairwise disjoint. -/
-theorem card_add_card_le_hadCones (hS : S.Algorithm) (hne : ∀ v ∈ S.values, v.Nonempty) {I : Finset (Fin d.D.N)}
+theorem card_add_card_le_hadCones (hS : S.Wiring) (hne : ∀ v ∈ S.values, v.Nonempty) {I : Finset (Fin d.D.N)}
     {X : Finset (Fin ni × Fin nl)} {Y : Finset (Fin nl × Fin nj)} (hX : X ⊆ S.hadA I) (hY : Y ⊆ S.hadB I) :
     X.card + Y.card ≤ (S.hadCones I).card := by
   have hneA : ∀ e : Fin ni × Fin nl, (S.coneA e.1 e.2).Nonempty := fun e =>
@@ -198,7 +198,7 @@ theorem nonneg_of_postFixed [Fintype κ] {k b : ℕ} {cs : κ → ℝ} {A : κ �
 /-- **The class bound below depth `t`**: in an inference block, each class `i`'s products less deep than `t` have the
 whole chains of at most `μ_i k / b` output entries. -/
 theorem classBound_lt [Fintype κ] [DecidableEq κ] {c k b : ℕ} {cs : κ → ℝ} {A : κ → κ → ℝ} {μ : κ → ℝ}
-    (hS : ∀ p, (sys.prod p).Algorithm) (hV : sys.Values) (hsh : sys.Shared c k cs) (hW : sys.WidthExtended c k b)
+    (hS : ∀ p, (sys.prod p).Wiring) (hV : sys.Values) (hsh : sys.Shared c k cs) (hW : sys.WidthExtended c k b)
     (hM : sys.Matched A) (hb : 0 < b) (hcs : ∀ j, 0 ≤ cs j) (hA : ∀ i j, 0 ≤ A i j) (hμ : sys.PostFixed k b cs A μ)
     {I : Finset (Fin d.D.N)} (hI : InferenceBlock d c k I) (t : ℕ) (i : κ) :
     ((∑ q ∈ (univ.filter fun q => sys.depth q < t).filter (fun q => sys.cls q = i),
@@ -287,19 +287,20 @@ namespace System
 
 variable {ι κ : Type} [Fintype ι] [DecidableEq ι] (sys : System d ι κ)
 
-/-- **Operands paid or made whole**: a block's whole MACs `T` of product `q` have
+/-- **Operands paid or made whole**: MACs `T` of product `q` whole in a block have
 `b |π₁₂ T| + b |π₂₃ T| ≤ |U ∩ cones| + e k`, `e` the class's whole-making factor. -/
 theorem ops_le [Fintype κ] [DecidableEq κ] {c k b : ℕ} {cs : κ → ℝ} {A : κ → κ → ℝ} {μ : κ → ℝ}
-    (hS : ∀ p, (sys.prod p).Algorithm) (hV : sys.Values) (hsh : sys.Shared c k cs) (hW : sys.WidthExtended c k b)
+    (hS : ∀ p, (sys.prod p).Wiring) (hV : sys.Values) (hsh : sys.Shared c k cs) (hW : sys.WidthExtended c k b)
     (hM : sys.Matched A) (hb : 0 < b) (hcs : ∀ j, 0 ≤ cs j) (hA : ∀ i j, 0 ≤ A i j) (hμ : sys.PostFixed k b cs A μ)
-    {I : Finset (Fin d.D.N)} (hI : InferenceBlock d c k I) (q : ι) :
-    (b : ℝ) * (((sys.prod q).whole I).image fun x => (x.1, x.2.1)).card +
-        (b : ℝ) * (((sys.prod q).whole I).image fun x => (x.2.1, x.2.2)).card ≤
+    {I : Finset (Fin d.D.N)} (hI : InferenceBlock d c k I) (q : ι)
+    {T : Finset (Fin (sys.ni q) × Fin (sys.K (sys.cls q)) × Fin (sys.nj q))} (hT : T ⊆ (sys.prod q).whole I) :
+    (b : ℝ) * (T.image fun x => (x.1, x.2.1)).card + (b : ℝ) * (T.image fun x => (x.2.1, x.2.2)).card ≤
       ((d.unregistered I ∩ (sys.prod q).cones).card : ℝ) + k * wholeFactor A μ (sys.cls q) := by
   have hb' : (0 : ℝ) < b := by exact_mod_cast hb
   have hne : ∀ v ∈ (sys.prod q).values, v.Nonempty := fun v hv => (hV q q v hv v hv).1
-  have h1 := (sys.prod q).card_add_card_le_hadCones (hS q) hne ((sys.prod q).image_whole_subset_hadA (hS q) I)
-    ((sys.prod q).image_whole_subset_hadB (hS q) I)
+  have h1 := (sys.prod q).card_add_card_le_hadCones (hS q) hne
+    ((image_subset_image hT).trans ((sys.prod q).image_whole_subset_hadA (hS q) I))
+    ((image_subset_image hT).trans ((sys.prod q).image_whole_subset_hadB (hS q) I))
   have hpaid : b * (((sys.prod q).hadCones I).filter fun v => b ≤ (d.unregistered I ∩ v).card).card ≤
       (d.unregistered I ∩ (sys.prod q).cones).card := by
     refine (mul_card_le_card_inter (fun v hv w hw h => ?_) fun v hv => (mem_filter.1 hv).2).trans
@@ -323,8 +324,7 @@ theorem ops_le [Fintype κ] [DecidableEq κ] {c k b : ℕ} {cs : κ → ℝ} {A 
       _ = (k : ℝ) / b * (A i (sys.cls q) * μ i) := by ring
   rw [← card_filter_add_card_filter_not (s := (sys.prod q).hadCones I)
     (fun v => b ≤ (d.unregistered I ∩ v).card)] at h1
-  have h1' : ((((sys.prod q).whole I).image fun x => (x.1, x.2.1)).card : ℝ) +
-      (((sys.prod q).whole I).image fun x => (x.2.1, x.2.2)).card ≤
+  have h1' : ((T.image fun x => (x.1, x.2.1)).card : ℝ) + (T.image fun x => (x.2.1, x.2.2)).card ≤
       ((((sys.prod q).hadCones I).filter fun v => b ≤ (d.unregistered I ∩ v).card).card : ℝ) +
         ((((sys.prod q).hadCones I).filter fun v => ¬ b ≤ (d.unregistered I ∩ v).card).card : ℝ) := by
     exact_mod_cast h1
@@ -340,63 +340,66 @@ end System
 namespace SecurityProofs
 
 theorem WholeCap : Guarantees.WholeCap := by
-  intro d ι κ _ _ _ _ sys c k b bC cs A μ q m P hS hV hsh hW hM hR hP hb hC hcs hA hμ
+  intro d ι κ _ _ _ _ sys c k b bC cs A μ q cell w m P hS hV hsh hW hM hc hR hP hb hC hcs hA hμ
   obtain ⟨start, hcard, hread⟩ := hR
   have hCpos : (0 : ℝ) < bC := by exact_mod_cast hC
   have hbpos : (0 : ℝ) < b := by exact_mod_cast hb
   have he : 0 ≤ wholeFactor A μ (sys.cls q) :=
     sum_nonneg fun i _ => mul_nonneg (hA _ _) (sys.nonneg_of_postFixed hcs hμ i)
-  have key := Verity.Combinatorics.sum_card_le_chain (fun u => (sys.prod q).whole (P.gates u))
+  have key := Verity.Combinatorics.sum_card_le_chain (fun u => (sys.prod q).cellWhole cell (P.gates u))
     (fun u => ((d.unregistered (P.gates u) ∩ (sys.prod q).cones).card : ℝ) + k * wholeFactor A μ (sys.cls q))
     (fun u => ((d.unregistered (P.gates u) ∩ (sys.prod q).macs).card : ℝ))
     (fun u => ((∑ e : Fin (sys.ni q) × Fin (sys.nj q), (P.gates u ∩ start e.1 e.2).card : ℕ) : ℝ) / bC)
     (k := (k : ℝ) * (1 + wholeFactor A μ (sys.cls q))) (bA := b) (bB := b) (bC := bC)
     (O := ((sys.ni q * sys.nj q : ℕ) : ℝ)) (mul_nonneg (Nat.cast_nonneg _) (by linarith)) hbpos hbpos hCpos
     (fun _ => Nat.cast_nonneg _) (fun _ => div_nonneg (Nat.cast_nonneg _) hCpos.le)
-    (fun u => sys.ops_le hS hV hsh hW hM hb hcs hA hμ (inferenceBlock_gates hP u) q)
+    (fun u => sys.ops_le hS hV hsh hW hM hb hcs hA hμ (inferenceBlock_gates hP u) q
+      ((sys.prod q).cellWhole_subset_whole cell _))
     (fun u => by
       have h := (sys.prod q).card_add_card_le (hS q) (inferenceBlock_gates hP u)
       have h' : ((d.unregistered (P.gates u) ∩ (sys.prod q).cones).card : ℝ) +
           ((d.unregistered (P.gates u) ∩ (sys.prod q).macs).card : ℝ) ≤ k := by exact_mod_cast h
       linarith)
     (fun u => by
-      have h := (sys.prod q).received_sums (hS q) hread hP u
+      have h := (sys.prod q).received_sums cell (hS q) hread hP u
       rw [mul_div_cancel₀ _ hCpos.ne']
       exact_mod_cast h)
     (by
       rw [← sum_div, div_le_iff₀ hCpos]
       exact_mod_cast sum_sum_card_inter_le hcard P)
   rw [Fintype.card_fin] at key
-  have hsplit : ∑ u, ((d.unregistered (P.gates u) ∩ (sys.prod q).macs).card : ℝ) ≤ m * k := by
-    calc ∑ u, ((d.unregistered (P.gates u) ∩ (sys.prod q).macs).card : ℝ) ≤ ∑ _u : Fin m, (k : ℝ) :=
-          sum_le_sum fun u _ => by
+  have hsplit : (w : ℝ) * ∑ u, ((d.unregistered (P.gates u) ∩ (sys.prod q).macs).card : ℝ) ≤ m * (w * k) := by
+    calc (w : ℝ) * ∑ u, ((d.unregistered (P.gates u) ∩ (sys.prod q).macs).card : ℝ) ≤
+          w * ∑ _u : Fin m, (k : ℝ) :=
+          mul_le_mul_of_nonneg_left (sum_le_sum fun u _ => by
             exact_mod_cast (Nat.le_add_left _ _).trans
-              ((sys.prod q).card_add_card_le (hS q) (inferenceBlock_gates hP u))
-      _ = m * k := by rw [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
+              ((sys.prod q).card_add_card_le (hS q) (inferenceBlock_gates hP u))) (Nat.cast_nonneg _)
+      _ = m * (w * k) := by rw [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]; ring
   have hN : ((sys.ni q * sys.K (sys.cls q) * sys.nj q : ℕ) : ℝ) ≤
-      ∑ u, (((sys.prod q).whole (P.gates u)).card : ℝ) +
-        ∑ u, ((d.unregistered (P.gates u) ∩ (sys.prod q).macs).card : ℝ) := by
-    exact_mod_cast (sys.prod q).card_le_whole_add (hS q) P
+      ∑ u, (((sys.prod q).cellWhole cell (P.gates u)).card : ℝ) +
+        (w : ℝ) * ∑ u, ((d.unregistered (P.gates u) ∩ (sys.prod q).macs).card : ℝ) := by
+    exact_mod_cast (sys.prod q).card_le_cellWhole_add cell (hS q) hc P
   rw [mul_add]
   linarith
 
 theorem WholeBound : Guarantees.WholeBound := by
-  intro d ι κ _ _ _ _ sys c k b bC cs A μ G hS hV hsh hW hM hR hb hC hcs hA hμ m P hP
+  intro d ι κ _ _ _ _ sys c k b bC cs A μ G cell w hS hV hsh hW hM hc hR hb hC hcs hA hμ m P hP
   refine Finset.sup_le fun q hq => ?_
-  have hcap := WholeCap d ι κ sys c k b bC cs A μ q m P hS hV hsh hW hM (hR q hq) hP hb hC hcs hA hμ
+  have hcap := WholeCap d ι κ sys c k b bC cs A μ q (cell q) (w q) m P hS hV hsh hW hM (hc q hq) (hR q hq) hP hb
+    hC hcs hA hμ
   have he : 0 ≤ wholeFactor A μ (sys.cls q) :=
     sum_nonneg fun i _ => mul_nonneg (hA _ _) (sys.nonneg_of_postFixed hcs hμ i)
   have hk' : 0 ≤ (k : ℝ) * (1 + wholeFactor A μ (sys.cls q)) := mul_nonneg (Nat.cast_nonneg _) (by linarith)
   have hα : 0 ≤ (k : ℝ) * (1 + wholeFactor A μ (sys.cls q)) / 3 *
-      √((k : ℝ) * (1 + wholeFactor A μ (sys.cls q)) / 3) / √((b : ℝ) * b * bC) + k :=
+      √((k : ℝ) * (1 + wholeFactor A μ (sys.cls q)) / 3) / √((b : ℝ) * b * bC) + w q * k :=
     add_nonneg (div_nonneg (mul_nonneg (div_nonneg hk' (by norm_num)) (Real.sqrt_nonneg _)) (Real.sqrt_nonneg _))
-      (Nat.cast_nonneg _)
+      (by positivity)
   have hβ : 0 ≤ (k : ℝ) * (1 + wholeFactor A μ (sys.cls q)) / 2 / √((b : ℝ) * b) *
       √((sys.ni q * sys.nj q : ℕ) : ℝ) :=
     mul_nonneg (div_nonneg (div_nonneg hk' (by norm_num)) (Real.sqrt_nonneg _)) (Real.sqrt_nonneg _)
   have hm : chainBlocks ((sys.ni q * sys.K (sys.cls q) * sys.nj q : ℕ) : ℝ)
       ((k : ℝ) * (1 + wholeFactor A μ (sys.cls q)) / 3 * √((k : ℝ) * (1 + wholeFactor A μ (sys.cls q)) / 3) /
-        √((b : ℝ) * b * bC) + k)
+        √((b : ℝ) * b * bC) + w q * k)
       ((k : ℝ) * (1 + wholeFactor A μ (sys.cls q)) / 2 / √((b : ℝ) * b) * √((sys.ni q * sys.nj q : ℕ) : ℝ)) ≤
       m := by
     refine chainBlocks_le (Nat.cast_nonneg _) hα hβ (Nat.cast_nonneg _) ?_

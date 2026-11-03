@@ -68,6 +68,30 @@ theorem eq_of_mem_gates {m : ℕ} (P : Partition d.D m) {g : Fin d.D.N} {u v : F
     (hv : g ∈ P.gates v) : u = v :=
   Option.some_injective _ ((P.mem_gates.1 hu).symm.trans (P.mem_gates.1 hv))
 
+/-- **A split set is read across**: a nonempty connected set of computed gates that no block holds whole has a gate
+that some block reads. -/
+theorem split_read_of_connected {m : ℕ} (P : Partition d.D m) {Z : Finset (Fin d.D.N)} (hZ : Z ⊆ d.D.computed)
+    (hne : Z.Nonempty)
+    (hconn : ∀ X : Finset (Fin d.D.N), X ⊆ Z → X.Nonempty → X ≠ Z →
+      ∃ h ∈ Z, ∃ g ∈ Z, h ∈ d.D.reads g ∧ (h ∈ X ↔ g ∉ X))
+    (h : ∀ u, ¬ Z ⊆ P.gates u) : ∃ v, (d.unregistered (P.gates v) ∩ Z).Nonempty := by
+  obtain ⟨g₀, hg₀⟩ := hne
+  obtain ⟨u, hu⟩ := exists_mem_gates P (hZ hg₀)
+  have hX : P.gates u ∩ Z ≠ Z := fun heq => h u (by
+    rw [← heq]
+    exact inter_subset_left)
+  obtain ⟨a, ha, g, hg, hr, hag⟩ := hconn _ inter_subset_right ⟨g₀, mem_inter.2 ⟨hu, hg₀⟩⟩ hX
+  have hac := hZ ha
+  by_cases hau : a ∈ P.gates u
+  · have hgu : g ∉ P.gates u := fun hgu => (hag.1 (mem_inter.2 ⟨hau, ha⟩)) (mem_inter.2 ⟨hgu, hg⟩)
+    obtain ⟨v, hv⟩ := exists_mem_gates P (hZ hg)
+    have hav : a ∉ P.gates v := fun hav => hgu (eq_of_mem_gates P hav hau ▸ hv)
+    exact ⟨v, a, mem_inter.2 ⟨mem_unregistered hv hav hr hac, ha⟩⟩
+  · have hgu : g ∈ P.gates u := by
+      by_contra hgu
+      exact hau (mem_inter.1 (hag.2 fun hgX => hgu (mem_inter.1 hgX).1)).1
+    exact ⟨u, a, mem_inter.2 ⟨mem_unregistered hgu hau hr hac, ha⟩⟩
+
 namespace Standard
 
 variable {ni nl nj : ℕ} (S : Standard d ni nl nj)
@@ -83,11 +107,11 @@ theorem entry_subset_macs (i : Fin ni) (j : Fin nj) : S.entry i j ⊆ S.macs := 
   obtain ⟨l, -, hl⟩ := mem_biUnion.1 hg
   exact S.mac_subset_macs i l j hl
 
-theorem entry_computed (hS : S.Algorithm) (i : Fin ni) (j : Fin nj) : S.entry i j ⊆ d.D.computed := fun g hg => by
+theorem entry_computed (hS : S.Wiring) (i : Fin ni) (j : Fin nj) : S.entry i j ⊆ d.D.computed := fun g hg => by
   obtain ⟨l, -, hl⟩ := mem_biUnion.1 hg
   exact hS.mac_computed i l j hl
 
-theorem entry_disjoint (hS : S.Algorithm) {e e' : Fin ni × Fin nj} (h : e ≠ e') :
+theorem entry_disjoint (hS : S.Wiring) {e e' : Fin ni × Fin nj} (h : e ≠ e') :
     Disjoint (S.entry e.1 e.2) (S.entry e'.1 e'.2) := by
   refine (disjoint_biUnion_left _ _ _).2 fun l _ => (disjoint_biUnion_right _ _ _).2 fun l' _ =>
     hS.mac_disjoint (e.1, l, e.2) (e'.1, l', e'.2) ?_
@@ -97,7 +121,7 @@ theorem entry_disjoint (hS : S.Algorithm) {e e' : Fin ni × Fin nj} (h : e ≠ e
   exact Prod.ext heq.1 heq.2.2
 
 /-- **Operands, `A`**: a block's whole MACs touch at most `|U ∩ ⋃ coneA| / b_A` entries of `A`. -/
-theorem mul_card_le_coneA (hS : S.Algorithm) {c k bA bB bC : ℕ} (hW : S.Passed c k bA bB bC)
+theorem mul_card_le_coneA (hS : S.Wiring) {c k bA bB bC : ℕ} (hW : S.Passed c k bA bB bC)
     {I : Finset (Fin d.D.N)} (hI : InferenceBlock d c k I) :
     bA * ((S.whole I).image fun x => (x.1, x.2.1)).card ≤
       (d.unregistered I ∩ univ.biUnion fun p : Fin ni × Fin nl => S.coneA p.1 p.2).card := by
@@ -119,7 +143,7 @@ theorem mul_card_le_coneA (hS : S.Algorithm) {c k bA bB bC : ℕ} (hW : S.Passed
         exact ⟨hgp.1, mem_biUnion.2 ⟨p, mem_univ _, hgp.2⟩⟩
 
 /-- **Operands, `B`**: a block's whole MACs touch at most `|U ∩ ⋃ coneB| / b_B` entries of `B`. -/
-theorem mul_card_le_coneB (hS : S.Algorithm) {c k bA bB bC : ℕ} (hW : S.Passed c k bA bB bC)
+theorem mul_card_le_coneB (hS : S.Wiring) {c k bA bB bC : ℕ} (hW : S.Passed c k bA bB bC)
     {I : Finset (Fin d.D.N)} (hI : InferenceBlock d c k I) :
     bB * ((S.whole I).image fun x => (x.2.1, x.2.2)).card ≤
       (d.unregistered I ∩ univ.biUnion fun p : Fin nl × Fin nj => S.coneB p.1 p.2).card := by
@@ -140,14 +164,14 @@ theorem mul_card_le_coneB (hS : S.Algorithm) {c k bA bB bC : ℕ} (hW : S.Passed
         rw [mem_inter] at hgp ⊢
         exact ⟨hgp.1, mem_biUnion.2 ⟨p, mem_univ _, hgp.2⟩⟩
 
-theorem coneA_coneB_disjoint (hS : S.Algorithm) :
+theorem coneA_coneB_disjoint (hS : S.Wiring) :
     Disjoint (univ.biUnion fun p : Fin ni × Fin nl => S.coneA p.1 p.2)
       (univ.biUnion fun p : Fin nl × Fin nj => S.coneB p.1 p.2) :=
   (disjoint_biUnion_left _ _ _).2 fun p _ => (disjoint_biUnion_right _ _ _).2 fun q _ =>
     hS.cones_disjoint p.1 p.2 q.1 q.2
 
 /-- **Operands**: `b_A |π₁₂ T| + b_B |π₂₃ T| ≤ |U ∩ cones|` for a block's whole MACs `T`. -/
-theorem mul_card_le_cones (hS : S.Algorithm) {c k bA bB bC : ℕ} (hW : S.Passed c k bA bB bC)
+theorem mul_card_le_cones (hS : S.Wiring) {c k bA bB bC : ℕ} (hW : S.Passed c k bA bB bC)
     {I : Finset (Fin d.D.N)} (hI : InferenceBlock d c k I) :
     bA * ((S.whole I).image fun x => (x.1, x.2.1)).card + bB * ((S.whole I).image fun x => (x.2.1, x.2.2)).card ≤
       (d.unregistered I ∩ S.cones).card := by
@@ -156,13 +180,13 @@ theorem mul_card_le_cones (hS : S.Algorithm) {c k bA bB bC : ℕ} (hW : S.Passed
   exact add_le_add (S.mul_card_le_coneA hS hW hI) (S.mul_card_le_coneB hS hW hI)
 
 /-- **Reads**: a block reads its cones' and its MACs' gates within its `k`. -/
-theorem card_add_card_le (hS : S.Algorithm) {c k : ℕ} {I : Finset (Fin d.D.N)} (hI : InferenceBlock d c k I) :
+theorem card_add_card_le (hS : S.Wiring) {c k : ℕ} {I : Finset (Fin d.D.N)} (hI : InferenceBlock d c k I) :
     (d.unregistered I ∩ S.cones).card + (d.unregistered I ∩ S.macs).card ≤ k := by
   rw [← card_union_of_disjoint (hS.cones_macs.mono inter_subset_right inter_subset_right)]
   exact (card_le_card (union_subset inter_subset_left inter_subset_left)).trans hI.2.2
 
 /-- What the blocks hand on of `C_ij`'s gates, other blocks read. -/
-theorem sum_card_handed_le (hS : S.Algorithm) {m : ℕ} (P : Partition d.D m) (e : Fin ni × Fin nj) :
+theorem sum_card_handed_le (hS : S.Wiring) {m : ℕ} (P : Partition d.D m) (e : Fin ni × Fin nj) :
     ∑ u, (handed d.D (S.entry e.1 e.2) (P.gates u)).card ≤
       ∑ u, (d.unregistered (P.gates u) ∩ S.entry e.1 e.2).card := by
   rw [← card_biUnion fun u _ v _ huv => ?_]
@@ -179,14 +203,14 @@ theorem sum_card_handed_le (hS : S.Algorithm) {m : ℕ} (P : Partition d.D m) (e
     exact eq_of_mem_gates P hu.1.1 hv.1.1
 
 /-- A block's reads of the entries' gates are its reads of the MACs' gates. -/
-theorem sum_card_entry_le (hS : S.Algorithm) (U : Finset (Fin d.D.N)) :
+theorem sum_card_entry_le (hS : S.Wiring) (U : Finset (Fin d.D.N)) :
     ∑ e : Fin ni × Fin nj, (U ∩ S.entry e.1 e.2).card ≤ (U ∩ S.macs).card := by
   rw [← card_biUnion fun e _ e' _ h => (S.entry_disjoint hS h).mono inter_subset_right inter_subset_right]
   exact card_le_card (biUnion_subset.2 fun e _ =>
     inter_subset_inter_left (S.entry_subset_macs e.1 e.2))
 
 /-- **Partial sums**: `b_C Σ_u |π₁₃ T_u| ≤ E + Σ_u |U_u ∩ macs|`. -/
-theorem partial_sums (hS : S.Algorithm) {c k bA bB bC m : ℕ} (hW : S.Passed c k bA bB bC) {P : Partition d.D m}
+theorem partial_sums (hS : S.Wiring) {c k bA bB bC m : ℕ} (hW : S.Passed c k bA bB bC) {P : Partition d.D m}
     (hP : P.IsCK d c k) :
     bC * ∑ u, ((S.whole (P.gates u)).image fun x => (x.1, x.2.2)).card ≤
       S.outBits + ∑ u, (d.unregistered (P.gates u) ∩ S.macs).card := by
@@ -221,7 +245,7 @@ theorem partial_sums (hS : S.Algorithm) {c k bA bB bC m : ℕ} (hW : S.Passed c 
         exact add_le_add le_rfl (sum_le_sum fun u _ => S.sum_card_entry_le hS _)
 
 /-- A block's reads of the MACs' gates, MAC by MAC. -/
-theorem sum_card_mac_le (hS : S.Algorithm) (U : Finset (Fin d.D.N)) :
+theorem sum_card_mac_le (hS : S.Wiring) (U : Finset (Fin d.D.N)) :
     ∑ p : Fin ni × Fin nl × Fin nj, (U ∩ S.mac p.1 p.2.1 p.2.2).card ≤ (U ∩ S.macs).card := by
   rw [← card_biUnion fun p _ q _ h => (hS.mac_disjoint p q h).mono inter_subset_right inter_subset_right]
   exact card_le_card (biUnion_subset.2 fun p _ => inter_subset_inter_left (S.mac_subset_macs _ _ _))
@@ -235,23 +259,8 @@ theorem sum_card_whole {m : ℕ} (P : Partition d.D m) :
 
 /-- **A split MAC is read across**: a MAC that no block holds whole has a gate that some block reads. -/
 theorem split_read (hS : S.Algorithm) {m : ℕ} (P : Partition d.D m) (i : Fin ni) (l : Fin nl) (j : Fin nj)
-    (h : ∀ u, ¬ S.mac i l j ⊆ P.gates u) : ∃ v, (d.unregistered (P.gates v) ∩ S.mac i l j).Nonempty := by
-  obtain ⟨g₀, hg₀⟩ := hS.mac_nonempty i l j
-  obtain ⟨u, hu⟩ := exists_mem_gates P (hS.mac_computed i l j hg₀)
-  have hX : P.gates u ∩ S.mac i l j ≠ S.mac i l j := fun heq => h u (by
-    rw [← heq]
-    exact inter_subset_left)
-  obtain ⟨a, ha, g, hg, hr, hag⟩ := hS.mac_connected i l j _ inter_subset_right ⟨g₀, mem_inter.2 ⟨hu, hg₀⟩⟩ hX
-  have hac := hS.mac_computed i l j ha
-  by_cases hau : a ∈ P.gates u
-  · have hgu : g ∉ P.gates u := fun hgu => (hag.1 (mem_inter.2 ⟨hau, ha⟩)) (mem_inter.2 ⟨hgu, hg⟩)
-    obtain ⟨v, hv⟩ := exists_mem_gates P (hS.mac_computed i l j hg)
-    have hav : a ∉ P.gates v := fun hav => hgu (eq_of_mem_gates P hav hau ▸ hv)
-    exact ⟨v, a, mem_inter.2 ⟨mem_unregistered hv hav hr hac, ha⟩⟩
-  · have hgu : g ∈ P.gates u := by
-      by_contra hgu
-      exact hau (mem_inter.1 (hag.2 fun hgX => hgu (mem_inter.1 hgX).1)).1
-    exact ⟨u, a, mem_inter.2 ⟨mem_unregistered hgu hau hr hac, ha⟩⟩
+    (h : ∀ u, ¬ S.mac i l j ⊆ P.gates u) : ∃ v, (d.unregistered (P.gates v) ∩ S.mac i l j).Nonempty :=
+  split_read_of_connected P (hS.mac_computed i l j) (hS.mac_nonempty i l j) (hS.mac_connected i l j) h
 
 /-- **Splits**: `N ≤ Σ_u |T_u| + Σ_u |U_u ∩ macs|`, each MAC whole in a block or read across a split. -/
 theorem card_le_whole_add (hS : S.Algorithm) {m : ℕ} (P : Partition d.D m) :
@@ -275,7 +284,7 @@ theorem card_le_whole_add (hS : S.Algorithm) {m : ℕ} (P : Partition d.D m) :
     _ = ∑ u, (S.whole (P.gates u)).card +
           ∑ u, ∑ p : Fin ni × Fin nl × Fin nj, (d.unregistered (P.gates u) ∩ S.mac p.1 p.2.1 p.2.2).card := by
         rw [sum_add_distrib, S.sum_card_whole P, sum_comm (s := univ) (t := univ)]
-    _ ≤ _ := add_le_add le_rfl (sum_le_sum fun u _ => S.sum_card_mac_le hS _)
+    _ ≤ _ := add_le_add le_rfl (sum_le_sum fun u _ => S.sum_card_mac_le hS.toWiring _)
 
 /-- With every MAC in one block, `N ≤ Σ_u |T_u|`. -/
 theorem card_le_whole {m : ℕ} (P : Partition d.D m) (h : S.Unsplit P) :
@@ -293,7 +302,7 @@ def starts (I : Finset (Fin d.D.N)) : Finset (Fin ni × Fin nj) :=
   univ.filter fun e => ∃ l : Fin nl, l.val = 0 ∧ S.mac e.1 l e.2 ⊆ I
 
 /-- **Each chain starts once**: `Σ_u s_u ≤ ni nj`, an entry's first MAC lying in at most one block. -/
-theorem sum_card_starts_le (hS : S.Algorithm) {m : ℕ} (P : Partition d.D m) :
+theorem sum_card_starts_le (hS : S.Wiring) {m : ℕ} (P : Partition d.D m) :
     ∑ u, (S.starts (P.gates u)).card ≤ ni * nj := by
   have h1 : ∀ e : Fin ni × Fin nj, (univ.filter fun u => e ∈ S.starts (P.gates u)).card ≤ 1 := by
     intro e
@@ -314,7 +323,7 @@ theorem sum_card_starts_le (hS : S.Algorithm) {m : ℕ} (P : Partition d.D m) :
 
 /-- **A chain read into a block**: a block that holds a MAC of `C_ij` and doesn't start its chain reads `b_C` of
 `C_ij`'s gates, the partial sum of the MAC before the first one it holds. -/
-theorem le_card_entry (hS : S.Algorithm) {bC : ℕ} (hch : S.Chained bC) {m : ℕ} {P : Partition d.D m}
+theorem le_card_entry (hS : S.Wiring) {bC : ℕ} (hch : S.Chained bC) {m : ℕ} {P : Partition d.D m}
     (hP : S.Unsplit P) (u : Fin m) (e : Fin ni × Fin nj) (he : ∃ l, S.mac e.1 l e.2 ⊆ P.gates u)
     (hs : e ∉ S.starts (P.gates u)) : bC ≤ (d.unregistered (P.gates u) ∩ S.entry e.1 e.2).card := by
   have hne : (univ.filter fun l : Fin nl => S.mac e.1 l e.2 ⊆ P.gates u).Nonempty := by
@@ -341,7 +350,7 @@ theorem le_card_entry (hS : S.Algorithm) {bC : ℕ} (hch : S.Chained bC) {m : �
 
 /-- **Partial sums along chains**: `b_C |π₁₃ T_u| ≤ |U_u ∩ macs| + b_C s_u`, each entry a block touches starting its
 chain there or reading a partial sum. -/
-theorem chain_sums (hS : S.Algorithm) {bC : ℕ} (hch : S.Chained bC) {m : ℕ} {P : Partition d.D m}
+theorem chain_sums (hS : S.Wiring) {bC : ℕ} (hch : S.Chained bC) {m : ℕ} {P : Partition d.D m}
     (hP : S.Unsplit P) (u : Fin m) :
     bC * ((S.whole (P.gates u)).image fun x => (x.1, x.2.2)).card ≤
       (d.unregistered (P.gates u) ∩ S.macs).card + bC * (S.starts (P.gates u)).card := by
@@ -376,7 +385,7 @@ theorem chain_sums (hS : S.Algorithm) {bC : ℕ} (hch : S.Chained bC) {m : ℕ} 
         exact add_le_add hread le_rfl
 
 /-- There are at most `|C|` products: their MACs are disjoint nonempty sets of computed gates. -/
-theorem card_le_computed (hS : S.Algorithm) : ni * nl * nj ≤ d.D.computed.card := by
+theorem card_le_computed (hS : S.Wiring) : ni * nl * nj ≤ d.D.computed.card := by
   calc ni * nl * nj = ∑ _p : Fin ni × Fin nl × Fin nj, 1 := by
         rw [sum_const, card_univ, Fintype.card_prod, Fintype.card_prod, Fintype.card_fin, Fintype.card_fin,
           Fintype.card_fin, smul_eq_mul, mul_one, mul_assoc]
@@ -399,11 +408,11 @@ theorem Cap : Guarantees.Cap := by
     (s := 1) (E := S.outBits) (by exact_mod_cast hA) (by exact_mod_cast hB) (by exact_mod_cast hC) hμ
     (fun _ => Nat.cast_nonneg _) (fun _ => le_rfl) (fun _ => Nat.cast_nonneg _)
     (fun u => by
-      have h := S.mul_card_le_cones hS hW (inferenceBlock_gates hP u)
+      have h := S.mul_card_le_cones hS.toWiring hW (inferenceBlock_gates hP u)
       simp only [add_zero]
       exact_mod_cast h)
-    (fun u => by exact_mod_cast S.card_add_card_le hS (inferenceBlock_gates hP u))
-    (by exact_mod_cast S.partial_sums hS hW hP)
+    (fun u => by exact_mod_cast S.card_add_card_le hS.toWiring (inferenceBlock_gates hP u))
+    (by exact_mod_cast S.partial_sums hS.toWiring hW hP)
   simp only [add_zero, one_mul, sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul] at key
   have hN : ((ni * nl * nj : ℕ) : ℝ) ≤ ∑ u, ((S.whole (P.gates u)).card : ℝ) +
       ∑ u, ((d.unregistered (P.gates u) ∩ S.macs).card : ℝ) := by
@@ -417,9 +426,9 @@ theorem WordCap : Guarantees.WordCap := by
     (fun u => ((d.unregistered (P.gates u) ∩ S.macs).card : ℝ)) (k := k) (bA := bA) (bB := bB) (bC := bC)
     (E := S.outBits) (by exact_mod_cast hk) (by exact_mod_cast hA) (by exact_mod_cast hB) (by exact_mod_cast hC)
     (fun _ => Nat.cast_nonneg _) (fun _ => Nat.cast_nonneg _)
-    (fun u => by exact_mod_cast S.mul_card_le_cones hS hW (inferenceBlock_gates hP u))
-    (fun u => by exact_mod_cast S.card_add_card_le hS (inferenceBlock_gates hP u))
-    (by exact_mod_cast S.partial_sums hS hW hP)
+    (fun u => by exact_mod_cast S.mul_card_le_cones hS.toWiring hW (inferenceBlock_gates hP u))
+    (fun u => by exact_mod_cast S.card_add_card_le hS.toWiring (inferenceBlock_gates hP u))
+    (by exact_mod_cast S.partial_sums hS.toWiring hW hP)
   rw [Fintype.card_fin] at key
   have hN : ((ni * nl * nj : ℕ) : ℝ) ≤ ∑ u, ((S.whole (P.gates u)).card : ℝ) := by
     exact_mod_cast S.card_le_whole P hwhole
@@ -433,10 +442,10 @@ theorem ChainCap : Guarantees.ChainCap := by
     (k := k) (bA := bA) (bB := bB) (bC := bC) (O := ((ni * nj : ℕ) : ℝ)) (Nat.cast_nonneg _)
     (by exact_mod_cast hA) (by exact_mod_cast hB) (by exact_mod_cast hC) (fun _ => Nat.cast_nonneg _)
     (fun _ => Nat.cast_nonneg _)
-    (fun u => by exact_mod_cast S.mul_card_le_cones hS hW (inferenceBlock_gates hP u))
-    (fun u => by exact_mod_cast S.card_add_card_le hS (inferenceBlock_gates hP u))
-    (fun u => by exact_mod_cast S.chain_sums hS hch hwhole u)
-    (by exact_mod_cast S.sum_card_starts_le hS P)
+    (fun u => by exact_mod_cast S.mul_card_le_cones hS.toWiring hW (inferenceBlock_gates hP u))
+    (fun u => by exact_mod_cast S.card_add_card_le hS.toWiring (inferenceBlock_gates hP u))
+    (fun u => by exact_mod_cast S.chain_sums hS.toWiring hch hwhole u)
+    (by exact_mod_cast S.sum_card_starts_le hS.toWiring P)
   rw [Fintype.card_fin] at key
   have hN : ((ni * nl * nj : ℕ) : ℝ) ≤ ∑ u, ((S.whole (P.gates u)).card : ℝ) := by
     exact_mod_cast S.card_le_whole P hwhole
@@ -449,7 +458,7 @@ theorem Bound : Guarantees.Bound := by
   have hK0 : 0 ≤ capAt k bA bB bC μ := by
     unfold capAt
     exact le_max_of_le_right (mul_nonneg (by linarith) (Nat.cast_nonneg _))
-  have hNC : ((ni * nl * nj : ℕ) : ℝ) ≤ d.D.computed.card := by exact_mod_cast S.card_le_computed hS
+  have hNC : ((ni * nl * nj : ℕ) : ℝ) ≤ d.D.computed.card := by exact_mod_cast S.card_le_computed hS.toWiring
   have hE : 0 ≤ μ * S.outBits := mul_nonneg hμ.le (Nat.cast_nonneg _)
   rcases le_or_gt (((ni * nl * nj : ℕ) : ℝ) - μ * S.outBits) 0 with hW0 | hW0
   · rw [ENNReal.ofReal_of_nonpos hW0, ENNReal.zero_div, ENNReal.zero_div]

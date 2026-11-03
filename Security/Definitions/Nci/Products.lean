@@ -20,10 +20,11 @@ What the guarantees (`Nci.Products.Guarantees`) read of the product (`Standard`)
 
 Three premises, facts of the given circuit:
 
-* **The standard algorithm** (`Standard.Algorithm`): the MACs are nonempty, pairwise disjoint and connected sets of
-  computed gates (a set holding some of a MAC's gates but not all has a read across it); each MAC reads every bit of
-  both its operands; the cones are pairwise disjoint and disjoint from the MACs; and each entry's final value lies in
-  its MACs. A product by a fast algorithm (Strassen's) has no such MACs and stays outside.
+* **The standard algorithm** (`Standard.Algorithm`): its wiring (`Standard.Wiring`), the MACs nonempty and pairwise
+  disjoint sets of computed gates, each MAC reading every bit of both its operands, the cones pairwise disjoint and
+  disjoint from the MACs, and each entry's final value in its MACs; and each MAC connected (a set holding some of a
+  MAC's gates but not all has a read across it). A product by a fast algorithm (Strassen's) has no such MACs and stays
+  outside.
 * **Widths as passed** (`Standard.Passed`), at the policy's `(c, k)`: an inference block that holds or reads every bit
   of `A_il` reads at least `b_A` bits of `A_il`'s cone beyond `θ`, and of `B_lj`'s at least `b_B`; and an inference
   block that holds a whole MAC of `C_ij` hands at least `b_C` bits of `C_ij`'s gates to its gates outside the block, or
@@ -96,17 +97,14 @@ def Chained (bC : ℕ) : Prop :=
   ∀ i (l l' : Fin nl) j, l'.val + 1 = l.val →
     bC ≤ ((S.mac i l' j).filter fun h => ∃ g ∈ S.mac i l j, h ∈ d.D.reads g).card
 
-/-- **The standard algorithm**, a fact of the given circuit: the MACs are nonempty, pairwise disjoint and connected sets
-of computed gates; each reads every bit of both its operands; the cones are pairwise disjoint and disjoint from the
-MACs; and each entry's final value lies in its MACs. -/
-structure Algorithm : Prop where
+/-- **The standard algorithm's wiring**, a fact of the given circuit: the MACs are nonempty and pairwise disjoint sets of
+computed gates; each reads every bit of both its operands; the cones are pairwise disjoint and disjoint from the MACs;
+and each entry's final value lies in its MACs. -/
+structure Wiring : Prop where
   mac_computed : ∀ i l j, S.mac i l j ⊆ d.D.computed
   mac_nonempty : ∀ i l j, (S.mac i l j).Nonempty
   mac_disjoint : ∀ p q : Fin ni × Fin nl × Fin nj, p ≠ q →
     Disjoint (S.mac p.1 p.2.1 p.2.2) (S.mac q.1 q.2.1 q.2.2)
-  /-- A set holding some of a MAC's gates but not all has a read across it. -/
-  mac_connected : ∀ i l j (X : Finset (Fin d.D.N)), X ⊆ S.mac i l j → X.Nonempty → X ≠ S.mac i l j →
-    ∃ h ∈ S.mac i l j, ∃ g ∈ S.mac i l j, h ∈ d.D.reads g ∧ (h ∈ X ↔ g ∉ X)
   readsA : ∀ i l j, ∀ a ∈ S.opA i l, ∃ g ∈ S.mac i l j, a ∈ d.D.reads g
   readsB : ∀ i l j, ∀ b ∈ S.opB l j, ∃ g ∈ S.mac i l j, b ∈ d.D.reads g
   coneA_disjoint : ∀ p q : Fin ni × Fin nl, p ≠ q → Disjoint (S.coneA p.1 p.2) (S.coneA q.1 q.2)
@@ -114,6 +112,12 @@ structure Algorithm : Prop where
   cones_disjoint : ∀ i l l' j, Disjoint (S.coneA i l) (S.coneB l' j)
   cones_macs : Disjoint S.cones S.macs
   out_entry : ∀ i j, S.out i j ⊆ S.entry i j
+
+/-- **The standard algorithm**, a fact of the given circuit: its wiring (`Wiring`), with each MAC connected. -/
+structure Algorithm : Prop extends S.Wiring where
+  /-- A set holding some of a MAC's gates but not all has a read across it. -/
+  mac_connected : ∀ i l j (X : Finset (Fin d.D.N)), X ⊆ S.mac i l j → X.Nonempty → X ≠ S.mac i l j →
+    ∃ h ∈ S.mac i l j, ∃ g ∈ S.mac i l j, h ∈ d.D.reads g ∧ (h ∈ X ↔ g ∉ X)
 
 /-- **Widths as passed** at the policy's `(c, k)`, a fact of the given circuit: an inference block that holds or reads
 every bit of `A_il` reads at least `b_A` bits of its cone beyond `θ`, and of `B_lj`'s at least `b_B`; and one that holds

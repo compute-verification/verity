@@ -35,7 +35,8 @@ The theorems (`Nci.Products.Guarantees.ClassBound`, `WholeCap`, `WholeBound`) re
 io_bound's `whole_chain_of` computes the least, and a product's **whole-making factor** `e = Σ_i A_ij μ_i` at its class
 `j` (`wholeFactor`).
 `wholeBound` is the products kind's bound on `ρ` that the cap with operands made whole gives: `chainBlocks N
-(α' + k) (β' √O) · c / |C|`, with `α' = (k'/3) √(k'/3) / √(b b b_C)` and `β' = (k'/2) / b` at `k' = k (1 + e)`.
+(α' + w k) (β' √O) · c / |C|` in cells of at most `w` MACs, with `α' = (k'/3) √(k'/3) / √(b b b_C)` and
+`β' = (k'/2) / b` at `k' = k (1 + e)`.
 -/
 
 namespace Nci.Products
@@ -139,12 +140,13 @@ def PostFixed [Fintype κ] (k b : ℕ) (cs : κ → ℝ) (A : κ → κ → ℝ)
 
 end System
 
-/-- **The products kind's bound with operands made whole**: `chainBlocks N (α' + k) (β' √O) · c / |C|` for a product of
-`N` MACs and `O` output entries, with `α' = (k'/3) √(k'/3) / √(b b b_C)` and `β' = (k'/2) / √(b b)` at the bits
-`k' = k (1 + e)` its blocks have for operands and partial sums, `e` its whole-making factor. -/
-noncomputable def wholeBound (d : Declaration) (N O c k b bC : ℕ) (e : ℝ) : ℝ≥0∞ :=
+/-- **The products kind's bound with operands made whole**: `chainBlocks N (α' + w k) (β' √O) · c / |C|` for a product
+of `N` MACs and `O` output entries in cells of at most `w` MACs, with `α' = (k'/3) √(k'/3) / √(b b b_C)` and
+`β' = (k'/2) / √(b b)` at the bits `k' = k (1 + e)` its blocks have for operands and partial sums, `e` its whole-making
+factor. -/
+noncomputable def wholeBound (d : Declaration) (N O w c k b bC : ℕ) (e : ℝ) : ℝ≥0∞ :=
   ENNReal.ofReal (chainBlocks N
-      ((k : ℝ) * (1 + e) / 3 * √((k : ℝ) * (1 + e) / 3) / √((b : ℝ) * b * bC) + k)
+      ((k : ℝ) * (1 + e) / 3 * √((k : ℝ) * (1 + e) / 3) / √((b : ℝ) * b * bC) + w * k)
       ((k : ℝ) * (1 + e) / 2 / √((b : ℝ) * b) * √(O : ℝ))) *
     (c : ℝ≥0∞) / (d.D.computed.card : ℝ≥0∞)
 
