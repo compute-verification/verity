@@ -6,7 +6,7 @@ v2 or a segmented row). The verifier writes its own `--registered` file from the
 (`served.json`), with `register_served` on its own program, and `flock-verify verify --zk --registered` passes every check
 of the session on it, its verdict naming that program's digest (the partition's), and refuses it on the same file with
 the tree's root changed, or a bit row's port with its words or width changed.
-`--zk` holds the files to the form `SampledKSLiveV4` covers, or at a shared-row public file `SampledKSLiveV5`'s
+`--zk` holds the files to the form `SampledKSLiveV3` covers, or at a shared-row public file `SampledKSLiveV5`'s
 (`Flock.PortRoots`, `Flock.KsScope`). The rows of all three and their shared-row public files are in it, so each session
 is accepted.
 A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified draw) is accepted on that file too,
@@ -135,7 +135,7 @@ def test_a_bit_row_port_whose_words_and_width_are_not_its_rows_is_refused(fx, tm
 
 
 def test_ks_form_is_the_default_under_zk_and_every_row_format_passes_its_rows_check(fx, tmp_path):
-    """`--zk` holds the files to the form `SampledKSLiveV4` covers, or at a shared-row public file `SampledKSLiveV5`'s
+    """`--zk` holds the files to the form `SampledKSLiveV3` covers, or at a shared-row public file `SampledKSLiveV5`'s
     (`Flock.PortRoots.checkOf`, then `Flock.KsScope.checkOf`), which every served row format is in: the session at a
     `row/v1` circuit, at `row/v2` rows and with `cs` a `row-seg/v1` row is accepted, and `--ks-form`, the check's old
     flag, gives the same verdict. `--ks-form` without `--zk` is a usage error."""

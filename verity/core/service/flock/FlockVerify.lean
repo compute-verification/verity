@@ -800,7 +800,7 @@ reading several input groups or a tail stage returning the outputs is; a shared-
 `--registered F`, outside the form `Flock.Guarantees.SampledKSLiveV5` covers (`KsScope.sharedWhy`: one whose circuit's
 public input ports do not parse, that does not load over them, or two of whose ports' roots over its tables are one root
 under different domains); at more than one table a draw that does not parse or a subset draw whose `k` the tables don't
-divide; `Flock.Guarantees.SampledKSLiveV4` is over that acceptance without shared rows, and `SampledKSLiveV5` with
+divide; `Flock.Guarantees.SampledKSLiveV3` is over that acceptance without shared rows, and `SampledKSLiveV5` with
 them), all after every
 check has passed (so the reason is the refusal only when nothing else
 fails; the form's first). Exit 0 iff every
