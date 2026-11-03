@@ -84,7 +84,8 @@
 #     unless COMPOSITE is set empty,
 #     remote's and onsite's Lean verdicts on the run's cases (`served_composite.sh`'s docstring). Their verdicts gate
 #     nothing, but a composite that didn't run (a tree without composite.py) or whose Lean didn't answer fails the run.
-#     With the network certifier's piece in the run, `onsite_record.py` then writes the onsite demo's record
+#     With the network certifier in the run, its piece (CERTIFIER_CMD) or its front (CERTIFIER_FRONT), `onsite_record.py`
+#     then writes the onsite demo's record
 #     ($OUT/record/onsite.json: every verdict its run of record needs, the network bound term by term and over each
 #     monitoring period, and beside it ADVICE_CHARGE's measured advice charge, a test run's advice-charge.json, below);
 #     its ONSITE line gates nothing.
@@ -785,7 +786,7 @@ rec=${PIPESTATUS[0]}
 private_pieces
 comp=0
 [ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
-[ -z "${CERTIFIER_CMD:-}" ] \
+[ -z "${CERTIFIER_CMD:-}${CERTIFIER_FRONT:-}" ] \
   || "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} 2>&1 | publish_lines
 measure
 # V3c after the record, each step within its limit: it gates nothing
