@@ -2150,6 +2150,10 @@
    "owner": "@lean",
    "digest": "a78011b108a9369070c518c56ec7264ee084cb9aab661d2ab5ba77a6b4c26cd2"
   },
+  "Verity.Recursive.LiveCoins": {
+   "owner": "@proofs",
+   "digest": "8546e06c806d9823031c662a2c463f83113cfaf39894ef4f03cf02912d4933ba"
+  },
   "Verity.Sound": {
    "owner": "@proofs",
    "digest": "8ce08e78994d35e34dd4fb619f6366bee293379b3c7442a8007d53d80d5a5bd7"
@@ -2177,10 +2181,6 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
-  },
-  "Verity.Recursive.LiveCoins": {
-   "owner": "@proofs",
-   "digest": "8546e06c806d9823031c662a2c463f83113cfaf39894ef4f03cf02912d4933ba"
   }
  },
  "meaning": [
