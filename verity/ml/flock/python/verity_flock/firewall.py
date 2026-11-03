@@ -307,9 +307,9 @@ class Firewall:
         with self._slot_lock(session, part, waiting):
             with self._locked((session,)) as rec:
                 held: list[bytes] = []
-                self._take(rec, session, part, held)
-                why, _ = self._admit(rec, session, part, False, held)
                 try:
+                    self._take(rec, session, part, held)
+                    why, _ = self._admit(rec, session, part, False, held)
                     self._write(rec, b"".join(held))
                 except BaseException:
                     if isinstance(rec, _Index):
