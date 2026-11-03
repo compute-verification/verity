@@ -470,7 +470,7 @@ NOISED = program("Noised", {"x": VEC, "w1": MAT, "w2": MAT, "z": VEC}, VEC, nois
 def test_work_is_pinned_to_a_block_only_by_data_it_must_consume_there_or_a_named_premise(setup):
     """A helper holding the registered weights needs only small inputs and outputs, so crossing bytes
     alone attribute nothing. Fresh data from a trusted device that only the block receives pins the work there: a helper
-    could get it only through the block's certified egress. So does the named premise that the fleet is closed."""
+    could get it only through the block's certified egress. So does the proposed assumption that the fleet is closed."""
     dc, p = setup
     profile = p.public(Plan(EPOCH))
     claims = audit(run(p, INPUTS, Plan(EPOCH)), profile)

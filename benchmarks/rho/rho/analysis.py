@@ -89,7 +89,7 @@ def restrict(s: Scenario, status: str) -> Scenario:
 def upto(status: str) -> Metric:
     """`LO` from only the bounds and cuts at least as strong as `status`: `upto("conditional")` drops the draft
     statements (the straddling premise among them, so the uncertified and dark gates count at the elementary cap),
-    `upto("proved")` keeps only what needs no named premise."""
+    `upto("proved")` keeps only what needs no assumption."""
     if status not in STATUSES:
         raise ValueError(f"status {status!r} is not one of {STATUSES}")
 

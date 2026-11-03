@@ -11,15 +11,15 @@ the scenario's own `fleet` and `horizon` choices overridden (`scenario.<name>.fl
 * **without the ruled assumptions**: the lower bound with every regime's host CPUs at their datasheet peak (without
   hosts carry no compute), with free compute at peak (without reference efficiency), and without both, sensitivities
   beside the headline (`sensitivities`);
-* **its parts**: the citations of the bound that sets it, by kind (`KINDS`), each named premise with its standing at
+* **its parts**: the citations of the bound that sets it, by kind (`KINDS`), each assumption with its standing at
   the block that binds;
 * **what is scaled**: a serving block's local minimum is a per-server-window bound (one server between two wipes,
   onsite; one server over the period, remote), its cuts' statements are per serving block, and the bound sums them over
   every server and window; the dark leaves are one pool, `ε_dark` of the fleet, and the uncertified routes are shares of
   each server's capacity, neither a per-window bound;
 * **what sets it** (`analysis.attribution`);
-* **the premises ranked** by how far each alone moves the lower bound: each ranged parameter over its range, each named
-  premise of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary cap).
+* **the premises ranked** by how far each alone moves the lower bound: each ranged parameter over its range, each
+  assumption of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary cap).
 
 `--measured CIRCUIT` evaluates them with a measured step's design in place of the FLOP model (`circuits.in_place`: its
 structure's `s_×` and its gates per FLOP), and sets the step beside the FLOP model first (`circuits.compare`).
@@ -50,7 +50,7 @@ FLEETS = (("reference-h200", "one datacenter"), ("world-h200", "the world"))
 #: core's monitoring periods, by name (`params.PERIODS`)
 PERIODS = tuple(params.PERIODS)
 #: `lean.status` as the kinds a part of a bound is
-KINDS = {"proved": "proved in Lean", "assumption": "named premise", "draft": "paper", "absent": "stated, in no lock"}
+KINDS = {"proved": "proved in Lean", "assumption": "assumption", "draft": "paper", "absent": "stated, in no lock"}
 #: parameter statuses that are a choice or a measurement rather than an open premise
 FIXED = ("datasheet", "measured", "declared", "ruled")
 
@@ -76,7 +76,7 @@ def sensitivities(reg: Registry, name: str) -> dict[str, float]:
 
 
 def parts(r: Result, reg: Registry) -> dict:
-    """The bound that sets the lower bound, its citations by kind, and each named premise's standing where it binds."""
+    """The bound that sets the lower bound, its citations by kind, and each assumption's standing where it binds."""
     f = run.picked(r)
     e = run.setter(f) if f else None
     if e is None:
@@ -107,7 +107,7 @@ def scaled(r: Result) -> dict:
 
 
 def ranking(reg: Registry, name: str, swings: list[analysis.Swing]) -> list[dict]:
-    """Every ranged parameter over its range, every named premise refuted, `draft:no-straddle` dropped, by how many
+    """Every ranged parameter over its range, every assumption refuted, `draft:no-straddle` dropped, by how many
     decades each alone moves the lower bound."""
     base = analysis.at(reg, name)
     out = [{"what": s.key, "kind": f"parameter ({reg.param(s.key).status})",
@@ -118,11 +118,11 @@ def ranking(reg: Registry, name: str, swings: list[analysis.Swing]) -> list[dict
         v = analysis.at(reg, name, {f"premise.{p}.standing": "refuted", f"premise.{p}.beyond": "refuted"})
         if v != base:
             standing = f"{reg[f'premise.{p}.standing']} ({reg[f'premise.{p}.beyond']} above its `credible_bits`)"
-            out.append({"what": cited, "kind": "named premise", "open": True,
+            out.append({"what": cited, "kind": "assumption", "open": True,
                         "range": [standing, "refuted"], "at": [base, v], "decades": _decades(base, v)})
     st = analysis.result(reg, name).scenario.structure.name
     v = analysis.at(reg, name, {f"structure.{st}.s_times": 1})
-    out.append({"what": "draft:no-straddle", "kind": "named premise", "open": True,
+    out.append({"what": "draft:no-straddle", "kind": "assumption", "open": True,
                 "range": ["assumed", "dropped (s_× = 1)"], "at": [base, v], "decades": _decades(base, v)})
     return sorted((x for x in out if x["decades"] > 0), key=lambda x: -x["decades"])
 
@@ -249,8 +249,8 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
                 "| what sets it | " + ", ".join(f"{t['name']} {t['share']:.1%}" for t in x["attribution"]) + " |", ""]
     out += ["## The premises, ranked", "",
             ("How far each alone moves the lower bound, the rest at reference, in decades: each ranged parameter "
-             "over its plausible range, each named premise of `data/premises.toml` refuted (a bound citing it then "
-             "bounds no block), and `draft:no-straddle` dropped (`s_×` = 1). **Open** is a named premise or a "
+             "over its plausible range, each assumption of `data/premises.toml` refuted (a bound citing it then "
+             "bounds no block), and `draft:no-straddle` dropped (`s_×` = 1). **Open** is an assumption or a "
              "parameter that is assumed, conjectured or derived; ruled, measured, declared and datasheet inputs "
              "are ranked beside them for scale."), ""]
     for name in dict.fromkeys(x["scenario"] for x in rows):

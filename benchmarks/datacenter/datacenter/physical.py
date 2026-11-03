@@ -209,7 +209,7 @@ class Datacenter:
         return problems
 
     def assumptions(self) -> list[Assumption]:
-        """Every named premise the declaration makes, once each."""
+        """Every assumption the declaration makes, once each."""
         out: dict[str, Assumption] = {self.cadence.tick.name: self.cadence.tick}
         for d in self.devices.values():
             for a in [*d.rate.values(), d.memory, d.bandwidth, d.on_chip, d.residual, d.write]:

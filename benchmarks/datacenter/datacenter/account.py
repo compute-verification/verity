@@ -13,8 +13,8 @@ concludes:
   work that must have run on the block. Crossing bytes bound nothing by themselves: a helper holding the registered
   weights needs only small inputs and outputs. Work is pinned to the block only by data it must consume that only the
   block receives, a trusted device's fresh data (a run input placed on a trusted device), which a helper could get only through the
-  block's certified egress: outsourceable ≤ egress × work per forced bit. Or by the named premise `FLEET_CLOSED`. Or,
-  under the premise `SALT_CUSTODY`, by a salt the block's own certifier releases only into it: the work that depends
+  block's certified egress: outsourceable ≤ egress × work per forced bit. Or by the proposed assumption `FLEET_CLOSED`. Or,
+  under the proposed assumption `SALT_CUSTODY`, by a salt the block's own certifier releases only into it: the work that depends
   on it is pinned while `custody`, k, the bits that could carry the salt out before registration (the block's egress
   timing advice, the profile's advice, inside inputs and salt-dependent values crossing out), stays at most 384. With
   none, it is unbounded and nothing is attributed;
@@ -215,7 +215,7 @@ def _sample(profile: Profile, c: Held) -> float:
 
 def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...] = ()) -> Account:
     """Read `claims` against `profile`: credit their ANDs, and the time the work takes at the devices' declared rates for
-    each kind of it, under the named premises in `assume`."""
+    each kind of it, under the assumptions in `assume`."""
     dc, epoch = profile.datacenter, profile.plan.epoch
     seconds = dc.cadence.seconds(epoch.length)
     inside = lambda c: getattr(c, "during", epoch) in epoch  # noqa: E731
