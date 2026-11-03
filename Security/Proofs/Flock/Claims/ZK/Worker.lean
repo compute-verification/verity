@@ -7,13 +7,14 @@ public import Proofs.Flock.Soundness.ZK.Refusal
 # Lemma B at a worker's values
 
 The ZK server's workers compute the clear values under the pads (`Table.vals`: the zerocheck and lincheck rounds, the
-final evaluations) and never see the pads. A worker's values are a function of the witness, the mask slot `u` and the
-extra lanes `R` (`Table.Vals`), and of nothing the server draws for the pads (`h`, `pad_h`, `pad_μ`, `μ`, the salts).
-Lemma B holds at any such values, whether or not they pass the inner proof's constraint:
+final evaluations) and never see the pads. A worker's values are a function of the witness, the mask slot `u` and level
+0's hiding `V` (`Table.Vis`: the lanes' paddings, the extra lanes and theirs; `Vals`), and of nothing the server draws
+for the pads (`h`, `pad_h`, `pad_μ`, `μ`, the salts). Lemma B holds at any such values, whether or not they pass the
+inner proof's constraint:
 
 * `swView`, the **switched prover**, at two witnesses of one table that differ only in their clear values, `p` (the
   worker's) and `q` (the honest one): where `p`'s values pass the inner constraint at every pad (`RowsAt`, a property of
-  `u` and `R` alone), `p`'s view; elsewhere `q`'s view on the pads moved by Lemma A's amounts (`shift`), so that every
+  `u` and `V` alone), `p`'s view; elsewhere `q`'s view on the pads moved by Lemma A's amounts (`shift`), so that every
   masked value and `ρ_in`, `σ_in` are `p`'s.
 * `sw_shvzk`: the switched view and `S_shvzk(x, e)` have the same distribution, at any `p`, on `InnerHolds` of `q` alone:
   its components are `card_seq_masked4`'s form, the pads that the triple and `C_h` read (`swPads`) being a function of the
@@ -48,37 +49,37 @@ set_option synthInstance.maxHeartbeats 1000000
 
 /-! ## The switched prover -/
 
-/-- **Lemma A's move of the pads** from `q`'s clear values to `p`'s at `(u, R)`: each exposed pad by the difference, and
+/-- **Lemma A's move of the pads** from `q`'s clear values to `p`'s at `(u, V)`: each exposed pad by the difference, and
 `h_tx`, `h_ty` so that `ρ_in`, `σ_in` stay. -/
 def padShift {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W Salt Seed D Hi VL) (p q : W)
-    (u : T.Mask) (R : T.XLanes) : Fin 2 → (Fin T.nE → F) × F × F := fun r =>
-  (fun i => T.vals r p u R i - T.vals r q u R i, -(T.ζ r * (T.vals r p u R T.ia - T.vals r q u R T.ia)),
-    -(T.vals r p u R T.ib - T.vals r q u R T.ib))
+    (u : T.Mask) (V : T.Vis) : Fin 2 → (Fin T.nE → F) × F × F := fun r =>
+  (fun i => T.vals r p u V i - T.vals r q u V i, -(T.ζ r * (T.vals r p u V T.ia - T.vals r q u V T.ia)),
+    -(T.vals r p u V T.ib - T.vals r q u V T.ib))
 
 /-- The tape `q`'s prover continues on: the pads moved by `padShift`, every other block kept. -/
 def shift {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W Salt Seed D Hi VL) (p q : W)
     (ω : T.Rand) : T.Rand :=
-  (ω.1, ω.2.1, ω.2.2.1 + T.padShift p q ω.1 ω.2.1.2.1, ω.2.2.2)
+  (ω.1, ω.2.1, ω.2.2.1 + T.padShift p q ω.1 ω.2.1, ω.2.2.2)
 
-/-- **The rows hold at `(u, R)`**: `p`'s clear values pass the inner proof's constraint at every pad. It reads the mask
-slot and the extra lanes alone. -/
+/-- **The rows hold at `(u, V)`**: `p`'s clear values pass the inner proof's constraint at every pad. It reads the mask
+slot and level 0's hiding alone. -/
 def RowsAt {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2] (T : Table F K W Salt Seed D Hi VL)
-    (p : W) (u : T.Mask) (R : T.XLanes) : Prop :=
-  ∀ ω : T.Rand, ω.1 = u → ω.2.1.2.1 = R → ∀ r,
+    (p : W) (u : T.Mask) (V : T.Vis) : Prop :=
+  ∀ ω : T.Rand, ω.1 = u → ω.2.1 = V → ∀ r,
     ∑ i, T.lam r (T.view p ω).pre i * T.hFull (ω.2.2.1 r) i = T.theta r (T.view p ω).pre
 
 open Classical in
 /-- The pads the switched prover's triple and `C_h` read: the drawn ones where the rows hold, else the moved ones. -/
 noncomputable def swPads {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
-    (T : Table F K W Salt Seed D Hi VL) (p q : W) (u : T.Mask) (b : (Fin T.nL → Fin T.tpad → F) × T.XLanes × T.XPad)
+    (T : Table F K W Salt Seed D Hi VL) (p q : W) (u : T.Mask) (b : T.Vis)
     (h : Fin 2 → (Fin T.nE → F) × F × F) : Fin 2 → (Fin T.nE → F) × F × F :=
-  if T.RowsAt p u b.2.1 then h else h + T.padShift p q u b.2.1
+  if T.RowsAt p u b then h else h + T.padShift p q u b
 
 open Classical in
 /-- **The switched prover's view**: `p`'s where the rows hold, else `q`'s on the moved pads. -/
 noncomputable def swView {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (p q : W) (ω : T.Rand) : T.View :=
-  if T.RowsAt p ω.1 ω.2.1.2.1 then T.view p ω else T.view q (T.shift p q ω)
+  if T.RowsAt p ω.1 ω.2.1 then T.view p ω else T.view q (T.shift p q ω)
 
 /-- **The switched view's components** in Lemma B's sampling order: `realCore` at `p` with the pads `swPads` in the last
 block's determined part. -/
@@ -86,7 +87,7 @@ noncomputable def swCore {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [C
     [AddCommGroup Seed] [AddCommGroup Hi] (T : Table F K W Salt Seed D Hi VL) (p q : W) (ω : T.Rand) : T.Core :=
   (T.nu p + T.maskHom ω.1,
     (fun q' l => ∑ c, T.lanes p ω.1 l c * T.E q' c, fun r => T.y1 p ω.1 r, 0) + T.mask1 ω.2.1,
-    (fun r => (T.vals r p ω.1 ω.2.1.2.1, 0, 0)) + T.mask2 ω.2.2.1,
+    (fun r => (T.vals r p ω.1 ω.2.1, 0, 0)) + T.mask2 ω.2.2.1,
     (fun r k => ∑ i, T.Ch r k i * T.hFull (T.swPads p q ω.1 ω.2.1 ω.2.2.1 r) i, 0,
       fun r => T.hFull (T.swPads p q ω.1 ω.2.1 ω.2.2.1 r), 0) + T.mask3 ω.2.2.2)
 
@@ -154,12 +155,12 @@ theorem psi_realCore_at {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [Ch
 and `ρ_in`, `σ_in` are the same, the moved pads absorbing the difference of the clear values. -/
 theorem swCore_of_not_rows {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2] [AddCommGroup Salt]
     [AddCommGroup Seed] [AddCommGroup Hi] (T : Table F K W Salt Seed D Hi VL) (p q : W) (hnu : T.nu p = T.nu q)
-    (hlanes : T.lanes p = T.lanes q) (ω : T.Rand) (hr : ¬ T.RowsAt p ω.1 ω.2.1.2.1) :
+    (hlanes : T.lanes p = T.lanes q) (ω : T.Rand) (hr : ¬ T.RowsAt p ω.1 ω.2.1) :
     T.swCore p q ω = T.realCore q (T.shift p q ω) := by
   have hy : T.y1 p ω.1 = T.y1 q ω.1 := by
     funext r c
     simp only [y1, hlanes]
-  have hp : T.swPads p q ω.1 ω.2.1 ω.2.2.1 = ω.2.2.1 + T.padShift p q ω.1 ω.2.1.2.1 := by
+  have hp : T.swPads p q ω.1 ω.2.1 ω.2.2.1 = ω.2.2.1 + T.padShift p q ω.1 ω.2.1 := by
     simp only [swPads, hr, ↓reduceIte]
   simp only [swCore, realCore, shift, hp]
   refine Prod.ext (by rw [hnu]) (Prod.ext (by rw [hlanes, hy]) (Prod.ext ?_ rfl))
@@ -182,7 +183,7 @@ theorem psi_swCore {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F
     (hnu : T.nu p = T.nu q) (hlanes : T.lanes p = T.lanes q) (hreg : T.sReg p = T.pubReg)
     (hreg' : T.sReg q = T.pubReg) (hinner : T.InnerHolds q) (ω : T.Rand) :
     T.psi (T.swCore p q ω) = T.swView p q ω := by
-  by_cases hr : T.RowsAt p ω.1 ω.2.1.2.1
+  by_cases hr : T.RowsAt p ω.1 ω.2.1
   · have e : T.swCore p q ω = T.realCore p ω := by
       simp only [swCore, swPads, hr, ↓reduceIte]
       rfl
@@ -203,7 +204,7 @@ theorem card_swCore {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP 
   card_seq_masked4 T.maskHom T.mask1 T.mask2 T.mask3 (T.maskHom_surjective hrank) (T.mask1_surjective hpad hW)
     T.mask2_surjective (T.mask3_surjective hpads hβ) (T.nu p)
     (fun u => (fun q' l => ∑ c, T.lanes p u l c * T.E q' c, fun r => T.y1 p u r, 0))
-    (fun u b => fun r => (T.vals r p u b.2.1, 0, 0))
+    (fun u b => fun r => (T.vals r p u b, 0, 0))
     (fun u b h => (fun r k => ∑ i, T.Ch r k i * T.hFull (T.swPads p q u b h r) i, 0,
       fun r => T.hFull (T.swPads p q u b h r), 0)) v
 
@@ -223,7 +224,7 @@ theorem sw_shvzk {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2
 
 /-- **Where the rows hold, the switched view is `p`'s.** -/
 theorem swView_of_rows {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
-    (T : Table F K W Salt Seed D Hi VL) (p q : W) (ω : T.Rand) (hr : T.RowsAt p ω.1 ω.2.1.2.1) :
+    (T : Table F K W Salt Seed D Hi VL) (p q : W) (ω : T.Rand) (hr : T.RowsAt p ω.1 ω.2.1) :
     T.swView p q ω = T.view p ω := by
   rw [swView, ite_eq_left hr]
 
@@ -237,7 +238,7 @@ theorem swView_outer {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP
         Y1 := (T.swView p q ω).Y1
         ch := (T.swView p q ω).ch
         leavesP := (T.swView p q ω).leavesP } := by
-  by_cases hr : T.RowsAt p ω.1 ω.2.1.2.1
+  by_cases hr : T.RowsAt p ω.1 ω.2.1
   · rw [swView, ite_eq_left hr]
   · rw [swView, ite_eq_right hr]
     obtain ⟨u, ⟨μ0, R, μR⟩, h, ⟨padh, padμ, μ, s⟩⟩ := ω
@@ -247,18 +248,18 @@ theorem swView_outer {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP
     have hrows : T.rows q u μ0 = T.rows p u μ0 := by
       funext q' l
       simp only [rows, hlanes]
-    have hm : (fun r i => T.vals r q u R i + ((h + T.padShift p q u R) r).1 i) =
-        fun r i => T.vals r p u R i + (h r).1 i := by
+    have hm : (fun r i => T.vals r q u (μ0, R, μR) i + ((h + T.padShift p q u (μ0, R, μR)) r).1 i) =
+        fun r i => T.vals r p u (μ0, R, μR) i + (h r).1 i := by
       funext r i
       simp only [Pi.add_apply, Prod.fst_add, padShift]
       ring
-    have hin : (fun r => T.innerMsg r ((h + T.padShift p q u R) r)) = fun r => T.innerMsg r (h r) := by
+    have hin : (fun r => T.innerMsg r ((h + T.padShift p q u (μ0, R, μR)) r)) = fun r => T.innerMsg r (h r) := by
       funext r
       simp only [innerMsg, Pi.add_apply, Prod.fst_add, Prod.snd_add, padShift]
       refine Prod.ext ?_ ?_ <;> simp only [] <;> ring
     have hpre : (T.view q (T.shift p q (u, (μ0, R, μR), h, padh, padμ, μ, s))).pre =
         (T.view p (u, (μ0, R, μR), h, padh, padμ, μ, s)).pre := by
-      simp only [View.pre, view, shift]
+      simp only [View.pre, view, shift, visOf]
       rw [hnu, hm, hin, hy]
     apply View.ext
     all_goals (try rfl)
@@ -286,10 +287,10 @@ theorem swView_outer {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP
 
 /-! ## At a worker's clear values -/
 
-/-- **Clear values a worker may supply** for a table: functions of the witness, the mask slot and the extra lanes,
-`Table.vals`'s shape, and of nothing else: not of the pads. -/
+/-- **Clear values a worker may supply** for a table: functions of the witness, the mask slot and level 0's hiding
+(`Vis`), `Table.vals`'s shape, and of nothing else: not of the pads. -/
 abbrev Vals {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] (T : Table F K W Salt Seed D Hi VL) : Type :=
-  Fin 2 → W → T.Mask → T.XLanes → Fin T.nE → F
+  Fin 2 → W → T.Mask → T.Vis → Fin T.nE → F
 
 /-- **The table at any clear values**: its witnesses paired with clear values, which `vals` reads; every other field
 `T`'s, reading the witness. -/
@@ -383,43 +384,43 @@ theorem worker_prefinal {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [Ch
 
 /-! ## The switched prover is the honest one at row-satisfying values -/
 
-/-- The view at clear values reads them at its own mask slot and extra lanes alone. -/
+/-- The view at clear values reads them at its own mask slot and level 0's hiding alone. -/
 theorem onVals_view_congr {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (w : W) (v v' : T.Vals) (ω : T.Rand)
-    (h : ∀ r, v r w ω.1 ω.2.1.2.1 = v' r w ω.1 ω.2.1.2.1) :
+    (h : ∀ r, v r w ω.1 ω.2.1 = v' r w ω.1 ω.2.1) :
     T.onVals.view (w, v) ω = T.onVals.view (w, v') ω := by
-  obtain ⟨u, ⟨μ0, R, μR⟩, rest⟩ := ω
-  have h' : ∀ r i, T.onVals.vals r (w, v) u R i = T.onVals.vals r (w, v') u R i := fun r i => congrFun (h r) i
+  obtain ⟨u, V, rest⟩ := ω
+  have h' : ∀ r i, T.onVals.vals r (w, v) u V i = T.onVals.vals r (w, v') u V i := fun r i => congrFun (h r) i
   have hnu : T.onVals.nu (w, v) = T.onVals.nu (w, v') := rfl
   have hreg : T.onVals.sReg (w, v) = T.onVals.sReg (w, v') := rfl
   have hy : T.onVals.y1' (w, v) = T.onVals.y1' (w, v') := rfl
   have hrows : T.onVals.rows (w, v) = T.onVals.rows (w, v') := rfl
-  simp only [view, h', hnu, hreg, hy, hrows]
+  simp only [view, visOf, h', hnu, hreg, hy, hrows]
 
 open Classical in
-/-- **The worker's values, rectified**: `v` at the mask slots and extra lanes where they pass the inner constraint at
-every pad (`RowsAt`), the honest values elsewhere. They pass it everywhere (`rect_innerHolds`). -/
+/-- **The worker's values, rectified**: `v` at each mask slot and level 0's hiding where it passes the inner constraint
+at every pad (`RowsAt`), the honest values elsewhere. They pass it everywhere (`rect_innerHolds`). -/
 noncomputable def rect {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) : T.Vals :=
-  fun r w' u R => if T.onVals.RowsAt (w, v) u R then v r w' u R else T.vals r w' u R
+  fun r w' u V => if T.onVals.RowsAt (w, v) u V then v r w' u V else T.vals r w' u V
 
 open Classical in
 /-- **The switched prover's tape**: the drawn one where `p`'s rows hold, the moved one elsewhere. -/
 noncomputable def swTape {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (p q : W) (ω : T.Rand) : T.Rand :=
-  if T.RowsAt p ω.1 ω.2.1.2.1 then ω else T.shift p q ω
+  if T.RowsAt p ω.1 ω.2.1 then ω else T.shift p q ω
 
-/-- The move keeps the mask slot and the extra lanes, so the switched tape is a bijection. -/
+/-- The move keeps the mask slot and level 0's hiding, so the switched tape is a bijection. -/
 theorem swTape_bijective {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (p q : W) : Function.Bijective (T.swTape p q) := by
   classical
   let g : T.Rand → T.Rand := fun ω =>
-    if T.RowsAt p ω.1 ω.2.1.2.1 then ω else (ω.1, ω.2.1, ω.2.2.1 - T.padShift p q ω.1 ω.2.1.2.1, ω.2.2.2)
+    if T.RowsAt p ω.1 ω.2.1 then ω else (ω.1, ω.2.1, ω.2.2.1 - T.padShift p q ω.1 ω.2.1, ω.2.2.2)
   refine Function.bijective_iff_has_inverse.2 ⟨g, fun ω => ?_, fun ω => ?_⟩
-  · by_cases hr : T.RowsAt p ω.1 ω.2.1.2.1
+  · by_cases hr : T.RowsAt p ω.1 ω.2.1
     · simp only [swTape, g, hr, ↓reduceIte]
     · simp only [swTape, g, hr, ↓reduceIte, shift, add_sub_cancel_right]
-  · by_cases hr : T.RowsAt p ω.1 ω.2.1.2.1
+  · by_cases hr : T.RowsAt p ω.1 ω.2.1
     · simp only [swTape, g, hr, ↓reduceIte]
     · simp only [swTape, g, hr, ↓reduceIte, shift, sub_add_cancel]
 
@@ -428,7 +429,7 @@ open Classical in
 theorem view_rect {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.onVals.Rand) :
     T.onVals.view (w, T.rect w v) (T.onVals.swTape (w, v) (w, T.vals) ω) = T.onVals.swView (w, v) (w, T.vals) ω := by
-  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1
   · rw [swTape, ite_eq_left hr, swView, ite_eq_left hr]
     exact T.onVals_view_congr w _ _ ω fun r => funext fun i => by simp only [rect, hr, ↓reduceIte]
   · rw [swTape, ite_eq_right hr, swView, ite_eq_right hr]
@@ -440,7 +441,7 @@ theorem rect_innerHolds {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [Ch
     (T : Table F K W Salt Seed D Hi VL) (w : W) (hinner : T.InnerHolds w) (v : T.Vals) :
     T.onVals.InnerHolds (w, T.rect w v) := by
   intro ω r
-  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1
   · rw [T.onVals_view_congr w (T.rect w v) v ω fun r => funext fun i => by simp only [rect, hr, ↓reduceIte]]
     exact hr ω rfl rfl r
   · rw [T.onVals_view_congr w (T.rect w v) T.vals ω fun r => funext fun i => by simp only [rect, hr, ↓reduceIte]]
@@ -497,13 +498,13 @@ moved pads. Its leaves are ideal and its masked values and `ρ_in`, `σ_in` are 
 in `Y₁`. -/
 noncomputable def swPre {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) : T.PreView :=
-  if T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1 then T.toBasePre (T.onVals.preView (w, v) ω)
+  if T.onVals.RowsAt (w, v) ω.1 ω.2.1 then T.toBasePre (T.onVals.preView (w, v) ω)
   else T.preView w (T.onVals.shift (w, v) (w, T.vals) ω)
 
-/-- The pre-final view at clear values reads them at its own mask slot and extra lanes alone. -/
+/-- The pre-final view at clear values reads them at its own mask slot and level 0's hiding alone. -/
 theorem onVals_preView_congr {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (w : W) (v v' : T.Vals) (ω : T.Rand)
-    (h : ∀ r, v r w ω.1 ω.2.1.2.1 = v' r w ω.1 ω.2.1.2.1) :
+    (h : ∀ r, v r w ω.1 ω.2.1 = v' r w ω.1 ω.2.1) :
     T.onVals.preView (w, v) ω = T.onVals.preView (w, v') ω := by
   simp only [preView, T.onVals_view_congr w v v' ω h]
 
@@ -519,7 +520,7 @@ open Classical in
 theorem swPre_rect {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) :
     T.swPre w v ω = T.toBasePre (T.onVals.preView (w, T.rect w v) (T.onVals.swTape (w, v) (w, T.vals) ω)) := by
-  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1.2.1
+  by_cases hr : T.onVals.RowsAt (w, v) ω.1 ω.2.1
   · have e : T.onVals.swTape (w, v) (w, T.vals) ω = ω := by
       unfold swTape
       exact ite_eq_left hr
@@ -564,14 +565,14 @@ open Classical in
 /-- The switched view with its hidden leaves `L`. -/
 noncomputable def swViewWith {F K W Salt B D Hi VL : Type} [Field F] [Field K] [AddCommGroup B] [CharP F 2]
     (T : Table F K W Salt (B × Salt) D Hi VL) (p q : W) (ω : T.Rand) (L : T.Hid → D) : T.View :=
-  if T.RowsAt p ω.1 ω.2.1.2.1 then T.viewWith p ω L else T.viewWith q (T.shift p q ω) L
+  if T.RowsAt p ω.1 ω.2.1 then T.viewWith p ω L else T.viewWith q (T.shift p q ω) L
 
 open Classical in
 /-- The digests the switched view's hidden leaves commit: `p`'s columns where the rows hold, else the honest prover's
 on the moved pads. -/
 noncomputable def Hm96.swDig {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [AddCommGroup B] [CharP F 2]
     {T : Table F K W Salt (B × Salt) D Hi VL} (M : T.Hm96 C) (p q : W) (ω : T.Rand) : T.Hid → B :=
-  if T.RowsAt p ω.1 ω.2.1.2.1 then M.dig p ω else M.dig q (T.shift p q ω)
+  if T.RowsAt p ω.1 ω.2.1 then M.dig p ω else M.dig q (T.shift p q ω)
 
 /-- **The switched prover's view with real leaves**: its hidden leaves are hm96 leaves of what they commit. -/
 noncomputable def Hm96.swViewR {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [AddCommGroup B] [CharP F 2]
@@ -583,7 +584,7 @@ open Classical in
 the moved pads. -/
 theorem Hm96.swViewR_eq {F K W Salt B D Hi VL C : Type} [Field F] [Field K] [AddCommGroup B] [CharP F 2]
     {T : Table F K W Salt (B × Salt) D Hi VL} (M : T.Hm96 C) (p q : W) (ω : T.Rand) (ys : T.Hid → Salt) :
-    M.swViewR p q ω ys = if T.RowsAt p ω.1 ω.2.1.2.1 then M.viewR p ω ys else M.viewR q (T.shift p q ω) ys := by
+    M.swViewR p q ω ys = if T.RowsAt p ω.1 ω.2.1 then M.viewR p ω ys else M.viewR q (T.shift p q ω) ys := by
   unfold swViewR swViewWith swDig Hm96.viewR
   split_ifs <;> rfl
 
