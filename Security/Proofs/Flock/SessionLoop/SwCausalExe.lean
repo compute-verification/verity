@@ -133,6 +133,1021 @@ theorem freeWord_congr
     exact congrArg some (key _ _ _ _ hn hn' hc hc')
   · rw [dite_eq_right h, dite_eq_right fun h' => h (hiff.mpr h')]
 
+/-- **The places of pad `i` in the absorbed order**: `i` itself up to `final_b`'s, `i - 1` after. -/
+theorem absorbed_place (l : _root_.Flock.Zk.PadLayout) {P i : ℕ} (hP : P < (absorbed l).size)
+    (h : (absorbed l)[P]! = i) : P ≤ i ∧ (l.fa + 2 ≤ i → P + 1 = i) := by
+  rw [absorbed_getElem! l hP] at h
+  split_ifs at h <;> omega
+
+/-- Pad `i`'s places in the absorbed order are below `b` where its last is. -/
+theorem place_hi (l : _root_.Flock.Zk.PadLayout) {i b : ℕ} (h : (if i < l.fa + 2 then i else i - 1) < b) :
+    ∀ P, P < (absorbed l).size - nLig l → (absorbed l)[P]! = i → P < b := fun P hP hPi => by
+  obtain ⟨a1, a2⟩ := absorbed_place l (by omega) hPi
+  split_ifs at h with hi
+  · omega
+  · have := a2 (by omega)
+    omega
+
+/-- A pad past the PIOP's values in the absorbed order is at none of its places. -/
+theorem place_lig (l : _root_.Flock.Zk.PadLayout) {i : ℕ} (h : (absorbed l).size - nLig l + 1 ≤ i) :
+    ∀ P, P < (absorbed l).size - nLig l → (absorbed l)[P]! ≠ i := fun P hP hPi => by
+  obtain ⟨a1, a2⟩ := absorbed_place l (by omega) hPi
+  have hs := absorbed_size l
+  have := a2 (by omega)
+  omega
+
+section Words
+
+variable (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+
+/-- **`freeWord` at a pad below PIOP round `jj`'s values reads the coins below `repBase + jj`** (`freedAt_le`). -/
+theorem freeWord_le {x : Msg} {w : Flock.Wit} (hSv : Serves x)
+    (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w) (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real))
+    {ν : CoinLayer.Nonce} {c c' : Fin (refK x) → FlockDeploy.Coin}
+    {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z} {j : Fin (jOf x)} {r : Fin 2}
+    {i jj : ℕ} (hjj : jj < piopNR (stAt x j).m (stAt x j).c.kLog)
+    (hi : ∀ P, P < (absorbed (layE x j)).size - nLig (layE x j) → (absorbed (layE x j))[P]! = i →
+      P < piopLen (stAt x j).m (stAt x j).c.kLog (jj + 1))
+    (hcc : ∀ k : Fin (refK x), k.val < repBase x (2 * j.val + r.val) + jj → c k = c' k) :
+    freeWord _ bx x w ν c s j r i = freeWord _ bx x w ν c' s j r i :=
+  freeWord_congr (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real hP bx
+    (fun _ _ hF => freedAt_le L₀ src real hSv hP _ hF hjj hi) hcc
+
+/-- **`freeWord` at a pad the PIOP never absorbs is none at every coins** (`freedAt_place`). -/
+theorem freeWord_lig {x : Msg} {w : Flock.Wit} (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w)
+    (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) {ν : CoinLayer.Nonce}
+    {c c' : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
+    {j : Fin (jOf x)} {r : Fin 2} {i : ℕ}
+    (hi : ∀ P, P < (absorbed (layE x j)).size - nLig (layE x j) → (absorbed (layE x j))[P]! ≠ i) :
+    freeWord _ bx x w ν c s j r i = freeWord _ bx x w ν c' s j r i :=
+  freeWord_congr (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real hP bx (t := 0)
+    (fun _ _ hF => by
+      obtain ⟨P, hPs, hPi⟩ := freedAt_place L₀ src real _ hF
+      exact absurd hPi (hi P hPs))
+    fun _ hk => absurd hk (Nat.not_lt_zero _)
+
+end Words
+
+section Vals
+
+variable (L : LeanRelease Flock.Wit
+  ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
+
+/-- **`vsOfWord` is one at two coin vectors** where `freeWord` is and the table's own value is. -/
+theorem vsOfWord_congr (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : CoinLayer.Nonce}
+    {c c' : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
+    {j : Fin (jOf x)} {r : Fin 2} {wt : FlockSoundness.Model.Witness (tabC PE x j).S.m}
+    (b : ZkView.Base (tabC PE x j).z (tabC PE x j).Hi) {i : ℕ}
+    (hF : freeWord L bx x w ν c s j r i = freeWord L bx x w ν c' s j r i)
+    (hT : ∀ h : i < (tabC PE x j).z.nE, ((tabC PE x j).T (czExe PE x c j)).tab.vals r wt b.1 b.2.1 ⟨i, h⟩ =
+      ((tabC PE x j).T (czExe PE x c' j)).tab.vals r wt b.1 b.2.1 ⟨i, h⟩) :
+    vsOfWord L bx x w ν c s j r wt b.1 b.2.1 i = vsOfWord L bx x w ν c' s j r wt b.1 b.2.1 i := by
+  unfold vsOfWord
+  rw [hF]
+  rcases freeWord L bx x w ν c' s j r i with _ | a
+  · dsimp only
+    split_ifs with h1 h2 h2
+    · exact congrArg FlockLevel3.GF128.val (hT h1)
+    · exact absurd (show i < (tabC PE x j).z.nE from h1) (show ¬ i < (tabC PE x j).z.nE from h2)
+    · exact absurd (show i < (tabC PE x j).z.nE from h2) (show ¬ i < (tabC PE x j).z.nE from h1)
+    · rfl
+  · rfl
+
+/-- **`vsServed` at a pad other than `final_c`'s is one at two coin vectors** where `freeWord` is and the table's own
+value is. -/
+theorem vsServed_congr (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : CoinLayer.Nonce}
+    {c c' : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
+    {j : Fin (jOf x)} {r : Fin 2} {wt : FlockSoundness.Model.Witness (tabC PE x j).S.m}
+    (b : ZkView.Base (tabC PE x j).z (tabC PE x j).Hi) {i : ℕ} (hi : i < (tabC PE x j).z.nE)
+    (hfc : i ≠ (layE x j).fc) (hF : freeWord L bx x w ν c s j r i = freeWord L bx x w ν c' s j r i)
+    (hT : ((tabC PE x j).T (czExe PE x c j)).tab.vals r wt b.1 b.2.1 ⟨i, hi⟩ =
+      ((tabC PE x j).T (czExe PE x c' j)).tab.vals r wt b.1 b.2.1 ⟨i, hi⟩) :
+    vsServed L bx x w ν c s j r wt b.1 b.2.1 ⟨i, hi⟩ = vsServed L bx x w ν c' s j r wt b.1 b.2.1 ⟨i, hi⟩ := by
+  have e : ∀ c₀ : Fin (refK x) → FlockDeploy.Coin, vsServed L bx x w ν c₀ s j r wt b.1 b.2.1 ⟨i, hi⟩ =
+      (vsOfWord L bx x w ν c₀ s j r wt b.1 b.2.1 i : FlockLevel3.GF128) := fun _ => ite_eq_right hfc
+  rw [e, e, vsOfWord_congr L bx b hF fun _ => hT]
+
+/-- **`vsServed` at `final_c`'s pad is one at two coin vectors** where the zerocheck's point and the round-1c words
+are. -/
+theorem vsServed_fc_congr (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : CoinLayer.Nonce}
+    {c c' : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
+    {j : Fin (jOf x)} {r : Fin 2} {wt : FlockSoundness.Model.Witness (tabC PE x j).S.m}
+    (b : ZkView.Base (tabC PE x j).z (tabC PE x j).Hi) (hi : (layE x j).fc < (tabC PE x j).z.nE)
+    (hz : (zcE c j r).z = (zcE c' j r).z)
+    (hw : ∀ k < 64, vsOfWord L bx x w ν c s j r wt b.1 b.2.1 ((layE x j).r1c k) =
+      vsOfWord L bx x w ν c' s j r wt b.1 b.2.1 ((layE x j).r1c k)) :
+    vsServed L bx x w ν c s j r wt b.1 b.2.1 ⟨(layE x j).fc, hi⟩ =
+      vsServed L bx x w ν c' s j r wt b.1 b.2.1 ⟨(layE x j).fc, hi⟩ := by
+  have e : ((Array.range 64).map fun k => vsOfWord L bx x w ν c s j r wt b.1 b.2.1 ((layE x j).r1c k)) =
+      (Array.range 64).map fun k => vsOfWord L bx x w ν c' s j r wt b.1 b.2.1 ((layE x j).r1c k) :=
+    Array.ext (by simp) fun k h1 _ => by
+      simp only [Array.getElem_map, Array.getElem_range]
+      exact hw k (by simpa using h1)
+  have e2 : ∀ c₀ : Fin (refK x) → FlockDeploy.Coin,
+      vsServed L bx x w ν c₀ s j r wt b.1 b.2.1 ⟨(layE x j).fc, hi⟩ =
+        (_root_.Flock.dot (_root_.Flock.lagrange _root_.Flock.nodesL _root_.Flock.den6Inv (zcE c₀ j r).z)
+          ((Array.range 64).map fun k => vsOfWord L bx x w ν c₀ s j r wt b.1 b.2.1 ((layE x j).r1c k)) :
+          FlockLevel3.GF128) :=
+    fun _ => ite_eq_left rfl
+  rw [e2, e2, hz, e]
+
+end Vals
+
+/-- The zerocheck's point of rep `2j + r` reads its coins below `repBase + 3`. -/
+theorem zcE_z_congr {x : Msg} {c c' : Fin (refK x) → FlockDeploy.Coin} (j : Fin (jOf x)) (r : Fin 2) {n : ℕ}
+    (hcc : ∀ k : Fin (refK x), k.val < n → c k = c' k) (h : repBase x (2 * j.val + r.val) + 2 < n) :
+    (zcE c j r).z = (zcE c' j r).z :=
+  slotAt_congr hcc h 0
+
+section Cut
+
+variable {x : Msg}
+
+/-- **The switched source's masked value** at a sent index is the worker's clear value plus the base's pad. -/
+theorem swCut_masked (cz : ∀ j, Composed.CoinsZK (tabC PE x j).Rest)
+    (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (v : ∀ j, ((tabC PE x j).T (cz j)).tab.Vals)
+    (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+    (lv : ZkView.Leaves (fun j => (tabC PE x j).z) → ByteArray) (j : Fin (jOf x)) (r : Fin 2) (k : ℕ) :
+    (repSrcCut PE x cz (swCutAt (tabC PE x) cz wt v ω lv) j r).masked k =
+      if h : k < (tabC PE x j).z.nE then
+        FlockLevel3.GF128.val (v j r (wt j) (ω j).1 (ω j).2.1 ⟨k, h⟩ + ((ω j).2.2.1 r).1 ⟨k, h⟩) else 0 := by
+  rw [repSrcCut_masked]
+  by_cases h : k < (tabC PE x j).z.nE
+  · rw [dite_eq_left h, dite_eq_left h, swCutAt_masked, FlockSoundness.ZK.Table.swPre_masked_any]
+    rfl
+  · rw [dite_eq_right h, dite_eq_right h]
+
+/-- **The honest sources' masked values agree only where the tables' own values do**: the pad is the base's at both. -/
+theorem vals_of_masked (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m)
+    (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+    (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray) {c c' : Fin (refK x) → FlockDeploy.Coin}
+    (j : Fin (jOf x)) (r : Fin 2) {k : ℕ} (hk : k < (tabC PE x j).z.nE)
+    (h : (repSrcCut PE x (czExe PE x c) (cutC x wt ω p c) j r).masked k =
+      (repSrcCut PE x (czExe PE x c') (cutC x wt ω p c') j r).masked k) :
+    ((tabC PE x j).T (czExe PE x c j)).tab.vals r (wt j) (ω j).1 (ω j).2.1 ⟨k, hk⟩ =
+      ((tabC PE x j).T (czExe PE x c' j)).tab.vals r (wt j) (ω j).1 (ω j).2.1 ⟨k, hk⟩ := by
+  rw [repSrcCut_masked, repSrcCut_masked, dite_eq_left hk, dite_eq_left hk] at h
+  have h' : ((tabC PE x j).T (czExe PE x c j)).tab.vals r (wt j) (ω j).1 (ω j).2.1 ⟨k, hk⟩ +
+        ((ω j).2.2.1 r).1 ⟨k, hk⟩ =
+      ((tabC PE x j).T (czExe PE x c' j)).tab.vals r (wt j) (ω j).1 (ω j).2.1 ⟨k, hk⟩ + ((ω j).2.2.1 r).1 ⟨k, hk⟩ :=
+    congrArg FlockLevel3.GF128.of h
+  exact add_right_cancel h'
+
+end Cut
+
+/-- **The switched sources' masked value at a pad other than `final_c`'s is one at two coin vectors** where the honest
+sources' is and `freeWord` is: the pad is the base's at both, and the worker's value `freeWord`'s or the table's own. -/
+theorem swMasked_congr (L : LeanRelease Flock.Wit
+      ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
+    (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} (hSv : Serves x) {ν : CoinLayer.Nonce}
+    {c c' : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
+    (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+    (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray)
+    (lv lv' : ZkView.Leaves (fun j => (tabC PE x j).z) → ByteArray) (j : Fin (jOf x)) (r : Fin 2) {k : ℕ}
+    (hfc : k ≠ (layE x j).fc)
+    (hH : (repSrcCut PE x (czExe PE x c) (cutC x wt ω p c) j r).masked k =
+      (repSrcCut PE x (czExe PE x c') (cutC x wt ω p c') j r).masked k)
+    (hF : freeWord L bx x w ν c s j r k = freeWord L bx x w ν c' s j r k) :
+    (repSrcCut PE x (czExe PE x c) (swCutAt (tabC PE x) (czExe PE x c) wt (vsOf L bx x w ν c s) ω lv) j r).masked k =
+      (repSrcCut PE x (czExe PE x c') (swCutAt (tabC PE x) (czExe PE x c') wt (vsOf L bx x w ν c' s) ω lv') j
+        r).masked k := by
+  have e : ∀ (c₀ : Fin (refK x) → FlockDeploy.Coin) (lv₀ : ZkView.Leaves (fun j => (tabC PE x j).z) → ByteArray),
+      (repSrcCut PE x (czExe PE x c₀) (swCutAt (tabC PE x) (czExe PE x c₀) wt (vsOf L bx x w ν c₀ s) ω lv₀) j
+        r).masked k =
+        if h : k < (tabC PE x j).z.nE then
+          FlockLevel3.GF128.val (vsOf L bx x w ν c₀ s j r (wt j) (ω j).1 (ω j).2.1 ⟨k, h⟩ +
+            ((ω j).2.2.1 r).1 ⟨k, h⟩) else 0 :=
+    fun c₀ lv₀ => swCut_masked (czExe PE x c₀) wt (vsOf L bx x w ν c₀ s) ω lv₀ j r k
+  rw [e, e]
+  by_cases hk : k < (tabC PE x j).z.nE
+  · rw [dite_eq_left hk, dite_eq_left hk]
+    refine congrArg (fun a => FlockLevel3.GF128.val (a + ((ω j).2.2.1 r).1 ⟨k, hk⟩)) ?_
+    rw [vsOf_of_serves L bx hSv]
+    exact vsServed_congr L bx (ω j) hk hfc hF (vals_of_masked wt ω p j r hk hH)
+  · rw [dite_eq_right hk, dite_eq_right hk]
+
+section Uniform
+
+variable (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+
+/-- **`freeWord` at any pad reads the coins below the PIOP's last round** (`freeWord_le` at `piopNR − 1`): every place
+before the Ligerito values is among the PIOP's (`piopLen_full`). -/
+theorem freeWord_all {x : Msg} {w : Flock.Wit} (hSv : Serves x)
+    (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w) (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real))
+    {ν : CoinLayer.Nonce} {c c' : Fin (refK x) → FlockDeploy.Coin}
+    {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z} {j : Fin (jOf x)} {r : Fin 2} (i : ℕ)
+    (hcc : ∀ k : Fin (refK x), k.val < repBase x (2 * j.val + r.val) + (piopNR (stAt x j).m (stAt x j).c.kLog - 1) →
+      c k = c' k) :
+    freeWord _ bx x w ν c s j r i = freeWord _ bx x w ν c' s j r i := by
+  have e1 : piopNR (stAt x j).m (stAt x j).c.kLog - 1 + 1 = piopNR (stAt x j).m (stAt x j).c.kLog := by
+    unfold piopNR
+    omega
+  refine freeWord_le L₀ src real hSv hP bx (by unfold piopNR; omega) (fun P hP' _ => ?_) hcc
+  rw [e1, piopLen_full]
+  have hs := absorbed_size (layE x j)
+  have hfa : (layE x j).fa = 128 + 2 * ((stAt x j).m - 6) := rfl
+  have hlc : (layE x j).nLc = (stAt x j).c.kLog - 6 := rfl
+  rw [hfa, hlc] at hs
+  omega
+
+end Uniform
+
+/-- **`vsServed` is one at two coin vectors at every index** where every `freeWord` is, the zerocheck's point is, and
+the table's own values are. -/
+theorem vsServed_all (L : LeanRelease Flock.Wit
+      ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
+    (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} {ν : CoinLayer.Nonce}
+    {c c' : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
+    {j : Fin (jOf x)} {r : Fin 2} {wt : FlockSoundness.Model.Witness (tabC PE x j).S.m}
+    (b : ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+    (hF : ∀ i, freeWord L bx x w ν c s j r i = freeWord L bx x w ν c' s j r i)
+    (hz : (zcE c j r).z = (zcE c' j r).z)
+    (hT : ∀ i : Fin (tabC PE x j).z.nE, ((tabC PE x j).T (czExe PE x c j)).tab.vals r wt b.1 b.2.1 i =
+      ((tabC PE x j).T (czExe PE x c' j)).tab.vals r wt b.1 b.2.1 i) (i : Fin (tabC PE x j).z.nE) :
+    vsServed L bx x w ν c s j r wt b.1 b.2.1 i = vsServed L bx x w ν c' s j r wt b.1 b.2.1 i := by
+  obtain ⟨i, hi⟩ := i
+  by_cases hfc : i = (layE x j).fc
+  · subst hfc
+    exact vsServed_fc_congr L bx b hi hz fun k _ => vsOfWord_congr L bx b (hF _) fun h => hT ⟨_, h⟩
+  · exact vsServed_congr L bx b hi hfc (hF i) (hT ⟨i, hi⟩)
+
+section Bridges
+
+variable {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
+  (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
+  (ω : ∀ j, ZkView.Base (C j).z (C j).Hi) (lv lv' : ZkView.Leaves (fun j => (C j).z) → ByteArray) (j : Fin J)
+
+theorem swCutAt_sHat : (swCutAt C cz wt v ω lv j).sHat = (cutAt C cz wt ω lv' j).sHat := by
+  unfold swCutAt cutAt
+  exact FlockSoundness.ZK.Table.cut_sHat_congr _ _ (ZkView.Coined.swPreWith_sHat _ _ _ _ _ _)
+
+theorem swCutAt_sReg : (swCutAt C cz wt v ω lv j).sReg = (cutAt C cz wt ω lv' j).sReg := by
+  unfold swCutAt cutAt
+  simp only [FlockSoundness.ZK.Table.cut_sReg]
+  exact ZkView.Coined.swPreWith_sReg _ _ _ _ _ _
+
+theorem swCutAt_y1 : (swCutAt C cz wt v ω lv j).y1 = (cutAt C cz wt ω lv' j).y1 := by
+  unfold swCutAt cutAt
+  exact FlockSoundness.ZK.Table.cut_y1_congr _ _ (ZkView.Coined.swPreWith_y1 _ _ _ _ _ _)
+
+theorem swCutAt_ybar : (swCutAt C cz wt v ω lv j).ybar = (cutAt C cz wt ω lv' j).ybar := by
+  unfold swCutAt cutAt
+  simp only [FlockSoundness.ZK.Table.cut_ybar]
+  exact ZkView.Coined.swPreWith_ybar _ _ _ _ _ _
+
+theorem swCutAt_lig : (swCutAt C cz wt v ω lv j).lig = (cutAt C cz wt ω lv' j).lig := by
+  unfold swCutAt cutAt
+  exact FlockSoundness.ZK.Table.cut_lig_congr _ _ (ZkView.Coined.swPreWith_lig _ _ _ _ _ _)
+
+theorem swCutAt_inner : (swCutAt C cz wt v ω lv j).inner = (cutAt C cz wt ω lv' j).inner := by
+  unfold swCutAt cutAt
+  simp only [FlockSoundness.ZK.Table.cut_inner]
+  exact ZkView.Coined.swPreWith_inner _ _ _ _ _ _
+
+theorem swCutAt_Y2 : (swCutAt C cz wt v ω lv j).Y2 = (cutAt C cz wt ω lv' j).Y2 := by
+  unfold swCutAt cutAt
+  simp only [FlockSoundness.ZK.Table.cut_Y2]
+  exact ZkView.Coined.swPreWith_Y2 _ _ _ _ _ _
+
+theorem swCutAt_leavesP : (swCutAt C cz wt v ω lv j).leavesP = (cutAt C cz wt ω lv j).leavesP := rfl
+
+/-- Where table `j`'s rows hold at its base, the switched cut's `Y₁` is the honest cut's. -/
+theorem swCutAt_Y1 (hr : ((C j).T (cz j)).tab.onVals.RowsAt (wt j, v j) (((C j).T (cz j)).randOf (ω j) 0).1
+      (((C j).T (cz j)).randOf (ω j) 0).2.1) :
+    (swCutAt C cz wt v ω lv j).Y1 = (cutAt C cz wt ω lv' j).Y1 := by
+  unfold swCutAt cutAt
+  exact FlockSoundness.ZK.Table.cut_Y1_congr _ _ (ZkView.Coined.swPreWith_Y1 _ _ _ _ _ _ hr)
+
+end Bridges
+
+section RepBridges
+
+variable {x : Msg} (cz : ∀ j, Composed.CoinsZK (tabC PE x j).Rest)
+  (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (v : ∀ j, ((tabC PE x j).T (cz j)).tab.Vals)
+  (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+  (lv lv' : ZkView.Leaves (fun j => (tabC PE x j).z) → ByteArray) (j : Fin (jOf x)) (r : Fin 2)
+
+theorem swRep_sv : (repSrcCut PE x cz (swCutAt (tabC PE x) cz wt v ω lv) j r).sv =
+    (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω lv') j r).sv :=
+  repSrcCut_sv_congr PE x cz _ _ j r (swCutAt_sHat _ _ _ _ _ _ _ _) (swCutAt_sReg _ _ _ _ _ _ _ _)
+
+theorem swRep_restart :
+    (repSrcCut PE x cz (swCutAt (tabC PE x) cz wt v ω lv) j r).y1 =
+        (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω lv') j r).y1 ∧
+      (repSrcCut PE x cz (swCutAt (tabC PE x) cz wt v ω lv) j r).ybar =
+        (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω lv') j r).ybar ∧
+      (repSrcCut PE x cz (swCutAt (tabC PE x) cz wt v ω lv) j r).hiSalt =
+        (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω lv') j r).hiSalt :=
+  repSrcCut_restart_congr PE x cz _ _ j r (swCutAt_y1 _ _ _ _ _ _ _ _) (swCutAt_ybar _ _ _ _ _ _ _ _)
+    (swCutAt_lig _ _ _ _ _ _ _ _)
+
+theorem swRep_inner :
+    (repSrcCut PE x cz (swCutAt (tabC PE x) cz wt v ω lv) j r).rhoIn =
+        (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω lv') j r).rhoIn ∧
+      (repSrcCut PE x cz (swCutAt (tabC PE x) cz wt v ω lv) j r).sigmaIn =
+        (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω lv') j r).sigmaIn := by
+  have h := swCutAt_inner (tabC PE x) cz wt v ω lv lv' j
+  constructor <;> (simp only [repSrcCut]; rw [h])
+
+theorem swRep_y (hr : ((tabC PE x j).T (cz j)).tab.onVals.RowsAt (wt j, v j)
+      (((tabC PE x j).T (cz j)).randOf (ω j) 0).1 (((tabC PE x j).T (cz j)).randOf (ω j) 0).2.1) :
+    (repSrcCut PE x cz (swCutAt (tabC PE x) cz wt v ω lv) j r).y =
+      (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω lv') j r).y := by
+  rw [repSrcCut_y, repSrcCut_y, swCutAt_Y2 (tabC PE x) cz wt v ω lv lv' j,
+    swCutAt_Y1 (tabC PE x) cz wt v ω lv lv' j hr]
+
+end RepBridges
+
+set_option smartUnfolding false in
+theorem onVals_colPAt {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W)
+    (v : T.tab.Vals) (b : ZkView.Base z Hi) (r : Fin 2) (p : Fin (z.nQ + z.nPU)) :
+    T.onVals.colPAt (w, v) b r p = T.colPAt w b r p :=
+  rfl
+
+/-- Where the rows hold at the base, the switched prover's pads leaves commit the honest prover's columns: they read the
+base's pads alone. -/
+theorem swContent_pads {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W)
+    (v : T.tab.Vals) (b : ZkView.Base z Hi) (hr : T.tab.onVals.RowsAt (w, v) b.1 b.2.1) (r : Fin 2)
+    (p : Fin (z.nQ + z.nPU)) : T.swContent w v b (.inr (.inl (r, p))) = T.content w b (.inr (.inl (r, p))) := by
+  unfold ZkView.Coined.swContent
+  rw [ite_eq_left hr]
+  simp only [ZkView.Coined.content, onVals_colPAt]
+
+/-- The switched prover's `τ` is `λ`'s batch against `μ` at its own pre-final view. -/
+theorem swTau_congr {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T T' : ZkView.Coined K W Hi VL z) (w : W)
+    (v : T.tab.Vals) (v' : T'.tab.Vals) (b : ZkView.Base z Hi) (r : Fin 2)
+    (h : T.onVals.lam r (T.onVals.tab.view (w, v) (T.onVals.randOf b 0)).pre =
+      T'.onVals.lam r (T'.onVals.tab.view (w, v') (T'.onVals.randOf b 0)).pre) :
+    (T.onVals.tab.view (w, v) (T.onVals.randOf b 0)).tau r =
+      (T'.onVals.tab.view (w, v') (T'.onVals.randOf b 0)).tau r := by
+  show ∑ i, T.onVals.lam r (T.onVals.tab.view (w, v) (T.onVals.randOf b 0)).pre i * b.2.2.2.2.2.1 r i =
+    ∑ i, T'.onVals.lam r (T'.onVals.tab.view (w, v') (T'.onVals.randOf b 0)).pre i * b.2.2.2.2.2.1 r i
+  rw [h]
+
+/-- A switched cut's pads leaf at tree position `q` is the leaf at `q`, whatever the coins' tree. -/
+theorem padLeafCut_swCutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
+    (wt : ∀ j, FlockSoundness.Model.Witness (tabC P x j).S.m) (v : ∀ j, ((tabC P x j).T (cz j)).tab.Vals)
+    (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
+    (lv : ZkView.Leaves (fun j => (tabC P x j).z) → ByteArray) (j : Fin (jOf x)) (r : Fin 2) {q : ℕ}
+    (hq : q < (tabC P x j).z.nQ + (tabC P x j).z.nPU) :
+    padLeafCut P x cz (swCutAt (tabC P x) cz wt v ω lv) j r q = lv ⟨j, .inr (.inl (r, ⟨q, hq⟩))⟩ := by
+  have e : padLeafCut P x cz (swCutAt (tabC P x) cz wt v ω lv) j r q =
+      padLeafCut P x cz (cutAt (tabC P x) cz wt ω lv) j r q := by
+    unfold padLeafCut
+    simp only [swCutAt_leavesP (tabC P x) cz wt v ω lv j]
+  rw [e]
+  exact Cx.padLeafCut_cutAt P x cz wt ω lv j r hq
+
+section Leaves
+
+attribute [local irreducible] Composed.treeEquiv
+
+variable {x : Msg} (cz : ∀ j, Composed.CoinsZK (tabC PE x j).Rest)
+  (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (v : ∀ j, ((tabC PE x j).T (cz j)).tab.Vals)
+  (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+  (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray)
+
+/-- The switched session's level-0 leaves are the honest session's (`Coined.swContent_inl`). -/
+theorem leafAt_sw (j : Fin (jOf x)) :
+    leafAt PE x cz (swCutAt (tabC PE x) cz wt v ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) cz wt v ω l + (p l).1, (p l).2)) j =
+      leafAt PE x cz (cutAt (tabC PE x) cz wt ω fun l =>
+        ZkView.leafH (digOf (tabC PE x) cz wt ω l + (p l).1, (p l).2)) j :=
+  funext fun q => by
+    by_cases hq : q < (tabC PE x j).z.nS + (tabC PE x j).z.nU
+    · rw [leafAt_swCutAt PE x cz wt v ω _ j hq, leafAt_cutAt PE x cz wt ω _ j hq]
+      simp only [swDigOf, digOf, ZkView.Coined.swContent_inl]
+    · simp only [leafAt, hq, ↓reduceDIte]
+
+/-- **Where table `j`'s rows hold at its base, the switched session's pads leaves are the honest session's**
+(`swContent_pads`). -/
+theorem padLeaf_sw (j : Fin (jOf x)) (r : Fin 2)
+    (hr : ((tabC PE x j).T (cz j)).tab.onVals.RowsAt (wt j, v j) (ω j).1 (ω j).2.1) :
+    padLeafCut PE x cz (swCutAt (tabC PE x) cz wt v ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) cz wt v ω l + (p l).1, (p l).2)) j r =
+      padLeafCut PE x cz (cutAt (tabC PE x) cz wt ω fun l =>
+        ZkView.leafH (digOf (tabC PE x) cz wt ω l + (p l).1, (p l).2)) j r :=
+  funext fun q => by
+    by_cases hq : q < (tabC PE x j).z.nQ + (tabC PE x j).z.nPU
+    · rw [padLeafCut_swCutAt PE x cz wt v ω _ j r hq, Cx.padLeafCut_cutAt PE x cz wt ω _ j r hq]
+      simp only [swDigOf, digOf, swContent_pads _ _ _ _ hr]
+    · simp only [padLeafCut, hq, ↓reduceDIte]
+
+set_option smartUnfolding false in
+/-- **Where table `j`'s rows hold at its base, the switched cut's `τ` commitment is the worker's view's `τ`'s leaf.** -/
+theorem swCut_tauCom (j : Fin (jOf x)) (r : Fin 2)
+    (hr : ((tabC PE x j).T (cz j)).tab.onVals.RowsAt (wt j, v j) (ω j).1 (ω j).2.1) :
+    (swCutAt (tabC PE x) cz wt v ω (fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) cz wt v ω l + (p l).1, (p l).2)) j).tauCom r =
+      ZkView.leafH (ZkView.bitsOf (_root_.Flock.Sha512.hash (_root_.Flock.Zk.TAU_TAG ++ _root_.Flock.F128.toBytes
+        ((((tabC PE x j).T (cz j)).onVals.tab.view (wt j, v j)
+          (((tabC PE x j).T (cz j)).onVals.randOf (ω j) 0)).tau r))) + (p ⟨j, .inr (.inr r)⟩).1,
+        (p ⟨j, .inr (.inr r)⟩).2) := by
+  have e : (swCutAt (tabC PE x) cz wt v ω (fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) cz wt v ω l + (p l).1, (p l).2)) j).tauCom r =
+      ZkView.leafH (ZkView.bitsOf (((tabC PE x j).T (cz j)).swContent (wt j) (v j) (ω j) (.inr (.inr r))) +
+        (p ⟨j, .inr (.inr r)⟩).1, (p ⟨j, .inr (.inr r)⟩).2) := rfl
+  rw [e, ZkView.Coined.swContent, ite_eq_left hr]
+  rfl
+
+end Leaves
+
+/-- **The switched view's `τ` at rep `r` reads its coins below the inner proof's `β`**, its own masked claims' points and
+the worker's values at its base (`view_tau_congr` at the table at clear values). -/
+theorem swView_tau_congr {x : Msg} (cz cz' : ∀ j, Composed.CoinsZK (tabC PE x j).Rest)
+    (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (v : ∀ j, ((tabC PE x j).T (cz j)).tab.Vals)
+    (v' : ∀ j, ((tabC PE x j).T (cz' j)).tab.Vals) (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+    (j : Fin (jOf x)) (r : Fin 2) (hA : Composed.Cx.InAgree (zkTab x j).table (stAt x j) (cz j) (cz' j) r)
+    (hpt : ∀ k (h : k < (tabC PE x j).z.nC), (k = 2 * r.val ∨ k = 2 * r.val + 1) →
+      Composed.pointsOf ((cz j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) ⟨k, h⟩ =
+        Composed.pointsOf ((cz' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) ⟨k, h⟩)
+    (hv : ∀ i : Fin (tabC PE x j).z.nE, v j r (wt j) (ω j).1 (ω j).2.1 i = v' j r (wt j) (ω j).1 (ω j).2.1 i) :
+    (((tabC PE x j).T (cz j)).onVals.tab.view (wt j, v j) (((tabC PE x j).T (cz j)).onVals.randOf (ω j) 0)).tau r =
+      (((tabC PE x j).T (cz' j)).onVals.tab.view (wt j, v' j)
+        (((tabC PE x j).T (cz' j)).onVals.randOf (ω j) 0)).tau r := by
+  have hrbar := Composed.Cx.rbar_congr PE (zkTab x j).table (stAt x j) (cz j) (cz' j) r hA.lane
+  have hρ := Composed.Cx.ρ_congr PE (zkTab x j).table (stAt x j) (cz j) (cz' j) r hA.rhoP
+  have he := Composed.Cx.embed_congr PE (zkTab x j).table (stAt x j) (cz j) (cz' j)
+  have hla := Composed.Cx.lanes_congr PE (zkTab x j).table (stAt x j) (cz j) (cz' j)
+  have hζ : ((tabC PE x j).T (cz j)).ζ r = ((tabC PE x j).T (cz' j)).ζ r :=
+    Composed.Cx.ζ_congr PE (zkTab x j).table (stAt x j) (cz j) (cz' j) r hA.zeta
+  have hia : ((tabC PE x j).T (cz j)).ia = ((tabC PE x j).T (cz' j)).ia :=
+    Composed.Cx.ia_congr PE (zkTab x j).table (stAt x j) (cz j) (cz' j)
+  have hib : ((tabC PE x j).T (cz j)).ib = ((tabC PE x j).T (cz' j)).ib :=
+    Composed.Cx.ib_congr PE (zkTab x j).table (stAt x j) (cz j) (cz' j)
+  refine swTau_congr ((tabC PE x j).T (cz j)) ((tabC PE x j).T (cz' j)) (wt j) (v j) (v' j) (ω j) r
+    (Composed.Cx.lamOf_congr (zkTab x j).table (stAt x j) (cz j) (cz' j) r _ _ hA ?_ ?_ ?_ ?_ ?_)
+  · funext i
+    show v j r (wt j) (ω j).1 (ω j).2.1 i + ((ω j).2.2.1 r).1 i = v' j r (wt j) (ω j).1 (ω j).2.1 i + ((ω j).2.2.1 r).1 i
+    exact congrArg (fun a => a + ((ω j).2.2.1 r).1 i) (hv i)
+  · unfold Composed.sHatAt
+    split_ifs with h
+    · exact Composed.Cx.coined_val_congr ((tabC PE x j).T (cz j)) ((tabC PE x j).T (cz' j)) (wt j)
+        ⟨2 * r.val, h⟩ (ω j).1 (Composed.Cx.nu_congr PE _ _ _ _ (wt j) ⟨2 * r.val, h⟩ (hpt _ h (.inl rfl)))
+        (Composed.Cx.eqw_congr PE _ _ _ _ ⟨2 * r.val, h⟩ (hpt _ h (.inl rfl)))
+    · rfl
+  · unfold Composed.sHatAt
+    split_ifs with h
+    · exact Composed.Cx.coined_val_congr ((tabC PE x j).T (cz j)) ((tabC PE x j).T (cz' j)) (wt j)
+        ⟨2 * r.val + 1, h⟩ (ω j).1 (Composed.Cx.nu_congr PE _ _ _ _ (wt j) ⟨2 * r.val + 1, h⟩ (hpt _ h (.inr rfl)))
+        (Composed.Cx.eqw_congr PE _ _ _ _ ⟨2 * r.val + 1, h⟩ (hpt _ h (.inr rfl)))
+    · rfl
+  · show ∑ col : Fin (tabC PE x j).z.L, ((tabC PE x j).T (cz j)).tab.y1' (wt j) (ω j).1 (ω j).2.1.2.1 r col *
+        Composed.bFold (zkTab x j).table (stAt x j) (cz j) r col.val =
+      ∑ col : Fin (tabC PE x j).z.L, ((tabC PE x j).T (cz' j)).tab.y1' (wt j) (ω j).1 (ω j).2.1.2.1 r col *
+        Composed.bFold (zkTab x j).table (stAt x j) (cz' j) r col.val
+    rw [y1'_congr (tabC PE x) cz wt ω j r cz' hrbar hρ he hla,
+      Composed.Cx.bFold_congr _ _ _ _ r hA.toB0Agree hA.lane]
+  · show (((tabC PE x j).T (cz j)).ζ r * ((ω j).2.2.1 r).1 ((tabC PE x j).T (cz j)).ia + ((ω j).2.2.1 r).2.1,
+        ((ω j).2.2.1 r).1 ((tabC PE x j).T (cz j)).ib + ((ω j).2.2.1 r).2.2) =
+      (((tabC PE x j).T (cz' j)).ζ r * ((ω j).2.2.1 r).1 ((tabC PE x j).T (cz' j)).ia + ((ω j).2.2.1 r).2.1,
+        ((ω j).2.2.1 r).1 ((tabC PE x j).T (cz' j)).ib + ((ω j).2.2.1 r).2.2)
+    rw [hζ, hia, hib]
+
+/-- **Where table `j`'s rows hold at its base at both coin vectors, the switched sources' `τ` commitments agree** where
+the switched views' `τ` do (`swCut_tauCom`). -/
+theorem swRep_tauCom_congr {x : Msg} (cz cz' : ∀ j, Composed.CoinsZK (tabC PE x j).Rest)
+    (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (v : ∀ j, ((tabC PE x j).T (cz j)).tab.Vals)
+    (v' : ∀ j, ((tabC PE x j).T (cz' j)).tab.Vals) (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+    (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray) (j : Fin (jOf x)) (r : Fin 2)
+    (hr : ((tabC PE x j).T (cz j)).tab.onVals.RowsAt (wt j, v j) (ω j).1 (ω j).2.1)
+    (hr' : ((tabC PE x j).T (cz' j)).tab.onVals.RowsAt (wt j, v' j) (ω j).1 (ω j).2.1)
+    (htau : (((tabC PE x j).T (cz j)).onVals.tab.view (wt j, v j)
+        (((tabC PE x j).T (cz j)).onVals.randOf (ω j) 0)).tau r =
+      (((tabC PE x j).T (cz' j)).onVals.tab.view (wt j, v' j)
+        (((tabC PE x j).T (cz' j)).onVals.randOf (ω j) 0)).tau r) :
+    (repSrcCut PE x cz (swCutAt (tabC PE x) cz wt v ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) cz wt v ω l + (p l).1, (p l).2)) j r).tauCom =
+      (repSrcCut PE x cz' (swCutAt (tabC PE x) cz' wt v' ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) cz' wt v' ω l + (p l).1, (p l).2)) j r).tauCom :=
+  (swCut_tauCom cz wt v ω p j r hr).trans
+    ((congrArg (fun t => ZkView.leafH (ZkView.bitsOf (_root_.Flock.Sha512.hash (_root_.Flock.Zk.TAU_TAG ++
+      _root_.Flock.F128.toBytes t)) + (p ⟨j, .inr (.inr r)⟩).1, (p ⟨j, .inr (.inr r)⟩).2)) htau).trans
+      (swCut_tauCom cz' wt v' ω p j r hr').symm)
+
+section TauAgree
+
+variable {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
+  (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x)) (j : Fin (jOf x)) (r : Fin 2)
+  {c c' : Fin (refK x) → FlockDeploy.Coin} {n : ℕ} (hcc : ∀ k : Fin (refK x), k.val < n → c k = c' k)
+
+include hsx hcc in
+/-- **What rep `r`'s `τ` reads below its commitment's body agrees**: the inner proof's coins and its masked claims'
+points (`repOk`'s `tc` case). -/
+theorem inAgree_tc {e : Array _root_.Flock.Claim} (he : e.size = (stAt x j).regions.size * spec.points)
+    (hn : FlockComplete.CutEq.innerAt (FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val))
+      (_root_.Flock.Setup.ofCircuit (stAt x j)) (zkTab x j).sch e + 2 ≤ n) :
+    Composed.Cx.InAgree (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j) r ∧
+      ∀ k (h : k < (tabC PE x j).z.nC), (k = 2 * r.val ∨ k = 2 * r.val + 1) →
+        Composed.pointsOf ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) ⟨k, h⟩ =
+          Composed.pointsOf ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) ⟨k, h⟩ := by
+  have hp2 := FlockComplete.ZkTables.points_of_setup (live_of_lt j).1 hsx
+  have hm14 : 14 ≤ (stAt x j).m := (schOk_of (zkTab x j)).m
+  have hk6 : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
+  have hbase := repBase_eq hsx (2 * j.val + r.val)
+  have hout := outerSlot_at hsx j r
+  have hlig : FlockComplete.CutEq.ligAt (FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val))
+      (_root_.Flock.Setup.ofCircuit (stAt x j)) e = FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) +
+        FlockComplete.piopRoundsZk spec (stAt x j) := by
+    unfold FlockComplete.CutEq.ligAt FlockComplete.piopRoundsZk
+    rw [he, hp2]
+    show _ + 3 + ((stAt x j).m - 6) + (3 + ((stAt x j).c.kLog - 6)) + _ + 1 = _
+    omega
+  simp only [FlockComplete.CutEq.innerAt] at hn
+  generalize hB : FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val) = B at hbase hout hlig hn
+  have hpiop : FlockComplete.piopRoundsZk spec (stAt x j) =
+      (stAt x j).m + (stAt x j).c.kLog - 6 + (2 + 2 * (stAt x j).regions.size + 1) := by
+    unfold FlockComplete.piopRoundsZk
+    rw [hp2]
+  have ek0 : (zkTab x j).table.sch.k0 = (zkTab x j).sch.k0 := rfl
+  have hg : gateAt spec x j r .opening ≤ n := by simp only [gateAt]; rw [hB]; omega
+  have hl : ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).lane r =
+      ((czExe PE x c' j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).lane r :=
+    funext fun a => lane_agree_lt hsx j r hcc (i := (zkTab x j).sch.k0) (by omega) a a.isLt
+  have h0 : Composed.Cx.B0Agree (zkTab x j).table (stAt x j) (czExe PE x c j) (czExe PE x c' j) r :=
+    ⟨link_agree j hcc (by omega), rOuter_agree j r hcc (by omega), rho_agree j r hcc (by omega),
+      ts_agree j r hcc (by omega), rpp_agree j r hcc (by omega), rsGamma_agree hsx j r hcc (by omega),
+      oodPt_agree hsx j r hcc (by omega), ood_agree hsx j r hcc (by omega)⟩
+  refine ⟨{ toB0Agree := h0
+            zc := zc_agree j r hcc (by omega)
+            lcAlpha := lcAlpha_agree j r hcc (by omega)
+            lcBeta := lcBeta_agree j r hcc (by omega)
+            rPrime := rPrime_agree j r hcc (by omega)
+            lane := hl
+            rhoP := rhoPair_agree hsx j r hcc (by omega)
+            zeta := zeta_agree hsx j r hcc (by simp only [innerOff]; omega)
+            gammas := gammas_agree hsx j r hcc (by simp only [innerOff]; omega) }, fun k hk hk2 => ?_⟩
+  refine points_agree hsx j r hcc ⟨k, hk⟩ ?_ hg
+  rcases hk2 with rfl | rfl
+  · exact le_of_eq (rep_two r (k := 0) (by omega))
+  · exact le_of_eq (rep_two r (k := 1) (by omega))
+
+end TauAgree
+
+section Generic
+
+variable {x : Msg} (cut : ∀ c : Fin (refK x) → FlockDeploy.Coin, ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Cut)
+  {c c' : Fin (refK x) → FlockDeploy.Coin}
+
+/-- **The commitments of cuts whose level-0 and pads leaves agree are the same** (`commits_agree` at any cuts). -/
+theorem commitsCut_agree
+    (hl : ∀ j, leafAt PE x (czExe PE x c) (cut c) j = leafAt PE x (czExe PE x c') (cut c') j)
+    (hpl : ∀ j r, padLeafCut PE x (czExe PE x c) (cut c) j r = padLeafCut PE x (czExe PE x c') (cut c') j r) :
+    (∀ ms lv i, FlockComplete.commit0Cut hsE ms lv (tabSrcCut PE x (czExe PE x c) (cut c) i) =
+        FlockComplete.commit0Cut hsE ms lv (tabSrcCut PE x (czExe PE x c') (cut c') i)) ∧
+      (∀ N i r, FlockComplete.padsTreeCut hsE N ((tabSrcCut PE x (czExe PE x c) (cut c) i).rep r) =
+        FlockComplete.padsTreeCut hsE N ((tabSrcCut PE x (czExe PE x c') (cut c') i).rep r)) := by
+  refine ⟨fun ms lv i => ?_, fun N i r => ?_⟩
+  · by_cases h : i < jOf x
+    · rw [tabSrcCut_live _ _ h, tabSrcCut_live _ _ h]
+      exact commit0Cut_congr ms lv (hl ⟨i, h⟩) rfl rfl
+    · rw [tabSrcCut_dead _ _ h, tabSrcCut_dead _ _ h]
+  · by_cases h : i < jOf x
+    · by_cases hr : r < 2
+      · rw [tabSrcCut_rep _ _ h hr, tabSrcCut_rep _ _ h hr]
+        refine padsTreeCut_congr N ?_ ?_ ?_ ?_
+        · rw [repSrcCut_padLeaf, repSrcCut_padLeaf]
+          exact hpl ⟨i, h⟩ ⟨r, hr⟩
+        all_goals simp only [repSrcCut]
+      · rw [tabSrcCut_rep_dead _ _ h hr, tabSrcCut_rep_dead _ _ h hr]
+    · rw [tabSrcCut_dead _ _ h, tabSrcCut_dead _ _ h]
+
+open FlockComplete.CutEq in
+/-- **Each rep stream's sources agree where read from its first body** at cuts whose reps' sources do (`srcAgree_of`'s
+bookkeeping at any cuts). -/
+theorem repStreams_agree (hx : Live x) {n : ℕ} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
+    (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
+    (hR : ∀ (j : Fin (jOf x)) (r : Fin 2) (e : Array _root_.Flock.Claim),
+      e.size = (stAt x j).regions.size * spec.points →
+      RepAgree n (FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val))
+        (_root_.Flock.Setup.ofCircuit (stAt x j)) (zkTab x j).sch e
+        (repSrcCut PE x (czExe PE x c) (cut c) j r) (repSrcCut PE x (czExe PE x c') (cut c') j r)) :
+    ∀ schs, ((FlockDeploy.tabsOf (stsOf x)).mapM fun st =>
+          (monadLift (_root_.Flock.Zk.schedule st.m) : _root_.Flock.V (_root_.Flock.Schedule × ℕ))) = .ok schs →
+        ∀ k (hk : k < spec.repStreams.size) i r w, spec.repStreams[k] = (i, r, w) → ∀ extras,
+          (FlockDeploy.tabsOf (stsOf x))[i]!.extra (ptsOf (fun k i => slotAt c k i) spec) = .ok extras →
+          SchOk (FlockDeploy.tabsOf (stsOf x))[i]! schs[i]!.1 ∧
+            FlockComplete.repStartZk spec (stsOf x) (k + 1) = FlockComplete.repStartZk spec (stsOf x) k +
+              repSends (FlockDeploy.tabsOf (stsOf x))[i]! schs[i]!.1 extras ∧
+            RepAgree n (FlockComplete.repStartZk spec (stsOf x) k) (FlockDeploy.tabsOf (stsOf x))[i]! schs[i]!.1
+              extras ((tabSrcCut PE x (czExe PE x c) (cut c) i).rep r)
+              ((tabSrcCut PE x (czExe PE x c') (cut c') i).rep r) := by
+  intro schs hschs k hk i r w hkw extras hext
+  obtain ⟨-, -, hspec, -⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
+  rw [FlockDeploy.repStreams_getElem spec hk] at hkw
+  simp only [Prod.mk.injEq] at hkw
+  obtain ⟨rfl, rfl, -⟩ := hkw
+  rw [FlockDeploy.repStreams_size] at hk
+  have hj : k / 2 < jOf x := by unfold jOf; rw [if_pos hx]; omega
+  have hr : k % 2 < 2 := Nat.mod_lt _ (by norm_num)
+  have hst : (stsOf x)[k / 2]! = stAt x ⟨k / 2, hj⟩ := getElem!_pos (stsOf x) (k / 2) (lt_of_jOf ⟨k / 2, hj⟩)
+  have htab : (FlockDeploy.tabsOf (stsOf x))[k / 2]! = _root_.Flock.Setup.ofCircuit (stAt x ⟨k / 2, hj⟩) := by
+    rw [← hst]
+    unfold FlockDeploy.tabsOf
+    rw [getElem!_pos _ (k / 2) (by rw [Array.size_map]; exact lt_of_jOf ⟨k / 2, hj⟩),
+      getElem!_pos _ (k / 2) (lt_of_jOf ⟨k / 2, hj⟩), Array.getElem_map]
+  have hsch : schs[k / 2]!.1 = (zkTab x ⟨k / 2, hj⟩).sch := by
+    obtain ⟨hsz, hget⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem hschs
+    have hlt : k / 2 < (FlockDeploy.tabsOf (stsOf x)).size := by
+      rw [FlockDeploy.tabsOf, Array.size_map]; exact lt_of_jOf ⟨k / 2, hj⟩
+    have h1 := hget (k / 2) hlt (hsz ▸ hlt)
+    rw [← getElem!_pos (FlockDeploy.tabsOf (stsOf x)) (k / 2) hlt, htab] at h1
+    have h2 : (_root_.Flock.Zk.schedule (stAt x ⟨k / 2, hj⟩).m : _root_.Flock.V _) = .ok schs[k / 2] := h1
+    rw [(zkTab x ⟨k / 2, hj⟩).hz] at h2
+    rw [getElem!_pos schs (k / 2) (hsz ▸ hlt), ← Except.ok.inj h2]
+  rw [htab] at hext
+  have hes : extras.size = (stAt x ⟨k / 2, hj⟩).regions.size * spec.points := by
+    rw [FlockDeploy.extraClaims_size (st := stAt x ⟨k / 2, hj⟩) hext]
+    simp
+  rw [htab, hsch, tabSrcCut_rep _ _ hj hr, tabSrcCut_rep _ _ hj hr]
+  refine ⟨schOk_of _, ?_, ?_⟩
+  · have hk6 := (zkTab x ⟨k / 2, hj⟩).wf.1.hk6
+    have hm := (FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ (zkTab x ⟨k / 2, hj⟩).hz).1
+    rw [FlockComplete.ZkTables.repStart_succ, hst]
+    unfold FlockDeploy.repRounds
+    simp only [↓reduceIte, (zkTab x ⟨k / 2, hj⟩).hz]
+    simp only [repSends, innerAt]
+    show _ = _ + (3 + ((stAt x ⟨k / 2, hj⟩).m - 6) + (3 + ((stAt x ⟨k / 2, hj⟩).c.kLog - 6)) + _ + 1 + _ + 4)
+    rw [hes.trans (Nat.mul_comm _ _)]
+    omega
+  · have := hR ⟨k / 2, hj⟩ ⟨k % 2, hr⟩ extras hes
+    rwa [show 2 * (⟨k / 2, hj⟩ : Fin (jOf x)).val + (⟨k % 2, hr⟩ : Fin 2).val = k by simp only; omega] at this
+
+/-- **The deployed round encodings of cuts agree at coins agreeing below the round** where the cuts' level-0 and pads
+leaves agree and each rep's sources agree where read (`causalExe_of` at any cuts of the coins). -/
+theorem encExe_congr {n : ℕ} (hcc : ∀ k : Fin (refK x), k.val < n → c k = c' k)
+    (hl : ∀ j, leafAt PE x (czExe PE x c) (cut c) j = leafAt PE x (czExe PE x c') (cut c') j)
+    (hpl : ∀ j r, padLeafCut PE x (czExe PE x c) (cut c) j r = padLeafCut PE x (czExe PE x c') (cut c') j r)
+    (hR : ∀ s spec, FlockDeploy.setupOf true x = some (s, spec, stsOf x) → ∀ (j : Fin (jOf x)) (r : Fin 2)
+      (e : Array _root_.Flock.Claim), e.size = (stAt x j).regions.size * spec.points →
+      FlockComplete.CutEq.RepAgree n (FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val))
+        (_root_.Flock.Setup.ofCircuit (stAt x j)) (zkTab x j).sch e
+        (repSrcCut PE x (czExe PE x c) (cut c) j r) (repSrcCut PE x (czExe PE x c') (cut c') j r)) :
+    encExe PE x c n (cut c) = encExe PE x c' n (cut c') := by
+  unfold encExe
+  by_cases hn : n = 0
+  · simp only [hn, ↓reduceIte]
+    unfold enc0
+    simp only [hl]
+  rw [if_neg hn, if_neg hn]
+  rcases hsx : FlockDeploy.setupOf true x with _ | ⟨s, spec, sts⟩
+  · rfl
+  dsimp only
+  have hs : stsOf x = sts := stsOf_of hsx
+  have hrun : runCut x c n spec (tabSrcCut PE x (czExe PE x c) (cut c)) =
+      runCut x c' n spec (tabSrcCut PE x (czExe PE x c') (cut c')) := by
+    unfold runCut
+    rw [FlockComplete.asksCut_congr (coin := fun k i => slotAt c' k i) (coin' := fun k i => slotAt c k i)
+      (fun k hk => funext fun e => (slotAt_congr hcc hk e).symm)]
+    by_cases hx : Live x
+    · have hsx' : FlockDeploy.setupOf true x = some (s, spec, stsOf x) := by rw [hs]; exact hsx
+      obtain ⟨hcm, hic⟩ := commitsCut_agree cut hl hpl
+      exact FlockComplete.CutEq.sessionCut_eq _ n spec _ _ _ _ (by omega) hcm hic _
+        (by simp [FlockComplete.repStartZk]) (repStreams_agree cut hx hsx' (hR s spec hsx'))
+    · have hj : jOf x = 0 := by
+        unfold jOf
+        simp [hx]
+      have hd : ∀ c₀ : Fin (refK x) → FlockDeploy.Coin,
+          tabSrcCut PE x (czExe PE x c₀) (cut c₀) = fun _ => default :=
+        fun c₀ => funext fun i => tabSrcCut_dead _ _ (by omega)
+      rw [hd, hd]
+  rw [hrun]
+
+end Generic
+
+/-- **The switched sources' masked value at `final_c`'s pad is one at two coin vectors** where the zerocheck's point is
+and, at each round-1c pad, the honest sources' value and `freeWord` are. -/
+theorem swMasked_fc_congr (L : LeanRelease Flock.Wit
+      ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
+    (bx : AlgWorker L) {x : Msg} {w : Flock.Wit} (hSv : Serves x) {ν : CoinLayer.Nonce}
+    {c c' : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
+    (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+    (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray)
+    (lv lv' : ZkView.Leaves (fun j => (tabC PE x j).z) → ByteArray) (j : Fin (jOf x)) (r : Fin 2)
+    (hz : (zcE c j r).z = (zcE c' j r).z)
+    (hH : ∀ k < 64, (repSrcCut PE x (czExe PE x c) (cutC x wt ω p c) j r).masked ((layE x j).r1c k) =
+      (repSrcCut PE x (czExe PE x c') (cutC x wt ω p c') j r).masked ((layE x j).r1c k))
+    (hF : ∀ k < 64, freeWord L bx x w ν c s j r ((layE x j).r1c k) = freeWord L bx x w ν c' s j r ((layE x j).r1c k)) :
+    (repSrcCut PE x (czExe PE x c) (swCutAt (tabC PE x) (czExe PE x c) wt (vsOf L bx x w ν c s) ω lv) j r).masked
+        (layE x j).fc =
+      (repSrcCut PE x (czExe PE x c') (swCutAt (tabC PE x) (czExe PE x c') wt (vsOf L bx x w ν c' s) ω lv') j
+        r).masked (layE x j).fc := by
+  have e : ∀ (c₀ : Fin (refK x) → FlockDeploy.Coin) (lv₀ : ZkView.Leaves (fun j => (tabC PE x j).z) → ByteArray),
+      (repSrcCut PE x (czExe PE x c₀) (swCutAt (tabC PE x) (czExe PE x c₀) wt (vsOf L bx x w ν c₀ s) ω lv₀) j
+        r).masked (layE x j).fc =
+        if h : (layE x j).fc < (tabC PE x j).z.nE then
+          FlockLevel3.GF128.val (vsOf L bx x w ν c₀ s j r (wt j) (ω j).1 (ω j).2.1 ⟨(layE x j).fc, h⟩ +
+            ((ω j).2.2.1 r).1 ⟨(layE x j).fc, h⟩) else 0 :=
+    fun c₀ lv₀ => swCut_masked (czExe PE x c₀) wt (vsOf L bx x w ν c₀ s) ω lv₀ j r (layE x j).fc
+  rw [e, e]
+  by_cases hk : (layE x j).fc < (tabC PE x j).z.nE
+  · rw [dite_eq_left hk, dite_eq_left hk]
+    refine congrArg (fun a => FlockLevel3.GF128.val (a + ((ω j).2.2.1 r).1 ⟨(layE x j).fc, hk⟩)) ?_
+    rw [vsOf_of_serves L bx hSv]
+    exact vsServed_fc_congr L bx (ω j) hk hz fun k hk' =>
+      vsOfWord_congr L bx (ω j) (hF k hk') fun h => vals_of_masked wt ω p j r h (hH k hk')
+  · rw [dite_eq_right hk, dite_eq_right hk]
+
+theorem ofCircuit_m (st : Stmt) : (_root_.Flock.Setup.ofCircuit st).m = st.m := rfl
+theorem ofCircuit_kLog (st : Stmt) : (_root_.Flock.Setup.ofCircuit st).kLog = st.c.kLog := rfl
+theorem ofCircuit_fold (st : Stmt) : (_root_.Flock.Setup.ofCircuit st).fold.kLog = st.c.kLog := rfl
+
+/-- A bound on a pad's position or its place in the absorbed order, at the pads layout's positions (`pl_*`). -/
+local macro "place_tac" : tactic =>
+  `(tactic| ((try simp only [layOf, layE, pl_r1ab, pl_r1c, pl_ml, pl_fa, pl_fb, pl_fc, pl_lc, pl_zp, pl_lgOod,
+    pl_lgMsg, pl_lgE, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold, piopLen, piopNR] at *); first | (split_ifs <;> omega) | omega))
+
+section SwRep
+
+variable (L₀ : LeanRelease Flock.Wit
+      ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+
+/-- `freeWord_le` at a pad whose places in the absorbed order are below PIOP round `jj`'s values (`place_hi`). -/
+theorem freeWord_at {x : Msg} {w : Flock.Wit} (hSv : Serves x)
+    (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w) (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real))
+    {ν : CoinLayer.Nonce} {c c' : Fin (refK x) → FlockDeploy.Coin}
+    {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z} {j : Fin (jOf x)} {r : Fin 2}
+    {i : ℕ} (jj : ℕ) (hjj : jj < piopNR (stAt x j).m (stAt x j).c.kLog)
+    (hi : (if i < 130 + 2 * ((stAt x j).m - 6) then i else i - 1) <
+      piopLen (stAt x j).m (stAt x j).c.kLog (jj + 1))
+    (hcc : ∀ k : Fin (refK x), k.val < repBase x (2 * j.val + r.val) + jj → c k = c' k) :
+    freeWord _ bx x w ν c s j r i = freeWord _ bx x w ν c' s j r i := by
+  have e : (layE x j).fa + 2 = 130 + 2 * ((stAt x j).m - 6) := by
+    show 128 + 2 * ((stAt x j).m - 6) + 2 = _
+    omega
+  exact freeWord_le L₀ src real hSv hP bx hjj (place_hi (layE x j) (by rw [e]; exact hi)) hcc
+
+/-- `freeWord_lig` at a pad past the PIOP's values (`place_lig`). -/
+theorem freeWord_ligAt {x : Msg} {w : Flock.Wit} (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w)
+    (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) {ν : CoinLayer.Nonce}
+    {c c' : Fin (refK x) → FlockDeploy.Coin} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
+    {j : Fin (jOf x)} {r : Fin 2} {i : ℕ}
+    (hi : 195 + 2 * ((stAt x j).m - 6) + 2 * ((stAt x j).c.kLog - 6) ≤ i) :
+    freeWord _ bx x w ν c s j r i = freeWord _ bx x w ν c' s j r i := by
+  refine freeWord_lig L₀ src real hP bx (place_lig (layE x j) ?_)
+  have hs := absorbed_size (layE x j)
+  have hfa : (layE x j).fa = 128 + 2 * ((stAt x j).m - 6) := rfl
+  have hlc : (layE x j).nLc = (stAt x j).c.kLog - 6 := rfl
+  rw [hfa, hlc] at hs
+  omega
+
+/-- **The switched sources agree where read**, at coins agreeing below `n`, where table `j`'s rows hold at its base at
+both: each field the honest sources' (`repOk`) or the worker's values along coins that agree up to the PIOP round that
+frees each (`freeWord_at`, `freeWord_ligAt`); `τ`'s commitment the switched views' `τ` (`swView_tau_congr`). -/
+theorem swRepAgree {x : Msg} {w : Flock.Wit} (hSv : Serves x)
+    (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w) (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real))
+    {ν : CoinLayer.Nonce} {sn : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
+    (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+    (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray)
+    {c c' : Fin (refK x) → FlockDeploy.Coin} {n : ℕ} (hcc : ∀ k : Fin (refK x), k.val < n → c k = c' k)
+    {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
+    (j : Fin (jOf x)) (r : Fin 2) {e : Array _root_.Flock.Claim} (he : e.size = (stAt x j).regions.size * spec.points)
+    (hr : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wt j, vsOf _ bx x w ν c sn j) (ω j).1 (ω j).2.1)
+    (hr' : ((tabC PE x j).T (czExe PE x c' j)).tab.onVals.RowsAt (wt j, vsOf _ bx x w ν c' sn j) (ω j).1 (ω j).2.1) :
+    FlockComplete.CutEq.RepAgree n (FlockComplete.repStartZk spec (stsOf x) (2 * j.val + r.val))
+      (_root_.Flock.Setup.ofCircuit (stAt x j))
+      (zkTab x j).sch e
+      (repSrcCut PE x (czExe PE x c) (swCutAt (tabC PE x) (czExe PE x c) wt (vsOf _ bx x w ν c sn) ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c) wt (vsOf _ bx x w ν c sn) ω l + (p l).1, (p l).2)) j r)
+      (repSrcCut PE x (czExe PE x c') (swCutAt (tabC PE x) (czExe PE x c') wt (vsOf _ bx x w ν c' sn) ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c') wt (vsOf _ bx x w ν c' sn) ω l + (p l).1, (p l).2)) j r) := by
+  have hA := repOk x (live_of_lt j) wt ω p c c' n hcc s spec hsx j r e he
+  have hm14 : 14 ≤ (stAt x j).m := (schOk_of (zkTab x j)).m
+  have hk6 : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
+  have hbase := repBase_eq hsx (2 * j.val + r.val)
+  have em := ofCircuit_m (stAt x j)
+  have ef := ofCircuit_fold (stAt x j)
+  have ek := ofCircuit_kLog (stAt x j)
+  have hM : ∀ {k : ℕ}, k ≠ (layE x j).fc →
+      (repSrcCut PE x (czExe PE x c) (cutC x wt ω p c) j r).masked k =
+        (repSrcCut PE x (czExe PE x c') (cutC x wt ω p c') j r).masked k →
+      freeWord _ bx x w ν c sn j r k = freeWord _ bx x w ν c' sn j r k →
+      (repSrcCut PE x (czExe PE x c) (swCutAt (tabC PE x) (czExe PE x c) wt (vsOf _ bx x w ν c sn) ω fun l =>
+          ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c) wt (vsOf _ bx x w ν c sn) ω l + (p l).1, (p l).2)) j
+          r).masked k =
+        (repSrcCut PE x (czExe PE x c') (swCutAt (tabC PE x) (czExe PE x c') wt (vsOf _ bx x w ν c' sn) ω fun l =>
+          ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c') wt (vsOf _ bx x w ν c' sn) ω l + (p l).1, (p l).2)) j
+          r).masked k :=
+    fun hfc hH hF => swMasked_congr _ bx hSv wt ω p _ _ j r hfc hH hF
+  have bsv : ∀ c₀ : Fin (refK x) → FlockDeploy.Coin,
+      (repSrcCut PE x (czExe PE x c₀) (swCutAt (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω l + (p l).1, (p l).2)) j
+          r).sv =
+        (repSrcCut PE x (czExe PE x c₀) (cutC x wt ω p c₀) j r).sv := fun _ => swRep_sv _ _ _ _ _ _ _ _
+  have brs : ∀ c₀ : Fin (refK x) → FlockDeploy.Coin,
+      (repSrcCut PE x (czExe PE x c₀) (swCutAt (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω l + (p l).1, (p l).2)) j
+          r).y1 = (repSrcCut PE x (czExe PE x c₀) (cutC x wt ω p c₀) j r).y1 ∧
+      (repSrcCut PE x (czExe PE x c₀) (swCutAt (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω l + (p l).1, (p l).2)) j
+          r).ybar = (repSrcCut PE x (czExe PE x c₀) (cutC x wt ω p c₀) j r).ybar ∧
+      (repSrcCut PE x (czExe PE x c₀) (swCutAt (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω l + (p l).1, (p l).2)) j
+          r).hiSalt = (repSrcCut PE x (czExe PE x c₀) (cutC x wt ω p c₀) j r).hiSalt :=
+    fun _ => swRep_restart _ _ _ _ _ _ _ _
+  have bin : ∀ c₀ : Fin (refK x) → FlockDeploy.Coin,
+      (repSrcCut PE x (czExe PE x c₀) (swCutAt (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω l + (p l).1, (p l).2)) j
+          r).rhoIn = (repSrcCut PE x (czExe PE x c₀) (cutC x wt ω p c₀) j r).rhoIn ∧
+      (repSrcCut PE x (czExe PE x c₀) (swCutAt (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω l + (p l).1, (p l).2)) j
+          r).sigmaIn = (repSrcCut PE x (czExe PE x c₀) (cutC x wt ω p c₀) j r).sigmaIn :=
+    fun _ => swRep_inner _ _ _ _ _ _ _ _
+  have byy : ∀ c₀ : Fin (refK x) → FlockDeploy.Coin,
+      ((tabC PE x j).T (czExe PE x c₀ j)).tab.onVals.RowsAt (wt j, vsOf _ bx x w ν c₀ sn j) (ω j).1 (ω j).2.1 →
+      (repSrcCut PE x (czExe PE x c₀) (swCutAt (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω l + (p l).1, (p l).2)) j
+          r).y = (repSrcCut PE x (czExe PE x c₀) (cutC x wt ω p c₀) j r).y :=
+    fun _ h => swRep_y _ _ _ _ _ _ _ _ h
+  refine ⟨fun hn i hi => ?_, fun i hi hn => ?_, fun hn => ?_, fun i hi hn => ?_, fun hn i hi => ?_,
+    fun k hk hn => ?_, fun hn => ?_, fun i hi hn t ht => ?_, fun hn a ha t ht => ?_, fun hn => ?_, fun hn => ?_,
+    fun hn => ?_, fun hn => ?_, fun _ => ?_⟩
+  · obtain ⟨h1, h2⟩ := hA.ab hn i hi
+    exact ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx 2 (by place_tac) (by place_tac)
+        fun k hk => hcc k (by omega)),
+      hM (by place_tac) h2 (freeWord_at L₀ src real hSv hP bx 2 (by place_tac) (by place_tac)
+        fun k hk => hcc k (by omega))⟩
+  · obtain ⟨h1, h2⟩ := hA.ml i hi hn
+    rw [em] at hi
+    exact ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx (3 + i) (by place_tac) (by place_tac)
+        fun k hk => hcc k (by omega)),
+      hM (by place_tac) h2 (freeWord_at L₀ src real hSv hP bx (3 + i) (by place_tac) (by place_tac)
+        fun k hk => hcc k (by omega))⟩
+  · obtain ⟨h1, h2, -⟩ := hA.f hn
+    rw [em] at hn
+    refine ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx (3 + ((stAt x j).m - 6)) (by place_tac)
+        (by place_tac) fun k hk => hcc k (by omega)),
+      hM (by place_tac) h2 (freeWord_at L₀ src real hSv hP bx (3 + ((stAt x j).m - 6)) (by place_tac)
+        (by place_tac) fun k hk => hcc k (by omega)), ?_⟩
+    exact swMasked_fc_congr _ bx hSv wt ω p _ _ j r (zcE_z_congr j r hcc (by omega))
+      (fun k hk => (hA.ab (by omega) k hk).2)
+      fun k hk => freeWord_at L₀ src real hSv hP bx 2 (by place_tac) (by place_tac) fun k hk => hcc k (by omega)
+  · obtain ⟨h1, h2⟩ := hA.lc i hi hn
+    rw [em, ef] at hn
+    rw [ef] at hi
+    exact ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx (5 + ((stAt x j).m - 6) + i) (by place_tac)
+        (by place_tac) fun k hk => hcc k (by omega)),
+      hM (by place_tac) h2 (freeWord_at L₀ src real hSv hP bx (5 + ((stAt x j).m - 6) + i) (by place_tac)
+        (by place_tac) fun k hk => hcc k (by omega))⟩
+  · have h1 := hA.zp hn i hi
+    rw [em, ef] at hn
+    exact hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx (5 + ((stAt x j).m - 6) +
+      ((stAt x j).c.kLog - 6)) (by place_tac) (by place_tac) fun k hk => hcc k (by omega))
+  · rw [bsv c, bsv c']
+    exact hA.sv k hk hn
+  · exact hM (by place_tac) (hA.ood hn) (freeWord_ligAt L₀ src real hP bx (by place_tac))
+  · exact hM (by place_tac) (hA.msg i hi hn t ht) (freeWord_ligAt L₀ src real hP bx (by place_tac))
+  · exact hM (by place_tac) (hA.E hn a ha t ht) (freeWord_ligAt L₀ src real hP bx (by place_tac))
+  · obtain ⟨h1, h2, h3⟩ := hA.y1 hn
+    obtain ⟨b1, b2, b3⟩ := brs c
+    obtain ⟨b1', b2', b3'⟩ := brs c'
+    exact ⟨b1.trans (h1.trans b1'.symm), b2.trans (h2.trans b2'.symm), b3.trans (h3.trans b3'.symm)⟩
+  · obtain ⟨h1, h2⟩ := hA.rs hn
+    obtain ⟨b1, b2⟩ := bin c
+    obtain ⟨b1', b2'⟩ := bin c'
+    exact ⟨b1.trans (h1.trans b1'.symm), b2.trans (h2.trans b2'.symm)⟩
+  · obtain ⟨hIA, hpt⟩ := inAgree_tc hsx j r hcc he hn
+    simp only [FlockComplete.CutEq.innerAt, FlockComplete.CutEq.ligAt, em, ef] at hn
+    have hT : ∀ i : Fin (tabC PE x j).z.nE,
+        ((tabC PE x j).T (czExe PE x c j)).tab.vals r (wt j) (ω j).1 (ω j).2.1 i =
+          ((tabC PE x j).T (czExe PE x c' j)).tab.vals r (wt j) (ω j).1 (ω j).2.1 i := fun i => by
+      show Composed.honestAt (zkTab x j).table (stAt x j) (czExe PE x c j) r
+          (Composed.zWith (stAt x j) (wt j) (ω j).1) ((ω j).2.1.2.1 r) i.val =
+        Composed.honestAt (zkTab x j).table (stAt x j) (czExe PE x c' j) r
+          (Composed.zWith (stAt x j) (wt j) (ω j).1) ((ω j).2.1.2.1 r) i.val
+      rw [Composed.Cx.honestAt_all _ _ _ _ r _ _ hIA.toB0Agree hIA.zc hIA.lcAlpha hIA.lcBeta hIA.lane]
+    have hv : ∀ i : Fin (tabC PE x j).z.nE, vsOf _ bx x w ν c sn j r (wt j) (ω j).1 (ω j).2.1 i =
+        vsOf _ bx x w ν c' sn j r (wt j) (ω j).1 (ω j).2.1 i := fun i => by
+      rw [vsOf_of_serves _ bx hSv]
+      exact vsServed_all _ bx (ω j)
+        (fun i => freeWord_all L₀ src real hSv hP bx i fun k hk => hcc k (by unfold piopNR at hk; omega))
+        (zcE_z_congr j r hcc (by omega)) hT i
+    exact swRep_tauCom_congr _ _ wt _ _ ω p j r hr hr' (swView_tau_congr _ _ wt _ _ ω j r hIA hpt hv)
+  · rw [byy c hr, byy c' hr']
+    exact hA.y hn
+  · exact ⟨(repSrcCut_tau x _ j r _).1.trans (repSrcCut_tau x _ j r _).1.symm,
+      (repSrcCut_tau x _ j r _).2.trans (repSrcCut_tau x _ j r _).2.symm⟩
+
+/-- **Where every table's rows hold at its base at both coin vectors, the switched round encodings agree** at coins
+agreeing below the round (`encExe_congr` at the switched cuts: `leafAt_sw`, `padLeaf_sw`, `swRepAgree`). -/
+theorem swEncExe_congr {x : Msg} {w : Flock.Wit} (hSv : Serves x)
+    (hP : (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w) (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real))
+    {ν : CoinLayer.Nonce} {sn : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
+    (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+    (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray)
+    {c c' : Fin (refK x) → FlockDeploy.Coin} {n : ℕ} (hcc : ∀ k : Fin (refK x), k.val < n → c k = c' k)
+    (hr : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wt j, vsOf _ bx x w ν c sn j) (ω j).1 (ω j).2.1)
+    (hr' : ∀ j,
+      ((tabC PE x j).T (czExe PE x c' j)).tab.onVals.RowsAt (wt j, vsOf _ bx x w ν c' sn j) (ω j).1 (ω j).2.1) :
+    encExe PE x c n (swCutAt (tabC PE x) (czExe PE x c) wt (vsOf _ bx x w ν c sn) ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c) wt (vsOf _ bx x w ν c sn) ω l + (p l).1, (p l).2)) =
+      encExe PE x c' n (swCutAt (tabC PE x) (czExe PE x c') wt (vsOf _ bx x w ν c' sn) ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c') wt (vsOf _ bx x w ν c' sn) ω l + (p l).1, (p l).2)) :=
+  encExe_congr (fun c₀ => swCutAt (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω fun l =>
+      ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c₀) wt (vsOf _ bx x w ν c₀ sn) ω l + (p l).1, (p l).2)) hcc
+    (fun j => (leafAt_sw _ wt _ ω p j).trans ((leaf0_agree x wt ω p c c' j).trans (leafAt_sw _ wt _ ω p j).symm))
+    (fun j r => (padLeaf_sw _ wt _ ω p j r (hr j)).trans
+      ((padLeaf_agree x wt ω p c c' j r).trans (padLeaf_sw _ wt _ ω p j r (hr' j)).symm))
+    fun _ _ hsx j r _ he => swRepAgree L₀ src real hSv hP bx wt ω p hcc hsx j r he (hr j) (hr' j)
+
+/-- **The switched session's round encoding at `vsOf` reads the coins before the round**, at coins where, if the loop
+serves the statement, every table's rows hold at its base: `swEncExe_congr` stopped where a refusal is seen
+(`refused_congr`); at a statement it doesn't serve, `vsOf` is the honest values and the encoding the honest one's
+(`causalExe`, `causal_encStop`). -/
+theorem swEnc_congr (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) {x : Msg} {w : Flock.Wit}
+    (hP : Serves x → (LeanRelease.ofLoopLink L₀ src real).ProgChecks x w) {ν : CoinLayer.Nonce}
+    (sn : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z)
+    (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+    (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray)
+    {c c' : Fin (refK x) → FlockDeploy.Coin} {n : ℕ} (hcc : ∀ k : Fin (refK x), k.val < n → c k = c' k)
+    (hr : Serves x → ∀ j,
+      ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wt j, vsOf _ bx x w ν c sn j) (ω j).1 (ω j).2.1)
+    (hr' : Serves x → ∀ j,
+      ((tabC PE x j).T (czExe PE x c' j)).tab.onVals.RowsAt (wt j, vsOf _ bx x w ν c' sn j) (ω j).1 (ω j).2.1) :
+    encStop (encExe PE) x c n (swCutAt (tabC PE x) (czExe PE x c) wt (vsOf _ bx x w ν c sn) ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c) wt (vsOf _ bx x w ν c sn) ω l + (p l).1, (p l).2)) =
+      encStop (encExe PE) x c' n (swCutAt (tabC PE x) (czExe PE x c') wt (vsOf _ bx x w ν c' sn) ω fun l =>
+        ZkView.leafH (swDigOf (tabC PE x) (czExe PE x c') wt (vsOf _ bx x w ν c' sn) ω l + (p l).1, (p l).2)) := by
+  by_cases hSv : Serves x
+  · unfold encStop
+    by_cases hf : Refused x c n
+    · rw [if_pos hf, if_pos ((refused_congr hcc).1 hf)]
+    · rw [if_neg hf, if_neg (mt (refused_congr hcc).2 hf)]
+      exact swEncExe_congr L₀ src real hSv (hP hSv) bx wt ω p hcc (hr hSv) (hr' hSv)
+  · have hv : ∀ c₀ : Fin (refK x) → FlockDeploy.Coin,
+        vsOf _ bx x w ν c₀ sn = fun j => ((tabC PE x j).T (czExe PE x c₀ j)).tab.vals := fun c₀ => by
+      rw [vsOf_of_not_serves _ bx hSv]
+      rfl
+    rw [hv c, hv c', swDigOf_vals, swDigOf_vals, swCutAt_vals, swCutAt_vals]
+    exact causal_encStop causalExe x wt ω p c c' n hcc
+
+end SwRep
+
+/-- **`SwCausal`'s round at `vsOf` where the tables' rows hold**: at `SessionLoopZKDeployed`'s release with the loop's
+own inner rounds (`withInner`) and its tables `realOf src`, the switched round encoding at `vsOf bx` agrees at coins
+agreeing before the round, at every witness, nonce, base, seen values and leaf pairs where, at a statement the loop
+serves, every table's rows hold at its base at both coin vectors (`swEnc_congr`; its `ProgChecks` as `takesVals_vsOf`
+has it). -/
+theorem swCausal_rows
+    (L₁ : LeanRelease Flock.Wit
+      ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
+    (src : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      ℕ → V (Tab × Array ByteArray))
+    (fin : Msg → Flock.Wit →
+      (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
+      List (Msg × Msg) → Array ByteArray)
+    (hreal : real = realOf src)
+    (bx : AlgWorker (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real))
+    (x : Msg) (w : Flock.Wit) (ν : CoinLayer.Nonce) (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+    (s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z)
+    (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray) (c c' : Fin (refK x) → FlockDeploy.Coin)
+    (i : ℕ) (hcc : ∀ k : Fin (refK x), k.val < i → c k = c' k)
+    (hr : Serves x → ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt
+      ((CoinLayer.session loopNr Masked.dataE).wt x w j, vsOf _ bx x w ν c s j) (ω j).1 (ω j).2.1)
+    (hr' : Serves x → ∀ j, ((tabC PE x j).T (czExe PE x c' j)).tab.onVals.RowsAt
+      ((CoinLayer.session loopNr Masked.dataE).wt x w j, vsOf _ bx x w ν c' s j) (ω j).1 (ω j).2.1) :
+    (CoinLayer.session loopNr Masked.dataE).enc x c i
+        (swCutAt ((CoinLayer.session loopNr Masked.dataE).C x) ((CoinLayer.session loopNr Masked.dataE).cz x c)
+          ((CoinLayer.session loopNr Masked.dataE).wt x w) (vsOf _ bx x w ν c s) ω fun l =>
+          ZkView.leafH (swDigOf ((CoinLayer.session loopNr Masked.dataE).C x)
+            ((CoinLayer.session loopNr Masked.dataE).cz x c) ((CoinLayer.session loopNr Masked.dataE).wt x w)
+            (vsOf _ bx x w ν c s) ω l + (p l).1, (p l).2)) =
+      (CoinLayer.session loopNr Masked.dataE).enc x c' i
+        (swCutAt ((CoinLayer.session loopNr Masked.dataE).C x) ((CoinLayer.session loopNr Masked.dataE).cz x c')
+          ((CoinLayer.session loopNr Masked.dataE).wt x w) (vsOf _ bx x w ν c' s) ω fun l =>
+          ZkView.leafH (swDigOf ((CoinLayer.session loopNr Masked.dataE).C x)
+            ((CoinLayer.session loopNr Masked.dataE).cz x c') ((CoinLayer.session loopNr Masked.dataE).wt x w)
+            (vsOf _ bx x w ν c' s) ω l + (p l).1, (p l).2)) :=
+  swEnc_congr _ src real bx (fun hSv => LeanRelease.ofLoop_progChecks_sizes Masked.dataE
+      (LeanRelease.withFiles (LeanRelease.withLink (LeanRelease.withInner Masked.dataE L₁ real fin) src) src) real x w
+      (sizesOk_of_serves hSv) (fun ρ _ _ _ hs => by rw [hreal]; exact realTabs_of src x w ρ hs)
+      (_root_.Flock.SecurityProofs.LoopInnerRound0Own Masked.dataE L₁ real fin x w))
+    s _ ω p hcc hr hr'
+
 end Loop
 
 end Claims.ZKServer
