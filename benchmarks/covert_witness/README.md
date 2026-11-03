@@ -63,11 +63,11 @@ scores by the formalism. `pinned.json` names v3's commit, and v2.3's two as its 
   checkpoints (the coordinator's 19:50Z rule), and Security's S = W*/H. **Plots** (`python -m te_core.plots --out
   DIR`): P1-P4 of the experiments draft and the A2 curve (the least compute to each target against Δ, per start; Δ's
   bins, never caps), as five panels, each `<name>.json` and a PNG made from it, off the console; `python -m
-  te_core.console DIR` cuts each to the panels route's limits. The console's two training panels are
-  `training/frontier-branches` (loss against total training compute: the frontier and each start's honest and throttled
-  branches), `python -m te_core.panels frontier-branches --out DIR --publish`, and `training/algorithm-policy` (per run
-  and end loss, its algorithm's inefficiency p = C/H against its policy's slowdown ρ), `python -m
-  te_core.algorithm_policy --out DIR --publish`.
+  te_core.console DIR` cuts each to the panels route's limits. The console's training panels are
+  `training/algorithm-policy` (per run, start and gain target, a gain being effective compute over the start's own, its
+  algorithm's inefficiency p = C/H against its policy's slowdown ρ, reached or not) and `training/frontier-fit` (per
+  data, the scaling law fitted to its unconstrained frontier, which turns a loss into effective compute), both `python
+  -m te_core.algorithm_policy --out DIR --publish`; `training/frontier-branches` is retired.
   **Re-scoring v2.3's records** (`python -m te_core.rescore --out DIR`): the same score and panels over the pin's
   valid records, on the quantities measured on each record's traced step (te_core 4.0's default; `--charge-context`
   charges earlier tokens' affected keys and values), or `analysis/rescore_v1.py`'s per-record quantities with
