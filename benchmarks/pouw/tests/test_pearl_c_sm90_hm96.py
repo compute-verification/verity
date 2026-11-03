@@ -96,17 +96,25 @@ def test_the_gates_evaluated_give_the_references_leaves_and_open_them_at_its_roo
 
 
 def test_the_report_gives_each_points_share_of_the_pearl_call_and_of_the_forward():
+    """A point over its (n, k, M)'s pearlc arms; a forward's calls summed shape by shape, and a step of the same shapes in
+    any order, over each of its arms; a forward with a shape no point timed is left out."""
     hm = {"rows": [{"name": "a", "n": 3072, "k": 2048, "m": 8, "us": {"split-graph": 50.0, "fused-graph": 80.0}},
-                   {"name": "b", "n": 2048, "k": 8192, "m": 8, "us": {"split-graph": 150.0}}]}
+                   {"name": "b", "n": 2048, "k": 8192, "m": 8, "us": {"split-graph": 150.0}}],
+          "steps": [{"m": 8, "shapes": [[2048, 8192], [3072, 2048]] * 16, "us": {"split-serial": 2400.0}},
+                    {"m": 8, "shapes": [[3072, 2048]], "us": {"split-serial": 1.0}}]}
     timing = {"rows": [{"n": 3072, "k": 2048, "m": 8, "ms": {"pearlc": 0.1, "pearlc-eager": 0.2, "deepgemm": 0.01}}]}
-    whole = {"rows": [{"m": 8, "calls": 32, "ms": {"pearlc-served": 4.0}}, {"m": 16, "calls": 32, "ms": {"pearlc-served": 5.0}}]}
+    whole = {"rows": [{"m": 8, "calls": 32, "shapes": [[3072, 2048], [2048, 8192]] * 16, "ms": {"pearlc-served": 4.0}},
+                      {"m": 8, "calls": 1, "shapes": [[128, 2048]], "ms": {"pearlc-served": 1.0}},
+                      {"m": 16, "calls": 32, "shapes": [[3072, 2048], [2048, 8192]] * 16, "ms": {"pearlc-served": 5.0}}]}
     r = R.report(hm, timing, whole)
     share = r["points"][0]["share"]
     assert share["split-graph"] == pytest.approx({"pearlc": 0.5, "pearlc-eager": 0.25})
     assert share["fused-graph"] == pytest.approx({"pearlc": 0.8, "pearlc-eager": 0.4}) and len(share) == 2
     assert r["points"][1]["pearlc_ms"] == {} and r["points"][1]["share"] == {"split-graph": {}}
-    assert len(r["forwards"]) == 1 and r["forwards"][0]["added_ms"] == pytest.approx({"split-graph": 16 * 0.2})
-    assert r["forwards"][0]["share"] == {"split-graph": {"pearlc-served": pytest.approx(0.8)}}
+    assert len(r["forwards"]) == 1
+    assert r["forwards"][0]["added_ms"] == pytest.approx({"calls-split-graph": 16 * 0.2, "step-split-serial": 2.4})
+    assert r["forwards"][0]["share"] == {"calls-split-graph": {"pearlc-served": pytest.approx(0.8)},
+                                         "step-split-serial": {"pearlc-served": pytest.approx(0.6)}}
 
 
 def test_the_session_is_a_lease_of_its_own_on_the_served_committers_kernels():
@@ -115,6 +123,7 @@ def test_the_session_is_a_lease_of_its_own_on_the_served_committers_kernels():
     sh = (HERE / "hm96.sh").read_text()
     lease = sh[sh.index("gpu-lease 1"):]
     assert '"$D/hm96_rows.py" time --lib "$LIB"' in lease and "LIB=$IN/hm96_rows.so" in sh
+    assert '--step-m $STEP_M --layers "$LAYERS"' in lease
     assert "hm96" not in (HERE / "h200.sh").read_text()
     assert set(native_jit.CUDA_CFLAGS) <= set(R.NVCC) and R.SOURCE.name in native_jit.SOURCES
     src = R.SOURCE.read_text()
