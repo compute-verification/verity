@@ -681,7 +681,7 @@ if [ -n "${CERTIFIER_CMD:-}" ]; then  # the certifier's chain is the longest pie
   CERT_TASKSET=(); NCPU=$(nproc)
   command -v taskset > /dev/null && [ "$NCPU" -gt 2 ] && CERT_TASKSET=(taskset -c "${CERT_CPUS:-2-$((NCPU - 1))}")
   ${CERT_TASKSET[@]+"${CERT_TASKSET[@]}"} "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" \
-    --only certifier > "$OUT/pieces-certifier.txt" 2>&1 &
+    --product "$PRODUCT" --only certifier > "$OUT/pieces-certifier.txt" 2>&1 &
   CERT=$!
 fi
 cd "$TREE/integrations/vllm" || exit 9
@@ -740,12 +740,12 @@ fi
 # 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
 TPY=$TREE/.venv/bin/python
 "$TPY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" ${CERT:+--skip certifier} \
-  2>&1 | publish_lines
+  --product "$PRODUCT" 2>&1 | publish_lines
 [ -z "$CERT" ] || { wait "$CERT"; publish_lines < "$OUT/pieces-certifier.txt"; }
 
 # 5. one record of every verdict
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
-  --pieces "$OUT/pieces" --out "$OUT/record" 2>&1 | publish_lines
+  --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" 2>&1 | publish_lines
 rec=${PIPESTATUS[0]}
 private_pieces
 comp=0
