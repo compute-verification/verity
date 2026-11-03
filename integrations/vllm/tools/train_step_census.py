@@ -28,7 +28,8 @@ from tests.program.train_step_lf import ADAMW, CTX, VOCAB, loss_fn, meta_step
 from verity.ml.circuits.census import census
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
-from verity_vllm.program.frontend.rules.training import holes, training_rules
+from verity_vllm.program.frontend.rules.training import training_rules
+from verity_vllm.program.frontend.rules.training_survey import holes
 from verity_vllm.program.frontend.train_step import AdamW, export_step, step_report
 
 #: te_core.opnames's sets (te_core.flops counts these at one MAC per output element)

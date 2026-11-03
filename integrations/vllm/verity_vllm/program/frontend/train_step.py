@@ -1,5 +1,5 @@
 """One training step as a Program: the forward, the backward and the optimizer of an ordinary `nn.Module`, derived through the same
-front door as a served model (`derive.derive_graph`), with the training rules (`rules/training.py`) added to the default ones.
+front door as a served model (`derive_graph.derive_graph`), with the training rules (`rules/training.py`) added to the default ones.
 
     step_program(model, loss_fn, optimizer, example_batch, mode="reference") -> Program | Unsupported
 
@@ -15,7 +15,7 @@ are the Program's theta (`Program.theta`: the start's weights); the optimizer st
 
 A node no rule lowers is `Unsupported`, as for any derivation. `step_report(..., survey=True)` instead lowers every node it can and
 takes each refused one's output as a field of the Program's `run` input (a hole), recording the refusal: the list of what is
-missing, and a Program whose census counts everything else (`rules.training.holes`).
+missing, and a Program whose census counts everything else (`rules.training_survey.holes`).
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ import torch
 from torch.func import functional_call, grad_and_value
 
 from verity.ml.circuits.program import Program
-from verity_vllm.program.frontend.derive import derive_graph
+from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.report import DeriveReport
 from verity_vllm.program.frontend.rules.base import RuleSet
@@ -162,9 +162,10 @@ def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, exa
 def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor, *, mode: str = "reference",
                 survey: bool = False, rules: RuleSet | None = None, name: str = "TrainStep", exported=None) -> DeriveReport:
     """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules()`). `survey`: when the
-    step is `Unsupported`, derive it again with every refused node a hole (`rules.training.with_holes`), so the report lists every
-    refusal at once (`rules.training.holes(report)`) and its Program counts everything else. `exported`: `export_step`'s result."""
-    from verity_vllm.program.frontend.rules.training import training_rules, with_holes
+    step is `Unsupported`, derive it again with every refused node a hole (`rules.training_survey.with_holes`), so the report lists every
+    refusal at once (`rules.training_survey.holes(report)`) and its Program counts everything else. `exported`: `export_step`'s result."""
+    from verity_vllm.program.frontend.rules.training import training_rules
+    from verity_vllm.program.frontend.rules.training_survey import with_holes
 
     gm, metas, layout = exported if exported is not None else export_step(model, loss_fn, optimizer, example_batch)
     ruleset = rules if rules is not None else training_rules()
