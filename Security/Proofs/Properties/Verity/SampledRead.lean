@@ -202,7 +202,10 @@ def lookA (roots : Array (String × Array ByteArray)) (label : String) : List By
 theorem rootOf_eq {a : String} {r : Json} {label root : String} {bytes : ByteArray} (he : event a = .ok r)
     (hl : SampledProofs.getD r "label" = .str label) (hr : SampledProofs.getD r "root" = .str root)
     (hb : (Flock.unhex root).toOption = some bytes) : rootOf a = some (label, bytes) := by
-  simp only [rootOf, he, Except.toOption, Option.bind_eq_bind, Option.bind_some, Option.pure_def, hl, hr, hb]
+  have hu : Flock.unhex root = .ok bytes := by
+    revert hb
+    cases Flock.unhex root <;> intro hb <;> first | (cases hb; rfl) | cases hb
+  simp only [rootOf, he, hu, Except.toOption, Option.bind_eq_bind, Option.bind_some, Option.pure_def, hl, hr]
 
 theorem look_modify {bytes : ByteArray} {g : String × Array ByteArray → String × Array ByteArray}
     (hg : ∀ x, g x = (x.1, x.2.push bytes)) (label ℓ : String) :
@@ -318,7 +321,7 @@ theorem fresh_readLines (label : String) (after : ByteArray) (records : List Jso
       simp only [Option.bind_eq_bind] at h
       obtain ⟨⟨r, ts'⟩, hX, h⟩ := Option.bind_eq_some_iff.1 h
       obtain ⟨j, -, hj⟩ := Option.bind_eq_some_iff.1 hX
-      simp only [Option.bind_eq_bind, Option.pure_def] at h
+      simp only [Option.pure_def] at h
       obtain ⟨rest, hR, h⟩ := Option.bind_eq_some_iff.1 h
       cases h
       rw [freshCoins_cons_tree hj]
@@ -331,7 +334,7 @@ theorem fresh_readLines (label : String) (after : ByteArray) (records : List Jso
         simp only [Option.toList_some, List.cons_append, List.nil_append]
         simp only [Option.bind_eq_bind] at h
         obtain ⟨⟨lab, root⟩, hra, h⟩ := Option.bind_eq_some_iff.1 h
-        simp only [Option.bind_eq_bind, Option.pure_def] at h
+        simp only [Option.pure_def] at h
         by_cases hm : lab = label ∧ root = after
         · rw [if_pos hm] at h
           obtain ⟨rest, hR, h⟩ := Option.bind_eq_some_iff.1 h
@@ -482,7 +485,7 @@ theorem coinsRead_eq {s : Verity.Sent} {p : _root_.SampledProofs.OneStageZk.Para
     (hch : p.base.challenger = some (key, label)) (hξ : _root_.SampledProofs.OneStageZk.coinsOf p c e = .ok ξ)
     (hl : linesOf e = .ok lines) :
     coinsRead s = (recordsOf s e).bind fun rs => readLines label c.digest rs lines.tail [] none ξ := by
-  simp only [coinsRead, hcs, Except.toOption, Option.bind_eq_bind, Option.bind_some, Option.pure_def, hch, hξ, hl]
+  simp only [coinsRead, hcs, Except.toOption, Option.bind_eq_bind, Option.bind_some, hch, hξ, hl]
 
 /-! ## The draw the read shows -/
 
@@ -605,9 +608,7 @@ theorem popHeld_of_checkBlobsAt {p : _root_.SampledProofs.OneStageZk.Params}
     | ok u => rfl
     | error err =>
       exfalso
-      first
-        | (simp only [hp, bind_ok, reduceCtorEq, false_and, and_false, exists_false, exists_const] at hr; done)
-        | simp [hp, bind_ok] at hr
+      simp only [hp, bind_ok, reduceCtorEq, false_and, and_false, exists_false] at hr
 
 /-- **The population `popHeld` passes is one the program holds**: under the verifier's query, the program's proof
 blocks are the record's population units in order (`Slots.popOk`). -/
