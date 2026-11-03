@@ -17,6 +17,7 @@ TAU = 16
 MACS = {[4e14, 1e15, 6e14]!r}
 E = {[9e7, 9e7, 8e4]!r}
 T = [0.5, 0.0, 0.0]
+LATENTS = [3e9, None, None]
 
 def gate_factors(cache):
     cache.write_text("{{}}")
@@ -31,7 +32,7 @@ def profiles(u1, t):
     return [[0.0, 0.0], [1.0, u1]], [[0.0, 0.0], [1.0, u1]]
 
 def build(subs, launch, starts, counted, g):
-    records = {{f"s{{i}}": {{"delta_grad": 1e9, "a": 512 * 16, "t": T[i],
+    records = {{f"s{{i}}": {{"delta_grad": 1e9, "a": 512 * 16, "t": T[i], "delta_t": LATENTS[i],
                             "family": "full" if i < 2 else "adapter"}} for i in range(3)}}
     cps = []
     for i in range(3):
@@ -82,6 +83,7 @@ def test_the_analysis_blocks_score_the_rows_they_cover_and_the_rest_are_left_out
     kept = [json.loads(line) for line in (out / "formalism.jsonl").read_text().splitlines()]
     assert [k["id"] for k in kept] == ["r0", "r1", "r2"] and {k["source"] for k in kept} == {"analysis"}
     assert [k["family"] for k in kept] == ["full", "full", "adapter"]
+    assert {fr["te_core_version"], *(k["te_core_version"] for k in kept)} == {rescore.VERSION}
     f0, f1 = kept[0]["formalism"], kept[1]["formalism"]
     u, u_in = formalism.tail(8 * 9e7, 0.5)
     assert (f0["u"], f0["u_in"], f0["tail_share"]) == ([list(p) for p in u], [list(p) for p in u_in], 0.5)
@@ -144,16 +146,18 @@ def test_stubs_score_every_valid_row(tmp_path, monkeypatch):
 
 def test_the_analysis_reads_the_pinned_versions_records_so_the_pilot_keeps_its_quantities(tmp_path):
     """The scorer's regimes (scorer.py's `regime_of`): `current` for the pin's version, `pin V` for an earlier pinned
-    version's (v2.3's, the pilot's, once v3 is pinned), `paired` and `earlier`; the analysis reads the first two."""
-    regimes = ("current", "pin 2.3", "paired", "earlier")
+    version's (v2.3's, the pilot's, once v3 is pinned), `paired` and `earlier`; the analysis reads the first two, on
+    the starts the scorer's starts.json has (the last record's start, s-t20, isn't one)."""
+    regimes = ("current", "pin 2.3", "paired", "earlier", "current")
     scorer, ledger = tmp_path / "scorer", tmp_path / "ledger"
     scorer.mkdir()
     ledger.mkdir()
     (scorer / "submissions.json").write_text(json.dumps([{"id": f"te:s{i}", "regime": g, "macs": 1}
                                                          for i, g in enumerate(regimes)]))
-    (scorer / "index.jsonl").write_text("".join(json.dumps({"source": "launch.py", "id": f"te:s{i}", "run": f"run{i}"})
+    (scorer / "index.jsonl").write_text("".join(json.dumps({"source": "launch.py", "id": f"te:s{i}", "run": f"run{i}",
+                                                            "start": "s-t20" if i == 4 else "s50"})
                                                 + "\n" for i in range(len(regimes))))
-    (scorer / "starts.json").write_text("{}")
+    (scorer / "starts.json").write_text(json.dumps({"s50": {}}))
     (ledger / "index.jsonl").write_text("".join(json.dumps({"run_id": f"run{i}", "macs": 1, "macs_log": {"ops": {}}})
                                                 + "\n" for i in range(len(regimes))))
     subs, _, _, counted = rescore.load_analysis(rescore.ANALYSIS).load(scorer, ledger)
@@ -198,6 +202,24 @@ def test_charge_context_charges_each_run_its_facts_place(tmp_path, monkeypatch):
     assert formalism.at(m1, c, k)["rho"] == formalism.at(formalism.measure(plain[1], SHAPE), c, k)["rho"]
     with pytest.raises(SystemExit, match="--facts"):
         run(tmp_path, monkeypatch, "--charge-context")
+
+
+@pytest.mark.parametrize("quantities", ["measured", "analysis"])
+def test_a_straight_through_runs_latents_are_its_delta_t(tmp_path, monkeypatch, quantities):
+    """r0's run trains its code through its rounding with 3e9 bits of fp32 latents (the analysis reads them from its
+    record): its block carries them as Δ_t, measured or analysed, labelled, and the update application reads them;
+    r1's run has none, so its Δ_t is Δ (the coordinator's 00:47Z ruling)."""
+    out, _ = run(tmp_path, monkeypatch, "--quantities", quantities)
+    k0, k1 = [json.loads(line) for line in (out / "formalism.jsonl").read_text().splitlines()][:2]
+    assert k0["formalism"]["delta_t_bits"] == 3e9 and k0["formalism"]["labels"]["delta_t_bits"] == rescore.LATENTS
+    assert k1["formalism"].get("delta_t_bits") is None
+    # formalism.jsonl's lines carry no output; d 0 (E stores θ') leaves Fit to the update application alone
+    m0, m1 = (formalism.measure(k | {"output": {"rebuild_macs": 0}}, SHAPE) for k in (k0, k1))
+    assert m0.delta_t == 3e9 != m0.delta_bits and m1.delta_t == m1.delta_bits
+    c, _ = policy.cells(SHAPE)["reference"]
+    k = 3e9 + m0.delta_grad_bits
+    assert formalism.at(m0, c, k)["parts"][0]["fit"]["update"]
+    assert not formalism.at(m0, c, k * (1 - 1e-9))["parts"][0]["fit"]["update"]
 
 
 @pytest.mark.parametrize("tail", ["literal", "frozen"])

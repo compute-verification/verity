@@ -69,6 +69,7 @@ def test_the_frontier_and_its_branches(tmp_path, monkeypatch, beaten):
     assert (p["id"], p["kind"], p["columns"]) == (panels.PANEL, "table", panels.COLUMNS) and p["source"]
     assert all(len(r) == len(p["columns"]) for r in p["rows"])
     ds = plots.frame(p)
+    assert {d["te_core_version"] for d in ds} == {panels.VERSION}
     assert {d["curve"] for d in ds} == {"frontier", "honest", "throttled", "candidate"}
     assert {d["data"] for d in ds} == {"v2.3-pilot"}
     fr = [d for d in ds if d["curve"] == "frontier"]

@@ -99,6 +99,32 @@ def test_the_grown_adapter_is_bounded_under_reading_a_only_with_its_live_update_
     assert live["rho"] == pytest.approx(live["terms"]["reduction"]) and live["rho"] > 9
 
 
+def test_the_published_rho_takes_only_the_kinds_valid_on_their_own(built):
+    """The coordinator's 08:26Z ruling: the published ρ's max takes the token kind under reading A and decoding, the
+    token kind unmeasured until the packer proposes product tiles and an infinite packer term unmeasured, never ∞;
+    reduction and update are sensitivities beside it. At the console default the dense and LoRA steps (∞ under 4.4's
+    bound) and the grown adapter (∞ with its traced cut, 9.78 by reduction with its live code) publish ρ 1, nothing
+    binding, with reduction's term beside it; a row without entries is reading B's, te_core 4.3's ρ, a target, and
+    until `READING_A` (the coordinator's 09:02Z: until 4.5's packer) so is every row."""
+    default = rho_vectors.CELLS[0]
+    for case in rho_vectors.CASES:
+        v = by(built, case, "A", *default)
+        m = formalism.from_json(built["measured"][case])
+        one = formalism.published(m, v["c"], v["k"], "A")
+        assert formalism.published(m, v["c"], v["k"])["reading"] == ("A" if formalism.READING_A else "B")
+        assert (one["reading"], one["rho"], one["binding_kind"]) == ("A", 1.0, "none") and not v["fit"]
+        assert one["terms"]["token"] is None and one["terms"]["fresh_products"] is None
+        assert one["terms"]["decoding"] == (v["terms"]["decoding"] and pytest.approx(v["terms"]["decoding"]))
+        assert one["sensitivities"] == pytest.approx({kind: v["terms"][kind] for kind in formalism.SENSITIVITIES})
+        assert one["rests_on"] == formalism.RESTS_ON["none"]
+    live = formalism.published(formalism.from_json(built["measured"]["adapter-live"]), v["c"], v["k"], "A")
+    assert live["sensitivities"]["reduction"] > 9
+    m = formalism.from_json(built["measured"]["dense"] | {"entries": None})
+    b = formalism.published(m, v["c"], v["k"])
+    assert (b["reading"], b["binding_kind"], b["rho"]) == ("B", "target", formalism.at(m, v["c"], v["k"])["rho"])
+    assert b["terms"]["token"] == pytest.approx(by(built, "dense", "B", *default)["terms"]["token"])
+
+
 def test_the_tiny_starts_forward_is_the_counters():
     import model
 
