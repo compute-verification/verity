@@ -32,11 +32,13 @@ only the reader's proof refuses it.
 **Lean** (opt-in as the records, and a Lean toolchain): `served_cases.py --serve-dir` on a serve dir under H1's tie (V3c's
 audit's v1 case of R, H1's log of W then R, and PoUW's period case of one window naming R) writes the three cases, and
 `sampled-proofs-one-stage check` (whose log record reader takes W and whose R1-R7 accept R) and `inference-only check`
-accept theirs, each naming R's digest; `composite.py remote` composes them and the tie holds, so remote's reason is the
-period's alone. The v1 case's verdict of record is an accepting stand-in reporting R's tables' roots as their readers
-opened them (the proof blocks' proofs aren't run here), and its period has no H1 window's proofs, so PoUW's period Lean
-refuses it and remote rejects: remote accepting all three is a served window's. A period naming W instead breaks the tie,
-and remote rejects on the record. With the flipped row, one-stage's Lean accepts R' on the log [W'] and refuses it on [W].
+accept theirs, each naming R's digest, and the period's window names R (`served_cases.period_case`, the record tie remote
+checks); `composite.py remote` composes them. The v1 case's verdict of record is an accepting stand-in reporting R's
+tables' roots as their readers opened them (the proof blocks' proofs aren't run here), and its period has no H1 window's
+proofs, so PoUW's period Lean refuses it and remote rejects with that refusal. Remote checks its tie only once every piece
+accepts (`Core.Composition.holdTies`), so here the tie is `served_cases`' check, not remote's: remote's own tie, and remote
+accepting all three, are a served window's. A period naming W is refused by `served_cases` before any composite. With the
+flipped row, one-stage's Lean accepts R' on the log [W'] and refuses it on [W].
 """
 from __future__ import annotations
 
@@ -461,12 +463,12 @@ def _remote(lean, out: Path, period: Path) -> tuple[int, dict]:
 @pytest.mark.slow
 @RECORDS
 @LEAN
-def test_one_stage_and_the_policy_accept_r_on_the_log_w_and_remote_s_tie_holds(toy, written, lean, tmp_path):
+def test_one_stage_and_the_policy_accept_r_on_the_log_w_and_the_period_names_r(toy, written, lean, tmp_path):
     """`served_cases` writes the three cases from the serve dir. One-stage's Lean accepts R on the log [W] (its log record
     reader takes W, and its R1-R7 accept R chained right after W with each table an output value of W's), and the
     policy's Lean accepts its case, whose log is H1's through W; both name R's digest. The period names R as its window's
-    Commit record, and its Lean refuses it for want of an H1 window's proofs. Composed, the tie holds: remote rejects
-    with the period's refusal alone."""
+    Commit record (`served_cases.period_case`), and its Lean refuses it for want of an H1 window's proofs, so remote
+    rejects with that refusal, before any tie of its own."""
     SC, d = lean.one.SC, REG.digest(written.R)
     assert (lean.rc, [(c["protocol"], c["verdict"]) for _, c in lean.lines]) == (0, [
         (SC.V1, "accept"), (SC.INFERENCE_ONLY, "accept"), (SC.PERIOD, "reject")]), lean.lines
@@ -476,6 +478,7 @@ def test_one_stage_and_the_policy_accept_r_on_the_log_w_and_remote_s_tie_holds(t
     policy = json.loads((lean.private / SC.DIRS[SC.INFERENCE_ONLY] / "case.json").read_text())
     assert policy["params"]["log"] == [toy.h1.W] and policy["commitment"] == canonical_json(written.R).hex()
     period = _answer(lean, SC.PERIOD)
+    assert SC.period_case(lean.private / SC.DIRS[SC.PERIOD], d)[2] == "reject"
     rc, got = _remote(lean, tmp_path, lean.private / SC.DIRS[SC.PERIOD])
     assert (rc, got["verdict"], got["reason"]) == (1, "reject", f"{SC.PERIOD} reject: {period['reason']}"), got
 
@@ -483,16 +486,18 @@ def test_one_stage_and_the_policy_accept_r_on_the_log_w_and_remote_s_tie_holds(t
 @pytest.mark.slow
 @RECORDS
 @LEAN
-def test_a_period_naming_w_breaks_remote_s_tie(toy, written, lean, tmp_path):
-    """A period whose window names H1's W as its Commit record is refused by `served_cases` before any composite; handed to
-    remote anyway, beside the policy's and one-stage's cases on R, it rejects remote on the record."""
+def test_a_period_naming_w_is_refused_before_any_composite(toy, written, lean, tmp_path):
+    """A period whose window names H1's W as its Commit record is refused by `served_cases` (remote's record tie) before any
+    composite. Handed to remote anyway, beside the policy's and one-stage's cases on R, it rejects with the period's own
+    refusal, which stands before any tie."""
     SC = lean.one.SC
     period = tmp_path / "pouw-period"
     _period(lean.one, lean.exes.period, period, [toy.h1.W])
     with pytest.raises(SC.Refused, match="remote's record tie rejects it"):
         SC.period_case(period, REG.digest(written.R))
+    refused = json.loads((period / "answer.json").read_text())
     rc, got = _remote(lean, tmp_path / "remote", period)
-    assert (rc, got["verdict"]) == (1, "reject") and got["reason"].startswith(f"record: {SC.INFERENCE_ONLY} committed "), got
+    assert (rc, got["verdict"], got["reason"]) == (1, "reject", f"{SC.PERIOD} reject: {refused['reason']}"), got
 
 
 @pytest.mark.slow
