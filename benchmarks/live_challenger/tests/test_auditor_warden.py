@@ -475,9 +475,10 @@ def test_a_scan_rehearsals_prompt_may_be_the_scans_ki_ids_and_no_more():
 
 def test_a_scan_rehearsal_at_another_class_runs_at_its_egress_cells_with_its_ki_and_tokens(host, tmp_path):
     """`--scan-class w63k4` is recorded (``scan_class``) only when given, takes a prompt of its KI = 32 ids and 4 tokens
-    out (its 5 egress cells less the trailer), and runs the network certifier at the scan's schedule with its 5 egress cells, every
-    other flag the class of record's (`test_warden_serve` holds each class's schedule to `scan_zk.py schedule --class`).
-    A request without it is the class of record's: its bounds are `WARDEN_PROMPT_IDS` and `WARDEN_PROMPT_TOKENS`."""
+    out (its 5 egress cells less the trailer), and runs the network certifier at the scan's schedule with its 5 egress
+    cells, every other flag the class of record's (`test_warden_serve` holds each class's schedule to `scan_zk.py
+    schedule --class`). A request without it is the class of record's: its bounds are `WARDEN_PROMPT_IDS` and
+    `WARDEN_PROMPT_TOKENS`."""
     rc, out = gate(host, SCAN + ["--scan-class", "w63k4", "--window-per-group", "--tokens", "4", "--minutes", "4"],
                    stdin=json.dumps([[0] * 32] * 4).encode(), started=[])
     assert rc == 0, out
