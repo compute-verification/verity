@@ -66,6 +66,7 @@ FILES = {
     "tools/verity/lean/tests/fixtures/ctl/Ctl.lean": "def c := 0\n",
     "tools/verity/lean/check.py": "",
     "tools/verity/check/common.py": "",
+    "tools/verity/graph/verity_graph/contract.py": "",
     **{f: "" for f in (*TOOLS, *ENV_TOOLS)},
     f"{graph.RUNNERS}/lean_module.py": "",
     f"{graph.RUNNERS}/lean_lock.py": "",
@@ -173,7 +174,8 @@ def test_a_lock_reads_every_package_its_records_read(tmp_path):
         assert t["reads"] == built(*(i.removeprefix("lean-module:") for i in ts if i.startswith("lean-module:"))), \
             "Sec names Sec/Proofs as proved_in, and Sec/Proofs requires Sec by path: each reads both builds"
         assert {"Sec/Proofs/B.lean", "Sec/Definitions/A.lean", "Sec/lean-audit.json", "Sec/Proofs/lean-audit.json",
-                "tools/verity/lean/check.py", "tools/verity/check/common.py"} <= set(t["inputs"])
+                "tools/verity/lean/check.py", "tools/verity/check/common.py",
+                "tools/verity/graph/verity_graph/contract.py"} <= set(t["inputs"])
         assert t["outputs"] == [{"name": "records", "path": f"out/{pkg}/lean-audit.json"}]
 
 
