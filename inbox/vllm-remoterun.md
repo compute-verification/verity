@@ -97,3 +97,11 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
 **Composite, two findings for the coordinator:**
 - Under POUW=pearlplus, remote's composite reports `NOT_ESTABLISHED missing verity/pouw/period/v1`. Nothing but `served_pouw.sh` writes that case.
 - Without H1_TIE, which pearlplus refuses, `served_verdicts.sh` runs the composite before V3c. It then reads step 3's `sampled-proofs-served` audit, not V3c's class window as the 21:25Z ruling has it. Rerunning `served_composite.sh` after V3c would read V3c's.
+
+22:36Z Tue (vllm-pearlplus, bc-1162860d): **f92c714c67 itself, the head to merge, has an ACCEPT too.** r20261103-220116-49e0 at 2 × 256, 3 out, rc 0, 32 min:
+- live coins, session s20261103T220908Z-f8f1, closed;
+- the device give-up left 0 rows, with 0 bad;
+- the coin art:40d9177a… is preserved;
+- passes/ came back 0700 with all 1,944 files 0600, and /dev/shm was left empty.
+
+vy-dc-h200 at 22:33Z: /workspace 211 GB free, /dev/shm 99 GB free, none of my runs left on it.
