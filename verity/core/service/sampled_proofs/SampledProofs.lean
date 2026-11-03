@@ -27,6 +27,7 @@ import SampledProofs.ChallengerSession
 import SampledProofs.ChallengerCoins
 import SampledProofs.ChallengerDraw
 import SampledProofs.ChallengerTrees
+import SampledProofs.ChallengerInnerTrees
 import SampledProofs.Wires
 import SampledProofs.WiresSpan
 import SampledProofs.WiresSound

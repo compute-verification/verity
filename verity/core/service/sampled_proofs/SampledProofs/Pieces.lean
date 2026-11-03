@@ -52,6 +52,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `challenger_coin_trees`, `challenger_session_trees`: a `--zk` session's coins (`ChallengerTrees`): the coin trees a
   release log shows the challenger sampled and opened (`coin_trees_of`), and an audit's session records held to them,
   one tree a session (`sessions_tree_reason`).
+* `challenger_inner_trees`: a recursive session's inner coins (`ChallengerInnerTrees`): `rec_live`'s coin server
+  records held to the trees a release log shows, one tree a session, every opening read (`rec_live.tree_held_reason`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and drawn rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the drawn units alone (`Wires.Summary.drawnOk`, each drawn
@@ -73,6 +75,7 @@ import SampledProofs.ChallengerRecord
 import SampledProofs.ChallengerSession
 import SampledProofs.ChallengerCoins
 import SampledProofs.ChallengerTrees
+import SampledProofs.ChallengerInnerTrees
 import SampledProofs.Produced
 import SampledProofs.HiddenDraw
 import SampledProofs.PartitionRef
@@ -586,6 +589,7 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
    ("challenger_draw_coins", Challenger.drawCoinsPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
+   ("challenger_inner_trees", Challenger.innerTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef)]
 
