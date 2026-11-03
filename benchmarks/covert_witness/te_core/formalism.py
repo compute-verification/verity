@@ -790,9 +790,11 @@ def whole_chain(system: dict, k: float) -> dict:
 def traced_products(p: dict | None, block: dict | None) -> dict | None:
     """Products ingest took from a trace's rows (`p`, `products_of_trace` of `block`) as this te_core takes them from
     the same rows over the same traced steps (their kinds' MACs over the rows' own), whatever te_core ingested the
-    record: the rows are the measurement and need no retrace, but te_core 4.8's ingest kept the trace's order unknown,
-    which `fresh_products` never measures, and before 4.10 an upcast operand's product was an expansion. Products a
-    record has of its own (no `kinds_macs`), and a block with no trace rows, stand."""
+    record, so the rows are read by this te_core's rules: an ingest before `SYSTEM_FROM` kept no whole-making system,
+    which `fresh_products` reads as products of no trace (`ONE_CLASS`), te_core 4.8's kept the trace's order unknown,
+    which it never measures, and before 4.10 an upcast operand's product was an expansion. Taken again, rows captured
+    before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`) and rows with `fed` are measured on their system.
+    Products a record has of its own (no `kinds_macs`), and a block with no trace rows, stand."""
     if p is None or block is None or "kinds_macs" not in p:
         return p
     per = sum(r["count"] * r["macs"] for r in block["rows"])
