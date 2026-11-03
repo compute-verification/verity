@@ -101,7 +101,7 @@ def probability? (p : String) : Option (Nat × Nat) :=
 
 /-- `service.count_varies`: the law draws a count that varies from draw to draw, so the sessions of one registration set
 up tables of different shapes: `bernoulli` at `0 < p < 1`, which the sampled audit's soundness statement doesn't cover.
-The stream's run (`Run.run`: `shapes`) and the audit (`OneStage.paramsCovered`) refuse it. -/
+The stream's run (`Run.run`: `shapes`) and the audit (`OneStage.paramsOfJson`) refuse it. -/
 def countVaries (law : Json) : Bool :=
   match getD law "law", getD law "p" with
   | .str "bernoulli", .str p => match probability? p with

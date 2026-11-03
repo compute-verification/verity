@@ -343,29 +343,12 @@ theorem ne_policy_stage : (NciCheck.Protocol.protocol.id == SampledProofs.OneSta
 theorem ne_pouw_stage : (PouwCheck.protocol.id == SampledProofs.OneStage.protocol.id) = false := by
   rw [id_pouw, id_oneStage]; decide
 
-/-- The parameters the audit covers (`OneStage.paramsCovered`) are the parameters it parsed. -/
-theorem paramsOfJson_of_covered {j : Lean.Json} {p : SampledProofs.OneStage.Params}
-    (h : SampledProofs.OneStage.paramsCovered j = .ok p) : SampledProofs.OneStage.paramsOfJson j = .ok p := by
-  unfold SampledProofs.OneStage.paramsCovered at h
-  cases hq : SampledProofs.OneStage.paramsOfJson j with
-  | error e => simp [hq, bind, Except.bind] at h
-  | ok q =>
-    simp only [hq, bind, Except.bind] at h
-    split at h
-    · simp [throw, throwThe, MonadExceptOf.throw] at h
-    · simp [pure, Except.pure] at h
-      rw [h]
-
 /-- What the one-stage audit's accepted case gives: `StageHeld`. -/
 theorem stage_held {k : Case} {n : Named} (hp : k.params = n.params)
     (h : Properties.Composition.DecodedAccepted SampledProofs.OneStage.protocol n.params.toUTF8
       k.commitment k.evidence) : StageHeld k := by
   obtain ⟨p, c, e, hp', hc, -, pub, prof, hchk⟩ := h
-  have hp'' : (canonicalJson n.params.toUTF8 >>= SampledProofs.OneStage.paramsOfJson) = .ok p := by
-    have h1 : (canonicalJson n.params.toUTF8 >>= SampledProofs.OneStage.paramsCovered) = .ok p := hp'
-    cases hj : canonicalJson n.params.toUTF8 with
-    | error r => rw [hj] at h1; simp [bind, Except.bind] at h1
-    | ok j => rw [hj] at h1; exact paramsOfJson_of_covered h1
+  have hp'' : (canonicalJson n.params.toUTF8 >>= SampledProofs.OneStage.paramsOfJson) = .ok p := hp'
   have hc' : SampledProofs.OneStage.commitmentOf k.commitment = .ok c := hc
   have hchk' : SampledProofs.OneStage.checkLive p c e = .accept pub prof := hchk
   exact ⟨p, c, by rw [hp]; exact hp'', hc', stage_registered hchk'⟩

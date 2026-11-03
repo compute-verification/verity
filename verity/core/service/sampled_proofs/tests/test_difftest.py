@@ -668,7 +668,7 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
 
 
 def covered_params(j) -> dict:
-    """`OneStage.paramsCovered`: `decode_params`, and a bernoulli law at 0 < p < 1 refused (`service.count_varies`)."""
+    """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and a bernoulli law at 0 < p < 1 refused (`service.count_varies`)."""
     p = decode_params(j)
     if service.count_varies(p["law"]):
         raise D.Reject("the law is bernoulli at 0 < p < 1, which the sampled audit's soundness statement doesn't cover "
@@ -677,7 +677,7 @@ def covered_params(j) -> dict:
 
 
 def covered_evidence(b: bytes) -> dict:
-    """`OneStage.evidenceCovered`: `decode_evidence`, and a draw that carries a closure refused."""
+    """`OneStage.evidenceOf`: `decode_evidence` (`evidenceParsed`), and a draw that carries a closure refused."""
     e = decode_evidence(b)
     if isinstance(e["draw"], dict) and "closure" in e["draw"]:
         raise D.Reject("the draw carries a closure, which the sampled audit's soundness statement doesn't cover")
@@ -3941,8 +3941,8 @@ def _covered_case(kind: str) -> tuple[dict, dict, dict]:
 
 def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
     """The one-stage audit, v1 (`OneStage.protocol`) and v2 (`OneStageZk`), Lean's the Python's: parameters under a
-    Bernoulli law at 0 < p < 1 are refused (`paramsCovered`), and evidence whose draw carries a closure
-    (`evidenceCovered`), after its commitment's digest, v2's parameters naming a challenger so that its refusal of
+    Bernoulli law at 0 < p < 1 are refused (`paramsOfJson`), and evidence whose draw carries a closure
+    (`evidenceOf`), after its commitment's digest, v2's parameters naming a challenger so that its refusal of
     parameters naming none (`NO_CHALLENGER`) isn't what refuses them; the same work audit without the closure is
     accepted by v1."""
     for kind, stage in (("bernoulli", "params: "), ("closure", "evidence: ")):
