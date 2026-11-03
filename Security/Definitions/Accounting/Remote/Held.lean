@@ -71,7 +71,7 @@ structure Pace (Ω : Type) where
   ended : Ω → ℕ → ℕ
 
 /-- What a route (`Trace.rebuilt`, `Trace.disk`, `Trace.link`) brings in over `[u, v)`. -/
-def over {Ω : Type} (f : Ω → ℕ → ℕ) (ω : Ω) (u v : ℕ) : ℕ := ∑ t ∈ Ico u v, f ω t
+def «over» {Ω : Type} (f : Ω → ℕ → ℕ) (ω : Ω) (u v : ℕ) : ℕ := ∑ t ∈ Ico u v, f ω t
 
 namespace Trace
 
