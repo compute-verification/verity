@@ -204,7 +204,7 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
     assert q["rows"] == AP.console_rows(p["rows"]) and not console.refused(q)
     assert len(console.body(q)) <= console.BODY_MAX and len(q["note"]) <= console.NOTE_MAX
     assert all(not isinstance(v, bool) for r in q["rows"] for v in r)
-    assert q["title"] == p["title"] and all(x["title"].endswith(f" in {gates.UNIT})") for x in (p, got["fit"]))
+    assert q["title"] == p["title"] and all(x["title"].endswith(f"{gates.UNIT})") for x in (p, got["fit"]))
 
 
 def test_the_dial_formula_on_a_rows_columns_is_te_cores_at_every_cell(tmp_path, monkeypatch):
