@@ -575,6 +575,8 @@ def test_the_one_bound_is_the_max_over_its_kinds_each_resting_on_what_it_names()
     assert b["max"] == b["terms"]["decoding"] and b["label"] == f"te_core {F_VERSION}, reading A"
     assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"].startswith(
         f"unmeasured: {F.LOG_UNKNOWN}; 100% of its products' MACs")
+    assert b["unmeasured"]["fresh_products"].endswith(f"a trace with te_core {F.PRODUCTS_FROM} or later keeps them "
+                                                      f"(te_core.capture.products)")
     assert b["inputs"]["fresh_products"] == {"source": "op log", "order": "unknown", "rows": 1, "unknown_share": 1.0,
                                              "macs": {"theta": 0.0, "attention": 0.0, "unknown": 1e12}}
     assert F.bound(replace(coded, ops=None), c, 2800)["unmeasured"]["fresh_products"] == F.FRESH_UNMEASURED
@@ -678,6 +680,106 @@ def test_products_of_ops_takes_a_logs_products_and_counts_none(name):
     b = F.bound(one_segment(ops=ops), 1e11, policy.CONSOLE[1])
     assert b["terms"]["fresh_products"] is None and b["inputs"]["fresh_products"]["rows"] == len(got["rows"])
     assert f"; {got['unknown_share']:.0%} of its products' MACs" in b["unmeasured"]["fresh_products"]
+
+
+@pytest.mark.slow
+def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it():
+    """The 45M start's dense step (te_core.io_bound.capture, Muon on the block matrices, batch 2 at ctx 256) through
+    te_core.capture.products and `products_of_trace` is the products io_bound.rows_of counts on it, its identical rows
+    merged, so io_bound's bound is the same: at the console's policy about 65,763 fresh MACs a block, 0.552 of |C| and
+    ρ 3.04e6 with the chain constant. A trace's order is unknown, so the term is unmeasured with that figure in its
+    inputs, and it is that figure where the order is the chain's. The one check of the strong bound's figure on a
+    model's own shape (about 6 s on a CPU): the fixtures' tiny start has almost no fresh products."""
+    import collections
+
+    from te_core import io_bound
+    from te_core.capture import products
+
+    g = io_bound.capture("dense", size="s", vocab=32000, batch=2, ctx=256, micro_steps=1)
+    c, k = policy.CONSOLE
+    block = products.rows(g, k)
+    got = F.products_of_trace(block)
+    rows = io_bound.rows_of(g, "bfloat16", k)
+    kinds = collections.Counter()
+    for r in rows:
+        kinds[r.kind] += r.macs
+    assert got["kinds_macs"] == pytest.approx(dict.fromkeys(io_bound.KINDS, 0.0) | kinds, rel=1e-12)
+    assert len(got["products"]) < sum(r.kind == "fresh" for r in rows)
+    C = block["gates"]
+    assert C == io_bound.step_gates(g, "bfloat16")
+    want = io_bound.bound([r.product() for r in rows if r.kind == "fresh"], c, k, C)
+    b = io_bound.bound(got["products"], c, k, C)
+    assert b["proved"]["rho"] == pytest.approx(want["proved"]["rho"], rel=1e-12) and b["G"] == pytest.approx(want["G"])
+    macs = sum(p["macs"] for p in got["products"])
+    assert macs / b["proved"]["blocks"] == pytest.approx(65_763, rel=1e-4)
+    assert b["share"] == pytest.approx(0.552, abs=5e-4) and b["proved"]["rho"] == pytest.approx(3.04e6, rel=1e-3)
+    m = replace(one_segment(), parts=(F.Part(gates=C, tokens=512, token_gates=C, affected_gates=C / 2),), products=got)
+    unknown = F.bound(m, c, k)
+    assert unknown["terms"]["fresh_products"] is None
+    assert "isn't in the trace, so the tree constant applies" in unknown["unmeasured"]["fresh_products"]
+    assert unknown["inputs"]["fresh_products"]["io_bound"]["proved"]["rho"] == b["proved"]["rho"]
+    assert unknown["inputs"]["fresh_products"]["capture"] == products.CAPTURE == F.PRODUCTS_FROM
+    chain = F.bound(replace(m, products=got | {"order": "chain"}), c, k)
+    assert chain["terms"]["fresh_products"] == b["proved"]["rho"]
+
+
+@pytest.mark.parametrize("name, fresh", (("dense_blocks", 0.00923), ("lora_blocks", 0.00093),
+                                         ("wildcard_adapter", 0.0)))
+def test_a_fixtures_trace_keeps_its_product_rows_and_their_fresh_share(name, fresh):
+    """Each fixture's product rows (the `.products.json` beside its circuit, te_core.capture.products of the step the
+    circuit traces): the capture's version, the console's k, the order unknown, the circuit's tokens and |C|, and by
+    kind every product the op log places, with the fresh share of their MACs each case shows (dense blocks 0.92%, LoRA
+    0.09%, the adapter none). The term is unmeasured, the order not in the trace, with io_bound's figure in its inputs."""
+    from te_core.capture.circuit import StepCircuit, measure
+
+    block = json.loads((FIXTURES / f"{name}.products.json").read_text())
+    f = measure(StepCircuit.load(FIXTURES / f"{name}.npz"))
+    assert (block["capture"], block["k"], block["order"]) == (F.PRODUCTS_FROM, policy.CONSOLE[1], "unknown")
+    assert (block["tokens"], block["gates"]) == (f["tokens"], f["gates"])
+    got = F.products_of_trace(block)
+    ops = json.loads((FIXTURES / f"{name}.ops.json").read_text())
+    total = sum(got["kinds_macs"].values())
+    assert total == sum(op["macs"] for op in ops if op["products"])
+    assert got["kinds_macs"]["fresh"] / total == pytest.approx(fresh, abs=5e-6)
+    assert bool(got["products"]) == (fresh > 0)
+    b = F.bound(replace(one_segment(), products=got), 1e11, policy.CONSOLE[1])
+    assert b["terms"]["fresh_products"] is None and "isn't in the trace" in b["unmeasured"]["fresh_products"]
+    assert b["inputs"]["fresh_products"]["kinds_macs"] == got["kinds_macs"]
+
+
+def test_a_records_trace_rows_are_its_traced_steps_products():
+    """`of_record` takes the record's trace's product rows (`formalism.trace.products`) as `Measured.products` over its
+    traced steps, the tokens of the steps whose structure has an affected share over the traced step's (before the
+    token factor scales a part's tokens), each fresh row times its count; a step before the first update adds none, a
+    record that has its own products keeps them, and one whose trace has no rows has none."""
+    row = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m": 4, "k": 8, "n": 8},
+           "token_dims": ["m"], "macs": 256, "outputs": 32, "affected": [True, True], "widths": [16, 16],
+           "rates": [16.0, 16.0], "paid": [True, True], "self": False, "b_c": 32, "k_whole": 8,
+           "gates_per_mac": 1480.0, "cell_gates": 23682.0}
+    theta = row | {"count": 1, "affected": [True, False], "rates": [16.0, 0.0], "paid": [True, False]}
+    block = {"capture": F.PRODUCTS_FROM, "k": 65536.0, "order": "unknown", "tokens": 4, "gates": None,
+             "rows": [row, theta]}
+    log = [["fwd", "theta", "mm", "[[8]]", 1, 80]]
+    record = {"steps": [{"step": 0, "tokens": 8, "struct": "b", "by": {"fwd/theta": 80}},
+                        {"step": 1, "tokens": 8, "struct": "a", "by": {"fwd/theta": 80}},
+                        {"step": 2, "tokens": 8, "struct": "a", "by": {"fwd/theta": 80}}],
+              "structures": {"a": {"updated": [], "log": log, "affected_share": 0.5, "sigma": 1.0,
+                                   "token_factor": 2.0, "delta_grad_bits": 10},
+                             "b": {"updated": [], "log": log}},
+              "formalism": {"trace": {"products": block}}}
+    f = F.of_record(record)
+    assert [p["tokens"] for p in f["parts"]] == [8, 32]
+    p = f["products"]
+    assert (p["k"], p["order"], p["capture"]) == (65536.0, "unknown", F.PRODUCTS_FROM)
+    assert p["products"] == [{"macs": 4 * 2 * 256, "outputs": 4 * 2 * 32, "k_dim": 8, "k_whole": 8, "b_a": 16,
+                              "b_b": 16, "b_c": 32, "gates_per_mac": 1480.0, "cell_gates": 23682.0}]
+    assert p["kinds_macs"]["fresh"] == 4 * 2 * 256 and p["kinds_macs"]["theta"] == 4 * 256
+    assert F.of_record(record, through=1)["products"]["products"][0]["macs"] == 2 * 2 * 256
+    m = F.complete(f, {"output": {"e_bytes": 10}}, SHAPE)
+    assert m.products == p and m.labels["products"] == F.TRACED_PRODUCTS
+    own = {"k": 1.0, "order": "chain", "products": []}
+    assert F.of_record(record | {"formalism": {"trace": {"products": block}, "products": own}})["products"] == own
+    assert "products" not in F.of_record(record | {"formalism": {"trace": {}}})
 
 
 def test_a_ledger_rows_log_puts_theta_and_attention_products_aside_and_the_rest_unknown():
