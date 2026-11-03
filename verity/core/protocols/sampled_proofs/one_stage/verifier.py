@@ -88,6 +88,13 @@ def _dumps(value: Any) -> str:
     nonce, big = secrets.token_hex(8), {}
 
     def walk(x: Any) -> Any:
+        t = type(x)
+        if t is str or t is int or t is bool or x is None:
+            return x
+        if t is dict:
+            return {k: walk(v) for k, v in x.items()}
+        if t is list or t is tuple:
+            return [walk(v) for v in x]
         if isinstance(x, float) and math.isfinite(x) and abs(x) >= 1e16:
             token = f"\0{nonce}:{len(big)}\0"
             big[json.dumps(token)] = format(x, ".1f")
