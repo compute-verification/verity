@@ -14,8 +14,8 @@ sampled head's rows taken at the counter's width and seed-subspace's d at the ru
 that structure on every updated step structure. `ledger` links the scorer's ledger ($TE_LEDGER) and replaces each
 traced run's submissions with the node's under their ids, so routes keep their names; a run with no trace keeps its
 row, which 4.0's rescore leaves out as not_measured. A run whose trace shows an affected share of 0 or u(1) = 0 beside
-a nonzero E is refused, not scored (coordinator 04:40Z): its rows are marked invalid. The cache is per te_core tree, so
-a new te_core traces again.
+a nonzero E is refused, not scored (coordinator 04:40Z): before te_core 4.2, which refuses it itself, its rows are
+marked invalid. The cache is per te_core tree, so a new te_core traces again.
 """
 from __future__ import annotations
 
@@ -468,10 +468,10 @@ def refused(c: Path) -> set[str]:
 
 def ledger(out: Path, te: Path) -> dict:
     """The scorer's ledger with each traced run's submissions replaced by the node's (under the ledger's id, agent and
-    write time), a refused run's (`refused`) marked invalid with REFUSED, every other file linked; written to `out`
-    whole, then swapped in."""
+    write time), a refused run's (`refused`) marked invalid with REFUSED where te_core refuses none itself (4.2's
+    `formalism.refusal`), every other file linked; written to `out` whole, then swapped in."""
     c = cache(te)
-    bad = refused(c)
+    bad = set() if "\ndef refusal(" in git("show", f"HEAD:{CW}/te_core/formalism.py", cwd=te) else refused(c)
     traced = collections.defaultdict(list)
     for p in sorted((c / "records").glob("*.jsonl.gz")) if (c / "records").exists() else []:
         with gzip.open(p, "rt") as f:

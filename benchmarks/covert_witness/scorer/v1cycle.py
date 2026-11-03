@@ -11,7 +11,9 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    starts (RESCORE_PATHS) on cursor/covert-witness-4207 or cursor/training-efficiency-4207 whose te_core is 4.x or
    later, or RESCORE_AHEAD holding it (merged with it when it doesn't, if they merge cleanly). Its pinned.json names
    the records scored (PINS: the pin, same_version and the pilot, trace40.pins). TE40_WT's capture traces while the
-   integrator's te_core VERSION is one of TRACE_SAME, else moves to it (`trace_head`).
+   integrator's te_core VERSION is one of TRACE_SAME. A new capture (`next_capture`) traces every run again into its
+   own cache, and until those traces cover every run TE40_WT's traced (`covered`), the refresh scores on LAST's
+   re-score commit and TE40_WT's traces; then TE40_WT moves to it.
 2. Builds the measured ledger (trace40.py): every valid run's step traced, measured and ingested again on TRACE_NODE,
    the runs traced at earlier refreshes kept.
 3. Runs its `python -m te_core.rescore` on that ledger at PINS: per checkpoint of every valid record, v3's and the
@@ -66,6 +68,14 @@ TRACE_SAME = ("4.0", "4.1")
 TRACE_NODE = os.environ.get("TE_TRACE_NODE", "vy-nebius-cpu-9")
 #: how long a refresh waits for its node runs; one still tracing is taken at the next refresh
 TRACE_WAIT_S = 1080
+#: the integrator's te_core whose capture TE40_WT's isn't (`next_capture`), checked out with no files: its runs traced
+#: into its own cache while the refresh scores on LAST's re-score commit and TE40_WT's traces, until they cover those
+NEXT_WT = Path(os.environ.get("TE_NEXT_WT", "/tmp/scorer/te-next"))
+#: the re-score commit of the last refresh scored with TE40_WT's capture
+LAST = trace40.STATE / "trace40" / "rescored.json"
+#: a new capture replaces TE40_WT's once it has traced this share of the runs TE40_WT's traced (a capture that fails
+#: every run covers them all)
+COVER_TRACED = 0.9
 #: what 4.0's rescore also writes, to the evidence store only (coordinator 01:22Z): t as the frozen tail, and the analysis
 VARIANTS = {"frozen": ["--tail", "frozen"], "analysis": ["--quantities", "analysis"]}
 #: the measurement commits scored: the re-score commit's pin, same_version and pilot (trace40.pins), set by `main`
@@ -141,16 +151,32 @@ def rescore_head() -> tuple[str, str, str]:
     return head, newest, f"{RESCORE_AHEAD} merged with it"
 
 
-def trace_head(newest: str) -> str:
-    """TE40_WT kept while the integrator's newest te_core has its VERSION or one in TRACE_SAME, else checked out at
-    that commit (a new capture: the trace cache is per te_core tree, so every run is traced again); its VERSION."""
-    have = git("show", f"HEAD:{trace40.CW}/te_core/__init__.py", cwd=trace40.TE40_WT)
-    have = next((x.split('"')[1] for x in have.splitlines() if x.startswith("VERSION = ")), "0")
-    want = te_version(newest)
-    if want != have and not {want, have} <= set(TRACE_SAME):
-        git("checkout", "-q", "--detach", newest, cwd=trace40.TE40_WT)
-        return want
-    return have
+def capture_version(te: Path) -> str:
+    init = git("show", f"HEAD:{trace40.CW}/te_core/__init__.py", cwd=te)
+    return next((x.split('"')[1] for x in init.splitlines() if x.startswith("VERSION = ")), "0")
+
+
+def next_capture(newest: str) -> Path | None:
+    """NEXT_WT at the integrator's newest te_core when its capture isn't TE40_WT's (its VERSION differs, and not both
+    are in TRACE_SAME), else None. Tracing reads only its git objects, so it has no files."""
+    have, want = capture_version(trace40.TE40_WT), te_version(newest)
+    if want == have or {want, have} <= set(TRACE_SAME):
+        return None
+    if not NEXT_WT.exists():
+        git("worktree", "add", "-q", "--no-checkout", "--detach", str(NEXT_WT), newest, cwd=trace40.REPO)
+    git("reset", "-q", "--soft", newest, cwd=NEXT_WT)
+    return NEXT_WT
+
+
+def covered(te: Path) -> tuple[int, int, int]:
+    """(the runs in scope that TE40_WT's capture traced, how many of them `te`'s has traced or failed under CODE, how
+    many it has traced)."""
+    def traced(c: Path) -> dict:
+        return json.loads((c / "traced.json").read_text()) if (c / "traced.json").exists() else {}
+    old, new = traced(trace40.cache()), traced(trace40.cache(te))
+    want = {k for k, v in old.items() if not v.get("error")} & {r["run_id"] for r in trace40.scope()}
+    return (len(want), len(want & trace40.done(trace40.cache(te))),
+            sum(not (new.get(k) or {"error": 1}).get("error") for k in want))
 
 
 def ledger_args(out: Path, root: Path | None = None) -> list[str]:
@@ -177,15 +203,16 @@ def trace_resources(runs: int) -> tuple[int, int]:
     return workers, min(200, 24 + 6 * workers)
 
 
-def measured_ledger(out: Path, launch: bool = True) -> dict:
+def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, build: bool = True) -> dict:
     """trace40.py's measured ledger: the scorer's ledger indexed (rescore reads the measured copy, so nothing else
-    rewrites the index), the valid runs with no trace yet and no node run tracing them launched on TRACE_NODE, every
-    node run (this one and earlier refreshes') waited for up to TRACE_WAIT_S and taken as it ends (one still tracing
-    is taken at a later refresh), and the copy built."""
-    t40, cw = trace40.TE40_WT / "benchmarks" / "covert_witness", [sys.executable, str(HERE / "trace40.py")]
-    subprocess.run([sys.executable, "-m", "te_core.ledger", "--root", str(trace40.LEDGER), "index"], cwd=t40,
-                   check=True, capture_output=True)
-    cache = trace40.cache()
+    rewrites the index), the valid runs with no trace yet in `te`'s cache and no node run tracing them launched on
+    TRACE_NODE, every node run (this one and earlier refreshes') waited for up to TRACE_WAIT_S and taken as it ends (one
+    still tracing is taken at a later refresh), and the copy built (`build`)."""
+    cw = [sys.executable, str(HERE / "trace40.py")]
+    if build:
+        subprocess.run([sys.executable, "-m", "te_core.ledger", "--root", str(trace40.LEDGER), "index"],
+                       cwd=te / "benchmarks" / "covert_witness", check=True, capture_output=True)
+    cache = trace40.cache(te)
     cache.mkdir(parents=True, exist_ok=True)
     out.mkdir(parents=True, exist_ok=True)
     pf = cache / "pending.json"
@@ -198,7 +225,7 @@ def measured_ledger(out: Path, launch: bool = True) -> dict:
             if state == "running":
                 continue
             # a failed or timed-out node run keeps the runs it finished (trace40.py's node writes each as it ends)
-            t = subprocess.run([*cw, "take", run], capture_output=True, text=True, check=False)
+            t = subprocess.run([*cw, "take", run, "--te", str(te)], capture_output=True, text=True, check=False)
             if t.returncode == 0:
                 took.append(run)
             else:
@@ -209,8 +236,8 @@ def measured_ledger(out: Path, launch: bool = True) -> dict:
     settle()
     pack = out / "trace40-pack.tar"
     skip = ",".join(r for runs in pending.values() for r in runs)
-    p = subprocess.run([*cw, "pack", "--out", str(pack), "--skip", skip], capture_output=True, text=True, check=False) \
-        if launch else None
+    p = subprocess.run([*cw, "pack", "--out", str(pack), "--te", str(te), "--skip", skip], capture_output=True,
+                       text=True, check=False) if launch else None
     if p and p.returncode:
         # nothing new traced this time; the refresh scores the runs traced so far
         log["pack_failed"] = (p.stderr.strip().splitlines() or [f"rc {p.returncode}"])[-3:]
@@ -236,7 +263,8 @@ def measured_ledger(out: Path, launch: bool = True) -> dict:
         time.sleep(60)
         settle()
     pf.write_text(json.dumps(pending, indent=1))
-    built = json.loads(subprocess.run([*cw, "ledger"], capture_output=True, text=True, check=True).stdout)
+    built = json.loads(subprocess.run([*cw, "ledger", "--te", str(te)], capture_output=True, text=True,
+                                      check=True).stdout) if build else None
     traced = json.loads((cache / "traced.json").read_text()) if (cache / "traced.json").exists() else {}
     waiting = {k: sum(r not in traced or bool(traced[r].get("error")) for r in v) for k, v in pending.items()}
     return {"te_tree": cache.name, "took": took, "tracing": waiting,
@@ -381,9 +409,29 @@ def main() -> int:
     commit, newest, chosen = rescore_head()
     os.environ["TE_PIN_REV"] = commit
     PINS[:] = trace40.pins(commit)
-    trace_version = trace_head(newest)
+    nxt, retrace = (None, None) if final else (next_capture(newest), None)
+    if nxt:
+        # every row traced before a new capture is refused under its te_core, so the refresh scores on the last
+        # capture until the new one's traces cover it
+        retrace = measured_ledger(out / "next-capture", not args.no_trace, nxt, build=False)
+        retrace |= dict(zip(("of", "covered", "traced"), covered(nxt)), te_core=te_version(newest), commit=newest)
+        if (retrace["covered"] >= retrace["of"] and retrace["traced"] >= COVER_TRACED * retrace["of"]) \
+                or not LAST.exists():
+            git("checkout", "-q", "--detach", newest, cwd=trace40.TE40_WT)
+            nxt, retrace = None, None
+        else:
+            commit = json.loads(LAST.read_text())["commit"]
+            git("checkout", "-q", "--detach", commit)
+            chosen = (f"the last re-score on te_core {capture_version(trace40.TE40_WT)}'s capture, until te_core "
+                      f"{te_version(newest)}'s traces cover it")
+            os.environ["TE_PIN_REV"] = commit
+            PINS[:] = trace40.pins(commit)
+    if not nxt and not final:
+        LAST.write_text(json.dumps({"commit": commit, "te_core": te_version(commit), "stamp": stamp}) + "\n")
+    trace_version = capture_version(trace40.TE40_WT)
     rs = out / "rescore"
-    traced, root = (None, None) if final else (measured_ledger(out, not args.no_trace), trace40.MEASURED)
+    traced, root = (None, None) if final else (measured_ledger(out, not args.no_trace and not nxt),
+                                               trace40.MEASURED)
     last = rescore(rs, args.gates, final, root)
     put = "not PUT (final values)" if final else branches(rs, not args.no_put, root)
     policy = {} if final else policy_panels(out, commit, not args.no_put, root)
@@ -415,6 +463,8 @@ def main() -> int:
             "rule": "H and W* over every checkpoint (19:50Z)"}
     if policy:
         meta["algorithm_policy"] = {k: v for k, v in policy.items() if k != "coverage"}
+    if retrace:
+        meta["next_capture"] = retrace
     if traced:
         meta |= {"trace": traced, "variants": {k: str(v)[:200] for k, v in variants.items()},
                  "delta_t": "delta_t_bits" in git("show", f"{commit}:benchmarks/covert_witness/te_core/formalism.py")}
@@ -573,14 +623,19 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
     tr = meta["trace"]
     tracing = sum(tr["tracing"].values())
     refused = tr["ledger"].get("refused_runs") or []
+    nx = meta.get("next_capture")
+    nx_said = (f" (te_core {nx['te_core']} {nx['commit'][:11]} refuses every row traced before its capture, which "
+               f"is tracing every run again on {TRACE_NODE}: {nx['covered']} of the {nx['of']} runs done so far, "
+               f"{nx['traced']} traced; "
+               f"this refresh scores on te_core {meta['te_core_version']} until they're covered)" if nx else "")
     dt = ("; Δ_t a straight-through run's fp32 latents, else Δ (00:47Z)" if meta.get("delta_t")
           else "; Δ_t not priced (this te_core has none)")
     v3_said = ", ".join(f"{s} {x['records']} ({x['checkpoints']} checkpoints)" for s, x in meta["v3"].items()
                         if x["records"]) or "none measured yet"
     ap = meta.get("algorithm_policy") or {}
     ap_said = "; ".join(f"training/{k} {'PUT ' if v[:1].isdigit() else ''}{v}" for k, v in ap.items())
-    return (f"{head}te_core {meta['te_core'][:10]} ({meta['te_core_version']}), formalism v2's quantities measured on "
-            f"each record's traced step, t literal, the frozen tail always charged{dt}: {meta['records']} valid "
+    return (f"{head}te_core {meta['te_core'][:10]} ({meta['te_core_version']}){nx_said}, formalism v2's quantities "
+            f"measured on each record's traced step, t literal, the frozen tail always charged{dt}: {meta['records']} valid "
             f"records measured at the pin's commits and the pilot's, {meta['night2_records']} from night 2, "
             f"{meta['checkpoints']} checkpoints; v3: {v3_said}"
             + (f"; {meta['pilot_start']} v3 checkpoints from a pilot start left out (pilot-start)"
@@ -590,8 +645,8 @@ def digest(p: dict, meta: dict, ids: dict, put: str, fb_rows: dict | None) -> st
             + (f" ({tr['packed']} runs' trace refused on {TRACE_NODE}, packed again at the next refresh)"
                if "launch_refused" in tr else "")
             + (f", {tr['untraced_runs']} runs whose trace failed (trace40-traced.json)" if tr["untraced_runs"] else "")
-            + (f"; {len(refused)} runs refused, not scored, their trace showing an affected share of 0 or u(1) = 0 "
-               f"beside a nonzero E (04:40Z): {', '.join(refused)}" if refused else "")
+            + (f"; {len(refused)} run{'s' * (len(refused) != 1)} refused, not scored, a trace showing an affected "
+               f"share of 0 or u(1) = 0 beside a nonzero E (04:40Z): {', '.join(refused)}" if refused else "")
             + "; H and W* over every checkpoint, so S >= 1; ρ c/(c − d) where Fit holds for the training, else "
             "Slowdown's bound, a target, whose A1 charges no read of earlier tokens' keys and values "
             f"(loose-end-attention)) at −1% and {REFERENCE}: " + "; ".join(parts)
