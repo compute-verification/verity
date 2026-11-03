@@ -55,12 +55,6 @@
 #     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the sampled proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
-#     The inference-only verdict (`inference_only.py`), at IO_CLASS (default the first class of CLASSES but `record`): its
-#     policy, (c, k, n) and every input to them, is written before the lease from the run's settings alone (the class, REPO
-#     at REV, LEASE_MIN), $OUT/inference-only-policy.json and its INFERENCE-ONLY POLICY line; once the build is done, the
-#     window's circuit record at the class is judged by `NciCheck.Count`'s rule beside sampled proofs, with `nci-check
-#     --count` where the build built it, into $OUT/record/inference-only.json (the blocks padded to the grid) and its
-#     INFERENCE-ONLY line, in full with the exact counts in the serve dir's private/inference-only.json. It gates nothing.
 #  4. PoUW (H1 credit), PoUS, the bandwidth audit and the network certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it, one at a time (the certifier's alone, the longest,
 #     from the moment the window is picked, beside step 3, its lines said after the others'; split in two, the answer step
@@ -93,6 +87,13 @@
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
 #     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
 #     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's.
+#     Beside them, the inference-only verdict (`inference_only.py`), at IO_CLASS (default the first class of CLASSES but
+#     `record`): its policy, (c, k, n) and every input to them, is written before the lease from the run's settings alone
+#     (the class, REPO at REV, LEASE_MIN), $OUT/inference-only-policy.json and its INFERENCE-ONLY POLICY line; once the
+#     build is done, step 3's window circuit record at the class is judged by `NciCheck.Count`'s rule beside sampled proofs,
+#     with `nci-check --count` where the build built it, into $OUT/record/inference-only.json (the blocks padded to the
+#     grid) and its INFERENCE-ONLY line, in full with the exact counts in the serve dir's private/inference-only.json. It
+#     gates nothing.
 #  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
