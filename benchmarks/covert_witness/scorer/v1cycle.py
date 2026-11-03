@@ -72,10 +72,10 @@ RESCORE_AHEAD = os.environ.get("TE_RESCORE_AHEAD", "cursor/te-delta-t-40-516a")
 #: traces every run again (`next_capture`)
 CAPTURES = (("4.0", "4.1"), ("4.2", "4.3"), ("4.4", "4.5", "4.6", "4.7"), ("4.8", "4.9", "4.10"))
 #: the capture from which every later VERSION captures alike, and which traces the pilot's runs too, after v3's: te_core
-#: 4.8 saves a traced step's product rows in every trace (the toolsmith's 66162c92b1 line; coordinator 12:20Z), and 4.11
-#: writes them again (te_core.capture.products' CAPTURE 4.11): 4.8's ledger blocks keep the trace's order "unknown",
-#: which 4.11's formalism.fresh_products reads as a circuit's declared summation, so no 4.8 trace measures the term
-CAPTURE_FINAL = "4.11"
+#: 4.8 saves a traced step's product rows in every trace (the toolsmith's 66162c92b1 line; coordinator 12:20Z), and
+#: 4.12.1's stores everything 4.12.x reads, each row's fed, P and gathered and the rows at each k of the console's dial
+#: (the toolsmith's 16:34Z line): an older trace's fresh-products term is unmeasured (formalism.FRESH_RETRACE)
+CAPTURE_FINAL = "4.12.1"
 #: where node traces run, and the node's pool a shard asks for: vy-nebius-cpu-9's research pool (infra and the
 #: coordinator 15:08Z: `--on auto` misplaces runs until #7113 lands; auto spread shards over the CPU pool, 07:48Z)
 TRACE_NODE = os.environ.get("TE_TRACE_NODE", "vy-nebius-cpu-9")
