@@ -142,7 +142,7 @@
   "art:8ccb6fba94b8f22fddad3d904283343edf2db06b593dc91b5aed98f6e6a57b1b": "verity/ml/flock/tests/fixtures/rec-c3-inner",
   "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": "verity/ml/flock/tests/fixtures/rec-coins",
   "art:22fbef314a3ba3e417b9e49bfa30fe460a364913f1dbcc926768c7a254c5b50c": "verity/ml/flock/tests/fixtures/f1-gate",
-  "art:cb8c701f408b4f005205cfe338da1e14b491c79642c30c455ce8b53522088ddf": "verity/ml/flock/tests/fixtures/rec-links",
+  "art:76a4a543fed5f92fba901007ddfd4e035844421cb3893d243780d2d7c9974e06": "verity/ml/flock/tests/fixtures/rec-links",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
@@ -202,7 +202,8 @@
       "art:cd6a7a1b0c579c5b4ae3553689e9918cc459822bca72ec74144ba2e79a1410ee",
       "art:d0158e94e1964b37d698d880ee8c6944f7271b3dcc48bda55ea0741e3e557073"
     ],
-    "art:cb8c701f408b4f005205cfe338da1e14b491c79642c30c455ce8b53522088ddf": [
+    "art:76a4a543fed5f92fba901007ddfd4e035844421cb3893d243780d2d7c9974e06": [
+      "art:cb8c701f408b4f005205cfe338da1e14b491c79642c30c455ce8b53522088ddf",
       "art:ff28796246bdf4ea6df75289ccd8d1fddee94ecd17d21ef7b3c009f35bbcc863"
     ]
   }
