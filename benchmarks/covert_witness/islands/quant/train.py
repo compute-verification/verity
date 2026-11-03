@@ -95,7 +95,7 @@ class Schedule:
 #: what an arm may set (`--arms`); the rest is the run's
 ARM_KEYS = {"qat", "qat_group", "qat_mult", "qat_keep", "qat_block", "qat_norm_bits", "muon_lr", "adam_lr", "opt", "warmup",
             "data_seed", "targets", "rank", "qbits", "pow2", "norms", "lr", "norm_lr", "seed", "vote_step", "vote_rate",
-            "vote_margin"}
+            "vote_margin", "vote_carry"}
 
 
 def parse_arms(a) -> list[argparse.Namespace]:
@@ -278,11 +278,15 @@ class VoteSGD(torch.optim.Optimizer):
     inside the backward (`add_votes`): with `hooks`, each backward's gradient on a trained tensor is one partial (a
     post-accumulate hook, which clears the gradient); without, a caller passes each sequence's gradient (`SampleVotes`).
     step() moves each value by -lr · sign(votes) where |votes| reaches `margin` (1: any majority). No state but the
-    votes, which each step clears."""
+    votes, which each step clears; with `carry` (--vote-carry) a value's votes are kept across steps until it moves,
+    then cleared, so a drift too weak for one step's voters adds up (the votes are then int16 state, held to ±CARRY_CAP).
+    """
 
-    def __init__(self, params, lr: float, hooks: bool = True, margin: int = 1):
+    CARRY_CAP = 16384
+
+    def __init__(self, params, lr: float, hooks: bool = True, margin: int = 1, carry: bool = False):
         super().__init__(params, {"lr": lr})
-        self.handles, self.word, self.margin, self.moved, self.steps = [], None, margin, None, 0
+        self.handles, self.word, self.margin, self.carry, self.moved, self.steps = [], None, margin, carry, None, 0
         for grp in self.param_groups:
             for p in grp["params"]:
                 self.state[p] = self.init_state(p)
@@ -308,19 +312,23 @@ class VoteSGD(torch.optim.Optimizer):
         v = st["votes"]
         return torch.sign(v) * (v.abs() >= self.margin) if self.margin > 1 else torch.sign(v)
 
-    def move(self, p: torch.Tensor, grp: dict, st: dict) -> torch.Tensor:
-        """Moves p; returns how many of its values moved (a device tensor)."""
+    def move(self, p: torch.Tensor, grp: dict, st: dict) -> tuple[torch.Tensor, torch.Tensor]:
+        """Moves p; returns how many of its values moved and where a move was made (device tensors)."""
         push = self.push(st)
         p.add_(push.to(p.dtype), alpha=-grp["lr"])
-        return push.abs().sum()
+        return push.abs().sum(), push != 0
 
     @torch.no_grad()
     def step(self) -> None:
         for grp in self.param_groups:
             for p in grp["params"]:
-                n = self.move(p, grp, self.state[p])
+                st = self.state[p]
+                n, tried = self.move(p, grp, st)
                 self.moved = n if self.moved is None else self.moved + n
-                self.state[p]["votes"].zero_()
+                if self.carry:
+                    st["votes"].masked_fill_(tried, 0).clamp_(-self.CARRY_CAP, self.CARRY_CAP)
+                else:
+                    st["votes"].zero_()
         self.steps += 1
 
     def log(self) -> dict:
@@ -345,9 +353,9 @@ class VoteCodes(VoteSGD):
     view, so no index is carried."""
 
     def __init__(self, params, bits: int, gen: torch.Generator, strides: dict | None = None, hooks: bool = True,
-                 margin: int = 1):
+                 margin: int = 1, carry: bool = False):
         self.qmax, self.gen, self.strides = 2 ** (bits - 1) - 1, gen, strides or {}
-        super().__init__(params, 1.0, hooks, margin)
+        super().__init__(params, 1.0, hooks, margin, carry)
 
     def stride(self, p: torch.Tensor) -> int:
         return self.strides.get(p, 1)
@@ -361,12 +369,13 @@ class VoteCodes(VoteSGD):
         self.add_votes(p, p.grad.reshape(1, -1)[:, :: self.stride(p)])
         p.grad = None
 
-    def move(self, p: torch.Tensor, grp: dict, st: dict) -> torch.Tensor:
+    def move(self, p: torch.Tensor, grp: dict, st: dict) -> tuple[torch.Tensor, torch.Tensor]:
         draw = torch.rand(st["code"].shape, generator=self.gen, device=p.device) < grp["lr"]
-        code = torch.clamp(st["code"] - self.push(st) * draw, -self.qmax, self.qmax).to(torch.int8)
+        push = self.push(st) * draw
+        code = torch.clamp(st["code"] - push, -self.qmax, self.qmax).to(torch.int8)
         moved = (code != st["code"]).sum()
         st["code"] = code
-        return moved
+        return moved, push != 0
 
     def log(self) -> dict:
         """VoteSGD's, and the share of codes at the end of their range."""
@@ -718,7 +727,7 @@ def main_qlora(a, arms: list[argparse.Namespace]) -> int:
         groups = [{"params": [p for A, B, _ in factors.values() for p in (A, B)], "lr": x.lr},
                   {"params": [params[n] for n in norms], "lr": x.norm_lr}]
         opt = (SignSGD(groups, x.lr) if x.opt == "sign" else
-               VoteSGD(groups, x.lr, hooks=False, margin=x.vote_margin) if sample else
+               VoteSGD(groups, x.lr, hooks=False, margin=x.vote_margin, carry=x.vote_carry) if sample else
                torch.optim.AdamW([grp | {"weight_decay": 0.0} for grp in groups], betas=(0.9, 0.95),
                                  fused=dev.startswith("cuda")))
 
@@ -871,6 +880,9 @@ def main() -> int:
     ap.add_argument("--vote-margin", type=int, default=1,
                     help="--opt vote: move a value only where its summed votes reach this size in absolute value (of the "
                          "step's partials; 1: any majority)")
+    ap.add_argument("--vote-carry", action="store_true",
+                    help="--opt vote: keep a value's votes across steps until it moves (int16 state), so the margin "
+                         "counts every partial since its last move")
     ap.add_argument("--warmup", type=int, default=50)
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--micro", type=int, default=32)
@@ -968,7 +980,7 @@ def main() -> int:
             params[n].requires_grad_(not sample)
         voter = (VoteCodes([params[n] for n in quantized], vbits, torch.Generator(device=dev).manual_seed(x.seed),
                            {params[n]: vote_stride(params[n].shape, x.qat_keep) for n in mats}, hooks=not sample,
-                           margin=x.vote_margin)
+                           margin=x.vote_margin, carry=x.vote_carry)
                  if vote else None)
         sampler, l0 = None, lowest_block(mats) if sample else 0
         if sample:
