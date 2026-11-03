@@ -172,20 +172,20 @@ theorem pickIn_mem {C : Type} [Fintype C] {S : Finset C} (h : S.Nonempty) (d : C
 
 section Fill
 
-variable {V ι X : Type}
+variable {V ι Q : Type}
 
 /-- **Which coin nodes a fill writes**: at a coin node, an equivalence from the written coins onto the node's, or
 none. -/
-abbrev FillSel (α X : Type) : Type 1 :=
-  ∀ {C : Type} [Fintype C] [Nonempty C], (C → Game α) → Option (X ≃ C)
+abbrev FillSel (α Q : Type) : Type 1 :=
+  ∀ {C : Type} [Fintype C] [Nonempty C], (C → Game α) → Option (Q ≃ C)
 
 open Classical in
 /-- **One coin node's fill**: where the node is chosen and a coin is left, the node's coin is the first left under the
 node's equivalence and the rest fill its continuation (`r`); else the tape's coin stays, and its continuation is
 filled with all of them. -/
-noncomputable def fillAt {C : Type} {T : C → Type} (r : (c : C) → (m : ℕ) → (Fin m → X) → T c → T c)
-    (o : Option (X ≃ C)) :
-    (m : ℕ) → (Fin m → X) → C × ((c : C) → T c) → C × ((c : C) → T c)
+noncomputable def fillAt {C : Type} {T : C → Type} (r : (c : C) → (m : ℕ) → (Fin m → Q) → T c → T c)
+    (o : Option (Q ≃ C)) :
+    (m : ℕ) → (Fin m → Q) → C × ((c : C) → T c) → C × ((c : C) → T c)
   | m + 1, κ, z =>
     match o with
     | some e => (e (κ 0), Function.update z.2 (e (κ 0)) (r (e (κ 0)) m (Fin.tail κ) (z.2 (e (κ 0)))))
@@ -196,8 +196,8 @@ open Classical in
 /-- **The tape filled with the coins `κ` up to the next stop**: along the tape's play from the node, through the
 prover's messages and the tape's coins, each chosen coin node (`sel`) takes the next of `κ` while any is left, up to
 the first node at which one of the cuts is fixed; the tape from there, and every branch off the play, stays. -/
-noncomputable def fill (sel : FillSel α X) : (g' : Game α) → (s' : Strategy g') → (ι → DigestCut V g') → (m : ℕ) →
-    (Fin m → X) → CoinTape g' s' → CoinTape g' s'
+noncomputable def fill (sel : FillSel α Q) : (g' : Game α) → (s' : Strategy g') → (ι → DigestCut V g') → (m : ℕ) →
+    (Fin m → Q) → CoinTape g' s' → CoinTape g' s'
   | .ret _, _, _, _, _, z => z
   | .send _ k, s', Ks, m, κ, z =>
     if ∃ i, (Ks i).isHere then z else fill sel (k s'.1) s'.2 (fun i => (Ks i).atSend s'.1) m κ z
@@ -233,26 +233,26 @@ theorem avg_pi_at {C : Type} [DecidableEq C] [Fintype C] {T : C → Type} [∀ c
   refine (Eq.trans ?_ (avg_update_pi c fun f => F (f c) fun y => Function.update f c y)).symm
   simp only [Function.update_self, Function.update_idem]
 
-/-- The coins `Fin (m + 1) → X`, as their first and the rest. -/
-def piCons (X : Type) (m : ℕ) : X × (Fin m → X) ≃ (Fin (m + 1) → X) where
+/-- The coins `Fin (m + 1) → Q`, as their first and the rest. -/
+def piCons (Q : Type) (m : ℕ) : Q × (Fin m → Q) ≃ (Fin (m + 1) → Q) where
   toFun p := Fin.cons p.1 p.2
   invFun f := (f 0, Fin.tail f)
   left_inv p := by simp
   right_inv f := Fin.cons_self_tail f
 
 open Classical in
-theorem avg_fillAt_keep [Fintype X] [Nonempty X] {C : Type} [Fintype C] [Nonempty C] {T : C → Type}
-    [∀ c, Fintype (T c)] [∀ c, Nonempty (T c)] (r : (c : C) → (m : ℕ) → (Fin m → X) → T c → T c)
-    (hr : ∀ c m (Φ : T c → ℝ≥0∞), avg (fun κ : Fin m → X => avg fun y => Φ (r c m κ y)) = avg Φ) (m : ℕ)
+theorem avg_fillAt_keep [Fintype Q] [Nonempty Q] {C : Type} [Fintype C] [Nonempty C] {T : C → Type}
+    [∀ c, Fintype (T c)] [∀ c, Nonempty (T c)] (r : (c : C) → (m : ℕ) → (Fin m → Q) → T c → T c)
+    (hr : ∀ c m (Φ : T c → ℝ≥0∞), avg (fun κ : Fin m → Q => avg fun y => Φ (r c m κ y)) = avg Φ) (m : ℕ)
     (Φ : C × ((c : C) → T c) → ℝ≥0∞) :
-    avg (fun κ : Fin m → X => avg fun z : C × ((c : C) → T c) =>
+    avg (fun κ : Fin m → Q => avg fun z : C × ((c : C) → T c) =>
       Φ (z.1, Function.update z.2 z.1 (r z.1 m κ (z.2 z.1)))) = avg Φ := by
   rw [avg_comm]
-  calc avg (fun z : C × ((c : C) → T c) => avg fun κ : Fin m → X =>
+  calc avg (fun z : C × ((c : C) → T c) => avg fun κ : Fin m → Q =>
         Φ (z.1, Function.update z.2 z.1 (r z.1 m κ (z.2 z.1))))
-      = avg fun z : C × ((c : C) → T c) => avg fun a : T z.1 => avg fun κ : Fin m → X =>
+      = avg fun z : C × ((c : C) → T c) => avg fun a : T z.1 => avg fun κ : Fin m → Q =>
           Φ (z.1, Function.update z.2 z.1 (r z.1 m κ a)) :=
-        avg_pick (T := T) fun c a u => avg fun κ : Fin m → X => Φ (c, u (r c m κ a))
+        avg_pick (T := T) fun c a u => avg fun κ : Fin m → Q => Φ (c, u (r c m κ a))
     _ = avg fun z : C × ((c : C) → T c) => avg fun a : T z.1 => Φ (z.1, Function.update z.2 z.1 a) := by
         refine congrArg avg (funext fun z => ?_)
         rw [avg_comm]
@@ -262,31 +262,31 @@ theorem avg_fillAt_keep [Fintype X] [Nonempty X] {C : Type} [Fintype C] [Nonempt
     _ = avg Φ := by simp only [Function.update_eq_self]
 
 open Classical in
-theorem avg_fillAt_write [Fintype X] [Nonempty X] {C : Type} [Fintype C] [Nonempty C] {T : C → Type}
-    [∀ c, Fintype (T c)] [∀ c, Nonempty (T c)] (r : (c : C) → (m : ℕ) → (Fin m → X) → T c → T c)
-    (hr : ∀ c m (Φ : T c → ℝ≥0∞), avg (fun κ : Fin m → X => avg fun y => Φ (r c m κ y)) = avg Φ) (e : X ≃ C)
+theorem avg_fillAt_write [Fintype Q] [Nonempty Q] {C : Type} [Fintype C] [Nonempty C] {T : C → Type}
+    [∀ c, Fintype (T c)] [∀ c, Nonempty (T c)] (r : (c : C) → (m : ℕ) → (Fin m → Q) → T c → T c)
+    (hr : ∀ c m (Φ : T c → ℝ≥0∞), avg (fun κ : Fin m → Q => avg fun y => Φ (r c m κ y)) = avg Φ) (e : Q ≃ C)
     (m : ℕ) (Φ : C × ((c : C) → T c) → ℝ≥0∞) :
-    avg (fun κ : Fin (m + 1) → X => avg fun z : C × ((c : C) → T c) =>
+    avg (fun κ : Fin (m + 1) → Q => avg fun z : C × ((c : C) → T c) =>
       Φ (e (κ 0), Function.update z.2 (e (κ 0)) (r (e (κ 0)) m (Fin.tail κ) (z.2 (e (κ 0)))))) = avg Φ := by
-  have h1 : ∀ (a : X) (κ : Fin m → X), avg (fun z : C × ((c : C) → T c) =>
+  have h1 : ∀ (a : Q) (κ : Fin m → Q), avg (fun z : C × ((c : C) → T c) =>
       Φ (e a, Function.update z.2 (e a) (r (e a) m κ (z.2 (e a))))) =
       avg fun f : (c : C) → T c => avg fun y : T (e a) => Φ (e a, Function.update f (e a) (r (e a) m κ y)) := by
     intro a κ
     rw [avg_prod]
     simp only [avg_const]
     exact avg_pi_at (e a) fun y u => Φ (e a, u (r (e a) m κ y))
-  calc avg (fun κ : Fin (m + 1) → X => avg fun z : C × ((c : C) → T c) =>
+  calc avg (fun κ : Fin (m + 1) → Q => avg fun z : C × ((c : C) → T c) =>
         Φ (e (κ 0), Function.update z.2 (e (κ 0)) (r (e (κ 0)) m (Fin.tail κ) (z.2 (e (κ 0))))))
-      = avg fun p : X × (Fin m → X) => avg fun z : C × ((c : C) → T c) =>
+      = avg fun p : Q × (Fin m → Q) => avg fun z : C × ((c : C) → T c) =>
           Φ (e p.1, Function.update z.2 (e p.1) (r (e p.1) m p.2 (z.2 (e p.1)))) :=
-        avg_equiv (piCons X m).symm fun p : X × (Fin m → X) => avg fun z : C × ((c : C) → T c) =>
+        avg_equiv (piCons Q m).symm fun p : Q × (Fin m → Q) => avg fun z : C × ((c : C) → T c) =>
           Φ (e p.1, Function.update z.2 (e p.1) (r (e p.1) m p.2 (z.2 (e p.1))))
-    _ = avg fun a : X => avg fun f : (c : C) → T c => Φ (e a, f) := by
+    _ = avg fun a : Q => avg fun f : (c : C) → T c => Φ (e a, f) := by
         rw [avg_prod]
         refine congrArg avg (funext fun a => ?_)
         simp only [h1]
         rw [avg_comm]
-        calc avg (fun f : (c : C) → T c => avg fun κ : Fin m → X => avg fun y : T (e a) =>
+        calc avg (fun f : (c : C) → T c => avg fun κ : Fin m → Q => avg fun y : T (e a) =>
               Φ (e a, Function.update f (e a) (r (e a) m κ y)))
             = avg fun f : (c : C) → T c => avg fun y : T (e a) => Φ (e a, Function.update f (e a) y) :=
               congrArg avg (funext fun f => hr (e a) m fun y => Φ (e a, Function.update f (e a) y))
@@ -296,9 +296,9 @@ theorem avg_fillAt_write [Fintype X] [Nonempty X] {C : Type} [Fintype C] [Nonemp
 
 /-- **A filled tape is a uniform tape**: over uniform coins `κ` and a uniform tape from the node, the tape filled with
 `κ` is a uniform tape from the node. -/
-theorem avg_fill [Fintype X] [Nonempty X] (sel : FillSel α X) :
+theorem avg_fill [Fintype Q] [Nonempty Q] (sel : FillSel α Q) :
     ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g') (m : ℕ) (Φ : CoinTape g' s' → ℝ≥0∞),
-      avg (fun κ : Fin m → X => avg fun z : CoinTape g' s' => Φ (fill sel g' s' Ks m κ z)) = avg Φ
+      avg (fun κ : Fin m → Q => avg fun z : CoinTape g' s' => Φ (fill sel g' s' Ks m κ z)) = avg Φ
   | .ret _, _, _, _, Φ => by simp only [fill]; exact avg_const _
   | .send M k, s', Ks, m, Φ => by
     by_cases hf : ∃ i, (Ks i).isHere
@@ -320,10 +320,10 @@ theorem avg_fill [Fintype X] [Nonempty X] (sel : FillSel α X) :
         rw [fill]; exact ite_eq_left hf
       simp only [e]
       exact avg_const _
-    · let r : (c : C) → (m : ℕ) → (Fin m → X) → CoinTape (k c) (s' c) → CoinTape (k c) (s' c) :=
+    · let r : (c : C) → (m : ℕ) → (Fin m → Q) → CoinTape (k c) (s' c) → CoinTape (k c) (s' c) :=
         fun c m κ y => fill sel (k c) (s' c) (fun i => (Ks i).atCoin c) m κ y
       have hr : ∀ c m (Φ : CoinTape (k c) (s' c) → ℝ≥0∞),
-          avg (fun κ : Fin m → X => avg fun y => Φ (r c m κ y)) = avg Φ := fun c m Φ =>
+          avg (fun κ : Fin m → Q => avg fun y => Φ (r c m κ y)) = avg Φ := fun c m Φ =>
         avg_fill sel (k c) (s' c) _ m Φ
       have e : ∀ κ z, fill sel (@Game.coin _ C iF iN k) s' Ks m κ z =
           fillAt (T := fun c => CoinTape (k c) (s' c)) r (@sel C iF iN k) m κ z := fun κ z => by
@@ -341,8 +341,8 @@ variable {g : Game α} {σ : Strategy g}
 /-- **The tape from the next stop stays uniform and independent of the walk to it on a filled tape**: at any coins `κ`,
 averaged over the tape from a node, any reading of the walk's stop on the tape filled with `κ` is its average over the
 tapes from the stop. -/
-theorem avg_walk_fill (sel : FillSel α X) (G : Pos g σ V ι → ℝ≥0∞) :
-    ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g') (m : ℕ) (κ : Fin m → X)
+theorem avg_walk_fill (sel : FillSel α Q) (G : Pos g σ V ι → ℝ≥0∞) :
+    ∀ (g' : Game α) (s' : Strategy g') (Ks : ι → DigestCut V g') (m : ℕ) (κ : Fin m → Q)
       (back : CoinTape g' s' → CoinTape g σ),
       avg (fun z : CoinTape g' s' => G (Pos.walk g' s' Ks (fill sel g' s' Ks m κ z) back)) =
         avg fun z : CoinTape g' s' => Pos.resample G (Pos.walk g' s' Ks (fill sel g' s' Ks m κ z) back)
@@ -370,17 +370,17 @@ theorem avg_walk_fill (sel : FillSel α X) (G : Pos g σ V ι → ℝ≥0∞) :
         rw [fill]; exact (congrArg (fun x => Pos.walk _ s' Ks x back) (ite_eq_left hf)).trans (ite_eq_left hf)
       simp only [e]
       exact Pos.avg_resample_lit G _ s' Ks back
-    · let W : (c : C) → (m' : ℕ) → (Fin m' → X) → CoinTape (k c) (s' c) →
+    · let W : (c : C) → (m' : ℕ) → (Fin m' → Q) → CoinTape (k c) (s' c) →
           (CoinTape (k c) (s' c) → (c : C) → CoinTape (k c) (s' c)) → Pos g σ V ι :=
         fun c m' κ' a u => Pos.walk (k c) (s' c) (fun i => (Ks i).atCoin c)
           (fill sel (k c) (s' c) (fun i => (Ks i).atCoin c) m' κ' a) fun y => back (c, u y)
-      have hw : ∀ (c : C) (m' : ℕ) (κ' : Fin m' → X) (z : CoinTape (@Game.coin _ C iF iN k) s'),
+      have hw : ∀ (c : C) (m' : ℕ) (κ' : Fin m' → Q) (z : CoinTape (@Game.coin _ C iF iN k) s'),
           Pos.walk (@Game.coin _ C iF iN k) s' Ks
             (c, Function.update z.2 c (fill sel (k c) (s' c) (fun i => (Ks i).atCoin c) m' κ' (z.2 c))) back =
             W c m' κ' (z.2 c) fun y => Function.update z.2 c y := fun c m' κ' z => by
         refine (ite_eq_right hf).trans ?_
         simp only [W, Function.update_self, Function.update_idem]
-      have key : ∀ (hd : C → C) (m' : ℕ) (κ' : Fin m' → X) (Ψ : Pos g σ V ι → ℝ≥0∞),
+      have key : ∀ (hd : C → C) (m' : ℕ) (κ' : Fin m' → Q) (Ψ : Pos g σ V ι → ℝ≥0∞),
           avg (fun z : CoinTape (@Game.coin _ C iF iN k) s' =>
             Ψ (W (hd z.1) m' κ' (z.2 (hd z.1)) fun y => Function.update z.2 (hd z.1) y)) =
           avg fun z : CoinTape (@Game.coin _ C iF iN k) s' => avg fun a : CoinTape (k (hd z.1)) (s' (hd z.1)) =>
@@ -390,7 +390,7 @@ theorem avg_walk_fill (sel : FillSel α X) (G : Pos g σ V ι → ℝ≥0∞) :
           (Eq.trans ?_ (avg_prod (C := C) (D := (c : C) → CoinTape (k c) (s' c)) _).symm)
         exact congrArg avg (funext fun z₁ =>
           avg_pi_at (T := fun c => CoinTape (k c) (s' c)) (hd z₁) fun a u => Ψ (W (hd z₁) m' κ' a u))
-      have hstep : ∀ (hd : C → C) (m' : ℕ) (κ' : Fin m' → X),
+      have hstep : ∀ (hd : C → C) (m' : ℕ) (κ' : Fin m' → Q),
           avg (fun z : CoinTape (@Game.coin _ C iF iN k) s' =>
             G (W (hd z.1) m' κ' (z.2 (hd z.1)) fun y => Function.update z.2 (hd z.1) y)) =
           avg fun z : CoinTape (@Game.coin _ C iF iN k) s' =>
