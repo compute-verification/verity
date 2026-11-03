@@ -180,7 +180,7 @@ def main(argv=None) -> int:
         print(f"reference: {r['what']}: published {r['loss']}{got} ({r['verdict']})")
     for s, r in rep["runs"].items():
         if not r["complete"]:
-            print(f"run {s}: still going ({r['dir']})")
+            print(f"run {s}: unfinished, going or stopped before its top branch ({r['dir']})")
     return 0
 
 
