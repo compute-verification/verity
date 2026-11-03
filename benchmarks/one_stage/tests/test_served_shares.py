@@ -1,7 +1,8 @@
 """`served_shares.py` on toy serve dirs: a full-prefill step of 8,192 tokens of the served 1B declares 8.617 ms at the
 tensor clock, the declared utilization is the steps' ideal seconds over the loads' busy wall (a Commit window's on-loop
 close in it), term by term, the credited share is Pearl+'s credited MACs over the same wall (none for no credit or a
-rejected answer), and a row with no start position or an undeclared model is refused."""
+rejected answer), the prover's replay is a CPU term beside them (the cores it takes to keep pace), and a row with no
+start position or an undeclared model is refused."""
 from __future__ import annotations
 
 import json
@@ -73,6 +74,16 @@ def test_credited_share_is_pearl_plus_credited_macs(tmp_path):
         S.shares(d, answer | {"public": {"work": [3]}})
 
 
+def test_the_provers_replay_is_a_cpu_term_beside_the_gpu_shares(tmp_path):
+    d = _dir(tmp_path / "s", _prefill(0.0, 2.0), model="verity-fp8/Llama-3.2-1B-FP8")
+    plain = S.shares(d)
+    got = S.shares(d, replay=(110.0, 32))
+    assert plain["replay"] is None and got["readings"] == plain["readings"]
+    assert got["replay"] == {"s": 110.0, "cpus": 32, "core_s": 3520.0, "of_wall": 55.0, "cores_to_keep_pace": 1760.0}
+    with pytest.raises(ValueError, match="cpus > 0"):
+        S.shares(d, replay=(110.0, 0))
+
+
 def test_refuses_what_it_cannot_count(tmp_path):
     with pytest.raises(ValueError, match="no start position"):
         S.shares(_dir(tmp_path / "a", _prefill(0.0, 1.0, start=None)))
@@ -85,5 +96,10 @@ def test_cli(tmp_path):
     script = str(HERE.parent / "served_shares.py")
     out = subprocess.run([sys.executable, script, str(d)], capture_output=True, text=True, check=True)
     assert json.loads(out.stdout)["schema"] == S.SCHEMA
+    out = subprocess.run([sys.executable, script, str(d), "--replay", "110", "--replay-cpus", "32"], capture_output=True,
+                         text=True, check=True)
+    assert json.loads(out.stdout)["replay"]["core_s"] == 3520.0
+    half = subprocess.run([sys.executable, script, str(d), "--replay", "110"], capture_output=True, text=True)
+    assert half.returncode == 2 and "go together" in half.stderr
     bad = subprocess.run([sys.executable, script, str(tmp_path / "none")], capture_output=True, text=True)
     assert bad.returncode == 2 and "served_shares.py:" in bad.stderr

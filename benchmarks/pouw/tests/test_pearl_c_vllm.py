@@ -52,6 +52,7 @@ from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.serving import SchemeId
 from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
@@ -1062,12 +1063,15 @@ def _serve_dir(tmp_path: Path, passes: list[Path]) -> Path:
 
 def test_served_passes_verify_refuses_two_passes_of_one_salt_sharing_a_call_index(tmp_path):
     """Two honest passes of one epoch whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
-    both, so the run is refused (``repeated-call``) before any pass is replayed."""
+    both, so the run is refused (``repeated-call``) before any pass is replayed, whether served.json or ``--manifest``
+    names them."""
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (1, 2))))
     assert json.loads(a.read_text())["salt"] == json.loads(b.read_text())["salt"]
-    rc, doc, answer = served_verify(_serve_dir(tmp_path, [a, b]), tmp_path / "verify.json")
-    assert rc == 1 and answer["verdict"] == "reject" and "verdicts" not in doc and doc["refused"][0] == "repeated-call"
-    assert "passes 0 and 1 both hold call index 1" in doc["refused"][1]
+    for d, more in ((_serve_dir(tmp_path, [a, b]), ()), (a.parent, ("--manifest", str(a), "--manifest", str(b)))):
+        rc, doc, answer = served_verify(d, tmp_path / d.name / "verify.json", *more)
+        assert rc == 1 and answer["verdict"] == "reject" and "verdicts" not in doc and doc["refused"][0] == "repeated-call"
+        assert "passes 0 and 1 both hold call index 1" in doc["refused"][1]
+        assert [x.split(" sha256:")[0].split(":", 1)[1] for x in doc["passes"]] == [str(a), str(b)]
 
 
 @pytest.mark.slow
@@ -1139,6 +1143,83 @@ def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_pa
     assert _replay_every_tile(VR.load(path, coins)) == {}
     again = VP.volunteer(path, coins, 1)
     assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
+
+
+def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex_or_its_published_root(tmp_path):
+    """A pass whose rows over a cap are given up (`volunteer_pass`) is accepted by the run's verdict, which credits none of
+    the given-up rows' cells.  More given-up rows than V-EX allows (⌈m/64⌉ of a call's A), or records changed after the
+    pass published their root, the verdict refuses before it takes its coin."""
+    VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    coins = published(path)
+    assert VP.volunteer(path, coins, 1)["ok"]
+    good = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4)
+    assert good["answer"]["verdict"] == "accept", good["line"]
+    p = VR.load(path, coins)
+    assert any(r.voluntary_a or r.voluntary_b for r in p.records)
+    kept = sum(r.k_kept * (r.real_rows - len(r.excluded_a) - len(r.voluntary_a)) *
+               (r.matmul.shape.n - len(r.excluded_b) - len(r.voluntary_b)) for r in p.records)
+    whole = sum(r.k_kept * (r.real_rows - len(r.excluded_a)) * (r.matmul.shape.n - len(r.excluded_b)) for r in p.records)
+    assert good["answer"]["public"]["work"]["macs"] == kept < whole
+    assert good["answer"]["public"]["work"]["credited"] == VR.credit_at_assumption([p], 3, VR.DELTA)["credited"]
+    man = json.loads(path.read_text())
+    u = next(u for u in man["matmuls"] if u.get("voluntary_a"))
+    for given, why in (([i for i in range(u["real_rows"]) if i not in u["excluded_a"]][:CW.voluntary_cap(u["m"]) + 1],
+                        "more voluntary rows than V-EX allows"),
+                       ([], "not the ones whose root the pass published")):
+        path.write_text(json.dumps({**man, "matmuls": [{**x, "voluntary_a": given} if x is u else x for x in man["matmuls"]]}))
+        r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4)
+        assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, r["line"]
+
+
+def window_record(path: Path) -> dict:
+    """Pearl+'s window record W over one pass, its round 0, as the tie writes it: a v2 record whose registered values are
+    each call's A rows (m16 rows of K FP32 words, A's domain) and y (its real rows of N, y's domain), beside a value of
+    another kind the verdict doesn't read."""
+    man = json.loads(path.read_text())
+    salt, reg = bytes.fromhex(man["salt"]), []
+    for c, u in enumerate(man["matmuls"]):
+        a = rows_domain(activation_binding(salt, u["index"]), u["index"], u["m"], HM96)
+        reg += [{"value": f"pearl-a/0/{c}", "root": u["root_a"], "leaves": u["m"], "words": u["k"], "word_bits": 32,
+                 "domain": a.domain_id.hex()},
+                {"value": f"pearl-y/0/{c}", "root": u["y"]["root"], "leaves": u["real_rows"], "words": u["n"], "word_bits": 32,
+                 "domain": SY.y_domain(salt, u["index"], u["real_rows"]).domain_id.hex()}]
+    return {"format": REG.FORMAT_V2, "registered": [*reg, {"value": "input-ids/0", "root": "00", "leaves": 1, "words": 1,
+                                                           "domain": "00"}]}
+
+
+def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_root_and_domain(tmp_path):
+    """``served_passes.py verify --tie W`` accepts a run whose window record registers each call's A rows and y at the roots
+    the verdict credits, under the domains it recomputes from the salt and the call's index, and names W's digest in its
+    answer.  A W whose root, domain (another salt's or call's), rows, words or word bits differ for any call, which misses
+    a call or names one the run doesn't hold, or which is not a v2 record, rejects the run before the coin."""
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    coins, w, man = published(path), window_record(path), json.loads(path.read_text())
+    (wfile := tmp_path / "w.json").write_text(json.dumps(w))
+    rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json", "--manifest", str(path), "--tie", str(wfile))
+    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 4}, doc["line"]
+    assert f"tied to W {REG.digest(w)[:16]} on its 4 tables" in doc["line"] and doc["tie_record"] == str(wfile)
+    salt, (u0, u1) = bytes.fromhex(man["salt"]), man["matmuls"]
+
+    def at(v: str, **kw) -> dict:
+        return {**w, "registered": [{k: x for k, x in {**e, **kw}.items() if x is not None} if e["value"] == v else e
+                                    for e in w["registered"]]}
+    cases = [(at("pearl-a/0/0", root=u1["root_a"]), "W's pearl-a/0/0: its root not the call's"),
+             (at("pearl-y/0/1", domain=SY.y_domain(bytes(32), u1["index"], u1["real_rows"]).domain_id.hex()),
+              "W's pearl-y/0/1: its domain"),
+             (at("pearl-a/0/1", domain=rows_domain(activation_binding(salt, u0["index"]), u0["index"], u1["m"], HM96)
+                 .domain_id.hex()), "W's pearl-a/0/1: its domain"),
+             (at("pearl-a/0/0", leaves=u0["real_rows"]), "W's pearl-a/0/0: its leaves"),
+             (at("pearl-y/0/0", words=u0["k"]), "W's pearl-y/0/0: its words"),
+             (at("pearl-y/0/0", word_bits=None), "W's pearl-y/0/0: its word_bits"),
+             ({**w, "registered": [e for e in w["registered"] if e["value"] != "pearl-y/0/1"]}, "W registers no pearl-y/0/1"),
+             ({**w, "registered": [*w["registered"], {**w["registered"][0], "value": "pearl-a/1/0"}]},
+              "W registers pearl-a/1/0, no call of the run's"),
+             ({**w, "registered": [*w["registered"], w["registered"][0]]}, "W registers pearl-a/0/0 twice"),
+             ({**w, "format": REG.FORMAT}, f"W is no {REG.FORMAT_V2} record")]
+    for bad, why in cases:
+        r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=bad)
+        assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
 
 
 def test_volunteer_words_gives_up_a_b_row_for_a_row_the_a_count_leaves_over():
