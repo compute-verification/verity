@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""The per-record quantities of the v2.3 search's valid records under the training formalism v2
-(note:training-20261102T2215Z-report-training-formalism-v2), which te_core.rescore scores: this file holds no formula of
-its own (Fit, Slowdown's rho, the attack side, W*, H and S are te_core.formalism's and te_core.frontier's).
+"""The per-record quantities of the v2.3 search's valid records under the training formalism v2,
+which te_core.rescore scores: this file holds no formula of its own (Fit, Slowdown's rho, the attack side, W*, H and S are te_core.formalism's and te_core.frontier's).
 
 It reads the night's state as the scorer left it: `submissions.json` (the current regime: the valid records'
 checkpoints), the launch records in `index.jsonl` (trainable set, arguments, tokens) and `starts.json` from the scorer's
@@ -17,6 +16,9 @@ each with the approximation it rests on:
 - Delta = 8·|E| of the checkpoint's E, with u(1) = Delta: every token's path reads the whole update (dense blocks, and
   the tied head reads the whole embedding).
 - Delta_grad = the trainable values' gradient and optimizer state at the run's widths (`delta_grad`).
+- Delta_t = the weights in the form the update rule reads and writes (the coordinator's 00:47Z ruling): a
+  straight-through run's fp32 latents, 32 bits a value, as its record's notes count them (`latent_bits`); for every
+  other run te_core takes Delta.
 - token blocks: each token's forward and backward, so their gates T are the checkpoint's `fwd` and `bwd` operations
   (the optimizer's, `other`, are in none) and sigma = T/G, G the checkpoint's gates.
 - affected gates in token blocks = T − nu·F: F the checkpoint's forward gates, nu the share of a token's forward
@@ -48,6 +50,7 @@ ACT_BITS = 16
 FUSED_ADAMW_MACS = 8
 LF_STAGES = {"attn_norm": 0, "wq": 1, "wk": 1, "wv": 1, "wo": 2, "mlp_norm": 3, "w_gate": 4, "w_up": 4, "w_down": 5}
 REFS = ("ref-optim", "ref-data")
+LATENT_BITS = 32
 
 
 def gate_factors(cache: Path) -> dict:
@@ -177,6 +180,26 @@ def delta_grad(rec: dict, start: dict, trainable: dict) -> tuple[float, str]:
     return 64.0 * mats + 96.0 * (sum(full.values()) - mats + adapters), opt
 
 
+def latent_bits(notes: dict) -> tuple[float | None, str | None]:
+    """A straight-through run's fp32 latents in bits, as its record's notes count them, and which note; (None, None)
+    for a run that trains no code through its rounding (its Delta_t is Delta)."""
+    dg = notes.get("delta_grad") if isinstance(notes.get("delta_grad"), dict) else {}
+    acc = notes.get("accounting") if isinstance(notes.get("accounting"), dict) else {}
+    if dg.get("latent_bits"):
+        return float(dg["latent_bits"]), "delta_grad.latent_bits"
+    if acc.get("delta_t_bits"):
+        return float(acc["delta_t_bits"]), "accounting.delta_t_bits"
+    if notes.get("latent_bytes_max"):
+        return 8.0 * notes["latent_bytes_max"], "latent_bytes_max"
+    if notes.get("coded_weights"):
+        return float(LATENT_BITS * notes["coded_weights"]), "coded_weights"
+    if notes.get("mode") == "qat" and notes.get("trained_parameters"):
+        return float(LATENT_BITS * notes["trained_parameters"]), "trained_parameters (qat)"
+    if "fp32 latents" in str(dg.get("what", "")) and dg.get("values"):
+        return float(LATENT_BITS * dg["values"]), "delta_grad.values"
+    return None, None
+
+
 def family(r: dict) -> str:
     """P4's family of a record (the scorer's rule, v1cycle's): how its update is carried."""
     mech, fmt, opt, d = r["mechanism"] or "", r["E_format"] or "", r["optimizer"], r["direction"]
@@ -205,6 +228,10 @@ def load(scorer: Path, ledger: Path):
         if r.get("source") == "launch.py":
             launch[r["id"]] = r
     starts = json.loads((scorer / "starts.json").read_text())
+    for rid in {x["id"] for x in subs}:
+        meta = scorer / "records" / rid.split(":", 1)[-1] / "meta.json"
+        notes = (json.loads(meta.read_text()).get("notes") or {}) if meta.exists() else {}
+        launch[rid]["latent_bits"], launch[rid]["latent_from"] = latent_bits(notes)
     runs = {launch[x["id"]]["run"] for x in subs}
     counted = {}
     for line in (ledger / "index.jsonl").open():
@@ -230,6 +257,7 @@ def build(subs, launch, starts, counted, g) -> tuple[dict, list[dict]]:
         records[rid] = {"id": rid, "start": rec["start"], "direction": rec["direction"], "mechanism": rec.get("mechanism"),
                         "class": rec.get("class"), "E_format": rec.get("E_format"), "note": rec.get("note", "")[:160],
                         "reference": rec["direction"] in REFS, "optimizer": opt, "delta_grad": dg,
+                        "delta_t": rec.get("latent_bits"), "delta_t_from": rec.get("latent_from"),
                         "w_fwd": w_fwd, "a": cfg["d_model"] * ACT_BITS, **pt}
         records[rid]["family"] = family(records[rid])
     for x in subs:

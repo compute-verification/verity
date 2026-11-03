@@ -1,6 +1,5 @@
-"""A record's slowdown ρ at a policy (c, k), by the training formalism v2 (Daniel, 2 Nov 2026, 2:09 and 2:12 PM PST;
-note:training-20261102T2215Z-report-training-formalism-v2): its theorems Fit and Slowdown per record, the attack side
-beside them, and the quantities Security's S = W*/H reads (te_core.frontier). |C|, c, w and d are Boolean gates
+"""A record's slowdown ρ at a policy (c, k), by the training formalism v2: its
+theorems Fit and Slowdown per record, the attack side beside them, and the quantities Security's S = W*/H reads (te_core.frontier). |C|, c, w and d are Boolean gates
 (te_core.gates), every other quantity bits.
 
 Measured per record (`Measured`), each with its source in `labels` ("measured: ...", "counted: ...", "stub: ...",
@@ -12,7 +11,9 @@ Measured per record (`Measured`), each with its source in `labels` ("measured: .
   the affected gates among those, |A ∩ ∪T| (`affected_gates`: the gates that depend on θ'), and the gradient and
   optimizer state its blocks pass between them (`delta_grad_bits`, Δ_grad; None: unmeasured);
 - `tau_bits` τ, the inputs outside θ a token block reads; `delta_bits` Δ, the bits that describe θ' given θ, by a
-  decoder of `decoder_gates` d gates (`decoder`; None: unmeasured, so Δ never counts and Fit fails);
+  decoder of `decoder_gates` d gates (`decoder`; None: unmeasured, so Δ never counts and Fit fails); `delta_t_bits`
+  Δ_t, the weights in the form the update rule reads and writes: a straight-through run's fp32 latents at 32 bits a
+  value (None: Δ, for every other run; the coordinator's 00:47Z ruling);
 - `a_bits` a, the cut cost: the computed bits a block reads to do any of a token's affected work without computing that
   token from its inputs;
 - `u`, A1's update profile: u(x) the update bits a block must read to do a share x of one token's affected work, as
@@ -29,8 +30,8 @@ At (c, k), with s = c/w, w = token_gates / tokens (each part's for Fit; the reco
 σ = token_gates / |C|:
 
 - **Fit** (construction, checked per part): the training's three kinds of block, compute Δ + sτ ≤ k, reduction
-  2Δ_grad ≤ k and update application Δ + Δ_grad ≤ k (Δ counts only when its decoder fits, d < c; a part with no token
-  blocks has only the compute kind). Where every part fits, the record's ρ is c/(c − d) (`rho_fit`).
+  2Δ_grad ≤ k and update application Δ_t + Δ_grad ≤ k (Δ counts only when its decoder fits, d < c, and so does Δ_t;
+  a part with no token blocks has only the compute kind). Where every part fits, the record's ρ is c/(c − d) (`rho_fit`).
 - **Slowdown** (the counting lemma at B = A \\ R; stated, not yet proved in Lean): its token form with the largest
   per-token affected count α_max where token blocks vary, ρ ≥ σ(1 − x0)·(s/s*)·(ᾱ/α_max), ᾱ the mean per-token
   affected count (for identical token blocks the last factor is 1). The claim takes the assumptions' upper bounds,
@@ -77,8 +78,8 @@ Where the quantities come from (`measure`): a row's `formalism` block, which ing
 per consumed token at ⌈log2 V⌉ bits, plus `tau_other_bits`), a, u_in, u and t (`of_trace`, with every measured field
 under `trace`). Δ stays 8 |E|, the submitted code: the trace's own encoding of θ' (`trace.update_cut_bits`) is the
 carried state, θ' in full. A run record may also give its own block, {"parts": [...], "tau_bits", "a_bits", "u",
-"u_in", "u1_bits", "tail_share", "delta_bits", "decoder_gates", "labels"}, which `of_record` passes through field by
-field.
+"u_in", "u1_bits", "tail_share", "delta_bits", "delta_t_bits", "decoder_gates", "labels"}, which `of_record` passes
+through field by field.
 
 **The decoder** (`decoder`; seed-mezo's 04:15Z finding of 3 Nov): d is the block's `decoder_gates` where it gives one,
 else the gates the record's program reports for the checkpoint's E (`output.decoder_gates`, ingest's from the
@@ -130,6 +131,12 @@ class Measured:
     labels: dict = field(default_factory=dict)
     tail_share: float = 0.0
     context: dict | None = None
+    delta_t_bits: float | None = None
+
+    @property
+    def delta_t(self) -> float | None:
+        """Δ_t, the update application's weights: `delta_t_bits`, else Δ."""
+        return self.delta_t_bits if self.delta_t_bits is not None else self.delta_bits
 
     @property
     def gates(self) -> float:
@@ -167,6 +174,24 @@ class Measured:
         return self.u[-1][1]
 
     @property
+    def alpha_ratio(self) -> float:
+        """ᾱ/α_max, Slowdown's token-form factor (0 where nothing is affected)."""
+        return self.alpha_mean / self.alpha_max if self.alpha_max else 0.0
+
+    @property
+    def w_fit(self) -> float:
+        """The least w of a part with token blocks, the one Fit's compute block binds on (inf: none has any)."""
+        return min((p.token_gates / p.tokens for p in self.parts if p.tokens), default=math.inf)
+
+    @property
+    def fit_delta_grad_bits(self) -> float | None:
+        """The Δ_grad Fit's reduction and update blocks bind on: the largest of the parts that have them (None where a
+        part with token blocks measures none, so Fit fails at every k; 0 where no part has them)."""
+        if any(p.tokens and p.delta_grad_bits is None for p in self.parts):
+            return None
+        return max((p.delta_grad_bits for p in self.parts if p.delta_grad_bits is not None), default=0.0)
+
+    @property
     def delta_grad_bits(self) -> float | None:
         """The largest Δ_grad of the parts that measure one (None: none does)."""
         return max((p.delta_grad_bits for p in self.parts if p.delta_grad_bits is not None), default=None)
@@ -179,7 +204,7 @@ class Measured:
 def from_json(d: dict) -> Measured:
     return Measured(tuple(Part(**p) for p in d["parts"]), d["tau_bits"], d["a_bits"], tuple(map(tuple, d["u"])),
                     tuple(map(tuple, d["u_in"])), d.get("delta_bits"), d.get("decoder_gates"), d.get("labels", {}),
-                    d.get("tail_share", 0.0), d.get("context"))
+                    d.get("tail_share", 0.0), d.get("context"), d.get("delta_t_bits"))
 
 
 # ---- the update profiles -----------------------------------------------------------------------------------------------
@@ -315,7 +340,7 @@ def at(m: Measured, c: float, k: float) -> dict:
     docstring); with `m.context`, s* is the context charge's (`context_s_star`) and v2's is `s_star_a1`. An unmeasured
     decoder (d None) fits no block."""
     d = m.decoder_gates if m.decoder_gates is not None else math.inf
-    delta = m.delta_bits if d < c else None
+    delta, delta_t = (m.delta_bits, m.delta_t) if d < c else (None, None)
     u, u_in = (m.u, m.u_in) if delta is None else (capped(m.u, delta), capped(m.u_in, delta))
     rho_fit = c / (c - d) if d < c else math.inf
     parts, fits = [], []
@@ -326,11 +351,11 @@ def at(m: Measured, c: float, k: float) -> dict:
         kinds = {"compute": delta is not None and delta + s * m.tau_bits <= k}
         if p.tokens or dg is not None:
             kinds["reduction"] = dg is not None and 2 * dg <= k
-            kinds["update"] = delta is not None and dg is not None and delta + dg <= k
+            kinds["update"] = delta_t is not None and dg is not None and delta_t + dg <= k
         fits.append(all(kinds.values()))
         parts.append({"w": w, "s": s, "fit": kinds, "fit_training": fits[-1]})
     sigma, s = m.sigma, c / m.w
-    ratio = m.alpha_mean / m.alpha_max if m.alpha_max else 0.0
+    ratio = m.alpha_ratio
     x0, s_star = bottom_share(u_in, k), room(u, k) / m.a_bits
     charged = {}
     if m.context is not None:
@@ -372,7 +397,7 @@ def fit_k(m: Measured, c: float, w_run: float) -> tuple[float | None, float | No
         dg = p.delta_grad_bits
         if dg is None and p.tokens:
             return run, None
-        need.append(max((m.delta_bits + st, *((2 * dg, m.delta_bits + dg) if dg is not None else ()))))
+        need.append(max((m.delta_bits + st, *((2 * dg, m.delta_t + dg) if dg is not None else ()))))
     return run, max(need)
 
 
@@ -553,7 +578,7 @@ def complete(f: dict, row: dict, shape: dict) -> Measured:
     if f.get("context"):
         labels.setdefault("context", CONTEXT)
     return Measured(parts, out["tau_bits"], out["a_bits"], out["u"], out["u_in"], out["delta_bits"],
-                    out["decoder_gates"], labels, t, f.get("context"))
+                    out["decoder_gates"], labels, t, f.get("context"), f.get("delta_t_bits"))
 
 
 def decoder(f: dict, row: dict) -> tuple[float | None, str | None]:

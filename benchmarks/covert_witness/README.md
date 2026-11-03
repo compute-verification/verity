@@ -1,13 +1,13 @@
 # covert_witness: the least compute that lowers a start's loss to a target, at every policy (c, k)
 
-The training formalism v2 (Daniel, 2 Nov; note:training-20261102T2215Z-report-training-formalism-v2) prices a training
+The training formalism v2 prices a training
 computation C at a policy (c, k) by its slowdown ρ, so that |C|ρ is what the computation costs under that policy. This
 speedrun measures, per start (θ, ℓ0) and target ℓ*, the least |C|ρ of a valid candidate's checkpoint that reaches ℓ*
 (W*), against the least |C| of any valid candidate's checkpoint that reaches it (honest H), and S = W*/H ≥ 1. The inputs are
 the start, the target and the policy, with c (gates per block) and k (bits a block reads beyond θ) as two independent
 axes and n the per-period cap; the red team chooses everything else: no class caps the update, its size, its format or
 its depth. Every candidate carries witnesses, which the evaluator checks, and every record carries the formalism's
-quantities, which te_core measures (the experiments are note:training-20261102T1715Z-draft-training-efficiency-experiments).
+quantities, which te_core measures.
 
 It is autoresearch-shaped: a fixed side (`prepare.py`, `evaluate.py`, `candidate.sh`, `sandbox.py`, `launch.py`,
 `pin.py` and the harness `te_core/`, with `data.py`, `starts.py`, `starts_store.py` and `model.py` behind them) and
@@ -15,11 +15,12 @@ islands (`islands/<name>/`, one per direction or seed program), each with one ed
 `README.md`, for a researcher agent.
 
 **Version**: v3.0 (`prepare.VERSION`, in every witness record, schema `covert-witness/witness/v5`; data version
-`sealed.DATA` v2.2). It measures every candidate as v2.3 did (te_core's harness counts its MACs and times its steps in a
+`sealed.DATA` v3, `data_v3.py`: OLMo 2's stage-1 mix and its 32,000-token BPE; v2.2's FineWeb-Edu, `data.py`, is the
+v2.3 harness's, labelled `v2.3-pilot` where its records are scored). It measures every candidate as v2.3 did (te_core's harness counts its MACs and times its steps in a
 sandboxed training job; a separate evaluation job rebuilds and scores the model on a fresh slice of the search pool;
 promotions are decided on a sealed set and the final set is sealed until the scorer's final scoring; one pinned commit,
 `pinned.json`, measures every candidate, taking only its island from the candidate's commit). It drops the classes and
-scores by the formalism. `pinned.json` names v2.3's commit until v3 is pinned.
+scores by the formalism. `pinned.json` names v3's commit, and v2.3's two as its `pilot`.
 
 ## Policy and score
 
@@ -62,18 +63,22 @@ scores by the formalism. `pinned.json` names v2.3's commit until v3 is pinned.
   checkpoints (the coordinator's 19:50Z rule), and Security's S = W*/H. **Plots** (`python -m te_core.plots --out
   DIR`): P1-P4 of the experiments draft and the A2 curve (the least compute to each target against Δ, per start; Δ's
   bins, never caps), as five panels, each `<name>.json` and a PNG made from it, off the console; `python -m
-  te_core.console DIR` cuts each to the panels route's limits. The console's one training panel,
+  te_core.console DIR` cuts each to the panels route's limits. The console's two training panels are
   `training/frontier-branches` (loss against total training compute: the frontier and each start's honest and throttled
-  branches), is `python -m te_core.panels frontier-branches --out DIR --publish`.
+  branches), `python -m te_core.panels frontier-branches --out DIR --publish`, and `training/algorithm-policy` (per run
+  and end loss, its algorithm's inefficiency p = C/H against its policy's slowdown ρ), `python -m
+  te_core.algorithm_policy --out DIR --publish`.
   **Re-scoring v2.3's records** (`python -m te_core.rescore --out DIR`): the same score and panels over the pin's
-  valid records, each with the
-  formalism block built from `analysis/rescore_v1.py`'s per-record quantities (from the scorer's directory), or the
-  stubs with `--stubs`.
+  valid records, on the quantities measured on each record's traced step (te_core 4.0's default; `--charge-context`
+  charges earlier tokens' affected keys and values), or `analysis/rescore_v1.py`'s per-record quantities with
+  `--quantities analysis` (from the scorer's directory), or the stubs with `--stubs`.
 
 **Budget**: 2x the MACs the harness counts ≤ 9e16 x 1.1 (`TRAIN_FLOP_BUDGET`, about 10 GPU-minutes of m's dense AdamW at
 its measured 1.49e14 FLOP/s, times `HARNESS_FLOP_SLACK` for the elementwise and optimizer work the analytic meter leaves
 out) and train.py's steps' wall seconds under the harness ≤ 3000 (`GPU_SECONDS_CAP`; the harness runs eager and counted,
-about 2.4x a compiled run). The budget bounds a run's node time; it is not a class.
+about 2.4x a compiled run). The budget bounds a run's node time; it is not a class. The long tier (`prepare.budget(start,
+"long")`, `launch.py --long 'HH:MMZ who'`, valid only for a run the board assigns it with that line): up to `LONG_C0` = 100
+times the start's C0 in FLOPs and `LONG_GPU_SECONDS`, 30 GPU-hours, of steps.
 
 The seed islands (`islands/<name>/train.py`), each a program to start from:
 
@@ -87,16 +92,20 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
 
 ## The fixed side
 
-- **Held-out sets** (`data.py`, data version v2.2, each with every document's tokens and bytes): the search pool,
-  fineweb-edu shard 013's first whole documents up to 2^23 GPT-2 tokens (8,282 documents, 38,780,980 bytes), in
-  `CW_ROOT/heldout/v2.2/search-pool`; the promotion set, shard 011's by the same rule up to 2^21 tokens (2,155
-  documents), and the final set, shard 010's up to 2^21 (2,213 documents) in GPT-2's and Pythia's tokens, both sealed.
-  A document whose text is one of the training shards' documents (sha256 of the text, 2,163,660 documents in shards
-  000-002) is left out: 157, 41 and 39 of them, each named by row and hash in its set's manifest (`dedup`). Each set's
-  tokens are pinned (`prepare.SET_SHA256`), so every node scores the same text. Bits per byte divides by the documents'
-  UTF-8 bytes, so scores compare across tokenizers. Training streams: learning_frontier's GPT-2 shards 000-002
-  (`train.bin`; its `val.bin`, the first 2M tokens of v2.0's search set, is not in the training job's view), and shard
-  000 in Pythia's tokens.
+- **Data** (`data_v3.py`, data version v3; its docstring has the rules): a proportional sample of OLMo 2's stage-1 mix
+  (`allenai/olmo-mix-1124` at `data_v3.REVISION`, `FRACTION` of each source's bytes; the 278 chosen files with their
+  sha256 in `data_v3.json`), split into units each a proportional sample of the mix. Unit 0 is held out: its documents
+  in hash order, less any whose text matches a training document's (6,567 of 104,971), each taken whole until a set
+  holds its bpe32k tokens: the search pool (2^23, `CW_ROOT/heldout/v3/search-pool`), the promotion and final sets (2^21
+  each, sealed under `heldout/v3/`) and the ladder's validation stream (2^22, `CW_ROOT/train/v3/val.bin`, in no
+  training job's view). Each set is in bpe32k's and GPT-2's tokens (final also in Pythia's), with every document's tokens
+  and bytes, pinned (`prepare.SET_SHA256`), so every node scores the same text; `CW_ROOT/heldout/v3/data.json` records
+  them. Bits per byte divides by the documents' UTF-8 bytes, so scores compare across tokenizers. The tokenizer,
+  `bpe32k`, is a byte-level BPE of 32,000 tokens (end-of-text 0) trained on the training stream's first 8 parts
+  (`CW_ROOT/train/v3/tokenizer.json`); models tie their embeddings. The training stream is units 1-277,
+  `CW_ROOT/train/v3/parts/NNN.bin` (uint16 bpe32k tokens, each document after end-of-text, about 40B tokens, about 4.23
+  bytes a token) with its records, `manifest.json` last, read through `prepare.TrainData("bpe32k")` (`parts=N`: the
+  first N); Pythia's shard 000 (`train/pythia.bin`) is the sealed start's.
 - **Search scores** (`prepare.Scorer`): every search evaluation, the evaluation job's, hashes the weights and then
   samples a slice of the pool (`prepare.draw_slice`: a coin of 16 bytes from the OS, and 1,024 of the pool's 8,192
   evaluation windows, 2^20 tokens, sampled by a generator seeded with sha256(coin ‖ digest)). The score is the start's bpb
@@ -124,20 +133,29 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
   `starts_store.json`. Each node installs them into one fixed directory, `/workspace/research/te/starts` (`CW_STARTS`,
   `prepare.STARTS`), with `python3 starts_store.py install --keep`, which checks every file against the manifest; no run
   reads another run's directory. Each start's manifest entry has its `shape` (`starts_store.shape`), which the policy
-  grid reads. ref-optim's ladder (`islands/ref-optim/ladder.py`, dense starts at several tokens per parameter with C0
-  counted) joins the store when it publishes.
-- **Evaluator** (`evaluate.py`, `prepare.evaluate_bpb`): bits per byte at context 1024 of decode(θ, E). The model must
-  have θ's tensors, shapes and dtypes, so its parameter count, evaluation FLOPs and weight bytes read per byte (every
-  parameter's bytes once per window, a lookup table in full) are the start's: no lookup table rides free.
+  grid reads. These four are GPT-2 starts on v2.2's data, the pilot's. v3's starts are the v3 ladder
+  (`islands/ref-optim/ladder.py`, dense lf models at vocabulary 32,000 on bpe32k's stream, at several tokens per
+  parameter with C0 counted), which join the store with tokenizer `bpe32k` in their `shape` when it publishes, each
+  batch in a commit that changes only `starts_store.json` on the pin, pinned with it as `same_version`. At v3 a branch
+  starts only from v3's starts: launch.py refuses a pilot start, and scoring leaves out a v3 record from one
+  (`pilot-start`).
+- **Evaluator** (`evaluate.py`, `prepare.evaluate_bpb`): bits per byte at context 1024 of decode(θ, E). The model has
+  θ's tensors, shapes and dtypes, or with E in the model format (`prepare.encode_model`, CWMODL1) its own lf
+  architecture with θ's vocabulary, context and tying (`prepare.model_config`), grown, pruned or distilled, every tensor
+  θ doesn't give it in E. Nothing in the harness caps its cost: the evaluation job records each model's parameters and
+  forward MACs and gates per token (`te_core.cw.forward_cost`), and scoring admits a checkpoint only within the cap
+  (`te_core.policy.eligible`: at most the greater of the start's forward and the compute-optimal model's at its loss
+  under the v3 ladder's fit, and twice the start's forward until that fit exists).
 - **Training job** (`candidate.sh`, `sandbox.py`, the harness `te_core/` and its README): the island's program runs as
   `python -m te_core.run --script islands/<island>/train.py`, which counts every multiply-accumulate it computes through
   torch, times its steps (a step is one `TrainData.next` to the next), writes the first E in each 5% of the run to its
   output (a checkpoint, scored later) and refuses programs that route around the dispatcher. It runs in sandbox.py: new
   mount, PID, network, IPC and UTS namespaces, as the run's user with no privileges, seeing the pinned commit's
-  `benchmarks/covert_witness/` with only its own island under `islands/`, the starts, `train.bin` (and the Pythia
-  stream), the Python and its leased GPU, all read-only, and one output directory; no held-out set, sealed side,
-  other run or home directory is mounted, and there is no network. An audit hook also refuses `prepare.UNREADABLE` (the search pool,
-  the sealed side, v2.0's `eval/`, and learning_frontier's `val.bin` and hub cache) and other runs' outputs.
+  `benchmarks/covert_witness/` with only its own island under `islands/`, the starts, the training stream
+  (`train/v3/parts/`, its tokenizer and manifest; and the Pythia stream), the Python and its leased GPU, all read-only,
+  and one output directory; no held-out set, sealed side, validation stream, other run or home directory is mounted, and
+  there is no network. An audit hook also refuses `prepare.UNREADABLE` (the search pool, the sealed side, v2.0's
+  `eval/`, learning_frontier's `val.bin` and hub cache, and v3's `val.bin`) and other runs' outputs.
   The submission holds E, the step log and the declarations; no model. sandbox.py records the job's whole process tree:
   every process's CPU seconds (the namespace's init reaps them all) and each GPU compute process `nvidia-smi` sees in
   it.
@@ -160,7 +178,9 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
   every candidate. launch.py ships it (a clean worktree of it under `~/.research/cw-pinned/`) whatever the candidate's
   checkout holds, and the witness and ledger records name it (`measurement_commit`); te_core's frontier leaves out a
   record of any other commit than it and the earlier commits of its version (`same_version`) (`other-version`), and
-  one whose E an earlier record at the pin, or another agent's at any commit, submitted (`duplicate-e`).
+  one whose E an earlier record at the pin, or another agent's at any commit, submitted (`duplicate-e`). `pilot` names
+  an earlier version's commits, whose records only `te_core.panels` shows beside the pin's, each curve labelled by its
+  data.
 - **Nodes** (`nodes.txt`, `prep.sh`): a node is listed (`NODE pool=GPU_POOL cpu=CPU_POOL`) once `prep.sh`, run there
   in its CPU pool, has installed the starts, built the held-out sets (checked against `prepare.SET_SHA256`, left
   read-only) and registered the sealed start; on a prepared node it only checks. vy-nebius-1, -2 and -3 are listed.
@@ -175,17 +195,17 @@ The seed islands (`islands/<name>/train.py`), each a program to start from:
 **Run**: `python benchmarks/covert_witness/launch.py START [--island NAME] --note TEXT [--program FILE] --
 TRAIN_ARGS` from a checkout whose island is committed: the island is NAME, else `islands/<direction>/` when HEAD has its
 FILE (default `train.py`), and nothing else of the checkout is used.
-`starts.py --size s|m` built the starts once (one GPU); `prep.sh` prepares a node (`data.py`,
-`prepare.register_pythia()`, the starts from the store); `evaluate.py --start NAME --out F` scores a start on the whole
+`starts.py --size s|m` built v2.3's starts once (one GPU); `data_v3.py build --push NODE ...` installs data v3 on every
+node from one; `prep.sh` prepares a node (`data_v3.py verify --keep`, `prepare.register_pythia()`, the starts from the
+store); `evaluate.py --start NAME --out F` scores a start on the whole
 search pool. `CW_DEVICE=cpu CW_LEASE=none` runs candidate.sh on a CPU for a smoke test.
-`analysis/rescore_v1.py` gives the scorer's current records' per-record quantities under the training formalism v2
-(note:training-20261102T2215Z-report-training-formalism-v2), analytically: gates, token blocks' gates, σ, the affected
-gates, Δ, Δ_grad, u and u_in, the frozen tail's share t and P4's family. It has no formula of its own: `python -m te_core.rescore` scores them. Its docstring
+`analysis/rescore_v1.py` gives the scorer's current records' per-record quantities under the training formalism v2, analytically: gates, token blocks' gates, σ, the affected
+gates, Δ, Δ_grad, u and u_in, the frozen tail's share t and P4's family. It has no formula of its own: `python -m te_core.rescore --quantities analysis` scores them. Its docstring
 lists the approximations.
 
 **Reads and writes**: the starts are in `/workspace/research/te/starts` and the sealed side in
 `/workspace/research/te/sealed` (above); everything else lives under `/workspace/research/scratch/covert-witness`
-(`CW_ROOT`, kept under @training): `heldout/<data version>/` (the search pool), `train/`, `ckpt/`, and `candidates/`
+(`CW_ROOT`, a retention the training lane owns): `heldout/<data version>/` (the search pool), `train/`, `ckpt/`, and `candidates/`
 (each candidate's island, training job output and sandbox root, removed when it ends).
 A candidate's run `out/` holds `run/run.json` (the harness's record as the evaluation job scored it, schema
 `te-core/run/v1`, with `evaluation`), `witness.json` (schema `covert-witness/witness/v5`), `tree.json` (the process

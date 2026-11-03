@@ -1,4 +1,4 @@
-"""te_core 4.0's definitions (Daniel's smell check, 2 Nov 8:23-8:29 AM PST), on toy steps: T2 reads update dependence,
+"""te_core 4.0's definitions (after Daniel's smell check), on toy steps: T2 reads update dependence,
 however the circuit is written, and T1's β is the narrowest cut the step's own circuit has (structure.py's docstring)."""
 from __future__ import annotations
 
