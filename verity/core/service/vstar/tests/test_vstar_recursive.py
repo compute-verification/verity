@@ -215,21 +215,25 @@ KEPT = json.loads((Path(__file__).with_name("recursive_data.json")).read_text())
 
 
 def _data_dir(tmp_path_factory) -> Path:
-    """``DATA``'s directory: ``DATA`` itself, or for ``fetch`` `KEPT` fetched from the evidence store into a fresh directory."""
+    """``DATA``'s directory: ``DATA`` itself, or for ``fetch`` `KEPT` fetched from the evidence store into a fresh directory.
+    `KEPT` is on the store's private remote only, so where the store can't reach it (a node without the remote's keys)
+    the tests skip, naming the store's refusal."""
     if DATA != "fetch":
         return Path(DATA)
     to = tmp_path_factory.mktemp("kept")
-    subprocess.run([sys.executable, "-m", "research", "data", "fetch", KEPT, "--to", str(to)], check=True,
-                   stdout=subprocess.DEVNULL)
+    r = subprocess.run([sys.executable, "-m", "research", "data", "fetch", KEPT, "--to", str(to)], capture_output=True,
+                       text=True, check=False)
+    if r.returncode:
+        why = (r.stderr.strip().splitlines() or [f"exit {r.returncode}"])[-1]
+        pytest.skip(f"VERITY_VSTAR_RECURSIVE_DATA=fetch: the evidence store did not fetch {KEPT} ({why}); run where "
+                    "`research data fetch` reaches the private remote, or fetch it there and set VERITY_VSTAR_RECURSIVE_DATA=DIR")
     return to
 
 
 def _staged(dd: Path, named: str) -> Path:
     """The staged directory a ``<s>.stmt`` names, in ``dd``: the run wrote its path on the node that ran it, so a copy of
-    the data elsewhere holds it under the longest tail of that path that is a directory of ``dd``."""
+    the data elsewhere holds it under the longest tail of that path that is a directory of ``dd``, else the path as written."""
     p = Path(named)
-    if p.is_dir():
-        return p
     for i in range(1, len(p.parts)):
         if (q := dd.joinpath(*p.parts[i:])).is_dir():
             return q
