@@ -2,6 +2,7 @@ import Proofs.Flock.SessionLoop.RoundL0Frame
 import Proofs.Flock.SessionLoop.RoundL0Cut
 import Proofs.Flock.SessionLoop.RoundL0Vals
 import Proofs.Flock.SessionLoop.RoundSwitchSv
+import Proofs.Flock.SessionLoop.SchedUnrefused
 
 /-!
 # A rep's level-0 rounds past the binding
@@ -10,15 +11,17 @@ import Proofs.Flock.SessionLoop.RoundSwitchSv
 `ρ_1`'s squeeze alone), where `vs`'s level-0 values are the firewall's (`Loop.L0Fixed`): the release of the worker's
 round is the switched session's message without its leading domain frame.
 
-* **`LeanRelease.release_sched_l0_st`**: where no refusal shows by the round and the frame takes the round's coins in
-  level 0's masked phase at body `i`'s position. The frame releases body `i` at the loop's table, the basis of its
-  switched vectors at the openings' words, the rep's pads and the opened coins from the binding on (`l0_frame`). The
+* **`LeanRelease.release_sched_l0_st`**: where no refusal shows by the round. The frame releases body `i` at the
+  loop's table, the basis of its switched vectors at the openings' words, the rep's pads and the opened coins from the
+  binding on (`l0_frame`). The
   session sends body `i` at the switched source's pads (`Loop.swMsgAt_l0`), which under `L0Fixed` are the rep's pads
   (`Loop.l0BodyAt_vs`, `Loop.RepSrc.pads`), at the tape's packed table and extra lanes, which are the loop's table's
   (`Loop.Level0Src.realOf`), the basis of the switched source's vectors at the opened coins, which is the loop's
   (`Loop.sws_of_pts`, the loop's extra claims at the session's link points, `Loop.linkPoints_slot`), and the opened
   coins, which are the openings' words (`wordsAt_slot`). Past the binding a body has no domain frame
   (`Loop.dropDom_l0Body`).
+* **`LeanRelease.release_sched_l0_pf`**: `release_sched_l0`'s statement. Level 0's rounds are past the rep's PCS round
+  and before its `β` round, where no refusal shows (`unrefused_sched`).
 -/
 
 set_option synthInstance.maxSize 100000
@@ -36,12 +39,11 @@ open FlockSoundness.Refine (Frame encs)
 
 open Loop Ranked in
 set_option maxHeartbeats 4000000 in
-/-- **Level 0's rounds past the binding, where no refusal shows and the frame is at the body**: at rep stream
-`2j + r`'s level-0 round `1 ≤ i ≤ k₀ + 3` (`Masked.repSlot` `i`), where `vs`'s level-0 values are the firewall's
-(`Loop.L0Fixed`), no refusal shows by the round, and the frame takes the round's coins in level 0's masked phase at body
-`i`'s position, the release of the worker's round is the switched session's message without its leading domain frame:
-body `i` at the rep's pads, the tape's packed table and extra lanes, the basis of the switched source's vectors and the
-opened coins from the binding on. -/
+/-- **Level 0's rounds past the binding, where no refusal shows**: at rep stream `2j + r`'s level-0 round
+`1 ≤ i ≤ k₀ + 3` (`Masked.repSlot` `i`), where `vs`'s level-0 values are the firewall's (`Loop.L0Fixed`) and no refusal
+shows by the round, the release of the worker's round is the switched session's message without its leading domain
+frame: body `i` at the rep's pads, the tape's packed table and extra lanes, the basis of the switched source's vectors
+and the opened coins from the binding on. -/
 theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)
@@ -54,9 +56,7 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
     (hv : wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false)) (j : Fin (Masked.jOf x)) (r : Fin 2) {i : ℕ}
     (hn : ops.length = Masked.repSlot x (2 * j.val + r.val) fun _ => i) (h1 : 1 ≤ i)
     (hi : i ≤ (Masked.zkTab x j).sch.k0 + 3)
-    (hN : ¬ Masked.Refused x (Loop.finS.pad (K := refK x) (ops.map fun p => Loop.finS.decOf p.2)) ops.length)
-    (hmS : ∀ m, (ofLoopLink L₀ src real).answered x (ν, t) ((m₀, ρ₀) :: ops) = .ok m →
-      m.on = true ∧ m.inner = none ∧ m.pos = absPos (Masked.layE x j) ((Masked.layE x j).lgOod 0) + l0Off i) :
+    (hN : ¬ Masked.Refused x (Loop.finS.pad (K := refK x) (ops.map fun p => Loop.finS.decOf p.2)) ops.length) :
     (ofLoopLink L₀ src real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
       dropDom (Loop.finS.swMsgAt x (Loop.finS.wt x w) (vs x w ν) t (ops.map fun p => Loop.finS.decOf p.2)) := by
   have hx : Masked.Live x := Masked.live_of hSc hR
@@ -79,7 +79,7 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
   -- the frame's release: body `i` at the loop's table, its basis, the rep's pads and the openings' words
   obtain ⟨tr, hir, zc, lc, T, xs, lay, mask, hre, hT1, hpts, hxs, hrep, hds, hrel⟩ :=
     l0_frame (withFiles (withLink L₀ src) src) real wk hx hSv ν t κ m₀ ρ₀ ops
-      (by rw [hreal]; exact Loop.realTabs_of src x w (ν, t) hsx) hlt hl hv j r hn h1 hi hmS
+      (by rw [hreal]; exact Loop.realTabs_of src x w (ν, t) hsx) hlt hl hv j r hn h1 hi
   have hrel' : (ofLoopLink L₀ src real).release x (ν, t) ((m₀, ρ₀) :: ops) false v = _ := hrel
   rw [hrel']
   -- the session's round: body `i` at the switched source's pads
@@ -134,7 +134,8 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
     show Masked.repBase x (2 * j.val + r.val) + ((Masked.stsOf x)[j.val]!.m + (Masked.stsOf x)[j.val]!.c.kLog - 6) = _
     rw [hstj]
   have hLR : Masked.ligP0 x j r = Masked.repBase x (2 * j.val + r.val) +
-      ((Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6) + (2 + spec.points * (Masked.stAt x j).regions.size + 1) := by
+      ((Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6) +
+        (2 + spec.points * (Masked.stAt x j).regions.size + 1) := by
     have hPR : FlockComplete.piopRoundsZk spec (Masked.stAt x j) = (Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6 +
         (2 + spec.points * (Masked.stAt x j).regions.size + 1) := rfl
     rw [hP0, Masked.repBase_eq hsx, hst, hPR]
@@ -258,6 +259,62 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
       unfold l0Nc
       rw [if_neg (by omega)]
       exact lt_of_lt_of_le he (by decide))
+
+set_option maxHeartbeats 1000000 in
+/-- **Level 0's rounds**: at rep stream `2j + r`'s level-0 round `i`, `1 ≤ i ≤ k0 + 3` (`Masked.repSlot` `i`; at
+`k0 + 3`, `ρ_1`'s squeeze alone), where `vs`'s level-0 values are the firewall's (`Loop.L0Fixed`), the release of the
+worker's round is the switched session's message without its leading domain frame. The round is past the rep's PCS
+round and before its `β` round, where no refusal shows (`unrefused_sched`), so it is `release_sched_l0_st`'s. -/
+theorem release_sched_l0_pf (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
+    (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
+    (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray)) (hreal : real = Loop.realOf src)
+    (wk : (ofLoopLink L₀ src real).toSrv.Worker) {x : Msg} {w : Flock.Wit}
+    (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Loop.Serves x)
+    (hSc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x) (hS : Loop.Src L₀ src x w)
+    (hL0 : Loop.L0Fixed vs x w) (ν : Loop.finS.Nonce) (t : Loop.finS.Tape) (κ : (ofLoopLink L₀ src real).toSrv.Chk)
+    (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hTV : Loop.TakesValsAt vs (ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops) {v : Msg}
+    (hpos : 0 < ops.length) (hlt : ops.length < refK x)
+    (hl : (ofLoopLink L₀ src real).toSrv.live wk x w (ν, t) κ ((m₀, ρ₀) :: ops) = true)
+    (hok : ((allOk (Loop.finS.refP.chk x ν ρ₀) 0 (ops.map Prod.snd)).eval CoinOpen.shaH).1 = true)
+    (href : (ofLoopLink L₀ src real).refusesCoins x (ν, t) ((m₀, ρ₀) :: ops) = false)
+    (hv : wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false)) (j : Fin (Masked.jOf x)) (r : Fin 2) {i : ℕ}
+    (hn : ops.length = Masked.repSlot x (2 * j.val + r.val) fun _ => i) (h1 : 1 ≤ i)
+    (hi : i ≤ (Masked.zkTab x j).sch.k0 + 3) :
+    (ofLoopLink L₀ src real).release x (ν, t) ((m₀, ρ₀) :: ops) false v =
+      dropDom (Loop.finS.swMsgAt x (Loop.finS.wt x w) (vs x w ν) t (ops.map fun p => Loop.finS.decOf p.2)) := by
+  have hx : Masked.Live x := Masked.live_of hSc hR
+  have hj := Masked.lt_of_jOf j
+  have hr2 := r.isLt
+  obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
+  have hjh : (2 * j.val + r.val) / 2 = j.val := by omega
+  have hrm : (2 * j.val + r.val) % 2 = r.val := by omega
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+      .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
+    rw [Masked.stsOf_half x j r]
+    exact (Masked.zkTab x j).hz
+  have hRS : ∀ f : _root_.Flock.Schedule → ℕ, Masked.repSlot x (2 * j.val + r.val) f =
+      Masked.repBase x (2 * j.val + r.val) + FlockComplete.piopRoundsZk spec (Masked.stsOf x)[j.val]! +
+        f (Masked.zkTab x j).sch := by
+    intro f
+    rw [Masked.repSlot_eq hsx hz, Masked.repBase_eq hsx, hjh]
+  have hPR : FlockComplete.piopRoundsZk spec (Masked.stsOf x)[j.val]! =
+      (Masked.stsOf x)[j.val]!.m + (Masked.stsOf x)[j.val]!.c.kLog - 6 +
+        (2 + spec.points * (Masked.stsOf x)[j.val]!.regions.size + 1) := rfl
+  have hRk : Masked.rankSlot x j.val r.val = Masked.repBase x (2 * j.val + r.val) +
+      ((Masked.stsOf x)[j.val]!.m + (Masked.stsOf x)[j.val]!.c.kLog - 6) := rfl
+  have hN := unrefused_sched Masked.dataE (withFiles (withLink L₀ src) src) real wk x w hx hSv (ν, t) κ m₀ ρ₀ ops
+    hlt.le hl href (q := 2 * j.val + r.val) (by omega) (by rw [hn, hRS]; omega)
+    (by
+      rw [hjh, hrm]
+      unfold Masked.betaSlot
+      rw [hn, hRS, hRS]
+      try dsimp only
+      omega)
+    (by
+      rw [hjh, hrm, hn, hRS, hRk, hPR]
+      try dsimp only
+      omega)
+  exact release_sched_l0_st vs L₀ src real hreal wk hR hSv hSc hS hL0 ν t κ m₀ ρ₀ ops hpos hlt hl hv j r hn h1 hi hN
 
 end LeanRelease
 
