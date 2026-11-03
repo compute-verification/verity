@@ -393,6 +393,41 @@ def test_a_model_format_keeps_thetas_vocabulary_context_and_tying_and_only_its_a
             prepare.decode(th, prepare.encode_model(big, given), device="cpu")
 
 
+@pytest.mark.parametrize("key, tensors, zero, live, stage", [
+    ("prefix", ("prefix_k.weight", "prefix_v.weight", "prefix_gate"), "prefix_gate", "prefix_k.weight", 1),
+    ("adapter", ("adapter_norm", "adapter_down.weight", "adapter_up.weight"), "adapter_up.weight", "adapter_down.weight", 7),
+])
+def test_an_extended_model_at_its_initialisation_computes_thetas_function_exactly(key, tensors, zero, live, stage):
+    small = lf(2)
+    big = {**small, key: 4}
+    # at fp32: the CPU's bf16 products aren't bitwise reproducible from one call to the next, θ's own model included
+    torch.manual_seed(1)
+    with torch.device("cpu"):
+        th = {k: v.detach().float() for k, v in prepare.Net(small).params().items()}
+        torch.manual_seed(2)
+        init = {k: v.detach().float() for k, v in prepare.Net(big).params().items() if k not in th}
+    assert sorted(init) == sorted(f"blocks.{j}.{n}" for j in range(2) for n in tensors)
+    assert all(not init[f"blocks.{j}.{zero}"].any() and init[f"blocks.{j}.{live}"].any() for j in range(2))
+    out = prepare.decode(th, prepare.encode_model(big, init), device="cpu")
+    idx = torch.randint(0, 32000, (2, 16), generator=torch.Generator().manual_seed(3))
+    with torch.device("cpu"):
+        start, extended = prepare.Net(small).load(th), prepare.Net(big).load(out)
+    assert torch.equal(start.logits(idx), extended.logits(idx))
+    rec = prepare.model_record({"config": small, "tokenizer": prepare.data_v3.TOKENIZER}, big, out)
+    at = {n["param"]: n for n in prepare.positions(rec)}
+    assert at[f"blocks.1.{live}"]["stage"] == stage and at[f"blocks.1.{live}"]["flops"] == 2 * 4 * 32
+    from te_core.flops import forward_macs_per_token
+    with torch.device("cpu"):
+        extra = forward_macs_per_token(prepare.Net(big), 16, 32000, "cpu") - forward_macs_per_token(prepare.Net(small), 16, 32000, "cpu")
+    # the 4 prefix keys' scores and values, or the adapter's down and up, at d = 32 in both blocks
+    assert extra >= 2 * 2 * 4 * 32
+    # training the zero tensor moves the function, so the extension is live
+    out[f"blocks.0.{zero}"] = torch.full_like(out[f"blocks.0.{zero}"], 0.5)
+    with torch.device("cpu"):
+        moved = prepare.Net(big).load(out)
+    assert not torch.equal(start.logits(idx), moved.logits(idx))
+
+
 def test_bpe32k_training_windows_cover_every_parts_windows_and_none_crosses_a_part(tmp_path, monkeypatch):
     lengths = (41, 9, 2, 25)
     (tmp_path / "parts").mkdir()
