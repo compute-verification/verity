@@ -16,9 +16,11 @@ the check or the term (``by``), the reason its verdict names (``reason``), and t
   connection's cells against the schedule, on the auditor's host, which `trusted-host` covers), or a read of the cells
   it certified (`warden_chain.io`);
 - ``proof``: Lean's registered reads of the network certifier's signed rows (`warden_rows.refusal`);
-- ``clear``: the piece's `certifier_piece.bind`, which reads the endpoint's records, the prover's, against the
-  certified I/O: it refuses what a relay between the network certifier and an honest endpoint does, and the verdict
-  of record is the tie's, which binds the committed values to the certified cells (``waits``, when it hasn't landed).
+- ``clear``: a check in the clear on what the prover records or opens: the piece's `certifier_piece.bind`, which
+  reads the endpoint's records against the certified I/O (it refuses what a relay between the network certifier and
+  an honest endpoint does, and the verdict of record is the tie's, which binds the committed values to the certified
+  cells), the records audit's compile of a window's advice opening (`prove_path.compile_advice`), and ADVICE-LINE
+  (`served_verdicts.advice_line`); a ``waits`` names the piece whose refusal of record hasn't landed.
 An attack the served rehearsal plays (``served``) also names the network certifier's check's outcome (``gate``: True
 when it accepts the run) and the piece's (``piece``): ``bound`` (steps 1 and 2 pass), ``reject``, or ``missing``
 (`certifier_piece.NotRun`: no served answer certified, the certifier missing). An attack with ``waits`` lands with the
@@ -146,6 +148,7 @@ AUDIT = "the network certifier's check (warden_serve.check)"
 BIND = "the piece's bind (certifier_piece.bind)"
 REGISTERED = "Lean's registered reads (warden_rows.refusal), a5_warden.py's refused run"
 A5 = "benchmarks/one_stage/tests/test_a5_warden.py"
+PP = "benchmarks/prove_path/tests/test_prove_path.py"
 TESTS = "benchmarks/network_traces/tests/test_attacks.py"
 FAILED = ("inside k_fail: where a connection fails is the server's choice, which log2(cap + 1) a connection counts; "
           "the rehearsal certifies no served answer")
@@ -186,11 +189,13 @@ ATTACKS = {a.name: a for a in [
     Attack("altered-read", "an altered output token", "prover", "a statement reading a cell one bit off the "
            "network certifier's", "refused", REGISTERED, "doesn't open", "proof", tests=(A5,)),
     Attack("advice-late", "advice after its coin", "prover", "a window's advice committed after that window's coin",
-           "refused", "advice v1's commitment against the window's coin", "after its coin", "proof",
-           waits=("advice v1's commitment",)),
+           "refused", "ADVICE-LINE (served_verdicts.advice_line): every closed window's advice line out before sampled "
+           "proofs' and the network certifier's first coin", "after sampled proofs' or the network certifier's first "
+           "coin", "clear", waits=("advice v1's commitment",)),
     Attack("advice-cap", "advice over the cap", "prover", "a window's advice longer than the registered cap",
-           "refused", "advice v1's commitment against the registered cap", "over the cap", "proof",
-           waits=("advice v1's commitment",)),
+           "refused", "the registered compiler's cap ℓ: prove_path.compile_advice refuses an opening over ℓ before it "
+           "reads it, and ℓ is in the compiler's registered digest (the server's B at ℓ_a before its first window is "
+           "advice v1's)", "over the registered cap", "clear", waits=("advice v1's commitment",), tests=(PP,)),
     Attack("extra", "an extra connection", "server", "one connection answered by the relay, never by the endpoint",
            "refused", f"{BIND}: every certified request is a served one", UNSERVED, "clear", gate=True,
            piece="reject", relay="extra", tests=(TESTS,)),
