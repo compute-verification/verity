@@ -73,7 +73,8 @@ opening that fails (`strat_eval_cons`).
   `HelloDParses` (`helloParses_of_helloEq`). From them `CheckIs` is proved (`LeanRelease.checkIs_coinLayer`, by
   `CoinOpen.coinLayer_verdict`), and the
   stop rule and both its Props (`rfOf`, `stopsCausal_rfOf`, `stopsAt_of_readsCoins`). The rest is the tables' side:
-  `S`'s six Props and that `T`'s frame rounds, without a rep's leading domain frame, are the frame's bytes
+  `S`'s Props (its switched causality at the coin vectors `Ok`, `SwCausalOn`, which take in every coin vector the stop
+  rule lets through, `StopsOk`) and that `T`'s frame rounds, without a rep's leading domain frame, are the frame's bytes
   (`LiveRoundEq`, `FillRoundEq`). `Claims/ZK/CoinPass.lean` has, at every tape, a history past the link whose answer
   and first opening the check passes (`LeanRelease.opens_coinPass`), so the premises leave the frame rounds a history
   to be live at.
@@ -1363,7 +1364,9 @@ theorem deployZk_last_eq (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Re
 /-- **`Flock.zk_server_lean` at the session with the frame's stops**: at a session `S` and a stop rule `Rf` that reads
 the coins before its round only and is the frame's refusals at `x` up to the protocol's last coin wherever the openings
 pass (`LeanRelease.StopsAt`), and a release whose `Finish` is one past the last coin, the bound holds at
-`S.withStops Rf L.stop` from `S`'s six Props, the transport's coin check being the session's up to the last coin
+`S.withStops Rf L.stop` from `S`'s Props, its switched causality only at the coin vectors `Ok` holds at
+(`SwCausalOn`), which hold at every coin vector the stops let through and every one the session admits (`StopsOk`),
+the transport's coin check being the session's up to the last coin
 (`LeanRelease.CheckIs`, which gives the release's refusal of a failed opening, `LeanRelease.openingsRefused_of_checkIs`),
 the server's `Hello`, the firewall's own link and `Finish` being the session's (`LeanRelease.HelloEq`, `LinkRoundEq`,
 `FinalRoundEq`) and the per-round byte equality at the worker's frame rounds and the stand-in frame rounds
@@ -1413,7 +1416,8 @@ theorem Flock.zk_server_lean_stops (H : Msg → Msg)
 /-- **`Flock.zk_server_lean_stops` at the deployed coin layer** (`CoinLayer.session nr T`), at SHA-512
 (`CoinOpen.shaH`), from the transport's trusts alone. `Hello`, the opening check (the keyed coin-tree walk at the round's place under
 `Hello`'s answer, `CoinLayer.treeD`, `CoinLayer.parseD`) and the coin reading are the deployed ones, and the tables,
-with their round encoding `enc`, `fin` and `off`, are `T`'s, whose six Props and the frame rounds' bytes
+with their round encoding `enc`, `fin` and `off`, are `T`'s, whose Props (the switched causality at the coin vectors
+`Ok`, which the stop rule's `StopsOk` takes in) and the frame rounds' bytes
 (`LeanRelease.LiveRoundEq`, `FillRoundEq`: `T`'s frame rounds, without their leading domain frame, are the frame's) are
 the tables' side. Each premise on the transport is a named trust or, at the session loop (`Claims/ZK/SessionLean.lean`),
 a theorem:
