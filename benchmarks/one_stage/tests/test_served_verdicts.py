@@ -1280,6 +1280,36 @@ def test_v3c_runs_no_audit_without_a_line_of_main_for_its_session_to_pin_on(tmp_
     assert sum(x.startswith(head) and x.endswith(tail) for x in lines) == 1, lines
 
 
+LOCAL_COINS = "a local development challenger session on vy-dc-h200, the served node, not an auditor's (PP_CHALLENGER local)"
+V3C_COINS = " V3c's audit: a local development challenger session where it runs;"
+
+
+@pytest.mark.parametrize("extra, coins, v3c", [
+    ({}, LOCAL_COINS, V3C_COINS),
+    ({"PP_CHALLENGER": "gate:research@auditor", "PP_PEER": "vy-dc-h200"},
+     "the challenger gate:research@auditor (peer vy-dc-h200)", V3C_COINS),
+    ({"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}, LOCAL_COINS, ""),
+])
+def test_the_coins_line_says_whose_coins_each_sample_is_on(tmp_path, extra, coins, v3c):
+    """Before step 0 the run says whose coins each sample is on: sampled proofs' (run.sh's local development session
+    unless PP_CHALLENGER names a challenger), PoUW H1's, and V3c's audit's when it runs. Here step 0's `predict row` then
+    fails, and the run stops there."""
+    venv = tmp_path / "toy-venv" / "bin"
+    _script(venv / "python", '[ "$1 $2" = "-m research" ] && exit 0\n[ "$1 $2" = "-m verity_vllm.pipeline.cli" ] && exit 9\n'
+                             f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200",
+                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", **extra)
+    assert rc == 17 and lines[-1] == "STOP at predict (exit 17)", lines
+    assert f"COINS sampled proofs: {coins}; PoUW H1: not served (H1_GATE empty);{v3c} the bandwidth audit's: " \
+           "vy-auditor-2's bw_party, inside PoUS's piece" in lines, lines
+
+
+def test_the_script_parses_whole():
+    """bash parses a top-level command only once a run reaches it, and no toy run here reaches the serve's later steps."""
+    run = subprocess.run(["bash", "-n", str(HERE.parent / "served_verdicts.sh")], capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+
+
 def test_under_h1_tie_v3c_runs_no_audit_whose_ports_rs_sample_cannot_size(tmp_path):
     """A tied audit's ports default to the size of R's sample, so an R with no strata gets no audit, and V3c says why."""
     _tied_commit(tmp_path, "same", law=None)
