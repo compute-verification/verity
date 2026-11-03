@@ -50,6 +50,15 @@ whether it depends on θ' (the carried values) and on the step's tokens, and the
 reads. `circuit.measure` reads the formalism's quantities from it, each defined in the module's docstring; `script
 --circuit F.npz` saves it, and `python -m te_core.capture.circuit F.npz` measures a saved one again.
 
+The measured step's quantities also keep its matrix products as `te_core.io_bound`'s bound reads them
+(`formalism["products"]`, `products.rows`, which reads a step captured by `capture_step` or `capture_fn` too): each
+GEMM's dims and token dims, whether each operand depends on θ′, the width it is passed at, the bits a block pays an
+entry of it at the console's k and the chain that makes one whole, identical rows merged with their count. A recorded
+program reads a weight through the version the previous step's update wrote, so these rates and chains are keyed by
+the capture's values, not by graph nodes as `io_bound`'s are. The summation order is `unknown`: a GEMM is one ATen op,
+summed as its kernel sums it. `"capture"` names the version of these rows (4.8); `te_core.formalism.products_of_trace`
+reads them.
+
 A Python number the program reads from a tensor has no value in the trace, so whatever Python decides from it is the
 stand-in's. The recording lists each such read-back by its source line and steps, in `formalism["data_dependent"]` (a
 comparison, a truth test or an integer conversion of a read-back float; an integer or boolean read-back; `numpy()` of a
