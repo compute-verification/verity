@@ -5,7 +5,8 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
   served_passes.py serve --passes DIR --out served.json [--spec SPEC] [--arm ARM] [--requests 32] [--prompt-tokens 512]
                          [--output-tokens 16] [--max-num-batched-tokens N] [--no-retain]
   served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J]
-  served_passes.py verify --passes DIR --out verify.json [--answer answer.json] [--draws 459] [--delta 1/100] [--jobs J] [--fast]
+  served_passes.py verify --passes DIR [--manifest M ...] [--tie W] --out verify.json [--answer answer.json]
+                          [--draws 459] [--delta 1/100] [--jobs J] [--fast]
 
 ``serve`` builds the spec's preset with its Pearl-C arm (`pearl_c_arm`: ``--arm``, else the spec's one; `verity_bench`'s
 ``engine_args`` and ``protocols_config``, whose in-process challenger is the epoch's coins) and the pouw setting
@@ -27,16 +28,20 @@ the pass's records, the rows that leave a tile or one of its credited rows over 
 can't see (the debit reads the noised codes); the transcript is the serve's.  It writes each pass's outcome and seconds to
 ``--out``, prints one line and exits 0 only when no pass has a tile left over a cap; it refuses a serve that retained none.
 
-``verify`` is Pearl+'s PoUW verdict on the run (`verify_run.verify_passes`): the passes with calls that
-``DIR/served.json`` names, else every ``DIR/pass-NNNNN/manifest.json`` (a transcript dir a served engine retained), in
-order, each epoch re-started against ``DIR/coins.json``.  It first holds the passes together to distinct call indices of
+``verify`` is Pearl+'s PoUW verdict on the run (`verify_run.verify_passes`): the passes ``--manifest`` names (a capture's
+``prefill/`` and ``decode/`` beside its ``coins.json``), else those with calls that ``DIR/served.json`` names, else every
+``DIR/pass-NNNNN/manifest.json`` (a transcript dir a served engine retained), in order, each epoch re-started against
+``DIR/coins.json``.  It first holds the passes together to distinct call indices of
 one salt (`credit.passes_distinct`: the device numbers calls across the epoch, and a run whose passes share an index is
-refused before any replay), then reads every pass, takes the verifier's coin, and replays ``--draws`` work-weighted tiles
-over all of them and each pass's exclusion tiles.  It writes the details to ``--out``, with, where ``served.json`` says
-which passes the timed call made, the credit over those alone (`timed_credit`), and the core answer (`answer_of`'s form,
+refused before any replay), then reads every pass, holds the window record ``--tie W`` to them where one is named
+(`verify_run.tie`: each call's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>`` entry its root and its domain recomputed from
+the salt and the call's index), takes the verifier's coin, and replays ``--draws`` work-weighted tiles over all of them
+and each pass's exclusion tiles.  It writes the details to ``--out``, with, where ``served.json`` names the passes and says
+which of them the timed call made, the credit over those alone (`timed_credit`), and the core answer (`answer_of`'s form,
 ``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer`` (default
-``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line and exits
-0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck).
+``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as PoUW's piece, ``POUW_CMD``), prints one line and
+exits 0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
+PouwCheck).
 """
 from __future__ import annotations
 
@@ -225,15 +230,16 @@ def verify(args: argparse.Namespace) -> int:
     import verify_run as VR
 
     passes = Path(args.passes)
-    served = json.loads((passes / "served.json").read_text()) if (passes / "served.json").exists() else None
-    doc = {"schema": SCHEMA, "passes_dir": str(passes), "served_run": (served or {}).get("run")}
+    served = (json.loads((passes / "served.json").read_text())
+              if not args.manifest and (passes / "served.json").exists() else None)
+    doc = {"schema": SCHEMA, "passes_dir": str(passes), "served_run": (served or {}).get("run"), "tie_record": args.tie}
     if served is not None and served.get("retained") is False:
         doc.update(refused=list(UNRETAINED), **VR.rejected(": ".join(UNRETAINED), args.commit))
     else:
-        paths, _ = manifests(passes)
         coins = CoinCommitment.from_json(json.loads((passes / "coins.json").read_text()))
-        doc.update(VR.verify_passes(paths, args.draws, args.jobs, args.commit, coins, fast=args.fast,
-                                    cross_check=args.cross_check, delta=args.delta))
+        window = json.loads(Path(args.tie).read_text()) if args.tie else None
+        doc.update(VR.verify_passes(args.manifest or manifests(passes)[0], args.draws, args.jobs, args.commit, coins,
+                                    fast=args.fast, cross_check=args.cross_check, delta=args.delta, window=window))
         if served is not None and doc["answer"]["verdict"] == "accept":
             doc["timed"] = timed_credit(served, doc["answer"]["public"]["work"], coins)
     out = Path(args.out)
@@ -263,6 +269,10 @@ def main(argv: list[str] | None = None) -> int:
     o.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     v = sub.add_parser("verify")
     v.add_argument("--passes", required=True)
+    v.add_argument("--manifest", action="append", type=Path,
+                   help="a pass's manifest, in order, repeated (default: those DIR/served.json names, else DIR/pass-*/)")
+    v.add_argument("--tie", metavar="W", help="the window record Pearl+ wrote at the window's close: each call's A and y "
+                   "entry must be its root and recomputed domain (verify_run.tie)")
     v.add_argument("--out", required=True)
     v.add_argument("--answer", help="where the core answer goes (default: answer.json beside --out)")
     v.add_argument("--draws", type=int, default=DRAWS)

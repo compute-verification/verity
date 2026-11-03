@@ -30,6 +30,11 @@
 `verify_passes` is a served run's verdict over all its passes (`served_passes.py verify`): one source of the verifier's
 coins, drawn once every pass's roots are read, keys t draws over all the passes' tickets together, and an accept credits
 the run's credited MACs at Pearl's Assumption 1, less what ε of the tickets' weight could hold at δ, in core's answer form.
+With a window record W (`tie`, Pearl+'s ``verity/registration/v2`` record at the window's close, whose values the
+one-stage registration takes as outputs), W is held to the passes before the coin: round s's call c (the run's pass s,
+its manifest's c-th call) is W's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>`` (`window_class.PearlTables`), each with
+its call's root, the domain recomputed from the pass's salt and the call's index, and its rows, words and word bits, and
+W names no other Pearl+ value; any mismatch rejects the run, since a tie to roots the verdict didn't credit is vacuous.
 
 Prints one line, ``ACCEPT …`` or ``REJECT …``, naming the pass's run and the manifest (`transcript`, as the panel's
 ``--transcript`` takes it), writes ``verify.json`` beside the manifest, and exits 0 only on acceptance, or with
@@ -60,8 +65,10 @@ from verity.core.protocols.pouw.audit import (
     HM96_WEIGHTS,
     ROW_SCHEMA,
     Epoch,
+    activation_binding,
     hm96_salt,
     opened_value,
+    rows_domain,
 )
 from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw.coins import CoinCommitment
@@ -69,6 +76,7 @@ from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Matmul, Shape, Tile, tagged
 from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
 from verity.errors import ProtocolError
 from verity.ml.randomness import derive
 from verity_vllm.protocols.pouw import pearl_c as PD
@@ -392,6 +400,54 @@ def run_commitment(passes: list[Pass]) -> bytes:
                                                          p.epoch.salt, *(bytes.fromhex(r or "") for r in y_roots(p)))))
 
 
+TIE_A, TIE_Y = "pearl-a/{s}/{c}", "pearl-y/{s}/{c}"
+TIE_PREFIXES = ("pearl-a/", "pearl-y/")
+
+
+def tie_entries(passes: list[Pass]) -> dict[str, dict]:
+    """What a window record must register for each call of the run (`tie`): A, its m16 committed rows of K FP32 words under
+    `activation_binding`'s domain, and y, its real rows of N FP32 words under `served_y.y_domain`'s, each at its root."""
+    want = {}
+    for s, p in enumerate(passes):
+        if p.scheme.commitment_hash != HM96:
+            raise ValueError(f"a tie is to {HM96} rows, not pass {s}'s {p.scheme.commitment_hash}")
+        for c, (r, rec) in enumerate(zip(p.records, p.man["matmuls"], strict=True)):
+            u = r.matmul
+            if "y" not in rec:
+                raise ValueError(f"pass {s}'s call {c} (index {u.index}) commits no y to tie")
+            a = rows_domain(activation_binding(p.epoch.salt, u.index), u.index, u.shape.m, HM96)
+            want[TIE_A.format(s=s, c=c)] = {"root": rec["root_a"], "leaves": u.shape.m, "words": u.shape.k, "word_bits": 32,
+                                            "domain": a.domain_id.hex()}
+            want[TIE_Y.format(s=s, c=c)] = {"root": rec["y"]["root"], "leaves": rec["real_rows"], "words": u.shape.n,
+                                            "word_bits": 32,
+                                            "domain": SY.y_domain(p.epoch.salt, u.index, rec["real_rows"]).domain_id.hex()}
+    return want
+
+
+def tie(w: dict, passes: list[Pass]) -> dict:
+    """``{"record": digest(W), "tables": n}`` for a window record W that registers exactly the run's calls' A rows and y
+    (`tie_entries`) among its ``pearl-a/`` and ``pearl-y/`` values; ValueError naming the first mismatch otherwise."""
+    if not isinstance(w, dict) or w.get("format") != REG.FORMAT_V2 or not isinstance(w.get("registered"), list):
+        raise ValueError(f"W is no {REG.FORMAT_V2} record with registered values")
+    got: dict[str, dict] = {}
+    for e in w["registered"]:
+        v = e.get("value") if isinstance(e, dict) else None
+        if isinstance(v, str) and v.startswith(TIE_PREFIXES):
+            if v in got:
+                raise ValueError(f"W registers {v} twice")
+            got[v] = e
+    want = tie_entries(passes)
+    if extra := sorted(set(got) - set(want)):
+        raise ValueError(f"W registers {extra[0]}, no call of the run's")
+    for v, x in want.items():
+        if (e := got.get(v)) is None:
+            raise ValueError(f"W registers no {v}")
+        have = {**e, "word_bits": e.get(G.WIDTH_KEY, G.WORD_BITS)}
+        if bad := [k for k in x if type(have.get(k)) is not type(x[k]) or have[k] != x[k]]:
+            raise ValueError(f"W's {v}: its {', '.join(bad)} not the call's")
+    return {"record": REG.digest(w), "tables": len(want)}
+
+
 def epsilon(t: int, delta: Fraction) -> Fraction:
     """The smallest ε (rounded up to 10^-9) with (1 − ε)^t ≤ δ: t accepted work-weighted draws leave more than ε of the
     tickets' weight on wrong tiles except with δ."""
@@ -438,12 +494,12 @@ def rejected(reason: str, commit: str) -> dict:
 
 
 def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: CoinCommitment, source: bytes | None = None,
-                  fast: bool = False, cross_check: int = 0, delta: Fraction = DELTA) -> dict:
+                  fast: bool = False, cross_check: int = 0, delta: Fraction = DELTA, window: dict | None = None) -> dict:
     """One served run's verdict over all its passes, in core's answer form (`core_check.answer_of`): every pass is read
-    and held to what it published, then one source of the verifier's coins (`pouw.verifier.coins`), drawn after, keys
-    `draws` work-weighted tiles over every pass's tickets together (`clear_work.draw` on their records in order), and each
-    pass opens one tile per excluded row.  It accepts iff every opened tile passes the tile rule, and credits the run at
-    Pearl's assumption (`credit_at_assumption`) at δ."""
+    and held to what it published, and to the window record `window` where there is one (`tie`), then one source of the
+    verifier's coins (`pouw.verifier.coins`), drawn after, keys `draws` work-weighted tiles over every pass's tickets
+    together (`clear_work.draw` on their records in order), and each pass opens one tile per excluded row.  It accepts iff
+    every opened tile passes the tile rule, and credits the run at Pearl's assumption (`credit_at_assumption`) at δ."""
     named = [read(x)[2] for x in paths]
     out = {"passes": named, "verifier_commit": commit, "draws": draws, "delta": str(delta)}
 
@@ -461,8 +517,11 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
         passes = [load(x, coins) for x in paths]
         if len({p.scheme.name for p in passes}) != 1:
             raise ValueError("the passes are not all of one scheme")
+        tied = None if window is None else tie(window, passes)
     except Exception as ex:  # noqa: BLE001 - a run that can't be checked is rejected, with the reason
         return reject(f"{type(ex).__name__}: {ex}")
+    if tied is not None:
+        out["tie"] = tied
     scheme, root = passes[0].scheme, run_commitment(passes)
     source = PV.coins(32) if source is None else source
     key = derive(source, RUN_DRAW_DOMAIN, {"run": root})
@@ -487,14 +546,17 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
         return reject("; ".join(bad))
     public = {"work": credit, "unit": "MAC", "assumption": ASSUMPTION, "scheme": scheme.name,
               "passes": [{"transcript": p.man["commitment"]["root"], "records": p.man["records_root"], "salt": p.epoch.salt.hex(),
-                          "activations": [u["root_a"] for u in p.man["matmuls"]], "y": y_roots(p)} for p in passes]}
+                          "activations": [u["root_a"] for u in p.man["matmuls"]], "y": y_roots(p)} for p in passes],
+              **({"tie": tied} if tied is not None else {})}
     profile = {"delta": str(delta), "draws": draws, "draw": "work-weighted, with replacement", "source": source.hex(),
                "exclusion_tiles": excluded, "tiles": [[i, t] for i, t, *_ in verdicts]}
     ys = [r for p in passes for r in y_roots(p)]
+    tie_clause = "" if tied is None else f", tied to W {tied['record'][:16]} on its {tied['tables']} tables"
     out.update(answer={"protocol": PROTOCOL, "verdict": "accept", "reason": None, "commitment": root.hex(), "public": public,
                        "profile": profile},
                line=(f"ACCEPT {PROTOCOL} {scheme.name}: {len(todo) - excluded} drawn and {excluded} exclusion tiles over "
-                     f"{len(passes)} passes, y committed and checked on {sum(r is not None for r in ys)} of {len(ys)} calls; "
+                     f"{len(passes)} passes, y committed and checked on {sum(r is not None for r in ys)} of {len(ys)} calls"
+                     f"{tie_clause}; "
                      f"{credit['credited']:,} of {credit['macs']:,} MACs credited at ε {float(Fraction(credit['epsilon'])):.4g}, "
                      f"δ {delta} (Pearl's Assumption 1); run {root.hex()[:16]}, source {source.hex()[:16]}; verifier {commit}"))
     return out
