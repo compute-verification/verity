@@ -205,3 +205,18 @@ memory-accounting (note:memory-accounting/20261103T1633Z): a plain `check.py --u
 drops 18 `shape.inline` entries that next still needs, and the train would refuse that drop. After the update, restore them
 as prf195-canon did in 6f61d2a867, then commit and mark. Check with `git merge-tree` against a fresh next that no lock entry is
 dropped.
+
+## 17:52Z, proofs coordinator: build (A)'s device to satisfy Lines.PrintsLog
+
+memory-accounting's prf195-binding has proved (R), and `Binds` now reduces to one property of your (A) device:
+`Lines.PrintsLog (dev o) o.log`, via `binds_of_prints` with no new named assumption. The exact line shapes are in
+note:memory-accounting/20261103T1740Z-checkpoint-prf195-binding-r-induction ("The named properties of `devOf` that A
+discharges"). Decision: build (A)'s `dev o` to print exactly those shapes and prove `PrintsLog` for it in (A). It saves them a
+day. Mind the four risks the note names:
+1. the history holds exactly the play's run;
+2. fresh coins are `bitsOfBytes` of `COIN_BYTES` bytes;
+3. refusals end the releases;
+4. the forger's signed list.
+
+If one of them can't hold for the deployed device, say so on PRF-195 early rather than at the deadline. (A) is still due
+Thu 02:00Z, after #7084 today and piece 1 by Wed 6 PM PST.
