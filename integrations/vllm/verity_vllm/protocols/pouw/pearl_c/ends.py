@@ -1,6 +1,7 @@
 """The Pearl-C device path's passes (`pouw_pearl_c_device.PearlCDeviceRun`'s): a pass's state (`_Pass`) and its end
 (`PassEnds`): one tile tree over every leaf under `audit.transcript_domain`, A's roots and the screen's counts as the pass's
-commitment, and a retained pass's files and manifest (`write_manifest`).  A lagged end's readback and tree aside are
+commitment, a retained call's record and files (`_retained`, written behind the call) and a retained pass's files and
+manifest (`write_manifest`).  A lagged end's readback and tree aside are
 `pouw_pearl_c_lanes.LaneCalls`' (`settle`, `_end_aside`, `_ended`).
 """
 from __future__ import annotations
@@ -15,8 +16,10 @@ from verity.core.protocols.pouw.protocol import Matmul
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.serving import Schedule, SchemeId
 
-from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _write, _zeros, joined, write_manifest
+from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _write, _zeros, joined, write_behind, write_manifest
 from verity_vllm.protocols.pouw.pearl_c.manifest import MANIFEST_SCHEMA, session_head
+from verity_vllm.protocols.pouw.pearl_c.screen import excluded
+from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
 
 @dataclass
@@ -40,6 +43,9 @@ class PassEnds:
     ``commits``, ``weights``, ``entry``, ``scheme``, ``coins``, ``opening``, ``salt_key``, ``device``, ``aside_ends``,
     ``lag_ends``, ``_lagged`` and ``_weight_files``, and its ``stream``, ``join_sides``, ``begin``, ``settle``,
     ``_end_aside`` and ``_ended``."""
+
+    #: the run's y trees on its device (`served_y.DeviceTrees`), made at the first retained call on it
+    _y_trees: Any = None
 
     def end(self, lag: bool = False) -> dict[str, Any]:
         """Close the pass: its tile tree on the device, every A root, and with `retain` the manifest.  Returns the pass's
@@ -109,6 +115,26 @@ class PassEnds:
         out = self.end(lag=step and self.lag_ends)
         self.begin(retain, run, schedule, stepped=step)
         return out
+
+    def _retained(self, cur: _Pass, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any, y: Any = None) -> None:
+        """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree,
+        and given its real rows of `y`, y's rows and its tree, `served_y.y_tree`, made on the call's device: all written
+        behind the call, `write_behind`, joined by the pass's end)."""
+        import torch
+        cur.records.append(PW.UnitRecord(mm, m, mm.shape.k, excluded(flags[:, 0].bool(), flags[:, 1].bool(), xa[:m]),
+                                         self.weights[mm.weight].excluded))
+        d = cur.retain / "calls"
+        d.mkdir(parents=True, exist_ok=True)
+        out = [(d / f"{mm.index}.rows.bf16", xa.to(torch.bfloat16).view(torch.uint8), False), (d / f"{mm.index}.tree", tree, True)]
+        if y is not None:
+            (cur.retain / "y").mkdir(exist_ok=True)
+            ytree = SY.y_tree(self, y, mm.index)
+            out += [(cur.retain / "y" / f"{mm.index}.rows.bf16", y, False), (cur.retain / "y" / f"{mm.index}.tree", ytree, True)]
+        got = write_behind(tuple(out), cur.writes)
+        files = {"rows": got[0], "tree": got[1]}
+        if y is not None:
+            files["y"] = {"root": _bytes(ytree[-self.nb:]).hex(), "rows": got[2], "tree": got[3]}
+        cur.files.append(files)
 
     def _write_retained(self, cur: _Pass, epoch: Epoch, roots_a: bytes, tree: Any, count: int) -> Path:
         import torch

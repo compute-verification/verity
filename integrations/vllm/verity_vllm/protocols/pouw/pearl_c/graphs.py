@@ -69,12 +69,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity.core.protocols.pouw.protocol import Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 
 from verity_vllm.protocols.pouw.pearl_c.passes import call_index
-from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _event, _Lane, _zeros, torch_uint8, write_behind
-from verity_vllm.protocols.pouw.pearl_c.screen import excluded, scatter_into
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+from verity_vllm.protocols.pouw.pearl_c.host import _event, _Lane, _zeros, torch_uint8
+from verity_vllm.protocols.pouw.pearl_c.screen import scatter_into
 
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
 #: a small share of the call, and a graph's own y would cost m x n of memory per weight
@@ -167,8 +165,6 @@ class GraphCalls:
     #: each (weight, m₁₆)'s stage, (A words, A tree, y's m₁₆ rows) as its call's steps leave them, made at its first retained
     #: warm-up; y is copied in the capture right after the call, ahead of the forward's next op, which may change it in place
     _stages: dict[tuple[int, int], tuple[Any, Any, Any]] | None = None
-    #: the run's y trees on its device (`served_y.DeviceTrees`), made at the first retained call on it
-    _y_trees: Any = None
     #: the slots the last `whole_replay` uploaded, and those `whole_replayed` staged for the forward after it
     _uploaded: _Slots | None = None
     _next: _Slots | None = None
@@ -236,26 +232,6 @@ class GraphCalls:
     def _kept(sh: Any, pipe: Any) -> tuple[Any, Any]:
         """What a retained call keeps of its shape's buffers once its steps ran: A's words (m₁₆ rows) and A's tree."""
         return sh.xa[:sh.m16], sh.buf("tree_a")[:pipe.size["tree_a"]]
-
-    def _retained(self, cur: Any, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any, y: Any = None) -> None:
-        """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree,
-        and given its real rows of `y`, y's rows and its tree, `served_y.y_tree`, made on the call's device: all written
-        behind the call, `write_behind`, joined by the pass's end)."""
-        import torch
-        cur.records.append(PW.UnitRecord(mm, m, mm.shape.k, excluded(flags[:, 0].bool(), flags[:, 1].bool(), xa[:m]),
-                                         self.weights[mm.weight].excluded))
-        d = cur.retain / "calls"
-        d.mkdir(parents=True, exist_ok=True)
-        out = [(d / f"{mm.index}.rows.bf16", xa.to(torch.bfloat16).view(torch.uint8), False), (d / f"{mm.index}.tree", tree, True)]
-        if y is not None:
-            (cur.retain / "y").mkdir(exist_ok=True)
-            ytree = SY.y_tree(self, y, mm.index)
-            out += [(cur.retain / "y" / f"{mm.index}.rows.bf16", y, False), (cur.retain / "y" / f"{mm.index}.tree", ytree, True)]
-        got = write_behind(tuple(out), cur.writes)
-        files = {"rows": got[0], "tree": got[1]}
-        if y is not None:
-            files["y"] = {"root": _bytes(ytree[-self.nb:]).hex(), "rows": got[2], "tree": got[3]}
-        cur.files.append(files)
 
     def whole_key(self, retained: bool | None = None) -> tuple | None:
         """What a forward captured whole depends on (hashing, omitted steps, schedule, with hashing whether its pass is

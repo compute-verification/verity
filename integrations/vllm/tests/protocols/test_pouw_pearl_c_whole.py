@@ -22,6 +22,7 @@ from verity_vllm.protocols.pouw.pearl_c import passes as PP
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import graphs as PG
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds
 from verity_vllm.protocols.pouw.pearl_c.host import joined
 from verity_vllm.protocols.pouw.pearl_c.whole import VLLM, WholeStep
 
@@ -269,8 +270,9 @@ class Event:
         self.recorded += 1
 
 
-class Calls(PG.GraphCalls, PP.EpochCalls):
-    """`GraphCalls` over CPU tensors: three weights, keys that name their call."""
+class Calls(PG.GraphCalls, PP.EpochCalls, PassEnds):
+    """`GraphCalls` over CPU tensors, with the run's `PassEnds` (its retained calls): three weights, keys that name their
+    call."""
 
     def __init__(self, torch):
         self.entry, self.hashing, self.graphs, self.omit = "test", True, True, frozenset()
