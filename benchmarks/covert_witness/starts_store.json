@@ -193,6 +193,29 @@
    },
    "art": "art:637a79c6a46d3c9d7bd5b0a8673d6573463ce23356542f5cc1a161c1be5954da",
    "path": "starts"
+  },
+  "xl-t20": {
+   "digest": "3ca02d80a4827936945600379dec8e6eab7ce0f6cbb93c62be79e0f9aed25ab6",
+   "files": {
+    "start.json": "fd212b6c6852b5661bca4d789de2c65eb2ae9e90607c8d4c457a4577719b91e7",
+    "theta.safetensors": "8569c6124ca04d4dda2fea864d3236e03d22da92dec2636dc762129b00876422"
+   },
+   "bytes": 2624672686,
+   "shape": {
+    "family": "lf",
+    "d_model": 1536,
+    "n_layer": 21,
+    "vocab": 32000,
+    "ctx": 1024,
+    "tokenizer": "bpe32k",
+    "parameters": 656146944,
+    "tokens": 12140150784,
+    "tokens_per_param": 18.5,
+    "forward_macs_per_token": 722555520.0,
+    "c0_macs": 27491104057549538093
+   },
+   "art": "art:064ff36b5573c10828f8bba9866ad1c1952e2e36317114f1318a62a553554c2f",
+   "path": "starts"
   }
  },
  "exported_by": "r20261102-095551-8f54"

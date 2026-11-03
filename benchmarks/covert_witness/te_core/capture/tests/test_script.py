@@ -8,6 +8,7 @@ from __future__ import annotations
 import io
 import json
 import math
+import os
 from pathlib import Path
 
 import numpy as np
@@ -116,6 +117,19 @@ def test_integer_reads_numpy_and_math_on_read_backs_are_listed(starts, monkeypat
     assert len(rec.listed("data_dependent")) == 6
 
 
+@pytest.mark.parametrize("unrecorded", [True, False])
+def test_e_sized_through_prepares_quant_arrays_lists_no_read_back(starts, monkeypatch, unrecorded):
+    """sparse's and shallow's E sizing (`prepare._quant_array` in the steps, no encode): its range and finiteness checks
+    and its bytes are E's, unrecorded as the encoders are, and the update measures as without them; recorded, the same
+    reads are listed."""
+    if not unrecorded:
+        monkeypatch.setattr(script, "_E_PARTS", ())
+    g = recorded(starts, "--update", "inplace", "--size-e")
+    assert fwd_roles(g) == ["updated", "updated"] and g.updated_macs() == T * FWD
+    assert sorted({e["kind"] for e in g.formalism["data_dependent"]}) == ([] if unrecorded else [
+        "bool() of a tensor (a branch on its value)", "int() of a tensor", "numpy() of a tensor"])
+
+
 def test_a_python_float_folded_over_steps_is_listed_and_grows_delta_grad(starts):
     """seed-mezo's 04:15Z TOOL: an EMA kept as a Python float carries every earlier step's read-back as a value of its
     own, so Δ_grad grows with the step; kept as a 0-dim tensor it is one carried value at every step."""
@@ -182,3 +196,28 @@ def test_a_programs_last_step_ends_at_its_end(starts, update):
     with pytest.raises(CaptureRefused, match="the program ended after 2 steps, before step 2 ended"):
         script.record(PROGRAM, ["--batch", str(B), "--update", *update.split(), "--steps", "2"], step=2, starts=starts,
                       wall=[0.1] * 8, step_tokens=T)
+
+
+@pytest.mark.parametrize("tier", ["long", "search", None])
+def test_a_record_replays_at_the_tier_it_was_scored_at(starts, tmp_path, monkeypatch, tier):
+    """hybrid's 16:22Z LOOPHOLE: a scored run.json keeps its tier only at ``evaluation.budget.tier``, and a program that
+    plans its steps from prepare.budget (``--from-budget``: the search tier pays for 2 steps, the long tier for 200) runs
+    its own steps only at that tier. A long-tier record replays to step 2; at the search tier, or with no evaluation,
+    the program ends before it. CW_TIER is the environment's again after."""
+    monkeypatch.delenv("CW_TIER", raising=False)
+    run = {"steps": [{"wall_s": 0.1, "tokens": T, "matmul_macs": 0, "by": {}}] * 6, "tier": "search"}
+    if tier is not None:
+        run["evaluation"] = {"budget": {"tier": tier, "train_flops": 0.0}}
+    (tmp_path / "run.json").write_text(json.dumps(run))
+    argv = ["--script", str(PROGRAM), "--run", str(tmp_path / "run.json"), "--step", "2", "--starts", str(starts),
+            "--out", str(tmp_path / "out.json"), "--", "--batch", str(B), "--update", "inplace", "--steps", "6",
+            "--from-budget"]
+    assert script.tier_of(run) == tier
+    if tier == "long":
+        assert script.main(argv) == 0
+        out = json.loads((tmp_path / "out.json").read_text())
+        assert out["tier"] == "long" and out["updated_macs"] == T * FWD and out["cut_bits"] == 32 * VALUES
+    else:
+        with pytest.raises(CaptureRefused, match="the program ended after 2 steps, before step 2 ended"):
+            script.main(argv)
+    assert "CW_TIER" not in os.environ

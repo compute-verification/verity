@@ -54,11 +54,17 @@ The measured step's quantities also keep its matrix products as `te_core.io_boun
 (`formalism["products"]`, which a saved circuit keeps; `products.rows`, which reads a step captured by `capture_step`
 or `capture_fn` too): each
 GEMM's dims and token dims, whether each operand depends on θ′, the width it is passed at, the bits a block pays an
-entry of it at the console's k and the chain that makes one whole, identical rows merged with their count. A recorded
+entry of it at the console's k and the chain that makes one whole, identical rows merged with their count, and under
+`at` the same rows at each other k of the console's dial (`products.rows_on_dial`, `products.DIAL_K`), since the rates,
+kinds and chains move with k. A recorded
 program reads a weight through the version the previous step's update wrote, so these rates and chains are keyed by
 the capture's values, not by graph nodes as `io_bound`'s are. The summation order is `unknown`: a GEMM is one ATen op,
-summed as its kernel sums it. `"capture"` names the version of these rows (4.8); `te_core.formalism.products_of_trace`
-reads them.
+summed as its kernel sums it. `"capture"` names the version of these rows (`products.CAPTURE`);
+`te_core.formalism.products_of_trace` reads them. `"elementwise_products"` lists the matrix products the step writes
+with elementwise ops, which no row is: a multiplication of two θ′-dependent values that broadcasts both (an outer
+product, or `(x.unsqueeze(-1) * W).sum(-2)` for `x @ W`), and gathered rows multiplied by such a value and summed by
+index (gather, mul and `index_add`). The formalism leaves the fresh-products term unmeasured where the list has any,
+and on a trace captured before the list (`formalism.ELEMENTWISE_FROM`).
 
 A Python number the program reads from a tensor has no value in the trace, so whatever Python decides from it is the
 stand-in's. The recording lists each such read-back by its source line and steps, in `formalism["data_dependent"]` (a
