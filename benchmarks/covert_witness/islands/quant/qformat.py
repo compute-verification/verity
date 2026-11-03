@@ -205,7 +205,8 @@ def groups_of(x: torch.Tensor, group: int) -> int:
 def rtn(x: torch.Tensor, bits: int, group: int = 128, clips=(1.0, 0.9, 0.8, 0.7, 0.6, 0.5)) -> QArray:
     """Symmetric round-to-nearest: levels -qmax..qmax (qmax = 2**(bits-1) - 1, so 2 bits is ternary), an absmax scale per
     group shrunk by the clip ratio (one per tensor) that minimizes the squared error, the first such on a tie. The choice
-    is an argmin in tensor ops, never a branch on a read-back error, so a traced step that codes a tensor shows it."""
+    is an argmin taken by index_select, in tensor ops, never a branch on or an index read back from the error, so a
+    traced step that codes a tensor shows it."""
     if bits < 2:
         raise ValueError("rtn: at least 2 bits (1 bit is `sign`)")
     g = groups_of(x, group)
@@ -214,8 +215,8 @@ def rtn(x: torch.Tensor, bits: int, group: int = 128, clips=(1.0, 0.9, 0.8, 0.7,
     amax = xg.abs().amax(1)
     scs = torch.stack([_f16(c * amax / qmax).float() for c in clips])
     ks = torch.clamp(torch.round(xg / torch.where(scs > 0, scs, 1.0)[:, :, None]), -qmax, qmax) * (scs > 0)[:, :, None]
-    i = ((ks * scs[:, :, None] - xg) ** 2).sum((1, 2)).argmin()
-    sc, k = scs[i], ks[i]
+    i = ((ks * scs[:, :, None] - xg) ** 2).sum((1, 2)).argmin().view(1)
+    sc, k = scs.index_select(0, i)[0], ks.index_select(0, i)[0]
     cb = torch.zeros(2 ** bits)
     cb[: 2 * qmax + 1] = torch.arange(-qmax, qmax + 1, dtype=torch.float32)
     return QArray(cb.to(torch.float16), sc.to(torch.float16), (k + qmax).to(torch.uint8).view(-1), bits, g, tuple(x.shape))
