@@ -1955,8 +1955,24 @@ def test_a_quiet_handles_runs_are_not_rung(tmp_path):
     assert [(r["run"], r["handle"]) for r in ended(tmp_path)] == [("r20261018-195000-0002", "circuits")]
 
 
-def test_the_shipped_nodes_file_keeps_ci_quiet():
+def test_a_quiet_senders_runs_are_not_rung(tmp_path):
+    """The task executor sends a run per task, hundreds a graph, and drive reads each task's verdict: ringing @infra for each
+    would bury it."""
+    api, clock, w, sh, roots = nodes_setup(tmp_path)
+    cfg = json.loads((tmp_path / "nodes.json").read_text())
+    (tmp_path / "nodes.json").write_text(json.dumps({**cfg, "quiet_senders": ["executor@vy-control-verity"]}))
+    w.sweep(lambda r: None)
+    clock.t += 60
+    node_run(roots["vy-nebius-2"], "r20261018-195500-0004", clock.t, by="executor@vy-control-verity", lane="infra")
+    node_run(roots["vy-nebius-1"], "r20261018-195000-0002", clock.t, by=f"https://cursor.com/agents/{CO}")
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    assert [(r["run"], r["handle"]) for r in ended(tmp_path)] == [("r20261018-195000-0002", "circuits")]
+
+
+def test_the_shipped_nodes_file_keeps_ci_and_the_executor_quiet():
     cfg = json.loads((W.Path(__file__).resolve().parents[3] / "infra/control/agent_watch_nodes.json").read_text())
+    assert cfg["quiet_senders"] == ["executor@vy-control-verity"]
     assert cfg["quiet_handles"] == ["ci"] and cfg["nodes"] == ["vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 
 

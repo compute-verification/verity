@@ -5,7 +5,8 @@
 # `executor_serve.sh stop` makes it and ends the serve, `start` removes it. Every start puts the tasks the last serve had leased
 # back in the queue (`requeue_leased`), so two serves on one queue run each such task twice: this lock and `stop` keep it one.
 # Code: /root/executor on the container disk (infra/executor.py, and the verity checkout whose tools/research it runs); a new
-# container gets executor.py from /data/executor/infra. Runs post as RESEARCH_AGENT_URL from /data/executor/agent-url.
+# container gets executor.py from /data/executor/infra. Its runs' sender is RESEARCH_AGENT_URL from /data/executor/agent-url,
+# executor@vy-control-verity, which agent watch's quiet_senders leaves unrung (drive reads each task's verdict).
 # Log: /data/executor/serve.log; /data/executor/alive is touched each minute a serve runs, or the loop is stopped (cloud watch).
 D=/data/executor
 LOG=$D/serve.log

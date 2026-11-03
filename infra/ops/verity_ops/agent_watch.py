@@ -118,7 +118,8 @@ Cursor refuses a run on a worker), or its parent's when the watch learned it fro
 job's lane, or a handle `submitted_by` names) when that is a handle, else the handle of the branch whose head the run's tree was
 (`branch_handle`: the registry's `branch_suffixes`, or `cursor/<handle>-...`). The runs of one read whose sender no handle owns are one
 `run_ended` with role `unknown`, each run with its `sender`, for the relay to ring @infra once; a run whose handle
-`quiet_handles` lists (ci: drive reads its own train checks' ends) is skipped. `run_ends.json` keeps each node's last read and the runs
+`quiet_handles` lists (ci: drive reads its own train checks' ends) is skipped, as is one whose `submitted_by` `quiet_senders`
+lists (the task executor's: drive reads each task's verdict). `run_ends.json` keeps each node's last read and the runs
 seen (`RUN_ENDS_KEEP_S`); runs that ended before the first read are never rung. `agent_watch.py runs` prints what it would read.
 
 The run's end also starts a clock (`awaiting` in `state.json`) on whoever must act on it: the sender when the list has it, a
@@ -1519,6 +1520,7 @@ class Watch:
               "seen": {k: v for k, v in (self.ends.get("seen") or {}).items() if v >= t - RUN_ENDS_KEEP_S}}
         handles = {str(h.get("handle")) for h in read_json(self.registry).get("handles") or []}
         quiet = {str(h) for h in cfg.get("quiet_handles") or []}
+        senders = {str(h) for h in cfg.get("quiet_senders") or []}
         unknown: list[dict] = []
         for node in nodes:
             since = max(st["since"], st["nodes"].get(node, st["since"])) - RUN_ENDS_SLACK_S
@@ -1532,7 +1534,7 @@ class Watch:
                     continue
                 st["seen"][key] = t
                 ended = epoch(row.get("ended")) or row.get("mtime") or t
-                if ended >= st["since"] and (u := self.ring_run(node, row, coords, handles, ended, quiet)):
+                if ended >= st["since"] and (u := self.ring_run(node, row, coords, handles, ended, quiet, senders)):
                     unknown.append(u)
         if unknown:
             self.record("run_ended", Run("", unknown[0]["run"] if len(unknown) == 1 else f"{len(unknown)} runs"), judged=False,
@@ -1557,10 +1559,12 @@ class Watch:
                 or "") or "unknown") if agent else "unknown"
 
     def ring_run(self, node: str, row: dict, coords: dict[str, str], handles: set[str], ended: float,
-                 quiet: set[str] = frozenset()) -> dict | None:
+                 quiet: set[str] = frozenset(), quiet_senders: set[str] = frozenset()) -> dict | None:
         """Record `row`'s end for its sender's handle; a run whose sender no handle owns is returned instead, for `run_ends` to
         record with the read's others as one (93 such senders sent 753 runs in 14 h on 19 Oct: one ring each would bury @infra)."""
         sent = str(row.get("submitted_by") or "")
+        if sent and sent in quiet_senders:
+            return None
         by = AGENT_RE.search(sent)
         agent = by[0] if by else ""
         words = re.findall(r"[a-z0-9-]+", re.sub(r"https?://\S+", " ", sent))
