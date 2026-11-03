@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from verity_vllm.config import option, workload_arg
-from verity_vllm.pipeline.telemetry.admission import (GiB, RowConfig, cgroup_memory_max, compare, plan_row, predict,
+from verity_vllm.pipeline.telemetry.admission import (GiB, RowScale, cgroup_memory_max, compare, plan_row, predict,
                                                       render_compare_md, render_points_md, retain_exclude_families,
                                                       row_config_from_attempt, row_config_from_workload)
 
@@ -91,7 +91,7 @@ def main(a: PlanOptions | CompareOptions | PredictOptions) -> int:
             print(f"ADMISSION advisory unavailable: {type(e).__name__}: {e}")
         return 0
     if a.cmd == "predict":
-        cfg = RowConfig(model=a.model, requests=a.requests, prompt_tokens=a.prompt_tokens, decode_rows=a.decode_rows, steps=a.steps, max_context=a.max_context, pairs=a.pairs,
+        cfg = RowScale(model=a.model, requests=a.requests, prompt_tokens=a.prompt_tokens, decode_rows=a.decode_rows, steps=a.steps, max_context=a.max_context, pairs=a.pairs,
                         replay_workers=a.replay_workers, host_limit_bytes=int(a.host_limit_gib * GiB) if a.host_limit_gib else None, n_instances=a.n_instances,
                         scheduled_raw_bytes=a.raw_bytes, largest_vu_in_parent=a.largest_vu_in_parent, retain=a.retain,
                         fork_gc_freeze=not a.no_fork_gc_freeze, bounded_staging=a.bounded_staging, retain_exclude=retain_exclude_families(a.retain_exclude))

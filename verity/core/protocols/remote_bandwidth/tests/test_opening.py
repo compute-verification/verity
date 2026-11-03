@@ -1,7 +1,7 @@
 """`remote_bandwidth.opening`: check 3 by the opening unit's reference on a small p512/k2 store. An honest window is
 accepted; the same window over a store that lost its first drawn block is rejected on codec at that draw; an uncertified
 plan row fails the plan link and a public row not the verifier's own is malformed. A plan row's ``b || c`` is the proof
-service's (pinned from C-Flock's commit strings)."""
+system's (pinned from C-Flock's commit strings)."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, opening as O, receipts
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 
@@ -22,28 +23,6 @@ PLAN_BC = ("12f7869e085f13e475ea68ff04f83289655b686aa1c56da778cc299af82f355882e4
            "f28e1caf352a9f425fcf1a31e3f75bce33b749894811a7b0ded5eed561fc3e18dee59b0f24f0806e3369646067a9612ea4ff35315e63e53bf4"
            "fbe9f2bce4d0b79f9cffa203ecd4")
 SALT = hashlib.shake_256(b"verity/remote-bandwidth/opening/test plan salt").digest(receipts.SALT_BYTES)
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        return self.now
-
-
-class Entropy:
-    """A deterministic stand-in for the operating system's generator: SHA-512 in counter mode under `label`."""
-
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 def payload(j: int) -> bytes:
@@ -68,7 +47,7 @@ def window(store: O.Store) -> SimpleNamespace:
     clock = Clock()
     s = O.Session(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1), not_before_ns=0,
                   clock=clock)
-    prover = audit.Prover(store, None, s.commitment, entropy=Entropy(b"receipt salts"))
+    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
     challenge, previous, passes = s.start(), reg.digest, {}
     for i in range(N // L):
         runs = ((L * i, L),)
@@ -88,7 +67,7 @@ def window(store: O.Store) -> SimpleNamespace:
     return SimpleNamespace(session=s, passes=passes, c3=c3)
 
 
-def test_a_plan_rows_commitment_is_the_proof_services() -> None:
+def test_a_plan_rows_commitment_is_the_proof_systems() -> None:
     assert O.commit(16 * 64, list(range(64, 128)), SALT).hex() == PLAN_BC
     with pytest.raises(ValueError, match="1024 bits is 64 u16 words, not 63"):
         O.commit(16 * 64, list(range(64, 127)), SALT)

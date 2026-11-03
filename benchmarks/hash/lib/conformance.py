@@ -607,7 +607,7 @@ def case_graph(d: Dev, rng: random.Random, quick: bool) -> None:
 
 
 def open_records(d: Dev, plan: vclib.Plan, tab, x, bc, sp, lv: int, n: int, positions: list[int], graph: bool = False,
-                 call: bool = True) -> list[vclib.Opening]:
+                 call: bool = True) -> list[vclib.VcOpen]:
     """The records vc_open_launch writes into a poisoned buffer; with call=False, the no-write control's."""
     m, size = len(positions), d.lib.open_bytes(n)
     pp, out = d.up(struct.pack(f"<{m}I", *positions)), d.buf(size * m)
@@ -621,7 +621,7 @@ def open_records(d: Dev, plan: vclib.Plan, tab, x, bc, sp, lv: int, n: int, posi
     return vclib.parse_openings(d.down(out, size * m), n, m)
 
 
-def check_openings(dom: CommitmentDomain, commitment, schema: str, recs: list[vclib.Opening], n: int, want_leaves, want_salt, want_bc,
+def check_openings(dom: CommitmentDomain, commitment, schema: str, recs: list[vclib.VcOpen], n: int, want_leaves, want_salt, want_bc,
                    value_of, asked: list[int] | None = None) -> dict:
     """Each record against the reference (and its position against the one ``asked``); verify_opening on it, and on it with a
     sibling or the value changed; the paths gathered into a multiproof verify_multiproof accepts. What failed, by check (the

@@ -17,11 +17,11 @@ many fall outside D-SB's byte range (`device_scales`).
 * the transcript commitment over the device's leaves (`audit.transcript_domain`);
 * the records: one unit, no channel split, its real rows, and as excluded the rows that fail `row_passes` (D-NF) and the
   rows that pass it but not R1 (`PearlC4.r1_row`, row by row over the workers), as `clear_work.declare` has them;
-* the draws' beacon, Fiat-Shamir over the commitment (`draw_beacon`), and the openings of the tiles the work law opens
+* the samples' beacon, Fiat-Shamir over the commitment (`draw_beacon`), and the openings of the tiles the work law opens
   there: t draws by the records' credit and one tile per excluded row.
 
 **`verify`** recomputes everything from the transcript and the scheme: the salt, the records against the workload, the
-draws, and on every opened tile (`clear_work.check_drawn`) A's and B's openings against the device's roots, the leaf's
+samples, and on every opened tile (`clear_work.check_drawn`) A's and B's openings against the device's roots, the leaf's
 against the commitment, the tile's C̃ and U through the scalar reference to the device's leaf, zero filler rows, credited
 rows passing the per-row rules and R1 and excluded rows failing one of them, and the replayed debit
 (`pearl_c4.tile_debit`: F1′'s base split under the exact noise law given the drawn E lines and the realised scale bytes,

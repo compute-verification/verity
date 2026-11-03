@@ -18,3 +18,7 @@ packages = ["src/cluster"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_nebius2.py", "tests/test_policy.py", "tests/test_policy_apply.py", "tests/test_submit.py"]

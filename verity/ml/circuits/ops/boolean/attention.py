@@ -8,7 +8,7 @@
     GuardNegInfZero_v2                         (m: Array<32, Value<1>>) -> Array<32, Value<1>>          word view: GuardNegInfZero_v1
     Fa2InvSum_v2                               (sum: Array<32, Value<1>>) -> Array<32, Value<1>>        word view: Fa2InvSum_v1
 
-Each is traced from `softmax`'s builder (`trace.definition`), the circuit C-Flock's lowering runs for its word primitive, so its
+Each is traced from `softmax`'s builder (`trace.definition`), the circuit Flock's lowering runs for its word primitive, so its
 And gates are that builder's live ANDs. `Fa2InvSum_v2` is ``(sum == 0 || sum != sum) ? 1 : MUFU.RCP(sum)`` with `mufu`'s
 reciprocal, whose table read is a plain circuit. The QK dot is `gemm.DotBf16_v3` and MUFU.EX2 is `mufu.MufuEx2Ftz_v2`.
 `fa3_inv_sum` is FA3's epilogue (``? 0 : MUFU.RCP(sum)``); its Definition is in `verity_vllm`, beside its word primitive.

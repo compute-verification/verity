@@ -3,7 +3,7 @@
 
 The firewall is the developer's only path from the workers to the auditor; the inner phase's is the program
 `Flock.Firewall.run` (`Flock/Firewall.lean`). This file is the property every firewall's sessions must have, stated over
-what it sends. Its contract (Daniel's draft, "Why the auditor learns nothing"): before release, every outbound value is one
+what it sends. Its contract: before release, every outbound value is one
 of three things.
 
 * (a) A commitment under a salt the workers never see, drawn from the tape and used for no other commitment:
@@ -19,7 +19,7 @@ of three things.
 * (c) A value uniquely fixed by what is already committed or public (`Item.fixed`): by the public schedule (the contract
   derives the value itself, and holds the items to the schedule's order), by the public statement (the value the public
   input names), or by the firewall's own values (its level-0 recheck, its opening, the values it computes from its pads,
-  under names the public input lists). Under D8 (a) the last three are today's Rust, which the transcript reports and
+  under names the public input lists). Under D8 (a) the last three are the current Rust, which the transcript reports and
   this contract does not recompute.
 
 What the contract holds a transcript to is the verifier's public input (`PublicInput`), never the transcript's own

@@ -28,7 +28,7 @@ argument), each with the variant its callee reads, and gates reading the carry o
 iterations. `seeds` and `shared` are the lane's shared-members family (`fuzz/gen/shared.py`, ported as it is): whole
 members of a batch returning leaves of arguments they share, each another root node's output, read by a gate.
 `desc_difftest_vectors.shared()`'s six declarations first (`shared-seed`, each with its two instances), which
-`NciCheck.Desc` once attributed to their first piece's node alone, then `decl` on parameters drawn at random
+`NciCheck.Desc` once attributed to their first piece's node alone, then `decl` on parameters sampled at random
 (`draw`): two or three shared arguments, each made by a root node of its own (a primitive on an input, a call of a
 composite of two gates, one member of a batch of primitives, or the input itself, registered or bound per run); the
 members' return, each argument's leaves in any order and repeated, now and then with a gate of the member's own; two to
@@ -893,7 +893,7 @@ def seeds() -> list[dict]:
 
 
 def shared(seed: int) -> tuple[str, list[dict]]:
-    """Seed `seed`'s declaration, `decl` on parameters drawn at random (`draw`), and its IU assignments (`instances`)."""
+    """Seed `seed`'s declaration, `decl` on parameters sampled at random (`draw`), and its IU assignments (`instances`)."""
     rng = random.Random(seed)
     text = decl(draw(rng, seed))
     return text, instances(rng, text)

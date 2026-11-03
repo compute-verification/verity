@@ -8,7 +8,7 @@ from verity.ml.circuits.codec import SCHEMA_V1, _encode_body, _Tables, encode_pr
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, REGISTRY
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 from verity_vllm.program import workload as W
 
 _ADD = PrimitiveDefinition("GpTestAdd16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: (a + b) & 0xFFFF)
@@ -159,10 +159,10 @@ def test_a_growing_key_value_sequence_composes_to_the_same_workload_through_its_
 
 
 def test_record_weights_lower_to_several_input_batches_shared_as_one_group():
-    """The real wrapper's `weights` is a mixed-width Record (bf16 tensors + an f32 rotary table), which lowers to one Input
+    """The real wrapper's `weights` is a mixed-width RecordType (bf16 tensors + an f32 rotary table), which lowers to one Input
     batch per field (a homogeneous record would be one batch): the group is shared as a whole either way."""
     def sig(S):
-        return ((("prompt", Array(S.LP, Value(16))), ("weights", Record(("wa", Array(2, Value(16))), ("wb", Array(3, Value(32)))))),
+        return ((("prompt", Array(S.LP, Value(16))), ("weights", RecordType(("wa", Array(2, Value(16))), ("wb", Array(3, Value(32)))))),
                 Array(1, Value(16)))
 
     def body(B, S, prompt, weights):
@@ -231,7 +231,7 @@ def test_a_workload_without_registered_values_keeps_its_digest():
 
 
 def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_workload_digest():
-    """NCI's baseline reads only registered inputs as θ (nci-check's `theta-not-registered`): `theta_registered` lowers the
+    """The inference-only check reads only registered inputs as θ (nci-check's `theta-not-registered`): `theta_registered` lowers the
     weights as `RegisteredInput<w>_v1`, still θ, and every other input as before. The components are the same Definitions, so
     their request digests stand and only the workload digest moves; off, it is the digest pinned above."""
     from verity.ml.circuits.constants import REGISTRATION, RUN
@@ -261,7 +261,7 @@ def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_w
 
 def test_theta_registered_keeps_a_tp_rank_programs_peers_bound_per_run():
     """A TP rank workload (B1's shape: `peers_*` before the weights, at shifting positions): only the weights move to
-    registration; every request's prompt and peers stay `Input<w>_v1`, the inputs NCI counts against the limit."""
+    registration; every request's prompt and peers stay `Input<w>_v1`, the inputs the inference-only check counts against the limit."""
     from verity.ml.circuits.program import INPUT_ID, REGISTERED_ID
     ca = W.request_component(encode_program(Program(_toy_rank_request(3, 2))), REGISTRY, _WP_rank(3, 2))
     cb = W.request_component(encode_program(Program(_toy_rank_request(5, 0))), REGISTRY, _WP_rank(5, 0))

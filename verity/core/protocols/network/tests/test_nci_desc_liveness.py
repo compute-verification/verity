@@ -1,4 +1,4 @@
-"""The liveness cases of the description-sized NCI check (`NciCheck.Desc`): the Python half.
+"""The liveness cases of the description-sized inference-only check (`NciCheck.Desc`): the Python half.
 
 `verity/core/protocols/network/nci/lean/scripts/desc_liveness_vectors.py` writes 13 Program shapes, each at a small `n`
 and at one of `2^22` to `2^52 + 1` scan iterations or batch members, past anything `NciCheck.Desc` walks one by one.

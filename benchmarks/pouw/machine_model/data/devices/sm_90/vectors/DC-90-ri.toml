@@ -1,13 +1,13 @@
-# Π on the H200, the refit of DC-90's uniform async-joint price. Every row of EPS1 DC's census as DC-90, except the
+# Π on the H200, the refit of DC-90's uniform async-joint price. Every row of the measured census as DC-90, except the
 # uniform instruction's price on the async-joint issue row (UNI,JI90_0), refit from 0.965 (0.9838 of an issue slot,
 # scaled from a scalar-saturated stream) to its measured cost beside the saturated async tensor op, 0.0001862 SMSP-cycles
-# (RT-ISA r2's 0.00019 slope beside wgmma, less 2%; decision 86/88's rule). No price LP is solved on it, so it credits
-# nothing. It drops DC-90's TMAB, a facet no class loads (an empty row in its Lean statement, RT3-DC-2). DC-90 is
+# (the measured 0.00019 slope beside wgmma, less the 2% margin). No price LP is solved on it, so it credits
+# nothing. It drops DC-90's TMAB, a facet no class loads (an empty row in its Lean statement). DC-90 is
 # kept; read this one with `eps --vector DC-90-ri`.
 name = "DC-90-ri"
 epoch = "DC-90-ri"
 summary = "the H200 (sm_90) census as DC-90, with UNI,JI90_0 refit to the uniform instruction's measured cost beside the saturated async wgmma (0.0001862 vs DC-90's 0.965): the async-joint issue price silicon charges, not the scalar-saturated-stream estimate"
-note = "note:20261017T1834Z-draft-rt-isa Round 2 (the uniform chain beside the saturated wgmma r20261017-204843-4803: 0.00019 SMSP-cycles an instruction, less 2%); on DC-90 (note:20261017T0452Z-draft-eps1-dc)"
+note = "the uniform chain beside the saturated wgmma: 0.00019 SMSP-cycles an instruction, less 2%; on DC-90"
 rows = ["issue", "M", "A", "I", "SHFL", "JI90_0", "JI90_1", "JI90_2", "JPI90_0", "JPI90_1", "JPA90_0", "JPA90_1",
         "JPSHFL90_0", "UP", "AT90"]
 credits = []

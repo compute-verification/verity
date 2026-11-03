@@ -16,9 +16,10 @@ length and ``max_tokens``). Every later position's token is `io_shell.TokenFeed_
 prompt cap (the prompt's id below its length, else the previous position's select), and past it the previous position's
 select. Each select is collected in the unit that makes it (`io_shell.SelectCollect_v1`: the select, then
 `io_shell.OutCollect_v1` over it). The last position's makes the slot's entry of the scan's Programs' row instead
-(`io_shell.SelectEntry_v1`: the select, its collector, then `io_shell.SlotEntry_v1`): its output count (up to ``max_tokens``
-and the model's first stop id, that one kept, `stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an
-empty slot (the entry reads the occupancy word, so no select is masked on the way); a request the class can't hold (a prompt
+(`io_shell.SelectEntry_v1`: the select, its collector, then `io_shell.SlotEntry_v1`), in the scan's layout: its read bit
+(the occupancy word's bit 0), its output count (up to ``max_tokens`` and the model's first stop id, that one kept,
+`stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an empty slot (the entry reads the occupancy
+word, so no select is masked on the way); a request the class can't hold (a prompt
 past ``prompt`` ids, or outputs that don't end within ``outputs``) has ``outputs`` + 1 and no ids, which the scan refuses at
 the anchor and the egress never renders. A collector's rows and an entry's are a few words at a small class, too narrow for
 a proof block of their own, so none is a unit of its own. The state rows and the entries are the circuit's external ports.
@@ -100,7 +101,7 @@ more than its prompt and the weights (a stochastic request's seed, a prefix-cach
 a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a weight whose leaves aren't whole u16
 words, a read that cuts a writer's row, and at `settle`, every one named at once, a template's port read at two row counts
 or as rows that aren't its outer elements cut that many ways, a unit of more than ``grain.rows`` rows, and then a unit
-C-Flock's composer wouldn't prove (`interface.check_proof_block`). The circuit is completeness only: that it computes what
+Flock's composer wouldn't prove (`interface.check_proof_block`). The circuit is completeness only: that it computes what
 serving ran is held by the units' proofs on their committed rows, never by this lowering.
 
 Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
@@ -192,8 +193,8 @@ class WindowClass:
 
     @property
     def scan(self) -> Any:
-        """The network certifier's scan class at its lanes, outputs and timestep (`scan_state.scan_class`)."""
-        return SS.scan_class(self.lanes, self.outputs, self.every)
+        """The network certifier's scan class at its lanes, outputs, timestep and prompt ids (`scan_state.scan_class`)."""
+        return SS.scan_class(self.lanes, self.outputs, self.every, self.prompt)
 
 
 #: the class of record, the network certifier's envelope at these fixed slots:
@@ -709,7 +710,7 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
     scan state row before its anchor (`WindowClass.anchor`), each allocation's slots side by side in its template; its blocks'
     slots are the slots. Its registered parameters are the weights (`window_builder.weight_param`) and ``SCAN_STATE``'s
     ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`). A window's circuit is every
-    slot's; ``programs`` is the first slots only, a probe's census (`class_size`). Each unit is a proof block C-Flock's composer
+    slot's; ``programs`` is the first slots only, a probe's census (`class_size`). Each unit is a proof block Flock's composer
     proves (`_Builder.settle`) unless not ``provable`` (a probe's, or a test's of too small a class)."""
     return lower(registered, cls, programs, grain, name, provable=provable).circuit
 

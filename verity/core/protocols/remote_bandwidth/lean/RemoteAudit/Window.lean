@@ -151,16 +151,6 @@ inductive Verdict
   | reject (failure : Failure) (at? : Option (Nat × Nat))
 deriving BEq, Repr
 
-/-- `Key.subset(k, n, index)` exactly: each swap's stream read far enough (a draw fails to land in 64 bytes with
-probability below 2^-256, and the read doubles until it does). -/
-def subsetExact (key : ByteArray) (k n : Nat) (index : List FlockSoundness.Randomness.Part) : Option (Array Nat) :=
-  Id.run do
-  let mut len := 64
-  for _ in [0:24] do
-    if let some out := FlockSoundness.Randomness.subset key k n index len then return some out
-    len := 2 * len
-  return none
-
 /-- `Session.close`'s draws: `min(s, U)` distinct receipts (pass, position) uniform over the window's U receipts, from
 its openings coin, in order. -/
 def draws (registration : ByteArray) (t : Nat) (coin : ByteArray) (samples : Nat) (lengths : Array Nat) :
@@ -168,7 +158,7 @@ def draws (registration : ByteArray) (t : Nat) (coin : ByteArray) (samples : Nat
   let ends := (lengths.foldl (fun (acc : Array Nat × Nat) n => (acc.1.push (acc.2 + n), acc.2 + n)) (#[], 0)).1
   let total := ends.back?.getD 0
   let key := FlockSoundness.Randomness.derive coin OPENINGS_DOMAIN [("registration", .bytes registration), ("window", .int t)]
-  let us ← subsetExact key (min samples total) total [.str "openings"]
+  let us ← FlockSoundness.Randomness.subsetExact key (min samples total) total [.str "openings"]
   pure (us.map fun u => let i := bisectRight ends u; (i, u - (if i = 0 then 0 else ends[i - 1]!)))
 
 /-- The append holding store index `j ≥ N`: the last with `first ≤ j`. -/

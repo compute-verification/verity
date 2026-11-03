@@ -26,11 +26,11 @@ operations of the served FP8 linear, around its tensor-core steps, and of NVFP4 
     F32ToS8RniSat_v2                   (x: Array<32, Value<1>>) -> Array<8, Value<1>>          word view: F32ToS8RniSat_v1
     U32Hi16_v2                         (a: Array<32, Value<1>>) -> Array<16, Value<1>>         word view: U32Hi16_v1
 
-Each is traced from a builder over `forms` (`trace.definition`), the circuit C-Flock's lowering runs for its word primitive. The
+Each is traced from a builder over `forms` (`trace.definition`), the circuit Flock's lowering runs for its word primitive. The
 builders are also pieces of larger circuits, such as an argmax over a logits row: `bf16_key` maps a bf16 word to a NaN flag and a
 16-bit key whose unsigned order is the value order (+0 and -0 one key), `f32_key` an f32 word likewise, `gt_u` compares two keys,
 `select` is the bitwise multiplexer. The arithmetic is `elementwise`'s and the bf16 widening `cast`'s, named here too; max / min,
-the E4M3 and E2M1 casts and the bit AND are written here (the first two formerly C-Flock's `tail_pieces`, which imports them).
+the E4M3 and E2M1 casts and the bit AND are written here (the first two formerly Flock's `tail_pieces`, which imports them).
 The s8 cast is `int8`'s two builders in a row, `f32_rint` (ties to even) then `f32_to_s8_rzi` (saturating, NaN 0), which is
 exact on the integer rint leaves.
 """
@@ -155,7 +155,7 @@ def f32_to_e4m3_sat(C, x):
 def e4m3_to_f32(C, x):
     """``E4m3ToF32_v1``: an E4M3 byte widened to f32, exactly. A normal byte's exponent field is ``e + 120``, its fraction ``m``
     the top three bits; a subnormal ``m 2^-9`` is normalized by its leading bit (fields 118, 119, 120); NaN (0x7F / 0xFF) is
-    0x7FFFE000, its sign dropped. The exponent's pairwise ANDs serve both its OR and the NaN test (C-Flock's lowering has no
+    0x7FFFE000, its sign dropped. The exponent's pairwise ANDs serve both its OR and the NaN test (Flock's lowering has no
     CSE)."""
     m, e, s = x[:3], x[3:7], x[7]
     e01, e23 = C.AND(e[0], e[1]), C.AND(e[2], e[3])
