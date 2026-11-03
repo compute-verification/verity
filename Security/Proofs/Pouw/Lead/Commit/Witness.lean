@@ -14,7 +14,7 @@ The honest and nontrivial witnesses (the lock's `witnesses`) of `leafFirstBlock`
   block: with `Domain.mk?`'s acceptance dropped, `LeafFirstBlock`'s conclusion fails.
 * `rowBound_nontrivial`: at a domain with an empty id, the leaves at positions 0 and 1 are of two framed messages whose
   SHA-512 digests differ, so neither case of `RowBound`'s conclusion holds there.
-* `roundsOpenAfterRoots_honest`: the round check accepts a live epoch's coin commitment, with its salt, draw and round
+* `roundsOpenAfterRoots_honest`: the round check accepts a live epoch's coin commitment, with its salt and round
   families, before any round root is recorded.
 * `roundsOpenAfterRoots_nontrivial`: a coin commitment of no scheme and no families is no live epoch's, so with the
   round check's acceptance dropped `RoundsOpenAfterRoots`'s conclusion fails at it.
@@ -54,11 +54,11 @@ theorem rowBound_nontrivial :
   · exact absurd h (by decide)
   · exact absurd h (by decide +kernel)
 
-/-- **`RoundsOpenAfterRoots`'s honest witness**: the round check accepts a live epoch's coin commitment, its salt, draw
-and round families, before any round root is recorded. -/
+/-- **`RoundsOpenAfterRoots`'s honest witness**: the round check accepts a live epoch's coin commitment, its salt and
+round families (`liveFamilies 1`; the draw coin is a session of its own), before any round root is recorded. -/
 theorem roundsOpenAfterRoots_honest :
-    PouwWindow.roundsReason ⟨PouwWindow.LIVE_SCHEME, 0, [(PouwWindow.SALT, 1), (PouwWindow.DRAW, 1),
-      (PouwWindow.ROUND, 1)], ByteArray.mk (Array.replicate 64 0)⟩ [] [] = .ok none :=
+    PouwWindow.roundsReason ⟨PouwWindow.LIVE_SCHEME, 0, [(PouwWindow.SALT, 1), (PouwWindow.ROUND, 1)],
+      ByteArray.mk (Array.replicate 64 0)⟩ [] [] = .ok none :=
   rfl
 
 /-- **`RoundsOpenAfterRoots`'s nontrivial witness**: a coin commitment of no scheme and no families is no live

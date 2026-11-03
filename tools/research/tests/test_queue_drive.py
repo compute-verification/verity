@@ -437,13 +437,11 @@ def test_a_circuit_check_whose_only_failures_are_killed_targets_is_a_machines_fa
     (d / "steps.jsonl").write_text(step)
     died = ("FAIL circuit-check/killed PousSha512Head_v1: its process died (signal 9: the OOM killer?) at a peak of 164.16 GiB\n"
             "FAIL circuit-check/killed PousSha512Mid_v1{M=1}: its process died (signal 9: the OOM killer?) at a peak of 164.16 GiB\n")
-    tail = "circuit-check: 5211 target(s), 2 new failure(s), 3 known\nwarn dead-gates/ir: 258100 over 309 target(s)\n"
+    tail = "circuit-check: 5211 target(s), 2 failure(s), 0 unchecked\nwarn dead-gates/ir: 258100 over 309 target(s)\n"
     (d / "circuit-check.log").write_text(died + tail)
     assert killed(d)
     (d / "circuit-check.log").write_text(died + "FAIL partition/unchecked PousSha512Ctr_v1: an output bit is free\n" + tail)
     assert not killed(d), "a real failure beside the killed ones is the code's"
-    (d / "circuit-check.log").write_text(died + "FAIL circuit_check.known lists Foo, which no longer fails: drop it\n" + tail)
-    assert not killed(d)
     (d / "circuit-check.log").write_text(died + tail)
     (d / "steps.jsonl").write_text(step + '{"step": "pytest", "status": "failed", "rc": 1, "log": "pytest.log"}\n')
     assert not killed(d), "another failed step is judged on its own"
