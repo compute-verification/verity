@@ -219,7 +219,8 @@ docstring says why pooling them by weight copy would be unsound).
 **K per monitoring period on a run**: `uv run benchmarks/network_traces/chain_record.py leak --warden-run RUN --scan
 SUMMARY --out FILE`, with RUN a fetched warden run and SUMMARY its scan's `summary.json` (its draw). It reads
 `leak_bounds` on the run's parameters (`deployment.json`), its traffic (`end.json`'s requests and sampling blocks) and
-the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block undrawn. FILE holds the widths, each
+the scan's class (`chain_record.run_class`: the `scan_zk` class whose schedule has the run's egress cells, w63's 65 or
+w63k4's 5), and refuses a scan that left a proof block undrawn. FILE holds the widths, each
 term, the links and a row for each monitoring period, scope and reading; `FILE.md`, which it prints, holds the tables.
 A run's figures are its published Attempt's. The report's `d1` lists, per sampling block, whether its certificates, N2
 and the scan accepted.
