@@ -17,7 +17,7 @@ open Lean (Json)
 
 /-- The bytes of each file of `paths`, or why one can't be read. -/
 def readAll (paths : Array String) : IO (Except String (Array ByteArray)) := do
-  try return .ok (← paths.mapM fun p => IO.FS.readBinFile p)
+  try return .ok (← paths.mapM fun (p : String) => IO.FS.readBinFile ⟨p⟩)
   catch e => return .error s!"slots: {e}"
 
 /-- The circuit file a `slots` input names, read and parsed, or why it can't be. -/
