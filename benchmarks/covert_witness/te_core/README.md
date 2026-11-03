@@ -136,9 +136,6 @@ other quantity bits. A gate is any of AND, XOR and NOT, so a count is about 3x i
   is one whose read-outs `cw.readout_leaks` lists (`read-out-leak`) (`frontier.status`; a row ingested before 3.13 gets
   its read-outs from `frontier --facts`). The scorer's tied-lookup rule (13:32Z) is retired: a tied embedding's update
   is affected from its lookup on.
-- **Tiers**: tier 0 is a screen of about 3 GPU-minutes on the small start, which anyone may launch. Tier 1 is about 10
-  GPU-minutes on the medium start, at most `TIER1_PER_HOUR` per agent per hour. Tier 2 is about 30 GPU-minutes, 3
-  seeds, the small and medium starts. Tiers 1 and 2 run only an entry the scorer promoted to that tier.
 
 `frontier` gives, per start, target and cell, W\*, H and S with W\*'s route and its x₀ and s\* bounds and best-known
 values; `plots` writes five panels (P1-P4 and the A2 curve, the least |C| to each target against Δ, per start), each
@@ -220,8 +217,6 @@ read (`run.no_bytecode`). From `benchmarks/covert_witness/`:
 ~~~text
 python -m te_core.run --script islands/NAME/train.py --out OUT [--families DIR] [--budget-fraction F] [--tier T] \
     -- --start NAME --out SUB [--budget-fraction F] [TRAIN_ARGS...]
-python -m te_core.launch --script islands/NAME/train.py --tier 0 --agent A --direction D --mechanism M \
-    [--nodes FILE] [-- TRAIN_ARGS...]        # FILE: `vy-nebius-2 pool=gpu`
 python -m te_core.ledger --agent A ingest OUT --direction D --mechanism M [--reference]
 python -m te_core.frontier [--json OUT]              # W*, honest and S per target and (c, k) cell
 python -m te_core.rescore --out DIR [--quantities measured|analysis|stubs]  # v2.3's records, one command
@@ -258,7 +253,7 @@ A script may call `te_core.hooks` (`plan`, `output`, `step`, `tokens`, `family`;
    Tokens computed outside a step make the run invalid. A program naming the harness's internals or a route around the
    dispatcher (`run.FORBIDDEN`) is refused.
 4. **A run**: `python -m te_core.run --program train.py --starts starts.json --start small --tier 0 --seed 0 --evaluator
-   MODULE:FUNCTION --out OUT`, or `python -m te_core.launch ...` to put it on a node. Either one writes `OUT/run.json`.
+   MODULE:FUNCTION --out OUT`, which writes `OUT/run.json`. covert_witness's `launch.py` puts a run on a node.
 5. **Ingest**: `python -m te_core.ledger --agent A ingest OUT --direction D --mechanism M --parent ID --run-id R`
    writes one submission record per checkpoint, with the program's arguments; `--structures TRACED.json` (structure
    id -> traced structure, `capture.script`) gives its steps their U, D and the formalism's measured quantities
