@@ -12,10 +12,11 @@ Sampled proofs is a subprotocol of both composite protocols. The remote protocol
 `verity/core/protocols/remote/`) composes it (`verity/sampled-proofs/v1`) with PoUW's period (`verity/pouw/period/v1`)
 and the inference-only policy, and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols.
 In each, the composite's verifier runs `VStar.Recursive.Sampled`'s Lean check as a component, in the form its params
-name: the one-stage audit (`verity/sampled-proofs/one-stage/v1`) or the recursive audit
+name: the audit on the proofs (one-stage v2, `verity/sampled-proofs/one-stage/v2`) or the recursive audit
 (`verity/sampled-proofs/recursive/v1`, V*'s compiled check, which ends in the one-stage audit's live check on its
-verdict of record). The composite accepts only when every
-component accepts.
+verdict of record). One-stage v1 (`verity/sampled-proofs/one-stage/v1`), whose verdicts are the evidence's, is refused
+by name: a one-stage form whose params or evidence name no `proofs` is v1's (`VStar.Recursive.Sampled.V1_REFUSED`). The
+composite accepts only when every component accepts.
 
 ## Guarantee and assumptions
 
@@ -35,10 +36,10 @@ over the statement circuit. It rests on these named assumptions:
 - `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
   (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
 
-On `main`, both composites' sampled-proofs component is `verity/sampled-proofs/v1`, whose one-stage form is one-stage v1
-(`verity/sampled-proofs/one-stage/v1`), which takes the sessions' verdicts as evidence: the verifier's run of
-`flock-verify --zk` produces them, and the link from a composite's acceptance to that run, and so to `SampledKSLiveV3`,
-comes with one-stage v2 (under "Where things are").
+Both composites' sampled-proofs component is `verity/sampled-proofs/v1`, whose one-stage form is one-stage v2: its
+verdicts are its own run of `flock-verify verify --zk`'s one-stage path on the sessions' files, which come in as blobs
+(under "Where things are"), so a composite accepts in that form only where that run accepts. No Lean statement yet
+carries a composite's acceptance to `SampledKSLiveV3`'s event.
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
 before any coin. In the remote protocol the coins come from the auditor's challenger (or, until proofs retires it, the
@@ -147,8 +148,8 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `challenger.sessions_tree_reason`): its `coin_tree` a logged tree, its link points and round coins that tree's
   openings after its link's roots and each round's message, one tree per session and every tree a session's.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
-  to `verify`'s. Onsite and remote (`Core.Onsite`, `Core.Remote`) read v1 as `VStar.Recursive.Sampled`'s one-stage
-  form, never alone; switching it to v2 is what is left.
+  to `verify`'s. Onsite and remote (`Core.Onsite`, `Core.Remote`) read v2 as `VStar.Recursive.Sampled`'s one-stage
+  form, never alone, and refuse v1 there.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
