@@ -929,6 +929,14 @@ FAKE_RECORDS_AUDIT = '''import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
 open(os.environ["ORDER"], "a").write(a[0] + "\\n")
+if a[0] == "warm":
+    open(os.environ["ORDER"] + ".warm", "w").write(json.dumps(a))
+    if os.environ.get("FAIL_WARM"):
+        print("records_audit.py warm: a template's compose was killed", file=sys.stderr)
+        sys.exit(1)
+    print(json.dumps({"template": "a@0", "seconds": 1.5, "kept": False, "pin": "ab"}))
+    print("WARM " + json.dumps({"templates": 3, "kept": 0, "seconds": 2.0}, sort_keys=True))
+    sys.exit(0)
 out = Path(a[a.index("--out") + 1])
 if a[0] == "audit":
     assert ("--tie" in a) == ("--tie-prefix" in a)
@@ -1176,6 +1184,61 @@ def test_under_h1_tie_v3cs_audit_is_tied_to_h1s_w_at_a_stratum_of_each_tables_re
     w = str(tmp_path / "serve" / "h1" / "w7" / "registration.json")
     assert _audited(tmp_path) == ({"--law": "stratified:1", "--tie": w, "--tie-prefix": "h1/", "--ports": ports} if tied
                                   else {"--law": "subset:1", "--tie": None, "--tie-prefix": None, "--ports": ports})
+
+
+@pytest.mark.parametrize("tied, extra, limit", [
+    (False, {}, None), (False, {"V3C_WARM_JOBS": "2"}, "180m"),
+    (True, {"V3C_WARM_JOBS": "3", "V3C_WARM_TIMEOUT": "5h"}, "5h"),
+])
+def test_v3c_warm_composes_the_windows_templates_before_its_audit_which_then_takes_their_cache(tmp_path, tied, extra, limit):
+    """With V3C_WARM_JOBS, records_audit's warm composes every template of the committed window into its compose cache,
+    that many at a time, at the audit's sampling design, within V3C_WARM_TIMEOUT (default V3C_AUDIT_TIMEOUT), before the
+    audit, which takes the cache and so composes none; without it, no warm and no cache."""
+    if tied:
+        _tied_commit(tmp_path, "same")
+    rc, lines, order, limits = _v3c(tmp_path, **({"H1_TIE": "1"} if tied else {}), **extra)
+    assert rc == 0 and "audit" in order, (lines, order)
+    audit = json.loads((tmp_path / "order.audit").read_text())
+    if limit is None:
+        assert "warm" not in order and "--compose-cache" not in audit and not (tmp_path / "order.warm").exists()
+        assert not any(line.startswith("V3C-WARM") for line in lines)
+        return
+    vw, jobs = tmp_path / "serve" / f"v3c-w7-{W63K4.replace(',', '-')}", extra["V3C_WARM_JOBS"]
+    assert order.count("warm") == 1 and order.index("warm") < order.index("audit"), order
+    assert json.loads((tmp_path / "order.warm").read_text()) == [
+        "warm", "--window", str(vw / "window"), "--law", "stratified:1" if tied else "subset:1",
+        "--compose-cache", str(vw / "compose-cache"), "--jobs", jobs]
+    assert audit[audit.index("--compose-cache") + 1] == str(vw / "compose-cache")
+    assert limits.count(limit) == 1 + (limit == "180m"), limits
+    assert f'V3C-WARM class {W63K4} (records_audit.py warm exit 0, {jobs} at a time): WARM ' \
+           '{"kept": 0, "seconds": 2.0, "templates": 3}' in lines
+
+
+def test_a_warm_that_fails_says_why_and_the_audit_composes_what_it_did_not_keep(tmp_path):
+    """The warm only makes the audit's composes early: one that fails is said, and the audit, taking the cache, composes the
+    templates it holds no circuit of."""
+    rc, lines, order, _limits = _v3c(tmp_path, V3C_WARM_JOBS="2", FAIL_WARM="1")
+    assert rc == 0 and order.index("warm") < order.index("audit"), (lines, order)
+    assert f"V3C-WARM class {W63K4} (records_audit.py warm exit 1, 2 at a time): records_audit.py warm: a template's " \
+           "compose was killed; the audit composes the templates it didn't keep" in lines
+    audit = json.loads((tmp_path / "order.audit").read_text())
+    assert "--compose-cache" in audit
+
+
+@pytest.mark.parametrize("jobs, records_audit, line", [
+    ("0", FAKE_RECORDS_AUDIT, "PREFLIGHT: V3C_WARM_JOBS is how many of the window's templates warm composes at once, a "
+                              "positive integer, not 0"),
+    ("two", FAKE_RECORDS_AUDIT, "PREFLIGHT: V3C_WARM_JOBS is how many of the window's templates warm composes at once, a "
+                                "positive integer, not two"),
+    ("2", "import sys\n", "PREFLIGHT: V3C_WARM_JOBS composes the window's templates before its audit with records_audit.py "
+                          "warm, which this tree's records_audit.py doesn't have"),
+])
+def test_the_preflight_refuses_a_warm_at_no_positive_number_of_jobs_or_on_a_tree_without_it(tmp_path, jobs, records_audit,
+                                                                                             line):
+    """V3C_WARM_JOBS is a count of composes at once, and a tree whose records_audit.py has no warm is refused, not run
+    with every compose inside the audit's limit: before anything runs."""
+    rc, lines, order, _limits = _v3c(tmp_path, records_audit=records_audit, V3C_WARM_JOBS=jobs)
+    assert (rc, lines, order) == (3, [line], [])
 
 
 def test_under_h1_tie_v3c_runs_no_audit_whose_ports_rs_sample_cannot_size(tmp_path):
