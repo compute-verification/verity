@@ -4,15 +4,18 @@ import Proofs.Flock.Recursive.StopCountStream
 # A stream's sessions left unreleased, at most its failure budget
 
 `StopCountStream` counts a stream's joint stops where at most `B` of its sessions are left with a statement not
-released. Here `B` is the stream's failure budget `b`, at every run (`StopCount.run`): `openSession` refuses an open while
-the stream's failures and its unended recursive sessions reach `b`, a session left with a statement not released is
-unended or stopped, and each stop of one of the stream's sessions is one of its failures (rule 4's count, `failures`).
+released. Here `B` is the stream's failure budget `b`, at every order of the record's ops (`Op`), and so at every run
+(`StopCount.run`): `openSession` refuses an open while the stream's failures and its unended recursive sessions reach
+`b`, a session left with a statement not released is unended or stopped, a stop is recorded only of an opened session
+(`stop`, and `slot`'s for the slot's orphan), so each stop of one of the stream's sessions is one of its failures (rule
+4's count, `failures`).
 
 * `unrel`, `unrelStopped`: the stream's sessions with a statement not released, and those of them that stopped.
-* `RecOk`, `BInv`: the record's invariant (every stop of an opened session, the stream's stopped sessions not released at
-  most its failures, its sessions not released at most its budget) and the run's (the slot's orphan, too, of an opened
-  session).
-* `card_unreleased_le_budget`: at every run, at most `b` of a stream's sessions are left with a statement not released.
+* `RecOk`: the record's invariant (every stop of an opened session, the stream's stopped sessions not released at most
+  its failures, its sessions not released at most its budget), kept by each of the record's ops (`RecOk.apply`).
+* `card_unrel_le_budget`: at every order of the record's ops, at most `b` of a stream's sessions have a statement not
+  released.
+* `card_unreleased_le_budget`: the same at every run.
 * `streamStopBudget`: the stream's joint stop as a `Pattern` at its budget, which `card_streamStops` counts.
 -/
 
@@ -380,43 +383,7 @@ theorem RecOk.pushOpen {evs : Events} (h : RecOk evs) (o' : Open)
       · exact hu
       · exact absurd hst ht
 
-/-! ## The slot's orphan -/
-
-theorem doneAfter_push {evs : Events} {k : ℕ} (hk : k < evs.size) (e : Event) (s p : String) :
-    doneAfter (evs.push e) k s p = (doneAfter evs k s p || doneEv s p e) := by
-  have hk1 : k + 1 ≤ evs.size := hk
-  simp only [doneAfter, Array.size_push]
-  rw [Array.extract_push]
-  simp only [Nat.not_succ_le_self, ↓reduceIte, hk1, Array.any_push]
-
-theorem orphan_push_of_ne {evs : Events} {e : Event} (he : ∀ s p, e ≠ .slot s p) :
-    orphan (evs.push e) = (orphan evs).bind fun x => if doneEv x.2.1 x.2.2 e then none else some x := by
-  rw [orphan_eq, orphan_eq, lastSlot_push_ne he]
-  cases hl : lastSlot evs with
-  | none => rfl
-  | some x =>
-    obtain ⟨k, s, p⟩ := x
-    simp only
-    rw [doneAfter_push (lastSlot_lt hl)]
-    cases doneAfter evs k s p <;> simp
-
-theorem orphan_of_push {evs : Events} {e : Event} (he : ∀ s p, e ≠ .slot s p) {x : ℕ × String × String}
-    (h : orphan (evs.push e) = some x) : orphan evs = some x := by
-  rw [orphan_push_of_ne he] at h
-  cases ho : orphan evs with
-  | none => rw [ho] at h; cases h
-  | some y =>
-    rw [ho] at h
-    simp only [Option.bind_some] at h
-    split at h
-    · cases h
-    · exact h
-
-/-- The slot's orphan is of an opened session. -/
-def OrphanOpened (evs : Events) : Prop := ∀ k s p, orphan evs = some (k, s, p) → (openOf evs s).isSome = true
-
-theorem OrphanOpened.push {evs : Events} (h : OrphanOpened evs) {e : Event} (he : ∀ s p, e ≠ .slot s p) :
-    OrphanOpened (evs.push e) := fun k s p ho => isSome_openOf_push e (h k s p (orphan_of_push he ho))
+/-! ## Each of the record's ops keeps its invariant -/
 
 /-- `admit` refusing records the refusal, after a stop of the session, opened, if the part was asked out of turn. -/
 theorem admit_error_open {evs : Events} {s part why : String} {evs' : Events}
@@ -483,168 +450,200 @@ theorem openSession_guard (evs : Events) (stream : String) (parts : Array String
       rw [budgetOf_eq, firstOn_push_open, hf']
       simp
 
-/-! ## The run's invariant -/
-
-/-- **The run's invariant**: the record's, and the slot's orphan of an opened session. -/
-structure BInv (evs : Events) : Prop where
-  ok : RecOk evs
-  orph : OrphanOpened evs
-
-theorem BInv.init : BInv #[] where
-  ok := RecOk.init
-  orph k s p h := by simp [orphan] at h
-
-theorem BInv.pushPlain {evs : Events} (h : BInv evs) {e : Event} (h1 : ∀ o, e ≠ .opened o)
-    (h2 : ∀ s p w, e ≠ .stop s p w) (h3 : ∀ s p, e ≠ .slot s p) : BInv (evs.push e) :=
-  ⟨h.ok.pushPlain h1 h2, h.orph.push h3⟩
-
-theorem BInv.stop {evs : Events} (h : BInv evs) {s : String} (ho : (openOf evs s).isSome = true) (p w : String) :
-    BInv (stop evs s p w).2 := by
+/-- `stop`: a stop only of an opened session, or nothing. -/
+theorem RecOk.afterStop {evs : Events} (h : RecOk evs) (s p w : String) : RecOk (Core.Firewall.stop evs s p w).2 := by
   rw [stop_evs]
   split
   · exact h
-  · exact ⟨h.ok.pushStop ho p w, h.orph.push fun _ _ h => by cases h⟩
+  · rename_i hc
+    have ho : (openOf evs s).isSome = true := by
+      cases hO : openOf evs s with
+      | none => simp [hO] at hc
+      | some _ => rfl
+    exact h.pushStop ho p w
 
-theorem RecOk.slot {evs : Events} (h : BInv evs) (s part : String) : RecOk (slot evs s part) := by
-  rcases (slot_evs evs s part).1 with he | ⟨k, s', p', w, hor, -, he⟩
+/-- `slot`: the slot's orphan's stop only if it was opened, then the slot. -/
+theorem RecOk.afterSlot {evs : Events} (h : RecOk evs) (s part : String) : RecOk (Core.Firewall.slot evs s part) := by
+  rcases (slot_evs evs s part).1 with he | ⟨k, s', p', w, hor, hos, -, he⟩
   · rw [he]
-    exact h.ok.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
+    exact h.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
   · rw [he]
-    exact (h.ok.pushStop (h.orph k s' p' hor) p' w).pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
+    exact (h.pushStop hos p' w).pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
+
+/-- `admit`: nothing when it admits; a refusal when it refuses, after a stop of the session, opened, if out of turn. -/
+theorem RecOk.afterAdmit {evs : Events} (h : RecOk evs) (s part : String) :
+    RecOk (Core.Firewall.admit evs s part).2 := by
+  cases hadm : Core.Firewall.admit evs s part with
+  | mk r evs' =>
+    cases r with
+    | ok a =>
+      obtain ⟨o, j, -, -, -, hserved⟩ := Properties.Firewall.admit_ok hadm
+      obtain ⟨-, -, -, rfl⟩ := Properties.Firewall.served_ok hserved
+      exact h
+    | error why =>
+      rcases admit_error_open hadm with he | ⟨p, w, hos, he⟩
+      · rw [he]
+        exact h.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
+      · rw [he]
+        exact (h.pushStop hos p w).pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
+
+/-- `openSession`: an open the budget lets through, or nothing. -/
+theorem RecOk.afterOpen {evs : Events} (h : RecOk evs) (stream : String) (parts : Array String)
+    (budget : Option ℕ) (release : Option Core.Firewall.Schedule) :
+    RecOk (openSession evs stream parts budget release).2 := by
+  rcases openSession_guard evs stream parts budget release with he | ⟨s, he, hb, hg⟩
+  · rw [he]
+    exact h
+  · rw [he]
+    exact h.pushOpen _ hb hg
+
+/-- One of the record's ops, as the firewall's server calls them: `openSession`, `finish`, `stop`, `release`, `slot`,
+`admit`, and the Loop's `wait`. -/
+inductive Op where
+  | openRec (stream : String) (parts : Array String) (budget : Option ℕ) (release : Option Core.Firewall.Schedule)
+  | finish (s : String)
+  | stop (s part why : String)
+  | release (s part : String)
+  | slot (s part : String)
+  | admit (s part : String)
+  | wait (s part : String)
+
+/-- The record after `op`. -/
+def Op.apply (evs : Events) : Op → Events
+  | .openRec stream parts budget sched => (openSession evs stream parts budget sched).2
+  | .finish s => Core.Firewall.finish evs s
+  | .stop s part why => (Core.Firewall.stop evs s part why).2
+  | .release s part => Core.Firewall.release evs s part
+  | .slot s part => Core.Firewall.slot evs s part
+  | .admit s part => (Core.Firewall.admit evs s part).2
+  | .wait s part => evs.push (.wait s part)
+
+/-- The record after the ops `ops`, in order, from the empty record. -/
+def opsRun (ops : List Op) : Events := ops.foldl Op.apply #[]
+
+theorem RecOk.apply {evs : Events} (h : RecOk evs) : ∀ op, RecOk (Op.apply evs op)
+  | .openRec stream parts budget sched => h.afterOpen stream parts budget sched
+  | .finish _ => h.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
+  | .stop s part why => h.afterStop s part why
+  | .release _ _ => h.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
+  | .slot s part => h.afterSlot s part
+  | .admit s part => h.afterAdmit s part
+  | .wait _ _ => h.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
+
+/-- **Every order of the record's ops keeps its invariant.** -/
+theorem RecOk.ofOps (ops : List Op) : RecOk (opsRun ops) := by
+  have : ∀ (l : List Op) evs, RecOk evs → RecOk (l.foldl Op.apply evs) := by
+    intro l
+    induction l with
+    | nil => intro evs h; exact h
+    | cons op rest ih => intro evs h; exact ih _ (h.apply op)
+  exact this ops _ RecOk.init
+
+/-- **At most `b` of a stream's sessions are left with a statement not released**, at every order of the record's ops,
+`b` the stream's failure budget. -/
+theorem card_unrel_le_budget (ops : List Op) {t : String} {b : ℕ} (hb : budgetOf (opsRun ops) t = some b) :
+    (unrel (opsRun ops) t).card ≤ b :=
+  (RecOk.ofOps ops).within t b hb
+
+/-! ## A run's record -/
 
 variable {M : String → ℕ → ℕ}
 
-theorem holder_opened {σ : St} (hI : Inv M σ) {h : Holder} (hh : σ.holder = some h) :
-    (openOf σ.evs h.session).isSome = true := by
-  obtain ⟨o, hO, -⟩ := hI.hold h hh
-  rw [hO]
-  rfl
-
-theorem BInv.seat {σ : St} (hB : BInv σ.evs) (s part : String) : BInv (step M σ (.seat s part)).evs := by
-  dsimp only [step]
-  split
-  · exact hB
-  · have hR1 := RecOk.slot hB s part
-    obtain ⟨k1, hor1⟩ := orphan_slot σ.evs s part
-    split
-    · rename_i a evs2 hadm
-      obtain ⟨o, j, hO1, -, -, hserved⟩ := Properties.Firewall.admit_ok hadm
-      obtain ⟨-, -, -, rfl⟩ := Properties.Firewall.served_ok hserved
-      refine ⟨hR1, fun k s' p' hor => ?_⟩
-      rw [hor1] at hor
-      simp only [Option.some.injEq, Prod.mk.injEq] at hor
-      obtain ⟨-, rfl, -⟩ := hor
-      rw [hO1]
-      rfl
-    · rename_i w evs2 hadm
-      rcases admit_error_open hadm with he | ⟨p, w', hos, he⟩
-      · subst he
-        refine ⟨hR1.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h), fun k s' p' hor => ?_⟩
-        rw [orphan_push_of_ne (fun _ _ h => by cases h), hor1] at hor
-        simp [doneEv] at hor
-      · subst he
-        refine ⟨(hR1.pushStop hos p w').pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h),
-          fun k s' p' hor => ?_⟩
-        have h0 : orphan ((slot σ.evs s part).push (.stop s p w')) = none := by
-          rw [orphan_push_of_ne (fun _ _ h => by cases h), hor1]
-          simp [doneEv]
-        rw [orphan_push_of_ne (fun _ _ h => by cases h), h0] at hor
-        cases hor
-
-theorem BInv.next {σ : St} (hI : Inv M σ) (hB : BInv σ.evs) : ∀ st, BInv (step M σ st).evs
+/-- Each step of a run leaves the record as it was or applies the record's ops to it, so keeps its invariant. -/
+theorem RecOk.next {σ : St} (hR : RecOk σ.evs) : ∀ st, RecOk (step M σ st).evs
   | .openRec stream parts budget release => by
     dsimp only [step]
     cases partsOk parts with
-    | error _ => exact hB
+    | error _ => exact hR
     | ok u =>
       cases u
       cases budgetArg budget with
-      | error _ => exact hB
+      | error _ => exact hR
       | ok u =>
         cases u
-        show BInv (openSession σ.evs stream parts budget release).2
-        rcases openSession_guard σ.evs stream parts budget release with h | ⟨s, h, hb, hg⟩
-        · rw [h]
-          exact hB
-        · rw [h]
-          exact ⟨hB.ok.pushOpen _ hb hg, hB.orph.push fun _ _ h => by cases h⟩
+        exact hR.afterOpen stream parts budget release
   | .innerSend s => by
     dsimp only [step]
-    split <;> exact hB
+    split <;> exact hR
   | .innerFinish s => by
     dsimp only [step]
     split
-    · exact hB.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h) (fun _ _ h => by cases h)
-    · exact hB
+    · exact hR.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
+    · exact hR
   | .innerStop s why => by
     dsimp only [step]
     split
-    · rename_i hg
-      rw [Bool.and_eq_true] at hg
-      exact hB.stop hg.1 INNER why
-    · exact hB
-  | .wait s part => hB.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h) (fun _ _ h => by cases h)
-  | .seat s part => hB.seat s part
+    · exact hR.afterStop s INNER why
+    · exact hR
+  | .wait s part => hR.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
+  | .seat s part => by
+    have hA := (hR.afterSlot s part).afterAdmit s part
+    dsimp only [step]
+    split
+    · exact hR
+    · split
+      · rename_i a evs2 hadm
+        rw [hadm] at hA
+        exact hA
+      · rename_i w evs2 hadm
+        rw [hadm] at hA
+        exact hA
   | .relay => by
     dsimp only [step]
     split
-    · split <;> exact hB
-    · exact hB
+    · split <;> exact hR
+    · exact hR
   | .barrier now prove ready => by
     dsimp only [step]
     split
-    · rename_i h hh
-      split
-      · exact hB
+    · split
+      · exact hR
       · split
-        · exact hB
-        all_goals exact hB.stop (holder_opened hI hh) _ _
-    · exact hB
+        · exact hR
+        all_goals exact hR.afterStop _ _ _
+    · exact hR
   | .verdict v => by
     cases v with
     | error why =>
       dsimp only [step]
       split
-      · rename_i h hh
-        split
-        · exact hB.stop (holder_opened hI hh) _ _
-        · exact hB
-      · exact hB
+      · split
+        · exact hR.afterStop _ _ _
+        · exact hR
+      · exact hR
     | ok b =>
       cases b with
       | false =>
         dsimp only [step]
         split
-        · rename_i h hh
-          split
-          · exact hB.stop (holder_opened hI hh) _ _
-          · exact hB
-        · exact hB
+        · split
+          · exact hR.afterStop _ _ _
+          · exact hR
+        · exact hR
       | true =>
         dsimp only [step]
         split
         · split
-          · exact hB.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h) (fun _ _ h => by cases h)
-          · exact hB
-        · exact hB
+          · exact hR.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
+          · exact hR
+        · exact hR
   | .cut why => by
     dsimp only [step]
     split
-    · rename_i h hh
-      split
-      · exact hB
-      · exact hB.stop (holder_opened hI hh) _ _
-    · exact hB
-  | .die => hB
+    · split
+      · exact hR
+      · exact hR.afterStop _ _ _
+    · exact hR
+  | .die => hR
 
 /-- **Every run keeps the record's invariant.** -/
-theorem BInv.ofRun (M : String → ℕ → ℕ) (steps : List Step) : BInv (run M steps).evs := by
-  have : ∀ (l : List Step) σ, Inv M σ → BInv σ.evs → BInv (l.foldl (step M) σ).evs := by
+theorem RecOk.ofRun (M : String → ℕ → ℕ) (steps : List Step) : RecOk (run M steps).evs := by
+  have : ∀ (l : List Step) σ, RecOk σ.evs → RecOk (l.foldl (step M) σ).evs := by
     intro l
     induction l with
-    | nil => intro σ _ h; exact h
-    | cons st rest ih => intro σ hI h; exact ih _ (hI.next st) (h.next hI st)
-  exact this steps _ (Inv.init M) BInv.init
+    | nil => intro σ h; exact h
+    | cons st rest ih => intro σ h; exact ih _ (h.next st)
+  exact this steps _ RecOk.init
 
 /-! ## The stream's sessions not released, at most its budget -/
 
@@ -655,7 +654,7 @@ theorem card_unreleased_le_budget (M : String → ℕ → ℕ) (steps : List Ste
     (hs : ∀ i o, openOf (run M steps).evs (ss i) = some o → o.stream = t) {b : ℕ}
     (hb : budgetOf (run M steps).evs t = some b) :
     (univ.filter fun i => unreleasedOf (run M steps) (ss i)).card ≤ b := by
-  refine le_trans ?_ ((BInv.ofRun M steps).ok.within t b hb)
+  refine le_trans ?_ ((RecOk.ofRun M steps).within t b hb)
   refine card_le_card_of_injOn ss (fun i hi => ?_) (fun i _ j _ h => hinj h)
   rw [mem_coe, mem_filter] at hi
   rw [mem_coe, mem_unrel]
