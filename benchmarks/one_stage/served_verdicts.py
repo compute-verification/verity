@@ -11,7 +11,8 @@ sampled proofs, and the one record of every verdict (the block record).
                               [--product P]
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
                                 [--statements FILE] [--live-evidence FILE]
-    served_verdicts.py pearlplus DIR --served FILE --verify FILE
+    served_verdicts.py pearlplus DIR --served FILE --verify FILE [--unretained FILE] [--gate CMD] [--key-sha512 HEX]
+                                 [--main FILE]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
                               [--product P] [--deferred WHY]
     served_verdicts.py public-registration REGISTRATION
@@ -92,8 +93,12 @@ window meets the two premises of `Security`'s that no check here discharges, ``A
 ``pearlplus``: PoUW's development piece under POUW=pearlplus (`served_pearlplus.sh`, POUW_CMD's default then), from Pearl+'s
 own served run on the card after the window's serve: ``--served`` (`served_passes.py serve`'s document: every pass retained)
 and ``--verify`` (its ``verify``'s: Pearl+'s verdict over all the passes, the reference replay of the tiles it draws).
-Its verdict is accept when that run served within its caps across at least two pass boundaries and Pearl+'s verdict
-accepts; its document carries the passes, that verdict's line and credit at Pearl's Assumption 1, where its coins came from
+Its verdict is accept when that run served within its caps across at least two pass boundaries, Pearl+'s verdict
+accepts, and each pass's salt is the live session's that the serve names (`pearlplus_coins`: the session's tree as the gate
+``--gate`` fetches it, the ledger and pins log that gate answers now and ``--main``'s line, held by `core_check.live_salt`
+under the key ``--key-sha512`` pins); a run whose coins are an in-process challenger's claims no verdict where nothing
+failed (`UNCLAIMED`, `PEARLPLUS_WHY_IN_PROCESS`), and one served under the gate whose coins are not live rejects. Its
+document carries the passes, that verdict's line and credit at Pearl's Assumption 1, where its coins came from
 (`PEARLPLUS_COINS`) and its shares (`served_shares.pearlplus_shares`), and says why it credits nothing (`PEARLPLUS_WHY`:
 its passes are not the window sampled proofs audited).
 
@@ -184,17 +189,31 @@ DEVELOPMENT = "development.json"
 DEV_WHY = ("development run, credits nothing: H1's coins come from vy-challenger-1's gate under the lane's development key, "
            "and a window counts for credit only under the lane's own key; core's credit also needs the window in a period "
            "whose open commits its draw K, rows and weights")
-#: why the Pearl+ piece's verdict (`pearlplus`) credits nothing
-PEARLPLUS_WHY = ("development run, credits nothing: Pearl+ (pearl-c-h100-v1-h3) served its own seeded load on this card after "
-                 "the window's serve, the BF16 checkpoint's linears as its FP8 product, so its passes are not the window "
-                 "sampled proofs audited and nothing ties them to that window's Commit; its epoch's coins are an in-process "
-                 "challenger's, which the serving process holds; and an ACCEPT is the reference replay's (verify_run.py), "
-                 "not PouwCheck's ZK proof")
-#: where Pearl+'s epoch coins and the replay's draws come from (`pearlplus`)
-PEARLPLUS_COINS = {"epoch": "an in-process challenger of epoch 0 (verity_bench's protocols_config, pouw.challenged), held by "
-                            "the serving process",
+_PEARLPLUS_UNTIED = ("development run, credits nothing: Pearl+ (pearl-c-h100-v1-h3) served its own seeded load on this card "
+                     "after the window's serve, the BF16 checkpoint's linears as its FP8 product, so its passes are not the "
+                     "window sampled proofs audited and nothing ties them to that window's Commit")
+#: why the Pearl+ piece's verdict (`pearlplus`) credits nothing, its epoch's salt coin a live session's
+PEARLPLUS_WHY = (f"{_PEARLPLUS_UNTIED}; its epoch's salt coin is a live session's on vy-challenger-1, under the lane's "
+                 "development key; and an ACCEPT is the reference replay's (verify_run.py), not PouwCheck's ZK proof")
+#: the same where its epoch's coins are an in-process challenger's: the piece then claims no verdict (`UNCLAIMED`)
+PEARLPLUS_WHY_IN_PROCESS = (f"{_PEARLPLUS_UNTIED}; its epoch's coins are an in-process challenger's, which the serving "
+                            "process holds, so it claims no verdict: the reference replay's (verify_run.py) ACCEPT under "
+                            "coins the prover holds shows nothing")
+#: the Pearl+ piece's verdict where its epoch's coins are an in-process challenger's and nothing failed
+UNCLAIMED = "unclaimed"
+#: where Pearl+'s epoch coins and the replay's draws come from (`pearlplus`), its epoch's salt coin a live session's
+PEARLPLUS_COINS = {"epoch": "a salt-only session on vy-challenger-1, reserved through the lane's gate before the engine "
+                            "started and opened by the install on its salt epoch's root; each pass's salt is held to it by "
+                            "core_check.live_salt through the auditor's signed ledger, the host's pins log and main's "
+                            "first-parent line (`pearlplus_coins`)",
                    "draws": "the Lean verifier's IO.getRandomBytes in verify_run.py, one source for the run, taken once every "
                             "pass's roots are read"}
+#: the same where its epoch's coins are an in-process challenger's
+PEARLPLUS_COINS_IN_PROCESS = {**PEARLPLUS_COINS,
+                              "epoch": "an in-process challenger of epoch 0 (verity_bench's protocols_config, "
+                                       "pouw.challenged), held by the serving process"}
+#: `served_step.coins_of`'s ``source`` for a live session's coins
+LIVE_SOURCE = "challenger"
 #: what `record` composes from, until it runs on an auditor-side host reading each party's own answer
 COMPOSED_FROM = ("each piece's answer file as the served node wrote it, not the party that produced it: an edit to that "
                  "file on the node changes its row")
@@ -516,15 +535,19 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
 
 def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
     """A development piece's line (`pouw`'s document): its verdict, why it rejects, the window's session and how each
-    check came out, core's credit refusal, and that it credits nothing. `pearlplus`'s: its verdict, why it rejects, its
-    passes, Pearl+'s verdict's credit (its credited and credited cells' MACs and ε), its shares at the tensor clock, and the
-    unretained serve's wall and declared share there (None without one, or why it has none)."""
+    check came out, core's credit refusal, and that it credits nothing. `pearlplus`'s: its verdict, why it rejects, where
+    its epoch's coins came from, its live session and `pearlplus_coins`' refusal (None when it accepted, ``unchecked``
+    when it didn't run), its passes, Pearl+'s verdict's credit (its credited and credited cells' MACs and ε), its shares at
+    the tensor clock, and the unretained serve's wall and declared share there (None without one, or why it has none)."""
     if doc.get("piece") == "pearlplus":
         shares = doc.get("shares") or {}
         at = (shares.get("readings") or {}).get("tensor") or {}
         un = shares.get("unretained")
         credit = doc.get("credit")
+        check = (doc.get("coins") or {}).get("check") or {}
         return {"verdict": doc.get("verdict"), "development": True, "credited": False, "reasons": doc.get("reasons"),
+                "coin_source": doc.get("coin_source"), "session": check.get("session"),
+                "coins": check.get("reason", "unchecked"),
                 **{k: doc.get(k) for k in ("scheme", "passes", "served_tokens", "generate_s")},
                 "credit": None if credit is None else {k: credit.get(k) for k in ("credited", "macs", "epsilon")},
                 "shares_at_tensor_clock": {k: at.get(k) for k in ("declared_linears", "credited")},
@@ -812,21 +835,75 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
     return doc
 
 
+def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key: str | None,
+                    main: Path | None) -> dict[str, Any]:
+    """Whether every pass with calls of Pearl+'s served run (``served``, `served_passes.py serve`'s document) has its
+    epoch's salt from the live session its ``coins`` names (`served_step.coins_of`'s): the session's tree as the gate
+    `gate`'s ``fetch`` gives it, and the auditor's ledger and the host's pins log as the gate answers now, written to
+    `out`, with main's first-parent line `main` (`remote.main_lines`), each pass's manifest held by
+    `core_check.live_salt` under the challenger key whose public key's SHA-512 is `key` (`challenger.pinned_key`).
+    ``{session, closed, passes, reason}``: the passes checked, and None or the first refusal."""
+    from verity.core.protocols.pouw import core_check as CC
+    from verity.core.protocols.sampled_proofs import remote
+    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+
+    coins = served.get("coins") or {}
+    sid = (coins.get("session") or {}).get("session")
+    got: dict[str, Any] = {"session": sid, "closed": coins.get("closed"), "passes": 0, "reason": None}
+    try:
+        if not (gate and key and main):
+            raise ValueError("no gate, key pin or main's first-parent line to check the session by (--gate, --key-sha512, "
+                             "--main)")
+        if not sid:
+            raise ValueError("the served run names no live session")
+        tgz, tree = out / "session.tgz", out / "session"
+        tgz.write_bytes(_gate_out(gate, "fetch", sid))
+        with tarfile.open(tgz) as t:
+            t.extractall(tree, filter="data")
+        for name in ("ledger", "pins"):
+            (out / f"{name}.jsonl").write_bytes(_gate_out(gate, name))
+        d = tree / sid / "out"
+        live = {"key": PHC.pinned_key(d / remote.KEY, key).to_json(), "ledger": remote.ledger_lines(out / "ledger.jsonl"),
+                "pins": remote.ledger_lines(out / "pins.jsonl"), "main": remote.main_lines(main),
+                "session": remote.session_files(d)}
+        for p in served.get("passes") or ():
+            if not p.get("units"):
+                continue
+            _salt, refused = CC.live_salt(live["key"], live["ledger"], live["pins"], live["main"], live["session"],
+                                          json.loads(Path(p["manifest"]).read_text()), CC.lms_verify)
+            got["passes"] += 1
+            if refused is not None:
+                got["reason"] = f"pass {p.get('pass')}: {refused[0]}: {refused[1]}"[:600]
+                break
+        else:
+            if not got["passes"]:
+                got["reason"] = "the served run has no pass with calls to check"
+    except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
+        got["reason"] = f"{type(e).__name__}: {e}"[:600]
+    return got
+
+
 def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str, Any] | None,
-              unretained: Mapping[str, Any] | None = None) -> dict[str, Any]:
+              unretained: Mapping[str, Any] | None = None, *, gate: str | None = None, key: str | None = None,
+              main: Path | None = None) -> dict[str, Any]:
     """PoUW's development piece under POUW=pearlplus (``served_pearlplus.sh``), its document written to
     ``out/development.json``: Pearl+'s own served run (``served``, `served_passes.py serve`'s document) and Pearl+'s
     verdict over every pass it retained (``verified``, its ``verify``'s; None where either wrote none). Its verdict is
-    accept when the run served within its caps across at least two pass boundaries and Pearl+'s verdict accepts; it
-    carries that verdict's line and credit at Pearl's Assumption 1 (``credit``, the answer's ``public.work``), its shares
+    accept when the run served within its caps across at least two pass boundaries, Pearl+'s verdict accepts, and its
+    epoch's salt coin is its live session's (`pearlplus_coins` through the gate `gate`, the key pin `key` and main's line
+    `main`; `PEARLPLUS_COINS`); with an in-process challenger's coins (`PEARLPLUS_COINS_IN_PROCESS`) a run where nothing
+    failed is `UNCLAIMED`, and a run served under the gate whose coins are not live rejects. It carries that verdict's
+    line and credit at Pearl's Assumption 1 (``credit``, the answer's ``public.work``), its shares
     are `served_shares.pearlplus_shares`'s wherever the run served within its caps, whatever the verdict (a rejected or
-    missing one credits 0), and it credits nothing (`PEARLPLUS_WHY`). ``unretained``, the same load served
+    missing one credits 0), and it credits nothing (`PEARLPLUS_WHY`, or `PEARLPLUS_WHY_IN_PROCESS`). ``unretained``, the same load served
     with no pass retained (``serve --no-retain``), adds the shares' ``unretained`` (`served_shares.pearlplus_unretained`),
     or why there are none; it is a measurement and never decides the verdict."""
     import served_shares as SS
 
     out.mkdir(parents=True, exist_ok=True)
     reasons = []
+    source = None if served is None else (served.get("coins") or {}).get("source", "in-process")
+    live = bool(gate) if served is None else source == LIVE_SOURCE
     if served is None:
         reasons.append("no served run: served_passes.py serve wrote no document")
     elif not served.get("ok"):
@@ -837,8 +914,16 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
         reasons.append("no verdict: served_passes.py verify wrote no document")
     elif answer.get("verdict") != "accept":
         reasons.append(f"Pearl+'s verdict rejects the run: {answer.get('reason')}"[:800])
-    doc: dict[str, Any] = {"piece": "pearlplus", "credited": False, "why": PEARLPLUS_WHY, "coins": PEARLPLUS_COINS,
-                           "scheme": None, "arm": None, "passes": None, "line": None, "credit": None, "shares": None}
+    coins: dict[str, Any] = dict(PEARLPLUS_COINS if live else PEARLPLUS_COINS_IN_PROCESS)
+    if served is not None and live:
+        coins["check"] = pearlplus_coins(served, out, gate, key, main)
+        if coins["check"]["reason"] is not None:
+            reasons.append(f"coins: {coins['check']['reason']}")
+    elif served is not None and gate:
+        reasons.append(f"coins: {source}, not a live session on the gate, so nothing checks them")
+    doc: dict[str, Any] = {"piece": "pearlplus", "credited": False, "why": PEARLPLUS_WHY if live else PEARLPLUS_WHY_IN_PROCESS,
+                           "coin_source": source, "coins": coins, "scheme": None, "arm": None, "passes": None, "line": None,
+                           "credit": None, "shares": None}
     if served is not None:
         doc.update(arm=served.get("arm"), scheme=(served.get("arm") or "").partition(":")[2] or None,
                    passes=sum(1 for p in served.get("passes") or () if p.get("units")),
@@ -855,7 +940,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
                 doc["shares"]["unretained"] = SS.pearlplus_unretained(doc["shares"], dict(served), dict(unretained))
             except (KeyError, TypeError, ValueError) as e:
                 doc["shares"]["unretained"] = {"error": f"{type(e).__name__}: {e}"[:600]}
-    doc.update(verdict="reject" if reasons else "accept", reasons=reasons)
+    doc.update(verdict="reject" if reasons else "accept" if live else UNCLAIMED, reasons=reasons)
     (out / DEVELOPMENT).write_text(json.dumps(doc, indent=1, sort_keys=True, default=str) + "\n")
     return doc
 
@@ -924,8 +1009,8 @@ def piece(key: str, pieces_dir: Path, run: str | None = None) -> tuple[dict[str,
 
 def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, Any]:
     """A subprotocol's runner row from its piece's answer; a development piece's is ``missing`` with its document when it
-    accepts (it credits nothing, for the document's ``why``, else `DEV_WHY`), else ``reject``; a piece that ran (`RAN`) and
-    wrote neither is its ``error``, unless it
+    accepts or claims no verdict (`UNCLAIMED`; it credits nothing, for the document's ``why``, else `DEV_WHY`), else
+    ``reject``; a piece that ran (`RAN`) and wrote neither is its ``error``, unless it
     refused to run (`REFUSED`); otherwise ``missing``, naming why."""
     _name, comp, owner, what = PIECES.get(key, WIPE)
     d = pieces_dir / comp
@@ -934,7 +1019,7 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, A
         doc = _json(dev)
         if not isinstance(doc, dict):
             return {"verdict": "error", "owner": owner, "reason": f"its piece's {DEVELOPMENT} is not a JSON object"}
-        if doc.get("verdict") == "accept":
+        if doc.get("verdict") in ("accept", UNCLAIMED):
             own = doc.get("why") or DEV_WHY
             refused = (doc.get("credit") or {}).get("window")
             if isinstance(refused, list) and len(refused) == 2:
@@ -1136,6 +1221,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     pp.add_argument("--served", type=Path, help="served_passes.py serve's document")
     pp.add_argument("--verify", type=Path, help="served_passes.py verify's document")
     pp.add_argument("--unretained", type=Path, help="served_passes.py serve --no-retain's document of the same load")
+    pp.add_argument("--gate", help="the gate's command the serve reserved its live session through "
+                                   "(PEARLC_CHALLENGER_GATE): the session is fetched through it")
+    pp.add_argument("--key-sha512", help="the SHA-512 of the challenger's public key the deployment pins (H1_KEY_SHA512)")
+    pp.add_argument("--main", type=Path, help="main's first-parent line, one commit a line (MAIN_FILE)")
     rg = sub.add_parser("public-registration")
     rg.add_argument("registration", type=Path)
     pl = sub.add_parser("public-lines")
@@ -1255,13 +1344,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "pearlplus":
         doc = pearlplus(a.out, _json(a.served) if a.served else None, _json(a.verify) if a.verify else None,
-                        _json(a.unretained) if a.unretained else None)
+                        _json(a.unretained) if a.unretained else None, gate=a.gate, key=a.key_sha512, main=a.main)
         print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
         return 0
     if a.cmd == "pieces":
         a.out.mkdir(parents=True, exist_ok=True)
         got = pieces(a.serve_run, a.window, a.out, node=a.node, only=a.only, skip=a.skip, product=a.product)
-        return 0 if all(g["verdict"] in ("accept", "missing", "dropped") for g in got.values()) else 1
+        return 0 if all(g["verdict"] in ("accept", "missing", "dropped", UNCLAIMED) for g in got.values()) else 1
     steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]

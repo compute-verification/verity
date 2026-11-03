@@ -142,10 +142,11 @@ def volunteer(path: Path, coins: CoinCommitment, jobs: int) -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("manifest", type=Path)
-    ap.add_argument("--coins", type=Path, required=True, help="the epoch's published coin commitment (coins.json)")
+    ap.add_argument("--coins", type=Path, required=True,
+                    help="the epoch's published coin commitment (coins.json, a live session's or an in-process challenger's)")
     ap.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     a = ap.parse_args(argv)
-    out = volunteer(a.manifest, CoinCommitment.from_json(json.loads(a.coins.read_text())), a.jobs)
+    out = volunteer(a.manifest, VR.epoch_coins(a.coins), a.jobs)
     print(out["line"], flush=True)
     return 0 if out["ok"] else 1
 

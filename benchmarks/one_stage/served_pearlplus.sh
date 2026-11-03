@@ -9,9 +9,12 @@
 #      (default benchmarks/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml: pouw:pearl-c-h100-v1-h3 over Llama 3.2 1B's
 #      BF16 checkpoint) a warm-up, then PEARLPLUS_REQUESTS requests (default 32) of PEARLPLUS_PROMPT_TOKENS seeded random
 #      tokens (default 1,024) and PEARLPLUS_OUTPUT_TOKENS outputs (default 1) at PEARLPLUS_T tokens a step (default 8,192:
-#      a prefill-heavy load, 8 prompts a step), each engine step one pass retained in passes/; before it, unless
-#      PEARLPLUS_UNRETAINED is set empty, the same load under its own lease with no pass retained (`serve --no-retain`,
-#      unretained/), whose wall is the option's without writing the passes;
+#      a prefill-heavy load, 8 prompts a step), each engine step one pass retained in passes/, its epoch's salt coin a
+#      live session's on vy-challenger-1 where PEARLC_CHALLENGER_GATE and PEARLC_CHALLENGER_PEER are set (served_verdicts.sh
+#      sets them under POUW=pearlplus; `served_passes.py serve`'s, `bench_arm.live_coins`), else an in-process
+#      challenger's; before it, unless PEARLPLUS_UNRETAINED is set empty, the same load under its own lease with no pass
+#      retained (`serve --no-retain`, unretained/), whose wall is the option's without writing the passes, its coins an
+#      in-process challenger's, since no verdict reads them;
 #   3. with PEARLPLUS_VOLUNTEER=1, after the lease and before the verifier's coin, `served_passes.py volunteer` replays every
 #      tile of every retained pass on the CPU in PEARLPLUS_JOBS processes and gives up, in the passes' records, the rows
 #      over a debit cap (V-EX), which the serve's screen can't see. That replay is the whole run's, not a sample's, and at
@@ -22,7 +25,9 @@
 #      too (a scalar replay takes minutes a tile at the 1B's K), or with PEARLPLUS_FAST set empty on the scalar reference
 #      alone. Its document goes to PIECE_DIR/verify.json and its core answer to PIECE_DIR/pearlplus-answer.json, not
 #      answer.json, which the record would compose as the window's PoUW answer;
-#   5. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, Pearl+'s verdict's credit,
+#   5. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, with each pass's salt
+#      held to the serve's live session (`pearlplus_coins`: the session fetched through PEARLC_CHALLENGER_GATE, under
+#      H1_KEY_SHA512 and MAIN_FILE's line; with in-process coins it claims no verdict), Pearl+'s verdict's credit,
 #      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.PEARLPLUS_WHY: its
 #      passes are not the window sampled proofs audited, so WINDOW names nothing here).
 # The passes hold the run's activations, so they stay in SERVE_DIR/private, under served_verdicts.sh's `research keep`.
@@ -69,7 +74,8 @@ serve() {  # LOG ARGS...: served_passes.py serve of the piece's load under its o
 if [ -n "${PEARLC_CUBIN:-}" ]; then
   if [ -n "${PEARLPLUS_UNRETAINED-1}" ]; then
     t=$(date +%s)
-    serve serve-unretained.log --no-retain --passes "$Q/unretained" --out "$Q/served-unretained.json"
+    ( unset PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER
+      serve serve-unretained.log --no-retain --passes "$Q/unretained" --out "$Q/served-unretained.json" )
     rc=$?
     say "serve, no pass retained: served_passes.py serve --no-retain exit $rc after $(took "$t"): $(grep -m1 '^served ' "$Q/serve-unretained.log" | cut -c1-300)"
   fi
@@ -101,7 +107,8 @@ fi
 UN=()
 [ -s "$Q/served-unretained.json" ] && UN=(--unretained "$Q/served-unretained.json")
 "$TPY" benchmarks/one_stage/served_verdicts.py pearlplus "$P" --served "$Q/served.json" --verify "$P/verify.json" \
-  ${UN[@]+"${UN[@]}"} > "$Q/pearlplus.log" 2>&1
+  ${UN[@]+"${UN[@]}"} ${PEARLC_CHALLENGER_GATE:+--gate "$PEARLC_CHALLENGER_GATE"} ${H1_KEY_SHA512:+--key-sha512 "$H1_KEY_SHA512"} \
+  ${MAIN_FILE:+--main "$MAIN_FILE"} > "$Q/pearlplus.log" 2>&1
 rc=$?
 grep '^POUW-DEV ' "$Q/pearlplus.log"
 say "piece: served_verdicts.py pearlplus exit $rc"
