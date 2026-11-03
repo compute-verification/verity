@@ -1,4 +1,4 @@
-"""The Lean trace assigner (`VStar.Trace.assign`, served by ``vstar-trace``) against the witness the deployed C-Flock prover
+"""The Lean trace assigner (`VStar.Trace.assign`, served by ``vstar-trace``) against the witness the deployed Flock prover
 assigns (``flock-trace``: `Stmt::row_inputs`, `Stmt::unit_inputs`, `Stmt::converge`, `Stmt::witness`, M0's zero mask), on
 V*'s staged parts: each block's SHA-512 and each block's ranges' (the ``sha512x3`` compressions, the ``hm96`` slots, the
 units, the mask) must be equal, and every port's row whole 16-bit words (`VStar.Trace.fullRows`, which

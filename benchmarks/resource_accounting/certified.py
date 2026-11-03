@@ -5,7 +5,7 @@
   W_cert = (1 − γ)(1 − ε_s)·ΣW_ref, in W1 units (one dense FP8 MAC on the device), with ΣW_ref the drawn statement's
   reference work over the credited cells (`clear_work.ticket_cell`; about 1.09 to 1.11 per MAC at the sweep's shapes).
   γ is looked up from the Lean-pinned price twins (`price_twins.lookup`) of the statement on the priced path the scheme's
-  draw cites (`clear_work.draw_wref`), at both FP32 prices, the larger published; it is never typed.  Twins are stated
+  sample cites (`clear_work.draw_wref`), at both FP32 prices, the larger published; it is never typed.  Twins are stated
   at the cubes 8,192³ and 16,384³ and at each of Llama-3.1-8B's linears (n, k) and its layout (`GAMMA_PIN`), so
   every shape the sweep names is priced; a shape no twin states has W_cert unproved.  ε_s = 0.1% at t = K = 27,713 draws
   (`plan.RECORD_K`, (1 − ε_s)^K ≤ 2⁻⁴⁰).  A chain's credited rows are its screened rows less those the screen failed or
@@ -141,7 +141,7 @@ def scheme():
 
 
 def priced_path(s) -> str:
-    """The priced path the scheme's draw cites, from its statement's name (``...Cast8p72...`` is ``cast-8.72``)."""
+    """The priced path the scheme's sample cites, from its statement's name (``...Cast8p72...`` is ``cast-8.72``)."""
     at = clear_work().draw_wref(s)
     if at is None:
         raise ValueError(f"{s.name}: its draw cites no statement")

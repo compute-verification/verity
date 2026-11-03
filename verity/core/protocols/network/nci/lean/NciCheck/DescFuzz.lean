@@ -251,7 +251,7 @@ def segJson (s : Desc.Seg) : Json :=
 
 /-- `Novel.ReadsExact`'s conclusion for every root node: `none`, or the first node and clause where it fails; `some`
 with `skipped` for a segment past the cap. -/
-def readsExact (P : Prog) (reads : Array (Array Desc.Seg)) (c : Circuit) (cap : Nat) : Option Json := Id.run do
+def readsExact (P : Prog) (reads : Array (Array Desc.Seg)) (c : GateTable) (cap : Nat) : Option Json := Id.run do
   let offs := (P.defs[P.root]!).body.offsets
   let K := (P.defs[P.root]!).body.nodes.size
   for k in [0:K] do

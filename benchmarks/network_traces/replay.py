@@ -17,7 +17,9 @@ unit, so it gets its own `audit.Audit` and one clock:
 - **the published records** are the raw network certificates, their commitments (`commitment.commit`) and their network
   certificates (`certificate.Issuer`), signed by `ReplaySigner`;
 - **the verifier** is `Audit.check_link` on egress and `Audit.check_ingress_link` on ingress, once on the raw records,
-  once on the committed ones and once on the certified ones. The three must agree on every link-window.
+  once on the committed ones and once on the certified ones. The three must agree on every link-window, except that
+  the issuer certifies no incomplete status, so the certified audit gives a raw `status:<reason>` as a `no-verdict`
+  (`certified_of`).
 
 `ReplaySigner` is a stand-in: real LMS signatures under a toy key (`REPLAY_LMS`), leaves reused and every configuration
 signed in one certifier session (`REPLAY_SESSION`), as no certifier may.
@@ -40,7 +42,7 @@ release minus hand, and end to end is release minus ready. A frame not released 
 
     python replay.py --calibration REPORT.json --out DIR [--jobs N] [--syncs POLICY [--fresh]] TRACE.json|DIR ...
 
-It writes `verdicts.jsonl`, one line per link-window, and `summary.json`.
+It writes `verdicts.jsonl`, one line per execution phase, and `summary.json`.
 """
 
 from __future__ import annotations
@@ -104,6 +106,12 @@ def certify(records: Sequence[Record], direction: Direction, params: GridParams,
             signer: ReplaySigner) -> list:
     issuer = Issuer(signer, REPLAY_SESSION)
     return [c for r in records if (c := issuer.certify(r, direction, params, parameters)) is not None]
+
+
+def certified_of(raw: str | None) -> str | None:
+    """The raw audit's verdict of a link-window as the certified audit gives it: a window the raw audit rejects on its
+    status has no certificate, so it is a `no-verdict`."""
+    return "no-verdict" if raw is not None and raw.startswith("status:") else raw
 
 
 class Setup:
@@ -196,8 +204,8 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight", prio
     """One configuration through prover, shaper, certifier, records and audit, raw, committed and certified. The prover's
     syncs are `syncs` (`parse_sync_policy`), and an online rule starts from `prior` and reads the frames ready by `lag`
     buckets before each window (`online.declare`). The verifier is `audit` (a class with `audit.Audit`'s interface).
-    Returns one row per link-window, the configuration's tallies and the online prover's history (empty for the other
-    policies)."""
+    Returns one row per execution phase, the configuration's tallies and the online prover's history (empty for the
+    other policies)."""
     sync_set = setup.sync_set
     eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
     raw, committed, certified = audit(), audit(), audit()
@@ -382,8 +390,8 @@ def summarize(rows: Sequence[dict], tally: dict, setup: Setup) -> dict:
             s["delivery_delay_ms"] = hist_percentiles(t["delivery"])
         summary[side] = s
     summary["committed_agrees"] = all(r["raw"] == r["committed"] for r in rows)
-    summary["certified_agrees"] = all(r["raw"] == r["certified"] for r in rows)
-    summary["disagreements"] = [r for r in rows if not r["raw"] == r["committed"] == r["certified"]]
+    summary["certified_agrees"] = all(certified_of(r["raw"]) == r["certified"] for r in rows)
+    summary["disagreements"] = [r for r in rows if r["raw"] != r["committed"] or certified_of(r["raw"]) != r["certified"]]
     summary["violations"] = [r for r in rows if any(r[k] for k in AUDITS)]
     return summary
 

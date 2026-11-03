@@ -8,12 +8,12 @@ Output = the existing request-list workload format (a row file, `config.RowConfi
 `verity_vllm.engine.vllm_adapter.load_workload` / `bench/commit_delta.py` / `zk/bench/e2e_commit_run.py` / the eager capture consume unchanged,
 plus one extra top-level key `sweep` (row id, seed, the length/cap/seed/arrival vectors, the plan) that existing loaders ignore.
 
-Determinism: `seed = SHA256(row_id)`; every draw comes from `numpy.random.default_rng` seeded from that digest and a purpose tag.
+Determinism: `seed = SHA256(row_id)`; every sample comes from `numpy.random.default_rng` seeded from that digest and a purpose tag.
 
 Shape plan for batch B over [lo, I] (lo = 8, or 1 when I < 32):
   anchors (in this priority order, truncated to B):  I exactly · lo + {0..3} (near the minimum) · one awkward (odd, non-power-of-two)
   length in each linear quartile of [lo, I] (Q2, Q3, Q1, Q4) — then the remaining B - 6 lengths are log-uniform over [lo, I]
-  (stratified: one draw per equal log-width stratum), nudged off powers of two.  Output caps over [2, O]: O exactly · 2 (very short) ·
+  (stratified: one sample per equal log-width stratum), nudged off powers of two.  Output caps over [2, O]: O exactly · 2 (very short) ·
   one odd cap per quartile · log-uniform remainder; caps are paired with the lengths by a seeded permutation.  For B >= 8 this gives
   >= 6 distinct lengths and caps, one near the min, one at the max, one per quartile, several non-power-of-two values (`--check`).
 Prompts: distinct real text from `verity_vllm/engine/profiles/corpus_coverage.json` (three public-domain Gutenberg books), each request
@@ -134,7 +134,7 @@ def plan_values(n: int, lo: int, hi: int, rng: np.random.Generator, *, anchor_ne
         out.append(int(v))
     rest = n - len(out)
     if rest > 0:
-        # stratified log-uniform: one draw per equal-width stratum of log[lo, hi]
+        # stratified log-uniform: one sample per equal-width stratum of log[lo, hi]
         la, lb = np.log(max(lo, 1)), np.log(hi)
         edges = np.linspace(la, lb, rest + 1)
         for k in range(rest):

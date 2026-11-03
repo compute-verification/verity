@@ -1,8 +1,8 @@
-"""Row units under C-Flock's block (``Shape.row_k``): each row unit of Pearl-C's (`pc8`) and Pearl-C4's (`pc4`) tile
+"""Row units under Flock's block (``Shape.row_k``): each row unit of Pearl-C's (`pc8`) and Pearl-C4's (`pc4`) tile
 check cut along k into a head, one form per segment of row_k positions and a tail.  It is opt-in: a shape without
 ``row_k`` builds today's Programs, which this module leaves alone.
 
-C-Flock proves one instance in at most a 2^27-bit block (`verity_flock.circuit.K_MAX`), and a whole row unit outgrows it
+Flock proves one instance in at most a 2^27-bit block (`verity_flock.circuit.K_MAX`), and a whole row unit outgrows it
 long before the served k (Pearl-C's row of A on sm_120 past k = 2,560).  Cut at row_k = 2,048 (`ROW_K`), no piece grows
 with k but through the row of A it reads.  The pieces of row i of A (row j of B's are the same with F_B and F_A swapped,
 E_B, B's rows and, in the tail, G):
@@ -31,9 +31,9 @@ and its tail Ẽ and P.  Each form decodes its segment's BF16 words again (`Bf16
 two units hold.
 
 Each piece's rows (`PORTS8`, `PORTS4`; `leaves`' pc8-head, pc8-carry, fp8-codes, pc4-head, pc4-carry and nvfp4-codes) are
-C-Flock-committed ports in the row's session, and a form reads its segment of F_A and F_B as a public input region under
+Flock-committed ports in the row's session, and a form reads its segment of F_A and F_B as a public input region under
 the anchor's slice rule (`DERIVATIONS8`, `DERIVATIONS4`, `anchors.Derivation.per_segment`).  Every form opens the row of A
-whole, so a form's SHA work still grows with k.  C-Flock pads each output port to whole words and reads an input row as
+whole, so a form's SHA work still grows with k.  Flock pads each output port to whole words and reads an input row as
 its parameters' bits run together, so the head returns its row in whole-word ports (`HEAD8_OUT`, `HEAD4_OUT`: a_E with
 its pad, and the finite and floor bits with theirs, one port each) and commits the very words the forms and tail read.
 """
@@ -65,12 +65,12 @@ E4M3, E2M1, U8, BF16 = pc8.E4M3, W.E2M1, W.U8, W.BF16
 #: the head's row, as each form and the tail read it (`leaves`' pc8-head and pc4-head rows)
 HEAD8 = (("alpha", F32), ("ep", pc8.LINE), ("th", Value(64)), ("finite", Value(1)), ("floor", Value(1)), ("pad", Value(14)))
 HEAD4 = (("alpha", F32), ("ae", U8), ("pad", Value(8)))
-#: the head's output ports, each a run of its row's fields: C-Flock pads each output port to whole u16 words
+#: the head's output ports, each a run of its row's fields: Flock pads each output port to whole u16 words
 #: (`class_statement.unit_lowering`), so a_E and its pad, and the finite and floor bits and theirs, are one port each
 HEAD8_OUT = (("alpha",), ("ep",), ("th",), ("finite", "floor", "pad"))
 HEAD4_OUT = (("alpha",), ("ae", "pad"))
 #: a form's carry, as the next form and the tail read it (pc8-carry, pc4-carry); pc8-carry's zero fill makes the row whole
-#: SHA-512 blocks (128 words), a row shape C-Flock's widened scope takes, where 66 words would be neither short nor whole
+#: SHA-512 blocks (128 words), a row shape Flock's widened scope takes, where 66 words would be neither short nor whole
 FILL8 = 62
 CARRY8 = (("dead", Value(32)), ("tot", Array(R, F32)), ("fill", Array(FILL8, Value(16))))
 CARRY4 = (("tot", Array(R, F32)),)

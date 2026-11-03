@@ -27,7 +27,7 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits import Program, bind
-from verity.ml.circuits.codec import _spec_id, encode_program, program_digest
+from verity.ml.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import composite
 from verity.ml.circuits.refs import Coll, array_of, coll_concat, tuple_of
 from verity.ml.definitions.registry import b1, lifted as L, moe, prims as P
@@ -126,7 +126,7 @@ def test_active_routing_and_expert_arithmetic_are_bit_exact_gate_for_gate(data):
     assert all(L.is_active(32, v) for v in ids + w) and all(L.is_active(16, v) for v in out)
     # the lifted block is the node-replay lift: same node count, callees lifted, the specified members where the block selects/gathers
     lsp = L.lift_def(FFN)
-    assert _spec_id(lsp) == f"Lifted[TinyMoeFfn_v1]{{E={E},K={K},N={N},TOPK={TOPK},VPT={VPT}}}" or _spec_id(lsp).startswith("Lifted[TinyMoeFfn_v1]")
+    assert descriptor_id(lsp) == f"Lifted[TinyMoeFfn_v1]{{E={E},K={K},N={N},TOPK={TOPK},VPT={VPT}}}" or descriptor_id(lsp).startswith("Lifted[TinyMoeFfn_v1]")
     ids_in_program = {n.node.fn.id for n in pl.circuit.root_calls()} | {c.node.fn.id for call in pl.circuit.root_calls() for c in call.children()}
     assert any(i.startswith("Lifted[MoeRouterTopK_v1]") for i in ids_in_program) and any(i.startswith("Lifted[MoeExpertGemm") for i in ids_in_program)
 

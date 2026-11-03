@@ -1,5 +1,5 @@
 """The code reproduces every pinned vector (`vectors.json`, written by `remote_bandwidth_vectors.py`), the codec is
-kv/v0's (masked at p1024, k = 2 and 3, and at p512), and sketch-sha512 is ra-codec-tensor's reference's."""
+kv/v0's (masked at p1024, k = 2 and 3, and at p512), and sketch-sha512 is the tensor-core codec's reference's."""
 
 from __future__ import annotations
 
@@ -10,10 +10,11 @@ import json
 
 import pytest
 import remote_bandwidth_vectors as rv
+from remote_bandwidth_fakes import Clock
 
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 
-# `benchmarks/codec_tensor/sketch_receipt.py` (cursor/ra-device-reader-0f7a at 5b8decfc5, #1916), numpy, run on these
+# `benchmarks/codec_tensor/sketch_receipt.py` (at 5b8decfc5), numpy, run on these
 # inputs: seed k is SHA512(SKETCH_PINS ‖ u8 k), "counter" n bytes of SHA512(SKETCH_PINS ‖ label ‖ u32be c) for
 # c = 0, 1, …; each case (seed, block, z, j, σ_j, y) with σ_j its `sketch` and y its `SketchReceipter`'s, a receipt
 # that binds z; each unbound case (seed, block, j, σ_j, y), of the block alone, with σ_j its `sketches` of the block
@@ -52,7 +53,7 @@ SKETCH_CASES = [
      "6dd31d65ca1d94c620420c240e3834c3d09159020309c455514f6384f5bc0d566c31936d25ef206d6481b907ed3cff83ac3e4e245c2d7c9e9ca7004e99b3de6d"),
 ]
 
-# The same reference at 64 rows (cursor/ra-device-reader-0f7a at f666d887b, `SketchReceipter(seed, 64)`, `signs(seed,
+# The same reference at 64 rows (at f666d887b, `SketchReceipter(seed, 64)`, `signs(seed,
 # 64)`), on the same inputs: the sign bits' SHA-512 per seed, and each case with SHA-512 of σ_j's 256 bytes in place of
 # σ_j.
 SKETCH64_SIGN_BITS_SHA512 = [
@@ -88,7 +89,7 @@ SKETCH64_UNBOUND_CASES = [
      "a391d7324adcc28de3d7d5b780c433a2cdceb8755b795dd7d818401aa814074279c1e00b21e08307d961a433026089aadcb2f0e49f0ff966903906ad4cef9b95"),
 ]
 
-# `benchmarks/word_codec/tests/kv_vectors.json` ("p512/k2", cursor/ra-word-codec-10bf at 56818bb77): the kv/v0 codec
+# `benchmarks/word_codec/tests/kv_vectors.json` ("p512/k2", at 56818bb77): the kv/v0 codec
 # the KV kernel (`kv.cu`) implements, under its vector seed SHA256("verity/word-codec/kv/vectors").
 KV_SEED = "9a2a3bccf24b46d0788b084ea6ab8a259f06781facbe053a212734936d48be4a"
 KV_P512_K2 = {
@@ -103,7 +104,7 @@ KV_P512_K2 = {
     ],
 }
 
-# kv.py at p1024 masked (cursor/ra-codec-mix-ea59 at 088223599, #1894), `key("p1024", SEED, k, mask=True)` under the same
+# kv.py at p1024 masked (at 088223599), `key("p1024", SEED, k, mask=True)` under the same
 # seed: c_0, c_1 and τ are its kv_vectors.json's "p1024/k2" (the mask changes neither), K is the masked key's, and each
 # word is `encode_word(m, i, key)` at k = 2 and at k = 3, m from random.Random(f"p1024/k{k}/masked") at i = 0, 1, 2^33.
 KV_P1024_MASKED = {
@@ -276,28 +277,20 @@ def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_cha
     assert len({c["passes"][0]["root"] for c in chains.values()}) == 5
 
 
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        return self.now
-
-
 @pytest.mark.slow
 @pytest.mark.parametrize("kind, bind, rows", [rv.DEFAULT, *rv.VARIANTS])
 def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kind, bind, rows) -> None:
-    """The generator computes receipts and draws on its own; the audit's `Prover` and `Session` must agree with it, at the
-    default codec, under each receipt kind, of the block alone and binding z, and at 64 rows.  Slow for the same store
-    as `test_vectors_are_reproduced`, which encodes it once for all of them."""
+    """The generator computes receipts and draws on its own; the audit's `Prover` and `AuditRun` must agree with it, at
+    the default codec, under each receipt kind, of the block alone and binding z, and at 64 rows.  Slow for the same
+    store as `test_vectors_are_reproduced`, which encodes it once for all of them."""
     store = rv.store() if (kind, bind, rows) == rv.DEFAULT else rv.registered(kind, bind, rows)
     reg = store.registration
     challenger = coins.local(reg.digest, 0, rv.PARAMS.windows, rv.Entropy(rv.COIN_LABEL))
     clock = Clock()
     tiles = audit.NoiseTiles(96) if bind else None
-    s = audit.Session(dataclasses.replace(rv.PARAMS, receipt=kind, bind=bind, rows=rows), reg, tiles, challenger,
-                      not_before_ns=0, clock=clock)
-    prover = audit.Prover(store, tiles, s.commitment, entropy=rv.Entropy(rv.LEAF_SALT_LABEL))
+    s = audit.AuditRun(dataclasses.replace(rv.PARAMS, receipt=kind, bind=bind, rows=rows), reg, tiles, challenger,
+                       not_before_ns=0, clock=clock)
+    prover = audit.Prover(store, tiles, entropy=rv.Entropy(rv.LEAF_SALT_LABEL))
     pinned = json.loads(rv.PATH.read_text())
     pinned = pinned if (kind, bind, rows) == rv.DEFAULT else pinned["variants"][rv.name(kind, bind, rows)]
     challenge, previous, passes = s.start(), reg.digest, []

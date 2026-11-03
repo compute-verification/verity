@@ -58,7 +58,7 @@ from . import reference as R
 HERE = Path(__file__).resolve().parent
 MEMORY_CHALLENGER = HERE / "memory_challenger.py"
 SETUP_SOURCE = hashlib.sha256(b"verity-pous/bench/p2-v1/setup-source").digest()
-"""The bench's setup source: in a deployment the verifier's secret or a beacon round drawn after the commitment to `W`."""
+"""The bench's setup source: in a deployment the verifier's secret or a beacon round sampled after the commitment to `W`."""
 PINS = ("P2MeetsM1pB19Uncond", "P2MeetsM1pFamilyUncond", "P2MeetsM1pW8192Uncond", "P2SlackB19Uncond", "P2SlackFamilyUncond",
         "P2ErrorSplitB19Uncond")
 ASSUMPTIONS = ("P2-EXP-IO", "SHA-512-CTR/P2-EXP-IO", "P2–M1-SGI (not accepted)", "SeqRoot", "perfect isolation", "cr/sha-512",

@@ -191,12 +191,17 @@ class Reads:
             self.busy = False
 
     def seen(self, event: str, args: tuple, module: str, test: str = "") -> None:
+        """Record what ``event`` reads.  The `open` audit event carries no `dir_fd`, so a bare name that isn't in the current
+        directory is taken as one opened relative to a directory descriptor (`shutil.rmtree`'s walk), not as a read of
+        ``cwd/name``: its directory is unknown here."""
         if self.busy:
             return
         if event == "open" and args and not isinstance(args[0], int):
             try:
                 path = os.fsdecode(args[0])
             except TypeError:
+                return
+            if os.sep not in path and not os.path.lexists(path):
                 return
             if (hit := self.classify(path)) is not None:
                 self.write(hit[0], module, hit[1], test if hit[0] == "O" else "")

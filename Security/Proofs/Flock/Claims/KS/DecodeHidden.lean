@@ -157,6 +157,20 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
+/-- **A statement whose form is not templated is on flat tags**, once its session commits a circuit: a templated
+session's is `HmOut.parseTmpl`'s, which carries its template, and the check parses that circuit (`Read.circ`). -/
+theorem isTmpl_of_form {r : Readable.Read} {c : Circuit} (hh : r.tags.hiddenOutputs = true)
+    (hc : HmOut.parseCommit r.tags r.I.circuitFile r.I.tables = .ok c) (htm : r.form.templated = false) :
+    r.tags.isTmpl = false := by
+  cases hi : r.tags.isTmpl
+  · rfl
+  · have hcirc : r.circ = c := by
+      unfold Readable.Read.circ
+      rw [ProvedScope.circuitOf_hidden hh, hc]
+    rw [parseCommit_tmpl hi] at hc
+    obtain ⟨tu, c₀, -, -, -, rfl⟩ := TmplValue.parseTmpl_cases hc
+    simp [Readable.Read.form, hcirc] at htm
+
 /-- **A plain statement in scope with hidden outputs sets up its one table at its draw, under any leaf tag**:
 `plain_setupH` with setupHidden for setupH and `HmOut.parse` for `HmRow.parse`, in the general instance form (any input
 groups, any tail stages the verifier evaluates, whichever net returns the outputs), with `TagsOkH`'s tags at the tag
@@ -179,8 +193,12 @@ theorem plain_setupHiddenT {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse 
   have hzk : ins.read.zk = false := readOf_zk (x := x) (by unfold readOf; rw [(setupOf_some hset).1]; rfl)
   have htags : ins.read.tags = ins.read.I.tags := by simp [Readable.Read.tags, hzk]
   have hform : (Readable.toReadable Readable.relation p).form = ins.read.form := by rw [← hpr]; rfl
-  obtain ⟨-, -, -, -, -, ht, hrr, -, hc1, hpi, -⟩ := hin
-  rw [hform] at ht hrr hc1 hpi
+  obtain ⟨-, -, -, -, -, ht, hrr, -, hc1, hpi, -, -, -, -, -, htm⟩ := hin
+  rw [hform] at ht hrr hc1 hpi htm
+  have htm' : ins.read.form.templated = false := by
+    cases e : ins.read.form.templated
+    · rfl
+    · exact absurd (htm e).1 (by decide)
   simp only [Readable.Read.form, htags] at ht hrr hc1 hpi
   simp only [Bool.not_eq_true] at ht
   simp only [Bool.false_eq_true, ↓reduceIte] at hc1
@@ -196,7 +214,10 @@ theorem plain_setupHiddenT {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse 
     rw [hset] at h
     simpa using h
   subst e
-  have hc := HiddenExec.setupHidden_parseC hst
+  have hi : ins.read.I.tags.isTmpl = false := by
+    rw [← htags]
+    exact isTmpl_of_form (by rw [htags]; exact hh) (by rw [htags]; exact Hidden.setupHidden_parseCommit hst) htm'
+  have hc := HiddenExec.setupHidden_parseC hi hst
   have hm := parse_m hs hset (by simp)
   simp only [Bool.false_eq_true, ↓reduceIte] at hm₁
   refine ⟨ht, hc, ⟨hh, hrr, hl, hc1⟩, hst, hsp, ?_, ?_⟩
@@ -221,7 +242,8 @@ theorem plain_setupHidden {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse f
 
 /-- **The hidden table of a draw that sets up `st` is `plainTab` at `st`**: its statement `stmtOf st` is the one any
 layout reads (`Integrate.model_eq`), and the schedule is `fast100`'s at `st.m`. -/
-theorem tableAtH_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) {n : ℕ} (dj : Finset (Fin n) → Json)
+theorem tableAtH_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) (hi : I.tags.isTmpl = false) {n : ℕ}
+    (dj : Finset (Fin n) → Json)
     {spec : SessionSpec} {S₀ : Finset (Fin n)} (x₀ : HiddenExec.DrawSetupH I spec.mPts S₀ (dj S₀))
     {S : Finset (Fin n)} (x : HiddenExec.DrawSetupH I spec.mPts S (dj S)) {st : Stmt} (hx : x.st = st)
     (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
@@ -239,7 +261,7 @@ theorem tableAtH_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) {n : ℕ
   simp only [Accounting.Schedule.mk.injEq, List.cons.injEq] at hs
   obtain ⟨rfl, rfl, ⟨rfl, rfl, rfl⟩, rfl⟩ := hs
   have hS' : L.model (Refine.regionsOf yst) = Refine.stmtOf yst ywf.1 (Refine.regionsOf yst) :=
-    Integrate.model_eq (parse_facts (Hidden.parse_untyped ht (HiddenExec.setupHidden_parseC yh)).1) L
+    Integrate.model_eq (parse_facts (Hidden.parse_untyped ht (HiddenExec.setupHidden_parseC hi yh)).1) L
       (Hidden.setupHidden_spec yh).leaf ywf.1 _
   unfold plainTab
   simp only [HiddenExec.DrawSetupH.table, HiddenExec.DrawSetupH.specAt]
@@ -288,7 +310,8 @@ theorem plain_hdecH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false R
       fun _ _ => plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay := by
     funext S R
     obtain rfl : S = ∅ := Finset.eq_empty_of_isEmpty S
-    exact tableAtH_plainTab ht (fun _ : Finset (Fin 0) => d) (spec := st.spec) (S := ∅) x₀ x₀ hx₀ L m k0 l₀ l₁
+    exact tableAtH_plainTab ht (HmOut.parse_isTmpl hc) (fun _ : Finset (Fin 0) => d) (spec := st.spec) (S := ∅) x₀ x₀
+      hx₀ L m k0 l₀ l₁
       rest ext hsch hm hlay
   have hS : HiddenDec.DrawOkH ins.read.I (fun _ : Finset (Fin 0) => d) st.spec.mPts ∅ :=
     ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by

@@ -13,7 +13,8 @@ f32 scale; a z table's leaf is a ``ZY_BYTES`` record, its first ``ZY_BYTES - 4``
 stream has enqueued, nothing waiting on the host, and hands back a `Pending` whose `roots` waits for them: `H1Run` reads a
 step's roots at its round's close, so a call's tables hash beside the forward rather than in it. `device_roots` waits at once.
 `host_roots` runs the same functions on the CPU (`row_table_host.cpp`), the twin the CPU tests hold to `hiding_rows` on
-machines without a GPU. Builds share the Commit's row-table builds (`row_tables_device._build`); nvcc is `pouw_device`'s.
+machines without a GPU. Builds share the Commit's row-table builds (`row_tables_device._build`) and its per-device state
+(`row_tables_device.Device`); nvcc is `pouw_device`'s.
 
 `commit_tables` is `H1Run`'s commit of a call's tables, by `hiding_rows` (the reference) or by these kernels where `path`
 says, and `settle` records the roots of the calls the GPU has finished hashing, in call order.
@@ -130,40 +131,8 @@ def device_lib(arch: str) -> ctypes.CDLL:
     return dll
 
 
-class _Device:
-    """One CUDA device's build, its copies of the byte tables and midstates, the identity rank order tables share, and the
-    side streams tables hash on."""
-
-    def __init__(self, torch: Any, device: Any) -> None:
-        major, minor = torch.cuda.get_device_capability(device)
-        self.lib = device_lib(f"{major}{minor}")
-        self.hm = torch.from_numpy(RTD._hm().view(np.int64)).to(device)
-        pre = torch.from_numpy(RTD._prefixes().view(np.int64)).to(device)
-        self.ms = torch.empty(16, dtype=torch.int64, device=device)
-        rc = self.lib.rt_midstates(torch.cuda.current_stream(device).cuda_stream, pre.data_ptr(), self.ms.data_ptr())
-        if rc:
-            raise RuntimeError(f"rt_midstates: CUDA error {rc}")
-        torch.cuda.current_stream(device).synchronize()
-        self.perm = torch.arange(0, dtype=torch.int32, device=device)
-        self.streams, self.turn = [torch.cuda.Stream(device) for _ in range(STREAMS)], 0
-
-    def ranks(self, torch: Any, n: int) -> Any:
-        if len(self.perm) < n:
-            self.perm = torch.arange(max(n, 2 * len(self.perm)), dtype=torch.int32, device=self.perm.device)
-        return self.perm
-
-    def stream(self) -> Any:
-        self.turn = (self.turn + 1) % len(self.streams)
-        return self.streams[self.turn]
-
-
-_DEVICES: dict[int, _Device] = {}
-
-
-def _device(torch: Any, device: Any) -> _Device:
-    if device.index not in _DEVICES:
-        _DEVICES[device.index] = _Device(torch, device)
-    return _DEVICES[device.index]
+def _device(torch: Any, device: Any) -> RTD.Device:
+    return RTD.Device.of(torch, device.index, device_lib, "rt_midstates", STREAMS)
 
 
 @cache
@@ -236,7 +205,7 @@ def device_hash(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> Pe
     perm = d.ranks(torch, max(int(c.shape[0]) for _did, _nonce, c, _w in tables))
     written = torch.cuda.Event()
     written.record(torch.cuda.current_stream(dev))
-    side = d.stream()
+    side = d.next_stream()
     side.wait_event(written)
     inputs = (meta, perm, *(x for _did, _nonce, c, w in tables for x in (c, w)))
     for x in inputs:
@@ -333,15 +302,16 @@ def commit_tables(run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | N
     if where != "python":
         _kernel_tables(run, call, a, s_a, zy if m and records is not None else None, where)
         if run.prover is not None and m:
-            PV.keep_call(run.prover, call.index, row_words(a, m, "i1"), row_words(s_a, m, "<f4"), records)
+            PV.keep_call(run.prover, call.index, row_words(a, m, "i1"), row_words(s_a, m, "<f4"), ZR.host(records))
         return
     if a is not None and m:
         av, sv = row_words(a, m, "i1"), row_words(s_a, m, "<f4")
     else:
         av = sv = np.zeros((0, 1), "i1")
     out: dict[str, str | None] = {"a": _table(run, call, "a", table_leaves(t, call.k + 4, m, av, sv))}
-    leaves = [bytes(ZR.ZY_BYTES)] * call.units if not m else None if records is None else [r.tobytes() for r in records]
+    held = ZR.host(records)
+    leaves = [bytes(ZR.ZY_BYTES)] * call.units if not m else None if held is None else [r.tobytes() for r in held]
     out["z"] = None if leaves is None else _table(run, call, "z", leaves)
     run._roots[call.index] = out
     if run.prover is not None and m:
-        PV.keep_call(run.prover, call.index, av, sv, records)
+        PV.keep_call(run.prover, call.index, av, sv, held)

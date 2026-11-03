@@ -6,7 +6,7 @@ certifier splitting it (`uncertified`) and every host holding the prover's memor
 (`challenger-reach`).
 
 - The network certifier is the outside world's only way in: it carries each request to the developer and its response
-  back, commits to every frame it sees under its own salts, and signs each declaration period's view
+  back, commits to every frame it sees under its own salts, and signs each execution phase's view
   (`lms.certificate_message`, one signature a direction). The developer gets the frames' openings, to prove its I/O
   gates against; the verifier gets the signed commitments and the count.
 - The memory challenger opens a round once a declaration's values are committed: on its own coins it picks theta rows,
@@ -35,7 +35,7 @@ from verity.ml.crypto import lms
 ID = "lifecycle-onsite"
 UPLINK, CERT, CHAL = "uplink0", "cert0", "chal0"
 LMS = lms.Params(64, 4, 4)
-"""The certifier's signing key: 16 one-time keys, two a declaration period."""
+"""The certifier's signing key: 16 one-time keys, two an execution phase."""
 CERT_SEED = Tape(b"lifecycle/onsite").bytes("certifier-key", LMS.N)
 CERT_KEY = lms.public_key(lms.keygen(LMS, CERT_SEED)).hex()
 AUDITOR = {CERT: CERT_KEY, CHAL: ""}
@@ -58,7 +58,7 @@ ONSITE = (schema("Go", "structure"), schema("Ingress", "private"), schema("Egres
 
 
 class Certifier:
-    """The network certifier on the uplink. Capabilities: `load` (each declaration period's requests: the outside world)
+    """The network certifier on the uplink. Capabilities: `load` (each execution phase's requests: the outside world)
     and `seed` (its signing key's)."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
@@ -105,7 +105,7 @@ class Certifier:
 
 
 def certified(I: bytes, view: Mapping[str, Any], direction: str) -> bytes:
-    """What the certifier signs for one direction of a declaration period's view: the frames' commitments that way, and
+    """What the certifier signs for one direction of an execution phase's view: the frames' commitments that way, and
     the count."""
     way = "in" if direction == "ingress" else "out"
     record = codec.canonical_json({"count": view["count"], "frames": [f[way] for f in view["frames"]]})
@@ -169,7 +169,7 @@ def theta_reach(layout: Layout, store: str) -> tuple[int, int]:
 
 
 class OnsiteVerifier(Verifier):
-    """The verifier, with the onsite components: the certifier's signed view of each declaration period, and the memory
+    """The verifier, with the onsite components: the certifier's signed view of each execution phase, and the memory
     challenger's report."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:

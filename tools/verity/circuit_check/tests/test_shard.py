@@ -1,0 +1,431 @@
+"""``circuit-check --shard K/N`` and ``--combine`` (`circuit_check.shard`): which shard a target is, what a shard writes, what
+``--combine`` refuses, and that a combined run's report, verdict and output are the unsharded run's.  And ``--binding NAME``
+and ``--bindings``: each catalog binding's targets, together the whole list."""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import random
+import shutil
+import subprocess
+import sys
+import types
+from pathlib import Path
+
+import pytest
+
+from circuit_check import cache as CC
+from circuit_check import cli
+from circuit_check import known as KN
+from circuit_check import shard as SH
+from circuit_check import targets as TG
+from test_cache import REPO, _bindings, _tree
+from test_units import BINDINGS as UNIT_BINDINGS
+from test_units import FORKED as UNITS_FORKED
+from test_units import HARNESS as UNITS
+from test_units import _copied, _fresh, _records_only
+from test_units import _run as _run_units
+
+
+def test_a_target_s_shard_is_its_id_s_hash_and_never_its_place():
+    """Pinned: a change to the hash moves every target, which ci's shard plans and the measured walls assume it doesn't."""
+    assert [SH.shard_of("definition", "F32Add_v1", n) for n in (2, 3, 4, 7)] == [1, 3, 1, 1]
+    assert [SH.shard_of("definition", "RMSNormTriton_v1{N=64,EPS=1e-05}", n) for n in (2, 3, 4, 7)] == [1, 1, 3, 4]
+    assert [SH.shard_of("template", "rmsnorm-cuda-vec8/n6144-b256-eps1e-05/bf16", n) for n in (2, 3, 4, 7)] == [2, 2, 2, 6]
+    assert SH.shard_of("definition", "F32Add_v1", 1) == 1
+    ids = [("definition", f"Syn{i}_v1") for i in range(200)] + [("template", f"t/{i}") for i in range(50)]
+    for n in (1, 2, 3, 4, 7):
+        shards = [SH.mine(ids, (k, n)) for k in range(1, n + 1)]
+        assert sorted(i for s in shards for i in s) == list(range(len(ids)))          # total: each target in exactly one
+        assert all(s == sorted(s) for s in shards)
+        moved = [("definition", "SynNew_v1"), *ids[:120], ("template", "t/new"), *ids[120:]]
+        again = {moved[i]: k for k in range(1, n + 1) for i in SH.mine(moved, (k, n))}
+        assert all(again[t] == k for k in range(1, n + 1) for t in (ids[i] for i in shards[k - 1]))   # a new target moves none
+
+
+@pytest.mark.parametrize("spec", ["0/4", "5/4", "4", "a/b", "-1/3", "1/0"])
+def test_a_shard_is_one_of_1_to_n(spec):
+    with pytest.raises(ValueError, match="1 <= K <= N"):
+        SH.parse(spec)
+    assert SH.parse("1/4") == (1, 4) and SH.parse(" 4/4 ") == (4, 4)
+
+
+def _fail(label: str, code: str, check: str = "lowering") -> dict:
+    return {"check": check, "code": code, "definition": label, "name": f"{check}/{code} {label}"}
+
+
+def _result(failures=(), warnings=(), **more) -> dict:
+    return {"failures": list(failures), "warnings": list(warnings), **more}
+
+
+#: the stub targets: a pass, a new and a known failure, a warning, a Boolean Call recomputing across units, a by-calls root whose
+#: callee (another shard's at N = 3) fails with a known failure, so only the joined report fails the root, and three heavy ones
+CALLEE, ROOT = "SynCallee_v1", "SynRoot_v1"
+TARGETS = {
+    "SynPass_v1": lambda: _result(),
+    "SynNew_v1": lambda: _result([_fail("SynNew_v1", "lowering-mismatch")]),
+    "SynKnown_v1": lambda: _result([_fail("SynKnown_v1", "dead")]),
+    "SynWarn_v1": lambda: _result(warnings=[{**_fail("SynWarn_v1", "and", "redundant"), "count": 3}]),
+    "SynAcross_v1": lambda: _result(partition={"q_word": 2, "recomputed_across": 5}),
+    ROOT: lambda: _result(mode="by-calls", by_calls={"callees": [{"callee": "c0", "binding": CALLEE}]}),
+    CALLEE: lambda: _result([_fail(CALLEE, "dead")]),
+    "SynHeavyA_v1": lambda: _result(),
+    "SynHeavyB_v1": lambda: _result(),
+    "SynHeavyC_v1": lambda: _result(),
+}
+KNOWN = {"lowering/dead SynKnown_v1": "a known failure", f"lowering/dead {CALLEE}": "the callee's known failure",
+         "lowering/dead SynGone_v1": "no longer fails: --all drops it"}
+HEAVY = {"SynHeavyA_v1": 30, "SynHeavyB_v1": 20, "SynHeavyC_v1": 40}
+
+
+@pytest.fixture
+def stub(monkeypatch):
+    """`cli.run` over `TARGETS` (and the template ``t/stub``), each checked in this process in the order `cli.parallel` was
+    handed them, which ``order`` records per run: no Definition is built and no process forked."""
+    tasks = [("definition", label, fn) for label, fn in TARGETS.items()] + [("template", "t/stub", lambda: _result())]
+    order: list[list[str]] = []
+    monkeypatch.setattr(cli, "_tasks", lambda specs, opts, everything, as_call: list(tasks))
+    monkeypatch.setattr(cli, "Zygote", lambda *a, **k: types.SimpleNamespace(close=lambda: None))
+    monkeypatch.setattr(cli, "heavy", lambda: dict(HEAVY))
+
+    def parallel(fn, items, jobs, initializer=None, initargs=(), **_):
+        order.append([cli._TASKS[i][1] for i in items])
+        for i in items:
+            yield i, (i, cli._one(*cli._TASKS[i][:3]), None, [], None), 1.0, 0.5
+
+    monkeypatch.setattr(cli, "parallel", parallel)
+    monkeypatch.setattr(KN, "KNOWN", dict(KNOWN))
+    monkeypatch.setattr(KN, "KNOWN_PIECES", {})
+    return types.SimpleNamespace(tasks=tasks, order=order)
+
+
+#: what a record holds that two runs of one target needn't share: how long it took and how much memory it used
+TIMING = ("seconds", "seconds_by_check", "peak_gb", "rss_start_gb")
+
+
+def _untimed(rep: dict) -> list[dict]:
+    return [{k: v for k, v in t.items() if k not in TIMING} for t in rep["targets"]]
+
+
+def _shards(capsys, tmp_path: Path, n: int, base: list[str]) -> tuple[list[Path], list[int]]:
+    dirs, codes = [], []
+    for k in range(1, n + 1):
+        d = tmp_path / f"shard{k}"
+        codes.append(cli.main([*base, "--shard", f"{k}/{n}", "--shard-dir", str(d)]))
+        dirs.append(d)
+    capsys.readouterr()
+    return dirs, codes
+
+
+def test_combining_three_shards_gives_the_unsharded_run_s_report_verdict_and_output(stub, tmp_path, capsys):
+    """Each shard runs only the targets its hash gives it, heaviest first, and writes its records unjoined; ``--combine`` of
+    the three, in any order, prints what the unsharded ``--all`` prints, byte for byte, writes its report (its summary byte
+    for byte, every record but its timings) and exits as it does: here 1, on a new failure, a by-calls root whose callee is
+    another shard's and a known entry that no longer fails."""
+    out = tmp_path / "r.json"
+    base = ["--all", "--no-cache", "-q", "-j", "2"]
+    whole = cli.main([*base, "--out", str(out)])
+    said = capsys.readouterr().out
+    rep = json.loads(out.read_text())
+    assert whole == 1 and "lowering/dead SynGone_v1" in said
+    assert f"by-calls/callee-failed {ROOT}" in " ".join(rep["summary"]["new_failures"])
+    out.unlink()
+
+    dirs, codes = _shards(capsys, tmp_path, 3, base)
+    ids = [(kind, label) for kind, label, _ in stub.tasks]
+    for k, d in enumerate(dirs, 1):
+        m = json.loads((d / SH.MANIFEST).read_text())
+        mine = [ids[i] for i in SH.mine(ids, (k, 3))]
+        assert (m["shard"], m["shards"]) == (k, 3) and [tuple(r[1:]) for r in m["ran"]] == mine
+        assert m["list"] == {"targets": len(ids), "sha256": SH.digest(ids)}
+        assert [(r["kind"], r["target"]) for r in json.loads((d / SH.RECORDS).read_text())] == mine
+    assert sorted(t for o in stub.order[1:] for t in o) == sorted(label for _, label in ids)
+    for o in stub.order[1:]:                                                    # each shard's heavy targets first, heaviest first
+        heavy = [t for t in o if t in HEAVY]
+        assert o[:len(heavy)] == heavy == sorted(heavy, key=lambda t: -HEAVY[t])
+    assert [SH.shard_of("definition", t, 3) for t in (CALLEE, ROOT, "SynNew_v1")] == [1, 2, 3] and codes == [0, 0, 1]
+
+    random.Random(3).shuffle(dirs)
+    combined = cli.main(["--combine", *map(str, dirs), "-q", "--out", str(out)])
+    assert (combined, capsys.readouterr().out) == (whole, said)
+    got = json.loads(out.read_text())
+    assert json.dumps(got["summary"]) == json.dumps(rep["summary"])
+    assert _untimed(got) == _untimed(rep) and got["schema"] == rep["schema"] and got["options"] == rep["options"]
+    assert got["combined"]["shards"] == 3 and sum(w["targets"] for w in got["combined"]["walls"]) == len(ids)
+    assert all(0 <= w["prologue_s"] <= w["wall_s"] for w in got["combined"]["walls"]), got["combined"]["walls"]
+
+
+def test_a_shard_fails_on_its_own_new_failures_and_only_the_combine_on_the_joined_ones(stub, tmp_path, capsys, monkeypatch):
+    """Without a new failure of its own, every shard passes, while the combined run fails as the unsharded one does: on the
+    by-calls root whose callee is in another shard, and on the known entry that no longer fails, which only the whole list
+    shows."""
+    stub.tasks[:] = [t for t in stub.tasks if t[1] != "SynNew_v1"]
+    base = ["--all", "--no-cache", "-q", "-j", "2"]
+    whole = cli.main(base)
+    said = capsys.readouterr().out
+    dirs, codes = _shards(capsys, tmp_path, 3, base)
+    assert codes == [0, 0, 0] and whole == 1
+    assert (cli.main(["--combine", *map(str, dirs), "-q"]), capsys.readouterr().out) == (whole, said)
+    monkeypatch.setitem(KN.KNOWN, f"by-calls/callee-failed {ROOT}", "the root's known join")
+    monkeypatch.delitem(KN.KNOWN, "lowering/dead SynGone_v1")
+    assert cli.main(base) == 0
+    said = capsys.readouterr().out
+    assert (cli.main(["--combine", *map(str, dirs), "-q"]), capsys.readouterr().out) == (0, said)
+
+
+def _refused(capsys, dirs, why: str) -> None:
+    assert cli.main(["--combine", *map(str, dirs), "-q"]) == 2
+    err = capsys.readouterr().err
+    assert "circuit-check --combine: refused" in err and why in err, err
+
+
+def _rewrite(d: Path, edit) -> None:
+    m = json.loads((d / SH.MANIFEST).read_text())
+    edit(m)
+    (d / SH.MANIFEST).write_text(json.dumps(m))
+
+
+def test_combine_refuses_a_missing_shard_an_extra_target_and_mismatched_lists(stub, tmp_path, capsys):
+    base = ["--all", "--no-cache", "-q", "-j", "2"]
+    dirs, _ = _shards(capsys, tmp_path, 3, base)
+    assert cli.main(["--combine", *map(str, dirs), "-q"]) == 1
+    capsys.readouterr()
+    _refused(capsys, dirs[:2], "shard(s) 3 of 3 missing")
+    _refused(capsys, [dirs[0], dirs[1], dirs[1]], "given twice")
+    ids = [(kind, label) for kind, label, _ in stub.tasks]
+
+    def copy(name: str) -> list[Path]:
+        new = [tmp_path / name / d.name for d in dirs]
+        for d, e in zip(dirs, new):
+            shutil.copytree(d, e)
+        return new
+
+    unfinished = copy("unfinished")
+    (unfinished[1] / SH.MANIFEST).unlink()
+    _refused(capsys, unfinished, "did not finish")
+
+    extra = copy("extra")                       # shard 1 ran a target its hash gives another shard
+    k2 = SH.mine(ids, (2, 3))[0]
+    recs = json.loads((extra[0] / SH.RECORDS).read_text()) + [{"kind": ids[k2][0], "target": ids[k2][1], "failures": []}]
+    data = json.dumps(recs).encode()
+    (extra[0] / SH.RECORDS).write_bytes(data)
+    _rewrite(extra[0], lambda m: m.update(ran=[*m["ran"], [k2, *ids[k2]]], records_sha256=hashlib.sha256(data).hexdigest()))
+    _refused(capsys, extra, "an extra target")
+
+    dropped = copy("dropped")                   # shard 2 left one of its targets out
+    recs = json.loads((dropped[1] / SH.RECORDS).read_text())[1:]
+    data = json.dumps(recs).encode()
+    (dropped[1] / SH.RECORDS).write_bytes(data)
+    _rewrite(dropped[1], lambda m: m.update(ran=m["ran"][1:], records_sha256=hashlib.sha256(data).hexdigest()))
+    _refused(capsys, dropped, "a missing target")
+
+    tampered = copy("tampered")
+    (tampered[2] / SH.RECORDS).write_text("[]")
+    _refused(capsys, tampered, "not the records its manifest names")
+
+    other = tmp_path / "other"                  # a shard of a run over another list (a target more)
+    stub.tasks.append(("definition", "SynMore_v1", lambda: _result()))
+    cli.main([*base, "--shard", "2/3", "--shard-dir", str(other)])
+    capsys.readouterr()
+    _refused(capsys, [dirs[0], other, dirs[2]], "disagree on the whole list")
+    stub.tasks.pop()
+
+    four = tmp_path / "four"                    # a shard of a run with another N
+    cli.main([*base, "--shard", "3/4", "--shard-dir", str(four)])
+    capsys.readouterr()
+    _refused(capsys, [*dirs[:2], four], "disagree on N")
+
+    seeded = tmp_path / "seeded"                # a shard of another request: its checks' options differ
+    cli.main([*base, "--seed", "7", "--shard", "3/3", "--shard-dir", str(seeded)])
+    capsys.readouterr()
+    _refused(capsys, [*dirs[:2], seeded], "disagree on the request")
+
+    swapped = copy("swapped")                   # a list of the same targets in another order: another list
+    for d in swapped:
+        _rewrite(d, lambda m: m["list"].update(sha256=SH.digest(ids[::-1])))
+    _refused(capsys, swapped, "not the list their manifests name")
+
+
+def test_the_shard_options_are_refused_where_they_mean_nothing(stub, tmp_path, capsys):
+    for argv, why in ((["--all", "--shard", "0/3", "--shard-dir", "d"], "1 <= K <= N"),
+                      (["--all", "--shard", "1/3"], "--shard-dir"),
+                      (["--all", "--shard-dir", "d"], "give --shard K/N"),
+                      (["--all", "--shard", "1/3", "--shard-dir", "d", "--update-pins"], "--update-pins"),
+                      (["--combine", "d", "--all"], "--combine joins"),
+                      (["--combine", "d", "--batch"], "six modes"),
+                      (["--combine", "d", "--records-only"], "six modes"),
+                      (["--all", "--cache", "c", "--records-only", "--bindings"], "six modes"),
+                      (["--bindings", "--cache", "c"], "--bindings names"),
+                      (["--all", "--bindings"], "--bindings names"),
+                      (["--all", "--bindings", "--cache", "c", "--binding", "_core_roots"], "--bindings names"),
+                      (["--all", "--catalog-units", "--binding", "_core_roots"], "--binding checks"),
+                      (["--all", "--cache", "c", "--binding", "_core_roots"], "--binding checks"),
+                      (["--all", "--catalog-units", "--cache", "c", "--binding", "_core_roots", "SynPass_v1"], "--binding checks"),
+                      (["--all", "--catalog-units", "--cache", "c", "--binding", "_core_roots", "--shard", "1/3",
+                        "--shard-dir", "d"], "--binding checks"),
+                      (["--records-only", "--cache", "c"], "--records-only stores"),
+                      (["--all", "--records-only"], "--records-only stores"),
+                      (["--all", "--records-only", "--cache", "c", "SynPass_v1"], "--records-only stores"),
+                      (["--all", "--records-only", "--cache", "c", "--no-cache"], "--records-only stores"),
+                      (["--all", "--records-only", "--cache", "c", "--update-pins"], "--records-only stores"),
+                      (["--all", "--records-only", "--cache", "c", "--shard", "1/3", "--shard-dir", "d"], "--records-only stores")):
+        with pytest.raises(SystemExit) as e:
+            cli.main(argv)
+        assert e.value.code == 2 and why in capsys.readouterr().err, argv
+    _refused(capsys, [tmp_path / "nothing"], "did not finish")
+
+
+def test_a_binding_s_name_is_its_root_function_its_files_models_or_its_template_entry():
+    m = "verity.ml.circuits.ops.boolean.gf2k.circuit-check#"
+    assert [SH.binding(u) for u in ((f"{m}_gf2k_roots",), (f"{m}_x_roots", f"{m}_x_bindings"), ("_kernel_roots",),
+                                    ("_vocabulary_roots", "_vocabulary_bindings"), (f"{m}_model_roots:Gf2kMul_v1",),
+                                    ("_model_roots:SynOther_v1",), (f"{m}TEMPLATE_PARAMS:token-select-combine",),
+                                    ("TEMPLATE_PARAMS:rmsnorm-cuda-vec8",), ("<registered>",))] == [
+        f"{m}_gf2k_roots", f"{m}_x_roots", "_kernel_roots", "_vocabulary_roots", f"{m}_model_roots", "_model_roots",
+        f"{m}TEMPLATE_PARAMS:token-select-combine", "TEMPLATE_PARAMS", "<registered>"]
+
+
+def test_the_shard_module_is_outside_the_checker_s_version(tmp_path, monkeypatch):
+    """`cache.SHARD` decides which targets a run checks, never what a check computes: an edit to it reruns no target."""
+    monkeypatch.setattr(CC, "_HERE", tmp_path)
+    monkeypatch.setattr(CC, "SHARD", tmp_path / "shard.py")
+    (tmp_path / "checks.py").write_text("def f(x):\n    return 2 * x\n")
+    (tmp_path / "shard.py").write_text("def g(x):\n    return x % 4\n")
+    here = CC.version()
+    (tmp_path / "shard.py").write_text("def g(x):\n    return x % 5\n")
+    assert CC.version() == here
+    (tmp_path / "checks.py").write_text("def f(x):\n    return 3 * x\n")
+    assert CC.version() != here
+
+
+#: a small sidecar set: argmax's chunks and combines and the Boolean scalars, each checked as a Call (`--as-call`), so neither
+#: builds the catalog
+SIDECARS = [str(TG.REPO / "verity/ml/circuits/ops/argmax.circuit-check.py"),
+            str(TG.REPO / "verity/ml/circuits/ops/boolean/scalar.circuit-check.py")]
+
+
+def test_three_shards_of_a_sidecar_set_combine_to_the_unsharded_run(tmp_path, capsys):
+    """The real checks: the combined report's summary, its output and its exit status are the unsharded run's, byte for byte.
+    Uncached: a cache would trace this test process for good (`cache.trace`)."""
+    out = tmp_path / "r.json"
+    base = [*SIDECARS, "--as-call", "--no-cache", "-q", "-j", "2"]
+    whole = cli.main([*base, "--out", str(out)])
+    said = capsys.readouterr().out
+    rep = json.loads(out.read_text())
+    out.unlink()
+    assert len(rep["targets"]) >= 8
+    dirs, _ = _shards(capsys, tmp_path, 3, base)
+    combined = cli.main(["--combine", *map(str, dirs[::-1]), "-q", "--out", str(out)])
+    assert (combined, capsys.readouterr().out) == (whole, said)
+    got = json.loads(out.read_text())
+    assert json.dumps(got["summary"]) == json.dumps(rep["summary"])
+    assert [(t["kind"], t["target"], t["failures"]) for t in got["targets"]] == [(t["kind"], t["target"], t["failures"])
+                                                                                 for t in rep["targets"]]
+
+
+#: `test_units`' cached ``--all`` over the synthetic catalog as shard SHARD of 3 (None: unsharded), with each target
+#: `cache.descriptor` describes (``described``) and, as its checks start (`cli._checked_all`), the ones described before them
+#: (``before``) and the targets it checks (``checks``)
+PROLOGUE = """
+described, before, checks = [], [], []
+desc, checked = CC.descriptor, cli._checked_all
+CC.descriptor = lambda fn: described.append(fn.id) or desc(fn)
+def entered(*a):
+    before.extend(described)
+    checks.extend(a[0][i][1] for i in (range(len(a[0])) if a[17] is None else a[17]))
+    return checked(*a)
+cli._checked_all = entered
+"""
+SHARDED = (UNITS.replace("rep = cli.run(", PROLOGUE + "rep = cli.run(").replace("units=True)", "units=True, shard=SHARD)")
+           .replace('print(json.dumps({"stats"', 'print(json.dumps({"described": described, "before": before, "checks": checks, "stats"'))
+UNIT_IDS = ["SynAdd_v1", "SynK_v1{K=2}", "SynOther_v1", "SynSub_v1", "SynTop_v1", "SynX_v1", "SynXor_v1"]
+
+
+def test_a_shard_describes_only_its_own_targets_before_its_checks(tmp_path):
+    """A cold ``--all`` described every target (its key) before forking a worker, most of an hour on ci's ~8,600: a shard
+    describes only its own.  A full build builds the whole catalog, as the ids come from it, describes only shard 1's targets
+    before its checks and still stores every binding's record; shard 2, from those records, describes and makes only its own;
+    shard 1 again reuses its task list and every target it checked, describing nothing.  Unsharded, the full build describes
+    every target before its checks."""
+    assert SHARDED.count("shard=SHARD") == 1 and SHARDED.count('"described": described') == 1
+    own = {k: sorted(t for t in UNIT_IDS if SH.shard_of("definition", t, 3) == k) for k in (1, 2)}
+    assert all(0 < len(o) < len(UNIT_IDS) for o in own.values())
+    root = _tree(tmp_path / "t")
+    _bindings(root, *UNIT_BINDINGS)
+    first = _run_units(root, SHARDED.replace("SHARD)", "(1, 3))"))
+    assert sorted(first["before"]) == sorted(first["checks"]) == sorted(first["values"]) == own[1]
+    assert first["hits"] == [] and first["stats"]["units"] == {"stored": 5}
+    second = _run_units(root, SHARDED.replace("SHARD)", "(2, 3))"))
+    assert sorted(second["described"]) == sorted(second["checks"]) == sorted(second["values"]) == own[2]
+    assert second["hits"] == [] and second["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0}
+    again = _run_units(root, SHARDED.replace("SHARD)", "(1, 3))"))
+    assert (again["described"], again["checks"], again["hits"]) == ([], [], own[1])
+
+    whole = _tree(tmp_path / "w")
+    _bindings(whole, *UNIT_BINDINGS)
+    out = _run_units(whole, SHARDED.replace("SHARD)", "None)"))
+    assert sorted(out["before"]) == sorted(out["checks"]) == UNIT_IDS and out["stats"]["units"] == {"stored": 5}
+
+
+@pytest.mark.slow
+def test_every_shard_from_a_copy_of_one_records_only_run_s_cache_builds_no_binding(tmp_path):
+    """One ``--records-only`` run's cache, copied to three trees (three machines), gives each forked shard its targets with
+    no binding built and no body built in its own process, and the shards' verdicts are together the full build's."""
+    assert UNITS_FORKED.count("fork=True)") == 1
+    root = _tree(tmp_path / "t")
+    _bindings(root, *UNIT_BINDINGS)
+    assert _records_only(root)["stored"] == 5
+    got: dict = {}
+    for k in (1, 2, 3):
+        out = _run_units(_copied(root, tmp_path / f"s{k}"), UNITS_FORKED.replace("fork=True)", f"fork=True, shard=({k}, 3))"))
+        assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and out["here"] == [], out["stats"]["units"]
+        assert sorted(out["values"]) == sorted(t for t in UNIT_IDS if SH.shard_of("definition", t, 3) == k)
+        got.update(out["values"])
+    assert got == _fresh(root)["values"]
+
+
+#: `test_units`' setup, then ``circuit-check --all --bindings -j 2`` (`cli.bindings`) from the records in the tree's cache
+BINDINGS_ONLY = UNITS[:UNITS.index("rep = cli.run(")] + 'print(json.dumps(cli.bindings(root / "cache", log=None, jobs=2)))\n'
+
+
+def _py(root: Path, harness: str) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO,
+                          env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+
+
+@pytest.mark.slow
+def test_each_binding_from_a_copy_of_one_records_only_run_s_cache_checks_its_own_targets_and_together_the_list(tmp_path):
+    """``--bindings`` names each catalog binding with the targets ``--binding`` checks under it: together the whole list, each
+    target once.  Each forked ``--binding`` run, in a tree of its own from a copy of one ``--records-only`` run's cache (a task
+    on another machine), builds no binding and no body in its own process and checks exactly its targets, with the verdicts a
+    full build gives; run again, it reuses every target.  With no record it refuses rather than build, and given a name no
+    catalog binding has, rather than check nothing."""
+    root = _tree(tmp_path / "t")
+    _bindings(root, *UNIT_BINDINGS)
+    cold = _py(root, UNITS.replace("units=True)", "units=True, binding='_core_roots')"))
+    assert cold.returncode and "the bindings' records give no task list" in cold.stderr, cold.stderr
+    assert _records_only(root)["stored"] == 5
+    got = _py(root, BINDINGS_ONLY)
+    assert got.returncode == 0, got.stderr
+    named = json.loads(got.stdout.strip().splitlines()[-1])
+    assert sorted(named["bindings"]) == ["<registered>", "_core_roots", "_model_roots", "_sized_roots", "_xor_roots"]
+    assert sorted(label for ts in named["bindings"].values() for _, label in ts) == UNIT_IDS and named["root_errors"] == []
+    values: dict = {}
+    for i, (name, targets) in enumerate(named["bindings"].items()):
+        tree = _copied(root, tmp_path / f"b{i}")
+        # the real registry, which `targets.load_registries` loads before any check and the harness's stand-in doesn't: else the
+        # first check to load it records the kernels it registers as reads this process can't digest
+        forked = UNITS_FORKED.replace("fork=True)", f"fork=True, binding={name!r})").replace(
+            "rep = cli.run(", "from verity.ml.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(", 1)
+        out = _run_units(tree, forked)
+        assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and out["here"] == [], (name, out["stats"])
+        assert sorted(out["values"]) == sorted(label for _, label in targets) and out["hits"] == [], name
+        values.update(out["values"])
+        if name == "_core_roots":
+            again = _run_units(tree, forked)
+            assert again["stats"]["units"] == out["stats"]["units"] and again["here"] == [], again["stats"]
+            assert again["hits"] == sorted(again["values"]) == sorted(out["values"]), again
+    assert values == _fresh(root)["values"]
+    unknown = _py(root, UNITS.replace("units=True)", "units=True, binding='_no_roots')"))
+    assert unknown.returncode and cli.NO_BINDING in unknown.stderr, unknown.stderr
