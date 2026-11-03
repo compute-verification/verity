@@ -54,7 +54,7 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
   It takes as hypotheses `RecursiveKSAt` at the deployed brings, the coupling at the strategy (`SessionIn`, the
   session's projection) with the draw's miss, the deployment's reading of a witness (`hread`) and its collision from
   two (`hcoll`), and `live-verifier`. At the deployment `RecursiveKS` reads, `Proofs.Properties.Verity.Recursive.Audit`
-  states it with `RecursiveKS` and `λ₂ ≥ 100` discharged (`SampledProofsRecursive`).
+  states it with `RecursiveKS` and `λ₂ ≥ 135.7` discharged (`SampledProofsRecursive`).
 
 The model this reads (`RecDeploy`, `Flock.Guarantees.RecursiveKSAt`) is still in the proofs tree, so the property sits
 here rather than in `Properties` until C-Flock's spec is extracted.
@@ -721,11 +721,12 @@ def FinderCR (S : SessionIn V q k θ F c σ)
       (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ)
 
 /-- **The error's number at the strategy**, from `t'` and public parameters: the draw's miss `δs`, plus `BitsLin2On`'s
-`t' · 2^{-λ}`, plus the binding term, the file's wire bits times `√(E[bindBudget] / 2^256)` over pairs of draws. -/
+`t' · 2^{-λ}`, plus the binding term `√(min(W, 2n) · E[bindBudget] / 2^256)`, with `W` the file's wire bits, `n` its
+units and the budget averaged over pairs of draws. -/
 noncomputable def delta (S : SessionIn V q k θ F c σ) (dColl : ℕ) (δs lam : ℝ) : ℝ≥0∞ :=
   ENNReal.ofReal (δs + q.tCost V S * (2 : ℝ) ^ (-lam) +
-    (∑ g, (V.circuitOf θ F).w g : ℕ) *
-      Real.sqrt (Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ)))
+    Real.sqrt (min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) *
+      (Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))))
 
 open Classical in
 /-- **The error at the strategy's session `S`**, the shared `condError FinderCR δ := if FinderCR then δ else ⊤`
