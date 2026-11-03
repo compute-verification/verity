@@ -50,6 +50,7 @@ def test_the_tail_profiles():
     assert F.u_at(u_in, 1e-9) == u1 and F.bottom_share(u_in, k) == 0 and F.bottom_share(u_in, u1) == 1
     assert F.room(u, k) == pytest.approx(t * k)
     assert F.tail(u1, 0.0) == (F.even(u1), F.even(u1))
+    assert F.room(u_in, k) == 0 and F.room(F.with_tail(u_in, 0.0), 2 * u1) == pytest.approx(u1)
 
 
 def test_varying_token_blocks_take_the_largest_per_token_affected_count():

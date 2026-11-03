@@ -201,7 +201,7 @@ def room(u, k: float) -> float:
             v = (k - u0 + m * x0) / (2 * m)
             if x0 < v < x1:
                 xs.append(v)
-        best = max(best, *(x * (k - u_at(u, x)) for x in xs if x > 0))
+        best = max((best, *(x * (k - u_at(u, x)) for x in xs if x > 0)))
     return best
 
 
