@@ -62,6 +62,20 @@ theorem checkBlobsAt_public {p : _root_.SampledProofs.OneStageZk.Params}
 theorem blobs_get_ok {bs : Array ByteArray} {dg w : String} {b : ByteArray}
     (h : (Core.Blobs.ofArray bs).get dg w = .ok b) :
     ∃ d, Flock.hexOf d = dg ∧ bs.find? (fun f => Flock.Sha512.hash f == d) = some b := by
+  have hd : ∀ {x : ByteArray}, ¬((x.size != 64 || Flock.hexOf x != dg) = true) → Flock.hexOf x = dg := by
+    intro x hx
+    first
+    | (simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not] at hx; exact hx.2)
+    | (simp at hx; exact hx.2)
+  have hb : ∀ {x k b' : ByteArray},
+      (bs.map fun f => ((Flock.Sha512.hash f, f) : ByteArray × ByteArray)).find? (fun e => e.1 == x) =
+        some (k, b') → bs.find? (fun f => Flock.Sha512.hash f == x) = some b' := by
+    intro x k b' he
+    rw [Array.find?_map, Option.map_eq_some_iff] at he
+    obtain ⟨a, ha, he⟩ := he
+    simp only [Prod.mk.injEq] at he
+    obtain ⟨-, rfl⟩ := he
+    exact ha
   unfold Core.Blobs.get Core.Blobs.ofArray at h
   try dsimp only at h
   try simp only [throw_bind'] at h
@@ -69,11 +83,7 @@ theorem blobs_get_ok {bs : Array ByteArray} {dg w : String} {b : ByteArray}
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
-    rename_i hc _ hf
-    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not] at hc
-    simp only [Array.find?_map, Option.map_eq_some_iff, Prod.mk.injEq] at hf
-    obtain ⟨a, ha, -, rfl⟩ := hf
-    exact ⟨_, hc.2, ha⟩
+    exact ⟨_, hd ‹_›, hb ‹_›⟩
 
 /-- **The first element `q` picks** is the first `r` picks, where `r` holds wherever `q` does and `q` holds there. -/
 theorem find?_first {β : Type} {l : List β} {q r : β → Bool} {a : β} (hr : l.find? r = some a) (hq : q a = true)
@@ -135,6 +145,11 @@ theorem fail_codes (c : _root_.SampledProofs.Check) (code : String) (w : Json) :
     exact ⟨code, Array.mem_of_contains_eq_true hc⟩
   · simp
 
+theorem fail_not_empty (c : _root_.SampledProofs.Check) (code : String) (w : Json) :
+    ¬ (c.fail code w).codes.isEmpty = true := by
+  rw [fail_codes]
+  exact Bool.false_ne_true
+
 /-- **A public file that matches the registration has its population**: `matchesPublic`'s codes are empty only where
 the population matches the record's. -/
 theorem matchesPublic_population {rec scheme roots domains pop : Json}
@@ -143,9 +158,9 @@ theorem matchesPublic_population {rec scheme roots domains pop : Json}
   by_contra hne
   rw [Bool.not_eq_true] at hne
   unfold _root_.SampledProofs.Record.matchesPublic at h
-  simp only [Id.run, hne, Bool.not_false, ↓reduceIte, fail_codes] at h
+  simp only [Id.run, hne, Bool.not_false, ↓reduceIte] at h
   revert h
-  split_ifs <;> simp [fail_codes]
+  split_ifs <;> exact fail_not_empty _ _ _
 
 /-- **v2 holds the public file's `instances` to the record's `population`**, in the header it reads. -/
 theorem publicHeld_ok {rec : Json} {b : ByteArray}
@@ -155,12 +170,15 @@ theorem publicHeld_ok {rec : Json} {b : ByteArray}
         (_root_.SampledProofs.getD rec "population") = true := by
   unfold _root_.SampledProofs.OneStageZk.publicHeld at h
   obtain ⟨H, hH, h⟩ := ebind_ok h
-  refine ⟨H, hH, matchesPublic_population ?_⟩
+  refine ⟨H, hH, matchesPublic_population (scheme := _root_.SampledProofs.getD H "scheme")
+    (roots := _root_.SampledProofs.getD (_root_.SampledProofs.getD H "frame_v3") "roots")
+    (domains := _root_.SampledProofs.getD (_root_.SampledProofs.getD H "frame_v3") "domain_ids") ?_⟩
   dsimp only at h
   by_contra hc
   rw [Bool.not_eq_true] at hc
-  simp only [hc, Bool.not_false, ↓reduceIte] at h
-  exact absurd h (throw_ne_ok _ _)
+  first
+  | (simp only [hc, Bool.not_false, ↓reduceIte] at h; exact absurd h (throw_ne_ok _ _))
+  | (simp [hc] at h <;> exact absurd h (throw_ne_ok _ _))
 
 /-- **The header v2 reads**: `Flock.norm` of the parse of its header line. -/
 theorem headerOf_ok {b : ByteArray} {H : Json} (h : headerOf b = .ok H) :
@@ -194,13 +212,12 @@ theorem headerLine_of_findByte {b : ByteArray} {nl : ℕ} (h : Flock.findByte b 
   induction l with
   | nil => simp at h
   | cons i l ih =>
-    simp only [List.forIn_cons] at h ⊢
     by_cases hi : (b.get! i == 10) = true
-    · simp only [hi, ↓reduceIte] at h ⊢
-      simp at h ⊢
-      exact congrArg _ h
-    · simp only [hi, ↓reduceIte, Bool.false_eq_true] at h ⊢
-      simp at h ⊢
+    · simp only [List.forIn_cons, hi, ↓reduceIte, pure_bind] at h ⊢
+      have h' : some i = some nl := h
+      cases h'
+      rfl
+    · simp only [List.forIn_cons, hi, ↓reduceIte, pure_bind] at h ⊢
       exact ih h
 
 private theorem getNat_ok {j : Json} {n : ℕ} (h : j.getNat? = .ok n) : j = .num ⟨Int.ofNat n, 0⟩ := by
@@ -261,7 +278,7 @@ theorem hmIn_loadPublic {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn
     ∃ c', Flock.HmRow.loadPublic tags c' f = .ok pop := by
   unfold Flock.HmIn.loadPublic at h
   try dsimp only at h
-  try simp only [throw_bind', ok_bind] at h
+  try simp only [throw_bind'] at h
   repeat' walk_step
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -325,10 +342,10 @@ theorem population_eq {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A
   obtain ⟨-, hPd, hfirst⟩ := namedFile_first hreg
   have hPA : namedFile (V.publicDigest θ) F = A.I.publicFile := hA.publicFile.symm
   rw [hPA] at hPd hfirst
-  have hq := hfirst (fun f => Flock.Sha512.hash f == Flock.Sha512.hash A.I.publicFile) (beq_self_eq_true _)
+  have hq := hfirst (fun f => Flock.Sha512.hash f == Flock.Sha512.hash A.I.publicFile) (beq_bytes.2 rfl)
     (fun f hf => by
       rw [hPd]
-      exact congrArg some (sha512_of_hash (beq_iff_eq.1 hf)))
+      exact congrArg some (sha512_of_hash (beq_bytes.1 hf)).symm)
   have hblob : blob = A.I.publicFile := by
     change (o.files ++ o.blobs).find? _ = some blob at hfind
     rw [hF, Array.find?_append, hq, Option.some_or] at hfind
@@ -355,13 +372,19 @@ theorem run_exchange (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c 
   have h0 : Game.prob (fun o : Exchange => ¬ (o.params = θ ∧ o.files = F)) (V.game θ F c) σ = 0 :=
     prob_play_eq_zero (V.families θ) θ F c _ (fun _ _ h => h ⟨rfl, rfl⟩) σ
   rw [prob_eq_ofReal_pr] at h0
+  have hmem : x ∈ Finset.univ.filter fun y : CoinTape (V.game θ F c) σ =>
+      ¬ ((CoinTape.run (V.game θ F c) σ y).params = θ ∧ (CoinTape.run (V.game θ F c) σ y).files = F) :=
+    Finset.mem_filter.2 ⟨Finset.mem_univ _, hx⟩
   have hpos : 0 < Claims.Pr fun y : CoinTape (V.game θ F c) σ =>
       ¬ ((CoinTape.run (V.game θ F c) σ y).params = θ ∧ (CoinTape.run (V.game θ F c) σ y).files = F) := by
-    classical
     unfold Claims.Pr
     apply div_pos
-    · exact_mod_cast Finset.card_pos.2 ⟨x, Finset.mem_filter.2 ⟨Finset.mem_univ _, hx⟩⟩
-    · exact_mod_cast Fintype.card_pos
+    · first
+      | (rw [Nat.cast_pos, Finset.card_pos]; exact ⟨x, by convert hmem⟩)
+      | exact Nat.cast_pos.2 (Finset.card_pos.2 ⟨x, by convert hmem⟩)
+    · first
+      | exact_mod_cast Fintype.card_pos
+      | exact_mod_cast Fintype.card_pos_iff.2 ⟨x⟩
   exact absurd (ENNReal.ofReal_eq_zero.1 h0) (not_le.2 hpos)
 
 /-- `population_eq` on the tapes of the period's game. -/
