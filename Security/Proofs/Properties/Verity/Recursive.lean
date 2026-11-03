@@ -721,12 +721,12 @@ def FinderCR (S : SessionIn V q k θ F c σ)
       (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ)
 
 /-- **The error's number at the strategy**, from `t'` and public parameters: the draw's miss `δs`, plus `BitsLin2On`'s
-`t' · 2^{-λ}`, plus the binding term, the smaller of the file's wire bits and `√(2n)`, `n` its units, times
-`√(E[bindBudget] / 2^256)` over pairs of draws. -/
+`t' · 2^{-λ}`, plus the binding term `√(min(W, 2n) · E[bindBudget] / 2^256)`, with `W` the file's wire bits, `n` its
+units and the budget averaged over pairs of draws. -/
 noncomputable def delta (S : SessionIn V q k θ F c σ) (dColl : ℕ) (δs lam : ℝ) : ℝ≥0∞ :=
   ENNReal.ofReal (δs + q.tCost V S * (2 : ℝ) ^ (-lam) +
-    min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (Real.sqrt (2 * V.units θ F)) *
-      Real.sqrt (Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ)))
+    Real.sqrt (min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) *
+      (Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))))
 
 open Classical in
 /-- **The error at the strategy's session `S`**, the shared `condError FinderCR δ := if FinderCR then δ else ⊤`

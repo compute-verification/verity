@@ -19,14 +19,15 @@ commit phase's check (elsewhere no play is accepted) and sampled proofs' claim f
   the recursive relation (`PrBad`, at most `t' · 2^{-λ}` by `RecursiveKSAt` through `bitsLin2On_of_ksLin2On`), or the
   extractor's witness, correct and opened on every drawn unit (`hread`), differs from `X` at some bit of a wire of a drawn
   unit of `U` (`unbound_drawn`), the bit `X`'s plurality didn't pick (`offEvent`, `pr_verdict_le`);
-* averaged over the draws, the miss is at most `δs` (`hdraw`), and the last event is at most `√K`,
-  `K = E[bindBudget] / 2^256`, times the smaller of the file's wire bits and `√(2n)`, `n` its units. Both rest on
-  `hcoll`, which turns two independent plays that read a drawn wire differently into the binding finder's collision:
-  - at the bits (`ex_off_le_bits`), each bit's minority weight is at most `√K`, since the two weights' product is the
-    probability of such a pair (`weight_mul_le`);
-  - at the units (`ex_off_le_units`, `units_bound`), one unit picked per play gives each unit `u` a share `a_u` at most
-    its draw's probability `p_u`; a play off `X` at a bit of `u`'s wire collides with every play that reads `X`'s bit
-    there, which weighs at least `p_u / 2` (`drawn_le_weight`), so `∑ a_u p_u ≤ 2K` and `(∑ a_u)² ≤ n ∑ a_u² ≤ 2nK`.
+* averaged over the draws, the miss is at most `δs` (`hdraw`), and the last event is at most `√(min(W, 2n) · K)`,
+  `K = E[bindBudget] / 2^256`, with `W` the file's wire bits and `n` its units. Both bounds pick one piece per play
+  (`units_bound`), giving each piece a share `a` at most `p`, and rest on `hcoll`, which turns two independent plays
+  that read a drawn wire differently into the binding finder's collision, so that a play off `X` at a bit collides with
+  every play that reads `X`'s bit there (`majority_le_coll`):
+  - at the bits (`ex_off_le_bits`), `p` is the bit's minority weight, at most its majority's
+    (`minority_le_majority`), so `∑ a p ≤ K` and `(∑ a)² ≤ W ∑ a² ≤ WK`;
+  - at the units (`ex_off_le_units`), `p_u` is the probability of drawing `u`, and the majority at any bit of `u`'s
+    wires weighs at least `p_u / 2` (`drawn_le_weight`), so `∑ a p ≤ 2K` and `(∑ a)² ≤ n ∑ a² ≤ 2nK`.
 -/
 
 namespace Verity.Recursive
@@ -65,24 +66,6 @@ theorem pr_exists_finset_le {β I : Type} [Fintype β] (s : Finset I) (E : I →
       rcases Finset.mem_insert.mp hi with rfl | hi
       · exact Or.inl he
       · exact Or.inr ⟨i, hi, he⟩
-
-/-- Independent events on the two coordinates of a product. -/
-theorem pr_mul {β γ : Type} [Fintype β] [Fintype γ] (p : β → Prop) (q : γ → Prop) :
-    Pr (fun s : β × γ => p s.1 ∧ q s.2) = Pr p * Pr q := by
-  classical
-  rw [Pr_eq_sum (fun s : β × γ => p s.1 ∧ q s.2), Pr_eq_sum p, Pr_eq_sum q, div_mul_div_comm,
-    Finset.sum_mul_sum, Fintype.sum_prod_type, Fintype.card_prod]
-  push_cast
-  congr 1
-  refine Finset.sum_congr rfl fun a _ => Finset.sum_congr rfl fun b _ => ?_
-  by_cases hp : p a <;> by_cases hq : q b <;> simp [hp, hq]
-
-theorem ex_mul {β γ : Type} [Fintype β] [Fintype γ] (f : β → ℝ) (g : γ → ℝ) :
-    Ex f * Ex g = Ex (fun s : β × γ => f s.1 * g s.2) := by
-  unfold Ex
-  rw [div_mul_div_comm, Finset.sum_mul_sum, Fintype.sum_prod_type, Fintype.card_prod]
-  push_cast
-  rfl
 
 theorem ex_add3 {β : Type} [Fintype β] [Nonempty β] (f g : β → ℝ) (c : ℝ) :
     Ex (fun x => f x + c + g x) = Ex f + c + Ex g := by
@@ -150,43 +133,21 @@ theorem getLsbD_ofNat_sum (w : ℕ) (p : ℕ → Prop) [DecidablePred p] {i : �
   rw [BitVec.getLsbD_ofNat, decide_eq_true hi, Bool.true_and]
   exact (testBit_sum_pow p w).2 i hi
 
-theorem le_sqrt_mul {a b : ℝ} (ha : 0 ≤ a) (hab : a ≤ b) : a ≤ Real.sqrt (a * b) := by
-  calc a = Real.sqrt (a * a) := (Real.sqrt_mul_self ha).symm
-    _ ≤ Real.sqrt (a * b) := Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left hab ha)
+/-! ## Counting pieces -/
 
-/-- **The plurality's minority**: where `bit` is set exactly when `a < b`, the weight of `!bit` (`b` at `true`, `a` at
-`false`) is at most `√K` wherever the two weights' product is at most `K`. -/
-theorem minority_le {a b K : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) (hK : b * a ≤ K) (bit : Bool) (hbit : bit = true ↔ a < b) :
-    (if !bit then b else a) ≤ Real.sqrt K := by
-  by_cases h : a < b
-  · have : bit = true := hbit.2 h
-    subst this
-    calc (if !true then b else a) = a := rfl
-      _ ≤ Real.sqrt (a * b) := le_sqrt_mul ha h.le
-      _ ≤ Real.sqrt K := Real.sqrt_le_sqrt (by linarith [mul_comm a b])
-  · have : bit = false := by
-      cases bit
-      · rfl
-      · exact absurd (hbit.1 rfl) h
-    subst this
-    calc (if !false then b else a) = b := rfl
-      _ ≤ Real.sqrt (b * a) := le_sqrt_mul hb (not_lt.1 h)
-      _ ≤ Real.sqrt K := Real.sqrt_le_sqrt hK
-
-/-! ## Counting units -/
-
-/-- **The units' share**: over plays `(ξ, s)`, `s` uniform on `Smp ξ` given `ξ`, let `off u` be events of the units
-`u` of a finite `ι`, each within `drawn u`. Where a play in `off u` makes the probability that a second, independent
-play collides with it (`coll`) at least half that of `drawn u`, and two independent plays collide with probability at
-most `K`, the plays in some `off u` have probability at most `√(2 |ι| K)`. One unit picked per play gives each unit a
-share `a u ≤ p u = Pr[drawn u]`; the pairs give `∑ a u · p u ≤ 2K`, so `(∑ a u)² ≤ |ι| ∑ a u² ≤ 2 |ι| K`. -/
+/-- **The pieces' share**: over plays `(ξ, s)`, `s` uniform on `Smp ξ` given `ξ`, let `off u` be events of the pieces
+`u` of a finite `ι`, each within `drawn u`. Where a play in `off u` makes `c` times the probability that a second,
+independent play collides with it (`coll`) at least that of `drawn u`, and two independent plays collide with
+probability at most `K`, the plays in some `off u` have probability at most `√(c |ι| K)`. One piece picked per play
+gives each piece a share `a u ≤ p u = Pr[drawn u]`; the pairs give `∑ a u · p u ≤ cK`, so
+`(∑ a u)² ≤ |ι| ∑ a u² ≤ c |ι| K`. -/
 theorem units_bound {Ξ ι : Type} [Fintype Ξ] [Fintype ι] {Smp : Ξ → Type} [∀ ξ, Fintype (Smp ξ)]
-    (off drawn : ι → (ξ : Ξ) → Smp ξ → Prop) (coll : (ξ₁ : Ξ) → Smp ξ₁ → (ξ₂ : Ξ) → Smp ξ₂ → Prop) {K : ℝ}
-    (hdrawn : ∀ u ξ s, off u ξ s → drawn u ξ s)
+    (off drawn : ι → (ξ : Ξ) → Smp ξ → Prop) (coll : (ξ₁ : Ξ) → Smp ξ₁ → (ξ₂ : Ξ) → Smp ξ₂ → Prop) {c K : ℝ}
+    (hc : 0 ≤ c) (hdrawn : ∀ u ξ s, off u ξ s → drawn u ξ s)
     (hlow : ∀ u ξ₁ (s₁ : Smp ξ₁), off u ξ₁ s₁ →
-      Ex (fun ξ => Pr (drawn u ξ)) ≤ 2 * Ex (fun ξ₂ => Pr (coll ξ₁ s₁ ξ₂)))
+      Ex (fun ξ => Pr (drawn u ξ)) ≤ c * Ex (fun ξ₂ => Pr (coll ξ₁ s₁ ξ₂)))
     (hK : Ex (fun p : Ξ × Ξ => Pr (fun s : Smp p.1 × Smp p.2 => coll p.1 s.1 p.2 s.2)) ≤ K) :
-    Ex (fun ξ => Pr (fun s : Smp ξ => ∃ u, off u ξ s)) ≤ Real.sqrt (2 * Fintype.card ι * K) := by
+    Ex (fun ξ => Pr (fun s : Smp ξ => ∃ u, off u ξ s)) ≤ Real.sqrt (c * Fintype.card ι * K) := by
   classical
   obtain ⟨sel, hsel, hsel'⟩ : ∃ sel : (ξ : Ξ) → Smp ξ → Option ι,
       (∀ ξ s u, sel ξ s = some u → off u ξ s) ∧ ∀ ξ s, (∃ u, off u ξ s) → ∃ u, sel ξ s = some u := by
@@ -207,17 +168,17 @@ theorem units_bound {Ξ ι : Type} [Fintype Ξ] [Fintype ι] {Smp : Ξ → Type}
     obtain ⟨u, hu⟩ := hsel' ξ s hs
     exact ⟨u, Finset.mem_univ _, hu⟩
   have hpt : ∀ ξ (s : Smp ξ), (∑ u, (if sel ξ s = some u then (1 : ℝ) else 0) * p u) ≤
-      2 * Ex (fun ξ₂ => Pr (coll ξ s ξ₂)) := by
+      c * Ex (fun ξ₂ => Pr (coll ξ s ξ₂)) := by
     intro ξ s
     cases h : sel ξ s with
     | none =>
         simp only [reduceCtorEq, ite_false, zero_mul, Finset.sum_const_zero]
-        exact mul_nonneg (by norm_num) (Ex_nonneg fun _ => Pr_nonneg _)
+        exact mul_nonneg hc (Ex_nonneg fun _ => Pr_nonneg _)
     | some u₀ =>
         rw [Finset.sum_eq_single u₀ (fun u _ hu => by simp [Ne.symm hu]) (fun h' => absurd (Finset.mem_univ u₀) h'),
           show (if some u₀ = some u₀ then (1 : ℝ) else 0) = 1 by simp, one_mul, hp]
         exact hlow u₀ ξ s (hsel ξ s u₀ h)
-  have h3 : ∑ u, a u * p u ≤ 2 * K := by
+  have h3 : ∑ u, a u * p u ≤ c * K := by
     have e1 : ∑ u, a u * p u =
         Ex (fun ξ => Ex (fun s : Smp ξ => ∑ u, (if sel ξ s = some u then (1 : ℝ) else 0) * p u)) := by
       rw [ex_congr fun ξ => ex_sum Finset.univ (fun u (s : Smp ξ) => (if sel ξ s = some u then (1 : ℝ) else 0) * p u),
@@ -225,29 +186,29 @@ theorem units_bound {Ξ ι : Type} [Fintype Ξ] [Fintype ι] {Smp : Ξ → Type}
       refine Finset.sum_congr rfl fun u _ => ?_
       rw [ha, ← ex_mul_const]
       exact ex_congr fun ξ => by rw [ex_mul_const, ex_ind]
-    have e2 : Ex (fun ξ => Ex (fun s : Smp ξ => 2 * Ex (fun ξ₂ => Pr (coll ξ s ξ₂)))) =
-        2 * Ex (fun p : Ξ × Ξ => Pr (fun s : Smp p.1 × Smp p.2 => coll p.1 s.1 p.2 s.2)) := by
-      rw [ex_congr fun ξ => ex_const_mul 2 _, ex_const_mul,
+    have e2 : Ex (fun ξ => Ex (fun s : Smp ξ => c * Ex (fun ξ₂ => Pr (coll ξ s ξ₂)))) =
+        c * Ex (fun p : Ξ × Ξ => Pr (fun s : Smp p.1 × Smp p.2 => coll p.1 s.1 p.2 s.2)) := by
+      rw [ex_congr fun ξ => ex_const_mul c _, ex_const_mul,
         ex_prod (fun ξ₁ ξ₂ => Pr (fun s : Smp ξ₁ × Smp ξ₂ => coll ξ₁ s.1 ξ₂ s.2))]
       congr 1
       refine ex_congr fun ξ => ?_
       rw [ex_comm]
       exact ex_congr fun ξ₂ => pr_prod (fun (s : Smp ξ) (s₂ : Smp ξ₂) => coll ξ s ξ₂ s₂)
     rw [e1]
-    calc _ ≤ Ex (fun ξ => Ex (fun s : Smp ξ => 2 * Ex (fun ξ₂ => Pr (coll ξ s ξ₂)))) :=
+    calc _ ≤ Ex (fun ξ => Ex (fun s : Smp ξ => c * Ex (fun ξ₂ => Pr (coll ξ s ξ₂)))) :=
           Ex_mono fun ξ => Ex_mono fun s => hpt ξ s
       _ = _ := e2
-      _ ≤ 2 * K := by linarith
+      _ ≤ c * K := mul_le_mul_of_nonneg_left hK hc
   have hsq : ∑ u, a u ^ 2 ≤ ∑ u, a u * p u :=
     Finset.sum_le_sum fun u _ => by rw [sq]; exact mul_le_mul_of_nonneg_left (hap u) (ha0 u)
   have hcs := sq_sum_le_card_mul_sum_sq (s := (Finset.univ : Finset ι)) (f := a)
   rw [Finset.card_univ] at hcs
   calc Ex (fun ξ => Pr (fun s : Smp ξ => ∃ u, off u ξ s)) ≤ ∑ u, a u := h1
     _ = Real.sqrt ((∑ u, a u) ^ 2) := (Real.sqrt_sq (Finset.sum_nonneg fun u _ => ha0 u)).symm
-    _ ≤ Real.sqrt (2 * Fintype.card ι * K) := Real.sqrt_le_sqrt <| by
+    _ ≤ Real.sqrt (c * Fintype.card ι * K) := Real.sqrt_le_sqrt <| by
         calc (∑ u, a u) ^ 2 ≤ (Fintype.card ι : ℝ) * ∑ u, a u ^ 2 := hcs
-          _ ≤ (Fintype.card ι : ℝ) * (2 * K) := mul_le_mul_of_nonneg_left (hsq.trans h3) (Nat.cast_nonneg _)
-          _ = 2 * Fintype.card ι * K := by ring
+          _ ≤ (Fintype.card ι : ℝ) * (c * K) := mul_le_mul_of_nonneg_left (hsq.trans h3) (Nat.cast_nonneg _)
+          _ = c * Fintype.card ι * K := by ring
 
 end Target
 
@@ -327,12 +288,6 @@ theorem weight_eq (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteA
     (g : Fin (V.circuitOf θ F).N) (i : ℕ) (bit : Bool) :
     q.weight V S readX g i bit = Ex fun ξ => Pr (wEvent q V S readX g i bit ξ) := rfl
 
-theorem weight_nonneg (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
-    {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
-    (g : Fin (V.circuitOf θ F).N) (i : ℕ) (bit : Bool) : 0 ≤ q.weight V S readX g i bit :=
-  Ex_nonneg fun _ => Pr_nonneg _
-
 /-- **The extracted transcript's bit is the plurality's**: bit `i` of gate `g` of `Dep.extract` is set exactly where its
 weight at `true` exceeds its weight at `false`. -/
 theorem extract_bit (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
@@ -343,36 +298,18 @@ theorem extract_bit (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array Byt
       q.weight V S readX g i false < q.weight V S readX g i true :=
   getLsbD_ofNat_sum _ (fun j => q.weight V S readX g j false < q.weight V S readX g j true) hi
 
-/-- **Two plays that read a drawn wire's bit differently collide**: the product of a bit's two weights is at most the
-binding finder's collision probability averaged over pairs of draws, so at most `E[bindBudget] / 2^256` under
-`FinderCR`. -/
-theorem weight_mul_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
-    {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
+/-- **The plurality's minority weighs at most its majority**: at a bit `i` of a wire `g`, the weight of the bit
+`Dep.extract` didn't pick is at most that of the bit it picked. -/
+theorem minority_le_majority (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
+    {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
-    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
-    (hcoll : ∀ ξ₁ ξ₂ w₁ w₂ (g : Fin (V.circuitOf θ F).N), q.R (S.x ξ₁) w₁ → q.R (S.x ξ₂) w₂ →
-      (∃ u ∈ S.drawOf ξ₁, g ∈ (V.partsOf θ F).io u) → (∃ u ∈ S.drawOf ξ₂, g ∈ (V.partsOf θ F).io u) →
-      readX (S.x ξ₁) w₁ g ≠ readX (S.x ξ₂) w₂ g →
-      ∃ m m', collOf (S.x ξ₁) w₁ (S.x ξ₂) w₂ = some (m, m') ∧ Claims.Collision FlockDeploy.sha512 m m')
-    (hbind : ∀ ξ₁ ξ₂, (q.bindAt V S collOf dColl ξ₁ ξ₂).Pr FlockDeploy.sha512 ≤
-      (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ))
-    (g : Fin (V.circuitOf θ F).N) (i : ℕ) :
-    q.weight V S readX g i true * q.weight V S readX g i false ≤
-      Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ) := by
-  rw [weight_eq, weight_eq, ex_mul, ← Ex_div]
-  refine Ex_mono fun p => ?_
-  rw [← pr_mul]
-  refine le_trans (Pr_mono fun s hs => ?_) (hbind p.1 p.2)
-  obtain ⟨⟨-, hd₁, w₁, he₁, hR₁, hb₁⟩, ⟨-, hd₂, w₂, he₂, hR₂, hb₂⟩⟩ := hs
-  have hne : readX (S.x p.1) w₁ g ≠ readX (S.x p.2) w₂ g := fun h => by
-    rw [h] at hb₁
-    rw [hb₁] at hb₂
-    exact Bool.noConfusion hb₂
-  obtain ⟨m, m', hm, hcol⟩ := hcoll p.1 p.2 w₁ w₂ g hR₁ hR₂ hd₁ hd₂ hne
-  refine ⟨m, m', ?_, hcol⟩
-  first
-    | (simp only [Dep.bindAt, he₁, he₂]; exact hm)
-    | simp [Dep.bindAt, he₁, he₂, hm]
+    (g : Fin (V.circuitOf θ F).N) {i : ℕ} (hi : i < (V.circuitOf θ F).w g) :
+    q.weight V S readX g i (!(q.extract V S readX g).getLsbD i) ≤
+      q.weight V S readX g i ((q.extract V S readX g).getLsbD i) := by
+  have hx := extract_bit q V S readX g hi
+  cases hb : (q.extract V S readX g).getLsbD i
+  · exact not_lt.1 fun h => by rw [hb] at hx; exact Bool.false_ne_true (hx.2 h)
+  · rw [hb] at hx; exact (hx.1 rfl).le
 
 /-- **The event the binding term counts at the unit `u`**: at the draw `ξ` and a run with the extractor's seed `s`, the
 run accepts, `ξ` draws `u`, and the extractor returns a witness in the recursive relation whose reading differs from
@@ -400,6 +337,59 @@ def collEvent (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray
     (ξ₁ : S.Ξ) (s₁ : q.Sample V S ξ₁) (ξ₂ : S.Ξ) (s₂ : q.Sample V S ξ₂) : Prop :=
   ∃ m m', (q.bindAt V S collOf dColl ξ₁ ξ₂).out (s₁, s₂) = some (m, m') ∧ Claims.Collision FlockDeploy.sha512 m m'
 
+/-- **The event the binding term counts at the wire bit `b`**: `wEvent` at bit `b.2` of the wire `b.1`, reading the
+bit `Dep.extract` didn't pick there. -/
+def bitEvent (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
+    {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+    (b : Σ g : Fin (V.circuitOf θ F).N, Fin ((V.circuitOf θ F).w g)) (ξ : S.Ξ) (s : q.Sample V S ξ) : Prop :=
+  wEvent q V S readX b.1 b.2 (!(q.extract V S readX b.1).getLsbD b.2) ξ s
+
+/-- **A run off the plurality collides with every run on it**: where a run at the draw `ξ₁` with seed `s₁` returns a
+witness in the recursive relation whose reading, at a bit `i` of a wire `g` that `ξ₁` draws, is not the bit
+`Dep.extract` picked, the weight of the picked bit is at most the probability, over a second, independent draw and
+run, that the binding finder at the two collides (`hcoll`). -/
+theorem majority_le_coll (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
+    {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
+    (hcoll : ∀ ξ₁ ξ₂ w₁ w₂ (g : Fin (V.circuitOf θ F).N), q.R (S.x ξ₁) w₁ → q.R (S.x ξ₂) w₂ →
+      (∃ u ∈ S.drawOf ξ₁, g ∈ (V.partsOf θ F).io u) → (∃ u ∈ S.drawOf ξ₂, g ∈ (V.partsOf θ F).io u) →
+      readX (S.x ξ₁) w₁ g ≠ readX (S.x ξ₂) w₂ g →
+      ∃ m m', collOf (S.x ξ₁) w₁ (S.x ξ₂) w₂ = some (m, m') ∧ Claims.Collision FlockDeploy.sha512 m m')
+    {ξ₁ : S.Ξ} {s₁ : q.Sample V S ξ₁} {w₁ : Claims.Flock.Wit} {g : Fin (V.circuitOf θ F).N} {i : ℕ}
+    (hd₁ : ∃ u ∈ S.drawOf ξ₁, g ∈ (V.partsOf θ F).io u)
+    (he₁ : (q.E.eval FlockDeploy.sha512 (S.P ξ₁) (S.x ξ₁) s₁.1 s₁.2.1 s₁.2.2).1 = some w₁) (hR₁ : q.R (S.x ξ₁) w₁)
+    (hb₁ : (readX (S.x ξ₁) w₁ g).getLsbD i = !(q.extract V S readX g).getLsbD i) :
+    q.weight V S readX g i ((q.extract V S readX g).getLsbD i) ≤
+      Ex (fun ξ₂ => Pr (collEvent q V S collOf dColl ξ₁ s₁ ξ₂)) := by
+  rw [weight_eq]
+  refine Ex_mono fun ξ₂ => Pr_mono fun s₂ hs₂ => ?_
+  obtain ⟨-, hd₂, w₂, he₂, hR₂, hb₂⟩ := hs₂
+  have hne : readX (S.x ξ₁) w₁ g ≠ readX (S.x ξ₂) w₂ g := fun h => by
+    rw [h, hb₂] at hb₁
+    cases hx : (q.extract V S readX g).getLsbD i <;> simp [hx] at hb₁
+  obtain ⟨m, m', hm, hcol⟩ := hcoll ξ₁ ξ₂ w₁ w₂ g hR₁ hR₂ hd₁ hd₂ hne
+  refine ⟨m, m', ?_, hcol⟩
+  first
+    | (simp only [Dep.bindAt, he₁, he₂]; exact hm)
+    | simp [Dep.bindAt, he₁, he₂, hm]
+
+/-- **Two independent plays collide at most `E[bindBudget] / 2^256`** under `FinderCR`'s binding premise (`hbind`):
+the binding finder at each pair of draws is the pair of plays. -/
+theorem ex_coll_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
+    {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
+    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
+    (hbind : ∀ ξ₁ ξ₂, (q.bindAt V S collOf dColl ξ₁ ξ₂).Pr FlockDeploy.sha512 ≤
+      (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ)) :
+    Ex (fun p : S.Ξ × S.Ξ => Pr (fun s : q.Sample V S p.1 × q.Sample V S p.2 =>
+      collEvent q V S collOf dColl p.1 s.1 p.2 s.2)) ≤
+      Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ) := by
+  rw [← Ex_div]
+  first
+    | exact Ex_mono fun p => hbind p.1 p.2
+    | exact Ex_mono fun p => le_trans (Pr_mono fun s hs => hs) (hbind p.1 p.2)
+
 /-- **The plurality's bit weighs at least half a drawn unit**: at a bit `i` of a wire `g` of the unit `u`, the weight of
 the bit `Dep.extract` picked there is at least half the probability that the run accepts, draws `u` and the extractor
 returns a witness in the recursive relation. -/
@@ -425,9 +415,10 @@ theorem drawn_le_weight (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array
     linarith
 
 /-- **The binding term at the bits**: averaged over the draws, the probability that the run accepts while the
-extractor's witness differs from the plurality `Dep.extract` at a bit of a wire of a drawn unit is at most the file's
-wire bits times `√(E[bindBudget] / 2^256)`: each bit's minority weight is at most the square root
-(`weight_mul_le`). -/
+extractor's witness differs from the plurality `Dep.extract` at a bit of a wire of a drawn unit is at most
+`√(W · E[bindBudget] / 2^256)`, `W` the file's wire bits (`units_bound` over the bits): a run off the plurality at a
+bit collides, through `hcoll`, with every run that reads the plurality's bit there (`majority_le_coll`), which weighs
+at least the bit's minority (`minority_le_majority`). -/
 theorem ex_off_le_bits (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
@@ -439,41 +430,24 @@ theorem ex_off_le_bits (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array 
     (hbind : ∀ ξ₁ ξ₂, (q.bindAt V S collOf dColl ξ₁ ξ₂).Pr FlockDeploy.sha512 ≤
       (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ)) :
     Ex (fun ξ => Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s)) ≤
-      (∑ g, (V.circuitOf θ F).w g : ℕ) *
-        Real.sqrt (Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ)) := by
+      Real.sqrt ((∑ g, (V.circuitOf θ F).w g : ℕ) *
+        (Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))) := by
   classical
-  set K := Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ) with hKdef
-  have hpt : ∀ ξ, Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s) ≤
-      ∑ g, ∑ i ∈ Finset.range ((V.circuitOf θ F).w g),
-        Pr (wEvent q V S readX g i (!(q.extract V S readX g).getLsbD i) ξ) := by
-    intro ξ
-    calc Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s)
-        ≤ Pr (fun s : q.Sample V S ξ => ∃ g ∈ Finset.univ, ∃ i ∈ Finset.range ((V.circuitOf θ F).w g),
-            wEvent q V S readX g i (!(q.extract V S readX g).getLsbD i) ξ s) := Pr_mono fun s hs => by
-          obtain ⟨u, hacc, hu, wt, hw, hR, g, hg, i, hi, hbit⟩ := hs
-          exact ⟨g, Finset.mem_univ _, i, Finset.mem_range.2 hi, hacc, ⟨u, hu, hg⟩, wt, hw, hR, hbit⟩
-      _ ≤ _ := by
-          refine le_trans (pr_exists_finset_le Finset.univ _) (Finset.sum_le_sum fun g _ => ?_)
-          exact pr_exists_finset_le _ _
-  refine le_trans (Ex_mono hpt) ?_
-  rw [ex_sum]
-  have hbit : ∀ g, ∀ i ∈ Finset.range ((V.circuitOf θ F).w g),
-      Ex (fun ξ => Pr (wEvent q V S readX g i (!(q.extract V S readX g).getLsbD i) ξ)) ≤ Real.sqrt K := by
-    intro g i hi
-    rw [← weight_eq]
-    have := minority_le (weight_nonneg q V S readX g i false) (weight_nonneg q V S readX g i true)
-      (weight_mul_le q V S readX collOf dColl hcoll hbind g i) _
-      (extract_bit q V S readX g (Finset.mem_range.1 hi))
-    cases h : (q.extract V S readX g).getLsbD i <;> rw [h] at this <;> first | exact this | simpa using this
-  calc ∑ g, Ex (fun ξ => ∑ i ∈ Finset.range ((V.circuitOf θ F).w g),
-          Pr (wEvent q V S readX g i (!(q.extract V S readX g).getLsbD i) ξ))
-      = ∑ g, ∑ i ∈ Finset.range ((V.circuitOf θ F).w g),
-          Ex (fun ξ => Pr (wEvent q V S readX g i (!(q.extract V S readX g).getLsbD i) ξ)) :=
-        Finset.sum_congr rfl fun g _ => ex_sum _ _
-    _ ≤ ∑ g, ∑ _i ∈ Finset.range ((V.circuitOf θ F).w g), Real.sqrt K :=
-        Finset.sum_le_sum fun g _ => Finset.sum_le_sum fun i hi => hbit g i hi
-    _ = (∑ g, (V.circuitOf θ F).w g : ℕ) * Real.sqrt K := by
-        simp only [Finset.sum_const, Finset.card_range, nsmul_eq_mul, Nat.cast_sum, Finset.sum_mul]
+  have hlow : ∀ b ξ₁ (s₁ : q.Sample V S ξ₁), bitEvent q V S readX b ξ₁ s₁ →
+      Ex (fun ξ => Pr (bitEvent q V S readX b ξ)) ≤
+        1 * Ex (fun ξ₂ => Pr (collEvent q V S collOf dColl ξ₁ s₁ ξ₂)) := by
+    intro b ξ₁ s₁ hs
+    obtain ⟨-, hd₁, w₁, he₁, hR₁, hb₁⟩ := hs
+    rw [one_mul, show Ex (fun ξ => Pr (bitEvent q V S readX b ξ)) =
+      q.weight V S readX b.1 b.2 (!(q.extract V S readX b.1).getLsbD b.2) from rfl]
+    exact (minority_le_majority q V S readX b.1 b.2.isLt).trans
+      (majority_le_coll q V S readX collOf dColl hcoll hd₁ he₁ hR₁ hb₁)
+  have h := units_bound (Smp := q.Sample V S) (bitEvent q V S readX) (bitEvent q V S readX)
+    (collEvent q V S collOf dColl) zero_le_one (fun _ _ _ hs => hs) hlow (ex_coll_le q V S collOf dColl hbind)
+  simp only [Fintype.card_sigma, Fintype.card_fin, one_mul] at h
+  refine le_trans (Ex_mono fun ξ => Pr_mono fun s hs => ?_) h
+  obtain ⟨u, hacc, hu, wt, hw, hR, g, hg, i, hi, hbit⟩ := hs
+  exact ⟨⟨g, i, hi⟩, hacc, ⟨u, hu, hg⟩, wt, hw, hR, hbit⟩
 
 /-- **The binding term at the units**: averaged over the draws, the probability that the run accepts while the
 extractor's witness differs from the plurality `Dep.extract` at a bit of a wire of a drawn unit is at most
@@ -499,29 +473,12 @@ theorem ex_off_le_units (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array
         2 * Ex (fun ξ₂ => Pr (collEvent q V S collOf dColl ξ₁ s₁ ξ₂)) := by
     intro u ξ₁ s₁ hs
     obtain ⟨-, hu₁, w₁, he₁, hR₁, g, hg, i, hi, hb₁⟩ := hs
-    refine le_trans (drawn_le_weight q V S readX hg hi) (mul_le_mul_of_nonneg_left ?_ (by norm_num))
-    rw [weight_eq]
-    refine Ex_mono fun ξ₂ => Pr_mono fun s₂ hs₂ => ?_
-    obtain ⟨-, hd₂, w₂, he₂, hR₂, hb₂⟩ := hs₂
-    have hne : readX (S.x ξ₁) w₁ g ≠ readX (S.x ξ₂) w₂ g := fun h => by
-      rw [h, hb₂] at hb₁
-      cases hx : (q.extract V S readX g).getLsbD i <;> simp [hx] at hb₁
-    obtain ⟨m, m', hm, hcol⟩ := hcoll ξ₁ ξ₂ w₁ w₂ g hR₁ hR₂ ⟨u, hu₁, hg⟩ hd₂ hne
-    refine ⟨m, m', ?_, hcol⟩
-    first
-      | (simp only [Dep.bindAt, he₁, he₂]; exact hm)
-      | simp [Dep.bindAt, he₁, he₂, hm]
-  have hK : Ex (fun p : S.Ξ × S.Ξ => Pr (fun s : q.Sample V S p.1 × q.Sample V S p.2 =>
-      collEvent q V S collOf dColl p.1 s.1 p.2 s.2)) ≤
-      Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ) := by
-    rw [← Ex_div]
-    first
-      | exact Ex_mono fun p => hbind p.1 p.2
-      | exact Ex_mono fun p => le_trans (Pr_mono fun s hs => hs) (hbind p.1 p.2)
+    exact le_trans (drawn_le_weight q V S readX hg hi) (mul_le_mul_of_nonneg_left
+      (majority_le_coll q V S readX collOf dColl hcoll ⟨u, hu₁, hg⟩ he₁ hR₁ hb₁) (by norm_num))
   have h := units_bound (Smp := q.Sample V S) (offEvent q V S readX (q.extract V S readX)) (drawEvent q V S)
-    (collEvent q V S collOf dColl) (fun u ξ s hs => by
+    (collEvent q V S collOf dColl) (by norm_num : (0 : ℝ) ≤ 2) (fun u ξ s hs => by
       obtain ⟨hacc, hu, wt, hw, hR, -⟩ := hs
-      exact ⟨hacc, hu, wt, hw, hR⟩) hlow hK
+      exact ⟨hacc, hu, wt, hw, hR⟩) hlow (ex_coll_le q V S collOf dColl hbind)
   rwa [Fintype.card_fin] at h
 
 /-- **A drawn unbound unit gives a wire bit off the plurality**: where the witness's reading is correct on, and opened
@@ -641,8 +598,8 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
         add_le_add hbad le_rfl
 
 /-- **The bound at one coupling**: averaged over the draws, the probability that the recursive configuration's verdict
-holds is at most the draw's miss `δs`, plus `t' · 2^{-λ}`, plus the smaller of the file's wire bits and `√(2n)`, `n` its
-units, times `√(E[bindBudget] / 2^256)` (`ex_off_le_bits`, `ex_off_le_units`). -/
+holds is at most the draw's miss `δs`, plus `t' · 2^{-λ}`, plus `√(min(W, 2n) · E[bindBudget] / 2^256)`, with `W` the
+file's wire bits and `n` its units (`ex_off_le_bits`, `ex_off_le_units`). -/
 theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
     (hKS : Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR q.wE q.w (deployedB q.b)
       q.aux q.nOf q.hd q.recRest)
@@ -671,24 +628,25 @@ theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
       (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) ω r).seen) :
     Ex (fun ξ => Pr fun s : S.Ω × (Fin (q.D.V.k (S.x ξ)) → Coin) => RecVerdict V k (S.out ξ s)) ≤
       δs + q.tCost V S * (2 : ℝ) ^ (-lam) +
-        min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (Real.sqrt (2 * V.units θ F)) *
-          Real.sqrt (Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ)) := by
+        Real.sqrt (min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) *
+          (Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))) := by
   classical
   refine le_trans (Ex_mono fun ξ => pr_verdict_le q hG hKS hdecI hdecO nI vS lam hn hv hlam V k S readX hcr.1
     hread hlive ξ) ?_
   rw [ex_add3, ex_ind]
   refine add_le_add (add_le_add hdraw le_rfl) ?_
-  rw [min_mul_of_nonneg _ _ (Real.sqrt_nonneg _)]
-  refine le_min (ex_off_le_bits q V S readX collOf dColl hcoll hcr.2) ?_
-  rw [← Real.sqrt_mul (by positivity : (0 : ℝ) ≤ 2 * V.units θ F)]
-  exact ex_off_le_units q V S readX collOf dColl hcoll hcr.2
+  rcases le_total ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) with h | h
+  · rw [min_eq_left h]
+    exact ex_off_le_bits q V S readX collOf dColl hcoll hcr.2
+  · rw [min_eq_right h]
+    exact ex_off_le_units q V S readX collOf dColl hcoll hcr.2
 
 /-- **The target: sampled proofs at the recursive configuration**, in the per-prover form over the causal game (R4′,
 R5, R6), with the recursive configuration's verdict (`RecVerdict`). At composite `k`, the parameters `θ`, the
 committed files `F`, the commitment `c` and a strategy `σ`, with `S` its recursive session (`SessionIn`), the
 probability that the recursive component accepts while sampled proofs' claim fails on the extractor's transcript
 (`¬ Holds k .sampled`) is at most `Dep.errAt` at `S`, the shared `condError FinderCR δ`: where `FinderCR` holds at
-the finders built from `σ`, `δs + t'(σ) · 2^{-λ} + min(bits, √(2n)) · √(E[bindBudget(σ)] / 2^256)` with `n` the units,
+the finders built from `σ`, `δs + t'(σ) · 2^{-λ} + √(min(bits, 2n) · E[bindBudget(σ)] / 2^256)` with `n` the units,
 and `⊤` elsewhere, with `t'(σ)` the strategy's SHA-512 calls in one run (`Vocab.cost`) and every finder's budget defined
 from it. There is no hypothesis on the strategy but `live-verifier`.
 

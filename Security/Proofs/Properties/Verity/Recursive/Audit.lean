@@ -140,7 +140,7 @@ namespace Flock.Guarantees
 recursive configuration's verdict `RecVerdict`), at every composite `k`: wherever sampled proofs' case in what the
 prover sent `k` names the recursive form, V\*'s compiled check (`verity/sampled-proofs/recursive/v1`), the probability
 that the play is accepted while sampled proofs' claim fails on the extracted transcript is at most
-`δs + t'·2^{-λ} + min(bits, √(2n))·√(E[bindBudget]/2^256)`, `n` the units, where the finders built from the strategy
+`δs + t'·2^{-λ} + √(min(bits, 2n)·E[bindBudget]/2^256)`, `n` the units, where the finders built from the strategy
 meet `FinderCR`, and `⊤` elsewhere; and (ii) zero knowledge, `RecursiveFirewallPrivate`.
 
 Its `λ` is `λ₂ = 135.7`: route 2C's level (`Claims.Recursion.lamLin2`) at the inner calls `nI₀ = 2^28 + (c_B + 2^24)`
