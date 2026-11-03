@@ -282,8 +282,8 @@ theorem StatHeldBudgetNontrivial : Guarantees.StatHeldBudgetNontrivial := by
         _ ≤ _ := by
             refine PMF.toOuterMeasure_mono _ fun b ⟨hb, _⟩ => ?_
             rw [Set.mem_singleton_iff.1 hb]
-            simp only [Set.mem_preimage, Set.mem_ofPred_eq, Set.mem_setOf_eq, selectionBits, singleton_biUnion,
-              sort_singleton, Circuit.bits, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+            simp only [Set.mem_preimage, Set.mem_ofPred_eq, selectionBits, singleton_biUnion, sort_singleton,
+              Circuit.bits, List.flatMap_cons, List.flatMap_nil, List.append_nil]
             simpa [tok] using eval_two (tok true)
     have := (hhalf.trans hle).trans hbound
     norm_num [ENNReal.inv_le_inv] at this
