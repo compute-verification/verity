@@ -738,7 +738,35 @@ theorem ofCircuit_fold (st : Stmt) : (_root_.Flock.Setup.ofCircuit st).fold.kLog
 /-- A bound on a pad's position or its place in the absorbed order, at the pads layout's positions (`pl_*`). -/
 local macro "place_tac" : tactic =>
   `(tactic| ((try simp only [FlockComplete.CutEq.layOf, layE, pl_r1ab, pl_r1c, pl_ml, pl_fa, pl_fb, pl_fc, pl_lc, pl_zp, pl_lgOod,
-    pl_lgMsg, pl_lgE, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold, piopLen, piopNR] at *); first | (split_ifs <;> omega) | omega))
+    pl_lgMsg, pl_lgE, ofCircuit_m, ofCircuit_kLog, ofCircuit_fold, piopNR] at *); omega))
+
+/-! A pad's place in the absorbed order (`place_hi`'s) is below the values of the PIOP round that frees it: round 2
+for round 1's pads, residual round `a` for its pair, `final_a`/`final_b`'s round, lincheck round `a`, `z_partial`'s. -/
+
+theorem place_r1 {m k i : ℕ} (h : i < 128) :
+    (if i < 130 + 2 * (m - 6) then i else i - 1) < piopLen m k (2 + 1) := by
+  unfold piopLen
+  split_ifs <;> omega
+
+theorem place_ml {m k i a : ℕ} (ha : a < m - 6) (h : i < 130 + 2 * a) :
+    (if i < 130 + 2 * (m - 6) then i else i - 1) < piopLen m k (3 + a + 1) := by
+  unfold piopLen
+  split_ifs <;> omega
+
+theorem place_f {m k i : ℕ} (h : i < 130 + 2 * (m - 6)) :
+    (if i < 130 + 2 * (m - 6) then i else i - 1) < piopLen m k (3 + (m - 6) + 1) := by
+  unfold piopLen
+  split_ifs <;> omega
+
+theorem place_lc {m k i a : ℕ} (ha : a < k - 6) (h : i ≤ 132 + 2 * (m - 6) + 2 * a) :
+    (if i < 130 + 2 * (m - 6) then i else i - 1) < piopLen m k (5 + (m - 6) + a + 1) := by
+  unfold piopLen
+  split_ifs <;> omega
+
+theorem place_zp {m k i : ℕ} (h : i ≤ 194 + 2 * (m - 6) + 2 * (k - 6)) :
+    (if i < 130 + 2 * (m - 6) then i else i - 1) < piopLen m k (5 + (m - 6) + (k - 6) + 1) := by
+  unfold piopLen
+  split_ifs <;> omega
 
 section SwRep
 
@@ -852,36 +880,37 @@ theorem swRepAgree {x : Msg} {w : Flock.Wit} (hSv : Serves x)
     fun k hk hn => ?_, fun hn => ?_, fun i hi hn t ht => ?_, fun hn a ha t ht => ?_, fun hn => ?_, fun hn => ?_,
     fun hn => ?_, fun hn => ?_, fun _ => ?_⟩
   · obtain ⟨h1, h2⟩ := hA.ab hn i hi
-    exact ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx 2 (by place_tac) (by place_tac)
+    exact ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx 2 (by place_tac) (place_r1 (by place_tac))
         fun k hk => hcc k (by omega)),
-      hM (by place_tac) h2 (freeWord_at L₀ src real hSv hP bx 2 (by place_tac) (by place_tac)
+      hM (by place_tac) h2 (freeWord_at L₀ src real hSv hP bx 2 (by place_tac) (place_r1 (by place_tac))
         fun k hk => hcc k (by omega))⟩
   · obtain ⟨h1, h2⟩ := hA.ml i hi hn
     rw [em] at hi
-    exact ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx (3 + i) (by place_tac) (by place_tac)
-        fun k hk => hcc k (by omega)),
-      hM (by place_tac) h2 (freeWord_at L₀ src real hSv hP bx (3 + i) (by place_tac) (by place_tac)
-        fun k hk => hcc k (by omega))⟩
+    exact ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx (3 + i) (by place_tac)
+        (place_ml hi (by place_tac)) fun k hk => hcc k (by omega)),
+      hM (by place_tac) h2 (freeWord_at L₀ src real hSv hP bx (3 + i) (by place_tac)
+        (place_ml hi (by place_tac)) fun k hk => hcc k (by omega))⟩
   · obtain ⟨h1, h2, -⟩ := hA.f hn
     rw [em] at hn
     refine ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx (3 + ((stAt x j).m - 6)) (by place_tac)
-        (by place_tac) fun k hk => hcc k (by omega)),
+        (place_f (by place_tac)) fun k hk => hcc k (by omega)),
       hM (by place_tac) h2 (freeWord_at L₀ src real hSv hP bx (3 + ((stAt x j).m - 6)) (by place_tac)
-        (by place_tac) fun k hk => hcc k (by omega)), ?_⟩
+        (place_f (by place_tac)) fun k hk => hcc k (by omega)), ?_⟩
     exact swMasked_fc_congr _ bx hSv wt ω p _ _ j r (zcE_z_congr j r hcc (by omega))
       (fun k hk => (hA.ab (by omega) k hk).2)
-      fun k hk => freeWord_at L₀ src real hSv hP bx 2 (by place_tac) (by place_tac) fun k hk => hcc k (by omega)
+      fun k hk => freeWord_at L₀ src real hSv hP bx 2 (by place_tac) (place_r1 (by place_tac))
+        fun k hk => hcc k (by omega)
   · obtain ⟨h1, h2⟩ := hA.lc i hi hn
     rw [em] at hn
     rw [ef] at hi
     exact ⟨hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx (5 + ((stAt x j).m - 6) + i) (by place_tac)
-        (by place_tac) fun k hk => hcc k (by omega)),
+        (place_lc hi (by place_tac)) fun k hk => hcc k (by omega)),
       hM (by place_tac) h2 (freeWord_at L₀ src real hSv hP bx (5 + ((stAt x j).m - 6) + i) (by place_tac)
-        (by place_tac) fun k hk => hcc k (by omega))⟩
+        (place_lc hi (by place_tac)) fun k hk => hcc k (by omega))⟩
   · have h1 := hA.zp hn i hi
     rw [em, ef] at hn
     exact hM (by place_tac) h1 (freeWord_at L₀ src real hSv hP bx (5 + ((stAt x j).m - 6) +
-      ((stAt x j).c.kLog - 6)) (by place_tac) (by place_tac) fun k hk => hcc k (by omega))
+      ((stAt x j).c.kLog - 6)) (by place_tac) (place_zp (by place_tac)) fun k hk => hcc k (by omega))
   · rw [bsv c, bsv c']
     exact hA.sv k hk hn
   · exact hM (by place_tac) (hA.ood hn) (freeWord_ligAt L₀ src real hP bx (by place_tac))
