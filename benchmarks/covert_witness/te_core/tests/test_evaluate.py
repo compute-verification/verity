@@ -19,9 +19,10 @@ def stub_prepare(final: bool) -> SimpleNamespace:
         VERSION="3.0", DATA="v2.2",
         TRAIN_FLOP_BUDGET=1e12, HARNESS_FLOP_SLACK=1.1, GPU_SECONDS_CAP=600.0, FINAL_MODE=final, FINAL="final",
         SEARCH_POOL="search", DEVICE="cpu",
-        start_record=lambda name: {"digest": "d", "config": {"n_layer": 2}, "tokenizer": "gpt2"},
+        start_record=lambda name: {"digest": "d", "config": {"n_layer": 2}, "tokenizer": "gpt2", "parameters": 2},
         load_theta=lambda name: theta, format_of=lambda blob: "full", decode=lambda th, blob: dict(th),
         rebuild_macs=lambda th, blob: 0, same_bits=torch.equal, deep_share=lambda rec, names: {},
+        model_config=lambda rec, blob: rec["config"], model_record=lambda rec, config, state: rec,
         read_steps=lambda path: [], train_flops=lambda rec, trainable, steps: {"flops": 2e6},
         held_out=lambda split, tok: ([0] * 8, {"bytes": 32}), eval_cost=lambda rec, n, nbytes: {})
 
