@@ -25,6 +25,11 @@ entry `π₁₃ = (i, j)`.
   `b_A x + b_B y + b_C z ≤ k`, which holds of a block that pays `b_C` bits for every entry it touches. When only reads
   are charged a block that starts an entry pays nothing for it, and the amortized cap, `3√3/4 ≈ 1.299` times this
   one, is attained by blocks of two kinds, one reading operands and the other partial sums (`split_attains`).
+* `sqrt_mul_le_chain`: **the per-block form along chains**, for a block that reads a partial sum at `b_C` bits for
+  each entry it touches except the `s` whose chains it starts, `b_A x + b_B y + t ≤ k` and `b_C (z - s) ≤ t`:
+  `√(x y z) ≤ α + β √s`, `α = (k/3) √(k/3) / √(b_A b_B b_C)` and `β = (k/2) / √(b_A b_B)`.
+* `sum_card_le_chain`: its sum over `B` blocks, each chain started once, `Σ_u s_u ≤ O`: `Σ_u |T_u| ≤ B α + β √(B O)`,
+  by Cauchy–Schwarz on `Σ_u √s_u`.
 -/
 
 namespace Verity.Combinatorics
@@ -204,6 +209,73 @@ theorem sqrt_mul_le_third {x y z bA bB bC k : ℝ} (hx : 0 ≤ x) (hy : 0 ≤ y)
     ring
   rw [Real.sqrt_le_left (by positivity), hsq, le_div_iff₀ hb3]
   nlinarith
+
+/-- **The per-block form along chains**: a block that pays `b_A x + b_B y + t ≤ k` bits, `t` of them for partial sums
+at `b_C` bits each, and starts the chains of `s` of the `z` entries it touches, `b_C (z - s) ≤ t`, has
+`√(x y z) ≤ (k/3) √(k/3) / √(b_A b_B b_C) + (k/2) / √(b_A b_B) · √s`. -/
+theorem sqrt_mul_le_chain {x y z s t bA bB bC k : ℝ} (hx : 0 ≤ x) (hy : 0 ≤ y) (hs : 0 ≤ s) (ht : 0 ≤ t)
+    (hA : 0 < bA) (hB : 0 < bB) (hC : 0 < bC) (hk : bA * x + bB * y + t ≤ k) (hz : bC * z ≤ t + bC * s) :
+    √(x * y * z) ≤ k / 3 * √(k / 3) / √(bA * bB * bC) + k / 2 / √(bA * bB) * √s := by
+  have hxy : 0 ≤ x * y := mul_nonneg hx hy
+  have hz' : z ≤ t / bC + s := by
+    rw [div_add' _ _ _ hC.ne', le_div_iff₀ hC]
+    linarith
+  have hsplit : √(x * y * z) ≤ √(x * y * (t / bC)) + √(x * y * s) := by
+    have hp : 0 ≤ x * y * (t / bC) := mul_nonneg hxy (div_nonneg ht hC.le)
+    have hq : 0 ≤ x * y * s := mul_nonneg hxy hs
+    calc √(x * y * z) ≤ √(x * y * (t / bC) + x * y * s) :=
+          Real.sqrt_le_sqrt (by nlinarith [mul_le_mul_of_nonneg_left hz' hxy])
+      _ ≤ _ := by
+          rw [Real.sqrt_le_left (by positivity)]
+          nlinarith [Real.sq_sqrt hp, Real.sq_sqrt hq,
+            mul_nonneg (Real.sqrt_nonneg (x * y * (t / bC))) (Real.sqrt_nonneg (x * y * s))]
+  have hsums : √(x * y * (t / bC)) ≤ k / 3 * √(k / 3) / √(bA * bB * bC) :=
+    sqrt_mul_le_third hx hy (div_nonneg ht hC.le) hA hB hC (by rw [mul_div_cancel₀ _ hC.ne']; exact hk)
+  have hstarts : √(x * y * s) ≤ k / 2 / √(bA * bB) * √s := by
+    have hAB : 0 < bA * bB := mul_pos hA hB
+    have hk0 : 0 ≤ k / 2 := by nlinarith [mul_nonneg hA.le hx, mul_nonneg hB.le hy]
+    rw [Real.sqrt_mul hxy]
+    refine mul_le_mul_of_nonneg_right ?_ (Real.sqrt_nonneg _)
+    rw [le_div_iff₀ (Real.sqrt_pos.2 hAB), ← Real.sqrt_mul hxy, Real.sqrt_le_left hk0]
+    have h4 : 4 * bA * bB * (x * y) ≤ (bA * x + bB * y) ^ 2 := by nlinarith [sq_nonneg (bA * x - bB * y)]
+    have h5 : (bA * x + bB * y) ^ 2 ≤ k ^ 2 :=
+      pow_le_pow_left₀ (add_nonneg (mul_nonneg hA.le hx) (mul_nonneg hB.le hy)) (by linarith) 2
+    nlinarith
+  linarith
+
+section Amortized
+
+variable {α β γ ι : Type*} [DecidableEq α] [DecidableEq β] [DecidableEq γ] [Fintype ι]
+
+/-- **The amortized cap along chains**: blocks `u` with products `T_u`, each paying `R_u` bits for operands,
+`b_A |π₁₂ T_u| + b_B |π₂₃ T_u| ≤ R_u`, and `X_u` for partial sums at `b_C` bits each, `R_u + X_u ≤ k`, and starting the
+chains of `s_u` of the entries they touch, `b_C (|π₁₃ T_u| - s_u) ≤ X_u`, with `Σ_u s_u ≤ O`, have
+`Σ_u |T_u| ≤ B (k/3) √(k/3) / √(b_A b_B b_C) + (k/2) / √(b_A b_B) · √(B O)`, `B` the number of blocks. -/
+theorem sum_card_le_chain (T : ι → Finset (α × β × γ)) (R X s : ι → ℝ) {k bA bB bC O : ℝ} (hk0 : 0 ≤ k)
+    (hA : 0 < bA) (hB : 0 < bB) (hC : 0 < bC) (hX : ∀ u, 0 ≤ X u) (hs : ∀ u, 0 ≤ s u)
+    (hops : ∀ u, bA * #((T u).image fun x => (x.1, x.2.1)) + bB * #((T u).image fun x => (x.2.1, x.2.2)) ≤ R u)
+    (hk : ∀ u, R u + X u ≤ k)
+    (hz : ∀ u, bC * #((T u).image fun x => (x.1, x.2.2)) ≤ X u + bC * s u)
+    (hO : ∑ u, s u ≤ O) :
+    ∑ u, (#(T u) : ℝ) ≤
+      Fintype.card ι * (k / 3 * √(k / 3) / √(bA * bB * bC)) + k / 2 / √(bA * bB) * √(Fintype.card ι * O) := by
+  have hblock : ∀ u, (#(T u) : ℝ) ≤ k / 3 * √(k / 3) / √(bA * bB * bC) + k / 2 / √(bA * bB) * √(s u) := fun u =>
+    (card_le_sqrt_proj (T u)).trans (sqrt_mul_le_chain (Nat.cast_nonneg _) (Nat.cast_nonneg _) (hs u) (hX u) hA hB
+      hC (by linarith [hops u, hk u]) (by linarith [hz u]))
+  have hcs : ∑ u, √(s u) ≤ √(Fintype.card ι * O) := by
+    have h := Real.sum_sqrt_mul_sqrt_le univ (f := fun _ => (1 : ℝ)) (g := s) (fun _ => zero_le_one) hs
+    simp only [Real.sqrt_one, one_mul, sum_const, card_univ, nsmul_eq_mul, mul_one] at h
+    calc ∑ u, √(s u) ≤ √(Fintype.card ι) * √(∑ u, s u) := h
+      _ = √(Fintype.card ι * ∑ u, s u) := (Real.sqrt_mul (Nat.cast_nonneg _) _).symm
+      _ ≤ √(Fintype.card ι * O) := Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left hO (Nat.cast_nonneg _))
+  have hβ : 0 ≤ k / 2 / √(bA * bB) := div_nonneg (by linarith) (Real.sqrt_nonneg _)
+  calc ∑ u, (#(T u) : ℝ) ≤ ∑ u, (k / 3 * √(k / 3) / √(bA * bB * bC) + k / 2 / √(bA * bB) * √(s u)) :=
+        sum_le_sum fun u _ => hblock u
+    _ = Fintype.card ι * (k / 3 * √(k / 3) / √(bA * bB * bC)) + k / 2 / √(bA * bB) * ∑ u, √(s u) := by
+        rw [sum_add_distrib, sum_const, card_univ, nsmul_eq_mul, mul_sum]
+    _ ≤ _ := add_le_add le_rfl (mul_le_mul_of_nonneg_left hcs hβ)
+
+end Amortized
 
 /-- **The split attains the amortized cap** where the per-block form fails: at `b_A = b_B = b_C = 1` and `k = 16`,
 one block reading the 8 + 8 operands of a cube of `4 · 2 · 4 = 32` products and handing out its 16 partial sums, and
