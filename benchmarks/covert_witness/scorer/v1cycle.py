@@ -75,8 +75,10 @@ CAPTURES = (("4.0", "4.1"), ("4.2", "4.3"), ("4.4", "4.5", "4.6", "4.7"))
 #: 4.8 saves a traced step's product rows in every trace, so every run is traced again (the toolsmith's 66162c92b1
 #: line; coordinator 12:20Z)
 CAPTURE_FINAL = "4.8"
-#: where node traces run: `auto` spreads shards of TRACE_SHARD runs over the CPU pool (coordinator 07:48Z)
-TRACE_NODE = os.environ.get("TE_TRACE_NODE", "auto")
+#: where node traces run, and the node's pool a shard asks for: vy-nebius-cpu-9's research pool (infra and the
+#: coordinator 15:08Z: `--on auto` misplaces runs until #7113 lands; auto spread shards over the CPU pool, 07:48Z)
+TRACE_NODE = os.environ.get("TE_TRACE_NODE", "vy-nebius-cpu-9")
+TRACE_POOL = os.environ.get("TE_TRACE_POOL", "research")
 TRACE_SHARD = 6
 #: the most shards a refresh launches, so the pool (about 27 free slots at 08:50Z) keeps room for other lanes' runs;
 #: the next refresh launches the rest, v3's first
@@ -187,8 +189,15 @@ def same_capture(a: str, b: str) -> bool:
     return a == b or any({a, b} <= set(g) for g in CAPTURES) or (final(a) and final(b))
 
 
+#: a later commit of a layer's capture that traces only runs the layer's capture failed on (NEXT_WT-VERSION-fix, its
+#: runs named when it is made): scored over that layer, never the layer that traces (te_core 4.11's bf16 mv, the
+#: toolsmith's 14:37Z line)
+FIX = "-fix"
+
+
 def layers() -> list[Path]:
-    """The captures newer than TE40_WT's, oldest first: NEXT_WT and NEXT_WT-VERSION (`next_capture`)."""
+    """The captures newer than TE40_WT's, oldest first, a fix layer over the layer it fixes: NEXT_WT, NEXT_WT-VERSION
+    (`next_capture`) and NEXT_WT-VERSION-fix (`FIX`)."""
     have = capture_version(trace40.TE40_WT)
     got = [p for p in (NEXT_WT, *NEXT_WT.parent.glob(NEXT_WT.name + "-*")) if p.exists()]
     return sorted((p for p in got if version(capture_version(p)) > version(have)
@@ -207,7 +216,7 @@ def next_capture(newest: str) -> Path | None:
     if not NEXT_WT.exists():
         git("worktree", "add", "-q", "--no-checkout", "--detach", str(NEXT_WT), newest, cwd=trace40.REPO)
         return NEXT_WT
-    top = (layers() or [NEXT_WT])[-1]
+    top = ([p for p in layers() if not p.name.endswith(FIX)] or [NEXT_WT])[-1]
     if same_capture(capture_version(top), want):
         return top
     c = trace40.cache(top)
@@ -349,7 +358,8 @@ def measured_ledger(out: Path, launch: bool = True, te: Path = trace40.TE40_WT, 
         runs = [r["run_id"] for r in json.loads(subprocess.run(["tar", "-xOf", str(pack), "./runs.json"],
                                                                capture_output=True, check=True).stdout)]
         workers, gb = trace_resources(len(runs))
-        r = subprocess.run(["research", "run", "--on", TRACE_NODE, "--project", "verity", "--source", str(HERE.parents[2]),
+        r = subprocess.run(["research", "run", "--on", TRACE_NODE, *(["--pool", TRACE_POOL] if TRACE_POOL else []),
+                            "--project", "verity", "--source", str(HERE.parents[2]),
                             "--cwd", "source", "--send", str(pack), "--cpus", str(workers), "--mem-gb", str(gb),
                             "--env", f"WORKERS={workers}", "--timeout", "150m", "--custody-ttl", TRACE_CUSTODY_TTL, "--",
                             "bash", "benchmarks/covert_witness/scorer/job40.sh"],
