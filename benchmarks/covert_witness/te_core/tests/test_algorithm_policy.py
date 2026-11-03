@@ -352,8 +352,8 @@ def test_a_rows_rho_is_published_at_the_dials_default_and_follows_published_to_r
     `published` reads A on two runs: nothing measured on lora's, decoding binding on never's."""
     real, at = formalism.published, []
 
-    def published(m, c, k, reading=None):
-        at.append(k)
+    def published(m, c=None, k=None, reading=None):
+        at.append(AP.CONSOLE[1] if k is None else k)
         one = {8e6: {"rho": None, "binding_kind": "none", "rests_on": "unmeasured"},
                1e6: {"rho": 37.5, "binding_kind": "decoding", "rests_on": formalism.RESTS_ON_CELL["decoding"]}}
         return real(m, c, k, reading) | ({"reading": "A"} | one[m.delta_bits] if m.delta_bits in one else {})

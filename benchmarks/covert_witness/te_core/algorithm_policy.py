@@ -28,8 +28,9 @@ A: `panels.PACKED` and `SPLIT`, u_in through its points at the dial's k (`panels
 form and basis at every cell of te_core.panels' dial (`panels.mismatches`). `estimated` names the inputs that are
 stubs, bounds, assumptions or estimates, and gain:provisional where its data's fit is provisional
 (te_core.frontier_fit's `FIT_TARGET`), which the note names. The dashboard's cells, from `published` at the console's
-default policy (`CONSOLE`; coordinator 08:26Z): `rho_console`, the one bound's ρ there ("inf" where infinite, null
-where reading A measures no kind, coordinator 09:46Z), `reading` (A where formalism.READING_A and the row's token kind
+default policy (`CONSOLE`, te_core.policy's: one full session of the 45M reference, attention included; coordinator
+08:26Z and the dashboard's ruling): `rho_console`, the one bound's ρ there ("inf" where infinite, null where reading A
+measures no kind, never 1; coordinator 09:46Z), `reading` (A where formalism.READING_A and the row's token kind
 is measured, its trace's entries and an op log, else B, whose ρ is Slowdown's token form, a target), `te_core` the
 VERSION that priced it, `binding_kind` and `rests_on`, and `kinds`, a JSON cell of the terms its max takes and the
 sensitivities it leaves out.
@@ -69,7 +70,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-from . import VERSION, console, formalism, frontier_fit, panels, plots, rescore
+from . import VERSION, console, formalism, frontier_fit, panels, plots, policy, rescore
 
 NAME = "algorithm-policy"
 PANEL = f"training/{NAME}"
@@ -86,10 +87,11 @@ SPLIT = ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")
 COLUMNS = ["start", "start_compute_gates", "start_effective_gates", "start_loss", "end_loss", "gain_target", "gain",
            "reached", "C_gates", "H_gates", "p", "rho_default", "basis_default", "method_key", "family", "record", "data",
            "estimated", "rho_inputs", "reading", "te_core", "rho_console", "binding_kind", "rests_on", "kinds"]
-#: the console's default policy, at which `rho_console` is ρ ("inf" where infinite, null where reading A measures no
-#: kind, coordinator 09:46Z): the 45M reference
-#: with 4,096 input and 1,024 output tokens, c = 5,120 × 2 × 45e6 × 740 gates and k = 65,536 bits
-CONSOLE = (5_120 * 2 * 45e6 * 740, 65_536)
+#: the console's default policy, at which `rho_console` is ρ ("inf" where infinite, null where no kind is measured,
+#: coordinator 09:46Z): te_core.policy's
+#: `CONSOLE`, one full session of the 45M reference with 4,096 input and 1,024 output tokens (`policy.session_gates`)
+#: and k = 65,536 bits
+CONSOLE = policy.CONSOLE
 #: the columns the console's copy leaves out (the stored tables keep them), so its rows fit the route's
 #: `console.COLUMNS_MAX` and its finer tiers `console.BODY_MAX`: H is C/p, and what ρ's inputs rest on is the same on
 #: every row of a te_core version
@@ -283,7 +285,7 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
                        r.get("family"), f"{run}@{r.get('checkpoint_step')}", st.data,
                        " ".join(filter(None, (estimated(r["measured"]), "gain:provisional" if f.get("provisional") else "")))]
                 if r["id"] not in consoles:
-                    consoles[r["id"]] = formalism.published(r["measured"], *CONSOLE)
+                    consoles[r["id"]] = formalism.published(r["measured"])
                 one = consoles[r["id"]]
                 cols = {"rho_inputs": rho_inputs(r["measured"], st.w), "reading": one["reading"], "te_core": VERSION,
                         "rho_console": None if one["rho"] is None else "inf" if math.isinf(one["rho"]) else one["rho"],

@@ -1,5 +1,5 @@
-"""te_core.workloads models each covert workload from its dials to the one bound's kinds and rho at the console's three
-policies: workloads.json (the console's tests read it) is the module's output; every row carries each kind's term,
+"""te_core.workloads models each covert workload from its dials to the one bound's kinds and rho at the console's
+policy, the only one rows are reported at: workloads.json (the console's tests read it) is the module's output; every row carries each kind's term,
 their max, the binding kind and its basis (what it rests on is the reference's `rests_on`), and each input's source;
 the token, reduction, update and decoding terms are te_core.formalism.bound's (reading B's token form and decoding,
 reduction and update, sensitivities of its one bound), and the console's dial formula on a point's columns alone gives
@@ -21,7 +21,7 @@ import pytest
 pytest.importorskip("matplotlib")
 
 from te_core import algorithm_policy as AP
-from te_core import formalism, panels
+from te_core import formalism, panels, policy
 from te_core import workloads as W
 from te_core.gates import per_mac
 
@@ -231,8 +231,10 @@ def test_the_island_rows_are_its_panels(ref):
         W.ISLAND_STANDARD, W.ISLAND_DILOCO, W.ISLAND_LORA_ATTN, W.ISLAND_LORA_ALL, W.ISLAND_DISTILL}
     for ck in checks:
         row = rows[ck.record.split("@")[0]]
-        # page_rho on the row's columns gives the island's own rho at the console default, our default policy
-        assert math.isclose(AP.page_rho(ck.columns, *W.CONSOLE)[0], row["rho_console"], rel_tol=1e-5), ck.name
+        # page_rho on the row's columns gives the island's own rho at the dial's default (its rho_console is at the
+        # c its te_core had, until the island republishes)
+        assert math.isclose(AP.page_rho(ck.columns, *AP.default(ck.columns["w_fwd_gates"]))[0], row["rho_default"],
+                            rel_tol=1e-5), ck.name
         assert ck.dials["vocab"] == 32_000 and set(ck.dials) - {"vocab", "student_d_model", "workers"} == set(row["dials"])
         assert ck.differs and ck.record == f"{row['run']}@{row['checkpoint']}"
         got = next(c for w in ref["workloads"].values() for name, c in w["checks"].items() if name == ck.name)
@@ -262,14 +264,14 @@ def test_every_input_says_where_it_comes_from(ref):
     assert all(v.startswith("assumed: ") for v in ref["workloads"]["standard"]["points"]["7B"]["input_status"].values())
 
 
-def test_policies_and_their_attention():
-    assert W.POLICIES["default"] == (5120 * 2 * 45e6 * 740, 65_536.0)
-    c, k = W.POLICIES["default_full"]
-    assert k == 65_536 and round(c / W.POLICIES["default"][0], 2) == 1.57 == round(W.ATTENTION, 2)
-    assert W.POLICIES["served"] == (float(panels.SERVED[0]), float(panels.SERVED[1]))
-    # the console's c holds 1,457.5 training tokens of the 45M reference, which sets Fit's Δ threshold at 42.2 kbit
-    s = W.CONSOLE[0] / W.training(W.dense(W.REFERENCE_PARAMS), "bf16", 1024).w
-    assert 1457 < s < 1458 and 42_100 < W.CONSOLE[1] - s * 16.0156 < 42_300
+def test_the_rows_are_at_the_consoles_policy_only():
+    """The dashboard's ruling: rows are reported at the console's c, one full session of the reference model."""
+    assert W.POLICIES == {"default": policy.CONSOLE} and AP.CONSOLE is policy.CONSOLE
+    assert W.REFERENCE_PARAMS == policy.REFERENCE_PARAMS and W.dense(W.REFERENCE_PARAMS).d_model == pytest.approx(512)
+    # the console's c holds 2,293.9 training tokens of the 45M reference, which sets Fit's Δ threshold at 28.8 kbit
+    c, k = policy.CONSOLE
+    s = c / W.training(W.dense(W.REFERENCE_PARAMS), "bf16", 1024).w
+    assert 2293 < s < 2295 and 28_700 < k - s * 16.0156 < 28_900
 
 
 def test_the_fresh_cap_is_the_amortized_loomis_whitney():
@@ -297,8 +299,8 @@ def test_dense_training_is_fresh_bound_at_its_charged_share(ref):
         unit = c / (W.fresh_cap(k, W.WIDTHS["gemm/bf16"]) * per_mac("gemm/bf16"))
         assert math.isclose(r["terms"]["fresh_products"], unit * r["fresh_charged_share"], rel_tol=1e-9)
         assert 0.9 < r["fresh_charged_share"] < r["fresh_share"] < 0.99
-    # 4.97e6 times the charged share at the console default
-    assert 4.96e6 < W.CONSOLE[0] / (W.fresh_cap(65_536, W.WIDTHS["gemm/bf16"]) * per_mac("gemm/bf16")) < 4.98e6
+    # 7.82e6 times the charged share at the console default
+    assert 7.82e6 < policy.CONSOLE[0] / (W.fresh_cap(65_536, W.WIDTHS["gemm/bf16"]) * per_mac("gemm/bf16")) < 7.83e6
 
 
 def test_the_fresh_kind_counts_products_of_two_fresh_operands():
@@ -329,7 +331,7 @@ def test_a_forward_escapes_where_its_layers_update_and_ids_fit():
     m = W.model("lora", rank=1, targets="q")
     d = m.derived["d_model"]
     (pv,) = [f for f in m.fresh if not f.sequence and f.macs == d * 1024 and f.entries == d]
-    ub = W.update_bits(m.measured, W.CONSOLE[0])
+    ub = W.update_bits(m.measured, policy.CONSOLE[0])
     assert ub == 98_304
     assert pv.lowest == 0 and math.isclose(pv.counted(ub, 65_536)[0] / pv.total, 3 / 5)
 
@@ -338,10 +340,10 @@ def test_the_reduction_kind_is_a_maximum(ref):
     """te_core's reduction and update terms: (c/|C|)·steps·(b − 1)·partial/k and (c/|C|)·steps·γ/k, b a step's
     token blocks; a dense step's partial and cut are 32 N (the update kind no longer counts Δ_t)."""
     m = W.model("standard")
-    c, k = W.CONSOLE
+    c, k = policy.CONSOLE
     (part,) = m.measured.parts
     b = math.ceil(part.token_gates / part.steps / c)
-    assert b == 45 and math.isclose(b, 65_536 * m.derived["w_gates"] / c, rel_tol=0.01)
+    assert b == 29 and math.isclose(b, 65_536 * m.derived["w_gates"] / c, rel_tol=0.02)
     assert part.partial_bits == part.grad_bits == 32 * W.REFERENCE_PARAMS
     terms = rhos(ref, "standard", "default")["default"]["terms"]
     assert math.isclose(terms["reduction"], c / m.measured.gates * part.steps * (b - 1) * part.partial_bits / k,
@@ -359,10 +361,13 @@ def test_diloco_is_standard_training_until_a_phase_fits_a_block(ref):
             assert math.isclose(terms["token"], standard["token"], rel_tol=2e-3)
     corner = rhos(ref, "diloco", "Fit's corner")
     assert corner["default"]["basis"] == "fit" and 1 < corner["default"]["rho"] < 2
-    # the served block can't replay a phase, so no block reads the code and the products are fresh again
-    m = W.model("diloco", inner_steps=2, batch_tokens=256, syncs=32, sync_bits=1024)
-    assert m.measured.decoder_gates > W.POLICIES["served"][0]
-    assert corner["served"]["binding_kind"] == "fresh_products"
+    # its code, 16 syncs of 1,024 bits and a phase's ids, fits beside a block's 2,294 tokens' ids; 32 syncs don't
+    wider = dict(W.WORKLOADS["diloco"].points)["Fit's corner"] | {"syncs": 32}
+    assert W.rho(W.model("diloco", **wider), *policy.CONSOLE)["fit_fails"] == ["compute"]
+    # the served demo's smaller block can't replay a phase, so no block reads the code and the products are fresh again
+    m = W.model("diloco", inner_steps=2, batch_tokens=256, syncs=16, sync_bits=1024)
+    assert m.measured.decoder_gates > panels.SERVED[0]
+    assert W.rho(m, *map(float, panels.SERVED))["binding_kind"] == "fresh_products"
 
 
 def test_a_teacher_lowers_rho_by_the_students_share_and_not_the_blocks(ref):
@@ -383,9 +388,10 @@ def test_rl_bounds_that_count_each_kind_exceed_te_cores(ref):
 
 
 def test_a_lora_whose_update_fits_k_but_not_fits_reduction_clause_is_reduction_bound(ref):
-    served = rhos(ref, "lora", "rank 1 on W_q")["served"]
+    """At the served demo's block (c 3.0e13, k 145,568 bits), outside the rows."""
     m = W.model("lora", rank=1, targets="q")
-    c, k = W.POLICIES["served"]
+    c, k = map(float, panels.SERVED)
+    served = W.rho(m, c, k)
     (part,) = m.measured.parts
     assert m.measured.delta_bits + 16 * 1024 <= k < 2 * part.delta_grad_bits
     assert served["terms"]["fresh_products"] == 0 and served["fit_fails"] == ["reduction", "update"]
