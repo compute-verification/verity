@@ -36,7 +36,7 @@ file's descriptor is `tmpl c`, read at the statement circuit `HmOut.unrolled c`.
 - `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
   (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
 
-On `main`, both composites' sampled-proofs component is `verity/sampled-proofs/v1`, whose one-stage form is one-stage v1
+On `main`, every composite's sampled-proofs component is `verity/sampled-proofs/v1`, whose one-stage form is one-stage v1
 (`verity/sampled-proofs/one-stage/v1`), which takes the sessions' verdicts as evidence: the verifier's run of
 `flock-verify --zk` produces them, and the link from a composite's acceptance to that run, and so to `SampledKSLiveV3`,
 comes with one-stage v2 (under "Where things are").

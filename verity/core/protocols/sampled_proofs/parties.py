@@ -20,7 +20,7 @@ A party does no I/O: what its machine does is a capability it is given (`Identit
   drawn on that challenger's coins, its answer (``verdict``, and its ``commitment``) and its case for the product
   (`COMPOSED`'s, in its one-stage form), or None; ``component(block, name) -> (answer, case) | None``, another listed subprotocol's; and ``product(ids, cases,
   digests) -> {"product", "verdict", "reason"}``, the composite of exactly those subprotocols (`Core.Composites.ofIds`:
-  remote or onsite).
+  remote, remote with the network certifier, or onsite).
 
 A capability that can't do its step raises `Unavailable` with its reason, and the party finishes refused by its step's
 name with that reason recorded (an audit's or a product's is that block's ``error``). Anything else a capability raises
@@ -67,14 +67,14 @@ from verity.core.wire import Body, Hex, Int, Message, Schema, Str
 from .one_stage import registration as R
 
 ID = R.PROTOCOL
-#: sampled proofs as both composites compose it (`VStar.Recursive.Sampled`): `ID`'s audit or the recursive audit, as its
+#: sampled proofs as every composite composes it (`VStar.Recursive.Sampled`): `ID`'s audit or the recursive audit, as its
 #: params' and evidence's ``form`` names it
 COMPOSED = "verity/sampled-proofs/v1"
 VERSION = 1
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
-#: `Core.Remote.components`): each one's PoUW is its period check, onsite's bandwidth the P2 session on PoUS's store,
-#: and both compose sampled proofs as `COMPOSED`
+#: `Core.Remote.components`, `Core.RemoteNetwork.components`): each one's PoUW is its period check, onsite's bandwidth
+#: the P2 session on PoUS's store, and each composes sampled proofs as `COMPOSED`
 SUBPROTOCOLS = {
     "verity/onsite/v0": {"bandwidth": "verity/remote-bandwidth/p2/v0", "certifier": "verity/certifier/v0",
                          "inference-only": "verity/inference-only/v0", "pous": "verity/pous/p2/v4/run",
@@ -82,6 +82,8 @@ SUBPROTOCOLS = {
                          "wipe": "verity/wipe/v0"},
     "verity/remote/v0": {"inference-only": "verity/inference-only/v0", "pouw": "verity/pouw/period/v1",
                          "sampled-proofs": COMPOSED},
+    "verity/remote-network/v0": {"certifier": "verity/certifier/v0", "inference-only": "verity/inference-only/v0",
+                                 "pouw": "verity/pouw/period/v1", "sampled-proofs": COMPOSED},
 }
 #: a configuration's subprotocol names and the protocol id each has outside a composite
 IDS = {"bandwidth": "verity/remote-bandwidth/v0", "certifier": "verity/certifier/v0",
