@@ -81,7 +81,10 @@ most that. The kinds:
   capture_step or capture_fn, at the k it classifies them at). io_bound's cap has the chain order's constant (its
   premise P-chain) and the tree order's is the one where the trace doesn't give the order, so the term is measured
   only on products the capture says are summed in a chain; unmeasured, with io_bound's chain figure in `inputs`,
-  elsewhere, and on a record with no product rows (a recorded program's);
+  elsewhere, and on a record with no product rows (a recorded program's). A record with an op log and no captured
+  products (every ledger row traced so far) has its log's product rows (`products_of_ops`: dims, widths, θ or
+  attention's where the log's class says so), but a log doesn't keep whether an operand is fresh (`LOG_UNKNOWN`), so
+  the term is unmeasured there with the share of MACs whose freshness is unknown;
 - token: A1's cap on a block's affected token work under reading A (below), A1's values from a witness family with
   matrix-product and weight-gradient tiles; unmeasured (never ∞) for a record without an op log or entries;
 - decoding: a block reading the update code runs the whole decoder, so it holds at most c − d affected gates: the
@@ -605,6 +608,40 @@ ORDERS = ("chain", "tree")
 #: why the fresh-products kind is unmeasured on a record with no product rows
 FRESH_UNMEASURED = ("unmeasured: no product rows (te_core.io_bound reads a step captured by capture_step or capture_fn, "
                     "and a recorded program's has none)")
+#: an op log's class (te_core.tiles' ops: a macs_log's role, or a traced step's weight class) as what it says of a
+#: product: its non-token operand is θ (the product is never fresh), or it is attention's, which io_bound doesn't count
+LOG_KIND = {"theta": "theta", "registered": "theta"}
+#: what an op log doesn't keep, which decides whether a product's operands are fresh (`products_of_ops`): a weight
+#: decoded from a code or merged from a low-rank update, or an activation read from an embedding's rows, is passed
+#: below its op's dtype, and the log's updated class says only that an operand depends on the run's state
+LOG_UNKNOWN = ("the record's capture keeps each product's dims, its op's dtype and its op log's class, not its "
+               "operands' θ′-dependence or the widths and rates they're passed at (P-width's dataflow side, which "
+               "te_core.io_bound.rows_of reads from a step captured by capture_step or capture_fn)")
+
+
+def products_of_ops(ops: list[dict]) -> dict:
+    """A record's matrix products from its op log (te_core.tiles' ops: a ledger row's macs_log by `tiles.of_log`, or a
+    traced step's by `tiles.of_graph`), for a capture that keeps no step `io_bound.rows_of` reads: each product
+    (b, m, K, n) of an op tiles places, its MACs and output entries, its operands' widths as the log gives them and
+    its partial sums' (`io_bound.ACC_BITS`), and its kind where the log decides it (`LOG_KIND`: θ where its non-token
+    operand is θ, attention for a scaled-dot-product op), else unknown (`LOG_UNKNOWN`). The order is unknown: a log
+    keeps a matmul as one op. No product is counted (`products` is empty): a log never says both operands are fresh."""
+    rows = []
+    for op in ops:
+        if not op["products"]:
+            continue
+        total = sum(math.prod(p) for p in op["products"])
+        name = op["op"].removesuffix("_backward")
+        kind = "attention" if name in tiles.SDPA else LOG_KIND.get(op["class"], "unknown")
+        for b, m, K, n in op["products"]:
+            macs = op["macs"] * b * m * K * n / total
+            rows.append({"phase": op["phase"], "class": op["class"], "op": op["op"], "dims": [b, m, K, n],
+                         "macs": macs, "outputs": macs / K, "widths": op["widths"], "b_c": io_bound.ACC_BITS,
+                         "gates_per_mac": op["gates"] / op["macs"], "kind": kind})
+    macs = {kind: sum(r["macs"] for r in rows if r["kind"] == kind) for kind in ("theta", "attention", "unknown")}
+    total = sum(macs.values())
+    return {"k": None, "order": "unknown", "source": "op log", "products": [], "rows": rows, "macs": macs,
+            "unknown_share": macs["unknown"] / total if total else 0.0}
 
 
 def products_of(segments, k: float | None = None, gemm_dtype: str | None = "bfloat16", order: str | None = None) -> dict:
@@ -630,8 +667,16 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
     products (`Measured.products`) and the record's |C|; its reason where unmeasured (None: measured); and what it read.
     The products are io_bound's at the k `rows_of` classified them at, and its cap's constant is the chain's (its
     premise P-chain), so a term at another k, or for products summed in a tree or in an order the trace doesn't give,
-    is unmeasured, with io_bound's chain figure in what it read."""
+    is unmeasured, with io_bound's chain figure in what it read. A record with an op log and no captured products has
+    its log's (`products_of_ops`), none of which a log can count, so the term is unmeasured with what the log leaves
+    unknown."""
     p = m.products
+    if p is None and m.ops is not None:
+        p = products_of_ops(m.ops)
+        got = {"source": p["source"], "order": p["order"], "rows": len(p["rows"]), "macs": p["macs"],
+               "unknown_share": p["unknown_share"]}
+        return None, (f"unmeasured: {LOG_UNKNOWN}; {p['unknown_share']:.0%} of its products' MACs have operands of "
+                      f"unknown freshness (the rest a θ operand or attention's), and the order is unknown"), got
     if p is None:
         return None, FRESH_UNMEASURED, {}
     order = p.get("order")
@@ -767,25 +812,24 @@ def at(m: Measured, c: float, k: float, reading: str | None = None, kinds: tuple
 
 
 #: what a published ρ rests on, by its binding kind, short (a console cell on every row; `RESTS_ON` has each kind's in
-#: full): Fit's c/(c − d), a kind of the one bound, reading B's token form (a target, not a bound), `none` where Fit
-#: fails and no measured kind exceeds 1, or `unmeasured` (binding `none`, ρ None) where none is measured
+#: full): Fit's c/(c − d), a kind of the one bound (the measured kind its max takes, also where ρ is max(1, ·)'s 1),
+#: reading B's token form (a target, not a bound), or `unmeasured` (binding `none`, ρ None) where Fit fails and no
+#: kind is measured
 RESTS_ON_CELL = {
     "fit": "Fit's construction",
     "fresh_products": "theorem for this circuit (Loomis-Whitney, chain order)",
     "token": "A1 (reading A), its family: runs and tiles",
     "decoding": "assumption (D), with A1 (reading A)",
     "target": "target: A1 at reading B, not a bound",
-    "none": "no measured kind > 1",
     "unmeasured": "unmeasured",
 }
 #: the sensitivities a published ρ carries beside it (the coordinator's 08:28Z: reduction and update), on every console
 #: row, so the others (`SENSITIVITIES`) stay in `bound`
 CELL_SENSITIVITIES = ("reduction", "update")
-#: whether a row whose token kind is measured (its trace's `entries` and an op log) publishes reading A: not until the
-#: bound's fresh-products kind is measured too (coordinator 09:02Z: reading B "until te_core 4.5 lands, with
-#: matrix-product tiles in the packer and the fresh-products kind wired in"), since until then a reading-A row
-#: publishes 1 wherever its weak token term is at most 1 (the algorithm-policy builder's 10:47Z SMELL)
-READING_A = False
+#: whether a row whose token kind is measured (its trace's `entries` and an op log) publishes reading A: it does, at
+#: max(1, the measured terms) with its binding kind, the kinds cell naming fresh products unmeasured (the dashboard's
+#: 'partial'), and null only where no kind is measured (the coordinator's 11:18Z RULING on the builder's 10:47Z SMELL)
+READING_A = True
 
 
 def published(m: Measured, c: float | None = None, k: float | None = None, reading: str | None = None) -> dict:
@@ -793,8 +837,9 @@ def published(m: Measured, c: float | None = None, k: float | None = None, readi
     reference model) (coordinator 08:26Z), `at`'s: under reading A (`reading`, else where `READING_A` and
     the row's token kind is measured), Fit's c/(c − d) where it holds, else max(1, the one bound's max over `KINDS`),
     and None (binding none, resting on `unmeasured`) where no kind is measured, never 1, which would read as no
-    slowdown (coordinator 09:46Z); under reading B Slowdown's token form, a target. Beside it the binding kind (fit, a
-    kind, target, or none), what it rests on (`RESTS_ON_CELL`), the terms its max takes (None: unmeasured; under
+    slowdown (coordinator 09:46Z); under reading B Slowdown's token form, a target. Beside it the binding kind (fit,
+    the measured kind the max takes, also where ρ is the 1 of max(1, ·) (coordinator 11:18Z), target, or none where
+    no kind is measured), what it rests on (`RESTS_ON_CELL`), the terms its max takes (None: unmeasured; under
     reading B the token form) and the bound's `CELL_SENSITIVITIES`."""
     if (c is None) != (k is None):
         raise ValueError("published: give both c and k, or neither for the console's policy")
@@ -813,7 +858,7 @@ def published(m: Measured, c: float | None = None, k: float | None = None, readi
     elif reading == "B":
         binding = "target"
     else:
-        binding = b["binding"] if b["max"] is not None and b["max"] > 1 else "none"
+        binding = b["binding"] or "none"
     terms = dict(b["terms"]) if reading == "A" else {"token_form": v["slowdown"]}
     return {"reading": reading, "label": f"te_core {VERSION}, reading {reading}", "rho": v["rho"],
             "binding_kind": binding, "rests_on": RESTS_ON_CELL["unmeasured" if v["rho"] is None else binding],

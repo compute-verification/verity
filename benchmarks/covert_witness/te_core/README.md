@@ -72,14 +72,16 @@ other quantity bits.
   token form): the counting lemma over the kinds of block work that are lower bounds on their own, ρ ≥ max over the
   kinds (fresh products, token, decoding) of each kind's share of |C| over its cap a block. It returns each kind's
   term (None, with the reason, where unmeasured), the max, the kind it binds on and what each kind rests on: fresh
-  products a theorem for the run's circuit (Loomis-Whitney: `io_bound`'s bound on the products `formalism.products_of`
-  takes from captured steps, measured where the capture says they're summed in a chain, since `io_bound` has the
-  chain constant only and the tree constant applies where the trace doesn't give the order), token A1 under reading A
-  with its witness family, decoding assumption (D). Where Fit fails ρ is max(1, that
-  max). Gradient reduction, update application, reading B's token form and the per-gate token term come out beside it
-  as labelled sensitivities, never in the max: (R) and (U) hold only for partitions split by tokens, and per_gate only
-  for blocks that are no union of witnesses. `rho_vectors.json` holds its
-  test vectors, which the console's rho.ts runs (null unmeasured, "inf" ∞).
+  products Loomis-Whitney's cap (a theorem under `io_bound`'s premises, P-width among them, an assumption on a
+  reference circuit: `io_bound`'s bound on the products `formalism.products_of` takes from captured steps, measured
+  where the capture says they're summed in a chain, since `io_bound` has the chain constant only and the tree
+  constant applies where the trace doesn't give the order; a record with only an op log, every ledger row so far, has
+  its log's product rows, `formalism.products_of_ops`, but no operand's freshness, so the term is unmeasured there
+  with the share of MACs it leaves unknown), token A1 under reading A with its witness family, decoding assumption
+  (D). Where Fit fails ρ is max(1, that max). Gradient reduction, update application, reading B's token form and the
+  per-gate token term come out beside it as labelled sensitivities, never in the max: (R) and (U) hold only for
+  partitions split by tokens, and per_gate only for blocks that are no union of witnesses. `rho_vectors.json` holds
+  its test vectors, which the console's rho.ts runs (null unmeasured, "inf" ∞).
 - **Reading A** (A1's approved reading): a block reads at least the update bits its work reads, once, plus
   each token's computed state where its work on the token begins, the context it reads and doesn't compute included.
   A1's values are the least reads of the default packer's witness family: the runs of one traced token's path in
@@ -256,7 +258,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share (torch-free) |
 | `gates.py` | each counted op's price in Boolean gates from the circuits' Definitions (`DEFINITIONS`, `PRICES`, `kind_of`, `of_log`) |
 | `policy.py` | a start's reference shapes (inference block, reference policy, server block), the (c, k) grid in decades, and `cells`, both by key; the console's policy (`CONSOLE`), one full session of the 45M reference in gates (`session_gates`, `session`: the matrices, the LM head and attention's score and value products over the session's context, at the shape `SHAPES` states for each size), which every producer reads |
-| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it, and the one bound over the kinds that are lower bounds on their own under reading A, its sensitivities beside it (`bound`, `packer`, `per_gate`, `fresh_products`, `KINDS`, `RESTS_ON`, `SENSITIVITIES`), the fresh-products kind's inputs from captured steps (`products_of`, `ORDERS`) and the console's ρ on it (`published`, at `policy.CONSOLE` by default, `RESTS_ON_CELL`, `CELL_SENSITIVITIES`, `READING_A`); `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
+| `formalism.py` | the formalism's per-record quantities, Fit and Slowdown's ρ at (c, k) with the attack side beside it, and the one bound over the kinds that are lower bounds on their own under reading A, its sensitivities beside it (`bound`, `packer`, `per_gate`, `fresh_products`, `KINDS`, `RESTS_ON`, `SENSITIVITIES`), the fresh-products kind's inputs from captured steps (`products_of`, `ORDERS`), and an op log's product rows, which can't tell a fresh operand (`products_of_ops`, `LOG_KIND`, `LOG_UNKNOWN`), and the console's ρ on it (`published`, at `policy.CONSOLE` by default, `RESTS_ON_CELL`, `CELL_SENSITIVITIES`, `READING_A`); `of_record` (ingest's), `of_trace` (a traced step's), `measure` (with labelled stubs, assumptions and upper bounds), the profiles `even`, `tail` and `with_tail` (u, u_in) and their cap at Δ, `capped`; `fit_k` |
 | `plots.py` | the five panels (P1-P4 of the experiments draft and the A2 curve), from the ledger, each `<name>.json` and its PNG |
 | `console.py` | each panel cut to the panels route's limits (64 KiB, a 500-character note, 4,096-character cells, 24 columns; `refused`), one panel's PUT and the panels the route serves (`served`) |
 | `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
