@@ -18,7 +18,7 @@ What the guarantees (`Nci.Products.Guarantees`) read of the product (`Standard`)
   those of its computation that no other operand's computation reads (the increment an updated weight adds, the entry of
   an earlier product an activation applies its function to).
 
-Two premises, facts of the given circuit:
+Three premises, facts of the given circuit:
 
 * **The standard algorithm** (`Standard.Algorithm`): the MACs are nonempty, pairwise disjoint and connected sets of
   computed gates (a set holding some of a MAC's gates but not all has a read across it); each MAC reads every bit of
@@ -30,7 +30,12 @@ Two premises, facts of the given circuit:
   holds that many of `C_ij`'s final bits. The first charges an operand through reads of its cone, the same whether the
   block reads the operand or computes it itself. An operand or a partial sum passed narrower stays outside, as does an
   operand some inference block gets for fewer reads of its cone than its width: one in `θ`, which costs nothing to read,
-  or one computed from registered values.
+  one computed from registered values, or one it computes whole from values outside the cone, such as an activation
+  whose earlier product's chain the block runs itself, reading that product's operands.
+* **Chains** (`Standard.Chained`), at `b_C`: each entry's partial sum runs along its MACs in the order of `l`, MAC
+  `(i, l, j)` after the first reading at least `b_C` gates of MAC `(i, l - 1, j)`. A product whose partial sums run in
+  another order is the same product with `l` renumbered; one whose entries are sums of several chains (split-K) stays
+  outside.
 
 `outBits` is the bits of `C`'s final values `Σ_ij |out_ij|`, `handed C G I` the gates of `G` in `I` that a gate of `G`
 outside `I` reads, and `Unsplit P` the word level, a partition `P` that splits no MAC. `capAt k b_A b_B b_C μ` is the
@@ -84,6 +89,12 @@ def outBits : ℕ := ∑ p : Fin ni × Fin nj, (S.out p.1 p.2).card
 
 /-- **The word level**: the partition `P` splits no MAC, each lying in one of its blocks. -/
 def Unsplit {m : ℕ} (P : Partition d.D m) : Prop := ∀ i l j, ∃ u, S.mac i l j ⊆ P.gates u
+
+/-- **Chains** at `b_C`, a fact of the given circuit: each entry's partial sum runs along its MACs in the order of `l`,
+MAC `(i, l, j)` after the first reading at least `b_C` gates of MAC `(i, l - 1, j)`. -/
+def Chained (bC : ℕ) : Prop :=
+  ∀ i (l l' : Fin nl) j, l'.val + 1 = l.val →
+    bC ≤ ((S.mac i l' j).filter fun h => ∃ g ∈ S.mac i l j, h ∈ d.D.reads g).card
 
 /-- **The standard algorithm**, a fact of the given circuit: the MACs are nonempty, pairwise disjoint and connected sets
 of computed gates; each reads every bit of both its operands; the cones are pairwise disjoint and disjoint from the

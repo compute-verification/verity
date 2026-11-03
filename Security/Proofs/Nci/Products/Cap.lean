@@ -18,8 +18,12 @@ the amortized cap (`Verity.Combinatorics.sum_card_le`) reads, with `T_u` the pro
    read across the split is a read of a MAC's gate.
 
 `Cap` takes the cap at the weight `s = 1` on the MACs' reads, which pays for the splits; `WordCap` has no splits and
-takes it at `s = 0` and `μ*`. `Bound` divides `Cap` by `|C| / c` at each partition. The `example` at the end gives the
-one slowdown (`Nci.Formalism.Guarantees.Slowdown`) the products kind as a kind `J`, its `Λ_J` the products kind's bound.
+takes it at `s = 0` and `μ*`. `ChainCap` replaces fact 3 with its per-block form along chains (`chain_sums`):
+`b_C |π₁₃ T_u| ≤ |U_u ∩ macs| + b_C s_u`, `s_u` the entries whose first MAC is in `I_u` (`starts`). An entry `I_u`
+touches but doesn't start has a first MAC in `I_u` whose predecessor lies in another block, and the `b_C` gates of the
+predecessor it reads are reads of `I_u` (`le_card_entry`); each first MAC lies in one block, `Σ_u s_u ≤ ni nj`
+(`sum_card_starts_le`). `Bound` divides `Cap` by `|C| / c` at each partition. The `example` at the end gives the one
+slowdown (`Nci.Formalism.Guarantees.Slowdown`) the products kind as a kind `J`, its `Λ_J` the products kind's bound.
 -/
 
 namespace Nci.Products
@@ -284,6 +288,93 @@ theorem card_le_whole {m : ℕ} (P : Partition d.D m) (h : S.Unsplit P) :
         obtain ⟨u, hu⟩ := h p.1 p.2.1 p.2.2
         exact card_pos.2 ⟨u, mem_filter.2 ⟨mem_univ _, hu⟩⟩
 
+/-- The entries whose chain starts in `I`, their first MAC in `I`. -/
+def starts (I : Finset (Fin d.D.N)) : Finset (Fin ni × Fin nj) :=
+  univ.filter fun e => ∃ l : Fin nl, l.val = 0 ∧ S.mac e.1 l e.2 ⊆ I
+
+/-- **Each chain starts once**: `Σ_u s_u ≤ ni nj`, an entry's first MAC lying in at most one block. -/
+theorem sum_card_starts_le (hS : S.Algorithm) {m : ℕ} (P : Partition d.D m) :
+    ∑ u, (S.starts (P.gates u)).card ≤ ni * nj := by
+  have h1 : ∀ e : Fin ni × Fin nj, (univ.filter fun u => e ∈ S.starts (P.gates u)).card ≤ 1 := by
+    intro e
+    refine card_le_one.2 fun u hu v hv => ?_
+    simp only [starts, mem_filter, mem_univ, true_and] at hu hv
+    obtain ⟨l, hl, hlu⟩ := hu
+    obtain ⟨l', hl', hlv⟩ := hv
+    obtain rfl : l = l' := Fin.ext (hl.trans hl'.symm)
+    obtain ⟨g, hg⟩ := hS.mac_nonempty e.1 l e.2
+    exact eq_of_mem_gates P (hlu hg) (hlv hg)
+  calc ∑ u, (S.starts (P.gates u)).card
+      = ∑ e : Fin ni × Fin nj, (univ.filter fun u => e ∈ S.starts (P.gates u)).card := by
+        simp only [starts, card_filter, mem_filter, mem_univ, true_and]
+        exact sum_comm
+    _ ≤ ∑ _e : Fin ni × Fin nj, 1 := sum_le_sum fun e _ => h1 e
+    _ = ni * nj := by rw [sum_const, card_univ, Fintype.card_prod, Fintype.card_fin, Fintype.card_fin, smul_eq_mul,
+        mul_one]
+
+/-- **A chain read into a block**: a block that holds a MAC of `C_ij` and doesn't start its chain reads `b_C` of
+`C_ij`'s gates, the partial sum of the MAC before the first one it holds. -/
+theorem le_card_entry (hS : S.Algorithm) {bC : ℕ} (hch : S.Chained bC) {m : ℕ} {P : Partition d.D m}
+    (hP : S.Unsplit P) (u : Fin m) (e : Fin ni × Fin nj) (he : ∃ l, S.mac e.1 l e.2 ⊆ P.gates u)
+    (hs : e ∉ S.starts (P.gates u)) : bC ≤ (d.unregistered (P.gates u) ∩ S.entry e.1 e.2).card := by
+  have hne : (univ.filter fun l : Fin nl => S.mac e.1 l e.2 ⊆ P.gates u).Nonempty := by
+    obtain ⟨l, hl⟩ := he
+    exact ⟨l, mem_filter.2 ⟨mem_univ _, hl⟩⟩
+  obtain ⟨l₁, hl₁m, hl₁⟩ : ∃ l₁, l₁ ∈ (univ.filter fun l : Fin nl => S.mac e.1 l e.2 ⊆ P.gates u) ∧
+      ∀ l ∈ (univ.filter fun l : Fin nl => S.mac e.1 l e.2 ⊆ P.gates u), l₁ ≤ l :=
+    ⟨_, min'_mem _ hne, fun l hl => min'_le _ l hl⟩
+  have hl₁u : S.mac e.1 l₁ e.2 ⊆ P.gates u := (mem_filter.1 hl₁m).2
+  have h0 : l₁.val ≠ 0 := fun h0 => hs (mem_filter.2 ⟨mem_univ _, l₁, h0, hl₁u⟩)
+  have hlt : l₁.val - 1 < nl := by omega
+  have hnot : ¬ S.mac e.1 ⟨l₁.val - 1, hlt⟩ e.2 ⊆ P.gates u := fun h => by
+    have : l₁.val ≤ l₁.val - 1 := Fin.le_def.1 (hl₁ _ (mem_filter.2 ⟨mem_univ _, h⟩))
+    omega
+  obtain ⟨v, hv⟩ := hP e.1 ⟨l₁.val - 1, hlt⟩ e.2
+  refine (hch e.1 l₁ ⟨l₁.val - 1, hlt⟩ e.2 (Nat.sub_add_cancel (Nat.one_le_iff_ne_zero.2 h0))).trans
+    (card_le_card fun h hh => ?_)
+  obtain ⟨hh', g, hg, hr⟩ := mem_filter.1 hh
+  have hhu : h ∉ P.gates u := fun hhu => hnot (by
+    rw [eq_of_mem_gates P hhu (hv hh')]
+    exact hv)
+  exact mem_inter.2 ⟨mem_unregistered (hl₁u hg) hhu hr (hS.mac_computed _ _ _ hh'),
+    mem_biUnion.2 ⟨_, mem_univ _, hh'⟩⟩
+
+/-- **Partial sums along chains**: `b_C |π₁₃ T_u| ≤ |U_u ∩ macs| + b_C s_u`, each entry a block touches starting its
+chain there or reading a partial sum. -/
+theorem chain_sums (hS : S.Algorithm) {bC : ℕ} (hch : S.Chained bC) {m : ℕ} {P : Partition d.D m}
+    (hP : S.Unsplit P) (u : Fin m) :
+    bC * ((S.whole (P.gates u)).image fun x => (x.1, x.2.2)).card ≤
+      (d.unregistered (P.gates u) ∩ S.macs).card + bC * (S.starts (P.gates u)).card := by
+  have hZ : ((S.whole (P.gates u)).image fun x => (x.1, x.2.2)).card ≤ (S.starts (P.gates u)).card +
+      (((S.whole (P.gates u)).image fun x => (x.1, x.2.2)).filter fun e => e ∉ S.starts (P.gates u)).card := by
+    rw [← card_filter_add_card_filter_not (s := (S.whole (P.gates u)).image fun x => (x.1, x.2.2))
+      (fun e => e ∈ S.starts (P.gates u))]
+    exact add_le_add (card_le_card fun e he => (mem_filter.1 he).2) le_rfl
+  have hread : bC * (((S.whole (P.gates u)).image fun x => (x.1, x.2.2)).filter
+      fun e => e ∉ S.starts (P.gates u)).card ≤ (d.unregistered (P.gates u) ∩ S.macs).card := by
+    calc bC * (((S.whole (P.gates u)).image fun x => (x.1, x.2.2)).filter fun e => e ∉ S.starts (P.gates u)).card
+        = ∑ _e ∈ ((S.whole (P.gates u)).image fun x => (x.1, x.2.2)).filter
+            (fun e => e ∉ S.starts (P.gates u)), bC := by rw [sum_const, smul_eq_mul, mul_comm]
+      _ ≤ ∑ e ∈ ((S.whole (P.gates u)).image fun x => (x.1, x.2.2)).filter (fun e => e ∉ S.starts (P.gates u)),
+            (d.unregistered (P.gates u) ∩ S.entry e.1 e.2).card := by
+          refine sum_le_sum fun e he => ?_
+          obtain ⟨hez, hes⟩ := mem_filter.1 he
+          obtain ⟨⟨i, l, j⟩, hx, rfl⟩ := mem_image.1 hez
+          exact S.le_card_entry hS hch hP u (i, j) ⟨l, (mem_filter.1 hx).2⟩ hes
+      _ ≤ ∑ e : Fin ni × Fin nj, (d.unregistered (P.gates u) ∩ S.entry e.1 e.2).card :=
+          sum_le_sum_of_subset (subset_univ _)
+      _ ≤ _ := S.sum_card_entry_le hS _
+  calc bC * ((S.whole (P.gates u)).image fun x => (x.1, x.2.2)).card
+      ≤ bC * ((S.starts (P.gates u)).card +
+          (((S.whole (P.gates u)).image fun x => (x.1, x.2.2)).filter fun e => e ∉ S.starts (P.gates u)).card) :=
+        Nat.mul_le_mul_left _ hZ
+    _ = bC * (S.starts (P.gates u)).card +
+          bC * (((S.whole (P.gates u)).image fun x => (x.1, x.2.2)).filter fun e => e ∉ S.starts (P.gates u)).card :=
+        mul_add _ _ _
+    _ ≤ _ := by
+        rw [add_comm]
+        exact add_le_add hread le_rfl
+
 /-- There are at most `|C|` products: their MACs are disjoint nonempty sets of computed gates. -/
 theorem card_le_computed (hS : S.Algorithm) : ni * nl * nj ≤ d.D.computed.card := by
   calc ni * nl * nj = ∑ _p : Fin ni × Fin nl × Fin nj, 1 := by
@@ -329,6 +420,23 @@ theorem WordCap : Guarantees.WordCap := by
     (fun u => by exact_mod_cast S.mul_card_le_cones hS hW (inferenceBlock_gates hP u))
     (fun u => by exact_mod_cast S.card_add_card_le hS (inferenceBlock_gates hP u))
     (by exact_mod_cast S.partial_sums hS hW hP)
+  rw [Fintype.card_fin] at key
+  have hN : ((ni * nl * nj : ℕ) : ℝ) ≤ ∑ u, ((S.whole (P.gates u)).card : ℝ) := by
+    exact_mod_cast S.card_le_whole P hwhole
+  exact hN.trans key
+
+theorem ChainCap : Guarantees.ChainCap := by
+  intro d ni nl nj S c k bA bB bC m P hS hW hch hP hwhole hA hB hC
+  have key := Verity.Combinatorics.sum_card_le_chain (fun u => S.whole (P.gates u))
+    (fun u => ((d.unregistered (P.gates u) ∩ S.cones).card : ℝ))
+    (fun u => ((d.unregistered (P.gates u) ∩ S.macs).card : ℝ)) (fun u => ((S.starts (P.gates u)).card : ℝ))
+    (k := k) (bA := bA) (bB := bB) (bC := bC) (O := ((ni * nj : ℕ) : ℝ)) (Nat.cast_nonneg _)
+    (by exact_mod_cast hA) (by exact_mod_cast hB) (by exact_mod_cast hC) (fun _ => Nat.cast_nonneg _)
+    (fun _ => Nat.cast_nonneg _)
+    (fun u => by exact_mod_cast S.mul_card_le_cones hS hW (inferenceBlock_gates hP u))
+    (fun u => by exact_mod_cast S.card_add_card_le hS (inferenceBlock_gates hP u))
+    (fun u => by exact_mod_cast S.chain_sums hS hch hwhole u)
+    (by exact_mod_cast S.sum_card_starts_le hS P)
   rw [Fintype.card_fin] at key
   have hN : ((ni * nl * nj : ℕ) : ℝ) ≤ ∑ u, ((S.whole (P.gates u)).card : ℝ) := by
     exact_mod_cast S.card_le_whole P hwhole
