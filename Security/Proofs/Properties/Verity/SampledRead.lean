@@ -425,70 +425,28 @@ theorem chunks_flatten : ∀ (m : ℕ) (ξ : ByteArray), ξ.size = COIN_BYTES * 
 
 /-! ## v2's case in what the prover sent -/
 
-theorem find?_nodup {β : Type} {f : β → String} : ∀ {l : List β} {y : β}, (l.map f).Nodup → y ∈ l →
-    l.find? (fun x => f x == f y) = some y
-  | z :: l, y, hnd, hy => by
-    rw [List.map_cons, List.nodup_cons] at hnd
-    rcases List.mem_cons.1 hy with rfl | hy'
-    · simp
-    · have hne : f z ≠ f y := fun e => hnd.1 (e ▸ List.mem_map_of_mem hy')
-      rw [List.find?_cons, show (f z == f y) = false by simpa using hne]
-      exact find?_nodup hnd.2 hy'
-
-universe u v w
-
-theorem ids_of_zip {α : Type u} {β : Type v} {γ : Type w} {fa : α → String} {fb : β → String} {fc : γ → String}
-    {cs : List α} :
-    ∀ {ps : List β} {ev : List γ}, ps.map fb = cs.map fa → ev.map fc = cs.map fa →
-      ∀ {x}, x ∈ cs.zip (ps.zip ev) → fb x.2.1 = fa x.1 ∧ fc x.2.2 = fa x.1 := by
-  induction cs with
-  | nil => intro ps ev _ _ x hx; simp at hx
-  | cons c cs ih =>
-    intro ps ev hp he x hx
-    cases ps with
-    | nil => simp at hp
-    | cons p ps =>
-      cases ev with
-      | nil => simp at he
-      | cons e ev =>
-        simp only [List.map_cons, List.cons.injEq] at hp he
-        rw [List.zip_cons_cons, List.zip_cons_cons, List.mem_cons] at hx
-        rcases hx with rfl | hx
-        · exact ⟨hp.1, he.1⟩
-        · exact ih hp.2 he.2 hx
-
-/-- Composite `k`'s components on the blobs sent have distinct ids. -/
-theorem components_nodup (k : Verity.Registration.Composite) (s : Verity.Sent) :
-    ((s.components k).map (·.id)).Nodup := by
-  have e : (s.components k).map (·.id) = (Verity.componentsOf k).map (·.id) := by
-    unfold Verity.Sent.components
-    rw [List.map_map]
-    rfl
-  rw [e]
-  cases k <;> decide
-
 theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
 
 /-- **The case `caseOf` finds is the one v2 accepted**, in a composition composite `k` accepted. -/
 theorem caseOf_of {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
     {ev : _root_.SampledProofs.OneStageZk.Evidence} (hS : Verity.SameAccepts k s) (hcase : V2Case k s a b e)
-    (hp : (Core.canonicalJson a >>= _root_.SampledProofs.OneStageZk.paramsOfJson) = .ok p)
+    (hp : (Core.canonicalJson a >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p))
     (hc : _root_.SampledProofs.OneStage.commitmentOf b = .ok c)
-    (hev : _root_.SampledProofs.OneStageZk.evidenceOf e = .ok ev) : caseOf s = .ok (p, c, ev) := by
+    (hev : VStar.Recursive.Sampled.evidenceOf e = .ok (.inl ev)) : caseOf s = .ok (p, c, ev) := by
   obtain ⟨ps, c₀, evs, ⟨hps, -, hevs⟩, x, hx, hx1, rfl, rfl, rfl⟩ := hcase
   obtain ⟨ps', c₀', evs', ⟨hps', -, hevs'⟩, pub, prof, ⟨⟨⟨hfp, hfe, -, -⟩, -⟩, -⟩, -⟩ := hS
   rw [Except.ok.inj (hps'.symm.trans hps)] at hfp
   rw [Except.ok.inj (hevs'.symm.trans hevs)] at hfe
-  have hid : x.1.id = _root_.SampledProofs.OneStageZk.PROTOCOL := (congrArg (·.id) hx1).trans rfl
+  have hid : x.1.id = VStar.Recursive.Sampled.PROTOCOL := (congrArg (·.id) hx1).trans rfl
   obtain ⟨hpid, heid⟩ := ids_of_zip hfp hfe hx
   have hpid' : x.2.1.id = x.1.id := hpid
   have heid' : x.2.2.id = x.1.id := heid
   have hm := List.of_mem_zip (List.of_mem_zip hx).2
-  have h1 : ps.find? (·.id == _root_.SampledProofs.OneStageZk.PROTOCOL) = some x.2.1 := by
+  have h1 : ps.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) = some x.2.1 := by
     rw [← hid, ← hpid']
     exact find?_nodup (by rw [hfp]; exact components_nodup k s) hm.1
-  have h2 : evs.find? (·.id == _root_.SampledProofs.OneStageZk.PROTOCOL) = some x.2.2 := by
+  have h2 : evs.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) = some x.2.2 := by
     rw [← hid, ← heid']
     exact find?_nodup (by rw [hfe]; exact components_nodup k s) hm.2
   simp only [caseOf, hps, ok_bind, h1, hevs, h2, hp, hc, hev]
@@ -563,34 +521,14 @@ theorem drawRead_coinsRead (k : Verity.Registration.Composite) (h : ReadsLog k) 
 
 /-! ## The session's law -/
 
-theorem eq_of_ids {β : Type} {f : β → String} {l : List β} {x y : β} (hnd : (l.map f).Nodup) (hx : x ∈ l)
-    (hy : y ∈ l) (h : f x = f y) : x = y := by
-  have h1 := find?_nodup hnd hx
-  have h2 := find?_nodup hnd hy
-  rw [h] at h1
-  exact Option.some.inj (h1.symm.trans h2)
-
 /-- **v2's parameters in the parameters sent are the ones its case accepted**, in a composition composite `k`
 accepted. -/
 theorem paramsAt_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
     {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
     (hcase : V2Case k s a b e) (hacc : V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr)
-    {p' : _root_.SampledProofs.OneStageZk.Params} (h : ParamsAt s.params p') : p' = p := by
-  obtain ⟨ps, c₀, evs, ⟨hps, -, hevs⟩, x, hx, hx1, rfl, rfl, rfl⟩ := hcase
-  obtain ⟨hp, -⟩ := hacc
-  obtain ⟨ps', c₀', evs', ⟨hps', -, hevs'⟩, pub, prof, ⟨⟨⟨hfp, hfe, -, -⟩, -⟩, -⟩, -⟩ := hS
-  rw [Except.ok.inj (hps'.symm.trans hps)] at hfp
-  rw [Except.ok.inj (hevs'.symm.trans hevs)] at hfe
-  obtain ⟨ps'', hps'', y, hy, hyid, hyp⟩ := h
-  rw [Except.ok.inj (hps''.symm.trans hps)] at hy
-  have hid : x.1.id = _root_.SampledProofs.OneStageZk.PROTOCOL := (congrArg (·.id) hx1).trans rfl
-  have hpid : x.2.1.id = x.1.id := (ids_of_zip hfp hfe hx).1
-  have hxy : y = x.2.1 :=
-    eq_of_ids (by rw [hfp]; exact components_nodup k s) hy (List.of_mem_zip (List.of_mem_zip hx).2).1
-      (hyid.trans (hid.symm.trans hpid.symm))
-  rw [hxy] at hyp
-  exact Except.ok.inj (hyp.symm.trans hp)
+    {p' : _root_.SampledProofs.OneStageZk.Params} (h : ParamsAt s.params p') : p' = p :=
+  (Sum.inl.inj (params_of_case hS hcase hacc.1 h)).symm
 
 /-- The law `lawAt` reads at the population `LawOf` names is the law `LawOf` names. -/
 theorem lawAt_of_lawOf {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
@@ -618,20 +556,21 @@ theorem law_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A
 off `SetsUp` on the play's parameters. -/
 theorem coupled_draw_setsUp {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
-    (hA : SetsUp V θ F A) (hR : DrawRead k (V.coinsRead .sampled)) (hk : ReadsV2 k) {o : Verity.Exchange}
+    (hA : SetsUp V θ F A) (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
     (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) :
     ∃ dr L n ξ units, Drew k o.sent dr L n ξ units ∧
       ∀ ω : A.Ω × (K.coins A θ F c σ).T, A.n = n →
         (freshCoins dr.label dr.after o.log).flatten <+:
           bitsOf (_root_.Properties.SampledProofs.bytesOf (A.src ω.1 0)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
-  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw K A θ F c σ hR hk hv hl
+  obtain ⟨p₀, hp₀, -⟩ := hA.params
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw K A θ F c σ hR (by rw [hθ]; exact hp₀) hv hl
   exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (law_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
 
 /-- `coupled_draw_coins` at the session v2 sets up. -/
 theorem coupled_draw_coins_setsUp {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
     (A : Live) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
-    (hA : SetsUp V θ F A) (hR : DrawRead k (V.coinsRead .sampled)) (hk : ReadsV2 k) {o : Verity.Exchange}
+    (hA : SetsUp V θ F A) (hR : DrawRead k (V.coinsRead .sampled)) {o : Verity.Exchange}
     (hθ : o.params = θ) (hv : V.Verdict k .sampled o) (hl : V.Logged .sampled o) {m B : ℕ}
     (κ : A.Ω → Fin m → Fin (8 * B) → Bool)
     (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
@@ -640,7 +579,8 @@ theorem coupled_draw_coins_setsUp {V : Vocab d α} {k : Verity.Registration.Comp
       ∀ ω : A.Ω × (K.coins A θ F c σ).T, A.n = n →
         freshCoins dr.label dr.after o.log <+: (List.ofFn fun j => List.ofFn (κ ω.1 j)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
-  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_coins K A θ F c σ hR hk hv hl κ hsrc
+  obtain ⟨p₀, hp₀, -⟩ := hA.params
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_coins K A θ F c σ hR (by rw [hθ]; exact hp₀) hv hl κ hsrc
   exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (law_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
 
 end Verity.Sampled
