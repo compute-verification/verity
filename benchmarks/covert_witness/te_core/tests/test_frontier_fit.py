@@ -12,7 +12,7 @@ import pytest
 pytest.importorskip("matplotlib")
 
 from te_core import algorithm_policy as AP
-from te_core import console, frontier, panels, plots, rescore
+from te_core import VERSION, console, formalism, frontier, panels, plots, rescore
 from te_core import frontier_fit as FF
 from te_core.gates import per_mac
 from test_algorithm_policy import C0, LAW, RATE, SCRATCH, SHAPE2, V3_SHAPE, args, law, ledger_rows
@@ -220,7 +220,8 @@ def test_a_data_with_no_scored_start_has_no_fit(tmp_path, monkeypatch):
 
 def test_the_source_fits_the_route_its_pins_at_7_characters_where_12_dont(tmp_path, monkeypatch):
     """The panels route answers 400 to a source over 300 characters, as it did at 09:30Z to the scorer's eight pins
-    beside the ladder's manifest: each command's source names its pins at 12 characters where that fits, else at 7."""
+    beside the ladder's manifest: the panels' source, the code's name in words and its version, names its pins at 12
+    characters where that fits, else at 7."""
     tree = tmp_path / "ladder"
     tree.mkdir()
     (tree / FF.LADDER_FILE).write_text(json.dumps({"schema": "te-ladder/F/v1",
@@ -232,7 +233,7 @@ def test_the_source_fits_the_route_its_pins_at_7_characters_where_12_dont(tmp_pa
     for n, width in ((8, 12), (9, 12), (12, 7)):
         d = {"pin": [f"{i:x}" * 40 for i in range(n)], "quantities": "measured, t literal",
              "refused": dict.fromkeys(map(str, range(3956)))}
-        for command in ("te_core.frontier_fit", "te_core.algorithm_policy"):
-            source = FF.inputs(a, [{}] * 2958, {}, d, command)[2]
-            assert len(source) <= console.SOURCE_MAX and f"; pin {'0' * width} + {'1' * width} + " in source
-            assert source.endswith("; 3956 refused; 5 ladder points (art:bbbbbbbbbbbb))")
+        source = FF.inputs(a, [{}] * 2958, {}, d)[2]
+        assert len(source) <= console.SOURCE_MAX
+        assert source.startswith(f"{formalism.THE_CODE} {VERSION} (pin {'0' * width} + {'1' * width} + ")
+        assert source.endswith("; 3956 refused; 5 ladder points (art:bbbbbbbbbbbb))")

@@ -499,8 +499,9 @@ def test_rho_served_is_a_whole_number_labelled_else_null_with_why_never_inf(monk
     reason = formalism.bound(m, *panels.SERVED)["unmeasured"]["fresh_products"]
     assert "classified at k = 65536" in reason and there["terms"]["fresh_products"] is None
     rho, why = AP.served_rho(m, one)
-    assert (rho, why) == (None, {"why": f"partial: at least {AP.num(there['rho'], AP.DIGITS)} ({there['binding_kind']}"
-                                        "), a kind unmeasured", "unmeasured": {"fresh_products": reason}})
+    assert (rho, why) == (None, {"why": f"partial: at least {AP.num(there['rho'], AP.DIGITS)} "
+                                        f"({there['binding_kind'].replace('_', ' ')}), a kind unmeasured",
+                                 "unmeasured": {"fresh_products": reason}})
     assert json.loads(AP.kinds(one, at_served=why))["served"] == why
     at = classified(float(panels.SERVED[1]))
     there = formalism.published(at, *panels.SERVED)
@@ -958,7 +959,7 @@ def test_a_version_switch_never_empties_a_populated_panel():
     no row for (coordinator 07:58Z); the same te_core's are replaced, and an older one's where this build has every
     run, though its coverage fills fewer cells (every rho 1 here; coordinator 11:51Z).
     A data with no served rows takes this build's. A panel from before the te_core cell is at the version its source
-    names."""
+    names, beside te_core's name or, from 4.12.8, the code's name in words."""
     p = AP.build(info(runs=RUNS + DOMINATED), "test")
     mine = tuple(map(int, AP.VERSION.split(".")))
     newer, older = f"{mine[0] + 1}.0", f"{mine[0] - 1}.9"
@@ -974,20 +975,22 @@ def test_a_version_switch_never_empties_a_populated_panel():
     assert AP.kept_data(p, served_as(sparse, newer)) == ["v2.3-pilot"]
     assert AP.kept_data(sparse, served_as(p, older)) == ["v2.3-pilot"]
     assert AP.kept_data(p, served_as(sparse, older)) == AP.kept_data(p, served_as(p, older)) == []
-    legacy = served_as(p, None, source=f"python -m te_core.algorithm_policy (te_core {older}; pin x)")
-    assert AP.version_of(legacy, "v2.3-pilot") == tuple(map(int, older.split("."))) and not AP.version_of(legacy, "v3")
-    assert AP.kept_data(sparse, legacy) == ["v2.3-pilot"]
+    before = f"python -m te_core.algorithm_policy (te_core {older}; pin x)"
+    for source in (before, f"{formalism.THE_CODE} {older} (pin x; 3 valid checkpoints)"):
+        legacy = served_as(p, None, source=source)
+        assert AP.version_of(legacy, "v2.3-pilot") == tuple(map(int, older.split(".")))
+        assert not AP.version_of(legacy, "v3") and AP.kept_data(sparse, legacy) == ["v2.3-pilot"]
     fp = {"id": FF.PANEL, "columns": ["row", "data", "E_bpb"], "rows": [["fit", "v3", 1.0], ["fit", "v2.3-pilot", 0.9]]}
     fit = fp | {"rows": [["fit", "v2.3-pilot", 0.8]]}
     served = {AP.PANEL: served_as(sparse, newer), FF.PANEL: fit}
     v3 = [r[:AP.COLUMNS.index("data")] + ["v3"] + r[AP.COLUMNS.index("data") + 1:] for r in p["rows"][:2]]
     pub, fpub, held = AP.guarded(p | {"rows": v3 + p["rows"]}, fp, served)
-    assert held == f"v2.3-pilot (te_core {newer})"
+    assert held == f"v2.3-pilot ({formalism.THE_CODE} {newer})"
     assert pub["rows"][:2] == v3 and pub["rows"][2:] == [[d.get(c) for c in AP.COLUMNS]
                                                          for d in plots.frame(served_as(sparse, newer))]
     assert fpub["rows"] == [["fit", "v3", 1.0], ["fit", "v2.3-pilot", 0.8]]
     assert AP.guarded(p, fp, {AP.PANEL: served_as(p, AP.VERSION)}) == (p, fp, "")
-    assert AP.cut(pub, "art:x", held)["note"].endswith(f" Kept as served: v2.3-pilot (te_core {newer}). Tables art:x.")
+    assert AP.cut(pub, "art:x", held)["note"].endswith(f" Kept as served: {held}. Tables art:x.")
 
 
 def test_publish_puts_nothing_without_the_routes_panels_and_keeps_what_a_newer_te_core_serves(tmp_path, monkeypatch,
@@ -1014,10 +1017,10 @@ def test_publish_puts_nothing_without_the_routes_panels_and_keeps_what_a_newer_t
     code, got = run(tmp_path / "kept", monkeypatch, "--publish")
     assert code == 0 and [q["id"] for q in sent] == [FF.PANEL, AP.PANEL] and len(stored) == 1
     assert sent[1]["rows"] == ap["rows"] and got["console"] == json.loads(console.body(sent[1]))
-    assert f" Kept as served: v2.3-pilot (te_core {newer}). Tables art:" in sent[1]["note"]
+    assert f" Kept as served: v2.3-pilot ({formalism.THE_CODE} {newer}). Tables art:" in sent[1]["note"]
     assert len(got["panel"]["rows"]) == len(dry["panel"]["rows"])
     board = next(x for x in capsys.readouterr().out.splitlines() if x.startswith("board: "))
-    assert board.endswith(f" Kept as served: v2.3-pilot (te_core {newer}).")
+    assert board.endswith(f" Kept as served: v2.3-pilot ({formalism.THE_CODE} {newer}).")
 
 
 def test_without_ladder_points_v3_reads_the_manifests_and_a_fit_on_four_from_scratch_is_provisional(tmp_path,
@@ -1049,7 +1052,7 @@ def test_without_ladder_points_v3_reads_the_manifests_and_a_fit_on_four_from_scr
     assert fits["v3"]["status"].startswith("provisional fit: 4 of its points from scratch, under 5; ")
     assert fits["v2.3-pilot"]["status"].startswith("fit; ")
     assert fp["source"].endswith(f"; 5 ladder points ({FF.LADDER[:16]}))")
-    assert p["source"] == fp["source"].replace("te_core.frontier_fit", "te_core.algorithm_policy", 1)
+    assert p["source"] == fp["source"]
     assert fp["note"].startswith(FF.note() + " ") and len(fp["note"]) <= console.NOTE_MAX
     f, gates = fitted(fp, "v3"), per_mac("gemm/bf16")
     assert f["E"] == pytest.approx(1.2, abs=1e-3)
@@ -1082,12 +1085,12 @@ def test_the_rows_te_core_refuses_are_listed_and_counted_never_scored(tmp_path, 
     assert not {d["record"].split("@")[0] for d in plots.frame(got["panel"])} & set(traced)
     assert not {c.get("record", "").split("@")[0] for c in got["coverage"]} & set(traced)
     kinds = "2 data-dependent, 1 read-backs unchecked"
-    assert f"3 valid checkpoints are refused by te_core.formalism, never scored, so in no cell ({kinds}; " in \
+    assert f"3 valid checkpoints are refused by {formalism.THE_CODE}, never scored, so in no cell ({kinds}; " in \
         (got["out"] / "tables" / "coverage.md").read_text()
     assert "; 3 refused; " in got["panel"]["source"] and "; 3 refused; " in got["fit"]["source"]
     out = capsys.readouterr().out
     assert f"3 valid checkpoints refused, never scored: {kinds}" in out
-    assert f" 3 valid checkpoints refused by te_core.formalism, never scored ({kinds})." in \
+    assert f" 3 valid checkpoints refused by {formalism.THE_CODE}, never scored ({kinds})." in \
         next(x for x in out.splitlines() if x.startswith("board: "))
 
 
@@ -1103,3 +1106,45 @@ def test_a_record_its_columns_cant_reproduce_is_refused():
     plain = formalism.from_json(block(C0, 1e6, 3e6, None, 0.3))
     assert AP.build({"starts": [FF.Start("s1", SHAPE, "v2.3-pilot", [r | {"measured": plain}], RATE)],
                      "fits": {"v2.3-pilot": LAW}}, "test")["rows"]
+
+
+def test_every_string_the_panels_and_their_coverage_publish_is_plain_words(tmp_path, monkeypatch, capsys):
+    """Every string either panel publishes is plain words, as formalism's are (its code-name check), since the
+    dashboard prints them on a reader's page: both console copies' title, source and note (each clause of it), the fit
+    rows' status, each row's rests_on and the kinds cell's words (formalism's reasons, the void mark and why rho_served
+    is null, its kind in words), and the coverage's table and board line. The code is formalism's `THE_CODE` beside
+    its version; the panels' own column names, but for te_core, and the fit's C_eff are the page's."""
+    from test_formalism import CODE_NAME, SQUARE, one_segment
+
+    code, got = run(tmp_path, monkeypatch)
+    board = next(x for x in capsys.readouterr().out.splitlines() if x.startswith("board: "))
+    fit = json.loads((got["out"] / "console" / f"{FF.NAME}.json").read_text())
+    assert code == 0 and {q["source"].split(" (pin ")[0] for q in (got["console"], fit)} == {
+        f"{formalism.THE_CODE} {AP.VERSION}"}
+
+    def words(x) -> list[str]:
+        if isinstance(x, dict):
+            return [s for k, v in x.items() if k != "binding_kind" for s in words(v)]
+        return [x] if isinstance(x, str) else []
+
+    strings = [s for q in (got["console"], fit) for s in (q["title"], q["source"], q["note"])]
+    strings += [d["status"] for d in plots.frame(fit) if d["status"]]
+    for d in plots.frame(got["console"]):
+        strings += [d["rests_on"], *words(json.loads(d["kinds"]))]
+    m = dataclasses.replace(one_segment(), products={"k": AP.CONSOLE[1], "order": "chain", "products": [SQUARE]})
+    one = formalism.published(m)
+    served = [AP.served_rho(m, one)[1]]
+    for stand_in in ({"rho": math.inf}, {"rho": None, "why": None}, {"rho": 2.0, "partial": True}):
+        it = {"reading": "B", "binding_kind": "fresh_products"} | stand_in
+        monkeypatch.setattr(formalism, "published", lambda *_, s=it: s)
+        served.append(AP.served_rho(m, one)[1])
+    assert "unmeasured" in served[0] and [s["why"] for s in served[1:]] == [
+        "infinite (fresh products)", "unmeasured: fresh products", "partial: at least 2 (fresh products), a kind "
+        "unmeasured"]
+    strings += [s for x in served for s in words(x)] + list(AP.VOIDED.values())
+    strings += [AP.note("art:" + "a" * 64, "family", f"v2.3-pilot ({formalism.THE_CODE} 4.12.2)", ("v3",)),
+                AP.served_line({"rows": 3, "lost:fresh_products": 1, "partial": 1, "infinite": 1}),
+                (got["out"] / "tables" / "coverage.md").read_text(), board]
+    page = set(AP.COLUMNS) - {"te_core"} | set(FF.COLUMNS) | {"C_eff"}
+    named = {s: x for s in strings if (x := [n for n in CODE_NAME.findall(s) if n not in page])}
+    assert not named, named

@@ -49,7 +49,9 @@ is measured, its trace's entries and an op log, else B, whose ρ is Slowdown's t
 VERSION that priced it, `binding_kind` and `rests_on`, and `kinds`, a JSON cell of the terms its max takes and the
 sensitivities it leaves out, with a measured fresh-products term's premises beside it (`PREMISED`) and, where
 that term is its best subset's, the products it dropped (`fresh_subset`, te_core 4.10), or `void` where that term is
-a void's 0 (`VOIDED`), and `served`, rho_served's binding kind and what it rests on, or why it is null.
+a void's 0 (`VOIDED`), and `served`, rho_served's binding kind and what it rests on, or why it is null. Every string
+either panel publishes, and the coverage's sentences, are plain words, as formalism's are: the code is
+`formalism.THE_CODE`, its version beside it, and a kind is named in words.
 
 The coverage (`coverage`) is, per gain target, data and decade of ρ (`DECADES`: from 1, 10, ... and 1e5 and above,
 an infinite ρ there, and an unmeasured one, one resting on a stub input (basis `stub`) or a partial or void one
@@ -163,7 +165,7 @@ PARTIAL = "partial"
 #: and marked, in no decade, picked by the cut among the void rows alone, and never the least S
 VOID = "void"
 #: the kinds cell's `void` mark: the kind whose term is a void's 0, and why that 0 is no result
-VOIDED = {"fresh_products": "0 from a void Lambda (a chain making an operand whole past io_bound's r = 1/4): no result"}
+VOIDED = {"fresh_products": "0 from a void Lambda (a chain making an operand whole too short, r past 1/4): no result"}
 #: the bases whose ρ is only a lower bound, each with the marker the figure adds (a caret up, a cross); never the least S
 LOWER = {PARTIAL: 6, VOID: "x"}
 #: the kinds whose measured term the kinds cell labels with what it rests on (te_core.formalism's `RESTS_ON_CELL`),
@@ -185,16 +187,17 @@ def served_rho(m: formalism.Measured, default: dict) -> tuple[float | None, dict
     """rho_served and the kinds cell's `served`: te_core.formalism's `published` at the registered serving block
     (te_core.panels' `SERVED`) where it is a whole number (measured, finite and not partial), labelled with its binding
     kind and what it rests on; else null, never inf (coordinator 15:29Z), with why: published's reason where
-    unmeasured, the lower bound where partial, or that it is infinite, and under reading A te_core.formalism's reason
-    (`bound`'s) for each kind the console's default (`default`, `published` there) measures and the serving block
-    doesn't, such as a fresh-products term whose products were classified at the default's k alone."""
+    unmeasured, the lower bound where partial, or that it is infinite, the kind in words, and under reading A
+    te_core.formalism's reason (`bound`'s) for each kind the console's default (`default`, `published` there) measures
+    and the serving block doesn't, such as a fresh-products term whose products were classified at the default's k
+    alone."""
     one = formalism.published(m, *panels.SERVED)
     rho = one["rho"]
     if rho is not None and math.isfinite(rho) and not one.get("partial"):
         return rho, {"binding_kind": one["binding_kind"], "rests_on": one["rests_on"]}
-    why = (f"unmeasured: {one.get('why') or one['binding_kind']}" if rho is None else
-           f"infinite ({one['binding_kind']})" if math.isinf(rho) else
-           f"partial: at least {num(rho, DIGITS)} ({one['binding_kind']}), a kind unmeasured")
+    kind = one["binding_kind"].replace("_", " ")
+    why = (f"unmeasured: {one.get('why') or kind}" if rho is None else f"infinite ({kind})" if math.isinf(rho) else
+           f"partial: at least {num(rho, DIGITS)} ({kind}), a kind unmeasured")
     b = formalism.bound(m, *panels.SERVED) if one["reading"] == "A" else None
     lost = {kind: b["unmeasured"].get(kind, "unmeasured") for kind in b["kinds"]
             if b["terms"][kind] is None and default["terms"].get(kind) is not None} if b else {}
@@ -447,7 +450,7 @@ def note(art: str | None = None, tier: str | None = None, kept: str = "", provis
         out = (f"Per run, start and g = {', '.join(f'{g:g}' for g in GAINS)} (gain C(L)/C(l0), training/frontier-fit): "
                "yes at the first checkpoint reaching g, else no at the last. p = C/H, H the start's least C to g (a "
                "lower bound if no). rho_default = rho_console (console default); rho_served (registered serving "
-               "block)." + (" Dial: rho_inputs (u_in exact at its k)." if dial else ""))
+               "block)." + (" Dial: rho_inputs (exact at the dial's k)." if dial else ""))
         if provisional:
             out += f" {', '.join(provisional)}: provisional fit."
         if tier:
@@ -459,7 +462,7 @@ def note(art: str | None = None, tier: str | None = None, kept: str = "", provis
             out += f" Tables {art}."
         return out
 
-    bare = re.sub(r" \(te_core [\d.]+\)", "", kept)
+    bare = re.sub(rf" \({re.escape(formalism.THE_CODE)} [\d.]+\)", "", kept)
     return next((t for t in (text(kept, True), text(bare, True)) if len(t) <= console.NOTE_MAX), text(bare, False))
 
 
@@ -579,7 +582,7 @@ def served_line(nulls: dict[str, int], short: bool = False) -> str:
             if nulls.get(k)]
     return (f"rho_served is null on {nulls['rows']} {'row' if nulls['rows'] == 1 else 'rows'}, never inf: "
             + ", ".join(lost + rest)
-            + ("." if short else " (each row's kinds cell, served, gives te_core.formalism's reason)."))
+            + ("." if short else " (each row's kinds cell, under served, gives the reason)."))
 
 
 def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str] | None = None,
@@ -604,8 +607,8 @@ def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str]
                   "attempts."]
     lines += [x for x in (served_text(cov), served_line(served or {})) if x]
     if refused:
-        lines.append(f"{len(refused)} valid checkpoints are refused by te_core.formalism, never scored, so in no cell "
-                     f"({frontier_fit.refusals(refused)}; refused.json has each one's reason).")
+        lines.append(f"{len(refused)} valid checkpoints are refused by {formalism.THE_CODE}, never scored, so in no "
+                     f"cell ({frontier_fit.refusals(refused)}; refused.json has each one's reason).")
     if stubs:
         lines.append(f"{stubs} {'row rests' if stubs == 1 else 'rows rest'} on a stub input (basis_default {STUB}), "
                      "in no decade.")
@@ -638,7 +641,7 @@ def board_line(cov: list[dict], fits: dict, stamp: str, art: str | None, refused
             f"1e3, 1e4, 1e5+): the least-p reached row, else the failed attempt with the greatest gain, else {EMPTY}. "
             + "; ".join(parts) + f". {n} of {len(cov)} cells {EMPTY}."
             + "".join(f" {x}" for x in (served_text(cov), served_line(served or {}, short=True)) if x)
-            + (f" {len(refused)} valid checkpoints refused by te_core.formalism, never scored "
+            + (f" {len(refused)} valid checkpoints refused by {formalism.THE_CODE}, never scored "
                f"({frontier_fit.refusals(refused)})." if refused else "")
             + (f" {stubs} {'row rests' if stubs == 1 else 'rows rest'} on a stub, in no decade." if stubs else "")
             + (f" {partial} {'row' if partial == 1 else 'rows'} partial (rho a lower bound), in no decade."
@@ -722,12 +725,14 @@ def cut(p: dict, art: str | None = None, served: str = "") -> dict:
 
 def version_of(p: dict, data: str) -> tuple[int, ...] | None:
     """The te_core version a panel's rows on `data` are priced at: their `te_core` cell, else the one the panel's source
-    names (a panel from before the cell); None without rows on `data`."""
+    names (a panel from before the cell), as the code's name in words or, before 4.12.8, as te_core; None without rows
+    on `data`."""
     ds = [d for d in plots.frame(p) if d.get("data") == data]
     if not ds:
         return None
     v = next((str(d["te_core"]) for d in ds if d.get("te_core")), None)
-    v = v or next(iter(re.findall(r"te_core (\d+(?:\.\d+)*)", p.get("source") or "")), None)
+    v = v or next(iter(re.findall(rf"(?:te_core|{re.escape(formalism.THE_CODE)}) (\d+(?:\.\d+)*)",
+                                  p.get("source") or "")), None)
     return tuple(int(x) for x in v.split(".")) if v else None
 
 
@@ -770,7 +775,7 @@ def guarded(p: dict, fp: dict, served: dict[str, dict]) -> tuple[dict, dict, str
         return p, fp, ""
     fit = served.get(frontier_fit.PANEL)
     return (merged(p, ap, keep), merged(fp, fit, keep) if fit else fp,
-            ", ".join(f"{d} (te_core {'.'.join(map(str, version_of(ap, d)))})" for d in keep))
+            ", ".join(f"{d} ({formalism.THE_CODE} {'.'.join(map(str, version_of(ap, d)))})" for d in keep))
 
 
 def store(path: Path, meta: dict) -> str:
@@ -922,10 +927,8 @@ def main(argv=None) -> int:
                          f"{console.PANELS_URL}/{PANEL}")
     a = ap.parse_args(argv)
     d, scored = frontier_fit.scored_rows(a)
-    me = f"te_core.{NAME.replace('-', '_')}"
-    runs, extra, source = frontier_fit.inputs(a, scored, d["shapes"], d, me)
-    fp, info = frontier_fit.build(scored, d["shapes"], runs, a.source or source.replace(me, "te_core.frontier_fit", 1),
-                                  extra, gains=GAINS)
+    runs, extra, source = frontier_fit.inputs(a, scored, d["shapes"], d)
+    fp, info = frontier_fit.build(scored, d["shapes"], runs, source, extra, gains=GAINS)
     p = build(info, source, fp["updated_at"])
     own = coverage(p)
     tables = a.out / "tables"
@@ -950,8 +953,8 @@ def main(argv=None) -> int:
     nulls = served_nulls(pub)
     md = coverage_md(cov, info["fits"], p["updated_at"], d["refused"], unmeasured_rows(pub), unmeasured_rows(pub, STUB),
                      unmeasured_rows(pub, PARTIAL), unmeasured_rows(pub, VOID), nulls)
-    art = store(tables, {"what": f"{PANEL} uncut, its coverage and {frontier_fit.PANEL} (te_core.algorithm_policy)",
-                         "rows": len(p["rows"]), "source": source}) if a.publish else None
+    art = store(tables, {"what": f"{PANEL} uncut, its coverage and {frontier_fit.PANEL}", "rows": len(p["rows"]),
+                         "source": source}) if a.publish else None
     q = cut(pub, art, held)
     (a.out / "console" / f"{NAME}.json").write_bytes(console.body(q))
     (a.out / "console" / f"{frontier_fit.NAME}.json").write_bytes(console.body(fpub))
