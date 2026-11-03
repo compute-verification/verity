@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import subprocess
 import tomllib
 from pathlib import Path
 
@@ -64,27 +63,6 @@ def test_a_dropped_root_keeps_its_imports_reachable(tmp_path):
     assert M.keep_reachable(m, tmp_path, ren, dropped, False) == ["Proofs.A imports Proofs.A.Only"]
     assert (proofs / "A.lean").read_text().startswith("import Proofs.A.Used\nimport Proofs.A.Only\n\n")
     assert M.keep_reachable(m, tmp_path, ren, dropped, False) == []
-
-
-def test_a_module_s_header_is_read_past_module_and_its_imports_keep_their_form(tmp_path):
-    text = ("-- c\nmodule\n\npublic import Proofs.A.Used\nmeta import Proofs.A.Tac\nimport all Proofs.A.Open\n\n"
-            "@[expose] public section\n")
-    assert M.header_imports(text) == ([(3, "public import ", ["Proofs.A.Used"]), (4, "meta import ", ["Proofs.A.Tac"]),
-                                       (5, "import all ", ["Proofs.A.Open"])], 7)
-    m = M.Map(TOY, tmp_path)
-    proofs = tmp_path / "sec" / "Proofs"
-    (proofs / "A").mkdir(parents=True)
-    (proofs / "A.lean").write_text("module\n\npublic import Proofs.A.Used\n\n@[expose] public section\n")
-    for n in ("Used", "Only"):
-        (proofs / "A" / f"{n}.lean").write_text("module\n")
-    dropped = {"A": ["A.SecurityProofs", "A.SecurityProofs.Only", "A.SecurityProofs.Used"]}
-    ren = {"A.SecurityProofs": "Proofs.A", "A.SecurityProofs.Used": "Proofs.A.Used", "A.SecurityProofs.Only": "Proofs.A.Only"}
-    assert M.keep_reachable(m, tmp_path, ren, dropped, False) == ["Proofs.A imports Proofs.A.Only"]
-    assert (proofs / "A.lean").read_text().startswith("module\n\npublic import Proofs.A.Used\npublic import Proofs.A.Only\n\n")
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
-    assert M.rewrite_imports(tmp_path, {"Proofs.A.Used": "Proofs.A.Kept"}, {}, False) == 1
-    assert (proofs / "A.lean").read_text().startswith("module\n\npublic import Proofs.A.Kept\npublic import Proofs.A.Only\n\n")
 
 
 def test_the_merged_locks_are_laid_out_as_the_audit_writes_them(tmp_path):

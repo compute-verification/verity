@@ -43,7 +43,7 @@ PKG_FILES = ("lakefile.toml", "lake-manifest.json", "lean-toolchain", POLICY, ".
 GRADER_ESCAPE = ("@[extern] opaque: Lean's resident-memory limit (`lean -M`, the runtime's lean_internal_set_max_memory), "
                  "which the grader sets from POUS_GRADE_MEMORY_MB before elaborating a submission; no proof is about it")
 AREAS = ("Core", "Nci", "Pous", "Pouw", "Warden", "Flock")
-IMPORT = re.compile(r"^(\s*(?:public\s+|private\s+|meta\s+)*import\s+(?:all\s+)?)(.*)$")
+IMPORT = re.compile(r"^(\s*(?:public\s+|private\s+|meta\s+)*import\s+)(.*)$")
 
 
 def git(root: Path, *args: str) -> str:
@@ -111,7 +111,7 @@ def header_imports(text: str) -> tuple[list[tuple[int, str, list[str]]], int]:
         if depth:
             depth += s.count("/-") - s.count("-/")
             continue
-        if not s or s.startswith("--") or s in ("module", "prelude"):
+        if not s or s.startswith("--"):
             continue
         if s.startswith("/-"):
             depth = s.count("/-") - s.count("-/")
@@ -297,7 +297,7 @@ def keep_reachable(m: Map, root: Path, ren: dict, dropped: dict, dry: bool) -> l
             text = path(top).read_text()
             imps, _ = header_imports(text)
             lines = text.split("\n")
-            lines.insert(imps[-1][0] + 1 if imps else 0, f"{imps[-1][1].replace('all ', '') if imps else 'import '}{x}")
+            lines.insert(imps[-1][0] + 1 if imps else 0, f"import {x}")
             if not dry:
                 path(top).write_text("\n".join(lines))
             added.append(f"{top} imports {x}")
@@ -382,7 +382,6 @@ defaultTargets = ["Definitions", "Specs"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
-backward.proofsInPublic = true
 
 [[require]]
 name = "mathlib"
@@ -405,7 +404,6 @@ defaultTargets = ["Proofs"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
-backward.proofsInPublic = true
 
 [[require]]
 name = "Arklib"
@@ -431,7 +429,6 @@ defaultTargets = ["flock-verify", "flock-rows"]
 
 [leanOptions]
 autoImplicit = false
-backward.proofsInPublic = true
 
 [[lean_lib]]
 name = "Flock"
@@ -452,7 +449,6 @@ defaultTargets = ["Grader", "pous-grader"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
-backward.proofsInPublic = true
 
 [[lean_lib]]
 name = "Grader"
