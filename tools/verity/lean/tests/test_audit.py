@@ -1751,8 +1751,8 @@ def test_a_verifier_read_only_in_an_excepted_module_holds_its_statement_to_witne
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_renamed_unwitnessed_guarantee_passes_under_moved_and_its_entry_is_re_keyed(tmp_path):
     """On a real build: a guarantee `unwitnessed` lists, renamed with the statement it is (`Control.doubled :
-    Guarantees.Doubled` to `Control.twofold : Guarantees.Twofold`, as #6969 renames the remote audit's `Component`), says
-    the same, but its type hash reads names. Under `--update --moved` its entry, at the hash of its text under the old
+    Guarantees.Doubled` to `Control.twofold : Guarantees.Twofold`, as a namespace rename renames both), says the same,
+    but its type hash reads names. Under `--update --moved` its entry, at the hash of its text under the old
     names, passes, and the lock lists it under the new name at the hash as built, which passes without `--moved`. The
     unit test hands the rule a moved hash; this one checks that `Facts.lean`'s is the one the record and its entry hold."""
     pkg, build, audit, lock = excepted_toy(tmp_path, "Control.Verify", VERIFY, DOUBLED, "Control.doubled")
