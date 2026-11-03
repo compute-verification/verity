@@ -57,6 +57,13 @@ def test_what_is_kept_stands():
     assert s("the prover gateway", "tools/check/x.py") == "the firewall"
 
 
+def test_a_name_in_all_follows_what_it_exports_where_a_quoted_key_stands():
+    words = M.Words({"words": {"draw": "sample"}, "keep": {"patterns": ['"draw"']}})
+    module = '__all__ = ["draw",\n           "other"]\n\n\ndef draw():\n    return {"draw": 1}\n'
+    assert words.sub(module, "m.py") == '__all__ = ["sample",\n           "other"]\n\n\ndef sample():\n    return {"draw": 1}\n'
+    assert words.sub(module, "m.md") == module.replace("def draw", "def sample")
+
+
 def test_paths_and_names_are_renamed_part_by_part():
     assert WORDS.path("verity/protocols/accounting/communication/warden/tests/test_network_warden_grid.py") == \
         "verity/protocols/accounting/communication/certifier/tests/test_network_certifier_grid.py"

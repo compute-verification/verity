@@ -11,7 +11,8 @@
 What it does, on the tree as it is (so it reruns on a later main, and `restack.py --script tools/move/rename.py` carries a
 branch across it):
 1. renames each [words] entry in every tracked text file the map doesn't exclude, except inside what [keep] keeps (a domain
-   tag, a format id, an id) and, in the files a [keep_in] glob matches, the words it lists;
+   tag, a format id, an id; never a string in a Python module's `__all__`, which names what it exports) and, in the files
+   a [keep_in] glob matches, the words it lists;
 2. moves each tracked file whose path the same words rename, with `layout.py`'s machinery (`layout.Run.move`); a module's
    name is its path's, so the first step has already renamed every import of it;
 3. in a `lean-audit.json`, renames module names and prose but not the records the Lean check's `--update` writes (`guarantees`,
@@ -52,6 +53,7 @@ PIN = re.compile(r"^([0-9a-f]{64})  (.+)$", re.M)
 PINS_PY = "tools/verity/check/pins.py"              # the pins of Lean sources, some of them JSON (`json_pins`)
 MANIFEST = "lake-manifest.json"
 MOVES = L.MOVES                                     # research's record of each move's renamed paths
+EXPORTS = re.compile(r"^__all__\s*\+?=\s*[\[(][^\])]*[\])]", re.M)   # a Python module's `__all__`: names, never data
 
 
 def _match(path: str, glob: str) -> bool:
@@ -118,7 +120,11 @@ class Words:
         low = text.lower()
         if not any(w in low for w in lower) or pattern.search(text) is None:
             return text
-        spans = sorted([*keep, *((m.start(), m.end()) for k in self.keep if protect for m in k.finditer(text))])
+        held = [(m.start(), m.end()) for k in self.keep if protect for m in k.finditer(text)]
+        if held and path.endswith(".py"):
+            names = [(m.start(), m.end()) for m in EXPORTS.finditer(text)]
+            held = [(s, e) for s, e in held if not any(a <= s and e <= b for a, b in names)]
+        spans = sorted([*keep, *held])
         starts, reach, far = [], [], 0
         for s, e in spans:                                          # reach[i]: the furthest end of spans[:i + 1]
             starts.append(s)
