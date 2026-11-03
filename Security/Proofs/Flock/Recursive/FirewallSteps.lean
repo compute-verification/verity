@@ -174,14 +174,6 @@ theorem goes_append (s : Schedule) : ∀ (a b : List ByteArray) {st t u : State}
   | [], _, _, _, _, ha, hb => by subst ha; exact hb
   | _ :: a, b, _, _, _, ⟨v, hv, ha⟩, hb => ⟨v, hv, goes_append s a b ha hb⟩
 
-theorem goes_flatMap (s : Schedule) (F : Nat → List ByteArray) (S : Nat → State)
-    (h : ∀ i < n, Goes s (F i) (S i) (S (i + 1))) : Goes s ((List.range n).flatMap F) (S 0) (S n) := by
-  induction n with
-  | zero => rfl
-  | succ n ih =>
-    rw [List.range_succ, List.flatMap_append, List.flatMap_singleton]
-    exact goes_append s _ _ (ih fun i hi => h i (by omega)) (h n (by omega))
-
 theorem forIn_goes (s : Schedule) : ∀ (reqs : List ByteArray) {st t : State}, Goes s reqs st t →
     Id.run (forIn reqs (st, false) (FirewallRun.body s)) = (t, false)
   | [], _, _, h => by subst h; rfl
