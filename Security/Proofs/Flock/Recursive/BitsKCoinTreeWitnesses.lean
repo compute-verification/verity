@@ -2,7 +2,7 @@ import Proofs.Flock.Recursive.BitsKCoinTreeStatement
 import Proofs.Flock.Recursive.KSCoinTreeWitnesses
 
 /-!
-# `BitsKAtC` at the verifier that accepts everything
+# `RecursiveBitsKDeployed`'s witnesses (the Lean check's `honest` and `nontrivial`)
 
 `BitsKAtC` bounds the committed run's acceptance by the extractor's success at the simulating prover plus `a + t·e`
 and `2 · k(x) · δ₁`, under `BitsKAt`'s hypotheses at that prover. At the verifier that accepts everything
@@ -11,6 +11,13 @@ and `2 · k(x) · δ₁`, under `BitsKAt`'s hypotheses at that prover. At the ve
 recovers nothing (`Pr_E_none`); the hypotheses hold at `t = 1` and `n = v = 0`, since neither the silent prover nor the
 accepting verifier and its record call SHA-512, so every finder finds nothing; and the bound is `a + e`
 (`not_bitsKAtC_acceptAll`). Where `a + e < 1` it fails, at any statement `G` admits with a V\* session.
+
+* **The honest lemma** (`recursiveBitsKDeployed_honest`), from `RecDeploy.HonestFixture`: `recursiveKSDeployed_honest`'s
+  conclusions, with the run's statement at the deployment's sizes (`SizesAt`) beside `DenseAt`, so the honest run's
+  statement is one `RecursiveBitsKDeployed` reads.
+* **The nontrivial lemma** (`recursiveBitsKDeployed_nontrivial`), from `RecDeploy.KSFixture`: `BitsKAtC` at
+  `RecursiveBitsKDeployed`'s values and `δ₁ = 0` is false at the verifier that accepts everything, at every brings: the
+  fixture's statement is dense and at the deployment's sizes, has a V\* session, and `2^{−167.7} + 2^{−174.95} < 1`.
 -/
 
 namespace Claims.Recursion
@@ -131,4 +138,102 @@ theorem not_bitsKAtC_acceptAll (rel relO : _root_.Flock.Readable.Parsed → _roo
     (FlockDeploy.listWithin_plainTrim rel) Claims.GS.zkDecodeRD (Claims.GS.listWithin_zkDecodeRD id fun _ _ => rfl) x hx
     (recBound_k_pos rel b L nextE colsE wE join rowIn final w x) hS (zkRec_parse_nil relO) hae
 
+/-- `recursiveBitsK_deployed`'s numbers sum below `1`: `2^{−167.7} + 2^{−174.95} < 1`. -/
+theorem bitsK_ae_lt_one : (2 : ℝ) ^ (-(167.7 : ℝ)) + 2 ^ (-(174.95 : ℝ)) < 1 := by
+  have h1 : (2 : ℝ) ^ (-(167.7 : ℝ)) < 2 ^ (-1 : ℝ) := Real.rpow_lt_rpow_of_exponent_lt (by norm_num) (by norm_num)
+  have h2 : (2 : ℝ) ^ (-(174.95 : ℝ)) < 2 ^ (-1 : ℝ) := Real.rpow_lt_rpow_of_exponent_lt (by norm_num) (by norm_num)
+  rw [Real.rpow_neg_one] at h1 h2
+  linarith [show (2 : ℝ)⁻¹ = 1 / 2 by norm_num]
+
 end RecDeploy
+
+namespace RecDeploy.HonestHalfFixture
+
+open _root_.Flock
+open Claims (Msg Out)
+open FlockDeploy (Coin)
+open RecDeploy.VStarBuild
+open RecDeploy.VStarHonest
+open RecDeploy.HonestHalf
+
+/-- **`RecursiveBitsKDeployed`'s honest lemma**: `recursiveKSDeployed_honest`'s conclusions at `HonestFixture`'s run,
+with its statement at the deployment's sizes beside `DenseAt` (`SizesAt`, at the run's coin-server record), where
+`RecursiveBitsKDeployed` reads it: every V\* part accepts, the reference prover is accepted at the run's tape and
+coins committed in every coin tree, the deployed decoders meet the list-decoding spec, and hm96 leaves under the pinned
+key hide at its hiding gap, a finite `δ₁`. -/
+theorem recursiveBitsKDeployed_honest (h : HonestFixture) :
+    ∃ (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg) (aux : Msg → ℕ → Flock.RecRecord.Round)
+      (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
+      (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace)
+      (w : Claims.Flock.Wit) (ω : Tape (bLAt mask Ir b0 x aux nOf hd recRest))
+      (r : Fin ((DAt mask Ir b0 x aux nOf hd recRest).V.k x) → Coin),
+      (∀ s < nS x,
+        Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512 (DAt mask Ir b0 x aux nOf hd recRest)
+          (deployZkRec _root_.Flock.Readable.relation) (DeployedR.layR OpenRows.elemR) Claims.Recursion.Form.Dense
+          (showsPart recRead ({ bringsAt mask Ir (deployedB b0) x with tr := recTr aux nOf hd recRest } : Brings))
+          (cmtTr recRead) s x (Claims.coinSeq r)
+          ((Claims.run FlockDeploy.sha512 (refP (IAt decI).V (bLAt mask Ir b0 x aux nOf hd recRest) w)
+            (DAt mask Ir b0 x aux nOf hd recRest).V x ω r).msgs.map Prod.fst)) ∧
+      (DenseAt x ∧ SizesAt { bringsAt mask Ir (deployedB b0) x with tr := recTr aux nOf hd recRest } x) ∧
+      (∀ (T : Type) (C : Claims.Bridge.CoinTree Coin T ((DAt mask Ir b0 x aux nOf hd recRest).V.k x)) (τ : T),
+        (Claims.Bridge.runCM FlockDeploy.sha512
+          (Claims.Bridge.CProver.ofProver (refP (IAt decI).V (bLAt mask Ir b0 x aux nOf hd recRest) w))
+          (DAt mask Ir b0 x aux nOf hd recRest).V x C ω r τ).out = .acc) ∧
+      Claims.Recursion.decOK DeployedR.bdR.deploy Claims.GS.plainDecodeRD ∧
+      Claims.Recursion.decOK (deployZkRec _root_.Flock.Readable.relation) Claims.GS.zkDecodeRD ∧
+      Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash
+        (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap FlockSoundness.Discharge.ZkView.My
+          FlockSoundness.Discharge.ZkView.saltHash)) ∧
+      ENNReal.ofReal (FlockSoundness.CROnly.hidingGap FlockSoundness.Discharge.ZkView.My
+        FlockSoundness.Discharge.ZkView.saltHash) ≠ ⊤ := by
+  obtain ⟨mask, Ir, b0, x, aux, nOf, hd, recRest, decI, w, st, ω, r, hR, hW, hN, hI, hT, hZ⟩ := h
+  refine ⟨mask, Ir, b0, x, aux, nOf, hd, recRest, decI, w, ω, r,
+    HonestHalfTops.honest_half_tops mask Ir b0 x aux nOf hd recRest decI ω r hR hW hN hI hT, ⟨fun s hs => ?_, hZ⟩,
+    fun _ C τ => ?_, FlockDeploy.listWithin_plainTrim _root_.Flock.Readable.relation,
+    Claims.GS.listWithin_zkDecodeRD id fun _ _ => rfl, FlockSoundness.CROnly.hm96Hiding_gap _ _,
+    ENNReal.ofReal_ne_top⟩
+  · obtain rfl : st = s := Option.some.inj (hR.2.1.symm.trans hs)
+    exact hR.2.2.1
+  · rw [Claims.Bridge.runCM_ofProver]
+    exact hR.2.2.2
+
+end RecDeploy.HonestHalfFixture
+
+namespace Flock.Guarantees
+
+open Claims (Msg Out)
+
+/-- **`RecursiveBitsKDeployed`'s nontrivial lemma**: its conclusion, `BitsKAtC` at the deployed values, is false at the
+verifier that accepts everything (`RecAt.acceptAll` of the deployment's compiled record), at `δ₁ = 0` and every brings,
+from the named assumption `RecDeploy.KSFixture`: the fixture's statement is dense (`denseAt_of_parses`), at the
+deployment's sizes (`SizesAt`: its inner statement in the plain scope with one table, `plainIn_one_of_parses`, and its
+parts, their number and its inner setup's calls as `PartsInScope` reads them) and has a V\* session, and
+`2^{−167.7} + 2^{−174.95} < 1` (`RecDeploy.bitsK_ae_lt_one`), so `RecDeploy.not_bitsKAtC_acceptAll` applies. -/
+theorem recursiveBitsKDeployed_nontrivial (h : RecDeploy.KSFixture) :
+    ∃ (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
+      (recRest : Msg → List (Msg × Out) → List UInt8), ∀ b : RecDeploy.Brings,
+      ¬ Claims.Recursion.BitsKAtC FlockDeploy.sha512
+        (RecDeploy.recBoundAt _root_.Flock.Readable.relation
+          { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
+          (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR)).acceptAll
+        (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
+          (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
+          RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
+          RecDeploy.DeployedR.wR)
+        (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep
+        (fun x => RecDeploy.DenseAt x ∧
+          RecDeploy.SizesAt { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest } x)
+        (2 ^ 32) (2 ^ 32) (2 ^ (-(167.7 : ℝ))) (2 ^ (-(174.95 : ℝ))) 0 := by
+  obtain ⟨x, aux, nOf, hd, recRest, hP, hO, hn, hS⟩ := h
+  refine ⟨aux, nOf, hd, recRest, fun b => ?_⟩
+  exact RecDeploy.not_bitsKAtC_acceptAll _root_.Flock.Readable.relation _root_.Flock.Readable.relation
+    { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
+    (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR) (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
+    (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols RecDeploy.DeployedR.wER
+    FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR RecDeploy.DeployedR.wR FlockDeploy.KS.CpDep
+    (fun x => RecDeploy.DenseAt x ∧
+      RecDeploy.SizesAt { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest } x)
+    (2 ^ 32) (2 ^ 32) (2 ^ (-(167.7 : ℝ))) (2 ^ (-(174.95 : ℝ))) x
+    ⟨denseAt_of_parses hP, plainIn_one_of_parses hP, hO, hn, hS⟩ hP.2.1 RecDeploy.bitsK_ae_lt_one
+
+end Flock.Guarantees
