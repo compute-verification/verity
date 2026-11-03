@@ -27,8 +27,8 @@ change that removes a duplicate needn't touch this file. `python tests/test_lean
 under "stale (delete with --prune)", and `python tests/test_lean_vocabulary.py --prune` rewrites ``KNOWN`` without its
 stale lines and sets ``KNOWN_MAX`` to the new count, so no later line takes a freed slot unreviewed (a stale ``MIRRORS``
 entry is deleted by hand). Only lean prunes, so two prunes don't race on ``KNOWN_MAX``. ``KNOWN`` only shrinks, by count:
-it holds at most ``KNOWN_MAX`` lines. A new line needs lean's review and raises ``KNOWN_MAX`` in the same change; lowering
-it is welcome in any change.
+it holds at most ``KNOWN_MAX`` lines. A new line needs lean's review, and raises ``KNOWN_MAX`` in the same change unless it
+takes a slot a removal freed; lowering it is welcome in any change.
 
 The scan reads every tracked `.py` and `.lean` file (`git ls-files`, so `.lake`, `.venv` and build trees are never read)
 except:
@@ -398,7 +398,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 437
+KNOWN_MAX = 414
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -564,6 +564,8 @@ KNOWN: dict[str, str] = {
         "homonym, PoUW's committed transcript of unit commitments: rename (compute-accounting)",
     "Security/Definitions/Pouw/PearlC/Game.lean::Pouw.PearlC.Layout":
         "duplicate of `Pouw.Layout`: becomes a reading of it (compute-accounting)",
+    "Security/Definitions/Pouw/Lead/Model.lean::Pouw.Lead.Strategy":
+        "homonym, a prover's play on one call of the lead (its pre-coin tables and `A`'s root, and an execution at each coin value): rename (compute-research)",
     "Security/Definitions/Pouw/PearlC/Game.lean::Pouw.PearlC.Protocol":
         "homonym, Pearl-C's scheme Π, `Pouw.Protocol` again: rename (compute-accounting)",
     "Security/Definitions/Pouw/PearlC/Game.lean::Pouw.PearlC.Transcript":
