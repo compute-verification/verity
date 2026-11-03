@@ -4649,28 +4649,28 @@
    {
     "tags": "verity/flock-circuit (hidden outputs, registered reads: header registered and shared_rows, flock-verify --registered without --zk, PROTOCOL.md §16.15 rule 6)",
     "pr83": "61e5c2617",
-    "generator": "pod/89-served-registered.sh ZK=0 on vy-nebius-cpu-2 (r20261025-031112-428a, source 61e5c2617: --features sha512, CPU, FC_COINS=os): served_registered.py's RoPE d64 stage (32 units, each reading its cs row from the served tree cs_table, registered with register_served), one plain session under the verifier's own stratified draw of 16 (flock-verify draw --stratified 16, stage/draw.json), served from its file",
+    "generator": "pod/89-served-registered.sh ZK=0 on vy-nebius-cpu-2 (r20261103-095757-56ae, source e56b0e0f2: --features sha512, CPU, FC_COINS=os): served_registered.py's RoPE d64 stage (32 units, each reading its cs row from the served tree cs_table, registered with register_served), one plain session under the verifier's own stratified draw of 16 (flock-verify draw --stratified 16, stage/draw.json), served from its file",
     "statement": {
-     "circuit": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/circuit.txt",
-     "public": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/pub-32.bin",
-     "partition": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/partition.json",
-     "program": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/program.json",
-     "registered": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/stage/registered.json",
+     "circuit": "art:2343afa9c4127c8f81b1c3b0c159d97efdbc6fb4a97cf381d451d30cd992389d/stage/circuit.txt",
+     "public": "art:2343afa9c4127c8f81b1c3b0c159d97efdbc6fb4a97cf381d451d30cd992389d/stage/pub-32.bin",
+     "partition": "art:2343afa9c4127c8f81b1c3b0c159d97efdbc6fb4a97cf381d451d30cd992389d/stage/partition.json",
+     "program": "art:2343afa9c4127c8f81b1c3b0c159d97efdbc6fb4a97cf381d451d30cd992389d/stage/program.json",
+     "registered": "art:2343afa9c4127c8f81b1c3b0c159d97efdbc6fb4a97cf381d451d30cd992389d/stage/registered.json",
      "stratified": 16,
      "coins": "os",
      "circuit_sha512": "7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0",
-     "detail": "RoPE d64, 32 RegisteredRoPE units reading cs_table rows (registered root 6dd69162, row/v1), Q_template_instance v0: a shared-row public file at hidden outputs and hm96-sha512/v1 leaves; registered.json is the verifier's own (register_served on its own program)"
+     "detail": "RoPE d64, 32 RegisteredRoPE units reading cs_table rows (registered root a556c22e, row/v1), Q_template_instance v0: a shared-row public file at hidden outputs and hm96-sha512/v1 leaves; registered.json is the verifier's own (register_served on its own program)"
     },
     "sessions": [
      {
-      "dir": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/vectors/honest",
+      "dir": "art:2343afa9c4127c8f81b1c3b0c159d97efdbc6fb4a97cf381d451d30cd992389d/vectors/honest",
       "expect": {
        "accepted": true,
        "why": ""
       }
      },
      {
-      "dir": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/vectors/root",
+      "dir": "art:2343afa9c4127c8f81b1c3b0c159d97efdbc6fb4a97cf381d451d30cd992389d/vectors/root",
       "expect": {
        "accepted": false,
        "why": "setup: registered reads: port cs: table row 0 does not open cs_table's registered root at position 3",
@@ -4678,7 +4678,7 @@
       }
      },
      {
-      "dir": "art:88fd3f12b8f363acb27415b58e38e43f04431ce61e198b081d25c33f5b8524b9/vectors/none",
+      "dir": "art:2343afa9c4127c8f81b1c3b0c159d97efdbc6fb4a97cf381d451d30cd992389d/vectors/none",
       "expect": {
        "accepted": false,
        "why": "setup: registered reads: the statement reads registered values, and the verifier holds no registered roots",
