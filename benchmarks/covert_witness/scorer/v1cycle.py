@@ -70,11 +70,12 @@ RESCORE_AHEAD = os.environ.get("TE_RESCORE_AHEAD", "cursor/te-delta-t-40-516a")
 #: te_core VERSIONs that capture alike (4.1's capture differs from 4.0's in prose only; 4.3 prices the gradient cut at
 #: coded width from 4.2's traces, coordinator 07:48Z); a VERSION outside TE40_WT's group is a new capture, whose cache
 #: traces every run again (`next_capture`)
-CAPTURES = (("4.0", "4.1"), ("4.2", "4.3"), ("4.4", "4.5", "4.6", "4.7"))
+CAPTURES = (("4.0", "4.1"), ("4.2", "4.3"), ("4.4", "4.5", "4.6", "4.7"), ("4.8", "4.9", "4.10"))
 #: the capture from which every later VERSION captures alike, and which traces the pilot's runs too, after v3's: te_core
-#: 4.8 saves a traced step's product rows in every trace, so every run is traced again (the toolsmith's 66162c92b1
-#: line; coordinator 12:20Z)
-CAPTURE_FINAL = "4.8"
+#: 4.8 saves a traced step's product rows in every trace (the toolsmith's 66162c92b1 line; coordinator 12:20Z), and 4.11
+#: writes them again (te_core.capture.products' CAPTURE 4.11): 4.8's ledger blocks keep the trace's order "unknown",
+#: which 4.11's formalism.fresh_products reads as a circuit's declared summation, so no 4.8 trace measures the term
+CAPTURE_FINAL = "4.11"
 #: where node traces run, and the node's pool a shard asks for: vy-nebius-cpu-9's research pool (infra and the
 #: coordinator 15:08Z: `--on auto` misplaces runs until #7113 lands; auto spread shards over the CPU pool, 07:48Z)
 TRACE_NODE = os.environ.get("TE_TRACE_NODE", "vy-nebius-cpu-9")
