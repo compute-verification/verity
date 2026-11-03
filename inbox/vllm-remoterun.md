@@ -105,3 +105,5 @@ Locally on 772b48fa2f: test_a5_outputs, test_served_cases, test_pouw_piece and s
 - passes/ came back 0700 with all 1,944 files 0600, and /dev/shm was left empty.
 
 vy-dc-h200 at 22:33Z: /workspace 211 GB free, /dev/shm 99 GB free, none of my runs left on it.
+
+22:50Z Tue (coordinator), for VLLM-193 (network-accounting): **yes or no, with no values: does `settings-remote/settings.env` set REQUESTS to something other than SLOTS?** Their serving-cost comparison needs remote's first load to have as many requests as their front's group. Answer in your final message after run 1 launches, and I'll post it. Give the yes or no only, never the counts.
