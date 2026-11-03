@@ -73,7 +73,8 @@
 #      PREBUILT=DIR (another node's out/ship, e.g. research run --send's inputs/: each binary copied into its cache, and a
 #              step that would build one refuses instead)
 #      WARM_FROM=/workspace/jobs/proofs-vllm-moe/flock-gpu-link (a checkout whose cargo target starts the build warm)
-#      MODES=dev  REPLAY=1  CONTROLS= (oprove)  LOOPBACK_DRAW=all (a --zk loopback's sample: every unit; none: no sample)
+#      MODES=dev  REPLAY=1  CONTROLS= (oprove)  LOOPBACK_DRAW=all (a loopback's sample: every unit, --zk by the subset law and M0
+#              by the stratified one, data/$TAG/stage/draw.json; none: no sample)
 #      RETRY= (oprove, MODES=firewall: a statement's name, which gets a second session after its first, on a fresh coin
 #              server and in the run's record; a negative control, whose composition lean_verdicts.py requires refused)
 #      GPU=1 (0: the CPU prover end to end: built GPU=0, no CUDA, no lease, prove without --gpu; for a small K and N)
@@ -253,11 +254,15 @@ EOF
 loopback() {
   local name=$1 pub=$2 inst=$3 circ=$4 zk=${5:-} s=$DD/$STEP-$1 PORT=$(free_port) PIN=$(sha512sum $4 | cut -d' ' -f1)
   rm -rf $s; mkdir -p $s $O/$STEP/$name
-  # the verifier's sample on a --zk session (Lean refuses a session without one, D12), as rec-private-outer.sh's:
-  # LOOPBACK_DRAW=all (default) every unit; none: no sample
+  # the verifier's sample (Lean refuses a session without one, D12): LOOPBACK_DRAW=all (default) every unit, on a --zk
+  # session by the subset law (rec-private-outer.sh's), on a plain one by the stratified law at K = the population, the
+  # draw from its file (draw.json), the law every plain one-table claim draws by (ProvedScope.lawWhy); none: no sample
   local DRAW=()
-  [ -n "$zk" ] && [ "${LOOPBACK_DRAW:-all}" = all ] \
-    && DRAW=(--draw subset:$(python3 -c 'import json, sys; print(json.loads(open(sys.argv[1], "rb").readline())["instances"])' $pub))
+  if [ "${LOOPBACK_DRAW:-all}" = all ]; then
+    if [ -n "$zk" ]; then
+      DRAW=(--draw subset:$(python3 -c 'import json, sys; print(json.loads(open(sys.argv[1], "rb").readline())["instances"])' $pub))
+    else DRAW=(--draw-file $DD/stage/draw.json); fi
+  fi
   taskset -c $VCPU $B serve $zk --listen 127.0.0.1:$PORT --out $s/sessions --instances $pub --circuit $circ --pin $PIN \
     "${DRAW[@]}" ${RRUN:+--rec-run $RRUN --rec-part $RPART} --operator loopback --concurrency $((NS + 1)) \
     > $O/$STEP/$name/serve.log 2>&1 &
@@ -612,6 +617,7 @@ EOF
   # verdict ahead
   if [ "${INNER_LOOPBACK:-1}" = 1 ]; then
   DZ=$DD/stage-zk; [ -f $DZ/inst-$N.bin ] || { echo "no $DZ (run STEP=build first)"; exit 1; }
+  [ -f $DD/stage/draw.json ] || inner_partition > $O/inner/partition.txt || exit 1
   again loopback m0 $DZ/pub-$N.bin $DZ/inst-$N.bin $DZ/circuit.txt
   again loopback zk $DZ/pub-$N.bin $DZ/inst-$N.bin $DZ/circuit.txt --zk
   [ -n "${LAST:-}" ] && taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-zk.txt $B replay --zk --instances $DZ/pub-$N.bin \
