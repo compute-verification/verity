@@ -755,7 +755,7 @@ def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it():
     merged, and their whole-making system is io_bound.chain_classes', so io_bound's bound is the same: at the console's
     policy about 69,676 fresh MACs a block, 0.552 of |C| and ρ 2.87e6 with P-cell. The trace's order is unknown
     and the reference circuit's chain stands, so the term is measured: the figure without P-cell, 1.637e5, with 2.87e6
-    beside it as fresh_cell. The rows are the fixture the
+    beside it as fresh_cell. The rows, with those at the console dial's other k, are the fixture the
     vectors read (`dense_45m.products.json`). The one check of the strong bound's figure on a model's own shape (about
     6 s on a CPU): the fixtures' tiny start has almost no fresh products."""
     import collections
@@ -766,7 +766,8 @@ def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it():
     g = io_bound.capture("dense", size="s", vocab=32000, batch=2, ctx=256, micro_steps=1)
     c, k = policy.CONSOLE
     block = products.rows(g, k)
-    assert block == json.loads((FIXTURES / "dense_45m.products.json").read_text())
+    assert json.loads(json.dumps(products.rows_on_dial(g))) == json.loads(
+        (FIXTURES / "dense_45m.products.json").read_text())
     got = F.products_of_trace(block)
     rows = io_bound.rows_of(g, "bfloat16", k)
     kinds = collections.Counter()
@@ -846,6 +847,42 @@ def test_the_45m_dense_steps_term_reads_its_whole_making_system_and_a_rank_one_c
     broken, why, inputs = term(got | {"p_match": [{"op": "expand", "fan_out": 2.0, "count": 6}]})
     assert broken is None and "breaks P-match" in why and "expand (fan-out 2, 6×)" in why
     assert inputs["p_match"] == [{"op": "expand", "fan_out": 2.0, "count": 6}]
+
+
+def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_dial_reads_as_c_times_a_number():
+    """A trace from te_core 4.12.1 on keeps its product rows at each k of the console's dial (te_core.capture.products'
+    `at`), so the fresh-products term is measured at each of them on that k's products and whole-making system, and
+    off the dial it is unmeasured with the reason. At a fixed k io_bound's blocks don't move with c, so the dial reads
+    the term as c times a number for each k (`fresh_per_c`, [without P-cell, with it]). On the 45M dense step the term
+    falls with k (163,708 at the console's 65,536 bits, 131,294 at 80,000 and 64,497 at the served block's 145,568)
+    and is void from 800,000 bits up, where its whole-making system has no fixed point."""
+    from te_core.capture import products
+
+    rows = json.loads((FIXTURES / "dense_45m.products.json").read_text())
+    got = F.products_of_trace(rows)
+    C = rows["gates"]
+    m = replace(one_segment(), parts=(F.Part(gates=C, tokens=512, token_gates=C, affected_gates=C / 2),), products=got)
+    assert sorted(got["at"], key=int) == [str(k) for k in products.DIAL_K if k != policy.CONSOLE[1]]
+    assert all(b["k"] == float(x) and "at" not in b for x, b in got["at"].items())
+    per = F.fresh_per_c(m)
+    assert list(per) == [str(k) for k in products.DIAL_K]
+    for k in products.DIAL_K:
+        for c in (1e12, policy.CONSOLE[0]):
+            term, why, inputs = F.fresh_products(m, c, k)
+            assert inputs["k_classified"] == k
+            if per[str(k)] is None:
+                assert term is None and why == F.FRESH_VOID
+            else:
+                assert why is None and term == pytest.approx(c * per[str(k)][0], rel=1e-12)
+                assert inputs["fresh_cell"] == pytest.approx(c * per[str(k)][1], rel=1e-12)
+    c = policy.CONSOLE[0]
+    assert [round(c * per[str(k)][0]) for k in (65_536, 80_000, 145_568)] == [163_708, 131_294, 64_497]
+    assert [per[str(k)] is None for k in products.DIAL_K] == [False] * 3 + [True] * 4
+    term, why, _ = F.fresh_products(m, c, 100_000)
+    assert term is None and "keep none at it" in why and "DIAL_K" in why
+    assert F.fresh_per_c(replace(m, products={x: v for x, v in got.items() if x != "at"})) == {"65536": per["65536"]}
+    assert F.fresh_per_c(replace(m, products=None)) is None
+    assert F.from_json(m.to_json()).products == m.products
 
 
 @pytest.mark.parametrize("name", ("dense_blocks", "lora_blocks", "wildcard_adapter"))

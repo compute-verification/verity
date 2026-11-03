@@ -41,8 +41,12 @@ coordinator's 09:46Z and 12:20Z rulings). `basis` names fit, the binding kind, n
   coordinator's 12:09Z ruling). The term is formalism's, io_bound's proved figure without P-cell (`formalism.P_CELL`
   off), which needs no premise on how a partition splits a multiplier's gates (the coordinator's 06:57Z obligation 1
   and 12:09Z ruling: P-cell is a premise on the partition, which the attacker chooses); it rests on P-width and
-  P-chain and no A1. The figure under P-cell (every block holding whole GEMM gadgets) is the sensitivity beside it
-  (formalism's `fresh_cell`, 19 times the term on the dense default and on the LoRA's). A product with an
+  P-chain and no A1. Λ's whole-making factor is io_bound's one-class rule, which products with no whole-making system
+  take (formalism's ONE_CLASS: a model has no graph for io_bound's chain_classes), and which the class system of a
+  traced dense step lowers by under 1% (`DENSE_WHOLE`); it isn't proved for an adapter's products, and a traced LoRA
+  step's class system is void, so an adapter's term is unmeasured, never a number (`ADAPTER_WHOLE`; the
+  coordinator's 15:50Z ruling). The figure under P-cell (every block holding whole GEMM gadgets) is the sensitivity
+  beside it (formalism's `fresh_cell`, 19 times the term on the dense default). A product with an
   operand in θ (a frozen weight, a registered teacher's) isn't fresh, nor is the
   lowest layer's attention input projection's (its input is gathered embedding rows, which io_bound's P-width prices
   below their width), nor Newton-Schulz's products of an array with itself; and a block computes a product's operands
@@ -183,6 +187,13 @@ IO_BOUND = "cursor/te-io-bound-4207 at 3c2afa62aa"
 #: gadget accumulating each output entry along one chain from a zero word, so P-chain is a premise on the reference
 #: circuit, as P-width is (coordinator 12:09Z)
 ORDER = formalism.ORDER
+#: Λ's whole-making factor on a dense model's products: te_core.io_bound's one-class rule (te_core.formalism's
+#: ONE_CLASS, which products with no whole-making system take; a model has no graph for io_bound's chain_classes),
+#: which the class system of a traced dense step lowers by under 1% (coordinator 15:50Z)
+DENSE_WHOLE = "one-class rule; the traced class system lowers dense steps by under 1%"
+#: why the fresh-products kind is unmeasured on an adapter's products, never a number: the one-class rule isn't proved
+#: for them, and a traced LoRA step's class system has no fixed point (io_bound.whole_chain_of; coordinator 15:50Z)
+ADAPTER_WHOLE = "void under the traced class system (te_core 4.12)"
 #: why reading A's kinds are unmeasured here
 NO_TRACE = ("unmeasured: te_core 4.5's packer reads a trace's entries and op log (its runs and matrix-product tiles), "
             "which a model hasn't and the records here don't carry")
@@ -196,7 +207,9 @@ VALID = {
                       "entry accumulated along one chain from a zero word, as te_core's GEMM gadget does), premises "
                       "on a reference circuit's wiring, false on a declared one, given P-share; without P-cell, so "
                       "with no premise on how a partition splits a multiplier's gates (coordinator 06:57Z, obligation "
-                      "1); attention's products uncounted; the figure under P-cell beside it (fresh_cell)",
+                      "1); attention's products uncounted; Λ's whole-making factor by io_bound's one-class rule on a "
+                      f"dense model's products ({DENSE_WHOLE}), and an adapter's term unmeasured ({ADAPTER_WHOLE}); "
+                      "the figure under P-cell beside it (fresh_cell)",
     "token": f"{formalism.RESTS_ON['token']}; {NO_TRACE}",
     "decoding": f"{formalism.RESTS_ON['decoding']}; {NO_TRACE}",
 }
@@ -215,8 +228,8 @@ RESTS_ON = VALID | {
             "(coordinator 12:20Z)",
     "unmeasured": "unmeasured: Fit fails, no measured kind's term exceeds 1 and a valid kind is unmeasured, so rho is "
                   "null, never 1, the measured terms in the kinds cell (coordinator 09:46Z and 12:20Z): the fresh "
-                  "products are unmeasured only for a circuit that declares a tree (none does), the token and "
-                  "decoding kinds without a trace",
+                  f"products are unmeasured on an adapter's products ({ADAPTER_WHOLE}) and for a circuit that "
+                  "declares a tree (none does), the token and decoding kinds without a trace",
 }
 #: reading A's verdicts on the token and decoding kinds (`reading_a`); their terms are unmeasured under each
 VERDICTS_A = {"unmodelled": "finite (te_core 4.5's tiles split an op, so no op's update bits alone leave it infinite), "
@@ -658,6 +671,11 @@ class Model:
     op_update_bits: float | None = None
     derived: dict = field(default_factory=dict)
 
+    @property
+    def adapter(self) -> bool:
+        """A LoRA's model (`lora`, or `rl` with update "lora"), whose fresh products are its adapter's (`adapter_fresh`)."""
+        return self.workload == "lora" or self.dials.get("update") == "lora"
+
 
 def profile(u1: float, t: float) -> tuple[tuple, tuple]:
     """(u, u_in) at the free share t (A1 and A1′, module docstring): u_in evenly spread, u 0 up to t."""
@@ -1046,18 +1064,25 @@ def products(m: Model, c: float, k: float) -> list[dict]:
 
 
 def with_products(m: Model, c: float, k: float) -> formalism.Measured:
-    """The model's `Measured` with its fresh products (`products`) at k as `Measured.products`, summed in `ORDER`."""
+    """The model's `Measured` with its fresh products (`products`) at k as `Measured.products`, summed in `ORDER`; an
+    adapter's as it is, with none, so formalism leaves its term unmeasured (`ADAPTER_WHOLE`)."""
+    if m.adapter:
+        return m.measured
     return replace(m.measured, products={"k": float(k), "order": ORDER, "products": products(m, c, k)})
 
 
-def fresh(m: Model, got: dict, k: float) -> dict:
+def fresh(m: Model, got: dict, c: float, k: float) -> dict:
     """What the fresh-products kind read beside its term (`got`, te_core.formalism.fresh_products' on `with_products`):
     the order, Λ (None: void, past whole_chain's r = 1/4, its figures 0), the counted share of |C|, attention's share
-    (uncounted) and the term's figure at the numerical Λ (the figure `formalism.P_CELL` takes)."""
+    (uncounted) and the term's figure at the numerical Λ (the figure `formalism.P_CELL` takes). An adapter's term is
+    unmeasured, so its Λ and figure are None and its share is its products' (`products`)."""
+    attention = sum(f.total(k) * per_mac(f.kind) for f in m.fresh if f.attention) / m.measured.gates
+    if m.adapter:
+        share = sum(p["gates_per_mac"] * p["macs"] for p in products(m, c, k)) / m.measured.gates
+        return {"order": ORDER, "lam": None, "share": share, "numerical": None, "attention_share": attention}
     b = got["io_bound"]
     return {"order": got["order"], "lam": b["proved"]["lam"], "share": b["share"],
-            "numerical": b["numerical"]["rho" if formalism.P_CELL else "rho_no_cell"],
-            "attention_share": sum(f.total(k) * per_mac(f.kind) for f in m.fresh if f.attention) / m.measured.gates}
+            "numerical": b["numerical"]["rho" if formalism.P_CELL else "rho_no_cell"], "attention_share": attention}
 
 
 def reading_a(m: Model) -> str:
@@ -1078,7 +1103,8 @@ def rho(m: Model, c: float, k: float, target: tuple[float, str] | None = None) -
     decoding kinds' None without a trace's entries and op log (`reading_a`'s verdict beside them). `basis` is
     published's binding kind (fit, the measured kind whose term, the max, exceeds 1, none or unmeasured),
     `binding_kind` the kind among them, `RESTS_ON[basis]` what it rests on, `partial` the dashboard's mark, and `why`
-    each unmeasured kind's reason.
+    each unmeasured kind's reason: an adapter's fresh products are unmeasured, never a number (`ADAPTER_WHOLE`).
+    `whole_making` is what Λ's whole-making factor rests on, `DENSE_WHOLE` on a dense model's products.
     Beside it, never in the max: the `TARGET` (te_core.formalism.published at reading B, or for a record `target`,
     page_rho's on its columns) and the `SENSITIVITIES` (bound's, None where unmeasured, fresh_cell the fresh products'
     figure under P-cell); the kinds and sensitivities unmeasured (an infinite term among them: never ∞); Fit's clauses
@@ -1094,10 +1120,13 @@ def rho(m: Model, c: float, k: float, target: tuple[float, str] | None = None) -
     sens = {name: _finite(one["sensitivities"][name]) for name in formalism.SENSITIVITIES}
     basis = pub["binding_kind"]
     fails = sorted({clause for p in v["parts"] for clause, ok in p["fit"].items() if not ok})
+    why = {kind: one["unmeasured"].get(kind) for kind in terms if terms[kind] is None}
+    if m.adapter:
+        why["fresh_products"] = ADAPTER_WHOLE
     return {"rho": _finite(pub["rho"]), "basis": basis, "binding_kind": basis if basis in formalism.KINDS else None,
-            "terms": terms, "partial": pub["partial"],
-            "why": {kind: one["unmeasured"].get(kind) for kind in terms if terms[kind] is None},
-            "fresh": fresh(m, one["inputs"]["fresh_products"], k),
+            "terms": terms, "partial": pub["partial"], "why": why,
+            "whole_making": ADAPTER_WHOLE if m.adapter else DENSE_WHOLE,
+            "fresh": fresh(m, one["inputs"]["fresh_products"], c, k),
             "target": {"rho": _finite(target[0]), "basis": target[1]}, "sensitivities": sens, "token_A": reading_a(m),
             "unmeasured": [name for name in (*terms, *sens) if (terms | sens)[name] is None],
             "fit": v["fit"], "fit_fails": fails, "rho_fit": _finite(v["rho_fit"]), "s": v["s"], "x0": v["x0"],
@@ -1618,8 +1647,8 @@ def _check(ck: Check, workload: str) -> dict:
 
 
 #: what a check keeps of `rho` on its record and on the model
-CHECKED = ("rho", "basis", "binding_kind", "terms", "partial", "target", "sensitivities", "fit_fails", "token_A",
-           "unmeasured", "b")
+CHECKED = ("rho", "basis", "binding_kind", "terms", "partial", "whole_making", "target", "sensitivities", "fit_fails",
+           "token_A", "unmeasured", "b")
 
 
 def serving_block() -> dict:

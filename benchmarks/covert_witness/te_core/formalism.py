@@ -79,8 +79,10 @@ most that. The kinds:
   the run's circuit given the standard algorithm and the widths it passes: te_core.io_bound's bound with Λ proved
   (`fresh_products`) on the run's products (`Measured.products`, which `products_of` takes from steps captured by
   capture_step or capture_fn, and `products_of_trace` from the product rows a recorded program's trace keeps from
-  te_core 4.8 on (te_core.capture.products), each at the k it classifies them at), its figure without P-cell, a
-  premise on the partition (`P_CELL`; the whole-cell figure is the sensitivity fresh_cell). io_bound's cap has the
+  te_core 4.8 on (te_core.capture.products), each at the k it classifies them at, a trace's from te_core 4.12.1 on at
+  every k of the console's dial too, `at`), its figure without P-cell, a premise on the partition (`P_CELL`; the
+  whole-cell figure is the sensitivity fresh_cell). At a fixed k the term is linear in c, so the console's dial reads
+  it as c times a number for each k it has products at (`fresh_per_c`, in te_core.panels' rho_inputs). io_bound's cap has the
   chain order's constant (its premise P-chain), which is the reference circuit's order by construction (`ORDER`:
   te_core.gates prices a GEMM MAC as a dot cell adding into one running 32-bit sum), so the term is measured on every
   run's products. Λ proved reads the step's whole-making system (io_bound's `whole_chain_of`: every product with both
@@ -779,9 +781,23 @@ def products_of_trace(block: dict, steps: float = 1.0) -> dict:
     order = ORDER if block["order"] == "unknown" else block["order"]
     gathered = {"dropped": int(dropped), "of": int(fresh),
                 "dropped_macs_share": dropped_macs / macs if macs else 0.0} if flagged else None
-    return {"k": float(block["k"]), "order": order, "trace_order": block["order"], "capture": block["capture"],
-            "products": out, "kinds_macs": kinds, "system": system_of(block["rows"]), "p_match": block.get("p_match"),
-            "gathered": gathered}
+    got = {"k": float(block["k"]), "order": order, "trace_order": block["order"], "capture": block["capture"],
+           "products": out, "kinds_macs": kinds, "system": system_of(block["rows"]), "p_match": block.get("p_match"),
+           "gathered": gathered}
+    if "at" in block:
+        rest = {x: v for x, v in block.items() if x != "at"}
+        got["at"] = {x: products_of_trace(rest | b, steps) for x, b in block["at"].items()}
+    return got
+
+
+def classified_at(p: dict, k: float) -> dict | None:
+    """`Measured.products` `p` as classified at k: itself where it was classified at k, else its block at k (`at`: a
+    trace's rows at each k of the console's dial, te_core.capture.products.rows_on_dial) with `p`'s stand_in; None
+    where it has neither."""
+    if math.isclose(p["k"], k, rel_tol=1e-12):
+        return p
+    return next((b | {x: p[x] for x in ("stand_in",) if x in p} for b in p.get("at", {}).values()
+                 if math.isclose(b["k"], k, rel_tol=1e-12)), None)
 
 
 def system_of(rows: list[dict]) -> dict | None:
@@ -837,9 +853,10 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
     """The fresh-products kind's term at (c, k), te_core.io_bound's bound with Λ proved (`io_bound.bound`) on the run's
     products (`Measured.products`) and the record's |C|, its figure without P-cell (`rho_no_cell`; with it where
     `P_CELL`); its reason where unmeasured (None: measured); and what it read, the whole-cell figure among it
-    (`fresh_cell`). The products are io_bound's at the k `rows_of` classified them at, summed in the reference
-    circuit's chains (`ORDER`, io_bound's premise P-chain) unless their circuit declares another order, so a term at
-    another k, or for a circuit that declares a tree, is unmeasured, with io_bound's chain figure in what it read. A
+    (`fresh_cell`). The products are io_bound's at the k `rows_of` classified them at, or a trace's at each k of the
+    console's dial (`classified_at`), summed in the reference circuit's chains (`ORDER`, io_bound's premise P-chain)
+    unless their circuit declares another order, so a term at another k, or for a circuit that declares a tree, is
+    unmeasured, with io_bound's chain figure in what it read. A
     record with an op log and no product rows has its log's (`products_of_ops`), none of which a log can count, so the
     term is unmeasured with what the log leaves unknown. The products' `stand_in`, where a run's traced steps differ in
     shape (`of_record`), is in what it read, and so is `subset` where io_bound's best subset for the term dropped
@@ -856,13 +873,15 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
                       f"or later keeps them (te_core.capture.products)"), got
     if p is None:
         return None, FRESH_UNMEASURED, {}
+    p = classified_at(p, k) or p
     order = p.get("order") or ORDER
     got = {"k_classified": p["k"], "order": order, "products": len(p["products"])} | {
         x: p[x] for x in ("capture", "trace_order", "kinds_macs", "stand_in", "gathered") if x in p}
     if not math.isclose(p["k"], k, rel_tol=1e-12):
         return None, (f"unmeasured: the products were classified at k = {p['k']:g} (te_core.io_bound.rows_of), not at "
-                      f"this k; take them again at it (formalism.products_of, or a trace's by "
-                      f"te_core.capture.products.rows)"), got
+                      f"this k, and keep none at it (a trace from te_core {SYSTEM_FROM} on keeps them at each k of the "
+                      f"console's dial, te_core.capture.products.DIAL_K); take them again at it (formalism.products_of, "
+                      f"or a trace's by te_core.capture.products.rows)"), got
     if "system" not in p:
         got["whole_making"] = ONE_CLASS
         got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates)
@@ -891,6 +910,23 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
         return term, FRESH_VOID if term is None else None, got
     return None, (f"unmeasured: the circuit declares its products summed in a {order}, and te_core.io_bound has the "
                   f"chain constant only (its premise P-chain); its chain figure is in the inputs, never the bound"), got
+
+
+def fresh_per_c(m: Measured) -> dict[str, list[float] | None] | None:
+    """The fresh-products term as the console's dial reads it: for each k the run's products are classified at (by
+    its integer as a string; a trace's at each k of the console's dial, `classified_at`), the term over c without
+    P-cell and with it, [rho_no_cell/c, rho/c] (`fresh_products`' term and fresh_cell where `P_CELL` is off): at a
+    fixed k io_bound's blocks don't move with c, so the term at (c, k) is c times it exactly. None at a k where the
+    term is unmeasured; None for a run with no product rows."""
+    p = m.products
+    if p is None:
+        return None
+    out = {}
+    for k in sorted({p["k"], *(b["k"] for b in p.get("at", {}).values())}):
+        term, why, got = fresh_products(m, 1.0, k)
+        proved = got["io_bound"]["proved"] if why is None else None
+        out[f"{k:.0f}"] = None if proved is None else [proved["rho_no_cell"], proved["rho"]]
+    return out
 
 
 def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> dict:
