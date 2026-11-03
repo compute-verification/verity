@@ -32,6 +32,7 @@ each session's coins are its own keyed coin tree's, drawn fresh at its `Hello`, 
 record is read once, in comparisons quadratic in V*'s statement count (at most 4096, `RecBudget`), never per gate.
 -/
 import Lean.Data.Json
+import Flock.JsonParse
 import Flock.Bytes
 import Flock.Hash
 
@@ -215,7 +216,7 @@ def Accepts (n : Nat) (rows inner : String) (links : Option (String × Nat)) (vs
 def verdicts (log : String) : Except String (Array Json) :=
   (log.splitOn "\n").foldlM (init := #[]) fun out line =>
     if line.startsWith "VERDICT " then
-      match Json.parse (line.drop 8).toString with
+      match JsonParse.parse (line.drop 8).toString with
       | .ok j => pure (out.push j)
       | .error e => throw s!"a VERDICT line that is not JSON: {e}"
     else pure out
