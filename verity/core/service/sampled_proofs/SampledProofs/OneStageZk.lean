@@ -21,6 +21,10 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   and opened (`Challenger.trustedTreesOf`). Each session's coins must be one tree's, a tree no other session's, its
   record's `coin_tree`, link points and every round's coins as the challenger logged them, and every tree logged must be
   a session's (`Challenger.sessionsTreeReason`); else the check refuses, before any session is verified;
+* **population** (`popHeld`): the registration's population held to the verifier's program: under its query, the
+  program's proof blocks read stratum by stratum must be the record's `population` units in order (`Slots.popOk`), as
+  the service's run refuses at registration (`Run.run`, `population-order`), else the check refuses, before any session
+  is verified. v1's R2 holds only their count, and the session's knowledge soundness reads slot `u` as proof block `u`;
 * **public** (`publicHeld`): the public file's header held to the registration (`Record.matchesPublic`): its scheme,
   roots and their domains and its instance count the record's, else the check refuses, before any session is verified;
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
@@ -37,6 +41,7 @@ Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file
 import CoreProtocol.Blobs
 import SampledProofs.OneStage
 import SampledProofs.ChallengerTrees
+import SampledProofs.Slots
 import Flock
 
 namespace SampledProofs.OneStageZk
@@ -453,16 +458,29 @@ def oneSession (sessions : Array RunFiles) : V Unit :=
   if sessions.size == 1 then pure ()
   else throw s!"the evidence names {sessions.size} sessions: the drawn units are proved in one session"
 
+/-- The refusal of a registration whose population is not the program's proof blocks in order (`popHeld`). -/
+def POPULATION_ORDER : String :=
+  "population-order: the program's proof blocks under the query are not the registration's population units in order"
+
+/-- The registration's population held to the verifier's program (module docstring, **population**): the record names
+a population `n`, and under the verifier's query the program's proof blocks are its `n` units in order
+(`Slots.popOk`). -/
+def popHeld (v : Registration.Verifier) (record : Json) : V Unit :=
+  match nat? (getD record "population") with
+  | none => throw "the record names no population"
+  | some n => if Slots.popOk v.program v.query n then pure () else throw POPULATION_ORDER
+
 /-- The check at the coins `ξ` (module docstring, **check**): the evidence's one session (`oneSession`), its coins held
-to the trees the challenger logged (`treesOf`, `treesHeld`), the parameters' public file held to the registration
-(`publicHeld`), then the session's verdict on the blobs, then v1's `checkAt` at `ξ` on it. v1 accepts only verdicts that
-all accepted (`VerdictsAccept`); the run's own `all` says it again, so an acceptance reads the run rather than the
-verdicts' JSON. -/
+to the trees the challenger logged (`treesOf`, `treesHeld`), the registration's population held to the program
+(`popHeld`), the parameters' public file held to the registration (`publicHeld`), then the session's verdict on the
+blobs, then v1's `checkAt` at `ξ` on it. v1 accepts only verdicts that all accepted (`VerdictsAccept`); the run's own
+`all` says it again, so an acceptance reads the run rather than the verdicts' JSON. -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   let r : V Run := do
     oneSession e.sessions
     treesHeld (← treesOf p e) e bs
+    popHeld p.base.verifier c.record
     publicHeld c.record (← bs.get p.own.pub "public file")
     run p.own e.sessions (some e.base.provedUnits) bs
   match r with

@@ -316,8 +316,9 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     under the evidence's ``sessions``); the outcome line. `params` must name the auditor's challenger and its window
     (``challenger``, ``window_root``), whose signed release in the evidence's ``coins`` the draw reads: v2 refuses
     parameters naming none. The evidence names one session (v2 refuses none or several), whose record must be on the one
-    coin tree that release log shows the challenger sampled and opened (`challenger.sessions_tree_reason`), and the
-    public file's header must be `record`'s (`registration.matches_public`) before the session is verified."""
+    coin tree that release log shows the challenger sampled and opened (`challenger.sessions_tree_reason`), the
+    program's proof blocks must be `record`'s population in order (`partition.in_order`), and the public file's header
+    must be `record`'s (`registration.matches_public`), before the session is verified."""
     pr, blobs = evidence_v2(proof, evidence["sessions"])
     p2 = {**params, "proofs": {"circuit": circuit_sha512, "public": public_sha512, "registered": registered}}
     e2 = {k: v for k, v in evidence.items() if k != "verdicts"} | {"proofs": pr}
