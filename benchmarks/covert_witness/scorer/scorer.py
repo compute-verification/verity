@@ -69,7 +69,7 @@ COUNTED_FLOOR = 0.5  # the harness's count over the run's own step log, below wh
 #: account for the gap op by op (fewer head rows, a smaller matmul), so they score (coordinator 13:42Z): {id: reason}
 FLOOR_ACCOUNTED: dict[str, str] = {}
 BOARD = Path(os.environ.get("TE_BOARD", Path(__file__).resolve().parents[1] / "islands" / "scorer" / "BOARD.md"))
-BOARD_HEAD = ("# The scorer's board lines\n\nAppend-only, one line per entry: `HH:MMZ scorer [TAG] text (record ids)`. The "
+BOARD_HEAD = ("# The scorer's board lines\n\nAppend-only, one line per entry: `YYYY-MM-DD HH:MMZ scorer [TAG] text (record ids)`. The "
               "coordinator merges them into benchmarks/covert_witness/BOARD.md on cursor/te-digest-4207. The scorer's lines "
               "through 09:00Z are on cursor/te-board-4207.\n\n## Entries\n")
 SMALL_FILES = ("witness.json", "candidate.json", "meta.json", "timing.json")
@@ -1503,7 +1503,7 @@ def _append_board(lines: list[str]) -> None:
     BOARD.write_text(text + ("" if text.endswith("\n") else "\n") + "\n".join(lines) + "\n")
     tags = sorted({m[1] for m in (re.search(r"\[(\w+)\]", x) for x in lines) if m})
     subprocess.run(["git", "-C", wt, "add", str(BOARD)], check=True)
-    subprocess.run(["git", "-C", wt, "commit", "-q", "-m", f"board: scorer {lines[0][:6]} {', '.join(tags)}", "--", str(BOARD)],
+    subprocess.run(["git", "-C", wt, "commit", "-q", "-m", f"board: scorer {lines[0][:17]} {', '.join(tags)}", "--", str(BOARD)],
                    check=True)
     for attempt in range(5):
         if subprocess.run(["git", "-C", wt, "push", "-q", "origin", "HEAD"]).returncode == 0:
@@ -2117,7 +2117,7 @@ def main(argv=None) -> int:
             print(json.dumps({k: v for k, v in r.items() if k != "argv"} if not a.dry_run else r))
         return 0
     if a.cmd == "post":
-        append_board([f"{datetime.now(timezone.utc).strftime('%H:%MZ')} scorer [{a.tag}] {a.text}"])
+        append_board([f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%MZ')} scorer [{a.tag}] {a.text}"])
         return 0
     if a.cmd == "collect":
         print(json.dumps(collect(a.since)))
