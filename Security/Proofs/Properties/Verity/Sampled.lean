@@ -263,7 +263,11 @@ noncomputable def L : FlockSoundness.Audit.Law A.n where
     | .error _ => Finset.univ
 
 /-- The session's draw is V5's, `Flock.Bridge.execSel` at the session's bytes and law. -/
-theorem L_eq : A.L = Flock.Bridge.execSel (n := A.n) A.src A.law A.n := rfl
+theorem L_eq : A.L = Flock.Bridge.execSel (n := A.n) A.src A.law A.n := by
+  unfold Live.L Flock.Bridge.execSel
+  refine congrArg (@Verity.Law.mk (Fin A.n) A.Ω _ _) (funext fun ω => ?_)
+  rcases _root_.SampledProofs.Draw.drawUnits A.law A.n (_root_.Properties.SampledProofs.bytesOf (A.src ω 0)) with
+    _ | ⟨d, x⟩ <;> rfl
 
 /-- **C-Flock's live audit at the session**, the game V5 bounds: the prover registers, the device's bytes draw, and
 the live session runs at the draw. -/
