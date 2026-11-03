@@ -527,10 +527,10 @@ def SEED_COINS : String :=
 
 def coinsWhy : Coins → Option String
   | .seed => some SEED_COINS
-  | .tree _ => none
+  | .os | .tree _ => none
 
-/-- **The session is in a form `verify` takes**: a statement version of `served`, on the challenger's keyed coin tree
-(`--coins tree`, or `--zk`). `verify` runs it last, once every check has passed. -/
+/-- **The session is in a form `verify` takes**: a statement version of `served`, on live coins: the challenger's keyed coin
+tree (`--coins tree`, or `--zk`) or the verifier's OS's (`--coins os`). `verify` runs it last, once every check has passed. -/
 def servedForm (tags : Tags) (coins : Coins) : Except String Unit :=
   match versionWhy tags <|> coinsWhy coins with
   | some why => .error why

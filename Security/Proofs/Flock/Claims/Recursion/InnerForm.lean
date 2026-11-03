@@ -144,7 +144,7 @@ theorem check_plain {r : Readable.Read} (h : r.check = .ok ()) (hz : r.zk = fals
     simp [ProvedScope.statementRules] at h5 h6
     exact ⟨h5, by simpa using h6⟩
 
-/-- **Flock's plain verifier reads a `Tags.circuitPlainLeaves` statement without `--coins os`** at the
+/-- **Flock's plain verifier reads a `Tags.circuitPlainLeaves` statement that names no per-round OS coins** at the
 files' tags (`RecCoins.innerTags`), on a seed's coins, with the statement's files, table count, lookup tables,
 partition, draw and public inputs. -/
 theorem ins_plainLeaves {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) (hz : w.zk = false)
