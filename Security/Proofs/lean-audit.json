@@ -67,6 +67,7 @@
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness",
+  "Proofs.Properties.Verity.Sampled.Messages",
   "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Pous.WipeSigned",
