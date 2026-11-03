@@ -3078,12 +3078,12 @@ def _tree(repo: Path, commit: str) -> str:
 PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py",
                         "tests/test_repository.py", "tools/research/tests/test_pythonpath.py")
 #: what the sync's preflight runs rather than judges: `PREFLIGHT_TEST_PATHS` and what they load from the tree (pytest's settings
-#: and conftests for the two directories they run in, `waits.py`, `pins.py` and the `suites.py` the module strings take the
-#: members' packages from, under `tools/verity/check/`, and the `research` on their PYTHONPATH), and the workspace's members (the
-#: root `pyproject.toml`); a directory ends in `/`.  A base that changes one of them carries no verdict across (`Queue._standing`)
-PREFLIGHT_RULES = (*PREFLIGHT_TEST_PATHS, "tests/conftest.py", "tools/research/tests/conftest.py",
-                   "tools/research/tests/waits.py", "tools/research/pyproject.toml", "tools/research/src/", "tools/verity/check/",
-                   "pyproject.toml")
+#: for the two directories they run in, the conftest of `tools/research/tests` (one added beside the root's tests belongs here
+#: too), `waits.py`, `pins.py` and the `suites.py` the module strings take the members' packages from, under
+#: `tools/verity/check/`, and the `research` on their PYTHONPATH), and the workspace's members (the root `pyproject.toml`); a
+#: directory ends in `/`.  A base that changes one of them carries no verdict across (`Queue._standing`)
+PREFLIGHT_RULES = (*PREFLIGHT_TEST_PATHS, "tools/research/tests/conftest.py", "tools/research/tests/waits.py",
+                   "tools/research/pyproject.toml", "tools/research/src/", "tools/verity/check/", "pyproject.toml")
 
 
 def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]:
