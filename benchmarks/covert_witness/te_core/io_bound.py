@@ -46,8 +46,11 @@ search over small chained triples: Λ = 2/√3 (the "numerical" figures).
   each split gadget costs some block one input bit of its own, so at most N·k are split, and Γ grows by k·cell_gates
   (the "no_cell" figures, which need no premise on the partition).
 - P-width: every operand entry of a counted product that a block uses is paid by input bits of its own, at least its
-  passed width (a partial sum may pay b of its b_C bits and keep the rest for its own face; fan-out 1). `rows_of`
-  checks it structurally (`_Rates`) and counts only products whose operands both pass.
+  passed width (a partial sum may pay b of its b_C bits and keep the rest for its own face; fan-out 1). It is a premise
+  on a reference training circuit, false on a declared one, whose wiring the prover controls. It is stronger than
+  Security's `TrainingIncompressible`, which charges a received partial sum b_a, takes the larger of the input and
+  partial-sum counts rather than their sum, and whose `Chain` has no product of two activations. `rows_of` checks its
+  dataflow side (`_Rates`) and counts only products whose operands both pass; the gate-level side is assumed.
 - P-share: counted products share arrays only as forward/dX/dW triples. A product of an array with itself (`self`)
   can do 2α and is not counted.
 - For every method: no product is computed by a bilinear algorithm with fewer multiplications than its MACs (a
