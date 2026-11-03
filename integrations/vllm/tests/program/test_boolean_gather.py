@@ -1,8 +1,9 @@
-"""`verity.ml.definitions.registry.boolean_gather`: the Boolean vocabulary gathers and embedding agree with `GatherBf16x{V}_v1` and
-`Embedding_v1` on edge and random tokens (negative, past the vocabulary, at every chunk boundary), are pinned by gate count and
-program digest, and cut under `Q_word_v1{X=16,W=32}` into one unit of 16 output bits per gather, with no gate two gathers compute.
-The gathers over more than 1024 words are trees of Calls whose chunk Definition takes seconds to compile, so their tests are
-slow; the quick ones cover the multiplexer tree traced whole."""
+"""`verity.ml.definitions.registry.boolean_gather`: the Boolean vocabulary gathers and embedding agree with `GatherBf16x{V}_v1`,
+`GatherF32x{V}_v1` and `Embedding_v1` on edge and random tokens (negative, past the vocabulary, at every chunk boundary), are
+pinned by gate count and program digest, and cut under `Q_word_v1{X=16,W=32}` into one unit of 16 output bits per gather, with
+no gate two gathers compute. `GatherF32x{V}_v2` is one Definition, the word family's Boolean version made on demand and
+`boolean_fp8_moe`'s expert gather alike. The gathers over more than 1024 words are trees of Calls whose chunk Definition takes
+seconds to compile, so their tests are slow; the quick ones cover the multiplexer tree traced whole."""
 from __future__ import annotations
 
 import json
@@ -17,11 +18,16 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.boolean.trace import word_of
+from verity.ml.definitions import boolean as BB
+from verity.ml.definitions.registry import boolean_fp8_moe as BFM
 from verity.ml.definitions.registry import boolean_gather as BGA
 from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry import ref_prims as RP
 from verity.ml.definitions import word as W
 
 SERVED_VOCAB = 49152
+#: the training step's vocabulary, over which it gathers an f32 word (`GatherF32x50304_v1`)
+TRAINING_VOCAB = 50304
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -32,9 +38,15 @@ PINS = {
     "GatherBf16x1024u10_v1": (16368, 32736, 0, "342ae6660d384c030788a4e8d1acd46784bb40d4bd1c49f027378765bc35c19036ff5ec3d241ca671d94f34375f48902539942fe64097d8ac4d2d1cb44796b6b"),
     "GatherBf16x1100_v2": (18016, 35600, 405, "13b5d96e04c3c84641ee9330dd9e2d1a14224fc79cf0603aa9216b8e135f1db500f807f3f1a5568c2eec14653871caac90ff709e1fd3b400739046ae18e28d77"),
     "Embedding_v2{V=1100,H=2}": (36032, 71200, 810, "01796fa581b87c15391b8bc98d1789432a6a82b1e928435b46853c81bd15346ebc0d78acaa6db9fdc2baadecb90849af27852c9de053dad3899c6c369d8c0387"),
+    "GatherF32x64_v2": (2848, 4864, 234, "3fcbb5a9e4b1b6f77b3ba6d123d85521fdc68a1876aa53ce3171a6c2d3b0dc7796c9342d679fbf5994a69031a24a73455efde8634e9edebab5b4ed60313761e1"),
+    "GatherF32x128u10_v1": (4160, 8224, 27, "b68e161389f1e1a9badaaf275fc86ceb3d9655d2e26240fbfcf07799792c85c5af8e37078faf796f579e5066c70409012659239d414aff4bf5e6b82bd20c1a4b"),
+    "GatherF32x50u22_v1": (2176, 3744, 171, "5f4eac65d7ed4d1b6c9a45187657be4ee9d0eeaab5d3d15767ba1b861e8d1f80d6c575761f5f91178a4aacce2a8f0b9c8390dbba6060858e654b975ddc6d9ccd"),
+    "GatherF32x1024u10_v1": (32736, 65472, 0, "ef4a2799247f2f245f1e83882e6f0dd57504ebb379dfb4faea4e340b5adbe2a5c520f83f4f609c07f8b2772567e46bbc56c56d0a761c776fa3a4263b7383dd4c"),
 }
-QUICK = [bind(BGA.gather_bf16(64)), bind(BGA.gather_index(76, 10)), bind(BGA.gather_index(2, 22)), bind(BGA.Embedding, V=64, H=16)]
-TREES = [bind(BGA.gather_index(1024, 10)), bind(BGA.gather_bf16(1100)), bind(BGA.Embedding, V=1100, H=2)]
+QUICK = [bind(BGA.gather_bf16(64)), bind(BGA.gather_index(76, 10)), bind(BGA.gather_index(2, 22)), bind(BGA.Embedding, V=64, H=16),
+         bind(BGA.gather_f32(64)), bind(BGA.gather_index(128, 10, "F32")), bind(BGA.gather_index(50, 22, "F32"))]
+TREES = [bind(BGA.gather_index(1024, 10)), bind(BGA.gather_bf16(1100)), bind(BGA.Embedding, V=1100, H=2),
+         bind(BGA.gather_index(1024, 10, "F32"))]
 
 
 def _pinned(target) -> None:
@@ -94,6 +106,49 @@ def test_the_gather_agrees_with_gather_bf16_v1(V: int) -> None:
 @pytest.mark.parametrize("V", [1024, 1100, 2048, 3000])
 def test_the_tree_of_calls_agrees_with_gather_bf16_v1(V: int) -> None:
     _agree_gather(V, V, 400)
+
+
+def _agree_f32(V: int, seed: int, n: int) -> None:
+    g = bind(BGA.gather_f32(V))
+    assert word_of(g) is RP.gather_f32(V)
+    rng = np.random.default_rng(seed)
+    tok = _tokens(V, rng, n)
+    col = rng.integers(0, 1 << 32, (len(tok), V), dtype=np.uint64)
+    _agree(g, tok, col)
+    past = np.array([V, (1 << 32) - 1], np.uint32)
+    assert BS.evaluate_words(g, past, col[:2]).reshape(-1).tolist() == [BGA.F32_FILL] * 2
+
+
+@pytest.mark.parametrize("V", [1, 3, 64])
+def test_the_f32_gather_agrees_with_gather_f32_v1(V: int) -> None:
+    _agree_f32(V, V, 400)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("V", [1024, 1100, 3000])
+def test_the_f32_tree_of_calls_agrees_with_gather_f32_v1(V: int) -> None:
+    _agree_f32(V, V, 400)
+
+
+def test_the_f32_gather_is_one_definition_for_the_word_family_and_the_expert_gathers() -> None:
+    """`GatherF32x{V}_v1`'s Boolean version, made on demand by id, is `boolean_gather.gather_f32`'s, which `boolean_fp8_moe`'s
+    expert gather returns too, whole (V <= 1024) and as a tree of Calls."""
+    for V in (3, 1100, TRAINING_VOCAB):
+        g = BB.boolean_version(RP.gather_f32(V))
+        assert g.id == f"GatherF32x{V}_v2" and g.defn is BGA.gather_f32(V) is BFM.gather_f32(V)
+
+
+def test_the_training_vocabulary_f32_gather_is_pinned() -> None:
+    g = bind(BGA.gather_f32(TRAINING_VOCAB))
+    assert BL.is_boolean(g)
+    assert BS.compile(g).counts == {"and": 1610400, "xor": 3220096, "not": 198}
+    assert [(n.fn.id, n.gates) for n in g.body.nodes] == [("GatherF32x1024u10_v1", 49 * 98208), ("GatherF32x128u10_v1", 12411),
+                                                          ("GatherF32x50u22_v1", 6091)]
+
+
+@pytest.mark.slow
+def test_the_training_vocabulary_f32_gather_agrees_with_gather_f32x50304_v1() -> None:
+    _agree_f32(TRAINING_VOCAB, 7, 24)
 
 
 def test_the_served_gather_is_pinned_and_agrees_with_gather_bf16x49152_v1() -> None:
