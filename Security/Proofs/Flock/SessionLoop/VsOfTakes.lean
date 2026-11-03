@@ -6,14 +6,14 @@ import Proofs.Flock.SessionLoop.FinL0Vals
 # A pad-blind worker meets `TakesVals` at its own values
 
 * **`Loop.takesVals_vsOf`**: at `SessionLoopZKDeployed`'s release with the loop's own inner rounds (`withInner`), at
-  its premises on the statement and the loop's inputs, `phased bx post` meets `TakesVals` at `vsOf bx`, whatever `post`
-  reads, at every `bx` that never reads `Hello`'s answer (`Loop.HelloBlind`).
+  its premises on the statement and the loop's inputs, `phased bx post` meets `TakesVals` at `vsOf bx`, at every `bx`
+  and whatever `post` reads.
 * `Loop.freedAt_unique`: two rounds that free pad `i` of rep stream `2j + r` along one coin vector free it as one word.
-  At the same prefix the worker's round, the frame's state and the free list are the same (`HelloBlind`,
-  `frameAnswer_congr`, `Free.roundFree_agree`), so the place in the absorbed order is the same; at a longer prefix the
-  frame's state has moved past every place the shorter one frees (`Free.roundFree_pos`, the rep's later rounds each
-  leaving the state their check returns: `ProgChecks`, `step_pos`), and the absorbed order is injective
-  (`absorbed_inj`).
+  At the same prefix the worker's round (`bwOf` hands `bx` the answers after `Hello`'s), the frame's state and the free
+  list are the same (`frameAnswer_congr`, `Free.roundFree_agree`), so the place in the absorbed order is the same; at a
+  longer prefix the frame's state has moved past every place the shorter one frees (`Free.roundFree_pos`, the rep's
+  later rounds each leaving the state their check returns: `ProgChecks`, `step_pos`), and the absorbed order is
+  injective (`absorbed_inj`).
 -/
 
 namespace Claims.ZKServer
@@ -258,8 +258,8 @@ end Takes
 
 /-- **Two rounds that free one pad along one coin vector free it as one word**: where pad `i` of rep stream `2j + r` is
 freed after a history opening the coins' first `n₁` and after one opening their first `n₂ ≥ n₁` (`FreedAt`, at the
-same nonce and what the workers see), by a worker of the algebraic phase that never reads `Hello`'s answer, the two
-words are one. At `n₁ = n₂` the worker's round (`HelloBlind`), the frame's state (`frameAnswer_congr`) and its free
+same nonce and what the workers see), by a worker of the algebraic phase, the two words are one. At `n₁ = n₂` the
+worker's round (it reads the answers after `Hello`'s, `bwOf`), the frame's state (`frameAnswer_congr`) and its free
 list (`Free.roundFree_agree`) are the same, and so is the word's place in the absorbed order (`absorbed_inj`). At
 `n₁ < n₂` the rep's rounds `n₁ + 1, …, n₂` each start where the last left the frame (`answered_pos_same`, `step_pos`),
 past the places round `n₁` frees (`Free.roundFree_pos`), so no place is freed twice. -/
@@ -270,7 +270,7 @@ theorem freedAt_unique
       (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
       ℕ → V (Tab × Array ByteArray))
     {x : Msg} {w : Flock.Wit} (hP : (LeanRelease.ofLoop Masked.dataE L₀ real).ProgChecks x w)
-    (bx : AlgWorker (LeanRelease.ofLoop Masked.dataE L₀ real)) (hH : HelloBlind _ bx)
+    (bx : AlgWorker (LeanRelease.ofLoop Masked.dataE L₀ real))
     {ν : CoinLayer.Nonce} {s : ∀ j, ZkView.Seen ((CoinLayer.session loopNr Masked.dataE).C x j).z}
     {C : List FlockDeploy.Coin} {j : Fin (jOf x)} {r : Fin 2} {i n₁ n₂ : ℕ} {a₁ a₂ : F128}
     (hn : n₁ ≤ n₂) (hC : n₂ ≤ C.length)
@@ -345,11 +345,11 @@ theorem freedAt_unique
       exact Except.ok.inj (e2.symm.trans e1)
     have hv : v₂ = v₁ := by
       have e1 : bx x w ν ((CoinLayer.session loopNr Masked.dataE).seenOf x t₁)
-          (CoinLayer.rd ρ₀₁ :: ops₁.map fun p => CoinLayer.rd p.2) 0 = some (v₁, false) := hv₁
+          (some (ops₁.map fun p => CoinLayer.rd p.2)) 0 = some (v₁, false) := hv₁
       have e2 : bx x w ν ((CoinLayer.session loopNr Masked.dataE).seenOf x t₂)
-          (CoinLayer.rd ρ₀₂ :: ops₂.map fun p => CoinLayer.rd p.2) 0 = some (v₂, false) := hv₂
+          (some (ops₂.map fun p => CoinLayer.rd p.2)) 0 = some (v₂, false) := hv₂
       rw [hs₁] at e1
-      rw [hs₂, hD, hH x w ν s (CoinLayer.rd ρ₀₂) (CoinLayer.rd ρ₀₁)] at e2
+      rw [hs₂, hD] at e2
       exact (Prod.mk.inj (Option.some.inj (e2.symm.trans e1))).1
     rw [hm, hv, ← heq] at hf₂
     have hfr : fr₂ = fr₁ := (Free.roundFree_agree
@@ -395,11 +395,11 @@ theorem freedAt_unique
       exact Except.ok.inj (e2.symm.trans e1)
     have hvv : vG = v₁ := by
       have e1 : bx x w ν ((CoinLayer.session loopNr Masked.dataE).seenOf x t₁)
-          (CoinLayer.rd ρ₀₁ :: ops₁.map fun p => CoinLayer.rd p.2) 0 = some (v₁, false) := hv₁
+          (some (ops₁.map fun p => CoinLayer.rd p.2)) 0 = some (v₁, false) := hv₁
       have e2 : bx x w ν ((CoinLayer.session loopNr Masked.dataE).seenOf x t₂)
-          (CoinLayer.rd ρ₀₂ :: (ops₂.take n₁).map fun p => CoinLayer.rd p.2) 0 = some (vG, false) := hvG
+          (some ((ops₂.take n₁).map fun p => CoinLayer.rd p.2)) 0 = some (vG, false) := hvG
       rw [hs₁] at e1
-      rw [hs₂, hD, hH x w ν s (CoinLayer.rd ρ₀₂) (CoinLayer.rd ρ₀₁)] at e2
+      rw [hs₂, hD] at e2
       exact (Prod.mk.inj (Option.some.inj (e2.symm.trans e1))).1
     unfold LeanRelease.checkAt at hcG
     rw [hMm, hvv] at hcG
@@ -441,8 +441,8 @@ theorem freedAt_unique
 
 /-- **A pad-blind worker of the algebraic phase meets `TakesVals` at its own values**: at `SessionLoopZKDeployed`'s
 release with the loop's own inner rounds (`withInner`), at its premises on the statement and the loop's inputs, at
-every algebraic phase's worker `bx` that never reads `Hello`'s answer (`HelloBlind`) and any worker `post` after the
-phase, `phased bx post` meets `TakesVals` at `vsOf bx`. Each word the frame frees in the worker's round is at a pad
+every algebraic phase's worker `bx` and any worker `post` after the phase, `phased bx post` meets `TakesVals` at
+`vsOf bx`. Each word the frame frees in the worker's round is at a pad
 below `n_E` other than `final_c`'s (`absorbed_lt_hab`, at the rep's layout: `lay_ofLoopLink`), where `vsOf` is the word
 some round frees there along the coins (`freeWord`), and that round frees it as this word (`freedAt_unique`). -/
 theorem takesVals_vsOf
@@ -462,7 +462,6 @@ theorem takesVals_vsOf
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hSrc : Loop.Src (LeanRelease.withInner Masked.dataE L₁ real fin) src x w)
     (bx : AlgWorker (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real))
-    (hH : HelloBlind _ bx)
     (post : (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real).toSrv.Worker) :
     TakesVals (vsOf _ bx) (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real)
       (phased _ bx post) x w := by
@@ -533,10 +532,10 @@ theorem takesVals_vsOf
     rcases le_total (Classical.choose hex) ops.length with h | h
     · exact freedAt_unique
         (LeanRelease.withFiles (LeanRelease.withLink (LeanRelease.withInner Masked.dataE L₁ real fin) src) src) real
-        hP bx hH h (Nat.le_of_lt (Nat.lt_of_lt_of_eq hlt List.length_ofFn.symm)) hc hF
+        hP bx h (Nat.le_of_lt (Nat.lt_of_lt_of_eq hlt List.length_ofFn.symm)) hc hF
     · exact (freedAt_unique
         (LeanRelease.withFiles (LeanRelease.withLink (LeanRelease.withInner Masked.dataE L₁ real fin) src) src) real
-        hP bx hH h (Nat.le_of_lt (Nat.lt_of_lt_of_eq hn List.length_ofFn.symm)) hF hc).symm
+        hP bx h (Nat.le_of_lt (Nat.lt_of_lt_of_eq hn List.length_ofFn.symm)) hF hc).symm
   rw [hord.1]
   refine Eq.symm ((vsWord_vsOf _ bx x w ν _ t j r hiE).trans ?_)
   rw [ite_eq_right hab.2]

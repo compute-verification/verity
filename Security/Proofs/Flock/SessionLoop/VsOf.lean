@@ -22,11 +22,8 @@ what `RefSession.SwVals` reads, once each pad index has one round that frees it.
 * **`Loop.finalCFixed_vsOf`**: `vsOf bx`'s `final_c` is its round-1c values' c_eval (`Loop.FinalCFixed`), at every
   coins, by construction: no round frees `final_c`'s pad.
 
-`Loop.takesVals_vsOf` (`SessionLoop/VsOfTakes`) proves that `phased bx post` meets `TakesVals` at `vsOf bx`.
-`Loop.HelloBlind` is not yet a premise of any guarantee. `Loop.blind` hands the worker `Hello`'s answer read as a coin
-(`ZkServer.lift` maps `CoinLayer.rd` over the whole history), while `TakesVals` reads `vs` at the coins the later answers
-open, so at a worker that reads `Hello`'s answer no `vs` meets it: the verifier chooses that answer, and two answers
-whose roots agree validate the same openings.
+`Loop.takesVals_vsOf` (`SessionLoop/VsOfTakes`) proves that `phased bx post` meets `TakesVals` at `vsOf bx`: `bwOf`
+hands `bx` the answers after `Hello`'s (`List.tail?`), the coins `TakesVals` reads `vs` at, and never `Hello`'s answer.
 -/
 
 namespace Claims.ZKServer
@@ -110,11 +107,6 @@ noncomputable def vsOf (bx : AlgWorker L) : (CoinLayer.session loopNr Masked.dat
       (_root_.Flock.dot (_root_.Flock.lagrange _root_.Flock.nodesL _root_.Flock.den6Inv (zcE c j r).z)
         ((Array.range 64).map fun k => vsOfWord L bx x w ν c s j r wt u V ((layE x j).r1c k)) : FlockLevel3.GF128)
     else (vsOfWord L bx x w ν c s j r wt u V i.val : FlockLevel3.GF128)
-
-/-- **The algebraic phase's worker never reads `Hello`'s answer**: its value is the same at two answer lists that differ
-in their first, `Hello`'s, answer read as a coin. The deployed worker never receives `Hello`'s answer. -/
-def HelloBlind (bx : AlgWorker L) : Prop :=
-  ∀ x w ν s (a a' : FlockDeploy.Coin) (cs : List FlockDeploy.Coin) (n : ℕ), bx x w ν s (a :: cs) n = bx x w ν s (a' :: cs) n
 
 /-- **`vsOf`'s word below `n_E`**: the c_eval of its round-1c words at `final_c`'s index, `vsOfWord` elsewhere, at the
 tape's base and what the workers see of the tape. -/
