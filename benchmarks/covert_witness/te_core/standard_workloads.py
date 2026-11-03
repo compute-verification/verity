@@ -17,8 +17,9 @@ included), with `binding_kind`, `rests_on` and `kinds` there, and `rho_served` i
 (te_core.panels' `SERVED`). ρ, its binding kind and what it rests on are published's as it gives them (null where it
 has no bound, resting on "unmeasured"); reading A's ρ is never infinite, so `build` refuses one. `kinds` is
 algorithm_policy's cell of the terms the max takes, its `partial` and `why` where published sets them, and, beside
-them, the sensitivities `SENSITIVITIES`: published's (reduction, update and fresh_cell, the fresh-products term under
-P-cell) and reading B's token and decoding forms. `rho_inputs` holds
+them, the sensitivities `SENSITIVITIES`: published's (reduction, update, fresh_cell, the fresh-products term under
+P-cell, and fresh_converged, a void term's best set of the products no diverged cycle feeds, with the share of the
+counted fresh MACs that set keeps, `fresh_converged_share`) and reading B's token and decoding forms. `rho_inputs` holds
 `KEYS` (C_gates beside algorithm_policy's `rho_inputs`), from which algorithm_policy.page_rho gives the dial's ρ at
 any (c, k), and beside them te_core.panels' `FRESH`, the fresh-products term over c at each k of the dial its products
 are classified at (null for a run with no product rows), which the console's port multiplies by c; `build` refuses a
@@ -381,9 +382,14 @@ def rho_cell(v: float | None) -> float | str | None:
 
 def kinds(one: dict, b: dict) -> str:
     """formalism.published's `one` as the kinds cell (algorithm_policy's `kinds`), its sensitivities `SENSITIVITIES`
-    from the one bound `b` at its point, less any `one`'s max takes."""
-    return algorithm_policy.kinds(one | {"sensitivities": {s: b["sensitivities"][s] for s in SENSITIVITIES
+    from the one bound `b` at its point, less any `one`'s max takes, and where the fresh-products term is void with
+    fresh_converged beside it, the share of the counted fresh MACs that figure's products keep
+    (`fresh_converged_share`, coordinator 19:30Z)."""
+    cell = algorithm_policy.kinds(one | {"sensitivities": {s: b["sensitivities"][s] for s in SENSITIVITIES
                                                            if s not in one["terms"]}})
+    if (share := one.get("fresh_converged_share")) is None:
+        return cell
+    return f'{cell[:-1]},"fresh_converged_share":{algorithm_policy.num(share, algorithm_policy.DIGITS)}}}'
 
 
 def finite(x):

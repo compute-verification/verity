@@ -43,11 +43,13 @@ PRODUCT = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m":
            "gates_per_mac": 1480.0, "cell_gates": 23682.0, "fed": [[1024, 1.0]], "P": 1.0, "gathered": [False, False]}
 
 
-def products_rows(*rows, steps: float = 1.0, p_match: tuple = (), dial: tuple = ()) -> dict:
-    """`rows` as a run's products (formalism.products_of_trace): a traced step's, times `steps`, with the ops that
-    break P-match `p_match`, and the same rows at each k of `dial` (a trace's `at`)."""
-    block = {"capture": formalism.SYSTEM_FROM, "k": float(policy.CONSOLE[1]), "order": "unknown", "tokens": 8,
-             "gates": None, "rows": list(rows), "p_match": list(p_match)}
+def products_rows(*rows, steps: float = 1.0, p_match: tuple = (), dial: tuple = (),
+                  capture: str = formalism.ELEMENTWISE_FROM, elementwise: tuple = ()) -> dict:
+    """`rows` as a run's products (formalism.products_of_trace): a traced step's, times `steps`, captured by
+    `capture`'s te_core, with the ops that break P-match `p_match` and the matrix products it writes elementwise
+    `elementwise`, and the same rows at each k of `dial` (a trace's `at`)."""
+    block = {"capture": capture, "k": float(policy.CONSOLE[1]), "order": "unknown", "tokens": 8,
+             "gates": None, "rows": list(rows), "p_match": list(p_match), "elementwise_products": list(elementwise)}
     at = {f"{k:.0f}": {"k": float(k), "rows": list(rows), "p_match": list(p_match)} for k in dial}
     return formalism.products_of_trace(block | ({"at": at} if at else {}), steps)
 
@@ -271,9 +273,10 @@ def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed
     console's default and at the serving block, whose k the trace keeps them at too, with its reason where the serving
     block's k leaves them unmeasured (they were classified at the console's alone); assumed where the dominant traced step's stand in for steps of another shape, or with te_core's
     reason where unmeasured (an op log's, a round untraced, rows captured before te_core 4.12.1 that don't give all
-    the term reads, the step's whole-making system and which operands read an embedding's rows, a step that breaks
-    P-match, and a void: a system with no fixed point at the k, which voids every subset of the products, never a
-    measured 0); and assumed where untraced steps that update count none."""
+    the term reads, the step's whole-making system and which operands read an embedding's rows, rows captured before
+    4.12.9, whose capture didn't look for matrix products written elementwise, a step that writes some, a step that
+    breaks P-match, and a void: a counted product fed by a cycle with no fixed point at the k, which no subset may
+    drop, never a measured 0); and assumed where untraced steps that update count none."""
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
 
@@ -296,6 +299,14 @@ def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed
         old = {x: v for x, v in PRODUCT.items() if x not in since}
         assert unmeasured(products_rows(old)) == formalism.FRESH_RETRACE
         assert SW.products(bounds(products_rows(old))) == f"assumed: {formalism.FRESH_RETRACE}"
+    unchecked = products_rows(PRODUCT, capture=formalism.SYSTEM_FROM)
+    assert unmeasured(unchecked) == formalism.FRESH_UNCHECKED
+    assert SW.products(bounds(unchecked)) == f"assumed: {formalism.FRESH_UNCHECKED}"
+    outer = {"op": "aten.mul.Tensor", "count": 2, "macs": 4096}
+    written = unmeasured(products_rows(PRODUCT, elementwise=[outer]))
+    assert written.startswith("unmeasured: the traced step writes matrix products as elementwise steps")
+    assert "aten.mul.Tensor (2×, 4.1e+03 multiplications)" in written
+    assert SW.products(bounds(products_rows(PRODUCT, elementwise=[outer]))) == f"assumed: {written}"
     gather = {"op": "aten.embedding.default", "fan_out": 4.0, "count": 1}
     broken = unmeasured(products_rows(PRODUCT, p_match=[gather]))
     assert broken.startswith("unmeasured: the traced step breaks P-match") and "aten.embedding.default" in broken
@@ -361,6 +372,32 @@ def test_a_binding_fresh_products_term_is_publisheds_and_the_products_input_name
     assert (cells["binding_kind"], cells["rests_on"]) == ("fresh_products", premises)
     assert json.loads(cells["kinds"])["rests_on"] == {"fresh_products": premises}
     assert json.loads(cells["input_status"])["products"].startswith(f"assumed: none on 1 untraced step ({last}),")
+
+
+def test_a_term_whose_counted_product_a_diverged_cycle_feeds_is_void_with_the_best_set_of_the_rest_beside_it(
+        monkeypatch):
+    """The coordinator's 19:30Z rule: where a counted product is fed by a cycle with no fixed point at the k, no subset
+    drops it, so the term is void (null and unmeasured, never a measured 0) and the row is too, with the best set of
+    the products no such cycle feeds beside it in the kinds cell as the sensitivity fresh_converged, never in the max,
+    and the share of the counted fresh MACs that set keeps; a measured term carries neither."""
+    fx = json.loads(PINNED.read_text())
+    short = PRODUCT | {"dims": PRODUCT["dims"] | {"k": 8}, "macs": 256, "k_whole": 8, "fed": [[8, 1.0]]}
+    m = dataclasses.replace(formalism.from_json(fx["measured"]), products=products_rows(PRODUCT, short, steps=1e9))
+    b = formalism.bound(m, *SW.POINTS["console"])
+    conv = b["inputs"]["fresh_products"]["converged"]
+    assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"] == formalism.FRESH_VOID
+    assert conv["diverged_fed"] == 1 and conv["term"] > 1
+    assert formalism.published(m, *SW.POINTS["console"], SW.READING)["fresh_converged_share"] == \
+        conv["kept_macs_share"] == pytest.approx(32768 / (32768 + 256))
+    _, _, cells = build(m, fx, monkeypatch)
+    kinds = json.loads(cells["kinds"])
+    assert (cells["rho_console"], cells["binding_kind"], kinds["bound"]["fresh_products"]) == (None, "unmeasured", None)
+    assert kinds["sensitivity"]["fresh_converged"] == pytest.approx(conv["term"], rel=1e-3)
+    assert kinds["fresh_converged_share"] == pytest.approx(conv["kept_macs_share"], rel=1e-3)
+    _, _, cells = build(dataclasses.replace(m, products=products_rows(PRODUCT, steps=1e9)), fx, monkeypatch)
+    kinds = json.loads(cells["kinds"])
+    assert kinds["bound"]["fresh_products"] > 1 and kinds["sensitivity"]["fresh_converged"] is None
+    assert "fresh_converged_share" not in kinds
 
 
 def test_a_generation_runs_record_is_its_rounds_with_gemms_on_served_codes_priced_as_nvfp4():
