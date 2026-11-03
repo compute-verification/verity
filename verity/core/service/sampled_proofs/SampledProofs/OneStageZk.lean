@@ -113,7 +113,7 @@ def paramsOfJson (j : Json) : V Params := do
   exactly pr #["circuit", "registered"] "proofs"
   let (circuit, registered) ← circuitOf pr
   let rest := Json.mkObj (without j "proofs")
-  let base ← OneStage.paramsOfJson rest
+  let base ← OneStage.paramsCovered rest
   if base.challenger.isNone then throw NO_CHALLENGER
   let some partition := base.verifier.partition
     | throw "partition is null: the sessions are verified against the verifier's own partition object"
@@ -151,7 +151,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   if (field? j "verdicts").isSome then
     throw "the evidence names verdicts: this audit's verdicts are its own run of the verifier on the proofs"
   let some pr := field? j "proofs" | throw "the evidence names no proofs (the public file and the sessions' files)"
-  let base ← OneStage.evidenceOf (← Flock.canon (Json.mkObj (without j "proofs" ++ [("verdicts", Json.mkObj [])]))).toUTF8
+  let base ← OneStage.evidenceCovered (← Flock.canon (Json.mkObj (without j "proofs" ++ [("verdicts", Json.mkObj [])]))).toUTF8
   let (pub, sessions) ← proofsOf pr
   if sessions.map (·.name) != base.sessions then throw "proofs: the sessions are not the evidence's sessions, in order"
   pure { base, pub, sessions }

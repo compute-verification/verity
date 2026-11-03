@@ -77,6 +77,11 @@ but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s
 A work draw may add a closure, proof blocks proved with the drawn ones. Each verifier derives the strata from its own program and
 query, never from the prover.
 
+**What the stream runs.** A `Stream` and the Lean verifier refuse what the sampled audit's soundness statement doesn't
+cover: a `bernoulli` sampling design at `0 < p < 1` at `register` (`shapes`), whose drawn count varies, and a closure map
+at `select` (`closure`), before any coin is read. The one-stage audit refuses such a law in its parameters and a draw
+that carries a closure in its evidence. `All`, which draws every proof block whatever the coins, stays covered.
+
 **What an accepted audit establishes.** Under a stratified draw, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)` (the probability that the draw misses all of them), `m_s` being its proof blocks in
 stratum `s`, so a subcircuit that is incorrect in every proof block is never missed. Under the work sampling design, incorrect proof blocks
@@ -209,8 +214,8 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   - `check_public` is the public-items rule on a registration, and `check_verdicts` what an outcome holds the verdicts
     to before the audit record (the Python; a `Stream` runs each by the verifier, `verifier.check_public` and
     `verifier.check_verdicts`).
-  - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (with a work
-    sampling design's `closure=`), `session`, `deliver` and `outcome`, which
+  - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (which refuses a
+    `closure=`), `session`, `deliver` and `outcome`, which
     raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it. Its `unit`
     is one subcircuit, or a window's several in order (a TP rank's served window): the check's `program` is then their
     digests and its query `Q_template_instances`, `register(counts=)` gives the challenger's own instances of each,
