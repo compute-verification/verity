@@ -1,11 +1,25 @@
 """A covert_witness-shaped prepare for test_script.py: the names te_core.capture.script stubs, and the model it builds."""
 from __future__ import annotations
 
+import os
+
 import torch
 from torch import nn
 
 EVAL_CTX = 8
 DEVICE = "cpu"
+TIER = os.environ.get("CW_TIER", "search")
+#: the toy's training FLOPs a step, which `budget` is a multiple of
+STEP_FLOPS = 1e6
+
+
+def budget(name: str, tier: str | None = None) -> dict:
+    """prepare.budget's shape: the search tier's FLOPs pay for two of the toy's steps, the long tier's for 100 times
+    them."""
+    tier = tier or TIER
+    if tier not in ("search", "long"):
+        raise SystemExit(f"prepare: no tier {tier!r} (search or long)")
+    return {"tier": tier, "train_flops": 2 * STEP_FLOPS * (100 if tier == "long" else 1)}
 
 
 class Net(nn.Module):
