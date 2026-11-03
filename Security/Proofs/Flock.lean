@@ -24,8 +24,10 @@ public import Proofs.Flock.Claims.Complete
 public import Proofs.Flock.Claims.Complete.ZkTables
 public import Proofs.Flock.VBridge
 public import Proofs.Flock.Sampled
+public import Proofs.Flock.SampledGeneric
 public import Proofs.Flock.Claims
 public import Proofs.Flock.SamplingClaims
+public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.Bridge
 public import Proofs.Flock.Bridge.Transports
 public import Proofs.Flock.Bridge.TransportsRefs

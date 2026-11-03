@@ -3260,7 +3260,8 @@
    "Proofs.Properties.NetworkCertifier.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod": "the integrity bridge's realization reads C-Flock's integrity audit over a period (Flock.Guarantees.IntegrityHorizon, its SamplingBlock and Period.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock": "the block integrity bridge's realization reads C-Flock's integrity audit of a server-time block (Flock.Guarantees.IntegrityBlockCarried, its CarriedBlocks, SamplingBlock and CarriedBlocks.run), which is in Proofs; C-Flock is excepted until proofs extracts its spec",
-   "Proofs.Pouw.OnsiteFreed": "OnsiteFreed's witnesses read the toy instance's floor, certifier check and quiet prover (`twF`, `twNet`, `quiet`), proof-only beside it"
+   "Proofs.Pouw.OnsiteFreed": "OnsiteFreed's witnesses read the toy instance's floor, certifier check and quiet prover (`twF`, `twNet`, `quiet`), proof-only beside it",
+   "Proofs.Flock.SampledGeneric": "the sampled audit generic in the proof system reads C-Flock's audit game (`Audit.audit`, `ExtractionAnalysis`, `LinkFinder`) and states its proof-system interface beside it, still in Proofs; C-Flock is excepted until its spec is extracted"
   }
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
@@ -6611,6 +6612,24 @@
    ],
    "assumptions": [],
    "type_hash": "8c16cab1cb3a82846dac85a5de468d2758e66e0a407507d41a0c262fa17efc20"
+  },
+  "Flock.SecurityProofs.GenericSampledKS": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.GenericSampledKSCount": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.GenericSampledKSEscape": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.GenericSampledKSJoint": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.GenericSampledKSPa": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.GenericSampledZK": {
+   "owner": "@proofs"
   },
   "Flock.SecurityProofs.IntegrityBlock": {
    "owner": "@proofs",
@@ -13470,7 +13489,13 @@
    "Pous.SecurityProofs.ObligationWide320_nontrivial": "frozen (no-function): ObligationWide320's nontrivial witness: at 2^19 blocks and 320 reads the sure event, which a verifier that accepts everything passes, has probability 1, above 2^-20; it is about no function of the PoUS code and rests on no named assumption.",
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Verity.SecurityProofs.CommittedMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance."
+   "Verity.SecurityProofs.CommittedMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
+   "Flock.SecurityProofs.GenericSampledKS": "frozen (no-function): the sampled audit's soundness at any proof system for proof blocks, stated over C-Flock's audit game (`Audit.audit`) and an abstract proof system, extractor and trials (Security/Proofs/Flock/SampledGeneric/Defs.lean), not a Lean function; it reads GenericSampledKS (Security/Proofs/Flock/SampledGeneric/Statements.lean), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.GenericSampledKSPa": "frozen (no-function): GenericSampledKS at the sure event, the acceptance probability bounded by the sampling design's P_a(F) plus the knowledge and binding terms, over an abstract proof system, not a Lean function; it reads GenericSampledKSPa (Security/Proofs/Flock/SampledGeneric/Statements.lean), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.GenericSampledKSEscape": "frozen (no-function): GenericSampledKS at the event that a set lies inside the incorrect set, over an abstract proof system, not a Lean function; it reads GenericSampledKSEscape (Security/Proofs/Flock/SampledGeneric/Statements.lean), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.GenericSampledKSCount": "frozen (no-function): GenericSampledKS at the event that the incorrect set has at least K proof blocks, bounded through the sampling design's miss curve, over an abstract proof system, not a Lean function; it reads GenericSampledKSCount (Security/Proofs/Flock/SampledGeneric/Statements.lean), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.GenericSampledKSJoint": "frozen (no-function): GenericSampledKSPa at a proof system whose extractor is a game after the judged session with a knowledge error per proof block (`JointExtractor`), an abstract interface, not a Lean function; it reads GenericSampledKSJoint (Security/Proofs/Flock/SampledGeneric/Statements.lean), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.GenericSampledZK": "frozen (no-function): the sampled audit's zero knowledge from an abstract proof system's (`Zk.ZK`) and an abstract commitment's hiding (`Hider.Hiding`), stated over views in C-Flock's game model, not a Lean function; it reads GenericSampledZK (Security/Proofs/Flock/SampledGeneric/Statements.lean), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
