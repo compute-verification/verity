@@ -1,6 +1,6 @@
 {
  "traces": [
-  "art:52b3cab978f06203a39f274f8c36d6f4d6d865ccaf491ae871d651640e0c5e51"
+  "art:40e69be38c53e13a15750396018b91f20fbe76123d4424d4f1df355b3028bf56"
  ],
  "rows": [
   {"workload": "standard", "model": "20M", "run": "r20261103-053241-99bf",
