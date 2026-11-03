@@ -4,7 +4,7 @@ public import Proofs.Flock.RecGeneric.Statement
 public import Proofs.Flock.Recursive.KSStatement
 
 /-!
-# C-Flock as the instance: the server, the inner protocol and the outer extraction
+# Flock as the instance: the server, the inner protocol and the outer extraction
 
 The generic statements (`Proofs.Flock.RecGeneric.Statement`) at today's recursion:
 
@@ -14,22 +14,22 @@ The generic statements (`Proofs.Flock.RecGeneric.Statement`) at today's recursio
   injective (`BindsOfBound`) and its commitments open (`OpensOfBound`);
 * **the inner protocol** is the element-level Flock `DE` (`Proto.ofFlock`), its knowledge error `KSFlockLin`'s three terms
   as run finders (`termB`, `termFC`, `termF0`): `KSFlockLin` is its `Proto.KSAbortLin` (`KSAbortLinOfFlockLin`, from
-  `ForkPlanIsBAbort`, `CapPlanIsFC`, `ConflictPlanIsF0`), and its plans meet a bad unit at most `0`, `2` and `k + 1`
-  times as often as one unit is bad (`ForkPlanReads`, `CapPlanReads`, `ConflictPlanReads`, Wald's bound);
+  `ForkPlanIsBAbort`, `CapPlanIsFC`, `ConflictPlanIsF0`), and its plans meet a bad run at most `0`, `2` and `k + 1`
+  times as often as one run is bad (`ForkPlanReads`, `CapPlanReads`, `ConflictPlanReads`, Wald's bound);
 * **the outer extraction** is today's `E_O` at the compiled record (`Comp.ofRec`), knowledge sound at each statement
   from each session's (`OuterKSOfSessions`, from `Claims.Recursion.OuterKS`, which `outerKS_of_flockKS` gives from
   Flock's KS at the outer record).
 
 There `Comp.err` is at most `KSLin2`'s bound term by term: `κ`, `γ` and `β` equal `KSLin2`'s (`β = βdev2`, from
-`d = 0, 2, k + 1`); `B`'s term at the draws and the judged draw's `B_I` add to `(4k_I + 1)·Pr[B_I]` (`ForkPlansLeBinnerV`);
-`FC`'s and `F0`'s plans at the draws are `FCI` and `F0I` (`CapPlanIsFCI`, `ConflictPlanIsF0I`); and the gated link
-searches what `FdevV` searches where its first draw gives witnesses and nothing where it doesn't
+`d = 0, 2, k + 1`); `B`'s term at the reruns and the judged run's `B_I` add to `(4k_I + 1)·Pr[B_I]` (`ForkPlansLeBinnerV`);
+`FC`'s and `F0`'s plans at the reruns are `FCI` and `F0I` (`CapPlanIsFCI`, `ConflictPlanIsF0I`); and the gated link
+searches what `FdevV` searches where its first rerun gives witnesses and nothing where it doesn't
 (`LinkPlanLeFdevV`). So L1 gives `KSLin2On` at the statements where the instance's contract holds
 (`RecoversKSLin2On`): at `RecDeploy.DenseAt` it is today's `Flock.Guarantees.RecursiveKS`, and at every statement
 `Flock.Guarantees.RecursiveKSEveryAtRec`, which rests on V\*'s two contract facts at every form.
 
-`FdevV` searches its loop's draws even where its first draw gives nothing, which its declared cost doesn't charge; the
-gated link's cost charges every draw it names (`RunFinder.finder`), so the bits read off `linkPlan` charge what they
+`FdevV` searches its loop's reruns even where its first rerun gives nothing, which its declared cost doesn't charge; the
+gated link's cost charges every rerun it names (`RunFinder.finder`), so the bits read off `linkPlan` charge what they
 search.
 
 Statements only: definitions, no proofs.
@@ -43,17 +43,17 @@ open Claims Claims.Recursion
 
 /-! ## The plans' reads and the inner protocol's runs -/
 
-/-- **`B`'s plan asks about no unit** (`d = 0`). -/
+/-- **`B`'s plan asks about no run** (`d = 0`). -/
 def ForkPlanReads (Coin : Type) [Fintype Coin] [Nonempty Coin] : Prop :=
   ∀ k : Msg → ℕ, (forkPlan (Coin := Coin) k).ReadsLe fun _ => 0
 
-/-- **`FC`'s plan meets a bad unit at most twice as often as one unit is bad** (`d = 2`): its first unit, and its loop of
-forks gated by that unit, which Wald's bound counts once. -/
+/-- **`FC`'s plan meets a bad run at most twice as often as one run is bad** (`d = 2`): its first run, and its loop of
+forks gated by that run, which Wald's bound counts once. -/
 def CapPlanReads (Coin : Type) [Fintype Coin] [Nonempty Coin] : Prop :=
   ∀ (Cp : Caps Coin) (M : ℕ), (capPlan Cp M).ReadsLe fun _ => 2
 
-/-- **`F0`'s plan meets a bad unit at most `k + 1` times as often as one unit is bad**: its first unit, and each of its
-`k` waits gated by it, which stops at its first accepted unit. -/
+/-- **`F0`'s plan meets a bad run at most `k + 1` times as often as one run is bad**: its first run, and each of its
+`k` waits gated by it, which stops at its first accepted run. -/
 def ConflictPlanReads (Coin : Type) [Fintype Coin] [Nonempty Coin] : Prop :=
   ∀ (k : Msg → ℕ) (R : ℕ), (conflictPlan (Coin := Coin) k R).ReadsLe fun x => k x + 1
 
@@ -111,21 +111,21 @@ def OpensOfBound (Bd : Bound Coin Col T) : Prop := (Server.ofBound Bd).Opens
 
 /-! ## The inner protocol: the element-level Flock -/
 
-/-- **`B`'s term** at `k` rounds: `forkPlan k` at every loop bound, weight `4·k(x)`, no tail, no unit asked. -/
+/-- **`B`'s term** at `k` rounds: `forkPlan k` at every loop bound, weight `4·k(x)`, no tail, no run asked. -/
 noncomputable def termB (k : Msg → ℕ) : Term Coin where
   F _ := forkPlan k
   w x := 4 * (k x : ℝ)
   tail _ _ := 0
   d _ := 0
 
-/-- **`FC`'s term** at the caps `Cp`: `capPlan Cp M`, weight `4·W(x)`, tail `1/(M+1)`, two units met. -/
+/-- **`FC`'s term** at the caps `Cp`: `capPlan Cp M`, weight `4·W(x)`, tail `1/(M+1)`, two runs met. -/
 noncomputable def termFC (Cp : Caps Coin) : Term Coin where
   F := capPlan Cp
   w x := 4 * (Cp.width x : ℝ)
   tail _ M := 1 / ((M : ℝ) + 1)
   d _ := 2
 
-/-- **`F0`'s term** at `k(x)` waits: `conflictPlan k R`, weight `4`, tail `(k + 1)/(R+1)`, `k + 1` units met. -/
+/-- **`F0`'s term** at `k(x)` waits: `conflictPlan k R`, weight `4`, tail `(k + 1)/(R+1)`, `k + 1` runs met. -/
 noncomputable def termF0 (k : Msg → ℕ) : Term Coin where
   F := conflictPlan k
   w _ := 4
@@ -158,8 +158,8 @@ variable {Col' T' : Type} [DecidableEq Col']
 /-- **Today's compiled record and `E_O` as a `Comp`**, at the inner verifier `IV`, the inner protocol `I` whose rounds
 `E_O` skips, and the outer Flock at a decoder: the compiled verifier, its inner statement and form, `E_O`
 (`Claims.Recursion.EO`) with the relation every witness list meets (its sessions' checks are inside `E_O`), the inner
-messages the witnesses give (`RecAt.msgs`), the calls a finder searches at a draw (`Deploy.callsAt`) and the compiled
-verifier's own at a run's staged V\* statements (`setupCalls`, as `drawCalls` reads them), and the errors
+messages the witnesses give (`RecAt.msgs`), the calls a finder searches at a rerun (`Deploy.callsAt`) and the compiled
+verifier's own at a run's staged V\* statements (`setupCalls`, as `Claims.Recursion.drawCalls` reads them), and the errors
 `κ_O = Σ_s κ_s`, `γ_O = (Σ_s √(γ_s·k(x)))²`. -/
 noncomputable def Comp.ofRec (D : RecAt Coin) (IV : Verifier Coin) {W : Type} (I : Inner Coin W)
     (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') : Comp Coin where
@@ -191,10 +191,10 @@ noncomputable abbrev compAt (D : RecAt Coin) (Bd : Bound Coin Col T) (decI : Lis
 
 /-! ## The composite's terms against `KSLin2`'s -/
 
-/-- **`B`'s plan at the draws is at most `B_I`**: at a statement where the calls given witnesses record are true and
-those of no witnesses are (`CallsNil` at `x`), `forkPlan` on the draws as the inner view accepts (`innerModel`) and as
+/-- **`B`'s plan at the reruns is at most `B_I`**: at a statement where the calls given witnesses record are true and
+those of no witnesses are (`CallsNil` at `x`), `forkPlan` on the reruns as the inner view accepts (`innerModel`) and as
 `E_O` gives (`verModel`) each finds a collision at most as often as `BinnerV`, which searches a superset of true
-evaluations at the same two draws. -/
+evaluations at the same two reruns. -/
 def ForkPlansLeBinnerV (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') : Prop :=
   ∀ decI decO (x : Msg), (compAt D Bd decI DO decO).CallsTrue H x →
@@ -209,9 +209,9 @@ def ForkPlansLeBinnerV (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T
           ((compAt D Bd decI DO decO).xI x) ≤
         PrBinnerV H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x
 
-/-- **`FC`'s plan at the draws is `FCI`**, where the record's inner statement is the compiled one's (`RecAt.xI`): both
-loop over draws forked at the cap's inner round from a draw whose inner view accepts and whose inner coins query the
-cap, and search the two draws' recorded and inner calls. -/
+/-- **`FC`'s plan at the reruns is `FCI`**, where the record's inner statement is the compiled one's (`RecAt.xI`): both
+loop over reruns forked at the cap's inner round from a rerun whose inner view accepts and whose inner coins query the
+cap, and search the two reruns' recorded and inner calls. -/
 def CapPlanIsFCI (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) :
     Prop :=
   (∀ x, D.xI x = Claims.Recursion.xI (D.record Bd.IVStar) x) →
@@ -221,7 +221,7 @@ def CapPlanIsFCI (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Dep
         ((compAt D Bd decI DO decO).xI x) =
       PrFCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M
 
-/-- **`F0`'s plan at the draws is `F0I`**, where the record's inner statement is the compiled one's. -/
+/-- **`F0`'s plan at the reruns is `F0I`**, where the record's inner statement is the compiled one's. -/
 def ConflictPlanIsF0I (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T') : Prop :=
   (∀ x, D.xI x = Claims.Recursion.xI (D.record Bd.IVStar) x) →
   ∀ (H : Msg → Msg) decI decO (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (R : ℕ),
@@ -231,7 +231,7 @@ def ConflictPlanIsF0I (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Floc
       PrF0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R
 
 /-- **The gated link finds a collision at most as often as `FdevV`**, where the calls given witnesses record are true
-and those of no witnesses are: where its first draw gives witnesses the two search the same draws' true evaluations,
+and those of no witnesses are: where its first rerun gives witnesses the two search the same reruns' true evaluations,
 and where it doesn't the gated link searches nothing. -/
 def LinkPlanLeFdevV (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') : Prop :=
@@ -243,7 +243,7 @@ def LinkPlanLeFdevV (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
           ((compAt D Bd decI DO decO).xI x) ≤
         PrFdevV H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x M
 
-/-- **L1 at C-Flock gives `KSLin2` at the statements `G` admits.** From the generic theorem, the element-level Flock's
+/-- **L1 at Flock gives `KSLin2` at the statements `G` admits.** From the generic theorem, the element-level Flock's
 KS with no root (`KSFlockLin` at `DE`), each outer session's KS (`OuterKS`), the sessions' nonnegative table errors,
 the record's inner statement being the compiled one's, answers that decode to their coins, `DE`'s nonnegative table
 errors and last step free of its last coin, and at each statement `G` admits the calls of no witnesses true and the

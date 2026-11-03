@@ -3,18 +3,18 @@ module
 public import Proofs.Flock.RecGeneric.Plan
 
 /-!
-# Run finders every recursion reads, and C-Flock's
+# Run finders every recursion reads, and Flock's
 
 Plans that need no inner protocol:
 
-* `forkPlan k`: `B`'s plan, guess a round below `k(x)` and search a run and its fork there. At the composite's draws it is
+* `forkPlan k`: `B`'s plan, guess a round below `k(x)` and search a run and its fork there. At the composite's reruns it is
   `B_I` (`Claims.Recursion.BinnerV`'s finder).
-* `linkPlan k M`: the deviation finder's plan, gated: guess a round `j`, ask whether a draw forked at `j` from a shared
+* `linkPlan k M`: the deviation finder's plan, gated: guess a round `j`, ask whether a rerun forked at `j` from a shared
   prefix gives; only if it does, ask up to `M` more forks at `j` and search the first and the first of them that gives.
-  At the composite's draws it is `Claims.Recursion.FdevV`'s finder with its search gated by the first draw (`FdevV`
-  searches the loop even where the first draw gives nothing, which its declared cost doesn't charge).
+  At the composite's reruns it is `Claims.Recursion.FdevV`'s finder with its search gated by the first rerun (`FdevV`
+  searches the loop even where the first rerun gives nothing, which its declared cost doesn't charge).
 
-C-Flock's terms are plans too, at any caps (`Claims.Recursion.Caps`): `capPlan Cp M` (`FC`) and `conflictPlan k R` (`F0`).
+Flock's terms are plans too, at any caps (`Claims.Recursion.Caps`): `capPlan Cp M` (`FC`) and `conflictPlan k R` (`F0`).
 
 Statements only: definitions, no proofs.
 -/
@@ -33,7 +33,7 @@ def forkPlan (k : Msg → ℕ) : RunFinder Coin where
   slots _ := 1
   plan _ j := .done [.fresh 0, .fork j.val (.fresh 0) (.fresh 1)]
 
-/-- The link's loop: up to `n` forks at `j` of the shared prefix `u₀`, from the fresh unit `i` on; the first that is
+/-- The link's loop: up to `n` forks at `j` of the shared prefix `u₀`, from the fresh run `i` on; the first that is
 accepted is searched with `first`, and `first` alone where none is. -/
 def linkLoop (j : ℕ) (first : RunExp) : ℕ → ℕ → Plan Coin
   | 0, _ => .done [first]
@@ -48,7 +48,7 @@ def linkPlan (k : Msg → ℕ) (M : ℕ) : RunFinder Coin where
   plan _ j := .ask (.fork j.val (.fresh 0) (.fresh 1)) fun b =>
     if b then linkLoop j.val (.fork j.val (.fresh 0) (.fresh 1)) M 2 else .done []
 
-/-- The caps' loop at cap position `q` of round `j`: up to `n` forks at `j` of `u₀`, from the fresh unit `i` on; the
+/-- The caps' loop at cap position `q` of round `j`: up to `n` forks at `j` of `u₀`, from the fresh run `i` on; the
 first that is accepted and whose coins query `q` (`opens`) is searched with `u₀`, and `u₀` twice where none is. -/
 def capLoop (j : ℕ) (opens : (ℕ → Coin) → Bool) : ℕ → ℕ → Plan Coin
   | 0, _ => .done [.fresh 0, .fresh 0]
@@ -67,19 +67,19 @@ def capPlan (Cp : Claims.Recursion.Caps Coin) (M : ℕ) : RunFinder Coin where
       if Cp.opens x q cs then capLoop (Cp.round x q) (Cp.opens x q) M 1 else .done []
     else .done []
 
-/-- One wait of at most `n` fresh units from the unit `i` on, stopping at its first accepted one, then `cont` with it. -/
+/-- One wait of at most `n` fresh runs from the run `i` on, stopping at its first accepted one, then `cont` with it. -/
 def waitLoop (cont : Option RunExp → Plan Coin) : ℕ → ℕ → Plan Coin
   | 0, _ => cont none
   | n + 1, i => .ask (.fresh i) fun b => if b then cont (some (.fresh i)) else waitLoop cont n (i + 1)
 
-/-- `w` waits of at most `R` fresh units each, from the unit `base` on, collecting each wait's accepted unit after
+/-- `w` waits of at most `R` fresh runs each, from the run `base` on, collecting each wait's accepted run after
 `found`, then search them all. -/
 def waitsPlan (R : ℕ) : ℕ → ℕ → List RunExp → Plan Coin
   | 0, _, found => .done found
   | w + 1, base, found => waitLoop (fun o => waitsPlan R w (base + R) (found ++ o.toList)) R base
 
-/-- **`F0`'s plan** at `k(x)` waits of `R` units: if `u₀` is accepted, `k(x)` waits of at most `R` fresh units each,
-and search `u₀` and the waits' accepted units; otherwise search nothing. -/
+/-- **`F0`'s plan** at `k(x)` waits of `R` runs: if `u₀` is accepted, `k(x)` waits of at most `R` fresh runs each,
+and search `u₀` and the waits' accepted runs; otherwise search nothing. -/
 def conflictPlan (k : Msg → ℕ) (R : ℕ) : RunFinder Coin where
   sel _ := 1
   slots x := k x * R

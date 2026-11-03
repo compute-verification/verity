@@ -101,7 +101,7 @@ end Arg
 form and its inner statement; the rounds before the sessions (`pre`, the inner rounds and the staging rounds); the
 sessions' count and public shapes (`sh x s`); the sessions' statements the run's messages stage (`stmts`); session `s`'s
 view of a run (`session`); the inner messages a run's sessions' statements and witnesses give (`msgs`); the SHA-512
-evaluations a finder searches at a draw (`calls`, as `Comp.calls`); and the compiled verifier's own at a run's messages
+evaluations a finder searches at a rerun (`calls`, as `Comp.calls`); and the compiled verifier's own at a run's messages
 (`own`). -/
 structure Compiled (Coin : Type) (A : Arg Coin) where
   V : Verifier Coin
@@ -229,7 +229,7 @@ def OuterSessionsKS : Prop :=
 
 /-- **The composite extractor's cost** (lemma O2): `E*` (`Comp.E` at `L.toComp`) reruns the prover at most
 `(1 + m_Π·K_Π)·(1 + Σ_s ρ(sh_s))` times on every coin where `A` reruns at most `ρ`; in expectation at most
-`(1 + m_Π·k_Π)·(1 + Σ_s e(sh_s))` where `A` reruns at most `e` in expectation (Wald, over `E^rep`'s fresh draws); and it
+`(1 + m_Π·k_Π)·(1 + Σ_s e(sh_s))` where `A` reruns at most `e` in expectation (Wald, over `E^rep`'s fresh reruns); and it
 makes at most `(1 + m_Π·K_Π)·Σ_s h(sh_s)` SHA-512 calls beyond its reruns' where `A` makes at most `h`. The inner
 `E^rep`'s and `E_O`'s reruns multiply; their errors do not (`Comp.κ`: `N_I` times `κ_O`). -/
 def ExtractCost : Prop :=

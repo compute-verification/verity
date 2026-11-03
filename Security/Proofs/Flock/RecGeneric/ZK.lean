@@ -5,11 +5,11 @@ public import Proofs.Flock.Recursive.Statements
 /-!
 # The ZK server, as the recursion's zero knowledge reads it
 
-Zero knowledge reads the server through what it releases, never through C-Flock's message formats:
+Zero knowledge reads the server through what it releases, never through Flock's message formats:
 
 * **hiding leaves** (`Leaves`): it commits to every inner message under a fresh salt, and the auditor sees only the
   commitment (`leaf`). `Leaves.Hides δ` is hiding against adaptive messages: message `i` may read the commitments before
-  it, since each inner coin is live, drawn after the commitment before it, and a malicious auditor's coin is a function
+  it, since each inner coin is live, sampled after the commitment before it, and a malicious auditor's coin is a function
   of its tape and what it has seen; swapping every commitment for an ideal one (`ideal`, reading no message) moves any
   event by at most `n·δ`;
 * **the release rule** (`ZkServer`): after the commitments it releases the outer sessions' view only when the workers'
@@ -24,7 +24,7 @@ on a non-witness, where its zero knowledge says nothing.
 
 At hm96 (`Leaves.hm96`, through any encoding of a commit string's two halves) `Hides` holds at the key's hiding gap
 (`Hm96Hides`, from `ZK.ideal_leaves_adaptive`), and `Flock.Guarantees.RecursiveZK` is the generic statement at the
-firewall's leaves with the workers always honest (`RecoversRecursiveZK`).
+the ZK server's leaves with the workers always honest (`RecoversRecursiveZK`).
 
 Statements only: definitions, no proofs.
 -/
@@ -71,7 +71,7 @@ def Leaves.Hides (Lv : Leaves) (δ : ℝ≥0∞) : Prop :=
 
 /-- **hm96 leaves through an encoding `H` of a commit string's two halves**: the commitment to `m` under the salt `y`
 is `H(SHA-512(m) ⊕ M·y, c(y))`, the ideal one `H(U, c(y))` (`OuterZK.idealStrs`'s). At `H = commitBytes` they are the
-commit strings the firewall sends; at `H = ZkView.leafH`, the leaves `RecursiveZK` reads (`firewallLeaf`,
+commit strings the ZK server sends; at `H = ZkView.leafH`, the leaves `RecursiveZK` reads (`firewallLeaf`,
 `idealLeaf`). -/
 def Leaves.hm96 {D : Type} (H : ZkView.Bits × ByteArray → D) : Leaves where
   Y := ZkView.Salt
@@ -132,7 +132,7 @@ open scoped ENNReal
 
 /-- **Z1: the recursion is zero knowledge, generic in the server's leaves and the outer sessions**: where the leaves
 hide within `δ` and the outer sessions are zero knowledge within `ε_O` on every witness the workers give, the auditor's
-whole view (`ZkServer.real`) is within `ε_O + n_h·δ + Pr[¬ok]` of the simulator that draws ideal commitments and runs
+whole view (`ZkServer.real`) is within `ε_O + n_h·δ + Pr[¬ok]` of the simulator that samples ideal commitments and runs
 `sim` on them, at every event (so both ways, at its complement). The simulator reads the auditor's tape and public
 data only. -/
 def GenericRecursiveZK : Prop :=
@@ -145,7 +145,7 @@ def GenericRecursiveZK : Prop :=
             E (w.1.1, (fun i => Lv.ideal (w.1.2 i)), sim w.1.1 (fun i => Lv.ideal (w.1.2 i)) w.2)) +
           εo + Z.nh * δ + prCoin (fun w : (Ωa × Ωp) × (Fin Z.nh → Lv.Y) => ¬ Z.ok w.1.1 w.1.2 w.2)
 
-/-- **Z3: today's statement is the generic one at the firewall's leaves**: `GenericRecursiveZK` and `Hm96Hides` give
+/-- **Z3: today's statement is the generic one at the ZK server's leaves**: `GenericRecursiveZK` and `Hm96Hides` give
 `RecursiveZK` (the leaves `ZkView.leafH`, messages that read no commitment, workers always honest, so
 `Pr[¬ok] = 0`, and `δ` the pinned key's hiding gap, `CROnly.hm96Hiding_gap`). -/
 def RecoversRecursiveZK : Prop := GenericRecursiveZK → Hm96Hides → RecursiveZK

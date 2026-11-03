@@ -5,7 +5,7 @@ public import Definitions.Claims.Recursion
 /-!
 # The ZK server, as the recursion's knowledge soundness reads it
 
-The ZK server commits to every inner message before the auditor draws the coin that answers it, and the compiled
+The ZK server commits to every inner message before the auditor samples the coin that answers it, and the compiled
 verifier opens those commitments inside the outer proofs. Knowledge soundness reads the server only through how a
 commitment is opened (`Server`): a round's commit strings, each `width` bytes, open to that round's rows under salts,
 and the inner verifier's last message carries the openings (`final`). `Server.IVStar` is the inner verifier the outer

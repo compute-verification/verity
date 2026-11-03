@@ -11,15 +11,15 @@ Three layers, each a statement over the one below:
 * **L1, the composition** (`GenericRecursiveKS`): any inner protocol `Π` (`Proto`) over any server's commitments
   (`Server`), at any compiled verifier with any outer extraction (`Comp`), at each statement where the outer extraction
   is knowledge sound (`Comp.OuterKSAt`) and the compiler meets its contract (`Comp.Contract`). The composite
-  extractor is `Π`'s `E^rep`, each rerun served by `E_O` (`Comp.E`); its error is `Comp.err`: `κ_Π + N_I·κ_O`, `√(N_I²·γ_O·Pr[B])`, `Π`'s own terms with its finders run on the composite's draws, a
-  rejecting judged draw (`B_I`, `forkPlan`) and the deviation finder (`linkPlan`) at weight
-  `β = (N_I + Σ_i w_i·d_i)·k_Π`.
+  extractor is `Π`'s `E^rep`, each rerun served by `E_O` (`Comp.E`); its error is `Comp.err`: `κ_Π + N_I·κ_O`,
+  `√(N_I²·γ_O·Pr[B])`, `Π`'s own terms with its finders run on the composite's reruns, a rejecting judged run (`B_I`,
+  `forkPlan`) and the deviation finder (`linkPlan`) at weight `β = (N_I + Σ_i w_i·d_i)·k_Π`.
 * **L2, the compiler** (`GenericRecursiveKSCompiled`): L1 at `compile(Π, A, S)` for any outer argument `A` (`Arg`) and
   compiler, its outer extraction session by session (`Compiled.EO`) and knowledge sound by `A`'s (`OuterSessionsKS`).
 * **Zero knowledge** (`GenericRecursiveZK`, `Proofs.Flock.RecGeneric.ZK`): generic in the server's leaves and the outer
   sessions' simulator.
 
-The C-Flock instance (`Proofs.Flock.RecGeneric.AtFlock`) is L1 at today's compiled record, its `E_O`, the hm96 server
+The Flock instance (`Proofs.Flock.RecGeneric.AtFlock`) is L1 at today's compiled record, its `E_O`, the hm96 server
 and the element-level Flock: it gives the deployed theorem's bound (`Claims.Recursion.KSLin2`) at each statement where
 the instance's contract holds.
 
@@ -36,8 +36,8 @@ variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- **The composite's knowledge error** at the inner protocol `I` over the server `S`, the prover `P`, the statement
 `x`, `I`'s loop bounds `m` and the link's `M`:
-`κ(x) + √(γ(x)·Pr[B]) + Σ_i w_i(x_I)·(Pr[F_i(m_i) on the draws] + τ_i(x_I, m_i)) + Pr[B_I] + β(x)·(Pr[F_dev(M)] + 1/(M+1))`,
-`F_i` read on the draws as the inner view accepts (`innerModel`), `B_I` and `F_dev` as `E_O` gives (`verModel`). -/
+`κ(x) + √(γ(x)·Pr[B]) + Σ_i w_i(x_I)·(Pr[F_i(m_i) on the reruns] + τ_i(x_I, m_i)) + Pr[B_I] + β(x)·(Pr[F_dev(M)] + 1/(M+1))`,
+`F_i` read on the reruns as the inner view accepts (`innerModel`), `B_I` and `F_dev` as `E_O` gives (`verModel`). -/
 noncomputable def Comp.err (K : Comp Coin) (I : Proto Coin W) (S : Server) (H : Msg → Msg) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (x : Msg) (m : Fin I.nT → ℕ) (M : ℕ) : ℝ :=
   K.κ I x + Real.sqrt (K.γ I x * PrB H K.V P x) +

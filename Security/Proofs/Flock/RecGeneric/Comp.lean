@@ -9,18 +9,18 @@ public import Proofs.Flock.RecGeneric.Plans
 `Comp Coin` is what the recursion's knowledge soundness reads of a compiled verifier and the outer proof system: the
 compiled verifier `V`; the inner statement it carries (`xI`) and whether a statement parses into the relation's form
 (`parses`); the outer extraction `E_O` over `V`'s runs with its witnesses `WO`, the relation they are extracted for
-(`RO`) and its errors `κ_O`, `γ_O`; the inner messages a draw's witnesses give (`msgs`); the SHA-512 evaluations a finder
-searches at a draw (`calls`: those the witnesses record and those the finder evaluates itself, the inner setup's and the
+(`RO`) and its errors `κ_O`, `γ_O`; the inner messages a rerun's witnesses give (`msgs`); the SHA-512 evaluations a finder
+searches at a rerun (`calls`: those the witnesses record and those the finder evaluates itself, the inner setup's and the
 inner verifier's on the witnesses' messages) and the compiled verifier's own at a run's staged statements (`own`).
 
 Nothing here fixes the outer proof system: `E_O` is any extractor meeting `Claims.KS` at `RO`. An outer argument embedded
-session by session (`Proofs.Flock.RecGeneric.Outer`, `Compiled.toComp`) is one; C-Flock's `E_O`
+session by session (`Proofs.Flock.RecGeneric.Outer`, `Compiled.toComp`) is one; Flock's `E_O`
 (`Claims.Recursion.EO`) at today's compiled record is another (`Proofs.Flock.RecGeneric.AtFlock`).
 
-`E*` (`Comp.E`) is the inner protocol's `E^rep` at the inner statement, each rerun served by `E_O` at that draw, the
+`E*` (`Comp.E`) is the inner protocol's `E^rep` at the inner statement, each rerun served by `E_O` at that rerun, the
 inner view read off `E_O`'s witnesses (`Comp.dec`) as the run of `Open(Π, S)` on the messages they give. Its
 knowledge error is the inner protocol's, `N_I = 1 + m_Π·k_Π` times `E_O`'s, and the inner terms' finders run on the
-composite's draws (`Comp.innerModel`, `Comp.verModel`).
+composite's reruns (`Comp.innerModel`, `Comp.verModel`).
 
 `Comp.Contract H K IV x` is what the compiled verifier must give at the statement `x`, each a code fact proved per
 compiler (and, for `forks` and `accepts`, per circuit V* proves, where some run accepts `x`); `Comp.OuterKSAt` is
@@ -57,19 +57,19 @@ namespace Comp
 
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The inner view a draw's witnesses give**, at the inner verifier `IV`: `IV`'s run, at the compiled verifier's
+/-- **The inner view a rerun's witnesses give**, at the inner verifier `IV`: `IV`'s run, at the compiled verifier's
 first coins, of the inner messages the witnesses give. -/
 def view (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fin (K.V.k x) → Coin) (w : K.WO) :
     Seen :=
   (run H (replay (K.msgs x w)) IV (K.xI x) () fun i => coinSeq r i.val).seen
 
-/-- The inner view at a draw, read off `E_O`'s output; a rejected view where it gave up. -/
+/-- The inner view at a rerun, read off `E_O`'s output; a rejected view where it gave up. -/
 def dec (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fin (K.V.k x) → Coin) :
     Option K.WO → Seen
   | some w => K.view IV H x r w
   | none => ⟨[], .rej⟩
 
-/-- **`E*`, the composite extractor**: the inner protocol's `E^rep` at the inner statement, over draws of the compiled
+/-- **`E*`, the composite extractor**: the inner protocol's `E^rep` at the inner statement, over reruns of the compiled
 verifier's coins and `E_O`'s, each rerun served by `E_O` there and seen as the inner view of `Open(Π, S)` its witnesses
 give, opened (`Server.openView`) for the inner protocol's `opens`. Its extractors' composition is `served`'s. -/
 def E (K : Comp Coin) (I : Proto Coin W) (S : Server) (H : Msg → Msg) : Extractor Coin W K.V :=
@@ -91,53 +91,53 @@ noncomputable def κ (K : Comp Coin) (I : Proto Coin W) (x : Msg) : ℝ := I.κ 
 noncomputable def γ (K : Comp Coin) (I : Proto Coin W) (x : Msg) : ℝ := (K.NI I x : ℝ) ^ 2 * K.γO x
 
 /-- **The deviation finder's weight**: `β = (N_I + Σ_i w_i·d_i)·k_Π`, at the inner statement: a guess among the inner
-rounds at each draw the inner `E^rep` makes and each draw a term's plan reads. -/
+rounds at each rerun the inner `E^rep` makes and each rerun a term's plan reads. -/
 noncomputable def β (K : Comp Coin) (I : Proto Coin W) (x : Msg) : ℝ :=
   ((K.NI I x : ℝ) + ∑ i, (I.terms i).w (K.xI x) * (I.terms i).d (K.xI x)) * I.V.k (K.xI x)
 
-/-! ## The composite's draws as runs -/
+/-! ## The composite's reruns as runs -/
 
-/-- `E_O`'s witnesses at a draw (the compiled verifier's coins and `E_O`'s). -/
+/-- `E_O`'s witnesses at a rerun (the compiled verifier's coins and `E_O`'s). -/
 def wits (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (u : (Fin (K.V.k x) → Coin) × K.EO.C x) : Option K.WO :=
   (K.EO.eval H P x ω u.1 u.2).1
 
-/-- The evaluations a finder searches at a draw: those of `calls` at its witnesses, none where `E_O` gave up. -/
-def drawCalls (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+/-- The evaluations a finder searches at a rerun: those of `calls` at its witnesses, none where `E_O` gave up. -/
+def rerunCalls (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (u : (Fin (K.V.k x) → Coin) × K.EO.C x) : List (Msg × Msg) :=
   ((K.wits H P x ω u).map (K.calls H x u.1)).getD []
 
-/-- The compiled verifier's own evaluations at a draw's run (`own`). -/
+/-- The compiled verifier's own evaluations in a rerun's compiled run (`own`). -/
 def ownAt (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (u : (Fin (K.V.k x) → Coin) × K.EO.C x) : List (Msg × Msg) :=
   K.own H x (run H P K.V x ω u.1).msgs
 
-/-- A draw's SHA-512 calls: the compiled run's, both parties', and `E_O`'s. -/
-def drawCost (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+/-- A rerun's SHA-512 calls: the compiled run's, both parties', and `E_O`'s. -/
+def rerunCost (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (u : (Fin (K.V.k x) → Coin) × K.EO.C x) : ℕ :=
   (run H P K.V x ω u.1).pLog.length + (run H P K.V x ω u.1).vLog.length + (K.EO.eval H P x ω u.1 u.2).2.1
 
-/-- **The composite's draws, as the inner terms' finders read them**: a unit is a draw; a fork at the inner round `j`
-keeps the compiled coins before `min j k_Π`; a draw is accepted where the inner view `E_O`'s witnesses give accepts; its
-coins are the inner session's, the compiled verifier's first `k_Π`, as the inner run shows them (`default` past them);
-its evaluations are `drawCalls`. -/
+/-- **The composite's reruns, as the inner terms' finders read them**: each run of the model is a rerun; a fork at the
+inner round `j` keeps the compiled coins before `min j k_Π`; a rerun is accepted where the inner view `E_O`'s witnesses
+give accepts; its coins are the inner session's, the compiled verifier's first `k_Π`, as the inner run shows them
+(`default` past them); its evaluations are `rerunCalls`. -/
 def innerModel (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) :
     RunModel Coin Ω (K.V.k x) (K.EO.C x) where
   cut j := min j (IV.k (K.xI x))
   acc ω u := (K.dec IV H x u.1 (K.wits H P x ω u)).out = .acc
   coins u := coinSeq fun i : Fin (IV.k (K.xI x)) => coinSeq u.1 i.val
-  log := K.drawCalls H P x
-  cost := K.drawCost H P x
+  log := K.rerunCalls H P x
+  cost := K.rerunCost H P x
 
-/-- **The composite's draws, as `B_I` and the link read them**: as `innerModel`, but a draw is accepted where `E_O`
+/-- **The composite's reruns, as `B_I` and the link read them**: as `innerModel`, but a rerun is accepted where `E_O`
 gives witnesses, and its evaluations are the compiled verifier's own as well. -/
 def verModel (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) :
     RunModel Coin Ω (K.V.k x) (K.EO.C x) where
   cut j := min j (IV.k (K.xI x))
   acc ω u := (K.wits H P x ω u).isSome = true
   coins u := coinSeq fun i : Fin (IV.k (K.xI x)) => coinSeq u.1 i.val
-  log ω u := K.drawCalls H P x ω u ++ K.ownAt H P x ω u
-  cost := K.drawCost H P x
+  log ω u := K.rerunCalls H P x ω u ++ K.ownAt H P x ω u
+  cost := K.rerunCost H P x
 
 /-! ## The compiler's contract, at a statement -/
 
@@ -177,14 +177,14 @@ def CallsLogColl (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin) (x : Msg
         e ∈ K.calls H x r w ++ K.own H x (run H P K.V x ω r).msgs) ∨
       ∃ u v, findColl (K.calls H x r w ++ K.own H x (run H P K.V x ω r).msgs) = some (u, v) ∧ Collision H u v
 
-/-- The inner verifier's calls in the inner view's run at a draw's witnesses. -/
+/-- The inner verifier's calls in the inner view's run at a rerun's witnesses. -/
 def innerLog (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg) (r : Fin (K.V.k x) → Coin) (w : K.WO) :
     List (Msg × Msg) :=
   (run H (replay (K.msgs x w)) IV (K.xI x) () fun i => coinSeq r i.val).vLog
 
 /-- **The commitments bind across forks** (from the server's `Binds` and V\*'s reading of the run's commit strings),
-modulo what the inner extractor reads at the last inner round: at `x`, two accepted draws forked at an inner round `j`
-whose witnesses give inner views that differ at `j` show a collision among the two draws' evaluations, where `j` is
+modulo what the inner extractor reads at the last inner round: at `x`, two accepted reruns forked at an inner round `j`
+whose witnesses give inner views that differ at `j` show a collision among the two reruns' evaluations, where `j` is
 before the last inner round, or the two views differ in what the inner extractor reads of them (`rd`) or in the set
 of the inner verifier's calls. Two last messages read alike (as the deployed reader reads a trailing space) are one
 view to `E*`, so they need no collision. -/
@@ -200,7 +200,7 @@ def ForksBind {β : Type} (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin)
       Collision H u v
 
 /-- **V\* proves the inner check** (soundness of V\*'s circuits for `Open(Π, S)`): at `x`, witnesses `E_O` gives on an
-accepted run, in the outer relation, give an accepting inner view, or a collision among the draw's evaluations. -/
+accepted run, in the outer relation, give an accepting inner view, or a collision among the rerun's evaluations. -/
 def InnerAcceptsColl (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin) (x : Msg) : Prop :=
   ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin) (c : K.EO.C x) (w : K.WO),
     K.Gives H P x ω r c w → K.RO x w →
