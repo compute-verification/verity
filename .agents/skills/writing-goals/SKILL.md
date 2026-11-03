@@ -45,6 +45,10 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
     so it's `remote-demo`.
   - One tag is work inside a component; several mark joint work that can't be done at their interfaces.
   - `proofs` is the proof system; `lean` is Lean's code and build (the module system, the Lean check, toolchain bumps).
+  - The list is at Daniel's level (3 Nov). Finer components, such as kernels, benchmarks, compute-research, soundness
+    and comms, are real to the leads but below it: their goals take the tag of the component they belong to at his
+    level. A kernel the demo serves is `compute-accounting` or `vllm`, and the demo's cost measurements are
+    `remote-demo`.
   - Why a goal matters isn't a tag: it's the tier-1 project above it.
 - **Three tiers** (Daniel, 2 Nov):
   - Tier 1, a project: about a dozen across the plan, each one Daniel would name himself. Its description opens with
