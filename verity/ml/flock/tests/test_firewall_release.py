@@ -319,10 +319,11 @@ def test_the_record_is_the_shared_vectors_byte_for_byte(tmp_path):
     """Each case of ``firewall_record_vectors.json``, run on an empty state directory, gives its results and its
     ``record.jsonl`` exactly: rules 1 and 2 (with a slot holder that died), the statements' order (a skip, a repeat, a
     recursive session released whole, statements that can't be one's), the budget, unended recursive sessions reaching
-    it, an honest stream that never does, the schedule, and strings Python escapes. ``core_firewall``'s ``test_the_lean_replays_the_shared_vectors`` runs the same file, so the two ZK servers
-    read and write one record."""
+    it, an honest stream that never does, the schedule, strings Python escapes, and no stop of a session not yet opened
+    (by ``stop``, or of a slot's holder that died), so that each stop counts against its stream. ``core_firewall``'s
+    ``test_the_lean_replays_the_shared_vectors`` runs the same file, so the two ZK servers read and write one record."""
     v = json.loads(VECTORS.read_text())
-    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes"}
+    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "unended", "honest", "schedule", "escapes", "prestop"}
     for c in v["cases"]:
         fw = FW.Firewall(tmp_path / c["name"])
         assert [_vector_op(fw, op) for op in c["ops"]] == c["results"], c["name"]

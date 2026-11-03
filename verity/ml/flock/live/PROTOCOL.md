@@ -1054,7 +1054,8 @@ verity_flock.firewall relay --state DIR --session ID --part NAME --to SERVE`, be
 and only for the recursive session's next statement not yet released, once. A request for any other statement (a later
 one, or a released one again) is the recursive session's stop at that next statement, never opened: a statement the worker
 skips ends the recursive session where it stands, and no statement is served twice. The first stop, inner or outer, is the
-recursive session's one failure (`stop`, recorded once). After it, and after the last statement's release, the relay
+recursive session's one failure (`stop`, recorded once, and only of a recursive session opened, so that each stop counts
+against its stream). After it, and after the last statement's release, the relay
 refuses every V* statement of that recursive session before anything reaches the challenger: the worker's requests are
 answered `FIREWALL-REFUSED: recursive session …`, its `Finish` with a verdict that does not accept, and the record shows
 `refused`, which is not a failure (the challenger sees nothing of it). So no outer proof of a stopped recursive session is
@@ -1083,7 +1084,7 @@ leave, and serve's verdict is its release or its stop. `verity/core/service/fire
 Python's record and to the cases frozen from the Rust release side the loop replaced (`tests/fixtures/`). Every stop the
 loop makes, and a fault of its own, cuts the challenger's connection before `Finish`, and the worker gets the loop's own
 verdict; a prover killed while its session holds the slot is that session's stop, which the loop records, or, where the
-loop ended with it, the next session to take the slot. A session cut before its first request other than
+loop ended with it, the next session to take the slot, if its recursive session was opened. A session cut before its first request other than
 `Ping` records nothing, and the statement stays next: no message of it has reached the challenger. `flock-circuit` proves
 one session (`--warm 0 --runs 1`: each statement is served once), refuses `FC_VERIFY_AHEAD` (the slot is held until each
 session's verdict), and reports the outcome the loop recorded. `verity_flock.firewall` stays as the inner side

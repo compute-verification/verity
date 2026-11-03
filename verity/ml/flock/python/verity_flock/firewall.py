@@ -16,7 +16,8 @@ appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules ho
 * **A recursive session's statements go in their order, each once, and it ends at its first stop.** The inner phase opens
   a recursive session (`Firewall.open`: `rec_live`'s ``serve`` opens one for each session it serves) with its V*
   statements in their order (``parts``, public, from K: L0–L6 and the algebra at K = 4096). Its first stop, inner or
-  outer, is its one failure (``stop``). An outer session is admitted only once its recursive session's inner session has
+  outer, is its one failure (``stop``), recorded only once it is opened, so that every stop counts against its stream.
+  An outer session is admitted only once its recursive session's inner session has
   finished, and only for its next statement not yet released: a request for any other (a later one, or a released one
   again) is a stop at that next statement, never opened, so a statement the worker skips ends the recursive session where
   it stands. After a stop, and after the last statement's release, a relay refuses each outer session of it before
@@ -28,7 +29,7 @@ appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules ho
   released (the challenger's verdict accepts it) or fails. A second
   session that asks meanwhile waits (``wait``) and takes the slot after (``slot``), so each ``slot`` event is followed by its
   session's outcome before the next one. A holder that ended before its outcome (killed, say) is recorded as its session's
-  stop by the next session to take the slot.
+  stop by the next session to take the slot, if its session was opened.
 * **A stream stops at its failure budget.** A stream opened with ``budget`` b (the challenger's stream's ``budget``, P1, at
   least `BUDGET_MIN`) refuses every outer session and every open after its b-th failure: a recursive session's stop, or a
   refusal of a recursive session that had neither stopped nor released its last statement, on a stream that had not
@@ -223,9 +224,10 @@ class Firewall:
             self._append(rec, {"event": "finish", "session": session, "part": INNER})
 
     def stop(self, session: str, part: str, why: str) -> bool:
-        """The recursive session stops at ``part``: its one failure, recorded once (False if it had already stopped)."""
+        """The recursive session stops at ``part``: its one failure, recorded once and only once it is opened (False if it
+        was never opened or had already stopped)."""
         with self._locked((session,)) as rec:
-            if rec.stopped(session):
+            if rec.opened(session) is None or rec.stopped(session):
                 return False
             self._append(rec, {"event": "stop", "session": session, "part": part, "why": why})
             return True
@@ -291,7 +293,8 @@ class Firewall:
     def slot(self, session: str, part: str, waiting: Callable[[], None] | None = None) -> Iterator[None]:
         """The ZK server's one outer slot, held for the block. A session that finds it taken records ``wait``, calls
         ``waiting``, and blocks until the holder leaves it. Once it holds the slot, a ``slot`` event whose session has no
-        outcome after it (its holder died) is recorded as that session's stop, and then ``slot`` is recorded."""
+        outcome after it (its holder died) is recorded as that session's stop if it was opened, and then ``slot`` is
+        recorded."""
         with self._slot_lock(session, part, waiting):
             with self._locked((session,)) as rec:
                 self._take(rec, session, part)
@@ -353,8 +356,9 @@ class Firewall:
                 fcntl.flock(f, fcntl.LOCK_UN)
 
     def _take(self, rec: _Index | _Scan, session: str, part: str, held: list[bytes] | None = None) -> None:
-        """The slot taken: the stop of a holder that ended before its outcome, then ``slot`` (`_append`)."""
-        if (o := rec.orphan()) is not None and rec.stopped(o["session"]) is None:
+        """The slot taken: the stop of a holder that ended before its outcome, if its session was opened, then ``slot``
+        (`_append`)."""
+        if (o := rec.orphan()) is not None and rec.opened(o["session"]) is not None and rec.stopped(o["session"]) is None:
             self._append(rec, {"event": "stop", "session": o["session"], "part": o["part"],
                                "why": f"the slot's holder ended before its outcome (slot {o['seq']})"}, held)
         self._append(rec, {"event": "slot", "session": session, "part": part}, held)

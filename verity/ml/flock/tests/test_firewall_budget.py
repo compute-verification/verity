@@ -3,8 +3,8 @@ drive it: `rec_live` opens a recursive session and records its inner session's f
 session (`Firewall.seat`) and records its outcome, or ends while it holds the slot. At most b of a stream's recursive
 sessions ever have a statement not released, b its budget: the bound the Lean proves of the record's ops in its model of
 the loop (`StopCount.run`, `card_unreleased_le_budget`). It comes from the open's rule (refused while the stream's
-unended recursive sessions and its failures reach b), and from a seat being one op of the record, so that no stop is
-recorded of a session before it is opened. The worker and the challenger are `test_firewall_release`'s, on socket pairs;
+unended recursive sessions and its failures reach b), and from no stop being recorded of a session not yet opened, so
+that each stop counts against its stream. The worker and the challenger are `test_firewall_release`'s, on socket pairs;
 the clock is never read."""
 from __future__ import annotations
 
@@ -183,22 +183,22 @@ def test_a_seat_on_a_record_whose_last_line_has_no_newline_writes_nothing(tmp_pa
         assert why is None
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="the record's ops record a stop of a session not yet opened (slot's orphan rule; stop), which "
-                          "counts as no failure of its stream: the bound holds of the relay's seat, one op, and not yet of "
-                          "the record's ops in every order")
-def test_a_stop_recorded_before_its_sessions_open_still_counts_against_its_stream(tmp_path):
-    """A slot's holder for the next session's id, not yet opened, that ends before its outcome (`Firewall.slot` without
-    `Firewall.admit`, which `seat` never leaves): the next holder records that session's stop, and the session then opens
-    stopped. Repeated, the stream opens more than b sessions with a statement not released."""
+def test_no_stop_is_recorded_of_a_session_not_yet_opened(tmp_path):
+    """The record's ops in any order, not only the relay's seat: a slot's holder for the next session's id, not yet
+    opened, that ends before its outcome (`Firewall.slot` without `Firewall.admit`, which `seat` never leaves), and a
+    ``stop`` of that id, record no stop of it, so it opens unstopped, one of its stream's unended, and the stream's open
+    past its budget is refused; at most b of its sessions ever have a statement not released."""
     fw = FW.Firewall(tmp_path / "fw")
     for k in range(2 * FW.BUDGET_MIN):
+        assert fw.stop(f"r{k:04d}", FW.INNER, "rec proxy: the session ended without Finish") is False
         with fw.slot(f"r{k:04d}", "L0"):
             pass
         with fw.slot("r9999", "L0"):
             pass
         try:
             fw.open("s", list(NAMES), budget=FW.BUDGET_MIN)
-        except FW.Refused:
-            pass
-    assert _unreleased(fw.record(), "s") <= FW.BUDGET_MIN
+        except FW.Refused as e:
+            assert "unended recursive sessions and failures reach its failure budget (3 and 0 of 3)" in str(e)
+        assert _unreleased(fw.record(), "s") <= FW.BUDGET_MIN
+    assert not any(e["event"] == "stop" for e in fw.record()) and fw.failures("s") == 0
+    assert _unreleased(fw.record(), "s") == FW.BUDGET_MIN
