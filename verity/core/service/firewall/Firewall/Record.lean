@@ -13,11 +13,11 @@ sort_keys=True)` writes it, each with its `seq`. Python's `verity_flock.firewall
    was opened, by the next one to take the slot.
 3. A recursive session opened with a release schedule (`start_ms`, one window a statement) releases statement `j` at
    `start_ms + windows_ms[0] + ... + windows_ms[j]` (`releaseMs`); a missed time is a stop (`Firewall.Release`).
-4. A stream opened with a failure `budget` b, at least `BUDGET_MIN`, stops at its b-th failure (`failures`): a recursive
-   session's stop, or a refusal of a recursive session that had neither stopped nor released its last statement, on a
-   stream not yet stopped. It opens no recursive session while its unended ones (`unended`: opened on it, neither
-   stopped nor released whole) and its failures together reach b, so at most b of its recursive sessions ever have a
-   statement not released.
+4. A stream opened with a failure `budget` b (a public parameter of the deployment, at least `BUDGET_MIN`) stops at its
+   b-th failure (`failures`): a recursive session's stop, or a refusal of a recursive session that had neither stopped
+   nor released its last statement, on a stream not yet stopped. It opens no recursive session while its unended ones
+   (`unended`: opened on it, neither stopped nor released whole) and its failures together reach b, so at most b of its
+   recursive sessions ever have a statement not released.
 
 The functions here are pure: each takes the events read so far and returns its result and the events after it, which only
 ever extend them. `Record.read` reads the record whole and fails closed: every line must be exactly a line the firewall
@@ -135,10 +135,9 @@ def budgetOk : Option Nat → V Unit
   | _ => pure ()
 
 /-- The least failure budget a stream is opened with (rule 4). -/
-def BUDGET_MIN : Nat := 3
+def BUDGET_MIN : Nat := 1
 
-/-- A failure budget as an open is given it: at least `BUDGET_MIN`. A record holding a lesser one still reads
-(`budgetOk`). -/
+/-- A failure budget as an open is given it: at least `BUDGET_MIN`. -/
 def budgetArg : Option Nat → V Unit
   | some b =>
     if b < BUDGET_MIN then throw s!"a failure budget is an integer of at least {BUDGET_MIN}, not {b}" else pure ()
