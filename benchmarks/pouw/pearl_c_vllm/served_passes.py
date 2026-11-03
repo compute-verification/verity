@@ -32,8 +32,9 @@ so its walls are the option's without retention, its passes have no manifest or 
 each pass with calls, as ``verify`` reads them, it replays every tile word by word on ``--jobs`` processes and gives up, in
 the pass's records, the rows that leave a tile or one of its credited rows over its debit cap, which the serve's screen
 can't see (the debit reads the noised codes); the transcript is the serve's.  It writes each pass's outcome and seconds to
-``--out`` as each pass ends (``done`` once all have), prints one line and exits 0 only when no pass has a tile left over
-a cap; it refuses a serve that retained none, and any once the verifier's coin is drawn (``DIR/coin.json``).
+``--out`` as each pass ends (``done`` once all have), with the node it ran on, prints one line and exits 0 only when no
+pass has a tile left over a cap; it refuses a serve that retained none, and any once the verifier's coin is drawn
+(``DIR/coin.json``).
 
 ``retain`` is the prover's last step before the coin: it writes ``DIR/retention.json``, the rounds (places among
 ``served.json``'s passes with calls) the verdict is to read, dropping each ``--drop`` round and, with ``--volunteer``, each
@@ -64,6 +65,7 @@ import hashlib
 import json
 import math
 import os
+import socket
 import sys
 import time
 from fractions import Fraction
@@ -262,7 +264,8 @@ def volunteer(args: argparse.Namespace) -> int:
         total = {k: sum(len(r[k]) for r in got) for k in ("over", "left")}
         given = {k: sum(len(rows) for r in got for rows in r[k].values()) for k in ("voluntary_a", "voluntary_b")}
         doc = {"schema": "verity-pouw/pearl-plus-served-volunteer/v1", "passes_dir": str(passes),
-               "served_run": (served or {}).get("run"), "jobs": args.jobs, "done": done, "of": len(paths), "passes": got,
+               "served_run": (served or {}).get("run"), "node": socket.gethostname().split(".")[0], "jobs": args.jobs,
+               "done": done, "of": len(paths), "passes": got,
                "tiles": sum(r["tiles"] for r in got), **total, **given, "s": sum(r["s"] for r in got),
                "ok": done and bool(got) and all(r["ok"] for r in got)}
         tmp = out.with_name(out.name + ".tmp")

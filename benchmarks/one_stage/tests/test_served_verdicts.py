@@ -856,15 +856,17 @@ def test_a_pearlplus_piece_sets_the_unretained_serve_of_its_load_beside_its_shar
 
 def test_a_pearlplus_piece_sets_the_provers_replay_beside_its_shares(tmp_path, capsys, live):
     """The prover's replay of every tile before the coin (``served_passes.py volunteer``'s seconds on its processes) is a
-    CPU term beside the GPU shares: the cores it takes to keep pace with the timed call's wall. One whose document has no
-    seconds says why, and neither decides the verdict."""
+    CPU term beside the GPU shares: the cores it takes to keep pace with the timed call's wall, with the node it ran on
+    and how many of the passes it finished. One whose document has no seconds says why, and neither decides the verdict."""
     _calls, args = live
     served, verified = _pearlplus_run()
-    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered={"s": 110.0, "jobs": 32, "ok": True},
-                      **args)
+    volunteered = {"s": 110.0, "jobs": 32, "ok": False, "node": "vy-dc-h200", "of": 4, "passes": [{"pass": 0}] * 3}
+    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered=volunteered, **args)
     assert doc["verdict"] == "accept" and doc["shares"]["replay"] == {"s": 110.0, "cpus": 32, "core_s": 3520.0, "of_wall": 55.0,
-                                                                      "cores_to_keep_pace": 1760.0}
-    assert S.development_line(doc)["replay"] == {"s": 110.0, "cpus": 32, "cores_to_keep_pace": 1760.0}
+                                                                      "cores_to_keep_pace": 1760.0, "node": "vy-dc-h200",
+                                                                      "finished": 3, "of": 4}
+    assert S.development_line(doc)["replay"] == {"s": 110.0, "cpus": 32, "cores_to_keep_pace": 1760.0, "node": "vy-dc-h200",
+                                                 "finished": 3, "of": 4}
     assert S.development_line(S.pearlplus(tmp_path / "plain", served, verified, **args))["replay"] is None
     doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, volunteered={"jobs": 32}, **args)
     assert doc["verdict"] == "accept" and "KeyError" in S.development_line(doc)["replay"]
@@ -884,6 +886,137 @@ def test_a_pearlplus_piece_names_the_rounds_its_prover_dropped_before_the_coin(t
     assert (doc["verdict"], doc["dropped"], S.development_line(doc)["dropped"]) == ("accept", [2], [2])
     assert doc["shares"]["macs"]["declared_linears"] == 6000
     assert S.development_line(S.pearlplus(tmp_path / "all", served, verified, **live[1]))["dropped"] is None
+
+
+def _coin_record(source: str = "5e" * 32) -> bytes:
+    """The verifier's coin record as ``served_passes.py verify`` writes it before any replay (``DIR/coin.json``)."""
+    return (json.dumps({"schema": S.COIN_KIND, "commitment": "c1" * 64, "source": source, "passes": ["p0", "p1"]},
+                       indent=1) + "\n").encode()
+
+
+def _put(answers: dict) -> tuple:
+    """A stand-in for ``research data put``, answering by whether a call asks ``--preserve`` with (returncode, stdout,
+    stderr) or an exception to raise; every call's argv and keywords in ``calls``."""
+    calls = []
+
+    def put(argv, **kw):
+        calls.append((argv, kw))
+        got = answers["--preserve" in argv]
+        if isinstance(got, BaseException):
+            raise got
+        return subprocess.CompletedProcess(argv, *got)
+    return put, calls
+
+
+NODE_PUT = {True: (1, "", "Traceback (most recent call last):\nStoreError: no remote configured"),
+            False: (0, json.dumps({"id": "art:bb", "preserve": None, "pending": "write-through off"}), "")}
+
+
+@pytest.mark.parametrize("case", ["preserved", "node", "no store"])
+def test_coin_puts_the_verifiers_coin_record_in_the_store_the_moment_it_is_drawn(tmp_path, case):
+    """`coin` copies the verifier's coin record out of the passes and puts it in the evidence store as its own kind, its
+    meta the run and the run commitment: preserved where the put pushes it; on a node with no store write key, in the
+    node's own store under the same content-addressed id, with what the preserving put said; and with no id where no put
+    answers. Its answer is ``coin-put.json`` beside the copy."""
+    (rec := tmp_path / "passes" / "coin.json").parent.mkdir()
+    rec.write_bytes(raw := _coin_record())
+    put, calls = _put({"preserved": {True: (0, json.dumps({"id": "art:aa", "preserve": {"preserved": True}}), "")},
+                       "node": NODE_PUT,
+                       "no store": {True: FileNotFoundError(2, "No such file", "research"),
+                                    False: FileNotFoundError(2, "No such file", "research")}}[case])
+    got = S.coin(rec, out := tmp_path / "pieces" / "pouw", "r1", research=["research"], put=put)
+    art, preserved, error = {"preserved": ("art:aa", True, None),
+                             "node": ("art:bb", False, "research data put --preserve: StoreError: no remote configured"),
+                             "no store": (None, False, "research data put --preserve: FileNotFoundError: [Errno 2] No "
+                                                       "such file: 'research'")}[case]
+    assert got == {"sha512": hashlib.sha512(raw).hexdigest(), "commitment": "c1" * 64, "source": "5e" * 32, "run": "r1",
+                   "art": art, "preserved": preserved, "error": error}
+    assert (out / S.COIN_RECORD).read_bytes() == raw and json.loads((out / S.COIN_PUT).read_text()) == got
+    meta = json.dumps({"commitment": "c1" * 64, "run": "r1"})
+    assert calls[0] == (["research", "data", "put", "--kind", S.COIN_KIND, "--meta", meta, "--file", str(out / "coin.json"),
+                         "--json", "--preserve"],
+                        {"capture_output": True, "text": True, "check": False, "timeout": S.PUT_TIMEOUT_S})
+    assert [argv for argv, _ in calls[1:]] == ([] if preserved else [calls[0][0][:-1]])
+
+
+def test_coin_refuses_a_record_not_the_verifiers_and_a_second_coin_in_one_piece(tmp_path):
+    """A piece publishes the one coin its verifier drew: a record of another schema, or without its commitment or source,
+    is refused before anything is written, and so is a coin other than the one the piece already published, which stays;
+    the same coin again is the same put."""
+    put, calls = _put({True: (0, json.dumps({"id": "art:aa"}), "")})
+    rec, out = tmp_path / "coin.json", tmp_path / "pieces" / "pouw"
+    for bad in ({"schema": "other", "commitment": "c1", "source": "5e"}, {"schema": S.COIN_KIND, "source": "5e"}, [1]):
+        rec.write_text(json.dumps(bad))
+        with pytest.raises(ValueError, match="is no verity-pouw/pearl-plus-coin/v1 record"):
+            S.coin(rec, out, "r1", research=["research"], put=put)
+    assert not out.exists()
+    rec.write_bytes(first := _coin_record())
+    assert S.coin(rec, out, "r1", research=["research"], put=put) == S.coin(rec, out, "r1", research=["research"], put=put)
+    rec.write_bytes(_coin_record(source="77" * 32))
+    with pytest.raises(ValueError, match="already holds another coin"):
+        S.coin(rec, out, "r1", research=["research"], put=put)
+    assert (out / S.COIN_RECORD).read_bytes() == first and len(calls) == 2
+
+
+def test_the_coin_command_says_where_the_verifiers_coin_went(tmp_path, capsys, monkeypatch):
+    """``served_verdicts.py coin`` prints one COIN line, the run commitment the coin was drawn on, the record's digest and
+    where it went: preserved, in the node's store alone (and the put of the run's custody copy that preserves that id),
+    or in no store; a record that isn't the verifier's is refused, exit 1."""
+    (rec := tmp_path / "coin.json").write_bytes(raw := _coin_record())
+    real, head = S.coin, f"COIN drawn on run commitment {'c1' * 8}..., record sha512 {hashlib.sha512(raw).hexdigest()[:16]}..."
+    for i, (answers, said) in enumerate((
+            ({True: (0, json.dumps({"id": "art:aa"}), "")}, "preserved in the evidence store as art:aa"),
+            (NODE_PUT, "art:bb in this node's store, not preserved (research data put --preserve: StoreError: no remote "
+                       "configured): a put of the run's custody copy of coin.json as verity-pouw/pearl-plus-coin/v1 with "
+                       "meta {run, commitment} preserves that id"),
+            ({True: OSError("gone"), False: OSError("gone")},
+             "in no store (research data put --preserve: OSError: gone): coin.json goes with the run's custody"))):
+        monkeypatch.setattr(S, "coin", lambda *a, answers=answers, **k: real(*a, **k, put=_put(answers)[0]))
+        assert S.main(["coin", str(tmp_path / f"out{i}"), "--record", str(rec), "--run", "r1"]) == 0
+        assert capsys.readouterr().out == f"{head}: {said}\n"
+    rec.write_text("{}")
+    assert S.main(["coin", str(tmp_path / "out9"), "--record", str(rec)]) == 1
+    assert capsys.readouterr().out.startswith("COIN refused: ValueError: ")
+
+
+def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, capsys, live):
+    """``--coin`` (`coin`'s ``coin-put.json``) holds Pearl+'s accept to the coin published at its draw: the piece and its
+    line carry the coin's store id, whether the put preserved it and the record's digest, and an accept whose run
+    commitment or draw source isn't the published record's, a copy that isn't the one put, or a coin never published
+    rejects, while a verdict that rejects keeps its own reasons. The piece names its load."""
+    served, verified = _pearlplus_run()
+    served.update(requests=16, engine={"max_num_batched_tokens": 8192})
+    (rec := tmp_path / "coin.json").write_bytes(_coin_record())
+    pub = tmp_path / "pub"
+    published = S.coin(rec, pub, "r1", research=["research"], put=_put(NODE_PUT)[0])
+    answer = {**verified["answer"], "commitment": "c1" * 64, "profile": {"source": "5e" * 32}}
+    held, given = {**verified, "answer": answer}, {"coin": pub / S.COIN_PUT, **live[1]}
+    doc = S.pearlplus(tmp_path / "a", served, held, **given)
+    assert (doc["verdict"], doc["reasons"]) == ("accept", [])
+    coin = {"art": "art:bb", "preserved": False, "error": published["error"], "sha512": published["sha512"]}
+    assert doc["coin"] == {**coin, "reason": None} and S.development_line(doc)["coin"] == coin
+    load = {"requests": 16, "prompt_tokens": 1024, "output_tokens": 1, "max_num_batched_tokens": 8192}
+    assert doc["load"] == S.development_line(doc)["load"] == load
+    for name, d in (("served.json", served), ("v.json", held)):
+        (tmp_path / name).write_text(json.dumps(d))
+    assert S.main(["pearlplus", str(tmp_path / "cli"), "--served", str(tmp_path / "served.json"), "--verify",
+                   str(tmp_path / "v.json"), "--gate", GATE, "--key-sha512", "ff" * 64, "--main", str(tmp_path / "main.txt"),
+                   "--coin", str(pub / S.COIN_PUT)]) == 0
+    line = json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))
+    assert (line["verdict"], line["coin"], line["load"]) == ("accept", coin, load)
+    for other in ({"commitment": "c2" * 64}, {"profile": {"source": "77" * 32}}):
+        doc = S.pearlplus(tmp_path / "a", served, {**verified, "answer": {**answer, **other}}, **given)
+        assert doc["verdict"] == "reject" and doc["reasons"] == [f"coin: {doc['coin']['reason']}"]
+        assert doc["coin"]["reason"].startswith("the verdict's run commitment or draw source is not the published coin record's")
+    unpublished = {**given, "coin": tmp_path / "none" / S.COIN_PUT}
+    doc = S.pearlplus(tmp_path / "a", served, held, **unpublished)
+    assert doc["verdict"] == "reject" and doc["reasons"][0].startswith("coin: the verifier's coin was not published: FileNotFoundError")
+    doc = S.pearlplus(tmp_path / "a", served, _pearlplus_run(accepted=False)[1], **unpublished)
+    assert doc["reasons"] == ["Pearl+'s verdict rejects the run: pass 1 tile 7: B opening"] and doc["coin"]["reason"]
+    (pub / S.COIN_RECORD).write_bytes(_coin_record(source="77" * 32))
+    doc = S.pearlplus(tmp_path / "a", served, held, **given)
+    assert doc["reasons"] == ["coin: the coin record beside the put is not the one it published"]
+    assert S.development_line(S.pearlplus(tmp_path / "plain", served, held, **live[1]))["coin"] is None
 
 
 @pytest.mark.parametrize("served, verified, reason", [
@@ -1733,13 +1866,15 @@ def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins
         assert lines[1] == (f"COINS sampled proofs: {LOCAL_COINS}; {PEARLPLUS_RUN}, its epoch's salt coin a live session's "
                             "of its own on vy-challenger-1's gate (peer vy-dc-h200, lane vllm), each pass's salt checked by "
                             "core_check.live_salt in its piece, and its replay's draws the Lean verifier's "
-                            "IO.getRandomBytes; a development piece under the lane's development key, it credits "
+                            "IO.getRandomBytes on this node, taken once before the replay and cited by store id in the "
+                            "POUW line's coin; a development piece under the lane's development key, it credits "
                             f"nothing{tail}"), lines
     else:
         assert lines[0] == ("COINS Pearl+'s epoch coins are in-process and the record claims no Pearl+ verdict; sampled "
                             f"proofs: {LOCAL_COINS}; {PEARLPLUS_RUN}, its epoch's coins an in-process challenger's "
                             "(PEARLC_CHALLENGER_GATE empty), which the serving process holds, and its replay's draws the "
-                            f"Lean verifier's IO.getRandomBytes; a development piece, it credits nothing{tail}"), lines
+                            "Lean verifier's IO.getRandomBytes on this node, taken once before the replay and cited by "
+                            f"store id in the POUW line's coin; a development piece, it credits nothing{tail}"), lines
         assert not any(x.startswith("GATE") for x in lines), lines
 
 

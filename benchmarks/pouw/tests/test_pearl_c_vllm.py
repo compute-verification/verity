@@ -12,6 +12,7 @@ import math
 import random
 import shlex
 import shutil
+import socket
 import sys
 import threading
 import types
@@ -1343,7 +1344,7 @@ def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_an
     """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
     each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
     record's zero key) is left with none and its records' root is rewritten, so every tile then passes the verifier's check;
-    a serve that retained no pass is refused."""
+    its document names the node it ran on; a serve that retained no pass is refused."""
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     d, out = _serve_dir(tmp_path, [path]), tmp_path / "volunteer.json"
@@ -1351,6 +1352,7 @@ def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_an
     assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 0
     doc = json.loads(out.read_text())
     assert doc["ok"] and [p["manifest"] for p in doc["passes"]] == [str(path)] and doc["over"] and not doc["left"]
+    assert (doc["node"], doc["done"], doc["of"]) == (socket.gethostname().split(".")[0], True, 1)
     assert doc["voluntary_a"] + doc["voluntary_b"] > 0
     assert json.loads(path.read_text())["records_root"] == doc["passes"][0]["records_root"]["after"] != before
     assert _replay_every_tile(VR.load(path, published(path))) == {}

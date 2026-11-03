@@ -26,10 +26,14 @@
 #      exclusion tiles, replayed on fast_tile's batch forms, the first and every 256th after it on the scalar reference
 #      too (a scalar replay takes minutes a tile at the 1B's K), or with PEARLPLUS_FAST set empty on the scalar reference
 #      alone. Its document goes to PIECE_DIR/verify.json and its core answer to PIECE_DIR/pearlplus-answer.json, not
-#      answer.json, which the record would compose as the window's PoUW answer;
+#      answer.json, which the record would compose as the window's PoUW answer. Its coin, recorded in passes/coin.json
+#      before the replay, leaves the passes the moment it is drawn (`served_verdicts.py coin`: PIECE_DIR/coin.json, put
+#      in the evidence store, preserved where the node holds a store key and else in the node's own store under the same
+#      id, its answer in PIECE_DIR/coin-put.json);
 #   5. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, with each pass's salt
 #      held to the serve's live session (`pearlplus_coins`: the session fetched through PEARLC_CHALLENGER_GATE, under
-#      H1_KEY_SHA512 and MAIN_FILE's line; with in-process coins it claims no verdict), Pearl+'s verdict's credit,
+#      H1_KEY_SHA512 and MAIN_FILE's line; with in-process coins it claims no verdict) and an accept to the published
+#      coin (`pearlplus_coin`), its load, the replay's node and the rounds dropped, Pearl+'s verdict's credit,
 #      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.PEARLPLUS_WHY: its
 #      passes are not the window sampled proofs audited, so WINDOW names nothing here).
 # The passes hold the run's activations, so they stay in SERVE_DIR/private, under served_verdicts.sh's `research keep`.
@@ -107,7 +111,18 @@ if [ -s "$Q/served.json" ]; then
   t=$(date +%s)
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py verify --passes "$Q/passes" --out "$P/verify.json" \
     --answer "$P/pearlplus-answer.json" --jobs "${PEARLPLUS_JOBS:-$(nproc)}" ${PEARLPLUS_DRAWS:+--draws "$PEARLPLUS_DRAWS"} \
-    ${FAST:+--fast} > "$Q/verify.log" 2>&1
+    ${FAST:+--fast} > "$Q/verify.log" 2>&1 &
+  V=$!
+  # the coin record leaves the passes the moment verify draws it, before its replay: a deleted one would draw afresh
+  while [ ! -s "$Q/passes/coin.json" ] && kill -0 "$V" 2>/dev/null; do sleep 1; done
+  if [ -s "$Q/passes/coin.json" ]; then
+    "$TPY" benchmarks/one_stage/served_verdicts.py coin "$P" --record "$Q/passes/coin.json" --run "${RESEARCH_RUN_ID:-}" \
+      > "$Q/coin.log" 2>&1
+    say "coin: $(tail -1 "$Q/coin.log" | cut -c1-400)"
+  else
+    say "coin: served_passes.py verify drew none (it refused the run before its coin)"
+  fi
+  wait "$V"
   rc=$?
   say "verdict: served_passes.py verify exit $rc after $(took "$t"): $(tail -1 "$Q/verify.log" | cut -c1-400)"
 fi
@@ -117,7 +132,7 @@ UN=()
 [ -s "$Q/volunteer.json" ] && UN+=(--volunteer "$Q/volunteer.json")
 "$TPY" benchmarks/one_stage/served_verdicts.py pearlplus "$P" --served "$Q/served.json" --verify "$P/verify.json" \
   ${UN[@]+"${UN[@]}"} ${PEARLC_CHALLENGER_GATE:+--gate "$PEARLC_CHALLENGER_GATE"} ${H1_KEY_SHA512:+--key-sha512 "$H1_KEY_SHA512"} \
-  ${MAIN_FILE:+--main "$MAIN_FILE"} > "$Q/pearlplus.log" 2>&1
+  ${MAIN_FILE:+--main "$MAIN_FILE"} --coin "$P/coin-put.json" > "$Q/pearlplus.log" 2>&1
 rc=$?
 grep '^POUW-DEV ' "$Q/pearlplus.log"
 say "piece: served_verdicts.py pearlplus exit $rc"
