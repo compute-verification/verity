@@ -9,10 +9,11 @@ One pass per engine step: ``llm_engine.step`` is wrapped to open `Stack.pass_` a
 tiles by the step's scheduled tokens, so the full sweep's long prefills fit the pass buffers that one generate's pass
 would overflow.
 
-Its tokens are Pearl-C's own y (Pearl's FP8 quantization), so no stock arm is a bit-exact control (``control=None``); the
-arm's gate is Pearl-C's own, `e2e.gate`'s call check: at every distinct (n, k), served y against x·Wᵀ within `ERR` rel
-RMS, the same call's commitment twice bit for bit, and the ``hash_leaf``-omitted negative control changing the
-transcript root.
+Its tokens are Pearl-C's own y (Pearl's FP8 quantization), so no stock arm is a bit-exact control (``control=None``), and
+each call's noise is seeded by its index across the epoch, so no two of the engine's passes need agree either (the gate's
+`runner.PER_PASS_TOKENS`); the arm's gate is Pearl-C's own, `e2e.gate`'s call check: at every distinct (n, k), served y
+against x·Wᵀ within `ERR` rel RMS, the same call's commitment twice bit for bit, and the ``hash_leaf``-omitted negative
+control changing the transcript root.
 
 Env: ``PEARLC_KERNEL`` (default the tree's ``benchmarks/pouw/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's
 build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule),
@@ -242,9 +243,11 @@ class PearlCArm:
                 control = commits[2]["transcript_root"] != commits[0]["transcript_root"]
                 checks.append({"n": W.shape[0], "k": W.shape[1], "m": m, "rel_rms": err, "commitment_repeats": same,
                                "omitted_leaves_rejected": control, "ok": err < ERR and same and control})
+        from verity_bench.vllm.runner import PER_PASS_TOKENS
+
         run.details["passes"].clear()
         return {"passed": all(c["ok"] for c in checks), "scheme": run.scheme.name, "schedule": self.schedule,
-                "coins": self.coins, "checks": checks}
+                "coins": self.coins, "checks": checks, PER_PASS_TOKENS: True}
 
     def spans(self, target: Any) -> dict[str, Any]:
         return {} if self.stack is None else {"passes": float(len(self.stack.passes))}

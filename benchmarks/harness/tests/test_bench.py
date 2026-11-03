@@ -34,15 +34,15 @@ from verity_bench.vllm.presets import (
     served,
 )
 from verity_bench.vllm.result import IdentityMismatch, identity_mismatches, judge, validate
-from verity_bench.vllm.runner import ResidentCapacityError, _token_digest, run_benchmark
+from verity_bench.vllm.runner import PER_PASS_TOKENS, ResidentCapacityError, _token_digest, run_benchmark
 from verity_bench.vllm.table import render
 
 
 class FakeEngine:
     def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False, kv_tokens=458_752, timed_digest=None,
-                 drift=0.0, timed_ok=True):
+                 drift=0.0, timed_ok=True, per_pass_tokens=False):
         self.arm, self.events, self.gate_ok, self.bad_tokens = arm, events, gate_ok, bad_tokens
-        self.timed_digest, self.drift, self.timed_ok = timed_digest, drift, timed_ok
+        self.timed_digest, self.drift, self.timed_ok, self.per_pass_tokens = timed_digest, drift, timed_ok, per_pass_tokens
         self.identity = {
             "vllm_version": "0.fake+gd9105ea80",
             "kernel_digest": f"digest-{arm.id}",
@@ -58,7 +58,8 @@ class FakeEngine:
     def custom_gate(self):
         self.events.append(("custom-gate", self.arm.id))
         timed = any(e[:2] == ("measure", self.arm.id) for e in self.events)
-        return {"passed": self.gate_ok and (self.timed_ok or not timed), "provided": True}
+        return {"passed": self.gate_ok and (self.timed_ok or not timed), "provided": True,
+                **({PER_PASS_TOKENS: True} if self.per_pass_tokens else {})}
 
     def warmup(self, point):
         self.events.append(("warmup", self.arm.id, point.id))
@@ -88,8 +89,9 @@ class FakeEngine:
 
 class FakeFactory:
     def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None, kv_tokens=None, timed_digest=None,
-                 drift=0.0, kv_after_gate=None, timed_ok=True):
+                 drift=0.0, kv_after_gate=None, timed_ok=True, per_pass_tokens=()):
         self.events = []
+        self.per_pass_tokens = set(per_pass_tokens)
         self.resident_failure = resident_failure
         self.failed = False
         self.gate_ok = gate_ok
@@ -110,7 +112,7 @@ class FakeFactory:
         return FakeEngine(arm, self.events, gate_ok=self.gate_ok,
                           bad_tokens=arm.id == self.bad_tokens,
                           kv_tokens=kv, timed_digest=self.timed_digest.get(arm.id), drift=self.drift,
-                          timed_ok=self.timed_ok)
+                          timed_ok=self.timed_ok, per_pass_tokens=arm.id in self.per_pass_tokens)
 
 
 def inputs():
@@ -1641,8 +1643,10 @@ def test_an_arm_whose_timed_tokens_differ_from_its_controls_keeps_no_points():
 
 
 def test_an_arm_without_a_control_is_timed_on_its_own_gated_tokens_in_resident_mode():
-    """An uncontrolled arm (a Pearl-C protocol arm, whose tokens no stock arm reproduces) must still produce in every
-    timed rep the tokens its gate saw from the same engine; blocks mode times other engines, so it has no such gate."""
+    """An uncontrolled arm must still produce in every timed rep the tokens its gate saw from the same engine; blocks mode
+    times other engines, so it has no such gate, and neither has an arm whose own gate says its tokens carry each pass's
+    coins (`PER_PASS_TOKENS`: a Pearl-C protocol arm, whose every call's noise is seeded by its index across the epoch, so
+    its timed reps never repeat its gated tokens), whose closing gate alone holds its timed reps."""
 
     doc = bench(FakeFactory(timed_digest={"stock-fp8": "other"}))
     [gate] = [g for g in doc["gates"] if g["kind"] == "timed-tokens" and g["arm"] == "stock-fp8"]
@@ -1652,6 +1656,14 @@ def test_an_arm_without_a_control_is_timed_on_its_own_gated_tokens_in_resident_m
     blocks = bench(FakeFactory(resident_failure="candidate"))
     assert blocks["execution"]["interleave"] == "blocks"
     assert not [g for g in blocks["gates"] if g["kind"] == "timed-tokens" and g["control"] is None]
+    arms = (Arm("stock-fp8", precision="fp8"), Arm("pearl"))
+    per_pass = bench(FakeFactory(timed_digest={"pearl": "other"}, per_pass_tokens={"pearl"}), arms=arms)
+    assert per_pass["execution"]["interleave"] == "resident" and per_pass["points"]
+    assert [g["arm"] for g in per_pass["gates"] if g["kind"] == "timed-tokens"] == ["stock-fp8"]
+    assert [g["passed"] for g in per_pass["gates"] if g["kind"] == "arm-closing" and g["arm"] == "pearl"] == [True]
+    closing = bench(FakeFactory(timed_digest={"pearl": "other"}, per_pass_tokens={"pearl"}, timed_ok=False), arms=arms)
+    assert closing["points"] == [] and not all(g["passed"] for g in closing["gates"] if g["kind"] == "arm-closing")
+    validate(per_pass)
     good = bench()
     with pytest.raises(ValueError, match="lacks gates"):
         validate({**good, "gates": [g for g in good["gates"] if g["kind"] != "tokens"]})
