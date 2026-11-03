@@ -2,7 +2,7 @@
 The draw (`one_stage/draw.py`): the verifier's law expanded over its own program and query (`derive`), a draw held to the
 registration and to that law (`checkDraw`), and the proved statement's units held to the draw (`checkProved`). The strata,
 their rules, the law object and the samplers are C-Flock's (`Flock.Draw`). The check samples nothing: the draw comes from
-the verifier's own randomness, raw bytes with no derivation, which `drawFirst` reads as `coins.draw_first` does.
+the challenger's coins, raw bytes with no derivation, which `drawFirst` reads as `coins.draw_first` does.
 -/
 import Flock.Draw
 import SampledProofs.Partition

@@ -6,8 +6,8 @@ import Definitions.Accounting.TS.Play
 EPS1-SPEC §2.7's (I8), `Accounting.Assumptions.TS.ProofsSound`, reads three pieces of the proof system and one of the
 TS model's accounting:
 
-* **binding at `δ_bind`** (`ProofLayer.BindingAt`): an accepted proof opens its round's leaves (hm96 rows in
-  frame-v3-sha512 trees, committed before the round's σ) to the values the round committed (`ProofLayer.Moved`, its
+* **binding at `δ_bind`** (`ProofLayer.BindingAt`): an accepted proof opens its round's leaves (hm96 rows or keyed
+  leaves in frame-v3-sha512 trees, committed before the round's σ) to the values the round committed (`ProofLayer.Moved`, its
   failure). Its fork form (`ProofLayer.Forked`, as ruled): two runs off one commitment, both accepted, open it
   differently;
 * **proof soundness at `δ_ZK`**: an accepted proof's opening satisfies its relation on its path, outside `δ_ZK` a proof

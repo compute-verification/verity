@@ -18,7 +18,11 @@ members of `next`, in its order, onto `checked` on their ready mark alone, with 
 soundness-path Python), merges with no conflict, contains no PR not landed, and passes the landing gates and the compile gate.
 The after-landing run checks them with the rest, and `main` follows only a checked commit; never with `land_into = "main"`.
 Its landing rebuilds `next` on `checked`, and each Lean check of `next` that runs or passed moves to the commit of the same
-member, as its trees differ in no file `lowrisk_excludes` names (`_keep_lean`); the lane waits only while one can't move, and
+member, as its trees differ in no file `lowrisk_excludes` names (`_keep_lean`).  Above the prefix such a check holds, the
+lane also lands a member with a land verdict whose change is no Lean change and touches nothing a Lean check reads,
+whatever `lowrisk_excludes` say (`_reviewed_below`: a reviewed fix doesn't wait hours for the Lean checks below it), and the
+check moves across it as its trees differ in that member's files alone, none read by a Lean check (a moved check whose
+records then don't hold on its new commit by `merge.rekey_refusal` is checked again); the lane waits only while one can't move, and
 even then lands each fix of a red on `checked` above every such check's prefix whose change touches nothing a Lean check reads
 (`_land_fixes`), onto `checked`'s tip without rebuilding `next`: the next sync rebuilds it, and the check's verdict moves with its
 prefix (`_rekey_lean`, across trees that differ in no file `lowrisk_excludes` names).
@@ -72,7 +76,10 @@ The park moves no member below the lowest held one, so no Lean check below it is
 (its prefix can't land), and no check is stacked above a held member.  A Lean check lost or failed by its
 machine (killed, out of disk or memory: `_machine_fault`) runs again once on the other machines.  A failed Lean check is run
 again on the Lean change's own commit, and only a failure there is told to its owner; nothing at or above a failed commit lands until it leaves `next`, unless a passed Lean check
-of a reviewed commit above it checked the tree that lands (`_past_failed`).  And every .py file the
+of a reviewed commit above it checked the tree that lands (`_past_failed`).  No Lean check is stacked or cut above a failed
+one that would hold every Lean change of its prefix still on `next`, though a sync that rebuilds `next` above a running
+check's prefix (a `--first` fix) took the failed commit off it, until one of its members is held, ejected or pushed, or a
+Lean check that holds them all passes (`_live_failures`).  And every .py file the
 landing leaves must compile (`py_compile`): the PR that last changed one that doesn't is ejected.  While any Lean check of a
 commit of `next` runs, drive's or a hand one of its run registry (`_running_lean`), the members up to it keep their place
 and their merges (`--first` and each PR admitted meanwhile go above them, one a member contains too: `Queue.order`); only one
@@ -997,6 +1004,11 @@ def touches(files: set[str], paths: set[str]) -> set[str]:
     """The ``files`` (repository paths) among ``paths``, an absolute path matching the file it ends in when that file is under a
     directory (a bare `conftest.py` would match every conftest an installed package has)."""
     return {f for f in files for p in paths if p == f or ("/" in f and p.startswith("/") and p.endswith("/" + f))}
+
+
+def lean_reads(files: Iterable[str]) -> list[str]:
+    """The ``files`` a Lean check reads (`LEAN_INPUTS`, `LEAN_TOOLING`), sorted."""
+    return sorted(f for f in files if f.endswith(LEAN_INPUTS) or f.startswith(LEAN_TOOLING))
 
 
 def py_errors(repo: Path, base: str, top: str) -> list[tuple[str, str]]:
@@ -2287,7 +2299,7 @@ class Driver:
                 continue
             if m.pr in low:
                 refused.append(f"#{m.pr} (a fix of {key}, in the prefix of a Lean check of `{self.q.branch}`, which lands it)")
-            elif read := sorted(f for f in self._own(m) if f.endswith(LEAN_INPUTS) or f.startswith(LEAN_TOOLING)):
+            elif read := lean_reads(self._own(m)):
                 refused.append(f"#{m.pr} (a fix of {key}, but its change touches what a Lean check reads: {', '.join(read[:3])})")
             else:
                 fixes.append(m)
@@ -3154,6 +3166,7 @@ class Driver:
     #    (`_carry`: {"from": the commit it ran on, "files" that commit's tree and
     #    this one's differ in, "ok" once `_carried_ok` judged it}) when it moved there, "state": None while it runs, else
     #    "passed" (with "run", the id that passed) or "failed" (with "why")}}, each dropped once its commit leaves `next`.
+    #    `drive["lean_failed"]`: each failed one by its members, kept past that until it is resolved (`_live_failures`).
     #    `drive["postland"]` also keeps "verified_as" ({"steps", "no_cache"} of the run that verified `verified`, or ci's
     #    `research queue baseline`), "verified_run" (the ids of the run that verified it; none for ci's baseline), "gated" and
     #    "gated_run" (the newest tip whose run passed every step on the merge gate, red off it or not: `_gate_passed`; with
@@ -3478,7 +3491,10 @@ class Driver:
                      fixes: list[Member] | None = None) -> list[Member]:
         """The low-risk lane (drive.toml's `lowrisk_lane`): after the reviewed prefix lands, or when nothing does, land up to
         `lowrisk_per_tick` members of `next`, in its order, onto `checked`'s tip (never `main`) on their ready mark alone, each
-        as one `Queue: #N` merge, when the files that merge changes against that tip are `lowrisk`.  Each still needs its ready
+        as one `Queue: #N` merge, when the files that merge changes against that tip are `lowrisk`; above the prefix a Lean
+        check of `next` that runs or passed holds, also a member with a land verdict whose change is no Lean change and whose
+        merge touches nothing a Lean check reads, whatever `lowrisk_excludes` say (`_reviewed_below`), so it doesn't wait for
+        that check, and the check moves across it (`_keep_lean`'s (b) takes its files).  Each still needs its ready
         mark at its PR's head, no hold label or hold verdict, no red circuit-check on its inputs (`_circuit_held`), a merge
         with no conflict at all, every PR whose commits it contains (`Entry.after`) on the tip, the landing gates
         (`landing_gates`) and every .py file the landing leaves compiling (`py_errors`); each is judged on the tip the one
@@ -3500,13 +3516,20 @@ class Driver:
         landed: list[tuple[Member, str]] = []
         skipped: list[str] = []
         chain = self._chain()[1]
+        lean = drive.get("lean") or {}
+        held = {c for c, rec in lean.items() if rec.get("state") in (None, "passed")}
+        low = max((i + 1 for i, m in enumerate(chain) if m.commit in held), default=0) if fixes is None else 0
+        above = {m.pr for m in chain[low:]} if low else set()
+        reviewed: set[str] = set()              # the files the merges `_reviewed_below` let land change
+        byrev: set[int] = set()
         for m in chain if fixes is None else fixes:
             if len(landed) >= self.lowrisk_per_tick:
                 break
             if (head := self._merged_head(m)) is None:
                 skipped.append(f"#{m.pr} and those above it (a move, which lands on its review, at its place in `{q.branch}`)")
                 break
-            if not lowrisk(self._own(m), self.lowrisk_excludes) or self._ancestor(head, tip):
+            rev = m.pr in above and self._reviewed_below(m)
+            if not (rev or lowrisk(self._own(m), self.lowrisk_excludes)) or self._ancestor(head, tip):
                 continue
             if why := self._lowrisk_held(m, entries, hold_label, tip):
                 skipped.append(f"#{m.pr} ({why})")
@@ -3518,8 +3541,15 @@ class Driver:
                 continue
             files = set(_out(self.repo, "diff", "--name-only", "--no-renames", tip, tree).split())
             if not lowrisk(files, self.lowrisk_excludes):
-                skipped.append(f"#{m.pr} (its merge onto `{q.into}`'s tip is no low-risk change)")
-                continue
+                if not rev:
+                    skipped.append(f"#{m.pr} (its merge onto `{q.into}`'s tip is no low-risk change)")
+                    continue
+                if read := lean_reads(files):
+                    skipped.append(f"#{m.pr} (reviewed, but its merge onto `{q.into}`'s tip changes what a Lean check reads: "
+                                   f"{', '.join(read[:3])})")
+                    continue
+                reviewed |= files
+                byrev.add(m.pr)
             commit = _git(self.repo, "commit-tree", tree, "-p", tip, "-p", head, "-m", _message(p), env=IDENTITY).stdout.strip()
             refused, unjudged = gate_refusal(self.repo, tip, commit, gates, onto=q.into) if gates else ([], [])
             if refused or unjudged:
@@ -3535,13 +3565,16 @@ class Driver:
         if not landed:
             return []
         gone = {m.pr for m, _ in landed}
-        top, moves = self._keep_lean(drive, chain, gone, tip, running) if fixes is None else ("", {})
+        top, moves = self._keep_lean(drive, chain, gone, tip, running, reviewed) if fixes is None else ("", {})
         if top is None:
             return self._land_fixes(drive, entries, running, dry_run, chain)
+        lowtag = "(low-risk lane: no Lean, lock or soundness-path change)"
+        revtag = (f"(low-risk lane: reviewed, no Lean change and nothing a Lean check reads, above the prefix a Lean check of "
+                  f"`{q.branch}` holds)")
+        tag = {m.pr: revtag if m.pr in byrev else lowtag for m, _ in landed}
         if dry_run or q.shadow:
             for m, commit in landed:
-                q.log(f"research queue drive: would land #{m.pr} on `{q.into}` (low-risk lane: no Lean, lock or soundness-path "
-                      "change)" + (" [shadow]" if q.shadow else ""))
+                q.log(f"research queue drive: would land #{m.pr} on `{q.into}` {tag[m.pr]}" + (" [shadow]" if q.shadow else ""))
             return []
         q._drive_only(q.into, "once", False)
         if (r := self._push_into(drive, tip)).returncode:
@@ -3551,27 +3584,30 @@ class Driver:
         _git(self.repo, "update-ref", q.base, tip)
         below = start
         for m, commit in landed:
-            q.log(f"research queue drive: landed #{m.pr} on `{q.into}` at {commit[:12]} (low-risk lane: no Lean, lock or "
-                  "soundness-path change)")
+            q.log(f"research queue drive: landed #{m.pr} on `{q.into}` at {commit[:12]} {tag[m.pr]}")
             self._after_landing(drive, commit, below)
             below = commit
         if moves:
             self._move_lean(drive, gone, tip, top, moves)
         return [m for m, _ in landed]
 
-    def _keep_lean(self, drive: dict, chain: list[Member], gone: set[int], tip: str,
-                   running: set[str]) -> tuple[str, dict[str, tuple[str, list[list]]]] | tuple[None, None]:
+    def _keep_lean(self, drive: dict, chain: list[Member], gone: set[int], tip: str, running: set[str],
+                   reviewed: set[str] = frozenset()) -> tuple[str, dict[str, tuple[str, list[list]]]] | tuple[None, None]:
         """For the low-risk lane's landing of ``gone`` onto ``tip``: (the tip of `next` rebuilt on ``tip``, its other members
         merged again in its order as a sync merges them; {the commit of each Lean check of `next` that runs or passed: (the
-        commit there of its highest member left, the members up to it)}), ("", {}) when there is no such check (the next sync
+        commit there of its highest member left, the members up to it)}, those whose trees differ in ``reviewed`` also in
+        `_across_reviewed`, for `_move_lean`'s log), ("", {}) when there is no such check (the next sync
         rebuilds `next`), or (None, None), told to the log, when the lane waits for one that can't move: a check drive didn't
         launch runs (`_running_lean`: its run is of its commit), a passed one regenerated lock records or they can't be read
         (they land at its commit before the lane moves it: `_lean_gate`), or (a) the members up to the commit it moves to aren't its
         own less ``gone`` (one doesn't merge cleanly again, or its record isn't `next`'s), or (b) that commit's tree and its own
-        differ in a file `lowrisk_excludes` names.  A check of PRs in ``gone`` alone covers nothing left, and isn't moved."""
+        differ in a file `lowrisk_excludes` names, but one of ``reviewed`` (what a reviewed member's merge `_reviewed_below`
+        lets land changes) that no Lean check reads (`lean_reads`).  A check of PRs in ``gone`` alone covers nothing left, and
+        isn't moved."""
         from .queue import lowrisk
 
         q, lean = self.q, drive.get("lean") or {}
+        self._across_reviewed: set[str] = set()
         keep = {c: rec for c, rec in lean.items() if rec.get("state") in (None, "passed")}
         pos = {m.commit: i for i, m in enumerate(chain)}
         why = None
@@ -3609,12 +3645,14 @@ class Driver:
                 why = f"(a) can't be shown for the Lean check {_ids(rec)} of {c[:12]}: {broke} onto `{q.into}` {tip[:12]}"
             elif any(new == x for x, _ in moves.values()):
                 q.log(f"research queue drive: the Lean check {_ids(rec)} of {c[:12]} isn't moved: another one holds {new[:12]}")
-            elif (files := changed(self.repo, c, new)) and not lowrisk(files, self.lowrisk_excludes):
-                bad = sorted(f for f in files if not lowrisk([f], self.lowrisk_excludes))
+            elif bad := sorted(f for f in changed(self.repo, c, new) if not lowrisk([f], self.lowrisk_excludes)
+                               and (f not in reviewed or lean_reads([f]))):
                 why = (f"(b) can't be shown for the Lean check {_ids(rec)} of {c[:12]}: its tree and that of {new[:12]} on "
                        f"`{q.into}` {tip[:12]} differ in {', '.join(bad[:3])}, which `lowrisk_excludes` names")
             else:
                 moves[c] = (new, [[m.pr, m.head] for m in left])
+                if reviewed & changed(self.repo, c, new):
+                    self._across_reviewed.add(c)
             if why:
                 break
         if why:
@@ -3637,12 +3675,30 @@ class Driver:
             return
         _git(self.repo, "update-ref", f"refs/remotes/origin/{q.branch}", top)
         prs = " ".join(f"#{n}" for n in sorted(gone))
+        across = getattr(self, "_across_reviewed", set())
         for c, (new, members) in moves.items():
+            reviewed = c in across
             rec = lean.pop(c)
             lean[new] = {**rec, "members": members, "tree": self._tree(new), "rekeyed_from": rec.get("rekeyed_from", c)}
             q.log(f"research queue drive: the Lean check {_ids(rec)} of {c[:12]} ({rec.get('state') or 'running'}) holds "
                   f"{new[:12]} of `{q.branch}` rebuilt on `{q.into}` {tip[:12]}: the same PRs up to #{members[-1][0]} at the "
-                  f"same heads less {prs} (the low-risk lane's), and trees that differ in no file `lowrisk_excludes` names")
+                  f"same heads less {prs} (the low-risk lane's), and trees that differ in "
+                  + ("no file a Lean check reads, and in no file `lowrisk_excludes` names but a reviewed landing's"
+                     if reviewed else "no file `lowrisk_excludes` names"))
+
+    def _reviewed_below(self, m: Member) -> bool:
+        """Whether the low-risk lane lands ``m``, a member above the prefix a Lean check of `next` that runs or passed holds,
+        whatever `lowrisk_excludes` say: it has a land verdict at its head (`unreviewed`, by none of `_owners`), its own change
+        is no Lean change (`_lean_change`) and touches nothing a Lean check reads (`lean_reads`), so that check moves across its
+        landing (`_keep_lean`) and it doesn't wait for the check to land with the prefix.  Its merge onto `checked`'s tip is
+        held to the same, and to the lane's other rules (`_lowrisk_held`, the landing gates, the compile gate)."""
+        try:
+            if unreviewed(self.reviews(m.pr, m.head), self._owners(m)) is not None:
+                return False
+        except QueueError as e:
+            self.q.log(f"research queue drive: #{m.pr}'s verdicts can't be read, so it lands only as a low-risk change: {e}")
+            return False
+        return not self._lean_change(m) and not lean_reads(self._own(m))
 
     def _lowrisk_held(self, m: Member, entries: dict[int, Entry], hold_label: str, tip: str) -> str | None:
         """Why the low-risk lane doesn't land ``m`` onto ``tip`` before merging it, or None: its PR closed or pushed past the head
@@ -3676,9 +3732,10 @@ class Driver:
 
     def _clean_merge(self, tip: str, head: str) -> tuple[str | None, str]:
         """(the tree of ``head`` merged onto ``tip``, "") when it merges as `Queue._merge` merges, with ``tip``'s merge drivers
-        and a merge whose every conflict is in a pin kept, each pin rebuilt from the merged tree (`repinned`), else (None,
-        why).  A git without `--attr-source` merges without them, which conflicts more."""
-        from .queue import repinned
+        and a merge whose every conflict is in a pin kept, each pin rebuilt from the merged tree (`repinned`), and the merged
+        tree's Lean on the Lean module system once the tree has it (`ported`), else (None, why).  A git without
+        `--attr-source` merges without the drivers, which conflicts more."""
+        from .queue import ported, repinned
 
         args = ("merge-tree", "--write-tree", "--name-only", "--no-messages", tip, head)
         r = _git(self.repo, f"--attr-source={tip}", *args, check=False)
@@ -3686,12 +3743,14 @@ class Driver:
             r = _git(self.repo, *args, check=False)
         if r.returncode == 1:
             files = list(dict.fromkeys(r.stdout.splitlines()[1:]))
-            if tree := repinned(self.repo, r.stdout.split()[0], tip, head, files):
-                return tree, ""
-            return None, f"conflict in {', '.join(files) or 'a file'}"
-        if r.returncode:
+            if not (tree := repinned(self.repo, r.stdout.split()[0], tip, head, files)):
+                return None, f"conflict in {', '.join(files) or 'a file'}"
+        elif r.returncode:
             return None, f"doesn't merge: {(r.stderr or r.stdout).strip()[-200:]}"
-        return r.stdout.split()[0], ""
+        else:
+            tree = r.stdout.split()[0]
+        tree, _, _, why = ported(self.repo, tree)
+        return tree, why
 
     def _reviewed(self, chain: list[Member]) -> tuple[int, str | None]:
         """(how many members at the bottom of ``chain`` land on their verdicts, why the next one doesn't): each has its ready mark
@@ -3846,6 +3905,8 @@ class Driver:
             hi = max((j for j, m in enumerate(chain[:bad]) if self._lean_change(m)), default=-1)
             if hi < 0 or any(hi <= pos[x] < bad for x, r in lean.items() if r.get("state") == "passed" and x in pos):
                 del lean[c]                 # every Lean change below it passed below it: what broke is the after-landing run's
+                for x in [x for x, f in (drive.get("lean_failed") or {}).items() if f["members"] == rec.get("members")]:
+                    del drive["lean_failed"][x]
                 self.refuse(drive, f"lean-dropped:{c}", f"the Lean check {_ids(rec)} of `{self.q.branch}` {c[:12]} "
                                                      f"(#{chain[bad].pr}'s merge, which changes no Lean) failed ({rec.get('why')}), "
                                                      "and each Lean change below it passed a Lean check below it: drive drops it, "
@@ -3981,8 +4042,9 @@ class Driver:
         head, a hold, an ejection); after a failed one above it, check its own commit, so a PR is blamed only on its own
         check; else launch one of the reviewed prefix's top, ``chain[k - 1]``, capped below the lowest member above ``chain[i]``
         that came onto `next` within `LEAN_SETTLE_TICKS` ticks (`_churned`), so churn above doesn't take it off `next`, and cut
-        to share the Lean changes up to it with the Lean checks still free (`lean_cut`), lowest first.  One running below
-        stays; `_stack_lean` stacks one above it for the Lean changes it doesn't hold."""
+        to share the Lean changes up to it with the Lean checks still free (`lean_cut`), lowest first, but at its own commit
+        when that cut would hold every Lean change left of a failed check not resolved (`_failure_under`), as after a failed
+        one above it.  One running below stays; `_stack_lean` stacks one above it for the Lean changes it doesn't hold."""
         q, m, lean = self.q, chain[i], drive["lean"]
         pos = {x.commit: j for j, x in enumerate(chain)}
         mine = {c: rec for c, rec in lean.items() if pos.get(c, -1) >= i and not (
@@ -3999,6 +4061,8 @@ class Driver:
         cap = next((j for j in range(i + 1, k) if self._churned(drive, chain[j])), k)
         free = self.max_lean_checks - sum(rec.get("state") is None for rec in lean.values())
         t = i if any(rec.get("state") == "failed" for rec in mine.values()) else lean_cut(chain, i, cap - 1, self._lean_change, free)
+        if t > i and self._failure_under(drive, chain, t, set(q.park or ())):
+            t = i
         self._launch_lean(drive, chain, t, f"#{m.pr}'s Lean change", dry_run)
 
     def _stack_lean(self, drive: dict, dry_run: bool) -> None:
@@ -4006,18 +4070,85 @@ class Driver:
         (`lean_stack`, at most `max_lean_checks` running), so they don't wait for it to pass and then for a check of their own.
         The lower one runs on.  An ejection from a stacked check's prefix rebuilds `next` at once (`_review`), cancelling it.
         It stops below a held member (`_park`) as below churn: that one can't land, and each PR a sync adds goes below it,
-        taking the commits from it up off `next`."""
+        taking the commits from it up off `next`.  And none is stacked while a failed Lean check isn't resolved whose Lean
+        changes left on `next` it would hold (`_failure_under`), its commit on `next` or not: it would fail as that one did."""
         base, chain = self._chain()
+        held = set(self.q.park)
+        self._live_failures(drive, chain, held)
         if not chain or base != _out(self.repo, "rev-parse", self.q.base):
             return
         self._rekey_lean(drive, chain)
         self._note_marks(drive, chain)
-        held = set(self.q.park)
         t = lean_stack(chain, drive["lean"], self._lean_change, lambda m: m.pr in held or self._churned(drive, m),
                        self.max_lean_checks)
-        if t is not None:
-            self._launch_lean(drive, chain, t, f"the Lean changes up to #{chain[t].pr}, above the running one", dry_run,
-                              stacked=True)
+        if t is None:
+            return
+        if got := self._failure_under(drive, chain, t, held):
+            f, left = got
+            self.q.log(f"research queue drive: stacks no Lean check above the running one: the Lean check {_ids(f)} of "
+                       f"{' '.join(f'#{pr}' for pr, _ in f['members'])} failed ({f.get('why')}), and a check up to "
+                       f"#{chain[t].pr} would hold its Lean changes still on `{self.q.branch}` "
+                       f"({' '.join(f'#{m.pr}' for m in left)}), one of them what broke it; it stacks again once one is held, "
+                       "ejected or pushed, or a Lean check that holds them all passes")
+            return
+        self._launch_lean(drive, chain, t, f"the Lean changes up to #{chain[t].pr}, above the running one", dry_run,
+                          stacked=True)
+
+    def _note_failed(self, drive: dict) -> None:
+        """Remember each failed Lean check of `next` by its members (`drive["lean_failed"]`: {the commit it failed on: {"members",
+        "ids", "why"}}), past its record in `drive["lean"]`, which a sync that rebuilds `next` above a running check's prefix
+        (a `--first` fix, a lift) drops with its commit, though what broke it is still on `next` (`_live_failures`)."""
+        failed = drive.setdefault("lean_failed", {})
+        seen = [f["members"] for f in failed.values()]
+        for c, rec in (drive.get("lean") or {}).items():
+            if rec.get("state") == "failed" and (members := rec.get("members")) and members not in seen:
+                failed[c] = {"members": members, "ids": rec.get("ids") or [], "why": rec.get("why")}
+                seen.append(members)
+
+    def _live_failures(self, drive: dict, chain: list[Member], held: set[int]) -> list[tuple[dict, list[Member]]]:
+        """Each failed Lean check of `next` (`_note_failed`) not yet resolved, with the Lean changes of its prefix still on
+        `next`, one of which broke it: every member it held is on `next` at that head and not held (``held``, `_park`'s), or
+        landed.  One is dropped, with why, once one of its members is held, ejected or pushed (the walk, `_lean_check`, found
+        what broke it, or its owner acted), none of its Lean changes is left on `next`, or a Lean check that passed holds them
+        all at their heads (it failed by a fault no check saw)."""
+        self._note_failed(drive)
+        failed, at = drive["lean_failed"], {(m.pr, m.head): m for m in chain}
+        heads = {m.pr: m.head for m in chain}
+        passed = [(rec, {tuple(x) for x in rec.get("members") or ()}) for rec in (drive.get("lean") or {}).values()
+                  if rec.get("state") == "passed"]
+        out = []
+        for c, f in list(failed.items()):
+            left, why = [], None
+            for pr, head in f["members"]:
+                if (m := at.get((pr, head))) is not None and pr not in held:
+                    left += [m] if self._lean_change(m) else []
+                elif m is not None:
+                    why = f"#{pr} is held"
+                elif heads.get(pr, head) != head:
+                    why = f"#{pr} was pushed to {heads[pr][:8]}"
+                elif not self._ancestor(head, self.q.base):
+                    why = f"#{pr} left `{self.q.branch}`"
+                if why:
+                    break
+            if why is None and not left:
+                why = f"none of its Lean changes is left on `{self.q.branch}`"
+            if why is None and (ok := next((rec for rec, ms in passed if {(m.pr, m.head) for m in left} <= ms), None)):
+                why = f"the Lean check {_ids(ok)} that holds its Lean changes on `{self.q.branch}` passed"
+            if why:
+                del failed[c]
+                self.q.log(f"research queue drive: the failed Lean check {_ids(f)} of "
+                           f"{' '.join(f'#{pr}' for pr, _ in f['members'])} no longer holds a Lean check back from stacking "
+                           f"above it: {why}")
+            else:
+                out.append((f, left))
+        return out
+
+    def _failure_under(self, drive: dict, chain: list[Member], t: int, held: set[int]) -> tuple[dict, list[Member]] | None:
+        """A failed Lean check not yet resolved (`_live_failures`) whose Lean changes left on `next` a Lean check of ``chain[t]``
+        would hold every one of, (it, them), or None: that check would fail as it did."""
+        below = {(m.pr, m.head) for m in chain[: t + 1]}
+        return next(((f, left) for f, left in self._live_failures(drive, chain, held)
+                     if {(m.pr, m.head) for m in left} <= below), None)
 
     def _launch_lean(self, drive: dict, chain: list[Member], t: int, what: str, dry_run: bool, stacked: bool = False,
                      by: str | None = None) -> None:
@@ -4190,6 +4321,7 @@ class Driver:
                 del lean[c]
             else:
                 rec.update(state="failed", why=", ".join(f"{rid} {st} rc={rc}" for rid, (st, rc, *_) in states.items()))
+        self._note_failed(drive)
 
     def _machine_fault(self, ids: list[str]) -> str | None:
         """What says a Lean check that failed failed by its machine rather than by the Lean it checked, or None: a step killed
