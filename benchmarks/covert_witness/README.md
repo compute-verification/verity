@@ -62,9 +62,11 @@ scores by the formalism. `pinned.json` names v2.3's commit until v3 is pinned.
   checkpoints (the coordinator's 19:50Z rule), and Security's S = W*/H. **Plots** (`python -m te_core.plots --out
   DIR`): P1-P4 of the experiments draft and the A2 curve (the least compute to each target against Δ, per start; Δ's
   bins, never caps), as five panels, each `<name>.json` and a PNG made from it, off the console; `python -m
-  te_core.console DIR` cuts each to the panels route's limits. The console's one training panel,
+  te_core.console DIR` cuts each to the panels route's limits. The console's two training panels are
   `training/frontier-branches` (loss against total training compute: the frontier and each start's honest and throttled
-  branches), is `python -m te_core.panels frontier-branches --out DIR --publish`.
+  branches), `python -m te_core.panels frontier-branches --out DIR --publish`, and `training/algorithm-policy` (per run
+  and end loss, its algorithm's inefficiency p = C/H against its policy's slowdown ρ), `python -m
+  te_core.algorithm_policy --out DIR --publish`.
   **Re-scoring v2.3's records** (`python -m te_core.rescore --out DIR`): the same score and panels over the pin's
   valid records, each with the
   formalism block built from `analysis/rescore_v1.py`'s per-record quantities (from the scorer's directory), or the

@@ -14,7 +14,8 @@ valid record (the coordinator's 19:50Z rule). It writes into DIR:
   W*'s route and its x0 and s* bounds and best-known values (te_core.frontier's `formalism_report`);
 - the five panels, each `<name>.json` (a panels-route body) and `<name>.png` drawn from it (te_core.plots), and
   `console/<name>.json`, each cut to the route's limits (te_core.console); they are off the console, so nothing is PUT
-  (its one training panel is te_core.panels', which reads the ledger through `arguments` and `load`);
+  (its training panels, te_core.panels' and te_core.algorithm_policy's, read the ledger through `arguments` and
+  `load`);
 - `formalism.jsonl`: each scored row's attached block and its source.
 
 The block holds the per-record quantities of covert_witness's `analysis/rescore_v1.py` where that file is present
