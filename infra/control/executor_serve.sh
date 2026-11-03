@@ -1,6 +1,6 @@
 #!/bin/sh
-# The task executor's serve (INF-410): `executor.py serve --label` on /root/executor/queue.db, the queue drive's
-# `research executor enqueue` fills (drive.sh's RESEARCH_EXECUTOR_ENQUEUE), restarted 30 s after it exits. Its slots, NAME NODE
+# The task executor's serve (INF-410): `executor.py serve --label` on /root/executor/queue.db, the queue drive
+# fills through drive.toml's `executor_enqueue`, restarted 30 s after it exits. Its slots, NAME NODE
 # POOL CORES MEM_GB a line, are /data/executor/slots.txt, read at each start. No serve while /data/executor/stopped exists:
 # `executor_serve.sh stop` makes it and ends the serve, `start` removes it. Every start puts the tasks the last serve had leased
 # back in the queue (`requeue_leased`), so two serves on one queue run each such task twice: this lock and `stop` keep it one.
