@@ -248,7 +248,7 @@ exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_r
 # deployment's party and the recursion runs' mode `firewall` where shell, a flag's value or a message spells it bare
 # (`MODES=firewall`, `--modes firewall`, `(firewall)`, `dials firewall`, `listen: firewall`, `GATE_ABSENT=firewall`), a5's
 # coin family (`need 26 draw coins`), the module `verity_flock.firewall` (`python -m` runs it), the refusal
-# `FIREWALL-REFUSED`, the stored label `C-Flock`, the audit record's `wrong_units`, `proof_unit` and the `"proof-unit"`
+# `FIREWALL-REFUSED`, the stderr line tag `FIREWALL\t` and its timing keys (`t.firewall_recheck`), the stored label `C-Flock`, the audit record's `wrong_units`, `proof_unit` and the `"proof-unit"`
 # kind, the public items' reasons `Spec.digest` hashes (`N, the window's proof units` and three more), the package
 # directory `verity/core/service/firewall`; the structure `Accounting.TS.DrawnLayer` and its projection
 # (names under it are renamed here, so `check.py --moved` reads each back only if the prefix is renamed in a move of its
@@ -274,6 +274,7 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
             '\binner\.draw\b', '\b(?:every|need \d+) draw coins?\b', '(?<=listen: )firewall\b',
             '\bGATE_(?:ABSENT|PEERS|ROLE)=[^\x22\x27\n]*',
             '\b(?:FC|H1S?)_[A-Z0-9_]*FIREWALL[A-Z0-9_]*', 'FIREWALL-REFUSED', '[\x22\x27]C-Flock[\x22\x27]',
+            '\bFIREWALL(?=\\t)', '(?<=\^)FIREWALL\b', '`FIREWALL` lines', '\b(?:t|cpu)\.firewall_\w+',
             '\bwrong_units\b', '\bproof_unit\b', '[\x22\x27]proof-unit[\x22\x27]', '\bservice/firewall\b',
             'N, the (?:window|round)\x27s proof units', 'one proof unit per registration: the link-window',
             'T proof units per registration, unit t the link-window\x27s bucket row t',
