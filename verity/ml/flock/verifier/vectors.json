@@ -4688,7 +4688,7 @@
      }
     ],
     "lean_statement": "verity/flock-circuit",
-    "agreement": "the fixture run's own Lean verdicts (r20261027-130427-933f, Lean at 4fb69563c2): 3/3 as expected, 1 accepted; ci.py --live --sets 6 not rerun on this fixture",
+    "agreement": "ci.py --live --sets 6 on vy-nebius-cpu-5 (r20261103-121447-aefb, Lean at 0555fb9c21): 3/3 as expected, 1 accepted",
     "sessions_note": "honest: the session with the verifier's own reads (accepted); root: its registered.json with the tree's root zeroed; none: registered.json null (no --registered). Upstream's verdicts are the live server's (each case.json, from serve's record), which reads no registered roots"
    }
   ]
