@@ -33,9 +33,12 @@ the adapters' MACs are updated). Knobs, each a mechanism of the direction:
   of the factors (or of VeRA's d and b), taken in the one batched backward by tensor hooks, is its message: `vote` its
   sign (a zero drawn ±1), qN stochastically rounded onto 2^(N-1) - 1 levels a side times a bf16 absmax scale per 128
   entries. A message passes at its width in the trace (bools, or N-bit levels packed into uint8s, and bf16 scales). The
-  messages are summed up a binary tree whose every sum is recoded, so every message an inner node sends is as wide as a
-  leaf's, and the optimizer reads the root's. `delta_grad.grad_bits` is that width (1 bit an entry for `vote`, N +
-  16/128 for qN), and `notes.messages` says how it was cut;
+  messages are summed up a tree of fan-in `--fan` (default 2) whose every sum is recoded, so every message an inner node
+  sends is as wide as a leaf's, and the optimizer reads the root's. With `vote` a node sends its children's majority,
+  which only an odd fan-in amplifies: at 2, sign(s1 + s2) with the tie drawn is one child's sign at random (P(+1) =
+  p² + p(1 - p) = p), so the root's sign is distributed as one block's; at 3 each level multiplies a small bias by 1.5
+  (81 = 3^4 blocks: about 5x, against a full vote's 7.2x). `delta_grad.grad_bits` is that width (1 bit an entry for
+  `vote`, N + 16/128 for qN), and `notes.messages` says how it was cut;
 - initialization: `--init` gauss (A ~ N(0, 1/d_in), B = 0), orth (A orthonormal rows), grad (A the top-r right singular
   vectors of the targets' full gradient over `--init-batches` batches, B = 0; the pass and the weight gradients are logged);
 - optimizer: AdamW with `--b-lr-mult` (LoRA+), `--opt riemann` (each factor's gradient preconditioned by the other's Gram,
@@ -187,8 +190,8 @@ class Message:
     (`encode`) is at its width in the trace: bools at one bit, else the levels c packed 8 // N to a uint8, and the bf16
     scales. Tensor ops only; x is blocks x shape."""
 
-    def __init__(self, kind: str, gen: torch.Generator):
-        self.kind, self.gen = kind, gen
+    def __init__(self, kind: str, gen: torch.Generator, fan: int = 2):
+        self.kind, self.gen, self.fan = kind, gen, fan
         self.bits = 1 if kind == "vote" else int(kind[1:])
         self.levels = 1 if self.bits == 1 else 2 ** (self.bits - 1) - 1
 
@@ -227,12 +230,17 @@ class Message:
 
 
 def reduce_tree(leaves: torch.Tensor, code: Message) -> torch.Tensor:
-    """The root's message of a binary tree over the token blocks' partial gradients `leaves` (blocks x shape): each block
-    sends code(its gradient), each inner node code(its two children's sum), an odd node passing up as it is."""
+    """The root's message of a tree of fan-in code.fan over the token blocks' partial gradients `leaves` (blocks x
+    shape): each block sends code(its gradient), each inner node code(its children's sum), the nodes left over at a
+    level passing up as they are."""
     m = code(leaves)
     while m.shape[0] > 1:
-        n = m.shape[0] - m.shape[0] % 2
-        s = code(m[0:n:2] + m[1:n:2])
+        k = min(code.fan, m.shape[0])
+        n = m.shape[0] - m.shape[0] % k
+        s = m[0:n:k]
+        for i in range(1, k):
+            s = s + m[i:n:k]
+        s = code(s)
         # no empty slice of the level below: the trace would read it as a path around this level's codes
         m = torch.cat([s, m[n:]]) if n < m.shape[0] else s
     return m[0]
@@ -627,6 +635,7 @@ def main() -> int:
     ap.add_argument("--msg", default="fp32", choices=("fp32", *MSG_CODES),
                     help="each token block's gradient message (fp32: autograd's sum over the batch)")
     ap.add_argument("--leaf", type=int, default=1, help="--msg: sequences of 1,024 tokens a token block")
+    ap.add_argument("--fan", type=int, default=2, help="--msg: the reduction tree's fan-in (vote: odd, for a majority)")
     ap.add_argument("--init", default="gauss", choices=("gauss", "orth", "grad"))
     ap.add_argument("--init-batches", type=int, default=4)
     ap.add_argument("--scale", default="rs", choices=("rs", "one"), help="rs: s = sqrt(d_in / r); one: s = 1")
@@ -655,9 +664,9 @@ def main() -> int:
             raise SystemExit(f"{KLASS}: --vera trains d and b by AdamW or signSGD over its shared codes: no --dora, "
                              "--alloc, --init, --opt riemann or muon, --rank or --rank-map")
     coded = a.msg != "fp32"
-    if coded and (a.norms != "none" or a.dora or a.leaf < 1 or a.micro % a.leaf or a.batch % a.micro):
-        raise SystemExit(f"{KLASS}: --msg {a.msg} codes the factors' block gradients: --norms none, no --dora, and "
-                         "--leaf divides --micro, which divides --batch")
+    if coded and (a.norms != "none" or a.dora or a.leaf < 1 or a.micro % a.leaf or a.batch % a.micro or a.fan < 2):
+        raise SystemExit(f"{KLASS}: --msg {a.msg} codes the factors' block gradients: --norms none, no --dora, "
+                         "--leaf divides --micro, which divides --batch, and --fan at least 2")
     if a.dora and (a.format != "lora2" or a.dtype != "f16"):
         raise SystemExit(f"{KLASS}: --dora needs --format lora2 (CWLORA2 holds the magnitudes) and --dtype f16")
     if a.opt == "muon" and a.wd:
@@ -741,7 +750,7 @@ def main() -> int:
         ad.refresh(mag_dtype)
     # the block messages' tensor hooks run eager
     fwd = net if coded else torch.compile(net)
-    msg = Message(a.msg, torch.Generator(device=prepare.DEVICE).manual_seed(a.seed + 1)) if coded else None
+    msg = Message(a.msg, torch.Generator(device=prepare.DEVICE).manual_seed(a.seed + 1), a.fan) if coded else None
     if msg and msg.bits > 1 and any(p.numel() % (8 // msg.bits) for ad in ads.values() for p in ad.trained()):
         raise SystemExit(f"{KLASS}: --msg {a.msg} packs {8 // msg.bits} levels a byte, so every trained tensor's "
                          "entries must be a multiple of that")
@@ -758,7 +767,8 @@ def main() -> int:
     extra = sum(ns_flops(tuple(p.shape)) for grp in muon for p in grp["params"])
     msg_extra = 0
     if coded:
-        # the block gradients' einsums (2 FLOPs a MAC) and ~20 elementwise FLOPs an entry per coding and sum
+        # the block gradients' einsums (2 FLOPs a MAC) and ~20 elementwise FLOPs an entry per coding and sum, over a
+        # binary tree's node count (a wider fan-in has fewer nodes)
         macs = sum(r * (2 * theta[n].shape[0] + theta[n].shape[1]) if not a.vera else theta[n].shape[0] * (r + 1) + r
                    for n, r in ranks.items())
         entries = sum(p.numel() for ad in ads.values() for p in ad.trained())
@@ -777,8 +787,8 @@ def main() -> int:
     messages = {"code": a.msg, "leaf_sequences": a.leaf, "leaf_tokens": a.leaf * prepare.EVAL_CTX,
                 "blocks_per_step": a.batch // a.leaf, "max_group": MSG_GROUP,
                 "entry_bits": dgrad["grad_bits"] / max(dgrad["trainable"], 1),
-                "tree": "binary over the blocks, every sum recoded at the leaves' width, an odd node passing up; "
-                        "the optimizer reads the root's"} if coded else None
+                "tree": f"fan-in {a.fan} over the blocks, every sum recoded at the leaves' width, the nodes left over "
+                        "at a level passing up; the optimizer reads the root's", "fan": a.fan} if coded else None
     print(json.dumps({"island": KLASS, "method": "vera" if a.vera else "dora" if a.dora else "lora", "format": a.format,
                       "opt": a.opt, "msg": a.msg, "steps": n_steps, "rank": rank,
                       "ranks": sorted(set(ranks.values())), "rank_sum": sum(ranks.values()), "targets": len(ranks),
