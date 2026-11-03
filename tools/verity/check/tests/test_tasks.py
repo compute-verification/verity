@@ -145,17 +145,16 @@ def test_a_kept_steps_key_is_its_inputs_not_the_slot_or_the_toolchain_it_is_list
     _git(tree, "commit", "-q", "-m", "flock")
 
     def slot(name: str, rustc: str) -> dict[str, str]:
-        bin_, tmp = tree.parent / f"bin-{name}", tree.parent / f"tmp-{name}"
-        bin_.mkdir()
+        home, tmp = tree.parent / f"home-{name}", tree.parent / f"tmp-{name}"
+        (home / ".cargo" / "bin").mkdir(parents=True)
         tmp.mkdir()
-        (bin_ / "rustc").write_text(f"#!/bin/sh\necho 'rustc {rustc}'\n")
-        (bin_ / "rustc").chmod(0o755)
-        return {"VERITY_TEST_CACHE": str(tree.parent / f"tests-slot-{name}"), "TMPDIR": str(tmp),
-                "PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}"}
+        (home / ".cargo" / "bin" / "rustc").write_text(f"#!/bin/sh\necho 'rustc {rustc}'\n")
+        (home / ".cargo" / "bin" / "rustc").chmod(0o755)
+        return {"HOME": str(home), "VERITY_TEST_CACHE": str(tree.parent / f"tests-slot-{name}"), "TMPDIR": str(tmp)}
 
     key = _keys(tree, slot("x3", "1.0.0 (one build)"))["flock-rust-tests"]
     assert key and _keys(tree, slot("c4la0", "1.0.0 (another build)"))["flock-rust-tests"] == key, \
-        "a lister and a worker on other slots, with other toolchains installed, list one key"
+        "a lister and a worker on other slots, with other homes and toolchains, list one key"
     (tree / "a" / "tests" / "test_a.py").write_text("def test_a():\n    assert 1\n")
     assert _keys(tree)["flock-rust-tests"] == key, "a file outside its inputs leaves its key"
     (flock / "flock-a-b684b12.patch").write_text("b\n")
