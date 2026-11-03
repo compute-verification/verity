@@ -41,13 +41,18 @@ coordinator's 09:46Z and 12:20Z rulings). `basis` names fit, the binding kind, n
   coordinator's 12:09Z ruling). The term is formalism's, io_bound's proved figure without P-cell (`formalism.P_CELL`
   off), which needs no premise on how a partition splits a multiplier's gates (the coordinator's 06:57Z obligation 1
   and 12:09Z ruling: P-cell is a premise on the partition, which the attacker chooses); it rests on P-width and
-  P-chain and no A1. Λ's whole-making factor is io_bound's one-class rule, which products with no whole-making system
-  take (formalism's ONE_CLASS: a model has no graph for io_bound's chain_classes), and which the class system of a
-  traced dense step lowers by under 1% (`DENSE_WHOLE`); it isn't proved for an adapter's products, and a traced LoRA
-  step's class system is void, so an adapter's term is unmeasured, never a number (`ADAPTER_WHOLE`; the
-  coordinator's 15:50Z ruling). The figure under P-cell (every block holding whole GEMM gadgets) is the sensitivity
-  beside it (formalism's `fresh_cell`, 19 times the term on the dense default). A product with an
-  operand in θ (a frozen weight, a registered teacher's) isn't fresh, nor is the
+  P-chain and no A1. Λ's whole-making factor is io_bound's whole_chain_of on the model's own whole-making system, the
+  theorem a traced step's term takes (the coordinator's 15:50Z ruling): `Classes` walks the architecture's step as
+  io_bound's chain_classes reads a captured one's graph (the io-bound note's §2.2), every product of two operands
+  that depend on θ′ in the class of its chain (the counted products', attention's QK^T over d_h and PV over the
+  span, an adapter's over its rank, Newton-Schulz's of an array with itself), with the couplings between classes. On
+  io_bound's captured dense and rank-16 LoRA steps (45M and s-t20) it is their system exactly. Where it has no
+  fixed point the term is unmeasured, never a number (formalism's FRESH_VOID): on every adapter's products, whose
+  rank-long chains compound (but a one-layer rank-1 W_q adapter's, which all escape, so its term is 0 at any Λ),
+  and on full-weight RL's at the serving block, whose rollouts pass 4.5-bit operands through attention's chains
+  over a 256-token prompt. The figure under P-cell (every block holding whole GEMM
+  gadgets) is the sensitivity beside it (formalism's `fresh_cell`, 19 times the term on the dense default). A
+  product with an operand in θ (a frozen weight, a registered teacher's) isn't fresh, nor is the
   lowest layer's attention input projection's (its input is gathered embedding rows, which io_bound's P-width prices
   below their width), nor Newton-Schulz's products of an array with itself; and a block computes a product's operands
   itself where it can read the update up to the product's layer and the input ids up to its token (a forward) or of
@@ -77,7 +82,7 @@ The conventions every workload shares:
   gates, 7.0 FLOPs a parameter, 3.51 session tokens' 2N); the old c held 1,457.5, and an estimate of 1,250 takes a
   training token as 4.1 session tokens' 2N, 17% above the count. Beside the rows, each workload's default point at
   the registered serving block, rehearsal 2's measured session (`SERVED`: c = 3.009e13 gates, k = 145,568 bits), a
-  headline: standard pretraining reads 6.39e3 there, with 8.22e4 under P-cell, against 2.66e5 and 5.01e6 at the
+  headline: standard pretraining reads 6.38e3 there, with 8.08e4 under P-cell, against 2.65e5 and 4.98e6 at the
   console's policy.
 - **Shapes** (`dense`): a dense decoder of N parameters with the reference model's d/L and SwiGLU width, d solved from N
   and the vocabulary (`vocab`: the 45M reference's 50,304, s-t20's 32,000), τ its ⌈log2 V⌉ bits an id.
@@ -102,6 +107,7 @@ The conventions every workload shares:
 from __future__ import annotations
 
 import argparse
+import functools
 import inspect
 import json
 import math
@@ -109,7 +115,7 @@ import sys
 from dataclasses import astuple, dataclass, field, fields, replace
 from pathlib import Path
 
-from . import VERSION, algorithm_policy, formalism, panels, policy
+from . import VERSION, algorithm_policy, formalism, io_bound, panels, policy
 from .gates import PRICES, gates, per_mac
 from .opnames import FUSED_OPTIMIZER_MACS
 
@@ -187,13 +193,6 @@ IO_BOUND = "cursor/te-io-bound-4207 at 3c2afa62aa"
 #: gadget accumulating each output entry along one chain from a zero word, so P-chain is a premise on the reference
 #: circuit, as P-width is (coordinator 12:09Z)
 ORDER = formalism.ORDER
-#: Λ's whole-making factor on a dense model's products: te_core.io_bound's one-class rule (te_core.formalism's
-#: ONE_CLASS, which products with no whole-making system take; a model has no graph for io_bound's chain_classes),
-#: which the class system of a traced dense step lowers by under 1% (coordinator 15:50Z)
-DENSE_WHOLE = "one-class rule; the traced class system lowers dense steps by under 1%"
-#: why the fresh-products kind is unmeasured on an adapter's products, never a number: the one-class rule isn't proved
-#: for them, and a traced LoRA step's class system has no fixed point (io_bound.whole_chain_of; coordinator 15:50Z)
-ADAPTER_WHOLE = "void under the traced class system (te_core 4.12)"
 #: why reading A's kinds are unmeasured here
 NO_TRACE = ("unmeasured: te_core 4.5's packer reads a trace's entries and op log (its runs and matrix-product tiles), "
             "which a model hasn't and the records here don't carry")
@@ -207,9 +206,10 @@ VALID = {
                       "entry accumulated along one chain from a zero word, as te_core's GEMM gadget does), premises "
                       "on a reference circuit's wiring, false on a declared one, given P-share; without P-cell, so "
                       "with no premise on how a partition splits a multiplier's gates (coordinator 06:57Z, obligation "
-                      "1); attention's products uncounted; Λ's whole-making factor by io_bound's one-class rule on a "
-                      f"dense model's products ({DENSE_WHOLE}), and an adapter's term unmeasured ({ADAPTER_WHOLE}); "
-                      "the figure under P-cell beside it (fresh_cell)",
+                      "1); attention's products uncounted; Λ's whole-making factor by te_core.io_bound.whole_chain_of on "
+                      "the model's whole-making system, its products by chain length as a traced step's "
+                      "(io_bound.chain_classes; coordinator 15:50Z), the term unmeasured where it has no fixed point, "
+                      "as on every adapter's products; the figure under P-cell beside it (fresh_cell)",
     "token": f"{formalism.RESTS_ON['token']}; {NO_TRACE}",
     "decoding": f"{formalism.RESTS_ON['decoding']}; {NO_TRACE}",
 }
@@ -228,8 +228,9 @@ RESTS_ON = VALID | {
             "(coordinator 12:20Z)",
     "unmeasured": "unmeasured: Fit fails, no measured kind's term exceeds 1 and a valid kind is unmeasured, so rho is "
                   "null, never 1, the measured terms in the kinds cell (coordinator 09:46Z and 12:20Z): the fresh "
-                  f"products are unmeasured on an adapter's products ({ADAPTER_WHOLE}) and for a circuit that "
-                  "declares a tree (none does), the token and decoding kinds without a trace",
+                  "products are unmeasured where the model's whole-making system has no fixed point (every adapter's "
+                  "products: te_core.formalism's FRESH_VOID) and for a circuit that declares a tree (none does), the "
+                  "token and decoding kinds without a trace",
 }
 #: reading A's verdicts on the token and decoding kinds (`reading_a`); their terms are unmeasured under each
 VERDICTS_A = {"unmodelled": "finite (te_core 4.5's tiles split an op, so no op's update bits alone leave it infinite), "
@@ -579,6 +580,7 @@ def _stream(matrices: tuple, n: int, lam: float, b: float = ADAPTER_BITS) -> lis
     return out
 
 
+@functools.lru_cache(maxsize=None)
 def _paid(matrices: tuple, n: int, rank: float, x: str) -> tuple:
     """Per adapted layer, the largest k at which matrix x's input passes its width (`_stream`), where the adapter's
     second product passes lam = min(b, 4 r² b²/k) an entry (io_bound's rate of a K = r product with a trained side):
@@ -656,13 +658,184 @@ def muon_fresh(sh: Shape, optimizer: str, steps: float, seq: tuple) -> list[Fres
     return [Fresh("gemm/bf16", per * sh.d_model ** 3, per * sh.d_model ** 2, 1.0, steps, *seq, sequence=True)]
 
 
+# ---- the whole-making system ------------------------------------------------------------------------------------------
+
+#: a value of a model's step as te_core.io_bound's `_whole_making` reads one of a captured step's graph: None where it
+#: doesn't depend on θ′, else (the classes whose outputs reach it, {K: the largest factor on a path}, the largest
+#: factor any path into it has for paid entries); a trained array (a weight, a LoRA factor, the embedding's rows of a
+#: trained embedding) is read at its width, through no chain
+TRAINED = ({}, 1.0)
+
+
+def _join(*values):
+    """An elementwise op's output (a residual add, a norm, RoPE, softmax, SwiGLU, each one's backward), which P-match maps
+    entry to entry, on its operands that depend on θ′: each class at its largest factor among them and their largest
+    paid factor; None where none does. io_bound keeps only the least fed of several same-size operands where one is
+    paid at its width; the union is never less, so its fixed point bounds io_bound's."""
+    vs = [v for v in values if v is not None]
+    if not vs:
+        return None
+    feeds: dict = {}
+    for f, _ in vs:
+        for K, a in f.items():
+            feeds[K] = max(feeds.get(K, 0.0), a)
+    return feeds, max(p for _, p in vs)
+
+
+class Classes:
+    """A model's whole-making system (te_core.io_bound's `chain_classes`, the io-bound note's §2.2) from its steps'
+    products as a captured step's graph has them (`step`): every product whose two operands depend on θ′ (counted,
+    dropped, attention's, a LoRA's over its rank and Newton-Schulz's of an array with itself) in the class of its chain
+    K, with c (io_bound's C_PAIR, or C_SELF where it holds a self product), P (the largest factor any path into its
+    operands has, for paid entries) and the classes feeding it ({K_i: A_ij}: 1 through elementwise ops, n/K through a
+    product with one operand outside the update); the counted products' feeds, each with the largest k it is counted
+    at (`Fresh.paid`'s); and b, the least width of a class's operand. `system` gives it in te_core.formalism.system_of's
+    form at a k, which formalism.fresh_products solves by io_bound.whole_chain_of, as it does a traced step's. A
+    rollout's PV over its prompt and the tokens since is one class at the prompt's chain, the least: a product's
+    outputs made whole are at most c·a²/K² of the operand entries a it has, so at most that at the class's least K,
+    and the class's bound holds as it does for products of one K."""
+
+    def __init__(self):
+        self.classes: dict = {}
+        self.counted: list = []
+        self.b = math.inf
+
+    def product(self, K: float, a, b, m: float, n: float, counted: float = math.inf, self_: bool = False,
+                bits: float = WEIGHT_BITS["bf16"]):
+        """The output of the product (m x K)·(K x n) of the values `a` and `b`: where both depend on θ′, a member of
+        class K, counted at every k up to `counted` (0: never, as attention's, a dropped one's or one of an array with
+        itself, `self_`), its operands passed at `bits`."""
+        if a is None or b is None:
+            if a is None and b is None:
+                return None
+            feeds, paid = a or b
+            f = n / K if b is None else m / K
+            return {i: v * f for i, v in feeds.items()}, max(1.0, f * paid, f)
+        e = self.classes.setdefault(float(K), {"c": io_bound.C_PAIR, "P": 1.0, "feeds": {}})
+        e["c"] = max(e["c"], io_bound.C_SELF if self_ else io_bound.C_PAIR)
+        e["P"] = max(e["P"], a[1], b[1])
+        feeds = _join(a, b)[0]
+        for i, v in feeds.items():
+            e["feeds"][i] = max(e["feeds"].get(i, 0.0), v)
+        self.b = min(self.b, bits)
+        if counted > 0 and not self_:
+            self.counted.append((feeds, counted))
+        return {float(K): 1.0}, 1.0
+
+    def system(self, k: float) -> dict:
+        """te_core.formalism.system_of's form at k: each class by K, the feeds of the products counted at k, and b."""
+        counted: dict = {}
+        for feeds, top in self.counted:
+            if k <= top:
+                for i, v in feeds.items():
+                    counted[i] = max(counted.get(i, 0.0), v)
+        return {"classes": [{"k": K, "c": e["c"], "P": e["P"], "feeds": [[i, v] for i, v in sorted(e["feeds"].items())]}
+                            for K, e in sorted(self.classes.items())],
+                "counted": [[i, v] for i, v in sorted(counted.items())], "b": self.b if math.isfinite(self.b) else 16}
+
+    def step(self, sh: Shape, span: float, rows: float, bits: float, ad: Adapter | None = None, backward: bool = True,
+             muon: bool = False) -> Classes:
+        """Adds a step of the reference model's architecture (model.py) at `sh` on `rows` token rows a GEMM: the tied
+        embedding's rows, then each layer's norm, W_q, W_k and W_v, RoPE, causal attention over `span` positions (QK^T
+        over a head's `HEAD_DIM`, PV over the span), W_o and the residual add, the norm, the SwiGLU MLP and its
+        residual add, then the final norm and the head; with `backward` each op's backward, and with `muon` Muon's
+        Newton-Schulz on every matrix's gradient (X·X^T over its long side and A·A over its short, each of an array
+        with itself, then B·X). The weights' GEMMs pass `bits`, the rest bf16. Every weight is trained, or with `ad`
+        only the LoRA on its matrices of the top layers, base(x) + 2·B(A(x)), the rest θ's: x·A over d_in and its
+        gradient dA where the input passes its width (`_paid`), (x·A)·B and (dy·B^T)·A^T over the rank, dy·B^T and
+        dB where dy does, as `adapter_fresh` counts them. A dense step's lowest W_q, W_k and W_v read gathered
+        embedding rows, so their forward and weight gradient aren't counted (`dense_fresh`). Returns self, so a
+        workload's steps chain."""
+        d, layers = sh.d_model, math.ceil(sh.n_layer - 1e-9)
+        w = TRAINED if ad is None else None
+        if ad is not None:
+            ms, count, r = TARGET_MATRICES[ad.targets], len(_layers(ad.layers)), ad.rank
+            lowest = layers - count
+            paid_in = {x: _paid(ms, count, r, x) for x in ms}
+            top = _paid(ms, count, r, "out")[-1]
+            full = min(top, 4 * r * r * ADAPTER_BITS) if "down" in ms else 0.0
+            paid_dy = {x: full if x in ("gate", "up") else top for x in ms}
+
+        def adapted(name: str, i: int) -> bool:
+            return ad is not None and i >= lowest and name in ms
+
+        def gathered(name: str, i: int) -> bool:
+            return ad is None and i == 0 and name in ("q", "k", "v")
+
+        def linear(name: str, h, i: int, xa: dict):
+            d_in, d_out = (v * d for v in MATRICES[name])
+            y = self.product(d_in, h, w, rows, d_out, 0.0 if gathered(name, i) else math.inf, bits=bits)
+            if adapted(name, i):
+                xa[name] = self.product(d_in, h, TRAINED, rows, r, paid_in[name][i - lowest])
+                y = _join(y, self.product(r, xa[name], TRAINED, rows, d_out))
+            return y
+
+        def back(name: str, dy, h, xa: dict, i: int):
+            if dy is None:
+                return None
+            d_in, d_out = (v * d for v in MATRICES[name])
+            dh = None if h is None else self.product(d_out, dy, w, rows, d_in, bits=bits)
+            if ad is None:
+                self.product(rows, h, dy, d_in, d_out, 0.0 if gathered(name, i) else math.inf, bits=bits)
+            elif adapted(name, i):
+                dyb = self.product(d_out, dy, TRAINED, rows, r, paid_dy[name])
+                self.product(rows, xa[name], dy, r, d_out, paid_dy[name])
+                if h is not None:
+                    dh = _join(dh, self.product(r, dyb, TRAINED, rows, d_in))
+                self.product(rows, h, dyb, d_in, r, paid_in[name][i - lowest])
+            return dh
+
+        x, saved = TRAINED if ad is None else None, []
+        for i in range(layers):
+            xa: dict = {}
+            q, kq, v = (linear(name, x, i, xa) for name in ("q", "k", "v"))
+            s = self.product(HEAD_DIM, q, kq, span, span, 0.0)
+            a = self.product(span, s, v, span, HEAD_DIM, 0.0)
+            x2 = _join(x, linear("o", a, i, xa))
+            g, u = linear("gate", x2, i, xa), linear("up", x2, i, xa)
+            hid = _join(g, u)
+            saved.append((x, q, kq, v, s, a, x2, g, u, hid, xa))
+            x = _join(x2, linear("down", hid, i, xa))
+        logits = self.product(d, x, w, rows, sh.vocab, bits=bits)
+        if not backward:
+            return self
+        dx = _join(self.product(sh.vocab, logits, w, rows, d, bits=bits), x)
+        if ad is None:
+            self.product(rows, logits, x, sh.vocab, d, bits=bits)
+        for i in reversed(range(layers)):
+            x, q, kq, v, s, a, x2, g, u, hid, xa = saved[i]
+            dhid = back("down", dx, hid, xa, i)
+            dg = None if dhid is None else _join(dhid, g, u)
+            mlp = (back("gate", dg, x2, xa, i), back("up", dg, x2, xa, i))
+            dx2 = None if x2 is None else _join(dx, *mlp, x2)
+            da = back("o", dx2, a, xa, i)
+            dq = dk = dv = None
+            if da is not None and (q is not None or kq is not None):
+                ds = _join(self.product(HEAD_DIM, da, v, span, span, 0.0), s)
+                dq = None if q is None else self.product(span, ds, kq, span, HEAD_DIM, 0.0)
+                dk = None if kq is None else self.product(span, ds, q, span, HEAD_DIM, 0.0)
+            if da is not None and v is not None:
+                dv = self.product(span, s, da, span, HEAD_DIM, 0.0)
+            attn = [back(name, dz, x, xa, i) for name, dz in (("q", dq), ("k", dk), ("v", dv))]
+            dx = None if x is None else _join(dx2, *attn, x)
+        if muon:
+            for long in (d, MLP * d):
+                xm = ({float(rows): 1.0}, 1.0)
+                for _ in range(NEWTON_SCHULZ_STEPS):
+                    am = self.product(long, xm, xm, d, d, self_=True)
+                    bm = _join(am, self.product(d, am, am, d, d, self_=True))
+                    xm = _join(xm, self.product(d, bm, xm, d, long))
+        return self
+
+
 # ---- the model a workload gives --------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class Model:
     """A workload at its dials: te_core.formalism.bound's inputs (`measured`), the trained or served model's forward
     per token (`w_fwd`), the fresh products, the most update bits one of its ops reads (`op_update_bits`; None: a
-    record's, unknown), and the quantities they came from (`derived`)."""
+    record's, unknown), the quantities they came from (`derived`), and its steps' whole-making system (`system`;
+    None: formalism's one-class rule)."""
     workload: str
     dials: dict
     measured: formalism.Measured
@@ -670,6 +843,7 @@ class Model:
     fresh: tuple[Fresh, ...] = ()
     op_update_bits: float | None = None
     derived: dict = field(default_factory=dict)
+    system: Classes | None = None
 
     @property
     def adapter(self) -> bool:
@@ -762,7 +936,8 @@ def standard(n_params: float = REFERENCE_PARAMS, precision: str = "bf16", seq_le
     return Model("standard", _dials(standard, locals()), m, w_fwd(sh, precision, seq_len), tuple(fresh),
                  sh.op_bits(precision),
                  {"d_model": sh.d_model, "n_layer": sh.n_layer, "w_gates": tok.w, "t": tf, "t_counted": tok.t,
-                  "optimizer_gates_per_step": opt})
+                  "optimizer_gates_per_step": opt},
+                 Classes().step(sh, seq_len, batch_tokens, WEIGHT_BITS[precision], muon=optimizer == "muon"))
 
 
 def diloco(n_params: float = REFERENCE_PARAMS, precision: str = "bf16", seq_len: float = 1024,
@@ -816,7 +991,8 @@ def diloco(n_params: float = REFERENCE_PARAMS, precision: str = "bf16", seq_len:
     return Model("diloco", _dials(diloco, locals()), m, w_fwd(sh, precision, seq_len), tuple(fresh),
                  sh.op_bits(precision),
                  {"d_model": sh.d_model, "n_layer": sh.n_layer, "w_gates": tok.w, "tokens": tokens,
-                  "code_bits": code, "compressed": compressed, "phase_tokens": phase, "phase_gates": phase * tok.w})
+                  "code_bits": code, "compressed": compressed, "phase_tokens": phase, "phase_gates": phase * tok.w},
+                 Classes().step(sh, seq_len, batch_tokens / workers, WEIGHT_BITS[precision], muon=optimizer == "muon"))
 
 
 def rl(n_params: float = REFERENCE_PARAMS, update: str = "full", rank: float = 16, targets: str = "all",
@@ -833,7 +1009,9 @@ def rl(n_params: float = REFERENCE_PARAMS, update: str = "full", rank: float = 1
     the larger free share and the smaller u(1), as te_core's single A1 needs; `sensitivity` gives the token kind's
     bounds that count each kind's tokens apart. With `rounds`, the rollouts alone, `tokens` of them, as the island's
     generation rows record them (the learner's steps aren't in the row): a round serves θ' as it stands, so Δ is the
-    served weights (N at the rollouts' width) or the adapter, with no gradient and no learner's products."""
+    served weights (N at the rollouts' width) or the adapter, with no gradient and no learner's products. The
+    whole-making system (`Classes`) holds the rollouts' forward, its PV chains over the prompt (the shortest a rollout
+    runs), and the learner's step, each on a step's tokens a GEMM."""
     sh = dense(n_params, vocab=vocab, d_model=d_model)
     seq = prompt_tokens + generated_tokens
     pos, head = served(prompt_tokens, generated_tokens)
@@ -851,10 +1029,12 @@ def rl(n_params: float = REFERENCE_PARAMS, update: str = "full", rank: float = 1
         decoder, trained, a = 0.0, n_params, ACT_BITS * sh.d_model
         op = sh.op_bits("bf16")
         fresh = dense_fresh(sh, f"gemm/{rollout_precision}", n_r, span, sq_r, head_share=head)
+        system = Classes().step(sh, prompt_tokens, batch_tokens, WEIGHT_BITS[rollout_precision], backward=False)
         if rounds:
             delta, op = weights, sh.op_bits(rollout_precision, WEIGHT_BITS[rollout_precision])
         else:
             fresh += dense_fresh(sh, "gemm/bf16", n_l, seq, sq_l, batch_tokens) + muon_fresh(sh, optimizer, steps, sq_l)
+            system.step(sh, seq, batch_tokens, WEIGHT_BITS["bf16"], muon=optimizer == "muon")
     else:
         ad = Adapter.of(sh, rank, targets, layers)
         roll, learn = lora_forward(sh, ad, rollout_precision, span, head), lora_training(sh, ad, seq)
@@ -867,8 +1047,10 @@ def rl(n_params: float = REFERENCE_PARAMS, update: str = "full", rank: float = 1
         decoder, trained, a = ad.decoder_gates(), ad.values, ad.a_bits(sh)
         op = ad.op_bits(sh)
         fresh = adapter_fresh(sh, ad, n_r, span, sq_r)
+        system = Classes().step(sh, prompt_tokens, batch_tokens, WEIGHT_BITS[rollout_precision], ad, backward=False)
         if not rounds:
             fresh += adapter_fresh(sh, ad, n_l, seq, sq_l, batch_tokens)
+            system.step(sh, seq, batch_tokens, ADAPTER_BITS, ad)
     if rounds:
         u1s, ts = u1s[:1], ts[:1]
     if t is not None:
@@ -905,7 +1087,7 @@ def rl(n_params: float = REFERENCE_PARAMS, update: str = "full", rank: float = 1
     if not rounds:
         derived["kinds"] = [{"kind": kind, "tokens": n, "u1_bits": u1, "t": tk}
                             for kind, n, u1, tk in zip(("rollout", "learner"), (n_r, n_l), u1s, ts)]
-    return Model("rl", _dials(rl, locals()), m, w_fwd(sh, rollout_precision, span), tuple(fresh), op, derived)
+    return Model("rl", _dials(rl, locals()), m, w_fwd(sh, rollout_precision, span), tuple(fresh), op, derived, system)
 
 
 def inference(n_params: float = REFERENCE_PARAMS, precision: str = "fp4", prompt_tokens: float = 4096,
@@ -932,7 +1114,8 @@ def inference(n_params: float = REFERENCE_PARAMS, precision: str = "fp4", prompt
     return Model("inference", _dials(inference, locals()), m, w_fwd(sh, precision, span),
                  tuple(dense_fresh(sh, f"gemm/{precision}", tokens, span, sq, head_share=head)),
                  sh.op_bits(precision, WEIGHT_BITS[precision]),
-                 {"d_model": sh.d_model, "n_layer": sh.n_layer, "span": span, "t_counted": tok.t})
+                 {"d_model": sh.d_model, "n_layer": sh.n_layer, "span": span, "t_counted": tok.t},
+                 Classes().step(sh, prompt_tokens, prompt_tokens, WEIGHT_BITS[precision], backward=False))
 
 
 def lora(n_params: float = REFERENCE_PARAMS, rank: float = 8, targets: str = "all", layers: float | None = None,
@@ -967,7 +1150,7 @@ def lora(n_params: float = REFERENCE_PARAMS, rank: float = 8, targets: str = "al
     return Model("lora", _dials(lora, locals()), m, w_fwd(sh, "bf16", seq_len),
                  tuple(adapter_fresh(sh, ad, tokens, seq_len, seq, batch_tokens)), ad.op_bits(sh, adapter_bits),
                  {"d_model": sh.d_model, "n_layer": sh.n_layer, "adapter_values": ad.values, "w_gates": tok.w,
-                  "t_counted": tok.t})
+                  "t_counted": tok.t}, Classes().step(sh, seq_len, batch_tokens, ADAPTER_BITS, ad))
 
 
 def distill(student_params: float = REFERENCE_PARAMS, teacher_params: float = 10 * REFERENCE_PARAMS,
@@ -996,7 +1179,8 @@ def distill(student_params: float = REFERENCE_PARAMS, teacher_params: float = 10
     return Model("distill", _dials(distill, locals()), m, w_fwd(sh, "bf16", seq_len), tuple(fresh),
                  sh.op_bits("bf16"),
                  {"d_model": sh.d_model, "n_layer": sh.n_layer, "student_w": stu.w, "teacher_w": teach.w,
-                  "student_share": stu.w / tok.w})
+                  "student_share": stu.w / tok.w},
+                 Classes().step(sh, seq_len, batch_tokens, WEIGHT_BITS["bf16"], muon=optimizer == "muon"))
 
 
 def _dials(fn, scope: dict) -> dict:
@@ -1064,25 +1248,25 @@ def products(m: Model, c: float, k: float) -> list[dict]:
 
 
 def with_products(m: Model, c: float, k: float) -> formalism.Measured:
-    """The model's `Measured` with its fresh products (`products`) at k as `Measured.products`, summed in `ORDER`; an
-    adapter's as it is, with none, so formalism leaves its term unmeasured (`ADAPTER_WHOLE`)."""
-    if m.adapter:
-        return m.measured
-    return replace(m.measured, products={"k": float(k), "order": ORDER, "products": products(m, c, k)})
+    """The model's `Measured` with its fresh products (`products`) at k as `Measured.products`, summed in `ORDER`, and
+    its whole-making system there (`Classes.system`), which te_core.formalism.fresh_products solves as a traced step's."""
+    p = {"k": float(k), "order": ORDER, "products": products(m, c, k)}
+    if m.system is not None:
+        p["system"] = m.system.system(k)
+    return replace(m.measured, products=p)
 
 
 def fresh(m: Model, got: dict, c: float, k: float) -> dict:
     """What the fresh-products kind read beside its term (`got`, te_core.formalism.fresh_products' on `with_products`):
-    the order, Λ (None: void, past whole_chain's r = 1/4, its figures 0), the counted share of |C|, attention's share
-    (uncounted) and the term's figure at the numerical Λ (the figure `formalism.P_CELL` takes). An adapter's term is
-    unmeasured, so its Λ and figure are None and its share is its products' (`products`)."""
+    the order, Λ (None: void, the whole-making system with no fixed point, so the term is unmeasured), the counted
+    share of |C|, attention's share (uncounted) and the term's figure at the numerical Λ (the figure
+    `formalism.P_CELL` takes; None where Λ is void, never a number)."""
     attention = sum(f.total(k) * per_mac(f.kind) for f in m.fresh if f.attention) / m.measured.gates
-    if m.adapter:
-        share = sum(p["gates_per_mac"] * p["macs"] for p in products(m, c, k)) / m.measured.gates
-        return {"order": ORDER, "lam": None, "share": share, "numerical": None, "attention_share": attention}
     b = got["io_bound"]
-    return {"order": got["order"], "lam": b["proved"]["lam"], "share": b["share"],
-            "numerical": b["numerical"]["rho" if formalism.P_CELL else "rho_no_cell"], "attention_share": attention}
+    lam = b["proved"]["lam"]
+    return {"order": got["order"], "lam": lam, "share": b["share"],
+            "numerical": None if lam is None else b["numerical"]["rho" if formalism.P_CELL else "rho_no_cell"],
+            "attention_share": attention}
 
 
 def reading_a(m: Model) -> str:
@@ -1103,8 +1287,9 @@ def rho(m: Model, c: float, k: float, target: tuple[float, str] | None = None) -
     decoding kinds' None without a trace's entries and op log (`reading_a`'s verdict beside them). `basis` is
     published's binding kind (fit, the measured kind whose term, the max, exceeds 1, none or unmeasured),
     `binding_kind` the kind among them, `RESTS_ON[basis]` what it rests on, `partial` the dashboard's mark, and `why`
-    each unmeasured kind's reason: an adapter's fresh products are unmeasured, never a number (`ADAPTER_WHOLE`).
-    `whole_making` is what Λ's whole-making factor rests on, `DENSE_WHOLE` on a dense model's products.
+    each unmeasured kind's reason (formalism's FRESH_VOID where the whole-making system has no fixed point, as on every
+    adapter's products). `whole_making` is formalism's solution of the model's whole-making system (`Classes`): e and
+    Λ's factor whole_chain = (1 + e)^1.5, each None where void.
     Beside it, never in the max: the `TARGET` (te_core.formalism.published at reading B, or for a record `target`,
     page_rho's on its columns) and the `SENSITIVITIES` (bound's, None where unmeasured, fresh_cell the fresh products'
     figure under P-cell); the kinds and sensitivities unmeasured (an infinite term among them: never ∞); Fit's clauses
@@ -1121,12 +1306,10 @@ def rho(m: Model, c: float, k: float, target: tuple[float, str] | None = None) -
     basis = pub["binding_kind"]
     fails = sorted({clause for p in v["parts"] for clause, ok in p["fit"].items() if not ok})
     why = {kind: one["unmeasured"].get(kind) for kind in terms if terms[kind] is None}
-    if m.adapter:
-        why["fresh_products"] = ADAPTER_WHOLE
+    got = one["inputs"]["fresh_products"]
     return {"rho": _finite(pub["rho"]), "basis": basis, "binding_kind": basis if basis in formalism.KINDS else None,
-            "terms": terms, "partial": pub["partial"], "why": why,
-            "whole_making": ADAPTER_WHOLE if m.adapter else DENSE_WHOLE,
-            "fresh": fresh(m, one["inputs"]["fresh_products"], c, k),
+            "terms": terms, "partial": pub["partial"], "why": why, "whole_making": got.get("whole_making"),
+            "fresh": fresh(m, got, c, k),
             "target": {"rho": _finite(target[0]), "basis": target[1]}, "sensitivities": sens, "token_A": reading_a(m),
             "unmeasured": [name for name in (*terms, *sens) if (terms | sens)[name] is None],
             "fit": v["fit"], "fit_fails": fails, "rho_fit": _finite(v["rho_fit"]), "s": v["s"], "x0": v["x0"],
@@ -1603,7 +1786,8 @@ def recorded(ck: Check, m: Model) -> Model:
     island row's), else its columns in one part (its |C|, else the model's tokens at the record's w and σ; its tokens
     σ|C|/w, the model's steps, the record's Δ_grad, and the gradient inputs `Check.menu` gives, else the model's), with
     the columns' τ, a, profiles, Δ, d and Δ_t, and the model's fresh products on the record's tokens (each group's
-    count by the record's tokens over the model's; its trace's own are its published ρ's); a record's ops are unknown
+    count by the record's tokens over the model's; its trace's own are its published ρ's) with the model's
+    whole-making system, a step's chains, which the record's tokens don't change; a record's ops are unknown
     (`reading_a`). `rho` takes its target from page_rho on the columns, which one part can't give where the record's
     w_fit or ᾱ/α_max differ; its Fit, formalism's on the one part, is page_rho's on every check."""
     col = ck.columns
