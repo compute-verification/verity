@@ -54,7 +54,7 @@ def test_one_mathlib():
 #: PRs on `next` then brought, the exclusion bounds that read a partition once a derived circuit's registration built
 #: its one-block partition (`RegisteredCircuit.ofCircuit`), and the six C-Flock statements whose claim or verifier read
 #: lies in a module of `trees`' `except`, once the rule read through those (LEAN-158)
-UNWITNESSED = {"Security": 621, "Security/Properties": 235, "verity/core/service/flock": 8}
+UNWITNESSED = {"Security": 621, "Security/Properties": 237, "verity/core/service/flock": 8}
 
 
 def test_the_unwitnessed_list_only_shrinks():
