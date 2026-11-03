@@ -4,12 +4,17 @@
 from __future__ import annotations
 
 import ctypes
+import dataclasses
+import hashlib
 import importlib.util
 import json
 import math
 import random
+import shlex
 import shutil
+import socket
 import sys
+import threading
 import types
 from fractions import Fraction
 from pathlib import Path
@@ -17,6 +22,10 @@ from typing import ClassVar
 
 import numpy as np
 import pytest
+from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
+from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+from verity_vllm.protocols.pouw.pearl_c import host as PH
+from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
 torch = pytest.importorskip("torch")
 
@@ -47,14 +56,11 @@ from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
 from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.serving import SchemeId
 from verity.core.protocols.sampled_proofs import challenger as Ch
-from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
@@ -358,6 +364,58 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
         y, tree = (tmp_path / u["y"]["rows"]["path"]).read_bytes(), (tmp_path / u["y"]["tree"]["path"]).read_bytes()
         root, want = SY.commit_y(y, u["n"], salt, u["index"], SALT_KEY)
         assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
+
+
+def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_them(device_run, tmp_path, monkeypatch,
+                                                                                    request):
+    """`host.write_behind`: when a retained call returns, its entries name its files and sizes and its bytes are a copy of
+    their own, which the call's buffers no longer reach; the files (A's rows and tree, y's rows and tree) are written behind
+    it (here only once the buffers have changed), each digest landing in its entry, and the pass's end joins them before
+    its manifest names them.  A write that fails fails the pass's end, which then writes no manifest."""
+    make, _, weights, *_ = device_run
+    gate, write = threading.Event(), PH._write_host
+    request.addfinalizer(gate.set)
+
+    def gated(*a):
+        gate.wait()
+        write(*a)
+    monkeypatch.setattr(PH, "_write_host", gated)
+    run = make()
+    run.begin(retain=str(tmp_path / "ok"))
+    x = torch.randn(32, 1024).to(torch.bfloat16)
+    y = run.gemm(0, x, weights[0], None)
+    served = y.contiguous().view(torch.uint8).numpy().tobytes()
+    (sh,) = run.shapes.values()
+    index = run.cur.matmuls[0].index
+    (f,) = run.cur.files
+    assert {k: f[k] for k in ("rows", "tree")} == {"rows": {"path": f"calls/{index}.rows.bf16", "bytes": 2 * 32 * 1024},
+                                                   "tree": {"path": f"calls/{index}.tree", "bytes": f["tree"]["bytes"]}}
+    assert f["y"]["rows"] == {"path": f"y/{index}.rows.bf16", "bytes": 2 * 32 * 256}
+    assert len(run.cur.writes) == 1 and not any((tmp_path / "ok" / g["path"]).exists() for g in (f["rows"], f["y"]["rows"]))
+    with torch.inference_mode():                              # the call's buffers are made as vLLM's calls make them
+        sh.xa.fill_(7.0)
+        sh.buf("tree_a").fill_(7)
+        y.fill_(7.0)
+    gate.set()
+    man = json.loads(Path(run.end()["manifest"]).read_text())
+    (u,) = man["matmuls"]
+    assert run.details["passes"][-1]["manifest"] and not run.cur.writes
+    assert (tmp_path / "ok" / u["rows"]["path"]).read_bytes() == x.view(torch.uint8).numpy().tobytes()
+    tree = (tmp_path / "ok" / u["tree"]["path"]).read_bytes()
+    assert u["tree"]["sha256"] == hashlib.sha256(tree).hexdigest() and tree != bytes([7]) * len(tree)
+    assert (tmp_path / "ok" / u["y"]["rows"]["path"]).read_bytes() == served
+    ytree = (tmp_path / "ok" / u["y"]["tree"]["path"]).read_bytes()
+    assert u["y"]["tree"]["sha256"] == hashlib.sha256(ytree).hexdigest()
+    assert u["y"]["root"] == ytree[-64:].hex() == SY.commit_y(served, 256, run.salt, index, run.salt_key)[0].hex()
+
+    def fails(path, *_):
+        raise OSError(f"no space left for {path.name}")
+    monkeypatch.setattr(PH, "_write_host", fails)
+    run.begin(retain=str(tmp_path / "full"))
+    run.gemm(0, x, weights[0], None)
+    with pytest.raises(OSError, match="no space left"):
+        run.end()
+    assert not (tmp_path / "full" / "manifest.json").exists() and not run.cur.writes
 
 
 def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(device_run, tmp_path):
@@ -707,6 +765,106 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
         assert len({p["activation_roots"] for p in passes}) == 3
 
 
+#: `_retained_files`' digest of the three steps below as the retention path wrote them when each call's copies, its record,
+#: y's root and the pass's files and manifest were all waited for in its step
+RETAINED_DIGEST = "6ea82b92968e7213c16a075e8c0d7910dcbe5ea32f8892f937b85165e3a8722d"
+
+
+def _retained_files(root: Path) -> dict[str, str]:
+    """Every file under `root` and its bytes' SHA-256."""
+    return {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+def test_a_step_completed_behind_it_retains_the_bytes_a_waiting_end_retains(monkeypatch, tmp_path):
+    """`PassEnds.retain_behind`: three served steps, each pass's files, records and manifest completed behind its step
+    (`retained_ends`, which the install's close waits for), retain every byte that ends completing them in the step do, the
+    same files as the path that waited for each call's copies (`RETAINED_DIGEST`); each file is the owner's alone (0600)
+    and each directory of a pass too (0700)."""
+    zeroed_y(monkeypatch)
+    rng = np.random.default_rng(23)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    steps = [[(0, 200), (1, 200)], [(0, 120), (1, 120)], [(0, 3), (1, 3)]]
+    got, cls = {}, PPD.PearlCDeviceRun
+    for behind in (False, True):
+        monkeypatch.setattr(cls, "retain_behind", behind)
+        (runner,) = _runners(monkeypatch)
+        root = tmp_path / f"behind-{behind}"
+        model, comp, option = _served(monkeypatch, PPD.Kernel(R, F, RecordingDev(), "0" * 64), weights,
+                                      {"transcript_dir": str(root)}, capacity=32, flag_rows=512)
+        core = _Core(runner(), _Engine(model, steps))
+        for _ in steps:
+            core.step()
+        comp.close()
+        assert all(p["manifest"] and p["excluded_rows"] is not None for p in option.details["passes"])
+        got[behind] = _retained_files(root)
+        modes = {p.stat().st_mode & 0o777 for p in root.rglob("*")}
+        assert modes == {0o600, 0o700}, sorted(map(oct, modes))
+    assert got[True] == got[False] and len(got[True]) == 3 * (1 + 2 + 2 * 2 * 2 + 2 * 2)
+    assert hashlib.sha256(json.dumps(got[True], sort_keys=True).encode()).hexdigest() == RETAINED_DIGEST
+
+
+def test_a_pass_poisons_again_only_the_shapes_a_call_took_since_the_last_poison(monkeypatch, tmp_path):
+    """`PearlCDeviceRun.poison`: each retained pass begins with every shape's buffers at the poison byte, but a shape no call
+    took since the last poison holds it already and isn't filled again; one a call took is."""
+    rng = np.random.default_rng(37)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    steps = [[(0, 200), (1, 200)], [(0, 3), (1, 3)], [(0, 3), (1, 3)]]
+    (runner,) = _runners(monkeypatch)
+    model, comp, option = _served(monkeypatch, PPD.Kernel(R, F, RecordingDev(), "0" * 64), weights,
+                                  {"transcript_dir": str(tmp_path)}, capacity=32, flag_rows=512)
+    run, core, fills, fill = option.end_pass.__self__, _Core(runner(), _Engine(model, steps)), [], torch.Tensor.fill_
+    monkeypatch.setattr(torch.Tensor, "fill_", lambda t, v: (fills.append(t.data_ptr()), fill(t, v))[1])
+
+    def buffers(rows):
+        return [t for (m16, _, _), sh in run.shapes.items() if (m16 > 16) == rows for t in run._buffers(sh)]
+    core.step()
+    big = buffers(True)
+    assert big and {t.data_ptr() for t in big} <= set(fills)
+    fills.clear()
+    core.step()
+    assert not {t.data_ptr() for t in big} & set(fills) and all(bool((t == 0xA5).all()) for t in big)
+    assert {t.data_ptr() for t in buffers(False)} <= set(fills)
+    core.step()
+    comp.close()
+
+
+def test_the_record_decided_from_the_rows_bytes_is_the_devices(monkeypatch):
+    """`screen.excluded_host`, which a device's retained call decides its record by from the bytes its rows' write lands
+    (the flags and A's rows as BF16), excludes the rows `screen.excluded` does from the flags and A's FP32 words."""
+    S = importlib.import_module("verity_vllm.protocols.pouw.pearl_c.screen")
+    rng = np.random.default_rng(31)
+    words = bf16_words(rng, 64, 1024).view(np.uint32)
+    words[::3, 1::8] = 0x47000000                             # 2^15 off the screen's stride: rows live_row rejects
+    x = torch.from_numpy(words.view(np.float32).copy())
+    flags = torch.from_numpy(rng.integers(0, 2, (64, 2), dtype=np.uint8))
+    want = S.excluded(flags[:, 0].bool(), flags[:, 1].bool(), x)
+    rows = x.to(torch.bfloat16).view(torch.uint8).numpy().view("<u2").reshape(64, 1024)
+    assert S.excluded_host(flags.numpy(), rows) == want and want and set(want) > set(np.flatnonzero(flags[:, 0].numpy()))
+
+
+def test_the_pinned_ring_hands_out_disjoint_regions_and_frees_them_in_order(monkeypatch):
+    """`host._Ring`: regions handed out are disjoint from every live one, a region given back out of order is free only
+    once every earlier one is, and a take that doesn't fit before the oldest live region (or past the end) waits."""
+    empty = torch.empty
+    monkeypatch.setattr(torch, "empty", lambda *a, pin_memory=False, **kw: empty(*a, **kw))
+    ring = PH._Ring(1000)
+    a, b, c = (ring.take(n) for n in (300, 300, 300))
+    assert [r[:2] for r, _ in (a, b, c)] == [[0, 300], [300, 600], [600, 900]] and ring.take(200) is None
+    ring.give(b[0])
+    assert ring.take(200) is None                             # b is free only once a is
+    ring.give(a[0])
+    d = ring.take(400)
+    assert d[0][:2] == [0, 400] and ring.take(250) is None    # the end past 900 is too short, 400..600 is c's way
+    ring.give(c[0])
+    e = ring.take(500)
+    assert e[0][:2] == [400, 900] and d[1].numel() == 400
+    ring.give(d[0])
+    ring.give(e[0])
+    assert not ring.live and ring.take(1000)[0][:2] == [0, 1000]
+
+
 def test_a_step_over_one_pass_is_refused_before_its_forward(monkeypatch):
     """`pouw_pass.step_tokens`: weights of n 256 and 128 take 4 + 2 tiles a 64-row tile, so a pass of 32 tiles holds 5 tile
     rows (320 tokens) and one of 512 screened rows 256 tokens over its two calls a step: a step is held to 256 tokens
@@ -881,7 +1039,8 @@ def honest_pass(tmp_path, request):
     return proved_pass(tmp_path, request.param)
 
 
-def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None):
+def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None,
+                live: int | None = None):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
@@ -890,7 +1049,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     h100 record (Hopper's 14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits
     one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
     The calls have the epoch's indices `indices`, and every pass built here is of the one epoch (the same weights, key and
-    salt coin), as passes of one install are."""
+    salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt epoch
+    `live`'s root over the weights' root (`live_coin`), and the manifest names that epoch (``pass_index``)."""
     if key is None:
         key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
@@ -905,8 +1065,12 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     work = Workload((Matmul(i0, Shape(32, k, 16), 0), Matmul(i1, Shape(16, k, 32), 1)))
     prover = Prover(s, {w: rows(x) for w, x in wrows.items()}, salt_key=key)
     salted = lambda v, nonce, i: v + hm96_salt(prover.salt_key, nonce, i)  # noqa: E731
-    coins = salt_coin(prover.weight_roots)
-    epoch = Epoch.start(work, prover.weight_roots, *coins)
+    if live is None:
+        coins = salt_coin(prover.weight_roots)
+        epoch = Epoch.start(work, prover.weight_roots, *coins)
+    else:
+        coins = live_coin(PS.epoch_open_root(weights_root(prover.weight_roots), live))
+        epoch = PPD.epoch_of(work, prover.weight_roots, *coins, live)
     tr = prover.prove(epoch, {i: rows(x) for i, x in acts.items()})
     splits = {w: PW.Split(k) for w in wrows}
     records = CW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
@@ -940,6 +1104,7 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{scheme}", "scheme": scheme,
             "instance": {"k_min": 32, "tile": [16, 16]},
             "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
+            **({} if live is None else {"pass_index": live}),
             "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
             "commitment": {"root": tr.commitment.root.hex(), "count": count},
             "leaves": PPD._write(tmp_path / "leaves", b"".join(leaves)),
@@ -966,6 +1131,8 @@ def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
     fast = VR.verify(path, 3, 1, "test", source, fast=True, cross_check=1, coins=published(path))
     assert fast["replay"] == "batch" and fast["cross_checked"] == fast["tiles"] and "cross_check_failed" not in fast
     assert {k: fast[k] for k in ("accepted", "tiles", "verdicts")} == {k: got[k] for k in ("accepted", "tiles", "verdicts")}
+    by_place = VR.verify(path, 3, 1, "test", source, fast=True, cross_check=2, coins=published(path))
+    assert by_place["accepted"] and by_place["cross_checked"] == by_place["tiles"][::2]
     assert C.form_v1 is SD.FT._SCALAR["form_v1"]
     assert VR.main([str(path), *coins_args(path), "--jobs", "2", "--commit", "0" * 7, "--fast", "--cross-check", "1"]) == 0
 
@@ -1099,6 +1266,129 @@ def test_a_runs_credit_at_pearls_assumption_is_its_credited_macs_less_epsilon(tm
     assert 0 < got["credited"] <= (1 - p.scheme.cap) * (1 - eps) * got["macs"]
 
 
+def test_served_passes_verify_credits_the_timed_call_its_passes_less_the_runs_whole_deduction(tmp_path):
+    """Where served.json says which passes the timed call made, an accepted verdict also carries the credit over those
+    alone (`served_passes.timed_credit`): the run's credited MACs less the warm-up pass's credited cells' MACs at (1 − ρ),
+    rounded up, so the run's deduction for ε falls wholly on the timed pass."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+    served = {"run": RUN, "passes": [{"pass": 0, "timed": False, "units": 2, "tiles": 4, "manifest": str(a)},
+                                     {"pass": 1, "timed": True, "units": 2, "tiles": 4, "manifest": str(b)}]}
+    work = VR.credit_at_assumption([VR.load(x, published(x)) for x in (a, b)], SP.DRAWS, Fraction(1, 100))
+    warm = VR.pass_macs(VR.load(a, published(a)))
+    got = SP.timed_credit(served, work, published(a))
+    assert warm == work["macs"] // 2 and got["passes"] == 1 and got["macs"] == work["macs"] - warm
+    assert got["credited"] == work["credited"] - math.ceil((1 - Fraction(work["rho"])) * warm) > 0
+    few = VR.credit_at_assumption([VR.load(x, published(x)) for x in (a, b)], 3, Fraction(1, 100))
+    assert few["credited"] < (1 - Fraction(few["rho"])) * warm and SP.timed_credit(served, few, published(a))["credited"] == 0
+    assert SP.timed_credit({**served, "passes": [{**p, "timed": True} for p in served["passes"]]}, work, published(a)) == {
+        "passes": 2, "macs": work["macs"], "credited": work["credited"]}
+
+
+def test_served_passes_verify_refuses_a_serve_that_retained_no_pass(tmp_path):
+    """A serve run with ``--no-retain`` wrote no pass's manifest, so ``verify`` refuses it (``unretained``), replays
+    nothing, and its core answer rejects with that reason."""
+    d, out = tmp_path / "served", tmp_path / "verify.json"
+    d.mkdir()
+    (d / "served.json").write_text(json.dumps({"run": RUN, "retained": False,
+                                               "passes": [{"pass": i, "units": 2, "tiles": 4, "manifest": None, "macs": None}
+                                                          for i in range(3)]}))
+    rc, doc, answer = served_verify(d, out)
+    assert rc == 1 and doc["refused"][0] == "unretained" and "verdicts" not in doc and doc["line"].startswith("REJECT")
+    assert answer["verdict"] == "reject" and answer["reason"].startswith("unretained: the serve retained no pass")
+
+
+def test_a_seeded_serve_draws_the_same_coins_and_salt_key_and_takes_no_retention_or_live_coins(tmp_path, monkeypatch):
+    """`serve --seeded`'s streams (`served_passes.seeded`) give one label's bytes however they are drawn, so two seeded
+    installs (`seed_install`) hold challengers of one coin commitment and take one hm96 salt key (`pearl_c.new_salt_key`,
+    which the install's weight commitment calls); ``--seeded`` is refused beside retention and beside the challenger gate,
+    before anything is built."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    a, b = SP.seeded("coins"), SP.seeded("coins")
+    assert a(3) + a(70) + a(1) == b(74) and SP.seeded("salt key")(32) != SP.seeded("coins")(32)
+    monkeypatch.setattr(PPD, "new_salt_key", PPD.new_salt_key)
+    one, two = {"coins": None}, {}
+    SP.seed_install(one)
+    SP.seed_install(two)
+    assert one["coins"].commitment.to_json() == two["coins"].commitment.to_json()
+    assert PPD.new_salt_key(SCHEME) == SP.seeded("salt key")(32)
+    argv = ["serve", "--seeded", "--passes", str(tmp_path), "--out", str(tmp_path / "served.json")]
+    with pytest.raises(SystemExit, match="takes --no-retain and no PEARLC_CHALLENGER_GATE"):
+        SP.main(argv)
+    monkeypatch.setenv("PEARLC_CHALLENGER_GATE", "ssh research@gate")
+    with pytest.raises(SystemExit, match="takes --no-retain and no PEARLC_CHALLENGER_GATE"):
+        SP.main([*argv, "--no-retain"])
+    assert not (tmp_path / "served.json").exists()
+
+
+def test_served_passes_same_holds_two_seeded_serves_of_one_load_to_the_same_passes_naming_no_value(tmp_path, capsys):
+    """`same`: two seeded serves of one load (spec, arm, requests, tokens and batched tokens) and one salt are the same
+    when every pass's `KEEP` fields are; a pass that differs is named with its fields, never their values, and a serve
+    with another pass count fails.  Serves that aren't both seeded and unretained, that served different loads or that
+    drew different salts are refused, and so are two whose passes committed nothing, which would otherwise be the same
+    for want of any root."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    passes = [{"pass": i, "timed": i > 0, "units": 64, "base": 64 * i, "tiles": 5888, "screened_rows": 8192,
+               "failing_rows": 0, "unsure_rows": 0, "excluded_rows": 0, "transcript_root": f"{7 + i:0128x}",
+               "activation_roots": [f"{100 + 3 * i + j:0128x}" for j in range(3)], "schedule": "serial"} for i in range(3)]
+
+    def doc(**kw):
+        return {"spec": "s.toml", "arm": "pouw:pearl-c-h100-v1-h3", "requests": 8, "prompt_tokens": 1024,
+                "output_tokens": 1, "engine": {"max_num_batched_tokens": 8192}, "retained": False, "seeded": True,
+                "coins": {"source": "seeded", "salt": "ab" * 32}, "passes": passes, **kw}
+
+    def same(a, b):
+        paths = [tmp_path / "a.json", tmp_path / "b.json"]
+        for p, d in zip(paths, (a, b)):
+            p.write_text(json.dumps(d))
+        rc = SP.main(["same", *map(str, paths), "--out", str(tmp_path / "same.json")])
+        text = (tmp_path / "same.json").read_text()
+        assert json.loads(text)["line"] == capsys.readouterr().out.strip()
+        return rc, json.loads(text), text
+
+    rc, got, _ = same(doc(), doc())
+    assert rc == 0 and got["ok"] and got["passes"] == [3, 3] and got["calls"] == 192 and got["differ"] == []
+    assert got["line"].startswith("same: two seeded serves of one load (8 requests of 1024 tokens, 1 out, 8192 a step): "
+                                  "3 passes (3 with calls), 192 calls") and got["line"].endswith("-> OK")
+    empty = {**passes[0], "pass": 3, "units": 0, "tiles": 0, "transcript_root": None, "activation_roots": None}
+    rc, got, _ = same(doc(passes=[*passes, empty]), doc(passes=[*passes, empty]))
+    assert rc == 0 and got["ok"] and "4 passes (3 with calls), 192 calls" in got["line"]
+    other = [dict(p) for p in passes]
+    other[1]["activation_roots"] = [other[1]["activation_roots"][0], f"{999:0128x}", other[1]["activation_roots"][2]]
+    rc, got, text = same(doc(), doc(passes=other))
+    assert rc == 1 and got["differ"] == [{"pass": 1, "fields": ["activation_roots"]}] and got["line"].endswith("-> FAIL")
+    assert f"{999:0128x}" not in text and passes[0]["transcript_root"] not in text
+    rc, got, _ = same(doc(), doc(passes=passes[:2]))
+    assert rc == 1 and got["differ"] == [] and "3 passes against 2" in got["line"]
+    for b, why in ((doc(seeded=False), "aren't both seeded"), (doc(retained=True), "aren't both seeded"),
+                   (doc(requests=16), "different loads"), (doc(engine={"max_num_batched_tokens": 4096}), "different loads"),
+                   (doc(coins={"source": "seeded", "salt": "cd" * 32}), "different salts")):
+        rc, got, _ = same(doc(), b)
+        assert rc == 1 and not got["ok"] and why in got["refused"] and got["line"].startswith("same: refused: "), why
+    rootless = [{**p, "transcript_root": None, "activation_roots": None} for p in passes]
+    for a in (doc(passes=rootless), doc(passes=[{**passes[0], "activation_roots": []}, *passes[1:]]), doc(passes=[empty]),
+              doc(passes=[])):
+        rc, got, _ = same(a, a)
+        assert rc == 1 and not got["ok"] and "committed nothing to compare" in got["refused"], a["passes"]
+
+
+def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_cells_macs(tmp_path):
+    """`served_passes.macs` is a pass's real rows × n × k, and `verify_run.pass_macs` the MACs of the cells `clear_work`
+    credits (`UnitRecord.credited` over the scheme's tiles, at kept K), `credit_at_assumption`'s ``macs`` over the pass
+    alone: a filler row, an excluded A row and an excluded B row each take their cells out."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    man = json.loads(path.read_text())
+    p = VR.load(path, published(path))
+    assert SP.macs(str(path)) == sum(u["real_rows"] * u["n"] * u["k"] for u in man["matmuls"]) and SP.macs(None) is None
+    assert any(u["excluded_a"] for u in man["matmuls"]) and any(u["real_rows"] < u["m"] for u in man["matmuls"])
+    assert VR.pass_macs(p) == VR.credit_at_assumption([p], 459, Fraction(1, 100))["macs"] < SP.macs(str(path))
+    r = p.records[0]
+    b = min(set(range(r.matmul.shape.n)) - set(r.excluded_b))
+    more = dataclasses.replace(p, records=[dataclasses.replace(r, excluded_b=(*r.excluded_b, b)), *p.records[1:]])
+    assert VR.pass_macs(more) == VR.pass_macs(p) - (r.real_rows - len(r.excluded_a)) * r.k_kept
+
+
 def test_verify_run_refuses_a_call_index_at_2_to_the_32_and_one_held_twice(tmp_path):
     """A pass whose call index is 2^32 (`pearl_c.CALL_RANGE`, past the row seed's range) is refused ``call-range``, and one
     holding an index twice ``repeated-call``, before anything is opened."""
@@ -1145,6 +1435,65 @@ def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_pa
     assert again["ok"] and again["records_root"]["before"] == again["records_root"]["after"] == out["records_root"]["after"]
 
 
+class _StandInDebit:
+    """`debit.Debit` without a card: `fast_tile.word_debits` (module `ft`) on the whole of A′ by B̃, with the words `bad`
+    names in the first call marked non-finite and their counts wrong, and one added to the first call's atoms at `off`."""
+
+    def __init__(self, ft, device, bad=(), off=None):
+        self.ft, self.device, self.bad, self.off, self.calls = ft, device, set(bad), off, []
+
+    def words(self, a, b):
+        self.calls.append((a.shape, b.shape))
+        atoms, zeros = (x.astype(np.uint16) for x in self.ft.word_debits(a.tolist(), b.tolist(), self.device))
+        bad = np.zeros(atoms.shape, bool)
+        if len(self.calls) == 1:
+            for i, j in self.bad:
+                bad[i, j], atoms[i, j] = True, atoms[i, j] + 7
+            if self.off is not None:
+                atoms[self.off] += 1
+        return atoms, zeros, bad
+
+
+def test_volunteer_pass_on_the_device_counts_every_tile_as_the_replay_and_gives_up_the_same_rows(tmp_path):
+    """`volunteer_pass.words_device` on a stand-in for the card (`_StandInDebit`): each call's A′ (its real rows) and each
+    weight's B̃ formed once as `encode` forms a tile's, every word's counts cut into the tiles in `scheme.tiles`' order with
+    filler rows zero, give every tile's counts as the CPU replay (`words`) gives them, so the pass gives up the same rows to
+    the same records root.  A tile with a word the device marks non-finite takes the replay's counts, and a count unlike
+    the replay's on a cross-checked tile stops the step before the records change."""
+    VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    coins, before = published(path), path.read_text()
+    p = VP.VR.load(path, coins)
+    want = VP.words(p, 1)
+    cubin = tmp_path / "debit_sm90.cubin"
+    cubin.write_bytes(b"stand-in")
+    # call 0's row 17 is in its second row tile (tile id 1), which no cross-check at every 2^20th tile replays
+    stand = _StandInDebit(VP.FT, p.scheme.device, bad=[(17, 3)])
+    VP._DEBIT[str(cubin.resolve())] = stand
+    VP._B_CODES.clear()
+    try:
+        got, on = VP.words_device(VP.VR.load(path, coins), 1, cubin, cross_check=1 << 20)
+        assert got.keys() == want.keys()
+        assert all(np.array_equal(got[t][0], want[t][0]) and np.array_equal(got[t][1], want[t][1]) for t in want)
+        assert [a for a, _ in stand.calls] == [(r.real_rows, r.matmul.shape.k) for r in p.records]
+        assert on["bad_tiles"] == 1 and on["replayed"] == 2 and on["cross_check"] == 1 << 20
+        VP._DEBIT[str(cubin.resolve())] = _StandInDebit(VP.FT, p.scheme.device, off=(0, 0))
+        with pytest.raises(RuntimeError, match="differ from the CPU replay's on 1 of 1 tiles"):
+            VP.volunteer(path, coins, 1, cubin, 1 << 20)
+        assert path.read_text() == before
+        VP._DEBIT[str(cubin.resolve())] = _StandInDebit(VP.FT, p.scheme.device)
+        out = VP.volunteer(path, coins, 1, cubin, 1)
+        assert out["ok"] and out["device"]["replayed"] == len(want) and "counted on the device" in out["line"]
+        dev_root = out["records_root"]["after"]
+    finally:
+        VP._DEBIT.clear()
+        VP._B_CODES.clear()
+    path.write_text(before)
+    cpu = VP.volunteer(path, coins, 1)
+    assert cpu["records_root"]["after"] == dev_root != cpu["records_root"]["before"]
+    assert (cpu["voluntary_a"], cpu["voluntary_b"]) == (out["voluntary_a"], out["voluntary_b"])
+
+
 def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex_or_its_published_root(tmp_path):
     """A pass whose rows over a cap are given up (`volunteer_pass`) is accepted by the run's verdict, which credits none of
     the given-up rows' cells.  More given-up rows than V-EX allows (⌈m/64⌉ of a call's A), or records changed after the
@@ -1172,18 +1521,20 @@ def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, r["line"]
 
 
-def window_record(path: Path) -> dict:
-    """Pearl+'s window record W over one pass, its round 0, as the tie writes it: a v2 record whose registered values are
-    each call's A rows (m16 rows of K FP32 words, A's domain) and y (its real rows of N, y's domain), beside a value of
-    another kind the verdict doesn't read."""
-    man = json.loads(path.read_text())
-    salt, reg = bytes.fromhex(man["salt"]), []
-    for c, u in enumerate(man["matmuls"]):
-        a = rows_domain(activation_binding(salt, u["index"]), u["index"], u["m"], HM96)
-        reg += [{"value": f"pearl-a/0/{c}", "root": u["root_a"], "leaves": u["m"], "words": u["k"], "word_bits": 32,
-                 "domain": a.domain_id.hex()},
-                {"value": f"pearl-y/0/{c}", "root": u["y"]["root"], "leaves": u["real_rows"], "words": u["n"], "word_bits": 32,
-                 "domain": SY.y_domain(salt, u["index"], u["real_rows"]).domain_id.hex()}]
+def window_record(*paths: Path) -> dict:
+    """Pearl+'s window record W over passes `paths`, pass s its round s, as the tie writes it: a v2 record whose registered
+    values are each call's A rows (m16 rows of K FP32 words, A's domain) and y (its real rows of N, y's domain), beside a
+    value of another kind the verdict doesn't read."""
+    reg = []
+    for s, path in enumerate(paths):
+        man = json.loads(path.read_text())
+        salt = bytes.fromhex(man["salt"])
+        for c, u in enumerate(man["matmuls"]):
+            a = rows_domain(activation_binding(salt, u["index"]), u["index"], u["m"], HM96)
+            reg += [{"value": f"pearl-a/{s}/{c}", "root": u["root_a"], "leaves": u["m"], "words": u["k"], "word_bits": 32,
+                     "domain": a.domain_id.hex()},
+                    {"value": f"pearl-y/{s}/{c}", "root": u["y"]["root"], "leaves": u["real_rows"], "words": u["n"],
+                     "word_bits": 32, "domain": SY.y_domain(salt, u["index"], u["real_rows"]).domain_id.hex()}]
     return {"format": REG.FORMAT_V2, "registered": [*reg, {"value": "input-ids/0", "root": "00", "leaves": 1, "words": 1,
                                                            "domain": "00"}]}
 
@@ -1239,6 +1590,136 @@ def test_the_window_record_the_install_writes_is_the_one_the_run_verdict_ties_to
     assert r["answer"]["verdict"] == "reject" and "W registers pearl-a/2/0, no call of the run's" in r["answer"]["reason"]
 
 
+def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_and_refuses_an_unretained_serve(tmp_path):
+    """``served_passes.py volunteer``, the prover's step between the serve and the verifier's coin, runs `volunteer_pass` on
+    each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
+    record's zero key) is left with none and its records' root is rewritten, so every tile then passes the verifier's check;
+    its document names the node it ran on; a serve that retained no pass is refused."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    d, out = _serve_dir(tmp_path, [path]), tmp_path / "volunteer.json"
+    before = json.loads(path.read_text())["records_root"]
+    assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 0
+    doc = json.loads(out.read_text())
+    assert doc["ok"] and [p["manifest"] for p in doc["passes"]] == [str(path)] and doc["over"] and not doc["left"]
+    assert (doc["node"], doc["done"], doc["of"]) == (socket.gethostname().split(".")[0], True, 1)
+    assert doc["voluntary_a"] + doc["voluntary_b"] > 0
+    assert json.loads(path.read_text())["records_root"] == doc["passes"][0]["records_root"]["after"] != before
+    assert _replay_every_tile(VR.load(path, published(path))) == {}
+    (d / "served.json").write_text(json.dumps({**json.loads((d / "served.json").read_text()), "retained": False}))
+    assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 1
+
+
+def test_served_passes_volunteer_on_the_device_gives_up_the_cpus_rows_and_names_its_cubin_and_cross_check(tmp_path):
+    """``served_passes.py volunteer --device`` (a stand-in for the card, `_StandInDebit`) gives up the rows the CPU replay
+    gives up, to the same records root, and its document names the debit cubin, the cross-check rate (``--device-check``,
+    else `volunteer_pass.CROSS_CHECK`) and the tiles it replayed on the CPU too; the CPU's document has no ``device``."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    VP = load("volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    d, out, before = _serve_dir(tmp_path, [path]), tmp_path / "volunteer.json", path.read_text()
+    cubin = tmp_path / "debit_sm90.cubin"
+    cubin.write_bytes(b"stand-in")
+    device = VP.VR.load(path, published(path)).scheme.device
+    got = {}
+    try:
+        for check in ("2", None):
+            path.write_text(before)
+            VP._DEBIT[str(cubin.resolve())] = _StandInDebit(VP.FT, device)
+            VP._B_CODES.clear()
+            more = ["--device-check", check] if check else []
+            assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1", "--device", str(cubin),
+                            *more]) == 0
+            got[check] = json.loads(out.read_text()), json.loads(path.read_text())["records_root"]
+    finally:
+        VP._DEBIT.clear()
+        VP._B_CODES.clear()
+    path.write_text(before)
+    assert SP.main(["volunteer", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 0
+    cpu, root = json.loads(out.read_text()), json.loads(path.read_text())["records_root"]
+    assert cpu["device"] is None and cpu["voluntary_a"] + cpu["voluntary_b"] > 0
+    for check, (doc, dev_root) in got.items():
+        rate = int(check) if check else VP.CROSS_CHECK
+        assert doc["ok"] and dev_root == root and doc["tiles"] == cpu["tiles"]
+        assert {k: doc[k] for k in ("voluntary_a", "voluntary_b", "over", "left")} == {
+            k: cpu[k] for k in ("voluntary_a", "voluntary_b", "over", "left")}
+        assert {k: doc["device"][k] for k in ("cubin", "cubin_sha256", "cross_check", "replayed", "bad_tiles")} == {
+            "cubin": str(cubin), "cubin_sha256": hashlib.sha256(b"stand-in").hexdigest(), "cross_check": rate,
+            "replayed": len(range(0, doc["tiles"], rate)), "bad_tiles": 0}
+        assert doc["passes"][0]["device"]["replayed"] == doc["device"]["replayed"]
+
+
+def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_and_refuses_a_retention_after_it(tmp_path):
+    """``retain`` drops passes before the coin (one ``--drop``, and with ``--volunteer`` each pass that step didn't finish or
+    left over a cap): ``verify`` then reads the retained passes alone, each at its round, credits only them, and records
+    its coin against their commitment (``coin.json``).  The same retention again takes the same source, never another;
+    ``retain`` and ``volunteer`` refuse once the coin is drawn, and a retention changed behind them is refused
+    (``after-coin``) before any replay, whichever way it changed."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+    d = _serve_dir(tmp_path, [a, b])
+    vol = tmp_path / "volunteer.json"
+    for passes, why in (([{"manifest": str(a), "ok": True, "left": []}], "did not finish before the coin"),
+                        ([{"manifest": str(a), "ok": True, "left": []}, {"manifest": str(b), "ok": False, "left": [7]}],
+                         "1 tiles left over a cap")):
+        vol.write_text(json.dumps({"passes": passes}))
+        assert SP.main(["retain", "--passes", str(d), "--volunteer", str(vol)]) == 0
+        got = json.loads((d / SP.RETENTION).read_text())
+        assert got["rounds"] == [0] and [x["round"] for x in got["dropped"]] == [1] and why in got["dropped"][0]["why"]
+    assert SP.main(["retain", "--passes", str(d), "--drop", "2"]) == 1
+    assert SP.main(["retain", "--passes", str(d), "--drop", "0"]) == 0
+    rc, doc, answer = served_verify(d, tmp_path / "verify.json")
+    one = VR.credit_at_assumption([VR.load(b, published(b))], 3, Fraction(1, 100))
+    work = answer["public"]["work"]
+    assert rc == 0 and (work["macs"], work["credited"]) == (one["macs"], one["credited"]), doc["line"]
+    assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["dropped"]) == ([1], [0], [0])
+    assert doc["passes"][0].split(" sha256:")[0].split(":", 1)[1] == str(b) and "1 passes dropped before the coin (rounds 0)" in doc["line"]
+    assert doc["timed"] == {"passes": 1, "macs": one["macs"], "credited": one["credited"]}
+    coin = json.loads((d / SP.COIN).read_text())
+    assert (coin["commitment"], coin["source"], coin["rounds"]) == (answer["commitment"], doc["source"], [1])
+    again = served_verify(d, tmp_path / "again.json")[1]
+    assert again["source"] == doc["source"] and again["answer"] == answer
+    before = (d / SP.RETENTION).read_text()
+    assert SP.main(["retain", "--passes", str(d)]) == 1 and (d / SP.RETENTION).read_text() == before
+    assert SP.main(["volunteer", "--passes", str(d), "--out", str(vol), "--jobs", "1"]) == 1
+    for rounds in ([0, 1], [0]):
+        (d / SP.RETENTION).write_text(json.dumps({"rounds": rounds}))
+        rc, doc, answer = served_verify(d, tmp_path / "verify.json")
+        assert rc == 1 and doc["refused"][0] == "after-coin" and "source" not in doc and "verdicts" not in doc, doc["line"]
+    (d / SP.RETENTION).write_text(json.dumps({"rounds": [1, 0]}))
+    assert "not distinct rounds of the served run's 2, in order" in served_verify(d, tmp_path / "verify.json")[2]["reason"]
+    assert json.loads((d / SP.COIN).read_text()) == coin
+
+
+def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
+    """V-EX's give-up is the prover's before the coin: a pass whose records change after the verifier recorded its coin
+    (`volunteer_pass` run past ``served_passes.py volunteer``'s refusal) is another run, and the verdict refuses it
+    (``after-coin``) rather than draw again over it."""
+    VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
+    coins, record = published(path), tmp_path / "coin.json"
+    first = VR.verify_passes([path], 3, 1, "test", coins, record=record)
+    assert "source" in first and json.loads(record.read_text())["commitment"] == first["commitment"]
+    assert VP.volunteer(path, coins, 1)["ok"]
+    late = VR.verify_passes([path], 3, 1, "test", coins, record=record)
+    assert late["answer"]["verdict"] == "reject" and late["refused"][0] == "after-coin" and "source" not in late, late["line"]
+    assert VR.verify_passes([path], 3, 1, "test", coins)["answer"]["verdict"] == "accept"
+
+
+def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes_over_the_dropped_rounds(tmp_path):
+    """With round 0 dropped before the coin, W over both rounds ties the retained pass at its round 1, its dropped round's
+    entries crediting nothing; without the drop those entries are a call the run doesn't hold, and the pass at round 0
+    misses its own."""
+    a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
+    coins, w = published(b), window_record(a, b)
+    r = VR.verify_passes([b], 3, 1, "test", coins, b"verifier" * 4, window=w, rounds=[1], dropped=(0,))
+    assert r["answer"]["verdict"] == "accept" and r["answer"]["public"]["tie"]["tables"] == 4, r["line"]
+    for rounds, dropped, why in (([1], (), "W registers pearl-a/0/0, no call of the run's"),
+                                 ([0], (1,), "W's pearl-a/0/0: its root")):
+        r = VR.verify_passes([b], 3, 1, "test", coins, b"verifier" * 4, window=w, rounds=rounds, dropped=dropped)
+        assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
+
+
 def test_volunteer_words_gives_up_a_b_row_for_a_row_the_a_count_leaves_over():
     """V-EX allows ⌈m/64⌉ = 1 A row of a 16-row unit: of two credited rows over their row caps the one further over is
     given up as an A row, and the other gives up the B row holding its flagged atom-word.  A third row over its cap in the
@@ -1264,6 +1745,98 @@ def test_volunteer_words_gives_up_a_b_row_for_a_row_the_a_count_leaves_over():
     assert (va, vb) == ({7: [0]}, {2: [5]})
     given = [PW.UnitRecord(rec.matmul, 16, 128, voluntary_a=tuple(va[7]), voluntary_b=tuple(vb[2]))]
     assert [(x["tile"], [r[0] for r in x["rows"]]) for x in CW.over_words(s, given, three)] == [(1, [2])]
+
+
+def _volunteer_words_one_row_at_a_time(scheme, records, words):
+    """`clear_work.volunteer_words` with its A count stated one row at a time: every tile of the unit rescanned after each
+    A row given up, the row furthest over then given up."""
+    _, tol, units = CW._word_units(scheme, records, words)
+    va = {r.matmul.index: set(r.voluntary_a) for r in records}
+    vb = {}
+    for r in records:
+        vb.setdefault(r.matmul.weight, set(r.voluntary_b))
+
+    def credited(r, tile):
+        ua, ub = set(r.excluded_a) | va[r.matmul.index], set(r.excluded_b) | vb[r.matmul.weight]
+        return ([x for x, i in enumerate(tile.rows) if i < r.real_rows and i not in ua],
+                [z for z, j in enumerate(tile.cols) if j not in ub])
+
+    def a_left(r):
+        return len(va[r.matmul.index]) < CW.voluntary_cap(r.matmul.shape.m)
+
+    def b_left(r):
+        return len(vb[r.matmul.weight]) < CW.voluntary_cap(r.matmul.shape.n)
+
+    changed = True
+    while changed:
+        changed = False
+        for _, r, _, row_cell, tiles in units if CW.row_cap(scheme) else ():
+            while a_left(r):
+                excess = {}
+                for _, tile, w in tiles:
+                    rows, cols = credited(r, tile)
+                    if rows and cols:
+                        s, limit = w[np.ix_(rows, cols)].sum(axis=1), row_cell * len(cols) * tol
+                        for x in np.flatnonzero(s > math.floor(limit)):
+                            excess[tile.rows[rows[x]]] = excess.get(tile.rows[rows[x]], 0) + int(s[x]) - limit
+                if not excess:
+                    break
+                va[r.matmul.index].add(max(excess, key=lambda i: (excess[i], -i)))
+                changed = True
+        for _, r, _, row_cell, tiles in units if CW.row_cap(scheme) else ():
+            for _, tile, w in tiles:
+                while b_left(r):
+                    rows, cols = credited(r, tile)
+                    if not (rows and cols):
+                        break
+                    sub = w[np.ix_(rows, cols)]
+                    x = int(np.argmax(sub.sum(axis=1)))
+                    z = int(np.argmax(sub[x]))
+                    if int(sub[x].sum()) <= row_cell * len(cols) * tol or int(sub[x, z]) <= row_cell * tol:
+                        break
+                    vb[r.matmul.weight].add(tile.cols[cols[z]])
+                    changed = True
+        for _, r, cell, _, tiles in units:
+            for _, tile, w in tiles:
+                while True:
+                    rows, cols = credited(r, tile)
+                    if not (rows and cols):
+                        break
+                    sub = w[np.ix_(rows, cols)]
+                    debit, nr, nc = int(sub.sum()), len(rows), len(cols)
+                    if debit <= cell * nr * nc * tol:
+                        break
+                    options = []
+                    if a_left(r) and nr > 1:
+                        options += [(debit - int(d) - cell * (nr - 1) * nc, "A", tile.rows[rows[x]])
+                                    for x, d in enumerate(sub.sum(axis=1))]
+                    if b_left(r) and nc > 1:
+                        options += [(debit - int(d) - cell * nr * (nc - 1), "B", tile.cols[cols[z]])
+                                    for z, d in enumerate(sub.sum(axis=0))]
+                    if not options:
+                        break
+                    _, side, row = min(options, key=lambda o: o[0])
+                    (va[r.matmul.index] if side == "A" else vb[r.matmul.weight]).add(row)
+                    changed = True
+    return {i: sorted(s) for i, s in va.items() if s}, {w: sorted(s) for w, s in vb.items() if s}
+
+
+def test_volunteer_words_ranks_a_units_rows_over_their_caps_in_one_scan():
+    """`volunteer_words` gives up a unit's A rows over their caps from one scan of its tiles, since an A row given up leaves
+    every other row's sum and cap as they were: on seeded counts with more rows over their caps than ⌈m/64⌉ allows, filler
+    rows, and B rows over theirs, across three units, it gives up the A and B rows the one-row-at-a-time statement does."""
+    s = PPD.scheme_of("pearl-c-h100-v1-h3", k_min=32, tile=(16, 16))
+    rng = np.random.default_rng(7)
+    most = 0
+    for trial in range(24):
+        recs = [PW.UnitRecord(Matmul(u, Shape(192, 128, 48), 10 + u), int(rng.integers(150, 193)), 128) for u in range(3)]
+        words = {(p, t): (np.where(rng.random((16, 16)) < 0.04, rng.integers(1, 4, (16, 16)), 0),
+                          np.where(rng.random((16, 16)) < 0.02, rng.integers(1, 3, (16, 16)), 0))
+                 for p, r in enumerate(recs) for t in range(len(s.tiles(r.matmul.shape)))}
+        got = CW.volunteer_words(s, recs, words)
+        assert got == _volunteer_words_one_row_at_a_time(s, recs, words), trial
+        most = max(most, *(len(v) for v in got[0].values()))
+    assert most == CW.voluntary_cap(192) == 3
 
 
 @pytest.mark.slow
@@ -1436,6 +2009,84 @@ def test_a_retained_pass_salted_by_a_live_session_restarts_only_under_that_sessi
     early = {**man, "salt_opening": {**o.to_json(), "after": weights_root({0: roots[0], 1: bytes(32)}).hex()}}
     with pytest.raises(DomainError, match="not opened after"):
         PPD.manifest_epoch(early, c)
+
+
+def test_a_runs_coins_file_is_a_live_sessions_commitment_or_an_in_process_challengers(tmp_path):
+    """`verify_run.epoch_coins`, the coins file every step of a served run reads (``served_passes.py volunteer`` and
+    ``verify``, ``verify_run.py --coins``, ``volunteer_pass.py --coins``): a live session's commitment when its scheme is
+    `window.LIVE_SCHEME`, under which a pass salted by that session restarts its epoch, else an in-process challenger's;
+    a pass restarts under its own epoch's commitment only."""
+    live = proved_pass(tmp_path / "live", PROMOTED[0], live=0)[0]
+    plain = proved_pass(tmp_path / "plain", PROMOTED[0])[0]
+    c, cp = VR.epoch_coins(live.parent / "coins.json"), VR.epoch_coins(plain.parent / "coins.json")
+    assert isinstance(c, Ch.LiveCommitment) and isinstance(cp, CoinCommitment) and c.to_json()["scheme"] == Wd.LIVE_SCHEME
+    man = json.loads(live.read_text())
+    assert man["pass_index"] == 0 and man["coins"] == c.to_json()
+    assert VR.load(live, c).epoch.salt.hex() == man["salt"] != json.loads(plain.read_text())["salt"]
+    assert VR.load(plain, cp).epoch.salt.hex() == json.loads(plain.read_text())["salt"]
+    for path, other in ((live, cp), (plain, c)):
+        with pytest.raises(DomainError, match="not the epoch's"):
+            VR.load(path, other)
+
+
+@pytest.mark.slow
+def test_served_passes_verify_accepts_a_run_salted_by_a_live_session(tmp_path):
+    """A served run whose epoch's salt coin is a live session's (``serve`` with the challenger gate): ``verify`` reads its
+    coins file as that session's commitment and accepts its honest pass."""
+    path = proved_pass(tmp_path, PROMOTED[0], live=0)[0]
+    (path.parent / "served.json").write_text(json.dumps({"run": RUN, "passes": [{"pass": 0, "units": 2, "tiles": 4,
+                                                                                 "manifest": str(path)}]}))
+    rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json")
+    assert rc == 0 and answer["verdict"] == "accept" and doc["line"].startswith("ACCEPT"), doc["line"]
+
+
+def test_live_coins_reserve_a_salt_only_session_whose_settings_the_install_takes():
+    """`bench_arm.live_coins` (``served_passes.py serve``'s and ``served_step.py``'s): given the gate and this node's peer
+    name, the PoUW settings drop their in-process coins and take a salt-only session the gate reserves under the lane once
+    its ledger shows the lane's open period (``reserve --peer P --scheme S --families [["pouw/salt",1]] --epoch N``): the
+    challenger on this node, the reserve answer, the gate's open and that period, which `pouw.Settings` reads and the
+    adapter's refusals (`pouw.refusals`) refuse nothing of.  Neither given leaves the settings, and their coins
+    in-process, untouched; one alone is refused, and a reserve while the lane's open period is H1's is refused before it
+    is asked."""
+    from verity_vllm.protocols import pouw
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+
+    BA = load("pearl_c_vllm_bench_arm", KERNEL.parent / "pearl_c_vllm" / "bench_arm.py")
+    gate = "ssh -i KEY -o BatchMode=yes research@gate"
+    reserved = {"session": "s20261103T140000Z-0001", "seq": 7, "peer": "vy-dc-h200", "by": "vllm",
+                "expires_utc": "2026-11-03T16:00:00Z"}
+    ledger, asked = [], []
+
+    def run(argv):
+        assert argv[:-1] == shlex.split(gate)
+        asked.append(shlex.split(argv[-1]))
+        if asked[-1][0] == "ledger":
+            return 0, "".join(json.dumps(e) + "\n" for e in ledger)
+        return 0, json.dumps(reserved)
+
+    base = {"device": "cuda", "kernel": "k", "transcript_dir": "passes", "coins": Challenger(0, random.Random(7).randbytes)}
+    assert BA.live_coins(base, None, None, 5, "vllm", run) == (base, None) and asked == []
+    got, answer = BA.live_coins(base, gate, "vy-dc-h200", 5, "vllm", run)
+    assert answer == reserved and "coins" not in got and "coins" in base
+    assert {k: got[k] for k in ("device", "kernel", "transcript_dir", "challenger", "session", "period")} == {
+        "device": "cuda", "kernel": "k", "transcript_dir": "passes", "challenger": "127.0.0.1:0", "session": reserved,
+        "period": None}
+    assert asked == [["ledger"], ["reserve", "--peer", "vy-dc-h200", "--scheme", Wd.LIVE_SCHEME, "--families",
+                                  json.dumps([list(f) for f in Wd.SALT_FAMILIES], separators=(",", ":")), "--epoch", "5"]]
+    settings = pouw.Settings.of(got)
+    assert (settings.coins, settings.challenger, settings.session, settings.period) == (None, "127.0.0.1:0", reserved, None)
+    serving = types.SimpleNamespace(stage="serve", world=1, enforce_eager=True, settings_of=lambda name: got,
+                                    filled_of=lambda name: ())
+    assert pouw.refusals(SCHEME, serving) == ()
+    for one in ((gate, None), (None, "vy-dc-h200")):
+        with pytest.raises(ValueError, match="together"):
+            BA.live_coins(base, *one, 5, "vllm", run)
+    ledger.append({"kind": "period-open", "session": None, "body": {"period": "p1", "lane": "vllm",
+                                                                     **dict.fromkeys(PHW.H1_PERIOD, 1)}})
+    asked.clear()
+    with pytest.raises(ValueError, match="refused before reserving a salt-only session: the lane's open period p1 is H1's"):
+        BA.live_coins(base, gate, "vy-dc-h200", 5, "vllm", run)
+    assert asked == [["ledger"]]
 
 
 @pytest.mark.slow
@@ -3156,6 +3807,66 @@ def test_the_quality_run_does_a_group_a_chunk_and_skips_the_ones_done(tmp_path, 
     monkeypatch.setattr(E2E, "Worker", Ungated)
     with pytest.raises(SystemExit, match="gate failed"):
         E2E.perplexity(args)
+
+
+def test_the_quality_run_on_sm90a_runs_its_one_pearl_c_scheme(tmp_path, monkeypatch):
+    """On pearl_c_sm90's kernels the quality run's Pearl-C group is ``pearl-c-h100-v1-h3`` alone, since sm_90a has no
+    unpromoted record, so it finishes after two groups instead of asking for an sm_120 scheme on an H200."""
+    E2E = load("pearl_c_vllm_e2e_sm90", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    monkeypatch.setattr(E2E, "wikitext_windows", lambda model, limit: [[1, 2, 3]])
+    started = []
+
+    class Fake:
+        live: ClassVar[list] = []
+
+        def __init__(self, ctx, args, group, coins):
+            started.append((group, args.scheme))
+            self.ready = {"gate": [{"ok": True}], "committer": "x"} if group == "arm" else {}
+
+        def ask(self, **cmd):
+            return {"nll": 1.0, "tokens": 2, "top1": [2, 3]} if cmd["op"] == "ppl" else {"tokens": [[1, 2]], "texts": ["t"]}
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(E2E, "Worker", Fake)
+    args = types.SimpleNamespace(out=tmp_path / "quality.json", model="m", ppl_windows=None, chunk_min=0.0,
+                                 kernel=str(KERNEL.parent / "pearl_c_sm90"))
+    assert [E2E.perplexity(args) for _ in range(2)] == [99, 0]
+    assert started == [("base", None), ("arm", "pearl-c-h100-v1-h3")]
+    doc = json.loads(args.out.read_text())
+    assert set(doc["summary"]) == {"fp8", "bf16", "pearlc-v1"} and doc["summary"]["pearlc-v1"]["scheme"] == "pearl-c-h100-v1-h3"
+
+
+def test_a_tag_names_another_model_in_the_shape_names():
+    """``--tag`` puts another model's name in both phases' shape names, so a Llama 3.2 1B row is never read as the panel's
+    Llama-3.1-8B one; without it the names are the panel's."""
+    E2E = load("pearl_c_vllm_e2e_tag", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64, tag="llama32-1b"))
+    assert E2E.SHAPES == {"prefill_8192": "e2e-llama32-1b-vllm-m8192", "decode_b32_step": "e2e-llama32-1b-vllm-m32"}
+    E2E.configure(types.SimpleNamespace(batch=32, prompt=64))
+    assert E2E.SHAPES == {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
+
+
+def test_a_base_models_chat_prompts_are_their_text():
+    """A base model (the demo's Llama 3.2 1B) has no chat template, so its chat prompts are their own text instead of the
+    engine failing; an instruct model's are its template's turns, and any other refusal still raises."""
+    E2E = load("pearl_c_vllm_e2e_chat", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+
+    class Tokenizer:
+        def __init__(self, error=None):
+            self.error = error
+
+        def apply_chat_template(self, turns, tokenize, add_generation_prompt):
+            if self.error:
+                raise ValueError(self.error)
+            return f"<user>{turns[0]['content']}<assistant>"
+
+    base = Tokenizer("Cannot use chat template functions because tokenizer.chat_template is not set")
+    assert E2E.chat(base, ["a", "b"]) == ["a", "b"]
+    assert E2E.chat(Tokenizer(), ["a"]) == ["<user>a<assistant>"]
+    with pytest.raises(ValueError, match="other"):
+        E2E.chat(Tokenizer("some other refusal"), ["a"])
 
 
 # ---- one install path: the run behind the Stack ------------------------------------------------------------------------

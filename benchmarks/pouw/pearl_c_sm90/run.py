@@ -82,9 +82,11 @@ ONE_COMMIT = os.environ.get("PEARLC_ONE_COMMIT", "1") != "0"
 #: PEARLC_PDL=0 launches PDL_KERNELS and PDL_ENTRY_KERNELS (below PD_SERVED) plainly
 PDL = os.environ.get("PEARLC_PDL", "1") != "0"
 PROGRAMMATIC_STREAM_SERIALIZATION, PDL_MARK, PDL_ENTRY_MARK = 6, "pdl_waits", "pdl_waits_entry"
-#: a split pipeline's pd_commit may read a call's BF16 rows in its FP32 words' place (`Pipeline.reads_bf16`), from a cubin
-#: with BF16_ROWS_MARK, so the call's widen_a can run beside it; PEARLC_BF16_ROWS=0 says no
-BF16_ROWS = os.environ.get("PEARLC_BF16_ROWS", "1") != "0"
+#: PEARLC_BF16_ROWS=1 lets a split pipeline's pd_commit read a call's BF16 rows in its FP32 words' place
+#: (`Pipeline.reads_bf16`), from a cubin with BF16_ROWS_MARK, so the call's widen_a can run beside it.  Off otherwise: a whole
+#: capture that defers A's tree and forks its scales (whole_defer_a with whole_fork_stats) races on them, its bytes differing
+#: pass to pass
+BF16_ROWS = os.environ.get("PEARLC_BF16_ROWS", "0") == "1"
 BF16_ROWS_MARK = "pd_reads_bf16"
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: every GEMM's operand pair, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + MAP_SET * slot: the chain's (P_A, P_B

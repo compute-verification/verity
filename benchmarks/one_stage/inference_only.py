@@ -40,16 +40,20 @@ class with a block at most c gates and k fresh bits, and the blocks at most n. A
 (`Undecided`): no policy, a serve dir that records no start, a policy written once the serve had begun (unless
 ``--retroactive`` says why it's read anyway), a record with no inference blocks, an unpriced primitive, a closed window
 with no seal, or a sealed window the class doesn't take.
-With ``--lean``, `nci-check --count` runs on one window's session Program (`lean_count`), and a block's gates that
-differ from its own refuse too. That Program's inputs are positional (`Input<w>`), so its θ is empty: every input bit,
-the weights' too, is fresh to it, and its fresh bits and its verdict there (``with_theta_empty``) are said beside the
-verdict's, not judged. Its output counts that one window's blocks, and the verdict keeps none of its counts.
+With ``--lean``, `nci-check --count` runs on one window's session Program (`lean_count`), with ``--detail`` where the
+binary takes it, as its usage says (`takes_detail`): such a binary prints only ``{complies}`` without it and its whole
+verdict with it, as one that doesn't take it prints by default. A block's gates that differ from its own refuse too.
+That Program's inputs are positional (`Input<w>`), so its θ is empty: every input bit, the weights' too, is fresh to it,
+and its fresh bits and its verdict there (``with_theta_empty``) are said beside the verdict's, not judged. Its whole
+verdict counts that one window's blocks and names the row that failed, so the public verdict takes only its gates a
+block, fresh bits and ``complies``, or its refusal's ``error`` and ``message`` (`lean_said`), and the private one the
+whole call.
 
 ``--out`` is the public verdict: the judgment against (c, k, n) and no count, of blocks or of windows, in any form. It
 holds the verdict, ``complies``, ``failure`` and ``reason``, each block class's session and its gates and fresh bits a
 block (``classes``), the class's slots and positions, and ``counts`` saying that n was judged on the exact count, which
 it doesn't publish. ``--private`` (the serve dir's, 0600) holds it with the exact counts (``blocks``, `NciCheck.Count`'s
-rows, and ``total``) and each window the class doesn't take and why.
+rows, and ``total``), each window the class doesn't take and why, and the `nci-check --count` call (``lean_detail``).
 """
 from __future__ import annotations
 
@@ -77,7 +81,7 @@ import served_shares as SS  # noqa: E402
 import served_verdicts as SV  # noqa: E402
 
 POLICY_FORMAT = "verity-bench/inference-only-policy/v1"
-VERDICT_FORMAT = "verity-bench/inference-only-verdict/v3"
+VERDICT_FORMAT = "verity-bench/inference-only-verdict/v4"
 #: what the public verdict says of the counts: a count on the grid, floored or not, still gives the count of windows
 #: (at 4 blocks a window, exactly for 5 to 16 of them), so it publishes the judgment against n alone
 COUNTS = "none published: n judged on the blocks' exact count, which only the serve dir's private verdict holds"
@@ -351,23 +355,56 @@ def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: 
     return {"program": text, "theta": [], "blocks": [codec.descriptor_id(fn)], "table": dict(table), "c": c, "k": k, "n": n}
 
 
+def takes_detail(exe: Path, timeout_s: int) -> bool:
+    """Whether ``exe``'s ``--count`` takes ``--detail``, as the usage it prints given no argument says. One that does
+    prints only ``{complies}`` without it; one that doesn't answers ``--detail`` with its usage."""
+    p = subprocess.run([str(exe)], capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout_s)
+    return "--detail" in p.stdout + p.stderr
+
+
 def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int = 1800) -> dict[str, Any]:
-    """`nci-check --count` on ``inst``, in ``scratch``: its verdict, or ``{"error"}`` with why it gave none."""
+    """`nci-check --count` on ``inst``, in ``scratch``, with ``--detail`` where ``exe`` takes it (`takes_detail`): its
+    ``flags`` and the JSON object it printed (``out``), its whole verdict or its refusal, else ``error``, why it printed
+    none, and where it said something, its tail (``said``). All of it is private; `lean_said` is what the public verdict
+    takes."""
     fd, path = tempfile.mkstemp(dir=scratch, suffix=".json")
     with os.fdopen(fd, "w") as fh:
         json.dump(inst, fh)
+    flags = ["--count"]
     try:
-        p = subprocess.run([str(exe), "--count", path], capture_output=True, text=True, timeout=timeout_s)
+        if takes_detail(exe, timeout_s):
+            flags.append("--detail")
+        p = subprocess.run([str(exe), *flags, path], capture_output=True, text=True, timeout=timeout_s)
     except subprocess.TimeoutExpired:
-        return {"error": f"nci-check --count gave no verdict within {timeout_s} s"}
+        return {"flags": flags, "error": f"nci-check {' '.join(flags)} gave no verdict within {timeout_s} s"}
     finally:
         os.unlink(path)
     if p.returncode != 0:
-        return {"error": f"nci-check --count exit {p.returncode}: {p.stderr.strip()[-300:]}"}
+        return {"flags": flags, "error": f"nci-check {' '.join(flags)} exit {p.returncode}", "said": p.stderr.strip()[-300:]}
     try:
-        return json.loads(p.stdout)
+        out = json.loads(p.stdout)
     except ValueError:
-        return {"error": f"nci-check --count printed no JSON: {p.stdout.strip()[-300:]}"}
+        out = None
+    if not isinstance(out, dict):
+        return {"flags": flags, "error": f"nci-check {' '.join(flags)} printed no JSON object",
+                "said": p.stdout.strip()[-300:]}
+    return {"flags": flags, "out": out}
+
+
+def lean_said(call: Mapping[str, Any], gates: int) -> dict[str, Any]:
+    """What the public verdict takes of `lean_count`'s ``call``: why it gave no verdict, its refusal (``error`` and
+    ``message``), or its gates a block, whether they are ``gates``, and with θ empty its fresh bits and ``complies``.
+    Never its rows' counts, total or failure, nor any other text it printed."""
+    out = call.get("out")
+    if out is None:
+        return {"error": call["error"]}
+    if "error" in out:
+        return {key: out[key] for key in ("error", "message") if key in out}
+    rows = out.get("blocks")
+    if not (isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], list) and len(rows[0]) == 4):
+        return {"error": f"nci-check {' '.join(call['flags'])} printed no row of the block"}
+    _, g, x, _ = rows[0]
+    return {"gates": g, "agrees_on_gates": g == gates, "with_theta_empty": {"fresh": x, "complies": out.get("complies")}}
 
 
 def served_start(serve_dir: Path) -> str:
@@ -426,14 +463,11 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
                  "failure": got["failure"], "positions": row["positions"], "slots": row["slots"]}
         if lean is not None:
             inst = count_instance(doc, row["table"], c, k, n)
-            got_lean = lean_count(lean, inst, scratch or Path(tempfile.gettempdir()), lean_timeout_s)
-            base["lean"] = got_lean if "error" in got_lean else {
-                "gates": got_lean["blocks"][0][1], "agrees_on_gates": got_lean["blocks"][0][1] == row["gates"],
-                "with_theta_empty": {"fresh": got_lean["blocks"][0][2], "complies": got_lean["complies"],
-                                     "failure": got_lean["failure"]}}
-            if "error" not in got_lean and got_lean["blocks"][0][1] != row["gates"]:
-                raise Undecided(f"nci-check --count counts {got_lean['blocks'][0][1]} gates a block, and this "
-                                f"{row['gates']}")
+            call = lean_count(lean, inst, scratch or Path(tempfile.gettempdir()), lean_timeout_s)
+            private["lean_detail"] = call
+            base["lean"] = said = lean_said(call, row["gates"])
+            if "gates" in said and not said["agrees_on_gates"]:
+                raise Undecided(f"nci-check --count counts {said['gates']} gates a block, and this {row['gates']}")
         if got["complies"]:
             base |= {"verdict": "accept", "reason": None}
         else:
