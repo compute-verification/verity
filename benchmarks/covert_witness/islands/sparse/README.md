@@ -35,7 +35,19 @@ allocation, or with -1 lets it join that allocation; E carries it as one factor 
 in factored form to the lookup and the head (`tie_lora`), so the frozen head's matmul is unchanged. A probe (`--probe N`,
 4 batches by default) takes the mean gradient at θ, priced in the step log as a forward pass plus the full backward
 (`extra`). With `--analyse`, a record's `notes.first_order` holds, for budgets of 10 kB, 100 kB and 1 MB, the share of
-‖G‖² each encoding captures.
+‖G‖² each encoding captures; with `--no-analyse` the probe reads only the candidate tensors (`--targets none` probes
+just the gains), and `notes.probe` gives its uncoded fp32 gradient's width, a reduction of its own.
+
+`--grad-code vote` (with `entries`) passes one bit a value between token blocks. A zero perturbation P[b] of the entries
+rides in each sequence's forward (`entry_forward`, and `vote_gains` for gain entries, a mirror of `Block.forward` and
+`LM.top`), so P's gradient is each sequence's own gradient, at one product an entry a token and no weight gradient. Its
+sign leaves as a bool, the step sums the bools as int16 votes, and each value moves by its lr times the votes' mean sign
+(`--vote mean`) or the majority's. Values live and update in `--entry-dtype` with stochastic rounding, so there are no
+latents and no optimizer state. A CPU check on tiny0 gives the patched logits equal to θ with the values merged, and P's
+rows equal to each sequence's gradient (relative difference 1e-7). te_core 4.1's capture of a vote step shows the
+partials as bools (its narrowest cut, 1 bit a value a sequence) and prices Δ_grad at its 32-bit floor, state 0. The
+notes give `grad_bits` at the vote sum's width, ceil(log2(B + 1)) bits a value, with `partial_bits` and `floor_bits`
+beside it. The counter sees no weight gradient, so a matrix with entries is declared as a rank-1 adapter.
 
 `--opt` is `adamw` (the default), `sign` (sign descent) or `sgd` (no momentum); the last two keep no state, so only the
 gradient passes between token blocks and Fit's reduction bound, 2Δ_grad ≤ k, holds up to k/64 trained values. Every

@@ -4,8 +4,10 @@ values in the fixed formats; and the first-order trade between the mask's encodi
 On v2.3's pin (the pilot, with classes) it takes the class as `--klass`; v3's has none, so it takes no `--klass` there
 and `--cap` (E's byte cap) is required.
 
-A probe (`--probe N` batches) takes the mean gradient G at θ of every tensor, priced in the step log as a forward pass plus
-the full backward's FLOPs (`extra`). From G the record's notes get, for each budget in BUDGETS, the share of ||G||² that each
+A probe (`--probe N` batches) takes the mean gradient G at θ of every tensor (with `--no-analyse`, of the candidate
+tensors only, so `--targets none` probes just the gains), priced in the step log as a forward pass plus the full
+backward's FLOPs (`extra`); its uncoded fp32 gradient is in the notes (`probe`). From G the record's notes get, for each
+budget in BUDGETS, the share of ||G||² that each
 encoding of a mask captures (`analyse`): LoRA ranks, whole rows or columns as one-hot LoRA factors (what the fixed `lora`
 decoder can carry) or with a list index, and single entries with an entropy-coded, int32-list or bitmap index at 16- or
 8-bit values. The update then trains one mechanism (`--mech`):
@@ -33,6 +35,13 @@ both the lookup and the head), its (vocab + d) · R entries taken before the blo
 byte bin below the class's cap (the 10 kB bin, or Fit's ~1.8 kB at the reference policy); the reference class has no
 cap, so there `--cap` is the planner's budget and is required.
 
+`--grad-code vote` (entries only) compresses what passes between token blocks to one bit a value: each sequence's
+gradient of the trained values is its own (a zero perturbation P[b] of the entries rides in the forward, so P's gradient
+is per sequence, with no weight gradient), its sign leaves as a bool, the step sums the bools as int16 votes, and each
+value moves by its lr times the votes' mean sign (`--vote mean`) or the majority's. The values live in `--entry-dtype`
+and update there with stochastic rounding, so there are no latents and no optimizer state (Δ_t = Δ). A sum of B votes
+passes ceil(log2(B + 1)) bits a value (the coordinator's 04:41Z ruling prices that width when the trace shows it).
+
 `--opt` is AdamW, `sign` (sign descent) or `sgd` (no momentum); the last two keep no state. The record's notes give
 `delta_grad`: the trained values N and what passes between token blocks, the gradient of every tensor the step trains
 (a masked gain's whole tensor) in fp32 plus AdamW's m and v where AdamW trains (a straight-through code trains fp32
@@ -44,6 +53,7 @@ harness's checkpoints scores the most training its 5% holds.
 
     python launch.py START --island sparse --note "MECHANISM: ..." -- --cap BYTES --mech qlora [--embed-rank R] [--lr 1e-3]
     python launch.py START --island sparse --note "entries: ..." -- --cap BYTES --mech entries [--values N] [--opt sign]
+    python launch.py START --island sparse --note "vote: ..." -- --cap BYTES --mech entries --grad-code vote [--targets none]
 """
 from __future__ import annotations
 
@@ -507,6 +517,81 @@ class Sign(torch.optim.Optimizer):
                     p.add_(p.grad.sign(), alpha=-grp["lr"])
 
 
+def entry_forward(w: torch.Tensor, V: torch.Tensor, ii: torch.Tensor, cell: dict, off: int):
+    """A matrix's forward with V added at its flat entries `ii`, plus each sequence's own perturbation of those entries,
+    P[b, off:off + len(ii)] with P = cell["P"] (fresh zeros each micro-batch, so the output is unchanged and nothing is
+    carried): P's gradient is each sequence's gradient of the entries, Σ_t dy[b, t, row] · x[b, t, col], at one product
+    an entry a token and no weight gradient."""
+    d_in = w.shape[1]
+    rows, cols, m = ii // d_in, ii % d_in, len(ii)
+
+    def forward(x: torch.Tensor) -> torch.Tensor:
+        y = F.linear(x, w.reshape(-1).index_add(0, ii, V.to(w.dtype)).view_as(w))
+        per = x.index_select(-1, cols) * cell["P"][:x.shape[0], off:off + m].unsqueeze(1)
+        return y.index_add(-1, rows, per.to(y.dtype))
+
+    return forward
+
+
+def vote_gains(lm, gains: dict, cell: dict) -> None:
+    """The `lf` model's norms with V added at each gain's entries and each sequence's perturbation P[b] of them (P =
+    cell["P"]), so P's gradient is each sequence's gradient of the gain entries. Mirrors `model.Block.forward` and
+    `LM.top`, as `tie_lora` mirrors `LM.hidden` and `LM.top`; blocks without a gain entry keep their own forward."""
+    import model as lf
+
+    def norm(name: str, weight: torch.Tensor):
+        if name not in gains:
+            return lambda x: F.rms_norm(x, (x.shape[-1],), weight)
+        ii, V, off = gains[name]
+
+        def f(x: torch.Tensor) -> torch.Tensor:
+            w = weight.index_add(0, ii, V.to(weight.dtype))
+            wb = w.expand(x.shape[0], -1).index_add(1, ii, cell["P"][:x.shape[0], off:off + len(ii)].to(w.dtype))
+            return F.rms_norm(x, (x.shape[-1],), None) * wb.unsqueeze(1)
+
+        return f
+
+    def block_forward(blk, an, mn):
+        def forward(x, cos, sin):
+            b, t, d = x.shape
+            h = an(x)
+            q, k, v = (w(h).view(b, t, blk.n_head, d // blk.n_head).transpose(1, 2) for w in (blk.wq, blk.wk, blk.wv))
+            q, k = lf.rope(q, cos, sin), lf.rope(k, cos, sin)
+            o = F.scaled_dot_product_attention(q, k, v, is_causal=True).transpose(1, 2).reshape(b, t, d)
+            x = x + blk.wo(o)
+            h = mn(x)
+            return x + blk.w_down(F.silu(blk.w_gate(h)) * blk.w_up(h))
+
+        return forward
+
+    for i, blk in enumerate(lm.blocks):
+        an, mn = f"blocks.{i}.attn_norm", f"blocks.{i}.mlp_norm"
+        if an in gains or mn in gains:
+            blk.forward = block_forward(blk, norm(an, blk.attn_norm), norm(mn, blk.mlp_norm))
+    if "norm" in gains:
+        final = norm("norm", lm.norm)
+
+        def top(x, start):
+            t = x.shape[1]
+            cos, sin = lm.cos[:t], lm.sin[:t]
+            for b in lm.blocks[start:]:
+                x = b(x, cos, sin)
+            return F.linear(final(x), lm.embed)
+
+        lm.top = top
+
+
+def stochastic_round(x: torch.Tensor, dtype: torch.dtype, gen: torch.Generator) -> torch.Tensor:
+    """x (fp32) in `dtype`, rounded to one of its two neighbours with probability by distance, so updates far below
+    the value's spacing still move it on average."""
+    near = x.to(dtype)
+    side = torch.where(x > near.float(), torch.full_like(near, math.inf), torch.full_like(near, -math.inf))
+    other = torch.nextafter(near, side)
+    gap = other.float() - near.float()
+    p = torch.where(gap != 0, (x - near.float()) / torch.where(gap != 0, gap, 1.0), 0.0)
+    return torch.where(torch.rand(x.shape, generator=gen, device=x.device) < p, other, near)
+
+
 def tie_lora(lm, A, B, s: float) -> None:
     """`embed` + s · B @ A in the `lf` model's lookup and its tied head, never formed: the lookup adds s · B[idx] @ A and
     the head s · (x Aᵀ) Bᵀ, so the frozen head's matmul stays as it was. Mirrors `model.LM.hidden` and `LM.top`. A and B
@@ -568,8 +653,14 @@ def main() -> int:
                          "embedding joins the gradient's allocation as one more candidate")
     ap.add_argument("--values", type=int, default=0, help="entries: at most this many entries (0: as many as fit --cap)")
     ap.add_argument("--entry-dtype", default="f16", choices=("f16", "bf16"), help="entries: CWSPAR1's value dtype")
+    ap.add_argument("--grad-code", default="none", choices=("none", "vote"),
+                    help="entries: `vote` passes each sequence's gradient as one bit a value (its sign, a bool), summed "
+                         "as int16 votes; the values train in --entry-dtype, no latents and no optimizer state")
+    ap.add_argument("--vote", default="mean", choices=("mean", "majority"),
+                    help="vote: a step moves a value by lr times its votes' mean sign, or by lr times the majority's")
     ap.add_argument("--opt", default="adamw", choices=("adamw", "sign", "sgd"),
                     help="AdamW, sign descent or SGD without momentum (the last two keep no state)")
+    ap.add_argument("--compile", action=argparse.BooleanOptionalAction, default=True, help="torch.compile on CUDA")
     ap.add_argument("--probe", type=int, default=4, help="probe batches at θ (0: no probe, no analysis)")
     ap.add_argument("--analyse", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--lr", type=float, default=3e-4)
@@ -612,21 +703,28 @@ def main() -> int:
     entries = a.mech == "entries"
     if entries and a.embed_rank:
         raise SystemExit("sparse: --mech entries takes no --embed-rank")
+    vote = a.grad_code == "vote"
+    if vote and (not entries or a.batch % a.micro or a.batch > 32767):
+        raise SystemExit("sparse: --grad-code vote takes --mech entries, and --micro dividing --batch (at most 32,767)")
     need_g = a.mech in ("lora", "qlora") or a.mech in ("lines", "signrows", "entries") and a.select in ("grad", "fisher", "adam")
     if need_g and not a.probe:
         raise SystemExit("sparse: --mech lora|qlora and a gradient selection need --probe > 0")
+    norms = norm_names(theta, a.norms, a.layers, L)
+    cands = matrices(theta, a.targets, a.layers, L) if a.mech != "norms" else []
+    if entries:
+        cands, norms = cands + norms, []
     if a.probe and (need_g or a.analyse):
-        G, G2, steps = probe(net, rec, theta, data, a.probe, a.batch, a.micro)
+        probed = None if a.analyse else sorted(set(cands) | set(norms) | ({"embed"} if a.embed_rank < 0 else set()))
+        G, G2, steps = probe(net, rec, theta, data, a.probe, a.batch, a.micro, names=probed)
+        values = sum(theta[n].numel() for n in (probed or theta))
+        notes["probe"] = {"batches": a.probe, "values": values, "grad_bits": 32 * values,
+                          "what": "the probe's fp32 gradient of every probed tensor, summed over its batches (uncoded)"}
         if a.analyse:
             t0 = time.perf_counter()
             notes["first_order"] = analyse(G)
             notes["first_order"]["seconds"] = round(time.perf_counter() - t0, 1)
             print(json.dumps({"first_order": notes["first_order"]["budgets"]}), flush=True)
 
-    norms = norm_names(theta, a.norms, a.layers, L)
-    cands = matrices(theta, a.targets, a.layers, L) if a.mech != "norms" else []
-    if entries:
-        cands, norms = cands + norms, []
     if quant and any(theta[n].numel() % a.norm_group for n in norms):
         raise SystemExit(f"sparse: --norm-group {a.norm_group} doesn't divide every gain")
     sizer = torch.Generator().manual_seed(1)
@@ -748,7 +846,26 @@ def main() -> int:
             mod.register_forward_hook(lambda m, inp, out, Vq=Vq, ri=ri: out.index_add(
                 -1, ri, F.linear(inp[0], Vq).to(out.dtype)))
     gain_entries: dict = {}
-    if entries:
+    votes: list[tuple] = []
+    cell: dict = {}
+    n_votes = 0
+    if vote:
+        n_votes = sum(len(i) for i in plan.values())
+        gain_votes = {}
+        off = 0
+        for n, idx in plan.items():
+            ii = idx.to(dev)
+            V = torch.zeros(len(ii), dtype=prepare.DTYPES[a.entry_dtype], device=dev)
+            train_vals[n] = (ii, V)
+            votes.append((V, off, a.lr if theta[n].ndim == 2 else a.norm_lr))
+            if theta[n].ndim == 2:
+                mod = net.inner.get_submodule(n.removesuffix(".weight"))
+                mod.forward = entry_forward(mod.weight, V, ii, cell, off)
+            else:
+                gain_votes[n] = (ii, V, off)
+            off += len(ii)
+        vote_gains(net.inner, gain_votes, cell)
+    if entries and not vote:
         for n, idx in plan.items():
             ii = idx.to(dev)
             if theta[n].ndim == 2:
@@ -810,13 +927,22 @@ def main() -> int:
                 ri, V = v
                 entries[n] = rows_entry(tuple(theta[n].shape), ri, V.detach(), a.bits)
         return prepare.encode_quant(entries, theta)
-    if a.opt == "adamw":
+    if vote:
+        opt = None
+    elif a.opt == "adamw":
         opt = torch.optim.AdamW(groups, betas=(0.9, 0.95), fused=dev.startswith("cuda"))
     elif a.opt == "sign":
         opt = Sign(groups, lr=a.lr)
     else:
         opt = torch.optim.SGD(groups, lr=a.lr, momentum=0.0)
-    trainable = {"full": sorted(plan), "adapters": {}} if entries else {"full": norms, "adapters": adapters}
+    if vote:
+        # no weight gradient: a matrix's entries cost at most a rank-1 adapter's products, so they are declared as one
+        trainable = {"full": sorted(n for n in plan if theta[n].ndim == 1),
+                     "adapters": {n: 1 for n in sorted(plan) if theta[n].ndim == 2}}
+    elif entries:
+        trainable = {"full": sorted(plan), "adapters": {}}
+    else:
+        trainable = {"full": norms, "adapters": adapters}
     tokens = a.batch * prepare.EVAL_CTX
     per_step = prepare.train_flops(rec, trainable, [{"op": "train", "tokens": tokens}])["flops"]
     spent = prepare.train_flops(rec, trainable, steps)["flops"]
@@ -850,15 +976,42 @@ def main() -> int:
         notes["plan"] = {n: len(i) for n, i in plan.items()}
     notes["summary"] = summary
     print(json.dumps(summary), flush=True)
-    fwd = torch.compile(net) if dev.startswith("cuda") else net
+    fwd = torch.compile(net) if dev.startswith("cuda") and a.compile else net
     calls = a.probe if steps else 0
     planned = calls + n_steps + (a.probe if regrow else 0)
     hooks.plan(planned)
     marks = {planned * k // 20 for k in range(1, 21)}
     t0 = time.perf_counter()
-    lrs = [grp["lr"] for grp in opt.param_groups]
+    lrs = [grp["lr"] for grp in opt.param_groups] if opt else []
     loss = torch.zeros(())
-    for step in range(n_steps):
+    count = torch.zeros(n_votes, dtype=torch.int16, device=dev)
+    rounding = torch.Generator(device=dev).manual_seed(a.seed + 1)
+    for step in range(n_steps) if vote else ():
+        frac = min(1.0, (step + 1) / a.warmup) * (1 - step / n_steps)
+        rows = data.next(a.batch)
+        calls += 1
+        count.zero_()
+        for i in range(0, a.batch, a.micro):
+            x = rows[i: i + a.micro]
+            cell["P"] = torch.zeros(len(x), n_votes, device=dev, requires_grad=True)
+            with torch.autocast(dev.split(":")[0], dtype=torch.bfloat16):
+                logits = fwd(x[:, :-1])
+            loss = F.cross_entropy(logits.float().view(-1, logits.shape[-1]), x[:, 1:].reshape(-1))
+            (g,) = torch.autograd.grad(loss, [cell["P"]])
+            count += (g > 0).sum(0, dtype=torch.int16)
+        d = count.float() * (2.0 / a.batch) - 1.0
+        if a.vote == "majority":
+            d = torch.sign(d)
+        with torch.no_grad():
+            for V, off, lr in votes:
+                V.copy_(stochastic_round(V.float() - (lr * frac) * d[off:off + len(V)], V.dtype, rounding))
+        steps.append({"op": "train", "tokens": tokens})
+        if (step + 1) % 100 == 0 or step + 1 == n_steps:
+            print(json.dumps({"step": step + 1, "loss": float(loss.detach()), "s": round(time.perf_counter() - t0, 1)}),
+                  flush=True)
+        if calls in marks:
+            encode_e()
+    for step in range(n_steps) if not vote else ():
         if step == grow_at:
             Gm, _, more = probe(net, rec, theta, data, a.probe, a.batch, a.micro, names=cands)
             steps += more
@@ -909,15 +1062,27 @@ def main() -> int:
     blob = encode_q() if quant else encode_e() if entries else encode(a.mech, theta, params, norms, plan, train_vals)
     model = prepare.decode(theta, blob)
     changed = sorted(plan) if entries else sorted(set(norms) | set(adapters))
-    grads = sum(p.numel() for grp in opt.param_groups for p in grp["params"])
-    n_train = summary["entries"] if entries else grads
-    state = 64 * grads if a.opt == "adamw" else 0
-    notes["delta_grad"] = {"values": n_train, "fp32_bytes": (32 * grads + state) // 8, "optimizer": a.opt,
-                           "what": "the fp32 gradient of every trained tensor (a masked gain's whole) and AdamW's m and v "
-                                   "where AdamW trains (fp32 latents for codes apart)",
-                           "trainable": n_train, "grad_bits": 32 * grads, "adam_bits": state, "muon_bits": 0,
-                           "latent_bits": 32 * grads if quant else 0, "bits": 32 * grads + state,
-                           "bytes": (32 * grads + state) // 8}
+    if vote:
+        width = math.ceil(math.log2(a.batch + 1))
+        notes["delta_grad"] = {
+            "values": n_votes, "optimizer": f"vote-{a.vote}", "grad_code": "vote", "partials": a.batch,
+            "what": "each sequence's gradient of the trained values as one bool a value (its sign), summed over the "
+                    f"step's {a.batch} sequences as int16 votes, so a partial sum passes ceil(log2({a.batch} + 1)) = "
+                    f"{width} bits a value; the values are stored and updated in {a.entry_dtype} (stochastic rounding, "
+                    "no latents, no optimizer state)",
+            "trainable": n_votes, "partial_bits": n_votes, "grad_bits": width * n_votes, "floor_bits": 32 * n_votes,
+            "adam_bits": 0, "muon_bits": 0, "latent_bits": 0, "state_bits": 0, "bits": width * n_votes,
+            "bytes": math.ceil(width * n_votes / 8)}
+    else:
+        grads = sum(p.numel() for grp in opt.param_groups for p in grp["params"])
+        n_train = summary["entries"] if entries else grads
+        state = 64 * grads if a.opt == "adamw" else 0
+        notes["delta_grad"] = {"values": n_train, "fp32_bytes": (32 * grads + state) // 8, "optimizer": a.opt,
+                               "what": "the fp32 gradient of every trained tensor (a masked gain's whole) and AdamW's m "
+                                       "and v where AdamW trains (fp32 latents for codes apart)",
+                               "trainable": n_train, "grad_bits": 32 * grads, "adam_bits": state, "muon_bits": 0,
+                               "latent_bits": 32 * grads if quant else 0, "bits": 32 * grads + state,
+                               "bytes": (32 * grads + state) // 8}
     notes["E_bytes"] = {"planned": size, "encoded": len(blob), "format": prepare.format_of(blob)}
     notes["E_bytes"]["over_cap"] = len(blob) > cap
     print(json.dumps({"delta_grad": notes["delta_grad"], "E_bytes": notes["E_bytes"]}), flush=True)
