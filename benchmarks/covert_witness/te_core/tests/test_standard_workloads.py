@@ -133,17 +133,6 @@ def test_under_reading_a_a_row_is_publisheds_rho_and_basis_as_is_with_its_terms_
         build(m, fx, monkeypatch)
 
 
-def test_a_row_reading_a_void_fresh_products_term_has_its_kinds_cell_marked_void(monkeypatch):
-    """Where algorithm_policy.voided finds a row's published ρ at the console's default reading a void fresh-products
-    term (a 0 where io_bound's proved Λ is void, no result), its kinds cell carries algorithm-policy's void mark."""
-    fx = json.loads(PINNED.read_text())
-    m = formalism.from_json(fx["measured"])
-    seen = []
-    monkeypatch.setattr(algorithm_policy, "voided", lambda mm, one: seen.append((mm, one["reading"])) or True)
-    _, _, cells = build(m, fx, monkeypatch)
-    assert seen == [(m, "A")] and json.loads(cells["kinds"])["void"] == algorithm_policy.VOIDED
-
-
 def test_traces_from_te_core_4_4_to_this_one_are_read_and_others_refused(tmp_path, monkeypatch):
     (tmp_path / "traces").mkdir()
     (tmp_path / "manifest.json").write_text(json.dumps({"te_commit": "c0ffee"}))
@@ -255,25 +244,35 @@ def test_an_unmeasured_delta_grad_names_its_steps_and_whether_fits_verdict_at_ei
 def test_the_fresh_products_input_is_measured_at_the_consoles_default_or_assumed_with_te_cores_reason():
     """`products`, the fresh-products kind's input: measured where te_core prices a trace's product rows at the
     console's default, with its reason where the serving block's k leaves them unmeasured (they were classified at
-    the console's); assumed where the dominant traced step's stand in for steps of another shape, or with te_core's
-    reason where unmeasured (an op log's, and a round untraced)."""
+    the console's), and still measured where the term's best subset drops a product whose whole-making chain is too
+    short (published's `fresh_subset` says so); assumed where the dominant traced step's stand in for steps of another
+    shape, or with te_core's reason where unmeasured (an op log's, a round untraced, and a void: no subset with a
+    proved bound, never a measured 0)."""
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
     row = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m": 4, "k": 8, "n": 8},
            "token_dims": ["m"], "macs": 256, "outputs": 32, "affected": [True, True], "widths": [16, 16],
-           "rates": [16.0, 16.0], "paid": [True, True], "self": False, "b_c": 32, "k_whole": 8,
+           "rates": [16.0, 16.0], "paid": [True, True], "self": False, "b_c": 32, "k_whole": 1024,
            "gates_per_mac": 1480.0, "cell_gates": 23682.0}
-    rows = formalism.products_of_trace({"capture": formalism.PRODUCTS_FROM, "k": float(policy.CONSOLE[1]),
-                                        "order": "unknown", "tokens": 8, "gates": None, "rows": [row]})
+
+    def of(*rs):
+        return formalism.products_of_trace({"capture": formalism.PRODUCTS_FROM, "k": float(policy.CONSOLE[1]),
+                                            "order": "unknown", "tokens": 8, "gates": None, "rows": list(rs)})
 
     def bounds(p):
         return {name: formalism.bound(dataclasses.replace(m, products=p), c, k) for name, (c, k) in SW.POINTS.items()}
 
+    rows, short = of(row), row | {"k_whole": 8}
     b = bounds(rows)
     off = b["served"]["unmeasured"]["fresh_products"]
     assert "fresh_products" not in b["console"]["unmeasured"]
     assert off.startswith(f"unmeasured: the products were classified at k = {policy.CONSOLE[1]:g}")
     assert SW.products(b) == f"measured at the console's default; at the serving block, {off}"
+    assert SW.products(bounds(of(row, short))) == SW.products(b)
+    one = formalism.published(dataclasses.replace(m, products=of(row, short)), reading=SW.READING)
+    assert one["terms"]["fresh_products"] > 0 and (one["fresh_subset"]["dropped"], one["fresh_subset"]["of"]) == (1, 2)
+    assert bounds(of(short))["console"]["unmeasured"]["fresh_products"] == formalism.FRESH_VOID
+    assert SW.products(bounds(of(short))) == f"assumed: {formalism.FRESH_VOID}"
     stand = rows | {"stand_in": {"structures": ["a", "c"], "step_tokens": [4, 8], "traced_tokens": 8,
                                  "why": formalism.STAND_IN}}
     assert SW.products(bounds(stand)) == (
