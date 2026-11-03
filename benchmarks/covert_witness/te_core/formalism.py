@@ -1269,12 +1269,12 @@ def of_record(record: dict, through: int | None = None) -> dict:
     structure (its steps' gates by te_core.gates, their tokens, the gates of their token blocks, its affected gates and
     Δ_grad), and the record's own `formalism` fields over these. In a record with traced structures
     (`annotate.with_structures`), a traced structure's affected gates, token blocks' gates and Δ_grad are its measured
-    shares of its counted gates and its measured Δ_grad, and its tokens are scaled by its token factor (`TRACED`); any
-    other structure there (a step before the first update) has no affected gates. Otherwise a structure's affected
-    gates are the record's when it gives them (`affected_gates`), else its updated forward nodes' MACs at the bf16 GEMM
-    price; its token blocks' gates are its forward and backward (`_token_log`); its Δ_grad is its `delta_grad_bits`,
-    else 4.0's `cut_bits`. The setup, and the tail of a whole run, are parts of their own, so |C| is the prefix's whole
-    count, as `ledger._macs_log`'s."""
+    shares of its counted gates and its measured Δ_grad, and its tokens are scaled by its token factor (`TRACED`), a
+    step before the first update's too (its Δ_grad 0, measured); an untraced structure there has no affected gates and
+    no Δ_grad (Fit fails at every k). Otherwise a structure's affected gates are the record's when it gives them
+    (`affected_gates`), else its updated forward nodes' MACs at the bf16 GEMM price; its token blocks' gates are its
+    forward and backward (`_token_log`); its Δ_grad is its `delta_grad_bits`, else 4.0's `cut_bits`. The setup, and the
+    tail of a whole run, are parts of their own, so |C| is the prefix's whole count, as `ledger._macs_log`'s."""
     own = dict(record.get("formalism") or {})
     labels = dict(own.get("labels", {}))
     steps = [s for s in record["steps"] if through is None or s["step"] <= through]
