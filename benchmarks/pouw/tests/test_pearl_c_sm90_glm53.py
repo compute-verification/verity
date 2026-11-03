@@ -196,9 +196,10 @@ def test_h200_session_runs_the_tables_shapes():
     """h200.sh's run.py SHAPES are every in-domain (n, k) of its MODEL (`in_domain`, each model's list), at decode's 64 and
     prefill's 8192; every step after the check runs at MODEL's linears; it times each linear under the serial schedule,
     graphed and eager, and deferred-a, decode's forward whole (--whole, every in-domain shape) over llama32_1b's every layer
-    and one of glm53's, and prefill under the h3 chain beside the default one, and checks the captured passes' outputs in
-    full after every lease.  With LOCK_MHZ the timing runs at the card's locked clock, reset when the lease ends, the lock's
-    outcome kept out of rc.txt."""
+    and one of glm53's, and prefill under the h3 chain beside the default one (TIMING=0: none of it), and after every lease
+    gives up the passes' rows over a debit cap, then verifies them at the verdict's draws and checks their outputs in full.
+    With LOCK_MHZ the timing runs at the card's locked clock, reset when the lease ends, the lock's outcome kept out of
+    rc.txt."""
     sh = (HERE / "h200.sh").read_text()
     listed = {m: (nks, int(layers)) for m, nks, layers in
               re.findall(r'^\s*(\w+)\) NKS="([\dx ]+)"; LAYERS=\$\{LAYERS:-(\d+)\} ;;$', sh, re.M)}
@@ -213,6 +214,10 @@ def test_h200_session_runs_the_tables_shapes():
     assert '"$D/glm53_timing.py" --model "$MODEL" --whole --layers "$LAYERS" --out "$O/whole"' in sh
     assert 'PEARLC_CHAIN=h3 "$PY" "$D/glm53_timing.py" --model "$MODEL" --out "$O/timing-h3" --m 2048 8192' in sh
     assert sh.index('"$D/glm53_passes.py" full --out "$O/passes" --jobs "$(nproc)"') > sh.index('echo "lease rc $?"')
+    lease, volunteer = sh.index('echo "lease rc $?"'), sh.index('"$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)"')
+    verify = sh.index('"$D/glm53_passes.py" verify --out "$O/passes" --fast --draws "${DRAWS:-459}"')
+    assert lease < volunteer < verify and _served_passes().DRAWS == 459
+    assert sh.index('"$D/glm53_passes.py" capture') < sh.index('[ "$TIMING" = 1 ] || exit 0') < sh.index('"$D/glm53_timing.py"')
     lock, trap = sh.index('sudo -n nvidia-smi -i "$U" -lgc "$LOCK_MHZ,$LOCK_MHZ"'), sh.index('trap "sudo -n nvidia-smi -i $U -rgc')
     assert trap < lock < sh.index('"$D/glm53_timing.py" --model "$MODEL" --out "$O" --graphs')
     assert '-lgc exit $?" > "$O/clock.txt"' in sh and "kill \"$smi\"'" in sh
@@ -237,6 +242,13 @@ def _timing():
     T = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(T)
     return T
+
+
+def _served_passes():
+    spec = importlib.util.spec_from_file_location("pearl_c_vllm_served_passes", HERE.parent / "pearl_c_vllm" / "served_passes.py")
+    mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 class Card:
@@ -629,6 +641,28 @@ def test_full_fails_on_one_served_y_word_or_one_activation_row_and_names_it(reta
     assert dec["failed"] == 1 and "served y differs at 1 of 256 words, first row 3 column 17" in dec["failures"][0]["reason"]
     assert pre["failed"] == 1 and pre["failures"] == [{"tile": 0, "reason": "activation opening"}]
     assert not res["ok"]
+
+
+def test_volunteer_leaves_each_pass_no_tile_over_a_cap_and_its_transcript_as_captured(retained, tmp_path):
+    """`volunteer` runs `volunteer_pass` on prefill's and decode's passes: each pass's records then leave no tile over a
+    debit cap, its commitment is the capture's, its manifest's records root is the one written, and every tile passes the
+    verifier's check under it."""
+    from verity.core.protocols.pouw.coins import CoinCommitment
+
+    out = _copy(retained, tmp_path)
+    before = {n: json.loads((out / n / "manifest.json").read_text()) for n in retained.GP.FULL}
+    assert retained.GP.main(["volunteer", "--out", str(out), "--jobs", "1"]) == 0
+    import verify_run as VR
+
+    res, coins = json.loads((out / "volunteer.json").read_text()), CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
+    for name in retained.GP.FULL:
+        r, man = res[name], json.loads((out / name / "manifest.json").read_text())
+        assert r["ok"] and r["left"] == [] and r["tiles"] == retained.count, r["line"]
+        assert man["commitment"] == before[name]["commitment"] and man["records_root"] == r["records_root"]["after"]
+        p = VR.load(out / name / "manifest.json", coins)
+        got, _ = VR.replay([p], [(0, ref.matmul, ref.id) for ref in p.verifier.refs], 1)
+        assert [reason for _, _, ok, reason, _ in got if not ok] == []
+    assert res["ok"]
 
 
 def test_full_requires_the_served_y_unless_told_the_pass_has_none(retained, tmp_path):
