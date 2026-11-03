@@ -291,9 +291,10 @@ def test_a_target_the_start_already_meets_has_no_rows_and_a_data_without_a_fit_n
     assert AP.build(info(None), "test")["rows"] == []
 
 
-def row(start, g, family, reached, p, rho, gain, rec, data="v2.3-pilot", gates=1.0) -> list:
+def row(start, g, family, reached, p, rho, gain, rec, data="v2.3-pilot", gates=1.0, basis=None) -> list:
     d = dict.fromkeys(AP.COLUMNS) | {"start": start, "gain_target": g, "family": family, "reached": reached, "p": p,
-                                    "rho_default": rho, "gain": gain, "record": rec, "data": data, "C_gates": gates}
+                                    "rho_default": rho, "gain": gain, "record": rec, "data": data, "C_gates": gates,
+                                    "basis_default": basis}
     return [d[c] for c in AP.COLUMNS]
 
 
@@ -322,6 +323,62 @@ def test_the_coverage_is_the_least_p_reached_row_else_the_best_failed_attempt_el
     line = AP.board_line(cov, fits, "T", "art:x")
     assert "g 2 v3: no fit, all 6 EMPTY" in line and "g 11 v2.3-pilot: EMPTY | EMPTY | EMPTY | no gain 1.9 | " in line
     assert line.endswith("32 of 36 cells EMPTY.")
+
+
+def test_an_unmeasured_rho_is_in_no_decade_and_an_infinite_one_in_the_last():
+    """Under reading A a row whose ρ no kind valid on its own measures has rho_default null with basis `unmeasured`:
+    the coverage puts it in no decade, never with reading B's null, an infinite ρ in the last, and the table and the
+    board line count it."""
+    rows = [row("s", 2, "adapter", "yes", 1.0, None, 2.1, "unmeasured", basis=AP.UNMEASURED),
+            row("s", 2, "full", "no", 0.5, None, 1.5, "inf", basis="target"),
+            row("s", 2, "full", "yes", 2.0, 37.5, 2.2, "decoding", basis="decoding")]
+    p = {"columns": AP.COLUMNS, "rows": rows}
+    cov = AP.coverage(p)
+    held = {c["record"]: (c["rho_decade"], c["rows"]) for c in cov if c["state"] != "empty"}
+    assert held == {"inf": ("1e5+", 1), "decoding": ("10", 1)} and AP.unmeasured_rows(p) == 1
+    assert [AP.decade(None), AP.decade(None, "target"), AP.decade(None, AP.UNMEASURED)] == [5, 5, None]
+    fits = {"v3": None, "v2.3-pilot": LAW}
+    assert AP.coverage_md(cov, fits, "T", unmeasured=1).endswith(
+        "1 row with no measured rho under reading A (rho_default null, basis_default unmeasured), in no decade.\n")
+    assert "reading A" not in AP.coverage_md(cov, fits, "T") + AP.board_line(cov, fits, "T", None)
+    assert AP.board_line(cov, fits, "T", None, unmeasured=2).endswith(" 2 rows unmeasured under reading A, in no "
+                                                                     "decade.")
+
+
+def test_a_rows_rho_is_published_at_the_dials_default_and_follows_published_to_reading_a(monkeypatch):
+    """rho_default and basis_default are te_core.formalism's `published` at the dial's default (`AP.default`), as
+    rho_console is at the console's: reading B's token form or Fit's until formalism.READING_A, then the one bound's
+    max with its binding kind, null with basis `unmeasured` where no kind valid on its own is measured. A stand-in
+    `published` reads A on two runs: nothing measured on lora's, decoding binding on never's."""
+    real, at = formalism.published, []
+
+    def published(m, c, k, reading=None):
+        at.append(k)
+        one = {8e6: {"rho": None, "binding_kind": "none", "rests_on": "unmeasured"},
+               1e6: {"rho": 37.5, "binding_kind": "decoding", "rests_on": formalism.RESTS_ON_CELL["decoding"]}}
+        return real(m, c, k, reading) | ({"reading": "A"} | one[m.delta_bits] if m.delta_bits in one else {})
+
+    monkeypatch.setattr(formalism, "published", published)
+    p = AP.build(info(), "test")
+    ds, by = plots.frame(p), {r["id"]: r for r in ledger_rows()}
+    assert set(at) == {float(panels.DEFAULT[1]), AP.CONSOLE[1]} and {"lora", "never"} <= {
+        d["record"].split("@")[0] for d in ds}
+    for d in ds:
+        run = d["record"].split("@")[0]
+        got = (d["reading"], d["rho_default"], d["basis_default"])
+        if run == "lora":
+            assert got == ("A", None, AP.UNMEASURED) and d["rho_console"] is None
+        elif run == "never":
+            assert got == ("A", 37.5, "decoding")
+        else:
+            r = by[d["record"].replace("@", "-")]
+            shape = {"s1": SHAPE, "s2": SHAPE2}[r["start"]]
+            v = formalism.at(formalism.measure(r, shape), *AP.default(policy.w_fwd(shape)))
+            assert got == ("B", None if math.isinf(v["rho"]) else pytest.approx(v["rho"]),
+                           "fit" if v["fit"] else "target")
+    cov, lora = AP.coverage(p), sum(d["record"].startswith("lora@") for d in ds)
+    assert lora == len(AP.GAINS) == AP.unmeasured_rows(p) and sum(c["rows"] for c in cov) == len(ds) - lora
+    assert not any((c.get("record") or "").startswith("lora@") for c in cov)
 
 
 def test_the_output_leads_with_the_coverage_table(tmp_path, monkeypatch, capsys):

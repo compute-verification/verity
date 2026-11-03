@@ -17,22 +17,26 @@ does). Every run from the start has a row at every target: `reached` "yes" at it
 checkpoint's |C| and p = C/H >= 1; else "no" at its last checkpoint, C its total |C| and p = C/H a lower bound on its
 p (null without H). A target the start's own loss already meets has no rows, and a data with no fit none.
 
-Each row's ρ is te_core.formalism.at's at its checkpoint at the dial's default (te_core.panels' `DEFAULT`: c = 4,096
-tokens of the start's forward, k = 80,000 bits): c/(c − d) where Fit holds for the training (basis `fit`), else
-Slowdown's bound (`target`), null where infinite. `rho_inputs`, one JSON cell, carries every input the console's dial
-needs to recompute that ρ at any (c, k): `panels.PACKED` and `SPLIT`, u_in through its points at the dial's k
-(`panels.through`), where x0 is exact; `page_rho` is the dial's formula on them. `build` refuses a row whose rounded
-columns don't give formalism.at's ρ and basis at every cell of te_core.panels' dial (`panels.mismatches`).
-`estimated` names the inputs that are stubs, bounds, assumptions or estimates, and gain:provisional where its
-data's fit is provisional (te_core.frontier_fit's `FIT_TARGET`), which the note names. The dashboard's cells, from
-te_core.formalism's `published` at the console's default policy (`CONSOLE`; coordinator 08:26Z): `rho_console`, the
-one bound's ρ there ("inf" where infinite), `reading` (A where formalism.READING_A and the row's token kind is
-measured, its trace's entries and an op log, else B, whose ρ is Slowdown's token form, a target), `te_core` the VERSION
-that priced it, `binding_kind` and `rests_on`, and `kinds`, a JSON cell of the terms its max takes and the
-sensitivities it leaves out.
+Each row's ρ is te_core.formalism's `published` at its checkpoint at the dial's default (te_core.panels' `DEFAULT`:
+c = 4,096 tokens of the start's forward, k = 80,000 bits), as `rho_console` is at the console's. Under reading B it is
+c/(c − d) where Fit holds for the training (basis `fit`), else Slowdown's token form (`target`), null where infinite;
+under reading A, Fit's, else the one bound's max over the kinds valid on their own (basis its binding kind, `none` at
+1), and null with basis `unmeasured` where no such kind is measured. `rho_inputs`, one JSON cell, carries every input
+the console's dial needs to recompute the token form at any (c, k), a row's ρ under reading B and a sensitivity under
+A: `panels.PACKED` and `SPLIT`, u_in through its points at the dial's k (`panels.through`), where x0 is exact;
+`page_rho` is the dial's formula on them. `build` refuses a row whose rounded columns don't give formalism.at's token
+form and basis at every cell of te_core.panels' dial (`panels.mismatches`). `estimated` names the inputs that are
+stubs, bounds, assumptions or estimates, and gain:provisional where its data's fit is provisional
+(te_core.frontier_fit's `FIT_TARGET`), which the note names. The dashboard's cells, from `published` at the console's
+default policy (`CONSOLE`; coordinator 08:26Z): `rho_console`, the one bound's ρ there ("inf" where infinite, null
+under reading A where no kind valid on its own is measured, coordinator 09:46Z), `reading` (A where
+formalism.READING_A and the row's token kind is measured, its trace's entries and an op log, else B, whose ρ is
+Slowdown's token form, a target), `te_core` the VERSION that priced it, `binding_kind` and `rests_on`, and `kinds`, a
+JSON cell of the terms its max takes and the sensitivities it leaves out.
 
 The coverage (`coverage`) is, per gain target, data and decade of ρ (`DECADES`: from 1, 10, ... and 1e5 and above,
-an infinite ρ there), the reached row with the least p, else the failed attempt with the greatest gain, else EMPTY.
+an infinite ρ there, and an unmeasured one in none, which the table counts), the reached row with the least p, else
+the failed attempt with the greatest gain, else EMPTY.
 The console's copy (`cut`) is the whole table when it fits the panels route (te_core.console), else the coverage's
 rows and, at the first tier of `TIERS` that fits, per data, start and target (and family, at the first tier) the
 reached rows on the lower-left (p, rho_default) front and the failed attempt with the greatest gain, without the
@@ -82,7 +86,8 @@ SPLIT = ("delta_bits", "w_fwd_gates", "u_points", "u_in_points")
 COLUMNS = ["start", "start_compute_gates", "start_effective_gates", "start_loss", "end_loss", "gain_target", "gain",
            "reached", "C_gates", "H_gates", "p", "rho_default", "basis_default", "method_key", "family", "record", "data",
            "estimated", "rho_inputs", "reading", "te_core", "rho_console", "binding_kind", "rests_on", "kinds"]
-#: the console's default policy, at which `rho_console` is ρ (null in no row: "inf" where infinite): the 45M reference
+#: the console's default policy, at which `rho_console` is ρ ("inf" where infinite, null where no kind valid on its
+#: own is measured, coordinator 09:46Z): the 45M reference
 #: with 4,096 input and 1,024 output tokens, c = 5,120 × 2 × 45e6 × 740 gates and k = 65,536 bits
 CONSOLE = (5_120 * 2 * 45e6 * 740, 65_536)
 #: the columns the console's copy leaves out (the stored tables keep them), so its rows fit the route's
@@ -111,6 +116,8 @@ COUNTED = (rescore.LABELS["gates"], rescore.LABELS["token_gates"])
 LEVELS = plots.LEVELS
 MARKERS = ("o", "s", "^", "D", "v", "P")
 EMPTY = "EMPTY"
+#: basis_default where reading A measures no kind valid on its own, its ρ null: in no decade, never an infinite ρ
+UNMEASURED = "unmeasured"
 
 
 def default(w_fwd: float) -> tuple[float, float]:
@@ -248,7 +255,7 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
             return False, math.inf if x[ix["p"]] is None else x[ix["p"]], x[ix["C_gates"]]
         return True, -x[ix["gain"]], x[ix["C_gates"]]
 
-    rows, wrong, consoles = [], [], {}
+    rows, wrong, consoles, defaults = [], [], {}, {}
     for st in info["starts"]:
         f = info["fits"].get(st.data)
         if f is None:
@@ -265,19 +272,21 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
                 r = hit or cps[-1]
                 if r["id"] not in dials:
                     dials[r["id"]] = panels.dial(r["measured"], st.w)
-                v = dials[r["id"]][panels.DEFAULT]
+                    defaults[r["id"]] = formalism.published(r["measured"], *default(st.w))
+                v = defaults[r["id"]]
                 gain = frontier_fit.gain(f, r["val_bpb"], st.c0)
                 row = [st.label, st.c0, None if math.isinf(own) else own, st.l0, r["val_bpb"], g,
                        None if math.isinf(gain) else gain,
                        "yes" if hit else "no", r["gates"], h, r["gates"] / h if h else None,
-                       None if math.isinf(v["rho"]) else v["rho"], "fit" if v["fit"] else "target", plots.method(r),
+                       None if v["rho"] is None or math.isinf(v["rho"]) else v["rho"],
+                       UNMEASURED if v["rho"] is None else v["binding_kind"], plots.method(r),
                        r.get("family"), f"{run}@{r.get('checkpoint_step')}", st.data,
                        " ".join(filter(None, (estimated(r["measured"]), "gain:provisional" if f.get("provisional") else "")))]
                 if r["id"] not in consoles:
                     consoles[r["id"]] = formalism.published(r["measured"], *CONSOLE)
                 one = consoles[r["id"]]
                 cols = {"rho_inputs": rho_inputs(r["measured"], st.w), "reading": one["reading"], "te_core": VERSION,
-                        "rho_console": "inf" if math.isinf(one["rho"]) else one["rho"],
+                        "rho_console": None if one["rho"] is None else "inf" if math.isinf(one["rho"]) else one["rho"],
                         "binding_kind": one["binding_kind"], "rests_on": one["rests_on"], "kinds": kinds(one)}
                 row += [cols[c] for c in COLUMNS[len(row):]]
                 d = dict(zip(COLUMNS, rounded(row)))
@@ -300,7 +309,7 @@ def note(art: str | None = None, tier: str | None = None, kept: str = "", provis
     def text(kept: str, dial: bool) -> str:
         out = (f"Per run, start and gain g = {', '.join(f'{g:g}' for g in GAINS)} (C_eff/C0, training/frontier-fit): "
                "yes at its first checkpoint reaching g, else no at its last. p = C/H, H the start's least C to g, a "
-               f"lower bound if no. rho: formalism.at, c = {panels.DEFAULT[0]} w_fwd, k = {panels.DEFAULT[1]:,} bits."
+               f"lower bound if no. rho: published at c = {panels.DEFAULT[0]} w_fwd, k = {panels.DEFAULT[1]:,} bits."
                + (" Dial: rho_inputs (u_in exact at the dial's k)." if dial else "")
                + " rho_console: one bound (kinds, binding_kind).")
         if provisional:
@@ -318,9 +327,17 @@ def note(art: str | None = None, tier: str | None = None, kept: str = "", provis
     return next((t for t in (text(kept, True), text(bare, True)) if len(t) <= console.NOTE_MAX), text(bare, False))
 
 
-def decade(rho: float | None) -> int:
-    """The coverage's decade of ρ (`DECADES`) a row's rho_default is in: an infinite one (null) is in the last."""
-    return len(DECADES) - 1 if rho is None else max(i for i, lo in enumerate(DECADES) if rho >= lo or i == 0)
+def decade(rho: float | None, basis: str | None = None) -> int | None:
+    """The coverage's decade of ρ (`DECADES`) a row's rho_default is in: an infinite one (null) is in the last, and an
+    unmeasured one (null, basis `UNMEASURED`) in none."""
+    if rho is None:
+        return None if basis == UNMEASURED else len(DECADES) - 1
+    return max(i for i, lo in enumerate(DECADES) if rho >= lo or i == 0)
+
+
+def unmeasured_rows(p: dict) -> int:
+    """How many of a panel's rows have no measured ρ (basis_default `UNMEASURED`), which no decade holds."""
+    return sum(d.get("basis_default") == UNMEASURED for d in plots.frame(p))
 
 
 def label(i: int) -> str:
@@ -337,7 +354,7 @@ def coverage(p: dict) -> list[dict]:
         for data in panels.DATA:
             for i in range(len(DECADES)):
                 on = [(j, d) for j, d in enumerate(rows) if d["gain_target"] == g and d["data"] == data
-                      and decade(d["rho_default"]) == i]
+                      and decade(d["rho_default"], d.get("basis_default")) == i]
                 yes = [(j, d) for j, d in on if d["reached"] == "yes"]
                 no = [(j, d) for j, d in on if d["reached"] == "no"]
                 best = (min(yes, key=lambda jd: (jd[1]["p"], jd[1]["rho_default"] or math.inf, jd[1]["C_gates"]))
@@ -361,9 +378,11 @@ def cell_text(c: dict, short: bool = False) -> str:
     return head if short else f"{head}, rho {rho} ({c['start']}, {c['method_key']}, {c['record']})"
 
 
-def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str] | None = None) -> str:
+def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str] | None = None,
+                unmeasured: int = 0) -> str:
     """The coverage table in Markdown, a row per gain target and data, a column per decade of ρ, and how many valid
-    checkpoints te_core.formalism refused (`refused`, row id -> reason), which no cell can hold."""
+    checkpoints te_core.formalism refused (`refused`, row id -> reason) and rows have no measured ρ (`unmeasured`),
+    which no cell can hold."""
     lines = [f"# training/algorithm-policy coverage, {stamp}", "",
              "Per gain target, data and decade of rho_default: the reached row with the least p, else the failed "
              f"attempt with the greatest gain (p a lower bound), else **{EMPTY}**.", "",
@@ -380,10 +399,14 @@ def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str]
     if refused:
         lines.append(f"{len(refused)} valid checkpoints are refused by te_core.formalism, never scored, so in no cell "
                      f"({frontier_fit.refusals(refused)}; refused.json has each one's reason).")
+    if unmeasured:
+        lines.append(f"{unmeasured} {'row' if unmeasured == 1 else 'rows'} with no measured rho under reading A "
+                     f"(rho_default null, basis_default {UNMEASURED}), in no decade.")
     return "\n".join(lines) + "\n"
 
 
-def board_line(cov: list[dict], fits: dict, stamp: str, art: str | None, refused: dict[str, str] | None = None) -> str:
+def board_line(cov: list[dict], fits: dict, stamp: str, art: str | None, refused: dict[str, str] | None = None,
+               unmeasured: int = 0) -> str:
     """The coverage as one board line's text, after its time and tag."""
     parts = []
     for g in GAINS:
@@ -398,7 +421,9 @@ def board_line(cov: list[dict], fits: dict, stamp: str, art: str | None, refused
             f"1e3, 1e4, 1e5+): the least-p reached row, else the failed attempt with the greatest gain, else {EMPTY}. "
             + "; ".join(parts) + f". {n} of {len(cov)} cells {EMPTY}."
             + (f" {len(refused)} valid checkpoints refused by te_core.formalism, never scored "
-               f"({frontier_fit.refusals(refused)})." if refused else ""))
+               f"({frontier_fit.refusals(refused)})." if refused else "")
+            + (f" {unmeasured} {'row' if unmeasured == 1 else 'rows'} unmeasured under reading A, in no decade."
+               if unmeasured else ""))
 
 
 def headline(p: dict) -> str:
@@ -561,7 +586,7 @@ def figure(p: dict, out: Path) -> Path:
             best = min(reached, key=lambda d: d["p"] * d["rho_default"])
             ax.plot(best["p"], best["rho_default"], "o", mfc="none", mec="red", ms=11)
             ax.set_title(f"gain {g:g}: {len(reached)} reached, {len(mine) - len(reached)} not"
-                         + (f" ({unplotted} more, infinite rho or no p)" if unplotted else "")
+                         + (f" ({unplotted} more: rho infinite or unmeasured, or no p)" if unplotted else "")
                          + f";\nleast S {best['p'] * best['rho_default']:.3g} ({best['start']}, {best['method_key']})",
                          fontsize=8)
         elif at:
@@ -639,7 +664,8 @@ def main(argv=None) -> int:
     (tables / f"{NAME}.json").write_text(json.dumps(p, allow_nan=False) + "\n")
     (tables / "coverage.json").write_text(json.dumps(own, allow_nan=False, indent=1) + "\n")
     (tables / "refused.json").write_text(json.dumps(d["refused"], indent=1, sort_keys=True) + "\n")
-    (tables / "coverage.md").write_text(coverage_md(own, info["fits"], p["updated_at"], d["refused"]))
+    (tables / "coverage.md").write_text(coverage_md(own, info["fits"], p["updated_at"], d["refused"],
+                                                    unmeasured_rows(p)))
     served = {}
     if a.publish:
         try:
@@ -650,7 +676,7 @@ def main(argv=None) -> int:
             return 1
     pub, fpub, held = guarded(p, fp, served)
     cov = own if pub is p else coverage(pub)
-    md = coverage_md(cov, info["fits"], p["updated_at"], d["refused"])
+    md = coverage_md(cov, info["fits"], p["updated_at"], d["refused"], unmeasured_rows(pub))
     art = store(tables, {"what": f"{PANEL} uncut, its coverage and {frontier_fit.PANEL} (te_core.algorithm_policy)",
                          "rows": len(p["rows"]), "source": source}) if a.publish else None
     q = cut(pub, art, held)
@@ -671,7 +697,7 @@ def main(argv=None) -> int:
           + f"){f' ({art})' if art else ''}; console {len(q['rows'])} rows, {len(console.body(q))} bytes, note "
           f"{len(q['note'])} characters" + (f", served rows kept on {held}" if held else "")
           + f" -> {a.out}: tables/, console/{NAME}.json, console/{frontier_fit.NAME}.json, {png.name}")
-    print("board: " + board_line(cov, info["fits"], p["updated_at"], art, d["refused"])
+    print("board: " + board_line(cov, info["fits"], p["updated_at"], art, d["refused"], unmeasured_rows(pub))
           + (f" Kept as served: {held}." if held else ""))
     if a.publish:
         status = []
