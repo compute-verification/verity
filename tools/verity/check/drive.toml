@@ -46,7 +46,7 @@ after_landing_shards = 3
 # list --json --kind after-landing`) enqueued too, at priority 1, and its verdicts compared with the run's, a record per tip
 # that `research queue shadow-report` prints; "on" (once 3 tips in a row agree fully) launches no run: the executor's verdicts
 # alone verify the tip, and `main` follows once every task passed
-executor = "off"
+executor = "shadow"
 # the most review-landing Lean checks running at once: one, and those stacked above it on `next` for Lean changes it doesn't hold
 max_lean_checks = 10
 # a sync merges PRs that change no Lean below Lean changes, so they don't wait for a Lean check (members on `next` never move)
