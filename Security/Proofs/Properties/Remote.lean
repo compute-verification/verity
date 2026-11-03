@@ -255,7 +255,6 @@ theorem stage_registered_at {p : SampledProofs.OneStage.Params} {c : SampledProo
     {prof : Integrity} (h : SampledProofs.OneStage.checkAt p c ξ e = .accept pub prof) :
     Properties.SampledProofs.R2 c.record p.verifier := by
   unfold SampledProofs.OneStage.checkAt at h
-  beta_reduce at h
   split at h
   · cases h
   · obtain ⟨law, d, n, hreg, -⟩ := Properties.SampledProofs.acceptMeans _ _ _ _ _ h
@@ -282,9 +281,11 @@ theorem stage_zk_registered {p : SampledProofs.OneStageZk.Params} {c : SampledPr
   · unfold SampledProofs.OneStageZk.checkBlobsAt at h
     split at h
     · cases h
-    · split at h
-      · next hacc => exact stage_registered_at hacc
-      · cases h
+    · split at h <;> (try split at h) <;>
+        first
+          | exact stage_registered_at (by assumption)
+          | (subst_vars; exact stage_registered_at (by assumption))
+          | simp at h
   · cases h
 
 /-- The recursive audit accepts only where one-stage v1 accepts on the inner statement's params, with the verdicts
