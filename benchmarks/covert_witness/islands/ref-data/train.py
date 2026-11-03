@@ -95,10 +95,12 @@ def gather_selects(n: int, bits: int = 32, chunk_bits: int = 10) -> int:
 def pass_flops(rec: dict, trainable: dict, lookup: int, op: str, ctx: int, n_tokens: int) -> int:
     """The FLOPs the harness counts for a pass of n_tokens: prepare.train_flops, plus what it leaves out. `lookup` is a
     trained table's token lookup (2 x gather_selects(V) x d a token, te_core's gather_macs; 0 for θ's own table), in
-    every pass. Attention: prepare prices the causal half of the score matrix (attention_flops), the harness the whole
-    of it, with a backward of 2.5x its forward, so one more attention_flops a layer in the forward and three more a
-    layer the backward reaches."""
+    every pass. Attention: a prepare with attention_macs prices it as the harness counts it; an older one prices the
+    causal half of the score matrix (attention_flops), the harness the whole of it, with a backward of 2.5x its
+    forward, so one more attention_flops a layer in the forward and three more a layer the backward reaches."""
     tf = prepare.train_flops(rec, trainable, [{"op": op, "tokens": n_tokens, "ctx": ctx}])
+    if hasattr(prepare, "attention_macs"):
+        return tf["flops"] + lookup * n_tokens
     first = tuple(tf["lowest_trained"] or ()) if op == "train" else ()
     n_layer = rec["config"]["n_layer"]
     reached = sum((layer, 1) >= first for layer in range(1, n_layer + 1)) if first else 0
