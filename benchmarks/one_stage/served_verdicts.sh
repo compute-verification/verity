@@ -95,7 +95,8 @@
 #     registration's members (V3C_LAW, default subset:1) and proves them; then `records_audit.py period` writes the audit
 #     as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json, and a copy in $OUT/v3c-audit: the
 #     registration, the Program, its answer and its free inputs), and V3c fails where it writes none. Under H1_TIE (below)
-#     the window commit is the one made at H1's close, its registration held to the record H1 bound, and none is made here.
+#     the window commit is the one made at H1's close, its registration held to the record H1 bound, and none is made here;
+#     V3c then runs before step 5's composite, whose one-stage and policy cases are its audit's.
 #     `served_verdicts.sh v3c` runs only that step on an
 #     existing serve dir (D and its window K set), the build first, its limits 120m and 180m. V3C_CLASS set empty leaves
 #     V3c out of the run, for a `served_verdicts.sh v3c` started once the window's advice is written.
@@ -144,7 +145,9 @@
 # PROVER/key --law V3C_LAW` within V3C_TIMEOUT (then default 60m, at most 90m), whose registration R, chained right after
 # H1's W, H1 names as the window's Commit record (`serve_tie`). Its output stays in the serve dir's h1/w<k>/. H1's sessions
 # are reserved for the gate's default 120 minutes, the window's sample session at the serve's start, and the sample coin
-# waits for R. Step 6 then audits that commit and makes none of its own: a window H1 bound no R for has no V3c. The
+# waits for R. Step 6 then audits that commit and makes none of its own: a window H1 bound no R for has no V3c. It runs
+# before the composite, which composes the cases on R: V3c's audit's, the policy's (its log the serve's h1/log.jsonl)
+# and PoUW's period case once each of its windows names R (`served_cases.py`). The
 # preflight refuses H1_TIE on a tree whose window-commit takes no --window-registration.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
@@ -836,11 +839,14 @@ TPY=$TREE/.venv/bin/python
   --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" 2>&1 | publish_lines
 rec=${PIPESTATUS[0]}
 private_pieces
+# 6. V3c after the record, each step within its limit: it gates nothing. Under H1_TIE it comes before the composite,
+# whose one-stage and policy cases are its audit's of the record H1 bound.
+v3c_done=$SPLIT
+if [ -z "$v3c_done" ] && [ -n "${H1_TIE:-}" ]; then v3c_commit && v3c_proved; v3c_done=1; fi
 comp=0
 [ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
 measure
-# V3c after the record, each step within its limit: it gates nothing
-if [ -n "$SPLIT" ]; then :
+if [ -n "$v3c_done" ]; then :
 elif [ -n "$V3C" ]; then v3c_commit && v3c_proved
 else say "V3C: not in this run (V3C_CLASS empty): \`served_verdicts.sh v3c\` runs it on the serve dir"; fi
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
