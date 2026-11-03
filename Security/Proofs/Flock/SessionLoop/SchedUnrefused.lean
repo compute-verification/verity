@@ -1,4 +1,5 @@
 import Proofs.Flock.SessionLoop.PcsRank
+import Proofs.Flock.SessionLoop.RhoUnrefused
 
 /-!
 # No refusal shows at a rep's scheduled rounds
@@ -10,7 +11,7 @@ check `LeanRelease.rank_unrefused_sched` reads, in `PcsRank`) and at `ρ₁`'s c
 `β` round:
 
 * **`LeanRelease.rho_unrefused_sched`**: on a live history past rep `2j + r`'s `ρ₁` round, its pair coins are
-  independent.
+  independent (`LeanRelease.rho_unrefused_sched_pf`, in `RhoUnrefused`).
 * **`LeanRelease.unrefused_of_rank`**: on a live history whose next round is one of rep `q`'s up to its `β` round, no
   refusal shows by that round where rep `q`'s rank check holds once its round is reached: an outer coin, an earlier
   rep's throw and a later rep's are `unrefused_prefix`'s cases, and rep `q`'s pair is `rho_unrefused_sched`'s.
@@ -46,8 +47,8 @@ theorem rho_unrefused_sched (T : ZKMal.CoinLayer.TableData)
     (hr : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false)
     {j r : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (hN : Masked.rhoSlot x j r + 1 < ops.length) :
     _root_.Flock.Zk.rhoIndependent (Masked.rhoAt (x := x) ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x)
-      (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) j r) = true := by
-  sorry
+      (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) j r) = true :=
+  rho_unrefused_sched_pf T L₀ real wk x w hx hSv ρ κ m₀ ρ₀ ops hl hlive hr hj hr2 hN
 
 /-- **No refusal shows at a rep's scheduled rounds where its rank check holds**: on a live history of at most `refK x`
 openings whose last coins the frame takes, whose next round is rep `q`'s, from its first up to its `β` round, where rep
