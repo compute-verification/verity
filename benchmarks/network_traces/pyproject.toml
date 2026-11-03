@@ -16,6 +16,23 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_active_replay.py",
+    "tests/test_certified_io_abort.py",
+    "tests/test_certifier_piece.py",
+    "tests/test_certifier_serve.py",
+    "tests/test_chain_record.py",
+    "tests/test_compact_eos_phase12.py",
+    "tests/test_compact_phase10.py",
+    "tests/test_covert.py",
+    "tests/test_leak_guard.py",
+    "tests/test_negatives.py",
+    "tests/test_out_request_values.py",
+    "tests/test_replay.py",
+    "tests/test_served_session.py",
+    "tests/test_wipe_gate.py",
+]
 # record.py's mixes are workloads of the vLLM integration, which test_record loads; the auditor host's gate runs
 # warden_serve.py's rehearsal, which test_warden_serve holds it to. compile_slice_zk's engine class is vLLM 8eb1's trace
 # header, read through the encodings' replay (with the modules `_encodings` loads beside it); the trace is in the
@@ -54,3 +71,26 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "examples/h200/interfaces/verity_e2e_demo/__init__.py", "benchmarks/one_stage/served_verdicts.py",
           "examples/h200/interfaces/tests/fixtures/block-record-r2-period0.json",
           "verity/core/protocols/network/tests/period_case.py", "verity/core/difftest/python/verity_difftest"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_block_certifier.py"]
+paths = ["verity"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_certifier_piece.py"]
+paths = ["benchmarks/network_traces"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_compact_phase10.py"]
+paths = ["verity/core/protocols/certifier/tests"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_compile_slice_zk.py"]
+paths = ["benchmarks/network_e2e/encodings", "verity/core/protocols/certifier"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_demo_stub.py"]
+paths = ["integrations/vllm/verity_vllm/pipeline"]

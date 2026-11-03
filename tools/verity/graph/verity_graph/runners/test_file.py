@@ -8,12 +8,14 @@ module as its source) and the Pythons its tests start; the runner holds them to 
 file its env's spec names and, when the task reads the fixture registry, of no registered fixture is an undeclared read, which
 makes the run an error. A directory opened is no read, nor is a name that is no file of the tree, nor a file under the work
 directory. A file git ignores that no fixture is (a build's lock or output, under `.lake`) is none the graph lists, so no
-input a key could hold: it is `detail.ignored`. Programs that aren't Python read what no tracer sees: they are
-`detail.untraced`. Both are facts the check can't hold the task to.
+input a key could hold: it is `detail.ignored`. Programs that aren't Python, or a Python that doesn't trace itself, read what no
+tracer sees: they are `detail.untraced`, and an error unless the task is keyed on its suite's whole tree (`vars` `untraced` =
+`suite`: its suite's `[tool.verity.tests] untraced` names the file), or they are compilers (`COMPILERS`) and its closure builds
+native code (`compilers`).
 
 Its status: pytest's exit 0, or 5 when the file holds no test to run, is a pass; 1 (a test failed) and 2 (collecting failed, or
-a `pytest.exit`) are a fail; death by a signal, any other exit, no guard report, a Python started that couldn't trace itself, and
-fixtures that couldn't be fetched are an error. `detail` holds the guard's counts (passed, failed, skipped and errors, a
+a `pytest.exit`) are a fail; death by a signal, any other exit, no guard report, a Python started that couldn't trace itself, an
+untraced program in a task not keyed on its suite's tree, and fixtures that couldn't be fetched are an error. `detail` holds the guard's counts (passed, failed, skipped and errors, a
 setup's or teardown's), pytest's exit, the failed tests' node ids and the untraced programs."""
 from __future__ import annotations
 
@@ -44,6 +46,8 @@ THREAD_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NU
 #: pytest's exits that are results: every test passed, or none was collected; a test failed, or collecting stopped
 PASS, FAIL = (0, 5), (1, 2)
 REPORT, READS = "guard.json", "guard.reads"
+#: what a task whose closure builds native code may start (`vars` `untraced` = `compilers`): it reads the sources beside the module
+COMPILERS = frozenset({"g++", "gcc", "c++", "cc", "clang", "clang++", "nvcc", "ninja"})
 
 _spec = importlib.util.spec_from_file_location("verity_suite_reads", CHILD / "verity_suite_reads.py")
 _reads = importlib.util.module_from_spec(_spec)
@@ -87,9 +91,11 @@ def fixtures(task: dict, tests: dict) -> list[str]:
 
 
 def environment(task: dict, tests: dict, work: Path, suite: Path) -> dict[str, str]:
-    """The test process's environment: this one's less `DROP`, thread pools sized to the task's cores, a git identity (tests commit
+    """The test process's environment: this one's less `DROP`, this Python's directory first on the PATH (a test's `python3` is the
+    workspace's, as under `uv run`, which runs `suites.py`), thread pools sized to the task's cores, a git identity (tests commit
     in throwaway repositories), and the guard's variables, which declare no inputs to it."""
     env = {k: v for k, v in os.environ.items() if not k.startswith(DROP_PREFIXES) and k not in DROP}
+    env["PATH"] = os.pathsep.join([str(Path(sys.executable).parent), *filter(None, [env.get("PATH")])])
     for v in THREAD_VARS:
         env.setdefault(v, str(max(1, int(task["resources"]["cores"]))))
     for k in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"):
@@ -131,11 +137,21 @@ def verdict(task: dict, rc: int, work: Path, tmp: Path, oom: bool) -> dict:
     why = (f"pytest died by {signal.Signals(-rc).name}" + (" when the kernel killed a process for memory" if oom else "")
            if rc < 0 else "the read guard wrote no report" if rep is None
            else f"a Python its tests started couldn't trace its reads: {blind[0]}" if blind
+           else (f"its tests started programs the read guard can't trace ({', '.join(detail['untraced'][:4])}): name the file "
+                 "under its suite's `[tool.verity.tests] untraced`, which keys it on the suite's whole tree, or give the test a "
+                 "stand-in") if untraced and not allowed(task, untraced)
            else None if rc in PASS + FAIL else f"pytest exited {rc}")
     if why:
         detail["error"] = why
     status = "error" if why else "pass" if rc in PASS else "fail"
     return {"status": status, "detail": detail, "undeclared_reads": reads}
+
+
+def allowed(task: dict, untraced: set[str]) -> bool:
+    """Whether the task may start the untraced programs ``untraced``: any when it is keyed on its suite's whole tree, compilers
+    when its closure builds native code."""
+    keyed = task["vars"].get("untraced")
+    return keyed == "suite" or keyed == "compilers" and all(Path(p).name in COMPILERS for p in untraced)
 
 
 def undeclared(task: dict, opened: set[str], scratch: list[Path]) -> tuple[list[str], list[str]]:
