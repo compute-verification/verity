@@ -26,9 +26,9 @@ notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields
 the public's ``scans[i]``), ℓ_{a,i} (``free``), k_{skip,i} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
 the jitter (``jitter``). They sum to K, by which `NetTiming.Guarantees.PeriodLeakAccepted` bounds what the serving node
 sends past its committed program except with δ_net, the answer's ``eps`` (`DELTA_NET_BESIDE`). K is that statement's
-count as proved, a known overcount (`OVERCOUNT`); ``connections`` is how many connections k_sched and k_fail count
-(`CONNECTIONS`), saying so when a case's caps name none (`NO_CONNECTIONS`). A public whose terms don't sum to K, or
-that isn't the rows form, is the bound's ``error``. Beside the bound, ``advice_charge``: the served run's realized
+count as proved, a known overcount (`OVERCOUNT`); ``connections`` is how many connections k_sched and k_fail count,
+every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's caps aren't those. A public whose terms
+don't sum to K, or that isn't the rows form, is the bound's ``error``. Beside the bound, ``advice_charge``: the served run's realized
 advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet), and ``measured`` is
 honest serving's, measured on a test run with public inputs (`advice_charge.py`'s record, ``--advice-charge``) and
 labelled as that run's, never a figure of this one.
@@ -82,18 +82,19 @@ ADVICE = ("not in this record: the realized advice length |a_j| is a value. The 
           "the compiler's cap in its place (`served_verdicts.py public_registration`), but each window's advice is "
           "committed and compiled at its own length, so |a_j| is hidden only once it is padded to ℓ_a before it is "
           "committed; the bound charges ℓ_{a,i}, the registered width")
-OVERCOUNT = ("a known overcount, proved and larger than necessary: each connection's cell count is charged twice, in "
+OVERCOUNT = ("a known overcount, proved and larger than necessary: k_sched and k_fail charge every connection the "
+             "schedule can carry (`Schedule.caps`), whatever the traffic, and each connection's cell count twice, in "
              "k_sched (its lane's length, #S_s ≤ ∏_c (cap_c + 1)) and in k_fail (its fail cell's position), which in a "
              "run coincide; K is PeriodLeakAccepted's count as it states it")
-CONNECTIONS = ("the caps of the certifier's case's params (``cells``), one a connection: the network certifier holds each "
-               "lane to its schedule's egress_cells, and the period's check reads the caps as given")
-NO_CONNECTIONS = ("the case's params give no caps, so k_sched and k_fail are 0: K counts no connection's schedule or "
-                  "fail cell")
+CONNECTIONS = ("the caps of the certifier's case's params (``cells``), one a connection: the period's check refuses any "
+               "but its schedule's (`NetworkCheck.Period.Schedule.caps`), egress_cells for each of the lanes · m · T "
+               "connections the network certifier can carry over the period's m execution phases, so this counts the "
+               "connections the schedule can carry, not those served")
 DELTA_NET_BESIDE = "the scans' knowledge and collision errors, which eps doesn't count"
 RULES = {
     "node": "the run's per execution phase times the period's execution phases, ⌈seconds / (T·τ)⌉, each as the run's at "
             "its load: ℓ_{a,i}, k_{skip,i} and the jitter scale with the phases, and k_sched and k_fail, "
-            "⌈log2(cap_c + 1)⌉ each a connection, with the connections, at the run's connections a phase",
+            "⌈log2(cap_c + 1)⌉ each a connection, with the connections, at the schedule's lanes · T a phase",
     "datacenter": "the node's times the census's reference datacenter's machines, one network certifier on each "
                   "machine's uplink",
     "world": "the node's times the world's links: the adversary resource model's compute over its monitoring period, at "
@@ -185,14 +186,20 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
 
 def schedule(case: Mapping[str, Any], phases: int) -> tuple[Fraction, int]:
     """An execution phase's seconds, T buckets of τ (the case's ``schedule``), and the connections its caps count
-    (``cells``), the case's period held to the answer's phases where its params keep ``windows``."""
+    (``cells``), the case's period held to the answer's phases where its params keep ``windows`` and its caps to its
+    schedule's over them (`CONNECTIONS`)."""
     params = case["params"]
     if "windows" in params and int(params["windows"]) != phases:
         raise ValueError(f"the case's period has {params['windows']} execution phases, and its answer {phases}")
     s, caps = params["schedule"], params["cells"]
     if not isinstance(caps, list):
         raise TypeError(f"the case's cells are its caps, a list, not {type(caps).__name__}")
-    return Fraction(int(s["window"]) * int(s["bucket_ms"]), 1000), len(caps)
+    n = int(s["lanes"]) * phases * int(s["window"])
+    if caps != [int(s["egress_cells"])] * n:
+        raise ValueError(f"the case's {len(caps)} caps aren't its schedule's (Schedule.caps: egress_cells = "
+                         f"{s['egress_cells']} for each of its lanes · m · T = {n} connections), which the period's "
+                         "check refuses")
+    return Fraction(int(s["window"]) * int(s["bucket_ms"]), 1000), n
 
 
 def census() -> dict[str, Any]:
@@ -286,7 +293,7 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     except (KeyError, TypeError, ValueError) as e:
         b["connections"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
         return rec | {"periods": {"error": f"{CASE}: {type(e).__name__}: {e}"}}
-    b["connections"] = {"count": connections, "from": CONNECTIONS} | ({} if connections else {"none": NO_CONNECTIONS})
+    b["connections"] = {"count": connections, "from": CONNECTIONS}
     return rec | {"periods": periods(b["K"], Fraction(b["delta_net"]), b["phases"], phase_s, connections)}
 
 

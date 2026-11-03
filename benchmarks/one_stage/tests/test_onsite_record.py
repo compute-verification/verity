@@ -1,7 +1,8 @@
 """`onsite_record.py` on toy served runs' $OUTs. A run whose network certifier, PoUW and composites are missing, as a
 rehearsal's, records each of them missing with its why, and no bound and no period figure. A run whose network
 certifier accepted in the rows form records K term by term in the notation table's symbols, each naming the public
-fields it sums, with its overcount and the connections its caps count, its run's own period proved, and each monitoring
+fields it sums, with its overcount and the connections its schedule's caps count (other caps are the connections'
+error), its run's own period proved, and each monitoring
 period's node, datacenter and world scaled from it at the execution phase its case's schedule gives, each naming its
 rule and parameters, beside its figure over one execution phase. A public whose terms don't sum to K, or in the clock
 form, is the bound's error. The served run's advice charge stays out of the record, and a test run's measurement is
@@ -9,6 +10,7 @@ stated beside the bound as that run's. The run's `publish` leaves the record as 
 every verdict, the onsite composite's included, accepted."""
 from __future__ import annotations
 
+import dataclasses
 import json
 import math
 import sys
@@ -27,9 +29,11 @@ import leak_bounds as LB  # noqa: E402
 NODE = "computeinstance-toy"
 SCAN = {"delta": "1/1048576", "drawn": 126, "units": 126, "wrong_units": 0, "free": 9088, "faulty_sets": 0,
         "faulty_bits": 0, "faulty_entries": 0, "jitter": 63}
-#: two connections of cap 4 (⌈log2 5⌉ = 3 each, as cells and again as schedules) and one execution phase's scan
-PUBLIC = {"K": 6 + 6 + 9088 + 63, "audits": [{"delta": "1/100", "drawn": 2, "units": 1024, "wrong_units": 0}],
-          "cells": 6, "eps": "1/1048576", "scans": [SCAN], "schedules": 6, "windows": 1}
+#: the schedule's 4 · 63 connections of cap 4 (⌈log2 5⌉ = 3 each, as cells and again as schedules) and one execution
+#: phase's scan
+PUBLIC = {"K": 756 + 756 + 9088 + 63, "audits": [{"delta": "1/100", "drawn": 2, "units": 1024, "wrong_units": 0}],
+          "cells": 756, "eps": "1/1048576", "scans": [SCAN], "schedules": 756, "windows": 1}
+K = PUBLIC["K"]
 #: T = 63 buckets of 20 ms: an execution phase of 63/50 s
 SCHEDULE = {"bucket_ms": 20, "cell_bytes": 512, "delay": 4, "egress_cells": 4, "every": 63, "ingress_buckets": 63,
             "ingress_cells": 4, "lanes": 4, "queue": 16, "slots": 8, "window": 63}
@@ -80,11 +84,16 @@ def remote_composite(verdict: str = "accept") -> dict:
             "verdict": {"id": OR.REMOTE, "verdict": verdict}}
 
 
-def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: tuple[int, ...] = (4, 4)) -> Path:
+def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list[int] | None = None,
+             schedule: dict = SCHEDULE) -> Path:
+    """A run whose network certifier accepted ``public``, its case the period's of ``windows`` execution phases at
+    ``schedule``, whose caps are the schedule's (`Schedule.caps`) unless given."""
     pouw = {"protocol": "verity/pouw/period/v1", "owner": "compute-accounting", "verdict": "accept", "reason": None}
+    if caps is None:
+        caps = [schedule["egress_cells"]] * (schedule["lanes"] * windows * schedule["window"])
     return served_out(tmp_path, network=network_row(public), work=pouw,
                       case={"commitment": "00", "evidence": "00",
-                            "params": {"windows": windows, "cells": list(caps), "schedule": SCHEDULE}},
+                            "params": {"windows": windows, "cells": caps, "schedule": schedule}},
                       composites={"remote": remote_composite()})
 
 
@@ -123,31 +132,51 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
     rec = OR.record(accepted(tmp_path))
     b = rec["bound"]
     assert (b["K"], b["phases"], b["delta_net"], b["statement"]) == (
-        9163, 1, "1/1048576", "NetTiming.Guarantees.PeriodLeakAccepted")
+        K, 1, "1/1048576", "NetTiming.Guarantees.PeriodLeakAccepted")
     assert [(t["symbol"], t.get("phase"), t["bits"], t["lean"]) for t in b["terms"]] == [
-        ("k_{sched}", None, 6, ["schedules"]), ("k_{fail}", None, 6, ["cells"]),
+        ("k_{sched}", None, 756, ["schedules"]), ("k_{fail}", None, 756, ["cells"]),
         ("\\ell_{a,i}", 0, 9088, ["scans[0].free"]),
         ("k_{skip,i}", 0, 0, ["scans[0].faulty_sets", "scans[0].faulty_bits", "scans[0].faulty_entries"]),
         ("k_i \\log_2 d_{jit}", 0, 63, ["scans[0].jitter"])]
     assert sum(t["bits"] for t in b["terms"]) == b["K"]
     assert b["overcount"] == OR.OVERCOUNT and "k_sched" in b["overcount"] and "k_fail" in b["overcount"]
-    assert b["connections"] == {"count": 2, "from": OR.CONNECTIONS}
+    assert b["connections"] == {"count": 4 * 63, "from": OR.CONNECTIONS}
     assert rec["placement"] == {"trusted-host": "the certifier on the gate's host"}
 
 
-def test_a_case_with_no_caps_says_k_sched_and_k_fail_count_no_connection(tmp_path):
-    none = dict(PUBLIC, K=9088 + 63, cells=0, schedules=0)
-    b = OR.record(accepted(tmp_path, none, caps=()))["bound"]
-    assert b["K"] == 9151 and b["connections"] == {"count": 0, "from": OR.CONNECTIONS, "none": OR.NO_CONNECTIONS}
+def test_w63k4_at_a_4_s_tick_charges_768_bits_a_link_window_for_its_128_connections_whatever_the_traffic(tmp_path):
+    """Three execution phases of w63k4's schedule at a 4 s tick: its 4 lanes over T = 32 buckets carry at most 128
+    connections a phase, each capped at 5 egress cells, so k_sched and k_fail charge 128 · ⌈log2 6⌉ = 384 bits a phase
+    each, the period's check's terms however few connections were served."""
+    sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
+    import scan_zk as SZ
+    schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
+    public = dict(PUBLIC, K=3 * (768 + 9088 + 63), cells=3 * 384, schedules=3 * 384, windows=3, scans=[SCAN] * 3)
+    rec = OR.record(accepted(tmp_path, public, windows=3, schedule=schedule))
+    b = rec["bound"]
+    assert [t["bits"] for t in b["terms"] if t.get("phase") is None] == [1152, 1152]
+    assert b["connections"] == {"count": 3 * 128, "from": OR.CONNECTIONS}
+    assert (rec["periods"]["phase_s"], rec["periods"]["run"]["seconds"]) == ("128", "384")
+    assert rec["periods"]["week"]["node"]["parameters"]["connections"] == str(128 * math.ceil(7 * 86400 / 128))
+
+
+@pytest.mark.parametrize("caps", [[], [4, 4], [5] * (4 * 63)])
+def test_a_case_whose_caps_arent_its_schedules_is_the_connections_error(tmp_path, caps):
+    """The period's check refuses caps that aren't the schedule's (`Schedule.caps`), an empty list included, so a
+    case's other caps beside an accepted answer leave the connections and the periods unfilled."""
+    rec = OR.record(accepted(tmp_path, caps=caps))
+    why = (f"{OR.CASE}: ValueError: the case's {len(caps)} caps aren't its schedule's (Schedule.caps: egress_cells = 4 "
+           "for each of its lanes · m · T = 252 connections), which the period's check refuses")
+    assert rec["bound"]["K"] == K and rec["bound"]["connections"] == {"error": why} and rec["periods"] == {"error": why}
 
 
 def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one_phase(tmp_path):
     p = OR.record(accepted(tmp_path))["periods"]
     phase = Fraction(63 * 20, 1000)
-    one = {"bits": 9163, "share": 9163 / LB.WEIGHTS.bits, "eps": "1/1048576", "vacuous": False, "how": "proved",
+    one = {"bits": K, "share": K / LB.WEIGHTS.bits, "eps": "1/1048576", "vacuous": False, "how": "proved",
            "statement": LB.STATEMENTS["per_period"]}
     assert p["phase_s"] == str(phase) and p["run"] == one | {
-        "seconds": str(phase), "phases": 1, "connections": 2, "per_phase": one}
+        "seconds": str(phase), "phases": 1, "connections": 252, "per_phase": one}
     links = {"node": 1, "datacenter": LB.datacenter_links(), "world": LB.world_links()}
     census = {"datacenter": "dc-12500-machines-600s", "world": ["world-inference-2027", "dc-12500-machines-600s"]}
     for name, seconds in LB.PERIODS.items():
@@ -155,12 +184,12 @@ def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one
         assert (p[name]["seconds"], p[name]["phases"]) == (seconds, w)
         for where, n in links.items():
             c = p[name][where]
-            assert (c["bits"], c["eps"], c["how"], c["rule"]) == (9163 * w * n, str(Fraction(1, 2 ** 20) * w * n),
+            assert (c["bits"], c["eps"], c["how"], c["rule"]) == (K * w * n, str(Fraction(1, 2 ** 20) * w * n),
                                                                   "scaled", where)
-            assert c["vacuous"] == (w * n >= 2 ** 20) and c["share"] == 9163 * w * n / LB.WEIGHTS.bits
-            assert c["parameters"] == {"phases": w, "phase_s": str(phase), "connections": str(2 * w * n), "links": n,
+            assert c["vacuous"] == (w * n >= 2 ** 20) and c["share"] == K * w * n / LB.WEIGHTS.bits
+            assert c["parameters"] == {"phases": w, "phase_s": str(phase), "connections": str(252 * w * n), "links": n,
                                        **({"census": census[where]} if where in census else {})}
-            assert c["per_phase"] == {"bits": 9163 * n, "share": 9163 * n / LB.WEIGHTS.bits,
+            assert c["per_phase"] == {"bits": K * n, "share": K * n / LB.WEIGHTS.bits,
                                       "eps": str(Fraction(n, 2 ** 20)), "vacuous": n >= 2 ** 20, "how": "scaled",
                                       "statement": OR.STATEMENTS[where]}
             assert c["rule"] in p["rules"]
@@ -170,11 +199,11 @@ def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one
 def test_a_scaled_cell_over_several_phases_rounds_up(tmp_path):
     two = dict(PUBLIC, K=PUBLIC["K"] + 9088 + 63 + 1, eps="1/524288", windows=2,
                scans=[SCAN, dict(SCAN, faulty_sets=1)])
-    p = OR.record(accepted(tmp_path, two, windows=2, caps=(4, 4, 4)))["periods"]
+    p = OR.record(accepted(tmp_path, two, windows=2))["periods"]
     w = math.ceil(Fraction(LB.PERIODS["month"]) / Fraction(63, 50))
     assert w % 2 and p["run"]["bits"] == two["K"] and p["run"]["per_phase"]["how"] == "scaled"
     assert p["month"]["node"]["bits"] == math.ceil(Fraction(two["K"], 2) * w) != Fraction(two["K"], 2) * w
-    assert p["month"]["node"]["parameters"]["connections"] == str(Fraction(3, 2) * w)
+    assert p["month"]["node"]["parameters"]["connections"] == str(252 * w)
     assert p["run"]["per_phase"]["bits"] == math.ceil(Fraction(two["K"], 2))
 
 
@@ -185,7 +214,7 @@ def test_a_case_of_another_period_or_none_leaves_the_periods_unfilled(tmp_path):
     assert rec["periods"] == {"error": why} and rec["bound"]["connections"] == {"error": why}
     (out / OR.CASE).unlink()
     rec = OR.record(out)
-    assert rec["bound"]["K"] == 9163 and rec["periods"] == {
+    assert rec["bound"]["K"] == K and rec["periods"] == {
         "missing": f"no {OR.CASE}: the execution phase's length is its params' schedule"}
 
 
@@ -208,7 +237,7 @@ def test_the_published_form_which_drops_windows_gives_the_same_record(tmp_path):
 
 
 @pytest.mark.parametrize("public, why", [
-    (dict(PUBLIC, K=PUBLIC["K"] + 1), "K is 9164, and its terms sum to 9163"),
+    (dict(PUBLIC, K=K + 1), f"K is {K + 1}, and its terms sum to {K}"),
     ({k: v for k, v in PUBLIC.items() if k != "scans"}, "not NetworkCheck.Period's rows form"),
     (dict(PUBLIC, scans=[{k: v for k, v in SCAN.items() if k != "faulty_entries"}]),
      "the rows form's public lacks a term: KeyError: 'faulty_entries'"),
