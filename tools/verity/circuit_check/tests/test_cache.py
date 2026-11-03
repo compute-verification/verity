@@ -454,19 +454,20 @@ BARE = HARNESS.replace("CC.trace(root)", "import types\n"
 def test_a_module_whose_file_is_a_bare_name_names_no_file_wherever_the_check_runs(tmp_path):
     """Resolved against the working directory, a bare ``__file__`` would be a module imported from outside the tree for a check
     run outside it (storing nothing) and a file of the tree for one run at its root, so where a check ran would decide whether
-    its verdict is stored and what it holds.  It names no file: stored from either, reused from the other, and no entry holds
-    it, nor where `inspect` looked for its source from the tree's root."""
+    its verdict is stored and what it holds.  It names no file: stored from either and reused from the other, each target
+    holds the same reads from both, and none of them is it, nor where `inspect` looked for its source from the tree's root."""
     root, elsewhere = _tree(tmp_path / "tree"), tmp_path / "elsewhere"
     elsewhere.mkdir()
     _edit(root, "syn/check.py", "from syn import reg", "from syn import reg\n    import syn_bare  # noqa: F401")
     assert BARE != HARNESS
+    held = []
     for first, then in ((elsewhere, root), (root, elsewhere)):
         shutil.rmtree(root / "cache", ignore_errors=True)
         assert _run(root, BARE, cwd=first)["hits"] == [], first
-        for t in ("SynTop_v1", "SynOther_v1"):
-            reads = _entry(root, t)["reads"]
-            assert not [f for f in [*reads["files"], *reads["probes"]] if "_bare" in f or "<" in f], (first, reads)
+        held.append({t: _entry(root, t)["reads"] for t in ("SynTop_v1", "SynOther_v1")})
         assert _run(root, BARE, cwd=then)["hits"] == ["SynOther_v1", "SynTop_v1"], then
+    assert held[0] == held[1], "what a check holds depends on where it ran"
+    assert not [f for r in held[0].values() for f in [*r["files"], *r["probes"]] if "_bare" in f or "<" in f], held[0]
 
 
 #: a C++ model of the synthetic tree, loaded as `_jit.Model` (its library built on first use, in `_jit.lib_path`)
