@@ -223,21 +223,54 @@ theorem oneRecord_of_strays {ss : List String} {cs : List Protocol} {ev : List C
     | none => rw [hc] at e; cases e
     | some d' => rw [hc] at e; cases e; rfl
 
+/-- A `mapM` of lists whose flattened entries past the first all have the first's second component: either `f` has no
+value on some entry, or every pair of every entry's value has that one. -/
+theorem one_of_flat {α : Type} {f : α → Option (List (String × ByteArray))} {l : List α}
+    (h : ∀ s d rest, (l.mapM f).map List.flatten = some ((s, d) :: rest) →
+      rest.find? (fun x => x.2 != d) = none) :
+    (∃ x ∈ l, f x = none) ∨ ∃ d, ∀ x ∈ l, ∃ ys, f x = some ys ∧ ∀ y ∈ ys, y.2 = d := by
+  cases hm : l.mapM f with
+  | none => exact Or.inl (mapM_none hm)
+  | some yss =>
+    have hall : ∀ d, (∀ y ∈ yss.flatten, y.2 = d) →
+        ∃ d, ∀ x ∈ l, ∃ ys, f x = some ys ∧ ∀ y ∈ ys, y.2 = d := by
+      intro d hd
+      refine ⟨d, fun x hx => ?_⟩
+      obtain ⟨ys, hys, e⟩ := mapM_some hm x hx
+      exact ⟨ys, e, fun y hy => hd y (List.mem_flatten.2 ⟨ys, hys, hy⟩)⟩
+    refine Or.inr ?_
+    cases hf : yss.flatten with
+    | nil => exact hall ByteArray.empty (by rw [hf]; intro y hy; exact absurd hy List.not_mem_nil)
+    | cons p rest =>
+      obtain ⟨s, d⟩ := p
+      have hr := h s d rest (by rw [hm]; simp [hf])
+      refine hall d ?_
+      rw [hf]
+      intro y hy
+      rcases List.mem_cons.1 hy with rfl | hy
+      · rfl
+      · have hb : (y.2 != d) = false := by simpa using List.find?_eq_none.1 hr _ hy
+        exact eq_of_bne_false hb
+
 theorem tied_of_strays {t : Tie} {ev : List Case} (h : t.strays ev = none) : Tied t ev := by
-  have h' := one_of_mapM (f := fun n => (named ev n).map (n.1, ·)) (l := t.names) (fun s d rest hm => by
-    have hm' : t.names.mapM (fun n : String × (ByteArray → Option ByteArray) =>
-        ((ev.find? fun (k : Case) => k.id == n.1).bind fun k => n.2 k.commitment).map (n.1, ·)) =
-        some ((s, d) :: rest) := hm
-    unfold Tie.strays at h
-    simp only [hm'] at h
-    simpa using h)
+  have h' := one_of_flat (f := fun n => (named ev n).map fun ds => ds.map (n.1, ·)) (l := t.names)
+    (fun s d rest hm => by
+      have hm' : (t.names.mapM (fun n : String × (Case → Option (List ByteArray)) =>
+          ((ev.find? fun (k : Case) => k.id == n.1).bind n.2).map fun ds => ds.map (n.1, ·))).map List.flatten =
+          some ((s, d) :: rest) := hm
+      unfold Tie.strays at h
+      simp only [hm'] at h
+      simpa using h)
   rcases h' with ⟨n, hn, e⟩ | ⟨d, hd⟩
   · exact Or.inl ⟨n, hn, by simpa using e⟩
   · refine Or.inr ⟨d, fun n hn => ?_⟩
-    obtain ⟨s, e⟩ := hd n hn
+    obtain ⟨ys, e, hys⟩ := hd n hn
     cases hc : named ev n with
     | none => rw [hc] at e; cases e
-    | some d' => rw [hc] at e; cases e; rfl
+    | some ds =>
+      rw [hc] at e
+      obtain rfl : ds.map (n.1, ·) = ys := by simpa using e
+      exact ⟨ds, rfl, fun x hx => hys (n.1, x) (List.mem_map.2 ⟨x, hx, rfl⟩)⟩
 
 theorem acceptSame : AcceptSame := by
   intro id ss cs ps c ev pub prof h

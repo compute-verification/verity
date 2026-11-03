@@ -16,15 +16,15 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
   declared division yet.
 
 PoUW's verdict on the served run credits nothing. The challenger's gate holds a development key, so every served PoUW
-run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case, the form
+run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case, the form
 remote's PoUW component reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
 
 `example.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
 is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
 session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
 errors. But the remote protocol has no guarantee in Lean for the demo to instantiate: `Verity.Soundness` is not in Lean
-yet, and remote's verifier reads one-stage v1, which takes the sessions' verdicts as evidence
-(`verity/core/protocols/remote/README.md`, "The open gap"). PoUW's proof layer needs `AcceptedLive`, which no served path
+yet, and no Lean statement carries the acceptance of remote's one-stage form, one-stage v2, which runs the proof check
+itself, to `SampledKSLiveV3`'s event (`verity/core/protocols/remote/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
 meets. Onsite's chain has a gap of its own: network certification's `NetTiming.Guarantees.SampledAuditAccepted` takes
 `Claims.Sampling.KS` as a hypothesis, and the theorem that gives it at the deployed record,
 `Claims.Sampling.sampling_assembled`, is not a lock guarantee and takes the verifier's own facts as hypotheses
