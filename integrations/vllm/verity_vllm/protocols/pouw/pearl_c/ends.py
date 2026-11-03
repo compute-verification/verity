@@ -45,8 +45,8 @@ class PassEnds:
     """`PearlCDeviceRun`'s pass ends, as its base class: the run's ``cur``, ``hashing``, ``kernel``, ``nb``, ``roots``,
     ``salt``, ``schedule``, ``leaves``, ``roots_buf``, ``flag_buf``, ``const_keys``, ``tree_hash``, ``details``,
     ``commits``, ``weights``, ``entry``, ``scheme``, ``coins``, ``opening``, ``salt_key``, ``device``, ``aside_ends``,
-    ``lag_ends``, ``_lagged`` and ``_weight_files``, and its ``stream``, ``join_sides``, ``begin``, ``settle``,
-    ``_end_aside`` and ``_ended``."""
+    ``lag_ends``, ``_lagged``, ``_weight_files``, ``shapes``, ``_graphs`` and ``_stages``, and its ``stream``,
+    ``join_sides``, ``begin``, ``settle``, ``_end_aside`` and ``_ended``."""
 
     #: the run's y trees on its device (`served_y.DeviceTrees`), made at the first retained call on it
     _y_trees: Any = None
@@ -184,6 +184,29 @@ class PassEnds:
         if y is not None:
             files["y"].update(rows=got[2], tree=got[3])
         cur.files.append(files)
+
+    def _poison_graphs(self, value: int) -> None:
+        """Every buffer the graphs write at `value`: each graph's y and leaves, and each stage, skipping those that hold it
+        from an earlier poison, which no call has taken since (a graph's call marks it, a forward replayed whole marks all)."""
+        import torch
+        for g in self._graphs.values():
+            if g.poisoned != value:
+                g.y.view(torch.uint8).fill_(value)
+                g.leaves.fill_(value)
+                g.poisoned = value
+        if self._stages and self._stages_poisoned != value:
+            for stage in self._stages.values():
+                for t in stage:
+                    t.view(torch.uint8).fill_(value)
+            self._stages_poisoned = value
+
+    def _unpoisoned(self) -> None:
+        """Every shape, graph and stage marked written (a forward replayed whole writes them without a call's Python)."""
+        for sh in self.shapes.values():
+            sh.poisoned = None
+        for g in self._graphs.values():
+            g.poisoned = None
+        self._stages_poisoned = None
 
     def _retain_stream(self, device: Any) -> Any:
         if self._retain_side is None:
