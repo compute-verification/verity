@@ -14,17 +14,21 @@ import torch
 from torch.fx.experimental.proxy_tensor import make_fx
 from torch.utils._python_dispatch import TorchDispatchMode
 
-from tests.program.train_step_lf import ADAMW, loss_fn, meta_step
+from tests.program.train_step_lf import ADAMW, loss_fn, meta_step, square_loss
 from verity.ml.circuits.boundary import gate_width
 from verity.ml.circuits.parts import Part, n_members
 from verity.ml.circuits.program import is_input
 from verity.ml.circuits.query_ast import GateSet, evaluate, parse
 from verity.ml.circuits.refs import runs as ref_runs
 from verity.ml.definitions.numerics.serve3_reference import materialize
+from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.derive_graph import derive_graph
+from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.outcomes import Unsupported
+from verity_vllm.program.frontend.program_identity import check_identity
+from verity_vllm.program.frontend.report import DeriveReport
 from verity_vllm.program.frontend.rules.training import training_rules
-from verity_vllm.program.frontend.rules.training_survey import holes
+from verity_vllm.program.frontend.rules.training_survey import survey, with_holes
 from verity_vllm.program.frontend.train_step import AdamW, export_step, in_bits_beyond_theta, step_program, step_report
 
 aten = torch.ops.aten
@@ -213,13 +217,47 @@ def _tiny_survey():
     return model, ex[2], step_report(model, loss_fn, opt, batch, survey=True, exported=ex)
 
 
-def test_tiny_step_survey_has_one_hole_and_theta_is_the_parameters() -> None:
-    model, layout, rep = _tiny_survey()
-    assert [(h["op"], h["reason"]) for h in holes(rep)] == [("aten._log_softmax.default", "numerics_unregistered")]
-    prog = rep.program
-    assert prog.theta == tuple(f"param_{n}".replace(".", "_") for n in layout.params)
+@functools.cache
+def _tiny_program():
+    """The tiny step with a loss that has no log (`square_loss`): a Program, every op derived."""
+    model, batch = meta_step("tiny", 2, ctx=16, vocab=64)
+    prog = step_program(model, square_loss, AdamW(**ADAMW), batch)
+    assert not isinstance(prog, Unsupported), prog
+    return model, prog
+
+
+def test_tiny_step_survey_lists_its_one_hole_and_holds_no_program() -> None:
+    model, layout, s = _tiny_survey()
+    assert [(h["op"], h["reason"]) for h in s.holes] == [("aten._log_softmax.default", "numerics_unregistered")]
+    assert s.holes[0]["fields"] == [f"hole0.0:{s.holes[0]['node']}"]
+    assert (s.unsupported.reason, s.unsupported.node) == ("numerics_unregistered", f"{s.holes[0]['node']}: aten._log_softmax.default")
+    assert not hasattr(s, "program") and not hasattr(s, "result") and s.refused is None
+    assert s.census["totals"]["gates"] > 0 and "F32Add_v1" in s.primitives
+    assert s.theta["names"] == [f"param_{n}".replace(".", "_") for n in layout.params]
+    assert s.theta["bits"] == 32 * sum(p.numel() for p in model.parameters())
+
+
+def test_tiny_step_theta_is_the_parameters() -> None:
+    model, prog = _tiny_program()
+    layout = prog.annotations["train_step"]
+    assert prog.theta == tuple(f"param_{n}".replace(".", "_") for n in layout["params"])
     nodes = prog.root.body.nodes
     assert sum(nodes[i].n * nodes[i].fn.ret.w for i in prog.root.theta) == 32 * sum(p.numel() for p in model.parameters())
+
+
+def test_a_program_with_holes_is_no_statement() -> None:
+    """A survey's holes are fields of the `run` input that no gate checks: its Program is marked with them, `check_identity`
+    refuses it (and so the Boolean lowering does), and a derivation that leaves holes returns no Program."""
+    gm = make_fx(lambda x: (torch.log_softmax(x, -1) * 2.0,), tracing_mode="fake")(X)
+    hs, prog = survey(gm, (X,), mode="reference", rules=training_rules(), name="T")
+    assert [(h["op"], h["fields"]) for h in hs] == [("aten._log_softmax.default", ["hole0.0:_log_softmax"])]
+    assert prog.annotations["survey_holes"] == hs
+    with pytest.raises(FrontendError, match="E_SURVEY_HOLES"):
+        check_identity(prog)
+    with pytest.raises(FrontendError, match="E_SURVEY_HOLES"):
+        derived(DeriveReport(prog, None, {"result": {}}))
+    rep = derive_graph(gm, (X,), mode="reference", rules=with_holes(training_rules()), name="T")
+    assert rep.program is None and rep.unsupported.reason == "side_input" and "E_SURVEY_HOLES" in rep.unsupported.hint, rep.unsupported
 
 
 def _sources(node) -> set[int]:
@@ -239,7 +277,7 @@ def test_witness_block_in_bits_beyond_theta() -> None:
     reads less the start's weights and structure (constants and what is computed from them alone), as a walk over its gates'
     operands finds them. A forward projection's row reads its input row and not its weight; the optimizer's update of one parameter
     reads the gradient, the two moments and the step's three scalars, and not the parameter, the constants or its own values."""
-    prog = _tiny_survey()[2].program
+    prog = _tiny_program()[1]
     nodes = prog.root.body.nodes
     structure: set[int] = set()
     while more := {j for j, nd in enumerate(nodes) if j not in structure and not is_input(nd.fn) and _sources(nd) <= structure}:

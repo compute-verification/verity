@@ -1,8 +1,8 @@
 """One AdamW step of the lf model through the training-step frontend (`program.frontend.train_step`), measured:
 
 - what the default rules and the training rules refuse: the strict derivation's refusal, then a survey that stands a run input in
-  for every refused node (`rules.training.with_holes`), its holes by op and reason; each derivation's CPU time;
-- the census (`verity.ml.circuits.census`) of the training rules' Program by class, in word gates and in Boolean gates and ANDs:
+  for every refused node (`step_report(..., survey=True)`), its holes by op and reason; each derivation's CPU time;
+- the survey's census (`verity.ml.circuits.census`) of the step by class, in word gates and in Boolean gates and ANDs:
   each primitive at its Boolean version's counts (`definitions.boolean.boolean_version`, `evaluation.bits.compile`), since the
   reference composites (`LinearRef`, `DotRef`, ...) have no Boolean version of their own; primitives with none are listed;
 - te_core's count of the same step: `te_core.flops.Counter`'s MAC rules applied to the step's graph (matmuls m·k·n, one MAC per
@@ -26,12 +26,9 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tests.program.train_step_lf import ADAMW, CTX, VOCAB, loss_fn, meta_step
-from verity.ml.circuits.census import census
-from verity.ml.circuits.defs import PrimitiveDefinition
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.training import training_rules
-from verity_vllm.program.frontend.rules.training_survey import holes
-from verity_vllm.program.frontend.train_step import AdamW, export_step, step_report
+from verity_vllm.program.frontend.train_step import AdamW, StepSurvey, export_step, step_report
 
 #: te_core.opnames's sets (te_core.flops counts these at one MAC per output element)
 ELEMENTWISE = {"mul", "div", "addcmul", "addcdiv", "lerp"}
@@ -62,38 +59,23 @@ def gather_selects(n: int) -> int:
             + _mux_tree(full + (1 if r else 0), GATHER_INDEX_BITS - GATHER_CHUNK_BITS))
 
 
-def survey(gm_ex, model, batch, opt, rules, label: str) -> tuple[dict, object]:
+def survey(gm_ex, model, batch, opt, rules, label: str) -> tuple[dict, StepSurvey]:
     t0 = time.process_time()
     strict = step_report(model, loss_fn, opt, batch, rules=rules, exported=gm_ex)
     t1 = time.process_time()
-    rep = strict if strict.program is not None else step_report(model, loss_fn, opt, batch, rules=rules, survey=True,
-                                                                exported=gm_ex)
+    s = step_report(model, loss_fn, opt, batch, rules=rules, survey=True, exported=gm_ex)
     t2 = time.process_time()
-    hs = holes(rep)
-    by = collections.Counter((h["op"], h["reason"]) for h in hs)
+    by = collections.Counter((h["op"], h["reason"]) for h in s.holes)
     out = {"rules": label, "strict_cpu_s": t1 - t0, "survey_cpu_s": t2 - t1,
            "strict": "Program" if strict.unsupported is None else strict.unsupported.to_json(),
-           "holes": len(hs), "by_op": [{"op": op, "reason": r, "n": n,
-                                         "hint": next(h["hint"] for h in hs if h["op"] == op and h["reason"] == r)[:400]}
-                                        for (op, r), n in sorted(by.items())]}
+           "refused": None if s.refused is None else s.refused.to_json(),
+           "holes": len(s.holes), "by_op": [{"op": op, "reason": r, "n": n,
+                                             "hint": next(h["hint"] for h in s.holes if h["op"] == op and h["reason"] == r)[:400]}
+                                            for (op, r), n in sorted(by.items())]}
     print(json.dumps({k: v for k, v in out.items() if k != "by_op"}, default=str), flush=True)
     for row in out["by_op"]:
         print(f"  {row['n']:5d} {row['op']} {row['reason']}", flush=True)
-    return out, rep.program
-
-
-def primitives(prog) -> dict[str, PrimitiveDefinition]:
-    out, seen, stack = {}, set(), [prog.root]
-    while stack:
-        fn = stack.pop()
-        if id(fn) in seen:
-            continue
-        seen.add(id(fn))
-        if isinstance(fn, PrimitiveDefinition):
-            out[fn.id] = fn
-        else:
-            stack.extend(nd.fn for nd in fn.body.nodes)
-    return out
+    return out, s
 
 
 def boolean_prices(prims: dict) -> dict[str, dict]:
@@ -195,25 +177,21 @@ def main(argv=None) -> int:
     print(json.dumps(rec), flush=True)
     rec["te_core"] = te_core_count(ex[0])
     print("te_core", json.dumps({k: v for k, v in rec["te_core"].items() if k != "by_op"}), flush=True)
-    prog = None
+    s = None
     for label in a.rules.split(","):
         rs = DEFAULT_RULES if label == "default" else training_rules()
-        rec[label], p = survey(ex, model, batch, opt, rs, label)
+        rec[label], sv = survey(ex, model, batch, opt, rs, label)
         if label == "training":
-            prog = p
+            s = sv
         (a.out / "census.json").write_text(json.dumps(rec, indent=1, default=str))
-    if prog is not None:
-        t0 = time.process_time()
-        cen = census(prog)
-        rec["census_cpu_s"] = time.process_time() - t0
-        prices = boolean_prices(primitives(prog))
+    if s is not None and s.census is not None:
+        cen = s.census
+        prices = boolean_prices(s.primitives)
         rec["prices"] = prices
         rec["census"] = {"totals": {k: cen["totals"][k] for k in ("gates", "computed_gates", "inputs", "values",
                                                                   "value_bits", "classes")},
                          "priced": priced(cen, prices)}
-        nodes = prog.root.body.nodes
-        rec["theta"] = {"names": len(prog.theta), "input_nodes": len(prog.root.theta),
-                        "bits": sum(nodes[i].n * nodes[i].fn.ret.w for i in prog.root.theta)}
+        rec["theta"] = {"names": len(s.theta["names"]), "input_nodes": s.theta["input_nodes"], "bits": s.theta["bits"]}
         pr = rec["census"]["priced"]
         print("census", json.dumps({"word_gates": pr["word_gates"], "gates": pr["gates"], "ands": pr["ands"],
                                     "unpriced_word_gates": pr["unpriced_word_gates"]}), flush=True)

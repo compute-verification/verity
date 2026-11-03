@@ -96,6 +96,11 @@ def loss_fn(model: nn.Module, x: torch.Tensor) -> torch.Tensor:
     return F.cross_entropy(logits.float().reshape(-1, logits.shape[-1]), x[:, 1:].reshape(-1))
 
 
+def square_loss(model: nn.Module, x: torch.Tensor) -> torch.Tensor:
+    """The sum of the logits' squares: a loss with no log, so every op of its step derives (the tests' step without holes)."""
+    return model(x[:, :-1]).float().square().sum()
+
+
 #: the ladder's AdamW hyperparameters (its embedding group's betas and eps), here over every parameter
 ADAMW = {"lr": 6e-3, "betas": (0.9, 0.95), "eps": 1e-10, "weight_decay": 0.01}
 

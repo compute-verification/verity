@@ -17,6 +17,7 @@ CODES = {
     "E_RETURN_TYPE": "returned pytree does not match the return annotation / scan step contract",
     "E_IDENTITY": "two different bodies claim one fully qualified specialisation (name + version + statics)",
     "E_DEAD_GATES": "the exported program has dead gates and export was asked to be strict about them",
+    "E_SURVEY_HOLES": "a survey's program: refused nodes' outputs are fields of its `run` input that no gate checks (holes)",
 }
 
 

@@ -548,7 +548,8 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
 def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode: str, ruleset: RuleSet, rank: tuple[int, int] | None,
                    check_registry: bool, dead_free: bool = False, theta: tuple[str, ...] = ()) -> DeriveReport:
     """The derivation's tail over the finished flat body: provenance, runtime correspondence, the flat Program and its digest, the
-    family claims, `prov["result"]`.  Raises `Refuse` / `FrontendError` (the caller reports them)."""
+    family claims, `prov["result"]`.  Raises `Refuse` / `FrontendError` (the caller reports them): a derivation that left holes
+    (`ctx.state["survey_holes"]`, `rules.training_survey.Hole`) marks its Program with them, which `check_identity` refuses."""
     prov["weights"] = [w.to_json() for w in ctx.weights]
     prov["weight_roles"] = ctx.weight_roles
     prov["unresolved_module_paths"] = dict(sorted(ctx.unresolved_module_paths.items()))   # GATE-PATH residual
@@ -570,7 +571,8 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     body, corr_doc["calls"], hints = kept_records(flat_sd.body, corr_doc["calls"], ctx.node_hints, registered=dead_free)
     flat_sd = flat_sd if body is flat_sd.body else _flat_definition(flat_sd.defn.name[len("Derived["):-1], body, flat_sd.bindings["SRC"], mode)
     corr_digest = correspondence_digest(corr_doc)
-    flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in hints.items()}, _CORR: corr_doc},
+    holes = {"survey_holes": ctx.state["survey_holes"]} if ctx.state.get("survey_holes") else {}
+    flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in hints.items()}, _CORR: corr_doc, **holes},
                            registered=ctx.registered_inputs.names if ctx.registered_values else (),
                            theta=(() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],)) + theta)
     check_identity(flat_program, check_registry=check_registry)

@@ -14,8 +14,9 @@ Program's inputs, in that order, each tensor one parameter named after it (`para
 are the Program's theta (`Program.theta`: the start's weights); the optimizer state, the scalars and the batch are not.
 
 A node no rule lowers is `Unsupported`, as for any derivation. `step_report(..., survey=True)` instead lowers every node it can and
-takes each refused one's output as a field of the Program's `run` input (a hole), recording the refusal: the list of what is
-missing, and a Program whose census counts everything else (`rules.training_survey.holes`).
+takes each refused one's output as a field of the `run` input (a hole, `rules.training_survey`), and returns a `StepSurvey`: every
+refusal at once and the census of everything else, without a Program. A hole is a value no gate checks, which a prover would
+choose, so a Program with holes is no statement (`check_identity` refuses it); `step_program` never surveys.
 
 A witness block is a `query_ast.GateSet` over the step Program: its gates are `GateSet.size()`, and its reads beyond the start's
 weights are `in_bits_beyond_theta(program, gates)`.
@@ -33,6 +34,8 @@ from torch.func import functional_call, grad_and_value
 
 from verity.ml.circuits import parts
 from verity.ml.circuits.boundary import gate_width, in_gates
+from verity.ml.circuits.census import census
+from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.query_ast import GateSet
 from verity_vllm.program.frontend.derive_graph import derive_graph
@@ -165,28 +168,59 @@ def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, exa
     return gm, metas, StepLayout(short, bshort, scalars, inputs, outputs)
 
 
+@dataclass(frozen=True)
+class StepSurvey:
+    """A step's survey (`step_report(..., survey=True)`): what its rules refuse, every op at once, and the census of the rest. It
+    holds no Program: the one it counts takes each refused node's outputs from fields of the `run` input that no gate checks."""
+    unsupported: Unsupported | None   # the step's refusal (`step_program`'s); None: the step derives, and the survey has no holes
+    holes: list[dict]                 # each refused node: node, op, reason, hint and its `run` fields
+    census: dict | None               # `verity.ml.circuits.census.census` of the step with its holes; None when `refused`
+    primitives: dict[str, PrimitiveDefinition]   # the primitives it calls, by id: what a census prices
+    theta: dict                       # theta's input names, input nodes and bits
+    layout: StepLayout
+    refused: Unsupported | None = None   # a refusal no hole stands in for (outside the rules): no census
+
+
 def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor, *, mode: str = "reference",
-                survey: bool = False, rules: RuleSet | None = None, name: str = "TrainStep", exported=None) -> DeriveReport:
-    """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules()`). `survey`: when the
-    step is `Unsupported`, derive it again with every refused node a hole (`rules.training_survey.with_holes`), so the report lists every
-    refusal at once (`rules.training_survey.holes(report)`) and its Program counts everything else. `exported`: `export_step`'s result."""
+                survey: bool = False, rules: RuleSet | None = None, name: str = "TrainStep",
+                exported=None) -> DeriveReport | StepSurvey:
+    """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules()`). `exported`:
+    `export_step`'s result. `survey`: a `StepSurvey` instead, of the step derived with every refused node a hole
+    (`rules.training_survey.survey`)."""
     from verity_vllm.program.frontend.rules.training import training_rules
-    from verity_vllm.program.frontend.rules.training_survey import with_holes
+    from verity_vllm.program.frontend.rules.training_survey import survey as survey_graph
 
     gm, metas, layout = exported if exported is not None else export_step(model, loss_fn, optimizer, example_batch)
     ruleset = rules if rules is not None else training_rules()
     theta = layout.inputs[:len(layout.params)]
-
-    def run(rs: RuleSet) -> DeriveReport:
-        return derive_graph(gm, metas, mode=mode, rules=rs, name=name, input_names=layout.inputs, theta=theta)
-
-    rep = run(ruleset)
-    if survey and rep.program is None:
-        rep = run(with_holes(ruleset))
+    rep = derive_graph(gm, metas, mode=mode, rules=ruleset, name=name, input_names=layout.inputs, theta=theta)
     rep.provenance["train_step"] = layout.to_json()
     if rep.program is not None:
         rep.program.annotations["train_step"] = layout.to_json()
-    return rep
+    if not survey:
+        return rep
+    holes, prog = ([], rep.program) if rep.program is not None else survey_graph(gm, metas, mode=mode, rules=ruleset, name=name,
+                                                                                 input_names=layout.inputs, theta=theta)
+    if isinstance(prog, Unsupported):
+        return StepSurvey(rep.unsupported, holes, None, {}, {}, layout, refused=prog)
+    nodes = prog.root.body.nodes
+    return StepSurvey(rep.unsupported, holes, census(prog), _primitives(prog), {
+        "names": list(prog.theta), "input_nodes": len(prog.root.theta),
+        "bits": sum(nodes[i].n * nodes[i].fn.ret.w for i in prog.root.theta)}, layout)
+
+
+def _primitives(prog: Program) -> dict[str, PrimitiveDefinition]:
+    out, seen, stack = {}, set(), [prog.root]
+    while stack:
+        fn = stack.pop()
+        if id(fn) in seen:
+            continue
+        seen.add(id(fn))
+        if isinstance(fn, PrimitiveDefinition):
+            out[fn.id] = fn
+        else:
+            stack.extend(nd.fn for nd in fn.body.nodes)
+    return out
 
 
 def step_program(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer, example_batch: torch.Tensor, *,
@@ -238,4 +272,4 @@ def _structure(circuit, g: int, memo: dict[int, bool]) -> bool:
     return True
 
 
-__all__ = ["AdamW", "StepLayout", "export_step", "in_bits_beyond_theta", "step_report", "step_program"]
+__all__ = ["AdamW", "StepLayout", "StepSurvey", "export_step", "in_bits_beyond_theta", "step_report", "step_program"]
