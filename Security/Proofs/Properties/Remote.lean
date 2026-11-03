@@ -280,11 +280,11 @@ theorem stage_zk_registered {p : SampledProofs.OneStageZk.Params} {c : SampledPr
   unfold SampledProofs.OneStageZk.checkBlobs Core.atCoins at h
   split at h
   · unfold SampledProofs.OneStageZk.checkBlobsAt at h
+    try simp only [] at h
     split at h
     · cases h
     · split at h
-      · next hacc => exact stage_registered_at hacc
-      · cases h
+      all_goals exact stage_registered_at (by assumption)
   · cases h
 
 /-- The recursive audit accepts only where one-stage v1 accepts on the inner statement's params, with the verdicts
