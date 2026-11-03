@@ -22,14 +22,15 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
-  `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV4` covers, `Flock.KsScope.checkOf`), and a
-  session's verdict holds only where the registration's population is the circuit file's units in order
-  (`FilePart.check`: its strata over the verifier's program and query, read stratum by stratum, are its units in order,
-  and the public file holds exactly those, so slot `u` is the file's unit `u`, as `Flock.Bridge.partOf` reads it); then
-  v1's `check` on those verdicts, one of
+  `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV4` covers, `Flock.KsScope.checkOf`); then v1's
+  `check` on those verdicts, one of
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
   file no blob holds is that session's reject, as a file `flock-verify` can't read is.
+* **population** (`FilePart.check`, each session's last check): a session's verdict holds only where the registration's
+  population is the circuit file's units in order: its strata over the verifier's program and query, read stratum by
+  stratum, are its units in order, and the public file holds exactly those, so slot `u` is the file's unit `u`, as
+  `Flock.Bridge.partOf` reads it.
 
 Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file.
 -/
