@@ -402,17 +402,21 @@ class Addcmul(_TrainRule):
 
 
 class Reduce(_TrainRule):
-    """`sum.dim_IntList` / `mean.dim` of an f32 value -> the reduced axes moved last by reference, one batch of `DotRef_v1{N}`
-    against ones (a sequential sum from +0) per kept element; `mean` divides the sum by f32(N) (`F32Div_v1`), as torch does."""
-    info = _info("Reduce", "aten.sum.dim_IntList / aten.mean.dim of f32", "the operand is an f32 value", "no dtype argument")
+    """`sum` / `mean` of an f32 value over `dim` (every axis when `dim` is None or `[]`, as torch reduces them, and for `.default`)
+    -> the reduced axes moved last by reference, one batch of `DotRef_v1{N}` against ones (a sequential sum from +0) per kept
+    element; `mean` divides the sum by f32(N) (`F32Div_v1`), as torch does."""
+    info = _info("Reduce", "aten.sum.dim_IntList / aten.mean.dim / aten.sum.default / aten.mean.default of f32",
+                 "the operand is an f32 value of at least one axis", "no dtype argument")
 
     def targets(self):
-        return {aten.sum.dim_IntList, aten.mean.dim}
+        return {aten.sum.dim_IntList, aten.mean.dim, aten.sum.default, aten.mean.default}
 
     def applies(self, node, ctx):
         why = _operand_ok(ctx, node.args[0])
         if why or not isinstance(ctx.val(node.args[0]), Coll):
             return why or "the operand is not a value"
+        if not _shape(ctx, node.args[0]):
+            return "a 0-d operand (no axis to reduce)"
         if node.kwargs.get("dtype") is not None or (len(node.args) > 3 and node.args[3] is not None):
             return "numerics_unregistered: a dtype argument"
         return True
@@ -421,13 +425,14 @@ class Reduce(_TrainRule):
         x = ctx.coll(node.args[0])
         S = shape_of(x.type)[0]
         r = len(S)
-        dims = sorted({d % r for d in (node.args[1] if node.args[1] is not None else range(r))}) if r else []
+        given = node.args[1] if len(node.args) > 1 else None
+        dims = sorted({d % r for d in given}) if given else list(range(r))
         keep = [a for a in range(r) if a not in dims]
         perm = tuple(keep + dims)
         xp = _view_permute(x, perm, node.name) if perm != tuple(range(r)) else x
         Rn, N = math.prod(S[a] for a in keep), math.prod(S[a] for a in dims)
         s = _batch(ctx, node, bind(R.DotRef, K=N), xp.reshape(Array(Rn, Array(N, F32))), _ones(ctx, node, N), axes=(0, None))
-        if node.target is aten.mean.dim:
+        if node.target in (aten.mean.dim, aten.mean.default):
             s = _batch(ctx, node, P.F32Div, s, _const(ctx, node, _bits(float(N))), axes=(0, None))
         ctx.define(node, s.reshape(_tensor_type(ctx.shape_of_node(node), 32)))
         ctx.record(self, node, {"dims": dims, "rows": Rn, "N": N}, emitted=f"DotRef_v1{{K={N}}} x{Rn}")
