@@ -81,6 +81,7 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                            verdict_first=False, stale_days=3, stale_close_days=7)
     assert DriveFlags.parse("") == DriveFlags() == DriveFlags(None, None, False, (), "review", None, False)
     assert DriveFlags.parse("after_landing_shards = 3\n").after_landing_shards == 3
+    assert [DriveFlags.parse(f'after_landing_shards = "{v}"\n').after_landing_shards for v in ("auto", "auto:4")] == ["auto", "auto:4"]
     assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True first=1858 land=review "
                         "land_into=None after_landing_no_cache=True landing_gates=gates/g.py max_lean_checks=3 nonlean_first=False reviewed_first=False verdict_first=False stale_days=3 "
                         "stale_close_days=7 stale_keep= after_landing_shards=1 command_line=on,first lowrisk_lane=True lowrisk_per_tick=20 lowrisk_excludes= "
@@ -91,6 +92,8 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ("on = []", "on = []: at least one machine"),
                       ("max_lean_checks = 0", "max_lean_checks = 0: a whole number, 1 or more"),
                       ("after_landing_shards = 0", "after_landing_shards = 0: a whole number, 1 or a shard plan's N"),
+                      ('after_landing_shards = "auto:0"', "after_landing_shards = 'auto:0': a whole number, 1 or a shard plan's N"),
+                      ('after_landing_shards = "3"', "after_landing_shards = '3': a whole number, 1 or a shard plan's N"),
                       ('marked_after = "12 Oct"', "marked_after = '12 Oct': a UTC time as YYYY-MM-DDTHH:MM:SSZ"),
                       ('regenerate_locks = "yes"', "regenerate_locks = 'yes': true or false"),
                       ("nonlean_first = 1", "nonlean_first = 1: true or false"),

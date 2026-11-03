@@ -25,7 +25,8 @@ merged record no longer lists, a group left without readers or definitions dropp
 both sides changed differently), and names each in one line on stderr. Whether a guarantee is listed is
 not the build's: one side's removal applies over the other's change to its record. What only a person writes still
 refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry (a `shape.inline` entry is one
-premise of a guarantee, so two sides that each add or drop premises of one guarantee merge: `DEEPER`), a dependency's
+premise of a guarantee, so two sides that each add or drop premises of one guarantee merge: `DEEPER`; a premise both
+sides give different reasons keeps ours', since the check asks only that one be given), a dependency's
 revision, a policy entry (a layer's field, a `compile_time` digest). A `shape.inline` premise one side dropped while the
 other has it as the base had it stays, while the merged record lists its guarantee (`held`): a side whose `--update` ran on
 an older tree drops a text the other side's tree still prints, and the Lean check fails on a missing entry but not on one
@@ -127,18 +128,25 @@ def names(o, a, b) -> bool:
     return ok(a) and ok(b) and (o is MISSING or ok(o))
 
 
-def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1) -> dict:
+def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1,
+            candidate: list[str] | None = None) -> dict:
     """Maps merged entry by entry; ``depth`` > 1 merges entries that are maps entry by entry too (one level more under a
-    `DEEPER` path), and lists of names merge as lists."""
+    `DEEPER` path), and lists of names merge as lists. A `shape.inline` premise both sides give different reasons keeps
+    ours' reason, named in ``candidate``: the check asks only that a reason be given."""
     out = {}
     for k in keys(path, a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
         if depth > 1 and isinstance(y, dict) and isinstance(z, dict) and (x is MISSING or isinstance(x, dict)):
             sub = f"{path}[{k}]"
-            v = entries(sub, {} if x is MISSING else x, y, z, why, depth - 1 + (sub in DEEPER))
+            v = entries(sub, {} if x is MISSING else x, y, z, why, depth - 1 + (sub in DEEPER), candidate)
             v = MISSING if path in DEEPER and not v else v
         elif depth > 1 and names(x, y, z):
             v = items([] if x is MISSING else x, y, z)
+        elif (path.startswith("shape[inline][") and isinstance(y, str) and isinstance(z, str) and y != z
+              and x not in (y, z) and (x is MISSING or isinstance(x, str))):
+            v = y
+            if candidate is not None:
+                candidate.append(f"{path}[{k}] (ours' reason)")
         else:
             v = one(f"{path}[{k}]", x, y, z, why)
         if v is not MISSING:
@@ -398,7 +406,7 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
         elif names(o, a, b):
             v = items([] if o is MISSING else o, a, b)
         elif isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
-            v = entries(k, {} if o is MISSING else o, a, b, why, 2 if k in NESTED else 1)
+            v = entries(k, {} if o is MISSING else o, a, b, why, 2 if k in NESTED else 1, candidate)
         else:
             v = one(k, o, a, b, why)
         if v is not MISSING:
