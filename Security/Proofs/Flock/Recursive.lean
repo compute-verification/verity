@@ -87,6 +87,7 @@ import Proofs.Flock.Recursive.Loop
 import Proofs.Flock.Recursive.LoopZK
 import Proofs.Flock.Recursive.FirewallSalted
 import Proofs.Flock.Recursive.LoopAny
+import Proofs.Flock.Recursive.LoopAnyDeployed
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`; what a stop leaks, the counting lemma
@@ -113,8 +114,8 @@ with the honest worker's half left an obligation (`FirewallAccepts`, with (ii) f
 from it), the honest worker's requests and rounds read back by `decode`, `frames` and `split` as it meant them
 (`FirewallWire`), a plain value's text parsing back to its canonical form with no fraction or exponent
 (`FirewallJson`), the live firewall's sends at any requests (`FirewallAny`) and at any worker that reads its answers
-(`FirewallAdaptive`), `RecursiveZK` at the loop at such a worker, with no `FirewallSends` (`LoopAny`), and the
-recursive audit at public units, the inner
+(`FirewallAdaptive`), `RecursiveZK` at the loop at such a worker, with no `FirewallSends` (`LoopAny`), and at the
+deployed tables (`LoopAnyDeployed`), and the recursive audit at public units, the inner
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof
 (`PublicAuditProof`), the same audit at candidate 3's table (`HoloExec`, its coins `HoloCoins`, its schedule and the
 verifier's map of its records `HoloSched` and `HoloMap`, `AuditC3`, its proof `AuditC3Proof` from the
