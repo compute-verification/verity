@@ -117,7 +117,7 @@ def curry3 {α β γ E : Type} : (α × β × γ → E) ≃ (α → β → γ �
 
 /-- `waitAcc` on coins mapped by `g`, against runs that accept together and open alike at the accepted ones, keeps
 what opens alike. -/
-theorem waitAcc_map {R R' Op : Type} (H : Msg → Msg) (run : R → Trace) (run' : R' → Trace) (g : R → R')
+theorem waitAcc_map {R R' Op : Type} (H : Msg → Msg) (run : R → Transcript) (run' : R' → Transcript) (g : R → R')
     (opens opens' : Seen → List Op) (k : ℕ) :
     ∀ (rs : List R) (acc acc' : List Seen),
       (∀ r ∈ rs, ((run r).seen.out = .acc ↔ (run' (g r)).seen.out = .acc) ∧
@@ -142,7 +142,7 @@ theorem waitAcc_map {R R' Op : Type} (H : Msg → Msg) (run : R → Trace) (run'
 
 /-- **Flock's `E^rep` waits on coins mapped by `g`**: against runs that accept together and open alike at the accepted
 ones, `firstWait` finds the same witness. -/
-theorem firstWait_map {R R' W Op : Type} (H : Msg → Msg) (run : R → Trace) (run' : R' → Trace) (g : R → R')
+theorem firstWait_map {R R' W Op : Type} (H : Msg → Msg) (run : R → Transcript) (run' : R' → Transcript) (g : R → R')
     (opens opens' : Seen → List Op) (k : ℕ) (assemble : List Op → Option W) (check : W → Bool) :
     ∀ rss : List (List R),
       (∀ rs ∈ rss, ∀ r ∈ rs, ((run r).seen.out = .acc ↔ (run' (g r)).seen.out = .acc) ∧

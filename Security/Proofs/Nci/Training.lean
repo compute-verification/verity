@@ -143,7 +143,7 @@ theorem trainingIncompressible_iff (hba : 0 ≤ b_a) :
 
 /-- **The support forms give training's incompressibility**: `ActivationsSupport` at cap `K + b_w + b_a` and
 `PartialSumsSupport`, with `WeightsIncompressible`, for any committed values of the baseline. -/
-theorem trainingIncompressible_of_support {θv : c.D.Transcript} (hw : 0 ≤ b_w) (hba : 0 ≤ b_a)
+theorem trainingIncompressible_of_support {θv : c.D.Trace} (hw : 0 ≤ b_w) (hba : 0 ≤ b_a)
     (hW : Assumptions.WeightsIncompressible c T Γ K b_w b_a)
     (hA : Assumptions.ActivationsSupport c θv ch (K + b_w + b_a) b_w b_a)
     (hPS : Assumptions.PartialSumsSupport c θv ch Γ K b_w b_a) :

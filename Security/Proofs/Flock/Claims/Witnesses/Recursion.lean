@@ -464,7 +464,7 @@ theorem serve_bind (q : R → RP R₂ Seen) (p : RP R α) (f : α → RP R β) :
   | hash m k ih => simp only [RP.bind, serve, ih]
   | rerun r k ih => simp only [RP.bind, serve, ih, RP.bind_assoc']
 
-theorem RP.reruns_bind (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : α → RP R β) :
+theorem RP.reruns_bind (H : Msg → Msg) (run : R → Transcript) (p : RP R α) (f : α → RP R β) :
     ((p.bind f).eval H run).2.2 = (p.eval H run).2.2 + ((f (p.eval H run).1).eval H run).2.2 := by
   induction p with
   | ret a => simp [RP.bind, RP.eval]
@@ -472,7 +472,7 @@ theorem RP.reruns_bind (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : 
   | rerun r k ih => simp only [RP.bind, RP.eval, ih]; omega
 
 /-- A wait whose every rerun is seen rejected reruns at each of its draws. -/
-theorem reruns_waitAcc_rej (H : Msg → Msg) (run : R → Trace) (f : Seen → Seen) (hf : ∀ v, (f v).out ≠ .acc)
+theorem reruns_waitAcc_rej (H : Msg → Msg) (run : R → Transcript) (f : Seen → Seen) (hf : ∀ v, (f v).out ≠ .acc)
     (k : ℕ) (hk : 0 < k) (rs : List R) : ((serve (viewing f) (waitAcc k rs [])).eval H run).2.2 = rs.length := by
   induction rs with
   | nil => rfl
@@ -480,7 +480,7 @@ theorem reruns_waitAcc_rej (H : Msg → Msg) (run : R → Trace) (f : Seen → S
     have hk' : ¬ k ≤ ([] : List Seen).length := by simp only [List.length_nil]; omega
     simp only [waitAcc, hk', ite_false, serve, viewing, RP.bind, RP.eval, hf, List.length_cons, ih]
 
-theorem reruns_firstWait_rej {Op W : Type} (H : Msg → Msg) (run : R → Trace) (f : Seen → Seen)
+theorem reruns_firstWait_rej {Op W : Type} (H : Msg → Msg) (run : R → Transcript) (f : Seen → Seen)
     (hf : ∀ v, (f v).out ≠ .acc) (k : ℕ) (hk : 0 < k) (opens : Seen → List Op) (assemble : List Op → Option W)
     (check : W → Bool) (m K : ℕ) (hm : 0 < m) (g : Fin m → Fin K → R) :
     K ≤ ((serve (viewing f) (firstWait k opens assemble check
@@ -493,7 +493,7 @@ theorem reruns_firstWait_rej {Op W : Type} (H : Msg → Msg) (run : R → Trace)
     rw [serve_bind, RP.reruns_bind, reruns_waitAcc_rej H run f hf k hk, List.length_map, List.length_finRange]
     omega
 
-theorem reruns_collect {α : Type} (H : Msg → Msg) (run : R → Trace) (n : ℕ) (hn : 0 < n)
+theorem reruns_collect {α : Type} (H : Msg → Msg) (run : R → Transcript) (n : ℕ) (hn : 0 < n)
     (g : Fin n → RP R (Option α)) :
     ((g ⟨0, hn⟩).eval H run).2.2 ≤ ((collect ((List.finRange n).map g)).eval H run).2.2 := by
   cases n with

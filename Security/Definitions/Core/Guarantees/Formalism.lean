@@ -47,7 +47,7 @@ run of the registered circuit, each proof block's extracted string has local des
 def BlockDescription : Prop :=
   ∀ (R : Committed) (c k : ℕ), R.P.IsCK R.d c k →
     ∀ (ρ : Type) (M : Decoder ρ) (r : ρ) (t a_blk : ℕ) (e : List Bool)
-      (y : Fin R.B → R.d.D.Transcript → List Bool),
+      (y : Fin R.B → R.d.D.Trace → List Bool),
       e.length ≤ a_blk → Evaluates M r t R e y →
       ∀ a, R.Honest a → ∀ u, LDL M t r (y u (R.d.D.eval a)) ≤ (k + Nat.clog 2 R.B + a_blk : ℕ)
 

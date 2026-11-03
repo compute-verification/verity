@@ -51,7 +51,7 @@ structure RealizesIntegrityOfIntegrityPeriod {ι : Type} {d : Device ι} {α : T
   /-- the sampled audit accepts exactly when flock-verify accepts every sampling block -/
   accepts_iff : ∀ ξ, r.accepts .sampled ξ ↔ ∀ w ∈ record ξ, w.accepted
   /-- the run's faulty proof blocks are the sampling blocks' (M1, the program-from-circuit correspondence) -/
-  wrong_eq : ∀ ξ, (r.parts.wrong (r.transcript ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.wrong).sum
+  wrong_eq : ∀ ξ, (r.parts.wrong (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.wrong).sum
   /-- the partition's units are the sampling blocks' units -/
   units_eq : r.units = ∑ t ∈ Finset.range T, (W t).n
   /-- every unit of the partition has at least one gate -/

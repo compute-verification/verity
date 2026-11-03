@@ -28,8 +28,8 @@ blocks for the extraction rule `ext` within `t` at overhead `aBlk` (`EvaluatesBl
 The description is the block index and its unregistered input bits: evaluated from them, the block holds the run's
 values, since the run is the circuit's evaluation. The block size `c` is not used. -/
 def BlockDescription : Prop :=
-  ∀ (R : Committed) (k : ℕ) (D : Decoder) (t : ℕ) (ext : Fin R.B → R.d.D.Transcript → List Bool) (aBlk : ℕ)
-    (inp : R.d.D.Transcript),
+  ∀ (R : Committed) (k : ℕ) (D : Decoder) (t : ℕ) (ext : Fin R.B → R.d.D.Trace → List Bool) (aBlk : ℕ)
+    (inp : R.d.D.Trace),
     ReadCap R.d R.P k → R.Honest (R.d.D.eval inp) → Assumptions.EvaluatesBlocks D t R ext aBlk →
       ∀ u, LDL D t (ext u (R.d.D.eval inp)) ≤ (k + Nat.clog 2 R.B + aBlk : ℕ)
 
@@ -56,8 +56,8 @@ subcircuit lies whole in its block: that is what makes `ActivationRate` plausibl
 When `e h ≤ 0` the bound is at most `0`. -/
 def FanOutBound : Prop :=
   ∀ (R : Committed) (c k : ℕ) {ι A : Type} [DecidableEq A] (M : Products R.d.D ι A)
-    (e : ℕ) (D : Decoder) (t aBlk : ℕ) (a : Fin R.B → R.d.D.Transcript → List Bool) (β Λ T₀ : ℝ)
-    (inp : R.d.D.Transcript),
+    (e : ℕ) (D : Decoder) (t aBlk : ℕ) (a : Fin R.B → R.d.D.Trace → List Bool) (β Λ T₀ : ℝ)
+    (inp : R.d.D.Trace),
     CKPartition R.d R.P c k → R.Honest (R.d.D.eval inp) → M.FanOut e → 0 < β → 0 < T₀ →
     Assumptions.EvaluatesBlocks D t R a aBlk → Assumptions.ActivationRate β Λ t D R M a (R.d.D.eval inp) →
       c * β * M.J.card / (T₀ * e * (k + Nat.clog 2 R.B + aBlk + Λ)) ≤ R.d.D.size R.d.D.computed / T₀
