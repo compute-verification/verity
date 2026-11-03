@@ -53,6 +53,8 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity_difftest import protocol as PR
+from verity.core.protocols.pouw import audit as PA
+from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
@@ -3259,6 +3261,53 @@ def test_a_bit_row_values_rows_are_counted_in_its_format(pieces):
             b = copy.deepcopy(a)
             drop(b)
             assert codes(b) == (["R7-leaves", "R7-domain"] if "A" in values else []), values
+
+
+#: Pearl+'s y trees' binding tag: PoUW's rows domain over a call's served y, at salt nonce 2^61 + the call's index
+PEARL_Y_ROWS = "verity/pouw/pearl-plus/y-rows/v1"
+
+
+def test_an_output_reuse_takes_a_pearl_plus_domain_verbatim(pieces):
+    """`T` reusing (`outputs`) Pearl+'s window record's entry for a call's A rows or served y, which PoUW commits
+    (`audit.commit_rows` under hm96-sha512) under its rows domain, not one-stage's: `T`'s 32-bit rows as `row-seg/v1`
+    rows, or `row/v2` rows (which R7 counts alike), are accepted under that domain and root verbatim, and without
+    `outputs` are `R7-domain`. The record's entry under one-stage's own domain for `T` (`registered.domain`, whichever
+    binding it takes) is `R7-domain`, under another root `R7-held`, and Pearl+'s entry of 16-bit words or of other rows
+    `R7-output`, Lean and Python agreeing."""
+    s, values, law = REGISTERED_SETUPS[1], {"T": 2}, {"k": 1, "law": "subset"}
+    mine = s.committed["T", 2].entry()
+    roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
+    salt, u = bytes(range(64)), 7
+
+    def codes(b):
+        kind, out = D.replay(REGISTRATION, _json(b), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    for name, binding, nonce in (("pearl-a/0/0", PA.activation_binding(salt, u), u),
+                                 ("pearl-y/0/0", tagged(PEARL_Y_ROWS, salt, u), (1 << 61) + u)):
+        tree = PA.commit_rows(binding, u, [b"".join(w.to_bytes(4, "little") for w in r) for r in s._rows("T", 2)[0]],
+                              PA.HM96, salt_key=bytes(range(32)), nonce=nonce)
+        theirs = {**mine, "value": name, "root": tree.commitment.root.hex(), "domain": tree.domain.domain_id.hex()}
+        assert theirs["domain"] != mine["domain"]
+
+        def case(entry=(), earlier=theirs, drop=(), **change):
+            log = [R.record(s.program, s.query, law, SCHEME, roots, EARLIER, leaf_layer=LEAF, registered=[earlier])]
+            rec = R.record(s.program, s.query, law, SCHEME, roots, {**WINDOW, **BINDING}, leaf_layer=LEAF,
+                           previous=R.digest(log[0]),
+                           registered=[{**mine, "root": theirs["root"], "domain": theirs["domain"], **dict(entry)}])
+            params = {"anchors": [], "binding": BINDING, "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": log,
+                      "outputs": {"T": {"record": R.digest(log[0]), "value": name}}, "parameters": s.signature,
+                      "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
+                      "row_schemas": {"T": G.SCHEMA_SEG}, "scheme": SCHEME, "work_table": None, **change}
+            return {"params": {k: v for k, v in params.items() if k not in drop}, "record": rec}
+
+        assert codes(case()) == [], name
+        assert codes(case(row_schemas={"T": G.SCHEMA_V2})) == [], name
+        assert codes(case(drop=["outputs"])) == ["R7-domain"], name
+        assert codes(case({"domain": mine["domain"]})) == ["R7-domain"], name
+        assert codes(case({"root": "ef" * 64})) == ["R7-held"], name
+        for e in ({k: v for k, v in theirs.items() if k != G.WIDTH_KEY}, {**theirs, "leaves": 4, "words": 1}):
+            assert codes(case(earlier=e))[0] == "R7-output", (name, e)
 
 
 def test_a_tile_replayed_across_streams_in_one_window_is_refused(pieces):
