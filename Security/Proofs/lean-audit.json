@@ -73,6 +73,7 @@
   "Proofs.Properties.Verity.Sampled.Messages",
   "Proofs.Properties.Verity.Sampled.Coupling",
   "Proofs.Properties.Verity.Sampled.Project",
+  "Proofs.Properties.Verity.Sampled.CoinMap",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
