@@ -69,7 +69,7 @@ theorem loadPublic_core (h : ByteArray → ByteArray) (tags : Tags) (c : Circuit
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpA at hp
   simp (config := { zeta := false }) only [jpA] at hp
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpB at hp
-  cases hj : Lean.Json.parse text with
+  cases hj : Flock.JsonParse.parse text with
   | error e =>
     simp (config := { zeta := false }) only [hj] at hp
     obtain ⟨_, hte, -⟩ := except_bind_ok hp; cases hte
