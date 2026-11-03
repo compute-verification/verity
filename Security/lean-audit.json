@@ -2676,6 +2676,7 @@
   "Accounting.SecurityProofs.RemoteWindowRunConservationRelay": "8d29d2e533802015098f254806edb1e99d0a93e33acf916a76ca12484b570e3e",
   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies": "4acf1c33f2211813d280f64d9ce420527790e62cdc0bd2120a685384914d8df5",
   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap": "ce07bb9268f9ba61b228b15986624be7a933fefcbad6c041e24f3c41e0e22c5c",
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": "25bb13b79dd739375049d34f8168300966c182117594c7a5a67767779cd0ea9c",
   "Accounting.SecurityProofs.TS.AdditiveFixed": "07df6f85c37128f9bb90686a6cd381d38849912acd984c59a901f78fe55828ca",
   "Accounting.SecurityProofs.TS.BindingOfFork": "35df2fcc55dd37402511f188176a776059b9c8e8cabacb798f5dceb4b3c5d8ff",
   "Accounting.SecurityProofs.TS.CheckedSessionSound": "59ccc77bbee7f21805538ad51557c48a566d9c08401de5ff9bc988fff15c13ad",
@@ -2930,6 +2931,7 @@
   "Verity.SecurityProofs.ExpandAndSize": "03966908eadf7f2df4b6715764c0a881097cb6d8a2ea801f44df28194c7d2e60",
   "Verity.SecurityProofs.ExpandSize": "ba20fed6329ddf69ec6358b50a84b4245f08fbbd3cd9543a994231dcfd64ab9f",
   "Verity.SecurityProofs.InferenceCap": "0035c5e37498f2d808d066ae0a6d0bd50791b4ad147383f0feba37bf8362c9fc",
+  "Verity.SecurityProofs.PrivateFitsOfLocal": "64f42467cd87ee1d655ab157a39ee9412d15a923c2cbbd93d790f98f69f9029b",
   "Verity.SecurityProofs.PrivateOutBitsLe": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
   "Verity.SecurityProofs.RefineWrong": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
   "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8"
