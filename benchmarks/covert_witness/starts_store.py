@@ -9,12 +9,14 @@
 data fetch`; a node holds no store key, so there it unpacks `pack`'s tar, sent with the run), checks every file's sha256
 and each start.json's digest against the manifest, and moves each start into place whole, through a directory beside
 it. It leaves a start whose files already match and refuses one that differs (remove it with `research retention rm`).
-`--keep` records the directory's retention (`research keep`, owner @training, the artifact as its copy). `export` checks
-each θ's digest (`prepare.digest`, so it needs torch); `pack` and `install` are stdlib only, with research from this tree.
+`--keep` records the directory's retention (`research keep`, owned by the training lane, the artifact as its copy). `export` checks
+each θ's digest (`prepare.digest`, so it needs torch) and records each start's shape (`shape`, what te_core.policy's
+reference shapes read); `pack` and `install` are stdlib only, with research from this tree.
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -41,9 +43,34 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def entry(d: Path) -> dict:
-    return {"digest": json.loads((d / "start.json").read_text())["digest"],
-            "files": {f: sha256(d / f) for f in FILES}, "bytes": sum((d / f).stat().st_size for f in FILES)}
+def shape(rec: dict) -> dict:
+    """What te_core.policy sets a start's reference shapes from: its architecture, its training tokens and C0 when its
+    provenance counted it, and its forward MACs per token at full context (needs torch). torch's FLOP formulas have no
+    entry for CPU's fused attention kernel, so on CPU attention runs as its math form, whose matmuls are counted."""
+    import torch
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+
+    import prepare
+    from te_core.flops import forward_macs_per_token
+
+    cfg, prov = rec["config"], rec["provenance"]
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    with torch.device(dev):
+        net = prepare.Net(cfg)
+    with sdpa_kernel(SDPBackend.MATH) if dev == "cpu" else contextlib.nullcontext():
+        per_token = forward_macs_per_token(net, cfg["ctx"], cfg["vocab"], dev)
+    out = {k: cfg[k] for k in ("family", "d_model", "n_layer", "vocab", "ctx")}
+    out.update(parameters=rec["parameters"], tokens=prov["tokens"],
+               tokens_per_param=round(prov["tokens"] / rec["parameters"], 2), forward_macs_per_token=per_token)
+    if (prov.get("c0") or {}).get("macs"):
+        out["c0_macs"] = prov["c0"]["macs"]
+    return out
+
+
+def entry(d: Path, with_shape: bool = False) -> dict:
+    rec = json.loads((d / "start.json").read_text())
+    return {"digest": rec["digest"], "files": {f: sha256(d / f) for f in FILES},
+            "bytes": sum((d / f).stat().st_size for f in FILES), **({"shape": shape(rec)} if with_shape else {})}
 
 
 def export(src: Path, out: Path, names=NAMES, check: bool = True) -> dict:
@@ -61,7 +88,7 @@ def export(src: Path, out: Path, names=NAMES, check: bool = True) -> dict:
             want = json.loads((d / "start.json").read_text())["digest"]
             if got != want:
                 raise SystemExit(f"starts_store: {src / name}'s θ has digest {got}, its start.json says {want}")
-        starts[name] = entry(d)
+        starts[name] = entry(d, with_shape=check)
     man = {"schema": "covert-witness/starts-store/v1", "art": None, "path": "starts", "starts": starts}
     (out / "starts_store.json").write_text(json.dumps(man, indent=1) + "\n")
     return man
@@ -109,14 +136,14 @@ def checked(man: dict, names, tmp: Path, fetch) -> Path:
 
 
 def pack(man: dict, out: Path, fetch=store_fetch) -> Path:
-    """The artifact's starts as one tar (`<path>/<name>/<file>`, the manifest's path), checked against the manifest."""
+    """The artifact's starts as one tar (`starts/<name>/<file>`), checked against the manifest."""
     tmp = Path(tempfile.mkdtemp(prefix="starts-pack-"))
     try:
         root = checked(man, man["starts"], tmp, fetch)
         with tarfile.open(out, "w") as tf:
             for name, want in man["starts"].items():
                 for f in want["files"]:
-                    tf.add(root / name / f, arcname=f"{man.get('path', 'starts')}/{name}/{f}")
+                    tf.add(root / name / f, arcname=f"starts/{name}/{f}")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return out

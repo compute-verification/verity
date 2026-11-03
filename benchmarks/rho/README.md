@@ -1,5 +1,8 @@
 # rho: the slowdown's lower bound on training
 
+Everything here is the earlier statement of the training slowdown, which the training formalism (`GLOSSARY.md`,
+Notation, "Training") replaces, until the training harness restates or retires it; its terms are older names there.
+
 This package computes, for each scenario and monitoring period, a lower bound on the **slowdown** a training run pays
 under the regime: `overhead(𝒢, 𝒜′, η)` (`GLOSSARY.md`, Notation), the training cost over the admissible set
 divided by the reference training algorithm's GPU-hours, on the datacenter the adversary actually runs. It is Lean's
@@ -142,7 +145,7 @@ slowdown (the training cost once called the overhead; `Overhead` and `theorem.ov
 `Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. The slowdown is the `ρ` of Lean's
 `Nci.Guarantees.DampenerRemote` (`remoteDampener`, bounded by `hardwareMultiple`) and `benchmarks/nci`'s compute
 dampener `D`; the padded size ratio `|A| / T_0` (`Overhead.padded`, `Estimate.padded`, the JSON's `padded`) is the
-intermediate, not the slowdown. The glossary's `ρ` is the ACCEL model's resource rate, not this number.
+intermediate, not the slowdown. The glossary's ρ(C), the training formalism's slowdown, is not this number.
 
 ## Extending
 

@@ -13,7 +13,7 @@ te_core.flops, at one MAC per element of its largest operand or result (only its
 a using `Matmul` of part ``elementwise`` (`using_elementwise`), with k its MACs per token, which counts toward the
 upstream MACs of the GEMMs it reaches but not toward their `upstream` counts.
 
-Terms are the training ontology's (note:training-20261102T0700Z-finding-training-ontology):
+Terms are the training ontology's:
 
 - A GEMM's result is **token-indexed** when one of its batch, m or n dims is indexed by a token axis, else
   **parameter-indexed** (a weight-shaped sum over tokens, as dW).
@@ -52,7 +52,7 @@ import torch
 
 from te_core.capture.trace import BACKWARD, PHASE, CaptureRefused, Trace
 from te_core.flops import (ELEMENTWISE_NAMES, FUSED_OPTIMIZER_MACS, GATHERS, GEMM_LIKE, LINALG_NAMES, NOT_GEMM, SCALED_NAMES,
-                           TOKEN_INDEX, _is_view)
+                           TOKEN_INDEX, _is_view, gather_macs)
 
 __all__ = ["CLASSES", "Matmul", "StepGraph"]
 
@@ -609,7 +609,8 @@ class StepGraph:
             recs.append([n, g, tdims, classes, names, result, role, weight, rv])
 
         # a forward node that combines an activation with an updated operand is a using node whatever op it is
-        # (te_core.flops): at its elementwise multiplications, else its work (`_work`); a gather's source isn't combined
+        # (te_core.flops): at its elementwise multiplications, else its work (`_work`); a gather's source isn't combined,
+        # but an updated source gathered by token data is the circuit's gather (`gather_macs`)
         extra = 0
         for n in nodes:
             if (n.op != "call_function" or not isinstance(n.target, torch._ops.OpOverload) or _gemms(n)
@@ -620,12 +621,19 @@ class StepGraph:
             src = set(_arg_nodes_of(n.args[:1])) if _pk(n.target) in _GATHERS else set()
             cls_ = [klass(n, a) for a in ops]
             mixed = [c for a, (c, _) in zip(ops, cls_) if a not in src]
-            if "activation" not in mixed or "updated" not in mixed:
-                continue
-            k, kind = _other_macs(n)
-            if not kind:
-                k = _work(n)
+            source = [c for a, (c, _) in zip(ops, cls_) if a in src]
+            if "updated" in source and "activation" in mixed:
+                # an updated table read by token data: the circuit's gather of its rows (te_core.flops, gather_macs)
+                k = gather_macs(_pk(n.target), n.args[0].meta["val"].shape, n.args[1] if len(n.args) > 1 else None,
+                                n.meta["val"].numel())
                 extra += k
+            elif "activation" in mixed and "updated" in mixed:
+                k, kind = _other_macs(n)
+                if not kind:
+                    k = _work(n)
+                    extra += k
+            else:
+                continue
             if not k:
                 continue
             out = n.meta.get("val")

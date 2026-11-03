@@ -6,6 +6,7 @@ import torch
 
 from te_core import run as te_run
 from te_core.counterexample import check
+from te_core.gates import of_log
 from te_core.ledger import Ledger, ingest
 
 MODEL = '''
@@ -111,7 +112,10 @@ def test_sgd_run_records_every_step_and_verifies_an_identity_family(tmp_path, th
     assert fam["failed"] == {}
     assert len(fam["sampled"]) == 5
     assert fam["covers"] == [1, 2, 3, 4, 5]  # step 0 reads θ itself: nothing to cover
-    assert all(b > 32 for b in fam["beta"].values())  # a full update costs at least p bits per updated value
+    # a full update costs at least p bits per updated value (V·D + D·D of them, V, D = 32, 16); per token the updated MACs
+    # are the tied table's lookup (58 multiplexers per word), w1 and the head
+    floor = 32 * (32 * 16 + 16 * 16) / (58 * 16 + 16 * 16 + 32 * 16)
+    assert all(b > floor for b in fam["beta"].values()), fam["beta"]
     assert (out / "checkpoints").exists()
 
 
@@ -138,12 +142,19 @@ def test_mezo_run_is_rebuilt_from_its_seed_log(tmp_path, theta_file):
     assert all(set(s["rho"]) == {f"{k}/r{r}" for k in ("10kB", "100kB", "1MB") for r in (1, 10, 100)} for s in subs)
     assert subs[-1]["macs"] == rec["totals"]["macs"]
     assert subs[0]["macs"] < subs[-1]["macs"]
+    for s in subs:
+        assert sum(p["gates"] for p in s["formalism"]["parts"]) == pytest.approx(of_log(s["macs_log"])["gates"])
     final = json.loads((out / "run.json").read_text())
     for cp in final["checkpoints"]:
         cp["score"] = {"val": 1.0}  # final mode scores on the final set, which has no slice
     (out / "run.json").write_text(json.dumps(final))
     subs = ingest(out, led, direction="zeroth-order", mechanism="seed-replay", parent="", run_id="r1")
     assert [s["val_slice"] for s in subs] == [None] * 6
+    assert "changed" not in subs[0] and "readout_leaks" not in subs[0]
+    (out.parent / "witness.json").write_text(json.dumps({"changed": {"actual": ["embed"]}, "structure": {"layers": 2}}))
+    subs = ingest(out, led, direction="zeroth-order", mechanism="seed-replay", parent="", run_id="r1", tensors={})
+    assert subs[0]["changed"] == ["embed"] and subs[0]["layers"] == 2 and subs[0]["readout_leaks"] == []
+    assert subs[0]["args"] == final.get("script_args")
 
 
 TOKENS_OUTSIDE = MODEL + '''

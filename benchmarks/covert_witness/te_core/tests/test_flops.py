@@ -3,10 +3,12 @@ import torch.nn.functional as F
 
 from conftest import D, PER_TOKEN, VOCAB, loss_of
 from te_core.annotate import annotate
-from te_core.flops import Counter, flags, forward_macs_per_token, guard_exits, leaked
+from te_core.cw import readout_leaks
+from te_core.flops import Counter, flags, forward_macs_per_token, gather_selects, guard_exits, leaked, mux_tree
 
 IDX = torch.randint(0, VOCAB, (3, 8), generator=torch.Generator().manual_seed(3))  # 24 tokens: no activation is weight-shaped
 TOKENS = IDX.numel()
+LOOKUP = mux_tree(VOCAB, 32) * D  # the updated tied table's lookup per token: 58 multiplexers per word
 
 
 def train(m, theta, n=3, params=None, lr=0.1, body=None):
@@ -34,15 +36,38 @@ def test_counts_and_updated_structure(tiny):
     assert s0["tokens"] == s1["tokens"] == TOKENS
     assert s0["by"]["fwd/theta"] == PER_TOKEN * TOKENS  # step 0 reads θ itself
     assert "fwd/updated" not in s0["by"]
-    assert s1["by"]["fwd/updated"] == PER_TOKEN * TOKENS
+    assert s1["by"]["fwd/updated"] == (PER_TOKEN + LOOKUP) * TOKENS
     assert sorted(s1["weights"]) == ["emb", "w1.weight", "w2.weight"]
     ann = annotate(rec)
     st = ann.steps[1]
-    assert st.updated_per_token == PER_TOKEN
-    assert st.depth == 2 * D * D  # the head, after w1 and w2
-    assert [u for u, _ in st.profile] == [0, D * D, 2 * D * D]
+    assert st.updated_per_token == PER_TOKEN + LOOKUP
+    assert st.depth == LOOKUP + 2 * D * D  # the head, after the updated table's lookup, w1 and w2
+    assert [u for u, _ in st.profile] == [0, LOOKUP, LOOKUP + D * D, LOOKUP + 2 * D * D]
     assert ann.macs == rec["totals"]["macs"] == sum(s["macs"] for s in rec["steps"])
     assert st.bits == 32
+
+
+def test_a_gathers_price_is_the_ands_of_the_circuits_gather():
+    """`gather_selects` against `verity.ml.circuits.boolean.gather` on one-bit words: one tree by the token's 32 bits up to a
+    chunk, and past it the registry's chunks by the low 10 bits, then their results by the high 22."""
+    from verity.ml.circuits.boolean.forms import Circuit
+    from verity.ml.circuits.boolean.gather import gather
+
+    def ands(n):
+        C = Circuit()
+        idx = C.input("idx", 32)
+        words = [C.input(f"w{i}", 1) for i in range(n)]
+        if n <= 1024:
+            gather(C, idx, words, 0)
+        else:
+            chunks = [gather(C, idx[:10], words[i:i + 1024], 0) for i in range(0, n, 1024)]
+            gather(C, idx[10:], chunks, 0)
+        return C.kind.count("and")
+
+    for n in (1, 2, 3, 5, 32, 1000, 1024, 2048, 2051):
+        assert gather_selects(n) == ands(n), n
+    assert gather_selects(VOCAB) == mux_tree(VOCAB, 32) == 58
+    assert gather_selects(50304) == 50325  # GPT-2's table: about one multiplexer per row
 
 
 def test_frozen_weights_stay_theta(tiny):
@@ -53,6 +78,39 @@ def test_frozen_weights_stay_theta(tiny):
     assert list(st.weights) == ["w2.weight"]
     assert st.profile == ((0, D * D * TOKENS),)  # w1 is θ's: nothing updated upstream of w2
     assert st.depth == 0
+
+
+def test_an_update_of_the_tied_table_alone_is_read_at_its_lookup(tiny):
+    """The 12:50Z ruling: the lookup reads the updated table at position 0, an updated node priced as the circuit's gather,
+    so the tied head has it upstream; w1 and w2 are θ's and add nothing."""
+    m, theta = tiny
+    rec = train(m, theta, params=[m.emb])
+    st = annotate(rec).steps[2]
+    assert list(st.weights) == ["emb"]
+    assert st.updated_macs == (LOOKUP + VOCAB * D) * TOKENS
+    assert st.profile == ((0, LOOKUP * TOKENS), (LOOKUP, VOCAB * D * TOKENS))
+    assert st.depth == LOOKUP
+
+
+def test_a_record_counted_before_lookups_were_priced_gets_them_at_ingest(tiny, monkeypatch):
+    """`annotate.with_lookups` on a record counted as 3.5 did (no lookup priced) gives 3.6's annotation of the same run."""
+    from te_core import flops
+    from te_core.annotate import with_lookups
+
+    m, theta = tiny
+    want = annotate(train(m, theta))
+    torch.manual_seed(0)
+    m2 = type(m)()
+    monkeypatch.setattr(flops, "gather_macs", lambda *a: 0)
+    old = train(m2, theta)
+    monkeypatch.undo()
+    assert annotate(old).steps[1].depth == 2 * D * D
+    got = annotate(with_lookups(old, ["emb"]))
+    assert got.macs == want.macs
+    assert [(s.profile, s.depth, s.updated_per_token) for s in got.steps] == [
+        (s.profile, s.depth, s.updated_per_token) for s in want.steps]
+    assert annotate(with_lookups(old, ["w1.weight"])).steps[1].depth > annotate(old).steps[1].depth
+    assert annotate(with_lookups(old, ["head"])) == annotate(old)  # names no weight the record lists
 
 
 def test_new_weights_are_updated(tiny):
@@ -191,6 +249,68 @@ def test_token_data_read_out_of_torch_is_counted_in_its_step():
     assert s["exited"] == TOKENS * D + TOKENS and leaked(s)
     (s,) = one_step(lambda w, e: embedded(e).sum((1, 2)).tolist())["steps"]
     assert s["exited"] == 3 and not leaked(s)
+
+
+def test_a_program_made_token_source_is_one_source_by_tensor_not_by_address():
+    """ref-data's 14:06Z LOOPHOLE: tokens were keyed by an index tensor's address, so a fresh index tensor per chunk at a
+    freed one's address counted once, and one score per chunk read out was a value per token. Each new tensor over the
+    same memory counts (here a numpy buffer refilled per chunk, every chunk at one address), as does a buffer an op
+    rewrites; the same source read again, or through a view, doesn't."""
+    guard_exits()
+    chunks, per = 4, 6
+    gen = torch.Generator().manual_seed(5)
+    data = torch.randint(0, VOCAB, (chunks, per), generator=gen).numpy()
+
+    def fresh(w, e):
+        buf = data[0].copy()
+        for k in range(chunks):
+            buf[:] = data[k]
+            (F.embedding(torch.from_numpy(buf), e) @ w).sum().tolist()
+
+    (s,) = one_step(fresh)["steps"]
+    assert s["tokens"] == chunks * per and s["exited"] == chunks and not leaked(s)
+
+    def rewritten(w, e):
+        buf = torch.zeros(per, dtype=torch.long)
+        for k in range(chunks):
+            buf.copy_(torch.from_numpy(data[k]))
+            F.embedding(buf, e) @ w
+
+    (s,) = one_step(rewritten)["steps"]
+    assert s["tokens"] == chunks * per
+
+    def reread(w, e):
+        idx = torch.from_numpy(data[0])
+        F.embedding(idx, e) @ w
+        F.embedding(idx[: per // 2], e) @ w
+        F.embedding(idx, e) @ w
+
+    (s,) = one_step(reread)["steps"]
+    assert s["tokens"] == per
+
+
+def test_a_read_out_allowance_from_zero_mac_lookups_is_listed_at_ingest():
+    """The coordinator's 14:22Z rule (cw.readout_leaks): lookups of θ's table by fresh index tensors cost nothing but
+    raise the step's tokens, so a value per token read out stays under the counter's allowance; judged against the
+    tokens its counted GEMMs consumed, the step is listed. Read-outs under that, and steps without the lookups, aren't."""
+    guard_exits()
+    tensors = {"w": ["float32", [D, D]], "embed": ["float32", [VOCAB, D]]}
+
+    def body(out):
+        def run(w, e):
+            F.embedding(IDX, e) @ w
+            for _ in range(3):
+                F.embedding(torch.randint(0, VOCAB, (TOKENS,)), e)
+            out(F.embedding(IDX, e))
+
+        return run
+
+    rec = one_step(body(lambda x: x.sum(-1).numpy()))
+    (s,) = rec["steps"]
+    assert s["tokens"] == 4 * TOKENS and s["exited"] == TOKENS and not leaked(s)
+    assert readout_leaks(rec, tensors) == [{"step": 0, "tokens": 4 * TOKENS, "consumed": TOKENS, "exited": TOKENS}]
+    assert readout_leaks(one_step(body(lambda x: x.sum((1, 2)).numpy())), tensors) == []
+    assert readout_leaks(one_step(lambda w, e: (F.embedding(IDX, e) @ w).sum(-1).numpy()), tensors) == []
 
 
 def test_writes_through_data_are_seen(tiny):
