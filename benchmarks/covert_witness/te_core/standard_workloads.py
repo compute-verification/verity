@@ -13,8 +13,8 @@ checkpoint as te_core.ledger.ingest writes it (into a scratch ledger) with the r
 formalism.published under `READING`: `rho_default` and `rho_console` are its ρ at the dial's default (`points`: c =
 4,096 tokens of the start's forward, k = 80,000 bits) and at algorithm_policy's `CONSOLE` (te_core.policy's, one full
 session of the 45M reference, attention included), and `binding_kind`, `rests_on` and `kinds` are published's at the
-console's. Under reading A ρ is max(1, the measured kinds' terms), binding none where none exceeds 1, and null,
-resting on "unmeasured", only where no kind is measured; it is never infinite, so `build` refuses one. `kinds` is
+console's. ρ, its binding kind and what it rests on are published's as it gives them (null where it has no bound,
+resting on "unmeasured"); reading A's ρ is never infinite, so `build` refuses one. `kinds` is
 algorithm_policy's cell of the terms the max takes and, beside them, the sensitivities `SENSITIVITIES`: reduction,
 update and reading B's token and decoding forms. `rho_inputs` holds `KEYS` (C_gates beside algorithm_policy's `rho_inputs`), from which
 algorithm_policy.page_rho gives the dial's ρ at any (c, k); `build` refuses a row whose rho_inputs miss formalism.at's
@@ -367,7 +367,7 @@ def note(p: dict, art: str | None = None) -> str:
     (c, k), (n, bits), (into, out) = algorithm_policy.CONSOLE, panels.DEFAULT, policy.CONSOLE_SESSION
     got = {r[COLUMNS.index("reading")] for r in p["rows"]}
     how = ("reading B, a target and not a bound (the tables hold reading A's)" if got <= {"B"} else
-           "reading A, the one bound over the valid kinds (null: none measured)")
+           "reading A, the one bound over the valid kinds (null: unmeasured)")
     return (f"Small real runs, te_core {VERSION}: formalism.published, {how}, at the dial's default (c = {n} w_fwd, "
             f"k = {bits:,}) and the console's (c = {algorithm_policy.num(c, 5)} gates, one full session of the "
             f"{policy.REFERENCE_PARAMS / 1e6:.0f}M reference, attention included, {into:,} tokens in, {out:,} out: "

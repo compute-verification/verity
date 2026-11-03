@@ -1,7 +1,7 @@
 """te_core.standard_workloads builds `training/standard-workloads`: a row per workload and measured dial setting, whose
-ρ is formalism.published's under the builder's `READING`, A (max(1, the measured kinds' terms), with its binding kind,
-what it rests on and its kinds, reading B's forms among their sensitivities; null and "unmeasured" only where no kind
-is measured) at the dial's default and the console's, whose rho_inputs give the dial's ρ there (page_rho) and whose
+ρ is formalism.published's under the builder's `READING`, A (with its binding kind, what it rests on and its kinds as
+published gives them, reading B's forms among their sensitivities; null and "unmeasured" where it has no bound, never
+infinite) at the dial's default and the console's, whose rho_inputs give the dial's ρ there (page_rho) and whose
 input_status says which inputs te_core measured; a generation run's row is its rounds alone, each GEMM on the served
 codes priced as NVFP4; it reads traces from te_core 4.4 on; and the panel keeps to the panels route's limits, a cell up
 to 4,096 characters, and never replaces a served panel with one that drops its runs."""
@@ -89,11 +89,12 @@ def test_the_pinned_row_is_its_runs_quantities_priced_as_algorithm_policy_prices
     assert not SW.refused(p) and not SW.refused(p | {"note": SW.note(p, "art:" + "0" * 64)})
 
 
-def test_under_reading_a_a_row_is_max_1_and_its_measured_terms_and_null_only_where_no_kind_is_measured(monkeypatch):
+def test_under_reading_a_a_row_is_publisheds_rho_and_basis_as_is_with_its_terms_null_where_unmeasured(monkeypatch):
     """The pinned row's token kind under reading A (its trace's entries and its macs_log's tiles) is at most 1 at the
-    console's and fresh products are unmeasured, so its ρ is max(1, it) = 1, binding none, the kinds cell holding the
-    token term and fresh products' null; a measured term above 1 is published with its binding kind; without an op log
-    no kind is measured: null and unmeasured; an infinite ρ is refused."""
+    console's and fresh products are unmeasured (an op log can't tell a fresh operand): its ρ, binding kind and basis
+    are published's as it gives them, the kinds cell holding the token term and fresh products' null; a measured term
+    above 1 is published with its binding kind; without an op log no kind is measured: null and unmeasured; an
+    infinite ρ is refused."""
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
     assert SW.READING == "A"
@@ -101,14 +102,13 @@ def test_under_reading_a_a_row_is_max_1_and_its_measured_terms_and_null_only_whe
     b = formalism.bound(m, c, k)
     assert b["terms"]["token"] is not None and b["terms"]["token"] <= 1 and b["terms"]["fresh_products"] is None
     one = formalism.published(m, c, k, "A")
-    assert (one["rho"], one["binding_kind"]) == (1.0, "none")
     p, _, cells = build(m, fx, monkeypatch)
     assert (cells["reading"], cells["rho_console"], cells["binding_kind"], cells["rests_on"]) == \
-        ("A", 1.0, "none", formalism.RESTS_ON_CELL["none"])
+        ("A", SW.rho_cell(one["rho"]), one["binding_kind"], one["rests_on"])
     kinds = json.loads(cells["kinds"])
     assert list(kinds["bound"]) == list(formalism.KINDS) and kinds["bound"]["fresh_products"] is None
     assert kinds["bound"]["token"] == pytest.approx(b["terms"]["token"], rel=1e-3)
-    assert "reading A, the one bound over the valid kinds (null: none measured)" in p["note"]
+    assert "reading A, the one bound over the valid kinds (null: unmeasured)" in p["note"]
     assert f"(c = {algorithm_policy.num(policy.CONSOLE[0], 5)} gates, one full session of the 45M reference" in p["note"]
     _, _, cells = build(dataclasses.replace(m, ops=None), fx, monkeypatch)
     assert (cells["rho_default"], cells["rho_console"], cells["binding_kind"], cells["rests_on"]) == \

@@ -2456,9 +2456,9 @@
   1.0,
   1.0,
   "A",
-  "4.6",
-  "none",
-  "no measured kind > 1",
+  "4.8",
+  "token",
+  "A1 (reading A), its family: runs and tiles",
   "{\"bound\":{\"fresh_products\":null,\"token\":0.5736,\"decoding\":0.5736},\"sensitivity\":{\"reduction\":6059,\"update\":757.3,\"token_form\":312.6,\"decoding_form\":0.5736}}"
  ]
 }
