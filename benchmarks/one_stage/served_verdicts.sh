@@ -193,6 +193,8 @@
 # `served_verdicts.sh inference-policy`, in TREE with D and OUT, writes the inference-only policy at IO_CLASS alone, to
 # IO_POLICY (default $OUT/inference-only-policy.json), before a serve; `served_verdicts.sh inference-only K` judges window
 # K's circuit record at IO_CLASS alone against it.
+# `served_verdicts.sh block-counts K`, in TREE with D and OUT, judges window K's circuit records at CLASSES against the
+# policy alone (`block_counts`): the judgment public, the exact counts in D's private/.
 # `served_verdicts.sh defer WHY`, in TREE with D, K and OUT, makes step 6's deferral alone.
 # Defaults are vy-dc-h200's: the int8 B4 row's traced Build (r20261030-210701-a20f's, traced after the required manifest stopped
 # naming the FlashAttention M1 stream, as `predict row` doesn't) and taps under $H, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
@@ -642,18 +644,21 @@ measure() {  # in TREE: the class of record, unless CLASSES gates on it; it gate
   esac
   return 0
 }
-block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each class of CLASSES it counted, public (padded
-  # counts); a day's total counts each of the day's windows
-  local c tag f pins=() day
+block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each class of CLASSES it counted, judged against
+  # the inference-only policy (IO_POLICY) where the run has one: the judgment public, its exact counts in the serve dir's private/
+  local c tag f pins=() day decl=${IO_POLICY:-$OUT/inference-only-policy.json}
+  [ -f "$decl" ] || { say "BLOCK-COUNTS: none, since the run declares no c, k and n"; return 0; }
   [ -f "$WREG" ] && pins=(--pins "$WREG")
   day=$("$PY" -c 'import datetime, json, sys; t = json.load(open(sys.argv[1]))["clocks"]["time"]; print(datetime.datetime.fromtimestamp(t, datetime.timezone.utc).date())' "$D/serve.json") || return 0
+  (umask 077; mkdir -p "$D/private")
   for c in $CLASSES; do
     tag=${c//,/-}; [ "$c" = record ] && tag=record
     f=$D/window-circuit-w$K-$tag.json
     [ -f "$f" ] || continue
-    if "$PY" -m verity_vllm.pipeline.cli block-counts --day "$day" --window "$f" "$D/advice/w$K/registration.json" "${pins[@]}" \
+    if "$PY" -m verity_vllm.pipeline.cli block-counts --day "$day" --declaration "$decl" \
+         --window "$f" "$D/advice/w$K/registration.json" "${pins[@]}" --private "$D/private/block-counts-$tag.json" \
          --out "$OUT/block-counts-$tag.json" > /dev/null 2> "$D/block-counts-$tag.err"; then
-      say "BLOCK-COUNTS class $c, the picked window alone: $(tail -1 "$D/block-counts-$tag.err" | cut -c1-200)"
+      say "BLOCK-COUNTS class $c, the picked window alone: $(tail -1 "$D/block-counts-$tag.err" | cut -c1-400)"
     else say "BLOCK-COUNTS class $c refused: $(tail -1 "$D/block-counts-$tag.err" | cut -c1-600)"; fi
   done
 }
@@ -783,6 +788,7 @@ if [ "${1:-}" = tie ]; then shift; tie "$@"; exit $?; fi
 if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; rc=$?; measure; exit "$rc"; fi
 if [ "${1:-}" = inference-policy ]; then mkdir -p "$D" && inference_policy; exit $?; fi
 if [ "${1:-}" = inference-only ]; then K=${2:?served_verdicts.sh inference-only WINDOW}; inference_only; exit $?; fi
+if [ "${1:-}" = block-counts ]; then K=${2:?served_verdicts.sh block-counts WINDOW}; block_counts; exit $?; fi
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
 if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
 if [ "${1:-}" = defer ]; then defer "${2:?served_verdicts.sh defer WHY}"; exit $?; fi
