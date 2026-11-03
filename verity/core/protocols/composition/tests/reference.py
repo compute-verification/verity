@@ -199,14 +199,14 @@ def _one_stage_params(rest: dict) -> dict:
 
 def _one_stage_evidence(rest: dict) -> dict:
     """`OneStageZk.evidenceOf` behind `VStar.Recursive.Sampled`'s refusal of v1: no ``verdicts``, v1's evidence with
-    none (`decode_evidence`), and ``proofs``, exactly the public file's digest and, for each of v1's sessions in order,
-    its name, its record's digest and its rep files' digests."""
+    none (`covered_evidence`, `OneStage.evidenceOf`), and ``proofs``, exactly the public file's digest and, for each of
+    v1's sessions in order, its name, its record's digest and its rep files' digests."""
     if "proofs" not in rest:
         raise Reject(f"the evidence names no proofs: {V1_REFUSED}")
     if "verdicts" in rest:
         raise Reject("the evidence names verdicts: this audit's verdicts are its own run of the verifier on the proofs")
-    base = ONE_STAGE.decode_evidence(canonical({**{k: v for k, v in rest.items() if k != "proofs"},
-                                                "verdicts": {}}).encode())
+    base = ONE_STAGE.covered_evidence(canonical({**{k: v for k, v in rest.items() if k != "proofs"},
+                                                 "verdicts": {}}).encode())
     pr = rest["proofs"]
     _keys(pr, ["public", "sessions"], "the evidence's proofs")
     if not isinstance(pr["public"], str) or not isinstance(pr["sessions"], list):
