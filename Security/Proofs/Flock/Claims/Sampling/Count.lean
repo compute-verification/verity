@@ -10,11 +10,11 @@ transcript holds except with probability `δ`: it multiplies the strata's factor
 largest available first, and stops before the product falls below `δ`. Here it is proved, as the code is, against the
 claims' `Design.miss` (`Definitions.Claims.Sampling`):
 
-* `countBound_miss`: **`miss(countBound + 1) < δ`** for every design that is a strata draw over the partition's replay
-  units whose strata have the code's sizes and counts, every `0 < δ` (`countBound_strataPa`, through `strataPa_eq_V`
-  and `sum_card_window`); `countBound_miss_design`: the same for every well-formed design that checks all of each drawn
-  replay unit and whose first stages are strata draws (`Design.Pa_eq_strataPa`; every one-stage design but Bernoulli's,
-  `OneStage.strata`), `strataOf_subset` the uniform `k`-subset's one stratum.
+* `countBound_miss`: **`miss(countBound + 1) < δ`** for every design that is a strata draw over the partition's proof
+  blocks whose strata have the code's sizes and counts, every `0 < δ` (`countBound_strataPa`, through `strataPa_eq_V`
+  and `sum_card_window`); `countBound_miss_design`: the same for every well-formed design whose rules are strata draws
+  (`Design.Pa_eq_strataPa`; every one-stage design but Bernoulli's, `OneStage.strata`), `strataOf_subset` the uniform
+  `k`-subset's one stratum.
 * `choose_div_eq_gr`: a stratum's escape `C(n − m, k)/C(n, k)` is the product of its first `m` factors, each in
   `[0, 1]` and falling with `j` (`fac_anti`).
 * `V_le_of_sep`: an exchange: when a threshold `τ` separates the factors a choice of counts takes from those it
@@ -528,10 +528,10 @@ theorem countBound_strataPa {ss : List (ℕ × ℕ)} (hk : ∀ p ∈ ss, p.2 ≤
   exact ht
 
 /-- **The deployed count bound is sound at the claims' design**: for a design that is a strata draw over the
-partition's replay units (`Design.Pa_eq_strataPa`), with the code's strata, `miss(countBound strata δ + 1) < δ`: an
+partition's proof blocks (`Design.Pa_eq_strataPa`), with the code's strata, `miss(countBound strata δ + 1) < δ`: an
 accepted transcript holds at most `countBound strata δ` faulty units except with probability `δ`. -/
 theorem countBound_miss {d : Design} {P : Partition} {ss : List (ℕ × ℕ)}
-    (hPa : ∀ B ⊆ range P.rus.length, d.Pa P B = strataPa ss 0 B) (hN : (ss.map Prod.fst).sum = P.rus.length)
+    (hPa : ∀ B ⊆ range P.blocks.length, d.Pa P B = strataPa ss 0 B) (hN : (ss.map Prod.fst).sum = P.blocks.length)
     (hk : ∀ p ∈ ss, p.2 ≤ p.1) (strata : Array Core.Stratum) (hlen : strata.size = ss.length)
     (hs : ∀ i (h₁ : i < strata.size) (h₂ : i < ss.length), strata[i].size = ss[i].1 ∧ strata[i].k = ss[i].2)
     (δ : Core.Ratio) (hδ : 0 < δ.num) (hδd : 0 < δ.den) :
@@ -542,26 +542,25 @@ theorem countBound_miss {d : Design} {P : Partition} {ss : List (ℕ × ℕ)}
   rw [hPa B hB]
   exact hc B (hN ▸ hB) ht
 
-theorem length_flatten_eq_sum (c : List (List RU)) : c.flatten.length = (strataSizes c).sum := by
+theorem length_flatten_eq_sum (c : List (List (List ℕ))) : c.flatten.length = (strataSizes c).sum := by
   rw [List.length_flatten, strataSizes]
 
-/-- Each class's strata cover its replay units, under a well-formed design. -/
+/-- Each class's strata cover its proof blocks, under a well-formed design. -/
 theorem strata_cover {d : Design} {P : Partition} (hw : d.WellFormed P) {sss : List (List (ℕ × ℕ))}
-    (hss : ∀ p ∈ (d.rules.zip P.classes).zip sss, p.1.1.first.strata (strataSizes p.1.2) = some p.2) :
+    (hss : ∀ p ∈ (d.rules.zip P.classes).zip sss, p.1.1.strata (strataSizes p.1.2) = some p.2) :
     ∀ p ∈ (d.rules.zip P.classes).zip sss, (p.2.map Prod.fst).sum = p.1.2.flatten.length := fun p hp => by
-  rw [OneStage.strata_sum (hss p hp) (hw.2 p.1 (List.of_mem_zip hp).1).1, length_flatten_eq_sum]
+  rw [OneStage.strata_sum (hss p hp) (hw.2 p.1 (List.of_mem_zip hp).1), length_flatten_eq_sum]
 
-/-- **A design that checks every proof unit, its first stages strata draws, is one strata draw** over the partition's
-replay units: the classes' strata in order. -/
+/-- **A design whose rules are strata draws is one strata draw** over the partition's proof blocks: the classes'
+strata in order. -/
 theorem Design.Pa_eq_strataPa {d : Design} {P : Partition} (hw : d.WellFormed P)
-    (hnone : ∀ r ∈ d.rules, r.check = none) {sss : List (List (ℕ × ℕ))} (hs : sss.length = P.classes.length)
-    (hss : ∀ p ∈ (d.rules.zip P.classes).zip sss, p.1.1.first.strata (strataSizes p.1.2) = some p.2)
+    {sss : List (List (ℕ × ℕ))} (hs : sss.length = P.classes.length)
+    (hss : ∀ p ∈ (d.rules.zip P.classes).zip sss, p.1.1.strata (strataSizes p.1.2) = some p.2)
     (B : Finset ℕ) : d.Pa P B = strataPa sss.flatten 0 B := by
   refine Design.Pa_strata d P sss hw.1 hs (fun p hp => ⟨strata_cover hw hss p hp, fun B' hB' => ?_⟩) B
-  have hr : p.1.1 ∈ d.rules := (List.of_mem_zip (List.of_mem_zip hp).1).1
-  rw [Rule.Pa_none (hnone _ hr), OneStage.Pa_strata (hss p hp) (by rwa [← length_flatten_eq_sum])]
+  rw [OneStage.Pa_strata (hss p hp) (by rwa [← length_flatten_eq_sum])]
 
-theorem sum_flatten_strata : ∀ (rs : List Rule) (cs : List (List (List RU))) (sss : List (List (ℕ × ℕ))),
+theorem sum_flatten_strata : ∀ (rs : List OneStage) (cs : List (List (List (List ℕ)))) (sss : List (List (ℕ × ℕ))),
     rs.length = cs.length → sss.length = cs.length →
     (∀ p ∈ (rs.zip cs).zip sss, (p.2.map Prod.fst).sum = p.1.2.flatten.length) →
     (sss.flatten.map Prod.fst).sum = cs.flatten.flatten.length
@@ -577,31 +576,31 @@ theorem sum_flatten_strata : ∀ (rs : List Rule) (cs : List (List (List RU))) (
       sum_flatten_strata rs cs sss (by simpa using hl) (by simpa using hs) fun p hp => h p (by simp [hp]),
       List.flatten_cons, List.flatten_append, List.length_append]
 
-/-- The strata of a design that is one strata draw cover the partition's replay units. -/
+/-- The strata of a design that is one strata draw cover the partition's proof blocks. -/
 theorem sum_strata_eq_length {d : Design} {P : Partition} (hw : d.WellFormed P) {sss : List (List (ℕ × ℕ))}
     (hs : sss.length = P.classes.length)
-    (hss : ∀ p ∈ (d.rules.zip P.classes).zip sss, p.1.1.first.strata (strataSizes p.1.2) = some p.2) :
-    (sss.flatten.map Prod.fst).sum = P.rus.length :=
+    (hss : ∀ p ∈ (d.rules.zip P.classes).zip sss, p.1.1.strata (strataSizes p.1.2) = some p.2) :
+    (sss.flatten.map Prod.fst).sum = P.blocks.length :=
   sum_flatten_strata d.rules P.classes sss hw.1 hs (strata_cover hw hss)
 
-/-- **The deployed count bound is sound at every design that checks all of each drawn replay unit and draws strata**:
-`miss(countBound strata δ + 1) < δ` for the classes' strata in order, given as the code's. -/
+/-- **The deployed count bound is sound at every design that draws strata**: `miss(countBound strata δ + 1) < δ` for
+the classes' strata in order, given as the code's. -/
 theorem countBound_miss_design {d : Design} {P : Partition} (hw : d.WellFormed P)
-    (hnone : ∀ r ∈ d.rules, r.check = none) {sss : List (List (ℕ × ℕ))} (hs : sss.length = P.classes.length)
-    (hss : ∀ p ∈ (d.rules.zip P.classes).zip sss, p.1.1.first.strata (strataSizes p.1.2) = some p.2)
+    {sss : List (List (ℕ × ℕ))} (hs : sss.length = P.classes.length)
+    (hss : ∀ p ∈ (d.rules.zip P.classes).zip sss, p.1.1.strata (strataSizes p.1.2) = some p.2)
     (strata : Array Core.Stratum) (hlen : strata.size = sss.flatten.length)
     (hst : ∀ i (h₁ : i < strata.size) (h₂ : i < sss.flatten.length),
       strata[i].size = sss.flatten[i].1 ∧ strata[i].k = sss.flatten[i].2)
     (δ : Core.Ratio) (hδ : 0 < δ.num) (hδd : 0 < δ.den) :
     d.miss P (countBound strata δ + 1) < (δ.num : ℝ) / δ.den := by
-  refine countBound_miss (fun B _ => Design.Pa_eq_strataPa hw hnone hs hss B) (sum_strata_eq_length hw hs hss)
+  refine countBound_miss (fun B _ => Design.Pa_eq_strataPa hw hs hss B) (sum_strata_eq_length hw hs hss)
     (fun p hp => ?_) strata hlen hst δ hδ hδd
   obtain ⟨ss, hss', hp'⟩ := List.mem_flatten.1 hp
   obtain ⟨q, hq, rfl⟩ : ∃ q ∈ (d.rules.zip P.classes).zip sss, q.2 = ss := by
     obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hss'
     have hi' : i < ((d.rules.zip P.classes).zip sss).length := by simp [hw.1, hs] at hi ⊢; omega
     exact ⟨_, List.getElem_mem hi', by simp⟩
-  exact OneStage.strata_le (hss q hq) (hw.2 q.1 (List.of_mem_zip hq).1).1 p hp'
+  exact OneStage.strata_le (hss q hq) (hw.2 q.1 (List.of_mem_zip hq).1) p hp'
 
 /-- `Bound.strataOf` reads the uniform `k`-subset as one stratum of every unit, the strata `OneStage.strata` gives
 `subset`. -/

@@ -3,7 +3,7 @@
 # the bit-exact gate (every arm on poisoned outputs, judged by egemm80_ref.py), the interleaved bench and each receipted
 # arm held 40 s for its steady clock, with nvidia-smi sampling clock and power every 200 ms. Clocks are read, never set.
 #
-#   research run --on vy-dc-a100 --project verity --campaign cmp-13 --source /workspace --cwd source \
+#   research run --on vy-dc-a100 --project verity --source /workspace --cwd source \
 #     --env GPU_LEASE_WHO=ampere -- bash benchmarks/pouw/edited_gemm/run80.sh
 #
 # Every output is under $OUT: build.log, sass/, gate-sass.json, gate/ (the dump), gate.jsonl, ref.jsonl, bench.jsonl,

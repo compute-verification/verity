@@ -348,7 +348,7 @@ def test_an_honest_fixed_length_round_is_accepted(s, slot):
     (1, [1, 4, 0, 0, 0, 0, 0, 0], lambda r: r[:3] + [[3, 0, 3, 2, 1]] + r[4:]),
 ])
 def test_a_swapped_request_to_row_assignment_is_refused(s, slot, edit):
-    """The rows a round serves are the public schedule's count (#3590, #3827's `credit._length`), and v1 holds each
+    """The rows a round serves are the public schedule's count (`credit._length`), and v1 holds each
     request to its hidden header's cap and round. A prover who keeps the counts but rewrites those headers moves a decode
     row from one request to another, and v1 accepts it; v2 reads the public caps and refuses it."""
     req, cap = _fixed()
@@ -420,3 +420,191 @@ def test_a_v2_rounds_live_file_reads_the_known_public_caps():
     rows = {p: (b, ps) for p, _s, b, ps in LR.statement_rows(4, v2=True)}
     assert list(rows)[-4:] == [f"cap_{i}" for i in range(4)] and rows["cap_1"] == (32, ["cap[1]"])
     assert LR.table("h1/", LR.CAPS) == "h1/caps"
+
+
+def _bits_rows(T, slot, req, m, s, base, cap):
+    (ok,) = evaluate(bind(L.PouwLiveRows, T=T, R=len(slot)), sum(map(_b, slot), []),
+                     sum((_b(x) for h in req for x in h), []), _b(m), _b(s), _b(base), sum(map(_b, cap), []))
+    return ok
+
+
+def _prefill(rng, T, R):
+    """A prefill round 0 at T rows whose requests (at most R, each admitted in round 0) are served whole, each its prompt's
+    rows in order from its first slot, and its public caps."""
+    n = rng.randrange(R + 1)
+    prompts, firsts, x = [], [], 0
+    for _q in range(n):
+        p = rng.randrange(1, max(T // max(n, 1), 1) + 1)
+        if x + p > T:
+            break
+        prompts.append(p)
+        firsts.append(x)
+        x += p
+    n = len(prompts)
+    cap = [rng.randrange(1, 4) for _q in range(n)]
+    req = [[q, 0, firsts[q], cap[q], prompts[q]] for q in range(n)] + [[0] * L.HEADER] * (T - n)
+    slot = [q + 1 for q in range(n) for _ in range(prompts[q])]
+    m = len(slot)
+    return slot + [0] * (T - m), req, m, 0, cap + [0] * (T - n)
+
+
+def _pieces_ok(T, R, slot, req, m, s, cap, bits=False):
+    f = (lambda *a: _bits_rows(T, *a)) if bits else (lambda *a: L.rows_ok(*a, T))
+    return [f(slot[j * R:(j + 1) * R], req[:R], m, s, j * R, cap[:R]) for j in range(L.pieces(T, R))]
+
+
+@pytest.mark.parametrize("T, R", [(4, 4), (8, 4), (16, 4), (12, 2)])
+def test_a_pieces_bits_are_its_words(T, R):
+    rng = random.Random(T * 7 + R)
+    for _ in range(80):
+        slot, req, m, s, cap = _prefill(rng, T, R)
+        slot, req, cap = list(slot), [list(h) for h in req], list(cap)
+        for _ in range(rng.randrange(3)):
+            k, i = rng.randrange(7), rng.randrange(T)
+            if k == 0:
+                slot[i] = rng.choice([0, 1, R, R + 1, 1 << 31, M32])
+            elif k == 1:
+                m = rng.choice([m + 1, max(m - 1, 0), T + 1, M32])
+            elif k == 2:
+                q = rng.randrange(R)
+                req[q][L.SLOT] = rng.choice([req[q][L.SLOT] + 1, max(req[q][L.SLOT] - 1, 0), M32])
+            elif k == 3:
+                q = rng.randrange(R)
+                req[q][L.PROMPT] = rng.choice([0, 1, req[q][L.PROMPT] + 1, M32])
+            elif k == 4:
+                s = rng.choice([1, 2, 1 << 31])
+            elif k == 5:
+                cap[rng.randrange(R)] ^= 1
+            else:
+                slot[i] = slot[rng.randrange(T)]
+        j = rng.randrange(T // R)
+        args = (slot[j * R:(j + 1) * R], req[:R], m, s, rng.choice([j * R, j * R + 1, M32 - 1]), cap[:R])
+        assert _bits_rows(T, *args) == L.rows_ok(*args, T)
+
+
+@pytest.mark.parametrize("T, R", [(8, 4), (16, 4), (16, 8), (12, 2)])
+def test_a_round_whose_pieces_all_accept_is_one_v2_accepts_and_counts_m_admitted_rows(T, R):
+    """Every piece of a round accepting is v2's ok on the round with the request leaves past the first R empty and their
+    caps 0 (no row names them), so m is rule A's count: no count is carried between pieces, since a request's rows lie in
+    its one interval [first slot, first slot + prompt length)."""
+    rng = random.Random(500 + T + R)
+    accepted = 0
+    for _ in range(150):
+        slot, req, m, s, cap = _prefill(rng, T, R)
+        slot = list(slot)
+        if rng.random() < 0.5:
+            i, k = rng.randrange(T), rng.randrange(T)
+            slot[i], slot[k] = slot[k], slot[i]
+        if rng.random() < 0.3:
+            slot[rng.randrange(T)] = rng.randrange(R + 2)
+        if all(_pieces_ok(T, R, slot, req, m, s, cap)):
+            accepted += 1
+            head = [h if q < R else [0] * L.HEADER for q, h in enumerate(req)]
+            assert L.live_ok_v2(slot, head, m, s, [c if q < R else 0 for q, c in enumerate(cap)]) == 1
+            assert L.admitted(slot, req) == L.admitted(slot, head) == m
+    assert accepted > 20
+
+
+def test_an_honest_prefill_round_cut_into_pieces_is_accepted_piece_by_piece():
+    """T = 16 in pieces of 4: requests 0, 1 and 2 with prompts of 5, 6 and 3 tokens from slots 0, 5 and 11, so request 0
+    spans pieces 0 and 1 and request 1 pieces 1 and 2; row 14 and on are empty."""
+    req = [[0, 0, 0, 2, 5], [1, 0, 5, 1, 6], [2, 0, 11, 1, 3]] + [[0] * L.HEADER] * 13
+    cap = [2, 1, 1] + [0] * 13
+    slot = [1] * 5 + [2] * 6 + [3] * 3 + [0] * 2
+    assert _pieces_ok(16, 4, slot, req, 14, 0, cap) == _pieces_ok(16, 4, slot, req, 14, 0, cap, bits=True) == [1] * 4
+    assert L.live_ok_v2(slot, req, 14, 0, cap) == 1
+
+
+@pytest.mark.parametrize("edit, bad", [
+    (lambda x, r, m, s: (x[:5] + [1] + x[6:], r, m, s), [1]),                   # request 0 a 6th row, past its interval
+    (lambda x, r, m, s: ([2] + x[1:], r, m, s), [0]),                           # request 1 named before its first slot
+    (lambda x, r, m, s: (x, r[:1] + [[1, 0, 4, 1, 6]] + r[2:], m, s), [2]),     # its first slot moved: row 10 is past it
+    (lambda x, r, m, s: (x, r, 15, s), [3]),                                    # an empty row counted (a pad row)
+    (lambda x, r, m, s: (x, r, 13, s), [3]),                                    # a served row past m
+    (lambda x, r, m, s: (x[:14] + [3, 0], r, 15, s), [3]),                      # request 2 a 4th row
+    (lambda x, r, m, s: (x, r, 17, s), [0, 1, 2, 3]),                           # m > T
+    (lambda x, r, m, s: (x, r, m, 1), [0, 1, 2, 3]),                            # round 1: none of them is its own
+    (lambda x, r, m, s: (x[:8] + [5] + x[9:], r, m, s), [2]),                   # a row naming a request past the first R
+])
+def test_a_piece_refuses_a_row_outside_its_requests_interval_or_round(edit, bad):
+    req = [[0, 0, 0, 2, 5], [1, 0, 5, 1, 6], [2, 0, 11, 1, 3]] + [[0] * L.HEADER] * 13
+    cap = [2, 1, 1] + [0] * 13
+    slot, req, m, s = edit([1] * 5 + [2] * 6 + [3] * 3 + [0] * 2, req, 14, 0)
+    got = _pieces_ok(16, 4, slot, req, m, s, cap)
+    assert got == _pieces_ok(16, 4, slot, req, m, s, cap, bits=True)
+    assert [j for j, ok in enumerate(got) if not ok] == bad
+
+
+def test_a_decode_row_is_refused_by_its_piece():
+    """A request decoding in round 1 (admitted in round 0, cap 2) is named in a later round than its header's: v2 takes the
+    row, and a piece has no interval for it and refuses it."""
+    req = [[0, 0, 0, 2, 5]] + [[0] * L.HEADER] * 7
+    cap = [2] + [0] * 7
+    slot = [1] + [0] * 7
+    assert L.live_ok_v2(slot, req, 1, 1, cap) == 1
+    assert _pieces_ok(8, 4, slot, req, 1, 1, cap) == _pieces_ok(8, 4, slot, req, 1, 1, cap, bits=True) == [0, 1]
+
+
+@pytest.mark.parametrize("T, R", [(0, 4), (8, 3), (8, 0), (True, 1), (8.0, 4)])
+def test_a_rounds_pieces_cut_t_into_whole_pieces(T, R):
+    with pytest.raises(ValueError, match="R dividing T"):
+        L.pieces(T, R)
+    with pytest.raises(ValueError, match="refuses this binding"):
+        bind(L.PouwLiveRows, T=T, R=R)
+
+
+def test_a_pieces_circuit_grows_with_its_rows_not_with_t():
+    """A piece reads R slots, R headers, m, s, base and R caps, to one bit; T enters only as the m ≤ T constant, so a
+    piece of T = 8,192's round is a piece of T = 128's."""
+    params, ret = bind(L.PouwLiveRows, T=16, R=4).signature()
+    assert [n for n, _ in params] == list(L.PORTS_ROWS) and ret == L.BL.BIT
+    assert [t.leaves for _, t in params] == [4 * 32, 4 * 5 * 32, 32, 32, 32, 4 * 32]
+    a, b = L.traced_rows(128, 8).counts["and"], L.traced_rows(1 << 13, 8).counts["and"]
+    assert abs(a - b) <= 64 and L.traced_rows(128, 16).counts["and"] < 5 * a
+
+
+@pytest.mark.parametrize("T, S, R", [(8, 1, 4), (8, 2, 2), (12, 2, 4)])
+def test_the_pieced_live_program_is_each_rounds_pieces_of_its_one_template(T, S, R):
+    """The pieced live Program's partition is S·P units, unit s·P + j round s's piece j on rows [s T + j R, s T + (j + 1) R)
+    of the slots, the first R headers and caps, row s of m and round and row j of base (j R), so it evaluates to each
+    piece's ok at its unit."""
+    prog, k = L.program_rows(T, S, "h1/", R), L.pieces(T, R)
+    params, ret = prog.fn.signature()
+    assert [n for n, _ in params] == [f"h1/{r}" for r in LR.ROLES_ROWS] and ret.leaves == S * k == S * T // R
+    assert P.evaluate(prog, L.query_rows(T, R)).population == S * k
+    rng = random.Random(T * S * R)
+    rounds = [_prefill(rng, T, R) for _s in range(S)]
+    req, cap = rounds[0][1], rounds[0][4]
+    rounds = [(slot if s == 0 else [0] * T, 0 if s else m) for s, (slot, _r, m, _s, _c) in enumerate(rounds)]
+    want = [L.rows_ok(slot[j * R:(j + 1) * R], req[:R], m, s, j * R, cap[:R], T)
+            for s, (slot, m) in enumerate(rounds) for j in range(k)]
+    args = (sum((_b(v) for slot, _m in rounds for v in slot), []), sum((_b(x) for h in req for x in h), []),
+            sum((_b(m) for _slot, m in rounds), []), sum((_b(s) for s in range(S)), []),
+            sum((_b(j * R) for j in range(k)), []), sum(map(_b, cap), []))
+    assert list(evaluate(prog.fn, *args)) == want == [1] * (S * k)
+
+
+def test_a_pieces_live_file_reads_its_rows_the_first_headers_and_caps_and_the_known_m_round_base_and_ok_rows():
+    """Unit u = s P + j reads rows j R + i of round s's ``slots@<s>``, rows i < R of ``requests@0`` and of the public caps,
+    m, s and base at their known rows (base@<j> j R's) and row u of the S·P ok rows, and nothing at another unit."""
+    T, S, R = 8, 2, 4
+    prog, window, session, regs = _window(T, S, random.Random(9))
+    roots = {v: r.root.hex() for v, r in regs.items()}
+    u, j = 3, 1
+    doc = LR.reads_file_rows(prog, T, S, R, u, roots, window, session, 2, [5, 2], "h1/")
+    ports = doc["ports"]
+    assert sorted(ports) == sorted([p for p, *_ in LR.statement_rows_pieces(R)] + [LR.OK_PORT])
+    assert [p for p, *_ in LR.statement_rows_pieces(R)][2 * R:2 * R + 3] == ["m", "s", "base"]
+    for i in range(R):
+        assert ports[f"slot_{i}"]["value"] == "h1/slots@1" and ports[f"slot_{i}"]["reads"] == [None] * u + [j * R + i]
+        assert {k: ports[f"slot_{i}"][k] for k in G.ENTRY_KEYS} == {k: regs["h1/slots@1"].entry()[k] for k in G.ENTRY_KEYS}
+        assert ports[f"req_{i}"]["reads"] == [None] * u + [i] and ports[f"cap_{i}"]["reads"] == [None] * u + [i]
+    rows, salts, reg = LR.base_table(prog, "h1/", window, j, R)
+    assert ports["base"]["value"] == "h1/base@1" and rows == [LR.slot_words([j * R])[0]]
+    assert ports["base"]["known"] == {"rows": rows, "salts": [x.hex() for x in salts]} and ports["base"]["root"] == reg.root.hex()
+    assert LR.base_table(prog, "h1/", window, 0, R)[2].root != reg.root
+    assert ports["m"]["value"] == "h1/m@1" and ports["s"]["value"] == "h1/round@1"
+    ok = ports[LR.OK_PORT]
+    assert ok["leaves"] == S * T // R and ok["reads"] == [None] * u + [u]
+    with pytest.raises(ValueError, match="none of the"):
+        LR.reads_file_rows(prog, T, S, R, S * T // R, roots, window, session, 2, [5, 2], "h1/")

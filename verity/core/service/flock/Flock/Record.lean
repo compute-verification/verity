@@ -21,7 +21,7 @@ structure StreamRec where
 
 /-- What the verifier configures about a session (§4); nothing here comes from the record. -/
 structure SessionSpec where
-  /-- the session's tables, in table order (one, or #306's several: `Stmt.setupTables`) -/
+  /-- the session's tables, in table order (one, or several: `Stmt.setupTables`) -/
   tables : Array String
   /-- a table's rep stream domain -/
   domain : String → Nat → String
@@ -35,7 +35,7 @@ structure SessionSpec where
   a table's part) and its instance count -/
   unitDraw : Option Json := none
   instances : Nat := 0
-  /-- the record's digests are SHA-512 under `_sha512` keys (PR #83's `SessionConfig::sha512_digests`), else SHA-256 -/
+  /-- the record's digests are SHA-512 under `_sha512` keys (the circuit prover's `SessionConfig::sha512_digests`), else SHA-256 -/
   sha512Digests : Bool := false
   /-- the verifier's keyed coin tree (`coin-tree/hm96-sha512/v2`), when its `Hello` names one: R7 takes the prover's nonce -/
   coinTree : Option CoinTree.Spec := none
@@ -50,7 +50,7 @@ def SessionSpec.dg (spec : SessionSpec) (b : ByteArray) : ByteArray :=
 def SessionSpec.repStreams (spec : SessionSpec) : Array (Nat × Nat × String) :=
   (Array.range spec.tables.size).flatMap fun i => #[0, 1].map fun r => (i, r, s!"{spec.tables[i]!}/rep{r}")
 
-structure Session where
+structure RunRecord where
   rootF : ByteArray
   /-- each table's root_B and public words, in the spec's table order -/
   rootB : Array ByteArray
@@ -96,7 +96,7 @@ def f128s (a : Array Json) : V (Array F128) := a.mapM fun x => match x.getStr? w
 def check (b : Bool) (why : String) : V Unit := if b then pure () else throw why
 
 /-- Decode the record and run S1–S14 (§5.3). -/
-def decode (spec : SessionSpec) (text : String) : V Session := do
+def decode (spec : SessionSpec) (text : String) : V RunRecord := do
   let j ← match Json.parse text with
     | .ok j => pure j
     | .error e => throw s!"record: not JSON: {e}"

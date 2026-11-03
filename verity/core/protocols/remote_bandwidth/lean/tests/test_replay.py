@@ -90,7 +90,7 @@ def test_a_transcript_reads_a_windows_frames_as_the_live_verifiers_do(server, tm
     """A transcript's `verify` carries the window's frames as the wire did (`frames`), which both verifiers read as the
     live ones do (`Wire.openingsOf`, `wire.openings_of`): every frame's openings in turn, or none once a frame doesn't
     decode. So a window whose openings all came, beside a frame neither can read, is malformed on replay as it was
-    live; a transcript that kept the frames that decoded replayed it accepted (RD-11)."""
+    live; a transcript that kept the frames that decoded replayed it accepted."""
     case, _ = M.recorded("honest")
 
     def framed(extra: list[bytes]) -> dict:
@@ -238,7 +238,7 @@ def test_a_registration_from_before_layout_and_rows_replays_without_its_digest(s
 
 
 def test_a_session_from_before_the_stated_window_replays_under_its_shortest(server, tmp_path) -> None:
-    """A window shorter than the record's `window_ns` is a boundary today's `Session` refuses, so the next window's
+    """A window shorter than the record's `window_ns` is a boundary today's `AuditRun` refuses, so the next window's
     challenge never leaves and its first root fails `order`; the case states the session's shortest window instead."""
     v = verifier_json(run("honest"))
     s = v["sessions"][0]
@@ -338,7 +338,7 @@ def test_case_of_keeps_a_paced_sessions_pace(server, tmp_path, name) -> None:
 
 
 def test_case_of_reads_the_pace_the_pace_k_driver_wrote(server, tmp_path) -> None:
-    """The `--pace K` driver wrote a session's pace as its `audit.Pace` (`{k, window_ns}`, r20261019-035339-7f27), not
+    """The `--pace K` driver wrote a session's pace as its `audit.Pace` (`{k, window_ns}`), not
     `pace_of`'s k and T: a rejected session, with no record to read it from, replays under it. Its `order` isn't in
     what the record keeps (the books keep no refused root), so the replay holds without reaching it."""
     v = verifier_json(run("order-past-pace"))

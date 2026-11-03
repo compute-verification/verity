@@ -1,11 +1,15 @@
 """``circuit-check --shard K/N`` and ``--combine`` (`circuit_check.shard`): which shard a target is, what a shard writes, what
-``--combine`` refuses, and that a combined run's report, verdict and output are the unsharded run's."""
+``--combine`` refuses, and that a combined run's report, verdict and output are the unsharded run's.  And ``--binding NAME``
+and ``--bindings``: each catalog binding's targets, together the whole list."""
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import random
 import shutil
+import subprocess
+import sys
 import types
 from pathlib import Path
 
@@ -16,9 +20,11 @@ from circuit_check import cli
 from circuit_check import known as KN
 from circuit_check import shard as SH
 from circuit_check import targets as TG
-from test_cache import _bindings, _tree
+from test_cache import REPO, _bindings, _tree
 from test_units import BINDINGS as UNIT_BINDINGS
+from test_units import FORKED as UNITS_FORKED
 from test_units import HARNESS as UNITS
+from test_units import _copied, _fresh, _records_only
 from test_units import _run as _run_units
 
 
@@ -147,6 +153,7 @@ def test_combining_three_shards_gives_the_unsharded_run_s_report_verdict_and_out
     assert json.dumps(got["summary"]) == json.dumps(rep["summary"])
     assert _untimed(got) == _untimed(rep) and got["schema"] == rep["schema"] and got["options"] == rep["options"]
     assert got["combined"]["shards"] == 3 and sum(w["targets"] for w in got["combined"]["walls"]) == len(ids)
+    assert all(0 <= w["prologue_s"] <= w["wall_s"] for w in got["combined"]["walls"]), got["combined"]["walls"]
 
 
 def test_a_shard_fails_on_its_own_new_failures_and_only_the_combine_on_the_joined_ones(stub, tmp_path, capsys, monkeypatch):
@@ -246,11 +253,37 @@ def test_the_shard_options_are_refused_where_they_mean_nothing(stub, tmp_path, c
                       (["--all", "--shard-dir", "d"], "give --shard K/N"),
                       (["--all", "--shard", "1/3", "--shard-dir", "d", "--update-pins"], "--update-pins"),
                       (["--combine", "d", "--all"], "--combine joins"),
-                      (["--combine", "d", "--batch"], "four modes")):
+                      (["--combine", "d", "--batch"], "six modes"),
+                      (["--combine", "d", "--records-only"], "six modes"),
+                      (["--all", "--cache", "c", "--records-only", "--bindings"], "six modes"),
+                      (["--bindings", "--cache", "c"], "--bindings names"),
+                      (["--all", "--bindings"], "--bindings names"),
+                      (["--all", "--bindings", "--cache", "c", "--binding", "_core_roots"], "--bindings names"),
+                      (["--all", "--catalog-units", "--binding", "_core_roots"], "--binding checks"),
+                      (["--all", "--cache", "c", "--binding", "_core_roots"], "--binding checks"),
+                      (["--all", "--catalog-units", "--cache", "c", "--binding", "_core_roots", "SynPass_v1"], "--binding checks"),
+                      (["--all", "--catalog-units", "--cache", "c", "--binding", "_core_roots", "--shard", "1/3",
+                        "--shard-dir", "d"], "--binding checks"),
+                      (["--records-only", "--cache", "c"], "--records-only stores"),
+                      (["--all", "--records-only"], "--records-only stores"),
+                      (["--all", "--records-only", "--cache", "c", "SynPass_v1"], "--records-only stores"),
+                      (["--all", "--records-only", "--cache", "c", "--no-cache"], "--records-only stores"),
+                      (["--all", "--records-only", "--cache", "c", "--update-pins"], "--records-only stores"),
+                      (["--all", "--records-only", "--cache", "c", "--shard", "1/3", "--shard-dir", "d"], "--records-only stores")):
         with pytest.raises(SystemExit) as e:
             cli.main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err, argv
     _refused(capsys, [tmp_path / "nothing"], "did not finish")
+
+
+def test_a_binding_s_name_is_its_root_function_its_files_models_or_its_template_entry():
+    m = "verity.ml.circuits.ops.boolean.gf2k.circuit-check#"
+    assert [SH.binding(u) for u in ((f"{m}_gf2k_roots",), (f"{m}_x_roots", f"{m}_x_bindings"), ("_kernel_roots",),
+                                    ("_vocabulary_roots", "_vocabulary_bindings"), (f"{m}_model_roots:Gf2kMul_v1",),
+                                    ("_model_roots:SynOther_v1",), (f"{m}TEMPLATE_PARAMS:token-select-combine",),
+                                    ("TEMPLATE_PARAMS:rmsnorm-cuda-vec8",), ("<registered>",))] == [
+        f"{m}_gf2k_roots", f"{m}_x_roots", "_kernel_roots", "_vocabulary_roots", f"{m}_model_roots", "_model_roots",
+        f"{m}TEMPLATE_PARAMS:token-select-combine", "TEMPLATE_PARAMS", "<registered>"]
 
 
 def test_the_shard_module_is_outside_the_checker_s_version(tmp_path, monkeypatch):
@@ -333,3 +366,66 @@ def test_a_shard_describes_only_its_own_targets_before_its_checks(tmp_path):
     _bindings(whole, *UNIT_BINDINGS)
     out = _run_units(whole, SHARDED.replace("SHARD)", "None)"))
     assert sorted(out["before"]) == sorted(out["checks"]) == UNIT_IDS and out["stats"]["units"] == {"stored": 5}
+
+
+@pytest.mark.slow
+def test_every_shard_from_a_copy_of_one_records_only_run_s_cache_builds_no_binding(tmp_path):
+    """One ``--records-only`` run's cache, copied to three trees (three machines), gives each forked shard its targets with
+    no binding built and no body built in its own process, and the shards' verdicts are together the full build's."""
+    assert UNITS_FORKED.count("fork=True)") == 1
+    root = _tree(tmp_path / "t")
+    _bindings(root, *UNIT_BINDINGS)
+    assert _records_only(root)["stored"] == 5
+    got: dict = {}
+    for k in (1, 2, 3):
+        out = _run_units(_copied(root, tmp_path / f"s{k}"), UNITS_FORKED.replace("fork=True)", f"fork=True, shard=({k}, 3))"))
+        assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and out["here"] == [], out["stats"]["units"]
+        assert sorted(out["values"]) == sorted(t for t in UNIT_IDS if SH.shard_of("definition", t, 3) == k)
+        got.update(out["values"])
+    assert got == _fresh(root)["values"]
+
+
+#: `test_units`' setup, then ``circuit-check --all --bindings -j 2`` (`cli.bindings`) from the records in the tree's cache
+BINDINGS_ONLY = UNITS[:UNITS.index("rep = cli.run(")] + 'print(json.dumps(cli.bindings(root / "cache", log=None, jobs=2)))\n'
+
+
+def _py(root: Path, harness: str) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, "-c", harness, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO,
+                          env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+
+
+@pytest.mark.slow
+def test_each_binding_from_a_copy_of_one_records_only_run_s_cache_checks_its_own_targets_and_together_the_list(tmp_path):
+    """``--bindings`` names each catalog binding with the targets ``--binding`` checks under it: together the whole list, each
+    target once.  Each forked ``--binding`` run, in a tree of its own from a copy of one ``--records-only`` run's cache (a task
+    on another machine), builds no binding and no body in its own process and checks exactly its targets, with the verdicts a
+    full build gives; run again, it reuses every target.  With no record it refuses rather than build, and given a name no
+    catalog binding has, rather than check nothing."""
+    root = _tree(tmp_path / "t")
+    _bindings(root, *UNIT_BINDINGS)
+    cold = _py(root, UNITS.replace("units=True)", "units=True, binding='_core_roots')"))
+    assert cold.returncode and "the bindings' records give no task list" in cold.stderr, cold.stderr
+    assert _records_only(root)["stored"] == 5
+    got = _py(root, BINDINGS_ONLY)
+    assert got.returncode == 0, got.stderr
+    named = json.loads(got.stdout.strip().splitlines()[-1])
+    assert sorted(named["bindings"]) == ["<registered>", "_core_roots", "_model_roots", "_sized_roots", "_xor_roots"]
+    assert sorted(label for ts in named["bindings"].values() for _, label in ts) == UNIT_IDS and named["root_errors"] == []
+    values: dict = {}
+    for i, (name, targets) in enumerate(named["bindings"].items()):
+        tree = _copied(root, tmp_path / f"b{i}")
+        # the real registry, which `targets.load_registries` loads before any check and the harness's stand-in doesn't: else the
+        # first check to load it records the kernels it registers as reads this process can't digest
+        forked = UNITS_FORKED.replace("fork=True)", f"fork=True, binding={name!r})").replace(
+            "rep = cli.run(", "from verity.ml.definitions.registry import catalog as RC\nRC.load()\nrep = cli.run(", 1)
+        out = _run_units(tree, forked)
+        assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and out["here"] == [], (name, out["stats"])
+        assert sorted(out["values"]) == sorted(label for _, label in targets) and out["hits"] == [], name
+        values.update(out["values"])
+        if name == "_core_roots":
+            again = _run_units(tree, forked)
+            assert again["stats"]["units"] == out["stats"]["units"] and again["here"] == [], again["stats"]
+            assert again["hits"] == sorted(again["values"]) == sorted(out["values"]), again
+    assert values == _fresh(root)["values"]
+    unknown = _py(root, UNITS.replace("units=True)", "units=True, binding='_no_roots')"))
+    assert unknown.returncode and cli.NO_BINDING in unknown.stderr, unknown.stderr
