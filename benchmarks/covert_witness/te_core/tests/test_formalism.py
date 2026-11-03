@@ -775,7 +775,7 @@ def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it():
     one = F.bound(m, c, k)
     assert one["terms"]["fresh_products"] == b["proved"]["rho_no_cell"] and one["binding"] == "fresh_products"
     assert one["sensitivities"]["fresh_cell"] == b["proved"]["rho"]
-    assert one["inputs"]["fresh_products"]["capture"] == products.CAPTURE == F.PRODUCTS_FROM
+    assert one["inputs"]["fresh_products"]["capture"] == products.CAPTURE
 
 
 @pytest.mark.parametrize("name, fresh", (("dense_blocks", 0.00923), ("lora_blocks", 0.00093),

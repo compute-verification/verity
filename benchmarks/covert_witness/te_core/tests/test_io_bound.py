@@ -373,3 +373,59 @@ def test_a_short_chain_through_a_trained_weight_makes_its_outputs_cheap(r, kind)
     first, a, b, last = [x for x in iob.rows_of(g) if x.phase == "forward"]
     assert (first.kind, a.kind, b.kind, last.kind) == ("theta", "fresh", "fresh", kind)
     assert last.rates[0] == pytest.approx(min(32, 4 * r * r * 32 * 32 / iob.CONSOLE[1])) and last.k_whole == r
+
+
+class _Cast(nn.Module):
+    """Two trained layers whose second product reads its operands through `cast` (None: as they are) and casts its
+    result back to the layers' dtype."""
+
+    def __init__(self, d: int, cast) -> None:
+        super().__init__()
+        self.first = nn.Linear(d, d, bias=False)
+        self.last = nn.Linear(d, d, bias=False)
+        self.cast = cast
+
+    def forward(self, x):
+        h, w = self.first(x), self.last.weight
+        if self.cast is None:
+            return F.linear(h, w)
+        return F.linear(h.to(self.cast), w.to(self.cast)).to(x.dtype)
+
+
+def _cast_rows(dtype, cast, k: float = 64):
+    from te_core.capture import products
+
+    torch.manual_seed(0)
+    m = _Cast(16, cast).to(dtype)
+    g = capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1), lambda mm, b: F.mse_loss(mm(b[0]), b[1]),
+                     (torch.empty(6, 16, dtype=dtype), torch.empty(6, 16, dtype=dtype)))
+    return iob.rows_of(g, "bfloat16", k), products.rows(g, k, "bfloat16")
+
+
+def test_a_widening_cast_keeps_its_products_count_and_a_narrowing_one_pays_its_narrower_width():
+    """An operand widened by a cast (bf16 → fp32, `x.float()`) keeps its argument's rate, and a block can cut before
+    the cast, so it is paid at the width it passed: every product of the step counts exactly as the uncast step's,
+    through io_bound.rows_of and through the capture's rows (`product_kind` reads their rates and widths, so a row a
+    capture wrote with `paid` false at the cast's width counts too). An operand narrowed by a cast (fp32 → bf16) pays
+    its narrower width."""
+    from te_core import formalism
+
+    def counted(rows):
+        return sorted(json.dumps({"phase": r.phase, "kind": r.kind} | r.product(), sort_keys=True) for r in rows)
+
+    plain, plain_rows = _cast_rows(torch.bfloat16, None)
+    wide, wide_rows = _cast_rows(torch.bfloat16, torch.float32)
+    assert counted(wide) == counted(plain)
+    last = [r for r in wide if r.kind == "fresh" and r.phase == "forward"]
+    assert len(last) == 1 and last[0].widths == (16, 16) and last[0].rates == (16.0, 16.0)
+    assert sum(r.kind == "fresh" for r in wide) == sum(r.kind == "fresh" for r in plain) > 1
+    for got, rows in ((wide_rows, wide), (plain_rows, plain)):
+        assert sorted(formalism.product_kind(r) for r in got["rows"] for _ in range(r["count"])) == \
+            sorted(r.kind for r in rows)
+        assert all(r["paid"] == [iob.is_paid(x, w) for x, w in zip(r["rates"], r["widths"])] for r in got["rows"])
+        old = [r | {"paid": [False, False]} for r in got["rows"]]
+        assert [formalism.product_kind(r) for r in old] == [formalism.product_kind(r) for r in got["rows"]]
+    narrow, _ = _cast_rows(torch.float32, torch.bfloat16)
+    last = [r for r in narrow if r.kind == "fresh" and r.phase == "forward" and r.dims["m"] * r.dims["n"] == 6 * 16]
+    assert [(r.widths, r.rates) for r in last] == [((16, 16), (16.0, 16.0))]
+    assert [r.product()["b_a"] for r in narrow if r.kind == "fresh"] == [16] * sum(r.kind == "fresh" for r in narrow)

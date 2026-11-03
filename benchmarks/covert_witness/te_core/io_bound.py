@@ -322,13 +322,14 @@ class _Rates:
       GEMM result) are paid at their width;
     - a gather by token data is 0: its rows repeat over the tokens that share an index;
     - a token-indexed GEMM result with an affected parameter side is 4·K²·b_tok·b_par/k at policy k, its sides at their
-      widths: by LW, x rows and y columns of K entries read in k bits make at most x·y entries, so a block making E of
+      passed widths (`_passed_width`): by LW, x rows and y columns of K entries read in k bits make at most x·y entries, so a block making E of
       them whole pays 2K·√(b_tok·b_par·E) bits, at least that an entry within k (the result's width b once
       K² ≥ k/(4b): K ≥ 32 at the console's k and 16 bits, which a rank-16 adapter's second product is not). A token side
       cheaper than its width (a gather's rows) makes whole columns of the result, which a consumer's chains use at most
       k²/(K·b·b_C) MACs a block, within its α once K ≥ 3^{3/2}·√(k/b_C) (235 at the console's k); below that the
       result is priced as if the weight were θ. With a parameter side outside the update it is its token side's rate
-      times K/n (a frozen weight widening n > K passes fewer bits an entry than its width, narrowing restores them);
+      times K/n (a frozen weight widening n > K passes fewer bits an entry than its width, narrowing restores them).
+      A token side's rate is compared with its passed width, as `paid` compares an operand's;
     - an attention product is rate(A)·K/n + rate(B)·K/m;
     - a view or cast keeps its argument's rate, a repeating view spreads it, a concatenation sums its parts', and any
       other op takes the largest rate(input)·numel(input)/numel(output) over its affected inputs (a broadcast gain passes
@@ -387,12 +388,19 @@ class _Rates:
         token_a = "m" in td or "n" not in td
         param, r_tok, spread = (B, ra, d["n"]) if token_a else (A, rb, d["m"])
         tok = A if token_a else B
-        if st.reads_affected(n, param) and (r_tok >= 0.999 * _width(tok) or d["k"] >= 3 ** 1.5 * math.sqrt(self.k / ACC_BITS)):
-            return 4 * d["k"] ** 2 * _width(tok) * _width(param) / self.k
+        b_tok, b_par = _passed_width(st, n, tok), _passed_width(st, n, param)
+        if st.reads_affected(n, param) and (is_paid(r_tok, b_tok) or d["k"] >= 3 ** 1.5 * math.sqrt(self.k / ACC_BITS)):
+            return 4 * d["k"] ** 2 * b_tok * b_par / self.k
         return r_tok * d["k"] / max(spread, 1)
 
-    def paid(self, a) -> bool:
-        return self.rate.get(a, 0.0) >= 0.999 * _width(a)
+    def paid(self, n, a) -> bool:
+        return is_paid(self.rate.get(a, 0.0), _passed_width(self.st, n, a))
+
+
+def is_paid(rate: float, width: float) -> bool:
+    """Whether an operand a block pays `rate` bits an entry of is paid at its passed width `width` (P-width): a cast
+    keeps its argument's rate, and a block can cut before it, so a widened operand is paid at the narrower width."""
+    return rate >= 0.999 * width
 
 
 def _passed_width(st: _Step, n, a) -> int:
@@ -463,9 +471,10 @@ def rows_of(graph, gemm_dtype: str | None = None, k: float = CONSOLE[1]) -> list
     (each depends on θ′, the step's dependent slots), passed widths (`_passed_width`), rates (`_Rates`) and shortest
     whole-making chain (`_chain_ks`), and its kind:
 
-    - ``fresh``: both operands affected and paid at their width (the bound counts it);
+    - ``fresh``: both operands affected and paid at their passed width (the bound counts it; an operand widened by a
+      cast, such as ``x.float()`` of a bf16 x, keeps its argument's rate and is paid at the narrower width it passed);
     - ``theta``: one operand affected; the other is θ or computed from θ and token data, so a block reads it for nothing;
-    - ``expansion``: both affected, one paid below its width (a gather's rows, a frozen widening product, a gain);
+    - ``expansion``: both affected, one paid below its passed width (a gather's rows, a frozen widening product, a gain);
     - ``attention``: two token-indexed dims among m, k and n (module docstring);
     - ``self``: both operands one array (P-share);
     - ``unaffected``: neither operand affected.
@@ -490,7 +499,7 @@ def rows_of(graph, gemm_dtype: str | None = None, k: float = CONSOLE[1]) -> list
             kind = "self"
         elif not all(aff):
             kind = "theta"
-        elif rates.paid(A) and rates.paid(B):
+        elif rates.paid(n, A) and rates.paid(n, B):
             kind = "fresh"
         else:
             kind = "expansion"

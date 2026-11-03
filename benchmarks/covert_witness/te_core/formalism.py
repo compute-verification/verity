@@ -692,7 +692,9 @@ def products_of(segments, k: float | None = None, gemm_dtype: str | None = "bflo
 def product_kind(row: dict) -> str:
     """A trace's product row's kind (te_core.capture.products' rows), as te_core.io_bound.rows_of classifies a GEMM:
     unaffected, attention (two token-indexed dims among m, k and n), self (both operands one array), theta (one
-    operand doesn't depend on θ′), fresh (both do and both are paid at their width) or expansion."""
+    operand doesn't depend on θ′), fresh (both do and both are paid at their passed width, `io_bound.is_paid` on the
+    row's rates and widths) or expansion. The row's own `paid` isn't read: before te_core 4.10 a capture compared an
+    upcast operand's rate with the cast's width, so a trace's rates and widths decide."""
     if not any(row["affected"]):
         return "unaffected"
     if sum(x in row["token_dims"] for x in ("m", "k", "n")) >= 2:
@@ -701,7 +703,7 @@ def product_kind(row: dict) -> str:
         return "self"
     if not all(row["affected"]):
         return "theta"
-    return "fresh" if all(row["paid"]) else "expansion"
+    return "fresh" if all(io_bound.is_paid(r, w) for r, w in zip(row["rates"], row["widths"])) else "expansion"
 
 
 def products_of_trace(block: dict, steps: float = 1.0) -> dict:
