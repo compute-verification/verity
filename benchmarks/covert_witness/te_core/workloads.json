@@ -1,0 +1,2119 @@
+{
+ "id": "te_core.workloads",
+ "te_core": "4.1",
+ "spec": "note:training-20261103T0600Z-draft-workload-models",
+ "policies": {
+  "default": {
+   "c": 341247298437120.0,
+   "k": 65536.0,
+   "session": {
+    "inputs": 4096,
+    "outputs": 1024
+   }
+  },
+  "tighter": {
+   "c": 341247298437120.0,
+   "k": 32768.0,
+   "session": {
+    "inputs": 2048,
+    "outputs": 3072
+   }
+  },
+  "looser": {
+   "c": 1160240814686208.0,
+   "k": 262144.0,
+   "session": {
+    "inputs": 16384,
+    "outputs": 1024
+   }
+  }
+ },
+ "gates_per_mac": {
+  "gemm/bf16": 1480.125,
+  "gemm/e4m3": 861.09375,
+  "gemm/fp4": 334.828125,
+  "gemm/f32": 12637.0,
+  "elementwise/bf16": 3947.0,
+  "elementwise/f32": 12637.0
+ },
+ "workloads": {
+  "standard": {
+   "title": "Standard dense pretraining",
+   "what": "Every weight of a dense decoder trained by backpropagation, its optimizer outside the token blocks.",
+   "dials": [
+    {
+     "name": "n_params",
+     "unit": "parameters",
+     "default": 45029888,
+     "range": [
+      10000000.0,
+      100000000000.0
+     ],
+     "why": "the trained model; d_model and n_layer follow at the reference model's d/L (te_core.workloads.dense)"
+    },
+    {
+     "name": "precision",
+     "unit": "GEMM format",
+     "default": "bf16",
+     "range": [
+      "bf16",
+      "e4m3",
+      "fp4"
+     ],
+     "why": "the weight GEMMs' format, forward and backward; attention stays bf16"
+    },
+    {
+     "name": "seq_len",
+     "unit": "tokens",
+     "default": 1024,
+     "range": [
+      256,
+      32768
+     ],
+     "why": "the training context: each token's attention span"
+    },
+    {
+     "name": "batch_tokens",
+     "unit": "tokens a step",
+     "default": 65536,
+     "range": [
+      10000.0,
+      10000000.0
+     ],
+     "why": "sets the optimizer's share, 1 - sigma; the pilot's 64 x 1,024"
+    },
+    {
+     "name": "optimizer",
+     "unit": "rule",
+     "default": "adamw",
+     "range": [
+      "adamw",
+      "muon",
+      "sgd"
+     ],
+     "why": "sets Delta_grad (the state) and the optimizer's gates"
+    },
+    {
+     "name": "t",
+     "unit": "share of a token's affected work",
+     "default": null,
+     "range": [
+      0.0,
+      0.9
+     ],
+     "why": "A1's free share: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread"
+    },
+    {
+     "name": "tokens_per_param",
+     "unit": "tokens / N",
+     "default": 20.0,
+     "range": [
+      1.0,
+      2000.0
+     ],
+     "why": "sets |C| only (Chinchilla's 20 by default)"
+    }
+   ],
+   "points": {
+    "default": {
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 20.0
+     },
+     "inputs": {
+      "C_gates": 2.1076908801314062e+20,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9997031897773526,
+      "tau_bits": 16,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
+      "u_in_points": "0:0;1:7.20478e8",
+      "delta_bits": 720478208,
+      "delta_t_bits": 720478208,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 263.1190814852731,
+       "basis": "target",
+       "s": 1458.552581032304,
+       "x0": 9.096180741111325e-05,
+       "s_star": 5.541168,
+       "fit_delta_bits": 42199.15870348313,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 526.2620989350211,
+       "basis": "target",
+       "s": 1458.552581032304,
+       "x0": 4.548090370555663e-05,
+       "s_star": 2.770584,
+       "fit_delta_bits": 9431.158703483135,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 223.59018255307126,
+       "basis": "target",
+       "s": 4959.078775509834,
+       "x0": 0.000363847229644453,
+       "s_star": 22.164672,
+       "fit_delta_bits": 182798.73959184266,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "w_gates": 233962973207.04,
+      "t": 0.692646,
+      "t_counted": 0.43025289803425626,
+      "optimizer_gates_per_step": 4552341557248.0
+     }
+    },
+    "evenly spread": {
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": 0.0,
+      "tokens_per_param": 20.0
+     },
+     "inputs": {
+      "C_gates": 2.1076908801314062e+20,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9997031897773526,
+      "tau_bits": 16,
+      "a_bits": 8192.0,
+      "u_points": "0:0;1:7.20478e8",
+      "u_in_points": "0:0;1:7.20478e8",
+      "delta_bits": 720478208,
+      "delta_t_bits": 720478208,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 8014281.356163215,
+       "basis": "target",
+       "s": 1458.552581032304,
+       "x0": 9.096180741111325e-05,
+       "s_star": 0.0001819236148222265,
+       "fit_delta_bits": 42199.15870348313,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 32058583.544320576,
+       "basis": "target",
+       "s": 1458.552581032304,
+       "x0": 4.548090370555663e-05,
+       "s_star": 4.548090370555663e-05,
+       "fit_delta_bits": 9431.158703483135,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 1702570.0125405984,
+       "basis": "target",
+       "s": 4959.078775509834,
+       "x0": 0.000363847229644453,
+       "s_star": 0.002910777837155624,
+       "fit_delta_bits": 182798.73959184266,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "w_gates": 233962973207.04,
+      "t": 0.0,
+      "t_counted": 0.43025289803425626,
+      "optimizer_gates_per_step": 4552341557248.0
+     }
+    },
+    "7B": {
+     "dials": {
+      "n_params": 7000000000.0,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 20.0
+     },
+     "inputs": {
+      "C_gates": 4.669996929659712e+24,
+      "w_gates": 33346322708367.36,
+      "w_fwd_gates": 10826728152067.324,
+      "sigma": 0.9996762844791867,
+      "tau_bits": 16,
+      "a_bits": 57941.493304682495,
+      "u_points": "0:0;0.692646:0;0.692646:7.75764e10;1:1.12e11",
+      "u_in_points": "0:0;1:1.12e11",
+      "delta_bits": 112000000000.0,
+      "delta_t_bits": 112000000000.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 672000000000.0,
+      "w_fit_gates": 33346322708367.36,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 13.058065152315848,
+       "basis": "target",
+       "s": 10.23343117685037,
+       "x0": 5.851428571428571e-07,
+       "s_star": 0.7834324879633638,
+       "fit_delta_bits": 65372.26510117039,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 26.11613794546972,
+       "basis": "target",
+       "s": 10.23343117685037,
+       "x0": 2.9257142857142857e-07,
+       "s_star": 0.3917162439816819,
+       "fit_delta_bits": 32604.265101170393,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 11.099335895331512,
+       "basis": "target",
+       "s": 34.79366600129126,
+       "x0": 2.3405714285714285e-06,
+       "s_star": 3.1337299518534554,
+       "fit_delta_bits": 261587.30134397934,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 3621.343331542656,
+      "n_layer": 42.4376171665155,
+      "w_gates": 33346322708367.36,
+      "t": 0.692646,
+      "t_counted": 0.3785896519618208,
+      "optimizer_gates_per_step": 707672000000000.0
+     }
+    }
+   },
+   "checks": {
+    "45M ref-optim/adamw-rewarm-mild": {
+     "record": "r20261102-140347-a1c2@946",
+     "source": "te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal); delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k",
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 20.0
+     },
+     "differs": "w 0.9% below the model's; u(1) the fp32 embedding with the bf16 matrices, 25 bits a parameter; u_in all of it at x = 0; Delta the submitted code, 32 N",
+     "record_inputs": {
+      "tau_bits": 16.0156,
+      "a_bits": 8192,
+      "delta_bits": 1440996608,
+      "delta_t_bits": 1441000000.0,
+      "d_gates": 0,
+      "u_points": "0:0;0.692646:0;0.692646:1.13268e9;1:1.13268e9",
+      "u_in_points": "0:0;0:80000;0:145568;0:800000;0:8e6;0:8e7;0:8e8;1:1.13268e9",
+      "w_gates": 231908000000.0,
+      "sigma": 0.999823,
+      "w_fit_gates": 154410000000.0,
+      "alpha_ratio": 0.995234,
+      "delta_grad_bits": 4322869248
+     },
+     "model_inputs": {
+      "C_gates": 2.1076908801314062e+20,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9997031897773526,
+      "tau_bits": 16,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
+      "u_in_points": "0:0;1:7.20478e8",
+      "delta_bits": 720478208,
+      "delta_t_bits": 720478208,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "rho": {
+      "default": {
+       "record": 264.2411807015765,
+       "model": 263.1190814852731
+      },
+      "tighter": {
+       "record": 528.482361403153,
+       "model": 526.2620989350211
+      },
+      "looser": {
+       "record": 224.60500359634008,
+       "model": 223.59018255307126
+      }
+     }
+    },
+    "45M ref-optim/cooldown-forks": {
+     "record": "r20261102-134356-ee8f@694",
+     "source": "te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal); delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k",
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "muon",
+      "t": null,
+      "tokens_per_param": 20.0
+     },
+     "differs": "as adamw-rewarm-mild; sigma the trace's 0.99339 against the model's 0.98774, five bf16 Newton-Schulz iterations on every matrix",
+     "record_inputs": {
+      "tau_bits": 16.0156,
+      "a_bits": 8192,
+      "delta_bits": 1440996608,
+      "delta_t_bits": 1441000000.0,
+      "d_gates": 0,
+      "u_points": "0:0;0.692646:0;0.692646:1.13268e9;1:1.13268e9",
+      "u_in_points": "0:0;0:80000;0:145568;0:800000;0:8e6;0:8e7;0:8e8;1:1.13268e9",
+      "w_gates": 232623000000.0,
+      "sigma": 0.993392,
+      "w_fit_gates": 103235000000.0,
+      "alpha_ratio": 0.992069,
+      "delta_grad_bits": 3706306560
+     },
+     "model_inputs": {
+      "C_gates": 2.1332214982096863e+20,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9877386374084287,
+      "tau_bits": 16,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
+      "u_in_points": "0:0;1:7.20478e8",
+      "delta_bits": 720478208,
+      "delta_t_bits": 720478208,
+      "d_gates": 0.0,
+      "delta_grad_bits": 3706306560.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "rho": {
+      "default": {
+       "record": 260.9022289364151,
+       "model": 259.9700447892966
+      },
+      "tighter": {
+       "record": 521.8044578728302,
+       "model": 519.9637390749408
+      },
+      "looser": {
+       "record": 221.76689459595283,
+       "model": 220.91423185521538
+      }
+     }
+    }
+   }
+  },
+  "diloco": {
+   "title": "DiLoCo-style pretraining",
+   "what": "Standard training on workers that sync every H inner steps by an outer step on their pseudo-gradients, optionally compressed.",
+   "dials": [
+    {
+     "name": "n_params",
+     "unit": "parameters",
+     "default": 45029888,
+     "range": [
+      10000000.0,
+      100000000000.0
+     ],
+     "why": "the inner model, which every worker trains; d_model and n_layer follow (te_core.workloads.dense)"
+    },
+    {
+     "name": "precision",
+     "unit": "GEMM format",
+     "default": "bf16",
+     "range": [
+      "bf16",
+      "e4m3",
+      "fp4"
+     ],
+     "why": "the weight GEMMs' format, forward and backward; attention stays bf16"
+    },
+    {
+     "name": "seq_len",
+     "unit": "tokens",
+     "default": 1024,
+     "range": [
+      256,
+      32768
+     ],
+     "why": "the training context: each token's attention span"
+    },
+    {
+     "name": "batch_tokens",
+     "unit": "tokens an inner step",
+     "default": 65536,
+     "range": [
+      256,
+      10000000.0
+     ],
+     "why": "B, an inner step's tokens, all workers"
+    },
+    {
+     "name": "optimizer",
+     "unit": "rule",
+     "default": "adamw",
+     "range": [
+      "adamw",
+      "muon",
+      "sgd"
+     ],
+     "why": "sets Delta_grad (the state) and the optimizer's gates"
+    },
+    {
+     "name": "t",
+     "unit": "share of a token's affected work",
+     "default": null,
+     "range": [
+      0.0,
+      0.9
+     ],
+     "why": "A1's free share: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread"
+    },
+    {
+     "name": "inner_steps",
+     "unit": "steps",
+     "default": 500,
+     "range": [
+      1,
+      10000
+     ],
+     "why": "H, the inner steps between syncs"
+    },
+    {
+     "name": "syncs",
+     "unit": "syncs",
+     "default": 28,
+     "range": [
+      1,
+      100000.0
+     ],
+     "why": "S, the record's outer steps so far; its tokens are S H B (28: 20 a parameter at 45M)"
+    },
+    {
+     "name": "sync_bits",
+     "unit": "bits a sync",
+     "default": null,
+     "range": [
+      100.0,
+      1500000000.0
+     ],
+     "why": "b, one compressed outer delta; None is 32 N, uncompressed"
+    }
+   ],
+   "points": {
+    "default": {
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "inner_steps": 500,
+      "syncs": 28,
+      "sync_bits": null
+     },
+     "inputs": {
+      "C_gates": 2.147256965511535e+20,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9997031897773526,
+      "tau_bits": 16,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
+      "u_in_points": "0:0;1:7.20478e8",
+      "delta_bits": 720478208,
+      "delta_t_bits": 720478208,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 263.1190814852731,
+       "basis": "target",
+       "s": 1458.552581032304,
+       "x0": 9.096180741111325e-05,
+       "s_star": 5.541168,
+       "fit_delta_bits": 42199.15870348313,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 526.2620989350211,
+       "basis": "target",
+       "s": 1458.552581032304,
+       "x0": 4.548090370555663e-05,
+       "s_star": 2.770584,
+       "fit_delta_bits": 9431.158703483135,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 223.59018255307126,
+       "basis": "target",
+       "s": 4959.078775509834,
+       "x0": 0.000363847229644453,
+       "s_star": 22.164672,
+       "fit_delta_bits": 182798.73959184266,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "w_gates": 233962973207.04,
+      "tokens": 917504000,
+      "code_bits": 40871067648,
+      "compressed": false,
+      "phase_tokens": 32768000,
+      "phase_gates": 7.666498706048287e+18
+     }
+    },
+    "1-bit syncs": {
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "inner_steps": 500,
+      "syncs": 28,
+      "sync_bits": 45029888
+     },
+     "inputs": {
+      "C_gates": 2.147256965511535e+20,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9997031897773526,
+      "tau_bits": 16,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
+      "u_in_points": "0:0;1:7.20478e8",
+      "delta_bits": 720478208,
+      "delta_t_bits": 720478208,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 263.1190814852731,
+       "basis": "target",
+       "s": 1458.552581032304,
+       "x0": 9.096180741111325e-05,
+       "s_star": 5.541168,
+       "fit_delta_bits": 42199.15870348313,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 526.2620989350211,
+       "basis": "target",
+       "s": 1458.552581032304,
+       "x0": 4.548090370555663e-05,
+       "s_star": 2.770584,
+       "fit_delta_bits": 9431.158703483135,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 223.59018255307126,
+       "basis": "target",
+       "s": 4959.078775509834,
+       "x0": 0.000363847229644453,
+       "s_star": 22.164672,
+       "fit_delta_bits": 182798.73959184266,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "w_gates": 233962973207.04,
+      "tokens": 917504000,
+      "code_bits": 1785124864.0,
+      "compressed": false,
+      "phase_tokens": 32768000,
+      "phase_gates": 7.666498706048287e+18
+     }
+    },
+    "Fit's corner": {
+     "dials": {
+      "n_params": 45029888,
+      "precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 256,
+      "optimizer": "adamw",
+      "t": null,
+      "inner_steps": 2,
+      "syncs": 32,
+      "sync_bits": 1024
+     },
+     "inputs": {
+      "C_gates": 4124599212688015.5,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9293628678472258,
+      "tau_bits": 16,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:40960;1:40960",
+      "u_in_points": "0:0;5.68511e-5:40960;1:40960",
+      "delta_bits": 40960.0,
+      "delta_t_bits": 40960.0,
+      "d_gates": 119789042282004.48,
+      "delta_grad_bits": 1024.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 1.5409102571371325,
+       "basis": "fit",
+       "s": 1458.552581032304,
+       "x0": 1.0,
+       "s_star": 5.541168,
+       "fit_delta_bits": 42199.15870348313,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 489.2336630580104,
+       "basis": "target",
+       "s": 1458.552581032304,
+       "x0": 4.548090370555663e-05,
+       "s_star": 2.770584,
+       "fit_delta_bits": 9431.158703483135,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 1.1151317585871416,
+       "basis": "fit",
+       "s": 4959.078775509834,
+       "x0": 1.0,
+       "s_star": 27.0,
+       "fit_delta_bits": 182798.73959184266,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "w_gates": 233962973207.04,
+      "tokens": 16384,
+      "code_bits": 40960.0,
+      "compressed": true,
+      "phase_tokens": 512,
+      "phase_gates": 119789042282004.48
+     }
+    }
+   },
+   "checks": {}
+  },
+  "rl": {
+   "title": "RL rollouts on the policy being trained",
+   "what": "Rollouts of the current policy in FP4 and a learner training on them, every token affected.",
+   "dials": [
+    {
+     "name": "n_params",
+     "unit": "parameters",
+     "default": 45029888,
+     "range": [
+      10000000.0,
+      100000000000.0
+     ],
+     "why": "the trained model; d_model and n_layer follow at the reference model's d/L (te_core.workloads.dense)"
+    },
+    {
+     "name": "update",
+     "unit": "what trains",
+     "default": "full",
+     "range": [
+      "full",
+      "lora"
+     ],
+     "why": "every weight, or a LoRA kept apart from the base"
+    },
+    {
+     "name": "rank",
+     "unit": "rank",
+     "default": 16,
+     "range": [
+      1,
+      256
+     ],
+     "why": "the LoRA's rank (update lora)"
+    },
+    {
+     "name": "targets",
+     "unit": "matrices",
+     "default": "all",
+     "range": [
+      "q",
+      "qv",
+      "attn",
+      "mlp",
+      "all"
+     ],
+     "why": "the LoRA's matrices in each adapted layer"
+    },
+    {
+     "name": "layers",
+     "unit": "layers",
+     "default": null,
+     "range": [
+      1,
+      128
+     ],
+     "why": "the LoRA's adapted layers, from the top; None is all"
+    },
+    {
+     "name": "rollout_precision",
+     "unit": "GEMM format",
+     "default": "fp4",
+     "range": [
+      "bf16",
+      "e4m3",
+      "fp4"
+     ],
+     "why": "the rollouts' weight GEMMs"
+    },
+    {
+     "name": "prompt_tokens",
+     "unit": "tokens",
+     "default": 256,
+     "range": [
+      16,
+      32768
+     ],
+     "why": "a rollout's prompt, the only inputs"
+    },
+    {
+     "name": "generated_tokens",
+     "unit": "tokens",
+     "default": 768,
+     "range": [
+      16,
+      32768
+     ],
+     "why": "a rollout's generated tokens"
+    },
+    {
+     "name": "samples_per_trained",
+     "unit": "sequences",
+     "default": 1.0,
+     "range": [
+      1.0,
+      16.0
+     ],
+     "why": "rollouts generated for each one trained on (1: each once; 4: one in four kept)"
+    },
+    {
+     "name": "optimizer",
+     "unit": "rule",
+     "default": "adamw",
+     "range": [
+      "adamw",
+      "muon",
+      "sgd"
+     ],
+     "why": "sets Delta_grad (the state) and the optimizer's gates"
+    },
+    {
+     "name": "batch_tokens",
+     "unit": "learner tokens a step",
+     "default": 65536,
+     "range": [
+      10000.0,
+      10000000.0
+     ],
+     "why": "sets the optimizer's share, 1 - sigma"
+    },
+    {
+     "name": "t",
+     "unit": "share of a token's affected work",
+     "default": null,
+     "range": [
+      0.0,
+      0.999
+     ],
+     "why": "A1's free share: None is the larger of the two kinds' (the learner's te_core literal t, or a LoRA's modelled one); 0 is evenly spread"
+    },
+    {
+     "name": "tokens",
+     "unit": "learner tokens",
+     "default": 100000000.0,
+     "range": [
+      1000000.0,
+      100000000000.0
+     ],
+     "why": "sets |C| only"
+    }
+   ],
+   "points": {
+    "default": {
+     "dials": {
+      "n_params": 45029888,
+      "update": "full",
+      "rank": 16,
+      "targets": "all",
+      "layers": null,
+      "rollout_precision": "fp4",
+      "prompt_tokens": 256,
+      "generated_tokens": 768,
+      "samples_per_trained": 1.0,
+      "optimizer": "adamw",
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0
+     },
+     "inputs": {
+      "C_gates": 2.5596603614788248e+19,
+      "w_gates": 127948286464.15999,
+      "w_fwd_gates": 20024348040.0,
+      "sigma": 0.9997286232946845,
+      "tau_bits": 4.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:1.40354e8;1:2.02634e8",
+      "u_in_points": "0:0;1:2.02634e8",
+      "delta_bits": 720478208,
+      "delta_t_bits": 720478208,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 21933599721.28,
+      "alpha_ratio": 0.5468740831521882
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 263.0646042726356,
+       "basis": "target",
+       "s": 2667.072048148983,
+       "x0": 0.00032341975968395824,
+       "s_star": 5.541168,
+       "fit_delta_bits": 3303.2059719332683,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 526.2143163619161,
+       "basis": "target",
+       "s": 2667.072048148983,
+       "x0": 0.00016170987984197912,
+       "s_star": 2.770584,
+       "fit_delta_bits": -29464.79402806673,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 223.387888699296,
+       "basis": "target",
+       "s": 9068.044963706543,
+       "x0": 0.001293679038735833,
+       "s_star": 22.164672,
+       "fit_delta_bits": 50552.50030457313,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "rollout_w": 21933599721.28,
+      "learner_w": 233962973207.04,
+      "rollout_tokens": 100000000.0,
+      "learner_tokens": 100000000.0,
+      "rollout_share": 0.08571275289186421,
+      "t": 0.692646,
+      "kinds": [
+       {
+        "kind": "rollout",
+        "tokens": 100000000.0,
+        "u1_bits": 202634496.0,
+        "t": 0.31259468762111053
+       },
+       {
+        "kind": "learner",
+        "tokens": 100000000.0,
+        "u1_bits": 720478208,
+        "t": 0.692646
+       }
+      ]
+     },
+     "sensitivity": {
+      "default": {
+       "tokens_worth": 481.0332257040384,
+       "per_kind": 773.5082446564106
+      },
+      "tighter": {
+       "tokens_worth": 962.222077390852,
+       "per_kind": 1547.2107919171633
+      },
+      "looser": {
+       "tokens_worth": 408.481395592356,
+       "per_kind": 656.9865363168767
+      }
+     }
+    },
+    "LoRA rank 16": {
+     "dials": {
+      "n_params": 45029888,
+      "update": "lora",
+      "rank": 16,
+      "targets": "all",
+      "layers": null,
+      "rollout_precision": "fp4",
+      "prompt_tokens": 256,
+      "generated_tokens": 768,
+      "samples_per_trained": 1.0,
+      "optimizer": "adamw",
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0
+     },
+     "inputs": {
+      "C_gates": 1.9321194269701997e+19,
+      "w_gates": 96605241561.76,
+      "w_fwd_gates": 20024348040.0,
+      "sigma": 0.9999924457387074,
+      "tau_bits": 4.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.983508:0;0.983508:1.48892e7;1:1.51388e7",
+      "u_in_points": "0:0;1:1.51388e7",
+      "delta_bits": 15138816.0,
+      "delta_t_bits": 15138816.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 90832896.0,
+      "w_fit_gates": 23371404040.0,
+      "alpha_ratio": 0.5688045535989597
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 254.25886776442803,
+       "basis": "target",
+       "s": 3532.3890600590203,
+       "x0": 0.004329004329004329,
+       "s_star": 7.868067230740335,
+       "fit_delta_bits": 7131.755590365465,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 509.62320886696233,
+       "basis": "target",
+       "s": 3532.3890600590203,
+       "x0": 0.0021645021645021645,
+       "s_star": 3.9340336153701676,
+       "fit_delta_bits": -25636.244409634535,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 213.30108058759305,
+       "basis": "target",
+       "s": 12010.12280420067,
+       "x0": 0.017316017316017316,
+       "s_star": 31.47226892296134,
+       "fit_delta_bits": 63569.56900724259,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "rollout_w": 23371404040.0,
+      "learner_w": 169839079083.52,
+      "rollout_tokens": 100000000.0,
+      "learner_tokens": 100000000.0,
+      "rollout_share": 0.12096343667366433,
+      "t": 0.9835084038425419,
+      "kinds": [
+       {
+        "kind": "rollout",
+        "tokens": 100000000.0,
+        "u1_bits": 15138816.0,
+        "t": 0.9400781078619357
+       },
+       {
+        "kind": "learner",
+        "tokens": 100000000.0,
+        "u1_bits": 15138816.0,
+        "t": 0.9835084038425419
+       }
+      ]
+     },
+     "sensitivity": {
+      "default": {
+       "tokens_worth": 447.0056826297761,
+       "per_kind": 457.3312018282698
+      },
+      "tighter": {
+       "tokens_worth": 895.9548682275079,
+       "per_kind": 916.6508001862278
+      },
+      "looser": {
+       "tokens_worth": 374.99889766702313,
+       "per_kind": 383.6611104033247
+      }
+     }
+    },
+    "LoRA in one layer": {
+     "dials": {
+      "n_params": 45029888,
+      "update": "lora",
+      "rank": 1,
+      "targets": "q",
+      "layers": 1,
+      "rollout_precision": "fp4",
+      "prompt_tokens": 256,
+      "generated_tokens": 768,
+      "samples_per_trained": 1.0,
+      "optimizer": "adamw",
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0
+     },
+     "inputs": {
+      "C_gates": 1.47132279631785e+19,
+      "w_gates": 73566139026.08,
+      "w_fwd_gates": 20024348040.0,
+      "sigma": 0.9999999892639126,
+      "tau_bits": 4.0,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.999967:0;0.999967:16383.5;1:16384",
+      "u_in_points": "0:0;1:16384",
+      "delta_bits": 16384.0,
+      "delta_t_bits": 16384.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 98304.0,
+      "w_fit_gates": 21935155786.56,
+      "alpha_ratio": 0.5629790276600861
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 1.0,
+       "basis": "target",
+       "s": 4638.64629780481,
+       "x0": 1.0,
+       "s_star": 7.999738768544032,
+       "fit_delta_bits": 3307.6207247167404,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 1.0,
+       "basis": "target",
+       "s": 4638.64629780481,
+       "x0": 1.0,
+       "s_star": 3.999869384272016,
+       "fit_delta_bits": -29460.37927528326,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 1.0,
+       "basis": "fit",
+       "s": 15771.397412536357,
+       "x0": 1.0,
+       "s_star": 31.998955074176127,
+       "fit_delta_bits": 50567.510464036925,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "rollout_w": 21935155786.56,
+      "learner_w": 125197122265.6,
+      "rollout_tokens": 100000000.0,
+      "learner_tokens": 100000000.0,
+      "rollout_share": 0.1490845929727517,
+      "t": 0.999967346068004,
+      "kinds": [
+       {
+        "kind": "rollout",
+        "tokens": 100000000.0,
+        "u1_bits": 16384.0,
+        "t": 0.999870377754273
+       },
+       {
+        "kind": "learner",
+        "tokens": 100000000.0,
+        "u1_bits": 16384.0,
+        "t": 0.999967346068004
+       }
+      ]
+     },
+     "sensitivity": {
+      "default": {
+       "tokens_worth": 1.0,
+       "per_kind": 1.0
+      },
+      "tighter": {
+       "tokens_worth": 1.0,
+       "per_kind": 1.0
+      },
+      "looser": {
+       "tokens_worth": 1.0,
+       "per_kind": 1.0
+      }
+     }
+    }
+   },
+   "checks": {}
+  },
+  "inference": {
+   "title": "Inference on an unregistered model",
+   "what": "Serving a model whose weights are not registered, so all of them are update bits.",
+   "dials": [
+    {
+     "name": "n_params",
+     "unit": "parameters",
+     "default": 45029888,
+     "range": [
+      10000000.0,
+      100000000000.0
+     ],
+     "why": "the served model"
+    },
+    {
+     "name": "precision",
+     "unit": "GEMM format",
+     "default": "fp4",
+     "range": [
+      "bf16",
+      "e4m3",
+      "fp4"
+     ],
+     "why": "the served weights' format"
+    },
+    {
+     "name": "prompt_tokens",
+     "unit": "tokens",
+     "default": 4096,
+     "range": [
+      16,
+      131072
+     ],
+     "why": "a session's prompt, the only inputs"
+    },
+    {
+     "name": "generated_tokens",
+     "unit": "tokens",
+     "default": 1024,
+     "range": [
+      1,
+      32768
+     ],
+     "why": "a session's generated tokens"
+    },
+    {
+     "name": "t",
+     "unit": "share of a token's work",
+     "default": null,
+     "range": [
+      0.0,
+      0.95
+     ],
+     "why": "A1's free share: None is attention's modelled share; 0 is evenly spread"
+    },
+    {
+     "name": "tokens",
+     "unit": "tokens served",
+     "default": 1000000000.0,
+     "range": [
+      1000000.0,
+      10000000000000.0
+     ],
+     "why": "sets |C| only"
+    }
+   ],
+   "points": {
+    "default": {
+     "dials": {
+      "n_params": 45029888,
+      "precision": "fp4",
+      "prompt_tokens": 4096,
+      "generated_tokens": 1024,
+      "t": null,
+      "tokens": 1000000000.0
+     },
+     "inputs": {
+      "C_gates": 5.6052509476672e+19,
+      "w_gates": 56052509476.672,
+      "w_fwd_gates": 53257052347.2,
+      "sigma": 1.0,
+      "tau_bits": 12.8,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.731015:0;0.731015:1.48129e8;1:2.02634e8",
+      "u_in_points": "0:0;1:2.02634e8",
+      "delta_bits": 202634496.0,
+      "delta_t_bits": 202634496.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 0.0,
+      "w_fit_gates": 56052509476.672,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 1040.6801808382133,
+       "basis": "target",
+       "s": 6087.993233900451,
+       "x0": 0.00032341975968395824,
+       "s_star": 5.848121611857556,
+       "fit_delta_bits": -12390.313393925768,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 2081.6970471011405,
+       "basis": "target",
+       "s": 6087.993233900451,
+       "x0": 0.00016170987984197912,
+       "s_star": 2.924060805928778,
+       "fit_delta_bits": -45158.31339392577,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 883.7196058794615,
+       "basis": "target",
+       "s": 20699.176995261532,
+       "x0": 0.001293679038735833,
+       "s_star": 23.392486447430223,
+       "fit_delta_bits": -2805.4655393476132,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "span": 4198.4,
+      "t_counted": 0.7310152014821945
+     }
+    },
+    "evenly spread": {
+     "dials": {
+      "n_params": 45029888,
+      "precision": "fp4",
+      "prompt_tokens": 4096,
+      "generated_tokens": 1024,
+      "t": 0.0,
+      "tokens": 1000000000.0
+     },
+     "inputs": {
+      "C_gates": 5.6052509476672e+19,
+      "w_gates": 56052509476.672,
+      "w_fwd_gates": 53257052347.2,
+      "sigma": 1.0,
+      "tau_bits": 12.8,
+      "a_bits": 8192.0,
+      "u_points": "0:0;1:2.02634e8",
+      "u_in_points": "0:0;1:2.02634e8",
+      "delta_bits": 202634496.0,
+      "delta_t_bits": 202634496.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 0.0,
+      "w_fit_gates": 56052509476.672,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 9408862.746263513,
+       "basis": "target",
+       "s": 6087.993233900451,
+       "x0": 0.00032341975968395824,
+       "s_star": 0.0006468395193679165,
+       "fit_delta_bits": -12390.313393925768,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 37641538.97828795,
+       "basis": "target",
+       "s": 6087.993233900451,
+       "x0": 0.00016170987984197912,
+       "s_star": 0.00016170987984197912,
+       "fit_delta_bits": -45158.31339392577,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 1997442.7857376905,
+       "basis": "target",
+       "s": 20699.176995261532,
+       "x0": 0.001293679038735833,
+       "s_star": 0.010349432309886664,
+       "fit_delta_bits": -2805.4655393476132,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "span": 4198.4,
+      "t_counted": 0.7310152014821945
+     }
+    },
+    "7B": {
+     "dials": {
+      "n_params": 7000000000.0,
+      "precision": "fp4",
+      "prompt_tokens": 4096,
+      "generated_tokens": 1024,
+      "t": null,
+      "tokens": 1000000000.0
+     },
+     "inputs": {
+      "C_gates": 4.581018076435386e+21,
+      "w_gates": 4581018076435.386,
+      "w_fwd_gates": 4253794798476.0254,
+      "sigma": 1.0,
+      "tau_bits": 12.8,
+      "a_bits": 57941.493304682495,
+      "u_points": "0:0;0.488368:0;0.488368:1.53836e10;1:3.15e10",
+      "u_in_points": "0:0;1:3.15e10",
+      "delta_bits": 31500000000.0,
+      "delta_t_bits": 31500000000.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 0.0,
+      "w_fit_gates": 4581018076435.386,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 134.85564956981023,
+       "basis": "target",
+       "s": 74.4915852204307,
+       "x0": 2.0805079365079367e-06,
+       "s_star": 0.5523790102804312,
+       "fit_delta_bits": 64582.507709178484,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 269.71157970845337,
+       "basis": "target",
+       "s": 74.4915852204307,
+       "x0": 1.0402539682539683e-06,
+       "s_star": 0.2761895051402156,
+       "fit_delta_bits": 31814.507709178488,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 114.6265866838147,
+       "basis": "target",
+       "s": 253.27138974946433,
+       "x0": 8.322031746031747e-06,
+       "s_star": 2.209516041121725,
+       "fit_delta_bits": 258902.12621120687,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 3621.343331542656,
+      "n_layer": 42.4376171665155,
+      "span": 4198.4,
+      "t_counted": 0.4883676868562431
+     }
+    }
+   },
+   "checks": {}
+  },
+  "lora": {
+   "title": "Fine-tuning a registered model with a LoRA",
+   "what": "A small adapter trained on a registered model; the base is frozen.",
+   "dials": [
+    {
+     "name": "n_params",
+     "unit": "parameters",
+     "default": 45029888,
+     "range": [
+      10000000.0,
+      100000000000.0
+     ],
+     "why": "the trained model; d_model and n_layer follow at the reference model's d/L (te_core.workloads.dense)"
+    },
+    {
+     "name": "rank",
+     "unit": "rank",
+     "default": 8,
+     "range": [
+      1,
+      256
+     ],
+     "why": "the adapter's rank"
+    },
+    {
+     "name": "targets",
+     "unit": "matrices",
+     "default": "all",
+     "range": [
+      "q",
+      "qv",
+      "attn",
+      "mlp",
+      "all"
+     ],
+     "why": "the adapted matrices in each adapted layer"
+    },
+    {
+     "name": "layers",
+     "unit": "layers",
+     "default": null,
+     "range": [
+      1,
+      128
+     ],
+     "why": "the adapted layers, from the top; None is all"
+    },
+    {
+     "name": "adapter_bits",
+     "unit": "bits a value",
+     "default": 16,
+     "range": [
+      1,
+      32
+     ],
+     "why": "the adapter's values as submitted"
+    },
+    {
+     "name": "optimizer",
+     "unit": "rule",
+     "default": "adamw",
+     "range": [
+      "adamw",
+      "sgd"
+     ],
+     "why": "sets Delta_grad: 64 or 0 state bits a value"
+    },
+    {
+     "name": "seq_len",
+     "unit": "tokens",
+     "default": 1024,
+     "range": [
+      256,
+      32768
+     ],
+     "why": "the training context: each token's attention span"
+    },
+    {
+     "name": "batch_tokens",
+     "unit": "tokens a step",
+     "default": 65536,
+     "range": [
+      10000.0,
+      10000000.0
+     ],
+     "why": "sets the optimizer's share, 1 - sigma; the pilot's 64 x 1,024"
+    },
+    {
+     "name": "t",
+     "unit": "share of a token's affected work",
+     "default": null,
+     "range": [
+      0.0,
+      0.9999
+     ],
+     "why": "A1's free share: None is the modelled share reading no adapter value; 0 is evenly spread"
+    },
+    {
+     "name": "tokens",
+     "unit": "tokens",
+     "default": 100000000.0,
+     "range": [
+      1000000.0,
+      100000000000.0
+     ],
+     "why": "sets |C| only"
+    }
+   ],
+   "points": {
+    "default": {
+     "dials": {
+      "n_params": 45029888,
+      "rank": 8,
+      "targets": "all",
+      "layers": null,
+      "adapter_bits": 16,
+      "optimizer": "adamw",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0
+     },
+     "inputs": {
+      "C_gates": 1.6768310239219e+19,
+      "w_gates": 167682372605.44,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9999956478217568,
+      "tau_bits": 16,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.991648:0;0.991648:7.50619e6;1:7.56941e6",
+      "u_in_points": "0:0;1:7.56941e6",
+      "delta_bits": 7569408.0,
+      "delta_t_bits": 7569408.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 45416448.0,
+      "w_fit_gates": 167682372605.44,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 254.30554669375854,
+       "basis": "target",
+       "s": 2035.0815242821127,
+       "x0": 0.008658008658008658,
+       "s_star": 7.933185165250718,
+       "fit_delta_bits": 32974.6956114862,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 510.8321025289473,
+       "basis": "target",
+       "s": 2035.0815242821127,
+       "x0": 0.004329004329004329,
+       "s_star": 3.966592582625359,
+       "fit_delta_bits": 206.69561148619687,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 210.49614137904774,
+       "basis": "target",
+       "s": 6919.277182559183,
+       "x0": 0.03463203463203463,
+       "s_star": 31.73274066100287,
+       "fit_delta_bits": 151435.56507905308,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "adapter_values": 473088.0,
+      "w_gates": 167682372605.44,
+      "t_counted": 0.9916481456563397
+     }
+    },
+    "rank 1 on W_q": {
+     "dials": {
+      "n_params": 45029888,
+      "rank": 1,
+      "targets": "q",
+      "layers": null,
+      "adapter_bits": 16,
+      "optimizer": "adamw",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0
+     },
+     "inputs": {
+      "C_gates": 1.6555368478015e+19,
+      "w_gates": 165553675302.4,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9999999427511987,
+      "tau_bits": 16,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.99989:0;0.99989:98293.2;1:98304",
+      "u_in_points": "0:0;1:98304",
+      "delta_bits": 98304.0,
+      "delta_t_bits": 98304.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 589824.0,
+      "w_fit_gates": 165553675302.4,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 85.89479412148668,
+       "basis": "target",
+       "s": 2061.248702656697,
+       "x0": 0.6666666666666666,
+       "s_star": 7.999121117621012,
+       "fit_delta_bits": 32556.02075749285,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 343.57917648594673,
+       "basis": "target",
+       "s": 2061.248702656697,
+       "x0": 0.3333333333333333,
+       "s_star": 3.999560558810506,
+       "fit_delta_bits": -211.97924250715005,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 1.0,
+       "basis": "target",
+       "s": 7008.245589032769,
+       "x0": 1.0,
+       "s_star": 31.99648447048405,
+       "fit_delta_bits": 150012.0705754757,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "adapter_values": 6144.0,
+      "w_gates": 165553675302.4,
+      "t_counted": 0.9998901397026265
+     }
+    },
+    "rank 1 on W_q, one layer": {
+     "dials": {
+      "n_params": 45029888,
+      "rank": 1,
+      "targets": "q",
+      "layers": 1,
+      "adapter_bits": 16,
+      "optimizer": "adamw",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0
+     },
+     "inputs": {
+      "C_gates": 1.25197123845225e+19,
+      "w_gates": 125197122265.6,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9999999873828971,
+      "tau_bits": 16,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.999967:0;0.999967:16383.5;1:16384",
+      "u_in_points": "0:0;1:16384",
+      "delta_bits": 16384.0,
+      "delta_t_bits": 16384.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 98304.0,
+      "w_fit_gates": 125197122265.6,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 1.0,
+       "basis": "target",
+       "s": 2725.6800496834053,
+       "x0": 1.0,
+       "s_star": 7.999738768544032,
+       "fit_delta_bits": 21925.119205065515,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 1.0,
+       "basis": "target",
+       "s": 2725.6800496834053,
+       "x0": 1.0,
+       "s_star": 3.999869384272016,
+       "fit_delta_bits": -10842.880794934485,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 1.0,
+       "basis": "fit",
+       "s": 9267.312168923578,
+       "x0": 1.0,
+       "s_star": 31.998955074176127,
+       "fit_delta_bits": 113867.00529722276,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "adapter_values": 1024.0,
+      "w_gates": 125197122265.6,
+      "t_counted": 0.999967346068004
+     }
+    }
+   },
+   "checks": {
+    "45M sparse/lora-alloc": {
+     "record": "r20261102-132959-286b@1720",
+     "source": "te_core 4.1's console columns for the record (algorithm_policy, quantities measured, t literal); delta_grad_bits its trace's gradient cut and state; u_in_points the trace's u_in at the policies' k",
+     "dials": {
+      "n_params": 45029888,
+      "rank": 4,
+      "targets": "qv",
+      "layers": null,
+      "adapter_bits": 16,
+      "optimizer": "adamw",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "t": null,
+      "tokens": 100000000.0
+     },
+     "differs": "48,512 trained values against the model's 49,152; u_in front-loaded (a token's forward reads every adapter value in dependency order before most of its work), where the model's A1' is even",
+     "record_inputs": {
+      "w_gates": 166764000000.0,
+      "sigma": 0.999972,
+      "tau_bits": 16.0156,
+      "a_bits": 8192,
+      "delta_bits": 788712,
+      "delta_t_bits": 788712,
+      "d_gates": 0,
+      "delta_grad_bits": 4657152,
+      "w_fit_gates": 166390000000.0,
+      "alpha_ratio": 0.998823,
+      "u_points": "0:0;0.999235:0;0.999235:788712;1:788712",
+      "u_in_points": "0:0;0.00105837:32768;0.00315535:65536;0.100031:262144;1:788712"
+     },
+     "model_inputs": {
+      "C_gates": 1.6574981534968e+19,
+      "w_gates": 165749739527.68,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9999995425515266,
+      "tau_bits": 16,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.999122:0;0.999122:785742;1:786432",
+      "u_in_points": "0:0;1:786432",
+      "delta_bits": 786432.0,
+      "delta_t_bits": 786432.0,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4718592.0,
+      "w_fit_gates": 165749739527.68,
+      "alpha_ratio": 1.0
+     },
+     "rho": {
+      "default": {
+       "record": 254.86673185228332,
+       "model": 236.11252762591502
+      },
+      "tighter": {
+       "record": 510.8057480155866,
+       "model": 493.6898304905497
+      },
+      "looser": {
+       "record": 195.58346842570947,
+       "model": 145.96047162329293
+      }
+     }
+    }
+   }
+  },
+  "distill": {
+   "title": "Distillation from a registered teacher",
+   "what": "A student trained on a registered teacher's outputs, the teacher's forward in each token block.",
+   "dials": [
+    {
+     "name": "student_params",
+     "unit": "parameters",
+     "default": 45029888,
+     "range": [
+      10000000.0,
+      100000000000.0
+     ],
+     "why": "the trained student"
+    },
+    {
+     "name": "teacher_params",
+     "unit": "parameters",
+     "default": 450298880,
+     "range": [
+      10000000.0,
+      1000000000000.0
+     ],
+     "why": "the registered teacher"
+    },
+    {
+     "name": "teacher_share",
+     "unit": "share of tokens",
+     "default": 1.0,
+     "range": [
+      0.0,
+      1.0
+     ],
+     "why": "the student tokens the teacher runs on"
+    },
+    {
+     "name": "teacher_precision",
+     "unit": "GEMM format",
+     "default": "bf16",
+     "range": [
+      "bf16",
+      "e4m3",
+      "fp4"
+     ],
+     "why": "the teacher's weight GEMMs"
+    },
+    {
+     "name": "seq_len",
+     "unit": "tokens",
+     "default": 1024,
+     "range": [
+      256,
+      32768
+     ],
+     "why": "the training context: each token's attention span"
+    },
+    {
+     "name": "batch_tokens",
+     "unit": "tokens a step",
+     "default": 65536,
+     "range": [
+      10000.0,
+      10000000.0
+     ],
+     "why": "sets the optimizer's share, 1 - sigma; the pilot's 64 x 1,024"
+    },
+    {
+     "name": "optimizer",
+     "unit": "rule",
+     "default": "adamw",
+     "range": [
+      "adamw",
+      "muon",
+      "sgd"
+     ],
+     "why": "sets Delta_grad (the state) and the optimizer's gates"
+    },
+    {
+     "name": "t",
+     "unit": "share of a token's affected work",
+     "default": null,
+     "range": [
+      0.0,
+      0.9
+     ],
+     "why": "A1's free share: None is te_core's literal t on the 45M trace, 0.692646; 0 is evenly spread"
+    },
+    {
+     "name": "tokens_per_param",
+     "unit": "tokens / N",
+     "default": 20.0,
+     "range": [
+      1.0,
+      2000.0
+     ],
+     "why": "sets |C| only (Chinchilla's 20 by default)"
+    }
+   ],
+   "points": {
+    "default": {
+     "dials": {
+      "student_params": 45029888,
+      "teacher_params": 450298880,
+      "teacher_share": 1.0,
+      "teacher_precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 20.0
+     },
+     "inputs": {
+      "C_gates": 8.899433411742946e+20,
+      "w_gates": 988100151120.023,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9999297051654347,
+      "tau_bits": 16,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
+      "u_in_points": "0:0;1:7.20478e8",
+      "delta_bits": 720478208,
+      "delta_t_bits": 720478208,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 988100151120.023,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 62.3156174979964,
+       "basis": "target",
+       "s": 345.356994481088,
+       "x0": 9.096180741111325e-05,
+       "s_star": 5.541168,
+       "fit_delta_bits": 60010.288088302594,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 124.63690385283981,
+       "basis": "target",
+       "s": 345.356994481088,
+       "x0": 4.548090370555663e-05,
+       "s_star": 2.770584,
+       "fit_delta_bits": 27242.288088302594,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 52.95381928833704,
+       "basis": "target",
+       "s": 1174.2137812356993,
+       "x0": 0.000363847229644453,
+       "s_star": 22.164672,
+       "fit_delta_bits": 243356.5795002288,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "student_w": 233962973207.04,
+      "teacher_w": 754137177912.9829,
+      "student_share": 0.23678062688467386
+     }
+    },
+    "no teacher": {
+     "dials": {
+      "student_params": 45029888,
+      "teacher_params": 450298880,
+      "teacher_share": 0.0,
+      "teacher_precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 20.0
+     },
+     "inputs": {
+      "C_gates": 2.1076908801314062e+20,
+      "w_gates": 233962973207.04,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9997031897773526,
+      "tau_bits": 16,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
+      "u_in_points": "0:0;1:7.20478e8",
+      "delta_bits": 720478208,
+      "delta_t_bits": 720478208,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 233962973207.04,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 263.1190814852731,
+       "basis": "target",
+       "s": 1458.552581032304,
+       "x0": 9.096180741111325e-05,
+       "s_star": 5.541168,
+       "fit_delta_bits": 42199.15870348313,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 526.2620989350211,
+       "basis": "target",
+       "s": 1458.552581032304,
+       "x0": 4.548090370555663e-05,
+       "s_star": 2.770584,
+       "fit_delta_bits": 9431.158703483135,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 223.59018255307126,
+       "basis": "target",
+       "s": 4959.078775509834,
+       "x0": 0.000363847229644453,
+       "s_star": 22.164672,
+       "fit_delta_bits": 182798.73959184266,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "student_w": 233962973207.04,
+      "teacher_w": 754137177912.9829,
+      "student_share": 1.0
+     }
+    },
+    "100x teacher": {
+     "dials": {
+      "student_params": 45029888,
+      "teacher_params": 4502988800,
+      "teacher_share": 1.0,
+      "teacher_precision": "bf16",
+      "seq_len": 1024,
+      "batch_tokens": 65536,
+      "optimizer": "adamw",
+      "t": null,
+      "tokens_per_param": 20.0
+     },
+     "inputs": {
+      "C_gates": 6.692350313161534e+21,
+      "w_gates": 7430939817951.128,
+      "w_fwd_gates": 75962004288.0,
+      "sigma": 0.9999906522496562,
+      "tau_bits": 16,
+      "a_bits": 8192.0,
+      "u_points": "0:0;0.692646:0;0.692646:4.99036e8;1:7.20478e8",
+      "u_in_points": "0:0;1:7.20478e8",
+      "delta_bits": 720478208,
+      "delta_t_bits": 720478208,
+      "d_gates": 0.0,
+      "delta_grad_bits": 4322869248.0,
+      "w_fit_gates": 7430939817951.128,
+      "alpha_ratio": 1.0
+     },
+     "estimated": "C_gates:est w_gates:est sigma:est tau_bits:est a_bits:bound u_points:A1 u_in_points:A1' delta_bits:est delta_t_bits:est d_gates:est delta_grad_bits:est",
+     "rho": {
+      "default": {
+       "rho": 8.286680500636798,
+       "basis": "target",
+       "s": 45.922495242494016,
+       "x0": 9.096180741111325e-05,
+       "s_star": 5.541168,
+       "fit_delta_bits": 64801.2400761201,
+       "fit_delta_grad_bits": 32768.0
+      },
+      "tighter": {
+       "rho": 16.57411484128002,
+       "basis": "target",
+       "s": 45.922495242494016,
+       "x0": 4.548090370555663e-05,
+       "s_star": 2.770584,
+       "fit_delta_bits": 32033.240076120095,
+       "fit_delta_grad_bits": 16384.0
+      },
+      "looser": {
+       "rho": 7.041756133524891,
+       "basis": "target",
+       "s": 156.13648382447965,
+       "x0": 0.000363847229644453,
+       "s_star": 22.164672,
+       "fit_delta_bits": 259645.81625880834,
+       "fit_delta_grad_bits": 131072.0
+      }
+     },
+     "derived": {
+      "d_model": 512.0,
+      "n_layer": 6.0,
+      "student_w": 233962973207.04,
+      "teacher_w": 7196976844744.088,
+      "student_share": 0.03148497753162381
+     }
+    }
+   },
+   "checks": {}
+  }
+ }
+}

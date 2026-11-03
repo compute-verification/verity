@@ -214,6 +214,8 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `rescore.py` | v2.3's records scored on their measured quantities (or the analysis's, or the stubs): the report, the five panels and their cuts, and the measured-against-analysis comparison, one command; `arguments` and `load`, its ledger and quantities loading |
 | `panels.py` | a console training panel, `training/frontier-branches`: the frontier, each branch point's honest and throttled curves and ρ's candidates, its console cut, figure and PUT |
 | `algorithm_policy.py` | the other, `training/algorithm-policy`: per run and end loss, p = C/H against ρ with ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`), its console cut, figure and PUT |
+| `workloads.py` | the covert workloads of the console's *Standard training under the policy* plot, each a model: one function per workload from its dials (`Dial`) to ρ's inputs as the console's columns (`columns`), ρ by `formalism.at` at the three policies (`POLICIES`, one served session a block), and pilot records beside the model (`Check`); `python -m te_core.workloads --json te_core/workloads.json` |
+| `workloads.json` | `workloads.py`'s reference points and checks, which the console's tests pin (`tests/test_workloads.py` fails while it's stale) |
 | `codecs/` | identity, low rank, sparse mask, quantized delta, seed replay, `Compose`, `Plan` |
 | `run.py` | `Session` (the program's API), the run CLI and its script mode |
 | `starts.py` | a start's registry entry |
