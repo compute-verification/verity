@@ -1402,17 +1402,29 @@
    "owner": "@compute-accounting",
    "digest": "b55efab6f13247ad3c7970b4659b72724dddc239457c0e562c6ba1c697a9b5c2"
   },
+  "Nci.Formalism.Annotation.TokenCapAt": {
+   "owner": "@training",
+   "digest": "8b7980c5f7920beca3e438877d7881d75d22c264640a66424c099631cb2a7202"
+  },
   "Nci.Formalism.Annotation.Valid": {
    "owner": "@training",
    "digest": "246e1e97b20a35f0482768b887e35db751f75d91eefa28de51d10c469bc0025b"
   },
+  "Nci.Formalism.Annotation.WorkPerBit": {
+   "owner": "@training",
+   "digest": "823359fd4535528cd6172830eb96a05ae03c6ce4aa186a7545e5a8cfa1d71cfb"
+  },
   "Nci.Formalism.Assumptions.CutCost": {
    "owner": "@training",
-   "digest": "a0eccc92cae6a392661f74944c6c67511d3a801454fa51ee115ae94f9fea091a"
+   "digest": "7123181c18ade145bf6fc07ca2929c7723b35ca10ec2311d931f6575e2436231"
   },
   "Nci.Formalism.Assumptions.EfficiencyFloor": {
    "owner": "@training",
    "digest": "bd5eea2adbee733740c70a5ab6a7fc532e1f330183420e4bf1553b1d386c940d"
+  },
+  "Nci.Formalism.Caps": {
+   "owner": "@training",
+   "digest": "46e4b37e04ca1e7219b2dd46e6bdeb60499f5c618d2c3667c88edf8eeafbc350"
   },
   "Nci.Formalism.GateSet": {
    "owner": "@training",
@@ -1421,6 +1433,14 @@
   "Nci.Formalism.InPeriods": {
    "owner": "@training",
    "digest": "2e9c8f7af1c83a77da3bc7a6cb8c309403d4e72509733fdede069044836a1e79"
+  },
+  "Nci.Formalism.InferenceBlock": {
+   "owner": "@training",
+   "digest": "f4c513ca7a5316a39db0af97dadc2728462cdcef93f0ab5ecdb53ba9e99ffd4e"
+  },
+  "Nci.Formalism.PeakAtMost": {
+   "owner": "@training",
+   "digest": "d846aaf90484906bcd76942d72dc6be57f5601ddaff436fd6e475ca537f48dce"
   },
   "Nci.Formalism.Run.Among": {
    "owner": "@training",
@@ -1444,11 +1464,11 @@
   },
   "Nci.Formalism.TrainingBlocks": {
    "owner": "@training",
-   "digest": "d55519b827232daa6848f5070a05eeda6d280b9778e81514f62158e01c2005ac"
+   "digest": "5fa9d1ae96a29df28e3b3ba890af38cd37dcb0a13b79f9578fa82432520b41f8"
   },
   "Nci.Formalism.TrainingFits": {
    "owner": "@training",
-   "digest": "31766e6632c3503b0abed8bad0f5091dfc85f5a9e9e44f0e3fad85478f050a60"
+   "digest": "b708a3fe8eb9aecf99d6e6ee46afc57aee936c361957b2e2c85ad49e028467a7"
   },
   "Nci.Ldl.Assumptions.ActivationRate": {
    "owner": "@training",
@@ -2202,25 +2222,9 @@
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
   },
-  "Nci.Formalism.Annotation.TokenCapAt": {
+  "Nci.Formalism.PartitionBound": {
    "owner": "@training",
-   "digest": "bc4b4e8b6033247789def8ca4eeb24e1c030c3fdb10b53468122bfd07233c939"
-  },
-  "Nci.Formalism.Annotation.WorkPerBit": {
-   "owner": "@training",
-   "digest": "d95775a3bfb434cf97de9610108ed8b511adb50775c11f093671866e51b822c8"
-  },
-  "Nci.Formalism.Caps": {
-   "owner": "@training",
-   "digest": "46e4b37e04ca1e7219b2dd46e6bdeb60499f5c618d2c3667c88edf8eeafbc350"
-  },
-  "Nci.Formalism.InferenceBlock": {
-   "owner": "@training",
-   "digest": "f4c513ca7a5316a39db0af97dadc2728462cdcef93f0ab5ecdb53ba9e99ffd4e"
-  },
-  "Nci.Formalism.PeakAtMost": {
-   "owner": "@training",
-   "digest": "551f9186a5d5cc423e2018bdabba52b1a5fb84b1771d707656f2b025d4c6e66a"
+   "digest": "53b47cf9f3cf119106630a976409763d5ef38fce4340d6c32823ddfb93df3e78"
   }
  },
  "meaning": [
@@ -13701,23 +13705,23 @@
    "Pous.SecurityProofs.ObligationWide320_nontrivial": "frozen (no-function): ObligationWide320's nontrivial witness: at 2^19 blocks and 320 reads the sure event, which a verifier that accepts everything passes, has probability 1, above 2^-20; it is about no function of the PoUS code and rests on no named assumption.",
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Nci.Formalism.SecurityProofs.Counting": "frozen (no-function): The counting lemma over kinds: it is about an arbitrary declaration, kinds of its work with caps on the gates of each that an inference block holds (Nci.Formalism.Caps, Security/Definitions/Nci/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.TokenCap": "frozen (no-function): The token kind's cap from A1: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), A1's values and a set of its token gates, reading no partition, under the named CutCost (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.TokenCapClean": "frozen (no-function): The token cap's clean form, beside it: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), A1's values and a set of its token gates, reading no partition, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.Slowdown": "frozen (no-function): Slowdown, the one bound: the counting lemma over kinds with the token kind's cap from A1: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), A1's values, a set of its token gates, kinds of its work with caps on the gates of each that an inference block holds (Nci.Formalism.Caps, Security/Definitions/Nci/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.Counting": "frozen (no-function): The counting lemma over kinds: it is about an arbitrary declaration, kinds of its work with caps on the gates of each that an inference block holds (Nci.Formalism.Caps, Security/Definitions/Nci/Formalism/Inference.lean), kinds that each give a bound for the whole partition (Nci.Formalism.PartitionBound, Security/Definitions/Nci/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.TokenCap": "frozen (no-function): The token kind's cap from A1: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt and updateAt, Security/Definitions/Nci/Formalism/Training.lean) and a set of its token gates, reading no partition, under the named CutCost (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.TokenCapClean": "frozen (no-function): The token cap's clean form, beside it: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt and updateAt, Security/Definitions/Nci/Formalism/Training.lean) and a set of its token gates, reading no partition, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
+   "Nci.Formalism.SecurityProofs.Slowdown": "frozen (no-function): Slowdown, the one bound: the counting lemma over kinds with the token kind's cap from A1: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, Security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt and updateAt, Security/Definitions/Nci/Formalism/Training.lean), a set of its token gates, kinds of its work with caps on the gates of each that an inference block holds (Nci.Formalism.Caps, Security/Definitions/Nci/Formalism/Inference.lean), kinds that each give a bound for the whole partition (Nci.Formalism.PartitionBound, Security/Definitions/Nci/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.FitServing": "frozen (no-function): Fit's construction for running θ': it is about an arbitrary Boolean declaration and a Verity.Partition of it into session blocks (Nci.Formalism.SessionBlocks, Security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.FitHonestServing": "frozen (no-function): FitServing at Δ = 0 with no decoder, beside it: it is about an arbitrary Boolean declaration and a Verity.Partition of it into session blocks (Nci.Formalism.SessionBlocks, Security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.FitTraining": "frozen (no-function): Fit's construction for training: it is about an arbitrary Boolean declaration and a Verity.Partition of it into training blocks (Nci.Formalism.TrainingBlocks, Security/Definitions/Nci/Formalism/Inference.lean), concluding its slowdown, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.Security": "frozen (no-function): Security: it is about an arbitrary run of a class of methods (Nci.Formalism.Run, Security/Definitions/Nci/Formalism/Runs.lean) and a partition of its declaration into inference blocks (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), under the named CutCost and EfficiencyFloor (Security/Definitions/Nci/Assumptions/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
-   "Nci.Formalism.SecurityProofs.Counting_honest": "completeness: The counting lemma's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), the kind of the token's gates {3, 4} has the cap 1, every inference block at (c, k) = (1, 1) holding at most one of its gates, and its four gates, each a block of its own, are a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.Counting_nontrivial": "lemma: The counting lemma's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at the kind {3, 4} with the cap 1 and (c, k) = (1, 1), whole, one block of its four gates, is no partition into inference blocks, and the bound (|B_K| / |C|) / (cap_K / c) = 1/2 is above whole's price 1/4. A counterexample at an instance, not a property of a Lean function.",
-   "Nci.Formalism.SecurityProofs.Slowdown_honest": "completeness: Slowdown's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its premises hold together at (c, k) = (1, 1): its valid annotation, A1 with a block's entry on the token the token's gates it holds, the state there the token's values that work reads, and the block's update bits the new weight when it reads it, the cap 1 on the token gates {3, 4} within A1's budget, the cap 1 on the kind of the new weight {1}, and its four gates, each a block of its own, a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.Slowdown_nontrivial": "lemma: Slowdown's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at twice the state and the rest as in its honest lemma, every premise but A1 holds, the token kind's cap 0 within A1's budget among them, A1 fails at the block of gate 3, which reads one value of the token's state and no update bit, below twice that state, and the bound, ⊤ at the cap 0, is above the blocks' price 1. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Formalism.SecurityProofs.Counting_honest": "completeness: The counting lemma's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), the kind of the token's gates {3, 4} has the cap 1, every inference block at (c, k) = (1, 1) holding at most one of its gates, the partition-level bound 1, which every partition into blocks of one gate meets with its |C| = 4 blocks, and its four gates, each a block of its own, are a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Formalism.SecurityProofs.Counting_nontrivial": "lemma: The counting lemma's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at the kind {3, 4} with the cap 1, the partition-level bound 1 and (c, k) = (1, 1), whole, one block of its four gates, is no partition into inference blocks, and the bound max(1/2, 1) = 1, the kind's (|B_K| / |C|) / (cap_K / c) = 1/2 beside the partition-level 1, is above whole's price 1/4. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Formalism.SecurityProofs.Slowdown_honest": "completeness: Slowdown's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its premises hold together at (c, k) = (1, 1): its valid annotation, A1 at the witness block of the token's three gates, which reads the new weight alone, one update bit and no state, the cap 1 on the token gates {3, 4} within A1's budget, the cap 1 on the kind of the new weight {1}, the partition-level bound 1, which every partition into blocks of one gate meets with its |C| = 4 blocks, and its four gates, each a block of its own, a partition into inference blocks. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Formalism.SecurityProofs.Slowdown_nontrivial": "lemma: Slowdown's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at the witness block of gates 2 and 4, which reads the new weight and gate 3's value, and the rest as in its honest lemma, every premise but A1 holds, the token kind's cap 0 within A1's budget among them, A1 fails: that witness block reads one update bit and one bit of state, so A1 prices every block that works on the token at two bits, and the block of gate 3 reads one, and the bound, ⊤ at the cap 0, is above the blocks' price 1. A counterexample at an instance, not a property of a Lean function.",
    "Nci.Formalism.SecurityProofs.Security_honest": "completeness: Security's honest lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), its run the one method, with a decoder that outputs nothing, D = ⊤, the loss 0 and ℓ* = 0, its premises hold together, A1 and A2 among them, at p = 1, (c, k) = (1, 1), its four blocks in one period of four, and Slowdown's premises as in Slowdown's honest lemma. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's annotation, A1's checked witness blocks, caps and partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Formalism.SecurityProofs.Security_nontrivial": "lemma: Security's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at twice the state and the rest as in its honest lemma, every premise but A1 holds, A2 among them, A1 fails at the block of gate 3, which reads one value of the token's state and no update bit, below twice that state, and ρ̲ p H(ℓ*), ⊤ at the token kind's cap 0, is above N n c = 4. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Formalism.SecurityProofs.Security_nontrivial": "lemma: Security's nontrivial lemma: at Chain (Nci.Formalism.Chain, Security/Definitions/Nci/Formalism/Instances.lean), a training step and a token of three gates in a chain (a registered weight, the new weight its copy, and the token's three gates each a copy of the one before), at the witness block of gates 2 and 4, which reads the new weight and gate 3's value, and the rest as in its honest lemma, every premise but A1 holds, A2 among them, A1 fails: that witness block reads one update bit and one bit of state, so A1 prices every block that works on the token at two bits, and the block of gate 3 reads one, and ρ̲ p H(ℓ*), ⊤ at the token kind's cap 0, is above N n c = 4. A counterexample at an instance, not a property of a Lean function.",
    "Nci.Formalism.SecurityProofs.FitServing_honest": "completeness: Fit's honest lemma for running θ': at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), its two blocks of one gate are session blocks, each reading a description of one value and one token's one data bit, and Δ + s τ = 2 fits k = 2, with no decoder. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a served model's partition into session blocks, which no check reads yet, would supply the deployed premises.",
    "Nci.Formalism.SecurityProofs.FitServing_nontrivial": "lemma: Fit's nontrivial lemma for running θ': at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), at k = 1 its session blocks' Δ + s τ = 2 does not fit, and the token's gate reads two values beyond the weight, so no partition into inference blocks exists and ρ = ⊤, above c / (c - d) = 1. A counterexample at an instance, not a property of a Lean function.",
-   "Nci.Formalism.SecurityProofs.FitTraining_honest": "completeness: Fit's honest lemma for training: at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), its two blocks of one gate are compute blocks that fit at k = 2, with Δ = Δ_grad = s = τ = 1 and no decoder. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's partition into training blocks, which no check reads yet, would supply the deployed premises.",
+   "Nci.Formalism.SecurityProofs.FitTraining_honest": "completeness: Fit's honest lemma for training: at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), its two blocks of one gate are compute blocks that fit at k = 2, with Δ = Δ_t = Δ_grad = s = τ = 1 and no decoder. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's partition into training blocks, which no check reads yet, would supply the deployed premises.",
    "Nci.Formalism.SecurityProofs.FitTraining_nontrivial": "lemma: Fit's nontrivial lemma for training: at Honest (Nci.Formalism.Honest, Security/Definitions/Nci/Formalism/Instances.lean), a token served from a new weight (a Boolean declaration with a registered weight, a data bit, the new weight computed from both and the token computed from it and the data), at k = 1 its blocks don't fit, no partition into inference blocks exists, and ρ = ⊤, above c / (c - d) = 1. A counterexample at an instance, not a property of a Lean function.",
    "Verity.SecurityProofs.CKSize_honest": "completeness: CKSize's honest lemma: at Honest (Verity.Formalism.Honest, Security/Definitions/Core/Formalism/Instances.lean), the proof blocks {1, 2} and {3} of a chain of three gates after a registered input, its premise holds at (c, k) = (2, 1), the second proof block having one gate, under c. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound and rests on no run and no art:.",
    "Verity.SecurityProofs.CKSize_nontrivial": "lemma: CKSize's nontrivial lemma: at Counter (Verity.Formalism.Counter, Security/Definitions/Core/Formalism/Instances.lean), the same chain's three operation gates in one proof block, its premise fails at (c, k) = (2, 1), and so does the bound, |C| = 3 > 2 * 1. A counterexample at an instance, not a property of a Lean function."
@@ -26971,9 +26975,9 @@
    ]
   },
   "Definitions.Nci.Assumptions.Formalism": {
-   "digest": "8563243b9431050d66738774b77e7124b9d61b0b011cf012675de0e521b30c29",
+   "digest": "778a009e7883d6e23d4feaa25371729e987cb30c2456e171310da88786f75cf7",
    "definitions": {
-    "Nci.Formalism.Assumptions.CutCost": "a0eccc92cae6a392661f74944c6c67511d3a801454fa51ee115ae94f9fea091a",
+    "Nci.Formalism.Assumptions.CutCost": "7123181c18ade145bf6fc07ca2929c7723b35ca10ec2311d931f6575e2436231",
     "Nci.Formalism.Assumptions.EfficiencyFloor": "bd5eea2adbee733740c70a5ab6a7fc532e1f330183420e4bf1553b1d386c940d"
    },
    "guarantees": [
@@ -27375,16 +27379,17 @@
    ]
   },
   "Definitions.Nci.Formalism.Inference": {
-   "digest": "8f6e5967fbcbe4aba047fb3a9b68149d6f618c8e0e11e02f90d7b50343194d8a",
+   "digest": "18074200ec941918532ddffb849dbab35db1803be33f867db2633b95897b0d0e",
    "definitions": {
     "Nci.Formalism.Caps": "46e4b37e04ca1e7219b2dd46e6bdeb60499f5c618d2c3667c88edf8eeafbc350",
     "Nci.Formalism.ComputeBlock": "20430193e391548f59aa189aece4770e01054a04a63297d5203ee51b01e9c8e4",
     "Nci.Formalism.InferenceBlock": "f4c513ca7a5316a39db0af97dadc2728462cdcef93f0ab5ecdb53ba9e99ffd4e",
+    "Nci.Formalism.PartitionBound": "53b47cf9f3cf119106630a976409763d5ef38fce4340d6c32823ddfb93df3e78",
     "Nci.Formalism.ReductionBlock": "ba84dfa80db087c760a034a2f6bcf2a33ea7cd4e62f4275e497f5137476e81cd",
     "Nci.Formalism.ServingFits": "9362c658fc805110812ff7fed480889858ba419e8ac09d892301fc1e6440a7b4",
     "Nci.Formalism.SessionBlocks": "34bcb8ec9972cc06cb477dc919bab4e382f0b55caf1c3a13a463fc952dba78f3",
-    "Nci.Formalism.TrainingBlocks": "d55519b827232daa6848f5070a05eeda6d280b9778e81514f62158e01c2005ac",
-    "Nci.Formalism.TrainingFits": "31766e6632c3503b0abed8bad0f5091dfc85f5a9e9e44f0e3fad85478f050a60",
+    "Nci.Formalism.TrainingBlocks": "5fa9d1ae96a29df28e3b3ba890af38cd37dcb0a13b79f9578fa82432520b41f8",
+    "Nci.Formalism.TrainingFits": "b708a3fe8eb9aecf99d6e6ee46afc57aee936c361957b2e2c85ad49e028467a7",
     "Nci.Formalism.UpdateBlock": "419565e4999e8ddb6db862c44d026b77902b73c2ebc940a5dd82704b03be65b5",
     "Nci.Formalism.instDecidablePredFinsetFinNDInferenceBlock": "b1a684d61a116754566a4f1e118710a26a69888327a42525b1bd0d30120bc745",
     "Nci.Formalism.kindBound": "1b3577f5a223546d3fe30b2668847483f6286ea1dbc9352bac59b6b8f168bb5d",
@@ -27413,18 +27418,18 @@
    ]
   },
   "Definitions.Nci.Formalism.Instances": {
-   "digest": "e58c32dc7592dcdb5659b9143d96bbbc0efaadcd941b1956de54be37fabe6d87",
+   "digest": "0a6639f0ab7d5ffc89be5425f2988254d4ffcbf76822bd8c38ad3253e8a74a30",
    "definitions": {
     "Nci.Formalism.Chain.A": "13b0728b5f3dbeddc47226dbf857555e1dd2c30b879c8e988df590c8cd2cf003",
     "Nci.Formalism.Chain.C": "de302dab8410acf20b177abc2f195e2930cb7d9d9b8767930318056b9630c180",
     "Nci.Formalism.Chain.blocks": "ccfada045435c7ae61a85175510087a2bbc33f781058077accda8468c58169a9",
     "Nci.Formalism.Chain.d": "255d959b0373594ea08f71912cc1e7c778eb30f7e7ed5c78e72ead31c9a8c755",
-    "Nci.Formalism.Chain.entry": "d9e1399d67ba1b892ab597a024f233ae8454895e8d3875f3af963977172f2ed4",
+    "Nci.Formalism.Chain.entry": "725a77d89a8d62d75362e5233275514f77b0995fa521d5dc67036b7234ea4360",
     "Nci.Formalism.Chain.methods": "6444268784cda082f21ed780d6cf9113be72d5e8402d8cf60b8135bca216e023",
     "Nci.Formalism.Chain.r": "7e3c457ab40de47620cdd0c45a2dc78e1ccc117436ebda212fe02b47211318f8",
-    "Nci.Formalism.Chain.state": "b11a4fbf204cba9424672e666b2356b3a9b7479637ebf9cb2301c5ca99bef74c",
-    "Nci.Formalism.Chain.update": "d404ccdf3aeb535d735c8c08d42a11a9309067cfdab95eb1ec94e78e084df836",
+    "Nci.Formalism.Chain.skipping": "41c4553d5ef1591150561710b11858ec83a38526e26a52bcc747031a4b014fb9",
     "Nci.Formalism.Chain.whole": "a329fbbc6aa79c612debdc4b3ae8631ccfb71d482ef0196c119413959daee465",
+    "Nci.Formalism.Chain.witnesses": "77d51d3c1e5e71ee52733590bf194823f44ac01d07525ba5c55ef725ae771624",
     "Nci.Formalism.Honest.C": "4a518890c3e4db1028630a61a6f0f885abaa7a9968cb711e5c46e9ff44c6454a",
     "Nci.Formalism.Honest.P": "413195c1d171fee28a870db259bf198cae3627a1bd0d419ecc00a429778155c5",
     "Nci.Formalism.Honest.d": "d2bae5cbba8f5ff35338b8bf9b0d1edc717f565dfb9a6d7feab3a695d16f4097",
@@ -27465,18 +27470,25 @@
    ]
   },
   "Definitions.Nci.Formalism.Training": {
-   "digest": "a179e1ccd015906ef8a1535dac94a2d0bd954d7a37fe6b9f7e88635193da5913",
+   "digest": "67e384faabb9176f1d5c4ca58a49312615ae9640a62beb0bf3d2843ba6f7f9a6",
    "definitions": {
     "Nci.Formalism.Annotation": "413c74d61b9251d9879712b9e07bfd9186289901b61c3a4950a853895d5f58f2",
-    "Nci.Formalism.Annotation.TokenCapAt": "bc4b4e8b6033247789def8ca4eeb24e1c030c3fdb10b53468122bfd07233c939",
+    "Nci.Formalism.Annotation.Enters": "48c7ea367937a34bfe38d531fd4eb898f7945d30d4d22b481f26fd1c2a9aabd4",
+    "Nci.Formalism.Annotation.TokenCapAt": "8b7980c5f7920beca3e438877d7881d75d22c264640a66424c099631cb2a7202",
     "Nci.Formalism.Annotation.Valid": "246e1e97b20a35f0482768b887e35db751f75d91eefa28de51d10c469bc0025b",
-    "Nci.Formalism.Annotation.WorkPerBit": "d95775a3bfb434cf97de9610108ed8b511adb50775c11f093671866e51b822c8",
-    "Nci.Formalism.Annotation.entryWork": "92874dbe51cded7ace2e6c0f1744322dd808ffe3d544e0db3a72ea5bb05193aa",
+    "Nci.Formalism.Annotation.WorkPerBit": "823359fd4535528cd6172830eb96a05ae03c6ce4aa186a7545e5a8cfa1d71cfb",
+    "Nci.Formalism.Annotation.blockUpdate": "08093006979791fa5d0888261e3490a07ff3c9e1770a055ce6e06e8446a4adc1",
+    "Nci.Formalism.Annotation.entryWork": "c816328d856228aa401a6ca3d4ff1c72bc874a46df9d4f52d679d07cd56b5d02",
+    "Nci.Formalism.Annotation.stateAt": "069e9970f21bfffac6b04520cd59206ef3ab41bdbe53387ce50870da9d07c5f2",
+    "Nci.Formalism.Annotation.stateReads": "ed7a7b1d1ad0c5733c46ae93d1cfce06659a19c1b5fbdebcb38ae8afdafb7582",
     "Nci.Formalism.Annotation.tokenGates": "062342d7a6d25499cd7ec04883e976d4ff53484c5bd10bba094541cf9a2b6564",
     "Nci.Formalism.Annotation.tokens": "5d45b499998b10099781ad5cbb87f5c491502db1631c6698c8fdca07e34c0f23",
     "Nci.Formalism.Annotation.totalUpdate": "c1f388b2f958cc3dad57fa00206f16e63c3976096bb098c73f3adb49eb3072eb",
+    "Nci.Formalism.Annotation.updateAt": "8694fdc392b242970409de89f2826997d02f08b1f7a4341ae41073691b514d20",
+    "Nci.Formalism.Annotation.updateReads": "beac4b2461573bdabc81da894f4c981aecb7eca9a707d629cd29f328821e3604",
+    "Nci.Formalism.Annotation.worksOn": "942d6e373a730e2ba113eb2d38e53c99c9a0b2a640877b7c5fd0a16b3a86a161",
     "Nci.Formalism.Annotation.θ'": "c36bb29467369ba299bc1f820857190375b35ce280264dc04de6ff3752a7ece7",
-    "Nci.Formalism.PeakAtMost": "551f9186a5d5cc423e2018bdabba52b1a5fb84b1771d707656f2b025d4c6e66a"
+    "Nci.Formalism.PeakAtMost": "d846aaf90484906bcd76942d72dc6be57f5601ddaff436fd6e475ca537f48dce"
    },
    "guarantees": [
     "Nci.Formalism.SecurityProofs.Security",
@@ -27694,16 +27706,16 @@
    ]
   },
   "Definitions.Nci.Guarantees.Formalism": {
-   "digest": "461579adce3611fec2eae504c4a1818898c5630e0bd2b47fb97cc56b58ec5bfb",
+   "digest": "a8ec568ef4563ed951c8f23fea3a35e04f4c19b142a0b74660c4e4d2c75489a3",
    "definitions": {
-    "Nci.Formalism.Guarantees.Counting": "2969a919c81838f3332d1db6527e7f47cee9cd407adb8a60896dd0a60c6f2db3",
+    "Nci.Formalism.Guarantees.Counting": "841787dcddb75c4450c80791dbd36c93178ea664e2055c602079da5a92838a72",
     "Nci.Formalism.Guarantees.FitHonestServing": "974760070b07ba321f59e7510d0cefab6a0dfaad27777eb3684df01af4f3bdbe",
     "Nci.Formalism.Guarantees.FitServing": "087b43ca9e00a97e5777b54a75b74ebd40f617791edcf4ab7088b7af703a281d",
-    "Nci.Formalism.Guarantees.FitTraining": "cbc8d17a14ef16b878b19d5be0db3b4e8524f645fa50c4ee5b77ad369f630993",
-    "Nci.Formalism.Guarantees.Security": "a10964f0ec0879aebc8d4e7513e8082a60d2f3c91c9de763618dee3f8d726145",
-    "Nci.Formalism.Guarantees.Slowdown": "f765e2f387b605a255dffa6be30bfea50720af4ad91e93818ccd329680e984f3",
-    "Nci.Formalism.Guarantees.TokenCap": "158bd1dd79511ec1ad9e5fb5fd6c6cf0a7bf863849171684bb88d1bc78b318bc",
-    "Nci.Formalism.Guarantees.TokenCapClean": "0b06c21daf4c359acd90ea874ab55fea785535df60b565205a833e110e34170e"
+    "Nci.Formalism.Guarantees.FitTraining": "e44417dc3c23034fae2a4619b7492d0f14dfe4fe221877fe2040429786481067",
+    "Nci.Formalism.Guarantees.Security": "545ea11a2caae5f3922d428f46e4cae2840530420b306befae0eafaf061b8e8c",
+    "Nci.Formalism.Guarantees.Slowdown": "2d65a5fb09b5b236eaa3e64d7593ed5be7f14b3e16a39050bb5725fba5295e09",
+    "Nci.Formalism.Guarantees.TokenCap": "b26ca3c77f128d43e58a4c9058ed357cfe894f9291393b091d38e094f2381cc4",
+    "Nci.Formalism.Guarantees.TokenCapClean": "9cea7d52c338454f3612cf5b55f420b70a8ff862ca5c3e9f6d0cbd3998498e2a"
    },
    "guarantees": [
     "Nci.Formalism.SecurityProofs.Counting",
@@ -27717,18 +27729,18 @@
    ]
   },
   "Definitions.Nci.Guarantees.Formalism.Witnesses": {
-   "digest": "19d4424819ff4865c06a3380b265f328db4abe569c6f87b66b580bd2d646281a",
+   "digest": "7d7cee25e5ff40807d60950f2576f2fed5dae43a464735e0f00e755d9b2a953c",
    "definitions": {
-    "Nci.Formalism.Guarantees.Counting_honest": "b6a09ffb64b70ab36920c4025360658bf12ef0de18e95c95380210d89af4095d",
-    "Nci.Formalism.Guarantees.Counting_nontrivial": "418e47047aaa6b50fa4a76eb7899f467fe3b5bca0971403a252b9ca62ed4ba58",
+    "Nci.Formalism.Guarantees.Counting_honest": "8fd4f296f941d84cc22a416149aa517dd9a3c0212f902d467aff6e4e65bb3b47",
+    "Nci.Formalism.Guarantees.Counting_nontrivial": "b8f306f3f123793d7e69cd23530d8a9df4fe885b7b8fbd4455dce2fbe08107f2",
     "Nci.Formalism.Guarantees.FitServing_honest": "c542dbfe54ee351fc9bbeb6ab1266e8f95eafa7feaf7325a9e19a3f7a2762d6a",
     "Nci.Formalism.Guarantees.FitServing_nontrivial": "7935455fdb436211e244a377e64604640b7b74675f4744f87986c1685a63501e",
-    "Nci.Formalism.Guarantees.FitTraining_honest": "08b86b85eaeb90e09e3c3660be10fcf04fcc9f56f29eb1ec33e8ecab47044ba9",
-    "Nci.Formalism.Guarantees.FitTraining_nontrivial": "ca49f36e0f5dced0af098600bc423ae4356fc07f8a6ef3c5950965a11ff3e044",
-    "Nci.Formalism.Guarantees.Security_honest": "cac1ff2aa3be3d522ddc86a519a937ac5f7d2560fc3b42c2b37424440abc9d57",
-    "Nci.Formalism.Guarantees.Security_nontrivial": "d27e7660cf2070f50c24b543a924826304756ad6c6b0c8bfd5a1b3b39bd08542",
-    "Nci.Formalism.Guarantees.Slowdown_honest": "f383066ddad5f8a073e79365b7802479e51e0e52c33a719d0c9fcf47bd65d59e",
-    "Nci.Formalism.Guarantees.Slowdown_nontrivial": "0e5a07125e8aa3c6eb1ea5155889e3a44529c7ce956d8b48c22bdc751c924677"
+    "Nci.Formalism.Guarantees.FitTraining_honest": "9deb8774a9ebb1aa5670edd2923a295eb91436a424b0bc743b24038fc04b724b",
+    "Nci.Formalism.Guarantees.FitTraining_nontrivial": "ea2967e788a0ce144556f6cd8ebe609707438a7a6381ba2566a997295c803eb8",
+    "Nci.Formalism.Guarantees.Security_honest": "6af1f6fb05704e4c061bd7b200b8fdef8f21151db2f6df5e01a1a8eb9d38ff2d",
+    "Nci.Formalism.Guarantees.Security_nontrivial": "231571fef0b2e95aa60f522d9e799884bbe320401a56691012e70f60441afdac",
+    "Nci.Formalism.Guarantees.Slowdown_honest": "86e3879e7dc692a2c6f928928a0526bffaf92aecc8c102c84eb7850db431519b",
+    "Nci.Formalism.Guarantees.Slowdown_nontrivial": "ad1edd1a11af6b863843813a8947740a3223a279ee6301c91e8e301f14577ece"
    },
    "guarantees": [
     "Nci.Formalism.SecurityProofs.Counting_honest",
