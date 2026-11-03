@@ -192,8 +192,37 @@ def test_a_stream_batch_is_token_data_through_any_op_and_counts_once():
         c.end_step()
     c.finish()
     s0, s1 = c.record()["steps"]
-    assert s0["tokens"] == s1["tokens"] == 3 * 8
+    assert s0["tokens"] == 3 * 9  # every position an op reads: x's 8 and the gather's last target
+    assert s1["tokens"] == 3 * 8
     assert s0["by"]["fwd/updated"] == s1["by"]["fwd/updated"] == 3 * 8 * D * D
+
+
+def test_disjoint_reads_of_one_batch_add_up_and_overlapping_ones_count_each_position_once():
+    """te_core 4.0's counter: a micro-batched step (`x = rows[i:i + m]`, `fwd(x[:, :-1])`) consumes every micro-batch's
+    tokens, where the rule before counted one at the largest read; windows overlapping by a token can't chain into one
+    read either."""
+    torch.manual_seed(0)
+    theta = {"w": torch.randn(D, D), "embed": torch.randn(VOCAB, D)}
+    w, embed = (torch.nn.Parameter(theta[k].clone()) for k in ("w", "embed"))
+    c = Counter(theta, digests=False)
+    c.register({"w": w, "embed": embed})
+    gen = torch.Generator().manual_seed(1)
+    with c, torch.no_grad():
+        c.begin_step()
+        w.add_(0.01)
+        rows = c.batch(torch.randint(0, VOCAB, (4, 9), generator=gen))
+        for i in range(0, 4, 2):
+            x = rows[i:i + 2]
+            F.embedding(x[:, :-1], embed) @ w
+        c.end_step()
+        stream = c.batch(torch.randint(0, VOCAB, (20,), generator=gen))
+        for lo, hi in ((0, 8), (7, 15), (14, 20), (0, 20)):
+            F.embedding(stream[lo:hi], embed) @ w
+        c.end_step()
+    c.finish()
+    s0, s1 = c.record()["steps"]
+    assert s0["tokens"] == 4 * 8 and s0["by"]["fwd/updated"] == 4 * 8 * D * D
+    assert s1["tokens"] == 20
 
 
 def one_step(body) -> dict:
