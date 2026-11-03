@@ -8,6 +8,15 @@ checks (AGENT_GUARD_LOCAL_OK=1). GPU work goes through the harness's launcher, n
 This brief replaces the v1-era one. Campaign v3 starts at the integrator's board line `[TOOL] v3 pinned at <commit>`.
 Until then, keep working at the v2.3 pin, whose results are now the FineWeb-Edu pilot.
 
+## The focus (Daniel, Mon 6:55 PM PST; TRN-40)
+
+The algorithm-against-policy plot is the campaign's focus: x is p = |C|/H, y is ρ at the page's policy, with one frontier
+per gain size (small: worth at most 1.1× the start's compute on the unconstrained frontier; medium 1.1–1.5×; large over
+1.5×). There's no prescribed sweep: attack every region of every gain size's frontier, low p at high ρ, the middle, and
+the region below the floor of about 300 down to Fit. A run counts once it beats a frontier somewhere. Publish every
+attempt, including runs that never reach, which the panel marks not reached; runs may go to p ≈ 100 on the long tier.
+The builder's coverage table on the board (gain size by decade of ρ) shows where the gaps are.
+
 ## The spec
 
 - The formalism is v2: note:training-20261102T2215Z-report-training-formalism-v2 (research-notes repo,
