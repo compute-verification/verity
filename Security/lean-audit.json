@@ -12061,10 +12061,16 @@
    "type_hash": "03966908eadf7f2df4b6715764c0a881097cb6d8a2ea801f44df28194c7d2e60"
   },
   "Verity.SecurityProofs.ExpandAndSize_honest": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.ExpandAndSize_honest : Verity.Guarantees.ExpandAndSize_honest"],
+   "assumptions": [],
+   "type_hash": "a7ff419aad4a9cf8d50732831b3856b9501fdfc57986427ef7bbeb2120bcf3f5"
   },
   "Verity.SecurityProofs.ExpandAndSize_nontrivial": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.ExpandAndSize_nontrivial : Verity.Guarantees.ExpandAndSize_nontrivial"],
+   "assumptions": [],
+   "type_hash": "89a901361a665320505aa9113c71097e2f44b8489bc0896f6c832b6488acd783"
   },
   "Verity.SecurityProofs.ExpandBits": {
    "owner": "@lean",
@@ -12091,10 +12097,16 @@
    "type_hash": "ba20fed6329ddf69ec6358b50a84b4245f08fbbd3cd9543a994231dcfd64ab9f"
   },
   "Verity.SecurityProofs.ExpandSize_honest": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.ExpandSize_honest : Verity.Guarantees.ExpandSize_honest"],
+   "assumptions": [],
+   "type_hash": "8ca0392c708102f72c1b1e0231296e28a075671b385e3dee15a2ac6567cde84a"
   },
   "Verity.SecurityProofs.ExpandSize_nontrivial": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Verity.SecurityProofs.ExpandSize_nontrivial : Verity.Guarantees.ExpandSize_nontrivial"],
+   "assumptions": [],
+   "type_hash": "112a8c90c018aebd4028397748512fca09566c34295f1a1479fc82c38fe3c058"
   },
   "Verity.SecurityProofs.HopperStepComplete": {
    "owner": "@proofs",
@@ -22460,10 +22472,14 @@
     "Verity.SecurityProofs.CountingSum",
     "Verity.SecurityProofs.CreditSizeLe",
     "Verity.SecurityProofs.ExpandAndSize",
+    "Verity.SecurityProofs.ExpandAndSize_honest",
+    "Verity.SecurityProofs.ExpandAndSize_nontrivial",
     "Verity.SecurityProofs.ExpandBits",
     "Verity.SecurityProofs.ExpandBoolean",
     "Verity.SecurityProofs.ExpandEval",
     "Verity.SecurityProofs.ExpandSize",
+    "Verity.SecurityProofs.ExpandSize_honest",
+    "Verity.SecurityProofs.ExpandSize_nontrivial",
     "Verity.SecurityProofs.InferenceCap",
     "Verity.SecurityProofs.Padding",
     "Verity.SecurityProofs.PrivateFitsOfLocal",
@@ -22576,7 +22592,11 @@
     "Verity.SecurityProofs.Counting",
     "Verity.SecurityProofs.CreditSizeLe",
     "Verity.SecurityProofs.ExpandAndSize",
+    "Verity.SecurityProofs.ExpandAndSize_honest",
+    "Verity.SecurityProofs.ExpandAndSize_nontrivial",
     "Verity.SecurityProofs.ExpandSize",
+    "Verity.SecurityProofs.ExpandSize_honest",
+    "Verity.SecurityProofs.ExpandSize_nontrivial",
     "Verity.SecurityProofs.Padding"
    ]
   },
@@ -22711,10 +22731,28 @@
    "guarantees": [
     "Nci.SecurityProofs.ExpandComplies",
     "Verity.SecurityProofs.ExpandAndSize",
+    "Verity.SecurityProofs.ExpandAndSize_honest",
+    "Verity.SecurityProofs.ExpandAndSize_nontrivial",
     "Verity.SecurityProofs.ExpandBits",
     "Verity.SecurityProofs.ExpandBoolean",
     "Verity.SecurityProofs.ExpandEval",
-    "Verity.SecurityProofs.ExpandSize"
+    "Verity.SecurityProofs.ExpandSize",
+    "Verity.SecurityProofs.ExpandSize_honest",
+    "Verity.SecurityProofs.ExpandSize_nontrivial"
+   ]
+  },
+  "Definitions.Core.Expand.Instances": {
+   "digest": "5534a43b2f0bc686088503da20cfe246963abd60dd9e7d992474826d99e08601",
+   "definitions": {
+    "Verity.Expand.AndPair.C": "623c103c289bc7444a4490de211d76215835bd9a6ebbf45bcb52283e6cc99f45",
+    "Verity.Expand.AndPair.P": "33081626f659ad3346386eb9e7643e3dd243b3bcdb4c9146262457106361009e",
+    "Verity.Expand.AndPair.d": "045b1b7deb1bf46cb8747a5587d1492d88e94050e963b0b091a14077478b6904"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.ExpandAndSize_honest",
+    "Verity.SecurityProofs.ExpandAndSize_nontrivial",
+    "Verity.SecurityProofs.ExpandSize_honest",
+    "Verity.SecurityProofs.ExpandSize_nontrivial"
    ]
   },
   "Definitions.Core.Formalism": {
@@ -22762,9 +22800,13 @@
     "Verity.SecurityProofs.Counting",
     "Verity.SecurityProofs.CreditSizeLe",
     "Verity.SecurityProofs.ExpandAndSize",
+    "Verity.SecurityProofs.ExpandAndSize_honest",
+    "Verity.SecurityProofs.ExpandAndSize_nontrivial",
     "Verity.SecurityProofs.ExpandBits",
     "Verity.SecurityProofs.ExpandBoolean",
     "Verity.SecurityProofs.ExpandSize",
+    "Verity.SecurityProofs.ExpandSize_honest",
+    "Verity.SecurityProofs.ExpandSize_nontrivial",
     "Verity.SecurityProofs.Padding",
     "Verity.SecurityProofs.ToCircuitAnd"
    ]
@@ -22998,6 +23040,21 @@
     "Verity.SecurityProofs.ExpandBoolean",
     "Verity.SecurityProofs.ExpandEval",
     "Verity.SecurityProofs.ExpandSize"
+   ]
+  },
+  "Definitions.Core.Guarantees.Expand.Witnesses": {
+   "digest": "04b4263c2f5d7f6177feb4875d6c7fe20d5a716d0adc413fce029b4b37a5cff6",
+   "definitions": {
+    "Verity.Guarantees.ExpandAndSize_honest": "600cc69732988ce836de6f770a19837b5c3673c0385f6c33dbb3dc54b957a80f",
+    "Verity.Guarantees.ExpandAndSize_nontrivial": "01eda8bc7732282d8bd5cd24751fe40e9c58800b01639e64cd866d94f804a7ad",
+    "Verity.Guarantees.ExpandSize_honest": "91b4fe77e60f0d001d992315e44b68c5fecf8e63da44ea9b994d23fb28cdfd1e",
+    "Verity.Guarantees.ExpandSize_nontrivial": "ea113cf3d24f5329d749c1cb40c2fc932ed19d49a7a6a63680070c18ca3c29ec"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.ExpandAndSize_honest",
+    "Verity.SecurityProofs.ExpandAndSize_nontrivial",
+    "Verity.SecurityProofs.ExpandSize_honest",
+    "Verity.SecurityProofs.ExpandSize_nontrivial"
    ]
   },
   "Definitions.Core.Guarantees.Formalism": {
@@ -23685,7 +23742,10 @@
     "Verity.SecurityProofs.Counting",
     "Verity.SecurityProofs.CountingSum",
     "Verity.SecurityProofs.ExpandAndSize",
+    "Verity.SecurityProofs.ExpandAndSize_honest",
     "Verity.SecurityProofs.ExpandSize",
+    "Verity.SecurityProofs.ExpandSize_honest",
+    "Verity.SecurityProofs.ExpandSize_nontrivial",
     "Verity.SecurityProofs.InferenceCap",
     "Verity.SecurityProofs.Padding",
     "Verity.SecurityProofs.PrivateFitsOfLocal",
