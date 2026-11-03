@@ -117,6 +117,7 @@ def _advised(d: Path, *, cap: int = 4096, t0: float = 10.0) -> Path:
 
     item = REG.item_of({"kind": "builder", "digest": B["inner"]["digest"], "advice": "verity-vllm/window-advice/v1", "cap": cap})
     log = REG.chain("onsite", [REG.Information((item,))])
+    d.mkdir(parents=True)
     (d / S.ADVICE_REGISTRATION).write_text(json.dumps({
         "compiler": B, "advice": "verity-vllm/window-advice/v1", "cap_bits": 4096, "t": t0,
         "registration": {"composite": "onsite", "head": REG.head("onsite", log), "log": json.loads(REG.committed("onsite", log))}}))
