@@ -3,7 +3,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
 
     python certifier_piece.py front PORT SERVE_DIR OUT [--gate USER@HOST | --gate local] [--key KEY] [--peer NAME]
         [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--scan-class w63k4] [--height 10]
-        [--minutes M] [--bucket-ms MS] [--warmup N]
+        [--minutes M] [--bucket-ms MS] [--warmup N] [--attack NAME [--attack-nth K]]
     python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--draw K] [--chain-cmd CMD]
         [CR_K=V ...]
     python certifier_piece.py chain SERVE_DIR WINDOW DIR V3C [--eos-ids IDS] [--draw K] [--class w63k4]
@@ -36,8 +36,10 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   OUT gets ``session.json`` and ``bundle.tgz``, the public outcome, and the run's kept directory a copy of
   ``session.json`` (`SESSION`), whose gate the piece's placement names. ``--gate local`` is the dry run's (this
   tree's gate in this process, a `relay` to PORT its tunnel): a warden on the prover's node is no auditor's device,
-  so it never stands for the gate.
-  Exit as `served_session.session`'s.
+  so it never stands for the gate. ``--attack NAME`` (after the warm-ups) puts the prover's relay playing attack NAME
+  (`attacks.py relay`; ``--attack-nth K``, the connection it plays on) between the gate's tunnel and PORT, at the
+  scan's cells and delay and the front's tick (`attack_relay`), its log the prover's under SERVE_DIR/`PRIVATE`/attacks;
+  `attacks.py judge` reads the outcome. Exit as `served_session.session`'s.
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
   form): accept only when the chain accepted and ``network-period check`` accepted the period, whose answer it then is.
   1. The kept network certifier run: exactly one fetch under SERVE_DIR/`PRIVATE`, whose rehearsal the gate's check
@@ -51,8 +53,8 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      certified requests (`warden_chain.io`), it carries the network certifier's run in its release, with the same
      prompt and streamed ids; and of the requests the endpoint recorded carrying that run, no two name one certified
      request and every certified request is one; else reject. These read the endpoint's records, the prover's, in the
-     clear: they refuse what a relay between the network certifier and an honest endpoint does, and the chain's tie is
-     what binds the committed values to the certified cells.
+     clear: they refuse what a relay between the network certifier and an honest endpoint does (`attacks.py`), and the
+     chain's tie is what binds the committed values to the certified cells.
   3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan)
      on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
@@ -207,6 +209,7 @@ def front(a: argparse.Namespace) -> int:
     if a.gate == "local":
         a.tunnel = lambda ssh, port: [sys.executable, str(Path(__file__).resolve()), "relay", "--listen", str(port),
                                       "--to", str(a.port)]
+    attack = None
     try:
         if a.prompts > SS.A.SCAN["--lanes"]:
             raise SS.Refused(f"--prompts {a.prompts}: one group, at most the scan's {SS.A.SCAN['--lanes']} lanes")
@@ -220,6 +223,8 @@ def front(a: argparse.Namespace) -> int:
         if a.warmup:
             warm = warmup(a, serve_dir)
             (out / "warmup.json").write_text(json.dumps({"requests": warm}, indent=1) + "\n")
+        if a.attack:
+            attack, a.port = attack_relay(a, keep)
         rc = SS.session(a, data, ps)
         if (doc := out / "session.json").is_file():
             shutil.copyfile(doc, keep / json.loads(doc.read_text())["run"] / SESSION)
@@ -228,6 +233,32 @@ def front(a: argparse.Namespace) -> int:
         (out / "session.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
         print(f"refused: {e}", file=sys.stderr)
         return e.code
+    finally:
+        if attack is not None:
+            end_group(attack)
+
+
+def attack_relay(a: argparse.Namespace, keep: Path) -> tuple[subprocess.Popen, int]:
+    """``--attack``'s relay (`attacks.py relay`, in a process group of its own) from a free loopback port to PORT, at
+    the scan's payload and delay and the front's tick, its log at KEEP/attacks/NAME.jsonl (the prover's, 0700): the
+    process and its port, once it listens."""
+    (keep / "attacks").mkdir(mode=0o700, exist_ok=True)
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    S = SS.A.SCAN
+    p = subprocess.Popen([sys.executable, str(HERE / "attacks.py"), "relay", "--attack", a.attack, "--listen", str(port),
+                          "--to", str(a.port), "--cell-bytes", str(S["--cell-bytes"]),
+                          "--bucket-ms", str(a.bucket_ms or S["--bucket-ms"]), "--delay", str(S["--delay"]),
+                          "--nth", str(a.attack_nth), "--log", str(keep / "attacks" / f"{a.attack}.jsonl")],
+                         stdout=subprocess.PIPE, text=True, process_group=0)
+    line = p.stdout.readline()
+    if not line.startswith("relay listening"):
+        end_group(p)
+        raise SS.Refused(f"--attack {a.attack}: the relay didn't listen: {line.strip()!r}")
+    threading.Thread(target=lambda: [print(x, end="", flush=True) for x in p.stdout], daemon=True).start()
+    print(f"attack {a.attack}: the relay on {port} to {a.port}", flush=True)
+    return p, port
 
 
 def warmup(a: argparse.Namespace, serve_dir: Path, *, clock: Callable[[], float] = time.monotonic,
@@ -858,6 +889,11 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--warmup", type=int, default=0, metavar="N",
                    help="plain requests of the group's shape straight to PORT first, each in a window of its own "
                         "(none by default)")
+    import attacks as AT
+    f.add_argument("--attack", choices=AT.RELAYED,
+                   help="the prover's relay playing this attack between the gate's tunnel and PORT (attacks.py)")
+    f.add_argument("--attack-nth", type=int, default=1, metavar="K",
+                   help="the connection, from 1, an attack on one connection plays on")
     q = sub.add_parser("piece")
     q.add_argument("serve_dir", type=Path)
     q.add_argument("window", type=int)

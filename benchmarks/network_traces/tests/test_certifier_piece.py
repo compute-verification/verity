@@ -18,7 +18,8 @@ warm-ups go straight to the endpoint, one at a time, each recorded in a closed w
 asked, and the pick passes over those windows for the group's. At a tick of 4000 ms the front's rehearsal reaches this
 tree's gate with the tick in its request and the minutes counted at it, and the warden runs the scan's schedule there;
 a tick the gate refuses (past its range, or on a request that isn't the scan rehearsal) refuses the front before the
-gate is asked."""
+gate is asked. An attack's front puts the prover's relay between the gate and the endpoint, and ends it with the
+front."""
 from __future__ import annotations
 
 import argparse
@@ -30,6 +31,7 @@ import re
 import shlex
 import signal
 import socket
+import socketserver
 import subprocess
 import sys
 import tarfile
@@ -43,6 +45,7 @@ HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parent), str(ROOT / "benchmarks" / "one_stage")]
 
+import attacks as AT  # noqa: E402
 import certifier_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
 import served_verdicts as S  # noqa: E402
@@ -697,6 +700,65 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"), "--key",
                     str(tmp_path / "key"), "--scan-class", "w63"]) == 0
     assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63 --window-per-group")
+
+
+class _Ids(socketserver.StreamRequestHandler):
+    """serve-openai's ``--protocol ids`` as the relay reads it: the request read whole, then `IDS`' id events at the
+    scan's payload and the trailer, and the connection closed."""
+
+    def handle(self):
+        head = b""
+        while not head.endswith(b"\r\n\r\n"):
+            head += self.rfile.readline()
+        self.rfile.read(int(re.search(rb"(?i)content-length:\s*(\d+)", head).group(1)))
+        self.wfile.write(AT.WS.id_response(IDS, SCAN_PAYLOAD))
+
+
+IDS = [5, 6]
+SCAN_PAYLOAD = CP.SS.A.SCAN["--cell-bytes"] - AT.IT.HEADER.size
+
+
+def test_an_attack_front_puts_the_relay_between_the_gate_and_the_endpoint_and_ends_it(tmp_path, monkeypatch):
+    """``--attack token``: the gate's request names the relay's port, a request through it (the session's stand-in)
+    reaches the endpoint on PORT and comes back with its first id one other, its line in the prover's 0700 attacks log,
+    and the relay is gone once the front ends."""
+    _stub_gate(tmp_path, monkeypatch)
+    endpoint = socketserver.ThreadingTCPServer(("127.0.0.1", 0), _Ids)
+    threading.Thread(target=endpoint.serve_forever, daemon=True).start()
+    relays, seen, real, real_relay = [], [], CP.SS.session, CP.attack_relay
+
+    def attack_relay(a, keep):
+        relays.append(real_relay(a, keep))
+        return relays[-1]
+
+    def session(a, data, ps):
+        request = AT.id_request(model="m", user="u", prompt=[1, 2], max_tokens=len(IDS),
+                                frame_bytes=CP.SS.A.SCAN["--cell-bytes"], offset=0)
+        with socket.create_connection(("127.0.0.1", a.port)) as s:
+            s.sendall(request)
+            got = b""
+            while chunk := s.recv(1 << 16):
+                got += chunk
+        seen.append(got)
+        return real(a, data, ps)
+
+    monkeypatch.setattr(CP, "attack_relay", attack_relay)
+    monkeypatch.setattr(CP.SS, "session", session)
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    try:
+        assert CP.main(["front", str(endpoint.server_address[1]), str(serve), str(out), "--key", str(tmp_path / "key"),
+                        "--attack", "token"]) == 0
+    finally:
+        endpoint.shutdown()
+        endpoint.server_close()
+    ((p, port),) = relays
+    assert p.poll() is not None
+    assert f" --port {port} " in (tmp_path / "request").read_text()
+    assert seen == [AT.WS.id_response([IDS[0] ^ 1, *IDS[1:]], SCAN_PAYLOAD)]
+    log = serve / CP.PRIVATE / "attacks"
+    assert log.stat().st_mode & 0o777 == 0o700
+    (line,) = [json.loads(x) for x in (log / "token.jsonl").read_text().splitlines()]
+    assert (line["connection"], line["attack"], line["events"]) == (1, "token", len(IDS))
 
 
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,

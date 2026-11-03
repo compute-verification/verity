@@ -129,6 +129,14 @@ bits. The leak guard (`--public`) moves any file the piece doesn't declare out o
 consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's; each step
 releases through its own hold.
 
+`attacks.py` lists what the served path must refuse or charge (`table`): each attack with its case, the check that
+refuses it or the leak bound's term that charges it, and the reason its verdict names. Its `relay` is the prover's
+process between the network certifier's server connections and the endpoint, playing an attack on the responses
+(timing, chunking, padding, an altered or extra id) or on the connections (one answered without the endpoint, a copy
+served around the network certifier); `certifier_piece.py front --attack NAME` puts it in a served rehearsal, and
+`judge NAME --front OUT --serve SERVE_DIR` reads that rehearsal as the attack's verdict. `tests/test_attacks.py` plays
+each attack on the network certifier at the scan's schedule on a virtual clock.
+
 ## The chain's run of record
 
 The run of record takes the network chain end to end on the gate's machines:
