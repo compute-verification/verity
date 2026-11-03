@@ -9,7 +9,18 @@
     "start.json": "b5eaf1cfc49548817483b86095a164f231bde7cf55897520d7d8d72bea63d787",
     "theta.safetensors": "e5690f751b678f991c5c47d09153f307de9d16f260181b1cb9a0e2bbcc837cce"
    },
-   "bytes": 180129506
+   "bytes": 180129506,
+   "shape": {
+    "family": "lf",
+    "d_model": 512,
+    "n_layer": 6,
+    "vocab": 50304,
+    "ctx": 1024,
+    "parameters": 45029888,
+    "tokens": 77070336,
+    "tokens_per_param": 1.71,
+    "forward_macs_per_token": 51342080
+   }
   },
   "s100": {
    "digest": "ffa93a70809761139ce3825e461379657e58de0aa40d1b79f22b886c9e079b14",
@@ -17,7 +28,18 @@
     "start.json": "bcbf8984481727cad18d0cdeb7f55a5ab1348bed1c7d0122793348fd9daf576b",
     "theta.safetensors": "ef2798904b04e301d1ce2251698dd91974513b400241e0a1321b4cd37e4bb04b"
    },
-   "bytes": 180129509
+   "bytes": 180129509,
+   "shape": {
+    "family": "lf",
+    "d_model": 512,
+    "n_layer": 6,
+    "vocab": 50304,
+    "ctx": 1024,
+    "parameters": 45029888,
+    "tokens": 154206208,
+    "tokens_per_param": 3.42,
+    "forward_macs_per_token": 51342080
+   }
   },
   "m50": {
    "digest": "6b98a69913544442d8109e4658fb8dee37c2ba22993159a86fd4ae10ea8c9179",
@@ -25,7 +47,18 @@
     "start.json": "d9380e73b24624eec3d27ae6b82daf5b6460475010560fb445f27edf1735e213",
     "theta.safetensors": "0bc222026ce0861da54f2b2ae12a2aabe0be689c1a4680e2b0d12d946536d565"
    },
-   "bytes": 381091593
+   "bytes": 381091593,
+   "shape": {
+    "family": "lf",
+    "d_model": 768,
+    "n_layer": 8,
+    "vocab": 50304,
+    "ctx": 1024,
+    "parameters": 95269632,
+    "tokens": 226557952,
+    "tokens_per_param": 2.38,
+    "forward_macs_per_token": 107893504
+   }
   },
   "m100": {
    "digest": "39ce1d01d3061a004d3b11f17bccfc4cd08d7e2de7fe11a09db0992008772ff0",
@@ -33,7 +66,18 @@
     "start.json": "25dd267337516fc1bb4d810de23405cca36326d4d8feae7bdbba74c9d38c3654",
     "theta.safetensors": "e1aba0200cc7ff3d877f03448c9b0aed1cd03b3dd0d076cf8badad7969e285ca"
    },
-   "bytes": 381091600
+   "bytes": 381091600,
+   "shape": {
+    "family": "lf",
+    "d_model": 768,
+    "n_layer": 8,
+    "vocab": 50304,
+    "ctx": 1024,
+    "parameters": 95269632,
+    "tokens": 453115904,
+    "tokens_per_param": 4.76,
+    "forward_macs_per_token": 107893504
+   }
   }
  },
  "exported_by": "r20261102-095551-8f54"
