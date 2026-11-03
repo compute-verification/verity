@@ -61,10 +61,13 @@ from te_core.launch import Node, nodes  # noqa: E402
 #: the harness this launcher drives (prepare.VERSION, read without importing prepare's torch)
 VERSION = re.search(r'^VERSION = "([^"]+)"', (HERE / "prepare.py").read_text(), re.M).group(1)
 DONE = {"done", "failed", "cancelled", "refused", "timeout", "lost"}
-#: candidate.sh's GPU lease (1.2x prepare.GPU_SECONDS_CAP plus 30 minutes for both jobs) and a margin; the long tier's
-#: (1.2x prepare.LONG_GPU_SECONDS plus the same)
+#: candidate.sh's GPU lease (1.2x prepare.GPU_SECONDS_CAP plus 30 minutes for both jobs) and a margin. The long tier's
+#: is capped by run custody instead: research run caps a custody key at 24 hours and counts the pool wait in the run's
+#: lifetime, so a long run's timeout plus POOL_WAIT stays under LONG_CUSTODY_TTL. A long run that needs more is split.
 TIMEOUT = "110m"
-LONG_TIMEOUT = "2240m"
+POOL_WAIT = 7200
+LONG_TIMEOUT = "1260m"
+LONG_CUSTODY_TTL = "24h"
 
 
 def research(*args: str, check: bool = True, stdout_only: bool = False) -> str:
@@ -195,7 +198,9 @@ def main() -> int:
                "--env", f"CW_ISLAND_TREE={island['tree']}", *(["--env", "CW_FINAL=1"] if a.final else []),
                *(["--env", "CW_TIER=long", "--env", f"CW_TIER_BY={a.long}"] if a.long else [])]
         cmd = ["run", "--on", node.name, "--project", "verity", "--source", str(src), "--send", str(tar),
-               "--pool", node.pool, "--as", a.lane, "--pool-wait", "7200", "--timeout", LONG_TIMEOUT if a.long else TIMEOUT,
+               "--pool", node.pool, "--as", a.lane, "--pool-wait", str(POOL_WAIT),
+               "--timeout", LONG_TIMEOUT if a.long else TIMEOUT,
+               *(["--custody-ttl", LONG_CUSTODY_TTL] if a.long else []),
                "--declared-output", "out/*", *env, "--",
                "bash", "benchmarks/covert_witness/candidate.sh", a.start, *train_args]
         out = research(*cmd)
@@ -234,7 +239,7 @@ def ingest(run: str, out: Path, direction: str, mechanism: str, reference: bool)
     f = subprocess.run([sys.executable, "-m", "te_core.frontier"], capture_output=True, text=True, cwd=HERE)
     print(f.stdout if f.returncode == 0 else f"launch: te_core.frontier failed: {f.stderr[-500:]}", file=sys.stderr)
     return {"ledger": [x["id"] for x in recs], "macs": recs[-1]["macs"] if recs else None,
-            "rho": recs[-1]["rho"] if recs else None}
+            "rho": recs[-1].get("rho") if recs else None}
 
 
 def collect(run: str, start: str, note: str, direction: str, mechanism: str, final: bool = False,
