@@ -738,11 +738,12 @@ theorem outer_unrefused (T : ZKMal.CoinLayer.TableData)
 
 /-- **Where the transport's reading does not refuse the coins `cs`**, past the `Commit`'s, the frame of round
 `cs.length`'s rep answers them at its rep's layout (`takeAt`): where the next round is the same rep's, at the next
-round's configuration, which has that layout; else the rep's answer comes before the next rep's start. -/
+round's configuration, which has that layout and the rep's mask slot, before the rank stop; else at no mask slot, the
+rep's answer before the next rep's start. -/
 theorem answer_of_refuseOf {W R Coin : Type} (L : LeanRelease W R) (pc : Msg → List Coin → Masker)
     (fc : Msg → List Coin → Except String Masker) (cc : Msg → List Coin → Array _root_.Flock.F128) (x : Msg)
     {cs : List Coin} {n : ℕ} (hn : cs.length = n) (h2 : 2 ≤ n) (h : L.refuseOf pc fc cc x cs = false) :
-    ∃ m, (pc x cs).answer (Cfg.ofDraws (L.lay x (L.rep x n)) default none) (cc x cs) = .ok m := by
+    ∃ mk m, (pc x cs).answer (Cfg.ofDraws (L.lay x (L.rep x n)) default mk) (cc x cs) = .ok m := by
   subst hn
   unfold refuseOf at h
   rw [Bool.not_eq_false'] at h
@@ -750,17 +751,18 @@ theorem answer_of_refuseOf {W R Coin : Type} (L : LeanRelease W R) (pc : Msg →
   rw [ite_eq_right (by omega)] at h
   by_cases hs : L.rep x (cs.length + 1) = L.rep x cs.length
   · rw [ite_eq_left (decide_eq_true hs), hs] at h
-    cases ha : (pc x cs).answer (Cfg.ofDraws (L.lay x (L.rep x cs.length)) default none) (cc x cs) with
+    cases ha : (pc x cs).answer (Cfg.ofDraws (L.lay x (L.rep x cs.length)) default (L.slot x (L.rep x cs.length)))
+        (cc x cs) with
     | error e =>
       rw [ha] at h
       cases h
-    | ok m => exact ⟨m, rfl⟩
+    | ok m => exact ⟨_, m, ha⟩
   · rw [ite_eq_right (fun e => hs (of_decide_eq_true e))] at h
     cases ha : (pc x cs).answer (Cfg.ofDraws (L.lay x (L.rep x cs.length)) default none) (cc x cs) with
     | error e =>
       rw [ha] at h
       cases h
-    | ok m => exact ⟨m, rfl⟩
+    | ok m => exact ⟨_, m, ha⟩
 
 /-- **The loop's stop rule fires at an outer coin `1`**: at a `Live` statement the loop serves, where the stop rule of
 the transport's reading (`rfOf`) has not fired by round `i` at the coins `c`, table `j`'s rep `r`'s outer coin `e`,
@@ -801,7 +803,7 @@ theorem rfOf_outer (T : ZKMal.CoinLayer.TableData)
     have h' : (ofLoop T L₀ real).refuseOf progOf freshOf readCoins x (((List.ofFn c).take i).take (s + 1)) ≠ true :=
       List.any_eq_false.1 hR' (s + 1) (List.mem_range.2 (by rw [List.length_take, List.length_ofFn]; omega))
     rw [htk] at h'
-    obtain ⟨m, ha⟩ := answer_of_refuseOf (ofLoop T L₀ real) progOf freshOf readCoins x hl (by omega)
+    obtain ⟨_, m, ha⟩ := answer_of_refuseOf (ofLoop T L₀ real) progOf freshOf readCoins x hl (by omega)
       (Bool.eq_false_iff.2 h')
     have hrc : readCoins x ((List.ofFn c).take s ++ [c ⟨s, hK⟩]) =
         (c ⟨s, hK⟩).vals (min (loopNr x s) _root_.Flock.Firewall.Frames.COIN_MAX) := by
