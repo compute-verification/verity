@@ -9,6 +9,8 @@ module
 
 public import Flock.JsonParse
 public import Lean.Data.Json
+import all Init.Data.Ord.String
+import all Init.Data.Repr
 meta import Flock.JsonParse
 meta import Lean.Data.Json
 
