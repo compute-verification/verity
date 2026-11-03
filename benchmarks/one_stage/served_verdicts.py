@@ -13,7 +13,7 @@ sampled proofs, and the one record of every verdict (the block record).
                                 [--statements FILE] [--live-evidence FILE]
     served_verdicts.py pearlplus DIR --served FILE --verify FILE
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
-                              [--product P]
+                              [--product P] [--deferred WHY]
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py sampled-line LOG [--partition FILE]
     served_verdicts.py front-line SESSION
@@ -119,7 +119,9 @@ record's at which its quantity is not established); PoUW's development piece rea
 with core's refusal of the window's credit. Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
 (the development piece's `DEV_VERDICT`), each missing one and why, each dropped one, each rejecting one, each one
 elsewhere, and the reason. The report and the line say where they were composed (``composed_on``: the host, whether it
-is the record's node, and what it read, `COMPOSED_FROM`).
+is the record's node, and what it read, `COMPOSED_FROM`, or off that node `COPIED_FROM`), and with ``--deferred`` what
+the run left to a follow-on and why (``deferred``: `served_verdicts.sh`'s step 6 on a node short of V3c's audit's
+memory), which composes the final record on another host, the record's node still ``--node``.
 """
 from __future__ import annotations
 
@@ -196,6 +198,9 @@ PEARLPLUS_COINS = {"epoch": "an in-process challenger of epoch 0 (verity_bench's
 #: what `record` composes from, until it runs on an auditor-side host reading each party's own answer
 COMPOSED_FROM = ("each piece's answer file as the served node wrote it, not the party that produced it: an edit to that "
                  "file on the node changes its row")
+#: what `record` composes from off the served node (a deferral's follow-on): the prover's copy of those files
+COPIED_FROM = ("a prover-side copy of each piece's answer file as the served node wrote it, not the party that produced it: "
+               "an edit to that file on the node or to its copy changes its row")
 #: a development piece's verdict in the ``RECORD`` line, in place of its row's ``missing``
 DEV_VERDICT = "development run, credits nothing"
 #: H1's record of a window (`pouw_h1.CALLS_FILE`) under the serve dir
@@ -386,9 +391,9 @@ def public_doc(text: str) -> str:
 
 def publish(out: Path, private: Path) -> list[str]:
     """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
-    `PUBLISH_MAX` or its encoding keeps from being read as text, held whole, and one whose text names or counts a window
-    (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. Binary
-    files stay. The paths held, in order."""
+    `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window (`public_doc`) held in
+    full, under ``private`` at its path under ``out``, its public form left in its place. A file that isn't UTF-8 text
+    stays. The paths held, in order."""
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():
@@ -402,9 +407,8 @@ def publish(out: Path, private: Path) -> list[str]:
             shutil.move(p, dst)
             held.append(rel)
             continue
-        try:
-            text = data.decode()
-        except UnicodeDecodeError:
+        text = data.decode(errors="replace")
+        if text.encode() != data:
             continue
         pub = public_doc(text)
         if pub != text:
@@ -1028,12 +1032,13 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
 
 
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
-           run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite"
-           ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite",
+           deferred: str | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
     drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; sampled proofs'
-    answer is about ``node``, and a piece's that names no server isn't carried."""
+    answer is about ``node``, and a piece's that names no server isn't carried. ``deferred``: what the run left to a
+    follow-on and why, which the report and the line carry."""
     from verity_e2e_demo import block_record as BR
 
     legs = {v: k for k, v in BR.RUNNER_KEYS.items()} | {"wipe": "wipe"}
@@ -1050,9 +1055,10 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                 rows[k] = {**r, "verdict": "error", "quantity": None, "epsilon": None,
                            "reason": f"its answer is not the block record's {legs[k]} leg: {type(e).__name__}: {e}"[:2000]}
     host = socket.gethostname()
-    where = {"host": host, "served_node": host == node, "from": COMPOSED_FROM}
+    where = {"host": host, "served_node": host == node, "from": COMPOSED_FROM if host == node else COPIED_FROM}
+    left = {"deferred": deferred} if deferred else {}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
-              "servers": {k: at[k][0] for k in rows}, "composed_on": where}
+              "servers": {k: at[k][0] for k in rows}, "composed_on": where, **left}
     verdicts = {NAMES[k]: DEV_VERDICT if "development" in r and r.get("verdict") == "missing" else r.get("verdict")
                 for k, r in rows.items()}
     missing = {NAMES[k]: r.get("why") for k, r in rows.items() if r.get("verdict") == "missing"}
@@ -1062,7 +1068,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     dev = {"development": {NAMES[k]: r["development"]["verdict"] for k, r in rows.items() if "development" in r}}
     dev = dev if dev["development"] else {}
     named = {"product": product, "verdicts": verdicts, "missing": missing, "elsewhere": elsewhere, "composed_on": where,
-             **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
+             **left, **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
              **({"unserved": unserved} if unserved else {}), **dev}
     bad = sorted(NAMES[k] for k, r in rows.items()
                  if r.get("verdict") not in ("accept", "missing", "dropped") and NAMES[k] not in elsewhere)
@@ -1152,6 +1158,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--sampled-proofs", type=Path, required=True)
     r.add_argument("--pieces", type=Path, required=True)
     r.add_argument("--out", type=Path, required=True)
+    r.add_argument("--deferred", help="what the run left to a follow-on and why, which the record carries")
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
         q.add_argument("--product", default="onsite")
@@ -1260,7 +1267,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     got = {k: piece(k, a.pieces, run) for k in keys}
     rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: row for k, (row, _) in got.items()}}
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
-                               servers={k: at for k, (_, at) in got.items()}, product=a.product)
+                               servers={k: at for k, (_, at) in got.items()}, product=a.product, deferred=a.deferred)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:

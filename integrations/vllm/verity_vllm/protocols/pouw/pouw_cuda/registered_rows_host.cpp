@@ -25,9 +25,9 @@ extern "C" int rr_public_salts_host(const Pub* p, uint64_t* out) {
   return 0;
 }
 
-// The same of the ok salts (`shake_salt`).
-extern "C" int rr_shake_salts_host(const Pub* p, uint64_t* out) {
+// The same of the ok salts (`ok_salt`).
+extern "C" int rr_ok_salts_host(const Pub* p, uint64_t* out) {
   if (p->n == 0 || p->len > 8 * PUB_WORDS) return 1;
-  for (uint32_t i = 0; i < p->n; ++i) shake_salt(*p, p->first + i, out + 24 * (size_t)i);
+  for (uint32_t i = 0; i < p->n; ++i) ok_salt(*p, p->first + i, out + 24 * (size_t)i);
   return 0;
 }

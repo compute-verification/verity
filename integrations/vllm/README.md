@@ -35,6 +35,8 @@ through every subprotocol (`examples/vllm/README.md`).
   with `--seal`, seals each closed sampling period for a later audit.
 - **Records.** The circuit database (`pipeline/circuit_db.py`, `verity-vllm records`) keeps, per workload of record
   (`manifests/records.json`), the exact circuit it served and the evidence that it is faithful, never committed values.
+  `verity-vllm block-counts` (`program/predict/block_counts.py`) reads a day's window circuit records and writes its public
+  (c, k)-inference block counts: per block class its gates, fresh bits and padded count, the day's total.
 
 ## Layout
 
@@ -63,9 +65,8 @@ Imports point down `pipeline` > `check` | `properties` > `acquire` > `observe` |
 
 ## Python API
 
-Outside code imports only `verity_vllm`, `verity_vllm.engine.spec`, `verity_vllm.engine.handle`,
-`verity_vllm.engine.served_seed`, `verity_vllm.program.predict.window_weights`, `verity_vllm.program.predict.window_rows` and
-`verity_vllm.pipeline.workload_file`, each only its `__all__`, and the modules still on its `KNOWN` list (`tests/test_vllm_public_api.py`). `verity_vllm.LLM` is a pinned vLLM engine, constructed and called like `vllm.LLM`:
+Outside code imports only the public modules (`PUBLIC` in `tests/test_vllm_public_api.py`), each only its `__all__`, and the
+modules still on its `KNOWN` list. `verity_vllm.LLM` is a pinned vLLM engine, constructed and called like `vllm.LLM`:
 
 ~~~python
 from vllm import SamplingParams

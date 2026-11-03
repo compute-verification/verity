@@ -102,32 +102,25 @@ struct Pub {
 };
 static_assert(sizeof(Pub) == 8 * PUB_WORDS + 16, "Pub is 42 words");
 
-// Position ``pos``'s public salt, SHA-512(head || u64be pos || u8 i) for i = 0, 1, 2, into ``out`` as its 192 bytes.
-HD void public_salt(const Pub& p, uint64_t pos, uint64_t out[24]) {
+// Position ``pos``'s salt, SHA-512(head || u64be pos || c) for c = 0, 1, 2 as a ``width``-byte big-endian counter, into
+// ``out`` as its 192 bytes.
+HD void counter_salt(const Pub& p, uint64_t pos, int width, uint64_t out[24]) {
   for (int c = 0; c < 3; ++c) {
-    uint8_t m[8 * PUB_WORDS + 64] = {};  // the head, pos and i, with room for their padding
+    uint8_t m[8 * PUB_WORDS + 64] = {};  // the head, pos and c, with room for their padding
     for (uint32_t i = 0; i < p.len; ++i) m[i] = (uint8_t)(p.w[i >> 3] >> (56 - 8 * (i & 7)));
     rc::be_put(m + p.len, pos, 8);
-    m[p.len + 8] = (uint8_t)c;
+    rc::be_put(m + p.len + 8, (uint64_t)c, width);
     uint64_t h[8];
-    rc::digest_padded(m, (int)p.len + 9, h);
+    rc::digest_padded(m, (int)p.len + 8 + width, h);
     for (int i = 0; i < 8; ++i) out[8 * c + i] = bswap64(h[i]);
   }
 }
 
-// Position ``pos``'s ok salt, the first 192 bytes of SHAKE-256(head || u64be pos), into ``out`` as those bytes.
-HD void shake_salt(const Pub& p, uint64_t pos, uint64_t out[24]) {
-  ncp2::Shake256 x;
-  x.init();
-  for (uint32_t i = 0; i < p.len; ++i) x.byte((uint8_t)(p.w[i / 8] >> (56 - 8 * (i % 8))));
-  for (int k = 56; k >= 0; k -= 8) x.byte((uint8_t)(pos >> k));
-  x.pad(ncp2::SHAKE_DS);
-  for (int i = 0; i < 24; ++i) {
-    uint64_t v = 0;
-    for (int k = 0; k < 8; ++k) v |= (uint64_t)x.squeeze() << (8 * k);
-    out[i] = v;
-  }
-}
+// Position ``pos``'s public salt (`core_check.public_row_salt`: a u8 counter).
+HD void public_salt(const Pub& p, uint64_t pos, uint64_t out[24]) { counter_salt(p, pos, 1, out); }
+
+// Position ``pos``'s ok salt (`core_check.ok_salt`: a u32be counter).
+HD void ok_salt(const Pub& p, uint64_t pos, uint64_t out[24]) { counter_salt(p, pos, 4, out); }
 
 // Level l of a tree of width W starts at node 2 W - 2 (W >> l) in its levels (level 0 the W leaves and pads, then each
 // level above, the root last: 2 W - 1 nodes).
