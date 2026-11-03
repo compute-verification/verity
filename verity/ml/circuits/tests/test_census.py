@@ -618,6 +618,18 @@ def test_a_boolean_programs_work_is_its_gates(monkeypatch):
     assert c["classes"]["TBHalf_v1"]["work"] == {"cuda:gate": {"gates": 2, "and": 1}}
 
 
+def test_boolean_gates_are_a_classs_work_summed_over_its_facets():
+    """`boolean_gates` gives each Definition the gates `census` with ``boolean`` counts for it, its facets summed (a class's,
+    or the root's as the totals), and one reaching a primitive that is no gate the primitive's id."""
+    P = Program(BRoot)
+    c = census(P, boolean=True)
+    coord = next(nd.fn for nd in P.root.body.nodes if descriptor_id(nd.fn) == "TBCoord_v1{K=3}")
+    gates = lambda work: sum(w["gates"] for w in work.values())  # noqa: E731
+    want = gates(c["classes"]["TBCoord_v1{K=3}"]["work"])
+    assert CE.boolean_gates([coord, P.root, coord]) == [want, gates(c["totals"]["work"]), want]
+    assert CE.boolean_gates([Add16]) == [Add16.id]
+
+
 def test_silicon_step_refusals(monkeypatch):
     """A binding is refused unless `PRODUCTS` counts the family at the model's precision; a `PRODUCTS` step bound to no model
     is refused when work is counted, and only then."""
