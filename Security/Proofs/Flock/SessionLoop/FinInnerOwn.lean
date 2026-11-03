@@ -135,15 +135,15 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     ⟨_, rfl⟩
   rw [← hQ]
   have hQc : Q.coins = q₀.coins.extract 0 (nSched spec (Masked.stsOf x) (2 * j.val + r.val) + e) := by
-    rw [hQ] <;> rfl
+    rw [hQ]; rfl
   have hQsz : Q.coins.size = nSched spec (Masked.stsOf x) (2 * j.val + r.val) + e := by
     rw [hQc, Array.size_extract]
     omega
   have hQv : Q.vals = q₀.vals.set! (Masked.layE x j).fc
       (vsWord vs x w ν (finS.pad (ops.map fun (p : Msg × Msg) => finS.decOf p.2)) t j r (Masked.layE x j).fc) := by
-    rw [hQ] <;> rfl
+    rw [hQ]; rfl
   have hQx : Q.xs = q₀.xs := by
-    rw [hQ] <;> rfl
+    rw [hQ]; rfl
   have hQk : ∀ k < nSched spec (Masked.stsOf x) (2 * j.val + r.val) + e, Q.coins[k]! = q₀.coins[k]! := by
     intro k hk
     rw [hQc]
@@ -171,7 +171,7 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
         ((2 + spec.points * (Masked.stAt x j).regions.size) + 1) +
         (tr.sch.k0 + 7 + 11 * (tr.sch.levels.size - 1)) + 4 := by
     rw [repPlan_size, repRounds_true]
-    simp only [hz] <;> omega
+    simp only [hz]
   have hrq : (roundsOf spec (Masked.stsOf x)).getD (2 * j.val + r.val) 0 =
       (_root_.Flock.Firewall.Session.repPlan spec (Masked.stAt x j)).size := by
     rw [repPlan_size, ← Masked.stsOf_half x j r]

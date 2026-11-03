@@ -783,7 +783,8 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
     (congrArg (fun p => p.h) hP).symm
   dsimp only
   rw [valsOf_at (Masked.layE x j) _ none _ _ hi hne (by omega), getElem!_absPos htail hi hne,
-    swSrcE_masked_vsWord vs x w ν (finCoins x ops) t j r hiE, hPh, add_pad_pad] <;> rfl
+    swSrcE_masked_vsWord vs x w ν (finCoins x ops) t j r hiE, hPh, add_pad_pad]
+  rfl
 
 /-- **The request's coins** at a history `InnerHist` holds at: it holds a round of coins for each of rep stream
 `2j + r`'s rounds, and its rounds before the history's next, `nSched + e` of them, hold the loop's count of coins
@@ -855,7 +856,7 @@ theorem innerReq_coins (x : Msg) (w : Flock.Wit)
   rw [getElem!_pos _ i hi]
   simp only [FlockDeploy.Coin.vals, Array.getElem_map, Array.getElem_range]
   unfold Masked.slotAt
-  rw [dif_pos hQK]
+  rw [dite_eq_left hQK]
   show ((ops.map fun (p : Msg × Msg) => CoinLayer.rd p.2).getD (Masked.repBase x k + k') default).at i = _
   rw [List.getD_eq_getElem _ _ (by simpa using hQ), List.getElem_map]
 
@@ -950,9 +951,7 @@ theorem finInner_parts {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : Re
     try dsimp only at h4
     rw [hcw] at h4
     try dsimp only at h4
-    first
-      | cases h4
-      | (obtain ⟨_, _, _, h5, -⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h4; cases h5)
+    cases h4
 
 /-- **`consWhy` passes** only where the rep took the request's rounds and its `zerocheck c_eval` constraints vanish on
 the pads. -/
@@ -1022,9 +1021,7 @@ theorem finInner_inner {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : Re
     try dsimp only at h4
     rw [hcw] at h4
     try dsimp only at h4
-    first
-      | cases h4
-      | (obtain ⟨_, _, _, h5, -⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h4; cases h5)
+    cases h4
 
 theorem eq_of_add_eq_zero' {d f : F128} (h : d + f = 0) : f = d := by
   have e := FlockSoundness.Discharge.Composed.ZerocheckMasked.add_add_self d f
@@ -1239,7 +1236,7 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
   obtain ⟨-, -, -, hg⟩ := hSrc.1.realOf ν t j r hR1
   -- the request at `a`: `a` is `vs`'s `final_c`, its other values `vs`'s, its pads the tape's, its coins the opened ones
   have ha := finInner_accepts_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC (by decide) hH hs hr hq
-    hLayT a (by rw [hok] <;> rfl)
+    hLayT a (by rw [hok]; rfl)
   obtain ⟨hvsz, hvals, hP⟩ :=
     innerReq_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch (by decide) hH hs hr hq
   obtain ⟨-, hnc, hcoins⟩ := innerReq_coins L₁ src real x w wk (by decide) hH hs hq
@@ -1253,14 +1250,14 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
   obtain ⟨ic, p, zl, cons, tF, ip, tG, kG, hrun, hin, hres⟩ := finInner_inner hok
   have htc : tc = ip.tauCommit := (Prod.mk.inj hres).2
   have hQc : Q.coins = q₀.coins.extract 0 (nSched spec (Masked.stsOf x) (2 * j.val + r.val) + 2) := by
-    rw [hQ] <;> rfl
+    rw [hQ]; rfl
   have hQsz : Q.coins.size = nSched spec (Masked.stsOf x) (2 * j.val + r.val) + 2 := by
     rw [hQc, Array.size_extract]
     omega
   have hQv : Q.vals = q₀.vals.set! (Masked.layE x j).fc a := by
-    rw [hQ] <;> rfl
+    rw [hQ]; rfl
   have hQx : Q.xs = q₀.xs := by
-    rw [hQ] <;> rfl
+    rw [hQ]; rfl
   have hPd : (_root_.Flock.Firewall.Finish.padsOf Q.draws).toC =
       FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j) := by
     rw [hQ, askOf_draws]
