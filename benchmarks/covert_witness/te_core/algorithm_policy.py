@@ -79,9 +79,10 @@ COLUMNS = ["start", "start_compute_gates", "start_effective_gates", "start_loss"
 #: the console's default policy, at which `rho_console` is ρ (null in no row: "inf" where infinite): the 45M reference
 #: with 4,096 input and 1,024 output tokens, c = 5,120 × 2 × 45e6 × 740 gates and k = 65,536 bits
 CONSOLE = (5_120 * 2 * 45e6 * 740, 65_536)
-#: the columns the console's copy leaves out to fit the route's `console.COLUMNS_MAX` (the stored tables keep them):
-#: H is C/p
-CONSOLE_DROP = ("H_gates",)
+#: the columns the console's copy leaves out (the stored tables keep them), so its rows fit the route's
+#: `console.COLUMNS_MAX` and its finer tiers `console.BODY_MAX`: H is C/p, and what ρ's inputs rest on is the same on
+#: every row of a te_core version
+CONSOLE_DROP = ("H_gates", "estimated")
 CONSOLE_COLUMNS = [c for c in COLUMNS if c not in CONSOLE_DROP]
 LOSSES = ("start_loss", "end_loss")
 #: significant digits of the console copy's compute and ρ inputs, so its dial reproduces ρ and its gains and p

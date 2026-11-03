@@ -582,15 +582,16 @@ VALID = ("token", "decoding")
 SENSITIVITIES = ("reduction", "update")
 #: the menu's kinds no record measures yet, with why
 NOT_YET = {"fresh_products": "io_bound.py's term for the run's circuit (due 13:00Z)"}
-#: what a published ρ rests on, by its binding kind (a console cell on every row, so short): `none` where no kind
-#: valid on its own exceeds 1 and Fit fails, the token kind unmeasured until the packer proposes matrix-product and
-#: weight-gradient tiles and fresh products until io_bound.py
+#: what a published ρ rests on, by its binding kind (a console cell on every row, so short): Fit's c/(c − d); the
+#: default packer's blocks; (D), a block reading the update code runs the whole decoder; reading B's token form, A1's
+#: target, not a bound; `none` where no kind valid on its own exceeds 1 and Fit fails, the token kind unmeasured until
+#: the packer proposes matrix-product and weight-gradient tiles and fresh products until io_bound.py
 RESTS_ON = {
-    "fit": "Fit's construction, c/(c - d)",
-    "token": "the default packer's blocks (reading A)",
-    "decoding": "assumption (D, reading A): a block reading the code runs the whole decoder",
-    "target": "a target, not a bound: A1 at reading B (te_core 4.3's token form)",
-    "none": "nothing valid exceeds 1: token unmeasured (no product tiles), fresh products not yet (io_bound.py)",
+    "fit": "Fit's construction",
+    "token": "the default packer (reading A)",
+    "decoding": "assumption (D, reading A)",
+    "target": "target: A1 at reading B, not a bound",
+    "none": "nothing valid > 1 (token, fresh products unmeasured)",
 }
 
 
