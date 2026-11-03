@@ -22,8 +22,8 @@ default (te_core.panels' `DEFAULT`: c = 4,096 tokens of the start's forward, k =
 the console's default policy (`CONSOLE`: c = 5,120 × 2 × 45e6 × 740 gates, k = 65,536 bits; `rho_console`, "inf"
 where infinite): c/(c − d) where Fit holds for the training (basis `fit`, `binding_kind` fit), else Slowdown's bound
 (`target`; `binding_kind` token above 1, else none), null where infinite. `rho_terms` has, at both defaults, each
-kind's term te_core prices under `READING` (4.4's `formalism.bound`): ρ is the max over `IN_RHO`'s, the others are
-sensitivities, never the bound. `te_core` is the VERSION that priced the row. `rho_inputs`, one JSON cell (`cell`, at
+kind's term of te_core's one bound (`formalism.bound`, reading A) and each of its sensitivities, reading B's token form
+among them: ρ is the max over `IN_RHO`'s. `te_core` is the VERSION that priced the row. `rho_inputs`, one JSON cell (`cell`, at
 most the route's 4,096 characters), holds every input the console's dial needs to recompute ρ at any (c, k) (`DIAL`),
 u and u_in exact, or u_in through its points at `U_IN_KS` where that is over the cell (`panels.through`, x0 exact
 there); `page_rho` is the dial's formula on them. `build` refuses a row whose rounded cells don't give formalism.at's
@@ -84,11 +84,11 @@ COLUMNS = ["start", "start_compute_gates", "start_effective_gates", "start_loss"
 #: reference, 4,096 tokens in and 1,024 out, c = 5,120 x 2 x 45e6 x 740 gates, k = 65,536 bits
 CONSOLE = (5_120 * 2 * 45e6 * 740, 65_536)
 #: the reading of A1 every row's ρ is priced under (coordinator 07:58Z): B, Fit's c/(c − d) else A1's token form, until
-#: te_core prices the one bound's menu (08:26Z: fresh products, the token kind under reading A, decoding)
+#: the rows take te_core's one bound (08:26Z: fresh products, the token kind under reading A, decoding; `rho_terms`)
 READING = "B"
-#: the kinds of block work ρ takes the max over under `READING`; `rho_terms` has every kind te_core prices, the
-#: others as sensitivities
-IN_RHO = ("token",)
+#: what ρ takes the max over under `READING`: reading B's token form, which te_core 4.5's one bound publishes as a
+#: sensitivity (`formalism.SENSITIVITIES`' token_form); `rho_terms` has every kind and sensitivity te_core prices
+IN_RHO = ("token_form",)
 #: the k at which a `rho_inputs` over the route's cell has u_in exact (`panels.through`): the dial's and the console's
 U_IN_KS = tuple(sorted({*panels.K_LEVELS, CONSOLE[1]}))
 LOSSES = ("start_loss", "end_loss")
@@ -236,16 +236,17 @@ def binding(v: dict) -> str:
 
 
 def rho_terms(m: formalism.Measured, cells: dict[str, tuple[float, float, dict]]) -> str:
-    """The `rho_terms` cell: per cell of `cells` (name -> (c, k, formalism.at there)), each kind's term under `READING`
-    (te_core's one bound where te_core has it, 4.4's `formalism.bound`, else the token form alone), null where
-    infinite, with the kinds it leaves unmeasured; `max_over` the kinds ρ takes (`IN_RHO`), every other a
-    sensitivity; and each cell but the first's binding kind (`binding`)."""
+    """The `rho_terms` cell: per cell of `cells` (name -> (c, k, formalism.at there)), each kind's term of te_core's
+    one bound (`formalism.bound`, reading A) and each of its sensitivities, reading B's token form among them, null
+    where unmeasured or infinite, with the names of the unmeasured (`bound` gives why); `max_over` what ρ takes
+    (`IN_RHO`); and each cell but the first's binding kind (`binding`)."""
     out: dict = {"max_over": list(IN_RHO)}
     for i, (name, (c, k, v)) in enumerate(cells.items()):
-        b = formalism.bound(m, c, k, READING) if hasattr(formalism, "bound") else {"terms": {"token": v["slowdown"]}}
-        out[name] = {kind: None if math.isinf(x) else float(num(x, DIGITS)) for kind, x in b["terms"].items()}
+        b = formalism.bound(m, c, k)
+        out[name] = {kind: None if x is None or math.isinf(x) else float(num(x, DIGITS))
+                     for kind, x in (b["terms"] | b["sensitivities"]).items()}
         if b.get("unmeasured"):
-            out[name]["unmeasured"] = b["unmeasured"]
+            out[name]["unmeasured"] = sorted(b["unmeasured"])
         if i:
             out[f"{name}_binding"] = binding(v)
     return cell(out)

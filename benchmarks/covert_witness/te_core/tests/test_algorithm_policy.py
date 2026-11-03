@@ -392,8 +392,8 @@ def test_publish_stores_the_tables_and_puts_both_panels_the_cut_naming_their_art
 def test_every_row_carries_the_dashboards_cells_under_the_routes_columns(tmp_path, monkeypatch):
     """The dashboard's cells (coordinator 07:58Z), in 24 columns with no split column: reading B, te_core's VERSION,
     rho_console (formalism.at at the console's default), binding_kind (fit where Fit holds, token where A1's token form
-    is above 1, else none) and rho_terms, every kind's term at both defaults under reading B (formalism.bound), ρ's
-    max over the token kind alone, the others sensitivities."""
+    is above 1, else none) and rho_terms, every kind's term and sensitivity of te_core's one bound at both defaults
+    (formalism.bound, reading A), ρ's max over reading B's token form alone (a sensitivity of the bound)."""
     _, got = run(tmp_path, monkeypatch)
     q = got["console"]
     assert q["columns"] == AP.COLUMNS and len(AP.COLUMNS) == console.COLUMNS_MAX
@@ -409,12 +409,15 @@ def test_every_row_carries_the_dashboards_cells_under_the_routes_columns(tmp_pat
         assert (d["binding_kind"] == "fit") == (d["basis_default"] == "fit")
         kinds.add(d["binding_kind"])
         terms = json.loads(d["rho_terms"])
-        assert terms["max_over"] == ["token"] and {"default", "console", "console_binding"} <= set(terms)
+        assert terms["max_over"] == ["token_form"] and {"default", "console", "console_binding"} <= set(terms)
         for name, (cc, kk) in (("default", (c, k)), ("console", AP.CONSOLE)):
-            b = formalism.bound(m, cc, kk, "B")
-            assert set(terms[name]) - {"unmeasured"} == set(formalism.KINDS)
-            for kind, x in b["terms"].items():
-                assert terms[name][kind] == (None if math.isinf(x) else pytest.approx(x, rel=1e-3))
+            b = formalism.bound(m, cc, kk)
+            assert set(terms[name]) - {"unmeasured"} == set(formalism.KINDS) | set(formalism.SENSITIVITIES)
+            for kind, x in (b["terms"] | b["sensitivities"]).items():
+                assert terms[name][kind] == (None if x is None or math.isinf(x) else pytest.approx(x, rel=1e-3))
+            vv = formalism.at(m, cc, kk)
+            assert terms[name]["token_form"] == (None if math.isinf(vv["slowdown"])
+                                                 else pytest.approx(vv["slowdown"], rel=1e-3))
         vc = formalism.at(m, *AP.CONSOLE)
         assert terms["console_binding"] == ("fit" if vc["fit"] else "token" if vc["slowdown"] > 1 else "none")
     assert {"fit", "token"} <= kinds

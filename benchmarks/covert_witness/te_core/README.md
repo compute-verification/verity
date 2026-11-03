@@ -140,8 +140,8 @@ off its frontier. `training/algorithm-policy` is `algorithm_policy`'s: per run, 
 g, else "no" at its last, with the algorithm's inefficiency p = C/H (H the least |C| of any checkpoint from the start
 on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ
 under reading B (`reading`), at the dial's default (`rho_default`) and the console's (`rho_console`), with the kind
-it binds on (`binding_kind`), each kind's term of te_core's one bound (`rho_terms`, the kinds outside the max as
-sensitivities), the te_core that priced it (`te_core`), and, in one JSON cell (`rho_inputs`), the inputs the console's
+it binds on (`binding_kind`), each kind's term and sensitivity of te_core's one bound (`rho_terms`, reading A; the
+row's ρ is reading B's token form, one of its sensitivities), the te_core that priced it (`te_core`), and, in one JSON cell (`rho_inputs`), the inputs the console's
 dial recomputes ρ from at any (c, k) (te_core 4.x's per-part Fit and ᾱ/α_max among them, u and u_in exact), so S =
 pρ; `build` refuses a row whose cells miss `formalism.at` at a dial cell or the console's default. Its coverage (gain
 target by data by decade of ρ) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
