@@ -716,6 +716,17 @@ def archivePutCmd (dir : String) (paths : List String) : IO UInt32 := do
     IO.println s!"{hex}  {path}"
   return 0
 
+/-- A plain session's coins from `--coins`: `seed` (the default), `os`, or `tree`, the challenger's keyed coin tree over the
+session's tables (`Zk.coinSpec`, the one `--zk` takes); `none` for any other value. -/
+def plainCoinsArg (arg : Option String) (tables : Array String) : Option Coins :=
+  match arg with
+  | none | some "seed" => some .seed
+  | some "os" => some .os
+  | some "tree" => some (.tree (Zk.coinSpec tables))
+  | some _ => none
+
+def COINS_USAGE : String := "--coins is seed (the default), os or tree"
+
 /-- `coin-tree-check FILE`: R7 and the record's `coin_tree` for the keyed coin tree (`Flock.CoinTree`), on `{"hello": the
 verifier's Hello object (its coins.nonce empty), "sessions": [{"hello": the prover's Hello, "coin_tree": ...}, ...]}`, in
 order, each key fresh. One `COINTREE` line per session: the nonce and the canonical `coins` it checked, or the refusal. -/
@@ -794,7 +805,8 @@ work draw, whatever flags it holds, a subset draw without `--zk` or `--plain-tab
 draw under `--plain-tables`), and under `--rec-inner` so is a session of more
 than one table or whose table holds fewer instances than its population (`RecSetup.oneFull`), and one whose registered
 reads exceed the recursion's call bound: more than 4096 ports, a tree of more than 64 levels or a table of more than 65536
-instances, or whose inner shape's V* list holds more than 4096 statements (`RecBudget`). Every session of a
+instances, or whose inner shape's V* list holds more than 16 statements, the parts the recursion's soundness bound
+covers (`RecBudget`). Every session of a
 statement whose form the soundness proof does not cover (`ProvedScope.check`, then its tables' `m`,
 `ProvedScope.sizesOk`, §16.15) is refused, and
 so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, a
@@ -821,6 +833,9 @@ check has passed (so the reason is the refusal only when nothing else
 fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
 none is on `os` or `seed` coins (the live build reads no `FC_COINS` under `--zk`), so `--zk` takes no `--coins`.
+`--coins tree`: plain sessions on that tree (`flock-circuit` under `FC_COINS=tree`), whose `Hello` names it, whose record
+opens it (R7, `CoinTree.checkHello`, `CoinTree.checkRecord`) and whose session key is fresh in the run
+(`CoinTree.checkFresh`); `--coins os`, the OS's coins; `--coins seed` (the default), a committed seed's.
 `--upstream-plain`: the plain proof files are upstream's form, without the zk patch's `zk_level0 = None` tag that every
 deployed prover writes after the pair (`Tags.upstreamPlain`, PROTOCOL.md §8.1), so each rep is decoded from the file then
 the tag (`verifyFiles (plainBytes true)`), while S17 binds the record's `proof_sha` to the file as received; each form is
@@ -855,8 +870,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
   if zk && tags.plainLeaves then
     IO.eprintln s!"verify --zk: refused: {tags.name}, a statement with plain SHA-512 leaves (flock-leaf/sha512-unsalted): --zk's hiding needs hm96-sha512/v1 leaves"
     return 2
-  let coins := if zk then Coins.tree (Zk.coinSpec (tags.tableNames count))
-    else if argOf args "--coins" == some "os" then Coins.os else Coins.seed
+  let some coins := if zk then some (Coins.tree (Zk.coinSpec (tags.tableNames count)))
+      else plainCoinsArg (argOf args "--coins") (tags.tableNames count)
+    | IO.eprintln s!"verify: {COINS_USAGE}"; return 2
   let tags := tags.withCoins coins
   let t0 ← IO.monoMsNow
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
@@ -1108,7 +1124,8 @@ def statementCmd (args : List String) : IO UInt32 := do
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
   let stmtTags := tags
   if !tags.hm96Rows && (argOf args "--comp").isNone then IO.eprintln s!"{tags.name}: --comp is required"; return 2
-  let coins := if argOf args "--coins" == some "os" then Coins.os else Coins.seed
+  let some coins := plainCoinsArg (argOf args "--coins") (tags.tableNames 1)
+    | IO.eprintln s!"statement: {COINS_USAGE}"; return 2
   let tags := tags.withCoins coins
   let (circuitB, pubB, compB, tables) ← match ← statementInputs args with
     | .ok x => pure x

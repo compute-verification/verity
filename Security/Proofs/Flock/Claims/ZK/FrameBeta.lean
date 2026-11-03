@@ -4,8 +4,8 @@ import Proofs.Flock.Claims.ZK.FrameTaken
 /-!
 # The frames refuse `β = 0` (`FrameUnrefused`'s `β` fault)
 
-At a `Live` statement the loop serves, on a live history of `refK x` openings whose last coins the frame takes, no
-table's rep has `β = 0` among the opened coins (`Masked.Thrown`'s third disjunct): the rep's frame takes `β`'s coins
+At a `Live` statement the loop serves, on a live history of at most `refK x` openings whose last coins the frame takes,
+no table's rep has `β = 0` among the opened coins (`Masked.Thrown`'s third disjunct): the rep's frame takes `β`'s coins
 at its round, in the inner proof's round 2, where `Masker.answer` stops at `β = 0`.
 
 * `Count.openStep_end`, `Count.feed_full`, **`Count.schedSoFar_size`**: the opening asks for exactly `openList`'s counts,
@@ -241,8 +241,8 @@ namespace LeanRelease
 
 open Loop
 
-/-- **The frames refuse `β = 0`**: at a `Live` statement the loop serves, on a live history of `refK x` openings whose
-last coins the frame takes, table `j`'s rep `r`'s `β`, where it is among the opened coins, is nonzero. The opening at
+/-- **The frames refuse `β = 0`**: at a `Live` statement the loop serves, on a live history of at most `refK x`
+openings whose last coins the frame takes, table `j`'s rep `r`'s `β`, where it is among them, is nonzero. The opening at
 `betaSlot` is the rep's inner round 2, its frame there at the inner proof's round 2 (the schedule so far complete,
 `schedSoFar_size`), and the frame took its coins (`coins_taken_of_live`), which it does only at a nonzero `β`
 (`answer_beta`). -/
@@ -254,10 +254,10 @@ theorem beta_unrefused (T : ZKMal.CoinLayer.TableData)
       ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
     (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
-    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length = refK x)
+    (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)
     (hlive : (ofLoop T L₀ real).toSrv.live wk x w ρ κ ((m₀, ρ₀) :: ops) = true)
     (hr : (ofLoop T L₀ real).refusesCoins x ρ ((m₀, ρ₀) :: ops) = false)
-    {j r : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (hb : Masked.betaSlot x j r < refK x) :
+    {j r : ℕ} (hj : j < (Masked.stsOf x).size) (hr2 : r < 2) (hb : Masked.betaSlot x j r < ops.length) :
     (Masked.betaAt (x := x) ((ZKMal.CoinLayer.session loopNr T).pad (K := refK x)
       (ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2)) j r).isZero = false := by
   obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) hj)
@@ -293,7 +293,8 @@ theorem beta_unrefused (T : ZKMal.CoinLayer.TableData)
   rw [hsd] at hs hb
   have hlast : (ofLoop T L₀ real).last x = refK x + 1 := loop_last loopNr T (withFrames T L₀ real) x
   obtain ⟨-, m, ha⟩ := coins_taken_of_live (ofLoop T L₀ real) wk x w ρ κ ((m₀, ρ₀) :: ops) hlive
-    (by rw [hlast]; simp [hl]) hr (i := s + 2) (by omega) (by simp only [List.length_cons]; omega)
+    (by rw [hlast]; simp only [List.length_cons]; omega) hr (i := s + 2) (by omega)
+    (by simp only [List.length_cons]; omega)
   obtain ⟨⟨dm, da⟩, hd⟩ : ∃ d, ops[s]? = some d := ⟨ops[s]'(by omega), List.getElem?_eq_getElem _⟩
   have htk : ops.take (s + 1) = ops.take s ++ [(dm, da)] := by rw [List.take_add_one, hd]; rfl
   have hh : ((m₀, ρ₀) :: ops).take (s + 2) = (m₀, ρ₀) :: (ops.take s ++ [(dm, da)]) := by
@@ -396,7 +397,7 @@ theorem beta_unrefused (T : ZKMal.CoinLayer.TableData)
     rw [hn1]
     simp [FlockDeploy.Coin.vals]
   unfold Masked.betaAt Masked.slotAt
-  rw [hsd, dif_pos hb]
+  rw [hsd, dif_pos (lt_of_lt_of_le hb hl)]
   show (((ops.map fun p => (ZKMal.CoinLayer.session loopNr T).decOf p.2).getD s default).at 0).isZero = false
   rw [List.getD_eq_getElem?_getD, List.getElem?_map, hd, Option.map_some, Option.getD_some]
   show ((ZKMal.CoinLayer.rd da).at 0).isZero = false
