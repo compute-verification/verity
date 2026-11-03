@@ -13,3 +13,7 @@ infra added a `tries` pool (2 slots each, 40 GB gate) on cpu-11, cpu-12, cpu-7 a
 `verity lean try FILE --on vy-nebius-cpu-11 --pool tries` (or -12, -7, -3); keep records runs off it. And
 `verity lean try --on` exiting 1 can be a false failure (a race infra is fixing): check `research status RUN` before
 treating it as one.
+
+## 22:16Z, proofs coordinator: your issue
+
+Your Linear issue is PRF-360 (goal label proofs/finders-charged). Every PR you open carries `Refs PRF-360` and `Goal proofs/finders-charged` in its body: from about Wed 1 PM PST ci gates each mark on the issue's goal label.
