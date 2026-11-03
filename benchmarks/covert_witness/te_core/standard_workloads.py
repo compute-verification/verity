@@ -1,25 +1,31 @@
 """The console's training panel `training/standard-workloads`: the standard covert workloads (te_core.workloads'
 names: standard, diloco, rl, inference, lora and distill), each a small real run from a registered start, measured by
-this te_core and priced by te_core.formalism at two dial points.
+this te_core and priced by te_core.formalism at the console's default and the registered serving block.
 
     python -m te_core.standard_workloads --out DIR [--rows FILE] [--publish]
 
 `--rows` (default `ROWS`, the island's rows.json) gives the stored traces (the island's trace.py output, chosen steps
-of the runs traced by a te_core, refused unless it is this one) and a row per workload and measured dial setting: its
-workload, model, dials (te_core.workloads' arguments), run id and record art, what the run was beside them (`about`,
-and a `note`), and `rounds` for a generation run (the island's generate.py). A row is the run's last checkpoint as
-te_core.ledger.ingest writes it (into a scratch ledger) with the run's traced structures (annotate.with_structures),
-measured by te_core.formalism.measure, and priced as te_core.algorithm_policy prices a run: `rho_default` and
-`rho_console` are formalism.at's ρ under algorithm_policy's `READING` over its `IN_RHO` kinds, at the dial's default
-(`points`: c = 4,096 tokens of the start's forward, k = 80,000 bits) and at its `CONSOLE`, the console's default session
-("inf" where infinite); `binding_kind` is what ρ rests on at the default (algorithm_policy's `binding`), and
-`rho_terms` every kind's term at both points (algorithm_policy's `rho_terms`), those outside `IN_RHO` sensitivities,
-never the bound. `rho_inputs` holds `KEYS` (C_gates and algorithm_policy's `DIAL`, to 6 significant digits), from
-which algorithm_policy.page_rho gives ρ at any (c, k); `build` refuses a row whose rho_inputs miss ρ at either point
-or whose token dials miss its measured tokens (`token_dials`).
+of the runs, refused unless traced by a te_core from `TRACED_SINCE` to this one) and a row per workload and measured
+dial setting: its workload, model, dials (te_core.workloads' arguments), run id and record art, what the run was beside
+them (`about`, and a `note`), and `rounds` for a generation run (the island's generate.py). A row is the run's last
+checkpoint as te_core.ledger.ingest writes it (into a scratch ledger) with the run's traced structures
+(annotate.with_structures), measured by te_core.formalism.measure (its op log the ledger row's macs_log), and priced by
+formalism.published under `READING` at `POINTS`, algorithm_policy's: `rho_default` and `rho_console` are both its ρ
+at the console's default policy (`CONSOLE`, te_core.policy's: one full session of the 45M reference, attention
+included), with `binding_kind`, `rests_on` and `kinds` there, and `rho_served` its ρ at the registered serving block
+(te_core.panels' `SERVED`). ρ, its binding kind and what it rests on are published's as it gives them (null where it
+has no bound, resting on "unmeasured"); reading A's ρ is never infinite, so `build` refuses one. `kinds` is
+algorithm_policy's cell of the terms the max takes, its `partial` and `why` where published sets them, and, beside
+them, the sensitivities `SENSITIVITIES`: published's (reduction, update and fresh_cell, the fresh-products term under
+P-cell) and reading B's token and decoding forms. `rho_inputs` holds
+`KEYS` (C_gates beside algorithm_policy's `rho_inputs`), from which algorithm_policy.page_rho gives the dial's ρ at
+any (c, k); `build` refuses a row whose rho_inputs miss formalism.at's ρ at either point or whose token dials miss its
+measured tokens (`token_dials`).
 `input_status` gives each input's source, "measured" or "assumed: " and why, from te_core's labels: a count, a trace's
 quantity, E's size and the harness's decoder are measured, and a stub, an assumption or an unmeasured quantity is
-assumed.
+assumed. An unmeasured Δ_grad names the steps te_core has none for and why (`untraced`), and whether Fit's verdict at
+`POINTS` rests on it (`held`). Beside `KEYS`, `products` is the fresh-products kind's input (`products`): measured at
+the console's default, or assumed with te_core's reason, and where the serving block's k leaves it unmeasured.
 
 A `rounds` row is the run's generation rounds alone (`rounds`), its setup and training steps dropped: a round is one
 counted step that codes the served weights, prefills its prompts and decodes. The capture can't trace a round (its
@@ -31,9 +37,11 @@ the served update's bits from the run's notes (every served matrix's codes and s
 LoRA in bf16), and Δ_grad, the partial gradient and the gradient cut 0 (no backward); τ an id per prompt token and
 none per generated one; a, u and u_in te_core's stubs.
 
-DIR gets the uncut table, each row with its labels, parts and formalism.at at both points
-(tables/standard-workloads.json), and the console's copy (console/standard-workloads.json); `--publish` puts tables/
-in the evidence store, whose art id the note names, and PUTs the panel.
+DIR gets the uncut table, each row with its labels, parts, and formalism.at, formalism.published and the one bound
+(reading A's, formalism.bound) at both points (tables/standard-workloads.json), and the console's copy
+(console/standard-workloads.json); `--publish` GETs what the route serves, puts tables/ in the evidence store, whose art
+id the note names, and PUTs the panel, unless it would drop a served run's row or the route serves a newer te_core
+(`emptied`).
 """
 from __future__ import annotations
 
@@ -47,15 +55,28 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-from . import VERSION, algorithm_policy, console, formalism, policy
+from . import VERSION, algorithm_policy, console, formalism, panels, policy
 from .gates import of_log
 from .ledger import Ledger, ingest
 
 NAME = "standard-workloads"
 PANEL = f"training/{NAME}"
-COLUMNS = ["workload", "model", "dials", "run", "rho_inputs", "input_status", "rho_default", "rho_console",
-           "binding_kind", "rho_terms", "reading", "te_core"]
-KEYS = ("C_gates", *algorithm_policy.DIAL)
+COLUMNS = ["workload", "model", "dials", "run", "rho_inputs", "input_status", "rho_default", "rho_console", "reading",
+           "te_core", "binding_kind", "rests_on", "kinds", "rho_served"]
+#: the points (c, k) each row is priced at, algorithm_policy's: the console's default policy, the one default of
+#: `rho_default` and `rho_console`, and the registered serving block, `rho_served`'s
+POINTS = {"console": algorithm_policy.CONSOLE, "served": panels.SERVED}
+#: the reading every row publishes (formalism.published's): A, the one bound over the kinds valid on their own, with
+#: reading B's forms among the kinds cell's sensitivities
+READING = "A"
+#: the kinds cell's sensitivities, beside the terms the bound's max takes: published's and reading B's two forms
+SENSITIVITIES = (*formalism.CELL_SENSITIVITIES, "token_form", "decoding_form")
+#: the `rho_inputs` cell's keys, algorithm_policy.rho_inputs' in its order
+KEYS = ("C_gates", *panels.PACKED, *algorithm_policy.SPLIT)
+#: the first te_core whose traces this one's formalism reads whole: their entries and partial and gradient cuts
+TRACED_SINCE = "4.4"
+#: the one bound's fields each row's details keep at both points
+BOUND = ("terms", "max", "binding", "unmeasured", "sensitivities")
 ROWS = Path(__file__).resolve().parents[1] / "islands" / NAME / "rows.json"
 FP4 = "float4_e2m1fn_x2"
 GEMMS = ("mm", "addmm", "bmm")
@@ -108,19 +129,24 @@ def version_at(commit: str) -> str:
     return next(line.split('"')[1] for line in src.splitlines() if line.startswith("VERSION"))
 
 
+def _version(v: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in v.split("."))
+
+
 def traces(arts: list[str]) -> dict[str, dict[int, dict]]:
-    """Each run's traced steps in `arts` (the island's trace.py output), refused unless this te_core traced them."""
+    """Each run's traced steps in `arts` (the island's trace.py output), each with its art and the te_core that traced
+    it, refused unless that is `TRACED_SINCE` to this one."""
     out: dict[str, dict[int, dict]] = {}
     for art in arts:
         root = fetch(art)
         v = version_at(json.loads((root / "manifest.json").read_text())["te_commit"])
-        if v != VERSION:
-            raise SystemExit(f"{PANEL}: {art} was traced by te_core {v}, not {VERSION}: trace the runs again "
-                             f"(islands/{NAME}/job.sh) and name the new traces in the rows")
+        if not _version(TRACED_SINCE) <= _version(v) <= _version(VERSION):
+            raise SystemExit(f"{PANEL}: {art} was traced by te_core {v}, not {TRACED_SINCE} to {VERSION}: trace the "
+                             f"runs again (islands/{NAME}/job.sh) and name the new traces in the rows")
         for p in sorted((root / "traces").glob("*.json")):
             t = json.loads(p.read_text())
             if t.get("trace"):
-                out.setdefault(t["run"], {})[t["step"]] = t | {"from": art}
+                out.setdefault(t["run"], {})[t["step"]] = t | {"from": art, "te_core": v}
     return out
 
 
@@ -180,6 +206,30 @@ def start(name: str) -> tuple[dict, dict]:
     return s["shape"], json.loads((fetch(s["art"], path) / path).read_text())["tensors"]
 
 
+def untraced(record: dict, traced: dict[int, dict]) -> list[str]:
+    """The steps with tokens that take no traced structure, so no Δ_grad (te_core.annotate.with_structures gives one
+    only to a step whose structure a traced step shares and updates something), each with why."""
+    by = {s["step"]: s["struct"] for s in record["steps"]}
+    have = {by[step]: t for step, t in traced.items()}
+    last, out = record["steps"][-1]["step"], []
+    for s in record["steps"]:
+        sid = s["struct"]
+        if not s.get("tokens") or (sid in have and record["structures"][sid].get("updated")):
+            continue
+        if sid in have:
+            dg = have[sid].get("measured", {}).get("delta_grad_bits")
+            why = ("before the run's first update: its structure updates nothing, so te_core.annotate leaves out its "
+                   "trace" + (f", which measures {algorithm_policy.num(dg)} bits" if dg is not None else ""))
+        elif s["step"] == last:
+            alone = sum(x["struct"] == sid for x in record["steps"]) == 1
+            why = (f"the program's last{', its structure having no other step' if alone else ''}, which "
+                   f"te_core.capture refuses to trace, the program ending before the step does")
+        else:
+            why = "no traced step shares its structure"
+        out.append(f"step {s['step']}: {why}")
+    return out
+
+
 def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, dict, dict]:
     """A row's quantities: its run's last checkpoint ingested with the run's `traced` steps' structures, or its rounds
     (`rounds`); the start's shape and what the row read."""
@@ -189,7 +239,7 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
     shape, tensors = start(record["start"]["name"])
     by_step = {s["step"]: s["struct"] for s in record["steps"]}
     structures = {by_step[step]: t["trace"]["structure"] for step, t in traced.items()}
-    read = {"traces": [{"step": step, "struct": by_step[step], "art": t["from"],
+    read = {"traces": [{"step": step, "struct": by_step[step], "art": t["from"], "te_core": t["te_core"],
                         "measured": {k: t["measured"].get(k) for k in TRACE_FACTS}}
                        for step, t in sorted(traced.items())]}
     if row.get("rounds"):
@@ -199,11 +249,12 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
         record = rounds(record, notes, {(tensors[n][1][1], tensors[n][1][0]) for n in names})
         record["formalism"] = round_formalism(notes, tensors, shape["vocab"])
         structures = {}
-        read = {"rounds": notes["rounds"], "round_steps": [s["step"] for s in record["steps"]],
+        read = {"traces": [], "rounds": notes["rounds"], "round_steps": [s["step"] for s in record["steps"]],
                 "fp4_macs": sum(r[5] * sum(s["struct"] == sid for s in record["steps"])
                                 for sid, st in record["structures"].items() for r in st["log"] if r[3].endswith(FP4))}
     else:
         record["checkpoints"] = record["checkpoints"][-1:]
+        read["untraced"] = untraced(record, traced)
     with tempfile.TemporaryDirectory(prefix="sw-ingest-") as tmp:
         d = Path(tmp) / "run"
         d.mkdir()
@@ -224,20 +275,54 @@ def _measured(label: str | None) -> bool:
                                   or label in algorithm_policy.COUNTED)
 
 
-def status(m: formalism.Measured, override: dict[str, str] | None = None) -> dict[str, str]:
-    """Each of `KEYS`' source (module docstring), `override`'s where it names one."""
-    out = {}
+def held(m: formalism.Measured) -> list[str]:
+    """The points of `POINTS` where Fit holds once every part with token blocks and no Δ_grad has 0 (the least any
+    could have): where Fit's verdict rests on those parts' Δ_grad."""
+    zero = dataclasses.replace(m, parts=tuple(dataclasses.replace(p, delta_grad_bits=0.0)
+                                              if p.tokens and p.delta_grad_bits is None else p for p in m.parts))
+    return [name for name, (c, k) in POINTS.items() if formalism.at(zero, c, k)["fit"]]
+
+
+def status(m: formalism.Measured, override: dict[str, str] | None = None,
+           read: dict | None = None) -> dict[str, str]:
+    """Each of `KEYS`' source (module docstring), `override`'s where it names one; an unmeasured Δ_grad's steps are
+    the row's `read`'s `untraced`, where it has them, which must number te_core's, out of its `steps`."""
+    out, gaps = {}, (read or {}).get("untraced")
     for key in KEYS:
         keys = LABELLED["delta_bits"] if key == "delta_t_bits" and m.delta_t_bits is None else LABELLED[key]
         bad = [m.labels.get(k) for k in keys if not _measured(m.labels.get(k))]
         out[key] = "measured" if not bad else f"assumed: {bad[0] or 'no label from te_core'}"
         if key == "delta_grad_bits" and m.fit_delta_grad_bits is None:
             n = sum(p.steps for p in m.parts if p.tokens and p.delta_grad_bits is None)
+            if gaps is not None and len(gaps) != n:
+                raise ValueError(f"te_core has no Delta_grad for {n} steps, `untraced` names {len(gaps)}: bring "
+                                 f"untraced() to te_core.annotate.with_structures' rule")
+            where = (f"{n} of {read['steps']} steps ({'; '.join(gaps[:3])}{f'; and {n - 3} more' if n > 3 else ''})"
+                     if gaps else f"{n} of {sum(p.steps for p in m.parts)} steps in structures with no traced "
+                                  f"Delta_grad")
+            on = held(m)
+            then = (f"Fit's verdict at {' and '.join(on)} rests on it, Fit holding there with it at 0" if on else
+                    "with it at 0, Fit still fails at both points, so neither rho_console nor rho_served rests on it")
             have = m.delta_grad_bits
-            out[key] = (f"assumed: unmeasured, {n} of {sum(p.steps for p in m.parts)} steps in structures with no "
-                        f"traced Delta_grad, so te_core fails Fit at every k"
+            out[key] = (f"assumed: unmeasured on {where}, so te_core fails Fit at every k; {then}"
                         + (f" (the traced steps' largest {algorithm_policy.num(have)} bits)" if have is not None else ""))
     return out | (override or {})
+
+
+def products(b: dict[str, dict], rounds: bool = False) -> str:
+    """The fresh-products kind's input, the run's products of two fresh operands, as the one bound `b` read them at
+    each of `POINTS`: measured at the console's default, or assumed with te_core's reason (where unmeasured, or where
+    the dominant traced step's stand in for steps of another shape, formalism.STAND_IN); and where unmeasured at the
+    serving block, te_core's reason."""
+    con = b["console"]
+    if (why := con["unmeasured"].get("fresh_products")) is not None:
+        return f"assumed: {why}" + (_UNTRACED if rounds else "")
+    stand = con["inputs"]["fresh_products"].get("stand_in")
+    out = (f"assumed: {formalism.STAND_IN.removeprefix('approximated: ')} ({len(stand['structures'])} traced "
+           f"structures)" if stand else "measured")
+    if (off := b["served"]["unmeasured"].get("fresh_products")) is None:
+        return out
+    return out + ("" if stand else " at the console's default") + f"; at the serving block, {off}"
 
 
 def token_dials(dials: dict, tokens: float) -> list[str]:
@@ -252,21 +337,15 @@ def token_dials(dials: dict, tokens: float) -> list[str]:
             for k, v in want.items() if k in dials and not math.isclose(dials[k], v, rel_tol=1e-2)]
 
 
-def points(w_fwd: float) -> dict[str, tuple[float, float]]:
-    """The two dial points (c, k): the dial's default for a start whose forward is `w_fwd` gates a token, and the
-    console's (algorithm_policy's `default` and `CONSOLE`)."""
-    return {"default": algorithm_policy.default(w_fwd), "console": algorithm_policy.CONSOLE}
-
-
 def priced(m: formalism.Measured, w_fwd: float, at: dict[str, dict]) -> str:
     """`KEYS` for `m` as the panel's JSON cell, C_gates beside algorithm_policy's `rho_inputs` (numbers to 6
     significant digits), refused where page_rho on the cell misses ρ or its basis at a point of `at` (formalism.at's
-    output at each of `points`)."""
+    output at each of `POINTS`)."""
     v = dict(zip(algorithm_policy.INPUTS, algorithm_policy.inputs(m, w_fwd)))
     v |= {"C_gates": m.gates, "w_fit_gates": m.w_fit, "alpha_ratio": m.alpha_ratio}
     if bad := [k for k in KEYS if isinstance(v[k], float) and not math.isfinite(v[k])]:
         raise ValueError(f"{', '.join(bad)} not finite")
-    text = algorithm_policy.cell({"C_gates": m.gates} | json.loads(algorithm_policy.rho_inputs(m, w_fwd)))
+    text = f'{{"C_gates":{algorithm_policy.num(m.gates)},' + algorithm_policy.rho_inputs(m, w_fwd)[1:]
     cell = json.loads(text)
     for name, want in at.items():
         got, basis = algorithm_policy.page_rho(cell, want["c"], want["k"])
@@ -277,8 +356,15 @@ def priced(m: formalism.Measured, w_fwd: float, at: dict[str, dict]) -> str:
     return text
 
 
-def rho_cell(v: float) -> float | str:
-    return "inf" if math.isinf(v) else float(algorithm_policy.num(v))
+def rho_cell(v: float | None) -> float | str | None:
+    return None if v is None else "inf" if math.isinf(v) else float(algorithm_policy.num(v))
+
+
+def kinds(one: dict, b: dict) -> str:
+    """formalism.published's `one` as the kinds cell (algorithm_policy's `kinds`), its sensitivities `SENSITIVITIES`
+    from the one bound `b` at its point, less any `one`'s max takes."""
+    return algorithm_policy.kinds(one | {"sensitivities": {s: b["sensitivities"][s] for s in SENSITIVITIES
+                                                           if s not in one["terms"]}})
 
 
 def finite(x):
@@ -299,46 +385,55 @@ def compact(d: dict) -> str:
 def build(spec: dict, stamp: str | None = None) -> tuple[dict, list[dict]]:
     """The panel and each row's details (module docstring) from the rows file's `spec`."""
     tr = traces(spec.get("traces", []))
-    reading, kinds = algorithm_policy.READING, algorithm_policy.IN_RHO
     rows, details = [], []
     for r in spec["rows"]:
         m, shape, read = measured(r, tr.get(r["run"], {}))
         if bad := token_dials(r["dials"], m.tokens):
             raise SystemExit(f"{PANEL}: {r['workload']} {r['run']}: {'; '.join(bad)}")
         w_fwd = policy.w_fwd(shape)
-        pts = points(w_fwd)
-        at = {name: formalism.at(m, c, k, reading, kinds) for name, (c, k) in pts.items()}
+        at = {name: formalism.at(m, c, k) for name, (c, k) in POINTS.items()}
         try:
             cell = priced(m, w_fwd, at)
+            st = status(m, ROUNDS if r.get("rounds") else None, read)
         except ValueError as e:
             raise SystemExit(f"{PANEL}: {r['workload']} {r['run']}: {e}") from None
-        st = status(m, ROUNDS if r.get("rounds") else None)
+        one = {name: formalism.published(m, c, k, READING) for name, (c, k) in POINTS.items()}
+        bound = {name: formalism.bound(m, c, k) for name, (c, k) in POINTS.items()}
+        if inf := [name for name, v in one.items() if v["reading"] == "A" and v["rho"] is not None
+                   and math.isinf(v["rho"])]:
+            raise SystemExit(f"{PANEL}: {r['workload']} {r['run']}: reading A's rho is infinite at "
+                             f"{' and '.join(inf)}, which no row publishes")
+        st["products"] = products(bound, bool(r.get("rounds")))
         said = "; ".join(r[x] for x in ("about", "note") if r.get(x))
         run = f"{r['run']} {r['art']}" + (f" ({said})" if said else "")
+        con = one["console"]
         rows.append([r["workload"], r["model"], compact(r["dials"]), run, cell, compact(st),
-                     rho_cell(at["default"]["rho"]), rho_cell(at["console"]["rho"]),
-                     algorithm_policy.binding(at["default"]),
-                     algorithm_policy.rho_terms(m, {name: (*pts[name], v) for name, v in at.items()}), reading,
-                     VERSION])
+                     rho_cell(con["rho"]), rho_cell(con["rho"]), con["reading"], VERSION,
+                     con["binding_kind"], con["rests_on"], kinds(con, bound["console"]),
+                     rho_cell(one["served"]["rho"])])
         details.append(finite({"workload": r["workload"], "run": r["run"], "art": r["art"], "read": read,
                                "w_fwd_gates": w_fwd, "labels": m.labels,
                                "parts": [dataclasses.asdict(p) for p in m.parts], "tail_share": m.tail_share,
-                               "reading": reading, "max_over": list(kinds), "at": at}))
+                               "at": at, "published": one,
+                               "bound": {name: {f: v[f] for f in BOUND} for name, v in bound.items()}}))
     p = {"id": PANEL, "title": "Standard training under the policy: covert workloads measured on real runs",
          "kind": "table", "updated_at": stamp or datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-         "source": f"python -m te_core.{NAME.replace('-', '_')} (te_core {VERSION}, reading {reading}; islands/{NAME})",
-         "note": note(), "columns": COLUMNS, "rows": rows}
-    return p, details
+         "source": f"python -m te_core.{NAME.replace('-', '_')} (te_core {VERSION}; islands/{NAME})",
+         "note": "", "columns": COLUMNS, "rows": rows}
+    return p | {"note": note(p)}, details
 
 
-def note(art: str | None = None) -> str:
-    c, k = algorithm_policy.CONSOLE
-    return (f"Covert workloads, each a small real run from a registered start, te_core {VERSION}. rho (target): "
-            f"reading {algorithm_policy.READING} over kinds {', '.join(algorithm_policy.IN_RHO)}, at the dial's default "
-            f"(c = {policy.SESSION_TOKENS} w_fwd, k = {policy.REFERENCE_K_BITS:,}) and the console's (c = "
-            f"{algorithm_policy.num(c, 5)}, k = {k:,}); low until te_core prices fresh products. binding_kind: fit "
-            "(c/(c-d)), token (A1, assumed) or none; rho_terms' other kinds are sensitivities, never the bound. "
-            "input_status: measured, or assumed and why." + (f" Tables {art}." if art else ""))
+def note(p: dict, art: str | None = None) -> str:
+    """The panel's note, its readings as its rows have them, and `art` the stored tables."""
+    (c, k), (cs, ks), (into, out) = POINTS["console"], POINTS["served"], policy.CONSOLE_SESSION
+    got = {r[COLUMNS.index("reading")] for r in p["rows"]}
+    how = ("reading B, a target, not a bound (tables: reading A's)" if got <= {"B"} else
+           "reading A, one bound over the valid kinds (null: unmeasured)")
+    return (f"Small real runs, te_core {VERSION}: formalism.published, {how}. rho_default = rho_console, binding_kind, "
+            f"rests_on and kinds at the console's default: c = {algorithm_policy.num(c, 5)} gates, one full {into:,}-in, "
+            f"{out:,}-out session of the {policy.REFERENCE_PARAMS / 1e6:.0f}M reference with attention; k = {k:,.0f}. "
+            f"rho_served at the registered serving block (c = {algorithm_policy.num(cs, 5)}, k = {ks:,}). input_status: "
+            f"measured, or assumed (why)." + (f" Tables {art}." if art else ""))
 
 
 def refused(p: dict) -> list[str]:
@@ -351,6 +446,18 @@ def refused(p: dict) -> list[str]:
     return out
 
 
+def emptied(p: dict, served: dict | None) -> list[str]:
+    """Why `p` mustn't replace the panel the route serves (`served`): a version switch never empties a populated
+    panel, so every run it serves stays a row, and a te_core newer than this one keeps it."""
+    if not served:
+        return []
+    run, te = (served["columns"].index(c) for c in ("run", "te_core"))
+    mine = {r[COLUMNS.index("run")].split()[0] for r in p["rows"]}
+    out = [f"it drops the served row of {r[run].split()[0]}" for r in served["rows"] if r[run].split()[0] not in mine]
+    newer = sorted({str(r[te]) for r in served["rows"] if _version(str(r[te])) > _version(VERSION)})
+    return out + [f"the route serves te_core {v}, newer than {VERSION}" for v in newer]
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", type=Path, required=True)
@@ -360,16 +467,19 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     spec = json.loads(a.rows.read_text())
     p, details = build(spec)
-    if bad := refused(p | {"note": note("art:" + "0" * 64)}):
+    if bad := refused(p | {"note": note(p, "art:" + "0" * 64)}):
         raise SystemExit(f"{PANEL}: the panels route refuses it: {'; '.join(bad[:5])}")
+    if a.publish and (bad := emptied(p, console.served().get(PANEL))):
+        raise SystemExit(f"{PANEL}: not PUT, since {'; '.join(bad[:5])}: name the served runs in the rows file")
     tables, cons = a.out / "tables", a.out / "console"
     tables.mkdir(parents=True, exist_ok=True)
     cons.mkdir(parents=True, exist_ok=True)
     (tables / f"{NAME}.json").write_text(json.dumps(p | {"details": details}, indent=1, allow_nan=False) + "\n")
-    art = algorithm_policy.store(tables, {"what": f"{PANEL} uncut, each row's labels, parts and rho's terms "
+    art = algorithm_policy.store(tables, {"what": f"{PANEL} uncut, each row's labels, parts, and formalism.at, "
+                                                  f"published and the one bound at both points "
                                                   f"(te_core.standard_workloads)", "rows": len(p["rows"]),
                                           "source": p["source"]}) if a.publish else None
-    q = p | {"note": note(art)}
+    q = p | {"note": note(p, art)}
     (cons / f"{NAME}.json").write_bytes(console.body(q))
     ix = {c: i for i, c in enumerate(COLUMNS)}
     for r in q["rows"]:
