@@ -14,7 +14,6 @@ import SampledProofs.OneStageZk
 import SampledProofs.Rate
 import SampledProofs.HiddenDraw
 import SampledProofs.Select
-import SampledProofs.FileUnits
 import SampledProofs.Slots
 import SampledProofs.FilePart
 import SampledProofs.Service

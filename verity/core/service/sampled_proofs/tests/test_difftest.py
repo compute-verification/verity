@@ -8,8 +8,8 @@ The Python held to it is `one_stage` itself (`registration.check`, `draw.derive`
 Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the `draw` piece `coins.draw_first` on
 `OwnRandomness` over the given bytes, for the `select` piece the challenger's sample from a Spec's selection rule on
 (`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), for the
-`slots` piece that sample in the claims' slots over a circuit file (`one_stage.slots`), on a deployed statement's file
-and registration (`SLOTS_FIXTURE`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
+`slots` piece that sample in the claims' slots over a circuit file (`one_stage.slots`) and for `file_part` the file's
+summary (`one_stage.slots.of_circuit`), on a deployed statement's file and registration (`SLOTS_FIXTURE`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
 arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
 `service.check_verdicts`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
 `Stream`'s order. The `partition` and `select` pieces also run on random partitions: mixed population
@@ -893,20 +893,35 @@ def select(j):
 
 def slots(j):
     """`Slots.select`: the claims' partition of the circuit file the input names (`circuit`, a path) in the strata of the
-    select piece's program under its query (`one_stage.slots.strata_sizes` of `partition.strata`; `layout` of
-    `file_units` at their sum), and the checked proof blocks of that piece's sample, `(slot, 0)` of each unit it proves
-    (`draw.proved`: its units and a work draw's closure), in slot order (`one_stage.slots.checked`)."""
+    select piece's program under its query (`one_stage.slots.sizes` of `partition.strata`; `layout` of `of_circuit`,
+    `FilePart.ofCircuit`'s port, at their sum), and the checked proof blocks of that piece's sample, `(slot, 0)` of each
+    unit it proves (`draw.proved`: its units and a work draw's closure), in slot order (`one_stage.slots.checked`)."""
     if not (isinstance(j, dict) and isinstance(j.get("circuit"), str)):
         raise D.Reject("circuit is not a path")
     out = select({k: v for k, v in j.items() if k != "circuit"})
     program = PROGRAMS[PO.program_sha512(j["program"])]
     try:
-        ns = SL.strata_sizes(P.strata(program, j["query"]))
-        classes = SL.layout(SL.file_units(Path(j["circuit"]), sum(ns)), ns)
+        ns = SL.sizes(P.strata(program, j["query"]))
+        if ns is None:
+            raise D.Reject("partition: the registration's strata, read stratum by stratum, are not its units in order")
+        classes = SL.layout(SL.of_circuit(Path(j["circuit"]), sum(ns)), ns)
     except (OSError, ValueError, KeyError, IndexError) as e:
         raise D.Reject(str(e)) from None
     return {"checked": SL.checked(classes, DR.proved(out["draw"])), "classes": classes}
 
+
+def file_part(j):
+    """`FilePart.ofCircuit` (`one_stage.slots.of_circuit`, its port) on the circuit file the input names (`circuit`, a
+    path) at `n` units: `{"n", "B", "m", "srcs"}`."""
+    if not (isinstance(j, dict) and isinstance(j.get("circuit"), str)):
+        raise D.Reject("circuit is not a path")
+    if not _nat(j.get("n")):
+        raise D.Reject("n is not a natural number")
+    try:
+        f = SL.of_circuit(Path(j["circuit"]), j["n"])
+    except (OSError, ValueError, KeyError, IndexError) as e:
+        raise D.Reject(str(e)) from None
+    return {"B": f.B, "m": f.m, "n": f.n, "srcs": list(f.srcs)}
 
 def file_population(j):
     """`FilePart.why` (`proofs.population_why`): the registration's strata over the program and query
@@ -2529,6 +2544,7 @@ SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), 
                                                      changed_selections(2), JSON), package=PACKAGE)
 #: run on the fixture's circuit file only (`test_the_slots_are_the_file_layout`), not drawn
 SLOTS = D.Port(PIECES, "slots", slots, st.nothing(), package=PACKAGE)
+FILE_PART = D.Port(PIECES, "file_part", file_part, st.nothing(), package=PACKAGE)
 
 @st.composite
 def file_populations(draw) -> dict:
@@ -3361,8 +3377,8 @@ def test_the_slots_are_the_file_layout(pieces, stage, registration):
     input columns per copy; every proof block's positions are disjoint and inside the program; and the checked proof
     blocks are the sampled units' slots.
 
-    It parses the 56 MB circuit file twice, in Lean and in Python: the one test of `FileUnits.ofCircuit` on a deployed
-    circuit, whose `srcKey` keys message leaves through `leaves_in`."""
+    It parses the 56 MB circuit file twice, in Lean and in Python: the one test of `FilePart.ofCircuit` on a deployed
+    circuit, whose `srcKey` keys message leaves through `leaves_in`, and of its port."""
     desc, query = registration
     circuit = stage / "circuit.txt"
     case = {"circuit": str(circuit), "closure": None, "program": desc, "query": query,
@@ -3372,7 +3388,7 @@ def test_the_slots_are_the_file_layout(pieces, stage, registration):
     assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
     (pop,) = out["classes"]
     assert [[b["unit"] for b in s] for s in pop] == [list(range(32))]
-    f = SL.file_units(circuit, 32)
+    f = SL.of_circuit(circuit, 32)
     assert (f.B, len(f.srcs)) == (32 * 128, 2048)
     for u, b in enumerate(pop[0]):
         (lo, hi), *owned = b["pus"]
@@ -3382,6 +3398,21 @@ def test_the_slots_are_the_file_layout(pieces, stage, registration):
     assert all(a[1] <= b[0] for a, b in zip(spans, spans[1:])) and spans[-1][1] <= f.size
     assert out["checked"] == [[u, 0] for u in sorted(select(case)["draw"]["units"])]
 
+
+@pytest.mark.slow
+def test_the_file_part_port_is_the_lean(pieces, stage, tmp_path):
+    """`one_stage.slots.of_circuit` is `FilePart.ofCircuit` on the fixture's circuit file at 32 units, its own count, and
+    at 1 and 0; both refuse an `n` that isn't a natural number and a circuit file they can't read. Every number the
+    slots' layout reads of the file is held here directly."""
+    circuit = str(stage / "circuit.txt")
+    for n in (32, 1, 0):
+        case = {"circuit": circuit, "n": n}
+        assert D.replay(FILE_PART, case, pieces) == ("output", D.canonical(file_part(dict(case)))), n
+    for case in ({"circuit": circuit, "n": -1}, {"circuit": circuit, "n": "32"}, {"circuit": circuit},
+                 {"circuit": str(tmp_path / "none.txt"), "n": 32}):
+        assert D.replay(FILE_PART, case, pieces)[0] == "reject", case
+        with pytest.raises(D.Reject):
+            file_part(dict(case))
 
 @pytest.mark.slow
 def test_a_circuit_file_that_does_not_parse_is_refused(pieces, stage, registration, tmp_path):

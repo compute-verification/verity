@@ -19,6 +19,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   coins, with the number of bytes it read (`Select.select`);
 * `slots`: the claims' partition over the circuit file, and the slots of that draw's checked proof blocks
   (`Slots.select`); the file is read from its path, so `DifftestMain` serves it (`slotsWith`), not `table`;
+* `file_part`: the circuit file's summary at `n` units (`FilePart.ofCircuit`), served the same way (`filePartWith`);
 * `file_population`: why the registration's population over a program and query is not a public file's units in order
   (`FilePart.why`);
 * `bound`: the exact bounds on wrong units at δ;
@@ -274,6 +275,14 @@ def slotsWith (j : Json) (c : V Flock.Circuit) : V Json := do
     (← Flock.unhex (← Flock.J.str j "source" "the slots"))
   return Json.mkObj [("classes", l.toJson),
     ("checked", Json.arr (checked.map fun v => Json.arr #[Lean.toJson v, Lean.toJson (0 : Nat)]))]
+
+/-- `{"n"}` with the circuit file `c` (`Slots.parseCircuit`) to `{"n", "B", "m", "srcs"}`: `FilePart.ofCircuit c n`;
+refused where the file doesn't parse or `n` is not a natural number. -/
+def filePartWith (j : Json) (c : V Flock.Circuit) : V Json := do
+  let c ← c
+  let some n := nat? (getD j "n") | throw "n is not a natural number"
+  let f := FilePart.ofCircuit c n
+  return Json.mkObj [("B", Lean.toJson f.B), ("m", Lean.toJson f.m), ("n", Lean.toJson f.n), ("srcs", Lean.toJson f.srcs)]
 
 /-- `{"draw", "proved_units", "instances"}`, a draw whose units (and closure) are integers, to `check_proved`'s codes. -/
 def checkProved (j : Json) : V Json := do

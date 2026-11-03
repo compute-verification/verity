@@ -1,4 +1,5 @@
-"""`one_stage.slots` on a small circuit file: Δ's source keys, the sources a unit owns, and the layout's positions.
+"""`one_stage.slots` (`FilePart.ofCircuit`'s port) on a small circuit file: Δ's source keys, the sources a unit owns,
+and the layout's positions.
 `verity/core/service/sampled_proofs/tests/test_difftest.py` holds it to `Slots.layout` on a deployed statement."""
 from __future__ import annotations
 
@@ -41,21 +42,25 @@ def test_a_unit_owns_the_first_input_of_each_key_a_row_reads(tmp_path):
     assert keys[257] == keys[128] == ("msg", 0, 2, 0)
     assert keys[384] == ("wire", "stage", 0, 128)
     assert keys[2] == ("pad", 0, 2)
-    f = SL.file_units(_circuit(tmp_path), 3)
-    assert f == SL.FileUnits(3, 512, 2 * (259 - 256 + 1), (0, 128, 384))
+    f = SL.of_circuit(_circuit(tmp_path), 3)
+    assert f == SL.FilePart(3, 512, 2 * (259 - 256 + 1), (0, 128, 384))
     assert (f.in_gates, f.size) == (2 + 3 * 512, 2 + 3 * 512 + 3 * 3 * 8)
     assert f.block(1) == [(f.in_gates + 24, f.in_gates + 48), (514, 515), (642, 643), (898, 899)]
 
 
 def test_the_layout_is_the_summary_unit_by_unit_in_the_strata():
-    f = SL.FileUnits(3, 2, 1, (1,))
-    (pop,) = SL.layout(f, SL.strata_sizes([("a", [(0, 2)]), ("b", [(2, 3)])]))
+    f = SL.FilePart(3, 2, 1, (1,))
+    (pop,) = SL.layout(f, SL.sizes([("a", [(0, 2)]), ("b", [(2, 3)])]))
     assert pop == [[{"pus": [[8, 11], [3, 4]], "unit": 0}, {"pus": [[11, 14], [5, 6]], "unit": 1}],
                    [{"pus": [[14, 17], [7, 8]], "unit": 2}]]
     assert SL.checked([pop], [2, 0]) == [[0, 0], [2, 0]]
 
 
-def test_strata_that_are_not_the_units_in_order_are_refused():
-    for strata in ([("a", [(0, 1), (2, 3)]), ("b", [(1, 2)])], [("a", [(1, 2)])]):
-        with pytest.raises(ValueError, match="not the units 0, 1"):
-            SL.strata_sizes(strata)
+def test_strata_that_are_not_the_units_in_order_have_no_sizes():
+    assert SL.sizes([("a", [(0, 1), (2, 3)]), ("b", [(1, 2)])]) is None
+    assert SL.sizes([("a", [(1, 2)])]) is None
+    assert SL.sizes([]) == []
+
+
+def test_last_le_is_the_last_entry_at_most_x():
+    assert [SL.last_le([0, 2, 2, 5], 2), SL.last_le([0, 2, 5], 7), SL.last_le([0, 2, 5], 0)] == [2, 2, 0]

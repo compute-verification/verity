@@ -3,12 +3,12 @@ The claims' slots over the verifier's circuit file (`Claims.Sampling.Partition` 
 the claims' program of the circuit file (`Flock.Bridge.partOf` of `Placed.keyProg`, at the registration's strata), and
 the slots of the proof blocks a draw checks.
 
-* **Classes.** One, the population, in the registration's strata (`strataSizes`: `Partition.strata` read stratum by
-  stratum, which must be the units `0, 1, …` in order), consecutive runs of slots. Slot `u` is unit `u`: the circuit
-  file's unit `u`, its positions those of `FileUnits.block`, its computed gates then each source it owns. A source no
-  computed row reads is in no proof block, nor are the constant and the zero.
-* **Expansion.** The circuit file is summarized once (`FileUnits.ofCircuit`, standing in for `FilePart.ofCircuit`), and
-  `layout` writes that summary out unit by unit, the summary shifted by the unit.
+* **Classes.** One, the population, in the registration's strata (`FilePart.sizes` of `Partition.strata`, which must
+  be the units `0, 1, …` in order), consecutive runs of slots. Slot `u` is unit `u`: the circuit file's unit `u`, its
+  positions those of `FilePart.block` as intervals, its rows' lowered gates then each source it owns. The constant, the
+  zero, a public input, an unread input and a repeated source past its first column are in no proof block.
+* **Expansion.** The circuit file is summarized once (`FilePart.ofCircuit`), and `layout` writes that summary out unit
+  by unit, the summary shifted by the unit.
 * **Checked.** `checked` lists the slot of every proof block the draw proves (`Select.select`'s proved units: its units
   and a work draw's closure), in slot order. It is the claims' reading of a draw; `Run.run` doesn't call it.
 * **Registration.** `popOk` reads no file: the program's strata under the query (`Partition.strata`) are the units
@@ -18,7 +18,7 @@ the slots of the proof blocks a draw checks.
   difftest's Python side (`one_stage.slots`) reads them.
 -/
 import SampledProofs.Select
-import SampledProofs.FileUnits
+import SampledProofs.FilePart
 
 namespace SampledProofs.Slots
 
@@ -43,31 +43,27 @@ def Layout.blocks (l : Layout) : Array ProofBlock := l.classes.flatten.flatten
 /-- Unit `u`'s slot: the proof block that is it. -/
 def Layout.slotOf (l : Layout) (u : Nat) : Option Nat := l.blocks.findIdx? (·.unit == some u)
 
-/-- **The registration's strata sizes** (`partOf`'s `ns`), in slot order: the strata of `p` under `query`
-(`Partition.strata`), each range starting where the last ended. An error where the query doesn't apply or the strata,
-read stratum by stratum, are not the units `0, 1, …` in order. -/
-def strataSizes (p : Program) (query : Json) : V (Array Nat) := do
-  let mut at_ := 0
-  let mut ns := #[]
-  for (_, rs) in ← Partition.strata p query do
-    let lo := at_
-    for (a, b) in rs do
-      if a != at_ || b < a then throw "the strata, read stratum by stratum, are not the units 0, 1, … in order"
-      at_ := b
-    ns := ns.push (at_ - lo)
-  return ns
+/-- **Unit `u`'s proof block** (`FilePart.block` as intervals `[lo, hi)`): its rows' lowered gates, then each source it
+owns. -/
+def blockOf (f : FilePart.FilePart) (u : Nat) : ProofBlock :=
+  { unit := some u
+    gates := #[(f.inGates + 3 * f.m * u, f.inGates + 3 * f.m * (u + 1))] ++
+      f.srcs.map fun b => (2 + u * f.B + b, 2 + u * f.B + b + 1) }
 
-/-- **The claims' partition of a circuit file's key program** (its summary `f`) in strata of sizes `ns`: one class, the
-strata consecutive runs of slots, slot `u` unit `u`'s proof block (`FileUnits.block`). `f` is the summary at `ns`'s
-sum of units. -/
-def layout (f : FileUnits) (ns : Array Nat) : Layout :=
-  let blocks := (Array.range f.n).map fun u => ({ unit := some u, gates := f.block u } : ProofBlock)
+/-- **The claims' partition of a circuit file's key program** (its summary `f`, `FilePart.ofCircuit`) in strata of sizes
+`ns`: one class, the strata consecutive runs of slots, slot `u` unit `u`'s proof block (`blockOf`). `f` is the summary at
+`ns`'s sum of units. -/
+def layout (f : FilePart.FilePart) (ns : Array Nat) : Layout :=
+  let blocks := (Array.range f.n).map (blockOf f)
   let (pop, _) := ns.foldl (fun (acc : Array (Array ProofBlock) × Nat) k =>
     (acc.1.push (blocks.extract acc.2 (acc.2 + k)), acc.2 + k)) (#[], 0)
   { classes := #[pop] }
 
 #guard (layout { n := 3, B := 2, m := 1, srcs := #[1] } #[2, 1]).classes.map (·.map (·.map fun b => (b.unit, b.gates))) ==
   #[#[#[(some 0, #[(8, 11), (3, 4)]), (some 1, #[(11, 14), (5, 6)])], #[(some 2, #[(14, 17), (7, 8)])]]]
+#guard let f : FilePart.FilePart := { n := 3, B := 4, m := 2, srcs := #[0, 1, 3] }
+  (List.range 3).all fun u =>
+    ((blockOf f u).gates.toList.flatMap fun (lo, hi) => List.range' lo (hi - lo)) == (f.block u).toList
 
 /-- The population's units under `query`, stratum by stratum (`Partition.strata`), each with its gates
 (`Partition.unitGates`). An error where the query doesn't apply. -/
@@ -93,12 +89,13 @@ def checked (l : Layout) (proved : Array Nat) : Array Nat :=
   (l.blocks.zipIdx.filter fun (b, _) => b.unit.any proved.contains).map (·.2)
 
 /-- **The challenger's draw in the claims' slots**: the layout of the circuit file `c` in the strata of the program `p`
-under `query` (`strataSizes`), and the slots of the units `Select.select`'s draw on the coins `src` proves (its units and
+under `query` (`FilePart.sizes`), and the slots of the units `Select.select`'s draw on the coins `src` proves (its units and
 a work draw's closure). An error where either is. -/
 def select (rule : Select.Rule) (c : Flock.Circuit) (p : Program) (query : Json)
     (table : Option Json) (cm : Option (Array (Int × Array Int))) (src : ByteArray) : V (Layout × Array Nat) := do
-  let ns ← strataSizes p query
-  let l := layout (FileUnits.ofCircuit c (ns.foldl (· + ·) 0)) ns
+  let some ns := FilePart.sizes (← Partition.strata p query)
+    | throw "partition: the registration's strata, read stratum by stratum, are not its units in order"
+  let l := layout (FilePart.ofCircuit c (ns.foldl (· + ·) 0)) ns
   let (_, proved, _) ← Select.select rule p query table cm src
   return (l, checked l proved)
 
