@@ -288,14 +288,16 @@ def _prepare(x: int | tuple[int, ...]) -> None:
 
 
 def _planned(plan: UN.Plan, opts: CK.Options, cache: Path, forked: bool = False,
-             keep: Callable[[str, str], bool] | None = None) -> tuple[list[tuple], list[dict | None], dict[int, tuple[dict, str]]]:
+             keep: Callable[[str, str], bool] | None = None,
+             drop: bool = False) -> tuple[list[tuple], list[dict | None], dict[int, tuple[dict, str]]]:
     """`_tasks` of ``--all`` from the bindings' records (`units.plan`), each target's key and the entries reused.  A target that
     misses through a binding built apart, or through any binding when the zygotes fork the checks (``forked``), is made here
     only if it is a primitive its id makes (`units.built_here`), and anything else where it is checked (`_made`): by the zygote
     that forks its check, which makes every such target of its binding (`_prepare`, `_owners`), or else by its check's process.
     So a run whose records count describes no target here, one after another, to check it.  Else it is made here from a
     binding that reaches it (`units._materialize`), and `units.Stale` when its descriptor is not its record's.  A target
-    ``keep`` (its kind and label) refuses, another shard's, is neither keyed (its key None), looked up nor made."""
+    ``keep`` (its kind and label) refuses, another shard's, is neither keyed (its key None), looked up nor made; with ``drop``
+    (``--binding``'s, whose task-list entry lists only its own targets) it is not listed either."""
     d = plan.derived
     memo = lambda: {}  # noqa: E731
     pins = CC.recorded_pins(CK.load_pins())
@@ -304,6 +306,9 @@ def _planned(plan: UN.Plan, opts: CK.Options, cache: Path, forked: bool = False,
     hits: dict[int, tuple[dict, str]] = {}
     for fid in d.ids:
         node = d.nodes[fid]
+        if drop and not keep("definition", fid):
+            TG.BINDINGS.setdefault(fid, set()).update(d.units.get(fid, set()))
+            continue
         call = node["f"] in plan.calls
         mine = keep is None or keep("definition", fid)
         k = target_key("definition", fid, opts, call, desc=node["d"]) if mine else None
@@ -331,6 +336,8 @@ def _planned(plan: UN.Plan, opts: CK.Options, cache: Path, forked: bool = False,
         tasks.append(("definition", fid, check, info))
         keys.append(k)
     for label, sub, sts in TG.templates():
+        if drop and not keep("template", label):
+            continue
         k = target_key("template", label, opts, None) if keep is None or keep("template", label) else None
         if k is not None and (hit := CC.lookup(cache, k, REPO)) is not None and not _errored(hit[0]):
             hits[len(tasks)] = hit
@@ -717,8 +724,10 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     the whole catalog, as the ids come from it (`targets.select`), but describes only shard K's targets before its checks,
     and its task-list entry is the shard's, under a key that names it.
 
-    With ``binding`` (a catalog binding's name, `shard.binding`) only that binding's targets (`_binding_of`) are looked up and
-    checked, from the bindings' records (``units``; a binding whose record misses is built apart, as ``--all`` builds it):
+    With ``binding`` (a catalog binding's name, `shard.binding`) only that binding's targets (`_binding_of`) are keyed, looked
+    up and checked, from the bindings' records (``units``; a binding whose record misses is built apart, as ``--all`` builds
+    it), and while the catalog's roots record counts only that binding's roots are made, each other's where it is read
+    (`units.plan`'s ``binding``):
     `units.Stale` when they give no task list, where ``--all`` would build the whole catalog here, or the catalog has no
     binding of that name (`NO_BINDING`), which would check nothing.  The report is of those targets alone, unjoined, as a
     shard's, and so is the task-list entry, under a key that names the binding.
@@ -755,7 +764,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     plan, planned, why = None, None, None
     if units:
         try:
-            plan = UN.plan(cache, REPO, log, apart)
+            plan = UN.plan(cache, REPO, log, apart,
+                           None if binding is None else lambda units: SH.binding(units) == binding)
             if plan is not None:
                 # `SC.owner` reads what a full build has imported before its checks, which no process of this run imports
                 t0 = time.time()
@@ -765,7 +775,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
                         f"imported every module the bindings' builds did ({time.time() - t0:.1f}s)")
                 if binding is not None:
                     keep = lambda kind, label, plan=plan: binding in _binding_of(plan, kind, label)  # noqa: E731
-            planned = _planned(plan, opts, cache, forked=apart is not None, keep=keep) if plan is not None else None
+            planned = _planned(plan, opts, cache, forked=apart is not None, keep=keep,
+                               drop=binding is not None) if plan is not None else None
         except UN.Stale as e:
             why = str(e)
             plan, planned = None, None
@@ -831,10 +842,11 @@ def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None)
     A ``--catalog-units`` run from a copy of ``cache``, on any machine whose tree its reads still match (each shard of one
     run), then builds no binding: it starts from the records.  Nothing is stored when this process or a binding's did
     something the tracer cannot see (`cache.untraced`), nor when a record disagrees with what was built (`units.Stale`), and
-    the report says why; a run from the cache builds each binding it misses, as it would with no records.  The report: the
+    the report says why; a run from the cache builds each binding it misses, as it would with no records.  Beside them the
+    catalog's roots record (`units.store_roots`), from which a ``--binding`` run makes only its binding's roots.  The report: the
     bindings reused and built (`units.Plan.stats`), the most bytes their builds' results held on disk at once
-    (``scratch_bytes``, `units.built_apart`), the records stored and the bytes every binding's records take in ``cache``
-    (``bytes``), and why none were stored."""
+    (``scratch_bytes``, `units.built_apart`), the records stored and the bytes every binding's records and the roots record
+    take in ``cache`` (``bytes``), and why none were stored."""
     if not CC.tracing():
         raise RuntimeError("records: the tracer is off (`cache.trace`), so a record would hold no read")
     try:
@@ -845,6 +857,7 @@ def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None)
     if why := CC.untraced():
         return {**out, "stored": 0, "why": f"the tracer could not see what it did ({'; '.join(why[:3])})"}
     stored = UN.store(cache, REPO, plan.entries, only_rebuilt=True)
+    UN.store_roots(cache, REPO, plan)
     return {**out, "stored": stored, "bytes": UN.held(cache, plan.entries)}
 
 
