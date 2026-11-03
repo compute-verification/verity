@@ -8,14 +8,16 @@ It reads what te_core.frontier_fit reads, and that fit: the valid records of the
 `pilot`) unless `--pin` names the commits, scored on their measured quantities unless `--quantities` says otherwise,
 where the scoring cap admits them (te_core.policy's `eligible`), each checkpoint on its start's data
 (te_core.frontier_fit's `data_of_shape`: `v3`, harness v3's OLMo 2 mix, else `v2.3-pilot`). A checkpoint's gain is
-effective compute over its start's own: C_eff(l)/C0, l its held-out loss and C_eff the compute at which its data's fit
-(te_core.frontier_fit, `training/frontier-fit`) reaches l; a row carries C0 (`start_compute_gates`) and the start's
-own effective compute C_eff(l0) (`start_effective_gates`, over C0 the start's own gain). At a gain target g (`GAINS`:
-1.1, 2 and 11, so +10%, +100% and +1000%) a start's target loss is the fit's at g·C0, and H is the least |C| of any
-scored checkpoint from the start on the same data reaching it, every checkpoint of every run pooled (null when none
-does). Every run from the start has a row at every target: `reached` "yes" at its first checkpoint reaching it, C that
-checkpoint's |C| and p = C/H >= 1; else "no" at its last checkpoint, C its total |C| and p = C/H a lower bound on its
-p (null without H). A target the start's own loss already meets has no rows, and a data with no fit none.
+Daniel's C(L1)/C(L0) (TRN-40, 7:05 PM PST; coordinator 08:09Z and 11:16Z): the compute at which its data's fit
+(te_core.frontier_fit, `training/frontier-fit`) reaches L1, its held-out loss, over the compute at which it reaches L0,
+its start's l0 (te_core.frontier_fit's `gain_from`); a row carries C0 (`start_compute_gates`) and the start's own
+effective compute C_eff(l0) (`start_effective_gates`, over C0 the start's own gain, which the gain no longer reads). At
+a gain target g (`GAINS`: 1.1, 2 and 11, so +10%, +100% and +1000%) a start's target loss is E + (l0 − E)·g^(−γ),
+below l0 at every g (te_core.frontier_fit's `target`), and H is the least |C| of any scored checkpoint from the start
+on the same data reaching it, every checkpoint of every run pooled (null when none does). Every run from the start has
+a row at every target: `reached` "yes" at its first checkpoint reaching it, C that checkpoint's |C| and p = C/H >= 1;
+else "no" at its last checkpoint, C its total |C| and p = C/H a lower bound on its p (null without H). A start at or
+below its fit's E has no rows, and a data with no fit none.
 
 Each row's ρ is te_core.formalism's `published` at its checkpoint at the dial's default (te_core.panels' `DEFAULT`:
 c = 4,096 tokens of the start's forward, k = 80,000 bits), as `rho_console` is at the console's. Under reading B it is
@@ -74,7 +76,7 @@ from . import VERSION, console, formalism, frontier_fit, panels, plots, policy, 
 
 NAME = "algorithm-policy"
 PANEL = f"training/{NAME}"
-#: the gain targets, effective compute over the start's own
+#: the gain targets, C(L1)/C(L0) on the fit (te_core.frontier_fit's `gain_from`)
 GAINS = (1.1, 2, 11)
 #: the coverage's decades of ρ, each from its value to the next's, the last with every larger and an infinite ρ
 DECADES = (1, 10, 100, 1_000, 10_000, 100_000)
@@ -260,13 +262,11 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
     rows, wrong, consoles, defaults = [], [], {}, {}
     for st in info["starts"]:
         f = info["fits"].get(st.data)
-        if f is None:
+        if f is None or st.l0 <= f["E"]:
             continue
         runs, dials, own = runs_of(st), {}, frontier_fit.c_eff(f, st.l0)
         for g in GAINS:
-            target = frontier_fit.loss_at(f, g * st.c0)
-            if st.l0 <= target:
-                continue
+            target = frontier_fit.target(f, st.l0, g)
             h = panels.least(st.honest, target)
             got = []
             for run, cps in runs.items():
@@ -276,7 +276,7 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
                     dials[r["id"]] = panels.dial(r["measured"], st.w)
                     defaults[r["id"]] = formalism.published(r["measured"], *default(st.w))
                 v = defaults[r["id"]]
-                gain = frontier_fit.gain(f, r["val_bpb"], st.c0)
+                gain = frontier_fit.gain_from(f, st.l0, r["val_bpb"])
                 row = [st.label, st.c0, None if math.isinf(own) else own, st.l0, r["val_bpb"], g,
                        None if math.isinf(gain) else gain,
                        "yes" if hit else "no", r["gates"], h, r["gates"] / h if h else None,
@@ -309,7 +309,7 @@ def note(art: str | None = None, tier: str | None = None, kept: str = "", provis
     served rows stay (`kept_data`) and `provisional` the data whose gains read a provisional fit. Over the route's
     `console.NOTE_MAX` it drops the kept data's versions, then the dial's sentence."""
     def text(kept: str, dial: bool) -> str:
-        out = (f"Per run, start and gain g = {', '.join(f'{g:g}' for g in GAINS)} (C_eff/C0, training/frontier-fit): "
+        out = (f"Per run, start and gain g = {', '.join(f'{g:g}' for g in GAINS)} (C(L)/C(l0), training/frontier-fit): "
                "yes at its first checkpoint reaching g, else no at its last. p = C/H, H the start's least C to g, a "
                f"lower bound if no. rho: published at c = {panels.DEFAULT[0]} w_fwd, k = {panels.DEFAULT[1]:,} bits."
                + (" Dial: rho_inputs (u_in exact at the dial's k)." if dial else "")
@@ -597,8 +597,7 @@ def figure(p: dict, out: Path) -> Path:
             ax.text(0.5, 0.5, f"best gain {top['gain']:.3g}\n({top['start']}, {top['method_key']}, {top['record']})",
                     transform=ax.transAxes, ha="center", va="center", fontsize=8, color="0.3")
         else:
-            ax.set_title(f"gain {g:g}: no attempts" + (" (every start's own loss meets it)" if every else
-                                                       f", no scored row on {data}"), fontsize=8)
+            ax.set_title(f"gain {g:g}: no attempts, no scored row on {data}", fontsize=8)
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlim(xlo, xhi)
@@ -644,7 +643,7 @@ def summary(p: dict, info: dict) -> str:
                          + " | " + (f"{ls['p'] * ls['rho_default']:.3g} ({ls['p']:.3g}, {ls['rho_default']:.3g})"
                                     if ls else "-")
                          + " | " + (f"gain {bn['gain']:.3g} ({bn['method_key']} {bn['record']})" if bn else "-")
-                         + " |" + ("" if mine else " met by the start itself"))
+                         + " |" + ("" if mine else " no rows: its loss is at or below the fit's E"))
     return "\n".join(lines)
 
 
@@ -658,7 +657,7 @@ def main(argv=None) -> int:
     me = f"te_core.{NAME.replace('-', '_')}"
     runs, extra, source = frontier_fit.inputs(a, scored, d["shapes"], d, me)
     fp, info = frontier_fit.build(scored, d["shapes"], runs, a.source or source.replace(me, "te_core.frontier_fit", 1),
-                                  extra)
+                                  extra, gains=GAINS)
     p = build(info, source, fp["updated_at"])
     own = coverage(p)
     tables = a.out / "tables"

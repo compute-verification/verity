@@ -1,6 +1,6 @@
 """te_core.algorithm_policy builds `training/algorithm-policy`: a row per run, start and gain target, at its first
-checkpoint whose gain (effective compute under te_core.frontier_fit's fit, over C0) reaches the target, else at its
-last; H the least compute from the start reaching it, every checkpoint pooled, and p = C/H; the dial's formula on a
+checkpoint whose gain (C(L1)/C(L0) under te_core.frontier_fit's fit, from the start's loss) reaches the target, else at
+its last; H the least compute from the start reaching it, every checkpoint pooled, and p = C/H; the dial's formula on a
 row's columns alone is te_core.formalism.at's at every cell; the coverage per gain target, data and decade of ρ; and
 the console's cut, which keeps the coverage's rows and each group's (p, ρ) front, naming the stored tables' art id."""
 import json
@@ -152,9 +152,9 @@ def dial(d: dict, c: float, k: float) -> tuple[float, str]:
 
 def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reaching_it_else_at_its_last(tmp_path,
                                                                                                     monkeypatch):
-    """At gain g a start's target loss is the fit's at g·C0; each run from the start has one row there: reached at its
-    first checkpoint at or below it, else not at its last, with C its |C|, the gain C_eff(loss)/C0, H the least |C| of
-    any checkpoint from the start reaching it and p = C/H (null without H)."""
+    """At gain g a start's target loss is E + (l0 − E)·g^(−γ) on the fit; each run from the start has one row there:
+    reached at its first checkpoint at or below it, else not at its last, with C its |C|, the gain C(L1)/C(l0) on the
+    fit, H the least |C| of any checkpoint from the start reaching it and p = C/H (null without H)."""
     code, got = run(tmp_path, monkeypatch)
     assert code == 0 and (got["out"] / f"{AP.NAME}.png").stat().st_size > 10_000
     p, f = got["panel"], fitted(got["fit"])
@@ -171,7 +171,7 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
     for start, shape in (("s1", SHAPE), ("s2", SHAPE2)):
         c0, mine = panels.c0(shape, RATE), [r for r in rows if r["start"] == start]
         for g in AP.GAINS:
-            target = FF.loss_at(f, g * c0)
+            target = FF.target(f, L0[start], g)
             at = {d["record"].split("@")[0]: d for d in ds
                   if (d["start"], d["gain_target"]) == (plots.start_label(shape), g)}
             assert set(at) == {r["run_id"] for r in mine}
@@ -184,7 +184,8 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
                 assert (d["start_loss"], d["end_loss"]) == (L0[start], r["val_bpb"])
                 assert (d["start_compute_gates"], d["C_gates"]) == pytest.approx((c0, r["formalism"]["parts"][0]["gates"]))
                 assert d["start_effective_gates"] == pytest.approx(FF.c_eff(f, L0[start]))
-                assert d["gain"] == pytest.approx(FF.c_eff(f, r["val_bpb"]) / c0) and (d["gain"] >= g) == bool(hit)
+                assert d["gain"] == pytest.approx(FF.c_eff(f, r["val_bpb"]) / FF.c_eff(f, L0[start]))
+                assert (d["gain"] >= g) == bool(hit) and target < L0[start]
                 assert d["H_gates"] == (h and pytest.approx(h))
                 assert d["p"] == (h and pytest.approx(d["C_gates"] / h))
                 assert d["family"] == next(x[3] for x in RUNS if x[1] == run_id)
@@ -283,11 +284,19 @@ def test_profiles_are_compact_strings():
     assert AP.num(1.234567e-7) == "1.23457e-7"
 
 
-def test_a_target_the_start_already_meets_has_no_rows_and_a_data_without_a_fit_none():
+def test_a_start_ahead_of_the_fit_has_every_target_below_its_loss_and_one_at_or_below_e_none():
+    """Gain is C(L1)/C(L0) on the fit (Daniel, TRN-40; coordinator 11:16Z): a start the fit puts ahead of the frontier
+    (its own gain C_eff(l0)/C0 1.5) has rows at every target, each below its l0, so a run that only holds l0 reaches
+    none (ref-data's 11:09Z LOOPHOLE); a start at or below the fit's E has no rows, and a data without a fit none."""
     rich = LAW | {"A": LAW["A"] * 1.5 ** 0.3}
     assert FF.gain(rich, 1.2, C0) == pytest.approx(1.5)
-    ds = plots.frame(AP.build(info(rich), "test"))
-    assert {d["gain_target"] for d in ds if d["start"] == plots.start_label(SHAPE)} == {2, 11}
+    ds = [d for d in plots.frame(AP.build(info(rich), "test")) if d["start"] == plots.start_label(SHAPE)]
+    assert {d["gain_target"] for d in ds} == set(AP.GAINS)
+    for d in ds:
+        target = FF.target(rich, 1.2, d["gain_target"])
+        assert target < 1.2 and (d["reached"] == "yes") == (d["end_loss"] <= target)
+        assert d["gain"] == pytest.approx(FF.gain_from(rich, 1.2, d["end_loss"]))
+    assert {d["start"] for d in plots.frame(AP.build(info(LAW | {"E": 1.25}), "test"))} == {plots.start_label(SHAPE2)}
     assert AP.build(info(None), "test")["rows"] == []
 
 
