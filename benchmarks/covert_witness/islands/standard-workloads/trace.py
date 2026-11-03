@@ -1,5 +1,5 @@
 """The standard-workloads panel's traces: chosen steps of published records, recorded by te_core.capture.script under
-this checkout's te_core and measured (te_core.capture.circuit.measure), as the scorer's trace40 does for its scope.
+this checkout's te_core and measured (te_core.capture.circuit.measure), as the scorer's re-trace does for its records.
 
     python trace.py pack --out PACK.tar --plan PLAN.json          # here: what each trace reads, into one tar
     python trace.py node --pack PACK.tar --out DIR [--workers N]   # on a CPU node (job.sh)
@@ -66,7 +66,7 @@ def pack(plan: list[dict], out: Path) -> dict:
         for name, m in starts:
             store = json.loads(git("show", f"{m}:{CW}/starts_store.json"))["starts"][name]
             tmp = d / "starts-fetch" / name
-            fetch(store["art"], tmp, "start.json")
+            fetch(store["art"], tmp, f"{store.get('path', 'starts')}/{name}/start.json")
             (d / "starts").mkdir(exist_ok=True)
             shutil.copy(next(tmp.rglob("start.json")), d / "starts" / f"{name}.start.json")
         shutil.rmtree(d / "starts-fetch", ignore_errors=True)
