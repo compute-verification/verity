@@ -388,11 +388,11 @@ def test_the_session_vectors_are_their_rule_at_every_stated_size(built):
 
 
 def test_each_reference_size_and_start_has_its_session_and_the_products_terms_inputs_at_every_k_of_the_grid(built):
-    """The console's dials move its reference model over its sizes, 20M to 1B at vocab 50,304, and k over its grid,
-    and a start's rows read its own shape. Each size and each start (the ladder's six among them) has its shape, the c
-    of its session at the console's 4,096 in and 1,024 out as session_gates prices it, and that session's k; and at
-    each k of the grid the c of a session of k/16 input tokens and 1,024 output, and that session's input ids: k at
-    50,304, and 15/16 of it at bpe32k's 32,000, which puts the ladder's starts' own k off the grid."""
+    """The console's dials move its reference model over its sizes, 20M to 1B at vocab 50,304, and k over its grid.
+    Each size and each start (the ladder's six among them) has its shape, the c of its session at the console's 4,096
+    in and 1,024 out as session_gates prices it, and that session's k; and at each k of the grid the c of a session of
+    k/16 input tokens and 1,024 output, and that session's input ids: k at 50,304, and 15/16 of it at bpe32k's 32,000,
+    which puts the ladder's starts' own k off the grid."""
     s = built["sessions"]
     assert s["dial"] | {"about": None} == {"about": None, "k": list(policy.K_GRID),
                                            "in_tokens": list(policy.DIAL_IN_TOKENS), "out_tokens": 1024}
