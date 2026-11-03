@@ -2694,6 +2694,11 @@
    "honest": ["Nci.Products.SecurityProofs.Bound_honest"],
    "nontrivial": "Nci.Products.SecurityProofs.Bound_nontrivial",
    "kind": "exclusion"
+  },
+  "Nci.Products.SecurityProofs.ChainCap": {
+   "honest": ["Nci.Products.SecurityProofs.ChainCap_honest"],
+   "nontrivial": "Nci.Products.SecurityProofs.ChainCap_nontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -9182,6 +9187,15 @@
    "assumptions": [],
    "type_hash": "ddb910ea051953c4c5b44d02843ce1ebebebab2d10ad587dc4e74a153b90a58d"
   },
+  "Nci.Products.SecurityProofs.ChainCap": {
+   "owner": "@training"
+  },
+  "Nci.Products.SecurityProofs.ChainCap_honest": {
+   "owner": "@training"
+  },
+  "Nci.Products.SecurityProofs.ChainCap_nontrivial": {
+   "owner": "@training"
+  },
   "Nci.Products.SecurityProofs.WordCap": {
    "owner": "@training",
    "signature": ["Nci.Products.SecurityProofs.WordCap : Nci.Products.Guarantees.WordCap"],
@@ -13814,7 +13828,10 @@
    "Nci.Products.SecurityProofs.WordCap_honest": "completeness: The word-level cap's honest lemma: at Single (Nci.Products.Single, Security/Definitions/Nci/Products/Instances.lean) with the operands fresh, at (c, k) = (1, 2) and b_A = b_B = b_C = 1, the product is by the standard algorithm, its widths are as passed, and the partition of one block, gate 2, is a partition into inference blocks that holds the one MAC whole. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's circuit, its products and its partition, which no check reads yet, would supply the deployed premises.",
    "Nci.Products.SecurityProofs.WordCap_nontrivial": "lemma: The word-level cap's nontrivial lemma: at Single (Nci.Products.Single, Security/Definitions/Nci/Products/Instances.lean) with the operands registered, at (c, k) = (1, 1) and b_A = b_B = b_C = 1, the product is by the standard algorithm and the partition of one block, gate 2, is one into inference blocks that holds the MAC whole, but the block reads both operands free, so widths as passed fail, and the cap 1 ≤ 1/4 + 1/4 fails. A counterexample at an instance, not a property of a Lean function.",
    "Nci.Products.SecurityProofs.Bound_honest": "completeness: The products kind's bound's honest lemma: at Single (Nci.Products.Single, Security/Definitions/Nci/Products/Instances.lean) with the operands fresh, at (c, k) = (1, 2), b_A = b_B = b_C = 1 and μ = 1/2, the product is by the standard algorithm, its widths are as passed, and the partition of one block, gate 2, is a partition into inference blocks, so the partition-level bound is over at least one partition. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's circuit, its products and its partition, which no check reads yet, would supply the deployed premises.",
-   "Nci.Products.SecurityProofs.Bound_nontrivial": "lemma: The products kind's bound's nontrivial lemma: at Single (Nci.Products.Single, Security/Definitions/Nci/Products/Instances.lean) with the operands registered, at (c, k) = (1, 0), b_A = b_B = b_C = 1 and μ = 1/2, the product is by the standard algorithm, but gate 2's block reads both operands free, so widths as passed fail, and the bound fails at the partition of that one block, a partition into inference blocks: the products kind's bound (1/2) / 0 = ⊤ is above its price 1. A counterexample at an instance, not a property of a Lean function."
+   "Nci.Products.SecurityProofs.Bound_nontrivial": "lemma: The products kind's bound's nontrivial lemma: at Single (Nci.Products.Single, Security/Definitions/Nci/Products/Instances.lean) with the operands registered, at (c, k) = (1, 0), b_A = b_B = b_C = 1 and μ = 1/2, the product is by the standard algorithm, but gate 2's block reads both operands free, so widths as passed fail, and the bound fails at the partition of that one block, a partition into inference blocks: the products kind's bound (1/2) / 0 = ⊤ is above its price 1. A counterexample at an instance, not a property of a Lean function.",
+   "Nci.Products.SecurityProofs.ChainCap": "frozen (no-function): The fresh-products cap along chains, every MAC within one block and each entry's partial sum running along its MACs: it is about an arbitrary declaration, a product in it by the standard algorithm with its widths as passed and its chains (Nci.Products.Standard, Standard.Algorithm, Standard.Passed and Standard.Chained, Security/Definitions/Nci/Products.lean) and its partitions into inference blocks that split no MAC (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean, and Standard.Unsplit), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and declared products, is what would give it an acceptance.",
+   "Nci.Products.SecurityProofs.ChainCap_honest": "completeness: The cap along chains' honest lemma: at Pair (Nci.Products.Pair, Security/Definitions/Nci/Products/Instances.lean), one entry's chain of two MACs (gates 0 to 3 the operands' bits, gate 4 a₀ ∧ b₀ and gate 5 (a₁ ∧ b₁) ⊕ g₄) with the operands fresh, at (c, k) = (1, 3) and b_A = b_B = b_C = 1, the product is by the standard algorithm, its widths are as passed, gate 5 reads gate 4's partial sum, and the partition of two blocks, gate 4 and gate 5, is a partition into inference blocks that splits no MAC, its second block reading the first's partial sum. It states facts of an instance, not a property of a Lean function; it is accepted as the honest instance of this structural bound, rests on no run and no art:, and a training run's circuit, its products and its partition, which no check reads yet, would supply the deployed premises.",
+   "Nci.Products.SecurityProofs.ChainCap_nontrivial": "lemma: The cap along chains' nontrivial lemma: at Pair (Nci.Products.Pair, Security/Definitions/Nci/Products/Instances.lean) with the operands registered, at (c, k) = (1, 1) and b_A = b_B = b_C = 1, the product is by the standard algorithm, gate 5 reads gate 4's partial sum, and the partition of two blocks, gate 4 and gate 5, is one into inference blocks that splits no MAC, but the blocks read the operands free, so widths as passed fail, and the cap 2 ≤ (2/3) √(1/3) + √2 / 2 fails. A counterexample at an instance, not a property of a Lean function."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
