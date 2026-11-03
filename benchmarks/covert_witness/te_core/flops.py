@@ -37,7 +37,9 @@ per tensor through every op within a step:
   it has named a θ weight, so no other tensor takes its memory.
 
 A node is `updated` when it is in a forward pass (outside autograd's backward), one operand is token-indexed and another
-(the weight, or an initial accumulator) has roots: the updated multiplications U. Others are `theta` (the weight equals
+(the weight, or an initial accumulator) has roots: the counter's updated multiplications, which were U before te_core
+4.0. 4.0 reads U by update dependence from the step's traced circuit (te_core.capture, `annotate.with_structures`), and
+this count stays |C|. Others are `theta` (the weight equals
 θ's, or a fast value made in the step), `act` (two token-indexed operands: attention), `param` (no token-indexed
 operand: optimizer work), and every product in autograd's backward is `bwd/grad`. Each updated node records its MACs per token row and the updated MACs per token
 row upstream of it in its token's pass (the cone of updated forward nodes its operands were computed from). Every value
@@ -220,6 +222,14 @@ def _ptr(t: torch.Tensor) -> int:
         return t.untyped_storage().data_ptr()
     except (RuntimeError, NotImplementedError):
         return 0
+
+
+def read_positions(t: torch.Tensor) -> np.ndarray:
+    """The storage positions `t`'s elements occupy (its offset and strides; no data read), sorted, each once."""
+    pos = np.array(t.storage_offset(), dtype=np.int64)
+    for n, s in zip(t.shape, t.stride()):
+        pos = pos[..., None] + np.arange(n, dtype=np.int64) * s
+    return np.unique(pos)
 
 
 def _written(func, args, kwargs) -> list[torch.Tensor]:
@@ -588,8 +598,8 @@ class Counter(TorchDispatchMode):
     def batch(self, t: torch.Tensor) -> torch.Tensor:
         """Mark `t`, a batch from the start's data stream, as token data in every step from now on while it lives, so
         whatever reads it is token-indexed (not only an embedding lookup). Its tokens are counted where an op reads it as
-        indices (`TOKEN_INDEX`), once per batch and step at its largest such read, so an input slice read twice, and the
-        targets beside it, count once."""
+        indices (`TOKEN_INDEX`), each position once per step (`_token_source`): an input slice read twice counts once,
+        and micro-batches of it add up."""
         self.batches[t] = True
         self._tag_batch(t)
         return t
@@ -599,11 +609,13 @@ class Counter(TorchDispatchMode):
         self.tags[t] = Tag(tok=True, src=frozenset((self.n_batches,)))
 
     def _token_source(self, idx: torch.Tensor, tag: Tag) -> Tag:
-        """Count `idx`'s elements as this step's tokens, once per source at its largest read, and return its tag. A
-        batch of the data stream is its own source; any other token tensor becomes one at its first read, held in its
-        tag, so a view of it or a value computed from it is the same source, a new tensor at a freed one's address is
-        another, and so is the tensor once an op writes into it (`sources`). A θ tensor keeps θ's tag and is keyed by
-        its memory, which the counter holds."""
+        """Count `idx`'s elements as this step's tokens, once each: a source's tokens are the union of the positions
+        its reads cover in each tensor they view (`read_positions`), so disjoint reads of one batch (micro-batches)
+        add up and a read of positions already read adds nothing; and return its tag. A batch of the data stream is
+        its own source; any other token tensor becomes one at its first read, held in its tag, so a view of it or a
+        value computed from it is the same source, a new tensor at a freed one's address is another, and so is the
+        tensor once an op writes into it (`sources`). A value computed from a source is its own tensor, whose reads
+        count beside the source's. A θ tensor keeps θ's tag and is keyed by its memory, which the counter holds."""
         if not tag.src:
             if _ptr(idx) in self.theta_ptr:
                 key = (_ptr(idx), idx.storage_offset(), tuple(idx.shape), idx._version)
@@ -615,10 +627,12 @@ class Counter(TorchDispatchMode):
             self.sources.add(self.n_batches)
             tag = tag.merge(Tag(tok=True, src=frozenset((self.n_batches,))))
             self.tags[idx] = tag
-        seen = self.token_seen.get(tag.src, 0)
-        if idx.numel() > seen:
-            self.cur.tokens += idx.numel() - seen
-            self.token_seen[tag.src] = idx.numel()
+        by_base = self.token_seen.setdefault(tag.src, WeakTensorKeyDictionary())
+        base = idx if idx._base is None else idx._base
+        seen = by_base.get(base)
+        now = read_positions(idx) if seen is None else np.union1d(seen, read_positions(idx))
+        self.cur.tokens += len(now) - (0 if seen is None else len(seen))
+        by_base[base] = now
         return tag
 
     # -- provenance

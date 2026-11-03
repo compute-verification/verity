@@ -21,6 +21,10 @@ D, the direction, defaults to the branch's `cursor/te-<D>-NNNN` (else `integrato
 word (else the island). A candidate of a reference direction (`te_core.frontier.REF_DIRECTIONS`), or `--reference`, is
 ingested as a reference run; honest is the least |C| of every valid record either way (te_core.frontier).
 
+At a v3 pin, START must be one of v3's starts: a start the pin's `starts_store.json` records with a tokenizer other
+than data v3's (the pilot's FineWeb-Edu starts) is refused (`refuse_pilot_start`), and scoring leaves out any v3 record
+from one (`pilot-start`, te_core.frontier).
+
 `--long 'HH:MMZ who'` runs the candidate at the long tier (`CW_TIER=long`, `prepare.budget`: up to LONG_C0 times the
 start's C0 and LONG_GPU_SECONDS of steps), only for a run the board assigns as long, whose line it names; the witness
 records it, and is valid at that tier only with it.
@@ -107,6 +111,23 @@ def island_of(name: str | None, program: str, direction: str) -> dict:
             "tree": git("rev-parse", f"HEAD:{ISLANDS}/{name}")}
 
 
+def refuse_pilot_start(start: str, pin: dict, src: Path) -> None:
+    """At a v3 pin, a start the pin's `starts_store.json` records with a tokenizer other than data v3's (the pilot's
+    FineWeb-Edu starts record none) is refused: its loss on v3's text would make it a v3 branch point. A start the
+    store doesn't have is prepare's to refuse (a sealed start in final mode)."""
+    if pin.get("data") != "v3":
+        return
+    cw = src / "benchmarks/covert_witness"
+    store = json.loads((cw / "starts_store.json").read_text())["starts"]
+    want = re.search(r'^TOKENIZER = "([^"]+)"', (cw / "data_v3.py").read_text(), re.M).group(1)
+    if start in store and store[start]["shape"].get("tokenizer") != want:
+        v3 = sorted(n for n, s in store.items() if s["shape"].get("tokenizer") == want)
+        raise SystemExit(f"launch: {start} is a pilot start, and v3 branches start from the v3 ladder's starts; "
+                         f"FineWeb-Edu starts are v2.3-pilot. Launch from one of the pin's v3 starts ("
+                         + (", ".join(v3) if v3 else "none published yet: prepare your port, or run a from-scratch "
+                            "frontier point on v3") + ")")
+
+
 def pick_node(name: str | None, path: Path, launches: Path = LAUNCHES) -> Node:
     """`name` if the node list has it, else the list's next node after the turns this VM's launches took so far."""
     known = nodes(path)
@@ -164,6 +185,7 @@ def main() -> int:
         raise SystemExit(f"launch: this launcher is harness v{VERSION} and the pin is v{pin.get('version')} "
                          f"({pin['commit'][:11]}): launch from a checkout at the pin's version until the integrator "
                          f"pins v{VERSION} (the board's [TOOL] line), then merge origin/cursor/covert-witness-4207")
+    refuse_pilot_start(a.start, pin, src)
     node = pick_node(a.node, Path(os.environ.get("CW_NODES", src / "benchmarks/covert_witness/nodes.txt")))
     with tempfile.TemporaryDirectory() as tmp:
         tar = Path(tmp) / "island.tar"
