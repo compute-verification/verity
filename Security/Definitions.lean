@@ -1,4 +1,5 @@
 import Definitions.Core
+import Definitions.Core.Formalism.Instances
 import Definitions.Core.Accel
 import Definitions.Core.Assumptions.Accel
 import Definitions.Core.Blocks
