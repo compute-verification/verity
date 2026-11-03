@@ -19,14 +19,14 @@ import Lms.Verify
 The verifier of record is one compiled Lean function per composite (`Verity.Registration.Composite`), the `answer` of
 the composite `Core.Composites.composites` lists for it (`verifier`): onsite's `Core.Onsite.protocol`
 (`verity/onsite/v0`, `Core.Composition.tiedSameB`) and remote's `Core.Remote.protocol` (`verity/remote/v0`,
-`Core.Composition.sameB`), each composing its subprotocols over the blobs the prover sent. Onsite has seven
+`Core.Composition.tiedSameB`), each composing its subprotocols over the blobs the prover sent. Onsite has seven
 subprotocols and remote three of them, each subprotocol at the component its composite names for it (`component`);
 the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 
 | subprotocol | `Audit` | onsite's component | remote's component |
 | --- | --- | --- | --- |
-| sampled proofs | `.sampled` | `SampledProofs.OneStage.protocol` (v1) | the same |
-| PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | `PouwCheck.protocol` (its window) |
+| sampled proofs | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) | the same |
+| PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | the same |
 | the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` | |
 | PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | |
@@ -65,8 +65,10 @@ The statement's form is the causal game, the committed files, one fixed extracto
   where `B^τ` outputs a SHA-512 collision with probability at most the published `ε_cr` at the strategy's calls
   (`FinderCR`, quantitative), its published `δ` at those calls plus its loss at `Pr[B^τ]`, the form of
   `Accounting.PeriodLive.error`; elsewhere `⊤`. That admits C-Flock's conditional bound (`loss = 0`) and the additive
-  one (`crBound = 1`). A bound that reads further finders built from the strategy states their premises in `finderCR`,
-  each at its own budget in the strategy's calls, and the error is `⊤` where one fails. Two openings of one position
+  one (`crBound = 1`). A bound that reads further finders built from the strategy lists them (`finders`, each a
+  `FinderSpec`: the finder, and its budget as a function of the strategy's calls that bounds its calls), and the error
+  is `⊤` where one of them outputs a collision with probability above its budget over `2^256` (`finderCR`, built by
+  `finderCROf`), the bound `ecr/sha-512` gives it. Two openings of one position
   and a second file with a registered digest (`fileFinder`, `publicFinder`) each enter that way. The named assumption
   `ecr/sha-512` is asked only of the finder. A forged device release enters the same way through a fixed forger
   (`forger a`, a `Hash.Assumptions.LmsForger` applied to the strategy, its calls bounded as the finder's are and the
@@ -80,9 +82,9 @@ The statement's form is the causal game, the committed files, one fixed extracto
 * **Each component's acceptance in what the prover sent.** Subprotocol `a`'s verdict at composite `k` (`Verdict`) is the
   file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
   components whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
-  at onsite PoUS and PoUB-P2 on one store, `AcceptTied`'s), and `a`'s compiled component's acceptance of its own case.
-  The device's log as each component's check read it (`coinsRead`) is the targets' to bind to the device's whole log
-  (`Logged`).
+  at onsite PoUS and PoUB-P2 on one store and at remote every window of PoUW's period on the record, `AcceptTied`'s),
+  and `a`'s compiled component's acceptance of its own case. The device's log as each component's check read it
+  (`coinsRead`) is the targets' to bind to the device's whole log (`Logged`).
 * **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
   (`computed`), with no pricing.
 
@@ -146,25 +148,26 @@ def componentsOf : Verity.Registration.Composite → List BlobProtocol
 /-- The subprotocols of composite `k` that must commit to one record. -/
 def tied : Verity.Registration.Composite → List String
   | .onsite => Onsite.tied
-  | .remote => Remote.components.map (·.id)
+  | .remote => Remote.tied
 
-/-- The ties of composite `k`: at onsite, PoUS and PoUB-P2 on one store. -/
+/-- The ties of composite `k`: at onsite, PoUS and PoUB-P2 on one store; at remote, every window of PoUW's period on
+the policy's record. -/
 def ties : Verity.Registration.Composite → List Composition.Tie
   | .onsite => [Onsite.store]
-  | .remote => []
+  | .remote => [Remote.windows]
 
 /-- **The compiled component of composite `k` that decides subprotocol `a`**; `none` when `k` has no such
 subprotocol. -/
 def component : Verity.Registration.Composite → Subprotocol → Option BlobProtocol
-  | .onsite, .sampled => some SampledProofs.OneStage.protocol
+  | .onsite, .sampled => some VStar.Recursive.Sampled.protocol
   | .onsite, .pouw => some PouwCheck.Period.protocol
   | .onsite, .inferenceOnly => some NciCheck.Protocol.protocol
   | .onsite, .pous => some PousCheck.RunProtocol.protocol
   | .onsite, .poub => some RemoteAudit.P2Protocol.protocol
   | .onsite, .network => some NetworkCheck.Period.protocol
   | .onsite, .wipe => some MemoryChallenger.WipeProtocol.protocol
-  | .remote, .sampled => some SampledProofs.OneStage.protocol
-  | .remote, .pouw => some PouwCheck.protocol
+  | .remote, .sampled => some VStar.Recursive.Sampled.protocol
+  | .remote, .pouw => some PouwCheck.Period.protocol
   | .remote, .inferenceOnly => some NciCheck.Protocol.protocol
   | .remote, _ => none
 
@@ -208,8 +211,8 @@ def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : 
 
 /-- **Composite `k` accepted what the prover sent as a `same` composition**: the three byte strings decode to an
 accepted composition of `k`'s components on the blobs sent, whose record subprotocols (`tied k`) committed to one
-record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at onsite, PoUS and PoUB-P2 on one store)
-each named one value (`Properties.Composition.Tied`). -/
+record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at onsite, PoUS and PoUB-P2 on one store; at
+remote, every window of PoUW's period on the policy's record) each named one value (`Properties.Composition.Tied`). -/
 def SameAccepts (k : Verity.Registration.Composite) (s : Sent) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧ ∃ pub prof,
     Properties.Composition.SameAccepted (verifier k).id (tied k) (s.components k) ps c ev pub prof ∧
@@ -495,6 +498,27 @@ structure Place where
   rank : ℕ
   offset : ℕ
 
+/-- **A further collision finder a subprotocol's bound reads, with its budget**: a finder built from the strategy, and
+its SHA-512 budget as a function of the strategy's calls alone (`budget`, as `q_F = 2t + 2v` and `q_S = t + v` are of
+`t`), which bounds the finder's calls on every coin (`calls`). -/
+structure FinderSpec (G : Game Exchange) (cost : Game.Strategy G → ℕ) where
+  finder : Game.Strategy G → Claims.Finder
+  budget : ℕ → ℕ
+  calls : ∀ σ (x : (finder σ).S), (finder σ).cost x ≤ budget (cost σ)
+
+/-- **A further finder's collision premise, at its budget**: applied to the strategy, it outputs a SHA-512 collision with
+probability at most its budget at the strategy's calls over `2^256`, what `ecr/sha-512` gives a finder of that many
+calls. -/
+def FinderSpec.CR {G : Game Exchange} {cost : Game.Strategy G → ℕ} (f : FinderSpec G cost) (σ : Game.Strategy G) :
+    Prop :=
+  (f.finder σ).Pr sha512Msg ≤ (f.budget (cost σ) : ℝ) / 2 ^ (256 : ℝ)
+
+/-- **The collision premises at a list of further finders**, each at its own budget (`FinderSpec.CR`): `True` at no
+finder. -/
+def finderCROf {G : Game Exchange} {cost : Game.Strategy G → ℕ} (fs : List (FinderSpec G cost))
+    (σ : Game.Strategy G) : Prop :=
+  fs.Forall fun f => f.CR σ
+
 /-- The fields of a period's run that the prover's world realizes in a play: whose account each resource is charged to,
 the window, the device schedule, and what the network certifiers saw (`Accounting.PeriodWorld`, the one definition). -/
 abbrev World {ι : Type} (d : Device ι) (α : Type) [Fintype α] := Accounting.PeriodWorld d α
@@ -505,7 +529,8 @@ files; the coin commitment's families, the device's only part the parameters fix
 `Frame`), and the device's log as each component's check read it, decoded from the device's signed log in what the
 prover sent; the extractor applied to a strategy, and each subprotocol's collision finder and forger of the device's
 signature, with their SHA-512 calls bounded by the strategy's (`finder_calls`, `forger_calls`) and the device's
-signatures the forger saw by the published `Q` (`forger_signed`); the committed circuit's gates a play computed after
+signatures the forger saw by the published `Q` (`forger_signed`), and the other finders each subprotocol's bound reads,
+each with its budget in the strategy's calls (`finders`); the committed circuit's gates a play computed after
 their window's coin; the world each play realizes; the declaration's registered inputs and the inference-only policy's
 budgets; the wipe that opens the period, at a boundary of a schedule of the committed circuit's blocks, and each play
 read at that boundary as the wipe's game;
@@ -539,11 +564,10 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   /-- **The finder's SHA-512 calls are at most `c · calls(τ) + d`**, on every coin of the finder. -/
   finder_calls : ∀ a θ F c σ (x : (finder a θ F c σ).S),
     (finder a θ F c σ).cost x ≤ callsMul θ a * cost θ F c σ + callsAdd θ a
-  /-- **The SHA-512 premises at the other finders subprotocol `a`'s bound reads**, each a finder built from the
-  strategy at its own budget, a function of the strategy's calls (`cost`); `True` where the bound reads only
-  `finder`. -/
-  finderCR : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
-    Game.Strategy (play (families θ) θ F c) → Prop
+  /-- **The other finders subprotocol `a`'s bound reads**, each built from the strategy, with its budget a function of
+  the strategy's calls (`cost`) that bounds its calls (`FinderSpec`); none where the bound reads only `finder`. -/
+  finders : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    List (FinderSpec (play (families θ) θ F c) (cost θ F c))
   /-- each subprotocol's forger of the device's signature, applied to the strategy -/
   forger : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Game.Strategy (play (families θ) θ F c) → Hash.Assumptions.LmsForger
@@ -698,6 +722,11 @@ noncomputable def fileFinder (θ : ByteArray) (F : Array ByteArray) : Claims.Fin
 the registered one when they differ, a SHA-512 collision when the files passed the file check. -/
 noncomputable def publicFinder (θ : ByteArray) (F : Array ByteArray) : Claims.Finder :=
   namedFinder (V.publicDigest θ) F (V.registered θ)
+
+/-- **The SHA-512 premises at the other finders subprotocol `a`'s bound reads** (`finders`), each at its own budget at
+the strategy's calls (`finderCROf`); `True` where the bound reads only `finder`. -/
+def finderCR (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
+  finderCROf (V.finders a θ F c) σ
 
 /-- **`B^τ`'s collision premise, quantitative**: subprotocol `a`'s finder applied to the strategy outputs a SHA-512
 collision with probability at most the published bound at the strategy's SHA-512 calls (`ε_cr`). `ecr/sha-512` is asked

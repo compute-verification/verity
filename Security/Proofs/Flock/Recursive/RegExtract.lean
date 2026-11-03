@@ -7,7 +7,7 @@ import Proofs.Flock.Recursive.ValueBridge
 /-!
 # Recursion: gap 2 at the word the prover's runs open (the knowledge form)
 
-`RecursiveAuditC3`'s hidden statement is the word the transported prover's own runs open at R's level 0 against R's
+`RecursiveAuditHolo`'s hidden statement is the word the transported prover's own runs open at R's level 0 against R's
 cap at each draw (`Flock.Guarantees.regStmt`), not a registrant's (`note:41519fce`). No registrant's openings are taken,
 so a run that opens R's level 0 off a word (`RegClash`) is no collision by itself. It is one against another of the
 prover's runs at the same draw, the one whose opening defines the word at that position (`regWord`): two runs at one
@@ -156,7 +156,7 @@ theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT :
 /-- **`zk_sessions_recursive_fork_regV` at the typing `τv`**: everything at `τv`'s protocol
 (`holoInnerAtτ`, `regStmtτ`, `clashPickHL` at `holoAtτ`), the salts' level a free parameter `lv` (the audit reads it
 at `(holoAt st hp).rsch.sch.level₀`, which no typing changes), the held top's collision `TopColl` off the bridge as in
-`zk_sessions_recursive_fork_regV`, and the error `holoAt st hp`'s own (`innerAtLeavesL_regτ`). `RecursiveAuditC3`
+`zk_sessions_recursive_fork_regV`, and the error `holoAt st hp`'s own (`innerAtLeavesL_regτ`). `RecursiveAuditHolo`
 reads it at the registered typing `hp.τ`, which `_hbr`'s `τv` is wherever check 5 accepts the inner shape. -/
 theorem zk_sessions_recursive_fork_regVτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog))
