@@ -162,7 +162,8 @@
 # environment that sets one of its settings to another value is refused) holds the copy to its sums, runs at the served
 # node's tree (another only with FOLLOW_ANY_TREE=1, which its WINDOW-CIRCUIT line names, since it reads that tree's
 # window-circuit record), needs no row dir, vLLM venv, card or gpu-lease, and after V3c's audit composes the final record
-# (`record --node` the served node, so its composed_on names the host it composed on and served_node false) and the
+# (`record --node` the served node, so its composed_on names the host it composed on, served_node false, and that it read
+# a prover-side copy) and the
 # composite (`served_composite.sh`, SERVED_NODE the served node); its $OUT is published as every run's is.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
