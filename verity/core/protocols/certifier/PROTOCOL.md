@@ -538,9 +538,11 @@ for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream
   refuses
   (`test_a_request_admitted_ahead_of_an_earlier_arrival_is_refused`). The premise is the network certifier's numbering: the
   proxy forwards whole requests, one connection each, in the order the network certifier numbers them.
-- **Each request's prompt_len is its certified ingress record's: checked by the ingress tie, not here.** The advice's
+- **Each request's prompt_len is its certified ingress record's: checked by the scan, not here.** The advice's
   prompt_len must be the number of prompt fields in the request the network certifier certified on ingress. This proof
-  block reads egress only; `IoTieRequest` ("The ingress tie" below) reads the ingress cells. The ids' binding to
+  block reads egress only. The scan's ingress units (`ingress_scan`) read each request's prompt off the certified
+  ingress cells into the scan's state, which the period check holds to the compute audit's `SCAN_STATE`
+  (`NetworkCheck.Period`'s `stateTied`), so no check reads the advice's prompt lengths. The ids' binding to
   `c00.input/ids` is the ingress-ids tie's (`io_ids`, below), reading the Commit's input rows as this proof block reads
   its sampled rows.
 
@@ -567,18 +569,17 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
 3. read from the lane's carry-in (bytes left, prompt fields so far), the cells leave its carry-out, with no count
    past 2^32.
 
-- **The lanes** (`lanes`) are public in the named gap, as the egress map is. The verifier computes them from the
-  opened advice's prompt lengths, advice request i on connection order[i] + 1 (advice v1's order permutation; v0's
-  is the identity), and the network certifier's ingress release (`Release`: each connection's first bucket and its request
-  cells a bucket, the wiring's timing), which it takes in the clear until the compile slice's proof block exists. Each
-  lane is its connection's q and the carries `carries` gives before and after its cells in the bucket, so a connection's
-  lanes chain by construction from (0, 0) into its first bucket to (0, n) out of its `END`'s, and a link's verdicts hold
-  every request's prompt_len to its cells, whatever buckets it spans. Checked alone, a bucket accepts a carried
-  count with any amount added to both its carries (the phase-9 attack (b)); the bucket before holds the count, so the
-  chain refuses it. `lanes` refuses a release that isn't the network certifier's schedule (ordinals 1, 2, … admitted in order,
-  at most L live, at most R request cells a bucket, the `END` in the last) or isn't the advice's (one connection a
-  request, its cells its request's). A connection the network certifier fails stops without an `END`, so a link with one is
-  refused until the tie reads the `fails` record. At the target the lanes are under the advice's hiding root.
+- **The lanes** (`lanes`) are the unit's public input. Built from advice prompt lengths, advice request i on
+  connection order[i] + 1 (advice v1's order permutation; v0's is the identity), and the network certifier's ingress
+  release (`Release`: each connection's first bucket and its request cells a bucket), each lane is its connection's q
+  and the carries `carries` gives before and after its cells in the bucket, so a connection's lanes chain from (0, 0)
+  into its first bucket to (0, n) out of its `END`'s. Checked alone, a bucket accepts a carried count with any amount
+  added to both its carries (the phase-9 attack (b)); the bucket before holds the count, so the chain refuses it.
+  `lanes` refuses a release that isn't the network certifier's schedule (ordinals 1, 2, … admitted in order, at most L
+  live, at most R request cells a bucket, the `END` in the last) or isn't the advice's (one connection a request, its
+  cells its request's). Lanes the verifier computed would publish the advice's prompt lengths, so no verifier
+  computes them: the scan's ingress units carry each request's count in the scan's state instead ("Each request's
+  prompt_len" above), and IoTieRequest is the Definition the ingress-ids tie builds on.
 - **The ordinal is read.** Each cell's header carries its connection's ordinal and the lane names q, so a request
   cell on another connection's stream is refused, as the egress map refuses one. A client that sends its `END`
   after a `DATA` holding its request's last byte (only a request of exactly k·(B − 9) bytes can: 338 tokens at
@@ -592,35 +593,10 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   cell, whether it ends the request, the bytes left after it and its prompt fields. The step keeps (left, fields,
   over, padded, ok); the count's carry past 2^32 is kept, so a sum that wraps is refused. Public: the lanes, each
   (q, left, fields, left_out, fields_out). Witness: the row.
-- **The verdict** (`tie_service.IoTieVerdict`) is `IoTieVerdict(link, registrations, advice, accepted)`: the link,
-  its ingress windows' registrations (each one's `registration.digest`, in order), the advice's digest
-  (`tie_service.digest`) and one bit a registration, set when every bucket row of that sampling block is accepted. It
-  is built only from IoTieRequest proofs the verifier verified on its own lanes (`lanes` from that advice's prompt
-  lengths and order and the network certifier's release) and given only by the verifier's own tie source
-  (`tie_service.Ties`), which gives none on another link or another stream than its own. An accepted verdict on every
-  window says that connection order[i] + 1 is an id request of `prompt_lens[i]` prompt ids. The advice carries no
-  tie, and none the prover states or delivers is taken: the phase-7 attack stated the swapped split, and the phase-10
-  attack delivered a verdict built for the forged advice's digest, every window accepted.
-- **Through the proof system** (`tie_service.IngressTie`). A registration is one ingress sampling block, the
-  network certifier's salted root of its T bucket rows, held to the window's order, and T proof blocks, unit t bucket
-  row t. The unit is `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
-  (`io_request.circuit-check.json`), its witness row the bucket row itself, read off the network certifier's root by
-  the verifier's own registered read (`warden_rows.bucket_port`). The statement is a shared-row file every port of
-  which is one of the verifier's registered reads (C-Flock's `Registered.checkComplete`): `wit` at the network
-  certifier's root, and `pub` and `o0` at known content the verifier registers itself (`IngressTie.known`), each
-  unit's lanes (`io_request.lanes`, from the advice it holds and the network certifier's release, taken in the clear)
-  and the output word 1, under public salts, which hide nothing since both rows are public. The verifier of record
-  decides each window on the proof alone, each unit's `pub` row opened to its own lanes, and reports the advice's
-  digest. `IngressTie.tie` reads the verdict from the stream's outcomes of record
-  alone, on the link and the stream's registrations. Window w is accepted when its outcome is, decided on the proof
-  for the advice's digest. Every window is refused unless the stream registers exactly the advice's windows in order,
-  the release is the network certifier's schedule for the advice and puts `received`'s request cells in each window,
-  and the profile's framing is the network certifier's cut (`tie_service.framing`) with no own frame. A connection's
-  lanes chain from (0, 0) into its first bucket to (0, n) out of its `END`'s, so the units together hold each
-  request's count across the buckets it spans. A size class with no pinned digest has no accepted proof.
-  `tests/test_network_certifier_tie_service.py` holds the phase-9 attack's carried field count, its forged advice and
-  phase 6's split, refused through the verifier, on stand-in proofs (`tests/standin.py`), and
-  `benchmarks/network_traces/n2_tie_zk.py` proves them live, its `warden` class the warden path's tie.
+- **The scan's refusals.** The phase-6 split and the phase-9 attack's carried count, which the lanes' chain refused,
+  are other scan states: the scan reads each prompt off its slot's cells, so a split reads the swapped prompts and a
+  carried count leaves a state the scan's step doesn't output
+  (`tests/test_network_certifier_ingress_scan.py`).
 - **The first negative** is the phase-6 attack's split (`test_redteam_phase6_split_is_refused`). At B = 4,096, prompts
   of 400 and 16 tokens take 2 cells and 1, released one a bucket (r = 1). The forged advice swaps them, keeping the
   total; its lanes aren't the release's, and built anyway they are refused by the proof block, which reads 400 fields in
@@ -712,7 +688,7 @@ S + 1 reads a proof block, and recomputes no root and hashes no row.
 **What the map and the port must be.** For the advice's output k = (step, row, request, index), released in the window
 (`release[k] // T = w`):
 - q is order[`request`] + 1, its request's ingress ordinal on the wire under advice v1's order permutation, which
-  the proof block holds to the network certifier's stream ("The two ingress ties");
+  the proof block holds to the network certifier's stream ("The two ingress ties" above);
 - its cell is in bucket t = `release[k]` − w·T, at slot ρ·r + (`index` mod r), ρ its request's rank by stream among
   the bucket's live requests;
 - e = σ·P + `row`, with σ the place of `step` among the bucket's steps;
@@ -790,9 +766,8 @@ refuse each tamper of the cells, the map, the port and the routing.
 
 Still to build: a proof block proved on the network certifier's registered rows through `bucket_port` (the tests hold
 each bucket's row to the network certifier's registered row and its port to row t a proof block; no proof reads them
-yet), the port's real layout and registration (vLLM's Commit), the target's map registration and its range read, the
-ingress tie's view read under the advice's hiding root, and the real Commit's `c00.input/ids` rows that the ingress-ids
-tie (`io_ids`) reads.
+yet), the port's real layout and registration (vLLM's Commit), the target's map registration and its range read, and
+the real Commit's `c00.input/ids` rows that the ingress-ids tie (`io_ids`) reads.
 
 **Open for proofs.**
 - Hidden-position reads (frame and port) under protocol soundness. In v4 every read is at a public position
@@ -807,7 +782,7 @@ advice names, and each request's number in the advice is its arrival ordinal. Th
 and for responses of any length. What it doesn't establish:
 - zero knowledge for the advice: v4 reads the map and the steps in the clear from the opened advice, the named gap,
   which the target and the compile slice's proof block close;
-- the advice's prompt lengths against the ingress record, which is the ingress tie's (`IoTieRequest`);
+- the advice's prompt lengths against the ingress record, which is the scan's (`ingress_scan`);
 - the port's layout and the registration of its root (the Commit's);
 - anything about the text a client shows beyond the public tokenizer's decode.
 

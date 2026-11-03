@@ -430,7 +430,7 @@ def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_le
     assert SS.main(argv) == 0
     seen = dict(line.split("=", 1) for line in (tmp_path / "seen").read_text().splitlines())
     assert seen == {"CR_PATH": "warden", "CR_GATES": str(keep / RUN / "fetch.tar.gz"), "CR_MEM_GB": "96",
-                    "CR_N2_DRAW": "4", "CR_TIE_WINDOWS": "8", "CR_ENDPOINT": str(keep / RUN / "endpoint"),
+                    "CR_N2_DRAW": "4", "CR_ENDPOINT": str(keep / RUN / "endpoint"),
                     "CR_EOS_IDS": "256"}
     assert SS.main(["chain", "--run", RUN, "--keep", str(keep)]) == 2
     assert SS.main([*argv, "N2_DRAW=4"]) == 2

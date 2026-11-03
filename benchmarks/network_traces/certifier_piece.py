@@ -47,11 +47,11 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      reject (`rehearsed`).
   2. The window's requests are certified ones: each window request's user names one of the network certifier's certified
      requests (`warden_chain.io`), with the same prompt and streamed ids; else reject.
-  3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan)
+  3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2 and scan)
      on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
-     dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
-     take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
-     reject with its why.
+     dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 takes every
+     link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a reject with
+     its why.
   4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
@@ -135,7 +135,7 @@ SESSION = "session.json"
 #: endpoint's report (each Commit window's request, carried, step and output counts, its opening time and its advice's
 #: bits), of which only a padded count may be public, report.md and the report's other keys (the certified I/O's
 #: counts, the advice's bits as K's term), and the steps' summaries (the scan's admissions and response lengths, the
-#: tie's prompt lengths and releases, the warden's check of its witness).
+#: warden's check of its witness).
 PUBLIC = {"report/report.json": ("schema", "verdict", "path", "scope", "stubbed", "negatives_refused",
                                  "steps.*.verdict", "steps.*.eps_at_delta", "steps.*.in_the_clear"),
           "scan/answers.json": ("format", "delta", "registration", "windows")}
@@ -392,14 +392,12 @@ def endpoint_copy(serve_dir: Path, dest: Path) -> Path:
 
 
 def sized(windows: int, sets: list[str]) -> list[str]:
-    """N2's sample and the tie's execution phases for a run of ``windows`` execution phases: every one when they are at
-    most `served_session.chain`'s 8 (whose sample of 8 a shorter run refuses), unless a CR_K=V of ``sets`` names
-    them."""
+    """N2's sample for a run of ``windows`` execution phases: every one when they are at most `served_session.chain`'s
+    8 (whose sample of 8 a shorter run refuses), unless a CR_N2_DRAW=V of ``sets`` names it."""
     given = {kv.partition("=")[0] for kv in sets}
     if windows > 8:
         return sets
-    return [*(["CR_N2_DRAW="] if "CR_N2_DRAW" not in given else []),
-            *([f"CR_TIE_WINDOWS={windows}"] if "CR_TIE_WINDOWS" not in given else []), *sets]
+    return [*(["CR_N2_DRAW="] if "CR_N2_DRAW" not in given else []), *sets]
 
 
 def live(pid: int, pgid: int | None = None) -> bool:

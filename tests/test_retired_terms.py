@@ -101,8 +101,6 @@ ALLOWED: dict[str, str] = {
                                   "`Spec.digest` hashes it",
     "one proof unit per registration: the link-window": "a public item's reason in N2's Spec "
                                                         "(`certifier.service`): `Spec.digest` hashes it",
-    "T proof units per registration, unit t the link-window's bucket row t": "a public item's reason in the ingress tie's "
-                                                                             "Spec (`certifier.tie_service`): `Spec.digest` hashes it",
     '"proof-unit"': "the kind circuit-check's Boolean export records for a unit circuit (`boolean_export.Registry.type_of`)",
     "verity/proof-service/": "the stream's and outcome's record formats (`sampled_proofs.service.STREAM`, `OUTCOME`), "
                              "which their digests hash",

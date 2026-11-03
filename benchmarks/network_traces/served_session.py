@@ -70,8 +70,7 @@ w63k4, the window circuit's 4,32,4, at 5 egress cells), whose KI and KO then bou
   CR_GATES=KEEP/RUN/fetch.tar.gz), with
   the endpoint's report (``--endpoint``, ``endpoint``'s art), or a dry rehearsal's endpoint records (KEEP/RUN/endpoint
   by default) and the model's EOS ids (``--eos-ids``, the stand-in's ``--vocab``), N2's period drawn
-  on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
-  at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every proof block, or ``--draw K`` of them, on the
+  on the verifier's coins (CR_N2_DRAW 8) at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every proof block, or ``--draw K`` of them, on the
   verifier's own coins (``--coins verifier``, the default and the fallback) or on the gate's (``--coins gate``). It is
   refused unless the tree has the record's leak guard (``leak_guard.py``), which chain_record.sh runs on its
   way out, whatever the exit.
@@ -695,8 +694,7 @@ def chain(a: argparse.Namespace) -> int:
     if endpoint and Path(endpoint).is_dir() and any(Path(endpoint).rglob("advice_trace.jsonl")) and not a.eos_ids:
         raise Refused("--endpoint's records need --eos-ids, the model's EOS ids (the stand-in's is its --vocab)")
     env = dict(os.environ)
-    env.update({"CR_PATH": "warden", "CR_GATES": str(fetch), "CR_MEM_GB": "96", "CR_N2_DRAW": "8",
-                "CR_TIE_WINDOWS": "8"})
+    env.update({"CR_PATH": "warden", "CR_GATES": str(fetch), "CR_MEM_GB": "96", "CR_N2_DRAW": "8"})
     for kv in a.set:
         k, eq, v = kv.partition("=")
         if not (eq and k.startswith("CR_")):
