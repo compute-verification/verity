@@ -623,6 +623,20 @@ KBIG_BINDING = """def kbig():
 """
 
 
+def _words_tree(at: Path) -> Path:
+    """A tree of `WORDS`' bindings, each check's value saying whether its word's Boolean Definition is registered (`WORDED`)."""
+    root = _tree(at)
+    (root / "syn/words.py").write_text(WORDS.lstrip("\n"))
+    (root / "syn/wordmod.py").write_text(WORDMOD.lstrip("\n"))
+    _edit(root, "syn/catalog.py", "BINDINGS = [", WORDS_BINDINGS + "BINDINGS = [")
+    _bindings(root, '(("_scale2_roots",), scale2)', '(("_scale3_roots",), scale3)', '(("_wtop_roots",), wtop)',
+              '(("_wprim_roots",), wprim)', '(("_vtop_roots",), vtop)')
+    _edit(root, "syn/check.py", "def check_definition(", WORDED + "def check_definition(")
+    _edit(root, "syn/check.py", "evaluate(fn, 3, 0x0105)", "[evaluate(fn, 3, 0x0105), worded(fn.id)]")
+    _edit(root, "syn/check.py", '"gates": fn.gates', '"gates": getattr(fn, "gates", 1)')
+    return root
+
+
 @pytest.mark.slow
 def test_bindings_built_apart_check_the_reference_and_find_the_boolean_definitions_a_full_build_does(tmp_path):
     """Built apart, a reference two bindings bind at two statics is checked at the statics of the one `targets.reachable`
@@ -632,19 +646,7 @@ def test_bindings_built_apart_check_the_reference_and_find_the_boolean_definitio
     The records hold those Boolean Definitions, so a run from them finds them too."""
     from test_cache import _set_pin
 
-    trees = []
-    for name in ("t", "here"):
-        root = _tree(tmp_path / name)
-        (root / "syn/words.py").write_text(WORDS.lstrip("\n"))
-        (root / "syn/wordmod.py").write_text(WORDMOD.lstrip("\n"))
-        _edit(root, "syn/catalog.py", "BINDINGS = [", WORDS_BINDINGS + "BINDINGS = [")
-        _bindings(root, '(("_scale2_roots",), scale2)', '(("_scale3_roots",), scale3)', '(("_wtop_roots",), wtop)',
-                  '(("_wprim_roots",), wprim)', '(("_vtop_roots",), vtop)')
-        _edit(root, "syn/check.py", "def check_definition(", WORDED + "def check_definition(")
-        _edit(root, "syn/check.py", "evaluate(fn, 3, 0x0105)", "[evaluate(fn, 3, 0x0105), worded(fn.id)]")
-        _edit(root, "syn/check.py", '"gates": fn.gates', '"gates": getattr(fn, "gates", 1)')
-        trees.append(root)
-    root, here = trees
+    root, here = _words_tree(tmp_path / "t"), _words_tree(tmp_path / "here")
     whole = _run(here, FORKED.replace(", jobs=2, isolate=True, fork=True)", ")"))
     values = whole["values"]
     assert values["syn.scale"] == [[3 * 3 + 0x0105], False] and values["SynW_v1"][1] and values["SynV_v1"][1], values
