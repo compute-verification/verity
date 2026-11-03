@@ -525,8 +525,9 @@ def test_a_tie_pins_the_circuits_values_at_the_earlier_registrations_tables():
     """`tie_of`: a circuit whose program takes values (a served window's H1 tables, by their Commit names) is tied to the
     earlier registration W that registered them first: one-stage's ``log`` is W, each value's ``registered`` words are W's
     entry's, its ``outputs`` W's table of it under the prefix (`credit.window_table`) and its schema v2, and the audit pins
-    each at W's entry under the value's own name. With neither values nor W there's no tie; values without W or a prefix,
-    W without values, a value W registers other than once and a value that is no Commit table are refused."""
+    each at W's     entry under the value's own name. With neither values nor W there's no tie; values without W, W without values, a
+    value W registers other than once (with no prefix, by its own name: told to give H1's) and a value that is no Commit
+    table are refused."""
     rows = np.arange(4 * K // 2, dtype=np.uint16).reshape(4, K // 2)
     a, other, ids = (REG.Registered.commit("h1/program", v, r.tolist(), schema=REG.SCHEMA_V2).entry()
                      for v, r in ((f"h1/a/{K}@0", rows), (f"h1/a/{K}@1", rows), ("h1/ids@0", rows[:, :4])))
@@ -549,6 +550,48 @@ def test_a_tie_pins_the_circuits_values_at_the_earlier_registrations_tables():
             (named, w, "h1/", "is no Commit name")):
         with pytest.raises(ValueError, match=why):
             RA.tie_of(circuit, earlier, prefix)
+
+
+def test_a_tie_with_no_prefix_takes_pearls_values_by_their_own_names_in_32_bit_seg_rows():
+    """`tie_of` with no prefix ties a circuit cut at its linears, whose values are round s's call c's A rows and y
+    (``pearl-a/<s>/<c>``, ``pearl-y/<s>/<c>``: FP32 words in ``row-seg/v1`` rows, `interface.Registered.formats`), to
+    Pearl+'s window record W, which registers each under the value's own name: its ``registered`` words are W's entry's
+    (K for A, N for y), its ``outputs`` W's entry of that name, its schema ``row-seg/v1`` and its pin W's 32-bit entry.
+    A value W doesn't register or registers twice is refused, and so is a prefix (Pearl+'s names are no Commit table)."""
+    rows = {"pearl-a/0/0": np.arange(16 * K, dtype=np.uint32).reshape(16, K),
+            "pearl-y/0/0": np.arange(5 * 2 * K, dtype=np.uint32).reshape(5, 2 * K)}
+    a, y = (REG.Registered.commit("pearl/program", v, r.tolist(), word_bits=32, schema=REG.SCHEMA_SEG).entry()
+            for v, r in rows.items())
+    w = {"format": R.FORMAT_V2, "registered": [a, y], "previous": None}
+    seg = {"row_schema": REG.SCHEMA_SEG, "word_bits": 32}
+    doc = {"registered": {"params": {v: 2 * r.size for v, r in rows.items()}, "tables": [], "reads": [], "roots": [],
+                          "openings": [], "values": list(rows), "formats": {v: seg for v in rows}}}
+    tied, pins = RA.tie_of(doc, w, None)
+    d = R.digest(w)
+    assert tied == {"log": [w], "registered": {"pearl-a/0/0": K, "pearl-y/0/0": 2 * K},
+                    "outputs": {v: {"record": d, "value": v} for v in rows}, "schemas": {v: REG.SCHEMA_SEG for v in rows}}
+    assert pins == {"pearl-a/0/0": a, "pearl-y/0/0": y} and a[REG.WIDTH_KEY] == y[REG.WIDTH_KEY] == 32
+    for earlier, prefix, why in (({**w, "registered": [a]}, None, "'pearl-y/0/0' as 'pearl-y/0/0' 0 times"),
+                                 ({**w, "registered": [a, y, a]}, None, "'pearl-a/0/0' 2 times"),
+                                 (w, "h1/", "is no Commit name")):
+        with pytest.raises(ValueError, match=why):
+            RA.tie_of(doc, earlier, prefix)
+
+
+def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
+    """The summary's ``tie`` names W's digest and the values tied to it. Tied to Pearl+'s W (its window names a Pearl-C
+    scheme) it also says what holds W's roots to the credited ones, Pearl+'s verdict, which reads the prover's salt key and
+    opens drawn rows in the clear; tied to H1's W, whose window names none, it doesn't."""
+    entry = {"value": "pearl-a/0/0", "root": "00" * 64, "leaves": 16, "words": K, "domain": "00" * 32, REG.WIDTH_KEY: 32}
+    outputs = {"pearl-a/0/0": {"record": "", "value": "pearl-a/0/0"}}
+    pearl = {"format": R.FORMAT_V2, "window": {"kind": "served", "entry": "pouw:pearl-c-h100-v1-h3",
+                                               "scheme": "pearl-c-h100-v1-h3", "salt": "00" * 64},
+             "registered": [entry], "previous": None}
+    h1 = {**pearl, "window": {"kind": "served", "entry": "toy-window", "open_root": "00" * 64, "refused": []}}
+    got = RA.tie_row({"log": [pearl], "outputs": outputs})
+    assert got == {"record": R.digest(pearl), "values": ["pearl-a/0/0"], "credited_by": RA.PEARL_CREDIT}
+    assert "development verifier" in got["credited_by"] and "salt key" in got["credited_by"]
+    assert RA.tie_row({"log": [h1], "outputs": outputs}) == {"record": R.digest(h1), "values": ["pearl-a/0/0"]}
 
 
 @dataclass(frozen=True)

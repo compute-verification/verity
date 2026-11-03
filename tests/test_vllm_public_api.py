@@ -64,15 +64,24 @@ PUBLIC = {
                                       "its record R and their log (W_FILE, R_FILE, LOG)",
     "verity_vllm.protocols.pouw.h1.commit": "I1: a served H1 window's Commit: its registration W (registration), the audited "
                                             "window's tables rebuilt as W's (reuse, reused) and the record H1 names (named)",
+    "verity_vllm.protocols.pouw.pearl_c.window": "I1: Pearl+'s window record W over a run's retained timed rounds (record, write), "
+                                                 "the names it registers each call's A rows and y under (a_value, y_value), "
+                                                 "which verify_run.tie and the one-stage audit read, and the audited "
+                                                 "window's values rebuilt as W's (reuse)",
     "verity_vllm.protocols.pouw.h1.words": "I1: the words H1 commits a call's rows and a step's input ids as (chunk_words, "
                                            "ids_words)",
     "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
                                            "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
-    "verity_vllm.protocols.pouw.pearl_c.served_y": "I1: Pearl+'s committed served y: each call's y rows, its domain and "
-                                                   "tree (y_domain, commit_y, retain_y), which verify_run opens and checks",
+    "verity_vllm.protocols.pouw.h1.answers": "I1: the verifier of record's answers on a window's statements, each run once "
+                                             "and shared by key by the steps that judge them (Answers), the drawn runs "
+                                             "filled J at a time (window_runs, fill, jobs), which drawn.py fill and "
+                                             "pouw_piece.py period read",
     "verity_vllm.protocols.pouw.h1.receipts": "I1: served H1's receipt producer, the zy receipts serve-openai's "
                                               "--h1-receipts registers (Receipts) and its noise kernel, which PoUW's "
                                               "benchmarks time and gate",
+    "verity_vllm.protocols.pouw.pearl_c.served_y": "I1: Pearl+'s served y as a retained pass commits it, a call's real rows "
+                                                   "under its domain (y_domain, commit_y, retain_y) and on its device "
+                                                   "(DeviceTrees), which verify_run opens on each drawn tile",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.

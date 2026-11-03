@@ -266,12 +266,13 @@ def volunteer(path: Path, coins: CoinCommitment, jobs: int, device: Path | None 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("manifest", type=Path)
-    ap.add_argument("--coins", type=Path, required=True, help="the epoch's published coin commitment (coins.json)")
+    ap.add_argument("--coins", type=Path, required=True,
+                    help="the epoch's published coin commitment (coins.json, a live session's or an in-process challenger's)")
     ap.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     ap.add_argument("--device", type=Path, help="debit_sm90.cubin: the words' counts on this machine's H100 or H200")
     ap.add_argument("--cross-check", type=int, default=CROSS_CHECK, help="with --device, replay every Nth tile on the CPU too")
     a = ap.parse_args(argv)
-    out = volunteer(a.manifest, CoinCommitment.from_json(json.loads(a.coins.read_text())), a.jobs, a.device, a.cross_check)
+    out = volunteer(a.manifest, VR.epoch_coins(a.coins), a.jobs, a.device, a.cross_check)
     print(out["line"], flush=True)
     return 0 if out["ok"] else 1
 

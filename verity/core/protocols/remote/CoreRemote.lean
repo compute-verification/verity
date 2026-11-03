@@ -4,12 +4,13 @@ subprotocols are the inference-only policy (`NciCheck.Protocol.protocol`, `verit
 circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the declared circuit
 and the registered information and so needs no hardware at the site), work by proof of useful work over the period
 (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's windows credited all or nothing), onsite's work
-subprotocol, and integrity by sampled proofs' one-stage audit (`SampledProofs.OneStage.protocol`,
-`verity/sampled-proofs/one-stage/v1`; v2, the audit on the proofs themselves, is not remote's until its check reads the
-challenger's signed coins). `Core.Composition.tiedSameB` composes them on the caller's blobs: every subprotocol accepts
-or remote doesn't, and any one's rejection rejects remote whatever the others answer. The policy's commitment and the
-one-stage audit's are the run's record, and both must commit to the same one; every window of the period must name
-that record as its Commit record (`windows`). Two records reject remote whatever the subprotocols answer.
+subprotocol, and integrity by sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the
+form its params name: one-stage v2's audit on the proofs themselves, or the recursive audit, V*'s compiled check run on
+the recursive session's parts, each on the blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, is
+refused). `Core.Composition.tiedSameB` composes them on the caller's blobs: every
+subprotocol accepts or remote doesn't, and any one's rejection rejects remote whatever the others answer. The policy's
+commitment and sampled proofs' are the run's record, and both must commit to the same one; every window of the period
+must name that record as its Commit record (`windows`). Two records reject remote whatever the subprotocols answer.
 
 A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
 fresh-input bits) in the clear. Remote composes it for the run of record of 28 Oct only, as an exception to
@@ -24,6 +25,7 @@ import NciCheck.Protocol
 import PouwCheck.Period
 import SampledProofs.OneStage
 import SampledProofs.OneStageZk
+import VStarRecursive.Sampled
 
 namespace Core.Remote
 
@@ -31,10 +33,10 @@ open Composition
 
 /-- Remote's subprotocols, in the order of their ids. -/
 def components : List BlobProtocol :=
-  [NciCheck.Protocol.protocol, PouwCheck.Period.protocol, SampledProofs.OneStage.protocol]
+  [NciCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol]
 
-/-- The subprotocols that must commit to one record: the policy and the one-stage audit. -/
-def tied : List String := [NciCheck.Protocol.protocolId, SampledProofs.OneStage.protocol.id]
+/-- The subprotocols that must commit to one record: the policy and sampled proofs. -/
+def tied : List String := [NciCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
 
 /-- The record the policy's case commits to: its commitment's digest, as the policy decodes it. -/
 def policyRecord (k : Case) : Option (List ByteArray) :=
@@ -66,7 +68,7 @@ private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 
 #guard orderedB components
 #guard components.map (·.id) ==
-  ["verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/one-stage/v1"]
+  ["verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"]
 #guard tied.all fun s => (components.map (·.id)).contains s
 #guard windows.names.all fun n => (components.map (·.id)).contains n.1
 
@@ -76,15 +78,19 @@ private def allRefused : Answer := answer (components.map refused)
 #guard allRefused.published.isNone && allRefused.profile.isNone
 #guard allRefused.reason.map (·.startsWith "verity/inference-only/v0 reject: params: ") == some true
 #guard allRefused.reason.map (contains · "; verity/pouw/period/v1 reject: params: ") == some true
-#guard allRefused.reason.map (contains · "; verity/sampled-proofs/one-stage/v1 reject: params: ") == some true
-#guard (answer [refused PouwCheck.Period.protocol, refused SampledProofs.OneStage.protocol]).reason ==
+#guard allRefused.reason.map (contains · "; verity/sampled-proofs/v1 reject: params: ") == some true
+#guard (answer [refused PouwCheck.Period.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/inference-only/v0 is missing"
 #guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.Period.protocol]).reason ==
-  some "params: verity/sampled-proofs/one-stage/v1 is missing"
--- PoUW's window check is not remote's work subprotocol, and v2's audit is not its integrity subprotocol
+  some "params: verity/sampled-proofs/v1 is missing"
+-- PoUW's window check is not remote's work subprotocol, and neither v1's nor v2's one-stage audit alone is its
+-- integrity subprotocol
 #guard (answer [refused NciCheck.Protocol.protocol, refusedAs "verity/pouw/v1",
-    refused SampledProofs.OneStage.protocol]).reason ==
+    refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/pouw/v1 is not a component of this composition"
+#guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
+    refused SampledProofs.OneStage.protocol]).reason ==
+  some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
 #guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
     refused SampledProofs.OneStageZk.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v2 is not a component of this composition"
@@ -94,24 +100,25 @@ private def record (n : Nat) : String := s!"\{\"format\":\"verity/registration/v
 
 private def committing (P : BlobProtocol) (r : String) : Case := { refused P with commitment := r.toUTF8 }
 
-private def recordsOf (policy period audit : String) : Answer :=
+private def recordsOf (policy period sampled : String) : Answer :=
   answer [committing NciCheck.Protocol.protocol policy, committing PouwCheck.Period.protocol period,
-    committing SampledProofs.OneStage.protocol audit]
+    committing VStar.Recursive.Sampled.protocol sampled]
 
--- the policy and the one-stage audit on one record: the tie holds, and the verdict is the subprotocols' (each refuses
--- its params)
+-- the policy and sampled proofs on one record: the tie holds, and the verdict is the subprotocols' (each refuses its
+-- params)
 #guard (recordsOf (record 0) "[]" (record 0)).reason.map
   (·.startsWith "verity/inference-only/v0 reject: params: ") == some true
--- the policy's record is not the one-stage audit's: remote rejects on the tie, whatever the subprotocols answer
+-- the policy's record is not sampled proofs': remote rejects on the tie, whatever the subprotocols answer
 #guard (recordsOf (record 1) "[]" (record 0)).verdict == .reject
 #guard (recordsOf (record 1) "[]" (record 0)).published.isNone
 #guard (recordsOf (record 1) "[]" (record 0)).reason.map
   (·.startsWith "record: verity/inference-only/v0 committed ") == some true
 #guard (recordsOf (record 1) "[]" (record 0)).reason.map
-  (contains · ", verity/sampled-proofs/one-stage/v1 committed ") == some true
+  (contains · ", verity/sampled-proofs/v1 committed ") == some true
+#guard !((recordsOf (record 1) "[]" (record 0)).reason.map (contains · "reject: params")).getD true
 
--- a period's windows name records by their Commit records' digests, which are the policy's and the one-stage audit's
--- digests of one record; a window on another record is a stray
+-- a period's windows name records by their Commit records' digests, which are the policy's and sampled proofs' digests
+-- of one record; a window on another record is a stray
 private def windowOn (r : String) : String := s!"\{\"commit\":\"{Flock.hexOf r.toUTF8}\"}"
 private def periodOn (rs : List String) : Case :=
   { refused PouwCheck.Period.protocol with
@@ -121,8 +128,8 @@ private def strayOf (policy : String) (rs : List String) : Option String :=
 #guard (windowRecords (periodOn [record 0, record 0])).map (·.length) == some 2
 #guard windowRecords (periodOn [record 0]) == policyRecord (committing NciCheck.Protocol.protocol (record 0))
 #guard policyRecord (committing NciCheck.Protocol.protocol (record 0)) ==
-  (SampledProofs.OneStage.protocol.commitment (record 0).toUTF8).toOption.map
-    fun c => [SampledProofs.OneStage.protocol.digest c]
+  (VStar.Recursive.Sampled.protocol.commitment (record 0).toUTF8).toOption.map
+    fun c => [VStar.Recursive.Sampled.protocol.digest c]
 #guard strayOf (record 0) [record 0, record 0] == none
 -- a window on another record
 #guard (strayOf (record 0) [record 0, record 1]).map (·.startsWith
