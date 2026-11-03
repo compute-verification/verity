@@ -22,7 +22,7 @@ of work, its factors explicit, and it reads the upper bounds A1 gives, never bes
   every block;
 * **the token kind's cap from A1** (`TokenCap`): under A1 at a family `𝒲` of witness blocks, an inference block holds
   at most `cap` gates of a set `X` of token gates, for any `cap` that bounds the token work within A1's budget
-  (`TokenCapAt`): a block with update bits `u_I` whose work on its tokens begins at the entries `e_T` holds at most the
+  (`TokenCapAt`): a block with shared bits `u_I` whose work on its tokens begins at the entries `e_T` holds at most the
   token work reachable from them, and `u_I + Σ_T a_T(e_T) ≤ k`, at the values `𝒲` sets. Its clean form
   (`TokenCapClean`): with at most `r(ν)` gates of token work a bit of state, `cap = max_ν (k - ν) r(ν)`, the bound
   `(k - u) max (W / a)`;

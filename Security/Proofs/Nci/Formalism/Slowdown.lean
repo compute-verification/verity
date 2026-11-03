@@ -15,7 +15,7 @@ Each lower bound `X ≤ ρ` is proved as `X ≤ m c / |C|` for a partition `P` i
    it, so `|B_K| ≤ m cap_K`, which puts the kind's bound at most `m c / |C|` (`kindBound_le`): a cap a block gives a
    partition-level bound (`partitionBound_kindBound`), and a kind with a partition-level bound gives it at `P`.
 2. **The token kind's cap.** By A1 an inference block `I` reads `u_I + Σ_T a_T(e_T(I)) ≤ |in(I) \ θ| ≤ k`, summed over
-   the tokens it works on, so those tokens, its entry profile `e_T(I)` and its update bits `u_I` are within A1's budget,
+   the tokens it works on, so those tokens, its entry profile `e_T(I)` and its shared bits `u_I` are within A1's budget,
    where the cap bounds `Σ_T W_T(e_T(I), u_I)`. `X` lies in the token blocks, so `|I ∩ X| ≤ Σ_T |I ∩ T ∩ X|` over the
    same tokens (`card_inter_le_sum_worksOn`), and each term is at most `W_T(e_T(I), u_I)`, the most a block entering `T`
    there holds (`card_le_entryWork`). The clean form: `Σ_T W_T(f_T, ν) ≤ r(ν) Σ_T a_T(f_T) ≤ r(ν) (k - ν)`.
@@ -128,10 +128,10 @@ theorem card_inter_le_sum_worksOn (A : Annotation d L) {X : Finset (Fin d.D.N)} 
   exact card_inter_le_sum A hX I
 
 /-- An inference block holds at most `W_T(e_T(I), u_I)` gates of `X` in `T`, the most any block entering `T` where it
-does with as many update bits holds. -/
+does with as many shared bits holds. -/
 theorem card_le_entryWork (A : Annotation d L) {c k : ℕ} {E : Type} (e : Finset (Fin d.D.N) → L → E)
     (𝒲 : Finset (Finset (Fin d.D.N))) (X : Finset (Fin d.D.N)) {I : Finset (Fin d.D.N)} (hI : InferenceBlock d c k I)
-    (T : L) : (I ∩ A.tokens.holds T ∩ X).card ≤ A.entryWork c k e 𝒲 X T (e I T) (A.blockUpdate e 𝒲 I) := by
+    (T : L) : (I ∩ A.tokens.holds T ∩ X).card ≤ A.entryWork c k e 𝒲 X T (e I T) (A.blockShared e 𝒲 I) := by
   classical
   unfold Annotation.entryWork
   refine le_sup (f := fun I => (I ∩ A.tokens.holds T ∩ X).card) ?_
@@ -147,12 +147,12 @@ theorem Counting : Guarantees.Counting := by
 theorem TokenCap : Guarantees.TokenCap := by
   intro d L _ A c k E e 𝒲 X cap hcut hcap I hI
   obtain ⟨hX, hW⟩ := hcap
-  have hbud : A.blockUpdate e 𝒲 I + ∑ T ∈ A.worksOn I, A.stateAt e 𝒲 T (e I T) ≤ k := (hcut I hI).trans hI.2.2
+  have hbud : A.blockShared e 𝒲 I + ∑ T ∈ A.worksOn I, A.stateAt e 𝒲 T (e I T) ≤ k := (hcut I hI).trans hI.2.2
   calc ((I ∩ X).card : ℝ≥0) ≤ ∑ T ∈ A.worksOn I, ((I ∩ A.tokens.holds T ∩ X).card : ℝ≥0) := by
         exact_mod_cast card_inter_le_sum_worksOn A hX I
-    _ ≤ ∑ T ∈ A.worksOn I, (A.entryWork c k e 𝒲 X T (e I T) (A.blockUpdate e 𝒲 I) : ℝ≥0) :=
+    _ ≤ ∑ T ∈ A.worksOn I, (A.entryWork c k e 𝒲 X T (e I T) (A.blockShared e 𝒲 I) : ℝ≥0) :=
         sum_le_sum fun T _ => by exact_mod_cast card_le_entryWork A e 𝒲 X hI T
-    _ ≤ cap := hW (A.worksOn I) (e I) (A.blockUpdate e 𝒲 I) hbud
+    _ ≤ cap := hW (A.worksOn I) (e I) (A.blockShared e 𝒲 I) hbud
 
 theorem TokenCapClean : Guarantees.TokenCapClean := by
   intro d L _ A c k E e 𝒲 X r M hw hpeak
