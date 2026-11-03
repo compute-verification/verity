@@ -170,6 +170,29 @@
    },
    "art": "art:b46133651ca97e261eb8cc99eeea3a5c1cd171c0192684599f815b3627fb36e8",
    "path": "starts"
+  },
+  "l16-t20": {
+   "digest": "016abe0cf79cda8726e38500eb9eed4957a247004d34212270aec9bde8cf6157",
+   "files": {
+    "start.json": "236e3afe66e4af55cd023538d754eda01eb3e723608d4f057a6427d6517e4cf3",
+    "theta.safetensors": "8638929014bf768ddb5980fc3dfc07e41ccdebc827091bb870b183b4f2db6b38"
+   },
+   "bytes": 953338279,
+   "shape": {
+    "family": "lf",
+    "d_model": 1024,
+    "n_layer": 16,
+    "vocab": 32000,
+    "ctx": 1024,
+    "tokenizer": "bpe32k",
+    "parameters": 238322688,
+    "tokens": 4111073280,
+    "tokens_per_param": 17.25,
+    "forward_macs_per_token": 272054272.0,
+    "c0_macs": 3586025215913033655
+   },
+   "art": "art:637a79c6a46d3c9d7bd5b0a8673d6573463ce23356542f5cc1a161c1be5954da",
+   "path": "starts"
   }
  },
  "exported_by": "r20261102-095551-8f54"
