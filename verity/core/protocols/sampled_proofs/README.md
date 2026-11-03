@@ -8,15 +8,14 @@ probability δ, at most so many proof blocks are incorrect, a proof block being 
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
-Sampled proofs is a subprotocol of both composite protocols. The remote protocol (`verity/remote/v0`,
-`verity/core/protocols/remote/`) composes it (`verity/sampled-proofs/v1`) with PoUW's period (`verity/pouw/period/v1`)
-and the inference-only policy, and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols.
-In each, the composite's verifier runs `VStar.Recursive.Sampled`'s Lean check as a component, in the form its params
-name: the audit on the proofs (one-stage v2, `verity/sampled-proofs/one-stage/v2`) or the recursive audit
-(`verity/sampled-proofs/recursive/v1`, V*'s compiled check, which ends in the one-stage audit's live check on its
-verdict of record). One-stage v1 (`verity/sampled-proofs/one-stage/v1`), whose verdicts are the evidence's, is refused
-by name: a one-stage form whose params or evidence name no `proofs` is v1's (`VStar.Recursive.Sampled.V1_REFUSED`). The
-composite accepts only when every component accepts.
+Sampled proofs (`verity/sampled-proofs/v1`) is a subprotocol of both composite protocols: remote (`verity/remote/v0`,
+`verity/core/protocols/remote/`) composes it with PoUW's period (`verity/pouw/period/v1`) and the inference-only
+policy, and onsite (`verity/core/protocols/onsite/`) with the other subprotocols. Each composite's verifier runs
+`VStar.Recursive.Sampled`'s Lean check in the form its params name: one-stage v2 (`verity/sampled-proofs/one-stage/v2`,
+the audit on the proofs) or the recursive audit (`verity/sampled-proofs/recursive/v1`, V*'s compiled check, which ends in
+the one-stage audit's live check on its verdict of record). One-stage v1, whose verdicts are the evidence's, is refused
+by name (`V1_REFUSED`: a one-stage form whose params or evidence name no `proofs`). The composite accepts only when
+every component accepts.
 
 ## Guarantee and assumptions
 
@@ -36,9 +35,9 @@ over the statement circuit. It rests on these named assumptions:
 - `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
   (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
 
-In the one-stage form the verdicts are the component's own run of `flock-verify verify --zk`'s one-stage path on the
-sessions' files, which come in as blobs (under "Where things are"), so a composite accepts in that form only where that
-run accepts. No Lean statement yet carries a composite's acceptance to `SampledKSLiveV3`'s event.
+In the one-stage form, v2's verdicts are its own run of `flock-verify verify --zk` on the sessions' files, which come
+in as blobs (under "Where things are"), so a composite accepts there only where that run accepts. No Lean statement yet
+carries a composite's acceptance to `SampledKSLiveV3`'s event.
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
 before any coin. In the remote protocol the coins come from the auditor's challenger, under three Lean premises,
@@ -147,7 +146,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds
   `proved_units` to what the session proved, and hands its verdict to v1's `checkAt` at those coins.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
-  to `verify`'s.
+  to `verify`'s. Onsite and remote read v2 as `VStar.Recursive.Sampled`'s one-stage form, and refuse v1.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
