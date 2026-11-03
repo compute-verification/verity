@@ -15,7 +15,7 @@ from verity.core.protocols.pouw.protocol import Matmul
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.serving import Schedule, SchemeId
 
-from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _write, _zeros, write_manifest
+from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _write, _zeros, joined, write_manifest
 from verity_vllm.protocols.pouw.pearl_c.manifest import MANIFEST_SCHEMA, session_head
 
 
@@ -27,6 +27,7 @@ class _Pass:
     flag_rows: int = 0               # rows of the pass's screen flags so far
     records: list[PW.UnitRecord] = field(default_factory=list)
     files: list[dict] = field(default_factory=list)
+    writes: list[Any] = field(default_factory=list)   # its files' writes still behind its calls (`write_behind`)
     tiles: int = 0
     poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
     stepped: bool = False            # begun by an engine step's end (`PearlCDeviceRun.end_pass`'s ``step``)
@@ -91,6 +92,7 @@ class PassEnds:
                 self._ended(out, roots_a, _bytes(tree[-nb:]), flags.tolist(), units, count)
                 if cur.retain is not None:
                     out["manifest"] = str(self._write_retained(cur, epoch, roots_a, tree, count))
+        joined(cur.writes)
         self.details["passes"].append(out)
         return out
 
@@ -110,6 +112,7 @@ class PassEnds:
 
     def _write_retained(self, cur: _Pass, epoch: Epoch, roots_a: bytes, tree: Any, count: int) -> Path:
         import torch
+        joined(cur.writes)
         d = cur.retain
         wd = d / "weights"
         wd.mkdir(parents=True, exist_ok=True)

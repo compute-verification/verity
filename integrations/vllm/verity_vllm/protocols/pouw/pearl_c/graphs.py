@@ -72,7 +72,7 @@ from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 
 from verity_vllm.protocols.pouw.pearl_c.passes import call_index
-from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _event, _Lane, _write, _zeros, torch_uint8
+from verity_vllm.protocols.pouw.pearl_c.host import _event, _Lane, _zeros, torch_uint8, write_behind
 from verity_vllm.protocols.pouw.pearl_c.screen import excluded, scatter_into
 
 #: with ``graphs``, calls of at most this many rows (decode's) replay their steps as one CUDA graph; above it the launches are
@@ -229,15 +229,16 @@ class GraphCalls:
         return sh.xa[:sh.m16], sh.buf("tree_a")[:pipe.size["tree_a"]]
 
     def _retained(self, cur: Any, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any) -> None:
-        """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree)."""
+        """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree),
+        written behind the call (`write_behind`, joined by the pass's end)."""
         import torch
         cur.records.append(PW.UnitRecord(mm, m, mm.shape.k, excluded(flags[:, 0].bool(), flags[:, 1].bool(), xa[:m]),
                                          self.weights[mm.weight].excluded))
         d = cur.retain / "calls"
         d.mkdir(parents=True, exist_ok=True)
-        rows = _bytes(xa.to(torch.bfloat16).view(torch.uint8))
-        cur.files.append({"rows": _write(d / f"{mm.index}.rows.bf16", rows, digest=False),
-                          "tree": _write(d / f"{mm.index}.tree", _bytes(tree))})
+        rows, tree = write_behind(((d / f"{mm.index}.rows.bf16", xa.to(torch.bfloat16).view(torch.uint8), False),
+                                   (d / f"{mm.index}.tree", tree, True)), cur.writes)
+        cur.files.append({"rows": rows, "tree": tree})
 
     def whole_key(self, retained: bool | None = None) -> tuple | None:
         """What a forward captured whole depends on (hashing, omitted steps, schedule, with hashing whether its pass is

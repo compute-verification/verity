@@ -21,6 +21,7 @@ from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
 from verity.core.protocols.pouw.protocol import Matmul, Shape  # noqa: E402
 from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
 from verity_vllm.protocols.pouw.pearl_c import grouped as PG  # noqa: E402
+from verity_vllm.protocols.pouw.pearl_c.host import joined  # noqa: E402
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
 SCHEME = "pearl-c-h100-v1-h3"
@@ -304,6 +305,8 @@ def test_the_vllm_call_commits_each_unit_as_its_call_alone(tmp_path, schedule):
         sh = alone.shapes[(u.m16, n, k)]
         assert meta[G.REC * j + G.KEYS_AT:G.REC * j + G.KEYS_AT + G.KEY_BYTES] == PPD._bytes(sh.keys[:G.KEY_BYTES]), j
     a, b = run.cur, alone.cur
+    for p in (a, b):
+        joined(p.writes)                                      # the files are written behind the calls: the pass's end joins them
     assert a.matmuls == b.matmuls == [Matmul(j, Shape(u.m16, k, n), ws[u.pos]) for j, u in enumerate(us)]
     assert (a.tiles, a.flag_rows) == (b.tiles, b.flag_rows) == (sum(u.tiles for u in us), sum(counts))
     assert a.records == b.records and [f["rows"]["bytes"] for f in a.files] == [f["rows"]["bytes"] for f in b.files]

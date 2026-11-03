@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import ctypes
+import hashlib
 import importlib.util
 import json
 import math
 import random
 import shutil
 import sys
+import threading
 import types
 from fractions import Fraction
 from pathlib import Path
@@ -52,6 +54,7 @@ from verity.core.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.pouw.serving import SchemeId
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity_vllm.protocols.pouw.pearl_c import host as PH
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
@@ -344,6 +347,51 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
     assert {w: v["root"] for w, v in man["weights"].items()} == {str(w): r.hex() for w, r in roots.items()}
     assert (tmp_path / man["matmuls"][0]["rows"]["path"]).stat().st_size == 2 * 32 * 1024
     assert (tmp_path / man["weights"]["0"]["rows"]["path"]).stat().st_size == 2 * 256 * 1024
+
+
+def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_them(device_run, tmp_path, monkeypatch,
+                                                                                    request):
+    """`host.write_behind`: when a retained call returns, its entries name its files and sizes and its bytes are a copy of
+    their own, which the call's buffers no longer reach; the files are written behind it (here only once the buffers have
+    changed), each digest landing in its entry, and the pass's end joins them before its manifest names them.  A write
+    that fails fails the pass's end, which then writes no manifest."""
+    make, _, weights, *_ = device_run
+    gate, write = threading.Event(), PH._write_host
+    request.addfinalizer(gate.set)
+
+    def gated(*a):
+        gate.wait()
+        write(*a)
+    monkeypatch.setattr(PH, "_write_host", gated)
+    run = make()
+    run.begin(retain=str(tmp_path / "ok"))
+    x = torch.randn(32, 1024).to(torch.bfloat16)
+    run.gemm(0, x, weights[0], None)
+    (sh,) = run.shapes.values()
+    index = run.cur.matmuls[0].index
+    (f,) = run.cur.files
+    assert f == {"rows": {"path": f"calls/{index}.rows.bf16", "bytes": 2 * 32 * 1024},
+                 "tree": {"path": f"calls/{index}.tree", "bytes": f["tree"]["bytes"]}}
+    assert len(run.cur.writes) == 2 and not (tmp_path / "ok" / f["rows"]["path"]).exists()
+    with torch.inference_mode():                              # the call's buffers are made as vLLM's calls make them
+        sh.xa.fill_(7.0)
+        sh.buf("tree_a").fill_(7)
+    gate.set()
+    man = json.loads(Path(run.end()["manifest"]).read_text())
+    (u,) = man["matmuls"]
+    assert run.details["passes"][-1]["manifest"] and not run.cur.writes
+    assert (tmp_path / "ok" / u["rows"]["path"]).read_bytes() == x.view(torch.uint8).numpy().tobytes()
+    tree = (tmp_path / "ok" / u["tree"]["path"]).read_bytes()
+    assert u["tree"]["sha256"] == hashlib.sha256(tree).hexdigest() and tree != bytes([7]) * len(tree)
+
+    def fails(path, *_):
+        raise OSError(f"no space left for {path.name}")
+    monkeypatch.setattr(PH, "_write_host", fails)
+    run.begin(retain=str(tmp_path / "full"))
+    run.gemm(0, x, weights[0], None)
+    with pytest.raises(OSError, match="no space left"):
+        run.end()
+    assert not (tmp_path / "full" / "manifest.json").exists() and not run.cur.writes
 
 
 def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(device_run, tmp_path):

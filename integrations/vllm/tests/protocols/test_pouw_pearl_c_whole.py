@@ -21,6 +21,7 @@ from verity_vllm.protocols.linear.api import Arm, PassSpec, Stack
 from verity_vllm.protocols.pouw.pearl_c import passes as PP
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import graphs as PG
+from verity_vllm.protocols.pouw.pearl_c.host import joined
 from verity_vllm.protocols.pouw.pearl_c.whole import VLLM, WholeStep
 
 NONE, FULL = "NONE", "FULL"
@@ -491,6 +492,7 @@ def test_after_a_retained_replay_each_call_keeps_its_stage_and_flags_as_a_call_m
         want.append(PPD.PW.UnitRecord(mm, 32, mm.shape.k, ex, run.weights[w].excluded))
     assert run.cur.records == want
     assert [f["tree"]["path"] for f in run.cur.files] == ["calls/0.tree", "calls/1.tree"]
+    joined(run.cur.writes)                                    # the files are written behind the calls: the pass's end joins them
     assert (tmp_path / "calls/1.tree").read_bytes() == bytes([3]) * 64
     assert (tmp_path / "calls/0.rows.bf16").read_bytes() == torch.full((32, 4), 2.0).to(torch.bfloat16).view(torch.uint8).numpy().tobytes()
     run.cur = PPD._Pass(None)
@@ -542,6 +544,8 @@ def test_a_retained_kinds_capture_at_two_sizes_keeps_each_calls_stage_at_its_m16
         run.whole_replayed(calls[m16])
         for i, (mm, w) in enumerate(zip(run.cur.matmuls, run.weights, strict=True)):
             run._retained(alone, mm, m, run.flag_buf[i * m:(i + 1) * m], *run._kept(sh[w, m16], pipe[m16]))
+        for p in (run.cur, alone):
+            joined(p.writes)
         assert run.cur.records == alone.records and run.cur.records[0].excluded_a == (3,)
         assert run.cur.files == alone.files and len(alone.files) == 2
         for f in (p for x in alone.files for p in (x["rows"]["path"], x["tree"]["path"])):
