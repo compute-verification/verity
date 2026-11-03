@@ -545,9 +545,9 @@ def main() -> int:
     if a.mom_rank and (a.opt != "muon" or not a.mom_bits or sparse or a.lora or a.grow or a.proj_every < 1):
         raise SystemExit("delta_grad: --mom-rank is a dense muon's momentum (--mom-bits > 0, no --support, no --lora), "
                          "with --proj-every >= 1")
-    if a.rotate and (a.vote or a.msg_bits >= 32 and not 0 < a.mom_bits < 32):
-        raise SystemExit("delta_grad: --rotate codes the messages or the momentum; with --vote or nothing coded it has "
-                         "no use")
+    if a.rotate and not (a.msg_bits < 32 and not a.vote or 0 < a.mom_bits < 32):
+        raise SystemExit("delta_grad: --rotate codes the messages (not a --vote) or the momentum; with neither coded it "
+                         "has no use")
     if a.msg_proj and (not a.mom_rank or a.vote):
         raise SystemExit("delta_grad: --msg-proj projects onto --mom-rank's basis, and takes no --vote")
     phases = [(float(f), t, int(r)) for f, t, r in (p.split(":") for p in a.grow.split(","))] if a.grow else []
