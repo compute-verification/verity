@@ -80,6 +80,7 @@ import Proofs.Flock.Claims.ZK.Server
 import Proofs.Flock.Claims.ZK.Blind
 import Proofs.Flock.Claims.ZK.Release
 import Proofs.Flock.Claims.ZK.Refine
+import Proofs.Flock.Claims.ZK.OwnHistAny
 import Proofs.Flock.Claims.ZK.CoinPass
 import Proofs.Flock.Claims.ZK.Os
 import Proofs.Flock.Claims.ZK.FrameTape
@@ -548,6 +549,10 @@ import Proofs.Flock.Claims.ZK.RepRet
   (`LeanRelease.checkIs_coinLayer`). The released bytes are read only through `LiveRoundEq`, `FillRoundEq`,
   `FinalRoundEq` (from `FrameAdmits` and `FinishIs`), `LinkRoundEq` (from `LinkIs`) and `ProgReads`, none of them yet
   proved about the live path, so the deployed ZK server is not yet proved zero-knowledge.
+* `OwnHistAny`: the deferred server's own histories (`ZkServer.OwnHist`, closed under prefixes: `OwnHist.take`; each
+  the own history on its answers: `OwnHist.eq_ownOf`), their messages at the Lean frame's live and stand-in rounds
+  (`LeanRelease.ownHist_msg_live`, `ownHist_msg_fill`): what the proofs of `LeanRelease.LiveRoundEqOwn` (`Refine`,
+  `LiveRoundEq` at the own histories only) share.
 * `SessionLean`: the release at the session loop (`LeanRelease.loop`): its `Hello`, its coin check's reading of it and its
   requests are the loop's pure functions at the statement's setup (`Flock.Firewall.Session.helloOf`, `planOf`, `reqAt`),
   so `HelloIs`, `HelloParses` and `ReqsFollow` hold at every statement and `Finish` is one past the last coin
