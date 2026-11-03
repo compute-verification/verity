@@ -27,7 +27,7 @@
    "name": "verity_difftest",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../../../../primitives/identity/../../difftest/lean",
+   "dir": "../../../../difftest/lean",
    "configFile": "lakefile.toml"}],
  "name": "pouw_commit",
  "lakeDir": ".lake",
