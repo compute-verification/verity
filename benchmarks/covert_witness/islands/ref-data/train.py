@@ -51,6 +51,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from te_core import hooks
+from te_core.flops import gather_selects
 
 import prepare
 
@@ -283,11 +284,15 @@ def main() -> int:
             raise SystemExit("train: growth trains every tensor it changes: an lf start, no --top-blocks or "
                              "--freeze-norms, and --freeze-embed only at θ's d_model")
         config, start_state = grow(config, theta, a)
+        base = net
         with torch.device(prepare.DEVICE):
             net = prepare.Net(config)
         net.load(start_state)
+        if not a.grow_d:
+            # θ's own table: the harness prices a token lookup of any table but θ's (te_core.flops gather_macs)
+            net.inner.embed = base.inner.embed
         mrec = prepare.model_record(rec, config, start_state)
-        del start_state
+        del start_state, base
     params = net.params()
     for p in params.values():
         p.data = p.data.float()
@@ -334,8 +339,13 @@ def main() -> int:
     tokens = a.batch * CTX
     extra = sum(ns_flops(tuple(params[n].shape), a.ns_steps) for n in mats) if a.mat_opt == "muon" else 0
 
+    # te_core prices a token lookup of an updated table as the gather circuit's multiplexers (gather_macs), which
+    # prepare.train_flops leaves out: a trained tied embedding adds that to every pass
+    lookup = 2 * gather_selects(params[embed].shape[0]) * params[embed].shape[1] if embed in trained else 0
+
     def flops(op: str, ctx: int, n_tokens: int) -> int:
-        return prepare.train_flops(mrec, trainable, [{"op": op, "tokens": n_tokens, "ctx": ctx}])["flops"]
+        return prepare.train_flops(mrec, trainable, [{"op": op, "tokens": n_tokens, "ctx": ctx}])["flops"] \
+            + lookup * n_tokens
 
     step_long = flops("train", CTX, tokens) + extra
     step_short = flops("train", a.short_ctx, tokens) + extra
