@@ -28,7 +28,8 @@ namespace Loop
 theorem label_pcs_off (c : Cfg) (s : Masker) (hon : s.on = false) :
     s.label c LABEL_PCS.toUTF8 = .ok (s, labelFrame LABEL_PCS.toUTF8) := by
   obtain ⟨p1, p2, p3, p4⟩ := Ranked.pcs_other
-  simp [Masker.label, hon, Ranked.isLabel_self, p1, p2, p3, p4] <;> rfl
+  simp [Masker.label, hon, Ranked.isLabel_self, p1, p2, p3, p4]
+  rfl
 
 /-- **The opening's label**, where the frame takes it, leaves it outside every masked phase and releases its label
 frame. -/
@@ -190,7 +191,7 @@ theorem check_rs {c : Cfg} {m s' : Masker} {sv : ℕ → Array F128} {N k n : �
       rw [(check_offAt (hon h0) (rsFrames_mid _ (hs hk)) (rsFrames_plain _) (.inl rfl) (by decide) (by decide)
         h).2, maskFrames_rs]
   · rw [if_neg hk] at hn
-    subst hn
+    subst n
     obtain rfl : k = N := by omega
     rw [rsBody_last sv _] at h ⊢
     rw [(check_offAt (hon (by omega)) (fun _ h => nomatch h) (fun _ h => nomatch h) (.inl rfl)
@@ -202,14 +203,14 @@ theorem rsBody_noDom (sv : ℕ → Array F128) {N k : ℕ} (hkN : k ≤ N) :
   by_cases hk : k < N
   · by_cases h0 : k = 0
     · subst h0
-      exact ⟨_, _, _, fun f hf => by
-        simp only [rsFrames, List.mem_cons, List.not_mem_nil, or_false] at hf
-        rcases hf with rfl | rfl | rfl <;> trivial, rsBody_zero sv hk⟩
-    · exact ⟨_, _, _, fun f hf => by
-        simp only [rsFrames, List.mem_cons, List.not_mem_nil, or_false] at hf
-        rcases hf with rfl | rfl <;> trivial, rsBody_mid sv h0 hk⟩
+      refine ⟨_, _, _, fun f hf => ?_, rsBody_zero sv hk⟩
+      simp only [rsFrames, List.mem_cons, List.not_mem_nil, or_false] at hf
+      rcases hf with rfl | rfl | rfl <;> trivial
+    · refine ⟨_, _, _, fun f hf => ?_, rsBody_mid sv h0 hk⟩
+      simp only [rsFrames, List.mem_cons, List.not_mem_nil, or_false] at hf
+      rcases hf with rfl | rfl <;> trivial
   · obtain rfl : k = N := by omega
-    exact ⟨[], _, _, fun _ h => nomatch h, rsBody_last sv _⟩
+    exact ⟨[], _, _, (fun _ h => nomatch h), rsBody_last sv _⟩
 
 /-- **The ring switch's rounds hold no domain frame**: their message is as it is without one. -/
 theorem dropDom_rs (sv : ℕ → Array F128) {N k : ℕ} (hkN : k ≤ N) :
