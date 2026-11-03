@@ -11,7 +11,8 @@ which every record carries. Findings, negative results and tool announcements go
 
 te_core scores by the training formalism v2. |C|, c, w and d are Boolean gates (`gates`: each counted op at its
 circuit Definition's price, a bf16 GEMM MAC being `HopperBF16WgmmaDot16_v2`'s 23,682 gates / 16 = 1,480.1), every
-other quantity bits.
+other quantity bits. A gate is any of AND, XOR and NOT, so a count is about 3x its AND count (3.0x for a bf16 GEMM,
+`gates.UNIT`, which the training panels' titles state).
 
 - **θ (registered weights)**: a start's weights, registered once at the start of the monitoring period, so every value
   computed during the run is new.
@@ -147,20 +148,24 @@ data with neither a start that has a scored checkpoint nor a ladder point has no
 from-scratch losses or prices C0. A fit takes three points (`FIT_MIN`), and one on fewer than five from scratch
 (`FIT_TARGET`) is provisional: its status and note say so, the note with its points' residuals and the ladder's runs
 off its frontier. `training/algorithm-policy` is `algorithm_policy`'s: per run, start and gain target g (1.1, 2 and
-11, a checkpoint's gain its effective compute through that fit over C0), "yes" at the run's first checkpoint reaching
-g, else "no" at its last, with the algorithm's inefficiency p = C/H (H the least |C| of any checkpoint from the start
-on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ at
-the dial's default (`rho_default`), and the inputs the console's dial recomputes ρ from at any (c, k), in one JSON
-cell (`rho_inputs`; te_core 4.x's per-part Fit and ᾱ/α_max among them, u_in exact at the dial's k), so S = pρ;
-`build` refuses a row whose cells miss `formalism.at` at a dial cell. Beside them, `formalism.published` at the
-console's default policy: `rho_console` (the one bound's ρ under reading A where the row's trace has entries and an op
-log, else reading B's, a target), its `reading`, the `te_core` that priced it, `binding_kind`, `rests_on` and `kinds`
-(the terms its max takes and the sensitivities it leaves out). Its coverage (gain
-target by data by decade of ρ) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
+11, a checkpoint's gain C(L1)/C(L0) on that fit, from the start's loss L0 to its own L1, so every target is below
+L0), "yes" at the run's first checkpoint reaching g, else "no" at its last, with the algorithm's inefficiency p = C/H
+(H the least |C| of any checkpoint from the start
+on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ,
+`formalism.published` at the console's default policy (`policy.CONSOLE`, the one default: `rho_default`, a number,
+and `rho_console`; `rho_served` at the registered serving block, `panels.SERVED`), so S = pρ, and the inputs the
+console's dial recomputes ρ from at any (c, k), in one JSON cell (`rho_inputs`; te_core 4.x's per-part Fit and
+ᾱ/α_max among them, u_in exact at the dial's k and the console's); `build` refuses a row whose cells miss
+`formalism.at` at a dial cell or the console's default. Beside them: its `reading` (the one bound's ρ under reading A
+where the row's trace has entries and an op log, else reading B's, a target), the `te_core` that priced it,
+`binding_kind`, `rests_on` and `kinds` (the terms its max takes and the sensitivities it leaves out). Its coverage
+(gain target by data by decade of ρ, with the reached cells' ρ at the registered serving block beside the console's
+default) names the cells nothing reaches, and counts the valid checkpoints `formalism.refusal`
 refuses, which no cell holds (`tables/refused.json` gives each one's reason). `--publish` GETs what the route serves
-and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one whose coverage
-this build fills less of, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never
-empties a populated panel. `training/frontier-branches` (`panels`'s: the frontier and each start's honest and throttled branches over
+and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one with a run this
+build has no row for, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never
+empties a populated panel; a build with every served run replaces an older te_core's rows, however its coverage
+moves. `training/frontier-branches` (`panels`'s: the frontier and each start's honest and throttled branches over
 the dial) is retired from the console and no longer PUT; `panels` still holds the dial both use (`dial`, `rho_columns`,
 `page_inputs`, `mismatches`). Every scoring command (`frontier`, `plots`, `rescore`, `panels`, `frontier_fit`,
 `algorithm_policy`) applies one cap, `policy.eligible`: a checkpoint is scored only when its model's forward gates per
@@ -172,9 +177,10 @@ the fit doesn't reach its loss, so a grown model is still scored; the rest are l
 registered start named in `islands/standard-workloads/rows.json`, measured by this te_core (its traced structures where
 the island traced them, from te_core 4.4 on; a generation run's rounds alone, priced as NVFP4) and priced by
 `formalism.published` under the builder's `READING`, reading A (the one bound over the kinds valid on their own, with
-its binding kind, what it rests on and its kinds, reading B's forms among their sensitivities), at the dial's default
-and the console's session (`policy.CONSOLE`), each input labelled measured or assumed and why. It is not scored
-against H.
+its binding kind, what it rests on and its kinds, reading B's forms among their sensitivities), at the console's
+session (`policy.CONSOLE`), the one default of `rho_default` and `rho_console`, with `rho_served` at the registered
+serving block beside it, as `algorithm_policy` prices its rows, each input labelled measured or assumed and why. It is
+not scored against H.
 
 ## What the integrator calls
 
@@ -276,7 +282,7 @@ Run every command from `benchmarks/covert_witness/`, where `te_core` and `prepar
 | `panels.py` | `training/frontier-branches`, retired from the console: the frontier, each branch point's honest and throttled curves and ρ's candidates, its cut and figure; the dial the training panels use (`dial`, `rho_columns`, `page_inputs`, `mismatches`) |
 | `frontier_fit.py` | a console training panel, `training/frontier-fit`: per data, L(C) = E + A·C^(−γ) fitted to the unconstrained frontier (`fit`, `used`; provisional under `FIT_TARGET` points from scratch), its effective compute (`loss_at`, `c_eff`, `gain`) and the v3 ladder's points (`ladder_points`, `LADDER`'s by default) |
 | `algorithm_policy.py` | the other, `training/algorithm-policy`: per run, start and gain target, p = C/H against ρ with ρ's inputs (`page_rho`, the dial's formula, which must reproduce `formalism.at`) and the dashboard's cells (`published`'s), the coverage, its console cut, figure, and the PUT of both panels over what the route serves (`guarded`) |
-| `standard_workloads.py` | a third, `training/standard-workloads`: the standard covert workloads' real runs, each row's ρ and the dashboard's cells `formalism.published`'s under its `READING` (A: ρ, its binding kind and basis as `published` gives them, null where it has no bound, never ∞) at the dial's default and the console's, its kinds cell with reading B's forms beside reduction and update as sensitivities (`SENSITIVITIES`, `kinds`), its inputs (`priced`, refused unless `page_rho` gives `formalism.at`'s ρ at both) and their status (`status`), a generation run as its rounds (`rounds`, `round_formalism`), and its PUT, refused where it would drop a served run (`emptied`) |
+| `standard_workloads.py` | a third, `training/standard-workloads`: the standard covert workloads' real runs, each row's ρ and the dashboard's cells `formalism.published`'s under its `READING` (A: ρ, its binding kind and basis as `published` gives them, null where it has no bound, never ∞) at algorithm-policy's `POINTS`: the console's default, the one default of `rho_default` and `rho_console`, and the registered serving block (`rho_served`); its kinds cell with reading B's forms beside reduction and update as sensitivities (`SENSITIVITIES`, `kinds`), its inputs (`priced`, refused unless `page_rho` gives `formalism.at`'s ρ at both) and their status (`status`), a generation run as its rounds (`rounds`, `round_formalism`), and its PUT, refused where it would drop a served run (`emptied`) |
 | `io_bound.py` | the Loomis-Whitney bound on a training step's slowdown under P-width, the fresh-products kind's calculator: one product's cap at the chain constant (`alpha`, `beta`, `mu`), Λ's factors (`SHARE`, `feed`, `whole_chain`), and the blocks a step's products need and its ρ, the larger of the root and linear forms, proved and searched, with and without P-cell (`bound`); each GEMM of a step captured by `capture_step` or `capture_fn` classified by kind (`rows_of`, `Row`), the step's \|C\| (`step_gates`), its vectors (`tests/io_bound_vectors.json`, `python -m te_core.io_bound vectors`) and the s-shape steps (`steps`) |
 | `tiles.py` | reading A's matrix-product tiles: a record's ops as products (`of_log` from a `macs_log`, `of_graph` from a traced step, `products`), the most MACs a tile reading k bits holds (`volume`) and each op's tile cap (`cap`, `caps`), and the most a block's tiles hold beside each other (`held`) |
 | `workloads.py` | the covert workloads of the console's *Standard training under the policy* plot, each a model: one function per workload from its dials (`Dial`) to the one bound's inputs (`formalism.Measured`), its products of two fresh operands (`Fresh`) and the most update bits one of its ops reads; at the console's policy, the only one rows are reported at (`POLICIES`: `policy.CONSOLE`), ρ over the bound's kinds (`rho`: the fresh products by `formalism.fresh_products` on the model's products, `products`, calibrated on io_bound's captured steps, at the tree constant a model's untraced order takes, `ORDER`, so unmeasured until io_bound has it, io_bound's figure without P-cell its term where measured; the token and decoding kinds unmeasured, reading A needing a trace, `reading_a`; max(1, the measured terms), partial where a kind is unmeasured, and null, never 1, where none is measured), its binding kind and what that rests on (`RESTS_ON`), with reading B's token form beside it as the target (`TARGET`) and the sensitivities (the bound's, and io_bound's chain figures without and with P-cell); measured records beside the model with every term on each (`Check`, `recorded`: the 45M pilot's and the standard-workloads island's rows), and each input's source, measured with its record or assumed with why (`input_status`); `python -m te_core.workloads --json te_core/workloads.json`, and `--records TABLES ART` to rewrite `workloads_records.json` from the island's panel |

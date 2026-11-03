@@ -1,10 +1,11 @@
 """te_core.standard_workloads builds `training/standard-workloads`: a row per workload and measured dial setting, whose
 ρ is formalism.published's under the builder's `READING`, A (with its binding kind, what it rests on and its kinds as
 published gives them, reading B's forms among their sensitivities; null and "unmeasured" where it has no bound, never
-infinite) at the dial's default and the console's, whose rho_inputs give the dial's ρ there (page_rho) and whose
-input_status says which inputs te_core measured; a generation run's row is its rounds alone, each GEMM on the served
-codes priced as NVFP4; it reads traces from te_core 4.4 on; and the panel keeps to the panels route's limits, a cell up
-to 4,096 characters, and never replaces a served panel with one that drops its runs."""
+infinite) at the console's default (rho_default and rho_console) and the registered serving block (rho_served), whose
+rho_inputs give the dial's ρ at both (page_rho) and whose input_status says which inputs te_core measured; a generation
+run's row is its rounds alone, each GEMM on the served codes priced as NVFP4; it reads traces from te_core 4.4 on; and
+the panel keeps to the panels route's limits, a cell up to 4,096 characters, and never replaces a served panel with one
+that drops its runs."""
 import dataclasses
 import json
 import math
@@ -14,7 +15,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from te_core import VERSION, algorithm_policy, console, formalism, policy
+from te_core import VERSION, algorithm_policy, console, formalism, panels, policy
 from te_core import standard_workloads as SW
 from te_core.gates import of_log, per_mac
 
@@ -55,11 +56,11 @@ def build(m: formalism.Measured, fx: dict, monkeypatch) -> tuple[dict, list, dic
     return p, details, dict(zip(SW.COLUMNS, row))
 
 
-def at(m: formalism.Measured, w_fwd: float) -> dict[str, dict]:
-    return {name: formalism.at(m, c, k) for name, (c, k) in SW.points(w_fwd).items()}
+def at(m: formalism.Measured) -> dict[str, dict]:
+    return {name: formalism.at(m, c, k) for name, (c, k) in SW.POINTS.items()}
 
 
-def test_the_pinned_row_is_its_runs_quantities_priced_as_algorithm_policy_prices_a_run_at_both_dial_points(monkeypatch):
+def test_the_pinned_row_is_its_runs_quantities_priced_as_algorithm_policy_prices_a_run_at_both_points(monkeypatch):
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
     p, details, cells = build(m, fx, monkeypatch)
@@ -70,13 +71,13 @@ def test_the_pinned_row_is_its_runs_quantities_priced_as_algorithm_policy_prices
     inputs = json.loads(cells["rho_inputs"])
     assert list(inputs) == list(SW.KEYS) == list(json.loads(cells["input_status"]))
     assert set(json.loads(cells["input_status"]).values()) == {"measured"}
-    w_fwd = policy.w_fwd(fx["shape"])
-    pts, got = SW.points(w_fwd), at(m, w_fwd)
-    assert pts["console"] == algorithm_policy.CONSOLE
+    pts, got = SW.POINTS, at(m)
+    assert pts == {"console": algorithm_policy.CONSOLE, "served": panels.SERVED}
     one = {name: formalism.published(m, c, k, SW.READING) for name, (c, k) in pts.items()}
     for name, (c, k) in pts.items():
         assert math.isclose(algorithm_policy.page_rho(inputs, c, k)[0], got[name]["rho"], rel_tol=1e-4)
         assert cells[f"rho_{name}"] == SW.rho_cell(one[name]["rho"])
+    assert cells["rho_default"] == cells["rho_console"]
     b = formalism.bound(m, *pts["console"])
     assert (cells["reading"], cells["binding_kind"], cells["rests_on"]) == \
         (SW.READING, one["console"]["binding_kind"], one["console"]["rests_on"])
@@ -92,9 +93,9 @@ def test_the_pinned_row_is_its_runs_quantities_priced_as_algorithm_policy_prices
 def test_under_reading_a_a_row_is_publisheds_rho_and_basis_as_is_with_its_terms_null_where_unmeasured(monkeypatch):
     """The pinned row's token kind under reading A (its trace's entries and its macs_log's tiles) is at most 1 at the
     console's and fresh products are unmeasured (an op log can't tell a fresh operand): its ρ, binding kind and basis
-    are published's as it gives them, the kinds cell holding the token term and fresh products' null; a measured term
-    above 1 is published with its binding kind; without an op log no kind is measured: null and unmeasured; an
-    infinite ρ is refused."""
+    are published's as it gives them, the kinds cell holding the token term, fresh products' null and published's
+    partial and why; a measured term above 1 is published with its binding kind at both points; without an op log no
+    kind is measured: null and unmeasured; an infinite ρ is refused."""
     fx = json.loads(PINNED.read_text())
     m = formalism.from_json(fx["measured"])
     assert SW.READING == "A"
@@ -108,20 +109,24 @@ def test_under_reading_a_a_row_is_publisheds_rho_and_basis_as_is_with_its_terms_
     kinds = json.loads(cells["kinds"])
     assert list(kinds["bound"]) == list(formalism.KINDS) and kinds["bound"]["fresh_products"] is None
     assert kinds["bound"]["token"] == pytest.approx(b["terms"]["token"], rel=1e-3)
-    assert "reading A, the one bound over the valid kinds (null: unmeasured)" in p["note"]
-    assert f"(c = {algorithm_policy.num(policy.CONSOLE[0], 5)} gates, one full session of the 45M reference" in p["note"]
-    _, _, cells = build(dataclasses.replace(m, ops=None), fx, monkeypatch)
-    assert (cells["rho_default"], cells["rho_console"], cells["binding_kind"], cells["rests_on"]) == \
-        (None, None, "none", "unmeasured")
+    assert (kinds.get("partial", False), kinds.get("why")) == (one["partial"], one["why"])
+    assert "reading A, one bound over the valid kinds (null: unmeasured)" in p["note"]
+    assert (f"c = {algorithm_policy.num(policy.CONSOLE[0], 5)} gates, one full 4,096-in, 1,024-out session of the 45M "
+            f"reference with attention") in p["note"]
+    bare = dataclasses.replace(m, ops=None)
+    _, _, cells = build(bare, fx, monkeypatch)
+    assert (cells["rho_default"], cells["rho_console"], cells["rho_served"], cells["rests_on"]) == \
+        (None, None, None, "unmeasured")
+    assert cells["binding_kind"] == formalism.published(bare, c, k, "A")["binding_kind"]
     assert json.loads(cells["kinds"])["bound"] == {"fresh_products": None, "token": None, "decoding": None}
     real = formalism.published
     above = {"rho": 2.5, "binding_kind": "token", "rests_on": formalism.RESTS_ON_CELL["token"]}
     monkeypatch.setattr(formalism, "published", lambda *a: real(*a) | above)
     _, _, cells = build(m, fx, monkeypatch)
-    assert (cells["rho_default"], cells["rho_console"], cells["binding_kind"], cells["rests_on"]) == \
-        (2.5, 2.5, "token", formalism.RESTS_ON_CELL["token"])
+    assert (cells["rho_default"], cells["rho_console"], cells["rho_served"], cells["binding_kind"],
+            cells["rests_on"]) == (2.5, 2.5, 2.5, "token", formalism.RESTS_ON_CELL["token"])
     monkeypatch.setattr(formalism, "published", lambda *a: one | {"rho": math.inf})
-    with pytest.raises(SystemExit, match="reading A's rho is infinite at default and console"):
+    with pytest.raises(SystemExit, match="reading A's rho is infinite at console and served"):
         build(m, fx, monkeypatch)
 
 
@@ -156,8 +161,8 @@ def test_a_row_whose_inputs_dont_give_te_cores_rho_is_refused(monkeypatch):
     m = formalism.from_json(fx["measured"])
     w_fwd = policy.w_fwd(fx["shape"])
     monkeypatch.setattr(algorithm_policy, "page_rho", lambda d, c, k: (1.01 * formalism.at(m, c, k)["rho"], "target"))
-    with pytest.raises(ValueError, match="at default"):
-        SW.priced(m, w_fwd, at(m, w_fwd))
+    with pytest.raises(ValueError, match="at console"):
+        SW.priced(m, w_fwd, at(m))
     with pytest.raises(ValueError, match="w_gates, w_fit_gates not finite"):
         SW.priced(formalism.Measured((formalism.Part(1e9, 0, 0, 0),), 16, 8192, formalism.even(1e6),
                                      formalism.even(1e6), 1e6), w_fwd, {})
