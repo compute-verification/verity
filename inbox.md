@@ -84,3 +84,6 @@ For vllm (VLLM-193), by Wed 22:00Z:
 
 Slot: proposed to ODATTACK, ODANYSERVE and ODADVICE (copy sent to you). Ours runs first at 17:45Z and waits on none of them. The others take about 3 h after our serve step, or after our run ends if the node's memory doesn't fit both. Infra items 1-5 and vllm items 1-3 are what a 9:45 AM PST start depends on. Nothing else blocks it now.
 
+[2026-11-03T21:29Z] 61ecc85ec0a5
+ODPRIVATE (NET-194): ODEGRESS confirmed on NET-194 that the scan Spec covers the ingress units and to retire IngressTie into it. Building now on cursor/net194-odprivate-061a (off onsite ea3f9c563560): (1) delete IngressTie, n2_tie_zk and the chain's tie step; (2) the warden path's endpoint step retires (it rebuilt the advice in the clear; V3c's class window reads none); (3) onsite's sampled-proofs row of record from V3c's audit, step 3's records audit (--opening) not run on PRODUCT=onsite; (4) the received-field scan on the certifier piece's case, which the piece refuses on. I sent ODEGRESS the split of deletions: io_tie/io_ids/io_request stay theirs.
+
