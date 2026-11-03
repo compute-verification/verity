@@ -18,12 +18,16 @@ and `start_qij` the sets its partial sums received at their width give:
    `I_u` has, `K₁ = k (1 + E)` by 1, and `K₂ = k`, `s = s_u = Σ_q Σ_ij |I_u ∩ start_qij| / b_C` by the partial sums
    received (`Standard.received_sums`), `I_u` reading at most `k` of `G`'s MACs' gates, the MACs being apart
    (`System.sum_card_macs_le`).
-4. **The cap** (`SecurityProofs.SumCap`): 3 summed over blocks, with
+4. **The cap** (`SecurityProofs.SumCap`): 3 summed over blocks (`System.sum_sum_card_cellWhole_le`), with
    `Σ_u √(k / b_C + s_u) ≤ √(m (m k / b_C + Σ_u s_u))` by Cauchy–Schwarz and `Σ_u s_u ≤ O`, each start held once
    (`sum_sum_card_inter_le`), and the split cells, `w Σ_u Σ_q |U_u ∩ macs_q| ≤ m w k`
    (`Standard.card_le_cellWhole_add`).
 5. **The bound** (`SecurityProofs.SumBound`): the cap with `√(X Y) ≤ (t X + Y / t) / 2` (`sqrt_mul_le_half_add`),
    inverted (`div_le_of_le_add_sqrt`).
+6. **With P-cell** (`SecurityProofs.SumCellCap`, `SumCellBound`): a partition that splits none of `G`'s cells
+   (`Standard.UnsplitCells`) has each MAC in a cell some block holds whole (`Standard.card_le_cellWhole`), so the cap
+   is 3 summed over blocks alone (`System.sum_sum_card_cellWhole_le`), with no split cells, and the bound is 5 at
+   `w = 0`.
 
 P-share on a set within one class is P-share at that class's `c_j` (`System.sharedOn_of_shared`).
 -/
@@ -205,12 +209,20 @@ theorem sum_card_cellWhole_le [Fintype κ] [DecidableEq κ] {c k b bC : ℕ} {cs
   exact sum_card_le_shared G (fun q => (sys.prod q).cellWhole (cell q) (P.gates u)) (Nat.cast_nonneg _) hbpos hCpos
     hxy (sys.card_hadValues_le hS hV hsh hW hM hb hcs hA hμ hI G) hz
 
-end System
-
-namespace SecurityProofs
-
-theorem SumCap : Guarantees.SumCap := by
-  intro d ι κ _ _ _ _ sys c k b bC cs A μ G cG cell w m P hS hV hsh hW hM hsO hap hc hR hP hb hC hcs hA hμ
+/-- **The blocks' whole cells**: over a partition into `m` inference blocks, the MACs of a set `G`'s cells that its
+blocks hold whole number at most `h √(m (m k / b_C + O))`, `h = √c_G k (1 + E) / b` and `O` the output entries of
+`G`'s products: each block's by `sum_card_cellWhole_le`, summed over the blocks by Cauchy–Schwarz, each start held
+once. -/
+theorem sum_sum_card_cellWhole_le [Fintype κ] [DecidableEq κ] {c k b bC : ℕ} {cs : κ → ℝ} {A : κ → κ → ℝ}
+    {μ : κ → ℝ} (hS : ∀ p, (sys.prod p).Wiring) (hV : sys.Values) (hsh : sys.Shared c k cs)
+    (hW : sys.WidthExtended c k b) (hM : sys.Matched A) (hb : 0 < b) (hC : 0 < bC) (hcs : ∀ j, 0 ≤ cs j)
+    (hA : ∀ i j, 0 ≤ A i j) (hμ : sys.PostFixed k b cs A μ) {G : Finset ι} {cG : ℝ}
+    (hsO : sys.SharedOn c k cG G) (hap : sys.Apart G)
+    (cell : (q : ι) → Fin (sys.ni q) → Fin (sys.K (sys.cls q)) → Fin (sys.nj q) → ℕ)
+    (hR : ∀ q ∈ G, (sys.prod q).Received (cell q) c k bC) {m : ℕ} {P : Partition d.D m} (hP : P.IsCK d c k) :
+    ∑ u, ∑ q ∈ G, (((sys.prod q).cellWhole (cell q) (P.gates u)).card : ℝ) ≤
+      √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
+        √((m : ℝ) * (m * ((k : ℝ) / bC) + (∑ q ∈ G, sys.ni q * sys.nj q : ℕ))) := by
   have hR' : ∀ q, ∃ start : Fin (sys.ni q) → Fin (sys.nj q) → Finset (Fin d.D.N), (∀ i j, (start i j).card ≤ bC) ∧
       (q ∈ G → ∀ I, InferenceBlock d c k I → ∀ i l j, (sys.prod q).cellGates (cell q) (cell q i l j) ⊆ I →
         bC ≤ (d.unregistered I ∩ (sys.prod q).entry i j).card + (I ∩ start i j).card) := fun q => by
@@ -246,18 +258,23 @@ theorem SumCap : Guarantees.SumCap := by
     refine Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left ?_ (Nat.cast_nonneg _))
     rw [sum_add_distrib, sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
     linarith
-  have hT : ∑ u, ∑ q ∈ G, (((sys.prod q).cellWhole (cell q) (P.gates u)).card : ℝ) ≤
-      √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
-        √((m : ℝ) * (m * ((k : ℝ) / bC) + (∑ q ∈ G, sys.ni q * sys.nj q : ℕ))) :=
-    calc _ ≤ ∑ u, √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
-          √((k : ℝ) / bC + ((∑ q ∈ G, ∑ e : Fin (sys.ni q) × Fin (sys.nj q),
-            (P.gates u ∩ start q e.1 e.2).card : ℕ) : ℝ) / bC) :=
-          sum_le_sum fun u _ => sys.sum_card_cellWhole_le hS hV hsh hW hM hb hC hcs hA hμ hsO hap cell start
-            (fun q hq => hread q hq) hP u
-      _ = √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
-          ∑ u, √((k : ℝ) / bC + ((∑ q ∈ G, ∑ e : Fin (sys.ni q) × Fin (sys.nj q),
-            (P.gates u ∩ start q e.1 e.2).card : ℕ) : ℝ) / bC) := (mul_sum _ _ _).symm
-      _ ≤ _ := mul_le_mul_of_nonneg_left hsq hL
+  calc _ ≤ ∑ u, √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
+        √((k : ℝ) / bC + ((∑ q ∈ G, ∑ e : Fin (sys.ni q) × Fin (sys.nj q),
+          (P.gates u ∩ start q e.1 e.2).card : ℕ) : ℝ) / bC) :=
+        sum_le_sum fun u _ => sys.sum_card_cellWhole_le hS hV hsh hW hM hb hC hcs hA hμ hsO hap cell start
+          (fun q hq => hread q hq) hP u
+    _ = √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
+        ∑ u, √((k : ℝ) / bC + ((∑ q ∈ G, ∑ e : Fin (sys.ni q) × Fin (sys.nj q),
+          (P.gates u ∩ start q e.1 e.2).card : ℕ) : ℝ) / bC) := (mul_sum _ _ _).symm
+    _ ≤ _ := mul_le_mul_of_nonneg_left hsq hL
+
+end System
+
+namespace SecurityProofs
+
+theorem SumCap : Guarantees.SumCap := by
+  intro d ι κ _ _ _ _ sys c k b bC cs A μ G cG cell w m P hS hV hsh hW hM hsO hap hc hR hP hb hC hcs hA hμ
+  have hT := sys.sum_sum_card_cellWhole_le hS hV hsh hW hM hb hC hcs hA hμ hsO hap cell hR hP
   have hsplit : ∑ u, ∑ q ∈ G, ((d.unregistered (P.gates u) ∩ (sys.prod q).macs).card : ℝ) ≤ m * k :=
     calc _ ≤ ∑ _u : Fin m, (k : ℝ) := sum_le_sum fun u _ => by
           exact_mod_cast sys.sum_card_macs_le hap (inferenceBlock_gates hP u)
@@ -284,6 +301,32 @@ theorem SumBound : Guarantees.SumBound := by
   have hL : 0 ≤ √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) :=
     mul_nonneg (Real.sqrt_nonneg _) (div_nonneg (mul_nonneg (Nat.cast_nonneg _) (by linarith)) hbpos.le)
   have hm := div_le_of_le_add_sqrt (Nat.cast_nonneg (α := ℝ) m) (by positivity : (0 : ℝ) ≤ w * k) hL
+    (div_nonneg (Nat.cast_nonneg (α := ℝ) k) hCpos.le) (Nat.cast_nonneg _) ht hcap
+  unfold sumBound partitionSlowdown
+  refine ENNReal.div_le_div_right ?_ _
+  rw [show ((m * c : ℕ) : ℝ≥0∞) = (m : ℝ≥0∞) * c from Nat.cast_mul m c, ← ENNReal.ofReal_natCast m]
+  gcongr
+
+theorem SumCellCap : Guarantees.SumCellCap := by
+  intro d ι κ _ _ _ _ sys c k b bC cs A μ G cG cell m P hS hV hsh hW hM hsO hap hR hP hu hb hC hcs hA hμ
+  refine le_trans ?_ (sys.sum_sum_card_cellWhole_le hS hV hsh hW hM hb hC hcs hA hμ hsO hap cell hR hP)
+  rw [sum_comm (s := univ) (t := G), Nat.cast_sum]
+  exact sum_le_sum fun q hq => by exact_mod_cast (sys.prod q).card_le_cellWhole (cell q) P (hu q hq)
+
+theorem SumCellBound : Guarantees.SumCellBound := by
+  intro d ι κ _ _ _ _ sys c k b bC cs A μ G cG cell t hS hV hsh hW hM hsO hap hR hb hC hcs hA hμ ht m P hP hu
+  have hcap : ((∑ q ∈ G, sys.ni q * sys.K (sys.cls q) * sys.nj q : ℕ) : ℝ) ≤
+      m * (((0 : ℕ) : ℝ) * k) + √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
+        √((m : ℝ) * (m * ((k : ℝ) / bC) + (∑ q ∈ G, sys.ni q * sys.nj q : ℕ))) := by
+    rw [Nat.cast_zero, zero_mul, mul_zero, zero_add]
+    exact SumCellCap d ι κ sys c k b bC cs A μ G cG cell m P hS hV hsh hW hM hsO hap hR hP hu hb hC hcs hA hμ
+  have hbpos : (0 : ℝ) < b := by exact_mod_cast hb
+  have hCpos : (0 : ℝ) < bC := by exact_mod_cast hC
+  have hE : 0 ≤ ∑ j ∈ G.image sys.cls, wholeFactor A μ j :=
+    sum_nonneg fun j _ => sum_nonneg fun i _ => mul_nonneg (hA _ _) (sys.nonneg_of_postFixed hcs hμ i)
+  have hL : 0 ≤ √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) :=
+    mul_nonneg (Real.sqrt_nonneg _) (div_nonneg (mul_nonneg (Nat.cast_nonneg _) (by linarith)) hbpos.le)
+  have hm := div_le_of_le_add_sqrt (Nat.cast_nonneg (α := ℝ) m) (by positivity : (0 : ℝ) ≤ ((0 : ℕ) : ℝ) * k) hL
     (div_nonneg (Nat.cast_nonneg (α := ℝ) k) hCpos.le) (Nat.cast_nonneg _) ht hcap
   unfold sumBound partitionSlowdown
   refine ENNReal.div_le_div_right ?_ _

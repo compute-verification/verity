@@ -22,6 +22,9 @@ most `w` MACs (`Standard.Cells`), `T_u` the MACs of the cells `I_u` holds whole 
 With `s_u = Σ_ij |I_u ∩ start_ij| / b_C`, facts 3 and 4 are the cap along chains' (`Verity.Combinatorics.sum_card_le_chain`)
 per-block partial sums and its `Σ_u s_u ≤ ni nj`, so `Σ_u |T_u| ≤ m α + β √(m ni nj)`, and fact 1 adds `m w k`
 (`NoCellCap`). `NoCellBound` inverts the cap: `m Γ + B √m ≥ N` gives `m ≥ chainBlocks N Γ B` (`chainBlocks_le`).
+
+With P-cell (`Standard.UnsplitCells`), fact 1 has no splits: `N ≤ Σ_u |T_u|` (`card_le_cellWhole`). P-cell implies the
+word level (`unsplit_of_unsplitCells`) and, with each MAC its own cell, is it (`unsplitCells_of_unsplit`).
 -/
 
 namespace Nci.Products
@@ -158,6 +161,32 @@ theorem card_le_cellWhole_add (hS : S.Wiring) {w : ℕ} (hc : S.Cells cell w) {m
     _ ≤ _ := by
         rw [mul_sum]
         exact add_le_add le_rfl (sum_le_sum fun u _ => S.sum_card_cell_le cell hS hc _)
+
+/-- **No cell split**: with P-cell, `N ≤ Σ_u |T_u|`, each MAC's cell whole in a block. -/
+theorem card_le_cellWhole {m : ℕ} (P : Partition d.D m) (h : S.UnsplitCells cell P) :
+    ni * nl * nj ≤ ∑ u, (S.cellWhole cell (P.gates u)).card :=
+  calc ni * nl * nj = ∑ _p : Fin ni × Fin nl × Fin nj, 1 := by
+        rw [sum_const, card_univ, Fintype.card_prod, Fintype.card_prod, Fintype.card_fin, Fintype.card_fin,
+          Fintype.card_fin, smul_eq_mul, mul_one, mul_assoc]
+    _ ≤ ∑ p : Fin ni × Fin nl × Fin nj,
+          (univ.filter fun u => S.cellGates cell (cell p.1 p.2.1 p.2.2) ⊆ P.gates u).card :=
+        sum_le_sum fun p _ => by
+          obtain ⟨u, hu⟩ := h p.1 p.2.1 p.2.2
+          exact card_pos.2 ⟨u, mem_filter.2 ⟨mem_univ _, hu⟩⟩
+    _ = _ := (S.sum_card_cellWhole cell P).symm
+
+/-- **P-cell implies the word level**: a partition that splits no cell splits no MAC. -/
+theorem unsplit_of_unsplitCells {m : ℕ} {P : Partition d.D m} (h : S.UnsplitCells cell P) : S.Unsplit P :=
+  fun i l j => (h i l j).imp fun _ hu => (S.mac_subset_cellGates cell i l j).trans hu
+
+/-- **With each MAC its own cell, P-cell is the word level**: a partition that splits no MAC splits no cell. -/
+theorem unsplitCells_of_unsplit
+    (hcell : ∀ p q : Fin ni × Fin nl × Fin nj, cell p.1 p.2.1 p.2.2 = cell q.1 q.2.1 q.2.2 → p = q) {m : ℕ}
+    {P : Partition d.D m} (h : S.Unsplit P) : S.UnsplitCells cell P := fun i l j => by
+  obtain ⟨u, hu⟩ := h i l j
+  refine ⟨u, biUnion_subset.2 fun q hq => ?_⟩
+  obtain rfl := hcell q (i, l, j) (mem_filter.1 hq).2
+  exact hu
 
 /-- **Operands**: `b_A |π₁₂ T| + b_B |π₂₃ T| ≤ |U ∩ cones|` for the MACs `T` of a block's whole cells. -/
 theorem mul_card_le_cones_cell (hS : S.Wiring) {c k bA bB bC : ℕ} (hW : S.Passed c k bA bB bC)

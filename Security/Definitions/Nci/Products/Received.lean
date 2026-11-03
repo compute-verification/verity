@@ -19,6 +19,10 @@ gates of `start i j` it holds. Each entry a block touches through a whole cell t
 has its partial sum read at its width, from another block or across a cell split between blocks, and each entry's start
 is held once over a partition.
 
+**P-cell** (`Standard.UnsplitCells`) is a premise on the partition, not a fact of the circuit: it splits no cell.
+Without it a cap allows for the cells a partition splits, each costing some block a read across its split, at most
+`w k` MACs a block (`Nci.Products.Guarantees.SumCap`); with it there are none (`Nci.Products.Guarantees.SumCellCap`).
+
 `chainBlocks N Γ B` is the fewest blocks `m ≥ 0` with `m Γ + B √m ≥ N`, `(2N / (√(B² + 4ΓN) + B))²`, and
 `noCellBound` the bound on `ρ` that the cap without the word level (`Nci.Products.Guarantees.NoCellCap`) gives,
 `chainBlocks (ni nl nj) (α + w k) (β √(ni nj)) · c / |C|`, with `α = (k/3) √(k/3) / √(b_A b_B b_C)` and
@@ -28,7 +32,7 @@ is held once over a partition.
 namespace Nci.Products
 
 open Finset
-open Verity (Declaration)
+open Verity (Declaration Partition)
 open Nci.Formalism
 open scoped ENNReal
 
@@ -56,6 +60,12 @@ def Received (cell : Fin ni → Fin nl → Fin nj → ℕ) (c k bC : ℕ) : Prop
   ∃ start : Fin ni → Fin nj → Finset (Fin d.D.N), (∀ i j, (start i j).card ≤ bC) ∧
     ∀ I, InferenceBlock d c k I → ∀ i l j, S.cellGates cell (cell i l j) ⊆ I →
       bC ≤ (d.unregistered I ∩ S.entry i j).card + (I ∩ start i j).card
+
+/-- **P-cell** in the cells `cell`, a premise on the partition, as training's slowdown code names it: `P` splits no
+cell, each lying in one of its blocks. It implies the word level (`Unsplit`), which is P-cell with each MAC its own
+cell. -/
+def UnsplitCells (cell : Fin ni → Fin nl → Fin nj → ℕ) {m : ℕ} (P : Partition d.D m) : Prop :=
+  ∀ i l j, ∃ u, S.cellGates cell (cell i l j) ⊆ P.gates u
 
 end Standard
 

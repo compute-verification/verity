@@ -9,9 +9,10 @@ import Mathlib.Tactic.NormNum
 The proofs of `Security/Definitions/Nci/Guarantees/Products/SumWitnesses.lean`, at `Pair`'s product alone as a
 whole-making system (`Security/Definitions/Nci/Products/WholeInstances.lean`). The class bound's premises, the cells and
 the received partial sums are the whole-making lemmas' (`Security/Proofs/Nci/Products/WholeWitnesses.lean`); P-share on
-the one product is P-share at its class (`System.sharedOn_of_shared`), and a product is apart from itself. Each bound is
-compared with its price in `ℝ` or `ℝ≥0∞`, with `√(1/4) = 1/2` and `√2 < 2`. The `example`s at the end apply each
-guarantee to its lemmas, so the lemmas are the premises as the guarantee states them.
+the one product is P-share at its class (`System.sharedOn_of_shared`), and a product is apart from itself. P-cell at `P`
+and at `P1` is their word level, each MAC its own cell (`Standard.unsplitCells_of_unsplit`). Each bound is compared
+with its price in `ℝ` or `ℝ≥0∞`, with `√(1/4) = 1/2` and `√2 < 2`. The `example`s at the end apply each guarantee to
+its lemmas, so the lemmas are the premises as the guarantee states them.
 -/
 
 namespace Nci.Products.SecurityProofs
@@ -67,6 +68,41 @@ theorem not_sumBound_le :
     ENNReal.div_self (by norm_num) (by norm_num), not_le, ENNReal.one_lt_ofReal, sqrt_quarter]
   norm_num
 
+/-- **P-cell with the operands fresh**: `P` splits no cell, each MAC its own. -/
+theorem unsplitCells_fresh : Pair.freshProduct.UnsplitCells Pair.cell Pair.P :=
+  Pair.freshProduct.unsplitCells_of_unsplit Pair.cell (by decide) Pair.unsplit_fresh
+
+/-- **P-cell with the operands registered**: `P1`'s one block holds both MACs. -/
+theorem unsplitCells_P1 : Pair.registeredProduct.UnsplitCells Pair.cell Pair.P1 :=
+  Pair.registeredProduct.unsplitCells_of_unsplit Pair.cell (by decide) (by unfold Standard.Unsplit; decide)
+
+theorem not_sumCellCap :
+    ¬ ((∑ q ∈ (univ : Finset Unit), Pair.registeredSystem.ni q *
+          Pair.registeredSystem.K (Pair.registeredSystem.cls q) * Pair.registeredSystem.nj q : ℕ) : ℝ) ≤
+      √(1 / 4) * (((1 : ℕ) : ℝ) * (1 + ∑ j ∈ (univ : Finset Unit).image
+          Pair.registeredSystem.cls, wholeFactor (fun _ _ => 0) (fun _ => 1 / 16) j) / (1 : ℕ)) *
+        √(((1 : ℕ) : ℝ) * ((1 : ℕ) * (((1 : ℕ) : ℝ) / (1 : ℕ)) +
+          (∑ q ∈ (univ : Finset Unit), Pair.registeredSystem.ni q * Pair.registeredSystem.nj q : ℕ))) := by
+  rw [sum_macs, sum_outputs, sum_wholeFactor, sqrt_quarter]
+  have h2 : √(2 : ℝ) < 2 := by
+    rw [Real.sqrt_lt' (by norm_num)]
+    norm_num
+  norm_num
+  linarith
+
+theorem not_sumCellBound_le :
+    ¬ sumBound Pair.registered
+        (∑ q ∈ (univ : Finset Unit), Pair.registeredSystem.ni q *
+          Pair.registeredSystem.K (Pair.registeredSystem.cls q) * Pair.registeredSystem.nj q)
+        (∑ q ∈ (univ : Finset Unit), Pair.registeredSystem.ni q * Pair.registeredSystem.nj q) 0 2 1 1 1 (1 / 4)
+        (∑ j ∈ (univ : Finset Unit).image Pair.registeredSystem.cls, wholeFactor (fun _ _ => 0) (fun _ => 1 / 16) j)
+        1 ≤ partitionSlowdown Pair.registered 1 2 := by
+  rw [sum_macs, sum_outputs, sum_wholeFactor]
+  unfold sumBound partitionSlowdown
+  rw [computed_card, ENNReal.mul_div_cancel_right (by norm_num) (by norm_num),
+    ENNReal.div_self (by norm_num) (by norm_num), not_le, ENNReal.one_lt_ofReal, sqrt_quarter]
+  norm_num
+
 end Pair
 
 theorem SumCap_honest : Guarantees.SumCap_honest :=
@@ -94,6 +130,32 @@ theorem SumBound_nontrivial : Guarantees.SumBound_nontrivial :=
     Pair.registeredSystem.sharedOn_of_shared Pair.shared_registered (j := ()) fun _ _ => rfl, Pair.apart _ _,
     Pair.cells_registered, Pair.received_registered 2 1, Nat.one_pos, fun _ => by norm_num, fun _ _ => le_rfl,
     Pair.postFixed_registered, one_pos, fun h => Pair.not_sumBound_le (h 1 Pair.P1 Pair.isCK_P1)⟩
+
+theorem SumCellCap_honest : Guarantees.SumCellCap_honest :=
+  ⟨fun _ => Pair.algorithm_fresh.toWiring, Pair.values_fresh, Pair.shared_fresh, Pair.widthExtended_fresh,
+    Pair.matched _ _, Pair.freshSystem.sharedOn_of_shared Pair.shared_fresh (j := ()) fun _ _ => rfl, Pair.apart _ _,
+    Pair.received_fresh 1 3, Pair.isCK_fresh, Pair.unsplitCells_fresh, Nat.one_pos, fun _ => by norm_num,
+    fun _ _ => le_rfl, Pair.postFixed_fresh⟩
+
+theorem SumCellCap_nontrivial : Guarantees.SumCellCap_nontrivial :=
+  ⟨fun _ => Pair.algorithm_registered.toWiring, Pair.values_registered, Pair.shared_registered,
+    Pair.not_widthExtended_registered, Pair.matched _ _,
+    Pair.registeredSystem.sharedOn_of_shared Pair.shared_registered (j := ()) fun _ _ => rfl, Pair.apart _ _,
+    Pair.received_registered 2 1, Pair.isCK_P1, Pair.unsplitCells_P1, Nat.one_pos, fun _ => by norm_num,
+    fun _ _ => le_rfl, Pair.postFixed_registered, Pair.not_sumCellCap⟩
+
+theorem SumCellBound_honest : Guarantees.SumCellBound_honest :=
+  ⟨fun _ => Pair.algorithm_fresh.toWiring, Pair.values_fresh, Pair.shared_fresh, Pair.widthExtended_fresh,
+    Pair.matched _ _, Pair.freshSystem.sharedOn_of_shared Pair.shared_fresh (j := ()) fun _ _ => rfl, Pair.apart _ _,
+    Pair.received_fresh 1 3, Nat.one_pos, fun _ => by norm_num, fun _ _ => le_rfl, Pair.postFixed_fresh, one_pos,
+    Pair.isCK_fresh, Pair.unsplitCells_fresh⟩
+
+theorem SumCellBound_nontrivial : Guarantees.SumCellBound_nontrivial :=
+  ⟨fun _ => Pair.algorithm_registered.toWiring, Pair.values_registered, Pair.shared_registered,
+    Pair.not_widthExtended_registered, Pair.matched _ _,
+    Pair.registeredSystem.sharedOn_of_shared Pair.shared_registered (j := ()) fun _ _ => rfl, Pair.apart _ _,
+    Pair.received_registered 2 1, Nat.one_pos, fun _ => by norm_num, fun _ _ => le_rfl, Pair.postFixed_registered,
+    one_pos, Pair.isCK_P1, Pair.unsplitCells_P1, Pair.not_sumCellBound_le⟩
 
 example : ((∑ q ∈ (univ : Finset Unit), Pair.freshSystem.ni q * Pair.freshSystem.K (Pair.freshSystem.cls q) *
       Pair.freshSystem.nj q : ℕ) : ℝ) ≤
@@ -123,5 +185,34 @@ example (h : Pair.registeredSystem.WidthExtended 2 1 1) : False := by
   obtain ⟨hS, hV, hsh, -, hM, hsO, hap, hc, hR, hb, hcs, hA, hμ, ht, hn⟩ := SumBound_nontrivial
   exact hn (SumBound _ _ _ Pair.registeredSystem 2 1 1 1 _ _ _ univ (1 / 4) (fun _ => Pair.cell) 1 1 hS hV hsh h hM
     hsO hap (fun _ _ => hc) (fun _ _ => hR) hb hb hcs hA hμ ht)
+
+example : ((∑ q ∈ (univ : Finset Unit), Pair.freshSystem.ni q * Pair.freshSystem.K (Pair.freshSystem.cls q) *
+      Pair.freshSystem.nj q : ℕ) : ℝ) ≤
+    √(1 / 4) * (((3 : ℕ) : ℝ) * (1 + ∑ j ∈ (univ : Finset Unit).image
+        Pair.freshSystem.cls, wholeFactor (fun _ _ => 0) (fun _ => 3 / 16) j) / (1 : ℕ)) *
+      √(((2 : ℕ) : ℝ) * ((2 : ℕ) * (((3 : ℕ) : ℝ) / (1 : ℕ)) +
+        (∑ q ∈ (univ : Finset Unit), Pair.freshSystem.ni q * Pair.freshSystem.nj q : ℕ))) := by
+  obtain ⟨hS, hV, hsh, hW, hM, hsO, hap, hR, hP, hu, hb, hcs, hA, hμ⟩ := SumCellCap_honest
+  exact SumCellCap _ _ _ Pair.freshSystem 1 3 1 1 _ _ _ univ (1 / 4) (fun _ => Pair.cell) 2 Pair.P hS hV hsh hW hM
+    hsO hap (fun _ _ => hR) hP (fun _ _ => hu) hb hb hcs hA hμ
+
+example (h : Pair.registeredSystem.WidthExtended 2 1 1) : False := by
+  obtain ⟨hS, hV, hsh, -, hM, hsO, hap, hR, hP, hu, hb, hcs, hA, hμ, hn⟩ := SumCellCap_nontrivial
+  exact hn (SumCellCap _ _ _ Pair.registeredSystem 2 1 1 1 _ _ _ univ (1 / 4) (fun _ => Pair.cell) 1 Pair.P1 hS hV
+    hsh h hM hsO hap (fun _ _ => hR) hP (fun _ _ => hu) hb hb hcs hA hμ)
+
+example : sumBound Pair.fresh (∑ q ∈ (univ : Finset Unit), Pair.freshSystem.ni q *
+      Pair.freshSystem.K (Pair.freshSystem.cls q) * Pair.freshSystem.nj q)
+    (∑ q ∈ (univ : Finset Unit), Pair.freshSystem.ni q * Pair.freshSystem.nj q) 0 1 3 1 1 (1 / 4)
+    (∑ j ∈ (univ : Finset Unit).image Pair.freshSystem.cls, wholeFactor (fun _ _ => 0) (fun _ => 3 / 16) j) 1 ≤
+    partitionSlowdown Pair.fresh 2 1 := by
+  obtain ⟨hS, hV, hsh, hW, hM, hsO, hap, hR, hb, hcs, hA, hμ, ht, hP, hu⟩ := SumCellBound_honest
+  exact SumCellBound _ _ _ Pair.freshSystem 1 3 1 1 _ _ _ univ (1 / 4) (fun _ => Pair.cell) 1 hS hV hsh hW hM hsO
+    hap (fun _ _ => hR) hb hb hcs hA hμ ht 2 Pair.P hP (fun _ _ => hu)
+
+example (h : Pair.registeredSystem.WidthExtended 2 1 1) : False := by
+  obtain ⟨hS, hV, hsh, -, hM, hsO, hap, hR, hb, hcs, hA, hμ, ht, hP, hu, hn⟩ := SumCellBound_nontrivial
+  exact hn (SumCellBound _ _ _ Pair.registeredSystem 2 1 1 1 _ _ _ univ (1 / 4) (fun _ => Pair.cell) 1 hS hV hsh h
+    hM hsO hap (fun _ _ => hR) hb hb hcs hA hμ ht 1 Pair.P1 hP (fun _ _ => hu))
 
 end Nci.Products.SecurityProofs

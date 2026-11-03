@@ -5,32 +5,40 @@ import Definitions.Nci.Products.Sum
 # Products made whole through chains, several in a block: the cap and its bound on `ρ` summed over a set
 
 The theorems about a set `G` of a whole-making system's products (`Definitions.Nci.Products.Sum`), proved in
-`Nci.Products.SecurityProofs`: the sum over products, several of them in one block (io_bound's `Λ`, `SHARE`), where the
-cap with operands made whole (`Nci.Products.Guarantees.WholeCap`) bounds one product at a time. `k` is the bits an
-inference block reads beyond `θ`, `b` an operand's width, `b_C` a partial sum's, `μ` a post-fixed point of the system,
-`E = Σ_j e_j` the whole-making factors (`wholeFactor`) of `G`'s classes summed, and `h = √c_G k (1 + E) / b`.
+`Nci.Products.SecurityProofs`: the sum over products, several of them in one block (the `Λ` and `SHARE` of training's
+slowdown code), where the cap with operands made whole (`Nci.Products.Guarantees.WholeCap`) bounds one product at a
+time. `k` is the bits an inference block reads beyond `θ`, `b` an operand's width, `b_C` a partial sum's, `μ` a
+post-fixed point of the system, `E = Σ_j e_j` the whole-making factors (`wholeFactor`) of `G`'s classes summed, and
+`h = √c_G k (1 + E) / b`.
 
-* **The cap summed over a set** (`SumCap`): a set `G` of the system's products with P-share on `G` at `c_G`
-  (`System.SharedOn`) and disjoint MACs (`System.Apart`), each in cells of at most `w` MACs with its partial sums
-  received at their width in them, has, in every partition into `m` inference blocks,
-  `N ≤ m w k + h √(m (m k / b_C + O))`, with `N` and `O` the MACs and output entries of `G`'s products in all. In each
-  block, Loomis–Whitney and Cauchy–Schwarz bound the MACs of `G`'s whole cells by
+* **The cap summed over a set with P-cell** (`SumCellCap`): a set `G` of the system's products with P-share on `G` at
+  `c_G` (`System.SharedOn`) and disjoint MACs (`System.Apart`), each with its partial sums received at their width in
+  its cells, has, in every partition into `m` inference blocks that splits none of their cells (P-cell,
+  `Standard.UnsplitCells`), `N ≤ h √(m (m k / b_C + O))`, with `N` and `O` the MACs and output entries of `G`'s products
+  in all. In each block, Loomis–Whitney and Cauchy–Schwarz bound the MACs of `G`'s whole cells by
   `√(Σ_q |π₁₂| |π₂₃|) √(Σ_q |π₁₃|)`; P-share on `G` bounds the first factor by `√c_G H`, `H` the values the block has,
   at most `k (1 + E) / b`, paid at their width from its `k` bits or made whole, at most `E k / b`, by the class bound;
   and the entries it touches, at most `k / b_C + s_u`, have their partial sums read at `b_C` bits, from at most `k`
   bits more, or start their chains there, `s_u` of them. Cauchy–Schwarz over the blocks gives
-  `Σ_u √(k / b_C + s_u) ≤ √(m (m k / b_C + O))`, each chain started once, and the split cells add at most `w k` MACs a
-  block.
-* **The bound summed over a set** (`SumBound`): `ρ ≥ (N - h O / (2 t)) / (w k + h (t + (k / b_C) / t) / 2) · c / |C|`
-  at every `t > 0` (`sumBound`), a partition-level bound (`Nci.Formalism.PartitionBound`), on any set `G` with its
-  premises: the cap with `√(m (m k / b_C + O)) ≤ (t m + (m k / b_C + O) / t) / 2`, largest at `t² = k / b_C + O / m`.
+  `Σ_u √(k / b_C + s_u) ≤ √(m (m k / b_C + O))`, each chain started once, and with P-cell every MAC lies in a cell some
+  block holds whole.
+* **The bound summed over a set with P-cell** (`SumCellBound`): every partition `𝓘` into inference blocks that splits
+  none of `G`'s cells has `|𝓘| c / |C| ≥ (N - h O / (2 t)) / (h (t + (k / b_C) / t) / 2) · c / |C|` at every `t > 0`
+  (`sumBound` with no cells split, `w = 0`): the cap with `√(m (m k / b_C + O)) ≤ (t m + (m k / b_C + O) / t) / 2`,
+  largest at `t² = k / b_C + O / m`. It bounds the partitions P-cell allows, so P-cell is its premise, not a
+  partition-level bound over every partition.
+* **Without P-cell** (`SumCap`, `SumBound`): with each product in cells of at most `w` MACs whose gates are connected
+  (`Standard.Cells`), a partition may split cells, each split costing some block a read across it, and the split cells
+  add at most `w k` MACs a block: `N ≤ m w k + h √(m (m k / b_C + O))`, and
+  `ρ ≥ (N - h O / (2 t)) / (w k + h (t + (k / b_C) / t) / 2) · c / |C|` at every `t > 0` (`sumBound`), a partition-level
+  bound (`Nci.Formalism.PartitionBound`) with no premise on the partition, the bound with P-cell's sensitivity to it.
 
-Against io_bound's `Λ`: `√c_G / √(1/4)` at `c_G = 1/3` is its `SHARE`, `2/√3`, a lone product's `Σ |hadA| |hadB|` being
-at most `H²/4`; the partial sums' reads charged apart from the operands', from at most `k` bits each, take the place of
-its `feed`, since a partial sum finished into another product's operand may be read for both; and `1 + E` is its
-whole-making, with `E` summed over `G`'s classes. The premises are the class bound's (`Nci.Products.Guarantees.WholeCap`
-names them), P-share on `G`, Apart, and each product's cells (`Standard.Cells`) and partial sums received at their width
-(`Standard.Received`).
+Against the `Λ` of training's slowdown code: `√c_G / √(1/4)` at `c_G = 1/3` is its `SHARE`, `2/√3`, a lone product's
+`Σ |hadA| |hadB|` being at most `H²/4`; the partial sums' reads charged apart from the operands', from at most `k` bits
+each, take the place of its `feed`, since a partial sum finished into another product's operand may be read for both;
+and `1 + E` is its whole-making, with `E` summed over `G`'s classes. The premises are the class bound's
+(`Nci.Products.Guarantees.WholeCap` names them), P-share on `G`, Apart, each product's partial sums received at their
+width in its cells (`Standard.Received`), and P-cell or, without it, each product's cells (`Standard.Cells`).
 
 Each has an honest and a nontrivial lemma (`Definitions.Nci.Guarantees.Products.SumWitnesses`).
 -/
@@ -72,5 +80,38 @@ def SumBound : Prop :=
     sys.PostFixed k b cs A μ → 0 < t →
     PartitionBound d c k (sumBound d (∑ q ∈ G, sys.ni q * sys.K (sys.cls q) * sys.nj q)
       (∑ q ∈ G, sys.ni q * sys.nj q) w c k b bC cG (∑ j ∈ G.image sys.cls, wholeFactor A μ j) t)
+
+/-- **The cap summed over a set with P-cell**: a set `G` of a whole-making system's products, with the class bound's
+premises, P-share on `G` at `c_G` and disjoint MACs, each with its partial sums received at their width in its cells,
+has in every partition into `m` inference blocks that splits none of their cells (P-cell) `N ≤ h √(m (m k / b_C + O))`,
+`N` and `O` the MACs and output entries of `G`'s products in all, `h = √c_G k (1 + E) / b` and `E` the whole-making
+factors of their classes summed. -/
+def SumCellCap : Prop :=
+  ∀ (d : Declaration) (ι κ : Type) [Fintype ι] [DecidableEq ι] [Fintype κ] [DecidableEq κ] (sys : System d ι κ)
+    (c k b bC : ℕ) (cs : κ → ℝ) (A : κ → κ → ℝ) (μ : κ → ℝ) (G : Finset ι) (cG : ℝ)
+    (cell : (q : ι) → Fin (sys.ni q) → Fin (sys.K (sys.cls q)) → Fin (sys.nj q) → ℕ) (m : ℕ)
+    (P : Partition d.D m),
+    (∀ p, (sys.prod p).Wiring) → sys.Values → sys.Shared c k cs → sys.WidthExtended c k b → sys.Matched A →
+    sys.SharedOn c k cG G → sys.Apart G → (∀ q ∈ G, (sys.prod q).Received (cell q) c k bC) → P.IsCK d c k →
+    (∀ q ∈ G, (sys.prod q).UnsplitCells (cell q) P) → 0 < b → 0 < bC → (∀ j, 0 ≤ cs j) → (∀ i j, 0 ≤ A i j) →
+    sys.PostFixed k b cs A μ →
+    ((∑ q ∈ G, sys.ni q * sys.K (sys.cls q) * sys.nj q : ℕ) : ℝ) ≤
+      √cG * ((k : ℝ) * (1 + ∑ j ∈ G.image sys.cls, wholeFactor A μ j) / b) *
+        √((m : ℝ) * (m * ((k : ℝ) / bC) + (∑ q ∈ G, sys.ni q * sys.nj q : ℕ)))
+
+/-- **The bound summed over a set with P-cell**: for a set `G` of a whole-making system's products with the cap summed
+over a set with P-cell's premises, every partition `𝓘` into inference blocks that splits none of their cells has, at
+every `t > 0`, `|𝓘| c / |C| ≥ (N - h O / (2 t)) / (h (t + (k / b_C) / t) / 2) · c / |C|`, `sumBound` with no cells
+split. -/
+def SumCellBound : Prop :=
+  ∀ (d : Declaration) (ι κ : Type) [Fintype ι] [DecidableEq ι] [Fintype κ] [DecidableEq κ] (sys : System d ι κ)
+    (c k b bC : ℕ) (cs : κ → ℝ) (A : κ → κ → ℝ) (μ : κ → ℝ) (G : Finset ι) (cG : ℝ)
+    (cell : (q : ι) → Fin (sys.ni q) → Fin (sys.K (sys.cls q)) → Fin (sys.nj q) → ℕ) (t : ℝ),
+    (∀ p, (sys.prod p).Wiring) → sys.Values → sys.Shared c k cs → sys.WidthExtended c k b → sys.Matched A →
+    sys.SharedOn c k cG G → sys.Apart G → (∀ q ∈ G, (sys.prod q).Received (cell q) c k bC) → 0 < b → 0 < bC →
+    (∀ j, 0 ≤ cs j) → (∀ i j, 0 ≤ A i j) → sys.PostFixed k b cs A μ → 0 < t →
+    ∀ (m : ℕ) (P : Partition d.D m), P.IsCK d c k → (∀ q ∈ G, (sys.prod q).UnsplitCells (cell q) P) →
+      sumBound d (∑ q ∈ G, sys.ni q * sys.K (sys.cls q) * sys.nj q) (∑ q ∈ G, sys.ni q * sys.nj q) 0 c k b bC cG
+        (∑ j ∈ G.image sys.cls, wholeFactor A μ j) t ≤ partitionSlowdown d m c
 
 end Nci.Products.Guarantees
