@@ -417,6 +417,20 @@ def _broadcast_dims(flat, shape: tuple, out: tuple) -> frozenset | None:
     return frozenset(i for i in range(len(out)) if out[i] > 1 and (i < k or shape[i - k] == 1 or i - k in flat))
 
 
+def _grid(*shapes: tuple) -> list[int] | None:
+    """The finest grid that arrays of `shapes`, each of the same entries laid out in order, share: the sizes of their
+    trailing blocks (each dim's entries times every later dim's), sorted, where each divides the next, so every dim of
+    each is a run of the grid's cells; None where they don't nest (a 2 x 3 and a 3 x 2 share none)."""
+    cuts = sorted({math.prod(s[i:]) for s in shapes for i in range(len(s) + 1)})
+    return cuts if all(b % a == 0 for a, b in zip(cuts, cuts[1:])) else None
+
+
+def _on_grid(grid: list[int], shape: tuple, flat: frozenset) -> frozenset:
+    """The cells of `grid` (its consecutive sizes) along which an array of `shape`, flat along `flat`, is."""
+    return frozenset(j for i in flat for j in range(len(grid) - 1)
+                     if math.prod(shape[i + 1:]) <= grid[j] and grid[j + 1] <= math.prod(shape[i:]))
+
+
 def _flats(vs: _Values, src: list) -> list:
     """Each value's flat dims: those of size above 1 along which what it reads of θ′ doesn't vary, so it is a broadcast
     along them (None: unknown, or it doesn't depend on θ′). A value that is its own source (`_sources`) has none; a
@@ -465,7 +479,10 @@ def _elementwise_products(vs: _Values) -> list[dict]:
     than the sources (`_sources`) of either have, each broadcast or repeated along a dim the other isn't (`_flats`;
     dims it can't tell never exempt): an outer product, a GEMM with K = 1, or a matrix product once summed, as
     (x.unsqueeze(-1) * W).sum(-2) writes x @ W, whatever maps or copies the broadcast passes through first. Two
-    broadcasts along the same dims (a token's code over lanes times the token's scale) are elementwise. And a sum by
+    broadcasts along the same dims (a token's code over lanes times the token's scale) are elementwise. The dims are
+    compared on the grid the operands' shapes share (`_grid`), an operand that is a view regrouping its argument's
+    dims read by its argument's, so a code's levels whose lanes a view merges into their group, times the group's
+    scale, are elementwise, and two broadcasts each flattened by a view are still a product. And a sum by
     index (`_sums_by_index`) of a multiplication of two such values one of which carries a gather's rows (a sparse
     product: gather, mul and index_add), in the forward or the backward. A gather's rows and such a multiplication are
     carried by every view, and by every other op with one affected argument and no fewer entries (a cast, a map, a
@@ -485,16 +502,32 @@ def _elementwise_products(vs: _Values) -> list[dict]:
         s = frozenset().union(*(src[x] for x in _reads(vs, n, a) if dep[x]))
         return min(io_bound._numel(a), sum(size[x] for x in s))
 
-    def dims(n, a) -> frozenset | None:
+    def dims(n, a) -> tuple[tuple, frozenset] | None:
+        """Operand `a` of `n` as (a shape of `n`'s entries, the dims of it along which `a` is flat): `n`'s own, or,
+        where `a` is a view that regroups its argument's dims (merging a flat dim with others, which its own dims
+        can't say) and `n` doesn't broadcast it, its argument's."""
         own = vs.flow.val.get(a)
         if not isinstance(own, int) or _reads(vs, n, a) - {own}:
             return None
-        return _broadcast_dims(flat[own], _shape_of(a), _shape_of(n))
+        out = _shape_of(n)
+        got = _broadcast_dims(flat[own], _shape_of(a), out)
+        if got is not None:
+            return out, got
+        x = a.args[0] if _pk(a.target) in _RESHAPE and a.args and hasattr(a.args[0], "op") else None
+        arg = vs.flow.val.get(x) if x is not None else None
+        if not isinstance(arg, int) or flat[arg] is None or _shape_of(a) != out or _reads(vs, a, x) - {arg}:
+            return None
+        return _shape_of(x), flat[arg]
 
     def mixes(n, a, b) -> bool:
-        """Whether each operand is a broadcast along a dim the other isn't (unknown: it may be)."""
+        """Whether each operand is a broadcast along a dim the other isn't (unknown: it may be), compared on the grid
+        both shapes share (`_grid`)."""
         fa, fb = dims(n, a), dims(n, b)
-        return fa is None or fb is None or not (fa <= fb or fb <= fa)
+        grid = None if fa is None or fb is None else _grid(fa[0], fb[0])
+        if grid is None:
+            return True
+        ga, gb = _on_grid(grid, *fa), _on_grid(grid, *fb)
+        return not (ga <= gb or gb <= ga)
 
     def add(name: str, macs: int) -> None:
         c, m = found.get(name, (0, 0))
