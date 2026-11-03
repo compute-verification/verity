@@ -41,7 +41,7 @@ theorem jsonOf_toOption (a b : String) (q : ByteArray) : (jsonOf a q).toOption =
   | none => rfl
   | some t =>
     simp only
-    cases Lean.Json.parse t <;> rfl
+    cases Flock.JsonParse.parse t <;> rfl
 
 theorem toOption_eq_some {ε α : Type} {e : Except ε α} {a : α} (h : e.toOption = some a) : e = .ok a := by
   cases e <;> simp_all [Except.toOption]
