@@ -104,3 +104,5 @@ theorem l0Fixed_honestVals (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hw : 
 end Loop
 
 end Claims.ZKServer
+
+#print axioms Claims.ZKServer.Loop.l0Fixed_honestVals
