@@ -3,8 +3,8 @@
 (note:training-20261102T2215Z-report-training-formalism-v2), which te_core.rescore scores: this file holds no formula of
 its own (Fit, Slowdown's rho, the attack side, W*, H and S are te_core.formalism's and te_core.frontier's).
 
-It reads the night's state as the scorer left it: `submissions.json` (the current regime: the valid records'
-checkpoints), the launch records in `index.jsonl` (trainable set, arguments, tokens) and `starts.json` from the scorer's
+It reads the night's state as the scorer left it: `submissions.json` (the regimes in `REGIMES`, the current one and
+v2.3's pin: the valid records' checkpoints on the starts `starts.json` has), the launch records in `index.jsonl` (trainable set, arguments, tokens) and `starts.json` from the scorer's
 directory, and te_core's ledger (`index.jsonl`, every checkpoint's counted operations, joined on run id and MACs).
 
     PYTHONPATH=. uv run python benchmarks/covert_witness/analysis/rescore_v1.py --out /tmp/te-v1-quantities
@@ -52,6 +52,8 @@ FUSED_ADAMW_MACS = 8
 LF_STAGES = {"attn_norm": 0, "wq": 1, "wk": 1, "wv": 1, "wo": 2, "mlp_norm": 3, "w_gate": 4, "w_up": 4, "w_down": 5}
 REFS = ("ref-optim", "ref-data")
 LATENT_BITS = 32
+#: the scorer's regimes the analysis reads: v2.3's records are "pin 2.3" since the v3 pin (02:40Z) made v3's current
+REGIMES = ("current", "pin 2.3")
 
 
 def gate_factors(cache: Path) -> dict:
@@ -222,13 +224,14 @@ def family(r: dict) -> str:
 
 
 def load(scorer: Path, ledger: Path):
-    subs = [x for x in json.loads((scorer / "submissions.json").read_text()) if x["regime"] == "current"]
     launch = {}
     for line in (scorer / "index.jsonl").open():
         r = json.loads(line)
         if r.get("source") == "launch.py":
             launch[r["id"]] = r
     starts = json.loads((scorer / "starts.json").read_text())
+    subs = [x for x in json.loads((scorer / "submissions.json").read_text())
+            if x["regime"] in REGIMES and launch.get(x["id"], {}).get("start") in starts]
     for rid in {x["id"] for x in subs}:
         meta = scorer / "records" / rid.split(":", 1)[-1] / "meta.json"
         notes = (json.loads(meta.read_text()).get("notes") or {}) if meta.exists() else {}
