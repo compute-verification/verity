@@ -33,9 +33,11 @@ from te_core import hooks
 MATRICES = ("wq", "wk", "wv", "wo", "w_gate", "w_up", "w_down")
 
 
-def forward(p: dict, cfg: dict, ids: torch.Tensor, lin, emb, cos, sin, cache: list | None = None, pos: int = 0):
-    """Logits of `ids` (n, t) at positions pos.., the lf model of `cfg` with its gains from `p`, its matrices through
-    `lin(name, x)` and its lookup `emb(ids)`; `cache` (one (k, v) a layer, None before the first call) grows by t."""
+def forward(p: dict, cfg: dict, ids: torch.Tensor, lin, emb, cos, sin, cache: list | None = None, pos: int = 0,
+            last: bool = False):
+    """Logits of `ids` (n, t) at positions pos.. (with `last`, at the last position only), the lf model of `cfg` with
+    its gains from `p`, its matrices through `lin(name, x)` and its lookup `emb(ids)`; `cache` (one (k, v) a layer,
+    None before the first call) grows by t."""
     n, t = ids.shape
     d, h = cfg["d_model"], cfg["n_head"]
     x = emb(ids)
@@ -53,6 +55,8 @@ def forward(p: dict, cfg: dict, ids: torch.Tensor, lin, emb, cos, sin, cache: li
         x = x + lin(b + "wo.weight", a).to(x.dtype)
         y = F.rms_norm(x, (d,), p[b + "mlp_norm"].to(x.dtype))
         x = x + lin(b + "w_down.weight", F.silu(lin(b + "w_gate.weight", y)) * lin(b + "w_up.weight", y)).to(x.dtype)
+    if last:
+        x = x[:, -1:]
     x = F.rms_norm(x, (d,), p["norm"].to(x.dtype))
     return lin("embed", x)
 
@@ -209,7 +213,8 @@ def main() -> int:
             rows = data.next(a.gen_batch)
             n_prompt = max(16, int(a.prompt_share * (rows.shape[1] - 1)))
             lin, emb = reader()
-            out = [gumbel(forward(served, cfg, rows[:, :n_prompt], lin, emb, cos, sin, cache, 0)[:, -1], gen)]
+            out = [gumbel(forward(served, cfg, rows[:, :n_prompt], lin, emb, cos, sin, cache, 0, last=True)[:, -1],
+                          gen)]
         with hooks.step(), torch.no_grad():
             lin, emb = reader()
             for i in range(a.generate - 1):
