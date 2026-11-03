@@ -1007,14 +1007,29 @@ def test_served_passes_verify_refuses_two_passes_of_one_salt_sharing_a_call_inde
 
 @pytest.mark.slow
 def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
-    """Two honest passes of one epoch numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: both replayed and
-    accepted."""
+    """Two honest passes of one epoch numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: both replayed at
+    once (``--parallel 2``) and accepted, their verdicts in pass order."""
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
     d, out = _serve_dir(tmp_path, [a, b]), tmp_path / "verify.json"
-    assert SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 0
+    assert SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "2", "--parallel", "2"]) == 0
     doc = json.loads(out.read_text())
     assert (doc["ok"], doc["verified"], doc["accepted"]) == (True, 2, 2) and "refused" not in doc
+    assert [v["pass"] for v in doc["verdicts"]] == [0, 1] and all(v["line"].startswith("ACCEPT") for v in doc["verdicts"])
+
+
+def test_served_passes_verify_refuses_a_serve_that_retained_no_pass(tmp_path):
+    """A serve run with ``--no-retain`` wrote no pass's manifest, so ``verify`` refuses it (``unretained``) and replays
+    nothing."""
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    d, out = tmp_path / "served", tmp_path / "verify.json"
+    d.mkdir()
+    (d / "served.json").write_text(json.dumps({"run": RUN, "retained": False,
+                                               "passes": [{"pass": i, "units": 2, "tiles": 4, "manifest": None, "macs": None}
+                                                          for i in range(3)]}))
+    assert SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1"]) == 1
+    doc = json.loads(out.read_text())
+    assert (doc["ok"], doc["verified"], doc["verdicts"], doc["refused"][0]) == (False, 0, [], "unretained")
 
 
 def test_served_passes_counts_a_passs_linear_macs_and_its_credited_cells_macs(tmp_path):

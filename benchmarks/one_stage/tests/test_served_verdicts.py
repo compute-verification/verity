@@ -773,6 +773,34 @@ def test_a_pearlplus_piece_replays_its_own_served_run_and_credits_nothing(tmp_pa
     assert got["pouw"]["shares_at_tensor_clock"]["declared_linears"] == tensor["declared_linears"]
 
 
+def test_a_pearlplus_piece_sets_the_unretained_serve_of_its_load_beside_its_shares(tmp_path, capsys):
+    """The same load served with no pass retained (``serve --no-retain``) gives the shares' ``unretained``: the retained
+    run's declared MACs over its wall at each reading, and the walls' ratio. One that served another load, or retained its
+    passes, is no comparison: the shares say why, and the verdict is the run's and its replay's alone."""
+    served, verified = _pearlplus_run()
+    served["engine"] = {"max_num_batched_tokens": 8192}
+    unretained = {**served, "retained": False, "generate_s": 0.5, "passes": []}
+    doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, unretained)
+    un, rho = doc["shares"]["unretained"], 4096 * 132 * 1830e6
+    assert doc["verdict"] == "accept" and (un["wall_s"], un["retained_over_unretained"]) == (0.5, 4.0)
+    assert un["readings"]["tensor"]["declared_linears"] == 6000 / rho / 0.5
+    assert S.development_line(doc)["unretained"] == {"generate_s": 0.5, "declared_linears_at_tensor_clock": 6000 / rho / 0.5}
+    assert S.development_line(S.pearlplus(tmp_path / "plain", served, verified))["unretained"] is None
+    for other, why in (({"engine": {"max_num_batched_tokens": 4096}}, "served another load"),
+                       ({"prompt_tokens": 512}, "served another load"), ({"retained": True}, "retained its passes")):
+        doc = S.pearlplus(tmp_path / "pieces" / "pouw", served, verified, {**unretained, **other})
+        assert doc["verdict"] == "accept" and why in doc["shares"]["unretained"]["error"]
+        assert why in S.development_line(doc)["unretained"]
+    (tmp_path / "served.json").write_text(json.dumps(served))
+    (tmp_path / "v.json").write_text(json.dumps(verified))
+    (tmp_path / "un.json").write_text(json.dumps(unretained))
+    out = tmp_path / "cli"
+    assert S.main(["pearlplus", str(out), "--served", str(tmp_path / "served.json"), "--verify", str(tmp_path / "v.json"),
+                   "--unretained", str(tmp_path / "un.json")]) == 0
+    line = json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))
+    assert line["verdict"] == "accept" and line["unretained"]["generate_s"] == 0.5
+
+
 @pytest.mark.parametrize("served, verified, reason", [
     (True, (True, False, True, True), "the replay accepted 3 of 4 passes: REJECT pass 1"),
     (True, None, "no replay: served_passes.py verify wrote no document"),

@@ -27,7 +27,10 @@ Pearl+'s served run (`pearlplus_shares`, from `served_passes.py`'s serve and ver
 has no step trace: its wall is its timed ``generate`` call's, its declared work that call's passes' linear MACs alone (no
 attention or LM head), and its credited work the credited cells' MACs of those passes the reference replay accepted, both at
 θ (the H200's dense FP8 rate is its int8 rate). The work law's credit (`clear_work.work`, W1 units: one a chain MAC, plus
-the peel's and A's forming) at θ is beside them, and no floor is applied: Pearl+'s is compute-accounting's to set.
+the peel's and A's forming) at θ is beside them, and no floor is applied: Pearl+'s is compute-accounting's to set. Every
+pass of that run is written whole for the replay inside its step; the same load served with no pass retained
+(`served_passes.py serve --no-retain`) gives the declared utilization without that write (`pearlplus_unretained`): the
+retained run's declared work over the unretained run's wall.
 """
 from __future__ import annotations
 
@@ -146,6 +149,30 @@ def pearlplus_shares(served: dict[str, Any], verified: dict[str, Any]) -> dict[s
             "macs": {"declared_linears": declared, "credited": credited}, "credit_w1": str(credit),
             "readings": {r: {"clock_mhz": CLOCKS_MHZ[r], "theta_macs_s": rho, "declared_linears": declared / rho / wall,
                              "credited": credited / rho / wall, "credit_w1": float(credit) / rho / wall}
+                         for r, rho in RHO.items()}}
+
+
+#: what two of `served_passes.py serve`'s documents agree on when they served one load
+LOAD = ("arm", "requests", "prompt_tokens", "output_tokens")
+
+
+def pearlplus_unretained(shares: dict[str, Any], served: dict[str, Any], unretained: dict[str, Any]) -> dict[str, Any]:
+    """The declared utilization of `pearlplus_shares`' run (``shares``, of ``served``) without retention: its declared work
+    over the wall of ``unretained``, `served_passes.py serve --no-retain`'s document of the same load, at each reading;
+    ValueError when ``unretained`` retained its passes or served another load (`LOAD` and the engine's batched tokens)."""
+    if unretained.get("retained") is not False:
+        raise ValueError("the unretained run retained its passes")
+
+    def load(d):
+        return [d.get(k) for k in LOAD] + [(d.get("engine") or {}).get("max_num_batched_tokens")]
+    if load(unretained) != load(served):
+        raise ValueError(f"the unretained run served another load: {load(unretained)} against {load(served)}")
+    wall = unretained["generate_s"]
+    if not (isinstance(wall, (int, float)) and wall > 0):
+        raise ValueError(f"the unretained run's timed call has no wall: {wall!r}")
+    declared = shares["macs"]["declared_linears"]
+    return {"wall_s": wall, "retained_over_unretained": shares["wall_s"] / wall,
+            "readings": {r: {"clock_mhz": CLOCKS_MHZ[r], "theta_macs_s": rho, "declared_linears": declared / rho / wall}
                          for r, rho in RHO.items()}}
 
 
