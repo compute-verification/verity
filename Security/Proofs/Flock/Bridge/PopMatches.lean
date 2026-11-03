@@ -114,7 +114,6 @@ theorem sum_strata_popOf (l : SampledProofs.Slots.Layout) :
     ((l.classes.toList.headD #[]).toList.map Array.size).sum = (popOf l).length := by
   simp only [popOf, List.length_flatten, List.map_map]
   congr 1
-  exact List.map_congr_left fun a _ => (Array.length_toList).symm
 
 /-- **The strata sum to `n`**: at `PopMatches`, the registration's strata cover the population's `n` slots. -/
 theorem nsOf_sum {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} (h : PopMatches desc q n) : (nsOf desc q).sum = n := by
