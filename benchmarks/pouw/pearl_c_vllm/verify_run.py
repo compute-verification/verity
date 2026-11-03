@@ -23,7 +23,7 @@
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
   forms, with every ``--cross-check``-th tile id replayed on the scalar reference too).  `tests/test_pearl_c_vllm_verify.py` holds this to `audit`'s
   own verdict.
-- **The served y**, where a call commits it (`served_y`, the manifest's ``y``): an accepted tile's rows of y open against
+- **The served y**, where a call commits it (`served_y`, the manifest's ``y``): an accepted tile's real rows of y open against
   its root, and each of the tile's words must be the unscale of the tile's checked U (`pearl_c_u.y`, the kernels'
   epilogue), so the y that leaves the linear is the one the credited rows computed.
 
@@ -159,12 +159,12 @@ class Opened:
                                    sv(bytes(leaves[nb * tile_id:nb * tile_id + nb]), HM96_TRANSCRIPT, tile_id), nb))
 
     def open_y(self, epoch: Epoch, tile_id: int) -> tuple[Opening, ...]:
-        """The tile's rows of its call's committed y (`served_y`)."""
+        """The tile's real rows of its call's committed y (`served_y`; filler rows aren't served)."""
         ref = self.refs[tile_id]
-        u, y = epoch.workload.matmuls[ref.matmul], self.man["matmuls"][ref.matmul]["y"]
-        rows, tree = self.files(y["rows"]), self.files(y["tree"])
-        return tuple(opening(tree, u.shape.m, i, self._salted(f32_row(rows, u.shape.n, i), SY.HM96_Y + u.index, i), self.nb)
-                     for i in ref.tile.rows)
+        u, rec = epoch.workload.matmuls[ref.matmul], self.man["matmuls"][ref.matmul]
+        rows, tree, real = self.files(rec["y"]["rows"]), self.files(rec["y"]["tree"]), rec["real_rows"]
+        return tuple(opening(tree, real, i, self._salted(f32_row(rows, u.shape.n, i), SY.HM96_Y + u.index, i), self.nb)
+                     for i in ref.tile.rows if i < real)
 
 
 class Refused(ValueError):
@@ -274,18 +274,19 @@ def _check(pick: tuple[int, int, int]) -> tuple[int, int, bool, str | None]:
 
 
 def check_y(p: Pass, pos: int, tile: Tile, v, opened: tuple[Opening, ...]) -> str | None:
-    """The served y on an accepted tile: its rows open against the call's y root, and each of the tile's words is the unscale
+    """The served y on an accepted tile: its real rows open against the call's y root, and each of their words is the unscale
     of the tile's checked U at its row's and column's α (`pearl_c_u.y`, the kernels' epilogue)."""
     if p.scheme.commitment_hash != HM96 or p.scheme.forming != "v1":
         return f"y is checked under {HM96} and forming v1, not {p.scheme.name}"
-    u, root = p.epoch.workload.matmuls[pos], bytes.fromhex(p.man["matmuls"][pos]["y"]["root"])
-    d, c = SY.y_domain(p.epoch.salt, u.index, u.shape.m), Commitment(root, u.shape.m)
+    u, rec = p.epoch.workload.matmuls[pos], p.man["matmuls"][pos]
+    real = rec["real_rows"]
+    d, c = SY.y_domain(p.epoch.salt, u.index, real), Commitment(bytes.fromhex(rec["y"]["root"]), real)
     try:
         if not all(verify_opening(d, c, o, ROW_SCHEMA, LIMITS) for o in opened):
             return "y opening"
     except ProtocolError:
         return "y opening"
-    for x, (o, urow) in enumerate(zip(opened, v.checked.u, strict=True)):
+    for x, (o, urow) in enumerate(zip(opened, v.checked.u[:len(opened)], strict=True)):
         words = np.frombuffer(opened_value(HM96, o.value), "<u4")
         for z, j in enumerate(tile.cols):
             try:

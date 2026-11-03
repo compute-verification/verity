@@ -349,7 +349,7 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
     for u in man["matmuls"]:
         y, tree = (tmp_path / u["y"]["rows"]["path"]).read_bytes(), (tmp_path / u["y"]["tree"]["path"]).read_bytes()
         root, want = SY.commit_y(y, u["n"], salt, u["index"], SALT_KEY)
-        assert len(y) == 2 * u["m"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
+        assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
 
 
 def test_a_retained_pass_starts_from_poisoned_outputs_and_omit_drops_a_step(device_run, tmp_path):
@@ -917,6 +917,7 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1)):
         x = rows(acts[u.index])
         d = rows_domain(activation_binding(epoch.salt, u.index), u.index, u.shape.m, s.commitment_hash)
         y = reference_y(s, Context(epoch.salt, u, root, epoch.weight_roots[u.weight]), x, rows(wrows[u.weight]))
+        y = y[:2 * rec.real_rows * u.shape.n]
         matmuls.append({"index": u.index, "m": u.shape.m, "k": k, "n": u.shape.n, "weight": u.weight, "real_rows": rec.real_rows,
                         "k_kept": rec.k_kept, "excluded_a": list(rec.excluded_a), "root_a": root.hex(),
                         "rows": PPD._write(tmp_path / "calls" / f"{u.index}.rows.bf16", bf16_file(x), digest=False),

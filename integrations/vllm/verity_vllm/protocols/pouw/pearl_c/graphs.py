@@ -231,7 +231,7 @@ class GraphCalls:
 
     def _retained(self, cur: Any, mm: Matmul, m: int, flags: Any, xa: Any, tree: Any, y: Any = None) -> None:
         """A retained call's record (the rows its screen excluded, from its flags) and files (its rows as BF16, A's tree,
-        and given its m₁₆ rows of `y`, y committed: `served_y`)."""
+        and given its real rows of `y`, y committed: `served_y`)."""
         import torch
         cur.records.append(PW.UnitRecord(mm, m, mm.shape.k, excluded(flags[:, 0].bool(), flags[:, 1].bool(), xa[:m]),
                                          self.weights[mm.weight].excluded))

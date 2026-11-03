@@ -617,7 +617,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
             if cur.retain is not None:
                 if "a_tree" in self._side_groups(sh) and sh.done[sh.j] is not None:   # A's tree is the call's side lane's
                     self.torch_stream(self.stream()).wait_event(sh.done[sh.j])
-                self._retained(cur, cur.matmuls[-1], m, flags, *self._kept(sh, pipe), y=y[:m16])
+                self._retained(cur, cur.matmuls[-1], m, flags, *self._kept(sh, pipe), y=y[:m])
             cur.tiles += tiles
         out = y[:m] if bias is None else y[:m] + bias
         return out.reshape(*lead, wt.n)
