@@ -1,16 +1,18 @@
-import Proofs.Properties.Verity.Recursive
+import Proofs.Properties.Verity.Recursive.FinderCost
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.BitsLin2
 import Proofs.Flock.Claims.Recursion.DeployFacts
 import Proofs.Core.Circuit
 
 /-!
-# The target, proved: sampled proofs at the recursive configuration
+# The target at the binding finder: sampled proofs at the recursive configuration
 
-`sampledProofsRecursive` proves the target's bound at each strategy from the property `acc_of_accepts` states
-(`AccOfAccepts`, the statement of `acc_of_accepts` at the deployment), at `acc_of_accepts`.
+`sampledProofsRecursive_bind` proves the target's bound at each strategy whose finders meet `FinderCR` from the
+property `acc_of_accepts` states (`AccOfAccepts`, the statement of `acc_of_accepts` at the deployment), at
+`acc_of_accepts`; `prob_le_off`, the part both binding finders share, leaves the probability that a play is off the
+plurality, which `Proofs.Properties.Verity.Recursive.Chase` bounds at the chasing finder.
 
-The proof, at a strategy `σ` whose finders meet `FinderCR` (elsewhere the error is `⊤`), where the files pass the
+The proof, at a strategy `σ` whose finders meet `FinderCR` (elsewhere the bound is `⊤`), where the files pass the
 commit phase's check (elsewhere no play is accepted) and sampled proofs' claim fails on the extracted transcript `X`
 (elsewhere the event is empty), so that the unbound units `U` number more than `ε n`:
 * each accepted play shows, through the coupling (`SessionIn.names_shows`) and G, an accepted run of the recursive
@@ -20,7 +22,8 @@ commit phase's check (elsewhere no play is accepted) and sampled proofs' claim f
   extractor's witness, correct and opened on every drawn unit (`hread`), differs from `X` at some bit of a wire of a drawn
   unit of `U` (`unbound_drawn`), the bit `X`'s plurality didn't pick (`offEvent`, `pr_verdict_le`);
 * averaged over the draws, the miss is at most `δs` (`hdraw`), and the last event is at most `√(min(W, 2n) · K)`,
-  `K = E[bindBudget] / 2^256`, with `W` the file's wire bits and `n` its units. Both bounds pick one piece per play
+  `K = E[bindBudget] / 2^256`, with `W` the file's wire bits and `n` its units, and the binding finder's expected
+  calls at most `bindBudget` (`ex_bindAt_cost_le`). Both bounds pick one piece per play
   (`units_bound`), giving each piece a share `a` at most `p`, and rest on `hcoll`, which turns two independent plays
   that read a drawn wire differently into the binding finder's collision, so that a play off `X` at a bit collides with
   every play that reads `X`'s bit there (`majority_le_coll`):
@@ -92,6 +95,14 @@ theorem ex_prod {β γ : Type} [Fintype β] [Fintype γ] (f : β → γ → ℝ)
   rw [Fintype.sum_prod_type, Fintype.card_prod, ← Finset.sum_div]
   push_cast
   ring
+
+theorem ex_fst {β γ : Type} [Fintype β] [Fintype γ] [Nonempty γ] (f : β → ℝ) :
+    Ex (fun s : β × γ => f s.1) = Ex f :=
+  (ex_prod (fun (a : β) (_ : γ) => f a)).trans (ex_congr fun a => Ex_const (α := γ) (f a))
+
+theorem ex_snd {β γ : Type} [Fintype β] [Fintype γ] [Nonempty β] (f : γ → ℝ) :
+    Ex (fun s : β × γ => f s.2) = Ex f :=
+  (ex_prod (fun (_ : β) (b : γ) => f b)).trans (Ex_const (α := β) (Ex f))
 
 theorem ex_comm {β γ : Type} [Fintype β] [Fintype γ] (f : β → γ → ℝ) :
     Ex (fun a => Ex (fun b => f a b)) = Ex (fun b => Ex (fun a => f a b)) := by
@@ -233,12 +244,6 @@ theorem accOfAccepts (q : Dep) : AccOfAccepts q :=
   fun p c e bs _ _ hacc x hnames _ P ω r hshow hrows hlive =>
     acc_of_accepts q.wE q.w q.b q.aux q.nOf q.hd q.recRest p c e bs hacc x hnames P ω r hshow hrows hlive
 
-/-- **Some run of the deployed recursive verifier accepts at `x`**, at some prover, tape and coins: the statements the
-call bounds and the level are read at. -/
-def Dep.RunAccepts (q : Dep) (x : Msg) : Prop :=
-  ∃ (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Fin (q.D.V.k x) → Coin),
-    (Claims.run FlockDeploy.sha512 P q.D.V x ω r).out = .acc
-
 open Accounting (Device)
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α]
@@ -332,10 +337,9 @@ def drawEvent (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray
 
 /-- **The binding finder's collision** (`bindAt`'s event) at the draws `ξ₁`, `ξ₂` and the runs with seeds `s₁`, `s₂`. -/
 def collEvent (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
-    {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
+    {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ) (collOf : CollOf)
     (ξ₁ : S.Ξ) (s₁ : q.Sample V S ξ₁) (ξ₂ : S.Ξ) (s₂ : q.Sample V S ξ₂) : Prop :=
-  ∃ m m', (q.bindAt V S collOf dColl ξ₁ ξ₂).out (s₁, s₂) = some (m, m') ∧ Claims.Collision FlockDeploy.sha512 m m'
+  ∃ m m', (q.bindAt V S collOf ξ₁ ξ₂).out (s₁, s₂) = some (m, m') ∧ Claims.Collision FlockDeploy.sha512 m m'
 
 /-- **The event the binding term counts at the wire bit `b`**: `wEvent` at bit `b.2` of the wire `b.1`, reading the
 bit `Dep.extract` didn't pick there. -/
@@ -351,18 +355,18 @@ witness in the recursive relation whose reading, at a bit `i` of a wire `g` that
 run, that the binding finder at the two collides (`hcoll`). -/
 theorem majority_le_coll (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
-    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) (collOf : CollOf)
     (hcoll : ∀ ξ₁ ξ₂ w₁ w₂ (g : Fin (V.circuitOf θ F).N), q.R (S.x ξ₁) w₁ → q.R (S.x ξ₂) w₂ →
       (∃ u ∈ S.drawOf ξ₁, g ∈ (V.partsOf θ F).io u) → (∃ u ∈ S.drawOf ξ₂, g ∈ (V.partsOf θ F).io u) →
       readX (S.x ξ₁) w₁ g ≠ readX (S.x ξ₂) w₂ g →
-      ∃ m m', collOf (S.x ξ₁) w₁ (S.x ξ₂) w₂ = some (m, m') ∧ Claims.Collision FlockDeploy.sha512 m m')
+      ∃ m m', ((collOf (S.x ξ₁) w₁ (S.x ξ₂) w₂).eval FlockDeploy.sha512).1 = some (m, m') ∧
+        Claims.Collision FlockDeploy.sha512 m m')
     {ξ₁ : S.Ξ} {s₁ : q.Sample V S ξ₁} {w₁ : Claims.Flock.Wit} {g : Fin (V.circuitOf θ F).N} {i : ℕ}
     (hd₁ : ∃ u ∈ S.drawOf ξ₁, g ∈ (V.partsOf θ F).io u)
     (he₁ : (q.E.eval FlockDeploy.sha512 (S.P ξ₁) (S.x ξ₁) s₁.1 s₁.2.1 s₁.2.2).1 = some w₁) (hR₁ : q.R (S.x ξ₁) w₁)
     (hb₁ : (readX (S.x ξ₁) w₁ g).getLsbD i = !(q.extract V S readX g).getLsbD i) :
     q.weight V S readX g i ((q.extract V S readX g).getLsbD i) ≤
-      Ex (fun ξ₂ => Pr (collEvent q V S collOf dColl ξ₁ s₁ ξ₂)) := by
+      Ex (fun ξ₂ => Pr (collEvent q V S collOf ξ₁ s₁ ξ₂)) := by
   rw [weight_eq]
   refine Ex_mono fun ξ₂ => Pr_mono fun s₂ hs₂ => ?_
   obtain ⟨-, hd₂, w₂, he₂, hR₂, hb₂⟩ := hs₂
@@ -371,21 +375,68 @@ theorem majority_le_coll (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Arra
     cases hx : (q.extract V S readX g).getLsbD i <;> simp [hx] at hb₁
   obtain ⟨m, m', hm, hcol⟩ := hcoll ξ₁ ξ₂ w₁ w₂ g hR₁ hR₂ hd₁ hd₂ hne
   refine ⟨m, m', ?_, hcol⟩
-  simp only [Dep.bindAt, he₁, he₂]
-  exact hm
+  simpa [Dep.bindAt, collRun, he₁, he₂] using hm
+
+/-- **`collOf`'s calls at a pair, or at none**, are at most `dColl` where its calls at every pair are (`hdColl`). -/
+theorem collRun_calls_le (collOf : CollOf) (dColl : ℕ)
+    (hdColl : ∀ x₁ w₁ x₂ w₂, ((collOf x₁ w₁ x₂ w₂).eval FlockDeploy.sha512).2.length ≤ dColl)
+    (o : Option (Msg × Claims.Flock.Wit × Msg × Claims.Flock.Wit)) : (collRun collOf o).2 ≤ dColl := by
+  rcases o with _ | ⟨x₁, w₁, x₂, w₂⟩
+  · exact Nat.zero_le _
+  · exact hdColl x₁ w₁ x₂ w₂
+
+/-- **The binding finder's expected calls are at most its budget** (`Dep.bindBudget`): each play's are at most its
+budget (`Dep.ex_playCost_le`) and `collOf`'s at most `dColl` (`hdColl`). -/
+theorem ex_bindAt_cost_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
+    {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
+    (collOf : CollOf) (nI : Msg → ℕ) (dColl : ℕ)
+    (hn : ∀ x, q.RunAccepts x → ∀ cs ws, (q.D.innerCalls FlockDeploy.sha512 x cs ws).length ≤ nI x)
+    (hdColl : ∀ x₁ w₁ x₂ w₂, ((collOf x₁ w₁ x₂ w₂).eval FlockDeploy.sha512).2.length ≤ dColl) (ξ₁ ξ₂ : S.Ξ) :
+    Ex (fun s => ((q.bindAt V S collOf ξ₁ ξ₂).cost s : ℝ)) ≤ (q.bindBudget V S nI dColl ξ₁ ξ₂ : ℝ) := by
+  have hpt : ∀ s : q.Sample V S ξ₁ × q.Sample V S ξ₂, ((q.bindAt V S collOf ξ₁ ξ₂).cost s : ℝ) ≤
+      (q.playCost V S ξ₁ s.1 : ℝ) + (q.playCost V S ξ₂ s.2 : ℝ) + (dColl : ℝ) := by
+    intro s
+    have h := collRun_calls_le collOf dColl hdColl
+      ((q.E.eval FlockDeploy.sha512 (S.P ξ₁) (S.x ξ₁) s.1.1 s.1.2.1 s.1.2.2).1.bind fun w₁ =>
+        (q.E.eval FlockDeploy.sha512 (S.P ξ₂) (S.x ξ₂) s.2.1 s.2.2.1 s.2.2.2).1.map fun w₂ =>
+          (S.x ξ₁, w₁, S.x ξ₂, w₂))
+    have h' : (q.bindAt V S collOf ξ₁ ξ₂).cost s ≤ q.playCost V S ξ₁ s.1 + q.playCost V S ξ₂ s.2 + dColl :=
+      Nat.add_le_add_left h _
+    exact_mod_cast h'
+  have e1 := ex_fst (γ := q.Sample V S ξ₂) (fun s : q.Sample V S ξ₁ => (q.playCost V S ξ₁ s : ℝ))
+  have e2 := ex_snd (β := q.Sample V S ξ₁) (fun s : q.Sample V S ξ₂ => (q.playCost V S ξ₂ s : ℝ))
+  have e3 := Claims.Ex_add (fun s : q.Sample V S ξ₁ × q.Sample V S ξ₂ => (q.playCost V S ξ₁ s.1 : ℝ))
+    (fun s => (q.playCost V S ξ₂ s.2 : ℝ))
+  have e4 := Claims.Ex_add
+    (fun s : q.Sample V S ξ₁ × q.Sample V S ξ₂ => (q.playCost V S ξ₁ s.1 : ℝ) + (q.playCost V S ξ₂ s.2 : ℝ))
+    (fun _ => (dColl : ℝ))
+  have e5 := Claims.Ex_const (α := q.Sample V S ξ₁ × q.Sample V S ξ₂) (dColl : ℝ)
+  have e6 : (q.bindBudget V S nI dColl ξ₁ ξ₂ : ℝ) =
+      (q.playBudget V S nI ξ₁ : ℝ) + (q.playBudget V S nI ξ₂ : ℝ) + (dColl : ℝ) := by
+    unfold Dep.bindBudget
+    push_cast
+    ring
+  have h1 := q.ex_playCost_le V S nI hn ξ₁
+  have h2 := q.ex_playCost_le V S nI hn ξ₂
+  refine (Ex_mono hpt).trans ?_
+  linarith
 
 /-- **Two independent plays collide at most `E[bindBudget] / 2^256`** under `FinderCR`'s binding premise (`hbind`):
-the binding finder at each pair of draws is the pair of plays. -/
+the binding finder at each pair of draws is the pair of plays, and its expected calls are at most its budget
+(`ex_bindAt_cost_le`). -/
 theorem ex_coll_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
-    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
-    (hbind : ∀ ξ₁ ξ₂, (q.bindAt V S collOf dColl ξ₁ ξ₂).Pr FlockDeploy.sha512 ≤
-      (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ)) :
+    (collOf : CollOf) (nI : Msg → ℕ) (dColl : ℕ)
+    (hn : ∀ x, q.RunAccepts x → ∀ cs ws, (q.D.innerCalls FlockDeploy.sha512 x cs ws).length ≤ nI x)
+    (hdColl : ∀ x₁ w₁ x₂ w₂, ((collOf x₁ w₁ x₂ w₂).eval FlockDeploy.sha512).2.length ≤ dColl)
+    (hbind : ∀ ξ₁ ξ₂, Claims.ExpectedCR FlockDeploy.sha512 (q.bindAt V S collOf ξ₁ ξ₂)) :
     Ex (fun p : S.Ξ × S.Ξ => Pr (fun s : q.Sample V S p.1 × q.Sample V S p.2 =>
-      collEvent q V S collOf dColl p.1 s.1 p.2 s.2)) ≤
-      Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ) := by
+      collEvent q V S collOf p.1 s.1 p.2 s.2)) ≤
+      Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S nI dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ) := by
   rw [← Ex_div]
-  exact Ex_mono fun p => hbind p.1 p.2
+  refine Ex_mono fun p => ?_
+  exact le_trans (hbind p.1 p.2)
+    (div_le_div_of_nonneg_right (ex_bindAt_cost_le q V S collOf nI dColl hn hdColl p.1 p.2) (by positivity))
 
 /-- **The plurality's bit weighs at least half a drawn unit**: at a bit `i` of a wire `g` of the unit `u`, the weight of
 the bit `Dep.extract` picked there is at least half the probability that the run accepts, draws `u` and the extractor
@@ -419,28 +470,30 @@ at least the bit's minority (`minority_le_majority`). -/
 theorem ex_off_le_bits (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
-    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
+    (collOf : CollOf) (nI : Msg → ℕ) (dColl : ℕ)
+    (hn : ∀ x, q.RunAccepts x → ∀ cs ws, (q.D.innerCalls FlockDeploy.sha512 x cs ws).length ≤ nI x)
+    (hdColl : ∀ x₁ w₁ x₂ w₂, ((collOf x₁ w₁ x₂ w₂).eval FlockDeploy.sha512).2.length ≤ dColl)
     (hcoll : ∀ ξ₁ ξ₂ w₁ w₂ (g : Fin (V.circuitOf θ F).N), q.R (S.x ξ₁) w₁ → q.R (S.x ξ₂) w₂ →
       (∃ u ∈ S.drawOf ξ₁, g ∈ (V.partsOf θ F).io u) → (∃ u ∈ S.drawOf ξ₂, g ∈ (V.partsOf θ F).io u) →
       readX (S.x ξ₁) w₁ g ≠ readX (S.x ξ₂) w₂ g →
-      ∃ m m', collOf (S.x ξ₁) w₁ (S.x ξ₂) w₂ = some (m, m') ∧ Claims.Collision FlockDeploy.sha512 m m')
-    (hbind : ∀ ξ₁ ξ₂, (q.bindAt V S collOf dColl ξ₁ ξ₂).Pr FlockDeploy.sha512 ≤
-      (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ)) :
+      ∃ m m', ((collOf (S.x ξ₁) w₁ (S.x ξ₂) w₂).eval FlockDeploy.sha512).1 = some (m, m') ∧
+        Claims.Collision FlockDeploy.sha512 m m')
+    (hbind : ∀ ξ₁ ξ₂, Claims.ExpectedCR FlockDeploy.sha512 (q.bindAt V S collOf ξ₁ ξ₂)) :
     Ex (fun ξ => Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s)) ≤
       Real.sqrt ((∑ g, (V.circuitOf θ F).w g : ℕ) *
-        (Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))) := by
+        (Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S nI dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))) := by
   classical
   have hlow : ∀ b ξ₁ (s₁ : q.Sample V S ξ₁), bitEvent q V S readX b ξ₁ s₁ →
       Ex (fun ξ => Pr (bitEvent q V S readX b ξ)) ≤
-        1 * Ex (fun ξ₂ => Pr (collEvent q V S collOf dColl ξ₁ s₁ ξ₂)) := by
+        1 * Ex (fun ξ₂ => Pr (collEvent q V S collOf ξ₁ s₁ ξ₂)) := by
     intro b ξ₁ s₁ hs
     obtain ⟨-, hd₁, w₁, he₁, hR₁, hb₁⟩ := hs
     rw [one_mul, show Ex (fun ξ => Pr (bitEvent q V S readX b ξ)) =
       q.weight V S readX b.1 b.2 (!(q.extract V S readX b.1).getLsbD b.2) from rfl]
     exact (minority_le_majority q V S readX b.1 b.2.isLt).trans
-      (majority_le_coll q V S readX collOf dColl hcoll hd₁ he₁ hR₁ hb₁)
+      (majority_le_coll q V S readX collOf hcoll hd₁ he₁ hR₁ hb₁)
   have h := units_bound (Smp := q.Sample V S) (bitEvent q V S readX) (bitEvent q V S readX)
-    (collEvent q V S collOf dColl) zero_le_one (fun _ _ _ hs => hs) hlow (ex_coll_le q V S collOf dColl hbind)
+    (collEvent q V S collOf) zero_le_one (fun _ _ _ hs => hs) hlow (ex_coll_le q V S collOf nI dColl hn hdColl hbind)
   simp only [Fintype.card_sigma, Fintype.card_fin, one_mul] at h
   refine le_trans (Ex_mono fun ξ => Pr_mono fun s hs => ?_) h
   obtain ⟨u, hacc, hu, wt, hw, hR, g, hg, i, hi, hbit⟩ := hs
@@ -454,28 +507,30 @@ draw (`drawn_le_weight`). -/
 theorem ex_off_le_units (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
-    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
+    (collOf : CollOf) (nI : Msg → ℕ) (dColl : ℕ)
+    (hn : ∀ x, q.RunAccepts x → ∀ cs ws, (q.D.innerCalls FlockDeploy.sha512 x cs ws).length ≤ nI x)
+    (hdColl : ∀ x₁ w₁ x₂ w₂, ((collOf x₁ w₁ x₂ w₂).eval FlockDeploy.sha512).2.length ≤ dColl)
     (hcoll : ∀ ξ₁ ξ₂ w₁ w₂ (g : Fin (V.circuitOf θ F).N), q.R (S.x ξ₁) w₁ → q.R (S.x ξ₂) w₂ →
       (∃ u ∈ S.drawOf ξ₁, g ∈ (V.partsOf θ F).io u) → (∃ u ∈ S.drawOf ξ₂, g ∈ (V.partsOf θ F).io u) →
       readX (S.x ξ₁) w₁ g ≠ readX (S.x ξ₂) w₂ g →
-      ∃ m m', collOf (S.x ξ₁) w₁ (S.x ξ₂) w₂ = some (m, m') ∧ Claims.Collision FlockDeploy.sha512 m m')
-    (hbind : ∀ ξ₁ ξ₂, (q.bindAt V S collOf dColl ξ₁ ξ₂).Pr FlockDeploy.sha512 ≤
-      (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ)) :
+      ∃ m m', ((collOf (S.x ξ₁) w₁ (S.x ξ₂) w₂).eval FlockDeploy.sha512).1 = some (m, m') ∧
+        Claims.Collision FlockDeploy.sha512 m m')
+    (hbind : ∀ ξ₁ ξ₂, Claims.ExpectedCR FlockDeploy.sha512 (q.bindAt V S collOf ξ₁ ξ₂)) :
     Ex (fun ξ => Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s)) ≤
       Real.sqrt (2 * V.units θ F *
-        (Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))) := by
+        (Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S nI dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))) := by
   classical
   have hlow : ∀ u ξ₁ (s₁ : q.Sample V S ξ₁), offEvent q V S readX (q.extract V S readX) u ξ₁ s₁ →
       Ex (fun ξ => Pr (drawEvent q V S u ξ)) ≤
-        2 * Ex (fun ξ₂ => Pr (collEvent q V S collOf dColl ξ₁ s₁ ξ₂)) := by
+        2 * Ex (fun ξ₂ => Pr (collEvent q V S collOf ξ₁ s₁ ξ₂)) := by
     intro u ξ₁ s₁ hs
     obtain ⟨-, hu₁, w₁, he₁, hR₁, g, hg, i, hi, hb₁⟩ := hs
     exact le_trans (drawn_le_weight q V S readX hg hi) (mul_le_mul_of_nonneg_left
-      (majority_le_coll q V S readX collOf dColl hcoll ⟨u, hu₁, hg⟩ he₁ hR₁ hb₁) (by norm_num))
+      (majority_le_coll q V S readX collOf hcoll ⟨u, hu₁, hg⟩ he₁ hR₁ hb₁) (by norm_num))
   have h := units_bound (Smp := q.Sample V S) (offEvent q V S readX (q.extract V S readX)) (drawEvent q V S)
-    (collEvent q V S collOf dColl) (by norm_num : (0 : ℝ) ≤ 2) (fun u ξ s hs => by
+    (collEvent q V S collOf) (by norm_num : (0 : ℝ) ≤ 2) (fun u ξ s hs => by
       obtain ⟨hacc, hu, wt, hw, hR, -⟩ := hs
-      exact ⟨hacc, hu, wt, hw, hR⟩) hlow (ex_coll_le q V S collOf dColl hbind)
+      exact ⟨hacc, hu, wt, hw, hR⟩) hlow (ex_coll_le q V S collOf nI dColl hn hdColl hbind)
   rwa [Fintype.card_fin] at h
 
 /-- **A drawn unbound unit gives a wire bit off the plurality**: where the witness's reading is correct on, and opened
@@ -594,10 +649,11 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
     _ ≤ q.tCost V S * (2 : ℝ) ^ (-lam) + Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX Xe u ξ s) :=
         add_le_add hbad le_rfl
 
-/-- **The bound at one coupling**: averaged over the draws, the probability that the recursive configuration's verdict
-holds is at most the draw's miss `δs`, plus `t' · 2^{-λ}`, plus `√(min(W, 2n) · E[bindBudget] / 2^256)`, with `W` the
-file's wire bits and `n` its units (`ex_off_le_bits`, `ex_off_le_units`). -/
-theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
+/-- **The bound at one coupling, off the plurality**: averaged over the draws, the probability that the recursive
+configuration's verdict holds is at most the draw's miss `δs`, plus `t' · 2^{-λ}`, plus the probability that the run
+accepts while the extractor's witness differs from the plurality at a bit of a wire of a drawn unit (`offEvent`), which
+each binding finder bounds. -/
+theorem ex_verdict_le_off (q : Dep) (hG : AccOfAccepts q)
     (hKS : Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR q.wE q.w (deployedB q.b)
       q.aux q.nOf q.hd q.recRest)
     (hdecI : Claims.Recursion.decOK q.Bd.deploy q.decI)
@@ -610,61 +666,30 @@ theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
     (V : Vocab d α) (k : Verity.Registration.Composite) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
-    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
-    (hcr : q.FinderCR V S collOf dColl nI vS) (δs : ℝ)
+    (hcr : ∀ ξ, q.SessionCR (nI (S.x ξ)) (vS (S.x ξ)) (S.x ξ) S.Ω (S.P ξ)) (δs : ℝ)
     (hdraw : Pr (fun ξ : S.Ξ =>
       Disjoint (S.drawOf ξ) (Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (q.extract V S readX))) ≤ δs)
     (hread : ∀ ξ wt, q.R (S.x ξ) wt → ∀ u ∈ S.drawOf ξ,
       (V.partsOf θ F).Correct (readX (S.x ξ) wt) u ∧
         ∀ g ∈ (V.partsOf θ F).io u, V.Opens θ F c g (readX (S.x ξ) wt g))
-    (hcoll : ∀ ξ₁ ξ₂ w₁ w₂ (g : Fin (V.circuitOf θ F).N), q.R (S.x ξ₁) w₁ → q.R (S.x ξ₂) w₂ →
-      (∃ u ∈ S.drawOf ξ₁, g ∈ (V.partsOf θ F).io u) → (∃ u ∈ S.drawOf ξ₂, g ∈ (V.partsOf θ F).io u) →
-      readX (S.x ξ₁) w₁ g ≠ readX (S.x ξ₂) w₂ g →
-      ∃ m m', collOf (S.x ξ₁) w₁ (S.x ξ₂) w₂ = some (m, m') ∧ Claims.Collision FlockDeploy.sha512 m m')
     (hlive : ∀ ξ ω r, LiveCoins q.Bd.IVStar q.st (S.x ξ)
       (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) ω r).seen) :
     Ex (fun ξ => Pr fun s : S.Ω × (Fin (q.D.V.k (S.x ξ)) → Coin) => RecVerdict V k (S.out ξ s)) ≤
       δs + q.tCost V S * (2 : ℝ) ^ (-lam) +
-        Real.sqrt (min ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) *
-          (Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ))) := by
+        Ex (fun ξ => Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s)) := by
   classical
-  refine le_trans (Ex_mono fun ξ => pr_verdict_le q hG hKS hdecI hdecO nI vS lam hn hv hlam V k S readX hcr.1
+  refine le_trans (Ex_mono fun ξ => pr_verdict_le q hG hKS hdecI hdecO nI vS lam hn hv hlam V k S readX hcr
     hread hlive ξ) ?_
   rw [ex_add3, ex_ind]
-  refine add_le_add (add_le_add hdraw le_rfl) ?_
-  rcases le_total ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) with h | h
-  · rw [min_eq_left h]
-    exact ex_off_le_bits q V S readX collOf dColl hcoll hcr.2
-  · rw [min_eq_right h]
-    exact ex_off_le_units q V S readX collOf dColl hcoll hcr.2
+  exact add_le_add (add_le_add hdraw le_rfl) le_rfl
 
-/-- **The target: sampled proofs at the recursive configuration**, in the per-prover form over the causal game (R4′,
-R5, R6), with the recursive configuration's verdict (`RecVerdict`). At composite `k`, the parameters `θ`, the
-committed files `F`, the commitment `c` and a strategy `σ`, with `S` its recursive session (`SessionIn`), the
-probability that the recursive component accepts while sampled proofs' claim fails on the extractor's transcript
-(`¬ Holds k .sampled`) is at most `Dep.errAt` at `S`, the shared `condError FinderCR δ`: where `FinderCR` holds at
-the finders built from `σ`, `δs + t'(σ) · 2^{-λ} + √(min(bits, 2n) · E[bindBudget(σ)] / 2^256)` with `n` the units,
-and `⊤` elsewhere, with `t'(σ)` the strategy's SHA-512 calls in one run (`Vocab.cost`) and every finder's budget defined
-from it. There is no hypothesis on the strategy but `live-verifier`.
-
-It takes these hypotheses:
-* `RecursiveKSAt` at the deployed brings (`hKS`);
-* the decoders meet the list-decoding spec (`hdecI`, `hdecO`);
-* the inner and setup call bounds `nI`, `vS` and the level `λ` (`hn`, `hv`, `hlam`), at the statements some run of the
-  deployed recursive verifier accepts (`Dep.RunAccepts`);
-* `K₀` covers the claim's `ε` share (`hK₀`), and the session's draw misses any `K₀` units with probability at most `δs`
-  (`hdraw`);
-* the vocabulary's extractor is the recursive configuration's (`hX`, `Dep.extract` at `S`);
-* the deployment's reading `readX` of a witness in the recursive relation is correct at, and opened by the commitment
-  on, every unit the statement draws (`hread`); and `collOf`, from two such witnesses that read a wire of units drawn
-  in both differently, outputs a SHA-512 collision (`hcoll`);
-* the records hold the run's live coins (`LiveCoins`, `live-verifier`). `live-verifier` is admissible until the
-  component reads the coins through the coin server's signed device log; then this hypothesis goes.
-
-The proof, at a strategy whose finders meet `FinderCR` (elsewhere the error is `⊤`), where the files pass the commit
-phase's check (elsewhere no play is accepted) and the claim fails (elsewhere the event is empty), is `ex_verdict_le`
-through the coupling's `prob_le`, at `acc_of_accepts`' property. -/
-theorem sampledProofsRecursive (q : Dep)
+/-- **The game's bound off the plurality**: the probability that the recursive component accepts while sampled
+proofs' claim fails on the extractor's transcript is at most `δs + t' · 2^{-λ}` plus the average over the draws of
+`offEvent`'s probability, wherever the session provers meet C-Flock's premises (`hcr`). Where the claim holds the event
+is empty, where the files fail the commit phase's check no play is accepted, and elsewhere more than an `ε` share of the
+units is unbound in the extracted transcript, so the draw misses them with probability at most `δs`
+(`ex_verdict_le_off`, through the coupling's `prob_le`, at `acc_of_accepts`' property). -/
+theorem prob_le_off (q : Dep)
     (hKS : Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR q.wE q.w (deployedB q.b)
       q.aux q.nOf q.hd q.recRest)
     (hdecI : Claims.Recursion.decOK q.Bd.deploy q.decI)
@@ -677,25 +702,18 @@ theorem sampledProofsRecursive (q : Dep)
     (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c)) (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
-    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl K₀ : ℕ) (δs : ℝ)
+    (hcr : ∀ ξ, q.SessionCR (nI (S.x ξ)) (vS (S.x ξ)) (S.x ξ) S.Ω (S.P ξ)) (K₀ : ℕ) (δs : ℝ)
     (hK₀ : ∀ m : ℕ, (V.certOf θ).ε * V.units θ F < m → K₀ ≤ m)
     (hdraw : ∀ U : Finset (Fin (V.units θ F)), K₀ ≤ U.card → Claims.Pr (fun ξ : S.Ξ => Disjoint (S.drawOf ξ) U) ≤ δs)
     (hX : V.extract θ F c σ = q.extract V S readX)
     (hread : ∀ ξ wt, V.Registered θ F → q.R (S.x ξ) wt → ∀ u ∈ S.drawOf ξ,
       (V.partsOf θ F).Correct (readX (S.x ξ) wt) u ∧ ∀ g ∈ (V.partsOf θ F).io u, V.Opens θ F c g (readX (S.x ξ) wt g))
-    (hcoll : ∀ ξ₁ ξ₂ w₁ w₂ (g : Fin (V.circuitOf θ F).N), q.R (S.x ξ₁) w₁ → q.R (S.x ξ₂) w₂ →
-      (∃ u ∈ S.drawOf ξ₁, g ∈ (V.partsOf θ F).io u) → (∃ u ∈ S.drawOf ξ₂, g ∈ (V.partsOf θ F).io u) →
-      readX (S.x ξ₁) w₁ g ≠ readX (S.x ξ₂) w₂ g →
-      ∃ m m', collOf (S.x ξ₁) w₁ (S.x ξ₂) w₂ = some (m, m') ∧ Claims.Collision FlockDeploy.sha512 m m')
     (hlive : ∀ ξ ω r, LiveCoins q.Bd.IVStar q.st (S.x ξ)
       (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) ω r).seen) :
     Game.prob (fun o => RecVerdict V k o ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ ≤
-      q.errAt V S collOf dColl nI vS δs lam := by
+      ENNReal.ofReal (δs + q.tCost V S * (2 : ℝ) ^ (-lam) +
+        Ex (fun ξ => Pr (fun s : q.Sample V S ξ => ∃ u, offEvent q V S readX (q.extract V S readX) u ξ s))) := by
   classical
-  unfold Dep.errAt
-  split_ifs with hcr
-  swap
-  · exact le_top
   -- where the claim holds, the event is empty
   by_cases hH : V.Holds k θ F c σ .sampled ⟨θ, F, c, [], ByteArray.empty, #[]⟩
   · refine le_trans (Game.prob_mono (q := fun _ => False) (fun o ho => ho.2 hH) _ σ) ?_
@@ -720,10 +738,55 @@ theorem sampledProofsRecursive (q : Dep)
     _ ≤ ENNReal.ofReal (Ex fun ξ => Pr fun s : S.Ω × (Fin (q.D.V.k (S.x ξ)) → Coin) =>
           RecVerdict V k (S.out ξ s)) :=
         ENNReal.ofReal_le_ofReal (Ex_mono fun ξ => Pr_mono fun s hs => hs.1)
-    _ ≤ q.delta V S dColl δs lam := by
-        unfold Dep.delta
-        refine ENNReal.ofReal_le_ofReal ?_
-        exact ex_verdict_le q (accOfAccepts q) hKS hdecI hdecO nI vS lam hn hv hlam V k S readX collOf dColl hcr
-          δs (hdraw _ hU) (fun ξ wt hR u hu => hread ξ wt hreg hR u hu) hcoll hlive
+    _ ≤ _ :=
+        ENNReal.ofReal_le_ofReal (ex_verdict_le_off q (accOfAccepts q) hKS hdecI hdecO nI vS lam hn hv hlam V k S
+          readX hcr δs (hdraw _ hU) (fun ξ wt hR u hu => hread ξ wt hreg hR u hu) hlive)
+
+open Classical in
+/-- **The target's bound at the binding finder**: the probability that the recursive component accepts while sampled
+proofs' claim fails on the extractor's transcript is at most `Dep.delta`,
+`δs + t' · 2^{-λ} + √(min(W, 2n) · E[bindBudget] / 2^256)`, where the finders built from the strategy meet `FinderCR`,
+and `⊤` elsewhere (`prob_le_off`, with `ex_off_le_bits` and `ex_off_le_units` at the binding finder `Dep.bindAt`).
+It takes `sampledProofsRecursive`'s hypotheses. -/
+theorem sampledProofsRecursive_bind (q : Dep)
+    (hKS : Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR q.wE q.w (deployedB q.b)
+      q.aux q.nOf q.hd q.recRest)
+    (hdecI : Claims.Recursion.decOK q.Bd.deploy q.decI)
+    (hdecO : Claims.Recursion.decOK (deployZkRec _root_.Flock.Readable.relation) q.decO)
+    (nI vS : Msg → ℕ) (lam : ℝ)
+    (hn : ∀ x, q.RunAccepts x → ∀ cs ws, (q.D.innerCalls FlockDeploy.sha512 x cs ws).length ≤ nI x)
+    (hv : ∀ x, q.RunAccepts x → ∀ ps,
+      (Claims.Recursion.setupCalls FlockDeploy.sha512 q.D (q.D.vstar x ps)).length ≤ vS x)
+    (hlam : ∀ x, q.RunAccepts x → lam ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI x) (vS x))
+    (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (V.game θ F c)) (S : SessionIn V q k θ F c σ)
+    (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) (collOf : CollOf) (dColl K₀ : ℕ) (δs : ℝ)
+    (hK₀ : ∀ m : ℕ, (V.certOf θ).ε * V.units θ F < m → K₀ ≤ m)
+    (hdraw : ∀ U : Finset (Fin (V.units θ F)), K₀ ≤ U.card → Claims.Pr (fun ξ : S.Ξ => Disjoint (S.drawOf ξ) U) ≤ δs)
+    (hX : V.extract θ F c σ = q.extract V S readX)
+    (hread : ∀ ξ wt, V.Registered θ F → q.R (S.x ξ) wt → ∀ u ∈ S.drawOf ξ,
+      (V.partsOf θ F).Correct (readX (S.x ξ) wt) u ∧ ∀ g ∈ (V.partsOf θ F).io u, V.Opens θ F c g (readX (S.x ξ) wt g))
+    (hdColl : ∀ x₁ w₁ x₂ w₂, ((collOf x₁ w₁ x₂ w₂).eval FlockDeploy.sha512).2.length ≤ dColl)
+    (hcoll : ∀ ξ₁ ξ₂ w₁ w₂ (g : Fin (V.circuitOf θ F).N), q.R (S.x ξ₁) w₁ → q.R (S.x ξ₂) w₂ →
+      (∃ u ∈ S.drawOf ξ₁, g ∈ (V.partsOf θ F).io u) → (∃ u ∈ S.drawOf ξ₂, g ∈ (V.partsOf θ F).io u) →
+      readX (S.x ξ₁) w₁ g ≠ readX (S.x ξ₂) w₂ g →
+      ∃ m m', ((collOf (S.x ξ₁) w₁ (S.x ξ₂) w₂).eval FlockDeploy.sha512).1 = some (m, m') ∧
+        Claims.Collision FlockDeploy.sha512 m m')
+    (hlive : ∀ ξ ω r, LiveCoins q.Bd.IVStar q.st (S.x ξ)
+      (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) ω r).seen) :
+    Game.prob (fun o => RecVerdict V k o ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ ≤
+      if q.FinderCR V S collOf nI vS then q.delta V S nI dColl δs lam else ⊤ := by
+  split_ifs with hcr
+  swap
+  · exact le_top
+  refine le_trans (prob_le_off q hKS hdecI hdecO nI vS lam hn hv hlam V k θ F c σ S readX hcr.1 K₀ δs hK₀ hdraw hX
+    hread hlive) ?_
+  unfold Dep.delta
+  refine ENNReal.ofReal_le_ofReal (add_le_add le_rfl ?_)
+  rcases le_total ((∑ g, (V.circuitOf θ F).w g : ℕ) : ℝ) (2 * V.units θ F) with h | h
+  · rw [min_eq_left h]
+    exact ex_off_le_bits q V S readX collOf nI dColl hn hdColl hcoll hcr.2
+  · rw [min_eq_right h]
+    exact ex_off_le_units q V S readX collOf nI dColl hn hdColl hcoll hcr.2
 
 end Verity.Recursive
