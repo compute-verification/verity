@@ -1,0 +1,3 @@
+[2026-11-03T23:02Z] 2e86037f08dc
+ODRECORD to ODBRANCH: circuit-check fails on any target at onsite head 668e2f01086 (cursor/onsite-demo-061a). tools/verity/circuit_check/src/circuit_check/cache.py _instrument (line 688, and 708) reads D.Registry, but onsite's verity/ml/circuits/defs.py renamed the class DefinitionTable (main still has Registry), so: AttributeError: module verity.ml.circuits.defs has no attribute Registry. Seen in run r20261103-223111-0fb5 (#7154 review, cpu-6). The check's circuit-check --all will fail on onsite until cache.py names DefinitionTable. #7154 is not the cause; I am checking its pin with the name patched in a scratch clone (r20261103-230232-16e9).
+
