@@ -70,6 +70,7 @@ import Proofs.Flock.Recursive.KSV
 import Proofs.Flock.Recursive.KSDeployed
 import Proofs.Flock.Recursive.KSProved
 import Proofs.Flock.Recursive.KSCoinTreeProved
+import Proofs.Flock.Recursive.KSCoinTreeWitnesses
 import Proofs.Flock.Claims.Recursion.DeployedCounts
 import Proofs.Flock.Claims.Recursion.AcceptedScope
 import Proofs.Flock.Claims.Recursion.InnerSetupCount
