@@ -48,6 +48,7 @@ import Proofs.Flock.SessionLoop.LiveInnerOwn
 import Proofs.Flock.SessionLoop.LiveOwn
 import Proofs.Flock.SessionLoop.Phase
 import Proofs.Flock.SessionLoop.VsOfTakes
+import Proofs.Flock.SessionLoop.VsOfBody
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
