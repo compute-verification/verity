@@ -7,10 +7,10 @@ import Init.Internal.Order.While
 /-!
 # The draw: a sampled verdict's units are the live audit's draw at the play's coins
 
-The draw's piece of `CouplingTarget`. In a play of the period's game where v2's case (`SampledProofs.OneStageZk.protocol`)
-accepts in what the prover sent, and the device's log as the sampled check read it is the play's (`Vocab.Logged`), the
-units v2 drew are the live audit's draw at any sample whose bytes start with the play's coins of the draw's family
-released after the registration's digest.
+The draw's piece of `CouplingTarget`. In a play of the period's game where v2's case
+(`SampledProofs.OneStageZk.protocol`) accepts in what the prover sent, and the device's log as the sampled check read it
+is the play's (`Vocab.Logged`), the units v2 drew are the live audit's draw at any sample whose bytes start with the
+play's coins of the draw's family released after the registration's digest.
 
 * **v2's acceptance** (`case_drew`, `drew_of`): v2's case in what the prover sent decodes (`V2Case`), v2 read its coins
   `ξ` under the challenger its parameters name and accepted at them (`V2Accepts`), so it drew the evidence's units from
