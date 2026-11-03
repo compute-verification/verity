@@ -1,11 +1,11 @@
 """a5's output class (`a5.output_units`): a window's units whose outputs are served out would be proved whole beside a work
 sample only on a closure map, which the stream refuses (`closure`), so a5 refuses a window with an output class before the
-sample (`a5.output_refusal`). The stream refuses the class's closure map before reading a coin, and the same registration's
-work sample without one is accepted, the Lean's `Run.run` agreeing. A toy window of one template."""
+sample (`a5.output_refusal`). On a test's own challenger (`fake_challenger`) the stream refuses the class's closure map
+before reading a coin, and the same registration's work sample without one is accepted, the Lean's `Run.run` agreeing. A
+toy window of one template."""
 
 from __future__ import annotations
 
-import random
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,8 +20,9 @@ from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition 
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "core" / "protocols" / "sampled_proofs" / "tests"))
 import a5 as A5  # noqa: E402
-import a5_coins as AC  # noqa: E402
+import fake_challenger as FC  # noqa: E402
 
 XOR8 = PrimitiveDefinition("A5OutputsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -33,7 +34,7 @@ QUERY = P.template_instances_query((PAIR,))
 TABLE = {P.template_id(PAIR): 1}
 SCHEMA = "hm96-sha512/row/v2"
 RUN = "r-a5-outputs-test"
-ROOT = "cd" * 64
+ROOT = FC.WINDOW["root"]
 SESSION = "5e" * 64
 VALUES = (S.Value("x", SCHEMA, "serve"), S.Value("out", SCHEMA, "serve"))
 PUBLIC = tuple(S.Public(i, "structure", r) for i, r in (
@@ -74,22 +75,17 @@ def _record() -> dict:
                     work_table=TABLE)
 
 
-def stream_of(coins) -> S.Stream:
-    return S.Stream(SPEC, (PAIR,), budget=1, delta=0.5, challenger="a5 outputs test, verifier", coins=coins, clock=Clock())
+def stream_of(coins: FC.Challenger) -> S.Stream:
+    return FC.Stream(SPEC, (PAIR,), budget=1, delta=0.5, challenger="a5 outputs test, challenger", coins=coins, clock=Clock())
 
 
 def register(stream: S.Stream) -> S.Registration:
     return stream.register(_record(), _ports(), window_root=ROOT, counts={P.template_id(PAIR): N}, work_table=TABLE)
 
 
-def outcome(stream: S.Stream, draw: S.Draw, evidence: dict | None) -> tuple[S.Outcome, dict | None]:
+def outcome(stream: S.Stream, draw: S.Draw) -> tuple[S.Outcome, dict | None]:
     assert stream.deliver(draw, [SESSION]) is None
-    return stream.outcome(draw, VERDICTS, {"statement": "stub"}, coins=evidence), stream.records[-1]["audit"]
-
-
-def seeded(seed: int):
-    rng = random.Random(seed)
-    return lambda n: rng.randbytes(n)
+    return stream.outcome(draw, VERDICTS, {"statement": "stub"}), stream.records[-1]["audit"]
 
 
 def test_an_output_class_is_refused_before_the_sample():
@@ -99,17 +95,19 @@ def test_an_output_class_is_refused_before_the_sample():
 
 @pytest.mark.parametrize("seed", range(3))
 def test_the_class_closure_map_is_refused_and_the_work_draw_without_it_accepted(seed):
-    """The stream refuses the class's closure map (every unit's closure the whole class) before any coin is read; the same
-    registration's sample of record without it draws k (the work law over one template of work 1 is the uniform
-    k-subset), proves exactly those, and is accepted, the Lean's run agreeing."""
-    coins = AC.VerifierCoins(seeded(seed))
-    stream = stream_of(coins)
+    """The stream refuses the class's closure map (every unit's closure the whole class) before any coin is read, so its
+    sample of record afterwards is the one a stream on the same challenger draws with no refusal before it: k units (the
+    work law over one template of work 1 is the uniform k-subset), proving exactly those, and accepted, the Lean's run
+    agreeing."""
+    stream = stream_of(FC.Challenger(f"a5-outputs/{seed}"))
     reg = register(stream)
     with pytest.raises(S.Refused) as e:
         stream.select(reg, closure={u: OUTS for u in range(N)})
-    assert e.value.verdict.codes == ("closure",) and bytes(coins.read) == b""
+    assert e.value.verdict.codes == ("closure",)
     draw = stream.select(reg)
+    fresh = stream_of(FC.Challenger(f"a5-outputs/{seed}"))
+    assert draw.draw == fresh.select(register(fresh)).draw
     units = draw.draw["units"]
     assert draw.draw["law"] == "work" and len(units) == K and "closure" not in draw.draw and D.proved(draw.draw) == units
-    got, audit = outcome(stream, draw, None)
+    got, audit = outcome(stream, draw)
     assert got.accepted and audit["accepted"] and "run" not in audit["checks"] and audit["verifiers"]["agree"]
