@@ -6,6 +6,7 @@ import Definitions.Core.Guarantees.PrivatePartition
 import Definitions.Core.Guarantees.TC
 import Definitions.Core.Guarantees.Formalism
 import Definitions.Core.Guarantees.Expand
+import Definitions.Core.Guarantees.Expand.Witnesses
 
 /-!
 # Core's guarantees

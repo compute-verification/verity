@@ -16,6 +16,7 @@ import Definitions.Core.TC
 import Definitions.Core.Fp32
 import Definitions.Core.Formalism
 import Definitions.Core.Expand
+import Definitions.Core.Expand.Instances
 import Definitions.Core.NaiveStrassen
 import Definitions.Core.Site
 

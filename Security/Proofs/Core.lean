@@ -29,6 +29,7 @@ import Proofs.Core.Formalism
 import Proofs.Core.Expand
 import Proofs.Core.Padding
 import Proofs.Core.AndSize
+import Proofs.Core.ExpandWitnesses
 import Proofs.Core.Accel.Model
 import Proofs.Core.Accel.Sheet
 import Proofs.Core.Accel.Witness
