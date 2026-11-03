@@ -1,5 +1,5 @@
-"""One execution phase's network certificates through the proof system (N2): the round trip to an accepted, exhaustive
-outcome, the public-items rule on the registration, the head check against the declared grid and the occupancy
+"""One execution phase's network certificates through the proof system (N2): the round trip to an accepted outcome over
+its one proof block, the public-items rule on the registration, the head check against the declared grid and the occupancy
 profile, and each way an execution phase fails closed, on injected coins and an injected clock. Each round's verdict of
 record is decided on a stand-in proof of the proof block (`standin`: the prover's rows and output word by the gates'
 references, the Lean run reading its session file), and held to the in-the-clear check on the opening, the debug
@@ -118,10 +118,10 @@ class Run:
 
 
 def reject(out: S.Outcome) -> bool:
-    return not out.accepted and out.verdict.codes == ("reject",) and out.public == {} and out.exhaustive is None
+    return not out.accepted and out.verdict.codes == ("reject",) and out.public == {} and out.profile is None
 
 
-def test_one_link_window_round_trip_is_the_exhaustive_fact(tmp_path):
+def test_one_link_window_round_trip_proves_its_one_proof_block(tmp_path):
     run = Run(tmp_path)
     opening = run.honest(0)
     reg = run.register(opening)
@@ -131,8 +131,8 @@ def test_one_link_window_round_trip_is_the_exhaustive_fact(tmp_path):
     draw = run.stream.select(reg)
     assert draw.units == [0] and draw.draw["law"] == "subset" and draw.draw["k"] == 1
     out = run.decide(draw, opening)
-    assert out.accepted and out.verdict.ok and out.exhaustive == S.Exhaustive(1) and out.profile is None
-    assert out.terms == S.Terms(None) and out.public == {"verdict": 1, "deadline": 1}
+    assert out.accepted and out.verdict.ok and out.profile is not None and out.profile.bound() == 0
+    assert out.terms == S.Terms(DELTA) and out.public == {"verdict": 1, "deadline": 1}
     body = run.stream.records[0]
     assert S._sha512(body) == out.record and body["registration"] == reg.digest and body["symbol"] == "accept"
 
@@ -214,7 +214,7 @@ def test_the_spec_declares_each_public_item_with_its_reason(tmp_path):
         "population": "structure", "window": "structure", f"leaves:{VALUE}": "structure",
         f"domain:{VALUE}": "structure", VALUE: "commitment", "parameters": "structure", "charge": "structure",
         "occupancy": "structure", "verdict": "output", "deadline": "output"}
-    assert lw.spec.public == PUBLIC and lw.spec.check.public_outputs == OUTPUTS and isinstance(lw.spec.selection, S.All)
+    assert lw.spec.public == PUBLIC and lw.spec.check.public_outputs == OUTPUTS and lw.spec.selection == S.Law("rate:1/1")
     assert lw.spec.check.program == P.program_sha512(Program(lw.unit))
     assert replace(lw, sync_set=SyncSet(tuple(range(16)), tuple(range(1, 9)))).charge == 7.0
     assert lw.spec.digest() != replace(lw, sync_set=SyncSet((0, 1), (1, 2))).spec.digest()

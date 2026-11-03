@@ -11,8 +11,9 @@ A proof that reads only the head, such as the head check's, opens a head leaf in
 compressions instead of the certificate's 272. The certificates, salts
 and heads are witness: the challenger sees the root, never a certificate, a salt or a head.
 
-**Selection** is `All`: every execution phase is checked, so an accepted outcome is the exhaustive fact. A registration
-is one execution phase, one proof block. Its `window` provenance is `{"kind": "served", "window": w}`, and the
+**Selection** is `rate:1/1`: every execution phase is checked, drawn as `subset:1` from the challenger's coins (the
+stream refuses `All`, which the sampled audit's soundness statement doesn't cover). A registration is one execution
+phase, one proof block. Its `window` provenance is `{"kind": "served", "window": w}`, and the
 challenger holds w to the registration's order in the stream (`LinkWindows.register`), so the receipt's order is the
 execution phase. The
 network verdict of record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share
@@ -697,7 +698,7 @@ class LinkWindows:
                         proof_deadline=self.proof_deadline)
         public = (PUBLIC_SERVED if self.served is not None else PUBLIC_WARDEN if self.warden is not None
                   else PUBLIC)
-        return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, public, context)
+        return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.Law("rate:1/1"), check, public, context)
 
     def stream(self, **kwargs: Any) -> S.Stream:
         """The challenger's stream for this link (`S.Stream`'s budget, delta, challenger, coins and clock)."""

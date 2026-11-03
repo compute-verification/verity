@@ -11,7 +11,8 @@ that root with the challenger (`IngressTie.registration`, on the head `warden_ro
 warden's signed registration); the rows and their salts are the prover's, which the warden hands it privately, and
 the challenger and the verifier see the root. A registration is one execution phase, its `window` provenance
 `{"kind": "served", "window": w}` held to the registration's order (`IngressTie.register`), and T proof blocks, proof
-block t bucket row t. Selection is `All`.
+block t bucket row t. Selection is `rate:1/1`, every proof block, drawn as `subset:T` from the challenger's coins (the
+stream refuses `All`, which no soundness statement covers).
 
 **The check** is `IngressTie.unit`, `NetworkIngressTieBucket` v1{B, L, R}: one gate naming
 `io_request.IoTieRequest_v1{B, L, R}` and its circuit digest, pinned in `io_request.circuit-check.json` and held to the
@@ -369,7 +370,7 @@ class IngressTie:
                                   "params": self.params.digest.hex()})
         check = S.Check(P.program_sha512(Program(self.unit)), self.query, public_outputs=OUTPUTS,
                         proof_deadline=self.proof_deadline)
-        return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, PUBLIC, context)
+        return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.Law("rate:1/1"), check, PUBLIC, context)
 
     def stream(self, **kwargs: Any) -> S.Stream:
         return S.Stream(self.spec, self.unit, **kwargs)
