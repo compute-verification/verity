@@ -21,6 +21,10 @@ commitments the firewall sent, and run only when the inner session finished.
 * `LoopAny.anyReal_eq`, `LoopAny.prCoin_anyReal`: the real view is that view cut at the session's stop, at every coin
   and so in law at the split coins (`LoopAny.splitSalts`), the two stops joined (`LoopAny.anyStop`).
 * `Flock.SecurityProofs.RecursiveZKLoopAny`: `prCoin_cut_le` over `anySent_le` at the joined stop.
+* `LoopAny.sumCut_toSum`, `LoopAny.prCoin_anyReal_sum`: where the release reads no stop at an unfinished session's
+  view, the joined stop is one of the inner session's or one of the audit's (`LoopAny.toSum`), a finished session
+  stopping after its last send (`LoopAny.anyStop_last`).
+* `Flock.SecurityProofs.RecursiveZKLoopAnySum`: `prCoin_cut_le` over `anySent_le` at that stop.
 -/
 
 namespace FlockSoundness.Discharge.Recursion.LoopAny
@@ -258,6 +262,61 @@ def RecursiveZKLoopAny : Prop :=
             (fun x => θ x.1 x.2.1) +
           fwHoles s * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)
 
+/-- **A view cut at one stop of the inner session or the audit**: at `.inl k`, the inner session's first `k` sends,
+unfinished, released at the stop `s₀`; at `.inr c`, all of them, finished, released at the audit's stop `c`. -/
+def sumCut {Ωa St W : Type} {K : ℕ} (s₀ : St)
+    (cut : St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W) :
+    Fin (K + 1) ⊕ St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W
+  | .inl k, v => cut s₀ (innerCut (k, false) v)
+  | .inr c, v => cut c (innerCut (Fin.last K, true) v)
+
+/-- **`RecursiveZKLoopAny` at a release that reads the audit's stop only once the inner session finished.** Its setting
+and premises, at a release `cut` such that, at a view of an unfinished inner session, which holds no statement's view,
+`cut c` is `cut s₀` for every stop `c`. The stops are then the inner session's where it didn't finish and the audit's
+where it did (`sumCut`): every event of the released view `cut (stop u) (anyReal … u.1)` is at most `|T| + 1 + |St|`
+times as likely as at the simulator's view released at a uniform such stop, plus the same
+$$\varepsilon_V + n_h \cdot \delta_{K^*},$$
+added once. The stops leak at most `log₂ (|T| + 1 + |St|)` bits: with `St` the stops of V*'s statements
+(`RecStops`), `RecStops`' count over the inner session, its message count `|T|`, and V*'s statements. -/
+def RecursiveZKLoopAnySum : Prop :=
+  ∀ {Ωa Ωp Θ St Ωk W : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] [Fintype St] [Nonempty St]
+    [Fintype Ωk] [Nonempty Ωk]
+    (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ)
+    (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
+    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+      _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
+    (s : Flock.Firewall.Schedule) (w : Ωa → Ωp → FirewallAdaptive.Worker) (N r : ℕ)
+    (m : ℕ) (stmt : ℕ → Ωa × (Fin (fwHoles s) → ByteArray) → Claims.Msg)
+    (wit : ℕ → OuterZK.WCtx Ωa Ωp (fwHoles s) → Claims.Flock.Wit) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
+    [∀ j, Nonempty (CB j)]
+    (Vs : Claims.VStar Θ) (θ : Ωa → (Fin (fwHoles s) → ByteArray) → Θ),
+    0 < t →
+    Claims.ZKServer.Loop.finS.Tables →
+    Claims.ZKServer.Loop.finS.Complete (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse) →
+    Claims.ZKServer.Loop.finS.DummyReg → Claims.ZKServer.Loop.finS.Causal → Claims.ZKServer.Loop.finS.SwCausal vs →
+    Claims.ZKServer.Loop.finS.TapeOK →
+    (OuterZK.LoopSessions.atWorker m stmt wit).Honest
+      (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse)
+      (fun u : {u : (Ωa × Ωp) × (Fin (fwHoles s + r) → Fin 192 → Fin 256) //
+          FirewallAdaptive.adaptFinished s (w u.1.1 u.1.2) N (saltsOf u.2) = true} =>
+        anyCtx s w N r u.1.1.1 u.1.1.2 u.1.2) →
+    (OuterZK.LoopSessions.atWorker m stmt wit).Sized (OuterZK.loopSim L₀ src t) CB →
+    ∀ (cut : St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W) (s₀ : St),
+      (∀ (c : St) (a : Ωa) (sent : Array Flock.Firewall.Sent),
+        cut c (a, (sent, false), []) = cut s₀ (a, (sent, false), [])) →
+    ∀ (stop : (((Ωa × Ωp) × (Fin (fwHoles s + r) → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
+        ((OuterZK.loopRef L₀ src).swP vs).Nonce ((OuterZK.loopRef L₀ src).swP vs).Rand m) × Ωk → St)
+      (E : W → Prop),
+      prCoin (fun u => E (cut (stop u) (anyReal vs L₀ src s w N r m stmt wit Vs θ u.1))) ≤
+        (Fintype.card (Fin ((FirewallTemplate.tmpl s s.tables).length + 1) ⊕ St) : ℝ≥0∞) *
+            prCoin (fun c : (Fin ((FirewallTemplate.tmpl s s.tables).length + 1) ⊕ St) ×
+                ((Ωa × (Fin (fwHoles s) → ZkView.Bits × ZkView.Salt)) × OuterZK.LoopSessions.SimCoins CB m) =>
+              E (sumCut s₀ cut c.1 (loopIdeal t L₀ src (fwFilled s) m stmt CB Vs θ c.2))) +
+          (OuterZK.LoopSessions.atWorker m stmt wit).err Claims.ZKMal.CoinOpen.shaH OuterZK.loopK
+            ((OuterZK.loopRef L₀ src).swP vs).prover (OuterZK.loopEps L₀ src t) (4 * t * 3 ^ t) Vs
+            (fun x => θ x.1 x.2.1) +
+          fwHoles s * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash)
+
 end Flock.Guarantees
 
 namespace FlockSoundness.Discharge.Recursion.LoopAny
@@ -346,6 +405,40 @@ theorem anyStop_split {Ωa Ωp Q Ωk S St : Type} {K nh r : ℕ}
     anyStop (K := K) stop σ (splitSalts (Ωa × Ωp) Q Ωk S nh r x) =
       (stop x.1, clampStop (σ x.1.1.1.1.1 x.1.1.1.1.2 (Flock.Guarantees.saltsOf x.1.1.1.2))) := by
   simp only [anyStop, Equiv.symm_apply_apply]
+
+/-- A joined stop `(c, (k, f))` as one of `sumCut`'s: the inner session's `k` where it didn't finish, the audit's `c`
+where it did. -/
+def toSum {St : Type} {K : ℕ} (c : St × (Fin (K + 1) × Bool)) : Fin (K + 1) ⊕ St :=
+  bif c.2.2 then .inr c.1 else .inl c.2.1
+
+/-- **A finished session stops after its last send**, where `σ` does. -/
+theorem anyStop_last {Ωa Ωp Q Ωk S St : Type} {K nh r : ℕ}
+    (stop : (((Ωa × Ωp) × (Fin (nh + r) → Fin 192 → Fin 256)) × Q) × Ωk → St)
+    (σ : Ωa → Ωp → List ByteArray → ℕ × Bool)
+    (hσ : ∀ (a : Ωa) (p : Ωp) (b : Fin (nh + r) → Fin 192 → Fin 256),
+      (σ a p (Flock.Guarantees.saltsOf b)).2 = true → (σ a p (Flock.Guarantees.saltsOf b)).1 = K)
+    (y : (((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × (Q × S)) × ((Fin r → Fin 192 → Fin 256) × Ωk)) :
+    (anyStop (K := K) stop σ y).2.2 = true → (anyStop (K := K) stop σ y).2.1 = Fin.last K := by
+  intro hf
+  dsimp only [anyStop, clampStop] at hf ⊢
+  exact Fin.ext ((congrArg (min · K) (hσ _ _ _ hf)).trans (Nat.min_self K))
+
+/-- **`sumCut` at the joined stop is the cut at it**, where the release reads no stop at an unfinished session's view
+and a finished session stops after its last send. -/
+theorem sumCut_toSum {Ωa St W : Type} {K : ℕ} (s₀ : St)
+    (cut : St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W)
+    (hcut : ∀ (c : St) (a : Ωa) (sent : Array Flock.Firewall.Sent),
+      cut c (a, (sent, false), []) = cut s₀ (a, (sent, false), []))
+    (c : St × (Fin (K + 1) × Bool)) (hc : c.2.2 = true → c.2.1 = Fin.last K)
+    (v : Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out)) :
+    Flock.Guarantees.sumCut s₀ cut (toSum c) v = cut c.1 (Flock.Guarantees.innerCut c.2 v) := by
+  obtain ⟨c, k, f⟩ := c
+  cases f with
+  | false => exact (hcut c v.1 _).symm
+  | true =>
+    have hk : k = Fin.last K := hc rfl
+    subst hk
+    rfl
 
 end FlockSoundness.Discharge.Recursion.LoopAny
 
@@ -612,6 +705,48 @@ theorem prCoin_anyReal {Ωa Ωp Θ St Ωk W : Type} [Fintype Ωa] [Fintype Ωp] 
     x.1.1.1.1.1 x.1.1.1.1.2 x.1.1.1.2 x.1.1.2 x.2 (hσ x.1.1.1.1.1 x.1.1.1.1.2 x.1.1.1.2)
     fun hf _ => hH ⟨x.1.1.1, hf⟩)
 
+/-- **The same at one stop of the inner session or the audit**, where the release reads no stop at an unfinished
+session's view: `prCoin_anyReal`, the joined stop read as `sumCut`'s (`sumCut_toSum`). -/
+theorem prCoin_anyReal_sum {Ωa Ωp Θ St Ωk W : Type} [Fintype Ωa] [Fintype Ωp] [Fintype Ωk]
+    (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ)
+    (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
+    (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
+      _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
+    (s : Flock.Firewall.Schedule) (w : Ωa → Ωp → Worker) (N r m : ℕ)
+    (stmt : ℕ → Ωa × (Fin (Flock.Guarantees.fwHoles s) → ByteArray) → Claims.Msg)
+    (wit : ℕ → OuterZK.WCtx Ωa Ωp (Flock.Guarantees.fwHoles s) → Claims.Flock.Wit) (CB : ℕ → Type)
+    [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] (Vs : Claims.VStar Θ)
+    (θ : Ωa → (Fin (Flock.Guarantees.fwHoles s) → ByteArray) → Θ)
+    (dg : Ωa → Ωp → ℕ → List ByteArray → ByteArray) (σ : Ωa → Ωp → List ByteArray → ℕ × Bool)
+    (hσ : ∀ (a : Ωa) (p : Ωp) (b : Fin (Flock.Guarantees.fwHoles s + r) → Fin 192 → Fin 256),
+      (σ a p (Flock.Guarantees.saltsOf b)).1 ≤ (tmpl s s.tables).length ∧
+      ((σ a p (Flock.Guarantees.saltsOf b)).2 = true →
+        (σ a p (Flock.Guarantees.saltsOf b)).1 = (tmpl s s.tables).length) ∧
+      (adaptOut s (w a p) N { salts := [] } [] (Flock.Guarantees.saltsOf b)).1 =
+        (fillAll (tmpl s s.tables) (strs (dg a p) (Flock.Guarantees.saltsOf b))).take
+          (σ a p (Flock.Guarantees.saltsOf b)).1 ∧
+      adaptFinished s (w a p) N (Flock.Guarantees.saltsOf b) = (σ a p (Flock.Guarantees.saltsOf b)).2)
+    (hH : (OuterZK.LoopSessions.atWorker m stmt wit).Honest
+      (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse)
+      (fun u : {u : (Ωa × Ωp) × (Fin (Flock.Guarantees.fwHoles s + r) → Fin 192 → Fin 256) //
+          adaptFinished s (w u.1.1 u.1.2) N (Flock.Guarantees.saltsOf u.2) = true} =>
+        Flock.Guarantees.anyCtx s w N r u.1.1.1 u.1.1.2 u.1.2))
+    (cut : St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W) (s₀ : St)
+    (hcut : ∀ (c : St) (a : Ωa) (sent : Array Flock.Firewall.Sent),
+      cut c (a, (sent, false), []) = cut s₀ (a, (sent, false), []))
+    (stop : (((Ωa × Ωp) × (Fin (Flock.Guarantees.fwHoles s + r) → Fin 192 → Fin 256)) ×
+        Claims.Sampling.unitTape.at 0 ((OuterZK.loopRef L₀ src).swP vs).Nonce ((OuterZK.loopRef L₀ src).swP vs).Rand
+          m) × Ωk → St)
+    (E : W → Prop) :
+    prCoin (fun u => E (cut (stop u) (Flock.Guarantees.anyReal vs L₀ src s w N r m stmt wit Vs θ u.1))) =
+      prCoin (fun y => E (Flock.Guarantees.sumCut s₀ cut
+        (toSum (anyStop (K := (tmpl s s.tables).length) (S := OuterZK.LoopSessions.SimCoins CB m) stop σ y))
+        (OuterZK.anySent vs t L₀ src (Flock.Guarantees.fwFilled s) m stmt wit CB Vs θ
+          (fun a p i pre => dg a p i (List.ofFn fun j => ZkView.saltBytes (pre j))) y.1))) := by
+  refine (prCoin_anyReal vs t L₀ src s w N r m stmt wit CB Vs θ dg σ hσ hH cut stop E).trans
+    (congrArg prCoin (funext fun y => congrArg E ?_))
+  exact (sumCut_toSum s₀ cut hcut _ (anyStop_last stop σ (fun a p b => (hσ a p b).2.1) y) _).symm
+
 end FlockSoundness.Discharge.Recursion.LoopAny
 
 namespace Flock.SecurityProofs
@@ -637,6 +772,23 @@ theorem RecursiveZKLoopAny : Flock.Guarantees.RecursiveZKLoopAny := by
         cut c.1 (Flock.Guarantees.innerCut c.2 v))
       (LoopAny.anyStop (K := (FirewallTemplate.tmpl s s.tables).length) (S := OuterZK.LoopSessions.SimCoins CB m)
         stop σ)
+      (fun E' => OuterZK.anySent_le vs t ht hS hV hD hc hsc hT L₀ src (Flock.Guarantees.fwFilled s) m stmt wit CB
+        Vs θ hsz (fun a p i pre => dg a p i (List.ofFn fun j => ZkView.saltBytes (pre j))) E') E).trans_eq
+      (add_assoc _ _ _).symm)
+
+/-- **The same at a release that reads the audit's stop only once the inner session finished.** -/
+theorem RecursiveZKLoopAnySum : Flock.Guarantees.RecursiveZKLoopAnySum := by
+  intro Ωa Ωp Θ St Ωk W _ _ _ _ _ _ _ _ vs t L₀ src s w N r m stmt wit CB _ _ Vs θ ht hS hV hD hc hsc hT hH hsz
+    cut s₀ hcut stop E
+  choose dg σ _ hσ using fun (a : Ωa) (p : Ωp) => adaptOut_any s (w a p) N (Flock.Guarantees.fwHoles s + r)
+  exact (LoopAny.prCoin_anyReal_sum vs t L₀ src s w N r m stmt wit CB Vs θ dg σ
+      (fun a p b => hσ a p (Flock.Guarantees.saltsOf b) List.length_ofFn) hH cut s₀ hcut stop E).trans_le
+    ((prCoin_cut_le (OuterZK.anySent vs t L₀ src (Flock.Guarantees.fwFilled s) m stmt wit CB Vs θ
+        (fun a p i pre => dg a p i (List.ofFn fun j => ZkView.saltBytes (pre j))))
+      (Flock.Guarantees.loopIdeal t L₀ src (Flock.Guarantees.fwFilled s) m stmt CB Vs θ)
+      (Flock.Guarantees.sumCut (K := (FirewallTemplate.tmpl s s.tables).length) s₀ cut)
+      (fun y => LoopAny.toSum (LoopAny.anyStop (K := (FirewallTemplate.tmpl s s.tables).length)
+        (S := OuterZK.LoopSessions.SimCoins CB m) stop σ y))
       (fun E' => OuterZK.anySent_le vs t ht hS hV hD hc hsc hT L₀ src (Flock.Guarantees.fwFilled s) m stmt wit CB
         Vs θ hsz (fun a p i pre => dg a p i (List.ofFn fun j => ZkView.saltBytes (pre j))) E') E).trans_eq
       (add_assoc _ _ _).symm)
