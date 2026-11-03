@@ -68,7 +68,7 @@ def test_every_rho_is_rho_fit_where_fit_holds_else_the_max_over_measured_kinds_n
     assert built["version"] == VERSION and built["kinds"] == list(formalism.KINDS)
     assert set(built["rests_on"]) == set(formalism.KINDS) and set(built["sensitivities"]) == set(formalism.SENSITIVITIES)
     for v in built["vectors"]:
-        assert v["label"] == f"te_core {VERSION}, reading A"
+        assert v["label"] == f"{formalism.THE_CODE} {VERSION}, reading A"
         measured = {kind: num(t) for kind, t in v["terms"].items() if t is not None}
         assert set(v["terms"]) - set(measured) <= set(v["unmeasured"])
         top = max(measured.values()) if measured else None
@@ -177,12 +177,17 @@ def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_ce
     """The console's port of the fresh-products term tests against these: on each of io_bound's hand-written product
     sets the term is io_bound's own vector's proved figure without P-cell and fresh_cell its figure with it, summed in
     the reference circuit's chain whether the order is declared or not, with what its best subset dropped, and where no
-    subset has a proved Λ unmeasured (`FRESH_VOID`), never 0; a circuit that declares a tree is unmeasured; the 45M
-    start's dense step's term reads its whole-making system, attention's 64-long chains below every counted operand:
-    163,708, its fresh_cell 2,870,251, on all its products (4.11's one-class rule gave 165,021 and 3,041,057)."""
+    subset has a proved Λ, or a product's chains have no bound, unmeasured (`FRESH_VOID`), never 0, with io_bound's
+    best subset of the rest beside it (`converged`); a circuit that declares a tree is unmeasured; the 45M start's
+    dense step's term reads its whole-making system, attention's 64-long chains below every counted operand: 163,341,
+    its fresh_cell 2,869,161, on all its products with G without each sequence's first position (163,708 and 2,870,251
+    before that trim; 4.11's one-class rule gave 165,021 and 3,041,057). The lowrank worker's DoRA rank-16 step on all
+    42 matrices and its LoRA rank-16 step on every block's MLP are void (coordinator 19:30Z), each with the products
+    no diverged cycle feeds beside it: DoRA's two, 0.1695 on 7.0e-5 of the counted MACs, and the MLP step's one,
+    31.65 on 5.6%; 4.12.9 published those as the terms."""
     f = built["fresh"]
     assert (f["p_cell"], f["order"]) == (formalism.P_CELL, formalism.ORDER) == (False, "chain")
-    assert f["rests_on"] == formalism.RESTS_ON_CELL["fresh_products"] and "without P-cell" in f["rests_on"]
+    assert f["rests_on"] == formalism.RESTS_ON_CELL["fresh_products"] and f"without assuming that {formalism.P_CELL_WORDS}" in f["rests_on"]
     vs = {v["name"]: v for v in f["vectors"]}
     from te_core import io_bound
 
@@ -197,7 +202,21 @@ def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_ce
         assert v["subset"] == (None if sub is None or not sub["dropped"] else {
             "dropped": sub["dropped"], "of": len(want["inputs"]["products"]),
             "dropped_macs_share": sub["dropped_macs_share"], "k_whole_min": sub["k_whole_min"]})
-    assert sum(v["why"] == formalism.FRESH_VOID for v in vs.values()) == 1 and sum(bool(v["subset"]) for v in vs.values())
+        conv = want["term"]["converged"]
+        assert (v["converged"] is None) == (conv is None)
+        if conv is not None:
+            assert (v["converged"]["term"], v["converged"]["fresh_cell"]) == (conv["rho_no_cell"], conv["rho"])
+            assert v["converged"]["diverged_fed"] == len(want["term"]["diverged_fed"])
+    assert sum(v["why"] == formalism.FRESH_VOID for v in vs.values()) == 4 and sum(bool(v["subset"]) for v in vs.values())
+    for name, (term, share, stuck, of) in {"DoRA rank-16": (0.16952, 6.98e-5, 28, 30),
+                                           "LoRA rank-16 step on every block's MLP": (31.645, 0.05641, 10, 11)}.items():
+        v = next(v for n, v in vs.items() if name in n)
+        conv = v["converged"]
+        assert (v["term"], v["fresh_cell"], v["why"], v["subset"]) == (None, None, formalism.FRESH_VOID, None)
+        assert conv["term"] == pytest.approx(term, rel=1e-4) and conv["kept_macs_share"] == pytest.approx(share, rel=1e-3)
+        assert (conv["diverged_fed"], conv["subset"]["dropped"], conv["subset"]["of"]) == (stuck, stuck, of)
+        assert v["inputs"]["products"]["capture"] == "4.12.9" and v["inputs"]["products"]["elementwise_products"] == []
+    assert f["fresh_converged"] == formalism.SENSITIVITIES["fresh_converged"]
     square = vs["one product, square, console"]
     assert vs["one product, square, console, no order declared"]["term"] == square["term"] > 1
     tree = vs["one product, square, console, a circuit that declares a tree"]
@@ -205,7 +224,7 @@ def test_the_fresh_vectors_are_io_bounds_figure_without_p_cell_with_the_whole_ce
     dense = vs["the 45M start's dense step, its trace's order unknown"]
     assert (dense["inputs"]["c"], dense["inputs"]["k"]) == policy.CONSOLE and dense["order"] == "chain"
     assert dense["inputs"]["products"]["trace_order"] == "unknown"
-    assert round(dense["term"]) == 163_708 and round(dense["fresh_cell"]) == 2_870_251 and dense["subset"] is None
+    assert round(dense["term"]) == 163_341 and round(dense["fresh_cell"]) == 2_869_161 and dense["subset"] is None
     assert dense["inputs"]["products"]["system"] is not None and dense["inputs"]["products"]["p_match"] == []
 
 
@@ -275,7 +294,7 @@ def test_the_published_vectors_take_each_case_of_the_rule(built):
             assert max(terms.values()) <= 1
             seen.add("none")
         assert v["rests_on"] == formalism.RESTS_ON_CELL["unmeasured" if v["rho"] is None else v["binding_kind"]]
-        assert v["label"] == f"te_core {VERSION}, reading A"
+        assert v["label"] == f"{formalism.THE_CODE} {VERSION}, reading A"
     assert seen == {"fit", ("max", True), ("max", False), "unmeasured", "none"}
 
 
